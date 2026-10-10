@@ -57,32 +57,54 @@ impl DirectStore {
         target: SourceNamespaceId,
         deadline: Instant,
     ) -> Result<String, String> {
-        check_deadline(Some(deadline))?;
-        owner.verify_existing()?;
+        self.check_operation()?;
+        let deadline = self
+            .operation_deadline()?
+            .map_or(deadline, |original| original.min(deadline));
+        let check = || {
+            self.check_operation()?;
+            check_deadline(Some(deadline))
+        };
+        let owner_verified = owner.verify_existing();
+        check()?;
+        owner_verified?;
         if owner.canonical_root() != self.root.as_path() {
             return Err("DIRECT_MIGRATION_ROOT_OWNER_MISMATCH".to_owned());
         }
-        crate::catalog_presence::require_existing(&self.root)?;
+        let existing = crate::catalog_presence::require_existing(&self.root);
+        check()?;
+        existing?;
         let header = self.inner.source_mapping_header(target)?;
-        if self.inner.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+        let snapshot = self.inner.verify_migration_snapshot(deadline);
+        check()?;
+        if snapshot? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
         let control = self.root.join("control");
-        ensure_directory(&control)?;
+        let control_directory = ensure_directory(&control);
+        check()?;
+        control_directory?;
         let directory = control.join("migration-plans");
-        ensure_child_directory(&directory)?;
+        let plans_directory = ensure_child_directory(&directory);
+        check()?;
+        plans_directory?;
         #[cfg(unix)]
-        sync_directory(&control)?;
+        let synced = sync_directory(&control);
         #[cfg(not(unix))]
         sync_directory(&control);
-        Self::stage_mapping_artifact(
+        check()?;
+        #[cfg(unix)]
+        synced?;
+        let staged = Self::stage_mapping_artifact(
             &self.inner,
             MigrationRoot::Owned(owner),
             target,
             &directory,
             "control/migration-plans/",
             deadline,
-        )
+        );
+        check()?;
+        staged
     }
 
     /// Stages into the caller's separate existing output directory.
@@ -96,6 +118,7 @@ impl DirectStore {
         directory: &Path,
         deadline: Instant,
     ) -> Result<String, String> {
+        let deadline = deadline.min(cap.operation_request()?.deadline());
         crate::plaintext_direct_store::DirectStore::with_existing_mapping_source(
             cap.canonical_root(),
             deadline,
@@ -126,6 +149,7 @@ impl DirectStore {
         locator_prefix: &'static str,
         deadline: Instant,
     ) -> Result<String, String> {
+        source.check_operation()?;
         let plan = Self::stage_mapping_artifact_typed(
             source,
             root,
@@ -133,8 +157,12 @@ impl DirectStore {
             directory,
             locator_prefix,
             deadline,
-        )?;
-        Ok(plan.render_json())
+        );
+        source.check_operation()?;
+        let output = plan?.render_json();
+        source.check_operation()?;
+        check_deadline(Some(deadline))?;
+        Ok(output)
     }
 
     /// Typed staging pass shared by the verify-only report and the atomic
@@ -149,6 +177,19 @@ impl DirectStore {
         locator_prefix: &'static str,
         deadline: Instant,
     ) -> Result<SourceMigrationStagedPlan, String> {
+        source.check_operation()?;
+        let deadline = match source.operation_request() {
+            Ok(request) => deadline.min(request.deadline()),
+            #[cfg(test)]
+            Err(_) => deadline,
+            #[cfg(not(test))]
+            Err(error) => return Err(error),
+        };
+        let check = || {
+            source.check_operation()?;
+            check_deadline(Some(deadline))
+        };
+        check()?;
         let source_root = root.canonical_root();
         let location = match locator_prefix {
             "" => SourceMigrationPlanLocation::ExplicitOutputDirectory,
@@ -156,45 +197,66 @@ impl DirectStore {
             "control/" => SourceMigrationPlanLocation::DataRootControl,
             _ => return Err("DIRECT_MIGRATION_OUTPUT_INVALID".to_owned()),
         };
-        check_deadline(Some(deadline))?;
-        ensure_directory(directory)?;
+        let output_directory = ensure_directory(directory);
+        check()?;
+        output_directory?;
         let header = source.source_mapping_header(target)?;
-        if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+        let snapshot = source.verify_migration_snapshot(deadline);
+        check()?;
+        if snapshot? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        root.gate_staging(target, header.catalog_snapshot)?;
+        let staging_gate = root.gate_staging(target, header.catalog_snapshot);
+        check()?;
+        staging_gate?;
 
-        let temporary_name = temporary_staging_name()?;
-        let mut artifact = SourceImportRecordArtifact::create(
+        let temporary_name = temporary_staging_name();
+        check()?;
+        let temporary_name = temporary_name?;
+        let created = SourceImportRecordArtifact::create(
             directory,
             &temporary_name,
             redb_import::DaemonImportOutputPlatform,
             deadline,
-        )
-        .map_err(plan_artifact_reason)?;
+        );
+        check()?;
+        let mut artifact = created.map_err(plan_artifact_reason)?;
         let summary = source.compile_source_mapping(target, deadline, |row| {
-            artifact.push(row, deadline).map_err(plan_artifact_reason)
-        })?;
-        let frozen = artifact.freeze(deadline).map_err(plan_artifact_reason)?;
+            check()?;
+            let pushed = artifact.push(row, deadline);
+            check()?;
+            pushed.map_err(plan_artifact_reason)
+        });
+        check()?;
+        let summary = summary?;
+        let frozen = artifact.freeze(deadline);
+        check()?;
+        let frozen = frozen.map_err(plan_artifact_reason)?;
         let digest = *frozen.chain();
         let bytes = frozen.encoded_bytes();
 
-        let mut readback = frozen
-            .begin_readback(deadline)
-            .map_err(plan_artifact_reason)?;
+        let readback = frozen.begin_readback(deadline);
+        check()?;
+        let mut readback = readback.map_err(plan_artifact_reason)?;
         let replayed = source.compile_source_mapping(target, deadline, |row| {
-            readback
-                .compare(row, deadline)
-                .map_err(plan_artifact_reason)
-        })?;
+            check()?;
+            let compared = readback.compare(row, deadline);
+            check()?;
+            compared.map_err(plan_artifact_reason)
+        });
+        check()?;
+        let replayed = replayed?;
         if replayed != summary {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
-        let verified = readback.finish(deadline).map_err(plan_artifact_reason)?;
+        let verified = readback.finish(deadline);
+        check()?;
+        let verified = verified.map_err(plan_artifact_reason)?;
         let name = format!("{}.source-map.v1", sha256::hex(&digest));
-        let published = verified
-            .publish(&name, deadline)
-            .map_err(plan_artifact_reason)?;
+        check()?;
+        let published = verified.publish(&name, deadline);
+        check()?;
+        let published = published.map_err(plan_artifact_reason)?;
         if published.chain() != &digest
             || published.encoded_bytes() != bytes
             || published.name() != name
@@ -204,8 +266,10 @@ impl DirectStore {
         let reused = published.reused();
 
         let content =
-            content_readback::stage(source, source_root, target, digest, directory, deadline)?;
-        let (database_name, database_reused) = redb_import::store(
+            content_readback::stage(source, source_root, target, digest, directory, deadline);
+        check()?;
+        let content = content?;
+        let database = redb_import::store(
             source,
             target,
             directory,
@@ -213,21 +277,26 @@ impl DirectStore {
             summary.import_counts(),
             &content,
             deadline,
-        )?;
-        if source.verify_migration_snapshot(deadline)? != header.catalog_snapshot {
+        );
+        check()?;
+        let (database_name, database_reused) = database?;
+        let snapshot = source.verify_migration_snapshot(deadline);
+        check()?;
+        if snapshot? != header.catalog_snapshot {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        if verify_record_artifact(&directory.join(&name), bytes, deadline)? != digest
+        if verify_record_artifact(&directory.join(&name), bytes, deadline, &check)? != digest
             || verify_record_artifact(
                 &directory.join(&content.name),
                 content.encoded_bytes,
                 deadline,
+                &check,
             )? != content.chain
         {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
-        check_deadline(Some(deadline))?;
-        Ok(SourceMigrationStagedPlan {
+        check()?;
+        let output = SourceMigrationStagedPlan {
             target,
             catalog_snapshot: header.catalog_snapshot,
             plan_name: name,
@@ -242,7 +311,9 @@ impl DirectStore {
             content_chain: content.chain,
             content_records: content.records,
             content_source_bytes: content.source_bytes,
-        })
+        };
+        check()?;
+        Ok(output)
     }
 }
 
@@ -258,14 +329,17 @@ pub(super) fn verify_record_artifact(
     path: &Path,
     encoded_bytes: u64,
     deadline: Instant,
+    check: &dyn Fn() -> Result<(), String>,
 ) -> Result<[u8; 32], String> {
+    check()?;
     let observed = inspect_source_import_record_artifact(
         &redb_import::DaemonImportOutputPlatform,
         path,
         encoded_bytes,
         deadline,
-    )
-    .map_err(plan_artifact_reason)?;
+    );
+    check()?;
+    let observed = observed.map_err(plan_artifact_reason)?;
     Ok(*observed.chain())
 }
 

@@ -7,10 +7,9 @@ use std::time::Instant;
 
 use search_contracts::{Sha256Digest32, SourceNamespaceId};
 use search_control_redb::migration::{
-    SourceContentManifest, SourceImportBinding, SourceImportCounts,
-    SourceImportOutputArtifact, SourceImportOutputArtifactError,
-    SourceImportOutputArtifactPlatform, SourceImportOutputLockPlatform,
-    SourceImportRecordArtifactError, SourceImportRecordChain,
+    SourceContentManifest, SourceImportBinding, SourceImportCounts, SourceImportOutputArtifact,
+    SourceImportOutputArtifactError, SourceImportOutputArtifactPlatform,
+    SourceImportOutputLockPlatform, SourceImportRecordArtifactError, SourceImportRecordChain,
     SourceImportRecordChainError, SourceMappingImport, SourceMappingReadback,
     inspect_source_import_record_artifact,
 };
@@ -20,6 +19,27 @@ use super::{check_deadline, ensure_directory, sha256, sync_directory};
 use crate::plaintext_direct_store::DirectStore;
 
 type ImportOutput = SourceImportOutputArtifact<DaemonImportOutputPlatform>;
+
+struct OriginalCheck<'a> {
+    source: &'a DirectStore,
+    deadline: Instant,
+}
+
+impl OriginalCheck<'_> {
+    fn run(&self) -> Result<(), String> {
+        self.source.check_operation()?;
+        check_deadline(Some(self.deadline))
+    }
+}
+
+/// Captures an API result, checks the original operation, then propagates.
+///
+/// This is the single precedence rule for every `store`/`verify_mapping` call:
+/// bind, check, then `?`.
+fn checked<T>(original: &OriginalCheck<'_>, result: Result<T, String>) -> Result<T, String> {
+    original.run()?;
+    result
+}
 
 /// The caller retains source exclusion and has already verified the text plan.
 /// A complete existing database is rechecked, not overwritten or treated as live control.
@@ -32,10 +52,12 @@ pub(super) fn store(
     content: &ContentArtifact,
     deadline: Instant,
 ) -> Result<(String, bool), String> {
-    check_deadline(Some(deadline))?;
-    ensure_directory(directory)?;
-    let header = source.source_mapping_header(target)?;
+    let original = OriginalCheck { source, deadline };
+    original.run()?;
+    checked(&original, ensure_directory(directory))?;
+    let header = checked(&original, source.source_mapping_header(target))?;
     let binding = header.import_binding(plan_chain);
+    original.run()?;
     if content.records != source.retained_revisions().len() as u64 {
         return Err("DIRECT_MIGRATION_CONTENT_COUNT_MISMATCH".to_owned());
     }
@@ -50,25 +72,31 @@ pub(super) fn store(
         objects: content.records,
         source_bytes: content.source_bytes,
     };
-    verify_content(directory, content, deadline)?;
+    verify_content(directory, content, &original)?;
 
     let target_digest = sha256::digest_parts(
         b"eliot-search/source-content-import/v2",
         &[&plan_chain, &content.chain],
     );
     let name = format!("{}.source-map.v2.redb", sha256::hex(&target_digest));
-    let output = ImportOutput::acquire(
-        directory,
-        &name,
-        DaemonImportOutputPlatform,
-        deadline,
-    )
-    .map_err(output_artifact_reason)?;
+    original.run()?;
+    let output = checked(
+        &original,
+        ImportOutput::acquire(
+            directory,
+            &name,
+            DaemonImportOutputPlatform,
+            original.deadline,
+        )
+        .map_err(output_artifact_reason),
+    )?;
 
-    if let Some(final_artifact) = output
-        .open_final(deadline)
-        .map_err(output_artifact_reason)?
-    {
+    if let Some(final_artifact) = checked(
+        &original,
+        output
+            .open_final(original.deadline)
+            .map_err(output_artifact_reason),
+    )? {
         let final_identity = *final_artifact.identity();
         verify_mapping(
             source,
@@ -76,75 +104,103 @@ pub(super) fn store(
             binding,
             content_binding,
             expected,
-            deadline,
+            &original,
         )?;
-        verify_content(directory, content, deadline)?;
-        output
-            .cleanup_verified_alias(&final_identity, deadline)
-            .map_err(output_artifact_reason)?;
+        verify_content(directory, content, &original)?;
+        checked(
+            &original,
+            output
+                .cleanup_verified_alias(&final_identity, original.deadline)
+                .map_err(output_artifact_reason),
+        )?;
+        original.run()?;
         return Ok((name, true));
     }
 
-    let pending = output
-        .open_or_create_pending(deadline)
-        .map_err(output_artifact_reason)?;
+    let pending = checked(
+        &original,
+        output
+            .open_or_create_pending(original.deadline)
+            .map_err(output_artifact_reason),
+    )?;
     let pending_identity = *pending.identity();
     let created = pending.created();
-    let mut writer = if created {
+    original.run()?;
+    let opened = if created {
         SourceMappingImport::create_with_content(
             pending.into_file(),
             binding,
             content_binding,
-            deadline,
+            original.deadline,
         )
     } else {
         SourceMappingImport::resume_with_content(
             pending.into_file(),
             binding,
             content_binding,
-            deadline,
+            original.deadline,
         )
-    }
-    .map_err(|error| error.code().to_owned())?;
+    };
+    let mut writer = checked(&original, opened.map_err(|error| error.code().to_owned()))?;
     if created {
-        output
-            .sync_pending_creation(deadline)
-            .map_err(output_artifact_reason)?;
+        checked(
+            &original,
+            output
+                .sync_pending_creation(original.deadline)
+                .map_err(output_artifact_reason),
+        )?;
     }
 
     let mut hash = SourceImportRecordChain::new();
-    let summary = source.compile_source_mapping_with_rows(
-        target,
-        deadline,
-        |encoded| hash.push(encoded).map_err(record_chain_reason),
-        |row| {
-            writer
-                .push(row, deadline)
-                .map_err(|error| error.code().to_owned())
-        },
+    let summary = checked(
+        &original,
+        source.compile_source_mapping_with_rows(
+            target,
+            original.deadline,
+            |encoded| {
+                original.run()?;
+                checked(&original, hash.push(encoded).map_err(record_chain_reason))
+            },
+            |row| {
+                original.run()?;
+                let pushed = writer.push(row, original.deadline);
+                checked(&original, pushed.map_err(|error| error.code().to_owned()))
+            },
+        ),
     )?;
     if summary.import_counts() != expected || hash.finish() != plan_chain {
+        original.run()?;
         return Err("DIRECT_MIGRATION_IMPORT_SOURCE_CHANGED".to_owned());
     }
-    writer
-        .finish(expected, deadline)
-        .map_err(|error| error.code().to_owned())?;
+    original.run()?;
+    checked(
+        &original,
+        writer
+            .finish(expected, original.deadline)
+            .map_err(|error| error.code().to_owned()),
+    )?;
 
-    let pending = output
-        .open_pending_matching(&pending_identity, deadline)
-        .map_err(output_artifact_reason)?;
+    let pending = checked(
+        &original,
+        output
+            .open_pending_matching(&pending_identity, original.deadline)
+            .map_err(output_artifact_reason),
+    )?;
     verify_mapping(
         source,
         pending.into_file(),
         binding,
         content_binding,
         expected,
-        deadline,
+        &original,
     )?;
 
-    let published = output
-        .publish_pending(&pending_identity, deadline)
-        .map_err(output_artifact_reason)?;
+    let published = checked(
+        &original,
+        output
+            .publish_pending(&pending_identity, original.deadline)
+            .map_err(output_artifact_reason),
+    )?;
     let reused = published.reused();
     let final_identity = *published.identity();
     verify_mapping(
@@ -153,12 +209,16 @@ pub(super) fn store(
         binding,
         content_binding,
         expected,
-        deadline,
+        &original,
     )?;
-    verify_content(directory, content, deadline)?;
-    output
-        .cleanup_verified_alias(&final_identity, deadline)
-        .map_err(output_artifact_reason)?;
+    verify_content(directory, content, &original)?;
+    checked(
+        &original,
+        output
+            .cleanup_verified_alias(&final_identity, original.deadline)
+            .map_err(output_artifact_reason),
+    )?;
+    original.run()?;
     Ok((name, reused))
 }
 
@@ -168,58 +228,72 @@ fn verify_mapping(
     binding: SourceImportBinding,
     content: SourceContentManifest,
     expected: SourceImportCounts,
-    deadline: Instant,
+    original: &OriginalCheck<'_>,
 ) -> Result<(), String> {
-    let mut reader = SourceMappingReadback::open_with_content(
+    original.run()?;
+    let opened = SourceMappingReadback::open_with_content(
         file,
         binding,
         content,
         expected,
-        deadline,
-    )
-    .map_err(|error| error.code().to_owned())?;
+        original.deadline,
+    );
+    let mut reader = checked(original, opened.map_err(|error| error.code().to_owned()))?;
     let mut hash = SourceImportRecordChain::new();
-    let summary = source.compile_source_mapping_with_rows(
-        binding.target_namespace,
-        deadline,
-        |encoded| hash.push(encoded).map_err(record_chain_reason),
-        |row| {
-            reader
-                .compare(&row, deadline)
-                .map_err(|error| error.code().to_owned())
-        },
+    let summary = checked(
+        original,
+        source.compile_source_mapping_with_rows(
+            binding.target_namespace,
+            original.deadline,
+            |encoded| {
+                original.run()?;
+                checked(original, hash.push(encoded).map_err(record_chain_reason))
+            },
+            |row| {
+                original.run()?;
+                let compared = reader.compare(&row, original.deadline);
+                checked(original, compared.map_err(|error| error.code().to_owned()))
+            },
+        ),
     )?;
-    if summary.import_counts() != expected
-        || hash.finish() != *binding.plan_chain.as_bytes()
-    {
+    if summary.import_counts() != expected || hash.finish() != *binding.plan_chain.as_bytes() {
+        original.run()?;
         return Err("DIRECT_MIGRATION_IMPORT_SOURCE_CHANGED".to_owned());
     }
-    reader
-        .finish(deadline)
-        .map_err(|error| error.code().to_owned())?;
-    check_deadline(Some(deadline))
+    original.run()?;
+    checked(
+        original,
+        reader
+            .finish(original.deadline)
+            .map_err(|error| error.code().to_owned()),
+    )
 }
 
+/// Private content verification now takes the original callback so both
+/// calls pass the same bound source closure.
 fn verify_content(
     directory: &Path,
     content: &ContentArtifact,
-    deadline: Instant,
+    original: &OriginalCheck<'_>,
 ) -> Result<(), String> {
+    original.run()?;
     let expected = format!("{}.source-content.v1", sha256::hex(&content.chain));
     if content.name != expected {
+        original.run()?;
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
     let observed = inspect_source_import_record_artifact(
         &DaemonImportOutputPlatform,
         &directory.join(&expected),
         content.encoded_bytes,
-        deadline,
-    )
-    .map_err(record_artifact_read_reason)?;
+        original.deadline,
+    );
+    let observed = checked(original, observed.map_err(record_artifact_read_reason))?;
     if observed.chain() != &content.chain {
+        original.run()?;
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
-    Ok(())
+    original.run()
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -232,11 +306,7 @@ impl SourceImportOutputLockPlatform for DaemonImportOutputPlatform {
         ensure_directory(path)
     }
 
-    fn verify_locator(
-        &self,
-        expected: &File,
-        path: &Path,
-    ) -> Result<(), Self::Error> {
+    fn verify_locator(&self, expected: &File, path: &Path) -> Result<(), Self::Error> {
         verify_locator(expected, path)
     }
 
@@ -256,17 +326,12 @@ impl SourceImportOutputLockPlatform for DaemonImportOutputPlatform {
 impl SourceImportOutputArtifactPlatform for DaemonImportOutputPlatform {
     type Identity = (u64, u64);
 
-    fn identity(
-        &self,
-        file: &File,
-    ) -> Result<Self::Identity, Self::Error> {
+    fn identity(&self, file: &File) -> Result<Self::Identity, Self::Error> {
         native_identity(file)
     }
 }
 
-fn output_artifact_reason(
-    error: SourceImportOutputArtifactError<String>,
-) -> String {
+fn output_artifact_reason(error: SourceImportOutputArtifactError<String>) -> String {
     error.into_reason()
 }
 
@@ -274,9 +339,7 @@ fn record_chain_reason(error: SourceImportRecordChainError) -> String {
     error.code().to_owned()
 }
 
-fn record_artifact_read_reason(
-    error: SourceImportRecordArtifactError<String>,
-) -> String {
+fn record_artifact_read_reason(error: SourceImportRecordArtifactError<String>) -> String {
     match error {
         SourceImportRecordArtifactError::Platform(reason) => reason,
         SourceImportRecordArtifactError::DeadlineExceeded => {
@@ -298,9 +361,7 @@ fn record_artifact_read_reason(
         SourceImportRecordArtifactError::IdentityChanged => {
             "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned()
         }
-        SourceImportRecordArtifactError::RecordChain(error) => {
-            error.code().to_owned()
-        }
+        SourceImportRecordArtifactError::RecordChain(error) => error.code().to_owned(),
         SourceImportRecordArtifactError::Closed
         | SourceImportRecordArtifactError::WriteFailed
         | SourceImportRecordArtifactError::SyncFailed
@@ -325,8 +386,7 @@ fn native_identity(file: &File) -> Result<(u64, u64), String> {
     }
     #[cfg(windows)]
     {
-        let observed =
-            eliot_searchd::native_file::observe(file).map_err(|_| invalid())?;
+        let observed = eliot_searchd::native_file::observe(file).map_err(|_| invalid())?;
         Ok((u64::from(observed.volume_serial), observed.file_index))
     }
     #[cfg(not(any(unix, windows)))]

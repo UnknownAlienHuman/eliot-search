@@ -736,3 +736,262 @@ fn one_shot_failure_emits_only_closed_reason_and_retains_uncertain_state() {
     assert!(!command(root, "--health-data-root", &[]).status.success());
     assert_eq!(snapshot(root), retained);
 }
+
+fn stage_in_service(root: &std::path::Path) -> String {
+    use std::io::Read;
+    let mut service = live_service(root);
+    service
+        .0
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(b"control-migration-plan\t26600000-0000-0000-0000-000000000003\nshutdown\n")
+        .unwrap();
+    drop(service.0.stdin.take());
+    let status = service.wait_bounded();
+    let mut output = String::new();
+    service
+        .1
+        .as_mut()
+        .unwrap()
+        .read_to_string(&mut output)
+        .unwrap();
+    let mut stderr = String::new();
+    service
+        .0
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut stderr)
+        .unwrap();
+    assert!(status.success(), "{output}\n{stderr}");
+    assert!(!output.contains("\"error\""), "{output}\n{stderr}");
+    assert!(
+        output.contains("\"event\":\"data_root_stopped\",\"clean\":true"),
+        "{output}"
+    );
+    let stages = output
+        .lines()
+        .filter(|line| line.starts_with("{\"event\":\"source_migration_plan_staged\","))
+        .collect::<Vec<_>>();
+    assert_eq!(stages.len(), 1, "{output}");
+    let stage = stages[0].to_owned();
+    drop(service);
+    stage
+}
+
+// The renderer emits flat, quoted ASCII artifact locators. Validate their
+// closed basename grammar before using any returned locator as a path.
+fn staged_receipt_string<'a>(receipt: &'a str, key: &str) -> &'a str {
+    let prefix = format!("\"{key}\":\"");
+    let (_, value) = receipt.split_once(&prefix).expect("receipt field missing");
+    value
+        .split_once('"')
+        .expect("receipt string unterminated")
+        .0
+}
+
+fn staged_relative_paths(
+    root: &std::path::Path,
+    directory: &std::path::Path,
+    paths: &mut std::collections::BTreeSet<PathBuf>,
+) {
+    for entry in fs::read_dir(directory).unwrap() {
+        let path = entry.unwrap().path();
+        let metadata = fs::symlink_metadata(&path).unwrap();
+        assert!(!metadata.file_type().is_symlink());
+        assert!(metadata.is_dir() || metadata.is_file());
+        paths.insert(path.strip_prefix(root).unwrap().to_owned());
+        if metadata.is_dir() {
+            staged_relative_paths(root, &path, paths);
+        }
+    }
+}
+
+fn assert_staged_catalog_unchanged(
+    root: &std::path::Path,
+    before: &TreeSnapshot,
+    artifacts: &[PathBuf],
+) {
+    let mut expected_paths = before
+        .keys()
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    expected_paths.insert(PathBuf::from("control/migration-plans"));
+    expected_paths.extend(artifacts.iter().cloned());
+    let mut actual_paths = std::collections::BTreeSet::new();
+    staged_relative_paths(root, root, &mut actual_paths);
+    assert_eq!(
+        actual_paths, expected_paths,
+        "unexpected staging side effects"
+    );
+
+    for (relative, expected) in before {
+        if relative == &PathBuf::from(".eliot-search-owner-state-a.v1")
+            || relative == &PathBuf::from(".eliot-search-owner-state-b.v1")
+        {
+            continue;
+        }
+        let path = root.join(relative);
+        let metadata = fs::symlink_metadata(&path).unwrap();
+        assert_eq!(metadata.is_dir(), expected.0, "{}", relative.display());
+        if !expected.0 {
+            assert_eq!(
+                fs::read(&path).unwrap(),
+                expected.1,
+                "{}",
+                relative.display()
+            );
+            assert_eq!(
+                Some(metadata.modified().unwrap()),
+                expected.2,
+                "{} was rewritten",
+                relative.display()
+            );
+        }
+    }
+}
+
+fn assert_new_staging_receipt(first: &str) {
+    for expected in [
+        "\"schema\":\"eliot.source-mapping.v1\"",
+        "\"target_namespace_id\":\"26600000-0000-0000-0000-000000000003\"",
+        "\"digest_scheme\":\"sha256-record-chain-v1\"",
+        "\"plan_location\":\"data_root\"",
+        "\"staged_database_schema\":\"source-map-content-v2\"",
+        "\"events\":0,",
+        "\"sources\":0,",
+        "\"revision_occurrences\":0,",
+        "\"retained_revision_events\":0,",
+        "\"retirements\":0,",
+        "\"content_objects_verified\":0,",
+        "\"content_bytes_verified\":0,",
+        "\"all_source_events_mapped\":true",
+        "\"canonical_records_materialized\":false",
+        "\"source_mapping_imported_to_redb\":true",
+        "\"staged_database_verified\":true",
+        "\"content_manifest_bound_to_redb\":true",
+        "\"content_blake3_verified\":true",
+        "\"redb_imported\":false",
+        "\"active_control_imported\":false",
+        "\"cutover_authorized\":false",
+        "\"reused\":false",
+        "\"staged_database_reused\":false",
+    ] {
+        assert!(first.contains(expected), "missing {expected}: {first}");
+    }
+}
+
+type StagedArtifactSnapshot = (Vec<u8>, std::time::SystemTime, (u32, u64, u64));
+
+fn assert_reused_staging_artifact(
+    root: &std::path::Path,
+    relative: &std::path::Path,
+    expected: &StagedArtifactSnapshot,
+) {
+    let path = root.join(relative);
+    let metadata = fs::symlink_metadata(&path).unwrap();
+    let file = fs::File::open(&path).unwrap();
+    let native = eliot_searchd::native_file::observe(&file).unwrap();
+    assert!(
+        fs::read(&path).unwrap() == expected.0,
+        "reused artifact bytes changed: {}",
+        relative.display()
+    );
+    assert_eq!(
+        (
+            native.volume_serial,
+            native.file_index,
+            native.creation_time
+        ),
+        expected.2,
+        "reused artifact identity changed: {}",
+        relative.display()
+    );
+    // SourceMappingReadback explicitly permits native redb target recovery.
+    // Mutating staging does not promise metadata write absence for that DB.
+    // The immutable text artifacts must still retain their original mtime.
+    if relative
+        .extension()
+        .is_none_or(|extension| extension != "redb")
+    {
+        assert_eq!(
+            metadata.modified().unwrap(),
+            expected.1,
+            "reused text artifact was rewritten: {}",
+            relative.display()
+        );
+    }
+}
+
+#[test]
+fn native_service_stages_inactive_plan_and_reuses_exact_artifacts() {
+    let initialized = InitializedScratch::new();
+    let root = &initialized.root.0;
+    let before = snapshot(root);
+    let first = stage_in_service(root);
+    assert_new_staging_receipt(&first);
+
+    let mut artifacts = Vec::new();
+    let mut staged = BTreeMap::new();
+    for (key, suffix) in [
+        ("plan_locator", ".source-map.v1"),
+        ("staged_database_locator", ".source-map.v2.redb"),
+        ("content_manifest_locator", ".source-content.v1"),
+    ] {
+        let locator = staged_receipt_string(&first, key);
+        let basename = locator
+            .strip_prefix("control/migration-plans/")
+            .expect("artifact outside inactive staging directory");
+        let digest = basename.strip_suffix(suffix).expect("artifact suffix");
+        assert_eq!(digest.len(), 64);
+        assert!(
+            digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        );
+        let relative = PathBuf::from(locator);
+        let path = root.join(&relative);
+        let metadata = fs::symlink_metadata(&path).unwrap();
+        assert!(metadata.is_file() && !metadata.file_type().is_symlink());
+        assert!(metadata.len() > 0, "empty staged artifact: {relative:?}");
+        let file = fs::File::open(&path).unwrap();
+        let native = eliot_searchd::native_file::observe(&file).unwrap();
+        let observed = (
+            fs::read(&path).unwrap(),
+            metadata.modified().unwrap(),
+            (
+                native.volume_serial,
+                native.file_index,
+                native.creation_time,
+            ),
+        );
+        assert!(staged.insert(relative.clone(), observed).is_none());
+        artifacts.push(relative);
+    }
+    assert_eq!(artifacts.len(), 3);
+    // The inactive database owner keeps one empty technical exclusion object.
+    // It is not an evidence artifact and must not be removed on successful reuse.
+    let database_locator = staged_receipt_string(&first, "staged_database_locator");
+    let database_name = database_locator
+        .strip_prefix("control/migration-plans/")
+        .unwrap();
+    let output_lock = PathBuf::from(format!("control/migration-plans/.{database_name}.lock"));
+    assert!(fs::read(root.join(&output_lock)).unwrap().is_empty());
+    artifacts.push(output_lock);
+    assert_staged_catalog_unchanged(root, &before, &artifacts);
+
+    let second = stage_in_service(root);
+    let expected_second = first
+        .replacen("\"reused\":false", "\"reused\":true", 1)
+        .replacen(
+            "\"staged_database_reused\":false",
+            "\"staged_database_reused\":true",
+            1,
+        );
+    assert_eq!(second, expected_second, "staging receipt changed on reuse");
+    assert_staged_catalog_unchanged(root, &before, &artifacts);
+    for (relative, expected) in staged {
+        assert_reused_staging_artifact(root, &relative, &expected);
+    }
+}

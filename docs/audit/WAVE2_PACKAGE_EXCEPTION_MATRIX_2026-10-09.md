@@ -83,6 +83,15 @@ can only tighten the original deadline. Classification, digest preimages, cursor
 schemas, physical file policy and bounds remain unchanged. No repair or deletion
 is added.
 
+The [staging-context continuation](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6095713143)
+names `control_migration_plan.rs`, `control_migration_content.rs` and
+`control_migration_redb.rs` plus the owning native root-open fixture. Original
+store checkpoints bracket existing artifact/import APIs, object readback, content
+chunk/emission loops and final results. The deadline is capped from the bound
+command request, not a detached service-startup request. Record schemas, digest
+preimages, accounting, artifact/import algorithms and package-owned cleanup do
+not change. Unknown record-artifact cleanup is tracked separately in #345.
+
 The [owner issue addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094110299)
 extends only the admission/open boundary to these actual reverse-consumer adapters:
 

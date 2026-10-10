@@ -85,6 +85,13 @@ results are captured, the original context is checked, then an ordinary error is
 propagated. Classification, cursor schemas, fingerprints/preimages and file bounds
 are unchanged; these read-only modes grant no repair or deletion authority.
 
+Staging plan, content and inactive redb adapters check the bound source request
+and the caller's absolute deadline through compilation, exact readback and
+publication. The plan ceiling only tightens the original request. Artifact and
+import API results are checked before ordinary errors propagate; mapping rows,
+content revisions and BLAKE3 chunks retain cooperative checkpoints. No optional
+production context, new timer or publication/recovery algorithm is introduced.
+
 ## Evidence scope
 
 Rust 1.98.0, locked/offline, Windows native fixture profile; no dependency/lockfile
@@ -123,15 +130,26 @@ routing and preservation of catalog objects (excluding owner lifecycle slots)
 through shutdown. It does not exercise populated physical inventories or
 mid-inventory cancellation; those qualification claims remain open.
 
+The native inactive-staging fixture uses the actual service command twice and
+checks exact artifact reuse, retained technical lock and source-catalog
+preservation. It compares every artifact's bytes and native identity and the
+immutable text artifacts' mtimes. Inactive redb opening may change its mtime
+under the existing package contract; no zero-metadata-write claim is made.
+It does not qualify populated imports, mid-staging cancellation or unknown
+publication recovery.
+
 ## Still open in #266 and downstream owners
 
-- Original command checkpoints now reach the named DIRECT children above. Some
-  staged migration artifact/import-object child internals still use deadline-only
-  checks and remain incomplete; their outer
-  result boundary is checked. No production caller uses the context-free catalog
-  replay wrappers. A checkpoint does not interrupt
+- Original command checkpoints reach the named DIRECT and staging adapters above.
+  Owning artifact/import library internals retain their existing deadline-only
+  APIs. No production caller uses the context-free catalog replay wrappers.
+  A checkpoint does not interrupt
   a synchronous OS/vendor/codec call already in progress; bounded/preemptible I/O
   and full child cancellation qualification are not claimed.
+- Record-artifact Drop cleanup can erase staging evidence after an unknown
+  publication outcome; #345 owns this separate lifecycle repair. The final
+  locator may exist even after an error. This checkpoint slice neither changes
+  cleanup nor qualifies unknown-publication recovery.
 - Arbitrary legacy quarantine has no retained operation identity. Named recovery
   currently covers complete initialization only; abandoned ordinary ACTIVE/DRAINING
   and unknown migration/publication outcomes are not automatically recovered.
