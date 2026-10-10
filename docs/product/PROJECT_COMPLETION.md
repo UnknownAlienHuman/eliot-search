@@ -1,16 +1,20 @@
 # ELIOT Search: complete implementation and release map
 
-**Audit base:** `1a6d17d073c5f6d1fe50f21082439f1965d24ef8`. **Coordinator:** [#97](https://github.com/UnknownAlienHuman/eliot-search/pull/97). **Topology:** one integration manager, one writer worktree, 5–10 read/research/review subagents. **Product acceptance:** not established by this document.
+**Historical audit base:** `1a6d17d073c5f6d1fe50f21082439f1965d24ef8`. **Accepted source checkpoint (2026-10-10):** `7068bbdbb923762529368878481f74d7a29fe029`. **Coordinator:** [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352). **Topology:** one integration manager, one writer worktree, 5–10 read/research/review subagents. **Product acceptance:** not established by this document.
 
-This is the whole-project continuation, not another wave or product subsystem. It supersedes old scheduling prose in dated audits and packet PRs. It does not replace Architecture Part I, accepted ADRs, package contracts, detailed issue semantics or actual execution evidence. No runtime consumes this document.
+This map describes the whole-project obligation and dependency graph. The live writer queue belongs to #352, the launch gate and the exact ready issue under [EXECUTION_PROTOCOL](EXECUTION_PROTOCOL.md); dated next-task wording is not scheduling authority. The map does not replace Architecture Part I, accepted ADRs, package contracts, detailed issue semantics or actual execution evidence. No runtime consumes this document.
 
 ## 1. Start and stop rules
 
 Read [root instructions](../../AGENTS.md), [architecture entrypoint](../architecture/README.md), [ADR 0005](../adr/0005-standalone-search-product-and-controller-boundary.md), [ADR 0006](../adr/0006-agent-analysis-framework-product-scope.md), this map, the exact issue, nearest package AGENTS/FUNCTIONS, then current code. [Package status](PACKAGE_STATUS.toml) describes packages; this map describes work. Neither grants source/access authority to runtime.
 
-Completed implementations: #317/#318 tooling prerequisite; #237/#319 canonical foundation; #253/#322 casefold research; #258/#323 indexed contracts; #250/#326 Cargo metadata. Do not repeat them. Reported scoped compiler/fixture results are not whole-product qualification. #253 completed a decision, not #254's tokenizer.
+Delivered source: #317/#318 tooling prerequisite; #237/#319 canonical foundation; #253/#322 casefold research; #258/#323 indexed contracts; #250/#326 Cargo metadata; #256/#338 stateless S11; #339/#340 Windows Cargo prefix handling; #327/#341 Rustls security repair; #257/#342 UnitSet v3. Do not repeat them. Scoped source/compiler/fixture evidence is not whole-product qualification. #253 completed a decision, not #254's tokenizer.
 
-**Next coding task remains #256.** Do not interrupt an active manager, reset its worktree or silently change its accepted base. A docs-only merge does not invalidate code evidence, but the next source slice records its actual base. #324 remains a real validator rerun obligation; #327 remains a dependency/advisory obligation, not a reason to restart foundation work.
+**Current source programme: #235.core; select its next bounded ready child through #352.** Do not repeat #256/#257, interrupt an active manager, reset its worktree or silently change its accepted base. A docs-only merge does not invalidate source evidence, but each successor records newly fetched main. #324 remains a validator rerun obligation; the delivered #327 repair does not qualify the whole dependency/release graph.
+
+Recent bounded deliveries: #363/PR #364 is pure root-open policy only; #366/PR #368 repairs existing CLI cancellation bounds; #365/PR #369 removes raw typed diagnostic payloads; #370/PR #371 requires trusted installation before product-grant I/O; #372/PR #374 preserves the resolver's original absolute setup deadline. The reusable client crate and duplicate CLI engine deletion are still absent. #373 owns the unresolved attachment/expectation contract; #375 owns conservative remote-outcome propagation. These follow-ups are not automatically ready slices.
+
+#266/#354/#355 retain native capability, initialization and caller obligations; #332 retains actual native attachment/cutover and legacy deletion. The CLI typed core currently has no runtime-owner dependency; the daemon does. Do not wait for the whole #266 programme to extract #235.core, and do not count the pure policy slice as native admission. Latest source heads `901d14b` and `a228251` passed production check and canonical guard; strict Clippy retains 44 unchanged diagnostics under #367, with zero additions. Their nine focused cases are authored NOT_RUN, with test-graph compilation/execution and integrated/native/installed qualification deferred.
 
 For each source slice: inspect actual callers, implement a coherent change, compile affected packages and immediate reverse consumers, run strict Clippy, retain the exact output, review, then merge. Broad installed/native/scale tests stay in final qualification; tiny causal checks are allowed when necessary. No workflow-trigger proliferation. No global formatting or speculative framework work.
 
@@ -41,11 +45,11 @@ Columns are stable: stage, prerequisites, owning implementation area, exact exit
 | 258 | 237 | search-contracts; merged #323 | One indexed payload/index/eligibility/epoch contract |
 | 250 | 237 | xtask; merged #326 | Bounded Cargo graph/status tool |
 | 324 | 250 | Existing xtask validator | Rerun on fixed docs; retain actual outcome, never edit predicate to pass |
-| 327 | - | Manager dependency lane | Accepted patched dependency and transitive/advisory record |
-| 256 | 237,258 | search-point-identity | New stateless S11; old required callers preserved unchanged until 329 |
-| 257 | 237,258 | search-unitizer | Internally verified complete UnitSet v3 |
+| 327 | - | Manager dependency lane; merged #341 | Accepted patched dependency and transitive/advisory record; full release graph still qualified separately |
+| 256 | 237,258 | search-point-identity; merged #338 | New stateless S11 source delivered; old required callers preserved unchanged until 329 |
+| 257 | 237,258 | search-unitizer; merged #342 | UnitSet v3 source delivered; integrated preparation remains 331 |
 | 266 | 237 | search-runtime-owner; daemon owner_composition | Distinct inspect/mutate/init/recovery capabilities; no create-on-read |
-| 235.core | 237 | New search-provider-client; typed CLI source | Single typed session engine; no new TCP/token fallback; existing assembly unchanged |
+| 235.core | 237 | New search-provider-client; current typed CLI source | Hardening #365/#366/#370/#372 delivered; single reusable session engine, #373/#375, second consumer and duplicate deletion remain; no new TCP/token fallback; external assembly unchanged until 332 |
 | 238 | 237 | search-config | Maintained TOML; bounded typed conversion; honest v1/v2 digest migration |
 | 241 | 237 | search-source-admission | Every field effective; explicit GlobSet profile; safety deny dominates |
 | 246 | 237 | search-exact/literal | Mature matcher; existing overlap/chunk/ASCII semantics preserved |
@@ -156,7 +160,7 @@ Rows for optional profiles are work through their existing programme, not permis
 
 ## 4. Work ordering and package seams
 
-Keep the already accepted remaining Wave-2 order: 256 → 257 → 266 → 235.core → 238 → 241 → 246 → 252 → 226. The table's preparation/store prerequisites for **integrated completion** do not require redoing model/profile source work. In particular, #226 parser/profile code can be prepared after #257; its real persistence/query acceptance waits for #331. Record source-complete versus integrated instead of holding an impossible all-in-one PR.
+Remaining serialized Wave-2 order: 235.core → 238 → 241 → 246 → 252 → 226 Markdown → 226 JATS, through exact ready children from successively merged main. #256/#257 are delivered; #266 residuals retain their own ready slices and are not blanket prerequisites for the independent CLI typed core. The table's preparation/store prerequisites for **integrated completion** do not require redoing model/profile source work. In particular, #226 parser/profile code can be prepared after #257; its real persistence/query acceptance waits for #331. Record source-complete versus integrated instead of holding an impossible all-in-one PR.
 
 After Wave 2, choose the first unfinished stage whose dependencies are actually delivered. Prefer closing a working vertical over building every optional adapter. Recommended progression: root/control → secrets/storage → ingestion/currentness/scopes → publication/vendor → access/handles/exact/query → profiles/connectors → lifecycle → installed candidate/qualification/release.
 
@@ -252,4 +256,4 @@ Before release: complete current profile inventory; completed migration/removal 
 
 This pass reconciles the complete execution programme against inspected current source, delivered PR evidence and detailed existing findings. It is not a new line-by-line proof of the entire repository, donor ecosystem or absence of bugs. Previously reported scope checks are not rerun here. No Rust, Cargo, lockfile, workflow or product feature is changed by this documentation cutover.
 
-The existing technical audit and specialized files retain F01–F154 obligations; a closed planning issue does not resolve a code finding. Maintain the finding-to-owner links and delivery evidence. Update only affected rows after source merges; do not append contradictory schedule comments indefinitely. When an issue body and this map disagree, resolve the concrete interface/phase against higher-level contracts and amend both before writing code. The current manager can continue #256; this full-project map is not a new gate requiring another general audit.
+The existing technical audit and specialized files retain F01–F154 obligations; a closed planning issue does not resolve a code finding. Maintain the finding-to-owner links and delivery evidence. Update only affected rows after source merges; do not append contradictory schedule comments indefinitely. Resolve interface/phase conflicts against higher-level contracts; use #352 and the exact ready issue for live scheduling. Continue #235.core through bounded serial children; this map is not a new gate requiring another general audit.
