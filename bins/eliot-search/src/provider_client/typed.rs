@@ -55,6 +55,8 @@ pub enum TypedClientError {
     CancellationPending,
     /// The mandatory initial standalone grant has not been issued.
     GrantRequired,
+    /// Product grants require an independently trusted registration binding.
+    TrustedBindingRequired,
     /// This session already spent the one initial standalone-grant command.
     GrantAlreadyIssued,
     /// A recipe attempted to substitute claims other than the exact issued grant.
@@ -89,6 +91,7 @@ impl TypedClientError {
             Self::NothingPending => "REMOTE_TYPED_NOTHING_PENDING",
             Self::CancellationPending => "REMOTE_TYPED_CANCEL_PENDING",
             Self::GrantRequired => "REMOTE_GRANT_REQUIRED",
+            Self::TrustedBindingRequired => "REMOTE_TYPED_TRUSTED_BINDING_REQUIRED",
             Self::GrantAlreadyIssued => "REMOTE_GRANT_ALREADY_ISSUED",
             Self::GrantMismatch => "REMOTE_GRANT_MISMATCH",
             Self::GrantRejected { status, .. } => match status {

@@ -8,7 +8,7 @@ use std::task::Poll;
 use std::time::{Duration, Instant};
 
 use search_contracts::{
-    BoundedSet, CorpusOrPortfolioId, MAX_SET_ITEMS, RequestId,
+    BoundedSet, CorpusOrPortfolioId, InstallationId, MAX_SET_ITEMS, RequestId,
     SearchReadGrantClaims,
 };
 use search_provider_protocol::{
@@ -27,11 +27,16 @@ use super::State;
 
 const INITIAL_STANDALONE_GRANT_SEQUENCE: u64 = 1;
 
+#[cfg(test)]
+mod tests;
+
 impl TypedProviderSession {
     /// Request and retain the one server-issued standalone read grant.
     ///
-    /// This must be the first post-profile command. The exact canonical grant
-    /// envelope and body are written as two typed/MAC records, then the two
+    /// This must be the first post-profile command and requires an independently
+    /// trusted registration installation identity;
+    /// pairing-only compatibility sessions fail before sending any grant bytes.
+    /// The canonical grant envelope and body use two typed/MAC records, then two
     /// authenticated response records are read under the same absolute deadline.
     /// Any refusal, partial I/O, mismatch or unwind drops the entire session.
     pub fn request_standalone_grant(
@@ -53,6 +58,9 @@ impl State {
         request: StandaloneGrantRequestV1,
         timeout: Duration,
     ) -> Result<SearchReadGrantClaims, TypedClientError> {
+        // A paired compatibility peer cannot supply its own installation anchor.
+        // Reject before encoding, spending sequence state or writing any record.
+        let trusted = self.trusted_installation_id.ok_or(TypedClientError::TrustedBindingRequired)?;
         request.validate()?;
         let (deadline, _) = budget(timeout)?;
         if self.grant.is_some()
@@ -148,7 +156,7 @@ impl State {
 
         match response_body {
             StandaloneGrantResponseBodyV1::Claims(claims) => {
-                validate_claims(self, &request, &claims)?;
+                validate_claims(self, &request, &claims, trusted)?;
                 self.grant = Some(claims.clone());
                 Ok(claims)
             }
@@ -199,13 +207,12 @@ fn validate_claims(
     state: &State,
     request: &StandaloneGrantRequestV1,
     claims: &SearchReadGrantClaims,
+    trusted_installation_id: InstallationId,
 ) -> Result<(), TypedClientError> {
     claims
         .validate_shape()
         .map_err(|_| TypedClientError::ResponseMismatch)?;
-    if state
-        .trusted_installation_id
-        .is_some_and(|trusted| claims.installation_id != trusted)
+    if claims.installation_id != trusted_installation_id
         || claims.binding_id != state.binding.binding_id()
         || claims.installation_incarnation_id != state.binding.incarnation()
         || claims.allowed_membership_ids.is_empty()
