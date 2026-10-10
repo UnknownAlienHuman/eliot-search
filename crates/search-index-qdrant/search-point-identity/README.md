@@ -2,7 +2,7 @@
 
 **C14 — Collision-safe point identity.**
 
-**Status:** `SOURCE_PRESENT / LEGACY_PROFILE`; point-key/digest/collision source exists, but the selected sole canonical identity owner is #207. Do not extend or duplicate the legacy identity formula. See [central package status](../../../docs/product/PACKAGE_STATUS.toml).
+**Status:** the `s11` module supplies the stateless canonical identity API from #256. Existing root exports and current routing remain `LEGACY_PROFILE` until #259/#262 consumers migrate and #329 retires them. This source API delivery is not indexed-product qualification. See [S11 profile and consumer handoff](S11_PROFILE.md) and [central package status](../../../docs/product/PACKAGE_STATUS.toml).
 
 Encode canonical point keys, derive namespace-separated IDs and make collisions detectable and non-destructive.
 

@@ -1,6 +1,13 @@
 # Function contract — `search-point-identity`
 
-**Status:** W3/P06 logical contract; pure implementation only.
+**Status:** #256 exposes the stateless `s11` API. Its exact public names, domains,
+limits and generation handoff are frozen in [S11_PROFILE.md](S11_PROFILE.md).
+Existing root exports remain unchanged legacy APIs until #329 retirement.
+
+The operation names below describe the logical S11 behavior; they are not
+forwarding aliases. The old `eliot-search/point-identity/v1` domain in this
+historical surface is superseded for the new profile by
+`eliot/cbor/point-identity/v1`, with address domain `eliot/raw/point-address/v1`.
 
 ## Operations
 
@@ -11,7 +18,7 @@ JSON serialization, map iteration order and omitted load-bearing fields are forb
 
 ### `full_digest(bytes) -> PointIdentityDigest`
 
-Computes BLAKE3-256 with the `eliot-search/point-identity/v1` domain prefix.
+Computes BLAKE3-256 through the shared canonical helper under the frozen S11 CBOR domain.
 
 ### `derive_qdrant_uuid(digest) -> QdrantPointUuid`
 
