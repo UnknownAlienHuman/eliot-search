@@ -140,16 +140,28 @@ impl InitializingDataRoot {
         self.operation
             .check()
             .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
-        verify_bound_directory(&self.root_file, &self.root)?;
-        verify_existing_locator(&self.primary, &self.root.join(PRIMARY))?;
-        verify_existing_locator(&self.intent_file, &self.root.join(INTENT))?;
+        let root = verify_bound_directory(&self.root_file, &self.root);
+        check_pending(&self.operation)?;
+        root?;
+        let primary = verify_existing_locator(&self.primary, &self.root.join(PRIMARY));
+        check_pending(&self.operation)?;
+        primary?;
+        let intent_locator = verify_existing_locator(&self.intent_file, &self.root.join(INTENT));
+        check_pending(&self.operation)?;
+        intent_locator?;
         if let Some(sealed) = &self.sealed {
-            sealed
+            let verified = sealed
                 .verify_existing(&self.root)
-                .map_err(|_| OwnerError::OwnerGuardMismatch)?;
+                .map_err(|_| OwnerError::OwnerGuardMismatch);
+            check_pending(&self.operation)?;
+            verified?;
         }
-        self.intent.verify_root(&self.root)?;
-        let actual = read_existing_bytes(&self.root.join(INTENT), MAX_INTENT)?
+        let verified = self.intent.verify_root(&self.root);
+        check_pending(&self.operation)?;
+        verified?;
+        let actual = read_existing_bytes(&self.root.join(INTENT), MAX_INTENT);
+        check_pending(&self.operation)?;
+        let actual = actual?
             .ok_or(OwnerError::OwnerAcquireOutcomeUnknown)?;
         if actual != self.intent.encode() {
             return Err(OwnerError::OwnerOperationConflict);
@@ -195,42 +207,62 @@ pub(crate) fn initialize_new_request(
     operation: &DataRootRequest,
 ) -> Result<InitializationReceipt, String> {
     operation.validate_root(root)?;
-    let root = canonical_root(root).map_err(code)?;
-    if fs::read_dir(&root)
-        .map_err(|_| code(OwnerError::DataRootInvalid))?
+    let root = canonical_root(root);
+    operation.check().map_err(code)?;
+    let root = root.map_err(code)?;
+    let entries = fs::read_dir(&root);
+    operation.check().map_err(code)?;
+    let nonempty = entries.map_err(|_| code(OwnerError::DataRootInvalid))?
         .next()
         .transpose()
-        .map_err(|_| code(OwnerError::DataRootInvalid))?
-        .is_some()
-    {
+        .map_err(|_| code(OwnerError::DataRootInvalid));
+    operation.check().map_err(code)?;
+    if nonempty?.is_some() {
         // An initialized exact request is resolved, never created a second time.
         return resolve_completed(&root, request, operation);
     }
-    let cap = acquire_new(&root, request, operation).map_err(code)?;
+    let acquired = acquire_new(&root, request, operation);
+    check_pending(operation).map_err(code)?;
+    let cap = acquired.map_err(code)?;
     cap.verify().map_err(code)?;
-    let store = crate::direct_store::DirectStore::initialize_legacy_layout(&cap)?;
-    store.verify_empty()?;
+    let store = crate::direct_store::DirectStore::initialize_legacy_layout(&cap);
+    cap.verify().map_err(code)?;
+    let store = store?;
+    let verified = store.verify_empty();
+    cap.verify().map_err(code)?;
+    verified?;
     drop(store);
     cap.verify().map_err(code)?;
 
-    let mut installation_file = create_new_file(&root.join(INSTALLATION_FILE)).map_err(code)?;
+    let installation_file = create_new_file(&root.join(INSTALLATION_FILE));
+    cap.verify().map_err(code)?;
+    let mut installation_file = installation_file.map_err(code)?;
     let mut binding = InstallationBinding {
         installation_id: cap.intent.installation,
         installation_incarnation_id: cap.intent.incarnation,
         initialization_id: None,
         native_objects_digest: None,
     };
-    let observed = observe_physical_root(&root).map_err(code)?;
-    let mut record =
-        super::succession::plan_successor(&binding, &observed, cap.intent.executable, None)
-            .map_err(code)?;
+    let observed = observe_physical_root(&root);
+    cap.verify().map_err(code)?;
+    let observed = observed.map_err(code)?;
+    let record = super::succession::plan_successor(&binding, &observed, cap.intent.executable, None);
+    cap.verify().map_err(code)?;
+    let mut record = record.map_err(code)?;
     record.owner_token = cap.intent.owner_token;
     record.owner_pid = cap.intent.owner_pid;
     record.refresh_digest();
-    publish_initial_slot(&root, OWNER_SLOT_A, &record).map_err(code)?;
-    publish_initial_slot(&root, OWNER_SLOT_B, &record).map_err(code)?;
-    publish_initialized_installation(&root, &mut installation_file, &mut binding, cap.intent.id)
-        .map_err(code)?;
+    cap.verify().map_err(code)?;
+    let first = publish_initial_slot(&root, OWNER_SLOT_A, &record, operation);
+    cap.verify().map_err(code)?;
+    first.map_err(code)?;
+    let second = publish_initial_slot(&root, OWNER_SLOT_B, &record, operation);
+    cap.verify().map_err(code)?;
+    second.map_err(code)?;
+    let installed =
+        publish_initialized_installation(&root, &mut installation_file, &mut binding, cap.intent.id);
+    cap.verify().map_err(code)?;
+    installed.map_err(code)?;
     drop(installation_file);
     finish_initialized(cap, record, false)
 }
@@ -243,25 +275,37 @@ pub(crate) fn recover_initialization_request(
     operation: &DataRootRequest,
 ) -> Result<InitializationReceipt, String> {
     operation.validate_root(root)?;
-    let root = canonical_root(root).map_err(code)?;
-    if matches!(fs::symlink_metadata(root.join(INTENT)), Err(error) if error.kind() == io::ErrorKind::NotFound)
+    let root = canonical_root(root);
+    operation.check().map_err(code)?;
+    let root = root.map_err(code)?;
+    let intent_metadata = fs::symlink_metadata(root.join(INTENT));
+    operation.check().map_err(code)?;
+    if matches!(intent_metadata, Err(error) if error.kind() == io::ErrorKind::NotFound)
     {
         return resolve_completed(&root, request, operation);
     }
-    let cap = acquire_recovery(&root, request, operation).map_err(code)?;
+    let acquired = acquire_recovery(&root, request, operation);
+    check_pending(operation).map_err(code)?;
+    let cap = acquired.map_err(code)?;
     cap.verify().map_err(code)?;
-    let binding = load_existing_installation(&root).map_err(code)?;
+    let binding = load_existing_installation(&root);
+    cap.verify().map_err(code)?;
+    let binding = binding.map_err(code)?;
     if binding.initialization_id != Some(cap.intent.id)
         || binding.installation_id != cap.intent.installation
         || binding.installation_incarnation_id != cap.intent.incarnation
     {
         return Err(code(OwnerError::OwnerOperationConflict));
     }
-    let (_, record) = newest_valid(&root).map_err(code)?;
+    let newest = newest_valid(&root);
+    cap.verify().map_err(code)?;
+    let (_, record) = newest.map_err(code)?;
     let record = record.ok_or_else(|| code(OwnerError::OwnerRecoveryEvidenceMissing))?;
     // Initialization owns epoch one only. Later root activity cannot be
     // relabelled as initialization recovery, even with the original request id.
-    let observed = observe_physical_root(&root).map_err(code)?;
+    let observed = observe_physical_root(&root);
+    cap.verify().map_err(code)?;
+    let observed = observed.map_err(code)?;
     let expected_generation = match record.lifecycle {
         LifecycleState::Active => 1,
         LifecycleState::Draining => 2,
@@ -285,8 +329,12 @@ pub(crate) fn recover_initialization_request(
         return Err(code(OwnerError::OwnerGuardMismatch));
     }
     let recovery = InitializationRecovery { root: &cap };
-    let store = crate::direct_store::DirectStore::open_initialization_recovery(&recovery)?;
-    store.verify_empty()?;
+    let store = crate::direct_store::DirectStore::open_initialization_recovery(&recovery);
+    cap.verify().map_err(code)?;
+    let store = store?;
+    let verified = store.verify_empty();
+    cap.verify().map_err(code)?;
+    verified?;
     drop(store);
     finish_initialized(cap, *record, true)
 }
@@ -297,13 +345,18 @@ fn finish_initialized(
     replayed: bool,
 ) -> Result<InitializationReceipt, String> {
     cap.verify().map_err(code)?;
-    let native_objects =
-        super::installation::retain_native_installation(&cap.root).map_err(code)?;
+    let native_objects = super::installation::retain_native_installation(&cap.root);
+    cap.verify().map_err(code)?;
+    let native_objects = native_objects.map_err(code)?;
     let recovery = InitializationRecovery { root: &cap };
     // Credential creation is restricted to the new-initialization child. This
     // final proof uses only the already-existing credential, even after a crash.
-    let store = crate::direct_store::DirectStore::open_initialization_recovery(&recovery)?;
-    store.verify_empty()?;
+    let store = crate::direct_store::DirectStore::open_initialization_recovery(&recovery);
+    cap.verify().map_err(code)?;
+    let store = store?;
+    let verified = store.verify_empty();
+    cap.verify().map_err(code)?;
+    verified?;
     drop(store);
     let mut owner = LiveOwner {
         canonical_root: cap.root.clone(),
@@ -318,11 +371,18 @@ fn finish_initialized(
         poisoned: false,
     };
     if owner.record.lifecycle != LifecycleState::Released {
-        owner.begin_drain(DrainReason::Shutdown).map_err(code)?;
-        owner.release_cleanly().map_err(code)?;
+        cap.verify().map_err(code)?;
+        let drained = owner.begin_drain(DrainReason::Shutdown);
+        cap.verify().map_err(code)?;
+        drained.map_err(code)?;
+        let released = owner.release_cleanly();
+        cap.verify().map_err(code)?;
+        released.map_err(code)?;
     }
     cap.verify().map_err(code)?;
-    owner.verify_existing().map_err(code)?;
+    let verified = owner.verify_existing();
+    cap.verify().map_err(code)?;
+    verified.map_err(code)?;
     let receipt = InitializationReceipt {
         namespace: cap.intent.namespace,
         replayed,
@@ -333,12 +393,19 @@ fn finish_initialized(
         primary,
         sealed,
         root_file,
+        operation,
         ..
     } = cap;
     drop(intent_file);
-    fs::remove_file(root.join(INTENT)).map_err(|_| code(OwnerError::OwnerReleaseOutcomeUnknown))?;
+    check_release(&operation).map_err(code)?;
+    let removed = fs::remove_file(root.join(INTENT));
+    check_release(&operation).map_err(code)?;
+    removed.map_err(|_| code(OwnerError::OwnerReleaseOutcomeUnknown))?;
     sync_directory(&root);
-    if !matches!(fs::symlink_metadata(root.join(INTENT)), Err(error) if error.kind() == io::ErrorKind::NotFound)
+    check_release(&operation).map_err(code)?;
+    let intent_metadata = fs::symlink_metadata(root.join(INTENT));
+    check_release(&operation).map_err(code)?;
+    if !matches!(intent_metadata, Err(error) if error.kind() == io::ErrorKind::NotFound)
     {
         return Err(code(OwnerError::OwnerReleaseOutcomeUnknown));
     }
@@ -347,7 +414,16 @@ fn finish_initialized(
     drop(root_file);
     drop(sealed);
     drop(primary);
+    check_release(&operation).map_err(code)?;
     Ok(receipt)
+}
+
+fn check_pending(operation: &DataRootRequest) -> Result<(), OwnerError> {
+    operation.check().map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)
+}
+
+fn check_release(operation: &DataRootRequest) -> Result<(), OwnerError> {
+    operation.check().map_err(|_| OwnerError::OwnerReleaseOutcomeUnknown)
 }
 
 fn resolve_completed(
@@ -381,27 +457,40 @@ fn acquire_new(
     operation: &DataRootRequest,
 ) -> Result<InitializingDataRoot, OwnerError> {
     operation.check()?;
-    let root_file = open_bound_directory(root)?;
-    if fs::read_dir(root)
-        .map_err(|_| OwnerError::DataRootInvalid)?
+    let root_file = open_bound_directory(root);
+    operation.check()?;
+    let root_file = root_file?;
+    let entries = fs::read_dir(root);
+    operation.check()?;
+    let nonempty = entries.map_err(|_| OwnerError::DataRootInvalid)?
         .next()
         .transpose()
-        .map_err(|_| OwnerError::DataRootInvalid)?
-        .is_some()
-    {
+        .map_err(|_| OwnerError::DataRootInvalid);
+    operation.check()?;
+    if nonempty?.is_some() {
         return Err(OwnerError::OwnerRecoveryQuarantined);
     }
-    let observed = observe_physical_root(root)?;
-    let executable = observe_executable()?;
-    let (installation, incarnation) = mint_installation_ids(&observed, &executable)?;
-    let owner_token = mint_owner_token(&observed, &executable)?;
+    let observed = observe_physical_root(root);
+    operation.check()?;
+    let observed = observed?;
+    let executable = observe_executable();
+    operation.check()?;
+    let executable = executable?;
+    let installation_ids = mint_installation_ids(&observed, &executable);
+    operation.check()?;
+    let (installation, incarnation) = installation_ids?;
+    let owner_token = mint_owner_token(&observed, &executable);
+    operation.check()?;
+    let owner_token = owner_token?;
     let namespace = initialization_namespace(
         request.0,
         installation,
         incarnation,
         *observed.data_root_id.as_bytes(),
         executable,
-    )?;
+    );
+    operation.check()?;
+    let namespace = namespace?;
     let intent = InitIntent {
         id: request.0,
         installation,
@@ -414,25 +503,44 @@ fn acquire_new(
     };
     // The exact intent is the first durable effect and arbitrates concurrent init.
     operation.check()?;
-    let mut intent_file = create_new_file(&root.join(INTENT))?;
-    intent_file
+    let intent_file = create_new_file(&root.join(INTENT));
+    check_pending(operation)?;
+    let mut intent_file = intent_file?;
+    let written = intent_file
         .write_all(&intent.encode())
         .and_then(|()| intent_file.sync_all())
-        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
+        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown);
+    check_pending(operation)?;
+    written?;
     sync_directory(root);
-    let primary = create_new_file(&root.join(PRIMARY))?;
-    lock_primary(&primary)?;
-    let sealed_file = create_new_file(&root.join(SEALED))?;
-    sealed_file
+    check_pending(operation)?;
+    let primary = create_new_file(&root.join(PRIMARY));
+    check_pending(operation)?;
+    let primary = primary?;
+    let locked = lock_primary(&primary);
+    check_pending(operation)?;
+    locked?;
+    let sealed_file = create_new_file(&root.join(SEALED));
+    check_pending(operation)?;
+    let sealed_file = sealed_file?;
+    let synced = sealed_file
         .sync_all()
-        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
+        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown);
+    check_pending(operation)?;
+    synced?;
     drop(sealed_file);
-    let sealed = existing_sealed(root)?;
+    let sealed = existing_sealed(root);
+    check_pending(operation)?;
+    let sealed = sealed?;
     // No unrelated state may enter the empty layout after the first proof.
-    for entry in fs::read_dir(root).map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)? {
+    let entries = fs::read_dir(root);
+    check_pending(operation)?;
+    for entry in entries.map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)? {
+        check_pending(operation)?;
         let name = entry
             .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?
             .file_name();
+        check_pending(operation)?;
         if !matches!(name.to_str(), Some(INTENT | PRIMARY | SEALED)) {
             return Err(OwnerError::OwnerRecoveryQuarantined);
         }
@@ -454,19 +562,36 @@ fn acquire_recovery(
     operation: &DataRootRequest,
 ) -> Result<InitializingDataRoot, OwnerError> {
     operation.check()?;
-    let root_file = open_bound_directory(root)?;
-    let primary = existing_file(&root.join(PRIMARY))?;
-    lock_primary(&primary)?;
-    let sealed = existing_sealed(root)?;
-    let intent_file = existing_file(&root.join(INTENT))?;
-    let bytes = read_existing_bytes(&root.join(INTENT), MAX_INTENT)?
+    let root_file = open_bound_directory(root);
+    check_pending(operation)?;
+    let root_file = root_file?;
+    let primary = existing_file(&root.join(PRIMARY));
+    check_pending(operation)?;
+    let primary = primary?;
+    let locked = lock_primary(&primary);
+    check_pending(operation)?;
+    locked?;
+    let sealed = existing_sealed(root);
+    check_pending(operation)?;
+    let sealed = sealed?;
+    let intent_file = existing_file(&root.join(INTENT));
+    check_pending(operation)?;
+    let intent_file = intent_file?;
+    let bytes = read_existing_bytes(&root.join(INTENT), MAX_INTENT);
+    check_pending(operation)?;
+    let bytes = bytes?
         .ok_or(OwnerError::OwnerRecoveryEvidenceMissing)?;
-    let intent = InitIntent::decode(&bytes)?;
+    let intent = InitIntent::decode(&bytes);
+    check_pending(operation)?;
+    let intent = intent?;
     if intent.id != request.0 {
         return Err(OwnerError::OwnerOperationConflict);
     }
     // Every other operation barrier is outside this exact initialization.
-    crate::catalog_quarantine::check(root).map_err(|_| OwnerError::OwnerRecoveryQuarantined)?;
+    let quarantine = crate::catalog_quarantine::check(root)
+        .map_err(|_| OwnerError::OwnerRecoveryQuarantined);
+    check_pending(operation)?;
+    quarantine?;
     for name in [
         "control/catalog-quarantine.tmp",
         "control/control.redb",
@@ -474,7 +599,10 @@ fn acquire_recovery(
         "control/source-roots.tmp",
         "control/source-roots.bak",
     ] {
-        if !matches!(fs::symlink_metadata(root.join(name)), Err(error) if error.kind() == io::ErrorKind::NotFound)
+        check_pending(operation)?;
+        let metadata = fs::symlink_metadata(root.join(name));
+        check_pending(operation)?;
+        if !matches!(metadata, Err(error) if error.kind() == io::ErrorKind::NotFound)
         {
             return Err(OwnerError::OwnerRecoveryQuarantined);
         }
@@ -587,15 +715,24 @@ fn publish_initial_slot(
     root: &Path,
     name: &str,
     record: &DurableOwnerRecord,
+    operation: &DataRootRequest,
 ) -> Result<(), OwnerError> {
     let expected = record.encode();
     let path = root.join(name);
-    let mut file = create_new_file(&path)?;
-    file.write_all(&expected)
+    check_pending(operation)?;
+    let file = create_new_file(&path);
+    check_pending(operation)?;
+    let mut file = file?;
+    let written = file.write_all(&expected)
         .and_then(|()| file.sync_all())
-        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
+        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown);
+    check_pending(operation)?;
+    written?;
     sync_directory(root);
-    if read_existing_bytes(&path, super::spec::MAX_STATE_BYTES)? != Some(expected) {
+    check_pending(operation)?;
+    let readback = read_existing_bytes(&path, super::spec::MAX_STATE_BYTES);
+    check_pending(operation)?;
+    if readback? != Some(expected) {
         return Err(OwnerError::OwnerAcquireOutcomeUnknown);
     }
     Ok(())

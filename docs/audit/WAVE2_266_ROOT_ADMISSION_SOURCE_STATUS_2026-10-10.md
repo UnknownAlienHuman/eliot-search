@@ -47,6 +47,15 @@ missing retained recovery inputs. The private context shares one original 120-se
 absolute deadline and cancellation through inspection, mutation and initialization.
 Native and durable revalidation checks the context before and after observations.
 
+Explicit initialization and its exact recovery also check that original context
+through native intent acquisition, exclusion objects, layout readback, owner-slot
+publication and finalization. Results are captured before context refusal and
+ordinary error propagation. A checkpoint separates durable drain from release;
+intent removal retains release-unknown classification through its exact readback.
+The existing intent/layout/owner formats and missing-state refusal are unchanged.
+These cooperative boundaries do not make partial initialization recoverable or
+establish a native DRAINING crash proof.
+
 Service startup has a finite context. After completed startup the same live owner may
 idle; each command borrows it under its own finite context. Shutdown retains its
 original command context through drain/release and final output. Migration staging

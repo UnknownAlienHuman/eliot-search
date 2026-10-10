@@ -64,6 +64,11 @@ may persist format 2 native control/lock bindings; ordinary format 1 opens canno
 silently upgrade. An exact retained intent fences unknown initialization outcomes.
 Recovery never retries missing creates or credentials.
 
+The [initialization-context continuation](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6096072235)
+uses the same original request through native acquisition/recovery, slot publication,
+drain/release and intent-removal result boundaries in that initialization owner.
+It adds no durable fields, retry/recovery algorithm or production fault switch.
+
 Existing migration child parameter wiring also covers `control_migration_plan.rs`,
 `control_migration.rs`, `control_migration_cutover.rs` and
 `control_migration_cutover/{marker_io,operation}.rs`. Only borrowed admission and
