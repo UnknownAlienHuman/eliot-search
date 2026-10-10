@@ -75,6 +75,14 @@ tighten the admitted absolute deadline. Existing catalog replay adapters without
 request are fixture-only after cutover. No import algorithm, artifact lifecycle,
 durable schema, hash preimage or recovery authority changes under this continuation.
 
+The [physical-inventory continuation](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6095608407)
+names only `control_migration_orphans.rs` and `control_migration_preparation.rs`,
+plus the owning native root-open fixture. Original checkpoints reach existing
+tree/shard/file/count/page loops and fingerprint/reference readback; page limits
+can only tighten the original deadline. Classification, digest preimages, cursor
+schemas, physical file policy and bounds remain unchanged. No repair or deletion
+is added.
+
 The [owner issue addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094110299)
 extends only the admission/open boundary to these actual reverse-consumer adapters:
 

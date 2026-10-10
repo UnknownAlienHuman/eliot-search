@@ -78,6 +78,13 @@ page limits, cannot extend the original absolute deadline. Directory inventory/r
 loops and revision-page read/preparation/result boundaries retain cancellation checks.
 Initialization's empty catalog readback also uses the checked reader.
 
+Physical revision-residue and preparation inventories retain the original request
+through tree/shard/file/page loops, counts and exact fingerprint/reference reads.
+Their 30-second page ceilings cannot extend the admitted deadline. Filesystem
+results are captured, the original context is checked, then an ordinary error is
+propagated. Classification, cursor schemas, fingerprints/preimages and file bounds
+are unchanged; these read-only modes grant no repair or deletion authority.
+
 ## Evidence scope
 
 Rust 1.98.0, locked/offline, Windows native fixture profile; no dependency/lockfile
@@ -110,11 +117,17 @@ retention is checked by the separate product process target, not by a hand-made 
 Public module declarations in this test binary preserve the original module visibility
 without changing product visibility or suppressing fixture Clippy findings.
 
+The native administrative-page fixture also requests the explicit orphan and
+preparation-files modes on an initialized empty catalog. It proves live-owner
+routing and preservation of catalog objects (excluding owner lifecycle slots)
+through shutdown. It does not exercise populated physical inventories or
+mid-inventory cancellation; those qualification claims remain open.
+
 ## Still open in #266 and downstream owners
 
 - Original command checkpoints now reach the named DIRECT children above. Some
-  physical orphan/preparation inventories and staged migration artifact/import-object
-  child internals still use deadline-only checks and remain incomplete; their outer
+  staged migration artifact/import-object child internals still use deadline-only
+  checks and remain incomplete; their outer
   result boundary is checked. No production caller uses the context-free catalog
   replay wrappers. A checkpoint does not interrupt
   a synchronous OS/vendor/codec call already in progress; bounded/preemptible I/O

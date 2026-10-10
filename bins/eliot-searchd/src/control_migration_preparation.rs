@@ -8,22 +8,18 @@ use std::path::Path;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use search_materializer::api::{
-    LEGACY_PREPARATION_DIRECTORY,
-    LegacyPreparationInventoryKind as Kind,
+    LEGACY_PREPARATION_DIRECTORY, LegacyPreparationInventoryKind as Kind,
     LegacyPreparationInventoryTree, LegacyPreparationProtection,
-    classify_legacy_preparation_inventory_name,
-    legacy_preparation_object_relative_locator,
-    legacy_preparation_reference_relative_locator,
-    legacy_preparation_rooted_locator,
+    classify_legacy_preparation_inventory_name, legacy_preparation_object_relative_locator,
+    legacy_preparation_reference_relative_locator, legacy_preparation_rooted_locator,
 };
 use zeroize::Zeroizing;
 
-use super::{
-    MAX_OBJECT_BYTES, REF_BYTES, binding, decode_reference,
-    decode_reference_fields, ensure_directory, lookup_key, object_id,
-    profile_digest, read_regular_file, sha256,
-};
 use super::super::DirectStore;
+use super::{
+    MAX_OBJECT_BYTES, REF_BYTES, binding, decode_reference, decode_reference_fields,
+    ensure_directory, lookup_key, object_id, profile_digest, read_regular_file, sha256,
+};
 use crate::service_output::json_string;
 
 const MAX_FILES: usize = 65_536;
@@ -68,9 +64,7 @@ impl Cursor {
         }
         let checkpoint = sha256::decode_digest(parts[1]).ok_or_else(invalid)?;
         let next = parts[2].parse::<usize>().map_err(|_| invalid())?;
-        if next > MAX_FILES
-            || next.to_string() != parts[2]
-            || sha256::hex(&checkpoint) != parts[1]
+        if next > MAX_FILES || next.to_string() != parts[2] || sha256::hex(&checkpoint) != parts[1]
         {
             return Err(invalid());
         }
@@ -87,11 +81,18 @@ impl DirectStore {
         &self,
         cursor: Option<&str>,
     ) -> Result<String, String> {
-        let deadline = Instant::now()
+        self.check_operation()?;
+        let check_context = || self.check_operation();
+        let page_deadline = Instant::now()
             .checked_add(DEADLINE)
             .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
+        let deadline = self
+            .operation_deadline()?
+            .map_or(page_deadline, |original| original.min(page_deadline));
         let cursor = cursor.map(Cursor::parse).transpose()?;
-        let catalog = self.inner.verify_migration_snapshot(deadline)?;
+        let catalog = self.inner.verify_migration_snapshot(deadline);
+        check(deadline, &check_context)?;
+        let catalog = catalog?;
         let inventory = self.preparation_inventory(deadline)?;
         let profile = profile_digest();
         let checkpoint = sha256::digest_parts(
@@ -115,7 +116,7 @@ impl DirectStore {
         let mut fingerprints = Vec::with_capacity(PAGE_FILES);
         let mut encoded_bytes = 0_u64;
         for entry in inventory.files.values().skip(first) {
-            check(deadline)?;
+            check(deadline, &check_context)?;
             if rows.len() == PAGE_FILES
                 || encoded_bytes
                     .checked_add(entry.size)
@@ -128,7 +129,9 @@ impl DirectStore {
                 entry,
                 MAX_OBJECT_BYTES,
                 deadline,
+                &check_context,
             )?);
+            check(deadline, &check_context)?;
             encoded_bytes += entry.size;
             rows.push(format!(
                 concat!(
@@ -146,33 +149,45 @@ impl DirectStore {
             ));
             fingerprints.push((entry, digest));
         }
+        check(deadline, &check_context)?;
         if rows.is_empty() && first != inventory.files.len() {
             return Err("DIRECT_MIGRATION_NO_PROGRESS".to_owned());
         }
         // Hash every reference during both sweeps, including references not owned by
         // the current profile. A same-size/mtime reference replacement invalidates the cursor.
-        if self.preparation_inventory(deadline)? != inventory
-            || self.inner.verify_migration_snapshot(deadline)? != catalog
-        {
+        let observed_inventory = self.preparation_inventory(deadline)?;
+        if observed_inventory != inventory {
+            return Err("DIRECT_MIGRATION_PREPARATION_INVENTORY_CHANGED".to_owned());
+        }
+        let observed_catalog = self.inner.verify_migration_snapshot(deadline);
+        check(deadline, &check_context)?;
+        if observed_catalog? != catalog {
             return Err("DIRECT_MIGRATION_PREPARATION_INVENTORY_CHANGED".to_owned());
         }
         for (entry, digest) in fingerprints {
-            if sha256::digest(&read_artifact(
+            check(deadline, &check_context)?;
+            let observed_digest = sha256::digest(&read_artifact(
                 &self.root,
                 entry,
                 MAX_OBJECT_BYTES,
                 deadline,
-            )?) != digest
-            {
+                &check_context,
+            )?);
+            check(deadline, &check_context)?;
+            if observed_digest != digest {
                 return Err("DIRECT_MIGRATION_PREPARATION_OBJECT_CHANGED".to_owned());
             }
         }
-        let count = |kind| {
-            inventory
-                .files
-                .values()
-                .filter(|entry| entry.kind == kind)
-                .count()
+        let count = |kind| -> Result<usize, String> {
+            let mut total = 0;
+            for entry in inventory.files.values() {
+                check(deadline, &check_context)?;
+                if entry.kind == kind {
+                    total += 1;
+                }
+            }
+            check(deadline, &check_context)?;
+            Ok(total)
         };
         let next = first + rows.len();
         let exhausted = next == inventory.files.len();
@@ -189,10 +204,7 @@ impl DirectStore {
         let next_cursor = if exhausted {
             "null".to_owned()
         } else {
-            json_string(&format!(
-                "p1.{}.{next}",
-                sha256::hex(&checkpoint)
-            ))
+            json_string(&format!("p1.{}.{next}", sha256::hex(&checkpoint)))
         };
         let output = format!(
             concat!(
@@ -216,11 +228,11 @@ impl DirectStore {
             inventory.directories.contains("."),
             inventory.directories.len(),
             inventory.files.len(),
-            count(Kind::CurrentReference),
-            count(Kind::CurrentTarget),
-            count(Kind::UnmappedReference),
-            count(Kind::UnmappedObject),
-            count(Kind::Temporary),
+            count(Kind::CurrentReference)?,
+            count(Kind::CurrentTarget)?,
+            count(Kind::UnmappedReference)?,
+            count(Kind::UnmappedObject)?,
+            count(Kind::Temporary)?,
             inventory.missing_current_references,
             first,
             next,
@@ -231,19 +243,21 @@ impl DirectStore {
             next_cursor,
             exhausted,
         );
+        check(deadline, &check_context)?;
         if output.len() > RESPONSE_BYTES {
             return Err("DIRECT_MIGRATION_PAGE_TOO_LARGE".to_owned());
         }
-        check(deadline)?;
+        check(deadline, &check_context)?;
         Ok(output)
     }
 
     fn preparation_inventory(&self, deadline: Instant) -> Result<Inventory, String> {
-        let mut inventory = physical_inventory(&self.root, deadline)?;
+        let check_context = || self.check_operation();
+        let mut inventory = physical_inventory(&self.root, deadline, &check_context)?;
         let namespace = self.inner.namespace_id();
         // Borrow the sole catalog's bounded inventory; do not build another revision map.
         for metadata in self.inner.retained_revisions() {
-            check(deadline)?;
+            check(deadline, &check_context)?;
             let binding = binding(&namespace, &metadata)?;
             let key = lookup_key(&binding, &self.protector);
             let relative = legacy_preparation_reference_relative_locator(&key);
@@ -255,8 +269,9 @@ impl DirectStore {
                 return Err(invalid());
             }
             let saved = entry.reference.as_ref().ok_or_else(invalid)?;
-            let (digest, _) = decode_reference(saved, &key, &self.protector)
-                .map_err(str::to_owned)?;
+            let decoded = decode_reference(saved, &key, &self.protector);
+            check(deadline, &check_context)?;
+            let (digest, _) = decoded.map_err(str::to_owned)?;
             let id = object_id(&binding, &self.protector, &digest);
             let id_bytes = sha256::decode_digest(&id).ok_or_else(invalid)?;
             let protection = if self.protector.encrypts_new_objects() {
@@ -264,34 +279,28 @@ impl DirectStore {
             } else {
                 LegacyPreparationProtection::Plaintext
             };
-            let target =
-                legacy_preparation_object_relative_locator(&id_bytes, protection);
+            let target = legacy_preparation_object_relative_locator(&id_bytes, protection);
             entry.kind = Kind::CurrentReference;
             entry.target = Some(target.clone());
             let object = inventory
                 .files
                 .get_mut(&target)
-                .ok_or_else(|| {
-                    "DIRECT_PREPARATION_REFERENCED_OBJECT_MISSING".to_owned()
-                })?;
+                .ok_or_else(|| "DIRECT_PREPARATION_REFERENCED_OBJECT_MISSING".to_owned())?;
             if object.kind != Kind::UnmappedObject {
                 return Err("DIRECT_PREPARATION_REFERENCE_CONFLICT".to_owned());
             }
             object.kind = Kind::CurrentTarget;
         }
-        let mut digest = sha256::digest_parts(
-            b"eliot-search/preparation-inventory-seed/v1",
-            &[],
-        );
+        let mut digest = sha256::digest_parts(b"eliot-search/preparation-inventory-seed/v1", &[]);
         for directory in &inventory.directories {
-            check(deadline)?;
+            check(deadline, &check_context)?;
             digest = sha256::digest_parts(
                 b"eliot-search/preparation-inventory-directory/v1",
                 &[&digest, directory.as_bytes()],
             );
         }
         for entry in inventory.files.values() {
-            check(deadline)?;
+            check(deadline, &check_context)?;
             let modified = entry
                 .modified
                 .duration_since(UNIX_EPOCH)
@@ -315,13 +324,20 @@ impl DirectStore {
             );
         }
         inventory.digest = digest;
+        check(deadline, &check_context)?;
         Ok(inventory)
     }
 }
 
-fn physical_inventory(root: &Path, deadline: Instant) -> Result<Inventory, String> {
-    check(deadline)?;
-    ensure_directory(root)?;
+fn physical_inventory(
+    root: &Path,
+    deadline: Instant,
+    check_context: &dyn Fn() -> Result<(), String>,
+) -> Result<Inventory, String> {
+    check(deadline, check_context)?;
+    let root_directory = ensure_directory(root);
+    check(deadline, check_context)?;
+    root_directory?;
     let base = root.join(LEGACY_PREPARATION_DIRECTORY);
     let mut result = Inventory {
         directories: BTreeSet::new(),
@@ -329,64 +345,79 @@ fn physical_inventory(root: &Path, deadline: Instant) -> Result<Inventory, Strin
         missing_current_references: 0,
         digest: [0; 32],
     };
-    match fs::symlink_metadata(&base) {
-        Ok(_) => ensure_directory(&base)?,
+    let base_metadata = fs::symlink_metadata(&base);
+    check(deadline, check_context)?;
+    match base_metadata {
+        Ok(_) => {
+            let directory = ensure_directory(&base);
+            check(deadline, check_context)?;
+            directory?;
+        }
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(result),
         Err(_) => return Err(invalid()),
     }
     result.directories.insert(".".to_owned());
     let mut trees = BTreeSet::new();
-    for item in fs::read_dir(&base).map_err(|_| invalid())? {
-        check(deadline)?;
+    let directory = fs::read_dir(&base);
+    check(deadline, check_context)?;
+    for item in directory.map_err(|_| invalid())? {
+        check(deadline, check_context)?;
         let item = item.map_err(|_| invalid())?;
         let tree_name = item.file_name().into_string().map_err(|_| invalid())?;
-        let tree = LegacyPreparationInventoryTree::from_directory_name(&tree_name)
-            .ok_or_else(invalid)?;
+        let tree =
+            LegacyPreparationInventoryTree::from_directory_name(&tree_name).ok_or_else(invalid)?;
         if !trees.insert(tree) {
             return Err(invalid());
         }
-        ensure_directory(&item.path())?;
+        let tree_directory = ensure_directory(&item.path());
+        check(deadline, check_context)?;
+        tree_directory?;
         result.directories.insert(tree_name.clone());
         let mut shards = BTreeSet::new();
-        for shard in fs::read_dir(item.path()).map_err(|_| invalid())? {
-            check(deadline)?;
+        let directory = fs::read_dir(item.path());
+        check(deadline, check_context)?;
+        for shard in directory.map_err(|_| invalid())? {
+            check(deadline, check_context)?;
             if shards.len() >= 256 {
                 return Err("DIRECT_MIGRATION_SHARD_LIMIT".to_owned());
             }
             let shard = shard.map_err(|_| invalid())?;
             let shard_name = shard.file_name().into_string().map_err(|_| invalid())?;
             if shard_name.len() != 2
-                || !shard_name.bytes().all(|byte| {
-                    byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)
-                })
+                || !shard_name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
                 || !shards.insert(shard_name.clone())
             {
                 return Err(invalid());
             }
-            ensure_directory(&shard.path())?;
+            let shard_directory = ensure_directory(&shard.path());
+            check(deadline, check_context)?;
+            shard_directory?;
             result
                 .directories
                 .insert(format!("{tree_name}/{shard_name}"));
-            for file in fs::read_dir(shard.path()).map_err(|_| invalid())? {
-                check(deadline)?;
+            let directory = fs::read_dir(shard.path());
+            check(deadline, check_context)?;
+            for file in directory.map_err(|_| invalid())? {
+                check(deadline, check_context)?;
                 if result.files.len() >= MAX_FILES {
                     return Err("DIRECT_MIGRATION_OBJECT_LIMIT".to_owned());
                 }
                 let file = file.map_err(|_| invalid())?;
                 let name = file.file_name().into_string().map_err(|_| invalid())?;
-                let classified = classify_legacy_preparation_inventory_name(
-                    tree,
-                    &name,
-                )
-                .ok_or_else(invalid)?;
+                let classified =
+                    classify_legacy_preparation_inventory_name(tree, &name).ok_or_else(invalid)?;
                 let id = classified.id();
                 let kind = classified.kind();
                 if !id.starts_with(&shard_name) {
                     return Err(invalid());
                 }
-                let (size, modified) = stamp(
-                    &fs::symlink_metadata(file.path()).map_err(|_| invalid())?,
-                )?;
+                let metadata = fs::symlink_metadata(file.path());
+                check(deadline, check_context)?;
+                let file_stamp = stamp(&metadata.map_err(|_| invalid())?);
+                check(deadline, check_context)?;
+                let (size, modified) = file_stamp?;
                 let relative = format!("{tree_name}/{shard_name}/{name}");
                 let mut artifact = Artifact {
                     relative: relative.clone(),
@@ -397,12 +428,12 @@ fn physical_inventory(root: &Path, deadline: Instant) -> Result<Inventory, Strin
                     target: None,
                 };
                 if kind == Kind::UnmappedReference {
-                    let bytes = read_artifact(root, &artifact, REF_BYTES, deadline)?;
+                    let bytes = read_artifact(root, &artifact, REF_BYTES, deadline, check_context)?;
                     let key = sha256::decode_digest(id).ok_or_else(invalid)?;
-                    decode_reference_fields(&bytes, &key).map_err(str::to_owned)?;
-                    artifact.reference = Some(
-                        bytes.as_slice().try_into().map_err(|_| invalid())?,
-                    );
+                    let decoded = decode_reference_fields(&bytes, &key);
+                    check(deadline, check_context)?;
+                    decoded.map_err(str::to_owned)?;
+                    artifact.reference = Some(bytes.as_slice().try_into().map_err(|_| invalid())?);
                 }
                 if result.files.insert(relative, artifact).is_some() {
                     return Err(invalid());
@@ -410,6 +441,7 @@ fn physical_inventory(root: &Path, deadline: Instant) -> Result<Inventory, Strin
             }
         }
     }
+    check(deadline, check_context)?;
     Ok(result)
 }
 
@@ -417,7 +449,8 @@ fn invalid() -> String {
     "DIRECT_MIGRATION_UNEXPECTED_PREPARATION_OBJECT".to_owned()
 }
 
-fn check(deadline: Instant) -> Result<(), String> {
+fn check(deadline: Instant, check_context: &dyn Fn() -> Result<(), String>) -> Result<(), String> {
+    check_context()?;
     if Instant::now() >= deadline {
         Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
     } else {
@@ -440,10 +473,7 @@ fn stamp(metadata: &Metadata) -> Result<(u64, SystemTime), String> {
     {
         return Err(invalid());
     }
-    Ok((
-        metadata.len(),
-        metadata.modified().map_err(|_| invalid())?,
-    ))
+    Ok((metadata.len(), metadata.modified().map_err(|_| invalid())?))
 }
 
 fn read_artifact(
@@ -451,30 +481,44 @@ fn read_artifact(
     entry: &Artifact,
     maximum: usize,
     deadline: Instant,
+    check_context: &dyn Fn() -> Result<(), String>,
 ) -> Result<Zeroizing<Vec<u8>>, String> {
-    check(deadline)?;
-    ensure_directory(root)?;
+    check(deadline, check_context)?;
+    let root_directory = ensure_directory(root);
+    check(deadline, check_context)?;
+    root_directory?;
     let base = root.join(LEGACY_PREPARATION_DIRECTORY);
-    ensure_directory(&base)?;
+    let base_directory = ensure_directory(&base);
+    check(deadline, check_context)?;
+    base_directory?;
     let mut directory = base.clone();
     // The exact three components were produced by package-owned generated-name
     // validation, not user input.
     for component in entry.relative.split('/').take(2) {
+        check(deadline, check_context)?;
         directory.push(component);
-        ensure_directory(&directory)?;
+        let inspected = ensure_directory(&directory);
+        check(deadline, check_context)?;
+        inspected?;
     }
     let path = base.join(&entry.relative);
     let expected = (entry.size, entry.modified);
-    if stamp(&fs::symlink_metadata(&path).map_err(|_| invalid())?)? != expected {
+    let metadata = fs::symlink_metadata(&path);
+    check(deadline, check_context)?;
+    let before = stamp(&metadata.map_err(|_| invalid())?);
+    check(deadline, check_context)?;
+    if before? != expected {
         return Err(invalid());
     }
-    let bytes = Zeroizing::new(read_regular_file(
-        &path,
-        maximum,
-        "DIRECT_MIGRATION_PREPARATION_READ_FAILED",
-    )?);
+    let readback = read_regular_file(&path, maximum, "DIRECT_MIGRATION_PREPARATION_READ_FAILED");
+    check(deadline, check_context)?;
+    let bytes = Zeroizing::new(readback?);
+    let metadata = fs::symlink_metadata(&path);
+    check(deadline, check_context)?;
+    let after = stamp(&metadata.map_err(|_| invalid())?);
+    check(deadline, check_context)?;
     if bytes.len() as u64 != entry.size
-        || stamp(&fs::symlink_metadata(&path).map_err(|_| invalid())?)? != expected
+        || after? != expected
         || entry
             .reference
             .as_ref()
@@ -482,6 +526,6 @@ fn read_artifact(
     {
         return Err("DIRECT_MIGRATION_PREPARATION_OBJECT_CHANGED".to_owned());
     }
-    check(deadline)?;
+    check(deadline, check_context)?;
     Ok(bytes)
 }

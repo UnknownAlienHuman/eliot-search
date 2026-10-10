@@ -589,7 +589,7 @@ fn administrative_pages_share_the_live_owner_and_preserve_catalog_objects() {
         .as_mut()
         .unwrap()
         .write_all(
-            b"control-migration-page\ncontrol-migration-revisions\ncontrol-migration-directories\nshutdown\n",
+            b"control-migration-page\ncontrol-migration-revisions\ncontrol-migration-revisions\torphans\ncontrol-migration-revisions\tpreparation-files\ncontrol-migration-directories\nshutdown\n",
         )
         .unwrap();
     drop(service.0.stdin.take());
@@ -604,6 +604,8 @@ fn administrative_pages_share_the_live_owner_and_preserve_catalog_objects() {
     for event in [
         "control_migration_page",
         "control_migration_revisions",
+        "control_migration_orphans",
+        "control_migration_preparation_files",
         "control_migration_directories",
         "data_root_stopped",
     ] {
