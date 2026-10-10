@@ -184,7 +184,7 @@ Read-only research for the next non-overlapping slice may run while the current 
 - Qdrant is the only production indexed/search database.
 - redb stores bounded technical control state, never a searchable corpus.
 - Qdrant payload is projection metadata, never source evidence; candidates require exact source/revision validation.
-- Retrieval, filtered IDF and exact denominator share one eligibility contract; denied data cannot influence ranking/statistics/counts/traces.
+- Retrieval, filtered IDF, exact denominator, count, scroll, facets, grouping, recommend/discover and response validation use the same eligibility base filter; denied data cannot influence permitted candidate visibility, ranking, statistics, counts, facets, groups, recommendations, suggestions or traces.
 - Paths are locators, not identities. Native/source/revision/representation/projection identities remain distinct.
 - Immutable revisions/manifests are never rewritten in place. Publication is generation/epoch safe.
 - Unknown external mutation outcome is neither success nor blind-replay permission.
