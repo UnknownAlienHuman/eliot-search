@@ -7,7 +7,7 @@ use search_contracts::{
 use search_runtime_owner::OwnerError;
 
 use super::catalog_intent::{FORMAT, MAX_INTENT_BYTES};
-use super::operation::{DataRootRequest, MAX_CONTEXT_BYTES, MAX_INPUT_BYTES};
+use super::operation::DataRootRequest;
 use super::record::DurableOwnerRecord;
 use super::spec::{DrainReasonText, LifecycleState};
 
@@ -100,7 +100,7 @@ impl CatalogIntentEvidence {
         let kind = original_command(payload)?;
         let domain = CanonicalDigestDomain::parse(domain.as_str())
             .map_err(|_| OwnerError::OwnerRecoveryQuarantined)?;
-        let limit = DigestInputLimit::new(MAX_CONTEXT_BYTES)
+        let limit = DigestInputLimit::new(DataRootRequest::cli_digest_byte_limit())
             .map_err(|_| OwnerError::OwnerRecoveryQuarantined)?;
         let observed = blake3_canonical(&domain, payload, limit)
             .map_err(|_| OwnerError::OwnerRecoveryQuarantined)?;
@@ -183,7 +183,7 @@ fn original_command(payload: &CanonicalValue) -> Result<CatalogOperationKind, Ow
         .into_iter()
         .try_fold(0_usize, |total, bytes| total.checked_add(bytes.len()))
         .ok_or(OwnerError::ContractExhausted)?;
-    if root.is_empty() || total > MAX_INPUT_BYTES {
+    if root.is_empty() || total > DataRootRequest::cli_input_byte_limit() {
         return Err(OwnerError::OwnerRecoveryQuarantined);
     }
     #[cfg(windows)]
