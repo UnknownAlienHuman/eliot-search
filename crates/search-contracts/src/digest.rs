@@ -5,7 +5,9 @@
 //! caller data; each semantic owner must freeze its schema and domain together.
 //! The explicitly named exact-byte SHA compatibility primitive adds no framing.
 
-use crate::canonical::stream_canonical_cbor;
+use crate::canonical::{
+    check_canonical_array_length, stream_canonical_cbor, stream_canonical_cbor_array,
+};
 use crate::{
     Blake3Digest32, CanonicalValue, ContractError, ContractErrorKind, MAX_CANONICAL_BYTES,
     Sha256Digest32,
@@ -156,6 +158,41 @@ pub fn blake3_canonical(
     hasher.update(domain.name.as_bytes());
     hasher.update(&[0]);
     stream_canonical_cbor(value, payload_limit, |bytes| {
+        hasher.update(bytes);
+        Ok(())
+    })?;
+    Ok(Blake3Digest32::from_computed_bytes(
+        *hasher.finalize().as_bytes(),
+    ))
+}
+
+/// Hash a finite ordered canonical array without collecting its complete input.
+///
+/// Uses the same length-first CBOR profile and domain framing as
+/// `blake3_canonical` over `CanonicalValue::Array`. The declared count is at most
+/// `MAX_COLLECTION_ITEMS`; at most count + 1 iterator reads check exact length.
+/// Each row is validated with the enclosing array included in the depth ceiling.
+/// Caller row errors, malformed length or byte/depth/canonical failures return no digest.
+///
+/// The helper does not retain a complete array or preimage. Callers own row
+/// construction, prior allocation and deterministic schema order; this computes
+/// equality only and grants no operation, validation or completeness authority.
+///
+/// # Errors
+/// Rejects a raw domain, oversized count/preimage, mismatched row count, invalid
+/// canonical row or any error returned by the row producer.
+pub fn blake3_canonical_array(
+    domain: &CanonicalDigestDomain,
+    row_count: usize,
+    rows: impl IntoIterator<Item = Result<CanonicalValue, ContractError>>,
+    limit: DigestInputLimit,
+) -> Result<Blake3Digest32, ContractError> {
+    check_canonical_array_length(row_count)?;
+    let payload_limit = domain.payload_limit(Representation::Cbor, limit)?;
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(domain.name.as_bytes());
+    hasher.update(&[0]);
+    stream_canonical_cbor_array(row_count, rows, payload_limit, |bytes| {
         hasher.update(bytes);
         Ok(())
     })?;
