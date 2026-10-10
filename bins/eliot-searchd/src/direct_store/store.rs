@@ -12,8 +12,10 @@ use crate::safe_reader_adapter::{AdapterError, FullReadError};
 use crate::{safe_reader_adapter, sha256};
 
 #[cfg(test)]
+use super::catalog::load_registry;
+#[cfg(test)]
 use super::catalog::{RevisionMetadata, verify_revision_identity};
-use super::catalog::{load_registry, load_registry_with_check, read_namespace};
+use super::catalog::{load_registry_with_check, read_namespace};
 use super::model::{
     CONTROL_DIRECTORY, DirectDigest, DirectStore, FileSnapshot, IdentityStrength,
     MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_FILES, MAX_LOG_BYTES, MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS,
@@ -80,7 +82,7 @@ impl DirectStore {
         sync_directory(&control);
         let namespace_id = read_namespace(&control.join(NAMESPACE_FILE))
             .map_err(|_| "DIRECT_INITIALIZATION_READBACK_INVALID".to_owned())?;
-        let registry = load_registry(&control.join(SOURCE_LOG_FILE))
+        let registry = load_registry_with_check(&control.join(SOURCE_LOG_FILE), &check)
             .map_err(|_| "DIRECT_INITIALIZATION_READBACK_INVALID".to_owned())?;
         if namespace_id != cap.namespace_id()
             || registry.event_count != 0

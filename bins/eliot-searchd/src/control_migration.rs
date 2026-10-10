@@ -14,7 +14,7 @@ mod mapping;
 
 use super::{
     CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, SOURCE_LOG_FILE,
-    SourceRecord, SourceState, ZERO_DIGEST, read_namespace, replay_registry, sha256,
+    SourceRecord, SourceState, ZERO_DIGEST, read_namespace, replay_registry_with_check, sha256,
 };
 
 const PAGE_EVENTS: usize = 32;
@@ -75,48 +75,53 @@ impl DirectStore {
         bindings: &[(String, String, String)],
         deadline: Instant,
     ) -> Result<[u8; 32], String> {
+        let check = || {
+            self.check_operation()?;
+            if Instant::now() >= deadline {
+                Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+            } else {
+                Ok(())
+            }
+        };
+        check()?;
         if bindings.len() > PAGE_EVENTS {
             return Err("DIRECT_MIGRATION_BINDING_LIMIT".to_owned());
         }
         // Own the pending keys so the replay closure can remove entries borrowed
         // from `record` without invariant lifetime conflicts (E0521).
         let mut missing = bindings.iter().cloned().collect::<BTreeSet<_>>();
-        if Instant::now() >= deadline {
-            return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
-        }
+        check()?;
         let control = self.root.join(CONTROL_DIRECTORY);
         let namespace = read_namespace(&control.join(NAMESPACE_FILE))?;
         if namespace != self.namespace_id {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
         }
-        let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
-            if Instant::now() >= deadline {
-                return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
-            }
-            validate_legacy_event(&namespace, record, previous)?;
-            if record.state == SourceState::Active {
-                missing.remove(&(
-                    record.source_id.clone(),
-                    record.revision_id.clone(),
-                    record.path_digest.clone(),
-                ));
-            }
-            Ok(())
-        })?;
+        let state = replay_registry_with_check(
+            &control.join(SOURCE_LOG_FILE),
+            |record, previous| {
+                check()?;
+                validate_legacy_event(&namespace, record, previous)?;
+                if record.state == SourceState::Active {
+                    missing.remove(&(
+                        record.source_id.clone(),
+                        record.revision_id.clone(),
+                        record.path_digest.clone(),
+                    ));
+                }
+                Ok(())
+            },
+            &check,
+        )?;
         if !missing.is_empty() {
             return Err("DIRECT_MIGRATION_MANIFEST_SOURCE_UNBOUND".to_owned());
         }
         if state != self.registry || read_namespace(&control.join(NAMESPACE_FILE))? != namespace {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        if Instant::now() >= deadline {
-            return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
-        }
-        Ok(snapshot_digest(
-            &namespace,
-            state.last_sequence,
-            &state.last_digest,
-        ))
+        check()?;
+        let snapshot = snapshot_digest(&namespace, state.last_sequence, &state.last_digest);
+        check()?;
+        Ok(snapshot)
     }
 
     /// Inspect disk history under the caller's existing exclusive owner guard.
@@ -127,9 +132,23 @@ impl DirectStore {
         owner: &crate::development::DataRootGuard,
         expected_namespace: &str,
         cursor: Option<&str>,
+        request: &crate::owner_composition::DataRootRequest,
     ) -> Result<String, String> {
+        request.preflight()?;
         let root = owner.canonical_root();
-        let started = Instant::now();
+        let deadline = Instant::now()
+            .checked_add(REPLAY_DEADLINE)
+            .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?
+            .min(request.deadline());
+        let check = || {
+            request.preflight()?;
+            if Instant::now() >= deadline {
+                Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+            } else {
+                Ok(())
+            }
+        };
+        check()?;
         let cursor = cursor.map(Cursor::parse).transpose()?;
         let control = root.join(CONTROL_DIRECTORY);
         let namespace = read_namespace(&control.join(NAMESPACE_FILE))?;
@@ -146,30 +165,30 @@ impl DirectStore {
             .as_ref()
             .map_or(ZERO_DIGEST, |value| value.event_digest.as_str())
             .to_owned();
-        let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
-            if started.elapsed() >= REPLAY_DEADLINE {
-                return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
-            }
-            validate_legacy_event(&namespace, record, previous)?;
-            // This ordinal counts this source's events, including retirement.
-            // It is deliberately NOT a SourceRevision or a content-object ID.
-            let ordinal = ordinals.entry(record.source_id.clone()).or_default();
-            *ordinal = ordinal
-                .checked_add(1)
-                .ok_or_else(|| "DIRECT_MIGRATION_ORDINAL_EXHAUSTED".to_owned())?;
-            if record.sequence == after {
-                cursor_found = record.record_digest == last_digest;
-            }
-            if record.sequence > after && entries.len() < PAGE_EVENTS {
-                entries.push(event_json(record, previous, *ordinal));
-                last = record.sequence;
-                last_digest.clone_from(&record.record_digest);
-            }
-            Ok(())
-        })?;
-        if started.elapsed() >= REPLAY_DEADLINE {
-            return Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned());
-        }
+        let state = replay_registry_with_check(
+            &control.join(SOURCE_LOG_FILE),
+            |record, previous| {
+                check()?;
+                validate_legacy_event(&namespace, record, previous)?;
+                // This ordinal counts this source's events, including retirement.
+                // It is deliberately NOT a SourceRevision or a content-object ID.
+                let ordinal = ordinals.entry(record.source_id.clone()).or_default();
+                *ordinal = ordinal
+                    .checked_add(1)
+                    .ok_or_else(|| "DIRECT_MIGRATION_ORDINAL_EXHAUSTED".to_owned())?;
+                if record.sequence == after {
+                    cursor_found = record.record_digest == last_digest;
+                }
+                if record.sequence > after && entries.len() < PAGE_EVENTS {
+                    entries.push(event_json(record, previous, *ordinal));
+                    last = record.sequence;
+                    last_digest.clone_from(&record.record_digest);
+                }
+                Ok(())
+            },
+            &check,
+        )?;
+        check()?;
         if read_namespace(&control.join(NAMESPACE_FILE))? != namespace {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
         }
@@ -231,6 +250,7 @@ impl DirectStore {
         if output.len() > MAX_PAGE_BYTES {
             return Err("DIRECT_MIGRATION_PAGE_TOO_LARGE".to_owned());
         }
+        check()?;
         Ok(output)
     }
 }

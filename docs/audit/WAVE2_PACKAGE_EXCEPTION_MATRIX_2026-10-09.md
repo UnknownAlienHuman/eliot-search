@@ -69,6 +69,12 @@ Existing migration child parameter wiring also covers `control_migration_plan.rs
 `control_migration_cutover/{marker_io,operation}.rs`. Only borrowed admission and
 content-free marker/status inspection change; artifact/schema/replay owners remain.
 
+The same administrative adapters retain the original request through source-history,
+source mapping and directory/revision page boundaries. Existing page limits may only
+tighten the admitted absolute deadline. Existing catalog replay adapters without a
+request are fixture-only after cutover. No import algorithm, artifact lifecycle,
+durable schema, hash preimage or recovery authority changes under this continuation.
+
 The [owner issue addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094110299)
 extends only the admission/open boundary to these actual reverse-consumer adapters:
 

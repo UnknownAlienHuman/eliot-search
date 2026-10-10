@@ -20,8 +20,10 @@ mod model;
 #[path = "direct_store/store.rs"]
 mod store;
 
+#[cfg(test)]
+use catalog::load_registry;
+use catalog::load_registry_with_check;
 pub use catalog::{RevisionMetadata, verify_revision_identity};
-use catalog::{load_registry, load_registry_with_check};
 use model::{
     CONTROL_DIRECTORY, DirectDigest, FileSnapshot, MAX_DIRECTORY_FILES, MAX_LOG_BYTES,
     MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE, RecordDraft, RegistryState,

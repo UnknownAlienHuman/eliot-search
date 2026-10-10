@@ -577,6 +577,58 @@ fn live_service(root: &std::path::Path) -> ServiceChild {
 }
 
 #[test]
+fn administrative_pages_share_the_live_owner_and_preserve_catalog_objects() {
+    use std::io::Read;
+    let initialized = InitializedScratch::new();
+    let root = &initialized.root.0;
+    let mut before = snapshot(root);
+    let mut service = live_service(root);
+    service
+        .0
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(
+            b"control-migration-page\ncontrol-migration-revisions\ncontrol-migration-directories\nshutdown\n",
+        )
+        .unwrap();
+    drop(service.0.stdin.take());
+    assert!(service.wait_bounded().success());
+    let mut output = String::new();
+    service
+        .1
+        .as_mut()
+        .unwrap()
+        .read_to_string(&mut output)
+        .unwrap();
+    for event in [
+        "control_migration_page",
+        "control_migration_revisions",
+        "control_migration_directories",
+        "data_root_stopped",
+    ] {
+        assert!(
+            output.contains(&format!("\"event\":\"{event}\"")),
+            "{output}"
+        );
+    }
+    assert!(!output.contains("\"error\""), "{output}");
+    drop(service);
+    let mut after = snapshot(root);
+    for slot in [
+        ".eliot-search-owner-state-a.v1",
+        ".eliot-search-owner-state-b.v1",
+    ] {
+        before.remove(&PathBuf::from(slot));
+        after.remove(&PathBuf::from(slot));
+    }
+    assert_eq!(
+        after, before,
+        "administrative pages changed a catalog object"
+    );
+}
+
+#[test]
 fn clean_service_shutdown_releases_before_an_existing_inspection_reopens() {
     use std::io::Read;
     let initialized = InitializedScratch::new();

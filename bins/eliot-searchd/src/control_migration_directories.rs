@@ -63,7 +63,8 @@ impl Page {
 
 impl DirectStore {
     /// Emits registration plus a bounded page from every extant manifest generation.
-    /// Both complete metadata sweeps and source replays share one cooperative deadline.
+    /// Metadata sweeps and source replays retain the original operation checks.
+    /// The page deadline is capped by the original admitted operation deadline.
     /// Startup migration is not made side-effect-free by this already-open-store read.
     /// The borrowed live owner binds the root and its admitted registration throughout.
     pub(crate) fn inspect_migration_directories(
@@ -71,10 +72,20 @@ impl DirectStore {
         owner: &DataRootGuard,
         cursor: Option<&str>,
     ) -> Result<String, String> {
-        let deadline = Instant::now()
+        self.check_operation()?;
+        let page_deadline = Instant::now()
             .checked_add(DEADLINE)
             .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
+        let deadline = self
+            .operation_deadline()?
+            .map_or(page_deadline, |original| original.min(page_deadline));
+        let check = || {
+            self.check_operation()?;
+            check_deadline(Some(deadline))
+        };
+        check()?;
         let cursor = cursor.map(Cursor::parse).transpose()?;
+        check()?;
         if owner.canonical_root() != self.root.as_path() {
             return Err("DIRECT_MIGRATION_ROOT_OWNER_MISMATCH".to_owned());
         }
@@ -82,43 +93,64 @@ impl DirectStore {
             .source_roots()
             .views()
             .map_err(|error| error.code().to_owned())?;
+        check()?;
         let catalog = self.inner.verify_migration_snapshot(deadline)?;
+        check()?;
         let roots =
             source_roots::migration_input(&self.root).map_err(|error| error.code().to_owned())?;
+        check()?;
         // A valid replacement or deleted registration file is not a new admitted
         // root set. Compare locators only: cached availability is not live authority.
-        if !roots
-            .paths
-            .iter()
-            .map(std::path::PathBuf::as_path)
-            .eq(admitted.iter().map(|view| std::path::Path::new(&view.path)))
-        {
+        if roots.paths.len() != admitted.len() {
             return Err("DIRECT_MIGRATION_ROOT_STATE_CHANGED".to_owned());
+        }
+        for (path, view) in roots.paths.iter().zip(&admitted) {
+            check()?;
+            if path.as_path() != std::path::Path::new(&view.path) {
+                return Err("DIRECT_MIGRATION_ROOT_STATE_CHANGED".to_owned());
+            }
+            check()?;
         }
         let root_ids = roots
             .paths
             .iter()
             .map(|path| {
+                check()?;
                 let bytes = path_identity_bytes(path);
-                (
+                let ids = (
                     sha256::hex(&sha256::digest(&bytes)),
                     sha256::hex(&sha256::digest_parts(
                         b"eliot-search/direct-directory/v1",
                         &[&bytes],
                     )),
-                )
+                );
+                check()?;
+                Ok(ids)
             })
-            .collect::<Vec<_>>();
-        let roots_json = root_ids.iter().enumerate().map(|(index, (path, directory))| format!(
-            "{{\"root_index\":{index},\"native_path_sha256\":\"{path}\",\"directory_sha256\":\"{directory}\"}}",
-        )).collect::<Vec<_>>().join(",");
+            .collect::<Result<Vec<_>, String>>()?;
+        let roots_json = root_ids
+            .iter()
+            .enumerate()
+            .map(|(index, (path, directory))| {
+                check()?;
+                let row = format!(
+                    "{{\"root_index\":{index},\"native_path_sha256\":\"{path}\",\"directory_sha256\":\"{directory}\"}}",
+                );
+                check()?;
+                Ok(row)
+            })
+            .collect::<Result<Vec<_>, String>>()?
+            .join(",");
+        check()?;
         let root_digest = roots.file_bytes.as_deref().map(sha256::digest);
+        check()?;
         let mut page = Page {
             after: cursor.as_ref().map_or(0, |value| value.after),
             rows: Vec::with_capacity(PAGE_ROWS),
             bindings: Vec::with_capacity(PAGE_ROWS),
         };
         let before = self.directory_inventory(&root_ids, Some(&mut page), deadline)?;
+        check()?;
         let snapshot = sha256::digest_parts(
             b"eliot-search/control-migration-directories/v1",
             &[
@@ -131,6 +163,7 @@ impl DirectStore {
                 &before.rows.to_be_bytes(),
             ],
         );
+        check()?;
         if page.after > before.rows
             || cursor
                 .as_ref()
@@ -139,24 +172,29 @@ impl DirectStore {
             return Err("DIRECT_MIGRATION_DIRECTORY_CURSOR_STALE".to_owned());
         }
         let after = self.directory_inventory(&root_ids, None, deadline)?;
-        if before != after
-            || source_roots::migration_input(&self.root).map_err(|error| error.code().to_owned())?
-                != roots
-        {
+        check()?;
+        if before != after {
+            return Err("DIRECT_MIGRATION_METADATA_CHANGED".to_owned());
+        }
+        let observed_roots =
+            source_roots::migration_input(&self.root).map_err(|error| error.code().to_owned())?;
+        check()?;
+        if observed_roots != roots {
             return Err("DIRECT_MIGRATION_METADATA_CHANGED".to_owned());
         }
         // Match historical tuples, not just a source's current path or the first
         // retained object occurrence. Renames and A/B/A transitions remain distinct.
-        if self
+        let bindings_catalog = self
             .inner
-            .verify_migration_bindings(&page.bindings, deadline)?
-            != catalog
-        {
+            .verify_migration_bindings(&page.bindings, deadline)?;
+        check()?;
+        if bindings_catalog != catalog {
             return Err("DIRECT_MIGRATION_DIRECTORY_CURSOR_STALE".to_owned());
         }
         let next = page.after + page.rows.len() as u64; // bounded by verified inventory rows
         let exhausted = next == before.rows;
         let body = page.rows.join(",");
+        check()?;
         let page_digest = sha256::digest_parts(
             b"eliot-search/control-migration-directory-page/v1",
             &[
@@ -167,11 +205,13 @@ impl DirectStore {
                 body.as_bytes(),
             ],
         );
+        check()?;
         let next_cursor = if exhausted {
             "null".to_owned()
         } else {
             json_string(&format!("d1.{}.{next}", sha256::hex(&snapshot)))
         };
+        check()?;
         let output = format!(
             concat!(
                 "{{\"event\":\"control_migration_directories\",\"schema\":\"legacy-directory-input-v1\",",
@@ -208,10 +248,11 @@ impl DirectStore {
             next_cursor,
             exhausted,
         );
+        check()?;
         if output.len() > MAX_PAGE_BYTES {
             return Err("DIRECT_MIGRATION_PAGE_TOO_LARGE".to_owned());
         }
-        check_deadline(Some(deadline))?;
+        check()?;
         Ok(output)
     }
 
@@ -221,9 +262,16 @@ impl DirectStore {
         mut page: Option<&mut Page>,
         deadline: Instant,
     ) -> Result<Inventory, String> {
+        let check = || {
+            self.check_operation()?;
+            check_deadline(Some(deadline))
+        };
+        check()?;
         let (directory_present, files) =
-            migration_manifest_files(&self.root, MAX_FILES, deadline, &|| self.check_operation())?;
+            migration_manifest_files(&self.root, MAX_FILES, deadline, &check)?;
+        check()?;
         let namespace = self.namespace_id();
+        check()?;
         let mut generations = BTreeMap::<String, BTreeSet<u64>>::new();
         let mut result = Inventory {
             directory_present,
@@ -234,12 +282,12 @@ impl DirectStore {
             digest: sha256::digest_parts(b"eliot-search/directory-inventory-seed/v1", &[]),
         };
         for path in &files {
-            check_deadline(Some(deadline))?;
+            check()?;
             let remaining = MAX_INVENTORY_BYTES
                 .checked_sub(result.encoded_bytes)
                 .ok_or_else(|| "DIRECT_MIGRATION_METADATA_BYTES_EXCEEDED".to_owned())?;
-            let (manifest, raw_digest, bytes) =
-                migration_manifest(path, remaining, &|| self.check_operation())?;
+            let (manifest, raw_digest, bytes) = migration_manifest(path, remaining, &check)?;
+            check()?;
             if manifest.namespace_id != namespace {
                 return Err("DIRECT_MANIFEST_NAMESPACE_MISMATCH".to_owned());
             }
@@ -268,10 +316,16 @@ impl DirectStore {
                 .as_deref_mut()
                 .filter(|selected| selected.wants(result.rows))
             {
-                let root = roots
-                    .iter()
-                    .position(|(_, digest)| digest == &manifest.directory_digest)
-                    .map_or_else(|| "null".to_owned(), |index| index.to_string());
+                check()?;
+                let mut root = "null".to_owned();
+                for (index, (_, digest)) in roots.iter().enumerate() {
+                    check()?;
+                    if digest == &manifest.directory_digest {
+                        root = index.to_string();
+                        break;
+                    }
+                }
+                check()?;
                 selected.rows.push(format!(
                     concat!(
                         "{{\"kind\":\"manifest\",\"directory_sha256\":{},\"generation\":{},",
@@ -286,13 +340,14 @@ impl DirectStore {
                     manifest.entries.len(),
                     root,
                 ));
+                check()?;
             }
             result.rows = result
                 .rows
                 .checked_add(1)
                 .ok_or_else(|| "DIRECT_MIGRATION_METADATA_COUNT_EXCEEDED".to_owned())?;
             for entry in manifest.entries.values() {
-                check_deadline(Some(deadline))?;
+                check()?;
                 if let Some(selected) = page
                     .as_deref_mut()
                     .filter(|selected| selected.wants(result.rows))
@@ -316,18 +371,22 @@ impl DirectStore {
                     .rows
                     .checked_add(1)
                     .ok_or_else(|| "DIRECT_MIGRATION_METADATA_COUNT_EXCEEDED".to_owned())?;
+                check()?;
             }
+            check()?;
         }
         // Generation numbers start at one. A unique set with max != count has
         // a missing earlier generation. Loss of an entire directory/final suffix
         // still needs an independent inventory anchor; this view cannot invent it.
         for values in generations.values() {
+            check()?;
             if values.last().copied() != Some(values.len() as u64) {
                 return Err("DIRECT_MIGRATION_MANIFEST_HISTORY_GAP".to_owned());
             }
+            check()?;
         }
         result.directory_count = generations.len();
-        check_deadline(Some(deadline))?;
+        check()?;
         Ok(result)
     }
 }

@@ -17,7 +17,7 @@ use search_control_redb::migration::{
 
 use super::{
     CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, SOURCE_LOG_FILE,
-    SourceRecord, SourceState, event_json, read_namespace, replay_registry, sha256,
+    SourceRecord, SourceState, event_json, read_namespace, replay_registry_with_check, sha256,
     snapshot_digest, validate_legacy_event,
 };
 
@@ -133,7 +133,8 @@ impl DirectStore {
         &self,
         namespace: SourceNamespaceId,
     ) -> Result<SourceMappingHeader, String> {
-        SourceMappingHeader::new(
+        self.check_operation()?;
+        let header = SourceMappingHeader::new(
             namespace,
             self.namespace_id,
             snapshot_digest(
@@ -145,7 +146,9 @@ impl DirectStore {
             self.registry.latest.len() as u64,
             MAX_SOURCE_EVENTS as u64,
         )
-        .map_err(mapping_error)
+        .map_err(mapping_error)?;
+        self.check_operation()?;
+        Ok(header)
     }
 
     /// Compile the same complete mapping stream used by staging/readback.
@@ -177,6 +180,7 @@ impl DirectStore {
         mut imported: Option<&mut dyn FnMut(SourceImportRow) -> Result<(), String>>,
     ) -> Result<SourceMappingSummary, String> {
         let check = || {
+            self.check_operation()?;
             if Instant::now() >= deadline {
                 Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
             } else {
@@ -189,20 +193,30 @@ impl DirectStore {
         if read_namespace(&control.join(NAMESPACE_FILE))? != self.namespace_id {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
         }
+        check()?;
         emit(encode_header(header).as_bytes())?;
+        check()?;
         let mut planner =
             SourceMappingPlanner::new(header, MAX_SOURCE_EVENTS).map_err(mapping_error)?;
-        let state = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
-            check()?;
-            validate_legacy_event(&header.legacy_namespace, record, previous)?;
-            let mapped = planner
-                .map(legacy_event(record, previous)?)
-                .map_err(mapping_error)?;
-            if let Some(imported) = imported.as_mut() {
-                imported(mapped.import_row())?;
-            }
-            emit(encode_mapped(&mapped, record, previous).as_bytes())
-        })?;
+        let state = replay_registry_with_check(
+            &control.join(SOURCE_LOG_FILE),
+            |record, previous| {
+                check()?;
+                validate_legacy_event(&header.legacy_namespace, record, previous)?;
+                let mapped = planner
+                    .map(legacy_event(record, previous)?)
+                    .map_err(mapping_error)?;
+                if let Some(imported) = imported.as_mut() {
+                    check()?;
+                    imported(mapped.import_row())?;
+                    check()?;
+                }
+                check()?;
+                emit(encode_mapped(&mapped, record, previous).as_bytes())?;
+                check()
+            },
+            &check,
+        )?;
         check()?;
         let summary = planner.finish().map_err(mapping_error)?;
         if state != self.registry
@@ -210,6 +224,7 @@ impl DirectStore {
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
+        check()?;
         emit(encode_summary(summary).as_bytes())?;
         check()?;
         Ok(summary)
@@ -234,10 +249,14 @@ impl DirectStore {
         crate::catalog_presence::require_existing(root)?;
         let control = root.join(CONTROL_DIRECTORY);
         let namespace_id = read_namespace(&control.join(NAMESPACE_FILE))?;
-        let registry = replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
-            check()?;
-            validate_legacy_event(&namespace_id, record, previous)
-        })?;
+        let registry = replay_registry_with_check(
+            &control.join(SOURCE_LOG_FILE),
+            |record, previous| {
+                check()?;
+                validate_legacy_event(&namespace_id, record, previous)
+            },
+            &check,
+        )?;
         check()?;
         if read_namespace(&control.join(NAMESPACE_FILE))? != namespace_id {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
@@ -257,6 +276,7 @@ impl DirectStore {
         if source.verify_migration_snapshot(deadline)? != expected {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
+        check()?;
         Ok(result)
     }
 }

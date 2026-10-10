@@ -99,6 +99,7 @@ pub(super) fn execute_command(
                 owner,
                 &store.namespace_id(),
                 fields.get(1).copied(),
+                command_cap.request(),
             )?;
             write_line(writer, &page)?;
         }

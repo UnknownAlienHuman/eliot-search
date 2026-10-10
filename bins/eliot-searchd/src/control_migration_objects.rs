@@ -145,22 +145,35 @@ impl DirectStore {
         &self,
         cursor: Option<&str>,
     ) -> Result<String, String> {
+        self.check_operation()?;
         // The same administrative command has an explicit physical-orphan mode.
         // Subsequent o1 bookmarks keep that mode; an ordinary r2 page never mixes it.
         if cursor == Some("orphans") || cursor.is_some_and(|value| value.starts_with("o1.")) {
-            return self.inspect_migration_orphans(cursor.filter(|value| *value != "orphans"));
+            let result = self.inspect_migration_orphans(cursor.filter(|value| *value != "orphans"));
+            self.check_operation()?;
+            return result;
         }
         // All physical preparation files, including unresolved old-profile residue.
         if cursor == Some("preparation-files")
             || cursor.is_some_and(|value| value.starts_with("p1."))
         {
-            return self.inspect_migration_preparation_files(
+            let result = self.inspect_migration_preparation_files(
                 cursor.filter(|value| *value != "preparation-files"),
             );
+            self.check_operation()?;
+            return result;
         }
-        let deadline = Instant::now()
+        let page_deadline = Instant::now()
             .checked_add(DEADLINE)
             .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
+        let deadline = self
+            .operation_deadline()?
+            .map_or(page_deadline, |original| original.min(page_deadline));
+        let check = || {
+            self.check_operation()?;
+            check_deadline(Some(deadline))
+        };
+        check()?;
         let cursor = cursor.map(Cursor::parse).transpose()?;
         let snapshot = self.inner.verify_migration_snapshot(deadline)?;
         let checkpoint = sha256::digest_parts(
@@ -184,7 +197,7 @@ impl DirectStore {
         let (mut plaintext_objects, mut protected_objects) = (0_usize, 0_usize);
         let (mut preparation_records, mut preparation_missing) = (0_usize, 0_usize);
         while let Some(metadata) = pending.peek() {
-            check_deadline(Some(deadline))?;
+            check()?;
             // Reserve room for both possible encodings before the next read.
             // Actual encoded bytes come from readback, never source-log lengths.
             let object_ceiling = metadata
@@ -208,6 +221,7 @@ impl DirectStore {
                 .next()
                 .ok_or_else(|| "DIRECT_MIGRATION_NO_PROGRESS".to_owned())?;
             let observed = self.read_revision_objects(&metadata, Some(deadline))?;
+            check()?;
             let preparation = super::preparation_store::inspect(
                 &self.root,
                 &self.protector,
@@ -215,7 +229,9 @@ impl DirectStore {
                 &metadata,
                 &observed.bytes,
                 deadline,
-            )?;
+            );
+            check()?;
+            let preparation = preparation?;
             source_bytes += metadata.byte_length;
             stored_bytes += observed.stored_bytes() + preparation.stored_bytes;
             preparation_records += usize::from(preparation.present);
@@ -224,9 +240,11 @@ impl DirectStore {
             protected_objects += usize::from(observed.protected.is_some());
             entries.push(observed.json(&metadata, &preparation.json));
             last = metadata.revision_id;
+            check()?;
             // No revision body survives into the next iteration or output frame.
         }
         let exhausted = pending.peek().is_none();
+        check()?;
         if self.inner.verify_migration_snapshot(deadline)? != snapshot {
             return Err("DIRECT_MIGRATION_REVISION_CURSOR_STALE".to_owned());
         }
@@ -287,7 +305,7 @@ impl DirectStore {
         if output.len() > MAX_PAGE_BYTES {
             return Err("DIRECT_MIGRATION_PAGE_TOO_LARGE".to_owned());
         }
-        check_deadline(Some(deadline))?;
+        check()?;
         Ok(output)
     }
 
@@ -296,13 +314,16 @@ impl DirectStore {
         metadata: &RevisionMetadata,
         deadline: Option<Instant>,
     ) -> Result<RevisionReadback, String> {
-        read_revision_objects_at(
+        self.check_operation()?;
+        let readback = read_revision_objects_at(
             &self.root,
             Some(&self.protector),
             metadata,
             cfg!(windows),
             deadline,
-        )
+        );
+        self.check_operation()?;
+        readback
     }
 }
 

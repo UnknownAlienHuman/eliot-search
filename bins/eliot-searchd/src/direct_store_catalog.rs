@@ -124,6 +124,7 @@ pub fn verify_revision_identity(metadata: &RevisionMetadata) -> Result<(), Strin
     .map_err(|error| error.code().to_owned())
 }
 
+#[cfg(test)]
 pub(super) fn load_registry(path: &Path) -> Result<RegistryState, String> {
     replay_registry(path, |_, _| Ok(()))
 }
@@ -137,6 +138,7 @@ pub(super) fn load_registry_with_check(
 
 /// A read-only migration observer shares the full owner replay validator.
 /// Observed entries remain provisional until this function returns successfully.
+#[cfg(test)]
 fn replay_registry(
     path: &Path,
     observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
@@ -171,8 +173,13 @@ fn replay_registry_with_check(
         return Err("DIRECT_CONTROL_LOG_HEADER_INVALID".to_owned());
     }
     let mut state = RegistryState::default();
-    while read_log_line(&mut reader, &mut line, &mut consumed)? != 0 {
+    loop {
         check()?;
+        let read = read_log_line(&mut reader, &mut line, &mut consumed)?;
+        check()?;
+        if read == 0 {
+            break;
+        }
         if state.event_count >= MAX_SOURCE_EVENTS {
             return Err("DIRECT_SOURCE_EVENT_LIMIT_EXCEEDED".to_owned());
         }
@@ -189,7 +196,9 @@ fn replay_registry_with_check(
         state
             .validate_record::<DirectDigest>(&record)
             .map_err(|error| error.code().to_owned())?;
+        check()?;
         observe(&record, state.latest.get(&record.source_id))?;
+        check()?;
         state.commit_record(record);
     }
     let after = reader

@@ -70,6 +70,14 @@ or expiry therefore returns an operation refusal instead of a complete negative.
 Manifest cancellation, write and rename failures retain the attempted temporary
 object. No cancellation cleanup erases partial effects or quarantine.
 
+Administrative source-history and mapping replay now use the checked journal reader;
+context-free catalog adapters are test-only. Replay checks before/after each read and
+observer, and mapping checks bracket emitted/imported rows. Source-history receives
+the service command's request explicitly. Its existing page limit, and directory/revision
+page limits, cannot extend the original absolute deadline. Directory inventory/root/page
+loops and revision-page read/preparation/result boundaries retain cancellation checks.
+Initialization's empty catalog readback also uses the checked reader.
+
 ## Evidence scope
 
 Rust 1.98.0, locked/offline, Windows native fixture profile; no dependency/lockfile
@@ -105,8 +113,10 @@ without changing product visibility or suppressing fixture Clippy findings.
 ## Still open in #266 and downstream owners
 
 - Original command checkpoints now reach the named DIRECT children above. Some
-  administrative migration replay/object children still use legacy replay adapters
-  or deadline-only checks and remain incomplete. A checkpoint does not interrupt
+  physical orphan/preparation inventories and staged migration artifact/import-object
+  child internals still use deadline-only checks and remain incomplete; their outer
+  result boundary is checked. No production caller uses the context-free catalog
+  replay wrappers. A checkpoint does not interrupt
   a synchronous OS/vendor/codec call already in progress; bounded/preemptible I/O
   and full child cancellation qualification are not claimed.
 - Arbitrary legacy quarantine has no retained operation identity. Named recovery
