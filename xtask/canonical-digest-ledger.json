@@ -57196,7 +57196,7 @@
       "test": false,
       "source_sha256": "9640d7b67ce0593aa893cd3d8e80f8bd487357ede6d5db70d506c8ed3cbc3c77",
       "classification": "production-compute",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 finite fallible canonical rows use the sole checked length-first CBOR encoder and private real BLAKE3 under validated CBOR domain/NUL framing. Count is checked before iterator/hash creation, one sink bounds aggregate bytes, wrapper depth and exact N are enforced, and errors yield no digest. Pure compute, no semantic receipt."
     },
@@ -57208,7 +57208,7 @@
       "test": false,
       "source_sha256": "9640d7b67ce0593aa893cd3d8e80f8bd487357ede6d5db70d506c8ed3cbc3c77",
       "classification": "production-compute",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 finite fallible canonical rows use the sole checked length-first CBOR encoder and private real BLAKE3 under validated CBOR domain/NUL framing. Count is checked before iterator/hash creation, one sink bounds aggregate bytes, wrapper depth and exact N are enforced, and errors yield no digest. Pure compute, no semantic receipt."
     },
@@ -57220,7 +57220,7 @@
       "test": false,
       "source_sha256": "9640d7b67ce0593aa893cd3d8e80f8bd487357ede6d5db70d506c8ed3cbc3c77",
       "classification": "opaque-value-use",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 finite fallible canonical rows use the sole checked length-first CBOR encoder and private real BLAKE3 under validated CBOR domain/NUL framing. Count is checked before iterator/hash creation, one sink bounds aggregate bytes, wrapper depth and exact N are enforced, and errors yield no digest. Pure compute, no semantic receipt."
     },
@@ -57232,7 +57232,7 @@
       "test": false,
       "source_sha256": "9640d7b67ce0593aa893cd3d8e80f8bd487357ede6d5db70d506c8ed3cbc3c77",
       "classification": "production-compute",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 finite fallible canonical rows use the sole checked length-first CBOR encoder and private real BLAKE3 under validated CBOR domain/NUL framing. Count is checked before iterator/hash creation, one sink bounds aggregate bytes, wrapper depth and exact N are enforced, and errors yield no digest. Pure compute, no semantic receipt."
     },
@@ -57244,7 +57244,7 @@
       "test": false,
       "source_sha256": "9640d7b67ce0593aa893cd3d8e80f8bd487357ede6d5db70d506c8ed3cbc3c77",
       "classification": "production-compute",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 finite fallible canonical rows use the sole checked length-first CBOR encoder and private real BLAKE3 under validated CBOR domain/NUL framing. Count is checked before iterator/hash creation, one sink bounds aggregate bytes, wrapper depth and exact N are enforced, and errors yield no digest. Pure compute, no semantic receipt."
     },
@@ -57256,7 +57256,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57268,7 +57268,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57280,7 +57280,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57292,7 +57292,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57304,7 +57304,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57316,7 +57316,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57328,7 +57328,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57340,7 +57340,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57352,7 +57352,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57364,7 +57364,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57376,7 +57376,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57388,7 +57388,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57400,7 +57400,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57412,7 +57412,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57424,7 +57424,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57436,7 +57436,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57448,7 +57448,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57460,7 +57460,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     },
@@ -57472,7 +57472,7 @@
       "test": true,
       "source_sha256": "232a0793bbc4a14731105aa43fcac30b7a644071c886f616fd925ead8815dbb9",
       "classification": "test-vector",
-      "owner_issue": 396,
+      "owner_issue": 238,
       "phase": "accepted",
       "reason": "#396 source-authored synthetic canonical-array parity and error-boundary fixtures use the accepted compute API. AUTHORED_NOT_RUN, no installed/runtime/resource proof or semantic authority."
     }
