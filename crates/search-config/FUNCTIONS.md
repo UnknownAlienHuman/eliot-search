@@ -18,7 +18,7 @@ platform facts, accepted capability receipts and time before invoking this crate
 ## Implemented representation notes
 
 - Optional capability fields use an explicit `ConfigValue::Absent`; absence is never inferred from a missing higher-precedence key.
-- `ConfigFingerprint` is SHA-256 over a bounded canonical preimage containing schema/profile identities, descriptor revisions/digests and package-validated section digests.
+- `ConfigFingerprint` remains SHA-256 over the exact legacy v1 length-delimited preimage containing schema/profile identities, descriptor revisions/digests and package-validated section digests. Shared `sha256_exact_bytes` executes the accepted SHA-2 donor without adding framing. The preimage has a hard 8 MiB ceiling in addition to the caller ceiling. This is not the forthcoming canonical v2 identity under #238.
 - The parser accepts the finite baseline TOML subset used by the project configuration: top-level `schema_version` and `profile`, flat package tables, booleans, signed integers, strings and arrays of strings. Unsupported TOML constructs fail closed.
 - Ordinary `Debug` representations redact unvalidated text, paths and opaque secret references.
 
@@ -68,7 +68,8 @@ projection rebuild and collection-generation cutover; it must not collapse them 
 
 Returns schema/fingerprint/owner/action metadata and allowed scalar summaries only. Secret refs, raw
 environment values, source/query content and absolute paths are excluded or represented by digests and
-location classes.
+location classes. A path exceeding the shared 8 MiB digest ceiling returns only text-kind/byte-extent
+metadata, with no digest or raw path. Ordinary bounded paths retain their exact standard SHA-256 bytes.
 
 ### `validate_environment_key(name, registry) -> Result<ConfigKeyPath, ConfigError>`
 

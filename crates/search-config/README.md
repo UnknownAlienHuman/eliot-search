@@ -8,6 +8,12 @@ This package owns bounded TOML configuration documents, deterministic layer prec
 section registration, validation dispatch, redaction, effective-config fingerprints and
 reconfiguration plans. Capability packages own their typed section schemas and runtime state.
 
+The #386 source slice removes copied SHA-256 and uses the shared exact-byte RustCrypto owner.
+Legacy v1 preimages and bounded path digests keep their bytes; hashing and preimage growth have
+a hard 8 MiB ceiling. Oversized diagnostic paths yield size metadata without a digest or text.
+Focused compatibility fixtures are AUTHORED_NOT_RUN. The typed TOML/builder cutover, internal
+section-digest ownership, canonical v2 identity and qualification remain open under #238/#109/#215.
+
 ## Owns
 
 - config source/layer identity and deterministic merge semantics
