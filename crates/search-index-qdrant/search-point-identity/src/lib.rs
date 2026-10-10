@@ -1,4 +1,9 @@
-//! Deterministic provider-neutral point identities for W3 publication.
+//! Provider-neutral point identities and stateless S11 collision checks.
+//!
+//! [`s11`] is the new canonical BLAKE3 profile for a new collection generation.
+//! The root-level exports below are the unchanged **legacy** two-lane profile,
+//! retained only for existing planner/daemon consumers until #329 retires them.
+//! Legacy values are not inputs to S11 and cannot mint S11 generation authority.
 //!
 //! A point identity is derived only from immutable logical inputs: namespace,
 //! stable source identity, retained source revision, exact unit range,
@@ -36,6 +41,9 @@
     clippy::too_many_lines,
     clippy::trivially_copy_pass_by_ref
 )]
+
+/// Stateless Architecture 8.4 S11 key, digest, address and readback decisions.
+pub mod s11;
 
 use core::fmt;
 use std::collections::BTreeMap;
