@@ -20,6 +20,7 @@ pub(super) fn dispatch(
 ) -> Result<(), String> {
     cli_request.preflight()?;
     match command {
+        "--inspect-catalog-recovery" => cmd_inspect_catalog_recovery(arguments, cli_request),
         "--initialize-data-root" | "--recover-initialization" => {
             require_count(arguments, 3)?;
             let request = arguments[2]
@@ -163,4 +164,36 @@ pub(super) fn dispatch(
         }
         _ => Err("UNKNOWN_PERSISTENT_COMMAND".to_owned()),
     }
+}
+
+fn cmd_inspect_catalog_recovery(
+    arguments: &[OsString],
+    request: &DataRootRequest,
+) -> Result<(), String> {
+    require_count(arguments, 3)?;
+    let name = arguments[2]
+        .to_str()
+        .ok_or_else(|| "OWNER_OPERATION_CONFLICT".to_owned())?;
+    let name = crate::owner_composition::CatalogRecoveryRequest::parse(name)
+        .map_err(|error| error.code().to_owned())?;
+    let observation = crate::owner_composition::inspect_catalog_recovery_request(
+        Path::new(&arguments[1]),
+        &name,
+        request,
+    )?;
+    write_stdout(
+        request,
+        &format!(
+            concat!(
+                "{{\"event\":\"catalog_recovery_inspection\",\"operation_id\":{},",
+                "\"operation_kind\":{},\"recovery_state\":{},\"owner_epoch\":{},",
+                "\"owner_generation\":{}}}"
+            ),
+            json_string(&observation.operation_id.to_string()),
+            json_string(observation.kind.as_str()),
+            json_string(observation.state.as_str()),
+            observation.owner_epoch,
+            observation.owner_generation,
+        ),
+    )
 }

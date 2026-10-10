@@ -75,6 +75,17 @@ post-release cleanup requires original generation + 2 RELEASED/NONE.
 Named recovery/reconciliation, service/migration cutover and later cleanup-phase
 qualification remain separate work under #266 and the mapped owning issues.
 
+The [named catalog-inspection continuation](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6097081990)
+adds only private `owner_composition/kernel/{catalog_intent_decode,catalog_recovery}.rs`,
+their companion native tests/module wiring, owner-private existing input bounds/domain,
+and `secure_commands/kernel/{support,dispatch}.rs` assembly. The existing catalog-intent
+crash fixture in `store.rs` adds named evidence inspection after actual kill/reap.
+It borrows existing native exclusions without succession, retains exact native
+layout/owner and original v2 inputs, and returns bounded content-free observations.
+It creates no ordinary child-store authority, retry, reconciliation, cleanup or
+operation-success receipt. Original-object unlink and late cleanup qualification
+remain separately tracked by #347 under #266.
+
 The [lifetime/redaction addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094629373)
 retains the fixed native layout objects through admitted child lifetimes and bounds
 `secure_commands/kernel/output.rs` failures to closed reason tokens. No new identity catalog

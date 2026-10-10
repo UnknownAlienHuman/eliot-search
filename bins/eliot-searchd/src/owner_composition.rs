@@ -9,6 +9,7 @@ mod kernel;
 
 pub(crate) use kernel::DataRootRequest;
 pub(crate) use kernel::CatalogMutationIntent;
+pub(crate) use kernel::{CatalogRecoveryRequest, inspect_catalog_recovery_request};
 #[cfg(test)]
 pub use kernel::establish;
 pub(crate) use kernel::establish_existing;

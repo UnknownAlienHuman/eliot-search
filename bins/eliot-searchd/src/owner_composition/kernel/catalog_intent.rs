@@ -21,10 +21,10 @@ use super::record::DurableOwnerRecord;
 use super::spec::{DrainReasonText, LifecycleState};
 use crate::catalog_quarantine::{QUARANTINE_ARM_FAILED, QUARANTINE_CLEAR_FAILED, QUARANTINE_ERROR};
 
-const FORMAT: &str = "eliot-search/catalog-mutation-intent/v2";
+pub(super) const FORMAT: &str = "eliot-search/catalog-mutation-intent/v2";
 const MARKER: &str = "catalog-quarantine.marker";
 const STAGING: &str = "catalog-quarantine.tmp";
-const MAX_INTENT_BYTES: usize = 512 * 1024;
+pub(super) const MAX_INTENT_BYTES: usize = 512 * 1024;
 
 /// Retained exact publication token. It cannot be cloned or decoded into authority.
 pub struct CatalogMutationIntent {

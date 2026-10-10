@@ -17,9 +17,9 @@ use search_ports::{
 };
 use search_runtime_owner::{OwnerError, OwnerOperation};
 
-const MAX_INPUT_BYTES: usize = 256 * 1024;
+pub(super) const MAX_INPUT_BYTES: usize = 256 * 1024;
 const MAX_ARGUMENTS: usize = 256;
-const MAX_CONTEXT_BYTES: usize = 512 * 1024;
+pub(super) const MAX_CONTEXT_BYTES: usize = 512 * 1024;
 const COMMAND_DEADLINE: Duration = Duration::from_secs(120);
 
 #[derive(Clone, Copy)]
@@ -81,6 +81,10 @@ impl fmt::Debug for DataRootRequest {
 }
 
 impl DataRootRequest {
+    pub(super) const fn cli_input_domain() -> &'static str {
+        RequestKind::Cli.domain()
+    }
+
     pub(crate) fn from_cli(arguments: &[OsString]) -> Result<Self, String> {
         Self::cli_with_deadline(arguments, COMMAND_DEADLINE)
     }

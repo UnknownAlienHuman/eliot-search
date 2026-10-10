@@ -2,6 +2,10 @@
 
 #[path = "kernel/catalog_intent.rs"]
 mod catalog_intent;
+#[path = "kernel/catalog_intent_decode.rs"]
+mod catalog_intent_decode;
+#[path = "kernel/catalog_recovery.rs"]
+mod catalog_recovery;
 
 #[path = "kernel/codec.rs"]
 mod codec;
@@ -40,6 +44,7 @@ pub use lifecycle::{LiveOwner, ShutdownReceipt};
 pub(crate) use native_bindings::NativeLayoutPins;
 pub(crate) use operation::DataRootRequest;
 pub(crate) use catalog_intent::CatalogMutationIntent;
+pub(crate) use catalog_recovery::{CatalogRecoveryRequest, inspect_catalog_recovery_request};
 pub(crate) use read_existing::{
     open_bound_directory, verify_bound_directory, verify_existing_locator,
 };

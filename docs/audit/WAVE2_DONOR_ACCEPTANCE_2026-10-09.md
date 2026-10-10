@@ -83,6 +83,15 @@ never reused or removed during arm/error/Drop. Cleanup is a distinct owned
 completion after actual release; its later crash and native unlink phases are
 not inferred from the donor's immutable-object acceptance.
 
+Named catalog evidence inspection also reuses current `DataRootGuard::with_existing_lock`,
+`NativeLayoutPins`, exact existing owner inspection, canonical parsing and the
+original request's shared canonical digest/domain. It selects no external framework
+and grants no ordinary store/recovery-completion authority. An exact-source search
+found no existing disposition-by-handle unlink donor in the daemon/library tree;
+#347 leaves that native mechanism, sharing/DELETE semantics and late cleanup
+qualification for separate review. Current path-based cleanup is not relabelled
+as atomic original-object deletion or power-loss durability.
+
 ## `#235` provider client — `PORT_CURRENT`
 
 Extract the existing typed CLI implementation:

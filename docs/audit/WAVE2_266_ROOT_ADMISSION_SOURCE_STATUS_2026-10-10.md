@@ -74,6 +74,28 @@ is checked before release and cleared afterward, before native exclusions drop.
 Release errors cannot discard inputs prematurely. This file-flush/readback proof
 does not establish parent-directory power-loss durability.
 
+`--inspect-catalog-recovery ROOT INVOCATION_UUID` now admits a private non-cloneable
+named evidence capability through the existing primary/sealed native exclusions.
+The admitted native command/root/name is checked before I/O. Existing installation,
+native layout and current owner remain pinned and verified without epoch succession.
+The current marker and staging must refer to the same retained read-only File;
+Windows sharing denies their writing/deletion during the capability lifetime.
+
+Decode requires exact v2 closed arrays, actual canonical ACTIVE owner bytes, the
+current platform's original CLI domain, a 16-byte invocation id, a 32-byte original
+digest and one of the four exact original command shapes. Complete canonical inputs
+are retained; aggregate native-input bounds and the original shared canonical digest
+are checked. The current owner must equal that ACTIVE record or its exact same-owner
+DRAINING/SHUTDOWN (+1) or RELEASED/NONE (+2), with every other record field preserved.
+
+The response contains only invocation id, command kind, epoch/generation and
+unresolved-active/unresolved-draining/released-awaiting-cleanup. None is an operation-
+success or cleanup receipt. It exposes no original arguments, root locator, record
+bytes, secrets or ordinary store capability, and performs no writes/creates, release,
+cleanup or retry. Legacy static/torn/foreign intent, equal bytes in a different staging
+object, wrong invocation/context and cancellation refuse. Named inspection does not
+make an unresolved root available to normal commands.
+
 Explicit initialization and its exact recovery also check that original context
 through native intent acquisition, exclusion objects, layout readback, owner-slot
 publication and finalization. Results are captured before context refusal and
@@ -224,8 +246,10 @@ initialization recovery, not general migration/publication recovery.
   locator may exist even after an error. This checkpoint slice neither changes
   cleanup nor qualifies unknown-publication recovery.
 - Arbitrary legacy quarantine has no retained operation identity. Named recovery
-  currently covers complete initialization only; abandoned ordinary ACTIVE/DRAINING
-  and unknown migration/publication outcomes are not automatically recovered.
+  currently finalizes complete initialization and separately permits exact native
+  v2 catalog evidence inspection. Abandoned catalog ACTIVE/DRAINING and unknown
+  migration/publication outcomes have no general operation-specific reconciliation;
+  they are never automatically replayed or declared successful.
 - The named ordinary DRAINING and pre-layout initialization crash/refusal points
   and complete-layout initialization crash/recovery have native fixture evidence.
   Partial initialization reconstruction, crashes between individual object/slot
@@ -240,7 +264,8 @@ initialization recovery, not general migration/publication recovery.
 - Intent cleanup after actual release closes its held File before exact-byte
   path unlink under the native root owner. Later cleanup crashes, partial alias
   removal and atomic original-object deletion against an external replacement
-  remain unqualified. Existing staging without final still fences ordinary
+  remain unqualified under #347; no current native unlink donor was found.
+  Existing staging without final still fences ordinary
   opens; a RELEASED record alone does not bypass that fence.
 - Active redb roots refuse with `DATA_ROOT_LAYOUT_UNSUPPORTED`. redb 2.6.3's writable
   opener is not a proven non-writing/non-repairing inspection API: #343 retains this

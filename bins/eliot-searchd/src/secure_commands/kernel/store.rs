@@ -285,6 +285,27 @@ mod catalog_intent_tests {
         assert_eq!(arguments.as_slice(), expected);
 
         let retained = snapshot(root);
+        let CanonicalValue::Bytes(invocation) = &input.as_slice()[1] else {
+            panic!("actual invocation identity absent");
+        };
+        let invocation: [u8; 16] = invocation.as_slice().try_into().unwrap();
+        let invocation = search_contracts::RequestId::from_bytes(invocation).to_string();
+        let name = crate::owner_composition::CatalogRecoveryRequest::parse(&invocation).unwrap();
+        let named = DataRootRequest::from_cli(&[
+            "--inspect-catalog-recovery".into(),
+            root.as_os_str().to_owned(),
+            invocation.into(),
+        ])
+        .unwrap();
+        let observation =
+            crate::owner_composition::inspect_catalog_recovery_request(root, &name, &named)
+                .unwrap();
+        assert_eq!(observation.state.as_str(), "unresolved_active");
+        assert_eq!(
+            (observation.owner_epoch, observation.owner_generation),
+            (2, 4)
+        );
+        assert_eq!(snapshot(root), retained);
         let mutation = request(root, "--gc-root", Some("--apply"));
         assert_eq!(
             DataRootGuard::open_existing_request(root, &mutation)
