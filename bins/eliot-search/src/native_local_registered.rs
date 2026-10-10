@@ -79,14 +79,14 @@ impl NativeLocalRegistration {
 /// only the diminishing remainder of the caller's original deadline. Possession
 /// of this bundle is not a grant; mutual pairing and current daemon-side binding
 /// validation remain mandatory.
-pub(crate) struct ResolvedNativeLocal<C> {
+pub(crate) struct ResolvedNativeLocal<C: CancellationProbe> {
     endpoint_name: NativeEndpointNameV1,
     binding: NativeClientBinding,
     key: BindingKey,
     context: OperationContext<C>,
 }
 
-impl<C> ResolvedNativeLocal<C> {
+impl<C: CancellationProbe> ResolvedNativeLocal<C> {
     /// Consume the handoff exactly once at the concrete local-socket connector.
     #[must_use]
     pub(crate) fn into_parts(

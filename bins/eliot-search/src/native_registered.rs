@@ -223,7 +223,7 @@ pub fn read_native_endpoint_descriptor(
     if metadata.len() > maximum {
         return Err(NativeDescriptorError::TooLarge);
     }
-    let mut file = File::open(&canonical_path).map_err(|_| NativeDescriptorError::Unavailable)?;
+    let file = File::open(&canonical_path).map_err(|_| NativeDescriptorError::Unavailable)?;
     let opened = file
         .metadata()
         .map_err(|_| NativeDescriptorError::Unavailable)?;
