@@ -12,6 +12,17 @@
 
 One manager owns one writer worktree, dependency pins, Cargo.lock and integration. Five to ten subagents inspect/research/review bounded assignments. Completed foundation tasks must not be restarted. Phase names such as `234.build` and `234.review` separate implementation from use; they are not new issues, runtime states or a controller system.
 
+## Programme stages resolve to these existing executable tasks
+
+| Map/programme stage | Actual code owner | Additional detailed inputs / boundaries |
+|---|---|---|
+| 120.native / PR #120 | [#334](https://github.com/UnknownAlienHuman/eliot-search/issues/334) | #266 root and #308 finite secret leases; #310 later binds consumers. No native-process/consumer integration cycle. |
+| Git / PR #129 | [#335](https://github.com/UnknownAlienHuman/eliot-search/issues/335) | #267/#269 admission/registration, #330/#270 retained-source integration. |
+| Overlay/LSP / PR #130 | [#336](https://github.com/UnknownAlienHuman/eliot-search/issues/336) | Core #274/#272/#246 before optional #332/#235 LSP leaf. |
+| Normative #220 | [#325](https://github.com/UnknownAlienHuman/eliot-search/issues/325) supplies the separate frozen-table provenance decision | Preserve old bytes, no fake digest relabelling or reopening completed #258. |
+
+These are bindings of existing stages, not extra competing implementations. Always use the actual issue's source scope and complete prerequisites in addition to the high-level DAG. Never branch from a historical programme PR.
+
 ## Delivered implementation and recorded checks
 
 - #317/#318 restored existing xtask gates.
