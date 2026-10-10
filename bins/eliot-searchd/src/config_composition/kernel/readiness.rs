@@ -204,12 +204,19 @@ pub fn config_status_json(
     effective: &EffectiveDaemonConfig,
     report: &ReadinessReport,
 ) -> String {
-    let view = redacted_view(
+    let Ok(view) = redacted_view(
         effective.snapshot(),
         effective.registry(),
         search_config::DisclosureLevel::Ordinary,
         daemon_limits(),
-    );
+    ) else {
+        return concat!(
+            "{\"event\":\"effective_config_status_error\",",
+            "\"schema\":\"eliot.effective-config-status-v1\",",
+            "\"reason\":\"CONFIG_DIAGNOSTIC_UNAVAILABLE\",\"read_only\":true}"
+        )
+        .to_owned();
+    };
     let fingerprint_hex = crate::sha256::hex(report.fingerprint.as_bytes());
     let mut blockers = String::from("[");
     for (index, blocker) in report.blockers.iter().enumerate() {

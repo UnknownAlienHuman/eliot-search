@@ -28,6 +28,7 @@ const fn limits() -> ConfigLimits {
         max_total_list_items: 256,
         max_canonical_bytes: 64 * 1024,
         max_diagnostic_entries: 256,
+        max_diagnostic_bytes: 64 * 1024,
     }
 }
 
@@ -560,7 +561,8 @@ fn redacted_view_never_discloses_secret_or_absolute_path() {
         "direct",
         50,
     );
-    let view = redacted_view(&candidate, &registry, DisclosureLevel::Ordinary, limits());
+    let view = redacted_view(&candidate, &registry, DisclosureLevel::Ordinary, limits())
+        .expect("bounded redacted view");
     let rendered = format!("{view:?}");
     assert!(!rendered.contains("alice"));
     assert!(!rendered.contains("qdrant-production"));

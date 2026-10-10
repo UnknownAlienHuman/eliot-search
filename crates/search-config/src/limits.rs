@@ -31,6 +31,8 @@ pub struct ConfigLimits {
     pub max_canonical_bytes: usize,
     /// Maximum redacted diagnostic entries.
     pub max_diagnostic_entries: usize,
+    /// Maximum complete logical redacted-view payload bytes, not serialized or resident bytes.
+    pub max_diagnostic_bytes: usize,
 }
 
 impl ConfigLimits {
@@ -49,6 +51,7 @@ impl ConfigLimits {
         max_total_list_items: 8_192,
         max_canonical_bytes: 8_388_608,
         max_diagnostic_entries: 4_096,
+        max_diagnostic_bytes: 1_048_576,
     };
 
     /// Validates that every ceiling is non-zero and internally usable.
@@ -70,6 +73,7 @@ impl ConfigLimits {
             || self.max_total_list_items == 0
             || self.max_canonical_bytes == 0
             || self.max_diagnostic_entries == 0
+            || self.max_diagnostic_bytes == 0
         {
             return Err(ConfigError::InvalidLimits);
         }

@@ -72,12 +72,23 @@ the field schema explicitly defines reset semantics.
 Preserves every required obligation. A plan may combine security barriers, dependency restarts,
 projection rebuild and collection-generation cutover; it must not collapse them to a lossy scalar.
 
-### `redacted_view(snapshot, disclosure) -> RedactedConfigView`
+### `redacted_view(snapshot, disclosure) -> Result<RedactedConfigView, ConfigError>`
 
 Returns schema/fingerprint/owner/action metadata and allowed scalar summaries only. Secret refs, raw
 environment values, source/query content and absolute paths are excluded or represented by digests and
 location classes. A path exceeding the shared 8 MiB digest ceiling returns only text-kind/byte-extent
 metadata, with no digest or raw path. Ordinary bounded paths retain their exact standard SHA-256 bytes.
+
+Both entry count and complete logical payload are charged before profile/path/text clones, path hashing
+or map growth. W1 `max_diagnostic_bytes` is 1 MiB. The header charges fingerprint=32 bytes, selected
+profile UTF-8 bytes and omitted count=8. Each entry charges section/key UTF-8 bytes plus value tag=1
+and payload: absent/hidden=0, boolean=1, integer=8, visible text bytes plus truncation flag=1, list
+extents=16, path class/digest=33, metadata kind/extent=9. These architecture-independent logical bytes
+exclude serialization framing/escaping and allocator/map overhead; this is not a measured heap bound.
+Overflow or insufficient header capacity returns an error without a partial view; invalid limits
+reject. An entry exceeding either ceiling is omitted whole; later smaller entries may still fit in
+canonical order. The daemon status adapter maps a failed view to a fixed content-free read-only error
+record. Configuration/fingerprint bytes and runtime readiness calculations remain unchanged.
 
 ### `validate_environment_key(name, registry) -> Result<ConfigKeyPath, ConfigError>`
 
