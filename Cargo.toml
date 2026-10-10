@@ -40,6 +40,7 @@ members = [
     "crates/search-runtime/search-retention",
     "crates/search-eval",
     "crates/search-provider-protocol",
+    "crates/search-provider-client",
     "crates/search-eliot-adapter",
     "crates/search-research-export-adapter",
     "bins/eliot-searchd",
@@ -99,6 +100,7 @@ search-continuation = { path = "crates/search-query/search-continuation" }
 search-retention = { path = "crates/search-runtime/search-retention" }
 search-eval = { path = "crates/search-eval" }
 search-provider-protocol = { path = "crates/search-provider-protocol" }
+search-provider-client = { path = "crates/search-provider-client" }
 search-provider-transport-windows = { path = "crates/search-runtime/search-provider-transport-windows" }
 search-eliot-adapter = { path = "crates/search-eliot-adapter" }
 search-research-export-adapter = { path = "crates/search-research-export-adapter" }

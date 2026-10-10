@@ -6,8 +6,11 @@
 //! the legacy line protocol.
 
 use core::fmt;
+#[cfg(feature = "legacy-loopback-compatibility")]
 use std::net::{SocketAddr, TcpStream};
-use std::time::{Duration, Instant};
+use std::time::Instant;
+#[cfg(any(feature = "legacy-loopback-compatibility", test))]
+use std::time::Duration;
 
 use search_contracts::{
     BindingId, Blake3Digest32, HelloBody, InstallationId,
@@ -16,7 +19,7 @@ use search_contracts::{
 };
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{
-    BindingContext, BindingKey, ClientEnvelopeCodec, NativeEndpointNameV1,
+    BindingContext, BindingKey, ClientEnvelopeCodec,
     PairingChallengeFrame, PairingMachine, PairingProofFrame, ProofDigest,
     ProtocolError, ProtocolLimits, ServerNonce, TransportPeer,
     authenticate_binding, decode_pairing_challenge, decode_pairing_verified,
@@ -27,7 +30,14 @@ use search_provider_protocol::{
 use super::io::{LocalByteStream, SetupBudget, SocketIo};
 use super::{TypedClientError, TypedProviderSession};
 
+#[cfg(test)]
+mod expectations_tests;
+
+#[cfg(test)]
+use search_provider_protocol::NativeEndpointNameV1;
+
 const NATIVE_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
+#[cfg(any(feature = "legacy-loopback-compatibility", test))]
 const CONNECT_QUANTUM: Duration = Duration::from_millis(250);
 
 // Must remain byte-equal to the daemon canonical local binding derivation.
@@ -35,6 +45,71 @@ const CONNECT_QUANTUM: Duration = Duration::from_millis(250);
 // cannot silently authenticate this local-provider path.
 const BINDING_DOMAIN: &[u8] = b"eliot-search/local-provider-binding/v1\0";
 const BINDING_ROLE: &[u8] = b"standalone-local-client";
+
+/// Mandatory caller-owned comparison coordinates from trusted registration.
+///
+/// This constructor validates protocol shape, not provenance. The caller must
+/// obtain these values independently of the endpoint/peer hello. Possession is
+/// not a verified registration receipt, pairing proof or grant authority.
+pub struct NativeClientExpectations {
+    installation_id: InstallationId,
+    binding: NativeClientBinding,
+}
+
+impl NativeClientExpectations {
+    /// Retain mandatory installation/incarnation/binding and exact hello metadata.
+    ///
+    /// Mutual pairing and current daemon policy still decide every capability.
+    /// # Errors
+    /// Rejects protocol ranges other than the existing exact 1.0 profile.
+    pub fn new(
+        installation_id: InstallationId,
+        installation_incarnation_id: InstallationIncarnationId,
+        binding_id: BindingId,
+        pairing_proof_ref: OpaqueRef,
+        supported_protocol_range: ProtocolRange,
+        requested_capability_digest: Option<Blake3Digest32>,
+    ) -> Result<Self, TypedClientError> {
+        NativeClientBinding::new_trusted(
+            installation_id,
+            installation_incarnation_id,
+            binding_id,
+            pairing_proof_ref,
+            supported_protocol_range,
+            requested_capability_digest,
+        )
+        .map(|binding| Self { installation_id, binding })
+    }
+
+    /// Installation comparison input, never an authenticated peer identity.
+    #[must_use]
+    pub const fn installation_id(&self) -> InstallationId {
+        self.installation_id
+    }
+    /// Installation-incarnation comparison input.
+    #[must_use]
+    pub const fn installation_incarnation_id(&self) -> InstallationIncarnationId {
+        self.binding.installation_incarnation_id()
+    }
+    /// Durable binding comparison input.
+    #[must_use]
+    pub const fn binding_id(&self) -> BindingId {
+        self.binding.binding_id()
+    }
+    /// Exact offered protocol range.
+    #[must_use]
+    pub const fn supported_protocol_range(&self) -> ProtocolRange {
+        self.binding.supported_protocol_range()
+    }
+}
+
+impl fmt::Debug for NativeClientExpectations {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_struct("NativeClientExpectations")
+            .field("protocol", &self.binding.supported_protocol_range)
+            .finish_non_exhaustive()
+    }
+}
 
 /// Exact public registration coordinates used to construct the native hello.
 ///
@@ -60,6 +135,10 @@ impl NativeClientBinding {
     /// constructor. The current typed codec implements protocol 1.0 exactly;
     /// any wider, narrower or different range is rejected before transport or
     /// credential use.
+    ///
+    /// # Errors
+    /// Rejects any protocol range other than exact 1.0.
+    #[cfg(feature = "legacy-loopback-compatibility")]
     pub fn new(
         installation_incarnation_id: InstallationIncarnationId,
         binding_id: BindingId,
@@ -167,12 +246,40 @@ impl fmt::Debug for NativeClientBinding {
 }
 
 impl TypedProviderSession {
+    /// Consume one concrete local connection and non-Clone pairing key.
+    ///
+    /// Platform/composition opened the endpoint under the same original
+    /// absolute deadline. No public stream plugin, discovery, reconnect or
+    /// fallback exists. Expectations are comparison inputs, not authentication.
+    /// Pairing/profile and daemon grant policy remain mandatory.
+    /// # Errors
+    /// Fails closed on original-deadline/cancellation, I/O, pairing or profile
+    /// mismatch. A possibly peer-visible write remains an unknown outcome.
+    pub fn open_native<C: CancellationProbe>(
+        connection: search_provider_transport_windows::NativeLocalConnection,
+        expectations: &NativeClientExpectations,
+        key: BindingKey,
+        limits: ProtocolLimits,
+        context: &OperationContext<C>,
+        absolute_deadline: Instant,
+    ) -> Result<Self, TypedClientError> {
+        let cancelled = || context.cancellation().is_cancelled();
+        let budget = SetupBudget::from_deadline(absolute_deadline, &cancelled)?;
+        Self::open_connected_local_stream(
+            connection, &expectations.binding, key, limits, context, &budget,
+        )
+    }
+
     /// Connect the compatibility TCP adapter, perform canonical mutual pairing
     /// and negotiate the typed transport profile under one deadline.
     ///
     /// The exact I/O and session framing below accept a transport-neutral local
     /// byte stream. This address-taking entry is retained only while the product
     /// path migrates to the architecture-required installation-scoped named pipe.
+    ///
+    /// # Errors
+    /// Rejects non-loopback, cancelled, expired or invalid pairing/profile setup.
+    #[cfg(feature = "legacy-loopback-compatibility")]
     pub fn connect_native<C: CancellationProbe>(
         address: SocketAddr,
         binding: &NativeClientBinding,
@@ -209,6 +316,7 @@ impl TypedProviderSession {
     /// TCP or renew the deadline. Endpoint success remains non-authenticating.
     /// The resolver's absolute deadline controls all remaining setup phases;
     /// the narrowed context supplies cancellation and advisory budget metadata.
+    #[cfg(test)]
     pub(super) fn connect_local<C, S>(
         endpoint_name: NativeEndpointNameV1,
         binding: &NativeClientBinding,

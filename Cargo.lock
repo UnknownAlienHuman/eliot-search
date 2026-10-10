@@ -375,6 +375,7 @@ dependencies = [
  "search-contracts",
  "search-os-secrets-windows",
  "search-ports",
+ "search-provider-client",
  "search-provider-protocol",
  "search-provider-transport-windows",
 ]
@@ -1317,6 +1318,17 @@ dependencies = [
  "search-domain",
  "search-point-identity",
  "search-ports",
+]
+
+[[package]]
+name = "search-provider-client"
+version = "0.0.0"
+dependencies = [
+ "blake3",
+ "search-contracts",
+ "search-ports",
+ "search-provider-protocol",
+ "search-provider-transport-windows",
 ]
 
 [[package]]

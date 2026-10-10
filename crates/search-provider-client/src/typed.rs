@@ -6,12 +6,14 @@
 //! second protocol stack or fallback route.
 
 mod io;
-mod local;
 mod native;
 mod state;
 
+#[cfg(feature = "legacy-loopback-compatibility")]
 pub use native::NativeClientBinding;
+pub use native::NativeClientExpectations;
 
+#[cfg(feature = "legacy-loopback-compatibility")]
 use std::net::TcpStream;
 use std::task::Poll;
 use std::time::Duration;
@@ -95,6 +97,9 @@ impl TypedClientError {
 
     /// Content-free reason; never includes queries, handle tokens or proofs.
     #[must_use]
+    // Preserve the existing non-const API. Const promotion would force an
+    // unrelated legacy-bootstrap lint cutover outside this extraction.
+    #[allow(clippy::missing_const_for_fn)]
     pub fn code(&self) -> &'static str {
         match self {
             Self::Protocol(error) => error.code(),
@@ -193,6 +198,10 @@ impl TypedProviderSession {
     /// provider proof. The server must then acknowledge the exact profile under
     /// a separate proof domain. No development token is promoted to authority.
     /// A single finite deadline covers these checks and both I/O directions.
+    ///
+    /// # Errors
+    /// Rejects failed pairing/profile, transport, allocation or expired setup.
+    #[cfg(feature = "legacy-loopback-compatibility")]
     pub fn from_paired(
         stream: TcpStream,
         binding: BindingContext,
@@ -208,7 +217,7 @@ impl TypedProviderSession {
         Self::from_paired_socket(socket, binding, ceremony, key, nonce, limits, &budget)
     }
 
-    pub(super) fn from_paired_socket(
+    fn from_paired_socket(
         mut socket: SocketIo,
         binding: BindingContext,
         ceremony: PairingMachine,
@@ -275,6 +284,9 @@ impl TypedProviderSession {
     }
 
     /// Send an existing typed recipe and the exact server-issued grant unchanged.
+    ///
+    /// # Errors
+    /// Rejects absent/mismatched grants, invalid requests, expired or failed I/O.
     pub fn send_request(
         &mut self,
         body: RequestBody,
@@ -284,6 +296,9 @@ impl TypedProviderSession {
     }
 
     /// Send a fresh cancellation control identity for one target request.
+    ///
+    /// # Errors
+    /// Rejects invalid/duplicate controls, expired or failed I/O and closed state.
     pub fn send_cancel(
         &mut self,
         control_id: RequestId,
@@ -294,11 +309,17 @@ impl TypedProviderSession {
     }
 
     /// Return one whole authenticated, correlated typed event; print nothing.
+    ///
+    /// # Errors
+    /// Rejects malformed/uncorrelated responses, replay, expired or failed I/O.
     pub fn receive(&mut self) -> Result<ProviderEnvelope, TypedClientError> {
         self.with_state(State::receive)
     }
 
     /// Poll one response without holding the caller until a whole frame arrives.
+    ///
+    /// # Errors
+    /// Rejects invalid polling budgets, response/proof mismatch or failed I/O.
     pub fn poll_receive(
         &mut self,
         quantum: Duration,

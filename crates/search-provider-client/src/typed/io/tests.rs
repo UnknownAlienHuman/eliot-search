@@ -14,9 +14,8 @@ mod fixtures {
     use search_provider_protocol::{BindingKey, DEFAULT_PROTOCOL_LIMITS, NativeEndpointNameV1};
 
     use super::super::{LocalByteStream, SetupBudget};
-    use crate::provider_client::typed::{
-        NativeClientBinding, TypedClientError, TypedProviderSession,
-    };
+    use crate::typed::{TypedClientError, TypedProviderSession};
+    use crate::typed::native::NativeClientBinding;
 
     #[derive(Clone, Copy, Debug)]
     struct Cancel(bool);
