@@ -21,6 +21,7 @@ mod fixtures {
     };
 
     use super::super::{State, TypedClientError, TypedProviderSession, validate_claims};
+    use crate::provider_client::OutcomeClass;
     use crate::provider_client::typed::io::{LocalByteStream, SocketIo};
 
     #[derive(Default)]
@@ -186,6 +187,10 @@ mod fixtures {
             invalid,
             Duration::ZERO,
         );
+        assert_eq!(
+            result.as_ref().expect_err("missing trust").outcome_class(),
+            OutcomeClass::DefinitelyNotSubmitted,
+        );
         assert!(matches!(
             result,
             Err(TypedClientError::TrustedBindingRequired)
@@ -195,6 +200,44 @@ mod fixtures {
         assert!(state.cancel.is_none());
         assert_eq!(state.next_client_sequence().expect("unspent sequence"), 1);
         no_io(&counts);
+    }
+
+    #[test]
+    fn grant_eof_after_both_records_is_unknown_and_drops_owner() {
+        let counts = Rc::new(Counts::default());
+        let expected = InstallationId::from_bytes([2; 16]);
+        let mut owner = TypedProviderSession {
+            state: Some(state(&counts, Some(expected))),
+        };
+        let error = owner
+            .request_standalone_grant(
+                RequestId::from_bytes([0x23; 16]),
+                request(),
+                Duration::from_secs(30),
+            )
+            .expect_err("peer closes after accepting both record writes");
+        assert!(matches!(&error, TypedClientError::PeerClosed));
+        assert_eq!(error.outcome_class(), OutcomeClass::Unknown);
+        assert!(counts.writes.get() > 0);
+        assert_eq!(counts.flushes.get(), 2);
+        assert_eq!(counts.reads.get(), 1);
+        assert!(owner.state.is_none());
+        assert_eq!(counts.drops.get(), 1);
+
+        let closed = owner
+            .request_standalone_grant(
+                RequestId::from_bytes([0x24; 16]),
+                request(),
+                Duration::from_secs(30),
+            )
+            .expect_err("closed owner cannot submit another call");
+        assert!(matches!(&closed, TypedClientError::Closed));
+        assert_eq!(closed.outcome_class(), OutcomeClass::DefinitelyNotSubmitted);
+        owner.close();
+        drop(owner);
+        assert_eq!(counts.drops.get(), 1);
+        assert_eq!(counts.flushes.get(), 2);
+        assert_eq!(counts.reads.get(), 1);
     }
 
     #[test]

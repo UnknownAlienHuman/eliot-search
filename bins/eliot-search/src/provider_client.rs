@@ -11,6 +11,19 @@ mod typed;
 // Explicit paired-socket handoff; never upgrades the development token shim.
 pub use typed::{NativeClientBinding, TypedClientError, TypedProviderSession};
 
+/// Conservative submission evidence for the call that returned an error.
+///
+/// This describes only that failed call. Earlier outstanding operations may
+/// still have unknown outcomes after session teardown. Neither class proves
+/// rollback, remote execution or permission to replay an operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OutcomeClass {
+    /// A local guard proves this call did not submit a command to the peer.
+    DefinitelyNotSubmitted,
+    /// Submission cannot be determined from this error alone.
+    Unknown,
+}
+
 use std::net::SocketAddr;
 use std::path::Path;
 

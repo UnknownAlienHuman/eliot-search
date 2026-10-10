@@ -25,6 +25,7 @@ use search_provider_protocol::{
     verify_proof,
 };
 
+use super::OutcomeClass;
 use io::{SetupBudget, SocketIo};
 use state::State;
 
@@ -75,6 +76,23 @@ pub enum TypedClientError {
 }
 
 impl TypedClientError {
+    /// Conservative submission class for this failed call, during setup or use.
+    ///
+    /// Only guards before any possible command write prove non-submission.
+    /// Every other and future variant remains unknown, including errors which
+    /// can occur both before and after writing. This does not classify earlier
+    /// pending operations or authorize replay after the session is dropped.
+    #[must_use]
+    pub const fn outcome_class(&self) -> OutcomeClass {
+        match self {
+            Self::TrustedBindingRequired
+            | Self::GrantRequired
+            | Self::NonLoopback
+            | Self::Closed => OutcomeClass::DefinitelyNotSubmitted,
+            _ => OutcomeClass::Unknown,
+        }
+    }
+
     /// Content-free reason; never includes queries, handle tokens or proofs.
     #[must_use]
     pub fn code(&self) -> &'static str {
@@ -120,6 +138,7 @@ impl std::fmt::Debug for TypedClientError {
         formatter
             .debug_tuple("TypedClientError")
             .field(&self.code())
+            .field(&self.outcome_class())
             .finish()
     }
 }
@@ -145,7 +164,10 @@ mod diagnostic_tests {
         ));
         assert_eq!(error.code(), "REMOTE_TYPED_IO_ERROR");
         assert_eq!(error.to_string(), "REMOTE_TYPED_IO_ERROR");
-        assert_eq!(format!("{error:?}"), "TypedClientError(\"REMOTE_TYPED_IO_ERROR\")");
+        assert_eq!(
+            format!("{error:?}"),
+            "TypedClientError(\"REMOTE_TYPED_IO_ERROR\", Unknown)"
+        );
         assert!(error.source().is_none());
     }
 }
