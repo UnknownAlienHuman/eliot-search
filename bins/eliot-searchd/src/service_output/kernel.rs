@@ -18,4 +18,5 @@ pub use provider::{emit_handle_expansion, emit_provider_status};
 pub use streaming::emit_streaming_search;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

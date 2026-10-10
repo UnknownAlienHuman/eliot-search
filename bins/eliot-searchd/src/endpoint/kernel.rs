@@ -45,4 +45,5 @@ use spec::{
 use wire::{read_bounded_line, redacted_io_error, write_line};
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

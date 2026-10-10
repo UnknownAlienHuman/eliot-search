@@ -37,4 +37,5 @@ pub use router::*;
 pub use spec::*;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

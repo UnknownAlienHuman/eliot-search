@@ -69,6 +69,13 @@ uses the same original request through native acquisition/recovery, slot publica
 drain/release and intent-removal result boundaries in that initialization owner.
 It adds no durable fields, retry/recovery algorithm or production fault switch.
 
+The [native-fixture harness prerequisite](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6096202633)
+restores explicit paths to existing daemon test modules and their missing test-only
+imports/helper references. Windows test credential-cleanup helpers are visible only
+to their existing grandparent owner so its existing test re-export compiles. Native
+crash fixtures use the actual private owner graph through test-only registration.
+No normal product API, dependency, schema or lifecycle implementation is changed.
+
 Existing migration child parameter wiring also covers `control_migration_plan.rs`,
 `control_migration.rs`, `control_migration_cutover.rs` and
 `control_migration_cutover/{marker_io,operation}.rs`. Only borrowed admission and

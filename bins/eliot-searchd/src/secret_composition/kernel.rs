@@ -24,4 +24,5 @@ pub use spec::*;
 pub use vault::*;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

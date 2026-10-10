@@ -774,3 +774,7 @@ fn initialization_namespace(
 fn code(error: OwnerError) -> String {
     error.code().to_owned()
 }
+
+#[cfg(all(test, windows))]
+#[path = "initialization_crash_tests.rs"]
+mod crash_tests;

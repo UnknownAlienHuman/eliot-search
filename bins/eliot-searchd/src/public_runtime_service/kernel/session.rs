@@ -136,7 +136,9 @@ pub(super) fn serve<R: BufRead, W: Write>(
 }
 
 #[cfg(test)]
+#[path = "session/tests.rs"]
 mod tests;
 
 #[cfg(test)]
+#[path = "session/delivery_tests.rs"]
 mod delivery_tests;

@@ -11,6 +11,7 @@ use search_os_secrets::{
 use zeroize::Zeroizing;
 
 use super::*;
+use crate::sha256;
 
 struct TestDigest;
 

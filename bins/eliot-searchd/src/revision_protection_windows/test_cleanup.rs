@@ -5,7 +5,7 @@ use std::path::Path;
 
 use search_os_secrets_windows::delete_legacy_revision_root_secret_for_test;
 
-pub(super) fn delete_test_credential_for_data_root(data_root: &Path) {
+pub(in super::super) fn delete_test_credential_for_data_root(data_root: &Path) {
     let Some((namespace_id, namespace_hex)) = read_test_namespace(data_root) else {
         return;
     };
@@ -19,7 +19,7 @@ pub(super) fn delete_test_credential_for_data_root(data_root: &Path) {
 }
 
 /// Reads this data root's namespace hex without creating anything.
-pub(super) fn read_test_namespace_hex(data_root: &Path) -> Option<String> {
+pub(in super::super) fn read_test_namespace_hex(data_root: &Path) -> Option<String> {
     read_test_namespace(data_root).map(|(_, hex)| hex)
 }
 

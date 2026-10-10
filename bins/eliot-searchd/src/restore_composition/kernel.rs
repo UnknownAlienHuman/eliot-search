@@ -24,4 +24,5 @@ pub use receipt::*;
 pub use spec::*;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

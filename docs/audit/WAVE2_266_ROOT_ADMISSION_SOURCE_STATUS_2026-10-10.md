@@ -53,8 +53,7 @@ publication and finalization. Results are captured before context refusal and
 ordinary error propagation. A checkpoint separates durable drain from release;
 intent removal retains release-unknown classification through its exact readback.
 The existing intent/layout/owner formats and missing-state refusal are unchanged.
-These cooperative boundaries do not make partial initialization recoverable or
-establish a native DRAINING crash proof.
+These cooperative boundaries do not make partial initialization recoverable.
 
 Service startup has a finite context. After completed startup the same live owner may
 idle; each command borrows it under its own finite context. Shutdown retains its
@@ -114,9 +113,18 @@ Production library/binary compilation, runtime-owner strict Clippy and unchanged
 canonical/Qdrant source guards are separate source gates. The complete all-target
 baseline/candidate comparison uses the same features and `--keep-going -j1`, with a
 separate accepted-base Cargo target. Earlier mixed-target-cache/early-cancel output is
-not qualification evidence. The observed baseline and candidate harness diagnostics
-remain under #189. Strict daemon compilation with warnings denied is also blocked by
-the existing `search-os-secrets-windows` Clippy findings, without suppressing them.
+not qualification evidence. The primary daemon test graph now compiles after explicit
+existing-module path, test import and helper-shadowing repairs. The complete
+baseline/candidate check decreases from 96 occurrences / 73 normalized signatures
+to 35 / 35, with no new signature. Remaining alternate/integration harness
+compilation is tracked by [#346](https://github.com/UnknownAlienHuman/eliot-search/issues/346);
+#189 still owns module/ownership decomposition. Strict daemon compilation with
+warnings denied remains blocked by existing daemon and dependency Clippy debt,
+including the `search-os-secrets-windows` findings. The dependency-inclusive
+all-target/all-feature gate also exposes findings in other unchanged owners;
+none are suppressed. Primary test-target Clippy diagnostics report no finding
+in the two new crash-fixture files after their helper diagnostics are fixed;
+the enclosing daemon Clippy gate still fails.
 
 Execution counts and the exact tested/reviewed source SHA belong in the draft PR
 evidence after the final checks; this document does not infer them from source presence.
@@ -147,6 +155,18 @@ under the existing package contract; no zero-metadata-write claim is made.
 It does not qualify populated imports, mid-staging cancellation or unknown
 publication recovery.
 
+The primary daemon now contains two Windows-only native crash fixtures. The
+ordinary-owner fixture initializes through production code, admits epoch two,
+persists actual `DRAINING` through `begin_drain`, acknowledges it and is killed
+and reaped while retaining its guard. Mutation and inspection then refuse without
+changing the bounded tree snapshot. The initialization fixture calls the private
+production `acquire_new`, acknowledges the persisted intent/native exclusions
+before DIRECT layout creation, and is killed and reaped with that capability alive.
+Exact initialization recovery refuses missing evidence; retry, mutation and
+inspection refuse the retained fence. Every attempt preserves bytes and mtimes.
+Neither fixture manufactures durable records/digests or adds a production fault
+switch. These are two named crash points, not all-phase recovery qualification.
+
 ## Still open in #266 and downstream owners
 
 - Original command checkpoints reach the named DIRECT and staging adapters above.
@@ -162,7 +182,9 @@ publication recovery.
 - Arbitrary legacy quarantine has no retained operation identity. Named recovery
   currently covers complete initialization only; abandoned ordinary ACTIVE/DRAINING
   and unknown migration/publication outcomes are not automatically recovered.
-- Partial initialization crash recovery and the DRAINING crash point remain unqualified.
+- The named ordinary DRAINING and pre-layout initialization crash/refusal points
+  have native fixture evidence. Partial initialization reconstruction, later
+  initialization crash phases and general named recovery remain unqualified.
 - Active redb roots refuse with `DATA_ROOT_LAYOUT_UNSUPPORTED`. redb 2.6.3's writable
   opener is not a proven non-writing/non-repairing inspection API: #343 retains this
   donor limitation. No private redb parser or silent dependency upgrade is introduced.

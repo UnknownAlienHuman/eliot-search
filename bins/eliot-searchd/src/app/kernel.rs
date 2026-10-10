@@ -22,4 +22,5 @@ mod status;
 pub use dispatch::run_main;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

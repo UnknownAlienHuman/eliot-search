@@ -88,6 +88,8 @@ mod storage_security;
 
 #[cfg(all(test, windows))]
 mod protected_ingest_tests;
+#[cfg(all(test, windows))]
+mod root_draining_266;
 
 use std::process::ExitCode;
 

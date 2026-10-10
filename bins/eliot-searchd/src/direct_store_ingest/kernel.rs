@@ -12,4 +12,5 @@ mod policy;
 mod spec;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

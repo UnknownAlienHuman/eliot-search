@@ -395,7 +395,9 @@ impl ContinuationCatalog {
 }
 
 #[cfg(test)]
+#[path = "catalog/tests.rs"]
 mod tests;
 
 #[cfg(test)]
+#[path = "catalog/delivery_tests.rs"]
 mod delivery_tests;

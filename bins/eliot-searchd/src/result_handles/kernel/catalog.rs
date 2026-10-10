@@ -199,4 +199,5 @@ impl ResultHandleCatalog {
 }
 
 #[cfg(test)]
+#[path = "catalog/delivery_tests.rs"]
 mod delivery_tests;

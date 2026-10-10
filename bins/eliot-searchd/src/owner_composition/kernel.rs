@@ -55,4 +55,5 @@ use spec::{INSTALLATION_FILE, LifecycleState, MAX_STATE_BYTES, Slot};
 use succession::verify_sealed_head_agrees;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

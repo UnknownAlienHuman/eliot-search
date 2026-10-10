@@ -43,4 +43,5 @@ impl fmt::Debug for DirectStore {
 pub(super) use read::verify_plaintext;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;
