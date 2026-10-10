@@ -44,7 +44,10 @@ pub use lifecycle::{LiveOwner, ShutdownReceipt};
 pub(crate) use native_bindings::NativeLayoutPins;
 pub(crate) use operation::DataRootRequest;
 pub(crate) use catalog_intent::CatalogMutationIntent;
-pub(crate) use catalog_recovery::{CatalogRecoveryRequest, inspect_catalog_recovery_request};
+pub(crate) use catalog_recovery::{
+    CatalogRecoveryInspection, CatalogRecoveryRequest, inspect_catalog_recovery_request,
+    list_catalog_recovery_request,
+};
 pub(crate) use read_existing::{
     open_bound_directory, verify_bound_directory, verify_existing_locator,
 };

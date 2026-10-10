@@ -48,6 +48,76 @@ fn recovery_request(root: &Path, name: &CatalogRecoveryRequest) -> DataRootReque
     .unwrap()
 }
 
+fn discovery_request(root: &Path) -> DataRootRequest {
+    DataRootRequest::from_cli(&[
+        DISCOVERY_COMMAND.into(),
+        root.as_os_str().to_owned(),
+    ])
+    .unwrap()
+}
+
+#[test]
+fn discovery_returns_only_the_exact_named_observation_without_writes() {
+    let (scratch, guard, intent, name) = armed();
+    drop(intent);
+    drop(guard);
+    let root = &scratch.0;
+    let before = snapshot(root);
+    let discovered = list_catalog_recovery_request(root, &discovery_request(root)).unwrap();
+    let named = inspect_catalog_recovery_request(root, &name, &recovery_request(root, &name))
+        .unwrap();
+    assert_eq!(discovered, named);
+    assert_eq!(discovered.operation_id, name.0);
+    assert!(!format!("{discovered:?}").contains(&root.to_string_lossy().to_string()));
+    assert_eq!(snapshot(root), before);
+}
+
+#[test]
+fn discovery_cannot_initialize_absent_or_empty_roots() {
+    let scratch = Scratch::new();
+    let missing = scratch.0.join("absent");
+    let before = snapshot(&scratch.0);
+    for root in [&scratch.0, &missing] {
+        assert!(list_catalog_recovery_request(root, &discovery_request(root)).is_err());
+        assert_eq!(snapshot(&scratch.0), before);
+    }
+    assert!(!missing.exists());
+}
+
+#[test]
+fn discovery_context_cancel_and_partial_alias_refusals_preserve_evidence() {
+    let (scratch, guard, intent, name) = armed();
+    drop(intent);
+    drop(guard);
+    let root = &scratch.0;
+    let before = snapshot(root);
+    assert_eq!(
+        list_catalog_recovery_request(root, &recovery_request(root, &name))
+            .err()
+            .as_deref(),
+        Some("OWNER_OPERATION_CONFLICT")
+    );
+    let request = discovery_request(root);
+    request.cancel();
+    assert_eq!(
+        list_catalog_recovery_request(root, &request)
+            .err()
+            .as_deref(),
+        Some("OWNER_CANCELLED_BEFORE_MUTATION")
+    );
+    assert_eq!(snapshot(root), before);
+    fs::remove_file(root.join(STAGING)).unwrap();
+    let before = snapshot(root);
+    assert_eq!(
+        list_catalog_recovery_request(root, &discovery_request(root))
+            .err()
+            .as_deref(),
+        Some("OWNER_GUARD_MISMATCH")
+    );
+    assert_eq!(snapshot(root), before);
+    assert!(root.join(MARKER).exists());
+}
+
 #[test]
 fn named_active_inspection_preserves_evidence_and_grants_no_ordinary_open() {
     let (scratch, guard, intent, name) = armed();

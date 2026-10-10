@@ -1,4 +1,4 @@
-//! Native named evidence inspection. No succession, ordinary store or cleanup.
+//! Native retained evidence inspection. No succession, ordinary store or cleanup.
 
 use std::fs::{self, File, OpenOptions};
 use std::io;
@@ -20,6 +20,7 @@ use super::slots::newest_valid;
 use crate::development::DataRootGuard;
 
 const COMMAND: &str = "--inspect-catalog-recovery";
+const DISCOVERY_COMMAND: &str = "--list-catalog-recovery";
 const MARKER: &str = "control/catalog-quarantine.marker";
 const STAGING: &str = "control/catalog-quarantine.tmp";
 
@@ -65,6 +66,12 @@ struct CatalogRecovery {
     inspection: CatalogRecoveryInspection,
 }
 
+#[derive(Clone, Copy)]
+enum CatalogRecoverySelection {
+    Named(RequestId),
+    Discover,
+}
+
 impl CatalogRecovery {
     fn verify(&self) -> Result<(), String> {
         self.request.preflight()?;
@@ -100,6 +107,27 @@ pub fn inspect_catalog_recovery_request(
     request: &DataRootRequest,
 ) -> Result<CatalogRecoveryInspection, String> {
     name.validate_inputs(root, request)?;
+    inspect_catalog_recovery(root, CatalogRecoverySelection::Named(name.0), request)
+}
+
+/// Discovers only the one fixed retained intent; no directory inventory or authority.
+pub fn list_catalog_recovery_request(
+    root: &Path,
+    request: &DataRootRequest,
+) -> Result<CatalogRecoveryInspection, String> {
+    request.validate_root(root)?;
+    request.validate_cli_inputs(&[
+        DISCOVERY_COMMAND.into(),
+        root.as_os_str().to_owned(),
+    ])?;
+    inspect_catalog_recovery(root, CatalogRecoverySelection::Discover, request)
+}
+
+fn inspect_catalog_recovery(
+    root: &Path,
+    selection: CatalogRecoverySelection,
+    request: &DataRootRequest,
+) -> Result<CatalogRecoveryInspection, String> {
     let result = DataRootGuard::with_existing_lock(root, |canonical| {
         request.preflight()?;
         require_catalog_profile(canonical, request)?;
@@ -131,8 +159,11 @@ pub fn inspect_catalog_recovery_request(
             .ok_or_else(|| code(OwnerError::OwnerRecoveryEvidenceMissing))?;
         let evidence = CatalogIntentEvidence::decode(&bytes).map_err(code)?;
         request.preflight()?;
-        if evidence.request_id != name.0 {
-            return Err(code(OwnerError::OwnerOperationConflict));
+        match selection {
+            CatalogRecoverySelection::Named(id) if evidence.request_id != id => {
+                return Err(code(OwnerError::OwnerOperationConflict));
+            }
+            CatalogRecoverySelection::Named(_) | CatalogRecoverySelection::Discover => {}
         }
         let current = newest_valid(canonical);
         request.preflight()?;

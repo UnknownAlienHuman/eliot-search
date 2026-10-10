@@ -21,6 +21,7 @@ pub(super) fn dispatch(
     cli_request.preflight()?;
     match command {
         "--inspect-catalog-recovery" => cmd_inspect_catalog_recovery(arguments, cli_request),
+        "--list-catalog-recovery" => cmd_list_catalog_recovery(arguments, cli_request),
         "--initialize-data-root" | "--recover-initialization" => {
             require_count(arguments, 3)?;
             let request = arguments[2]
@@ -181,6 +182,25 @@ fn cmd_inspect_catalog_recovery(
         &name,
         request,
     )?;
+    emit_catalog_recovery_observation(request, &observation)
+}
+
+fn cmd_list_catalog_recovery(
+    arguments: &[OsString],
+    request: &DataRootRequest,
+) -> Result<(), String> {
+    require_count(arguments, 2)?;
+    let observation = crate::owner_composition::list_catalog_recovery_request(
+        Path::new(&arguments[1]),
+        request,
+    )?;
+    emit_catalog_recovery_observation(request, &observation)
+}
+
+fn emit_catalog_recovery_observation(
+    request: &DataRootRequest,
+    observation: &crate::owner_composition::CatalogRecoveryInspection,
+) -> Result<(), String> {
     write_stdout(
         request,
         &format!(

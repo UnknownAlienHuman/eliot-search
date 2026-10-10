@@ -86,6 +86,13 @@ It creates no ordinary child-store authority, retry, reconciliation, cleanup or
 operation-success receipt. Original-object unlink and late cleanup qualification
 remain separately tracked by #347 under #266.
 
+The [bounded invocation-discovery continuation](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6097287181)
+uses only that same catalog-recovery owner, companion native fixtures, facade/module
+exports and command assembly. `--list-catalog-recovery ROOT` verifies at most one
+fixed retained v2 intent through the same private admission and held-object proof.
+It creates no directory inventory, ordinary store, succession, replay or cleanup
+authority; missing/partial/legacy evidence remains a preserving refusal.
+
 The [lifetime/redaction addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094629373)
 retains the fixed native layout objects through admitted child lifetimes and bounds
 `secure_commands/kernel/output.rs` failures to closed reason tokens. No new identity catalog

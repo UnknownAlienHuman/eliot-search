@@ -96,6 +96,13 @@ cleanup or retry. Legacy static/torn/foreign intent, equal bytes in a different 
 object, wrong invocation/context and cancellation refuse. Named inspection does not
 make an unresolved root available to normal commands.
 
+`--list-catalog-recovery ROOT` discovers the invocation id through the same private
+native admission and returns the same bounded observation. Exact discovery/root
+inputs are checked before I/O. It reads only the two fixed intent aliases, not a
+directory inventory. An absent/empty root is not initialized; malformed, legacy or
+partial evidence cannot produce an id or ordinary capability. Name discovery does
+not resolve the original operation or remove its quarantine.
+
 Explicit initialization and its exact recovery also check that original context
 through native intent acquisition, exclusion objects, layout readback, owner-slot
 publication and finalization. Results are captured before context refusal and

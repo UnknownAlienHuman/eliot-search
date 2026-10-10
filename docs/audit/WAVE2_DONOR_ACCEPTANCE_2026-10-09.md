@@ -92,6 +92,12 @@ found no existing disposition-by-handle unlink donor in the daemon/library tree;
 qualification for separate review. Current path-based cleanup is not relabelled
 as atomic original-object deletion or power-loss durability.
 
+Bounded invocation discovery shares that exact native evidence admission with
+named inspection; it reads one fixed retained intent and exports the same
+content-free observation. No enumeration, source recovery or external donor is
+added. Original-operation-linked reconciliation still requires its owning
+durable effect contract; an invocation id alone supplies no success authority.
+
 ## `#235` provider client — `PORT_CURRENT`
 
 Extract the existing typed CLI implementation:

@@ -9,6 +9,7 @@ pub(super) fn is_persistent_command(command: &str) -> bool {
             | "--initialize-data-root"
             | "--recover-initialization"
             | "--inspect-catalog-recovery"
+            | "--list-catalog-recovery"
             | "--index-file"
             | "--index-directory"
             | "--search-root"
@@ -35,6 +36,7 @@ pub(super) const fn help() -> &'static str {
         "  eliot-searchd --initialize-data-root ROOT OPERATION_ID\n",
         "  eliot-searchd --recover-initialization ROOT OPERATION_ID\n",
         "  eliot-searchd --inspect-catalog-recovery ROOT INVOCATION_UUID\n",
+        "  eliot-searchd --list-catalog-recovery ROOT\n",
         "  eliot-searchd --self-test\n",
         "  eliot-searchd --stdio\n",
         "  eliot-searchd --serve-data-root ROOT\n\n",
