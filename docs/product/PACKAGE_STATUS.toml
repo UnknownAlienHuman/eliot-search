@@ -317,3 +317,14 @@ path = "xtask"
 execution_chain = ["#250", "#251", "#214", "#240"]
 product_path = "absent"
 disposition = "tooling_only"
+
+[[package]]
+name = "search-provider-transport-windows"
+path = "crates/search-runtime/search-provider-transport-windows"
+execution_chain = ["#380", "#373", "#332"]
+consumers = ["#235", "#332"]
+product_path = "partial"
+check_clippy_evidence = "exact_pass"
+# Concrete source foundation only; no installed command cutover/native proof.
+live_native_qualified = false
+public_capability_enabled = false

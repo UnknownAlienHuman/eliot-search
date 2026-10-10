@@ -44,6 +44,15 @@ impl LocalByteStream for TcpStream {
     }
 }
 
+#[cfg(windows)]
+impl LocalByteStream for search_provider_transport_windows::NativeLocalConnection {
+    fn configure_local(&self) -> Result<(), TypedClientError> {
+        // The concrete owner already checked/configured its sole canonical
+        // local byte pipe. This does not replace pairing or grant validation.
+        Ok(())
+    }
+}
+
 struct Incoming {
     record: TypedRecordBuffer,
     deadline: Instant,

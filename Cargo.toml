@@ -48,6 +48,7 @@ members = [
     "bins/eliot-search-doc-worker",
     "crates/search-runtime/search-revision-crypto",
     "crates/search-runtime/search-os-secrets-windows",
+    "crates/search-runtime/search-provider-transport-windows",
     "xtask",
 ]
 
@@ -98,6 +99,7 @@ search-continuation = { path = "crates/search-query/search-continuation" }
 search-retention = { path = "crates/search-runtime/search-retention" }
 search-eval = { path = "crates/search-eval" }
 search-provider-protocol = { path = "crates/search-provider-protocol" }
+search-provider-transport-windows = { path = "crates/search-runtime/search-provider-transport-windows" }
 search-eliot-adapter = { path = "crates/search-eliot-adapter" }
 search-research-export-adapter = { path = "crates/search-research-export-adapter" }
 

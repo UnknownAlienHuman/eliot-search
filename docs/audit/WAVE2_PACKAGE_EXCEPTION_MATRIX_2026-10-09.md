@@ -14,6 +14,7 @@ One manager owns commits, root dependency pins and `Cargo.lock`. An exception pe
 | #356/#358 PROGRAM | DIRECT context / migration sequences | separately freeze and merge exact children one at a time | broad caller-family branches; stacked PRs; unrelated owner repair |
 | #357 catalog evidence | owner-private catalog intent/recovery observation | retained input/release, bounded named inspection/discovery, exact frozen callers | effect reconciliation, deletion qualification, redb repair, ordinary recovery authority |
 | #235.core | new `search-provider-client` | typed CLI client move/deletion, workspace member/lockfile, narrow CLI wiring | daemon internals; TCP/token/line protocol promotion; native cutover |
+| #380 native foundation | new `search-provider-transport-windows` | CLI `typed/io.rs` + `typed/local.rs` concrete pipe adapter; workspace/CLI manifests, lockfile, exact status row; six existing ledger source hashes only | arbitrary handle adoption; generic stream plugin; daemon/listener/command cutover; framing/authentication replacement; native qualification |
 | #238 | `search-config` | exact TOML/Serde pins, docs, shared exact-byte SHA exception | runtime apply/readiness/argv; silent old-digest change |
 | #241 | `search-source-admission` | exact GlobSet pin/lockfile/docs; shared digest compatibility API | ingestion/safe-reader/root/registry mutation; ignore walker |
 | #246 | `search-exact` | exact matcher pins/lockfile/docs | denominator/access/handles; regex successor work |
