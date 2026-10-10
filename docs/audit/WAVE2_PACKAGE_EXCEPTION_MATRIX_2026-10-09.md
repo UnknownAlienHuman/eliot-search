@@ -11,7 +11,7 @@ One manager owns integration, commits, dependency pins and Cargo.lock. This matr
 | #258 completed | search-contracts | accepted indexed contract/docs/fixtures | parallel schema owner |
 | #250 completed | xtask | accepted metadata/status tooling and pins | checker weakening; product runtime authority |
 | #256 | search-point-identity | focused port docs/fixtures; exact canonical-ledger refresh | deleting still-imported exports; daemon/planner rewrites; new codec/crypto owner |
-| #257 | search-unitizer | focused contract adapters/fixtures; exact ledger refresh | materializer/parser implementation; provisional second UnitSet |
+| #257 | search-unitizer | focused contract adapters/fixtures; exact ledger refresh; unitizer manifest/lock wiring to the existing search-materializer API and one named materialization ingress adapter | materializer/parser implementation; provisional second UnitSet; daemon/planner/store edits |
 | #266 | search-runtime-owner | daemon owner_composition, narrow command assembly, legacy DirectStore open helpers | query/source/Qdrant redesign; second root catalog |
 | #235 | new search-provider-client | typed CLI client move/deletion, workspace membership/lockfile, narrow CLI wiring | daemon internals; loopback promotion; protocol redesign; TCP fallback |
 | #238 | search-config | exact TOML/Serde pins/docs and the shared exact-byte SHA exception below | readiness/apply/input acquisition; changing existing digest domains |

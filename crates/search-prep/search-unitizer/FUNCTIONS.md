@@ -1,6 +1,6 @@
 # Function contract — `search-unitizer`
 
-**Status:** W2/P04 logical contract; no unitization runtime or qualification evidence exists.
+**Status:** W2/P04 logical contract with an implemented exact UTF-8 UnitSet v3 baseline. Broader operations remain future scope; product qualification is separate.
 
 This package owns deterministic bounded unit occurrences and manifests derived from one exact canonical
 representation. It owns no source/revision storage, materialization, semantic enrichment, lexical/model
@@ -183,3 +183,66 @@ by caller/admission logic.
 - no source store, lexical/model, ranking, Qdrant or vendor dependency;
 - content/path absent from manifest technical/debug/log views;
 - fake representation/cancellation ports and deterministic property tests.
+
+## Actual implementation status and API addendum — #257
+
+The integrated source
+implements the bounded `exact-unit-manifest/v3` baseline below. The broader logical contracts in this
+document remain design requirements and future scope where they exceed these concrete APIs. This
+source review reports no compilation, test execution or product qualification result.
+
+| Concrete public API | Implemented result |
+| --- | --- |
+| `validate_v3_unitizer_profile(&V3UnitizerProfileDescriptor)` | `Result<ValidatedV3UnitizerProfile, UnitizationError>`; explicit decisions/finite bounds and full descriptor identity |
+| `prepare_unit_set_input(binding, product, request, materializer_profile, profile, budget)` | `Result<UnitSetInput<'a>, UnitizationError>`; sole materializer ingress, owning verifier, exact immutable UTF-8 borrow and byte-line coordinates |
+| `build_unit_manifest(&UnitSetInput, &ValidatedV3UnitizerProfile, &UnitizationBudget)` | `Result<VerifiedUnitSet, UnitizationError>`; complete ordered derived occurrences, canonical commitments and contract `Representation` binding |
+| `canonicalize_unit_manifest(&UnitManifest)` | `Result<CanonicalUnitManifestBytes, UnitizationError>`; closed shared canonical CBOR and body-digest parity |
+| `decode_unit_manifest(&[u8], max_encoded_bytes: usize)` | `Result<UnitManifest, UnitizationError>`; bounded proposed manifest with schema/profile/digest and re-encoding checks |
+| `verify_unit_manifest(&UnitManifest, &UnitSetInput, &ValidatedV3UnitizerProfile, &UnitizationBudget)` | `Result<VerifiedUnitSet, UnitizationError>`; exact-source rebuild and full manifest equality |
+| `manifest_digest(&UnitManifest)` | `Blake3Digest32`; reads the commitment, without independent verification |
+| `diff_unit_manifests(&VerifiedUnitSet, &VerifiedUnitSet)` | `Result<UnitManifestDiff, UnitizationError>`; created/retained/retired IDs, with retention requiring full descriptor equality |
+
+`V3SourceBinding` carries admitted typed namespace/source/revision/materialization/representation UUIDs;
+the unitizer does not issue admission or derive those IDs from materializer digests. Peer materializer
+types appear only at the named ingress. `ValidatedV3UnitizerProfile` exposes `descriptor()`, `id()`,
+`limits()` and `revision()`; `UnitSetInput`, `VerifiedUnitSet`, `UnitManifest` and `UnitDescriptor` have
+no public constructors or writable fields. Verified output exposes immutable occurrence metadata and a
+representation whose `unit_manifest_digest` equals the manifest commitment. Decoding alone cannot
+create a verified set. `UnitManifestVerificationReceipt` aliases `VerifiedUnitSet`.
+
+The accepted profile is nonempty, byte-identical UTF-8 `Text` or `Code`, `ExactBytes` assurance, no loss
+records, File/Section/Doc units, boundary revision 1, no overlap, exact text-byte anchors, no structural
+or predicate attachments, no omitted bytes and anchor depth 1. `V3EmptyPolicy::Reject` serializes as
+`reject-empty`; empty input returns `EmptyInput`, and `allow-empty` is rejected. Existing deterministic
+line-preferred layout is reused; scalar/line excess in a selected span is refused. Generic predicates,
+structure and lossy/transformed coordinates are unsupported rather than silently dropped.
+
+The closed envelope has `format = exact-unit-manifest/v3`, unsigned `version = 3`, `body` and a 32-byte
+`digest`; the digest covers the canonical body. Body fields are `provenance`, full `profile`,
+`profile_id`, `input_bytes`, `represented_bytes`, `omitted_bytes`, `line_count` and ordered `units`.
+The profile has 18 exact fields, including a closed five-field `limits` object; provenance/unit/anchor
+arrays have exact positional lengths. UUIDs use 16-byte strings and digests 32-byte strings. The shared
+`search-contracts` owner supplies canonical CBOR and all v3 BLAKE3 operations under
+`eliot/cbor/unitizer-profile/v3`, `eliot/cbor/unit-provenance/v3`, `eliot/raw/unit-content/v3`,
+`eliot/cbor/unit-reference/v3`, `eliot/cbor/unit-occurrence/v3` and `eliot/cbor/unit-manifest/v3`.
+Profile IDs contain the full digest hex after `unitizer-v3-`; unit IDs preserve the first 16 occurrence
+digest bytes, with the full digest retained separately. The README gives exact record order.
+
+All limits are positive and consistent: input bytes, input lines and whole-envelope manifest bytes are
+at most `MAX_CANONICAL_BYTES - 128`; units at most 4096; accounted work at most 32,000,000; unit bytes
+at most input bytes; preferred bytes and scalar counts at most unit bytes; per-unit lines at most both
+input lines and unit bytes. Minimum unit bytes and anchor depth are exactly 1. A nonzero fixture digest
+is a binding, not fixture execution evidence. Per-call `UnitizationBudget` narrows step/output ceilings
+and adds a monotonic deadline and live cancellation flag, excluded from durable identity. Failures
+produce no complete set. Implemented reasons include `UNITIZATION_EMPTY_INPUT`,
+`UNITIZATION_CANCELLED`, `UNITIZATION_DEADLINE_EXCEEDED`, `UNITIZATION_WORK_BUDGET_EXCEEDED`,
+`UNIT_MANIFEST_LEGACY_UNSUPPORTED`, profile mismatch, completeness and digest/nondeterminism errors.
+The wider failure list above remains a logical contract rather than an inventory of compiled variants.
+
+Legacy DIRECT profile validation/digest/change classification, receipt-bound `unitize`, pure
+`unitize_text` and its layout codec stay unchanged until #331; these APIs cannot produce/verify v3 sets.
+Binary v1/v2 durable manifests are refused and require a rebuild from exact retained materializations;
+there is no v2 producer or relabelling migration. Batch/deadline-port orchestration, disclosure views,
+generalized request/boundary operations, structural/predicate profiles and v3 transition classification
+remain future scope. Currentness, admission, durable publication and indexed qualification are not
+asserted by the v3 unitizer result.

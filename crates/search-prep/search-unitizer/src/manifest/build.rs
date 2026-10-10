@@ -1,133 +1,254 @@
-//! Deterministic unit occurrence and manifest construction.
-
-use crate::{UnitizationError, UnitizationInput};
-use search_contracts::{Blake3Digest32, DigestAlgorithm};
-
-use super::codec::{encode_body, encoded_size};
-use super::digest::digest32;
-use super::model::{MaterializerProvenance, UnitDescriptor, UnitManifest};
-use super::profile::{ValidatedUnitizerProfile, unitizer_profile_digest};
-use super::spec::{MANIFEST_DOMAIN, UNIT_DOMAIN, UNIT_MANIFEST_DIGEST_ALGORITHM};
-
-fn derive_unit_digest(
-    input: &UnitizationInput,
-    provenance: &MaterializerProvenance,
-    profile: &ValidatedUnitizerProfile,
-    ordinal: u64,
-    span: &crate::UnitSpan,
-) -> Result<Blake3Digest32, UnitizationError> {
-    let start = u64::try_from(span.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
-    let end = u64::try_from(span.source_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-    Ok(Blake3Digest32::from_bytes(digest32(
-        UNIT_DOMAIN,
-        &[
-            input.source_id.as_str().as_bytes(),
-            &input.revision.get().to_le_bytes(),
-            provenance.representation_id.as_bytes(),
-            profile.id().as_bytes(),
-            &ordinal.to_le_bytes(),
-            &start.to_le_bytes(),
-            &end.to_le_bytes(),
-            &span.logical_line_start.to_le_bytes(),
-            &span.logical_line_end.to_le_bytes(),
-            &[
-                u8::from(span.starts_at_line_boundary),
-                u8::from(span.ends_at_line_boundary),
-            ],
-        ],
-    )))
-}
+//! Complete v3 construction with package-derived occurrence identities.
+use super::codec::{anchor_value, body_value, canonicalize_unit_manifest, provenance_value};
+use super::digest::{bytes, hash_cbor, hash_raw, object, text};
+use super::input::{UnitSetInput, UnitizationBudget};
+use super::model::{ManifestBody, UnitDescriptor, UnitManifest, VerifiedUnitSet};
+use super::v3_profile::{ValidatedV3UnitizerProfile, validate_v3_unitizer_profile};
+use crate::{UnitSpan, UnitizationError};
+use search_contracts::{
+    BoundedList, CanonicalValue, NativeAnchor, Representation, TextBytesAnchor, UnitId,
+    UnitOccurrence,
+};
+use std::collections::{BTreeMap, btree_map::Entry};
 
 pub(super) fn assemble_manifest(
-    input: &UnitizationInput,
-    provenance: &MaterializerProvenance,
-    profile: &ValidatedUnitizerProfile,
-    digest_algorithm: DigestAlgorithm,
+    input: &UnitSetInput<'_>,
+    profile: &ValidatedV3UnitizerProfile,
+    budget: &UnitizationBudget<'_>,
 ) -> Result<UnitManifest, UnitizationError> {
-    if digest_algorithm != UNIT_MANIFEST_DIGEST_ALGORITHM {
-        return Err(UnitizationError::UnitManifestDigestMismatch);
-    }
-    if unitizer_profile_digest(profile) != profile.id() {
+    budget.validate(profile)?;
+    if input.profile_id != *profile.id()
+        || validate_v3_unitizer_profile(profile.descriptor())?.id() != profile.id()
+    {
         return Err(UnitizationError::UnitizerProfileMismatch);
     }
-    if input.is_empty() {
-        return Err(UnitizationError::EmptyInput);
-    }
-    let spans = crate::unitize_text(input.text(), &input.lines, profile.limits())?;
-    if spans.is_empty() {
-        return Err(UnitizationError::UnitManifestIncomplete);
-    }
-    let input_bytes = u64::try_from(input.len()).map_err(|_| UnitizationError::OffsetOverflow)?;
-    let line_count =
-        u64::try_from(input.lines.len()).map_err(|_| UnitizationError::OffsetOverflow)?;
+    budget.check(input.prep_steps)?;
+    let source = input.product.canonical_text();
+    let spans = crate::layout::unitize_text_checked(
+        source,
+        &input.lines,
+        profile.limits(),
+        |unit_count| {
+            let steps = u64::try_from(unit_count)
+                .map_err(|_| UnitizationError::OffsetOverflow)?
+                .checked_mul(32)
+                .and_then(|steps| input.prep_steps.checked_add(steps))
+                .ok_or(UnitizationError::OffsetOverflow)?;
+            budget.check(steps)
+        },
+    )?;
+    let used = input
+        .prep_steps
+        .checked_add(
+            u64::try_from(spans.len())
+                .map_err(|_| UnitizationError::OffsetOverflow)?
+                .checked_mul(32)
+                .ok_or(UnitizationError::OffsetOverflow)?,
+        )
+        .ok_or(UnitizationError::OffsetOverflow)?;
+    budget.check(used)?;
+    let provenance_digest = hash_cbor(
+        "eliot/cbor/unit-provenance/v3",
+        &provenance_value(&input.provenance)?,
+        4096,
+    )?;
     let mut units = Vec::with_capacity(spans.len());
+    let mut ids = BTreeMap::new();
+    let mut cursor = 0;
     for (index, span) in spans.iter().enumerate() {
-        let ordinal = u64::try_from(index).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let start =
-            u64::try_from(span.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let end = u64::try_from(span.source_end).map_err(|_| UnitizationError::OffsetOverflow)?;
-        let unit_digest = derive_unit_digest(input, provenance, profile, ordinal, span)?;
-        units.push(UnitDescriptor {
-            ordinal,
-            source_start: start,
-            source_end: end,
-            logical_line_start: span.logical_line_start,
-            logical_line_end: span.logical_line_end,
-            starts_at_line_boundary: span.starts_at_line_boundary,
-            ends_at_line_boundary: span.ends_at_line_boundary,
-            unit_digest,
-        });
+        budget.check(used)?;
+        if span.source_start != cursor {
+            return Err(UnitizationError::UnitCoverageMismatch);
+        }
+        let descriptor = derive_occurrence(
+            input,
+            profile,
+            span,
+            u64::try_from(index).map_err(|_| UnitizationError::OffsetOverflow)?,
+            provenance_digest,
+        )?;
+        record_identity(
+            &mut ids,
+            descriptor.occurrence.unit_id,
+            descriptor.identity_digest,
+        )?;
+        cursor = span.source_end;
+        units.push(descriptor);
     }
-    let mut ordered: Vec<Blake3Digest32> = units.iter().map(UnitDescriptor::unit_digest).collect();
-    ordered.sort();
-    if ordered.windows(2).any(|pair| pair[0] == pair[1]) {
-        return Err(UnitizationError::UnitizationNondeterministic);
+    if cursor != source.len() {
+        return Err(UnitizationError::UnitCoverageMismatch);
     }
-    let mut manifest = UnitManifest {
-        source_id: input.source_id.clone(),
-        revision: input.revision,
-        content_digest: input.content_digest,
-        representation_id: provenance.representation_id,
-        materializer_profile_digest: provenance.materializer_profile_digest,
-        canonical_digest: provenance.canonical_digest,
-        coordinate_digest: provenance.coordinate_digest,
-        loss_digest: provenance.loss_digest,
-        unitizer_profile_id: profile.id(),
-        unitizer_profile_revision: profile.revision(),
-        unitizer_limits: profile.limits(),
-        digest_algorithm,
-        input_bytes,
-        emitted_bytes: input_bytes,
-        line_count,
+    let body = ManifestBody {
+        provenance: input.provenance.clone(),
+        profile: profile.descriptor().clone(),
+        profile_id: profile.id().clone(),
+        input_bytes: input.provenance.canonical_bytes,
+        represented_bytes: input.provenance.canonical_bytes,
+        omitted_bytes: 0,
+        line_count: u64::try_from(input.lines.len())
+            .map_err(|_| UnitizationError::OffsetOverflow)?,
         units,
-        manifest_digest: Blake3Digest32::from_bytes([0; 32]),
     };
-    let mut body = Vec::new();
-    encode_body(&manifest, &mut body)?;
-    manifest.manifest_digest = Blake3Digest32::from_bytes(digest32(MANIFEST_DOMAIN, &[&body]));
+    // The body is a draft, not an authority object with a zero placeholder.
+    let manifest_digest = hash_cbor(
+        "eliot/cbor/unit-manifest/v3",
+        &body_value(&body)?,
+        profile
+            .descriptor()
+            .max_manifest_bytes
+            .checked_add(128)
+            .ok_or(UnitizationError::OffsetOverflow)?,
+    )?;
+    let manifest = UnitManifest {
+        body,
+        manifest_digest,
+    };
+    let encoded = canonicalize_unit_manifest(&manifest)?;
+    if encoded.len() > budget.max_encoded_bytes {
+        return Err(UnitizationError::InputTooLarge);
+    }
+    budget.check(used)?;
     Ok(manifest)
 }
 
-/// Builds every occurrence in canonical order with full binding.
-///
-/// Validates finite counts, unique unit identities, profile-compliant sizes,
-/// complete accounting of the represented bytes and the exact source,
-/// representation, materializer and unitizer binding.
-///
-/// Success contains immutable unit descriptors and digests, not source
-/// bodies or ranking data. Cancellation and budget exhaustion surface as
-/// typed errors through boundary scanning; they never yield a successful
-/// complete manifest.
-pub fn build_unit_manifest(
-    input: &UnitizationInput,
-    provenance: &MaterializerProvenance,
-    profile: &ValidatedUnitizerProfile,
-    digest_algorithm: DigestAlgorithm,
-    max_encoded_bytes: usize,
-) -> Result<UnitManifest, UnitizationError> {
-    let manifest = assemble_manifest(input, provenance, profile, digest_algorithm)?;
-    if encoded_size(manifest.source_id.as_str().len(), manifest.units.len())? > max_encoded_bytes {
-        return Err(UnitizationError::InputTooLarge);
+pub(super) fn record_identity(
+    ids: &mut BTreeMap<UnitId, search_contracts::Blake3Digest32>,
+    unit_id: UnitId,
+    commitment: search_contracts::Blake3Digest32,
+) -> Result<(), UnitizationError> {
+    match ids.entry(unit_id) {
+        Entry::Vacant(entry) => {
+            entry.insert(commitment);
+            Ok(())
+        }
+        Entry::Occupied(entry) if *entry.get() == commitment => {
+            Err(UnitizationError::UnitizationNondeterministic)
+        }
+        Entry::Occupied(_) => Err(UnitizationError::IdentityCollision),
     }
-    Ok(manifest)
+}
+
+fn derive_occurrence(
+    input: &UnitSetInput<'_>,
+    profile: &ValidatedV3UnitizerProfile,
+    span: &UnitSpan,
+    ordinal: u64,
+    provenance_digest: search_contracts::Blake3Digest32,
+) -> Result<UnitDescriptor, UnitizationError> {
+    let descriptor = profile.descriptor();
+    let content = input
+        .product
+        .canonical_text()
+        .get(span.source_start..span.source_end)
+        .ok_or(UnitizationError::InvalidUtf8Boundary)?;
+    let line_count = span
+        .logical_line_end
+        .checked_sub(span.logical_line_start)
+        .ok_or(UnitizationError::InvalidLineSpan)?;
+    if content.len() < descriptor.min_unit_bytes
+        || content.chars().count() > descriptor.max_unit_scalars
+        || line_count
+            > u64::try_from(descriptor.max_unit_lines)
+                .map_err(|_| UnitizationError::OffsetOverflow)?
+    {
+        return Err(UnitizationError::UnitTooLarge);
+    }
+    let source_start =
+        u64::try_from(span.source_start).map_err(|_| UnitizationError::OffsetOverflow)?;
+    let source_end =
+        u64::try_from(span.source_end).map_err(|_| UnitizationError::OffsetOverflow)?;
+    let native_anchor = NativeAnchor::TextBytes(TextBytesAnchor {
+        content_digest: input.provenance.input_digest,
+        byte_start_0: source_start,
+        byte_end_exclusive_0: source_end,
+    });
+    native_anchor
+        .validate()
+        .map_err(|_| UnitizationError::InvalidLineSpan)?;
+    let unit_content_digest = hash_raw(
+        "eliot/raw/unit-content/v3",
+        content.as_bytes(),
+        descriptor
+            .limits
+            .max_unit_bytes
+            .checked_add(128)
+            .ok_or(UnitizationError::OffsetOverflow)?,
+    )?;
+    let reference = object(vec![
+        ("provenance", bytes(provenance_digest.as_bytes())?),
+        ("anchor", anchor_value(&native_anchor)?),
+        ("canonical_start", CanonicalValue::U64(source_start)),
+        ("canonical_end", CanonicalValue::U64(source_end)),
+    ])?;
+    let reference_digest = hash_cbor("eliot/cbor/unit-reference/v3", &reference, 4096)?;
+    let identity = object(vec![
+        ("provenance", bytes(provenance_digest.as_bytes())?),
+        ("profile", text(profile.id().as_str())?),
+        ("kind", text(descriptor.unit_kind.as_str())?),
+        ("ordinal", CanonicalValue::U64(ordinal)),
+        ("canonical_start", CanonicalValue::U64(source_start)),
+        ("canonical_end", CanonicalValue::U64(source_end)),
+        ("line_start", CanonicalValue::U64(span.logical_line_start)),
+        ("line_end", CanonicalValue::U64(span.logical_line_end)),
+        (
+            "starts_at_line_boundary",
+            CanonicalValue::Bool(span.starts_at_line_boundary),
+        ),
+        (
+            "ends_at_line_boundary",
+            CanonicalValue::Bool(span.ends_at_line_boundary),
+        ),
+        ("anchor", anchor_value(&native_anchor)?),
+        ("content", bytes(unit_content_digest.as_bytes())?),
+        ("reference", bytes(reference_digest.as_bytes())?),
+        ("structural_identity", CanonicalValue::Null),
+        ("configuration_predicate", CanonicalValue::Null),
+    ])?;
+    let identity_digest = hash_cbor("eliot/cbor/unit-occurrence/v3", &identity, 4096)?;
+    let mut id_bytes = [0_u8; 16];
+    id_bytes.copy_from_slice(&identity_digest.as_bytes()[..16]);
+    Ok(UnitDescriptor {
+        occurrence: UnitOccurrence {
+            unit_id: UnitId::from_bytes(id_bytes),
+            representation_id: input.provenance.binding.representation_id,
+            unit_kind: descriptor.unit_kind,
+            ordinal,
+            native_anchor,
+            structural_identity: None,
+            configuration_predicate: None,
+        },
+        source_start,
+        source_end,
+        logical_line_start: span.logical_line_start,
+        logical_line_end: span.logical_line_end,
+        starts_at_line_boundary: span.starts_at_line_boundary,
+        ends_at_line_boundary: span.ends_at_line_boundary,
+        unit_content_digest,
+        reference_digest,
+        identity_digest,
+    })
+}
+
+pub(super) fn verified(manifest: UnitManifest) -> VerifiedUnitSet {
+    let representation = Representation {
+        representation_id: manifest.body.provenance.binding.representation_id,
+        materialization_id: manifest.body.provenance.binding.materialization_id,
+        unitizer_profile_id: manifest.body.profile_id.clone(),
+        enrichment_profile_ids: BoundedList::empty(),
+        unit_manifest_digest: manifest.manifest_digest,
+    };
+    VerifiedUnitSet {
+        manifest,
+        representation,
+    }
+}
+
+/// Build the complete ordered v3 set; cancellation/budget failure emits no set.
+/// Occurrence identities, commitments and the representation digest are derived.
+pub fn build_unit_manifest(
+    input: &UnitSetInput<'_>,
+    profile: &ValidatedV3UnitizerProfile,
+    budget: &UnitizationBudget<'_>,
+) -> Result<VerifiedUnitSet, UnitizationError> {
+    assemble_manifest(input, profile, budget).map(verified)
 }

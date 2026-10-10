@@ -14,6 +14,7 @@ path = "src/lib.rs"
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 search-contracts.workspace = true
 search-domain.workspace = true
+search-materializer.workspace = true
 search-ports.workspace = true
 
 [lints]

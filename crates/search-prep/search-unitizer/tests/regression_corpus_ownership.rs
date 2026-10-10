@@ -19,7 +19,8 @@ fn regression_corpus_is_split_without_dropping_contracts() {
         facade.len()
     );
     assert!(facade.contains("mod layout_cases;"));
-    assert!(facade.contains("mod manifest_cases;"));
+    assert!(!facade.contains("mod manifest_cases;"));
+    assert!(read(&root, "src/manifest.rs").contains("mod tests;"));
     assert!(!facade.contains("#[test]"));
 
     let layout = read(&root, "src/tests/layout_cases.rs");
@@ -34,26 +35,35 @@ fn regression_corpus_is_split_without_dropping_contracts() {
         assert!(layout.contains(test), "layout corpus missing {test}");
     }
 
-    let manifest = read(&root, "src/tests/manifest_cases.rs");
+    let manifest = read(&root, "src/manifest/tests.rs");
     for test in [
-        "durable_manifest_binds_source_representation_and_profiles",
-        "same_input_yields_byte_identical_manifest",
-        "manifest_canonical_bytes_and_digest_are_golden",
-        "changed_profile_revision_changes_manifest_identity",
-        "changed_representation_changes_unit_identity",
-        "verify_accepts_exact_and_rejects_tamper",
-        "build_rejects_wrong_digest_algorithm_without_reinterpretation",
-        "invalid_profile_descriptors_fail_closed",
-        "codec_closedness_rejects_sha256_tag_with_valid_blake3_trailer",
-        "codec_closedness_rejects_wrapping_unit_count_before_reserve",
+        "real_materialization_roundtrip_complete_occurrences_and_representation_bind",
+        "deterministic_bytes_and_source_byte_anchors_include_unicode_and_crlf",
+        "v3_canonical_golden",
+        "provenance_profile_kind_and_representation_changes_change_derived_identity",
+        "correctly_rehashed_forged_manifests_never_become_verified",
+        "truncated_identity_collision_and_duplicate_fail_closed",
+        "attachment_and_predicate_cannot_be_silently_dropped",
+        "live_layout_cancellation_stops_before_complete_allocation",
+        "cancellation_deadline_unit_and_output_budgets_never_return_a_complete_set",
     ] {
         assert!(manifest.contains(test), "manifest corpus missing {test}");
     }
     assert!(manifest.contains("../testdata/unit_manifest_v1.hex"));
-    assert!(manifest.contains("legacy_v1_manifest_is_quarantined_for_rebuild"));
+    assert!(manifest.contains("v2_cannot_be_relabelled_or_satisfy_v3_and_codec_is_closed"));
     assert!(manifest.contains("../testdata/unit_manifest_v2.hex"));
 
-    for source in [layout, manifest] {
+    let profiles = read(&root, "src/manifest/profile_cases.rs");
+    assert!(
+        profiles.contains("closed_descriptor_rejects_unknown_and_missing_fields_at_both_levels")
+    );
+    assert!(
+        profiles.contains("unsupported_kinds_revisions_and_fixed_baseline_decisions_are_refused")
+    );
+    let ingress = read(&root, "src/manifest/tests/ingress.rs");
+    assert!(ingress.contains("real_code_materialization_builds_source_backed_occurrences"));
+    assert!(ingress.contains("recorded_bom_loss_and_empty_owner_request_are_refused"));
+    for source in [layout, manifest, profiles, ingress] {
         for forbidden in [
             "std::fs",
             "std::process",

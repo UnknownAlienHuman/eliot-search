@@ -17,8 +17,8 @@ pub use error::UnitizationError;
 
 mod unitization;
 pub use unitization::{
-    DEFAULT_UNITIZATION_LIMITS, SourceLineSpan, TextUnit, UnitIdentity,
-    UnitizationInput, UnitizationLimits, UnitizationReceipt, UnitizationResult, unitize,
+    DEFAULT_UNITIZATION_LIMITS, SourceLineSpan, TextUnit, UnitIdentity, UnitizationInput,
+    UnitizationLimits, UnitizationReceipt, UnitizationResult, unitize,
 };
 
 mod layout;
@@ -26,13 +26,19 @@ pub use layout::{UnitSpan, unitize_text};
 
 mod manifest;
 pub use manifest::{
-    CanonicalUnitManifestBytes, MaterializerProvenance, MAX_UNITIZER_PROFILE_NAME_BYTES,
-    UNIT_MANIFEST_DIGEST_ALGORITHM,
-    UNIT_MANIFEST_FORMAT, UNIT_MANIFEST_VERSION, UnitDescriptor, UnitManifest, UnitManifestDiff,
-    UnitManifestVerificationReceipt, UnitizerProfileChange, UnitizerProfileDescriptor,
-    UnitizerProfileId, ValidatedUnitizerProfile, build_unit_manifest, canonicalize_unit_manifest,
-    classify_unitizer_profile_change, decode_unit_manifest, diff_unit_manifests, manifest_digest,
-    unitizer_profile_digest, validate_unitizer_profile, verify_unit_manifest,
+    CanonicalUnitManifestBytes, MAX_UNITIZER_PROFILE_NAME_BYTES, MaterializerProvenance,
+    UNIT_MANIFEST_DIGEST_ALGORITHM, UNIT_MANIFEST_FORMAT, UNIT_MANIFEST_VERSION, UnitDescriptor,
+    UnitManifest, UnitManifestDiff, UnitManifestVerificationReceipt, UnitizerProfileChange,
+    UnitizerProfileDescriptor, UnitizerProfileId, ValidatedUnitizerProfile, build_unit_manifest,
+    canonicalize_unit_manifest, classify_unitizer_profile_change, decode_unit_manifest,
+    diff_unit_manifests, manifest_digest, unitizer_profile_digest, validate_unitizer_profile,
+    verify_unit_manifest,
+};
+pub use manifest::{
+    UnitSetInput, UnitizationBudget, V3AnchorPolicy, V3AttachmentPolicy, V3EmptyPolicy,
+    V3OmissionPolicy, V3OverlapPolicy, V3RepresentationKind, V3SourceBinding,
+    V3UnitizerProfileDescriptor, ValidatedV3UnitizerProfile, VerifiedUnitSet,
+    prepare_unit_set_input, validate_v3_unitizer_profile,
 };
 
 #[cfg(test)]
