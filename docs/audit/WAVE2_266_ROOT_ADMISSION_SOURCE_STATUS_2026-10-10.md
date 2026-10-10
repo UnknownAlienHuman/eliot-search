@@ -47,6 +47,17 @@ missing retained recovery inputs. The private context shares one original 120-se
 absolute deadline and cancellation through inspection, mutation and initialization.
 Native and durable revalidation checks the context before and after observations.
 
+The canonical input value and CLI/service kind now remain in that same immutable
+request rather than being discarded after hashing. A private comparison checks
+the complete native argument array before initialization/recovery acquisition:
+command, original root locator and parsed lowercase operation id must all match.
+Health/service contexts, mismatched ids, the opposite initialization mode and
+extra arguments cannot substitute for the admitted input. Caller-buffer changes
+or destruction do not change retained inputs; Debug and errors expose no input
+bytes. This is process-local retention and command binding, not a durable general
+recovery record. Existing digest domains/preimages and deadline/cancel semantics
+remain unchanged.
+
 Explicit initialization and its exact recovery also check that original context
 through native intent acquisition, exclusion objects, layout readback, owner-slot
 publication and finalization. Results are captured before context refusal and
@@ -203,6 +214,11 @@ initialization recovery, not general migration/publication recovery.
   and complete-layout initialization crash/recovery have native fixture evidence.
   Partial initialization reconstruction, crashes between individual object/slot
   publications or during finalization, and general named recovery remain unqualified.
+- The command context now retains full canonical inputs in memory. The legacy
+  quarantine marker still lacks durable exact invocation/input/root-owner binding;
+  cutover/migration records are not promoted to that authority. Count, sequence,
+  digest or a successful whole-catalog verification cannot replace an exact linked
+  operation record and operation-specific reconciliation.
 - Active redb roots refuse with `DATA_ROOT_LAYOUT_UNSUPPORTED`. redb 2.6.3's writable
   opener is not a proven non-writing/non-repairing inspection API: #343 retains this
   donor limitation. No private redb parser or silent dependency upgrade is introduced.

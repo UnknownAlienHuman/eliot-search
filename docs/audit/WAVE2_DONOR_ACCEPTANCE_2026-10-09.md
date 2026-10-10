@@ -63,6 +63,16 @@ Current `search-unitizer` already owns manifest, layout, spans and deterministic
 
 Current `search-runtime-owner`, daemon owner composition and control/quarantine source contain the necessary mechanics. Copy only mature state-machine invariants already selected in the audit; do not import a service framework or second owner catalog.
 
+The 2026-10-10 #266 continuation verified a **retained-input source gap** in
+these current owners: `DataRootRequest` hashed but discarded the canonical value,
+the quarantine marker is a fixed presence payload, and cutover records retain
+root/incarnation/snapshot chains without an exact invocation/input record. The
+request now retains its immutable canonical value/kind and initialization checks
+the full native input before acquisition. This does not qualify general durable
+named recovery. Its exact operation record and reconciliation remain open in
+#266/#268/#269; do not substitute counts, PID, digests or catalog verification for
+that evidence. No external recovery framework is selected by this donor row.
+
 ## `#235` provider client — `PORT_CURRENT`
 
 Extract the existing typed CLI implementation:

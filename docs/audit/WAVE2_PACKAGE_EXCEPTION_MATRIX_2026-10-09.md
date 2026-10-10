@@ -52,6 +52,13 @@ in the same directory's `entry.rs` and `mutation.rs`. The context binds exact bo
 arguments, one original deadline and cancellation; it is not root authority. Service commands
 borrow the same live owner. No new dependency, task registry or provider protocol is included.
 
+The [canonical-input retention continuation](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6096647839)
+retains the already-validated native canonical value and request kind in that
+same immutable command context. A private exact comparison binds initialization's
+command/root/id before native acquisition. It changes no digest preimage/domain,
+durable schema, owner authority or retry/recovery algorithm. General durable
+operation-specific recovery remains required under #266 and its named owners.
+
 The [lifetime/redaction addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094629373)
 retains the fixed native layout objects through admitted child lifetimes and bounds
 `secure_commands/kernel/output.rs` failures to closed reason tokens. No new identity catalog

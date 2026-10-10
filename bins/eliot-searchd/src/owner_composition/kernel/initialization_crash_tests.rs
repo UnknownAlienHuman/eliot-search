@@ -30,6 +30,54 @@ const COMPLETE_INITIALIZATION_ID: &str = "26600000000000000000000000000006";
 const FOREIGN_INITIALIZATION_ID: &str = "26600000000000000000000000000007";
 const COMPLETE_READY: &[u8] = b"266_INITIALIZATION_LAYOUT_PUBLISHED\n";
 
+#[test]
+fn initialization_refuses_mismatched_retained_inputs_without_writes() {
+    let scratch = Scratch::new();
+    let root = &scratch.0;
+    let before = snapshot(root);
+    let initialization = InitializationRequest::parse(COMPLETE_INITIALIZATION_ID).unwrap();
+    let foreign = InitializationRequest::parse(FOREIGN_INITIALIZATION_ID).unwrap();
+    let initialize = request(
+        root,
+        "--initialize-data-root",
+        Some(COMPLETE_INITIALIZATION_ID),
+    );
+    let recovery = request(
+        root,
+        "--recover-initialization",
+        Some(COMPLETE_INITIALIZATION_ID),
+    );
+    let health = request(root, "--health-data-root", Some(COMPLETE_INITIALIZATION_ID));
+    let service = DataRootRequest::from_service_command(root, "--initialize-data-root").unwrap();
+    let extra = DataRootRequest::from_cli(&[
+        "--initialize-data-root".into(),
+        root.as_os_str().to_owned(),
+        COMPLETE_INITIALIZATION_ID.into(),
+        "unadmitted-extra-input".into(),
+    ])
+    .unwrap();
+    for (operation, identity, is_recovery) in [
+        (&initialize, &foreign, false),
+        (&initialize, &initialization, true),
+        (&recovery, &initialization, false),
+        (&health, &initialization, false),
+        (&service, &initialization, false),
+        (&extra, &initialization, false),
+    ] {
+        let result = if is_recovery {
+            recover_initialization_request(root, identity, operation)
+        } else {
+            initialize_new_request(root, identity, operation)
+        };
+        assert_eq!(result.err().as_deref(), Some("OWNER_OPERATION_CONFLICT"));
+        assert_eq!(
+            snapshot(root),
+            before,
+            "mismatched request changed the root"
+        );
+    }
+}
+
 fn complete_in_child(root: &Path) -> ! {
     let initialization = InitializationRequest::parse(COMPLETE_INITIALIZATION_ID).unwrap();
     let operation = request(

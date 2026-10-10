@@ -22,6 +22,7 @@ const MAX_ARGUMENTS: usize = 256;
 const MAX_CONTEXT_BYTES: usize = 512 * 1024;
 const COMMAND_DEADLINE: Duration = Duration::from_secs(120);
 
+#[derive(Clone, Copy)]
 enum RequestKind {
     Cli,
     ServiceCommand,
@@ -52,6 +53,10 @@ struct RequestState {
     operation: OwnerOperation,
     deadline: Instant,
     root_locator: PathBuf,
+    // Exact validated input survives caller-buffer destruction and is shared
+    // with the original deadline/cancellation by every retained child.
+    payload: CanonicalValue,
+    kind: RequestKind,
 }
 
 /// Bounded original request, retained by the native capability and its children.
@@ -72,25 +77,10 @@ impl DataRootRequest {
     fn cli_with_deadline(arguments: &[OsString], timeout: Duration) -> Result<Self, String> {
         let started = Instant::now();
         let root = arguments.get(1).ok_or_else(invalid)?;
-        if arguments.len() > MAX_ARGUMENTS || arguments[0].is_empty() || root.is_empty() {
-            return Err(invalid());
-        }
-        let mut total = 0_usize;
-        let mut values = Vec::with_capacity(arguments.len());
-        for argument in arguments {
-            let bytes = native_argument(argument)?;
-            total = total.checked_add(bytes.len()).ok_or_else(invalid)?;
-            if total > MAX_INPUT_BYTES {
-                return Err(invalid());
-            }
-            values.push(CanonicalValue::Bytes(
-                BoundedBytes::new(bytes).map_err(|_| invalid())?,
-            ));
-        }
-        let payload = CanonicalValue::Array(BoundedList::new(values).map_err(|_| invalid())?);
+        let payload = canonical_cli_payload(arguments)?;
         Self::build(
             PathBuf::from(root),
-            &payload,
+            payload,
             started,
             timeout,
             RequestKind::Cli,
@@ -116,7 +106,7 @@ impl DataRootRequest {
         );
         Self::build(
             root.to_owned(),
-            &payload,
+            payload,
             started,
             COMMAND_DEADLINE,
             RequestKind::ServiceCommand,
@@ -125,7 +115,7 @@ impl DataRootRequest {
 
     fn build(
         root_locator: PathBuf,
-        payload: &CanonicalValue,
+        payload: CanonicalValue,
         started: Instant,
         timeout: Duration,
         kind: RequestKind,
@@ -140,7 +130,7 @@ impl DataRootRequest {
         };
         let domain = CanonicalDigestDomain::parse(name).map_err(|_| invalid())?;
         let limit = DigestInputLimit::new(MAX_CONTEXT_BYTES).map_err(|_| invalid())?;
-        let digest = blake3_canonical(&domain, payload, limit).map_err(|_| invalid())?;
+        let digest = blake3_canonical(&domain, &payload, limit).map_err(|_| invalid())?;
         let mut id = [0_u8; 16];
         crate::qualified_entropy::fill_qualified_entropy(&mut id).map_err(str::to_owned)?;
         if id == [0; 16] {
@@ -165,6 +155,8 @@ impl DataRootRequest {
             operation,
             deadline,
             root_locator,
+            payload,
+            kind,
         }));
         request.preflight()?;
         Ok(request)
@@ -190,6 +182,18 @@ impl DataRootRequest {
             return Err(OwnerError::OwnerOperationConflict.code().to_owned());
         }
         Ok(())
+    }
+
+    /// Compare initialization's command/root/id with the exact retained input.
+    /// This owner-private check grants no root capability and exposes no bytes.
+    pub(super) fn validate_cli_inputs(&self, arguments: &[OsString]) -> Result<(), String> {
+        self.preflight()?;
+        if !matches!(self.0.kind, RequestKind::Cli)
+            || canonical_cli_payload(arguments)? != self.0.payload
+        {
+            return Err(OwnerError::OwnerOperationConflict.code().to_owned());
+        }
+        self.preflight()
     }
 
     pub(crate) fn root_locator(&self) -> &Path {
@@ -256,6 +260,29 @@ impl<W: Write> Write for RequestOutput<'_, W> {
 
 fn invalid() -> String {
     "DATA_ROOT_REQUEST_INVALID".to_owned()
+}
+
+/// One bounded native-byte array builder serves admission and exact comparison.
+fn canonical_cli_payload(arguments: &[OsString]) -> Result<CanonicalValue, String> {
+    let root = arguments.get(1).ok_or_else(invalid)?;
+    if arguments.len() > MAX_ARGUMENTS || arguments[0].is_empty() || root.is_empty() {
+        return Err(invalid());
+    }
+    let mut total = 0_usize;
+    let mut values = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        let bytes = native_argument(argument)?;
+        total = total.checked_add(bytes.len()).ok_or_else(invalid)?;
+        if total > MAX_INPUT_BYTES {
+            return Err(invalid());
+        }
+        values.push(CanonicalValue::Bytes(
+            BoundedBytes::new(bytes).map_err(|_| invalid())?,
+        ));
+    }
+    Ok(CanonicalValue::Array(
+        BoundedList::new(values).map_err(|_| invalid())?,
+    ))
 }
 
 fn native_argument(argument: &OsStr) -> Result<Vec<u8>, String> {
@@ -333,6 +360,38 @@ mod operation_tests {
         grandchild.cancel();
         assert!(second.preflight().is_err());
         assert!(grandchild.preflight().is_err());
+    }
+
+    #[test]
+    fn retained_inputs_survive_caller_changes_and_refuse_another_kind() {
+        let mut arguments: Vec<OsString> = vec![
+            "--initialize-data-root".into(),
+            "private-root".into(),
+            "26600000000000000000000000000006".into(),
+        ];
+        let admitted = arguments.clone();
+        let request = DataRootRequest::from_cli(&arguments).unwrap();
+        let child = request.retain();
+        let digest = request.operation().request_digest();
+        arguments[2] = "26600000000000000000000000000007".into();
+        assert_eq!(
+            request.validate_cli_inputs(&arguments),
+            Err("OWNER_OPERATION_CONFLICT".to_owned())
+        );
+        drop(arguments);
+        drop(request);
+        assert!(child.validate_cli_inputs(&admitted).is_ok());
+        assert_eq!(child.operation().request_digest(), digest);
+        assert_eq!(format!("{child:?}"), "DataRootRequest(<opaque>)");
+        let service = DataRootRequest::from_service_command(
+            std::path::Path::new("private-root"),
+            "--initialize-data-root",
+        )
+        .unwrap();
+        assert_eq!(
+            service.validate_cli_inputs(&admitted),
+            Err("OWNER_OPERATION_CONFLICT".to_owned())
+        );
     }
 
     #[test]
@@ -428,6 +487,11 @@ mod operation_tests {
             OsString::from(arguments[1].to_string_lossy().into_owned()),
         ];
         let other = DataRootRequest::from_cli(&lossy).expect("request");
+        assert!(request.retain().validate_cli_inputs(&arguments).is_ok());
+        assert_eq!(
+            request.validate_cli_inputs(&lossy),
+            Err("OWNER_OPERATION_CONFLICT".to_owned())
+        );
         assert_ne!(
             request.operation().request_digest(),
             other.operation().request_digest()

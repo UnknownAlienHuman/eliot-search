@@ -42,6 +42,22 @@ impl InitializationRequest {
         }
         Ok(Self(id))
     }
+
+    /// The parsed operation name must come from this exact admitted CLI input.
+    /// A separately supplied id or a service command cannot name initialization.
+    fn validate_inputs(
+        &self,
+        root: &Path,
+        command: &str,
+        operation: &DataRootRequest,
+    ) -> Result<(), String> {
+        operation.validate_root(root)?;
+        operation.validate_cli_inputs(&[
+            command.into(),
+            root.as_os_str().to_owned(),
+            hex(&self.0).into(),
+        ])
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -161,8 +177,7 @@ impl InitializingDataRoot {
         verified?;
         let actual = read_existing_bytes(&self.root.join(INTENT), MAX_INTENT);
         check_pending(&self.operation)?;
-        let actual = actual?
-            .ok_or(OwnerError::OwnerAcquireOutcomeUnknown)?;
+        let actual = actual?.ok_or(OwnerError::OwnerAcquireOutcomeUnknown)?;
         if actual != self.intent.encode() {
             return Err(OwnerError::OwnerOperationConflict);
         }
@@ -206,13 +221,14 @@ pub fn initialize_new_request(
     request: &InitializationRequest,
     operation: &DataRootRequest,
 ) -> Result<InitializationReceipt, String> {
-    operation.validate_root(root)?;
+    request.validate_inputs(root, "--initialize-data-root", operation)?;
     let root = canonical_root(root);
     operation.check().map_err(code)?;
     let root = root.map_err(code)?;
     let entries = fs::read_dir(&root);
     operation.check().map_err(code)?;
-    let nonempty = entries.map_err(|_| code(OwnerError::DataRootInvalid))?
+    let nonempty = entries
+        .map_err(|_| code(OwnerError::DataRootInvalid))?
         .next()
         .transpose()
         .map_err(|_| code(OwnerError::DataRootInvalid));
@@ -255,7 +271,8 @@ fn publish_new_layout(cap: &InitializingDataRoot) -> Result<DurableOwnerRecord, 
     let observed = observe_physical_root(root);
     cap.verify().map_err(code)?;
     let observed = observed.map_err(code)?;
-    let record = super::succession::plan_successor(&binding, &observed, cap.intent.executable, None);
+    let record =
+        super::succession::plan_successor(&binding, &observed, cap.intent.executable, None);
     cap.verify().map_err(code)?;
     let mut record = record.map_err(code)?;
     record.owner_token = cap.intent.owner_token;
@@ -283,14 +300,13 @@ pub fn recover_initialization_request(
     request: &InitializationRequest,
     operation: &DataRootRequest,
 ) -> Result<InitializationReceipt, String> {
-    operation.validate_root(root)?;
+    request.validate_inputs(root, "--recover-initialization", operation)?;
     let root = canonical_root(root);
     operation.check().map_err(code)?;
     let root = root.map_err(code)?;
     let intent_metadata = fs::symlink_metadata(root.join(INTENT));
     operation.check().map_err(code)?;
-    if matches!(intent_metadata, Err(error) if error.kind() == io::ErrorKind::NotFound)
-    {
+    if matches!(intent_metadata, Err(error) if error.kind() == io::ErrorKind::NotFound) {
         return resolve_completed(&root, request, operation);
     }
     let acquired = acquire_recovery(&root, request, operation);
@@ -414,8 +430,7 @@ fn finish_initialized(
     check_release(&operation).map_err(code)?;
     let intent_metadata = fs::symlink_metadata(root.join(INTENT));
     check_release(&operation).map_err(code)?;
-    if !matches!(intent_metadata, Err(error) if error.kind() == io::ErrorKind::NotFound)
-    {
+    if !matches!(intent_metadata, Err(error) if error.kind() == io::ErrorKind::NotFound) {
         return Err(code(OwnerError::OwnerReleaseOutcomeUnknown));
     }
     drop(owner);
@@ -428,11 +443,15 @@ fn finish_initialized(
 }
 
 fn check_pending(operation: &DataRootRequest) -> Result<(), OwnerError> {
-    operation.check().map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)
+    operation
+        .check()
+        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)
 }
 
 fn check_release(operation: &DataRootRequest) -> Result<(), OwnerError> {
-    operation.check().map_err(|_| OwnerError::OwnerReleaseOutcomeUnknown)
+    operation
+        .check()
+        .map_err(|_| OwnerError::OwnerReleaseOutcomeUnknown)
 }
 
 fn resolve_completed(
@@ -471,7 +490,8 @@ fn acquire_new(
     let root_file = root_file?;
     let entries = fs::read_dir(root);
     operation.check()?;
-    let nonempty = entries.map_err(|_| OwnerError::DataRootInvalid)?
+    let nonempty = entries
+        .map_err(|_| OwnerError::DataRootInvalid)?
         .next()
         .transpose()
         .map_err(|_| OwnerError::DataRootInvalid);
@@ -588,8 +608,7 @@ fn acquire_recovery(
     let intent_file = intent_file?;
     let bytes = read_existing_bytes(&root.join(INTENT), MAX_INTENT);
     check_pending(operation)?;
-    let bytes = bytes?
-        .ok_or(OwnerError::OwnerRecoveryEvidenceMissing)?;
+    let bytes = bytes?.ok_or(OwnerError::OwnerRecoveryEvidenceMissing)?;
     let intent = InitIntent::decode(&bytes);
     check_pending(operation)?;
     let intent = intent?;
@@ -597,8 +616,8 @@ fn acquire_recovery(
         return Err(OwnerError::OwnerOperationConflict);
     }
     // Every other operation barrier is outside this exact initialization.
-    let quarantine = crate::catalog_quarantine::check(root)
-        .map_err(|_| OwnerError::OwnerRecoveryQuarantined);
+    let quarantine =
+        crate::catalog_quarantine::check(root).map_err(|_| OwnerError::OwnerRecoveryQuarantined);
     check_pending(operation)?;
     quarantine?;
     for name in [
@@ -611,8 +630,7 @@ fn acquire_recovery(
         check_pending(operation)?;
         let metadata = fs::symlink_metadata(root.join(name));
         check_pending(operation)?;
-        if !matches!(metadata, Err(error) if error.kind() == io::ErrorKind::NotFound)
-        {
+        if !matches!(metadata, Err(error) if error.kind() == io::ErrorKind::NotFound) {
             return Err(OwnerError::OwnerRecoveryQuarantined);
         }
     }
@@ -732,7 +750,8 @@ fn publish_initial_slot(
     let file = create_new_file(&path);
     check_pending(operation)?;
     let mut file = file?;
-    let written = file.write_all(&expected)
+    let written = file
+        .write_all(&expected)
         .and_then(|()| file.sync_all())
         .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown);
     check_pending(operation)?;
