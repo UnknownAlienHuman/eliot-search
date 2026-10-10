@@ -1,12 +1,23 @@
 # ELIOT Search bounded execution protocol
 
-**Authority:** root `AGENTS.md`, Architecture Part I, accepted ADRs, the exact source issue, and process issue #350.  
+**Authority:** root `AGENTS.md`, Architecture Part I, accepted ADRs, the exact source issue, process issue #350 and programme issue #352.  
 **Applies to:** all remaining implementation, migration, integration, qualification and release work.  
 **Topology:** one manager, one writer worktree, one dependency/`Cargo.lock` integrator, 5–10 bounded read/research/review subagents.
 
-This protocol fixes an execution defect, not a product invariant. The repository already prevents overlapping writers, but previous instructions did not prevent one valid source task from absorbing every new finding discovered during implementation. The result was large draft PRs, repeated scope amendments, blocked independent work and review that never reached a stable exact head.
+This protocol fixes an execution defect, not a product invariant. Previous instructions prevented conflicting writers but did not stop one valid source task from absorbing every newly discovered concern. The result was expanding draft PRs, repeated scope amendments, blocked independent work and review that never reached a stable final SHA.
 
-The manager must optimize for **small accepted source increments that delete duplicate authority**, not for completing an entire programme in one branch.
+The manager optimizes for **small accepted source increments that delete duplicate authority**, not for completing an entire programme in one branch.
+
+## Current queue authority
+
+The sources of truth have different jobs:
+
+1. Architecture Part I, ADRs and package contracts define product semantics.
+2. `PROJECT_COMPLETION.md` is the long-range obligation/dependency graph. Its dated “next task”, base SHA or local stage wording is not the live writer queue.
+3. Programme issue #352 and `docs/audit/AGENT_LAUNCH_GATE_2026-10-09.md` define the current writer sequence.
+4. The exact active issue/PR and current source define the current slice.
+
+When the long-range map is stale, follow #352, the launch gate and current merged artifacts; update the map separately. Never repeat delivered work because a dated map row still looks active.
 
 ---
 
@@ -16,11 +27,11 @@ Every active item has exactly one class.
 
 ### PROGRAM
 
-A capability or product tracker. It lives as an issue and in `PROJECT_COMPLETION.md`. It may remain open across many source deliveries. It never serves as a code merge base and never accumulates implementation commits.
+A capability or product tracker. It lives as an issue and in the completion map. It may remain open across many source deliveries. It never serves as a code merge base and never accumulates implementation commits.
 
 ### SLICE
 
-One causal source result, delivered by one mergeable PR. A slice has one primary state/effect owner, explicit narrow adapters, declared reverse consumers, one compatibility/deletion boundary and exact minimum gates.
+One causal source result delivered by one mergeable PR. A slice has one primary state/effect owner, explicit narrow adapters, declared reverse consumers, one compatibility/deletion boundary and exact minimum gates.
 
 ### FOLLOW-UP
 
@@ -28,7 +39,7 @@ A defect discovered outside the frozen slice. It names the actual owner, affecte
 
 ### GATE
 
-Evidence or qualification against an exact immutable candidate. A gate does not fix product source. Failures return to source-owner slices and create a new candidate.
+Evidence or qualification against exact immutable candidate bytes. A gate does not fix product source. Failures return to source-owner slices and create a new candidate.
 
 **Do not create new programme, tracking or gate pull requests. Open pull requests are merge candidates.**
 
@@ -36,7 +47,7 @@ Evidence or qualification against an exact immutable candidate. A gate does not 
 
 ## 2. Definition of Ready
 
-Before source edits, the manager records the following in the implementation issue or PR body:
+Before source edits, record in the issue or PR body:
 
 ```text
 class: SLICE
@@ -57,7 +68,7 @@ focused_fixtures:
 known_baseline_failures:
 ```
 
-A slice is not ready when the owner, compatibility rule, reverse consumers or minimum gates are still being invented during implementation.
+A slice is not ready when owner, compatibility rule, reverse consumers or minimum gates are still being invented during implementation.
 
 ### Path ownership
 
@@ -65,13 +76,13 @@ One slice owns:
 
 - one primary package or one cohesive daemon composition owner;
 - at most two narrowly named adapter families;
-- only the direct reverse consumers needed to compile and cut over that result.
+- only direct reverse consumers required to compile and cut over the result.
 
-A path glob such as `bins/eliot-searchd/src/**` is not a useful slice boundary.
+A glob such as `bins/eliot-searchd/src/**` is not a useful slice boundary.
 
 ### Persisted identities
 
-Before changing persisted bytes, digests, profile identity, schema or generation semantics, the slice states exactly one disposition:
+Before changing persisted bytes, digests, profile identity, schema or generation semantics, declare exactly one disposition:
 
 ```text
 BYTE_COMPATIBLE
@@ -80,34 +91,34 @@ LEGACY_DECODE_ONLY
 UNSUPPORTED_REQUIRES_MIGRATION
 ```
 
-No later review finding may silently change this disposition inside the same PR.
+A later review finding cannot silently change this disposition inside the same PR.
 
 ---
 
 ## 3. Scope freeze
 
-The manager publishes a `SCOPE_FROZEN` block no later than the second source commit.
-
-It contains:
+Publish a `SCOPE_FROZEN` block no later than the second source commit:
 
 ```text
 exact base SHA
 exact head SHA at freeze
-allowed production path list
+allowed production paths
 declared public/private API delta
 reverse-consumer list
-known legacy path retained and its deletion owner
+legacy path retained and deletion owner
 minimum source gates
-out-of-scope owner list
+out-of-scope owners
 ```
 
-After `SCOPE_FROZEN`, a comment cannot add another caller family, schema, lifecycle protocol, recovery owner or package. A necessary scope change requires one of:
+After `SCOPE_FROZEN`, a comment cannot add another caller family, schema, lifecycle protocol, recovery owner or package.
 
-1. revert to the last frozen head and redefine the slice before continuing; or
-2. finish the current coherent result and file the new work under its owner; or
-3. split the existing branch into ordered mergeable PRs.
+A necessary scope change requires one of:
 
-Repeated “narrow continuation” comments are not a substitute for freezing scope.
+1. revert to the last frozen head and redefine the same slice before continuing;
+2. finish the coherent frozen result, file the new work under its owner and merge the current PR; or
+3. define dependency-ordered tranches, but open and merge them **strictly one at a time**. Extract/open only the first tranche. After it merges, publish the new `main` SHA, create the successor branch from that new `main`, then open the next PR. Stacked unmerged source PRs are forbidden.
+
+Repeated “narrow continuation” comments are not a substitute for scope freeze.
 
 ---
 
@@ -117,42 +128,39 @@ Every new source/review finding receives exactly one disposition.
 
 ### B0 — same-slice blocker
 
-The active PR cannot merge because, without the fix, its declared result:
+Without the fix, the declared result:
 
 - does not compile for a declared immediate reverse consumer;
 - mints false authority or accepts caller-shaped proof;
 - corrupts or ambiguously rewrites data;
 - widens access or disclosure;
-- makes a newly enabled production path unsafe;
-- cannot remain fail-closed or unavailable.
+- enables an unsafe path that cannot remain fail-closed or unavailable.
 
-A B0 report must name the exact path, symbol, caller and causal chain. “Related to the programme” is insufficient.
+A B0 report names exact path, symbol, caller and causal chain. “Related to the programme” is insufficient.
 
 ### F1 — same-owner follow-up
 
-The finding is valid and belongs to the same package, but the frozen result remains correct when the affected behavior stays unavailable, legacy-only or fail-closed. Create a follow-up issue and merge the slice.
+The finding belongs to the same package, but the frozen result remains correct while affected behavior stays unavailable, legacy-only or fail-closed. File a follow-up and merge the slice.
 
 ### F2 — adjacent-owner follow-up
 
-The finding belongs to another package, state/effect owner, integration phase or qualification lane. Create an issue under that owner. Never edit that owner in the active PR merely to keep the programme moving.
+The finding belongs to another package, state/effect owner, integration phase or qualification lane. File it under that owner. Never edit the adjacent owner merely to keep the programme moving.
 
 ### D — baseline/debt
 
-The failure existed on the accepted base and the candidate introduces no new normalized diagnostic, broken caller or behavior. Record it once under the debt owner. It is not the slice gate.
+The failure existed on the accepted base and the candidate adds no normalized diagnostic, caller break or behavior regression. Record it once under the debt owner. It is not the slice gate.
 
 ### Q — qualification
 
-The finding asks for installed/native/live-Qdrant/fault/scale/release evidence. Route it to #215, #264 or the exact named gate. Do not expand source scope to simulate acceptance.
+The finding requests installed/native/live-Qdrant/fault/scale/release evidence. Route it to #215, #264 or the named gate. Do not expand source scope to simulate acceptance.
 
-### Decision rule
-
-A follow-up becomes B0 only when the manager demonstrates why the frozen result cannot safely remain fail-closed, unavailable or legacy-only. The burden is on widening the PR, not on merging the bounded result.
+A finding becomes B0 only when the manager demonstrates why the frozen result cannot safely remain fail-closed, unavailable or legacy-only. The burden is on widening the PR.
 
 ---
 
 ## 5. Default review budget
 
-These are mandatory split triggers, not permission to omit necessary correctness:
+These are mandatory split triggers, not permission to omit correctness:
 
 ```text
 primary owners:              1
@@ -163,39 +171,41 @@ persisted migrations:        <= 1
 cross-owner cutovers:         <= 1
 ```
 
-Focused fixtures, exact generated goldens and source-ledger rows are reported separately from production-line totals.
+Focused fixtures, exact generated goldens and source-ledger rows are reported separately from production totals.
 
 When a threshold is exceeded:
 
 1. stop adding feature work;
 2. publish the exact reason and path groups;
-3. split into dependency-ordered PRs;
-4. obtain review on each final exact head.
+3. select the first dependency-safe tranche only;
+4. open, review and merge that tranche;
+5. create each successor from the newly merged `main`, never as a stacked PR;
+6. obtain review on every final exact head.
 
-A review-budget exception requires a written justification accepted before additional source changes. A broad issue does not itself justify a broad PR.
+A review-budget exception requires written justification accepted before additional source changes. A broad issue does not itself justify a broad PR.
 
 ---
 
 ## 6. One-manager merge train
 
-One writer remains mandatory. Throughput comes from merging smaller slices, not from several overlapping writers.
+One writer remains mandatory. Throughput comes from smaller merges, not overlapping writers.
 
 ```text
 select dependency-ready slice
 → freeze source scope
 → run bounded subagent research
-→ manager implements and integrates
+→ manager implements/integrates
 → compile declared owners and reverse consumers
 → run focused causal fixtures
 → exact-head independent review
 → merge
 → publish new main SHA
-→ start next writer slice from new main
+→ create next writer branch from new main
 ```
 
 ### Permitted parallelism
 
-While the current PR is in final review, subagents may research the next non-overlapping slice and return read-only maps. They may not create a stacked source PR, mutate shared manifests or assume the current PR will merge unchanged.
+While the current PR is in final review, subagents may research the next non-overlapping slice and return read-only maps. They may not create a source branch/PR, mutate shared manifests or assume the current PR will merge unchanged.
 
 ### Programme closure is not a merge prerequisite
 
@@ -205,23 +215,23 @@ A broad programme issue remains open after a coherent source slice merges. The n
 
 ## 7. Subagent assignments
 
-Use only the assignments relevant to the active slice.
+Use only roles relevant to the active slice.
 
 | Role | Required output |
 |---|---|
 | Authority/caller map | exact owner, callers, reverse consumers, duplicate paths |
 | Donor/supply-chain | exact source/version/checksum/license/MSRV/features/advisories |
-| Compatibility/deletion | persisted-byte disposition and exact legacy deletion owner |
+| Compatibility/deletion | persisted-byte disposition and legacy deletion owner |
 | Recovery/security red-team | B0 or follow-up findings with exact causal evidence |
 | Bounds/allocation | pre-allocation/effect ceilings and deadline/cancellation gaps |
 | Focused fixtures | smallest causal cases, no broad test programme |
 | Diff/API review | public/private delta, unused compatibility and scope escapes |
-| Final exact-head review | blocking findings or `APPROVE_SOURCE` at one SHA |
+| Final exact-head review | blocking findings or scoped `APPROVE_SOURCE` at one SHA |
 
 Rules:
 
 - one pre-code research pass and one final exact-head review pass;
-- no repeated full-repository audit for every commit;
+- no repeated full-repository audit after every commit;
 - no subagent-created architecture or scope amendment;
 - every finding ends with `B0`, `FOLLOW_UP(owner)` or `NO_BLOCKER`;
 - duplicate reports are consolidated;
@@ -232,24 +242,24 @@ Rules:
 
 ## 8. Development gates
 
-For a source slice, run:
+For a source slice:
 
 1. locked Rust 1.98 check for changed owners;
 2. immediate reverse-consumer compilation for changed public APIs;
 3. strict Clippy for the same production closure;
-4. only focused causal fixtures required by the changed boundary;
+4. focused causal fixtures required by the changed boundary;
 5. affected repository source guards.
 
 ### Baseline failures
 
-Capture a complete baseline diagnostic fingerprint once. At the final candidate head, compare it once more.
+Capture one complete baseline diagnostic fingerprint and compare once at final head.
 
 ```text
 candidate adds diagnostic/signature/caller break → BLOCK
-candidate preserves identical unrelated debt     → D follow-up, not slice gate
+candidate preserves identical unrelated debt     → D follow-up
 ```
 
-Do not rerun and partially repair the full known-broken all-target graph after every commit. Do not hide new failures behind an old failing aggregate command.
+Do not repeatedly repair a known-broken all-target graph inside an unrelated branch. Do not hide new failures behind an old failing aggregate command.
 
 ### Deferred gates
 
@@ -259,7 +269,7 @@ Full workspace, installed Windows, real Qdrant, fault injection, scale, resource
 
 ## 9. Review and PR reporting
 
-The PR body is the single current status record. It contains:
+The PR body is the single current status record:
 
 ```text
 frozen scope
@@ -268,14 +278,14 @@ changed owner/path groups
 delivered causal result
 legacy path retained and deletion owner
 follow-up issues and disposition
-commands, exit codes and nonzero focused case counts
+commands, exits and nonzero focused case counts
 known baseline debt and candidate delta
 evidence boundary
 ```
 
-Do not post a new long status comment after every commit. Use commits for implementation history and update the PR body at stable checkpoints.
+Do not add a long status comment after every commit. Use commits for implementation history and update the PR body at stable checkpoints.
 
-Before merge, at least one formal GitHub review must target the final head and verify the load-bearing invariants of the slice. A security-review badge, signature, source-guard PASS or author comment is not independent acceptance.
+Before merge, at least one formal GitHub review targets the final head and verifies the load-bearing invariants. A security-review badge, signature, source-guard PASS or author comment is not independent acceptance.
 
 ---
 
@@ -283,19 +293,15 @@ Before merge, at least one formal GitHub review must target the final head and v
 
 ### Implementation issue
 
-Close when its declared source slice is merged and its exact residual obligations are linked to current follow-ups. Do not keep a completed implementation issue open merely because the whole product is unfinished.
+Close when its declared source slice is merged and residual obligations point to current follow-ups. Do not keep a completed implementation issue open merely because the whole product is unfinished.
 
 ### Programme issue
 
-May remain open until all selected source/integration/qualification obligations are delivered or explicitly deferred by a maintainer.
+May remain open until selected source/integration/qualification obligations are delivered or explicitly deferred by a maintainer.
 
 ### Pull request
 
-Open PR means merge candidate. Historical programme/tracking/gate packet PRs are closed after:
-
-1. useful obligations are retained in current issues/docs;
-2. a closure comment names the replacement owners;
-3. no agent is instructed to branch from the old head.
+Open PR means merge candidate. Historical programme/tracking/gate packet PRs are closed after useful obligations are retained in current issues/docs and no agent is instructed to branch from the old head.
 
 Do not create replacement tracking PRs.
 
@@ -303,15 +309,17 @@ Do not create replacement tracking PRs.
 
 ## 11. Immediate #266 / #344 application
 
-PR #344 exceeded every default split trigger: 119 changed files, more than 11,000 additions and several owner families. Process issues #349 and #350 now control its disposition.
+PR #344 exceeded every default split trigger: 119 changed files, more than 11,000 additions and several owner families. Process issues #349/#350 control its disposition.
 
-The manager must freeze the current branch and determine dependency-safe tranches. The commit history suggests these review units, subject to exact dependency verification:
+Freeze the current branch and derive sequential review units, subject to exact dependency verification:
 
-1. **Root admission and explicit initialization** — typed modes, existing-only open, retained request/deadline/cancellation, required immediate caller cutover.
-2. **Focused lifecycle/crash proof** — only fixtures and minimal production seams required to prove the first tranche.
+1. **Root admission and explicit initialization** — typed modes, existing-only open, retained request/deadline/cancellation and required immediate caller cutover.
+2. **Focused lifecycle/crash proof** — only fixtures and minimal production seams required to prove tranche 1.
 3. **Durable catalog intent and read-only recovery observation** — retained inputs, exact release, named inspection/discovery; no effect reconciliation or cleanup authority.
 
-The following stay separate unless a concrete B0 dependency is proved:
+Open only tranche 1. After its merge, rebase/extract tranche 2 from the new `main`; after tranche 2 merges, create tranche 3 from the next `main`. Do not open stacked PRs.
+
+These remain separate unless a concrete B0 dependency is proved:
 
 ```text
 #343 redb read-only inspection
@@ -321,24 +329,15 @@ The following stay separate unless a concrete B0 dependency is proved:
 #348 original request → durable effect reconciliation
 ```
 
-Unsafe or unsupported recovery/cleanup remains unavailable and fail-closed. It does not have to be falsely completed in order to merge a safe admission tranche.
+Unsafe or unsupported recovery/cleanup remains unavailable and fail-closed. It need not be falsely completed to merge safe admission.
 
-After the minimum typed root-admission API and its required normal callers are on `main`, `#235.core` may begin from the new main SHA. It does not wait for complete #266 programme closure.
+After the minimum typed root-admission API and required normal callers are on `main`, `#235.core` may begin from the new `main`. It does not wait for complete #266 programme closure.
 
 ---
 
-## 12. Current merge-queue cleanup
+## 12. Merge-queue cleanup
 
-The repository currently contains many open PRs whose own bodies say they are historical, tracking-only or never mergeable. They obscure the actual implementation queue.
-
-Perform a controlled cleanup:
-
-1. inventory every open PR;
-2. mark the active code candidate(s);
-3. ensure each historical packet's obligations have current issue/doc owners;
-4. add one closure comment;
-5. close the non-mergeable PR;
-6. preserve its branch and discussion as history.
+Historical open PRs whose own bodies say “tracking only”, “programme only” or “do not merge” obscure the actual queue. Preserve their useful obligations in current issues/docs, add a closure pointer and close them without merge. Their branches and discussions remain history.
 
 After cleanup, `is:pr is:open` must answer: **what can actually merge?**
 
@@ -346,13 +345,13 @@ After cleanup, `is:pr is:open` must answer: **what can actually merge?**
 
 ## 13. Process acceptance
 
-This protocol is effective when:
+The protocol is effective when:
 
 - active source work has a frozen scope and one causal result;
 - follow-up findings no longer widen the PR by default;
-- broad baseline debt is visible but does not block unrelated safe slices;
+- broad baseline debt remains visible but does not block unrelated safe slices;
 - exact-head review occurs before merge;
 - source delivery and programme closure are distinct;
-- the single writer advances through frequent bounded merges;
-- the open PR queue contains merge candidates rather than historical planning artifacts;
-- no product invariant, qualification threshold or authority boundary is weakened to gain throughput.
+- every successor branch starts from the newly merged `main`;
+- the open PR queue contains merge candidates rather than historical packets;
+- no product invariant, qualification threshold or authority boundary is weakened for throughput.
