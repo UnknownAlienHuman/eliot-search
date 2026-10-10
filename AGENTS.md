@@ -102,7 +102,9 @@ Current accepted addenda:
 
 - `docs/audit/WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md` for `#237/#253`;
 - `docs/audit/WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md` for the post-`#237` serialized Wave 2;
-- `docs/audit/WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md` for exact issue/path exceptions.
+- `docs/audit/WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md` for exact issue/path exceptions;
+- `docs/product/PROJECT_COMPLETION.md` for the remaining named implementation and integration phases,
+  using only each phase's explicit owned files/call-site wiring and current detailed issue scope.
 
 Rules:
 
@@ -114,6 +116,12 @@ Rules:
 6. an exception cannot introduce a second authority, temporary public facade or product-reachable
    compatibility implementation;
 7. if required work falls outside the row, stop and amend the owner issue/packet before editing.
+
+The whole-project map is a phase/dependency and donor-reading guide, not blanket cross-package access.
+Its programme/gate rows authorize no source changes. An integration phase may change only its named
+owner, explicitly listed boundary adapters and actual reverse-consumer wiring. No new runtime controller
+or generic task/approval registry is authorized. Existing required legacy APIs may remain unchanged only
+until their named consumer cutover/removal owner; they cannot mint or substitute new-profile authority.
 
 This mechanism exists to make a package extraction or exact dependency cutover possible without telling
 agents to violate the nearest package instructions or granting broad cross-package permission.
