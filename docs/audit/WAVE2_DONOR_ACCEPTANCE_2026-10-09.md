@@ -73,6 +73,16 @@ named recovery. Its exact operation record and reconciliation remain open in
 #266/#268/#269; do not substitute counts, PID, digests or catalog verification for
 that evidence. No external recovery framework is selected by this donor row.
 
+The next producer prerequisite reuses `search-revision-store/src/immutable_object.rs`
+hard-link no-clobber publication as a primitive only. It retains full original
+input and the actual ACTIVE owner record in shared canonical CBOR v2 at the
+existing catalog-quarantine locators for four one-shot consumers. It does not
+copy revision-object lifecycle, select a dependency, decode evidence into owner
+authority or qualify general named recovery. Existing staging/final evidence is
+never reused or removed during arm/error/Drop. Cleanup is a distinct owned
+completion after actual release; its later crash and native unlink phases are
+not inferred from the donor's immutable-object acceptance.
+
 ## `#235` provider client — `PORT_CURRENT`
 
 Extract the existing typed CLI implementation:

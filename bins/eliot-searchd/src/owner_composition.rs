@@ -8,6 +8,7 @@
 mod kernel;
 
 pub(crate) use kernel::DataRootRequest;
+pub(crate) use kernel::CatalogMutationIntent;
 #[cfg(test)]
 pub use kernel::establish;
 pub(crate) use kernel::establish_existing;

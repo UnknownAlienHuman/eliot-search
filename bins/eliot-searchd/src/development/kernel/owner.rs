@@ -535,6 +535,36 @@ impl DataRootGuard {
         crate::catalog_quarantine::clear(&self.canonical_root)
     }
 
+    fn require_original_catalog_request(&self, request: &DataRootRequest) -> Result<(), String> {
+        self.verify_existing()?;
+        if !self.request.as_ref().is_some_and(|original| original.same_context(request)) {
+            return Err(OwnerError::OwnerOperationConflict.code().to_owned());
+        }
+        request.preflight()
+    }
+
+    /// Persist the exact original input before one-shot catalog dispatch.
+    pub(crate) fn arm_catalog_intent(
+        &self,
+        request: &DataRootRequest,
+    ) -> Result<crate::owner_composition::CatalogMutationIntent, String> {
+        self.require_original_catalog_request(request)?;
+        let intent = self.owner.arm_catalog_intent(request)?;
+        self.require_original_catalog_request(request)?;
+        Ok(intent)
+    }
+
+    /// Finalize this intent after clean release, before native exclusions drop.
+    pub(crate) fn release_catalog_cleanly(
+        self,
+        intent: crate::owner_composition::CatalogMutationIntent,
+        request: &DataRootRequest,
+    ) -> Result<ShutdownReceipt, String> {
+        self.require_original_catalog_request(request)?;
+        self.owner.verify_catalog_release(&intent, request)?;
+        self.release_cleanly_after(|owner| owner.clear_catalog_intent(intent, request))
+    }
+
     /// A service may idle indefinitely; only completed startup detaches its
     /// finite request. Each command still borrows this same live owner.
     pub(crate) fn finish_service_startup(&self, request: &DataRootRequest) -> Result<(), String> {
@@ -624,11 +654,21 @@ impl DataRootGuard {
     ///
     /// Release without a prior drain, or an unprovable durable outcome,
     /// fails closed with the closed owner-policy code.
-    pub(crate) fn release_cleanly(mut self) -> Result<ShutdownReceipt, String> {
+    pub(crate) fn release_cleanly(self) -> Result<ShutdownReceipt, String> {
+        self.release_cleanly_after(|_| Ok(()))
+    }
+
+    fn release_cleanly_after(
+        mut self,
+        finalize: impl FnOnce(&LiveOwner) -> Result<(), String>,
+    ) -> Result<ShutdownReceipt, String> {
         self.verify_existing()?;
-        self.owner
+        let receipt = self.owner
             .release_cleanly()
-            .map_err(|error| error.code().to_owned())
+            .map_err(|error| error.code().to_owned())?;
+        self.verify_existing()?;
+        finalize(&self.owner)?;
+        Ok(receipt)
     }
 
     pub(crate) const fn source_roots(&self) -> &SourceRootCatalog {

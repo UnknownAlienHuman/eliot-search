@@ -59,6 +59,22 @@ command/root/id before native acquisition. It changes no digest preimage/domain,
 durable schema, owner authority or retry/recovery algorithm. General durable
 operation-specific recovery remains required under #266 and its named owners.
 
+The [durable catalog-input prerequisite](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6096798733)
+adds only `owner_composition/kernel/catalog_intent.rs` and its private module/export
+wiring, the existing `operation.rs`/`lifecycle.rs`,
+`development/kernel/owner.rs` and `secure_commands/kernel/store.rs`.
+The four one-shot index-file/index-directory/retire/GC-apply consumers retain
+their complete original native input and actual ACTIVE owner record at the
+existing quarantine staging/final locators before dispatch. The shared canonical
+writer and original request domains are reused; no second owner/catalog is added.
+The [release-order continuation](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6096857431)
+keeps that evidence through real shutdown drain and RELEASED readback, then runs
+the private token finalizer while the same native exclusions remain held.
+Its exact pre-release check requires original generation + 1 DRAINING/SHUTDOWN;
+post-release cleanup requires original generation + 2 RELEASED/NONE.
+Named recovery/reconciliation, service/migration cutover and later cleanup-phase
+qualification remain separate work under #266 and the mapped owning issues.
+
 The [lifetime/redaction addendum](https://github.com/UnknownAlienHuman/eliot-search/issues/266#issuecomment-6094629373)
 retains the fixed native layout objects through admitted child lifetimes and bounds
 `secure_commands/kernel/output.rs` failures to closed reason tokens. No new identity catalog

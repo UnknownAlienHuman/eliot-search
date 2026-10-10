@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use search_contracts::{
-    BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalValue, DigestInputLimit, OpaqueId,
-    OpaqueRef, RequestId, blake3_canonical,
+    BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalText, CanonicalValue,
+    DigestInputLimit, OpaqueId, OpaqueRef, RequestId, blake3_canonical,
 };
 use search_ports::{
     CancellationProbe, IdempotencyClass, MutationIdentity, OperationContext, PackageOpaque,
@@ -26,6 +26,17 @@ const COMMAND_DEADLINE: Duration = Duration::from_secs(120);
 enum RequestKind {
     Cli,
     ServiceCommand,
+}
+
+impl RequestKind {
+    const fn domain(self) -> &'static str {
+        match (self, cfg!(windows)) {
+            (Self::Cli, true) => "eliot/cbor/data-root-cli/windows-native/v1",
+            (Self::Cli, false) => "eliot/cbor/data-root-cli/unix-native/v1",
+            (Self::ServiceCommand, true) => "eliot/cbor/data-root-command/windows-native/v1",
+            (Self::ServiceCommand, false) => "eliot/cbor/data-root-command/unix-native/v1",
+        }
+    }
 }
 
 struct CommandCancellation(Arc<AtomicBool>);
@@ -122,12 +133,7 @@ impl DataRootRequest {
     ) -> Result<Self, String> {
         let deadline = started.checked_add(timeout).ok_or_else(invalid)?;
         let millis = u64::try_from(timeout.as_millis()).map_err(|_| invalid())?;
-        let name = match (kind, cfg!(windows)) {
-            (RequestKind::Cli, true) => "eliot/cbor/data-root-cli/windows-native/v1",
-            (RequestKind::Cli, false) => "eliot/cbor/data-root-cli/unix-native/v1",
-            (RequestKind::ServiceCommand, true) => "eliot/cbor/data-root-command/windows-native/v1",
-            (RequestKind::ServiceCommand, false) => "eliot/cbor/data-root-command/unix-native/v1",
-        };
+        let name = kind.domain();
         let domain = CanonicalDigestDomain::parse(name).map_err(|_| invalid())?;
         let limit = DigestInputLimit::new(MAX_CONTEXT_BYTES).map_err(|_| invalid())?;
         let digest = blake3_canonical(&domain, &payload, limit).map_err(|_| invalid())?;
@@ -210,6 +216,35 @@ impl DataRootRequest {
 
     pub(crate) fn retain(&self) -> Self {
         Self(Arc::clone(&self.0))
+    }
+
+    pub(crate) fn same_context(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
+    /// Owner-private immutable evidence, not an accessor or recovery authority.
+    /// The original digest/domain and qualified id are never reconstructed.
+    pub(super) fn retained_input_value(&self) -> Result<CanonicalValue, String> {
+        self.preflight()?;
+        let value = CanonicalValue::Array(
+            BoundedList::new(vec![
+                CanonicalValue::Text(
+                    CanonicalText::new_non_empty(self.0.kind.domain()).map_err(|_| invalid())?,
+                ),
+                CanonicalValue::Bytes(
+                    BoundedBytes::new(self.0.context.request_id().as_bytes().to_vec())
+                        .map_err(|_| invalid())?,
+                ),
+                CanonicalValue::Bytes(
+                    BoundedBytes::new(self.0.operation.request_digest().as_bytes().to_vec())
+                        .map_err(|_| invalid())?,
+                ),
+                self.0.payload.clone(),
+            ])
+            .map_err(|_| invalid())?,
+        );
+        self.preflight()?;
+        Ok(value)
     }
 
     pub(crate) fn cancel(&self) {

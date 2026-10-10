@@ -1,5 +1,8 @@
 //! Durable owner composition behind the stable daemon-local facade.
 
+#[path = "kernel/catalog_intent.rs"]
+mod catalog_intent;
+
 #[path = "kernel/codec.rs"]
 mod codec;
 #[path = "kernel/initialization.rs"]
@@ -36,6 +39,7 @@ pub(crate) use installation::{retain_native_installation, verify_native_installa
 pub use lifecycle::{LiveOwner, ShutdownReceipt};
 pub(crate) use native_bindings::NativeLayoutPins;
 pub(crate) use operation::DataRootRequest;
+pub(crate) use catalog_intent::CatalogMutationIntent;
 pub(crate) use read_existing::{
     open_bound_directory, verify_bound_directory, verify_existing_locator,
 };

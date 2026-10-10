@@ -58,6 +58,22 @@ bytes. This is process-local retention and command binding, not a durable genera
 recovery record. Existing digest domains/preimages and deadline/cancel semantics
 remain unchanged.
 
+The next prerequisite persists that original context for the four one-shot
+index-file/index-directory/retire/GC-apply consumers. The closed canonical CBOR v2
+record contains the actual original ACTIVE owner-record bytes and original
+domain, invocation id, request digest and full native argument array. It uses the
+existing quarantine staging/final locators; the record is evidence, never another
+owner catalog or an ordinary read/write/recovery capability.
+
+Create-new staging, file flush, hard-link no-clobber final publication, another
+file flush and exact held-object/byte readback precede dispatch. Neither existing
+locator is deleted/reused; errors and Drop retain evidence. The same request and
+owner remain held through closure/readback, child-store close, DRAINING/SHUTDOWN
+at original generation + 1 and actual RELEASED/NONE at generation + 2. The intent
+is checked before release and cleared afterward, before native exclusions drop.
+Release errors cannot discard inputs prematurely. This file-flush/readback proof
+does not establish parent-directory power-loss durability.
+
 Explicit initialization and its exact recovery also check that original context
 through native intent acquisition, exclusion objects, layout readback, owner-slot
 publication and finalization. Results are captured before context refusal and
@@ -215,10 +231,17 @@ initialization recovery, not general migration/publication recovery.
   Partial initialization reconstruction, crashes between individual object/slot
   publications or during finalization, and general named recovery remain unqualified.
 - The command context now retains full canonical inputs in memory. The legacy
-  quarantine marker still lacks durable exact invocation/input/root-owner binding;
-  cutover/migration records are not promoted to that authority. Count, sequence,
+  service/source-root/migration quarantine paths still use the legacy static
+  marker. The four one-shot consumers now have durable exact inputs/owner evidence,
+  but no general operation-specific reconciliation; cutover/migration records
+  are not promoted to recovery authority. Count, sequence,
   digest or a successful whole-catalog verification cannot replace an exact linked
   operation record and operation-specific reconciliation.
+- Intent cleanup after actual release closes its held File before exact-byte
+  path unlink under the native root owner. Later cleanup crashes, partial alias
+  removal and atomic original-object deletion against an external replacement
+  remain unqualified. Existing staging without final still fences ordinary
+  opens; a RELEASED record alone does not bypass that fence.
 - Active redb roots refuse with `DATA_ROOT_LAYOUT_UNSUPPORTED`. redb 2.6.3's writable
   opener is not a proven non-writing/non-repairing inspection API: #343 retains this
   donor limitation. No private redb parser or silent dependency upgrade is introduced.

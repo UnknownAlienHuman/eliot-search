@@ -46,6 +46,29 @@ pub struct ShutdownReceipt {
 }
 
 impl LiveOwner {
+    pub(crate) fn arm_catalog_intent(
+        &self,
+        request: &super::operation::DataRootRequest,
+    ) -> Result<super::catalog_intent::CatalogMutationIntent, String> {
+        super::catalog_intent::CatalogMutationIntent::arm(self, request)
+    }
+
+    pub(crate) fn clear_catalog_intent(
+        &self,
+        intent: super::catalog_intent::CatalogMutationIntent,
+        request: &super::operation::DataRootRequest,
+    ) -> Result<(), String> {
+        intent.clear(self, request)
+    }
+
+    pub(crate) fn verify_catalog_release(
+        &self,
+        intent: &super::catalog_intent::CatalogMutationIntent,
+        request: &super::operation::DataRootRequest,
+    ) -> Result<(), String> {
+        intent.verify_for_release(self, request)
+    }
+
     /// Revalidates the exact current durable binding without advancing it.
     pub(crate) fn verify_existing(&self) -> Result<(), OwnerError> {
         if self.poisoned {
