@@ -1,7 +1,7 @@
 ## Work item
 
 ```text
-class: SLICE | PROCESS | DOCS | GATE
+class: SLICE | PROCESS | DOCS
 programme_issue:
 source_issue:
 base_sha:
@@ -10,7 +10,7 @@ primary_owner:
 state_or_effect:
 ```
 
-For source work, link `docs/product/EXECUTION_PROTOCOL.md` and paste the final `SCOPE_FROZEN` block below. Programme/tracking work belongs in issues/docs, not a non-mergeable PR.
+For source work, link `docs/product/EXECUTION_PROTOCOL.md` and paste the final `SCOPE_FROZEN` block below. PROGRAM and GATE coordination/evidence belongs in issues/docs, not a non-mergeable PR.
 
 ## SCOPE_FROZEN
 
@@ -29,7 +29,8 @@ out_of_scope_owners:
 ```
 
 - [ ] Scope was frozen no later than the second source commit, or this is a non-source PR.
-- [ ] No stacked source PR exists; this branch starts from the accepted current `main`.
+- [ ] For `SLICE`: this is the sole active source branch and sole open source PR; it starts from the accepted current `main`.
+- [ ] No stacked or independent parallel source PR exists.
 - [ ] One primary owner, at most two narrow adapter families.
 
 ## Causal result
