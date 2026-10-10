@@ -7,8 +7,8 @@ use search_contracts::{ProfileId, Sha256Digest32};
 use crate::fingerprint::sha256_digest;
 
 use crate::{
-    ConfigFingerprint, ConfigKeyPath, ConfigLimits, ConfigRegistry, ConfigValue, ConfigValueKind,
-    EffectiveConfigSnapshot, RedactionPolicy,
+    ConfigError, ConfigFingerprint, ConfigKeyPath, ConfigLimits, ConfigRegistry, ConfigValue,
+    ConfigValueKind, EffectiveConfigSnapshot, RedactionPolicy,
 };
 
 /// Requested ordinary diagnostic disclosure level.
@@ -87,18 +87,30 @@ pub struct RedactedConfigView {
     pub omitted_entries: usize,
 }
 
-/// Produces a bounded non-disclosing view.
+/// Produces a bounded non-disclosing view, charging before owned clones or hashing.
 ///
 /// Secret references are always hidden, and path-like fields are always reduced
 /// to location class plus digest even under privileged metadata disclosure.
-#[must_use]
+/// The byte ceiling covers logical header/name/value payload, with fixed-width
+/// scalar extents; it is not a JSON/Debug or allocator-resident byte measurement.
+///
+/// # Errors
+/// Returns invalid limits, length overflow, or insufficient header capacity.
+/// Entries exceeding either ceiling are omitted whole, in canonical iteration order.
 pub fn redacted_view(
     snapshot: &EffectiveConfigSnapshot,
     registry: &ConfigRegistry,
     disclosure: DisclosureLevel,
     limits: ConfigLimits,
-) -> RedactedConfigView {
-    let max_entries = limits.max_diagnostic_entries;
+) -> Result<RedactedConfigView, ConfigError> {
+    let limits = limits.validate()?;
+    // Fixed-width fingerprint (32) and omitted-entry count (8), plus profile UTF-8.
+    let mut charged_bytes = (32_usize + 8)
+        .checked_add(snapshot.selected_profile().as_str().len())
+        .ok_or(ConfigError::LengthOverflow)?;
+    if charged_bytes > limits.max_diagnostic_bytes {
+        return Err(ConfigError::CapacityExceeded);
+    }
     let visible_text_bytes = match disclosure {
         DisclosureLevel::Ordinary => limits.max_text_bytes.min(256),
         DisclosureLevel::PrivilegedMetadata => limits.max_text_bytes.min(1_024),
@@ -114,40 +126,105 @@ pub fn redacted_view(
             let Some(field) = section.field(key) else {
                 continue;
             };
-            if entries.len() >= max_entries {
+            if entries.len() >= limits.max_diagnostic_entries {
                 omitted_entries = omitted_entries.saturating_add(1);
                 continue;
             }
-            let path = ConfigKeyPath::new(section_name.clone(), key.clone());
-            entries.insert(
-                path,
-                redact_value(
-                    &field.value,
-                    field_descriptor.redaction(),
-                    visible_text_bytes,
-                ),
+            let prepared = prepare_value(
+                &field.value,
+                field_descriptor.redaction(),
+                visible_text_bytes,
             );
+            let next_bytes = diagnostic_extent(
+                charged_bytes,
+                section_name.as_str().len(),
+                key.as_str().len(),
+                prepared.payload_bytes()?,
+            )?;
+            if next_bytes > limits.max_diagnostic_bytes {
+                omitted_entries = omitted_entries.saturating_add(1);
+                continue;
+            }
+            charged_bytes = next_bytes;
+            let path = ConfigKeyPath::new(section_name.clone(), key.clone());
+            entries.insert(path, redact_value(prepared));
         }
     }
 
-    RedactedConfigView {
+    Ok(RedactedConfigView {
         fingerprint: snapshot.fingerprint(),
         selected_profile: snapshot.selected_profile().clone(),
         entries,
         omitted_entries,
+    })
+}
+
+fn diagnostic_extent(
+    current: usize,
+    section_bytes: usize,
+    key_bytes: usize,
+    value_bytes: usize,
+) -> Result<usize, ConfigError> {
+    current
+        .checked_add(section_bytes)
+        .and_then(|bytes| bytes.checked_add(key_bytes))
+        .and_then(|bytes| bytes.checked_add(value_bytes))
+        .ok_or(ConfigError::LengthOverflow)
+}
+
+// Borrow source text until the whole diagnostic entry has been admitted.
+#[derive(Clone, Copy)]
+enum PreparedRedaction<'a> {
+    Absent,
+    Boolean(bool),
+    Integer(i64),
+    Text {
+        value: &'a str,
+        truncated: bool,
+    },
+    StringList {
+        items: usize,
+        total_bytes: usize,
+    },
+    PathDigest {
+        value: &'a str,
+        class: PathLocationClass,
+    },
+    SecretHidden,
+    Metadata {
+        kind: ConfigValueKind,
+        extent: usize,
+    },
+}
+
+impl PreparedRedaction<'_> {
+    fn payload_bytes(&self) -> Result<usize, ConfigError> {
+        let payload = match self {
+            Self::Absent | Self::SecretHidden => 0,
+            Self::Boolean(_) => 1,
+            Self::Integer(_) => 8,
+            Self::Text { value, .. } => value
+                .len()
+                .checked_add(1)
+                .ok_or(ConfigError::LengthOverflow)?,
+            Self::StringList { .. } => 16,
+            Self::PathDigest { .. } => 33,
+            Self::Metadata { .. } => 9,
+        };
+        payload.checked_add(1).ok_or(ConfigError::LengthOverflow)
     }
 }
 
-fn redact_value(
+fn prepare_value(
     value: &ConfigValue,
     policy: RedactionPolicy,
     max_visible_text_bytes: usize,
-) -> RedactedValue {
+) -> PreparedRedaction<'_> {
     if matches!(value, ConfigValue::Absent) {
-        return RedactedValue::Absent;
+        return PreparedRedaction::Absent;
     }
     if matches!(value, ConfigValue::SecretReference(_)) || policy == RedactionPolicy::Secret {
-        return RedactedValue::SecretHidden;
+        return PreparedRedaction::SecretHidden;
     }
     match policy {
         RedactionPolicy::PathDigest => {
@@ -155,43 +232,65 @@ fn redact_value(
                 ConfigValue::Text(text) => text.as_str(),
                 _ => "",
             };
-            // Oversized input has no hash identity and cannot reveal a path.
-            sha256_digest(text.as_bytes()).map_or(
-                RedactedValue::Metadata {
+            if text.len() > search_contracts::MAX_CANONICAL_BYTES {
+                PreparedRedaction::Metadata {
                     kind: ConfigValueKind::Text,
                     extent: text.len(),
-                },
-                |digest| RedactedValue::PathDigest {
+                }
+            } else {
+                PreparedRedaction::PathDigest {
+                    value: text,
                     class: classify_path(text),
-                    digest,
-                },
-            )
+                }
+            }
         }
-        RedactionPolicy::MetadataOnly => {
-            value
-                .kind()
-                .map_or(RedactedValue::Absent, |kind| RedactedValue::Metadata {
-                    kind,
-                    extent: value_extent(value),
-                })
-        }
+        RedactionPolicy::MetadataOnly => value.kind().map_or(PreparedRedaction::Absent, |kind| {
+            PreparedRedaction::Metadata {
+                kind,
+                extent: value_extent(value),
+            }
+        }),
         RedactionPolicy::Public => match value {
-            ConfigValue::Absent => RedactedValue::Absent,
-            ConfigValue::Boolean(value) => RedactedValue::Boolean(*value),
-            ConfigValue::Integer(value) => RedactedValue::Integer(*value),
+            ConfigValue::Absent => PreparedRedaction::Absent,
+            ConfigValue::Boolean(value) => PreparedRedaction::Boolean(*value),
+            ConfigValue::Integer(value) => PreparedRedaction::Integer(*value),
             ConfigValue::Text(value) => {
                 let (value, truncated) = truncate_utf8(value, max_visible_text_bytes);
-                RedactedValue::Text { value, truncated }
+                PreparedRedaction::Text { value, truncated }
             }
-            ConfigValue::StringList(values) => RedactedValue::StringList {
+            ConfigValue::StringList(values) => PreparedRedaction::StringList {
                 items: values.len(),
                 total_bytes: values
                     .iter()
                     .fold(0_usize, |total, value| total.saturating_add(value.len())),
             },
-            ConfigValue::SecretReference(_) => RedactedValue::SecretHidden,
+            ConfigValue::SecretReference(_) => PreparedRedaction::SecretHidden,
         },
-        RedactionPolicy::Secret => RedactedValue::SecretHidden,
+        RedactionPolicy::Secret => PreparedRedaction::SecretHidden,
+    }
+}
+
+fn redact_value(value: PreparedRedaction<'_>) -> RedactedValue {
+    match value {
+        PreparedRedaction::Absent => RedactedValue::Absent,
+        PreparedRedaction::Boolean(value) => RedactedValue::Boolean(value),
+        PreparedRedaction::Integer(value) => RedactedValue::Integer(value),
+        PreparedRedaction::Text { value, truncated } => RedactedValue::Text {
+            value: value.to_owned(),
+            truncated,
+        },
+        PreparedRedaction::StringList { items, total_bytes } => {
+            RedactedValue::StringList { items, total_bytes }
+        }
+        PreparedRedaction::PathDigest { value, class } => sha256_digest(value.as_bytes()).map_or(
+            RedactedValue::Metadata {
+                kind: ConfigValueKind::Text,
+                extent: value.len(),
+            },
+            |digest| RedactedValue::PathDigest { class, digest },
+        ),
+        PreparedRedaction::SecretHidden => RedactedValue::SecretHidden,
+        PreparedRedaction::Metadata { kind, extent } => RedactedValue::Metadata { kind, extent },
     }
 }
 
@@ -222,22 +321,79 @@ fn classify_path(value: &str) -> PathLocationClass {
     }
 }
 
-fn truncate_utf8(value: &str, max_bytes: usize) -> (String, bool) {
+fn truncate_utf8(value: &str, max_bytes: usize) -> (&str, bool) {
     if value.len() <= max_bytes {
-        return (value.to_owned(), false);
+        return (value, false);
     }
     let mut end = max_bytes.min(value.len());
     while !value.is_char_boundary(end) {
         end = end.saturating_sub(1);
     }
-    (value[..end].to_owned(), true)
+    (&value[..end], true)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{PathLocationClass, RedactedValue, classify_path, redact_value, truncate_utf8};
+    use super::{
+        PathLocationClass, RedactedValue, classify_path, diagnostic_extent, prepare_value,
+        truncate_utf8,
+    };
     use crate::{ConfigValue, ConfigValueKind, RedactionPolicy, SecretReference};
     use search_contracts::MAX_CANONICAL_BYTES;
+
+    fn redact_value(value: &ConfigValue, policy: RedactionPolicy, cap: usize) -> RedactedValue {
+        super::redact_value(prepare_value(value, policy, cap))
+    }
+
+    // #394 source-authored overflow proof; AUTHORED_NOT_RUN.
+    #[test]
+    fn diagnostic_extent_overflow_returns_no_partial_extent() {
+        assert_eq!(
+            diagnostic_extent(usize::MAX, 1, 0, 0),
+            Err(crate::ConfigError::LengthOverflow)
+        );
+        assert_eq!(diagnostic_extent(40, 1, 1, 2), Ok(44));
+    }
+
+    // Logical scalar/list/path costs and borrowed UTF-8 preparation, AUTHORED_NOT_RUN.
+    #[test]
+    fn prepared_redaction_charges_closed_payload_and_preserves_borrowed_text() {
+        for (value, policy, expected) in [
+            (ConfigValue::Absent, RedactionPolicy::Public, 1),
+            (ConfigValue::Boolean(true), RedactionPolicy::Public, 2),
+            (ConfigValue::Integer(-1), RedactionPolicy::Public, 9),
+            (
+                ConfigValue::StringList(vec!["abc".into()]),
+                RedactionPolicy::Public,
+                17,
+            ),
+            (
+                ConfigValue::Text("relative/path".into()),
+                RedactionPolicy::PathDigest,
+                34,
+            ),
+            (
+                ConfigValue::Text("private".into()),
+                RedactionPolicy::MetadataOnly,
+                10,
+            ),
+        ] {
+            assert_eq!(
+                prepare_value(&value, policy, 256).payload_bytes(),
+                Ok(expected)
+            );
+        }
+        let value = ConfigValue::Text("\u{e9}\u{e9}".into());
+        let prepared = prepare_value(&value, RedactionPolicy::Public, 3);
+        assert_eq!(prepared.payload_bytes(), Ok(4)); // tag + 2 UTF-8 bytes + truncation flag
+        assert_eq!(
+            super::redact_value(prepared),
+            RedactedValue::Text {
+                value: "\u{e9}".into(),
+                truncated: true,
+            }
+        );
+    }
 
     #[test]
     fn path_classification_never_needs_io() {

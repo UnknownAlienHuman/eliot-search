@@ -27,6 +27,14 @@ extent, source kind and entry/section counts. It omits unvalidated profile and p
 including when embedded in `ConfigLayers`, while preserving typed accessors and persisted bytes.
 Disclosure fixtures are AUTHORED_NOT_RUN under #238/#215.
 
+Redacted views now enforce a 1 MiB W1 logical diagnostic-byte ceiling as well as their entry ceiling.
+They charge the profile/header, names and visible values before cloning or hashing, omit over-budget
+entries whole, and return a content-free error if the header cannot fit or limits are invalid. This
+logical payload accounting does not measure allocator residency or serialized JSON/Debug bytes.
+The daemon status caller handles the fallible view without changing runtime readiness or persisted
+configuration identities. Diagnostic boundary fixtures are AUTHORED_NOT_RUN under #238/#109/#215;
+the maintained parser and explicit tagged v2 fingerprint cutover remain #389/#238 work.
+
 ## Owns
 
 - config source/layer identity and deterministic merge semantics
