@@ -14,23 +14,23 @@ Use Qdrant for sparse/optional dense vectors, payload indexes, filtered retrieva
 
 - source admission, identity, immutable revisions and no-execute acquisition;
 - materialization, unitization, coordinate maps and structural enrichment;
-- deterministic lexical encodings and separately qualified semantic profiles;
+- deterministic document/query lexical encoding and separately qualified semantic profiles;
 - projection manifests, collision-safe point identity, publication and rebuild;
-- workspace/corpus/portfolio scope, lineage and currentness;
-- exact/keyword/structural/sparse/optional semantic planning;
-- access-scoped retrieval, deterministic fusion, candidate validation and exact readback;
-- orientation, recommended reading, provenance, coverage and exact verification;
-- standalone daemon/CLI and optional typed leaf adapters.
+- workspace/corpus/portfolio scope, repository lineage and currentness;
+- exact, keyword, structural, sparse lexical and optional semantic query planning;
+- access-scoped retrieval, deterministic fusion, candidate validation and exact source readback;
+- corpus orientation, recommended reading, provenance, coverage and exact verification;
+- standalone daemon/CLI and optional typed provider adapters.
 
 ### Search does not own
 
-- tasks, attempts, task history or finish authority;
-- Governor/General Manager state or agent scheduling;
-- mailboxes, steer/goal routing or model loops;
-- assignment tickets, writer leases, approval/signature profiles;
-- cross-project orchestration.
+- Tasks, WorkScopes, Attempts or canonical task history;
+- General Manager/Governor state, agent scheduling or native harness lifecycle;
+- mailboxes, steer/goal routing, model loops or subagent observation;
+- generic assignment-ticket issuance, writer leases, approval/signature profiles;
+- review acceptance, finish authority or cross-project orchestration.
 
-Those belong to `eliot-swarm-controller` and `eliot-memory-os`. Search may be called by them; it does not embed them.
+Those responsibilities belong to `eliot-swarm-controller` and, after integration, `eliot-memory-os`. Search may be called by those systems; it does not embed or reimplement them.
 
 ## Product behavior
 
@@ -45,9 +45,9 @@ orient a bounded scope
 → expand exact source-backed handles
 ```
 
-Heuristic retrieval proposes candidates only. Every branch preserves assurance and coverage. Exact retained-source readback is mandatory before citations. A complete negative claim requires an exact frozen denominator and never follows from top-k saturation.
+Heuristic retrieval proposes candidates only. Sparse lexical, structural, keyword, optional dense and rerank branches preserve assurance and coverage. Exact retained-source readback is mandatory before citations. A complete negative claim requires an exact frozen denominator and never follows from top-k saturation.
 
-Agent results should minimize context use: compact ranked cards, exact handles, recommended reading, explicit ambiguity/coverage/freshness and bounded suggestions for the next exact check. Search provides evidence and navigation, not a task verdict.
+Agent results should minimize context use: compact ranked cards, exact handles, recommended reading, explicit ambiguity/coverage/freshness and bounded suggestions for the next exact `grep`, regex, symbol or structural check. Search provides evidence and navigation, not a task verdict.
 
 The v1 contract lacks general free-text retrieval and first-class orientation. Do not fake them by overloading `find_text@1` or exposing raw Qdrant queries; use the versioned work tracked by #213.
 
@@ -57,13 +57,13 @@ Resolve conflicts in this order:
 
 1. Part I of `docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`;
 2. accepted ADRs, especially ADR 0005 and ADR 0006;
-3. accepted public/provider/qualification contracts;
-4. nearest package `AGENTS.md`, `FUNCTIONS.md` and package docs;
+3. accepted public contracts, provider schemas and product qualification contracts;
+4. nearest package `AGENTS.md`, `FUNCTIONS.md` and package-owned documentation;
 5. current maintainer request, exact issue/PR and dependency contract;
 6. Cargo manifests and compiled source reality;
 7. historical material under `swarm/**`, `docs/handoff/**`, `docs/execution/**` and Architecture Part II.
 
-Part II and P00/ticket/lease material are historical scaffolding. They cannot authorize or block current product work. `swarm/launch-state.toml`, ticket drafts, context manifests, submissions and handoffs are repository history, not runtime inputs or implementation authority.
+Part II and P00/ticket/lease material are historical scaffolding. They cannot authorize or block current product work. `swarm/launch-state.toml`, ticket drafts, context manifests, leases, submissions, reviews and handoffs are repository history, not runtime inputs or implementation authority.
 
 A maintainer request or exact issue plus one non-overlapping writer worktree is sufficient authorization. Do not build controller machinery inside Search. Residual controller tooling is removal work under #214.
 
@@ -100,7 +100,7 @@ Rules:
 8. work outside the frozen row becomes a follow-up or a **serial** split: merge tranche 1, publish the new `main`, then create tranche 2 from that new `main`; no stacked source PRs;
 9. open PRs are merge candidates; programme/tracking/gate coordination lives in issues/docs, not permanent PRs.
 
-The completion map and exception matrix do not grant blanket cross-package access. An integration slice changes only its named owner, explicit adapters and immediate reverse-consumer wiring.
+The completion map and exception matrix do not grant blanket cross-package access. An integration slice changes only its named owner, explicit adapters and immediate reverse-consumer wiring. No new runtime controller or generic task/approval registry is authorized. Existing required legacy APIs may remain unchanged only until their named consumer cutover/removal owner; they cannot mint or substitute new-profile authority.
 
 ## Work-item classes
 
@@ -174,56 +174,72 @@ A B0 claim names exact path, symbol, caller and causal chain. “Related to the 
 11. Merge the coherent source slice when declared gates pass. Create the successor branch only from the newly merged `main`.
 12. Never claim execution not performed at the exact revision.
 13. Keep Actions manual-only; do not add push/PR triggers just to obtain a build.
-14. Do not commit local paths, credentials, source contents or unredacted logs.
+14. Do not commit local paths, credentials, API keys, source contents or unredacted logs.
 15. Keep the PR body as the current status record; do not post a long progress comment after every commit.
 
 Read-only research for the next non-overlapping slice may run while the current PR is in final review, but no successor source branch/PR is opened before merge.
 
 ## Product invariants
 
-- Qdrant is the only production indexed/search database.
-- redb stores bounded technical control state, never a searchable corpus.
-- Qdrant payload is projection metadata, never source evidence; candidates require exact source/revision validation.
-- Retrieval, filtered IDF, exact denominator, count, scroll, facets, grouping, recommend/discover and response validation use the same eligibility base filter; denied data cannot influence permitted candidate visibility, ranking, statistics, counts, facets, groups, recommendations, suggestions or traces.
-- Paths are locators, not identities. Native/source/revision/representation/projection identities remain distinct.
-- Immutable revisions/manifests are never rewritten in place. Publication is generation/epoch safe.
-- Unknown external mutation outcome is neither success nor blind-replay permission.
+- Qdrant is the only indexed/search database. No SQLite/FTS, Tantivy, Lucene, local postings database or alternate production search engine.
+- redb stores bounded technical control state, never a second searchable corpus.
+- Qdrant payload is projection metadata, never source evidence. Candidates require authoritative exact source/revision readback and validation.
+- Retrieval, filtered IDF population, exact denominator, count, scroll, facets, grouping, clusters, recommend/discover and response validation use one eligibility base filter. Denied data cannot influence permitted candidate visibility, ranking, statistics, counts, facets, groups, clusters, recommendations, suggestions or traces.
+- Paths are locators, not identities. File/native identity, source identity, revision identity, representation identity and projection identity remain distinct.
+- Immutable revisions and manifests are never rewritten in place. Publication is generation/epoch safe.
+- Unknown external mutation outcome is not success and is not blindly replayed.
 - Restrictive access/purge/shadow changes fail closed across retrieval, handles and continuations.
-- Portfolio scopes are explicit and immutable; forks/mirrors/copies collapse by lineage.
-- Scores from different access/scoring populations are not directly comparable; fusion is deterministic and versioned.
-- Query admission is read-only and creates no ordinary durable query job/store.
-- Standalone daemon/CLI and ELIOT adapter share one state/query authority.
-- Optional model/document workers stay disabled until individually qualified.
-- Vendor Qdrant types remain private to `search-qdrant-bridge`.
+- Multi-repository portfolios are explicit immutable scopes; forks/mirrors/copies collapse by lineage and cannot masquerade as independent evidence.
+- Raw scores from different access/scoring populations are not directly comparable; cross-leg fusion is deterministic and versioned.
+- Query admission is read-only and creates no ordinary durable query job or second query-state store.
+- The standalone daemon/CLI and ELIOT adapter share one underlying state and query authority.
+- Optional model/document workers remain disabled until independently qualified and are not required for the first lexical/code baseline.
+- Vendor Qdrant types stay inside `search-qdrant-bridge`; public boundaries use Eliot-owned types.
 - Search never executes indexed source code, document macros or remote resources.
-- An LLM is not required in the Search hot path and cannot replace source validation or coverage accounting.
+- An LLM is not required in the Search hot path. A consuming agent may interpret typed results but cannot replace source validation, exact proof or coverage accounting.
 
 ## Large-corpus and document requirements
 
-Large repositories and portfolios are first-class workloads. Use partitioned legs, progressive output, deterministic fusion, source/lineage caps and explicit budgets. Scale claims require #215 evidence.
+Large repositories and repository portfolios are first-class workloads, not optional demos. Implementation remains bounded through partitioned legs, progressive output, deterministic fusion, per-source/per-lineage caps and explicit query budgets. Scale claims require the measured qualification in #215.
 
-Raw text/source/Git are baseline. Document/research support reuses the same source, preparation, projection, validation and coordinate owners. PDF/HTML/Markdown/LaTeX/Office/OCR profiles require separate #216 qualification; unsupported formats remain explicit.
+Raw text, source code and Git are the first baseline. Research/document support reuses the same source, materialization, projection, validation and exact-coordinate owners. PDF/HTML/Markdown/LaTeX/Office/OCR profiles require separate qualification under #216; unsupported formats remain explicit.
 
 ## Standalone and ELIOT integration
 
-Standalone operation is baseline, not fallback. The daemon owns installation/root/process and serves the local client without an external controller.
+Standalone operation is the baseline, not a fallback. The daemon owns its installation/root/process and serves the public local client contract without any external controller.
 
-ELIOT integration is a leaf translation layer over accepted provider protocols. It receives no canonical ELIOT credentials, task authority or finish authority. No configuration may make Memory OS or the swarm controller mandatory for normal startup, ingestion, indexing, search, rebuild or recovery.
+ELIOT integration is a leaf translation layer over accepted provider protocols. Search returns bounded candidate/result records, coverage, freshness, assurance, reason codes and opaque handles. It does not receive canonical ELIOT credentials, task authority, Context Compiler admission or finish authority.
+
+No Search configuration option may make ELIOT Memory OS or `eliot-swarm-controller` mandatory for normal startup, ingestion, indexing, search, rebuild or recovery.
+
+## Repository metadata boundary
+
+Static package maps and ownership crosswalks may help avoid overlapping edits. They cannot issue authority or block work. Do not extend the active tree with generic:
+
+- assignment/lease event state machines;
+- context materialization for agent prompts;
+- approval/signature/profile registries;
+- task/attempt/mailbox/scheduler records;
+- orchestrator credentials or actor roles;
+- controller qualification suites;
+- large captures proving only repository-control tooling.
+
+Reusable controller work belongs in `UnknownAlienHuman/eliot-swarm-controller`. Canonical ELIOT task and memory authority belongs in `UnknownAlienHuman/eliot-memory-os`.
 
 ## Evidence and acceptance
 
 Compilation is necessary but not product qualification. Product claims require exact named evidence:
 
-- real Qdrant artifact/client/schema/query/restart probes;
+- real Qdrant artifact/client/schema/query/restart probes for indexed capability;
 - native Windows identity, containment, secrets and named-pipe evidence;
-- real source → durable state → Qdrant → validated result;
-- source-backed orientation/recommended reading/exact checks;
+- real source → durable state → Qdrant → validated result for the product spine;
+- agent retrieval/orientation fixtures with source-backed recommended reading and exact checks;
 - multi-repository scale, quality and resource evidence;
-- document coordinate/citation evidence for enabled profiles;
-- restart/recovery/deny/unknown-outcome/rebuild cases;
+- document coordinate/citation evidence for enabled materializers;
+- restart/recovery, deny, unknown-outcome and rebuild cases;
 - installed baseline evidence before release.
 
-Planning records, issue status, source presence, mock/oracle success, signatures and review badges cannot substitute for those gates.
+Planning records, ticket status, source presence, mock/oracle success, signatures and review badges cannot substitute for those gates.
 
 ## GitHub connector use
 
