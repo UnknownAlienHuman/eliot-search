@@ -38,6 +38,18 @@ under a raw domain. All use `domain || NUL || payload`. `DigestInputLimit` is a
 nonzero complete-preimage ceiling of at most 8 MiB; failures return no digest.
 Donor algorithm types never appear in the public contract.
 
+`blake3_canonical_array` hashes a declared finite ordered array one fallible
+owned row at a time through that same encoder. It rejects more than 4096 rows
+before iterator conversion, checks exact length with at most one excess probe,
+and counts the enclosing array in the depth limit. The complete-preimage limit
+includes domain framing and the array header; one sink bounds all row bytes.
+Equal ordered rows have the same
+bytes as `blake3_canonical` over `CanonicalValue::Array`.
+The helper collects no complete array or preimage; callers still own bounded
+row construction and schema order. It provides no semantic or operation
+authority. The #396 fixtures are authored; their execution and resource
+qualification remain deferred under #352 and #215.
+
 Stored/wire decoding does not prove that hashing occurred. Legacy raw-byte
 constructors remain decode-only compatibility until each semantic owner's
 profile/rebuild migration. The typed `xtask validate canonical-digest-guard`

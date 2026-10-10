@@ -361,6 +361,48 @@ where
     encode_cbor(value, &mut sink)
 }
 
+/// Validate the top-level declared count before consuming or encoding any row.
+pub(crate) fn check_canonical_array_length(row_count: usize) -> Result<(), ContractError> {
+    if row_count > MAX_COLLECTION_ITEMS {
+        return Err(ContractError::bounded(
+            ContractErrorKind::TooManyItems,
+            "canonical_array_length",
+            usize_to_u64(MAX_COLLECTION_ITEMS),
+            usize_to_u64(row_count),
+        ));
+    }
+    Ok(())
+}
+
+/// Encode a finite fallible row stream through the sole existing CBOR encoder.
+pub(crate) fn stream_canonical_cbor_array<I, F>(
+    row_count: usize,
+    rows: I,
+    max_bytes: usize,
+    write: F,
+) -> Result<(), ContractError>
+where
+    I: IntoIterator<Item = Result<CanonicalValue, ContractError>>,
+    F: FnMut(&[u8]) -> Result<(), ContractError>,
+{
+    check_canonical_array_length(row_count)?;
+    let mut sink = CheckedSink::new(max_bytes, write)?;
+    encode_cbor_head(4, usize_to_u64(row_count), &mut sink)?;
+    let mut rows = rows.into_iter();
+    for _ in 0..row_count {
+        let row = rows
+            .next()
+            .ok_or_else(|| ContractError::malformed("canonical_array_length"))??;
+        // The containing array occupies depth zero, so its rows start at one.
+        validate_value(&row, 1)?;
+        encode_cbor(&row, &mut sink)?;
+    }
+    if rows.next().is_some() {
+        return Err(ContractError::malformed("canonical_array_length"));
+    }
+    Ok(())
+}
+
 struct CheckedSink<F> {
     write: F,
     length: usize,
@@ -1321,6 +1363,31 @@ fn usize_to_u64(value: usize) -> u64 {
 #[cfg(test)]
 mod sink_tests {
     use super::*;
+
+    #[test]
+    fn array_rows_share_one_ceiling_and_refuse_the_crossing_chunk() {
+        let rows = || {
+            [
+                Ok(CanonicalValue::U64(24)),
+                Ok(CanonicalValue::Text(CanonicalText::new("abc").unwrap())),
+            ]
+        };
+        let mut output = Vec::new();
+        let error = stream_canonical_cbor_array(2, rows(), 4, |part| {
+            output.extend_from_slice(part);
+            Ok(())
+        })
+        .unwrap_err();
+        assert_eq!(error.kind(), ContractErrorKind::OversizePayload);
+        assert_eq!(output, [0x82, 0x18, 0x18, 0x63]);
+        output.clear();
+        stream_canonical_cbor_array(2, rows(), 7, |part| {
+            output.extend_from_slice(part);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(output, [0x82, 0x18, 0x18, 0x63, b'a', b'b', b'c']);
+    }
 
     #[test]
     fn ceiling_is_checked_before_callback_or_vector_growth() {
