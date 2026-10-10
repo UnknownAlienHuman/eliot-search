@@ -1,7 +1,7 @@
 # ELIOT Search bounded execution protocol
 
-**Authority:** root `AGENTS.md`, Architecture Part I, accepted ADRs, the exact source issue, process issue #350 and programme issue #352.  
-**Applies to:** all remaining implementation, migration, integration, qualification and release work.  
+**Authority:** root `AGENTS.md`, Architecture Part I, accepted ADRs, the exact source issue, process issue #350 and programme issue #352.
+**Applies to:** all remaining implementation, migration, integration, qualification and release work.
 **Topology:** one manager, one writer worktree, one dependency/`Cargo.lock` integrator, 5–10 bounded read/research/review subagents.
 
 This protocol fixes an execution defect, not a product invariant. Previous instructions prevented conflicting writers but did not stop one valid source task from absorbing every newly discovered concern. The result was expanding draft PRs, repeated scope amendments, blocked independent work and review that never reached a stable final SHA.

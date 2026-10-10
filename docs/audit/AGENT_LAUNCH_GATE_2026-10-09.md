@@ -1,9 +1,9 @@
 # Agent launch gate — current execution state
 
-**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.  
-**Live writer queue:** programme issue #352.  
-**Mandatory process:** [EXECUTION_PROTOCOL.md](../product/EXECUTION_PROTOCOL.md).  
-**Long-range obligations:** [PROJECT_COMPLETION.md](../product/PROJECT_COMPLETION.md).  
+**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
+**Live writer queue:** programme issue #352.
+**Mandatory process:** [EXECUTION_PROTOCOL.md](../product/EXECUTION_PROTOCOL.md).
+**Long-range obligations:** [PROJECT_COMPLETION.md](../product/PROJECT_COMPLETION.md).
 **Current process issues:** #349 and #350.
 
 `PROJECT_COMPLETION.md` is not the live next-task queue. Its dated “next task”, base SHA or local stage wording is subordinate to #352, this gate, current merged artifacts and the exact active issue.

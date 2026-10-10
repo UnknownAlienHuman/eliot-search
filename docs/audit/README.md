@@ -1,9 +1,9 @@
 # ELIOT Search: audit and implementation entrypoint
 
-**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.  
-**Live programme queue:** issue #352.  
+**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
+**Live programme queue:** issue #352.
 **Source programme:** #266; PR #344 closed unmerged/frozen at `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`.
-**Process correction:** #349 and #350 / PR #351.  
+**Process correction:** #349 and #350 / PR #351.
 **Product/release:** not qualified.
 
 Do not reset an active manager worktree to a dated audit SHA. Resolve actual `main`, active PR head and exact owner before writing source.

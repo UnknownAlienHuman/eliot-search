@@ -1,6 +1,6 @@
 # Wave 2 package-instruction exception matrix — current revision
 
-**Authority:** root `AGENTS.md`, exact source issue, [bounded execution protocol](../product/EXECUTION_PROTOCOL.md), programme issue #352 and this matrix.  
+**Authority:** root `AGENTS.md`, exact source issue, [bounded execution protocol](../product/EXECUTION_PROTOCOL.md), programme issue #352 and this matrix.
 **Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
 
 One manager owns commits, root dependency pins and `Cargo.lock`. An exception permits one frozen source slice; it does not authorize an entire issue/programme in one PR.

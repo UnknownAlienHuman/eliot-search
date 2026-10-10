@@ -1,9 +1,9 @@
 # Wave 2 single-manager execution packet — current revision
 
-**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.  
-**Live writer queue:** programme issue #352 and [launch gate](AGENT_LAUNCH_GATE_2026-10-09.md).  
-**Long-range obligations:** [PROJECT_COMPLETION.md](../product/PROJECT_COMPLETION.md).  
-**Mandatory process:** [EXECUTION_PROTOCOL.md](../product/EXECUTION_PROTOCOL.md).  
+**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
+**Live writer queue:** programme issue #352 and [launch gate](AGENT_LAUNCH_GATE_2026-10-09.md).
+**Long-range obligations:** [PROJECT_COMPLETION.md](../product/PROJECT_COMPLETION.md).
+**Mandatory process:** [EXECUTION_PROTOCOL.md](../product/EXECUTION_PROTOCOL.md).
 **Exact package exceptions:** [WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md](WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md).
 
 `PROJECT_COMPLETION.md` is not the live next-task queue. Its dated “next task”, base SHA and local stage text are subordinate to #352, the launch gate, current merged artifacts and the exact active issue.
