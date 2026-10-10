@@ -1,6 +1,7 @@
 //! Bounded parsing and construction of captured configuration documents.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::str;
 
 use search_contracts::ProfileId;
@@ -16,7 +17,9 @@ mod builder;
 use builder::{DocumentBuilder, TextPopulation};
 
 /// One finite captured configuration layer.
-#[derive(Clone, Debug, Eq, PartialEq)]
+///
+/// Debug exposes fixed metadata only; captured text is not yet authorized.
+#[derive(Clone, Eq, PartialEq)]
 pub struct ConfigDocument {
     schema_version: u32,
     requested_profile: Option<ProfileId>,
@@ -105,6 +108,29 @@ impl ConfigDocument {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+}
+
+impl fmt::Debug for ConfigDocument {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ConfigDocument")
+            .field("schema_version", &self.schema_version)
+            .field(
+                "requested_profile_present",
+                &self.requested_profile.is_some(),
+            )
+            .field(
+                "requested_profile_bytes",
+                &self
+                    .requested_profile
+                    .as_ref()
+                    .map(|profile| profile.as_str().len()),
+            )
+            .field("source_kind", &self.source.kind)
+            .field("entry_count", &self.entries.len())
+            .field("declared_section_count", &self.declared_sections.len())
+            .finish_non_exhaustive()
     }
 }
 
