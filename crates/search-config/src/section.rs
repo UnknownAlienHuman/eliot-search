@@ -6,7 +6,7 @@ use std::num::NonZeroU64;
 use search_contracts::{Blake3Digest32, ProfileId};
 
 use crate::{
-    ConfigError, ConfigKeyName, ConfigKeyPath, ConfigOwner, ConfigSectionDescriptor,
+    ConfigError, ConfigKeyName, ConfigKeyPath, ConfigLimits, ConfigOwner, ConfigSectionDescriptor,
     ConfigSectionName, ConfigValue, FieldProvenance, MergedConfig,
 };
 
@@ -131,14 +131,19 @@ pub struct ValidatedSection {
 }
 
 impl ValidatedSection {
-    /// Binds a package-validated digest to the exact projected descriptor input.
-    #[must_use]
+    /// Computes the v2 equality digest of exact typed input and supplied provenance.
+    /// This does not prove package validation or runtime application.
+    ///
+    /// # Errors
+    /// Returns content-free capacity, overflow, or canonical-byte failures.
     pub fn new(
         input: ConfigSectionInput,
         selected_profile: ProfileId,
-        validation_digest: Blake3Digest32,
-    ) -> Self {
-        Self {
+        limits: ConfigLimits,
+    ) -> Result<Self, ConfigError> {
+        let validation_digest =
+            crate::canonical_identity::section_digest(&input, &selected_profile, limits)?;
+        Ok(Self {
             section_name: input.section_name,
             owner: input.owner,
             schema_revision: input.schema_revision,
@@ -146,7 +151,7 @@ impl ValidatedSection {
             selected_profile,
             validation_digest,
             fields: input.fields,
-        }
+        })
     }
 
     /// Canonical section name.
@@ -179,7 +184,7 @@ impl ValidatedSection {
         &self.selected_profile
     }
 
-    /// Capability-owned digest of the complete validated section.
+    /// Config-owned equality digest under `eliot/cbor/config-section/v2`.
     #[must_use]
     pub const fn validated_section_digest(&self) -> Blake3Digest32 {
         self.validation_digest
@@ -197,6 +202,10 @@ impl ValidatedSection {
         self.fields.iter()
     }
 }
+
+#[cfg(test)]
+#[path = "identity_tests.rs"]
+mod identity_tests;
 
 pub(crate) fn descriptor_matches(
     section: &ValidatedSection,

@@ -2,14 +2,13 @@
 
 use std::collections::BTreeMap;
 
-use search_contracts::ProfileId;
+use search_contracts::{MAX_COLLECTION_ITEMS, ProfileId};
 
 use crate::section::descriptor_matches;
 
 use crate::{
     ConfigError, ConfigFieldDescriptor, ConfigFingerprint, ConfigKeyName, ConfigLimits,
-    ConfigOwner, ConfigRegistry, ConfigSectionField, ConfigSectionName, SectionFingerprintInput,
-    ValidatedSection, fingerprint,
+    ConfigOwner, ConfigRegistry, ConfigSectionField, ConfigSectionName, ValidatedSection,
 };
 
 /// One validated section in the authoritative candidate snapshot.
@@ -108,9 +107,10 @@ pub fn assemble_effective(
     limits: ConfigLimits,
 ) -> Result<EffectiveConfigSnapshot, ConfigError> {
     let limits = limits.validate()?;
+    let mut construction = crate::canonical_identity::snapshot_budget(&selected_profile, limits)?;
     let mut sections = BTreeMap::new();
     for validated in validated_sections {
-        if sections.len() >= limits.max_sections {
+        if sections.len() >= limits.max_sections.min(MAX_COLLECTION_ITEMS - 1) {
             return Err(ConfigError::CapacityExceeded);
         }
         let descriptor = registry
@@ -122,6 +122,7 @@ pub fn assemble_effective(
         if !descriptor_matches(&validated, descriptor) {
             return Err(ConfigError::StaleDescriptor);
         }
+        construction.snapshot_section(validated.section_name(), &validated)?;
         let name = validated.section_name().clone();
         let owner = descriptor.owner().clone();
         if sections
@@ -140,18 +141,11 @@ pub fn assemble_effective(
         return Err(ConfigError::MissingSection);
     }
 
-    let fingerprint = fingerprint(
+    let fingerprint = crate::canonical_identity::snapshot_fingerprint(
         registry.config_schema_version(),
         &selected_profile,
-        sections
-            .iter()
-            .map(|(name, section)| SectionFingerprintInput {
-                section_name: name,
-                schema_revision: section.validated.schema_revision(),
-                field_registry_digest: section.validated.field_registry_digest(),
-                validated_section_digest: section.validated.validated_section_digest(),
-            }),
-        limits.max_canonical_bytes,
+        &sections,
+        limits,
     )?;
 
     Ok(EffectiveConfigSnapshot {
@@ -249,8 +243,9 @@ mod tests {
         let validated = ValidatedSection::new(
             input,
             ProfileId::new("direct").expect("profile"),
-            Blake3Digest32::from_bytes([5; 32]),
-        );
+            ConfigLimits::W1,
+        )
+        .expect("bounded section");
         let left = assemble_effective(
             &registry,
             [validated.clone()],

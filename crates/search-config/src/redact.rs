@@ -104,8 +104,12 @@ pub fn redacted_view(
     limits: ConfigLimits,
 ) -> Result<RedactedConfigView, ConfigError> {
     let limits = limits.validate()?;
-    // Fixed-width fingerprint (32) and omitted-entry count (8), plus profile UTF-8.
-    let mut charged_bytes = (32_usize + 8)
+    // Complete tagged fingerprint payload and omitted count (8), plus profile UTF-8.
+    let mut charged_bytes = snapshot
+        .fingerprint()
+        .logical_payload_bytes()
+        .checked_add(8)
+        .ok_or(ConfigError::LengthOverflow)?
         .checked_add(snapshot.selected_profile().as_str().len())
         .ok_or(ConfigError::LengthOverflow)?;
     if charged_bytes > limits.max_diagnostic_bytes {

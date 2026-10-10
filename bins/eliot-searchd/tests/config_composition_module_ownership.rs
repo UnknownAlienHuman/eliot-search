@@ -103,7 +103,10 @@ fn config_owners_remain_bounded_and_transport_free() {
     assert!(capture.contains("eliot-searchd/cli-typed/v1\\0"));
     let snapshot = read(&root, "src/config_composition/kernel/snapshot.rs");
     assert!(snapshot.contains("assemble_effective"));
-    assert!(snapshot.contains("validation_digest"));
+    assert!(snapshot.contains("ValidatedSection::new"));
+    assert!(!snapshot.contains("validation_digest"));
+    assert!(!capture.contains("fn validation_digest"));
+    assert!(!capture.contains("fn encode_config_value"));
     let activation = read(&root, "src/config_composition/kernel/activation.rs");
     assert!(activation.contains("required_receipts"));
     let readiness = read(&root, "src/config_composition/kernel/readiness.rs");

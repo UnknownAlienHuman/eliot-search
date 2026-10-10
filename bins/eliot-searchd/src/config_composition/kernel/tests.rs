@@ -430,6 +430,17 @@ fn read_only_status_writes_nothing_and_leaks_nothing() {
         assert_eq!(config_status_json(&effective, &report), first);
     }
     assert!(first.contains(&sha256::hex(report.fingerprint.as_bytes())));
+    // #398 status tag and legacy mismatch fixtures, AUTHORED_NOT_RUN.
+    assert!(first.contains("eliot.effective-config-status-v2"));
+    assert!(first.contains("\"fingerprint_algorithm\":\"blake3\""));
+    assert!(first.contains("\"fingerprint_profile\":\"eliot/cbor/config-snapshot/v2\""));
+    assert!(first.contains("\"fingerprint_revision\":2"));
+    let mut stale = report;
+    stale.fingerprint =
+        search_config::ConfigFingerprint::restore_legacy_v1(*stale.fingerprint.as_bytes());
+    let rejected = config_status_json(&effective, &stale);
+    assert!(rejected.contains("CONFIG_IDENTITY_MISMATCH"));
+    assert!(!rejected.contains("\"configuration_ready\":true"));
 }
 
 #[test]
