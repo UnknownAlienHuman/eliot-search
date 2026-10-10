@@ -8,6 +8,11 @@
 #![deny(missing_docs)]
 #![allow(clippy::module_name_repetitions)]
 
+/// Current maintained FILE format; older files require explicit migration.
+pub const CONFIG_TOML_SCHEMA_VERSION: u32 = 2;
+/// Supported FILE grammar profile, distinct from composition and typed captures.
+pub const CONFIG_TOML_PROFILE: &str = "eliot-config-toml@2";
+
 pub mod action;
 mod canonical_identity;
 pub mod diff;

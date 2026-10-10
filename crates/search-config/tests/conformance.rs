@@ -17,6 +17,8 @@ const fn limits() -> ConfigLimits {
     ConfigLimits {
         max_document_bytes: 64 * 1024,
         max_lines: 1_024,
+        max_lex_tokens: 8_192,
+        max_lex_token_storage_bytes: 262_144,
         max_sections: 32,
         max_fields_per_section: 64,
         max_entries_per_layer: 256,
@@ -336,7 +338,7 @@ fn duplicate_unknown_and_wrong_type_fail_closed() {
     let registry = fixture_registry(1);
     assert_eq!(
         parse_document(
-            b"schema_version=1\nprofile='direct'\n[instance]\nmode='a'\nmode='b'\n",
+            b"schema_version=2\nprofile='direct'\n[instance]\nmode='a'\nmode='b'\n",
             source(ConfigSourceKind::File, 1),
             limits(),
         ),

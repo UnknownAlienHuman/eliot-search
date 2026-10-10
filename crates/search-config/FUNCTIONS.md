@@ -7,7 +7,7 @@ platform facts, accepted capability receipts and time before invoking this crate
 
 ## Shared rules
 
-- Input bytes are bounded before allocation and must be UTF-8 TOML 1.0 without BOM.
+- Input bytes are bounded before allocation and must be UTF-8 without BOM under [TOML_PROFILE_2.md](TOML_PROFILE_2.md).
 - Precedence is `defaults < file < environment < cli`, subject to each field's override allowlist.
 - One invalid section rejects the whole candidate snapshot.
 - Unknown sections, keys, duplicate keys and unknown load-bearing fields fail closed.
@@ -18,20 +18,22 @@ platform facts, accepted capability receipts and time before invoking this crate
 ## Implemented representation notes
 
 - Optional capability fields use an explicit `ConfigValue::Absent`; absence is never inferred from a missing higher-precedence key.
-- New effective snapshots compute config-owned BLAKE3/shared deterministic CBOR v2. ConfigFingerprint preserves algorithm/profile/revision in equality and serialization. restore_legacy_v1 is decode-only and cannot create a current snapshot; source must be rebuilt. Input schema1 and fingerprint revision2 are independent (VERSIONED_REBUILD).
-- The parser accepts the finite baseline TOML subset used by the project configuration: top-level `schema_version` and `profile`, flat package tables, booleans, signed integers, strings and arrays of strings. Unsupported TOML constructs fail closed.
+- New effective snapshots compute config-owned BLAKE3/shared deterministic CBOR v2. ConfigFingerprint preserves algorithm/profile/revision in equality and serialization. restore_legacy_v1 is decode-only and cannot create a current snapshot; source must be rebuilt. FILE schema2 and fingerprint revision2 are independent version dimensions (VERSIONED_REBUILD); schema2 changes the snapshot header value and digest, preserving its row layout/domain/tag.
+- File parsing delegates syntax to the maintained `toml_parser` event parser. Root `schema_version=2` and `profile` appear once before flat bare-name tables. Bare keys, booleans, decimal i64, single-line strings and flat string arrays are supported; quoted/dotted keys, nested/array/inline tables, nested arrays, multiline strings, floats/datetimes and non-decimal integers fail closed. Schema1 files return `UnsupportedSchemaVersion`.
 - Ordinary `Debug` representations redact unvalidated text, paths and opaque secret references.
 - `ConfigDocument` Debug emits only schema, profile presence/byte extent, source kind and entry/declared-section counts. It does not traverse captured profile text, names, values, source refs or digests. The same representation applies when `ConfigLayers` embeds the document; its separate externally selected `requested_profile` remains caller-authorized metadata. Debug changes no data/accessor or persisted v1 bytes and constructs no internal diagnostic String.
-- File parsing and `ConfigDocument::from_entries` share one private construction budget. Sections (including empty file tables), entries and fields per section are bounded before map growth or section clones. Parsed strings use the same legacy decoding rules for an allocation-free UTF-8 length pass and the subsequent exact-capacity allocation; list item counts are charged before each item decode/push.
+- File parsing and `ConfigDocument::from_entries` share one private construction budget. Sections (including empty file tables), entries and fields per section are bounded before map growth or section clones. Strings use the actual donor decoder for an allocation-free UTF-8 count, builder charge and exact-capacity fill/length check; list item counts are charged before each item decode/push. Decimal normalization uses a fixed stack sink and native i64 conversion. No copied string/numeric grammar remains.
 - `ConfigLimits::W1` adds aggregate ceilings: identifier bytes 1 MiB, decoded value bytes 4 MiB and list items 8,192 per layer. Identifiers count the profile once, declared section names once and both path components for each entry. Value bytes count text/list UTF-8 plus boolean=1 and integer=8; resets contribute zero. Per-identifier/text/list limits also apply to caller-owned captured values before configuration collection growth. These are logical payload/count ceilings, not an allocator-resident-byte measurement.
-- Constructor header rules remain unchanged: positive schema, no Defaults document, profiles only on File. File profile is optional in `from_entries` and mandatory in `parse_document`. Bounds now reject inputs that previously bypassed sections/fields/per-value/aggregate checks. In-budget typed values remain unchanged; current snapshots compute the separately tagged canonical v2 identity; over-limit malformed/duplicate intersections may report capacity first. Fixed content-free errors require no diagnostic path buffer. TOML donor/parser adoption remains #389. Canonical section/snapshot identities and diagnostic admission are implemented source slices; their fixture execution remains deferred.
+- Typed constructor header rules remain unchanged: positive schema, no Defaults document, profiles only on File. File profile is optional in `from_entries` and mandatory in `parse_document`; typed captures make no TOML syntax claim. File grammar is `eliot-config-toml@2` only, with both root headers required before the first table. W1 adds 131,072 lexer tokens and 4 MiB logical token-storage ceilings, checked before reservation/push. Fixed content-free errors require no diagnostic path buffer; sticky failure prevents subsequent growth/success even if the donor continues. Canonical rows, tags and layer/descriptor/secret semantics remain unchanged; schema2 deliberately changes the snapshot header value. Fixture execution remains deferred.
 
 ## Operations
 
 ### `parse_document(bytes, source, limits) -> Result<ConfigDocument, ConfigError>`
 
-Validates framing, encoding, schema version, duplicate keys/tables, nesting and allocation limits.
-It performs no path/environment expansion and never reads another source.
+Validates byte/UTF-8/BOM/LF/CRLF framing, bounded donor tokens and the sole schema2 file profile,
+duplicate keys/tables, value shape/depth and decoded collection budgets. Lone CR is rejected.
+It performs no path/environment expansion and never reads another source. Failure returns no
+partial document or donor diagnostic. Full grammar and migration rules are in TOML_PROFILE_2.md.
 
 ### `ConfigDocument::from_entries(schema_version, requested_profile, source, entries, limits)`
 
@@ -107,7 +109,7 @@ exclude serialization framing/escaping and allocator/map overhead; this is not a
 Overflow or insufficient header capacity returns an error without a partial view; invalid limits
 reject. An entry exceeding either ceiling is omitted whole; later smaller entries may still fit in
 canonical order. The daemon status adapter maps a failed view to a fixed content-free read-only error
-record. Runtime readiness calculations remain unchanged. The immediate status schema is eliot.effective-config-status-v2 and preserves fingerprint algorithm/profile/revision, rejecting a report/snapshot identity mismatch.
+record. Runtime readiness calculations remain unchanged. The immediate status schema is eliot.effective-config-status-v2 and preserves fingerprint algorithm/profile/revision, rejecting a report/snapshot identity mismatch. It reports the effective snapshot schema and supported_file_syntax_profile metadata; that support value does not assert captured-file provenance.
 
 ### `validate_environment_key(name, registry) -> Result<ConfigKeyPath, ConfigError>`
 

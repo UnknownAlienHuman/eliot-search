@@ -1,5 +1,5 @@
 schema_version = 3
-config_schema_version = 1
+config_schema_version = 2
 project = "eliot-search"
 unknown_section = "reject"
 duplicate_section = "reject"
