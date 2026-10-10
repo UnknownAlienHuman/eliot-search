@@ -16634,7 +16634,7 @@
       "signal": "unresolved-prefix-review",
       "count": 1,
       "test": false,
-      "source_sha256": "09dcee82e6b45914c4aa4f9b28efb53cc4b1da0b1e4ef7b79315ace34a11fc8e",
+      "source_sha256": "ca39680e3d7d1e31be24de6de59ca05467326fdc37d4baba2884bdf19b1177c3",
       "classification": "non-digest-surface",
       "owner_issue": 238,
       "phase": "accepted",
@@ -16646,7 +16646,7 @@
       "signal": "unresolved-prefix-review",
       "count": 1,
       "test": false,
-      "source_sha256": "09dcee82e6b45914c4aa4f9b28efb53cc4b1da0b1e4ef7b79315ace34a11fc8e",
+      "source_sha256": "ca39680e3d7d1e31be24de6de59ca05467326fdc37d4baba2884bdf19b1177c3",
       "classification": "non-digest-surface",
       "owner_issue": 238,
       "phase": "accepted",
@@ -16658,7 +16658,7 @@
       "signal": "raw-digest-construction",
       "count": 1,
       "test": true,
-      "source_sha256": "09dcee82e6b45914c4aa4f9b28efb53cc4b1da0b1e4ef7b79315ace34a11fc8e",
+      "source_sha256": "ca39680e3d7d1e31be24de6de59ca05467326fdc37d4baba2884bdf19b1177c3",
       "classification": "test-vector",
       "owner_issue": 238,
       "phase": "accepted",
@@ -16670,7 +16670,7 @@
       "signal": "digest-import-review",
       "count": 1,
       "test": true,
-      "source_sha256": "09dcee82e6b45914c4aa4f9b28efb53cc4b1da0b1e4ef7b79315ace34a11fc8e",
+      "source_sha256": "ca39680e3d7d1e31be24de6de59ca05467326fdc37d4baba2884bdf19b1177c3",
       "classification": "opaque-value-use",
       "owner_issue": 238,
       "phase": "accepted",
@@ -57127,6 +57127,30 @@
       "owner_issue": 238,
       "phase": "accepted",
       "reason": "#390 source-authored shared file/env/CLI document budget fixtures use synthetic source provenance only. AUTHORED_NOT_RUN. No new compute or semantic digest authority."
+    },
+    {
+      "path": "crates/search-config/tests/document_debug.rs",
+      "symbol": "source",
+      "signal": "raw-digest-construction",
+      "count": 1,
+      "test": true,
+      "source_sha256": "89df54427966a59e7898b4c8e5ac9b53b6979e0ae58d8f97f641c9067eb6ca80",
+      "classification": "test-vector",
+      "owner_issue": 238,
+      "phase": "accepted",
+      "reason": "#392 source-authored document Debug disclosure fixtures use synthetic source provenance only. AUTHORED_NOT_RUN. No new compute or semantic digest authority."
+    },
+    {
+      "path": "crates/search-config/tests/document_debug.rs",
+      "symbol": "use[search_contracts::{group}]",
+      "signal": "digest-import-review",
+      "count": 1,
+      "test": true,
+      "source_sha256": "89df54427966a59e7898b4c8e5ac9b53b6979e0ae58d8f97f641c9067eb6ca80",
+      "classification": "test-vector",
+      "owner_issue": 238,
+      "phase": "accepted",
+      "reason": "#392 source-authored document Debug disclosure fixtures use synthetic source provenance only. AUTHORED_NOT_RUN. No new compute or semantic digest authority."
     }
   ]
 }

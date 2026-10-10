@@ -22,6 +22,11 @@ in-budget v1 values and persisted digests keep their bytes. Previously unchecked
 values or aggregates now reject. Adversarial boundary fixtures are AUTHORED_NOT_RUN; donor
 materialization and the explicit TOML/v2 migration remain #389/#238 work.
 
+Captured document Debug now reports fixed primitive metadata: schema, profile presence/byte
+extent, source kind and entry/section counts. It omits unvalidated profile and payload text,
+including when embedded in `ConfigLayers`, while preserving typed accessors and persisted bytes.
+Disclosure fixtures are AUTHORED_NOT_RUN under #238/#215.
+
 ## Owns
 
 - config source/layer identity and deterministic merge semantics
