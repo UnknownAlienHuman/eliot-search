@@ -98,57 +98,119 @@ The accepted Wave packets may incorporate a **narrow issue-specific addendum** t
 instructions when one manager must move existing code between packages or integrate an exact root
 dependency/`Cargo.lock` change. This does not lower the package boundary generally.
 
-Current accepted addenda:
+Current accepted process and addenda:
 
-- `docs/audit/WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md` for `#237/#253`;
-- `docs/audit/WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md` for the post-`#237` serialized Wave 2;
+- `docs/product/EXECUTION_PROTOCOL.md` for mandatory bounded source slices, finding triage, review budgets,
+  exact-head review and merge discipline;
+- `docs/audit/WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md` for delivered `#237/#253` history;
+- `docs/audit/WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md` for the remaining Wave-2 order and subagent roles;
 - `docs/audit/WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md` for exact issue/path exceptions;
 - `docs/product/PROJECT_COMPLETION.md` for the remaining named implementation and integration phases,
-  using only each phase's explicit owned files/call-site wiring and current detailed issue scope.
+  using only each phase's explicit owner, adapters and current detailed issue scope.
 
 Rules:
 
 1. one manager and one writer worktree only;
-2. an exception applies only to the exact issue row and latest accepted base published by `#97`;
+2. an exception applies only to the exact issue row, current accepted base and one frozen source slice;
 3. subagents are read/research/review only and never edit repository state;
 4. the manager remains the sole root dependency and `Cargo.lock` integrator;
 5. all unlisted package prohibitions remain in force;
 6. an exception cannot introduce a second authority, temporary public facade or product-reachable
    compatibility implementation;
-7. if required work falls outside the row, stop and amend the owner issue/packet before editing.
+7. every source slice records Definition of Ready fields and publishes `SCOPE_FROZEN` no later than its
+   second source commit;
+8. after scope freeze, findings are classified `B0`, `F1`, `F2`, `D` or `Q`; only a concrete same-slice
+   compile/safety `B0` may stay in the active PR;
+9. work outside the frozen row becomes a current owner follow-up or a dependency-ordered split; do not
+   repeatedly amend the active issue/packet and continue widening the same branch;
+10. open pull requests are merge candidates. Do not create new programme/tracking/gate PRs; coordinators
+    live as issues and repository documentation.
 
 The whole-project map is a phase/dependency and donor-reading guide, not blanket cross-package access.
-Its programme/gate rows authorize no source changes. An integration phase may change only its named
-owner, explicitly listed boundary adapters and actual reverse-consumer wiring. No new runtime controller
-or generic task/approval registry is authorized. Existing required legacy APIs may remain unchanged only
-until their named consumer cutover/removal owner; they cannot mint or substitute new-profile authority.
+Its programme/gate rows authorize no source changes. An integration slice may change only its named
+owner, explicitly listed boundary adapters and actual immediate reverse-consumer wiring. No new runtime
+controller or generic task/approval registry is authorized. Existing required legacy APIs may remain
+unchanged only until their named consumer cutover/removal owner; they cannot mint or substitute
+new-profile authority.
 
 This mechanism exists to make a package extraction or exact dependency cutover possible without telling
 agents to violate the nearest package instructions or granting broad cross-package permission.
 
+## Bounded merge train
+
+The single-writer model is a safety rule, not permission for a giant branch. Throughput comes from small,
+reviewable merges.
+
+Every active item is one of:
+
+```text
+PROGRAM    broad capability tracker; issue/docs only, never a code merge base
+SLICE      one causal source result delivered by one mergeable PR
+FOLLOW-UP  separately owned defect found outside the frozen slice
+GATE       evidence/qualification against exact candidate bytes
+```
+
+Default split triggers are:
+
+```text
+one primary state/effect owner
+at most two narrow adapter families
+at most 30 changed production files
+at most 2,500 changed production lines
+at most one persisted migration or one cross-owner cutover
+```
+
+These triggers do not permit omitted correctness. If crossed, stop feature work and split into
+ dependency-ordered PRs or obtain a reviewed exception before further source changes.
+
+New findings use this taxonomy:
+
+- `B0`: without the fix, the frozen result does not compile for its declared consumer, mints false
+  authority, corrupts data, widens access/disclosure or enables an unsafe path that cannot remain
+  fail-closed; it may block the PR;
+- `F1`: valid same-owner follow-up; file it and merge the bounded result;
+- `F2`: adjacent-owner follow-up; route it to that owner;
+- `D`: unchanged baseline harness/lint/topology debt; record once, not a slice gate;
+- `Q`: native/live/scale/release qualification; route to the named late gate.
+
+A finding becomes `B0` only with exact path, symbol, caller and causal evidence explaining why the
+behavior cannot remain unavailable, legacy-only or fail-closed.
+
+The manager may run read-only research for the next non-overlapping slice while the current PR is in final
+review. There are no stacked unmerged source PRs and no second lockfile writer.
+
 ## Required working method
 
-1. Read Architecture Part I, these root instructions, the nearest package instructions and named issue/PR
-   before editing.
-2. Use one branch/worktree per manager and one active writer per overlapping package scope.
-3. Fix product code first. Do not replace missing implementation with planning documents, registries,
+1. Read Architecture Part I, these root instructions, `docs/product/EXECUTION_PROTOCOL.md`, the nearest
+   package instructions and the exact source issue before editing.
+2. Record exact base SHA, owner, allowed paths, reverse consumers, non-goals, persisted-profile decision,
+   replacement boundary and minimum gates.
+3. Use one branch/worktree per manager and one active writer per overlapping package scope.
+4. Publish `SCOPE_FROZEN` by the second source commit. Later comments cannot silently add another caller
+   family, owner, schema, recovery protocol or lifecycle phase.
+5. Fix product code first. Do not replace missing implementation with planning documents, registries,
    schemas or evidence prose.
-4. Keep changes within the actual owning package. Cross-package composition belongs in the daemon or a
-   separately reviewed integration branch, except for an exact current addendum above.
-5. Use the existing Qdrant capabilities through `search-qdrant-bridge`; do not build a parallel inverted
+6. Keep changes within the actual owning package. Cross-package composition belongs in the daemon or a
+   separately reviewed integration slice, except for an exact current addendum above.
+7. Use the existing Qdrant capabilities through `search-qdrant-bridge`; do not build a parallel inverted
    index, vector store, filter engine or query database.
-6. Run the smallest meaningful compilation gate after each implementation slice:
+8. Run the smallest meaningful source gates:
 
    ```text
-   cargo +1.98.0 check --locked -p <package> --all-features
-   cargo +1.98.0 clippy --locked -p <package> --all-features -- -D warnings
+   cargo +1.98.0 check --locked -p <changed-owner> --all-features
+   cargo +1.98.0 clippy --locked -p <changed-owner> --all-features -- -D warnings
    ```
 
-   Use applicable target flags when the package is library-only. Full product/process tests are deferred
-   until implementation is complete unless a change requires an immediate focused proof.
-7. Never claim execution that was not performed at the exact revision.
-8. Keep GitHub Actions manual-only. Do not add push/pull-request triggers merely to obtain a build.
-9. Do not commit generated local paths, credentials, API keys, source contents or unredacted logs.
+   Add immediate reverse-consumer compilation for public API changes and only focused causal fixtures.
+   Capture broad known baseline failures once and compare once at final head; identical unrelated debt is
+   not a slice gate, while new diagnostics are.
+9. Obtain a formal review bound to the exact final head. A later load-bearing commit expires the review.
+10. Merge the coherent source slice when its declared gates pass. A programme issue may remain open; the
+    next independent owner does not wait for every follow-up or final qualification obligation.
+11. Never claim execution that was not performed at the exact revision.
+12. Keep GitHub Actions manual-only. Do not add push/pull-request triggers merely to obtain a build.
+13. Do not commit generated local paths, credentials, API keys, source contents or unredacted logs.
+14. Use the PR body as the current status record; do not add a long progress comment after every commit.
 
 ## Product invariants
 
