@@ -37,6 +37,8 @@ search-provider-protocol.workspace = true
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure"] }
 
 [target.'cfg(windows)'.dependencies]
+# Concrete canonical pipe owner; framing/pairing remain in the typed engine.
+search-provider-transport-windows.workspace = true
 # Concrete current-user Credential Manager effect owner. The client supplies
 # only the canonical locator digest; no token file or caller-selected target.
 search-os-secrets-windows = { path = "../../crates/search-runtime/search-os-secrets-windows" }
