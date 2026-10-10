@@ -101,7 +101,7 @@ impl<C: CancellationProbe> ResolvedNativeLocal<C> {
     }
 }
 
-impl<C> fmt::Debug for ResolvedNativeLocal<C> {
+impl<C: CancellationProbe> fmt::Debug for ResolvedNativeLocal<C> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ResolvedNativeLocal")
