@@ -65,7 +65,7 @@ Resolve conflicts in this order:
 
 Part II and P00/ticket/lease material are historical scaffolding. They cannot authorize or block current product work. `swarm/launch-state.toml`, ticket drafts, context manifests, leases, submissions, reviews and handoffs are repository history, not runtime inputs or implementation authority.
 
-A maintainer request or exact issue plus one non-overlapping writer worktree is sufficient authorization. Do not build controller machinery inside Search. Residual controller tooling is removal work under #214.
+A maintainer request or exact ready issue plus the sole active writer worktree is sufficient authorization, subject to the live queue. Only one source branch/PR may be active; each successor starts from newly merged `main`. An independent non-overlapping branch is not an exception. Do not build controller machinery inside Search. Residual controller tooling is removal work under #214.
 
 ## Queue authority and project maps
 
@@ -75,7 +75,7 @@ These sources have different jobs:
 2. `docs/product/EXECUTION_PROTOCOL.md` defines repository execution.
 3. Programme issue #352, `docs/audit/AGENT_LAUNCH_GATE_2026-10-09.md`, the exact active issue/PR and current merged source define the **live writer queue**.
 4. `docs/product/PROJECT_COMPLETION.md` is the long-range obligation/dependency graph. Its dated “next task”, base SHA or local stage wording is not live scheduling authority.
-5. Audit files retain evidence and findings; they do not authorize source changes.
+5. Audit evidence does not authorize source changes. The launch gate, Wave-2 packet and package-exception matrix explicitly named below are accepted execution/path addenda, limited by the exact ready issue and sole-writer queue; other audit files remain evidence only.
 
 When the completion map is stale, follow #352, the launch gate, merged artifacts and the exact issue; update the map separately. Never repeat delivered work because an old row remains present.
 
@@ -168,9 +168,9 @@ A B0 claim names exact path, symbol, caller and causal chain. “Related to the 
    cargo +1.98.0 clippy --locked -p <changed-owner> --all-features -- -D warnings
    ```
 
-   Add immediate reverse-consumer compilation for public API changes and focused causal fixtures only.
-9. Capture broad known baseline failures once and compare once at final head. Identical unrelated debt is not a slice gate; new diagnostics are.
-10. Obtain a formal review bound to the exact final head. A load-bearing commit expires earlier review.
+   Select production targets (`--lib`/`--bins` as applicable), including immediate reverse consumers. Source gates are production check, strict Clippy and affected static guards. Specify focused tests with their source slice, but defer execution to integrated qualification; no all-target, runtime, native or fault suite is a source merge gate. Tiny debugging runs are diagnostic evidence only.
+9. Reuse recorded unrelated baseline debt. If a production gate fails, compare its relevant base/candidate diagnostics once. Do not rebuild broad harness graphs for every source slice. New candidate production diagnostics block.
+10. Obtain a formal review bound to the exact final head, with no unresolved B0/P1 and explicit F1/F2/D/Q dispositions. A load-bearing commit expires earlier review. In a single-owner repository, a formal COMMENT review may record the independent reviewer result and manager disposition; self-approval is not required.
 11. Merge the coherent source slice when declared gates pass. Create the successor branch only from the newly merged `main`.
 12. Never claim execution not performed at the exact revision.
 13. Keep Actions manual-only; do not add push/PR triggers just to obtain a build.
@@ -178,6 +178,8 @@ A B0 claim names exact path, symbol, caller and causal chain. “Related to the 
 15. Keep the PR body as the current status record; do not post a long progress comment after every commit.
 
 Read-only research for the next non-overlapping slice may run while the current PR is in final review, but no successor source branch/PR is opened before merge.
+
+PROCESS/DOCS PRs change no product source, manifests, lockfile or workflows. Any source-changing PR is a SLICE and obeys the sole-source-PR rule regardless of label. After #351, do not open another process programme PR until three bounded source slices merge, unless a verified B0 contradiction prevents source work.
 
 ## Product invariants
 

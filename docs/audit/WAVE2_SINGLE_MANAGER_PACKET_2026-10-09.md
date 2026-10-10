@@ -28,12 +28,13 @@ These are scoped source deliveries, not installed product acceptance.
 
 ## 2. Current writer slice
 
-The current programme is #266. Draft PR #344 contains substantive root-admission code but expanded to 119 files and multiple owner families. It is governed by #349/#350.
+The current programme is #266. PR #344 is closed unmerged and frozen at `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`; it is a read-only donor, not an active writer. Source-free PR #351 must merge before the first dependency-ready #354 child opens. #355/#356/#358 are PROGRAM parents; each requires an exact executable child before coding.
 
 Before more source work:
 
 ```text
-freeze current scope
+preserve frozen donor and merge #351
+→ freeze ready child/extraction manifest against new main
 → classify remaining findings
 → select only the first dependency-safe tranche
 → open/review/merge that tranche
@@ -84,7 +85,8 @@ at most two narrow adapter families
 immediate reverse consumers
 persisted-byte/profile disposition
 legacy replacement/deletion owner
-minimum check/Clippy/focused fixtures
+minimum production check/Clippy/static guards
+deferred test inventory and qualification owner
 known baseline failures
 non-goals and adjacent owners
 ```
@@ -148,11 +150,11 @@ For every tranche:
 locked Rust 1.98 check for changed owners
 immediate reverse-consumer compilation for public APIs
 strict Clippy for the same production closure
-focused causal fixtures with nonzero cases
 affected source guards
+deferred integrated test inventory
 ```
 
-Capture broad baseline failures once and compare once at final head. New candidate diagnostics block. Identical unrelated baseline debt is `D`, not a source gate.
+Production targets only (`--lib`/`--bins` as applicable). Do not run all-target/runtime/native/fault suites as source merge gates. Specify tests with their owning slice and execute them during integrated qualification. Tiny diagnostic runs are debugging only. Reuse recorded broad baseline debt; compare relevant failing production diagnostics once. New candidate production diagnostics block.
 
 Do not repair the entire all-target graph inside an unrelated branch. Full workspace, native Windows, live Qdrant, fault, scale and release evidence remain late gates.
 
@@ -160,7 +162,7 @@ Do not repair the entire all-target graph inside an unrelated branch. Full works
 
 One writer and one active source PR are mandatory. The PR body is the current status record; do not post a long progress comment after every commit.
 
-Before merge, require formal review bound to the final SHA. A security-review badge, signature, guard or author statement is not independent acceptance.
+Before merge, require formal review bound to the final SHA, no unresolved B0/P1 and explicit remaining dispositions. A formal COMMENT may record independent reviewer evidence and manager disposition in a single-owner repository; self-approval is not required. A badge alone is insufficient.
 
 A programme issue may remain open after a slice merges. The next independent owner begins once its actual artifact is on `main`, not when every prior follow-up is closed.
 

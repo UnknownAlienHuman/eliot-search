@@ -9,9 +9,10 @@ One manager owns commits, root dependency pins and `Cargo.lock`. An exception pe
 |---|---|---|---|
 | #256 completed | `search-point-identity` | focused profile/docs/fixtures and exact ledger rows | deleting imported legacy exports before #329; daemon/planner rewrite |
 | #257 completed | `search-unitizer` | one named materializer ingress, focused docs/fixtures/ledger | daemon/planner/store integration; provisional second UnitSet |
-| #266.A root admission | `search-runtime-owner`, daemon `owner_composition` | existing-only root open helpers, explicit initialization, narrow immediate command/caller assembly | source/query/Qdrant/provider redesign; control schema; second root catalogue |
-| #266.B focused lifecycle proof | same owners after A merges | only production seams and fixtures required to prove A's lifecycle invariants | general harness repair; unrelated migration/recovery owners |
-| #266.C catalog evidence | owner-private catalog intent/recovery observation after B merges | retained input/release, bounded named inspection/discovery, exact focused callers | effect reconciliation, deletion qualification, redb repair, ordinary recovery authority |
+| #354 readiness/split | `search-runtime-owner` root admission first | exact issue must freeze transitive API closure; initialization is a later serial slice with reviewed initialization-only DirectStore dependencies | broad `owner_composition/**`; unready source branch; catalog evidence; general harness repair |
+| #355 PROGRAM | existing-only normal caller cutover | first exact child issue must name one owner and at most two adapters; branch only after prerequisite merges | source branch from this broad parent; preparation/migration context work |
+| #356/#358 PROGRAM | DIRECT context / migration sequences | separately freeze and merge exact children one at a time | broad caller-family branches; stacked PRs; unrelated owner repair |
+| #357 catalog evidence | owner-private catalog intent/recovery observation | retained input/release, bounded named inspection/discovery, exact frozen callers | effect reconciliation, deletion qualification, redb repair, ordinary recovery authority |
 | #235.core | new `search-provider-client` | typed CLI client move/deletion, workspace member/lockfile, narrow CLI wiring | daemon internals; TCP/token/line protocol promotion; native cutover |
 | #238 | `search-config` | exact TOML/Serde pins, docs, shared exact-byte SHA exception | runtime apply/readiness/argv; silent old-digest change |
 | #241 | `search-source-admission` | exact GlobSet pin/lockfile/docs; shared digest compatibility API | ingestion/safe-reader/root/registry mutation; ignore walker |
@@ -30,22 +31,24 @@ Programme issue #352 and the launch gate define the live writer sequence. `PROJE
 ## Current serial merge train
 
 ```text
-#266.A merge
-→ #266.B branch from new main and merge if required
-→ #266.C branch from next main and merge if required
-→ minimum typed root API available
+#351 process merge
+→ first dependency-ready #354 child from new main
+→ exact initialization/caller-cutover children from successive main
+→ minimum typed root API and required normal callers available
 → #235.core
 → #238 → #241 → #246 → #252
 → #226 Markdown → #226 JATS
 ```
 
-Do not open B while A is unmerged, C while B is unmerged, or any other stacked source PR. Read-only research may proceed without a source branch.
+PR #344 is closed unmerged and frozen at `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`. No commits are added to the donor. No source successor opens before #351 merges. Each child requires an extraction manifest and starts only from newly merged `main`; read-only research may proceed without a source branch.
+
+Every slice includes its required fixture/source seams and specifies their deferred integrated qualification inventory. There is no separate later proof tranche required to establish an earlier slice's own source boundary. Source gates are production check/strict Clippy/static guards; no all-target, runtime, native or fault test merge gate.
 
 `#235.core` requires only the minimum root API it actually consumes. It does not wait for every #266 follow-up, harness, cleanup, redb inspection or final qualification item.
 
 ## #266 follow-up boundary
 
-PR #344 exceeded every default split trigger. Issues #349/#350 require scope freeze or serial extraction.
+PR #344 exceeded every default split trigger. Issues #349/#350 require frozen-donor serial extraction.
 
 Separate unless an exact `B0` dependency is proved:
 
@@ -55,6 +58,7 @@ Separate unless an exact `B0` dependency is proved:
 #346 remaining all-target fixture compilation
 #347 native original-object intent unlink / late cleanup
 #348 original request to durable-effect reconciliation
+#360 partial-initialization reconciliation/abandon
 ```
 
 The #266 tranches may keep these operations unavailable/fail-closed. They may not fabricate success, clear evidence automatically or widen ordinary authority.

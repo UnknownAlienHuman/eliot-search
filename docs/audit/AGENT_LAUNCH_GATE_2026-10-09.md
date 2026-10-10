@@ -17,8 +17,9 @@ Shared indexed contract/tooling:         MERGED
 S11 point identity #256:                 MERGED via #338
 UnitSet v3 #257:                         MERGED via #342
 Rustls repair #327:                      MERGED via #341
-Current writer slice:                    #266 / draft PR #344
-PR #344 disposition:                     FREEZE OR SERIAL-SPLIT
+Current writer:                          process PR #351, source-free
+PR #344 disposition:                     CLOSED UNMERGED / FROZEN DONOR 6d698ea
+Next source slice:                       dependency-ready #354 child after #351
 Next independent owner after root API:   #235.core
 Installed product / release:             NOT QUALIFIED
 ```
@@ -37,7 +38,7 @@ Definition of Ready
 → bounded subagent reports
 → manager implementation
 → changed owners + immediate reverse-consumer gates
-→ focused causal fixtures
+→ affected static guards + deferred test inventory
 → formal exact-head review
 → merge
 → next branch from new main
@@ -51,9 +52,9 @@ PR #344 has 119 changed files and more than 11,000 additions. It must not contin
 
 The manager must:
 
-1. publish one final `SCOPE_FROZEN` inventory;
+1. preserve the closed #344 donor at exact `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce` without new commits;
 2. classify every remaining finding `B0`, `F1`, `F2`, `D` or `Q`;
-3. choose only the first dependency-safe tranche;
+3. merge #351, make #354 dependency-ready and choose only its first exact tranche; #355/#356/#358 are PROGRAM parents, not source branch authority;
 4. open/review/merge tranche 1;
 5. publish the new `main` SHA;
 6. create tranche 2 from that new `main`; repeat serially as needed;
@@ -82,10 +83,10 @@ For each source tranche:
 - Rust 1.98 locked check for changed owners;
 - immediate reverse-consumer compilation for public API changes;
 - strict Clippy for that production closure;
-- focused nonzero causal fixtures;
+- specify deferred unit/integration/native/crash/fault inventory with its qualification owner;
 - affected source guards.
 
-Capture broad baseline failures once and compare once at final head. Unchanged pre-existing debt does not block; new candidate diagnostics do.
+Use production targets only (`--lib`/`--bins` as applicable). Tests execute during integrated qualification, not as source merge gates. Tiny debugging runs are diagnostic only. Reuse recorded broad baseline debt; compare only relevant failing production diagnostics once. New candidate production diagnostics block.
 
 Full workspace, installed Windows, live Qdrant, fault, scale, disclosure and release evidence remain #264/#215/#140 or exact named gates.
 
@@ -93,7 +94,7 @@ Full workspace, installed Windows, live Qdrant, fault, scale, disclosure and rel
 
 Open PR means merge candidate. Do not open new programme/tracking/gate PRs. Historical non-mergeable PRs are closed after current owner links are preserved.
 
-The PR body is the current status record. Do not add a long progress comment after every commit. A security-review badge, source guard, signature or author statement is not independent acceptance.
+The PR body is the current status record. Formal review binds the final SHA, no unresolved B0/P1, and explicit F1/F2/D/Q dispositions. Self-approval is not required; a formal COMMENT submission may record independent reviewer evidence and manager disposition. A badge alone is insufficient. PROCESS/DOCS are source-free. After #351, three bounded source merges precede another process programme PR unless a verified B0 prevents coding.
 
 ## Delivered evidence scope
 

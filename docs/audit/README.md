@@ -2,7 +2,7 @@
 
 **Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.  
 **Live programme queue:** issue #352.  
-**Active source programme:** #266, draft PR #344.  
+**Source programme:** #266; PR #344 closed unmerged/frozen at `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`.
 **Process correction:** #349 and #350 / PR #351.  
 **Product/release:** not qualified.
 
@@ -36,7 +36,7 @@ These are scoped source deliveries, not installed/native/Qdrant/full-product acc
 
 ## Current active work
 
-PR #344 contains substantive #266 typed root-admission work, but exceeded every default review threshold: 119 changed files, more than 11,000 additions and several owner families. Issues #349/#350 require scope freeze or serial splitting.
+PR #344 preserves substantive #266 work as a frozen read-only donor. Merge source-free #351 first, then open only the first dependency-ready #354 child from that new `main` with extraction provenance. #355/#356/#358 are PROGRAM parents and cannot authorize broad source branches.
 
 Separate follow-ups discovered during #266:
 
@@ -62,7 +62,7 @@ ready slice
 → bounded subagent reports
 → manager implementation
 → changed owners + immediate reverse-consumer check/Clippy
-→ focused causal fixtures
+→ affected static guards + deferred integrated test inventory
 → formal exact-final-SHA review
 → merge
 → publish new main SHA
@@ -70,6 +70,8 @@ ready slice
 ```
 
 No stacked source PRs. New findings are classified `B0`, `F1`, `F2`, `D` or `Q`; they do not automatically widen the active branch.
+
+PROCESS/DOCS are source-free. Source merges use minimum production check/strict Clippy/static guards; tests are specified with their owner and deferred to integrated qualification. Reuse existing broad debt rather than rebuilding harnesses per slice. Formal final-SHA review records no unresolved B0/P1 and explicit residual dispositions; self-approval is not required. After #351, three bounded source merges precede another process programme PR unless a verified B0 blocks coding.
 
 ## Programme bindings
 
