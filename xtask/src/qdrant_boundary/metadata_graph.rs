@@ -23,6 +23,35 @@ const DIAGNOSTICS_TRUNCATED: &str =
 type Packages<'a> = BTreeMap<&'a str, &'a CargoPackage>;
 type Nodes<'a> = BTreeMap<&'a str, &'a CargoNode>;
 
+#[cfg(not(windows))]
+fn same_manifest_path(left: &std::path::Path, right: &std::path::Path) -> bool {
+    left == right
+}
+
+#[cfg(windows)]
+fn same_manifest_path(left: &std::path::Path, right: &std::path::Path) -> bool {
+    use std::path::{Component, Prefix};
+    let mut left = left.components();
+    let mut right = right.components();
+    loop {
+        match (left.next(), right.next()) {
+            (None, None) => return true,
+            (Some(Component::Prefix(a)), Some(Component::Prefix(b))) => {
+                let equal = match (a.kind(), b.kind()) {
+                    (Prefix::Disk(a) | Prefix::VerbatimDisk(a),
+                     Prefix::Disk(b) | Prefix::VerbatimDisk(b)) => a == b,
+                    (Prefix::UNC(a, x) | Prefix::VerbatimUNC(a, x),
+                     Prefix::UNC(b, y) | Prefix::VerbatimUNC(b, y)) => a == b && x == y,
+                    (a, b) => a == b,
+                };
+                if !equal { return false; }
+            }
+            (Some(a), Some(b)) if a == b => {}
+            _ => return false,
+        }
+    }
+}
+
 /// Check complete metadata. A no-deps inventory cannot prove this boundary.
 #[must_use]
 pub(super) fn validate_graph(inventory: &CargoInventory, expected_version: &str) -> Vec<String> {
@@ -287,7 +316,7 @@ impl<'a> Graph<'a> {
             .workspace_members
             .iter()
             .filter_map(|id| self.packages.get(id.as_str()).copied())
-            .filter(|package| package.manifest_path == expected_manifest)
+            .filter(|package| same_manifest_path(&package.manifest_path, &expected_manifest))
             .collect();
         let [bridge] = candidates.as_slice() else {
             errors.push(format_args!(
@@ -611,6 +640,44 @@ mod tests {
             r"\\?\C:\fixture\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml",
         );
         assert!(validate_graph(&inventory, VERSION).is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_mixed_metadata_prefixes_preserve_the_bridge_boundary() {
+        for (root, manifest) in [
+            (r"\\?\C:\fixture", r"C:\fixture\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml"),
+            (r"C:\fixture", r"\\?\C:\fixture\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml"),
+            (r"\\?\UNC\server\share\fixture", r"\\server\share\fixture\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml"),
+            (r"\\server\share\fixture", r"\\?\UNC\server\share\fixture\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml"),
+        ] {
+            let mut inventory = inventory();
+            inventory.workspace_root = PathBuf::from(root);
+            package_mut(&mut inventory, "bridge-id").manifest_path = PathBuf::from(manifest);
+            assert!(validate_graph(&inventory, VERSION).is_empty(), "{root}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_prefix_equivalence_never_admits_foreign_or_literal_paths() {
+        for manifest in [
+            r"D:\fixture\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml",
+            r"C:\foreign\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml",
+            r"\\?\C:\fixture\crates/search-index-qdrant/search-qdrant-bridge/Cargo.toml",
+            r"\\.\C:\fixture\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml",
+            r"C:\fixture\crates\search-index-qdrant\search-qdrant-bridge\Cargo.toml\extra",
+        ] {
+            let mut inventory = inventory();
+            inventory.workspace_root = PathBuf::from(r"\\?\C:\fixture");
+            package_mut(&mut inventory, "bridge-id").manifest_path = PathBuf::from(manifest);
+            assert_error(&inventory, "expected one workspace search-qdrant-bridge at");
+            assert_error(&inventory, "forbidden production dependency path");
+        }
+        assert!(!same_manifest_path(
+            std::path::Path::new(r"\\?\UNC\server\share\Cargo.toml"),
+            std::path::Path::new(r"\\server\other\Cargo.toml"),
+        ));
     }
 
     fn package(id: &str, name: &str) -> CargoPackage {
