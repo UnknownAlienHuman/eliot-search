@@ -124,7 +124,7 @@ Repeated “narrow continuation” comments are not a substitute for scope freez
 
 ## 4. Finding triage
 
-Every new source/review finding receives exactly one disposition.
+Every actual finding receives exactly one disposition.
 
 ### B0 — same-slice blocker
 
@@ -155,6 +155,14 @@ The failure existed on the accepted base and the candidate adds no normalized di
 The finding requests installed/native/live-Qdrant/fault/scale/release evidence. Route it to #215, #264 or the named gate. Do not expand source scope to simulate acceptance.
 
 A finding becomes B0 only when the manager demonstrates why the frozen result cannot safely remain fail-closed, unavailable or legacy-only. The burden is on widening the PR.
+
+A subagent report preserves this exact five-way classification for each finding:
+
+```text
+B0 | F1 | F2 | D | Q
+```
+
+If no finding exists in the assigned scope, report `NO_FINDING`. Do not collapse F1/F2 into a generic follow-up or convert D/Q into a blocker.
 
 ---
 
@@ -222,19 +230,19 @@ Use only roles relevant to the active slice.
 | Authority/caller map | exact owner, callers, reverse consumers, duplicate paths |
 | Donor/supply-chain | exact source/version/checksum/license/MSRV/features/advisories |
 | Compatibility/deletion | persisted-byte disposition and legacy deletion owner |
-| Recovery/security red-team | B0 or follow-up findings with exact causal evidence |
-| Bounds/allocation | pre-allocation/effect ceilings and deadline/cancellation gaps |
-| Focused fixtures | smallest causal cases, no broad test programme |
-| Diff/API review | public/private delta, unused compatibility and scope escapes |
-| Final exact-head review | blocking findings or scoped `APPROVE_SOURCE` at one SHA |
+| Recovery/security red-team | findings individually classified B0/F1/F2/D/Q, or `NO_FINDING` |
+| Bounds/allocation | findings individually classified B0/F1/F2/D/Q, or `NO_FINDING` |
+| Focused fixtures | smallest causal cases; any discovered gaps classified B0/F1/F2/D/Q |
+| Diff/API review | API delta and scope escapes, each classified B0/F1/F2/D/Q |
+| Final exact-head review | blocking B0 findings, nonblocking F1/F2/D/Q, or `APPROVE_SOURCE` |
 
 Rules:
 
 - one pre-code research pass and one final exact-head review pass;
 - no repeated full-repository audit after every commit;
 - no subagent-created architecture or scope amendment;
-- every finding ends with `B0`, `FOLLOW_UP(owner)` or `NO_BLOCKER`;
-- duplicate reports are consolidated;
+- preserve the five-way disposition for every finding;
+- consolidate duplicate reports;
 - the manager independently verifies load-bearing claims;
 - a later load-bearing commit expires prior review.
 
