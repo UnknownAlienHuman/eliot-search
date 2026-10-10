@@ -83,7 +83,7 @@ impl TypedClientError {
     /// can occur both before and after writing. This does not classify earlier
     /// pending operations or authorize replay after the session is dropped.
     #[must_use]
-    pub fn outcome_class(&self) -> OutcomeClass {
+    pub const fn outcome_class(&self) -> OutcomeClass {
         match self {
             Self::TrustedBindingRequired
             | Self::GrantRequired
