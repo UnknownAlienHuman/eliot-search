@@ -1,6 +1,7 @@
 //! Single-owner typed record I/O. Each operation keeps its original deadline.
 
 use std::io::{self, Read, Write};
+#[cfg(any(feature = "legacy-loopback-compatibility", test))]
 use std::net::TcpStream;
 use std::task::Poll;
 use std::time::{Duration, Instant};
@@ -34,6 +35,7 @@ pub(super) trait LocalByteStream: Read + Write {
     fn configure_local(&self) -> Result<(), TypedClientError>;
 }
 
+#[cfg(any(feature = "legacy-loopback-compatibility", test))]
 impl LocalByteStream for TcpStream {
     fn configure_local(&self) -> Result<(), TypedClientError> {
         if !self.peer_addr()?.ip().is_loopback() || !self.local_addr()?.ip().is_loopback() {
@@ -44,7 +46,6 @@ impl LocalByteStream for TcpStream {
     }
 }
 
-#[cfg(windows)]
 impl LocalByteStream for search_provider_transport_windows::NativeLocalConnection {
     fn configure_local(&self) -> Result<(), TypedClientError> {
         // The concrete owner already checked/configured its sole canonical
@@ -69,6 +70,7 @@ pub(super) struct SetupBudget<'a> {
 }
 
 impl<'a> SetupBudget<'a> {
+    #[cfg(any(feature = "legacy-loopback-compatibility", test))]
     pub(super) fn new(
         duration: Duration,
         cancelled: &'a dyn Fn() -> bool,
@@ -103,6 +105,7 @@ pub(super) struct SocketIo {
 }
 
 impl SocketIo {
+    #[cfg(feature = "legacy-loopback-compatibility")]
     pub(super) fn new(stream: TcpStream) -> Self {
         Self::from_local_stream(stream)
     }
@@ -262,7 +265,6 @@ impl SocketIo {
                 Ok(()) => break,
                 Err(error) if retryable(&error) => {
                     pause_retry(&error, left);
-                    continue;
                 }
                 Err(error) => return Err(error.into()),
             }
@@ -297,7 +299,6 @@ impl SocketIo {
                 Ok(()) => break,
                 Err(error) if retryable(&error) => {
                     pause_retry(&error, left);
-                    continue;
                 }
                 Err(error) => return Err(error.into()),
             }

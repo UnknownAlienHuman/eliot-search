@@ -1,0 +1,25 @@
+[package]
+name = "search-provider-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+readme = "README.md"
+
+[features]
+default = []
+# Retained old API only; native/CLI cutover and deletion belong to #332.
+legacy-loopback-compatibility = []
+
+[dependencies]
+search-contracts.workspace = true
+search-ports.workspace = true
+search-provider-protocol.workspace = true
+search-provider-transport-windows.workspace = true
+# Exact accepted wire transcripts; existing shared prefixing helpers differ.
+blake3.workspace = true
+
+[lints]
+workspace = true

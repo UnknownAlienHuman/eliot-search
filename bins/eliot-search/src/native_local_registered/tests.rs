@@ -95,8 +95,8 @@ mod fixtures {
         assert_eq!(keys.calls, 1);
         assert_eq!(name, registration.endpoint_name());
         assert_eq!(
-            binding.trusted_installation_id(),
-            Some(InstallationId::from_bytes([1; 16]))
+            binding.installation_id(),
+            InstallationId::from_bytes([1; 16])
         );
         assert_eq!(narrowed.request_id(), context.request_id());
         assert_eq!(narrowed.budget_ref(), context.budget_ref());

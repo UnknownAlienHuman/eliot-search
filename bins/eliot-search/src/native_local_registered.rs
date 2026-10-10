@@ -23,7 +23,7 @@ use search_provider_protocol::{
 };
 
 use crate::native_registered::NativePairingKeySource;
-use crate::provider_client::{NativeClientBinding, TypedClientError};
+use crate::provider_client::{NativeClientExpectations, TypedClientError};
 
 const NATIVE_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion { major: 1, minor: 0 };
 
@@ -84,7 +84,7 @@ impl NativeLocalRegistration {
 /// validation remain mandatory.
 pub(crate) struct ResolvedNativeLocal<C: CancellationProbe> {
     endpoint_name: NativeEndpointNameV1,
-    binding: NativeClientBinding,
+    binding: NativeClientExpectations,
     key: BindingKey,
     context: OperationContext<C>,
     // Authoritative resolver origin; the relative context is advisory metadata.
@@ -98,7 +98,7 @@ impl<C: CancellationProbe> ResolvedNativeLocal<C> {
         self,
     ) -> (
         NativeEndpointNameV1,
-        NativeClientBinding,
+        NativeClientExpectations,
         BindingKey,
         OperationContext<C>,
         Instant,
@@ -208,7 +208,7 @@ where
 
     let range = ProtocolRange::new(NATIVE_PROTOCOL_VERSION, NATIVE_PROTOCOL_VERSION)
         .map_err(|_| ProtocolError::InvalidVersion)?;
-    let binding = NativeClientBinding::new_trusted(
+    let binding = NativeClientExpectations::new(
         registration.installation_id,
         registration.installation_incarnation_id,
         registration.binding_id,

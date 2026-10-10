@@ -55,7 +55,7 @@ pub(super) struct State {
 }
 
 impl State {
-    pub(super) fn new(
+    pub(super) const fn new(
         socket: SocketIo,
         binding: BindingContext,
         pairing: VerifiedPairing,
@@ -249,8 +249,9 @@ impl State {
         envelope: &ProviderEnvelope,
     ) -> Result<ResponseUpdate, TypedClientError> {
         let id = envelope.request_id;
-        if let Some(cancel) = &self.cancel {
-            if cancel.id == id {
+        if let Some(cancel) = &self.cancel
+            && cancel.id == id
+        {
                 return match &envelope.body {
                     ProviderBodyV1::Cancelled(value)
                         if value.target_request_id == cancel.target =>
@@ -259,7 +260,6 @@ impl State {
                     }
                     _ => Err(TypedClientError::ResponseMismatch),
                 };
-            }
         }
         let pending = self
             .requests
@@ -287,10 +287,10 @@ impl State {
                 if value.result.recipe_id() != pending.recipe {
                     return Err(TypedClientError::ResponseMismatch);
                 }
-                if let RecipeResultV1::ExecuteExactScan(report) = &value.result {
-                    if pending.exact_plan != Some(report.plan_ref) {
+                if let RecipeResultV1::ExecuteExactScan(report) = &value.result
+                    && pending.exact_plan != Some(report.plan_ref)
+                {
                         return Err(TypedClientError::ResponseMismatch);
-                    }
                 }
                 // P00 results carry coverage, not a universal success flag.
                 // Return those typed fields unchanged; never guess exit-zero.
@@ -306,7 +306,7 @@ impl State {
         }
     }
 
-    fn envelope(
+    const fn envelope(
         &self,
         id: RequestId,
         sequence: u64,
@@ -334,7 +334,7 @@ impl State {
             .ok_or(ProtocolError::SequenceExhausted)
     }
 
-    fn versions(&self) -> ProtocolRange {
+    const fn versions(&self) -> ProtocolRange {
         ProtocolRange {
             minimum: self.binding.version(),
             maximum: self.binding.version(),

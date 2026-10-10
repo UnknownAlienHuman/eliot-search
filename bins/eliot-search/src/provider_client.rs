@@ -1,28 +1,14 @@
-//! Canonical provider client facade with an explicit typed transport handoff.
+//! CLI composition over the reusable typed client and retained legacy facade.
 //!
-//! The transport entrypoints in `core.rs` use bounded private exchange and
-//! control-line parsers; no second session or verification path is created.
-//! This facade adds the indexed-query request mode without duplicating the
-//! pairing, framing, proof or response-verification machinery.
+//! Typed session mechanics belong to search-provider-client. The old core and
+//! its line/TCP helpers remain separate legacy ownership until #332 removes them.
 
 mod core;
-mod typed;
+mod local;
 
-// Explicit paired-socket handoff; never upgrades the development token shim.
-pub use typed::{NativeClientBinding, TypedClientError, TypedProviderSession};
-
-/// Conservative submission evidence for the call that returned an error.
-///
-/// This describes only that failed call. Earlier outstanding operations may
-/// still have unknown outcomes after session teardown. Neither class proves
-/// rollback, remote execution or permission to replay an operation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OutcomeClass {
-    /// A local guard proves this call did not submit a command to the peer.
-    DefinitelyNotSubmitted,
-    /// Submission cannot be determined from this error alone.
-    Unknown,
-}
+pub use search_provider_client::{NativeClientExpectations, TypedClientError, TypedProviderSession};
+#[cfg(feature = "legacy-loopback-harness")]
+pub use search_provider_client::NativeClientBinding;
 
 use std::net::SocketAddr;
 use std::path::Path;

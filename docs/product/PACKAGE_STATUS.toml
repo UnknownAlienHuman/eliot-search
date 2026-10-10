@@ -328,3 +328,15 @@ check_clippy_evidence = "exact_pass"
 # Concrete source foundation only; no installed command cutover/native proof.
 live_native_qualified = false
 public_capability_enabled = false
+
+[[package]]
+name = "search-provider-client"
+path = "crates/search-provider-client"
+execution_chain = ["#235", "#373", "#332"]
+consumers = ["#332"]
+product_path = "partial"
+check_clippy_evidence = "exact_pass"
+# Scoped library --no-deps gate only; unchanged CLI/protocol debt is separate.
+# Source extraction does not qualify native startup or an installed baseline.
+live_native_qualified = false
+public_capability_enabled = false

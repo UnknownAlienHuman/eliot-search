@@ -25,9 +25,10 @@ test = true
 default = []
 # Retains the obsolete address/token-file CLI only for existing process fixtures.
 # Final product startup must never enable or fall back to this feature.
-legacy-loopback-harness = []
+legacy-loopback-harness = ["search-provider-client/legacy-loopback-compatibility"]
 
 [dependencies]
+search-provider-client.workspace = true
 search-contracts.workspace = true
 search-ports.workspace = true
 search-config.workspace = true

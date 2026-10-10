@@ -39,6 +39,10 @@ impl TypedProviderSession {
     /// The canonical grant envelope and body use two typed/MAC records, then two
     /// authenticated response records are read under the same absolute deadline.
     /// Any refusal, partial I/O, mismatch or unwind drops the entire session.
+    ///
+    /// # Errors
+    /// Rejects missing trust, repeat grant commands, refused/mismatched claims,
+    /// invalid records/proofs, expired deadlines and transport failures.
     pub fn request_standalone_grant(
         &mut self,
         request_id: RequestId,
@@ -52,6 +56,8 @@ impl TypedProviderSession {
 }
 
 impl State {
+    // Retain the exact existing owned command and fixture boundary on extraction.
+    #[allow(clippy::needless_pass_by_value)]
     fn request_standalone_grant(
         &mut self,
         request_id: RequestId,

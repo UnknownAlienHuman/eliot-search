@@ -21,8 +21,8 @@ mod fixtures {
     };
 
     use super::super::{State, TypedClientError, TypedProviderSession, validate_claims};
-    use crate::provider_client::OutcomeClass;
-    use crate::provider_client::typed::io::{LocalByteStream, SocketIo};
+    use crate::OutcomeClass;
+    use crate::typed::io::{LocalByteStream, SocketIo};
 
     #[derive(Default)]
     struct Counts {

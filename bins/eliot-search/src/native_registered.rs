@@ -19,12 +19,18 @@ use search_contracts::{
     NonZeroRevision, OpaqueRef, ProfileId,
 };
 use search_provider_protocol::{
-    BindingKey, NativeEndpointDescriptorV1, ProofDigest, ProtocolError, ProtocolLimits,
+    BindingKey, NativeEndpointDescriptorV1, ProtocolError,
     MAX_NATIVE_ENDPOINT_DESCRIPTOR_BYTES, decode_native_endpoint_descriptor,
-    native_endpoint_descriptor_transcript, verify_proof,
 };
 
-use crate::provider_client::{NativeClientBinding, TypedClientError, TypedProviderSession};
+use crate::provider_client::TypedClientError;
+#[cfg(feature = "legacy-loopback-harness")]
+use crate::provider_client::{NativeClientBinding, TypedProviderSession};
+
+#[cfg(feature = "legacy-loopback-harness")]
+use search_provider_protocol::{
+    ProofDigest, ProtocolLimits, native_endpoint_descriptor_transcript, verify_proof,
+};
 
 const NATIVE_DESCRIPTOR_PATH: [&str; 2] = ["runtime", "native-endpoint.v1"];
 
@@ -257,6 +263,7 @@ pub fn read_native_endpoint_descriptor(
 /// pairing and typed-profile handshake. The key source receives only the
 /// canonical locator digest. A missing/conflicting key, invalid descriptor
 /// proof or any setup failure closes without retry or legacy fallback.
+#[cfg(feature = "legacy-loopback-harness")]
 pub fn open_registered_native<C, S>(
     descriptor: &NativeEndpointDescriptorV1,
     expected: &NativeEndpointExpectation,
