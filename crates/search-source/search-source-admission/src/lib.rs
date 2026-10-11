@@ -474,18 +474,53 @@ pub struct ConfigSectionInput {
 }
 
 /// Validated `source_admission` configuration.
+///
+/// Produced by [`validate_section`], with immutable access to validated data.
+/// This value grants no applied-effect or source-admission authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ValidatedAdmissionConfig {
     /// Accepted bootstrap policy profile.
-    pub bootstrap_policy_profile: String,
+    bootstrap_policy_profile: String,
     /// Validated maximum file bytes.
-    pub max_file_bytes: u64,
+    max_file_bytes: u64,
     /// Validated generated-source permission.
-    pub allow_generated: bool,
+    allow_generated: bool,
     /// Validated vendor-source permission.
-    pub allow_vendor: bool,
+    allow_vendor: bool,
     /// Validated binary-source permission.
-    pub allow_binary: bool,
+    allow_binary: bool,
+}
+
+impl ValidatedAdmissionConfig {
+    /// Accepted bootstrap policy profile for this section.
+    #[must_use]
+    pub fn bootstrap_policy_profile(&self) -> &str {
+        &self.bootstrap_policy_profile
+    }
+
+    /// Validated maximum file bytes.
+    #[must_use]
+    pub const fn max_file_bytes(&self) -> u64 {
+        self.max_file_bytes
+    }
+
+    /// Validated generated-source permission flag.
+    #[must_use]
+    pub const fn allow_generated(&self) -> bool {
+        self.allow_generated
+    }
+
+    /// Validated vendor-source permission flag.
+    #[must_use]
+    pub const fn allow_vendor(&self) -> bool {
+        self.allow_vendor
+    }
+
+    /// Validated binary-source permission flag.
+    #[must_use]
+    pub const fn allow_binary(&self) -> bool {
+        self.allow_binary
+    }
 }
 
 /// Caller platform identity for section validation.
@@ -562,9 +597,9 @@ pub fn compiled_defaults() -> ConfigSectionInput {
 ///
 /// # Errors
 ///
-/// Returns `ADMISSION_POLICY_UNKNOWN_FIELD` for unknown keys, wrong profile,
-/// or malformed platform; `ADMISSION_POLICY_CONFLICT` for out-of-bounds
-/// sizes.
+/// Returns `ADMISSION_POLICY_UNKNOWN_FIELD` for unknown keys,
+/// `ADMISSION_POLICY_SCHEMA_UNSUPPORTED` for a wrong/unaccepted profile or
+/// malformed platform, and `ADMISSION_POLICY_CONFLICT` for out-of-bounds sizes.
 pub fn validate_section(
     input: &ConfigSectionInput,
     platform: &SectionPlatform,
@@ -607,7 +642,8 @@ pub fn validate_section(
 /// The digest binds the exact validated profile, size ceiling, and
 /// generated/vendor/binary permissions with domain separation. The legacy
 /// `Blake3Digest32` container preserves existing SHA-256 bytes and does not
-/// certify BLAKE3 execution. Public fields can be modified after validation.
+/// certify BLAKE3 execution. The section is produced by its sole validator and
+/// exposes only immutable accessors; callers cannot rewrite validated fields.
 ///
 /// # Errors
 /// Returns `ADMISSION_OBSERVATION_INVALID` if the complete preimage exceeds
@@ -2958,6 +2994,157 @@ mod tests {
             .expect("defaults validate")
     }
 
+    // #406 private causal groups: AUTHORED_NOT_RUN under #352/#241/#215.
+    // Group 1: sole producer rejects invalid profile, zero and oversize ceilings.
+    // Uses validated_config() as the accepted reference.
+    #[test]
+    fn sole_validator_rejects_invalid_profile_zero_and_oversize_ceiling() {
+        let accepted = validated_config();
+
+        let mut bad_profile = compiled_defaults();
+        bad_profile.bootstrap_policy_profile = "not-baseline".to_owned();
+        assert_eq!(
+            validate_section(&bad_profile, &test_platform(), &test_capabilities()),
+            Err(AdmissionError::PolicySchemaUnsupported)
+        );
+
+        // Correct spelling still fails when the capability set does not accept it.
+        let empty_capabilities = AcceptedCapabilities {
+            profiles: Vec::new(),
+        };
+        assert_eq!(
+            validate_section(&compiled_defaults(), &test_platform(), &empty_capabilities),
+            Err(AdmissionError::PolicySchemaUnsupported)
+        );
+
+        let mut zero = compiled_defaults();
+        zero.max_file_bytes = 0;
+        assert_eq!(
+            validate_section(&zero, &test_platform(), &test_capabilities()),
+            Err(AdmissionError::PolicyConflict)
+        );
+
+        let mut oversize = compiled_defaults();
+        oversize.max_file_bytes = DEFAULT_MAX_FILE_BYTES + 1;
+        assert_eq!(
+            validate_section(&oversize, &test_platform(), &test_capabilities()),
+            Err(AdmissionError::PolicyConflict)
+        );
+
+        // Platform identity is part of the same refusal surface.
+        let bad_platform = SectionPlatform {
+            os: String::new(),
+            arch: "x64".to_owned(),
+        };
+        assert_eq!(
+            validate_section(&compiled_defaults(), &bad_platform, &test_capabilities()),
+            Err(AdmissionError::PolicySchemaUnsupported)
+        );
+
+        // The accepted reference is unchanged by every refusal above.
+        assert_eq!(accepted, validated_config());
+    }
+
+    // Group 2: getters reflect validated values and clone keeps the v1 digest stable.
+    #[test]
+    fn getters_reflect_validated_values_and_clone_keeps_section_digest() {
+        let validated = validated_config();
+
+        assert_eq!(validated.bootstrap_policy_profile(), BASELINE_PROFILE);
+        assert_eq!(validated.max_file_bytes(), DEFAULT_MAX_FILE_BYTES);
+        assert!(!validated.allow_generated());
+        assert!(!validated.allow_vendor());
+        assert!(!validated.allow_binary());
+
+        let digest = section_digest(&validated).expect("bounded v1 digest");
+        let cloned = validated.clone();
+        assert_eq!(section_digest(&cloned).expect("bounded v1 digest"), digest);
+
+        // Distinct permission combinations catch swapped or constant getters.
+        for flags in [
+            [true, false, false],
+            [false, true, false],
+            [false, false, true],
+        ] {
+            let mut raw = compiled_defaults();
+            raw.max_file_bytes = 1_024;
+            [raw.allow_generated, raw.allow_vendor, raw.allow_binary] = flags;
+            let value = validate_section(&raw, &test_platform(), &test_capabilities()).unwrap();
+            assert_eq!(value.max_file_bytes(), 1_024);
+            assert_eq!(value.bootstrap_policy_profile(), BASELINE_PROFILE);
+            assert_eq!(
+                [
+                    value.allow_generated(),
+                    value.allow_vendor(),
+                    value.allow_binary()
+                ],
+                flags
+            );
+        }
+        // Distinct validated values produce a distinct digest, so identity is real.
+        let mut relaxed = compiled_defaults();
+        relaxed.allow_generated = true;
+        let relaxed =
+            validate_section(&relaxed, &test_platform(), &test_capabilities()).expect("validates");
+        assert_ne!(section_digest(&relaxed).expect("digest"), digest);
+    }
+
+    // Group 3: raw input mutation cannot modify an existing produced section.
+    #[test]
+    fn raw_input_mutation_cannot_modify_produced_section() {
+        let mut input = compiled_defaults();
+        let produced =
+            validate_section(&input, &test_platform(), &test_capabilities()).expect("validates");
+        let digest = section_digest(&produced).expect("digest");
+
+        // The raw input stays editable by design; the produced value is separate data.
+        input.bootstrap_policy_profile = "attacker-mutated".to_owned();
+        input.max_file_bytes = 1;
+        input.allow_generated = true;
+        input.allow_vendor = true;
+        input.allow_binary = true;
+        input.unknown_keys = vec!["injected".to_owned()];
+
+        assert_eq!(produced.bootstrap_policy_profile(), BASELINE_PROFILE);
+        assert_eq!(produced.max_file_bytes(), DEFAULT_MAX_FILE_BYTES);
+        assert!(!produced.allow_generated());
+        assert!(!produced.allow_vendor());
+        assert!(!produced.allow_binary());
+        assert_eq!(section_digest(&produced).expect("digest"), digest);
+        assert_eq!(produced, validated_config());
+    }
+
+    // Group 4: reload stays conservative when built from separately validated values.
+    #[test]
+    fn reload_stays_conservative_from_separately_validated_values() {
+        let old = validated_config();
+
+        assert_eq!(
+            plan_section_change(&old, &validated_config()).expect("unchanged"),
+            SectionReloadDecision::Unchanged
+        );
+
+        // A restrictive change keeps the security barrier.
+        let mut restrictive = compiled_defaults();
+        restrictive.max_file_bytes = 1_024;
+        let restrictive = validate_section(&restrictive, &test_platform(), &test_capabilities())
+            .expect("validates");
+        assert_eq!(
+            plan_section_change(&old, &restrictive).expect("restrictive"),
+            SectionReloadDecision::SecurityBarrier
+        );
+
+        // A permissive change additionally demands explicit reconcile.
+        let mut permissive = compiled_defaults();
+        permissive.allow_binary = true;
+        let permissive = validate_section(&permissive, &test_platform(), &test_capabilities())
+            .expect("validates");
+        assert_eq!(
+            plan_section_change(&old, &permissive).expect("permissive"),
+            SectionReloadDecision::SecurityBarrierAndReconcile
+        );
+    }
+
     fn baseline() -> CanonicalAdmissionPolicy {
         baseline_policy(3, 1_024)
     }
@@ -3366,6 +3553,8 @@ mod tests {
     #[test]
     fn section_exact_ceiling_and_overflow_return_no_partial_digest() {
         let mut section = validated_config();
+        // Owner-private synthetic codec-defense input only. External callers
+        // cannot construct or mutate these fields on a validated section.
         // Domain+NUL (41), profile length (8), size (8), permissions (3).
         section.bootstrap_policy_profile = "x".repeat(MAX_DIGEST_PREIMAGE_BYTES - 60);
         assert!(section_digest(&section).is_ok());

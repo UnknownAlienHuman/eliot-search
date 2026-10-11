@@ -27,12 +27,28 @@ Implements `config/sections/source_admission.md`. Baseline keeps generated/vendo
 classes denied unless an explicit accepted policy profile permits them. Known credential/private-key
 classes remain unconditional deny.
 
+`validate_section` is the sole public producer of `ValidatedAdmissionConfig`.
+The five fields are private and expose only `bootstrap_policy_profile()`,
+`max_file_bytes()`, `allow_generated()`, `allow_vendor()` and `allow_binary()`.
+There is no public raw-field constructor, setter or mutable getter. Callers
+edit `ConfigSectionInput` and validate a new value; later raw-input mutation
+cannot modify a retained section. This is schema/data validation, not an
+applied-effect or source-admission receipt.
+
 ### `section_digest(validated) -> Result<Blake3Digest32, AdmissionError>`
 
 Retained v1 SHA-256 over the section profile, size and permission fields. The
 legacy `Blake3Digest32` container preserves existing bytes and is not BLAKE3
-execution evidence. Publicly writable section text is charged before copying;
-an over-limit preimage returns `ADMISSION_OBSERVATION_INVALID`, never a digest.
+execution evidence. Constructor-only section values retain the same v1 field
+order and bytes. The existing writer still charges each field before copying;
+an over-limit synthetic owner-private preimage returns
+`ADMISSION_OBSERVATION_INVALID`, never a digest. Its fallible signature stays.
+
+The #406 fields-to-methods Rust API hardening is deliberate; stored identities
+remain BYTE_COMPATIBLE. The validator, retained writer and reload bodies are
+unchanged. Four private causal fixture groups are AUTHORED_NOT_RUN under
+#352/#241/#215; the existing private oversized section fixture is codec-defense
+evidence only. No consumer cutover, effective v2 policy or lower-budget claim.
 
 ### `plan_section_change(old, new) -> Result<SectionReloadDecision, AdmissionError>`
 
