@@ -58731,7 +58731,7 @@
       "count": 4,
       "test": false,
       "source_sha256": "b7b9e441b88706fe5df1b8a9d3c1da076453778e05da4f72687e443c428ef473",
-      "classification": "donor-wrapper",
+      "classification": "opaque-value-use",
       "owner_issue": 241,
       "phase": "accepted",
       "reason": "#420 Import existing shared canonical/digest owner types and bounded producer; no donor, codec, crypto or parallel digest implementation added."
