@@ -41,6 +41,9 @@ use std::collections::BTreeSet;
 
 use search_contracts::{Blake3Digest32, DigestInputLimit, NonZeroRevision, sha256_exact_bytes};
 
+/// Pure bounded relative-locator and versioned observation equality model.
+pub mod observation_v2;
+
 // ---------------------------------------------------------------------------
 // Closed constants
 // ---------------------------------------------------------------------------
