@@ -44,3 +44,10 @@ mod native_request;
 mod native_snapshot;
 pub use native_admission::{NativeRootAdmission, admit_existing};
 pub use native_request::{NativeRootLimits, NativeRootRequest};
+
+#[path = "kernel/initialization.rs"]
+mod initialization;
+#[path = "kernel/initialization_journal.rs"]
+mod initialization_journal;
+pub use initialization::InitializingDataRoot;
+pub use initialization::initialize_new;

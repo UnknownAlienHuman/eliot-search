@@ -36,3 +36,7 @@ use store::{
     collect_regular_files, ensure_directory, ensure_regular_file, is_reparse,
     path_identity_bytes, read_file_snapshot,
 };
+
+#[path = "direct_store/initialization.rs"]
+mod initialization;
+pub use initialization::{initialize_layout, verify_layout as verify_initialization_layout};

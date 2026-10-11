@@ -46,3 +46,7 @@ use storage_io::{
     read_revision_object as read_regular_file,
     remove_plaintext_after_readback,
 };
+
+#[path = "secure_direct_store/initialization.rs"]
+mod initialization;
+pub use initialization::{existing_key_binding, initialize_layout as initialize_only};

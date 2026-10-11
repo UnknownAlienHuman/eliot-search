@@ -38,7 +38,7 @@ pub(super) fn metadata(
     })
 }
 
-fn require_kind(metadata: &Metadata, directory: bool) -> Result<(), OwnerError> {
+pub(super) fn require_kind(metadata: &Metadata, directory: bool) -> Result<(), OwnerError> {
     if metadata.file_type().is_symlink()
         || is_reparse(metadata)
         || (directory && !metadata.is_dir())
@@ -56,6 +56,27 @@ pub(super) fn open_existing(
     directory: bool,
     writable: bool,
 ) -> Result<File, OwnerError> {
+    open_with_sharing(request, work, path, directory, writable, 3)
+}
+
+/// Initialization retains read handles that exclude writes and deletion of parents.
+pub(super) fn open_initialization(
+    request: &NativeRootRequest,
+    work: &mut NativeWork,
+    path: &Path,
+    directory: bool,
+) -> Result<File, OwnerError> {
+    open_with_sharing(request, work, path, directory, false, 1)
+}
+
+fn open_with_sharing(
+    request: &NativeRootRequest,
+    work: &mut NativeWork,
+    path: &Path,
+    directory: bool,
+    writable: bool,
+    sharing: u32,
+) -> Result<File, OwnerError> {
     let before = metadata(request, work, path)?.ok_or(OwnerError::OwnerRecoveryEvidenceMissing)?;
     require_kind(&before, directory)?;
     work.open(request)?;
@@ -67,8 +88,10 @@ pub(super) fn open_existing(
             use std::os::windows::fs::OpenOptionsExt;
             options
                 .custom_flags(if directory { 0x0220_0000 } else { 0x0020_0000 })
-                .share_mode(0x3); // Deny rename/delete while the handle is live.
+                .share_mode(sharing);
         }
+        #[cfg(not(windows))]
+        let _ = sharing;
         options
             .open(path)
             .map_err(|_| OwnerError::OwnerGuardMismatch)
@@ -86,6 +109,58 @@ pub(super) struct NativePins {
 }
 
 impl NativePins {
+    pub(super) fn acquire_profile(
+        request: &NativeRootRequest,
+        work: &mut NativeWork,
+        root: &Path,
+        mutation: bool,
+        journal: bool,
+    ) -> Result<Self, OwnerError> {
+        if journal {
+            Self::acquire_with_journal(request, work, root, mutation)
+        } else {
+            Self::acquire(request, work, root, mutation)
+        }
+    }
+    pub(super) fn acquire_initialization(
+        request: &NativeRootRequest,
+        work: &mut NativeWork,
+        root: &Path,
+    ) -> Result<Self, OwnerError> {
+        let mut files = Vec::with_capacity(11);
+        for (index, (name, directory)) in OBJECTS.iter().enumerate() {
+            let path = root.join(name);
+            // Actual writable exclusion handles were already acquired and retained.
+            files.push(if matches!(index, 1 | 2) {
+                open_existing(request, work, &path, *directory, false)?
+            } else {
+                open_initialization(request, work, &path, *directory)?
+            });
+        }
+        files.push(open_initialization(
+            request,
+            work,
+            &root.join(super::initialization_journal::JOURNAL_FILE),
+            false,
+        )?);
+        Ok(Self { files })
+    }
+    pub(super) fn acquire_with_journal(
+        request: &NativeRootRequest,
+        work: &mut NativeWork,
+        root: &Path,
+        mutation: bool,
+    ) -> Result<Self, OwnerError> {
+        let mut pins = Self::acquire(request, work, root, mutation)?;
+        pins.files.push(open_existing(
+            request,
+            work,
+            &root.join(super::initialization_journal::JOURNAL_FILE),
+            false,
+            false,
+        )?);
+        Ok(pins)
+    }
     pub(super) fn acquire(
         request: &NativeRootRequest,
         work: &mut NativeWork,
@@ -110,6 +185,22 @@ impl NativePins {
         request: &NativeRootRequest,
         work: &mut NativeWork,
     ) -> Result<[u8; 32], OwnerError> {
+        if self.files.len() == 11 {
+            let mut identities = [[0; 20]; 11];
+            for (file, identity) in self.files.iter().zip(&mut identities) {
+                *identity = work
+                    .call(request, || native_identity(file))?
+                    .try_into()
+                    .map_err(|_| OwnerError::OwnerGuardMismatch)?;
+            }
+            return super::initialization_journal::native_objects_digest(
+                &identities,
+                &mut |bytes| work.canonical(request, bytes),
+            );
+        }
+        if self.files.len() != 10 {
+            return Err(OwnerError::OwnerGuardMismatch);
+        }
         let mut identities = Vec::with_capacity(OBJECTS.len());
         for file in &self.files {
             let bytes = work.call(request, || native_identity(file))?;
@@ -138,7 +229,15 @@ impl NativePins {
         work: &mut NativeWork,
         root: &Path,
     ) -> Result<(), OwnerError> {
-        for ((name, directory), held) in OBJECTS.iter().zip(&self.files) {
+        if !matches!(self.files.len(), 10 | 11) {
+            return Err(OwnerError::OwnerGuardMismatch);
+        }
+        let journal = (super::initialization_journal::JOURNAL_FILE, false);
+        for ((name, directory), held) in OBJECTS
+            .iter()
+            .chain(std::iter::once(&journal))
+            .zip(&self.files)
+        {
             let current = open_existing(request, work, &root.join(name), *directory, false)?;
             let original = work.call(request, || native_identity(held))?;
             if work.call(request, || native_identity(&current))? != original {
