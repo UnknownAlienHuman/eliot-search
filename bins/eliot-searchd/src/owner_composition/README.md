@@ -66,9 +66,10 @@ fixtures are retained. Normal callers still use their legacy surface until #355'
 
 ## Evidence boundary
 
-Eight private source fixtures cover original argv/context, lower limits/native input, zero creation,
+Nine private source fixtures cover original argv/context, lower limits/native input, zero creation,
 native inspection/exclusions, corrupt newer peer/barriers, pre/post-effect cancellation, admission
-terminal cancellation and terminal emission/abandoned Drop. They are authored, NOT_COMPILED/NOT_RUN.
+terminal cancellation, later lifecycle cancellation/retained poison kind and terminal emission/abandoned
+Drop. They are authored, NOT_COMPILED/NOT_RUN.
 Late deadline expiry, replacement/foreign/moved-layout cases, injected short-I/O failures and full
 lifecycle/restart/fault/resource/installed evidence remain qualification obligations under #215.
 

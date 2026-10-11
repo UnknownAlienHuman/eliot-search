@@ -362,6 +362,66 @@ fn admission_terminal_cancellation_cannot_return_capability() {
 
 #[cfg(windows)]
 #[test]
+fn later_lifecycle_cancellation_retains_prior_effect_and_poisoned_outcome() {
+    for (release, phase, expected) in [
+        (
+            false,
+            "before-owner-write",
+            OwnerError::OwnerAcquireOutcomeUnknown,
+        ),
+        (
+            true,
+            "before-owner-write",
+            OwnerError::OwnerAcquireOutcomeUnknown,
+        ),
+        (
+            true,
+            "after-owner-write",
+            OwnerError::OwnerReleaseOutcomeUnknown,
+        ),
+    ] {
+        let root = Scratch::released();
+        let flag = Arc::new(AtomicBool::new(false));
+        let req = request(
+            &root.0,
+            DataRootOpenMode::OpenExistingMutating,
+            Arc::clone(&flag),
+        );
+        let NativeRootAdmission::Mutation(mut cap) = admit_existing(req).unwrap() else {
+            panic!("mutation")
+        };
+        if release {
+            cap.begin_drain(DrainReason::Shutdown).unwrap();
+        }
+        let before = root.durable_inventory();
+        let hook_flag = Arc::clone(&flag);
+        cap.work.phase_hook = Some(Box::new(move |arrived| {
+            if arrived == phase {
+                hook_flag.store(true, Ordering::Release);
+            }
+        }));
+        let result = if release {
+            cap.release_cleanly().map(|_| ())
+        } else {
+            cap.begin_drain(DrainReason::Shutdown)
+        };
+        assert_eq!(result, Err(expected));
+        let after = root.durable_inventory();
+        if phase == "after-owner-write" {
+            assert_ne!(after, before);
+        } else {
+            assert_eq!(after, before);
+        }
+        cap.work.phase_hook = None;
+        flag.store(false, Ordering::Release);
+        assert!(matches!(cap.inspect(), Err(error) if error == expected));
+        drop(cap);
+        assert_eq!(root.durable_inventory(), after);
+    }
+}
+
+#[cfg(windows)]
+#[test]
 fn terminal_phase_refuses_ack_and_drop_never_publishes_release() {
     let root = Scratch::released();
     let flag = Arc::new(AtomicBool::new(false));

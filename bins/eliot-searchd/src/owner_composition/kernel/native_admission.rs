@@ -43,7 +43,7 @@ pub struct NativeRootCapability {
     request: NativeRootRequest,
     work: NativeWork,
     mutation: bool,
-    poisoned: bool,
+    poisoned: Option<OwnerError>,
     effect_observed: bool,
     bound_root: File,
     exclusions: Vec<File>,
@@ -140,12 +140,14 @@ fn admit_with_work(
         return Err(OwnerError::OwnerInvalidTransition);
     }
     let successor = if mutation {
-        Some(plan_successor(
-            &snapshot.installation.owner_binding(),
-            &snapshot.observed,
-            snapshot.record.executable_digest,
-            Some(&snapshot.record),
-        )?)
+        Some(work.call(&request, || {
+            plan_successor(
+                &snapshot.installation.owner_binding(),
+                &snapshot.observed,
+                snapshot.record.executable_digest,
+                Some(&snapshot.record),
+            )
+        })?)
     } else {
         None
     };
@@ -158,7 +160,7 @@ fn admit_with_work(
         request,
         work,
         mutation,
-        poisoned: false,
+        poisoned: None,
         effect_observed: false,
         bound_root,
         exclusions,
@@ -251,36 +253,39 @@ fn unavailable(
 }
 
 impl NativeRootCapability {
-    fn check_context(&self) -> Result<(), OwnerError> {
-        self.request.check().map_err(|error| {
-            if self.effect_observed {
-                self.unknown_error()
-            } else {
-                error
-            }
-        })
+    fn check_context(&mut self) -> Result<(), OwnerError> {
+        self.request.check().map_err(|error| self.failure(error))
     }
 
     fn unknown_error(&self) -> OwnerError {
-        if self.record.lifecycle == LifecycleState::Released && self.effect_observed {
+        if let Some(error) = self.poisoned {
+            error
+        } else if self.record.lifecycle == LifecycleState::Released && self.effect_observed {
             OwnerError::OwnerReleaseOutcomeUnknown
         } else {
             OwnerError::OwnerAcquireOutcomeUnknown
         }
     }
 
-    fn verify(&mut self) -> Result<(), OwnerError> {
-        let result = self.verify_bound();
-        if result.is_err() && self.effect_observed {
-            self.poisoned = true;
-            return Err(self.unknown_error());
+    fn failure(&mut self, error: OwnerError) -> OwnerError {
+        if let Some(poisoned) = self.poisoned {
+            return poisoned;
         }
-        result
+        if self.effect_observed {
+            let unknown = self.unknown_error();
+            self.poisoned = Some(unknown);
+            return unknown;
+        }
+        error
+    }
+
+    fn verify(&mut self) -> Result<(), OwnerError> {
+        self.verify_bound().map_err(|error| self.failure(error))
     }
 
     fn verify_bound(&mut self) -> Result<(), OwnerError> {
-        if self.poisoned {
-            return Err(OwnerError::OwnerAcquireOutcomeUnknown);
+        if let Some(error) = self.poisoned {
+            return Err(error);
         }
         self.check_context()?;
         self.pins
@@ -312,7 +317,7 @@ impl NativeRootCapability {
         let (request_id, request_digest) = self.request.binding();
         let result = NativeRootMetadata {
             owner_epoch: OwnerEpoch::new(self.record.epoch)
-                .map_err(|_| OwnerError::ContractExhausted)?,
+                .map_err(|_| self.failure(OwnerError::ContractExhausted))?,
             generation: self.record.generation,
             request_id,
             request_digest,
@@ -326,32 +331,22 @@ impl NativeRootCapability {
         self.verify()?;
         self.work
             .arrive(&self.request, "terminal-emission")
-            .map_err(|error| {
-                if self.effect_observed {
-                    self.unknown_error()
-                } else {
-                    error
-                }
-            })?;
-        self.request.emit(writer, line).map_err(|error| {
-            if self.effect_observed {
-                self.unknown_error()
-            } else {
-                error
-            }
-        })
+            .map_err(|error| self.failure(error))?;
+        self.request
+            .emit(writer, line)
+            .map_err(|error| self.failure(error))
     }
 
     pub fn begin_drain(&mut self, reason: DrainReason) -> Result<(), OwnerError> {
         if !self.mutation {
-            return Err(OwnerError::OwnerInvalidTransition);
+            return Err(self.failure(OwnerError::OwnerInvalidTransition));
         }
         self.check_context()?;
         if self.record.lifecycle == LifecycleState::Draining {
             return self.verify();
         }
         if self.record.lifecycle != LifecycleState::Active {
-            return Err(OwnerError::OwnerInvalidTransition);
+            return Err(self.failure(OwnerError::OwnerInvalidTransition));
         }
         let mut next = self.record.clone();
         next.lifecycle = LifecycleState::Draining;
@@ -361,21 +356,19 @@ impl NativeRootCapability {
 
     pub fn release_cleanly(&mut self) -> Result<ShutdownReceipt, OwnerError> {
         if !self.mutation {
-            return Err(OwnerError::OwnerInvalidTransition);
+            return Err(self.failure(OwnerError::OwnerInvalidTransition));
         }
         self.check_context()?;
         if self.record.lifecycle != LifecycleState::Draining {
-            return Err(OwnerError::OwnerDrainRequired);
+            return Err(self.failure(OwnerError::OwnerDrainRequired));
         }
         let mut next = self.record.clone();
         next.lifecycle = LifecycleState::Released;
         next.drain_reason = DrainReasonText::None;
         self.advance(next)?;
-        let epoch =
-            OwnerEpoch::new(self.record.epoch).map_err(|_| OwnerError::ContractExhausted)?;
-        self.request
-            .check()
-            .map_err(|_| OwnerError::OwnerReleaseOutcomeUnknown)?;
+        let epoch = OwnerEpoch::new(self.record.epoch)
+            .map_err(|_| self.failure(OwnerError::ContractExhausted))?;
+        self.check_context()?;
         Ok(ShutdownReceipt {
             epoch,
             generation: self.record.generation,
@@ -388,17 +381,17 @@ impl NativeRootCapability {
             .record
             .generation
             .checked_add(1)
-            .ok_or(OwnerError::ContractExhausted)?;
+            .ok_or_else(|| self.failure(OwnerError::ContractExhausted))?;
         next.refresh_digest();
         self.publish(next)
     }
 
     fn publish(&mut self, next: DurableOwnerRecord) -> Result<(), OwnerError> {
         self.verify()?;
-        next.validate_shape()?;
+        next.validate_shape().map_err(|error| self.failure(error))?;
         let bytes = next.encode();
         if bytes.len() > MAX_STATE_BYTES {
-            return Err(OwnerError::ContractExhausted);
+            return Err(self.failure(OwnerError::ContractExhausted));
         }
         let mut effect_attempted = false;
         let result = (|| {
@@ -439,26 +432,19 @@ impl NativeRootCapability {
         })();
         if let Err(error) = result {
             if effect_attempted {
-                self.poisoned = true;
-                return Err(if next.lifecycle == LifecycleState::Released {
+                let unknown = if next.lifecycle == LifecycleState::Released {
                     OwnerError::OwnerReleaseOutcomeUnknown
                 } else {
                     OwnerError::OwnerAcquireOutcomeUnknown
-                });
+                };
+                self.poisoned = Some(unknown);
+                return Err(unknown);
             }
-            return Err(error);
+            return Err(self.failure(error));
         }
         self.effect_observed = true;
         self.record = next;
-        if self.verify().is_err() {
-            self.poisoned = true;
-            return Err(if self.record.lifecycle == LifecycleState::Released {
-                OwnerError::OwnerReleaseOutcomeUnknown
-            } else {
-                OwnerError::OwnerAcquireOutcomeUnknown
-            });
-        }
-        Ok(())
+        self.verify()
     }
 }
 
