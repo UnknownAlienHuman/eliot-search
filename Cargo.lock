@@ -1260,6 +1260,7 @@ dependencies = [
 name = "search-exact"
 version = "0.0.0"
 dependencies = [
+ "aho-corasick",
  "search-access",
  "search-contracts",
  "search-domain",

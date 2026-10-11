@@ -1,6 +1,15 @@
 # Function contract — `search-exact`
 
-**Status:** W6/P12 logical contract; no exact predicate engine or executor implementation exists yet.
+**Status:** SOURCE_PRESENT for literal, proof and exact-spine source; authoritative
+denominator/readback integration and installed qualification remain incomplete.
+
+`literal::scan_chunks` uses one private Aho-Corasick 1.1.5 contiguous NFA with Standard
+semantics, caller-selected ASCII insensitivity and prefilter disabled. It preserves
+validation precedence, borrowed chunk state, overlaps, byte coordinates and the
+first-extra-match truncation boundary. Construction/start failure adds only
+`LiteralError::MatcherBuildFailed` / `LITERAL_MATCHER_BUILD_FAILED`; existing reason
+codes remain unchanged. The seven retained fixture bodies are AUTHORED_NOT_RUN under
+#215. This primitive proves only supplied-input exhaustion, never a corpus denominator.
 
 The exact plane compiles one immutable authorized denominator and executes a pinned exact predicate over
 every denominator item. It may prove only the stated predicate. Qdrant candidates, lexical top-k and

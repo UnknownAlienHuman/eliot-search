@@ -6,6 +6,8 @@
 use core::fmt;
 use core::ops::Range;
 
+use aho_corasick::{Anchored, MatchKind, automaton::Automaton, nfa::contiguous::NFA};
+
 /// Finite limits for one literal scan.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LiteralLimits {
@@ -32,6 +34,8 @@ pub enum LiteralError {
     InputTooLarge,
     /// The number of input chunks exceeds its ceiling.
     TooManyChunks,
+    /// The donor matcher could not be built or initialized.
+    MatcherBuildFailed,
 }
 
 impl LiteralError {
@@ -44,6 +48,7 @@ impl LiteralError {
             Self::QueryTooLarge => "LITERAL_QUERY_TOO_LARGE",
             Self::InputTooLarge => "LITERAL_INPUT_TOO_LARGE",
             Self::TooManyChunks => "LITERAL_CHUNK_LIMIT",
+            Self::MatcherBuildFailed => "LITERAL_MATCHER_BUILD_FAILED",
         }
     }
 }
@@ -78,14 +83,15 @@ impl LiteralScan {
 
 /// Matches one non-empty literal in linear time across exact ordered chunks.
 ///
-/// KMP state is retained across every boundary, including overlapping matches.
-/// ASCII folding never changes non-ASCII bytes. Input and chunk limits are
-/// checked before scanning, so early match truncation cannot hide oversized input.
+/// One donor automaton state is retained across every boundary and match.
+/// ASCII-insensitive matching never folds non-ASCII bytes. Input and chunk limits
+/// are checked before building or scanning, so truncation cannot hide oversized input.
 /// Auxiliary memory is O(query bytes + returned matches); source text is borrowed.
 /// No regex, normalization, I/O, caller authorization or evidence issuance occurs.
 ///
 /// # Errors
-/// Returns a closed validation error for empty queries or exceeded finite limits.
+/// Returns a closed validation error for empty queries or exceeded finite limits,
+/// or `MatcherBuildFailed` when donor construction or initialization fails.
 pub fn scan_chunks(
     chunks: &[&str],
     query: &str,
@@ -103,24 +109,24 @@ pub fn scan_chunks(
     let mut result = LiteralScan {
         matches: Vec::new(), input_bytes, scanned_bytes: 0, match_limit_reached: false,
     };
-    let needle = query.bytes().map(|byte| fold(byte, ascii_insensitive)).collect::<Vec<_>>();
-    let prefix = prefix_table(&needle);
-    let mut matched = 0;
+    let automaton = NFA::builder()
+        .match_kind(MatchKind::Standard)
+        .ascii_case_insensitive(ascii_insensitive)
+        .prefilter(false)
+        .build([query.as_bytes()])
+        .map_err(|_| LiteralError::MatcherBuildFailed)?;
+    let mut state = automaton.start_state(Anchored::No)
+        .map_err(|_| LiteralError::MatcherBuildFailed)?;
     for chunk in chunks {
         for byte in chunk.bytes() {
-            let byte = fold(byte, ascii_insensitive);
-            while matched > 0 && needle[matched] != byte {
-                matched = prefix[matched - 1];
-            }
-            if needle[matched] == byte { matched += 1; }
+            state = automaton.next_state(Anchored::No, state, byte);
             result.scanned_bytes += 1;
-            if matched == needle.len() {
+            if automaton.is_match(state) {
                 if result.matches.len() == limits.max_matches {
                     result.match_limit_reached = true;
                     return Ok(result);
                 }
-                result.matches.push(result.scanned_bytes - needle.len()..result.scanned_bytes);
-                matched = prefix[matched - 1];
+                result.matches.push(result.scanned_bytes - query.len()..result.scanned_bytes);
             }
         }
     }
@@ -140,23 +146,6 @@ pub const fn validate_query(query: &str, limits: LiteralLimits) -> Result<(), Li
     if query.is_empty() { return Err(LiteralError::EmptyQuery); }
     if query.len() > limits.max_query_bytes { return Err(LiteralError::QueryTooLarge); }
     Ok(())
-}
-
-const fn fold(byte: u8, ascii_insensitive: bool) -> u8 {
-    if ascii_insensitive { byte.to_ascii_lowercase() } else { byte }
-}
-
-fn prefix_table(needle: &[u8]) -> Vec<usize> {
-    let mut prefix = vec![0; needle.len()];
-    let mut matched = 0;
-    for index in 1..needle.len() {
-        while matched > 0 && needle[index] != needle[matched] {
-            matched = prefix[matched - 1];
-        }
-        if needle[index] == needle[matched] { matched += 1; }
-        prefix[index] = matched;
-    }
-    prefix
 }
 
 #[cfg(test)]
