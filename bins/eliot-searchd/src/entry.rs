@@ -25,8 +25,12 @@ mod direct_store;
 mod directory_manifest;
 #[cfg(feature = "legacy-loopback-harness")]
 mod endpoint;
+#[allow(dead_code)]
+#[path = "source_composition.rs"]
+mod git_source_composition;
 mod maintenance;
 mod maintenance_guard;
+mod native_root_command;
 pub(crate) mod owner_composition;
 #[path = "direct_store.rs"]
 mod plaintext_direct_store;
@@ -36,6 +40,9 @@ mod preparation_composition;
 mod projection_composition;
 mod protocol_io;
 mod provider_composition;
+mod public_runtime_service;
+#[allow(dead_code)]
+mod publication_composition;
 mod qualified_entropy;
 #[cfg(feature = "wave4-query")]
 #[allow(dead_code)]
@@ -46,9 +53,6 @@ mod query_live_authority;
 #[cfg(feature = "wave4-query")]
 #[path = "query_composition/serving.rs"]
 mod query_serving_composition;
-mod public_runtime_service;
-#[allow(dead_code)]
-mod publication_composition;
 #[cfg(feature = "wave3-index")]
 #[allow(dead_code)]
 mod rebuild_composition;
@@ -76,9 +80,6 @@ mod secret_composition;
 mod secure_commands;
 mod service_output;
 mod sha256;
-#[allow(dead_code)]
-#[path = "source_composition.rs"]
-mod git_source_composition;
 #[path = "direct_store/composition.rs"]
 mod source_composition;
 mod source_fence;
@@ -102,7 +103,8 @@ const fn maybe_run_legacy_loopback() -> Option<ExitCode> {
 }
 
 fn main() -> ExitCode {
-    let result = source_migration_command::maybe_run()
+    let result = native_root_command::maybe_run()
+        .or_else(source_migration_command::maybe_run)
         .or_else(preparation_composition::maybe_run)
         .or_else(maybe_run_legacy_loopback)
         .or_else(public_runtime_service::maybe_run)

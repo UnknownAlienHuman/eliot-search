@@ -27,11 +27,20 @@ use observation::{observe_executable, observe_physical_root};
 #[cfg(test)]
 use record::DurableOwnerRecord;
 #[cfg(test)]
-use spec::{
-    INSTALLATION_FILE, LifecycleState, MAX_STATE_BYTES, Slot,
-};
+use spec::{INSTALLATION_FILE, LifecycleState, MAX_STATE_BYTES, Slot};
 #[cfg(test)]
 use succession::verify_sealed_head_agrees;
 
 #[cfg(test)]
 mod tests;
+
+#[path = "kernel/native_admission.rs"]
+mod native_admission;
+#[path = "kernel/native_objects.rs"]
+mod native_objects;
+#[path = "kernel/native_request.rs"]
+mod native_request;
+#[path = "kernel/native_snapshot.rs"]
+mod native_snapshot;
+pub use native_admission::{NativeRootAdmission, admit_existing};
+pub use native_request::{NativeRootLimits, NativeRootRequest};

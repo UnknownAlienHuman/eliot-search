@@ -9,9 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use search_contracts::DataRootId;
 use search_runtime_owner::OwnerError;
 
-use super::codec::{
-    canonical_path_bytes, domain_digest, is_reparse, native_volume_material,
-};
+use super::codec::{canonical_path_bytes, domain_digest, is_reparse, native_volume_material};
 use super::spec::{MAX_EXECUTABLE_BYTES, READ_CHUNK_BYTES};
 
 static NEXT_TOKEN: AtomicU64 = AtomicU64::new(0);
@@ -35,16 +33,24 @@ pub(super) fn observe_physical_root(canonical_root: &Path) -> Result<ObservedRoo
     }
     let path_bytes = canonical_path_bytes(&fresh);
     let volume_material = native_volume_material(&fresh)?;
+    observe_root_parts(&path_bytes, &volume_material)
+}
+
+/// Same retained v1 physical-root transcript, also usable with a held handle.
+pub(super) fn observe_root_parts(
+    path_bytes: &[u8],
+    volume_material: &[u8],
+) -> Result<ObservedRoot, OwnerError> {
     let canonical_path_digest =
-        domain_digest(b"eliot-search/owner-canonical-path/v1\0", &[&path_bytes]);
+        domain_digest(b"eliot-search/owner-canonical-path/v1\0", &[path_bytes]);
     let volume_identity_digest = domain_digest(
         b"eliot-search/owner-volume-identity/v1\0",
-        &[&volume_material],
+        &[volume_material],
     );
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"eliot-search/owner-data-root-id/v1\0");
-    hasher.update(&volume_material);
-    hasher.update(&path_bytes);
+    hasher.update(volume_material);
+    hasher.update(path_bytes);
     let digest = hasher.finalize();
     let id: [u8; 16] = digest.as_bytes()[..16]
         .try_into()
@@ -65,24 +71,32 @@ pub(super) fn observe_executable() -> Result<[u8; 32], OwnerError> {
         return Err(OwnerError::DataRootInvalid);
     }
     let mut file = fs::File::open(&canonical).map_err(|_| OwnerError::DataRootInvalid)?;
+    hash_executable_file(&mut file, |file, chunk| {
+        file.read(chunk).map_err(|_| OwnerError::DataRootInvalid)
+    })
+}
+
+/// One existing executable transcript; the native caller supplies charged I/O.
+pub(super) fn hash_executable_file(
+    file: &mut fs::File,
+    mut read: impl FnMut(&mut fs::File, &mut [u8]) -> Result<usize, OwnerError>,
+) -> Result<[u8; 32], OwnerError> {
     let mut hasher = blake3::Hasher::new();
     hasher.update(b"eliot-search/owner-executable/v1\0");
     let mut chunk = vec![0_u8; READ_CHUNK_BYTES];
     let mut total: u64 = 0;
     loop {
-        let read = file
-            .read(&mut chunk)
-            .map_err(|_| OwnerError::DataRootInvalid)?;
-        if read == 0 {
+        let count = read(file, &mut chunk)?;
+        if count == 0 {
             break;
         }
         total = total
-            .checked_add(u64::try_from(read).map_err(|_| OwnerError::DataRootInvalid)?)
+            .checked_add(u64::try_from(count).map_err(|_| OwnerError::DataRootInvalid)?)
             .ok_or(OwnerError::DataRootInvalid)?;
         if total > MAX_EXECUTABLE_BYTES {
             return Err(OwnerError::DataRootInvalid);
         }
-        hasher.update(&chunk[..read]);
+        hasher.update(&chunk[..count]);
     }
     let digest = hasher.finalize();
     let mut output = [0_u8; 32];
