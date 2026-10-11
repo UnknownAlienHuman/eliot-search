@@ -104,6 +104,31 @@ It does not apply the change or decide which registered sources survive.
 
 ## Observation operations
 
+### Pure v2 observation model (#409)
+
+`observation_v2::AdmissionRelativeLocator::from_bytes(&[u8])` validates borrowed
+UTF-8 bytes before retaining them. Fixed profile
+`eliot-admission-relative-utf8-portable@1` preserves exact bytes and rejects
+malformed, traversal, absolute and nonportable native spellings. Limits are
+4,096 bytes total, 255 bytes per component and 128 components. It proves a byte
+vocabulary only; containment and native identity remain with their owners.
+
+`AdmissionObservationV2::new(AdmissionObservation, Option<AdmissionRelativeLocator>)`
+owns existing constructor-bounded metadata and explicit locator availability.
+It computes opaque `ObservationFingerprintV2` through shared
+`blake3_canonical_array`, with the fixed fifteen-row schema and complete
+16,384-byte domain-plus-CBOR ceiling specified in [OBSERVATION_V2.md](OBSERVATION_V2.md).
+Absent optionals encode as canonical Null. Shared failures return the existing
+content-free `ADMISSION_OBSERVATION_INVALID` and no model or partial identity.
+
+Only read-only getters are exposed. Debug omits metadata IDs and locator bytes.
+No constructor accepts a supplied digest, acceptance flag or profile. Equality
+grants no match, admission, receipt, access or currentness authority. All v1
+types, APIs, consumers and preimages are unchanged; future adoption requires
+VERSIONED_REBUILD, with no migration in this model-only slice. Six private
+causal fixture groups and an independent synthetic golden are AUTHORED_NOT_RUN;
+execution remains under #352/#241/#215.
+
 ### `validate_observation(input, policy, limits) -> Result<AdmissionObservation, AdmissionError>`
 
 Requires bounded normalized locator class (not unrestricted display path), root/location class,

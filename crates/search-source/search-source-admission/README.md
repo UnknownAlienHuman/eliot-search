@@ -40,6 +40,19 @@ not qualify ingestion, Qdrant, Windows installation or the complete product.
 
 ## Owns
 
+The additive [`observation_v2`](OBSERVATION_V2.md) module validates bounded
+portable root-relative UTF-8 bytes and binds them with existing validated
+metadata into an immutable observation equality model. It preserves case and
+Unicode bytes, uses the shared canonical CBOR/BLAKE3 implementation and exposes
+no policy, decision or receipt authority. Its locator profile has fixed
+4,096-byte, 255-byte-component and 128-component limits; its complete preimage
+ceiling is 16 KiB. V1 types, APIs and preimages remain unchanged. Future consumer
+adoption requires **VERSIONED_REBUILD**; this slice performs no cutover.
+
+Six private causal fixture groups and an independently encoded synthetic golden
+are **AUTHORED_NOT_RUN** under #352/#241/#215. Source checks do not establish
+matcher behavior, native containment or product qualification.
+
 - canonical policy normalization and fingerprinting
 - path/metadata/format/sensitivity observation evaluation
 - deterministic decisions, reasons and receipts
