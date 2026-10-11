@@ -1,6 +1,7 @@
 # Function contract — `search-materializer`
 
-**Status:** W2/P04 baseline logical contract; no selected optional document provider or runtime evidence.
+**Status:** W2/P04 baseline logical contract plus additive inert Markdown source preparation;
+no document-provider acceptance or runtime qualification.
 
 This package owns deterministic baseline text/source-code materialization from one exact immutable
 `SourceRevision`, including representation profile identity, coordinate maps, loss maps, assurance and
@@ -10,8 +11,10 @@ optional document provider.
 ## Global rules
 
 - every materialization binds exact source revision, residency, byte digest/length and profile revision;
-- source and canonical-output content digests are direct BLAKE3-256 over exact bytes; identity, profile,
-  coordinate and loss commitments use the v2 length-delimited BLAKE3 envelope;
+- baseline source and canonical-output content digests remain direct BLAKE3-256 over exact bytes;
+  baseline identity/profile/coordinate/loss commitments retain the v2 length-delimited BLAKE3 envelope;
+- additive Markdown profile/inventory/product commitments use named versioned domains through the
+  shared canonical CBOR/BLAKE3 producer, without reinterpreting baseline identities;
 - baseline text/code materialization works with optional workers absent;
 - source bytes are acquired only through an injected exact revision-read port;
 - every transformation declares encoding/newline/normalization behavior and coordinate/loss semantics;
@@ -257,3 +260,59 @@ Compatibility tests freeze magic, sizes, field order, digest domains, locator
 names, profile/algorithm tags, closed gaps, payload digest/length binding,
 identity fencing and conflict behavior. This surface is not a provider
 qualification, source admission, revision receipt or launch gate.
+
+## Inert Markdown source operations
+
+### `MarkdownProfile::new(raw, limits) -> Result<MarkdownProfile, MarkdownError>`
+
+Require a validated strict Text-only/UTF-8-only raw profile: reject BOM, invalid sequences and loss;
+preserve exact newlines with no Unicode normalization. Validate positive profile dimensions within
+`MAX_MARKDOWN_LIMITS`, then compute the immutable identity internally. Bind raw profile, exact donor/
+features/options, grammar/range/hierarchy/metadata decisions, all ceilings and exact source/fixture
+definition bytes, including line endings. Private setup uses fixed 512 Ki logical work units and
+16 KiB logical storage with no operation clock. `id()`, `raw_profile_id()` and `limits()` are read-only;
+no caller digest or acceptance constructor exists.
+
+### `MarkdownOperationLimits::validate(self) -> Result<Self, MarkdownError>`
+
+Validate positive hard-bounded parser dimensions and canonical limits: per-frame at most
+`MAX_MARKDOWN_PREIMAGE_BYTES` (2 MiB), aggregate at most `MAX_MARKDOWN_TOTAL_CANONICAL_BYTES` (4 MiB).
+This method has no selected-profile argument. Operation admission separately rejects any parser
+dimension above the selected profile before source acquisition. Profile/product frames retain their
+tighter 16 KiB caps. Baseline budgets are separately enforced.
+
+### `materialize_markdown(request, port, base_context, profile, limits, deadline) -> Result<MarkdownProduct, MarkdownError>`
+
+Admit matching request/context/raw-profile identities, strict Text/UTF-8 and lower limits before reading.
+Acquire through the existing exact revision port, preserve raw bytes/maps, parse bounded ordered
+observations and compute complete shared commitments. Precharge actual row construction/copy work
+before hash admission; charge actual successful domain/NUL/CBOR bytes once. Original cancellation,
+absolute caller deadline and cumulative allowance continue across stages and terminal construction.
+Failure drops provisional output.
+
+Whole-event spans and selected mapped code/info/destination/title values remain observations.
+`ObservedSpansAndSelectedValues` and `PotentiallyIncomplete` references do not imply exhaustive
+references, decoded display-text coordinates or additive coverage. Ordinary decoded Text/HTML strings
+are not retained as another representation; HTML/resources are never rendered, executed or fetched.
+
+### `verify_markdown(product, request, port, base_context, profile, limits, deadline) -> Result<MarkdownVerificationReceipt, MarkdownError>`
+
+Reopen/rebuild through the same preparation producer. Hold original inventory and residency during
+replay and precharge complete comparison. Compare all raw/maps/profile/record/value/status/usage/
+commitment fields, not stored digests alone. Mismatch is `ProductMismatch`; source unavailability,
+limits and cancellation remain typed refusals. The immutable receipt describes exact-source replay,
+not native identity, current filesystem state, access, publication or UnitSet authority.
+
+### Private accounting and qualification boundary
+
+Before-growth storage includes owner records/frames/selected strings, residency copies and canonical
+row temporaries; original inventory remains held during replay. It excludes borrowed raw bytes,
+existing raw/maps, allocator spare capacity and donor internals. Every donor next attempt, including
+terminal None, is charged before advance, separately from yielded events. Original checkpoints bracket
+donor construction/next, row preparation and terminal acceptance. Logical work is not CPU instrumentation;
+synchronous donor calls have no hard-preemption or donor-memory guarantee.
+
+Legacy public APIs/bytes and retained fixtures remain unchanged, apart from the final cancellation
+poll in the baseline producer. This source API is not a UnitSet; the separately versioned structural
+successor and JATS remain #226, persistence/adoption #331, and authored-but-uncompiled/unexecuted
+fixtures plus document/native/resource/product qualification #215/#216.

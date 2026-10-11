@@ -30,10 +30,9 @@ pub use crate::legacy_direct::{
     CONTENT_DIGEST_ALGORITHM, DIGEST_ALGORITHM_BLAKE3_256, DIGEST_ALGORITHM_SHA256,
     LEGACY_DIRECT_REPRESENTATION_DOMAIN, LegacyDirectPreparationBinding,
     LegacyDirectPreparationError, LegacyDirectPreparationFrame, LegacyDirectPreparationGap,
-    LegacyDirectRepresentationDigest, MANIFEST_DIGEST_ALGORITHM,
-    REPRESENTATION_DIGEST_ALGORITHM, decode_legacy_direct_preparation,
-    derive_legacy_direct_representation_id, encode_legacy_direct_gap,
-    encode_legacy_direct_layout, verify_legacy_direct_representation,
+    LegacyDirectRepresentationDigest, MANIFEST_DIGEST_ALGORITHM, REPRESENTATION_DIGEST_ALGORITHM,
+    decode_legacy_direct_preparation, derive_legacy_direct_representation_id,
+    encode_legacy_direct_gap, encode_legacy_direct_layout, verify_legacy_direct_representation,
 };
 pub use crate::legacy_direct_profile::{
     LEGACY_DIRECT_MATERIALIZER_NAME, LEGACY_DIRECT_MATERIALIZER_REVISION,
@@ -46,6 +45,14 @@ pub use crate::maps::{
     COORDINATE_MAP_VERSION, CoordinateMap, CoordinateSegment, LossKind, LossMap, LossRecord,
     MapBundle, MapIdentities, MapValidationReceipt, SegmentRelation, build_coordinate_map,
     build_loss_map, validate_coordinate_map, validate_map_bundle,
+};
+pub use crate::markdown::{
+    MAX_MARKDOWN_LIMITS, MAX_MARKDOWN_PREIMAGE_BYTES, MAX_MARKDOWN_TOTAL_CANONICAL_BYTES,
+    MarkdownError, MarkdownInlineKind, MarkdownInlineMetadataStatus, MarkdownInlineRecord,
+    MarkdownKind, MarkdownLimits, MarkdownMappedText, MarkdownMetadataAssurance, MarkdownNode,
+    MarkdownObservedLinkKind, MarkdownOperationLimits, MarkdownProduct, MarkdownProfile,
+    MarkdownRawSpan, MarkdownReferenceMetadataStatus, MarkdownVerificationReceipt,
+    materialize_markdown, verify_markdown,
 };
 pub use crate::normalize::{CanonicalLine, CanonicalRepresentation, normalize_representation};
 pub use crate::product::{

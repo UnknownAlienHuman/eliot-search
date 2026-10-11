@@ -95,6 +95,9 @@ pub fn materialize_text_or_code(
         .map_err(|_| MaterializationError::OffsetOverflow)?;
     let output_bytes =
         u64::try_from(canonical.text().len()).map_err(|_| MaterializationError::OffsetOverflow)?;
+    if context.cancel.is_cancelled() {
+        return Err(MaterializationError::Cancelled);
+    }
     Ok(MaterializationProduct {
         representation_id,
         source_id: request.source_id().clone(),

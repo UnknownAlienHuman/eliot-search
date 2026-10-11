@@ -6,6 +6,10 @@
 
 Convert an exact retained revision into a canonical representation with explicit coordinate and loss maps.
 
+The additive inert Markdown API produces an immutable raw-backed product and exact-source replay
+receipt. It is source preparation only: no UnitSet, document-provider acceptance or runtime/product
+qualification is implied.
+
 ## Owns
 
 - materializer profile contracts
@@ -13,6 +17,7 @@ Convert an exact retained revision into a canonical representation with explicit
 - coordinate map and loss map production
 - assurance ceiling classification
 - provider qualification seam for optional documents
+- inert Markdown profiles, bounded original-range observations, shared canonical commitments and complete exact-revision replay verification
 - bounded exact legacy preparation-object/reference reads
 - no-clobber immutable preparation publication with native-identity fencing
 - exact `ELSPRP02` binding and `ELSPRF01` reference layouts
@@ -43,3 +48,37 @@ overlay remain injected by daemon composition.
 - **Delivery wave:** W2 baseline / P04; optional P17
 - **Soft source-line target:** 7,000
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
+
+## Inert Markdown source preparation
+
+`MarkdownProfile::new` requires a validated Text-only/UTF-8-only raw profile: BOM and invalid sequences
+are rejected, newlines are preserved exactly, Unicode normalization is absent and loss is rejected.
+Its identity is computed internally. Pure setup has fixed 512 Ki logical work units and 16 KiB logical
+storage, without an operation clock. Source and fixture definitions bind exact embedded bytes, including
+line endings; authored fixture identity does not prove fixture execution.
+
+`materialize_markdown` reuses the validated request, injected exact revision port and raw context,
+with additional profile/operation limits and the original caller deadline. The private
+`pulldown-cmark =0.13.1` dependency has defaults disabled and uses empty parser Options. Raw bytes and
+maps remain the representation; HTML and destinations remain inert. Read-only records expose checked
+whole-event spans and selected mapped code/info/destination/title values. Ordinary decoded Text/HTML
+strings are not retained as another representation. Overlapping observations are not additive coverage.
+`ObservedSpansAndSelectedValues` and `PotentiallyIncomplete` reference metadata remain explicit:
+reference fallback can leave links as ordinary text, so references are not claimed exhaustive.
+
+`verify_markdown` reopens the same exact retained revision through the same preparation path and
+compares the complete raw/maps/profile, ordered inventories, selected values, metadata status, usage
+and commitments. Root coverage or stored digest equality alone is insufficient. Refusal returns no
+complete product or replay receipt.
+
+Original cancellation/deadline checkpoints bracket donor calls and terminal results. Every next
+attempt, including terminal None, is charged before advancing; yielded events are counted separately.
+Logical storage accounts owner records/frames/selected strings, residency copies and row temporaries,
+including original inventory held during replay. It excludes borrowed raw bytes, existing raw/maps,
+allocator spare capacity and donor internals. Logical work is not measured CPU work, and synchronous
+donor calls have no hard-preemption or donor-memory guarantee.
+
+The separately versioned structural UnitSet successor and JATS remain required under
+[#226](https://github.com/UnknownAlienHuman/eliot-search/issues/226). Durable persistence/caller adoption
+belongs to #331. All new fixtures are AUTHORED_NOT_RUN / NOT_COMPILED; execution and document/native/
+resource/product qualification remain #215/#216.
