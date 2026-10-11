@@ -50,6 +50,17 @@ row construction and schema order. It provides no semantic or operation
 authority. The #396 fixtures are authored; their execution and resource
 qualification remain deferred under #352 and #215.
 
+`blake3_canonical_array_with_usage` returns an immutable `CanonicalBlake3Output`
+with readonly digest and exact successful complete-preimage byte getters. The
+same checked stream counts domain framing, the array header and encoded rows
+before each hash update, without a second encoder pass or complete buffer.
+The existing digest-only API delegates to this producer and preserves its
+bytes, signature and refusal ordering. Errors return neither digest nor usage.
+This reports encoder consumption; caller row allocations and cumulative
+operation budgets remain caller-owned. It grants no admission or operation
+authority. The two #422 private usage/refusal fixtures are authored, not run;
+execution and resource qualification remain under #215.
+
 Stored/wire decoding does not prove that hashing occurred. Legacy raw-byte
 constructors remain decode-only compatibility until each semantic owner's
 profile/rebuild migration. The typed `xtask validate canonical-digest-guard`

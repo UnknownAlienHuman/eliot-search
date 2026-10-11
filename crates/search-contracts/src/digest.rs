@@ -166,6 +166,30 @@ pub fn blake3_canonical(
     ))
 }
 
+/// One completed canonical BLAKE3 computation and its exact complete byte usage.
+///
+/// This is encoder usage only, not an operation, validation, completeness or
+/// budget receipt. Fields are private; no supplied digest or count can mint it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CanonicalBlake3Output {
+    digest: Blake3Digest32,
+    complete_preimage_bytes: usize,
+}
+
+impl CanonicalBlake3Output {
+    /// Internally computed equality digest.
+    #[must_use]
+    pub const fn digest(self) -> Blake3Digest32 {
+        self.digest
+    }
+
+    /// Actual domain, NUL and CBOR bytes consumed by this successful computation.
+    #[must_use]
+    pub const fn complete_preimage_bytes(self) -> usize {
+        self.complete_preimage_bytes
+    }
+}
+
 /// Hash a finite ordered canonical array without collecting its complete input.
 ///
 /// Uses the same length-first CBOR profile and domain framing as
@@ -187,18 +211,44 @@ pub fn blake3_canonical_array(
     rows: impl IntoIterator<Item = Result<CanonicalValue, ContractError>>,
     limit: DigestInputLimit,
 ) -> Result<Blake3Digest32, ContractError> {
+    blake3_canonical_array_with_usage(domain, row_count, rows, limit)
+        .map(CanonicalBlake3Output::digest)
+}
+
+/// Hash the same finite canonical array and return exact successful byte usage.
+///
+/// The count includes domain framing, the containing array and all row bytes.
+/// One shared checked encoder feeds both the count and the private hasher; no
+/// preimage, second encoding pass or local CBOR size calculator is retained.
+/// Caller row construction and allocations before sink charging remain outside
+/// this byte-usage value. A consumer owns any cumulative budget and its units.
+///
+/// # Errors
+/// Has the same domain/count/row/encoding/ceiling refusals and precedence as
+/// the digest-only array function. Any error returns neither digest nor byte usage.
+pub fn blake3_canonical_array_with_usage(
+    domain: &CanonicalDigestDomain,
+    row_count: usize,
+    rows: impl IntoIterator<Item = Result<CanonicalValue, ContractError>>,
+    limit: DigestInputLimit,
+) -> Result<CanonicalBlake3Output, ContractError> {
     check_canonical_array_length(row_count)?;
     let payload_limit = domain.payload_limit(Representation::Cbor, limit)?;
+    let mut complete_preimage_bytes = limit.get() - payload_limit;
     let mut hasher = blake3::Hasher::new();
     hasher.update(domain.name.as_bytes());
     hasher.update(&[0]);
     stream_canonical_cbor_array(row_count, rows, payload_limit, |bytes| {
+        complete_preimage_bytes = complete_preimage_bytes
+            .checked_add(bytes.len())
+            .ok_or_else(|| ContractError::oversize("digest_preimage", limit.get(), usize::MAX))?;
         hasher.update(bytes);
         Ok(())
     })?;
-    Ok(Blake3Digest32::from_computed_bytes(
-        *hasher.finalize().as_bytes(),
-    ))
+    Ok(CanonicalBlake3Output {
+        digest: Blake3Digest32::from_computed_bytes(*hasher.finalize().as_bytes()),
+        complete_preimage_bytes,
+    })
 }
 
 /// SHA-256 over the same canonical CBOR profile and complete-preimage ceiling.
@@ -311,6 +361,125 @@ mod tests {
         assert_eq!(
             crate::hex_encode(&Sha256::digest(b"abc")),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+    // Counted-array cases are AUTHORED_NOT_RUN; execution remains Q/#215.
+    #[test]
+    fn canonical_array_usage_is_exact_and_boundary_inclusive() {
+        let domain = CanonicalDigestDomain::parse("eliot/cbor/usage-fixture/v1").unwrap();
+        assert_eq!(domain.as_str().len(), 27);
+        let rows = vec![
+            CanonicalValue::U64(1),
+            CanonicalValue::U64(2),
+            CanonicalValue::U64(3),
+        ];
+        let output = blake3_canonical_array_with_usage(
+            &domain,
+            rows.len(),
+            rows.iter().cloned().map(Ok),
+            DigestInputLimit::new(32).unwrap(),
+        )
+        .unwrap();
+        // RFC 8949: array header83 plus three one-byte integers; domain27+NUL1.
+        assert_eq!(output.complete_preimage_bytes(), 32);
+        assert_eq!(
+            output.digest(),
+            blake3_canonical_array(
+                &domain,
+                rows.len(),
+                rows.iter().cloned().map(Ok),
+                DigestInputLimit::new(32).unwrap(),
+            )
+            .unwrap()
+        );
+        let root = CanonicalValue::Array(crate::BoundedList::new(rows.clone()).unwrap());
+        assert_eq!(
+            crate::to_canonical_cbor(&root).unwrap().as_slice(),
+            &[0x83, 1, 2, 3]
+        );
+        assert_eq!(
+            output.digest(),
+            blake3_canonical(&domain, &root, DigestInputLimit::new(32).unwrap()).unwrap()
+        );
+        let below = blake3_canonical_array_with_usage(
+            &domain,
+            rows.len(),
+            rows.into_iter().map(Ok),
+            DigestInputLimit::new(31).unwrap(),
+        )
+        .unwrap_err();
+        assert_eq!(below.kind(), ContractErrorKind::OversizePayload);
+        assert_eq!(below.field(), "canonical_sink");
+        let empty = blake3_canonical_array_with_usage(
+            &domain,
+            0,
+            std::iter::empty(),
+            DigestInputLimit::new(29).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(empty.complete_preimage_bytes(), 29);
+        let varied = [
+            CanonicalValue::U64(256),
+            CanonicalValue::Bytes(crate::BoundedBytes::new(vec![0; 32]).unwrap()),
+        ];
+        // Outer array1 + unsigned256 three bytes + byte-string32 thirty-four bytes.
+        let output = blake3_canonical_array_with_usage(
+            &domain,
+            varied.len(),
+            varied.into_iter().map(Ok),
+            DigestInputLimit::new(66).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(output.complete_preimage_bytes(), 66);
+    }
+
+    #[test]
+    fn canonical_array_usage_returns_no_partial_result_on_refusal() {
+        let domain = CanonicalDigestDomain::parse("eliot/cbor/usage-fixture/v1").unwrap();
+        let limit = DigestInputLimit::new(64).unwrap();
+        let row_error = ContractError::new(ContractErrorKind::InvalidRange, "usage_row");
+        let rejected =
+            blake3_canonical_array_with_usage(&domain, 1, [Err(row_error.clone())], limit)
+                .unwrap_err();
+        assert_eq!(rejected, row_error);
+        for (declared, actual) in [(2, 1), (1, 2)] {
+            let legacy = blake3_canonical_array(
+                &domain,
+                declared,
+                (0..actual).map(|_| Ok(CanonicalValue::Null)),
+                limit,
+            )
+            .unwrap_err();
+            let counted = blake3_canonical_array_with_usage(
+                &domain,
+                declared,
+                (0..actual).map(|_| Ok(CanonicalValue::Null)),
+                limit,
+            )
+            .unwrap_err();
+            assert_eq!(counted, legacy);
+        }
+        let mut visits = 0;
+        let rows = std::iter::from_fn(|| {
+            visits += 1;
+            Some(Ok(CanonicalValue::Null))
+        });
+        assert!(
+            blake3_canonical_array_with_usage(
+                &domain,
+                crate::MAX_COLLECTION_ITEMS + 1,
+                rows,
+                limit,
+            )
+            .is_err()
+        );
+        assert_eq!(visits, 0);
+        let raw = CanonicalDigestDomain::parse("eliot/raw/usage-fixture/v1").unwrap();
+        assert_eq!(
+            blake3_canonical_array_with_usage(&raw, 0, std::iter::empty(), limit,)
+                .unwrap_err()
+                .kind(),
+            ContractErrorKind::InvalidTaggedVariant
         );
     }
 }
