@@ -7,11 +7,12 @@ use core::fmt;
 use std::collections::BTreeSet;
 
 use search_contracts::{
-    Blake3Digest32, BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalText,
-    CanonicalValue, ContractError, ContractErrorKind, DigestInputLimit, NonZeroRevision,
-    blake3_canonical_array,
+    Blake3Digest32, BoundedBytes, BoundedList, CanonicalBlake3Output, CanonicalDigestDomain,
+    CanonicalText, CanonicalValue, ContractError, ContractErrorKind, DigestInputLimit,
+    NonZeroRevision, blake3_canonical_array_with_usage,
 };
 
+use super::batch_v2::EvaluationMeterV2;
 use super::observation_v2::{AdmissionObservationV2, ObservationFingerprintV2};
 use super::policy_v2::{
     CanonicalRuleV2, CheckpointFailureV2, CompiledAdmissionPolicyV2, MatchBufferV2,
@@ -57,7 +58,7 @@ pub struct EvaluationLimitsV2 {
 }
 
 impl EvaluationLimitsV2 {
-    fn validate(self) -> Result<Self, AdmissionError> {
+    pub(super) fn validate(self) -> Result<Self, AdmissionError> {
         for (value, maximum) in [
             (self.max_rule_evaluations, MAX_RULE_EVALUATIONS),
             (self.max_matched_rule_ids, MAX_MATCHED_RULE_IDS),
@@ -183,19 +184,52 @@ pub fn evaluate_v2(
     limits: EvaluationLimitsV2,
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<AdmissionDecisionV2, AdmissionError> {
+    evaluate_v2_metered(policy, observation, scratch, limits, None, probe)
+}
+
+// The batch owner freshly creates the private meter for one whole call.
+// Some means its sole private caller already validated these per-item limits.
+// None is the existing public evaluator path, with unchanged raw validation.
+pub(super) fn evaluate_v2_metered(
+    policy: &CompiledAdmissionPolicyV2,
+    observation: &AdmissionObservationV2,
+    scratch: &mut MatchBufferV2,
+    limits: EvaluationLimitsV2,
+    mut meter: Option<&mut EvaluationMeterV2>,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<AdmissionDecisionV2, AdmissionError> {
     scratch.clear();
     let result = (|| {
         checkpoint(probe)?;
-        let limits = limits.validate()?;
+        let limits = if meter.is_none() {
+            limits.validate()?
+        } else {
+            // BatchLimitsV2::validate already checked these fresh call limits once.
+            limits
+        };
         if policy.rules().len() > limits.max_rule_evaluations {
             return Err(AdmissionError::BudgetExhausted);
         }
+        if let Some(meter) = meter.as_deref_mut() {
+            // Every canonical rule, including nonmatching/nonpath rules, is
+            // charged before observation/matcher/evaluator work for this item.
+            meter.charge_rules(policy.rules().len())?;
+        }
         checkpoint(probe)?;
-        observation.validate_encoded_limit(limits.max_observation_encoded_bytes)?;
+        if let Some(meter) = meter.as_deref_mut() {
+            let ceiling = meter.encoded_limit(limits.max_observation_encoded_bytes)?;
+            // Integration seam owned by observation_v2: same identity check and
+            // rows, but returns the successful shared producer's actual usage.
+            let output = observation.validate_encoded_limit_with_usage(ceiling)?;
+            let _ = meter.charge_encoded(output)?;
+        } else {
+            observation.validate_encoded_limit(limits.max_observation_encoded_bytes)?;
+        }
         checkpoint(probe)?;
         let path_matches = policy.match_path_rules(observation, scratch, probe)?;
         let metadata = observation.metadata();
-        let mut contributions = baseline_reasons(metadata, policy.section(), limits.max_reasons)?;
+        let mut contributions =
+            baseline_reasons(metadata, policy.section(), limits.max_reasons, &mut meter)?;
         let mut matched_rule_ids = Vec::new();
         for (index, rule) in policy.rules().iter().enumerate() {
             checkpoint(probe)?;
@@ -203,16 +237,25 @@ pub fn evaluate_v2(
                 if matched_rule_ids.len() >= limits.max_matched_rule_ids {
                     return Err(AdmissionError::BudgetExhausted);
                 }
+                if let Some(meter) = meter.as_deref_mut() {
+                    meter.charge_matched_rule_id()?;
+                }
                 matched_rule_ids.push(rule.id().to_owned());
-                insert_reason(&mut contributions, rule.reason(), limits.max_reasons)?;
+                insert_reason_metered(
+                    &mut contributions,
+                    rule.reason(),
+                    limits.max_reasons,
+                    &mut meter,
+                )?;
             }
         }
         let outcome = resolve(&contributions);
         if contributions.is_empty() {
-            insert_reason(
+            insert_reason_metered(
                 &mut contributions,
                 AdmissionReasonCode::DenyByDefault,
                 limits.max_reasons,
+                &mut meter,
             )?;
         }
         let reason_codes: Vec<_> = contributions
@@ -231,10 +274,16 @@ pub fn evaluate_v2(
             sensitivity,
         };
         checkpoint(probe)?;
-        let fingerprint = DecisionFingerprintV2(
+        let digest = if let Some(meter) = meter.as_deref_mut() {
+            let ceiling = meter.encoded_limit(limits.max_encoded_bytes)?;
+            let output = compute_decision_fingerprint_with_usage(&data, ceiling)
+                .map_err(encoded_limit_error)?;
+            meter.charge_encoded(output)?
+        } else {
             compute_decision_fingerprint(&data, limits.max_encoded_bytes)
-                .map_err(encoded_limit_error)?,
-        );
+                .map_err(encoded_limit_error)?
+        };
+        let fingerprint = DecisionFingerprintV2(digest);
         checkpoint(probe)?;
         let decision = AdmissionDecisionV2 {
             outcome,
@@ -255,6 +304,26 @@ pub fn evaluate_v2(
     result
 }
 
+fn insert_reason_metered(
+    reasons: &mut BTreeSet<AdmissionReasonCode>,
+    reason: AdmissionReasonCode,
+    maximum: usize,
+    meter: &mut Option<&mut EvaluationMeterV2>,
+) -> Result<(), AdmissionError> {
+    if !reasons.contains(&reason) {
+        // Local ceiling wins before the aggregate charge; both are exhaustion.
+        if reasons.len() >= maximum {
+            return Err(AdmissionError::BudgetExhausted);
+        }
+        if let Some(meter) = meter.as_deref_mut() {
+            meter.charge_reason_contribution()?;
+        }
+    }
+    // Duplicate reasons charge once per item. All categories remain visible
+    // here, before resolve/filter, including baseline and fallback reasons.
+    insert_reason(reasons, reason, maximum)
+}
+
 fn insert_reason(
     reasons: &mut BTreeSet<AdmissionReasonCode>,
     reason: AdmissionReasonCode,
@@ -271,6 +340,7 @@ fn baseline_reasons(
     metadata: &AdmissionObservation,
     section: &ValidatedAdmissionConfig,
     maximum: usize,
+    meter: &mut Option<&mut EvaluationMeterV2>,
 ) -> Result<BTreeSet<AdmissionReasonCode>, AdmissionError> {
     use AdmissionReasonCode as R;
     let mut reasons = BTreeSet::new();
@@ -349,7 +419,7 @@ fn baseline_reasons(
         ),
     ] {
         if applies {
-            insert_reason(&mut reasons, reason, maximum)?;
+            insert_reason_metered(&mut reasons, reason, maximum, meter)?;
         }
     }
     Ok(reasons)
@@ -436,8 +506,16 @@ fn compute_decision_fingerprint(
     data: &DecisionData<'_>,
     max_encoded_bytes: usize,
 ) -> Result<Blake3Digest32, ContractError> {
+    compute_decision_fingerprint_with_usage(data, max_encoded_bytes)
+        .map(CanonicalBlake3Output::digest)
+}
+
+fn compute_decision_fingerprint_with_usage(
+    data: &DecisionData<'_>,
+    max_encoded_bytes: usize,
+) -> Result<CanonicalBlake3Output, ContractError> {
     let domain = CanonicalDigestDomain::parse(DECISION_DIGEST_DOMAIN)?;
-    blake3_canonical_array(
+    blake3_canonical_array_with_usage(
         &domain,
         DECISION_ROWS,
         (0..DECISION_ROWS).map(|index| decision_row(data, index)),

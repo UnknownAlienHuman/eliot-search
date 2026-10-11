@@ -27,3 +27,16 @@ process or network I/O.
 ## Size
 
 Target `src/` ≤ 4,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+
+## #427 bounded batch size acceptance
+
+The manager reviewed the complete admission-owned batch after the real permanent
+receipt-owner split. This exact slice has a whole handwritten Rust ceiling of9,600
+physical lines, including all inline/external fixtures; projected9533 is reviewed
+before source edits. The10,000 hard stop stays unchanged. No prior receipt/contracts
+allowance transfers and no future growth is authorized. New growth needs review.
+
+Keep the1024-occurrence multiset contract, all finite metering dimensions and
+causal fixtures. Reuse the sole evaluator and measured shared producer; no sizing
+formula, second encode, duplicate evaluator, forwarding split or partial-success
+fallback. Original probes and all-refusal cleanup stay with the actual owner.

@@ -6,9 +6,13 @@
 use core::fmt;
 
 use search_contracts::{
-    Blake3Digest32, BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalText,
-    CanonicalValue, ContractError, ContractErrorKind, DigestInputLimit, blake3_canonical_array,
+    Blake3Digest32, BoundedBytes, BoundedList, CanonicalBlake3Output, CanonicalDigestDomain,
+    CanonicalText, CanonicalValue, ContractError, ContractErrorKind, DigestInputLimit,
+    blake3_canonical_array_with_usage,
 };
+
+#[cfg(test)]
+use search_contracts::blake3_canonical_array;
 
 use super::{AdmissionError, AdmissionObservation};
 
@@ -220,17 +224,26 @@ impl AdmissionObservationV2 {
     /// Uses the same closed ceiling/encoding failures as `new_with_encoded_limit`.
     /// A recomputed fingerprint mismatch returns `ADMISSION_OBSERVATION_INVALID`.
     pub fn validate_encoded_limit(&self, max_encoded_bytes: usize) -> Result<(), AdmissionError> {
+        self.validate_encoded_limit_with_usage(max_encoded_bytes)
+            .map(|_| ())
+    }
+
+    /// Revalidate through the same closed producer and report actual encoded work.
+    pub(super) fn validate_encoded_limit_with_usage(
+        &self,
+        max_encoded_bytes: usize,
+    ) -> Result<CanonicalBlake3Output, AdmissionError> {
         validate_encoded_ceiling(max_encoded_bytes)?;
-        let fingerprint = compute_observation_fingerprint(
+        let output = compute_observation_with_usage(
             &self.metadata,
             self.relative_locator.as_ref(),
             max_encoded_bytes,
         )
         .map_err(encoded_limit_error)?;
-        if fingerprint != self.fingerprint.0 {
+        if output.digest() != self.fingerprint.0 {
             return Err(AdmissionError::ObservationInvalid);
         }
-        Ok(())
+        Ok(output)
     }
 
     /// Existing bounded metadata, without mutable access or receipt authority.
@@ -275,9 +288,18 @@ fn compute_observation_fingerprint(
     relative_locator: Option<&AdmissionRelativeLocator>,
     max_encoded_bytes: usize,
 ) -> Result<Blake3Digest32, ContractError> {
+    compute_observation_with_usage(metadata, relative_locator, max_encoded_bytes)
+        .map(CanonicalBlake3Output::digest)
+}
+
+fn compute_observation_with_usage(
+    metadata: &AdmissionObservation,
+    relative_locator: Option<&AdmissionRelativeLocator>,
+    max_encoded_bytes: usize,
+) -> Result<CanonicalBlake3Output, ContractError> {
     let domain = CanonicalDigestDomain::parse(OBSERVATION_DIGEST_DOMAIN)?;
     let limit = DigestInputLimit::new(max_encoded_bytes)?;
-    blake3_canonical_array(
+    blake3_canonical_array_with_usage(
         &domain,
         OBSERVATION_ROWS,
         (0..OBSERVATION_ROWS).map(|index| observation_row(metadata, relative_locator, index)),
