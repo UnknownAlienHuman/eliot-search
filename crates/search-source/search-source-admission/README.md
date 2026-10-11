@@ -14,13 +14,27 @@ field; a sticky overflow returns no digest. `search-contracts::sha256_exact_byte
 executes accepted RustCrypto `sha2 0.10.9` without adding another prefix or codec.
 The admission package contains no SHA compression or padding implementation.
 
-`section_digest` now returns `Result<Blake3Digest32, AdmissionError>` because its
-input's profile string is publicly writable. Oversize returns the content-free
-`ADMISSION_OBSERVATION_INVALID`. The legacy return container holds SHA-256 bytes;
+`ValidatedAdmissionConfig` is produced only by `validate_section` and exposes
+five read-only getters for its private profile, size and permission fields.
+Callers edit `ConfigSectionInput` and validate a new section. They cannot
+construct or mutate the validated fields. This validates data without granting
+applied-effect or source-admission authority.
+
+`section_digest` retains `Result<Blake3Digest32, AdmissionError>` and its bounded
+writer. Oversize returns the content-free `ADMISSION_OBSERVATION_INVALID`.
+The legacy return container holds SHA-256 bytes;
 it does not certify BLAKE3 execution. Opaque bounded policy/observation inputs keep
 their infallible signatures. No stored identity is relabelled or rebuilt here.
 Caller-specific lower `AdmissionLimits` behavior is unchanged by this absolute
 ceiling; effective v2 policy and limit semantics remain separate work.
+
+The public Rust API deliberately replaces writable fields with immutable
+methods. Validated values retain exact v1 SHA bytes (**BYTE_COMPATIBLE**),
+validator/reload behavior and existing consumer source. Four private
+constructor/getter/input-isolation/reload fixture groups are
+**AUTHORED_NOT_RUN** under #352/#241/#215. The existing owner-only synthetic
+oversize fixture checks the defensive codec ceiling; it supplies no public
+validated-value bypass.
 
 Legacy v1 rule patterns remain validated, normalized and fingerprinted diagnostic
 bytes. V1 has no path predicate, so `evaluate`, `issue_receipt`, `verify_receipt`
