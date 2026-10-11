@@ -1520,7 +1520,7 @@ mod tests {
 
     #[test]
     fn independent_eight_row_golden_and_complete_byte_boundaries_preserve_identity() {
-        use search_contracts::{blake3_raw, to_canonical_cbor};
+        use search_contracts::{blake3_canonical, parse_canonical_cbor, to_canonical_cbor};
         let policy = custom_policy(section(), 1, Vec::new());
         let mut raw = raw_observation();
         raw.byte_size = Some(10);
@@ -1548,10 +1548,11 @@ mod tests {
         );
         assert_eq!(cbor.as_slice().len(), 144);
         assert_eq!(hex(cbor.as_slice()), expected);
+        let value = parse_canonical_cbor(cbor.as_slice()).unwrap();
         assert_eq!(
-            blake3_raw(
+            blake3_canonical(
                 &CanonicalDigestDomain::parse(DECISION_DIGEST_DOMAIN).unwrap(),
-                cbor.as_slice(),
+                &value,
                 DigestInputLimit::new(177).unwrap()
             )
             .unwrap()

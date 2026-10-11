@@ -127,7 +127,7 @@ are deleted. No lib/observation/policy/root manifest/lock/dependency/contracts/
 receipt-leaf/daemon/ingestion change. Receipt ownership stays in its permanent leaf.
 Pure evaluation gives no native containment, root/source identity, access or currentness proof.
 
-The complete corrected owner measures TOTAL 8,672 physical handwritten Rust lines:
+At #430, the complete corrected owner measured TOTAL 8,672 physical handwritten Rust lines:
 batch 308 + evaluator 1,723 + lib 4,442 + policy 1,303 + observation 896,
 including every retained fixture. This is 858 fewer than accepted TOTAL 9,530.
 It remains above the 8,500 split-review threshold and below hard 10,000.
@@ -145,12 +145,18 @@ policy/v1 fixtures stay unchanged and AUTHORED_NOT_RUN. This inventory retains
 requirements for later integrated implementation/execution under #427/#215;
 it is neither present tests nor a passing oracle.
 
-Corrective production/static gate results are recorded in #430 and its PR at
-the final corrected SHA; earlier #427 results are not new-head evidence.
+The #430 production/static gate results are recorded at its exact reviewed SHA;
+they are not #428 evidence. #428 production/static records belong to its exact reviewed head in #428 and its PR.
 Daemon D387 remains NOT_PASS/unrun. Source presence/compilation is not native,
 runtime, live-Qdrant, installed, resource, scale or product qualification.
-Known retained evaluator golden F1/#428 remains unrepaired and is not a passing
-oracle; its correction/execution and F1/#426 receipt documentation stay separate.
+The #428 correction changes only the retained evaluator fixture oracle at source
+level. It parses the same independently framed, golden-checked 144-byte CBOR with
+`parse_canonical_cbor` and hashes it using `blake3_canonical` under the complete
+177-byte ceiling. The exact golden and 144/177/176/194/193 assertions are retained.
+The fixture remains AUTHORED_NOT_RUN under #215: this correction is neither a
+passing oracle nor fixture execution/native/runtime/product qualification.
+All production/profile/API/checkpoint bodies stay unchanged; F1/#426 receipt
+documentation remains separate.
 #241/#405, Wave2/#235 and Goal remain incomplete.
 
 ## Deferred exact batch cases (#427/#215)

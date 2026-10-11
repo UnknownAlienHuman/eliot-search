@@ -44,7 +44,7 @@ and v1 fixtures. Preserve the exact deferred case/assertion inventory under
 #427/#215 and in [BATCH_V2.md](BATCH_V2.md); removed bodies are absent from this
 corrective candidate, not passing tests. Historical authored bodies were not run.
 
-The complete corrected owner is 8,672 physical handwritten Rust lines TOTAL,
+At #430, the complete corrected owner was 8,672 physical handwritten Rust lines TOTAL,
 including every retained fixture: batch 308 + evaluator 1,723 + lib 4,442 +
 policy 1,303 + observation 896. It removes 858 lines from accepted TOTAL 9,530.
 This still exceeds the 8,500 split-review threshold. Independent split review and manager pre-edit acceptance under #430 bind this
@@ -56,3 +56,14 @@ growth grant, fixture exclusion or receipt/contracts allowance is implied.
 Reuse the measured shared producer; no sizing formula, second encode, duplicate
 evaluator, forwarding split or partial-success fallback. Original probes and
 all-refusal cleanup stay unchanged. Source gates and qualification remain separate.
+
+## #428 fixture-only size boundary
+
+Independent whole-owner review and manager pre-edit acceptance bind this exact
+repair to 8,673 TOTAL physical handwritten Rust lines, including every retained
+fixture: batch 308 + evaluator 1,724 + lib 4,442 + policy 1,303 + observation 896.
+The only Rust delta is three removed/four added lines in the existing evaluator
+CBOR golden oracle. Production code, identities, APIs, probes and every assertion
+remain unchanged. This fresh allowance applies only to #428; no #430 allowance
+transfers and no future growth is granted. The 8,500 review threshold and 10,000
+hard stop remain. The corrected fixture is AUTHORED_NOT_RUN under #215.

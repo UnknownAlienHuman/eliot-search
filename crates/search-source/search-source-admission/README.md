@@ -167,14 +167,21 @@ removed. Their exact named future assertions remain in [BATCH_V2.md](BATCH_V2.md
 for #427/#215; they are deferred and absent from this candidate. Historical bodies
 remain in Git at `21c073e993bde903b35e1cf2a9de5575dfd68bc7` and were never executed.
 Retained evaluator/observation/policy/v1 fixtures remain **AUTHORED_NOT_RUN**.
-The unrepaired evaluator golden F1/#428 is not a passing oracle; its correction
-and F1/#426 receipt documentation remain separate.
+The #428 correction changes only the retained evaluator fixture oracle at source
+level: after checking the existing independently framed 144-byte CBOR golden,
+it parses those bytes with `parse_canonical_cbor` and hashes the resulting value
+with `blake3_canonical` under the complete 177-byte ceiling. The exact golden and
+144/177/176/194/193 boundary assertions remain unchanged. The fixture remains
+**AUTHORED_NOT_RUN** under #215; a corrected source oracle is not a passing oracle,
+fixture execution or product qualification. Production bodies, profiles, identity
+bytes, APIs and checkpoints are unchanged. F1/#426 receipt documentation stays separate.
 
-The concrete corrective owner measures 8,672 handwritten Rust lines TOTAL,
+At #430, the complete corrected owner measured 8,672 handwritten Rust lines TOTAL,
 including retained fixtures, down 858 from 9,530. It still requires the 8,500
 threshold whole-owner review; #430 records independent review and manager
 pre-edit acceptance of a new 8,700-line ceiling for this correction only. See AGENTS.md for the unchanged hard stop and
-BATCH_V2.md for the scope and corrected chronology. Exact-head corrective production/static
-gate results are recorded in #430 and its PR; daemon D387 stays **NOT_PASS/unrun**. Source gates do
+BATCH_V2.md for that scope and corrected chronology. The #430 production/static
+gate records apply to its reviewed head; #428 production/static records belong to its exact reviewed head in #428 and its PR.
+Daemon D387 stays **NOT_PASS/unrun**. Source gates do
 not qualify integrated resource/native/runtime/live-Qdrant/installed/scale behavior
 under #215 or complete #241/#405, Wave2/#235 or Goal.
