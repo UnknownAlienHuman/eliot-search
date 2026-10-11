@@ -78,7 +78,34 @@ including original inventory held during replay. It excludes borrowed raw bytes,
 allocator spare capacity and donor internals. Logical work is not measured CPU work, and synchronous
 donor calls have no hard-preemption or donor-memory guarantee.
 
-The separately versioned structural UnitSet successor and JATS remain required under
+The separately versioned Markdown structural UnitSet is delivered in search-unitizer; JATS remains under
 [#226](https://github.com/UnknownAlienHuman/eliot-search/issues/226). Durable persistence/caller adoption
 belongs to #331. All new fixtures are AUTHORED_NOT_RUN / NOT_COMPILED; execution and document/native/
 resource/product qualification remain #215/#216.
+
+## Inert JATS source preparation
+
+The additive JATS API accepts a strict UTF-8 Journal Publishing 1.4 subset through private
+quick-xml 0.42.0 borrowed events with every optional feature disabled. The profile binds its exact
+donor, parser options, finite limits, closed syntax/namespace policies and source/fixture definitions.
+It requires the same exact raw Text/UTF-8 profile as Markdown. DTD/DOCTYPE, processing instructions,
+custom entities, unknown elements/attributes/namespaces, rebinding and unsupported encodings reject.
+The fixed subset includes front/journal metadata, titles, body sections, lists, figures, tables,
+references and inert links. Parsing this subset does not claim full JATS schema validity.
+
+materialize_jats retains the original XML and maps. Element/comment spans refer to original bytes;
+normalized text and attribute values are mapped observations with whole-event provenance. Resources
+are never fetched. Complete ordered inventories use fixed 256-record canonical chunks, preserving
+all records beyond the shared single-array capacity. Shared CBOR/BLAKE3 is the only identity producer.
+verify_jats reopens the same revision, reconstructs the full raw/maps/profile/inventory/usage/product
+and compares every field before issuing a receipt. A consistently rehashed omission still refuses.
+
+Positive caller ceilings narrow input/events/depth/records/values, cumulative logical storage/work
+and actual successful complete canonical preimages. Original cancellation and absolute deadline
+survive raw preparation, donor calls and replay. Logical work/storage are not CPU/RSS guarantees;
+input-bounded synchronous donor calls cannot be hard-preempted. Original raw max_steps is separate.
+
+This #444 delivery is SOURCE_ONLY. The structural JATS UnitSet follows serially under #226;
+persistence/caller adoption remains #331 and requires a versioned rebuild. Ten private fixture
+functions are AUTHORED_NOT_COMPILED/NOT_RUN. Official sample, native/resource/installed and product
+qualification remain #215/#216. Existing raw, Markdown and legacy profiles/APIs/bytes are unchanged.

@@ -1,6 +1,6 @@
 # Function contract — `search-materializer`
 
-**Status:** W2/P04 baseline logical contract plus additive inert Markdown source preparation;
+**Status:** W2/P04 baseline logical contract plus additive inert Markdown/JATS source preparation;
 no document-provider acceptance or runtime qualification.
 
 This package owns deterministic baseline text/source-code materialization from one exact immutable
@@ -316,3 +316,38 @@ Legacy public APIs/bytes and retained fixtures remain unchanged, apart from the 
 poll in the baseline producer. This source API is not a UnitSet; the separately versioned structural
 successor and JATS remain #226, persistence/adoption #331, and authored-but-uncompiled/unexecuted
 fixtures plus document/native/resource/product qualification #215/#216.
+
+## Additive inert JATS preparation (#444)
+
+### JatsProfile::new(raw_profile, limits)
+
+Require strict Text/UTF-8/no-BOM/no-loss/preserve-newline raw preparation, positive narrowing limits
+and an internally computed profile commitment. Select Journal Publishing 1.4, XML 1.0 and the closed
+element/attribute/parent tables. Bind exact quick-xml 0.42.0 with defaults off, explicit reader settings,
+two retrieved official schema-file hashes (not complete imported closure), source/fixture definitions
+and all finite limits. No runtime schema validation, remote resource or schema-conformance claim.
+
+### materialize_jats(request, port, raw_context, profile, limits, deadline)
+
+Preflight selectors, raw bounds and additional work before acquisition. Reuse the owning raw producer
+and verifier, retain exact original XML/maps, then pull borrowed XML events. Reject unknown syntax,
+namespaces/rebinding, DTD/DOCTYPE/PI/custom entities and unsupported declarations. Require XML attribute
+whitespace and ordered declaration fields. Predefined/numeric normalization is explicit XML 1.0;
+literal and decoded characters must be legal, numeric CR is not normalized twice. Mapped values obey
+individual and cumulative byte ceilings before retained growth and never become exact subanchors.
+
+Retain complete ordered elements/attributes/texts/comments/declaration/counters with original spans.
+Encode every record through fixed 256-record chunks, full except last, with exact count/status header
+and shared CBOR/BLAKE3 only. Charge cumulative logical storage before copies/reservations, construction
+once before encoder-cap selection, and actual successful complete canonical bytes once. Raw max_steps
+is independent; original cancellation/deadline checkpoints remain. Donor CPU/RSS are not measured limits.
+
+### verify_jats(product, request, port, raw_context, profile, limits, deadline)
+
+Hold and charge the supplied inventory, reopen the same exact revision and reconstruct the full product
+through the same owning producer. Compare every raw/map/profile/ordered observation/counter/usage/
+commitment field and poll the original operation before returning an immutable receipt. Rehashed
+omission/order/span/value/declaration/counter mutation refuses; no partial-success receipt.
+
+SOURCE_ONLY: JATS structural UnitSet remains a serial #226 successor, adoption/rebuild #331,
+and ten authored private fixture functions remain NOT_COMPILED/NOT_RUN under #215/#216.
