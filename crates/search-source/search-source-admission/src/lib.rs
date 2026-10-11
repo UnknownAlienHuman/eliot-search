@@ -1822,6 +1822,9 @@ pub fn validate_observation(
     let source_kind = SourceKind::parse(&input.source_kind)?;
     let source_class =
         SourceClass::parse(&input.source_class).map_err(|_| AdmissionError::PolicyUnknownField)?;
+    if input.unavailable_fields.len() > CLOSED_UNAVAILABLE_FIELDS.len() {
+        return Err(AdmissionError::ObservationInvalid);
+    }
     for field in &input.unavailable_fields {
         if !CLOSED_UNAVAILABLE_FIELDS.contains(&field.as_str()) {
             return Err(AdmissionError::PolicyUnknownField);
@@ -2982,6 +2985,92 @@ pub fn baseline_policy(revision: u64, max_file_bytes: u64) -> CanonicalAdmission
 mod tests {
     use super::*;
 
+    // #418 causal fixtures. AUTHORED_NOT_RUN under #352/#241/#405/#215.
+    #[test]
+    fn all_eight_unique_markers_accept_and_order_keeps_identity() {
+        let policy = baseline();
+        let mut first = observation_input("regular");
+        first.unavailable_fields = CLOSED_UNAVAILABLE_FIELDS.map(str::to_owned).to_vec();
+        first.byte_size = None;
+        first.sensitivity = None;
+        first.detector_id = None;
+        first.profile_id = None;
+        first.is_generated = None;
+        first.is_vendor = None;
+        first.is_binary = None;
+        first.is_system = None;
+        let a = validate_observation(&first, &policy, DEFAULT_ADMISSION_LIMITS).unwrap();
+        first.unavailable_fields.reverse();
+        let b = validate_observation(&first, &policy, DEFAULT_ADMISSION_LIMITS).unwrap();
+        assert_eq!(a, b);
+        assert_eq!(observation_digest(&a), observation_digest(&b));
+        assert_eq!(
+            a.unavailable_fields().count(),
+            CLOSED_UNAVAILABLE_FIELDS.len()
+        );
+        let decision = evaluate(
+            &policy,
+            &a,
+            AdmissionBudget::default_budget(),
+            CancelFlag::live(),
+        )
+        .unwrap();
+        assert_ne!(decision.outcome, AdmissionOutcome::Allow);
+    }
+
+    #[test]
+    fn ninth_marker_refuses_before_the_unknown_token_loop() {
+        let policy = baseline();
+        let mut over = observation_input("regular");
+        over.unavailable_fields = vec!["byte-size".to_owned(); 9];
+        assert_eq!(
+            validate_observation(&over, &policy, DEFAULT_ADMISSION_LIMITS),
+            Err(AdmissionError::ObservationInvalid)
+        );
+        // Unknown at either end formerly reached the token loop first.
+        for index in [0, 8] {
+            over.unavailable_fields[index] = "not-a-closed-marker".to_owned();
+            assert_eq!(
+                validate_observation(&over, &policy, DEFAULT_ADMISSION_LIMITS),
+                Err(AdmissionError::ObservationInvalid)
+            );
+            over.unavailable_fields[index] = "byte-size".to_owned();
+        }
+    }
+
+    #[test]
+    fn raw_cardinality_preserves_earlier_and_within_cap_refusals() {
+        let policy = baseline();
+        let validate = |raw: &UnvalidatedObservationInput| {
+            validate_observation(raw, &policy, DEFAULT_ADMISSION_LIMITS)
+        };
+        let mut raw = observation_input("regular");
+        raw.unavailable_fields = vec!["byte-size".to_owned(); 9];
+        raw.unknown_fields.push("future".to_owned());
+        let bad_limits = AdmissionLimits {
+            max_rules: 0,
+            ..DEFAULT_ADMISSION_LIMITS
+        };
+        assert_eq!(
+            validate_observation(&raw, &policy, bad_limits),
+            Err(AdmissionError::ObservationInvalid)
+        );
+        assert_eq!(validate(&raw), Err(AdmissionError::PolicyUnknownField));
+        raw.unknown_fields.clear();
+        raw.source_class = "not-a-class".to_owned();
+        assert_eq!(validate(&raw), Err(AdmissionError::PolicyUnknownField));
+        raw = observation_input("regular");
+        raw.unavailable_fields = vec!["unknown".to_owned(); 8];
+        assert_eq!(validate(&raw), Err(AdmissionError::PolicyUnknownField));
+        raw.unavailable_fields = vec!["byte-size".to_owned(); 8];
+        assert_eq!(validate(&raw), Err(AdmissionError::ObservationInvalid));
+        raw.unavailable_fields.clear();
+        raw.byte_size = None;
+        assert_eq!(validate(&raw), Err(AdmissionError::ObservationIncomplete));
+        raw.byte_size = Some(10);
+        raw.unavailable_fields.push("byte-size".to_owned());
+        assert_eq!(validate(&raw), Err(AdmissionError::ObservationInvalid));
+    }
     fn test_platform() -> SectionPlatform {
         SectionPlatform {
             os: "windows".to_owned(),

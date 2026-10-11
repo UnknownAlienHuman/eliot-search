@@ -86,6 +86,14 @@ Private boundary/parity/error/readonly fixtures are **AUTHORED_NOT_RUN**, Q/#215
 limits, receipt/batch and integration remain #405/#241/#270/#271. Effective evaluation
 and immutable decision identity are supplied by #416.
 
+#418 caps the raw `unavailable_fields` list at the existing eight-name vocabulary before iteration
+or cloning in `validate_observation`. Oversized lists return `ObservationInvalid`, including an
+oversized list with an unknown marker. Earlier input checks retain their priority; in-cap validation
+and all accepted v1/v2 identity bytes remain exact (**BYTE_COMPATIBLE**). This bounds the validator's
+work and copy, without bounding caller-side input construction. Private causal fixtures are
+**AUTHORED_NOT_RUN**, Q/#215; receipt/batch/cumulative bounds remain #241/#405 and actual ingestion
+adoption remains #270/#271. No runtime or resource qualification follows from this source guard.
+
 - canonical policy normalization and fingerprinting
 - path/metadata/format/sensitivity observation evaluation
 - deterministic decisions, reasons and receipts
