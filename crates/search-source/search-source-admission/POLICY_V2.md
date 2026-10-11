@@ -8,9 +8,9 @@ model. It grants no admission authority.
 
 The matcher returns canonical rule indexes only. It produces no effective decision, no receipt,
 no batch, no allow or deny dominance, and no native-path, source-identity, root or currentness
-proof. Safety dominance, evaluation, receipts and batch are separate later #241 authority, and
-#405 owns lower observation and batch budgets. There is no v2-to-v1 facade and no consumer
-cutover.
+proof. Effective safety dominance and evaluation are provided by the separate
+[evaluation_v2 owner](EVALUATION_V2.md) under #416. Receipts and batch remain #241/#405 work.
+There is no v2-to-v1 facade or consumer cutover. The matcher itself still grants no verdict.
 
 The v1 policy, decision, receipt and batch bodies are unchanged (BYTE_COMPATIBLE). Adoption of v2
 is a VERSIONED_REBUILD that happens only in a later explicit slice; nothing here relabels or

@@ -115,7 +115,7 @@ pub enum CheckpointFailureV2 {
     DeadlineExceeded,
 }
 
-fn checkpoint(
+pub(super) fn checkpoint(
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<(), AdmissionError> {
     probe().map_err(|failure| match failure {
@@ -394,6 +394,13 @@ impl fmt::Debug for CompiledAdmissionPolicyV2 {
 pub struct MatchBufferV2 {
     policy: PolicyFingerprintV2,
     matches: Vec<usize>,
+}
+
+impl MatchBufferV2 {
+    /// Clears stale classification on evaluator entry and every refusal.
+    pub(super) fn clear(&mut self) {
+        self.matches.clear();
+    }
 }
 
 impl fmt::Debug for MatchBufferV2 {
