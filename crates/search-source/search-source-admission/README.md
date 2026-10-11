@@ -67,6 +67,16 @@ Six private causal fixture groups and an independently encoded synthetic golden
 are **AUTHORED_NOT_RUN** under #352/#241/#215. Source checks do not establish
 matcher behavior, native containment or product qualification.
 
+#414 adds `new_with_encoded_limit` and readonly `validate_encoded_limit` for caller-selected
+complete domain + NUL + CBOR ceilings from 1 through 16,384 bytes. The shared producer keeps
+identity bytes exact; the operation ceiling is not retained or hashed as another field.
+Invalid raw ceilings refuse as ObservationInvalid; shared preimage/sink byte exhaustion
+refuses as BudgetExhausted in the new APIs. Existing `new` retains its fixed ceiling and
+all-error ObservationInvalid behavior. Revalidation recomputes and checks the private identity
+without mutation. Bounded row values may still be copied before serialized-byte charging.
+Private boundary/parity/error/readonly fixtures are **AUTHORED_NOT_RUN**, Q/#215. Other lower
+limits, effective evaluator/decision/receipt/batch and integration remain #405/#241/#270/#271.
+
 - canonical policy normalization and fingerprinting
 - path/metadata/format/sensitivity observation evaluation
 - deterministic decisions, reasons and receipts

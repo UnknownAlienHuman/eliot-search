@@ -169,23 +169,68 @@ impl AdmissionObservationV2 {
         metadata: AdmissionObservation,
         relative_locator: Option<AdmissionRelativeLocator>,
     ) -> Result<Self, AdmissionError> {
-        let result = (|| {
-            let domain = CanonicalDigestDomain::parse(OBSERVATION_DIGEST_DOMAIN)?;
-            let limit = DigestInputLimit::new(MAX_OBSERVATION_PREIMAGE_BYTES)?;
-            blake3_canonical_array(
-                &domain,
-                OBSERVATION_ROWS,
-                (0..OBSERVATION_ROWS)
-                    .map(|index| observation_row(&metadata, relative_locator.as_ref(), index)),
-                limit,
-            )
-        })();
-        let fingerprint = result.map_err(|_| AdmissionError::ObservationInvalid)?;
+        let fingerprint = compute_observation_fingerprint(
+            &metadata,
+            relative_locator.as_ref(),
+            MAX_OBSERVATION_PREIMAGE_BYTES,
+        )
+        .map_err(|_| AdmissionError::ObservationInvalid)?;
         Ok(Self {
             metadata,
             relative_locator,
             fingerprint: ObservationFingerprintV2(fingerprint),
         })
+    }
+
+    /// Computes the same complete identity within a caller-selected byte ceiling.
+    ///
+    /// The ceiling is an operation constraint, not another identity row or a
+    /// retained acceptance flag. Bounded row values may be copied before the
+    /// shared serialized-byte charge. No cancellation or deadline is owned here.
+    ///
+    /// # Errors
+    /// Zero or above-profile ceilings and non-budget shared failures return
+    /// `ADMISSION_OBSERVATION_INVALID`. Complete preimage byte exhaustion returns
+    /// `ADMISSION_BUDGET_EXHAUSTED`. No model or partial digest is returned.
+    pub fn new_with_encoded_limit(
+        metadata: AdmissionObservation,
+        relative_locator: Option<AdmissionRelativeLocator>,
+        max_encoded_bytes: usize,
+    ) -> Result<Self, AdmissionError> {
+        validate_encoded_ceiling(max_encoded_bytes)?;
+        let fingerprint = compute_observation_fingerprint(
+            &metadata,
+            relative_locator.as_ref(),
+            max_encoded_bytes,
+        )
+        .map_err(encoded_limit_error)?;
+        Ok(Self {
+            metadata,
+            relative_locator,
+            fingerprint: ObservationFingerprintV2(fingerprint),
+        })
+    }
+
+    /// Recomputes and checks the retained identity under an operation ceiling.
+    ///
+    /// Nothing is mutated or cached; a refused check permits a later retry.
+    /// This pure model check grants no admission or receipt authority.
+    ///
+    /// # Errors
+    /// Uses the same closed ceiling/encoding failures as `new_with_encoded_limit`.
+    /// A recomputed fingerprint mismatch returns `ADMISSION_OBSERVATION_INVALID`.
+    pub fn validate_encoded_limit(&self, max_encoded_bytes: usize) -> Result<(), AdmissionError> {
+        validate_encoded_ceiling(max_encoded_bytes)?;
+        let fingerprint = compute_observation_fingerprint(
+            &self.metadata,
+            self.relative_locator.as_ref(),
+            max_encoded_bytes,
+        )
+        .map_err(encoded_limit_error)?;
+        if fingerprint != self.fingerprint.0 {
+            return Err(AdmissionError::ObservationInvalid);
+        }
+        Ok(())
     }
 
     /// Existing bounded metadata, without mutable access or receipt authority.
@@ -205,6 +250,39 @@ impl AdmissionObservationV2 {
     pub const fn fingerprint(&self) -> ObservationFingerprintV2 {
         self.fingerprint
     }
+}
+
+fn validate_encoded_ceiling(max_encoded_bytes: usize) -> Result<(), AdmissionError> {
+    if max_encoded_bytes == 0 || max_encoded_bytes > MAX_OBSERVATION_PREIMAGE_BYTES {
+        Err(AdmissionError::ObservationInvalid)
+    } else {
+        Ok(())
+    }
+}
+
+fn encoded_limit_error(error: ContractError) -> AdmissionError {
+    if error.kind() == ContractErrorKind::OversizePayload
+        && matches!(error.field(), "digest_preimage" | "canonical_sink")
+    {
+        AdmissionError::BudgetExhausted
+    } else {
+        AdmissionError::ObservationInvalid
+    }
+}
+
+fn compute_observation_fingerprint(
+    metadata: &AdmissionObservation,
+    relative_locator: Option<&AdmissionRelativeLocator>,
+    max_encoded_bytes: usize,
+) -> Result<Blake3Digest32, ContractError> {
+    let domain = CanonicalDigestDomain::parse(OBSERVATION_DIGEST_DOMAIN)?;
+    let limit = DigestInputLimit::new(max_encoded_bytes)?;
+    blake3_canonical_array(
+        &domain,
+        OBSERVATION_ROWS,
+        (0..OBSERVATION_ROWS).map(|index| observation_row(metadata, relative_locator, index)),
+        limit,
+    )
 }
 
 impl fmt::Debug for AdmissionObservationV2 {
@@ -587,5 +665,210 @@ mod tests {
         assert_eq!(error, AdmissionError::ObservationInvalid);
         assert!(!format!("{error:?}").contains(marker));
         assert!(!error.to_string().contains(marker));
+    }
+
+    // #414 cases are AUTHORED_NOT_RUN; integrated execution belongs to #215.
+    #[test]
+    fn caller_ceiling_accepts_exact_complete_golden_and_preserves_identity() {
+        // Existing independent golden: 158 CBOR + 35 domain + NUL = 194 bytes.
+        let baseline = model(&input(), Some(b"src/lib.rs"));
+        for ceiling in [194, 256, MAX_OBSERVATION_PREIMAGE_BYTES] {
+            let limited = AdmissionObservationV2::new_with_encoded_limit(
+                metadata(&input()),
+                Some(AdmissionRelativeLocator::from_bytes(b"src/lib.rs").unwrap()),
+                ceiling,
+            )
+            .unwrap();
+            assert_eq!(limited, baseline);
+        }
+        assert_eq!(
+            AdmissionObservationV2::new_with_encoded_limit(
+                metadata(&input()),
+                Some(AdmissionRelativeLocator::from_bytes(b"src/lib.rs").unwrap()),
+                193,
+            ),
+            Err(AdmissionError::BudgetExhausted)
+        );
+    }
+
+    #[test]
+    fn caller_ceiling_raw_invalid_values_refuse_before_shared_encoding() {
+        let baseline = model(&input(), Some(b"src/lib.rs"));
+        for ceiling in [0, MAX_OBSERVATION_PREIMAGE_BYTES + 1, usize::MAX] {
+            assert_eq!(
+                AdmissionObservationV2::new_with_encoded_limit(
+                    metadata(&input()),
+                    baseline.relative_locator().cloned(),
+                    ceiling,
+                ),
+                Err(AdmissionError::ObservationInvalid)
+            );
+            assert_eq!(
+                baseline.validate_encoded_limit(ceiling),
+                Err(AdmissionError::ObservationInvalid)
+            );
+        }
+    }
+
+    #[test]
+    fn caller_ceiling_charges_domain_separator_and_cbor() {
+        let baseline = model(&input(), Some(b"src/lib.rs"));
+        for ceiling in [
+            1,
+            OBSERVATION_DIGEST_DOMAIN.len(),
+            OBSERVATION_DIGEST_DOMAIN.len() + 1,
+            158,
+        ] {
+            assert_eq!(
+                AdmissionObservationV2::new_with_encoded_limit(
+                    metadata(&input()),
+                    baseline.relative_locator().cloned(),
+                    ceiling,
+                ),
+                Err(AdmissionError::BudgetExhausted)
+            );
+            assert_eq!(
+                baseline.validate_encoded_limit(ceiling),
+                Err(AdmissionError::BudgetExhausted)
+            );
+        }
+    }
+
+    #[test]
+    fn retained_ceiling_checks_are_readonly_and_failed_checks_allow_retry() {
+        let baseline = model(&input(), Some(b"src/lib.rs"));
+        let before = baseline.clone();
+        assert_eq!(baseline.validate_encoded_limit(194), Ok(()));
+        assert_eq!(
+            baseline.validate_encoded_limit(193),
+            Err(AdmissionError::BudgetExhausted)
+        );
+        assert_eq!(baseline, before);
+        assert_eq!(baseline.validate_encoded_limit(194), Ok(()));
+        assert_eq!(
+            baseline.validate_encoded_limit(0),
+            Err(AdmissionError::ObservationInvalid)
+        );
+        assert_eq!(baseline, before);
+    }
+
+    #[test]
+    fn retained_ceiling_check_refuses_owner_only_fingerprint_mismatch() {
+        let mut inconsistent = model(&input(), Some(b"src/lib.rs"));
+        // Owner-only synthetic mutation, never a public model producer.
+        inconsistent.fingerprint = model(&input(), Some(b"src/main.rs")).fingerprint();
+        let before = inconsistent.clone();
+        assert_eq!(
+            inconsistent.validate_encoded_limit(MAX_OBSERVATION_PREIMAGE_BYTES),
+            Err(AdmissionError::ObservationInvalid)
+        );
+        assert_eq!(inconsistent, before);
+    }
+
+    #[test]
+    fn caller_ceiling_preserves_missing_locator_and_metadata_optionals() {
+        let mut absent = input();
+        absent.byte_size = None;
+        absent.is_generated = None;
+        absent.is_vendor = None;
+        absent.is_binary = None;
+        absent.is_system = None;
+        absent.sensitivity = None;
+        absent.detector_id = None;
+        absent.profile_id = None;
+        absent.unavailable_fields = crate::CLOSED_UNAVAILABLE_FIELDS
+            .iter()
+            .map(|field| (*field).to_owned())
+            .collect();
+        let baseline = model(&absent, None);
+        let limited =
+            AdmissionObservationV2::new_with_encoded_limit(metadata(&absent), None, 512).unwrap();
+        assert_eq!(limited, baseline);
+        assert_eq!(limited.relative_locator(), None);
+        assert_eq!(limited.validate_encoded_limit(512), Ok(()));
+    }
+
+    #[test]
+    fn caller_ceiling_errors_and_debug_omit_private_input_text() {
+        let marker = "synthetic-private-marker-414";
+        let mut observed = input();
+        observed.detector_id = Some(marker.to_owned());
+        observed.profile_id = Some(marker.to_owned());
+        let path = format!("{marker}/file.rs");
+        let baseline = model(&observed, Some(path.as_bytes()));
+        assert!(!format!("{baseline:?}").contains(marker));
+        for ceiling in [0, 1, MAX_OBSERVATION_PREIMAGE_BYTES + 1] {
+            let error = AdmissionObservationV2::new_with_encoded_limit(
+                metadata(&observed),
+                baseline.relative_locator().cloned(),
+                ceiling,
+            )
+            .unwrap_err();
+            assert!(!format!("{error:?}").contains(marker));
+            assert!(!error.to_string().contains(marker));
+        }
+    }
+
+    #[test]
+    fn caller_ceiling_maps_only_exact_shared_byte_exhaustion() {
+        for field in ["digest_preimage", "canonical_sink"] {
+            assert_eq!(
+                encoded_limit_error(ContractError::new(
+                    ContractErrorKind::OversizePayload,
+                    field
+                )),
+                AdmissionError::BudgetExhausted
+            );
+            assert_eq!(
+                encoded_limit_error(ContractError::new(ContractErrorKind::InvalidRange, field)),
+                AdmissionError::ObservationInvalid
+            );
+        }
+        for field in [
+            "digest_limit",
+            "digest_domain",
+            "canonical_text",
+            "admission_observation_v2_row",
+        ] {
+            assert_eq!(
+                encoded_limit_error(ContractError::new(
+                    ContractErrorKind::OversizePayload,
+                    field
+                )),
+                AdmissionError::ObservationInvalid
+            );
+        }
+        let observed = metadata(&input());
+        let error = compute_observation_fingerprint(&observed, None, 1).unwrap_err();
+        assert_eq!(error.kind(), ContractErrorKind::OversizePayload);
+        assert_eq!(error.field(), "digest_preimage");
+        let error =
+            compute_observation_fingerprint(&observed, None, OBSERVATION_DIGEST_DOMAIN.len() + 1)
+                .unwrap_err();
+        assert_eq!(error.kind(), ContractErrorKind::OversizePayload);
+        assert_eq!(error.field(), "canonical_sink");
+    }
+
+    #[test]
+    fn legacy_constructor_keeps_all_error_mapping_at_fixed_ceiling() {
+        // Owner-only synthetic metadata bypasses its ordinary bounded producer.
+        let mut oversized = metadata(&input());
+        oversized.detector_id = Some("x".repeat(MAX_OBSERVATION_PREIMAGE_BYTES));
+        assert_eq!(
+            AdmissionObservationV2::new(oversized.clone(), None),
+            Err(AdmissionError::ObservationInvalid)
+        );
+        assert_eq!(
+            AdmissionObservationV2::new_with_encoded_limit(
+                oversized.clone(),
+                None,
+                MAX_OBSERVATION_PREIMAGE_BYTES
+            ),
+            Err(AdmissionError::BudgetExhausted)
+        );
+        assert_eq!(
+            AdmissionObservationV2::new_with_encoded_limit(oversized, None, 0),
+            Err(AdmissionError::ObservationInvalid)
+        );
     }
 }
