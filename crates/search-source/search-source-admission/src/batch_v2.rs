@@ -133,10 +133,7 @@ impl EvaluationMeterV2 {
         &mut self,
         output: CanonicalBlake3Output,
     ) -> Result<Blake3Digest32, AdmissionError> {
-        charge(
-            &mut self.encoded_bytes,
-            output.complete_preimage_bytes(),
-        )?;
+        charge(&mut self.encoded_bytes, output.complete_preimage_bytes())?;
         Ok(output.digest())
     }
 }
