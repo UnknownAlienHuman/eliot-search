@@ -27,7 +27,12 @@ Implements `config/sections/source_admission.md`. Baseline keeps generated/vendo
 classes denied unless an explicit accepted policy profile permits them. Known credential/private-key
 classes remain unconditional deny.
 
-### `section_digest(validated) -> Blake3Digest32`
+### `section_digest(validated) -> Result<Blake3Digest32, AdmissionError>`
+
+Retained v1 SHA-256 over the section profile, size and permission fields. The
+legacy `Blake3Digest32` container preserves existing bytes and is not BLAKE3
+execution evidence. Publicly writable section text is charged before copying;
+an over-limit preimage returns `ADMISSION_OBSERVATION_INVALID`, never a digest.
 
 ### `plan_section_change(old, new) -> Result<SectionReloadDecision, AdmissionError>`
 
@@ -49,8 +54,39 @@ Serialization is deterministic and independent of map/input order.
 
 ### `policy_fingerprint(policy) -> PolicyFingerprint`
 
-Domain-separated BLAKE3 over canonical policy schema/revision/behavior bytes. Any load-bearing change
+Retained domain-separated v1 SHA-256 over policy schema/revision/behavior bytes. Any load-bearing change
 produces a new fingerprint.
+
+### Retained v1 digest execution boundary (#320)
+
+One existing package-local writer supplies exact bytes to the shared bounded
+`sha256_exact_bytes` API. It adds no shared CBOR or raw-domain framing. Copied SHA
+constants, padding and compression are deleted. The complete preimage ceiling is
+`MAX_DIGEST_PREIMAGE_BYTES` (1,048,576); refusal is sticky and precedes each buffer
+extension and algorithm execution. Receipt/batch errors propagate through their
+existing `Result` boundaries. Opaque policy and observation values are bounded by
+their only public constructors; their signatures remain infallible.
+
+| Domain (prefix `eliot-search/`) | Retained field order after domain + NUL |
+|---|---|
+| `source-admission-section/v1` | profile, max-file bytes, generated/vendor/binary flags |
+| `admission-policy/v1` | schema, revision, max-file bytes, flags, rule count; each rule: ID, precedence, class, operator, effect, reason, optional size/sensitivity/locator/pattern |
+| `admission-observation/v1` | locator/location/kind/class, optional size and generated/vendor/binary/system flags, optional sensitivity/detector/profile, unavailable count and sorted fields |
+| `admission-receipt/v1` | schema, revision, fingerprint, observation digest, outcome, reason count and ordered reasons, matched-ID count and ordered IDs, sensitivity |
+| `admission-batch/v1` | revision, fingerprint, item count; each ordered item: observation digest, outcome, ordered reasons |
+
+Integers remain fixed big-endian (u32 schema, otherwise u64); bytes/text use a u64
+length and optional values a one-byte 0/1 tag. Policy schema and receipt schema
+remain 1. All five bounded identities are BYTE_COMPATIBLE; no profile migration or
+stored-byte restoration is algorithm execution proof. Independent-field upper
+bounds are policy 188,352, observation 860, receipt 34,639 and batch 738,392 bytes.
+Validated default section is 76 bytes; arbitrary public section text is fallible.
+Lower caller limits and their later v2 cutover are not changed by this absolute
+ceiling. No new digest type, second codec or dependency is introduced.
+
+Four private fixtures cover five independent frozen goldens, domain/framing
+distinction, constructor bounds and exact-ceiling/overflow refusal. They are
+AUTHORED_NOT_RUN under #352/#215; source gates establish no product qualification.
 
 ### `classify_policy_change(old, new) -> AdmissionPolicyChange`
 

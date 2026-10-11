@@ -39,7 +39,7 @@
 use core::fmt;
 use std::collections::BTreeSet;
 
-use search_contracts::{Blake3Digest32, NonZeroRevision};
+use search_contracts::{Blake3Digest32, DigestInputLimit, NonZeroRevision, sha256_exact_bytes};
 
 // ---------------------------------------------------------------------------
 // Closed constants
@@ -100,92 +100,8 @@ const CLOSED_UNAVAILABLE_FIELDS: [&str; 8] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Internal deterministic hashing (pure CPU, no external dependency)
+// Retained v1 preimages; algorithm execution belongs to search-contracts
 // ---------------------------------------------------------------------------
-
-fn sha256(input: &[u8]) -> [u8; 32] {
-    const INITIAL: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-    let bit_len = (input.len() as u64).wrapping_mul(8);
-    let padded_len = input
-        .len()
-        .checked_add(9)
-        .and_then(|v| v.checked_add(63))
-        .map(|v| v / 64 * 64)
-        .unwrap_or(64);
-    let mut padded = Vec::with_capacity(padded_len);
-    padded.extend_from_slice(input);
-    padded.push(0x80);
-    padded.resize(padded_len.saturating_sub(8), 0);
-    padded.extend_from_slice(&bit_len.to_be_bytes());
-    let mut state = INITIAL;
-    for chunk in padded.chunks_exact(64) {
-        let mut schedule = [0_u32; 64];
-        for (index, word) in chunk.chunks_exact(4).enumerate() {
-            schedule[index] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
-        }
-        for index in 16..64 {
-            let left = schedule[index - 15];
-            let right = schedule[index - 2];
-            let sigma0 = left.rotate_right(7) ^ left.rotate_right(18) ^ (left >> 3);
-            let sigma1 = right.rotate_right(17) ^ right.rotate_right(19) ^ (right >> 10);
-            schedule[index] = schedule[index - 16]
-                .wrapping_add(sigma0)
-                .wrapping_add(schedule[index - 7])
-                .wrapping_add(sigma1);
-        }
-        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h) = (
-            state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7],
-        );
-        for index in 0..64 {
-            let upper1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let choose = (e & f) ^ ((!e) & g);
-            let t1 = h
-                .wrapping_add(upper1)
-                .wrapping_add(choose)
-                .wrapping_add(K[index])
-                .wrapping_add(schedule[index]);
-            let upper0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let majority = (a & b) ^ (a & c) ^ (b & c);
-            let t2 = upper0.wrapping_add(majority);
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(t1);
-            d = c;
-            c = b;
-            b = a;
-            a = t1.wrapping_add(t2);
-        }
-        state[0] = state[0].wrapping_add(a);
-        state[1] = state[1].wrapping_add(b);
-        state[2] = state[2].wrapping_add(c);
-        state[3] = state[3].wrapping_add(d);
-        state[4] = state[4].wrapping_add(e);
-        state[5] = state[5].wrapping_add(f);
-        state[6] = state[6].wrapping_add(g);
-        state[7] = state[7].wrapping_add(h);
-    }
-    let mut output = [0_u8; 32];
-    for (chunk, word) in output.chunks_exact_mut(4).zip(state) {
-        chunk.copy_from_slice(&word.to_be_bytes());
-    }
-    output
-}
 
 fn hex_encode(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
@@ -199,20 +115,41 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 struct CanonicalWriter {
     bytes: Vec<u8>,
+    exceeded: bool,
 }
 
 impl CanonicalWriter {
     fn new(domain: &[u8]) -> Self {
-        let mut bytes = Vec::with_capacity(domain.len().saturating_add(1));
-        bytes.extend_from_slice(domain);
-        bytes.push(0);
-        Self { bytes }
+        let mut writer = Self {
+            bytes: Vec::new(),
+            exceeded: false,
+        };
+        writer.append(domain);
+        writer.append(&[0]);
+        writer
+    }
+
+    // Refusal is sticky; no later field can turn a partial preimage into a digest.
+    fn append(&mut self, bytes: &[u8]) {
+        if self.exceeded {
+            return;
+        }
+        if self
+            .bytes
+            .len()
+            .checked_add(bytes.len())
+            .is_none_or(|len| len > MAX_DIGEST_PREIMAGE_BYTES)
+        {
+            self.exceeded = true;
+            return;
+        }
+        self.bytes.extend_from_slice(bytes);
     }
 
     fn push_bytes(&mut self, value: &[u8]) {
         let len = u64::try_from(value.len()).unwrap_or(u64::MAX);
-        self.bytes.extend_from_slice(&len.to_be_bytes());
-        self.bytes.extend_from_slice(value);
+        self.append(&len.to_be_bytes());
+        self.append(value);
     }
 
     fn push_str(&mut self, value: &str) {
@@ -220,49 +157,56 @@ impl CanonicalWriter {
     }
 
     fn push_u32(&mut self, value: u32) {
-        self.bytes.extend_from_slice(&value.to_be_bytes());
+        self.append(&value.to_be_bytes());
     }
 
     fn push_u64(&mut self, value: u64) {
-        self.bytes.extend_from_slice(&value.to_be_bytes());
+        self.append(&value.to_be_bytes());
     }
 
     fn push_bool(&mut self, value: bool) {
-        self.bytes.push(u8::from(value));
+        self.append(&[u8::from(value)]);
     }
 
     fn push_option_str(&mut self, value: Option<&str>) {
         match value {
             Some(text) => {
-                self.bytes.push(1);
+                self.append(&[1]);
                 self.push_str(text);
             }
-            None => self.bytes.push(0),
+            None => self.append(&[0]),
         }
     }
 
     fn push_option_u64(&mut self, value: Option<u64>) {
         match value {
             Some(number) => {
-                self.bytes.push(1);
+                self.append(&[1]);
                 self.push_u64(number);
             }
-            None => self.bytes.push(0),
+            None => self.append(&[0]),
         }
     }
 
     fn push_option_bool(&mut self, value: Option<bool>) {
         match value {
             Some(flag) => {
-                self.bytes.push(1);
+                self.append(&[1]);
                 self.push_bool(flag);
             }
-            None => self.bytes.push(0),
+            None => self.append(&[0]),
         }
     }
 
-    fn finish(self) -> [u8; 32] {
-        sha256(&self.bytes)
+    fn finish(self) -> Result<[u8; 32], AdmissionError> {
+        if self.exceeded {
+            return Err(AdmissionError::ObservationInvalid);
+        }
+        let limit = DigestInputLimit::new(MAX_DIGEST_PREIMAGE_BYTES)
+            .map_err(|_| AdmissionError::ObservationInvalid)?;
+        let digest = sha256_exact_bytes(&self.bytes, limit)
+            .map_err(|_| AdmissionError::ObservationInvalid)?;
+        Ok(*digest.as_bytes())
     }
 }
 
@@ -655,18 +599,26 @@ pub fn validate_section(
     })
 }
 
-/// Computes the canonical digest of one validated section.
+/// Computes the retained v1 SHA-256 digest of one section.
 ///
 /// The digest binds the exact validated profile, size ceiling, and
-/// generated/vendor/binary permissions with domain separation.
-pub fn section_digest(validated: &ValidatedAdmissionConfig) -> Blake3Digest32 {
+/// generated/vendor/binary permissions with domain separation. The legacy
+/// `Blake3Digest32` container preserves existing SHA-256 bytes and does not
+/// certify BLAKE3 execution. Public fields can be modified after validation.
+///
+/// # Errors
+/// Returns `ADMISSION_OBSERVATION_INVALID` if the complete preimage exceeds
+/// `MAX_DIGEST_PREIMAGE_BYTES`; oversized fields are refused before copying.
+pub fn section_digest(
+    validated: &ValidatedAdmissionConfig,
+) -> Result<Blake3Digest32, AdmissionError> {
     let mut writer = CanonicalWriter::new(b"eliot-search/source-admission-section/v1");
     writer.push_str(&validated.bootstrap_policy_profile);
     writer.push_u64(validated.max_file_bytes);
     writer.push_bool(validated.allow_generated);
     writer.push_bool(validated.allow_vendor);
     writer.push_bool(validated.allow_binary);
-    Blake3Digest32::from_bytes(writer.finish())
+    Ok(Blake3Digest32::from_bytes(writer.finish()?))
 }
 
 /// Plans the reload decision between two validated sections.
@@ -1578,7 +1530,13 @@ fn canonical_policy_writer(policy: &CanonicalAdmissionPolicy) -> CanonicalWriter
 ///
 /// Any load-bearing change produces a new fingerprint.
 pub fn policy_fingerprint(policy: &CanonicalAdmissionPolicy) -> PolicyFingerprint {
-    PolicyFingerprint(canonical_policy_writer(policy).finish())
+    // Only validated drafts and the fixed baseline constructor create policies.
+    // 128 rules * 1,471 bytes + 64 header bytes = 188,352, below the ceiling.
+    PolicyFingerprint(
+        canonical_policy_writer(policy)
+            .finish()
+            .expect("opaque policy preimage fits the fixed admission ceiling"),
+    )
 }
 
 /// Classifies the exact change between two canonical policies.
@@ -1936,7 +1894,13 @@ fn canonical_observation_writer(observation: &AdmissionObservation) -> Canonical
 /// Classifier and profile identities are bound; source bodies are never
 /// hashed because baseline admission owns no body classifier.
 pub fn observation_digest(observation: &AdmissionObservation) -> AdmissionObservationDigest {
-    AdmissionObservationDigest(canonical_observation_writer(observation).finish())
+    // The sole validator bounds IDs and the closed unavailable vocabulary.
+    // Even the conservative independent-field sum is only 860 bytes.
+    AdmissionObservationDigest(
+        canonical_observation_writer(observation)
+            .finish()
+            .expect("opaque observation preimage fits the fixed admission ceiling"),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -2535,7 +2499,7 @@ pub fn issue_receipt(
         reason_codes: decision.reason_codes.clone(),
         matched_rule_ids: decision.matched_rule_ids.clone(),
         sensitivity: decision.sensitivity,
-        receipt_digest: writer.finish(),
+        receipt_digest: writer.finish()?,
     })
 }
 
@@ -2593,7 +2557,7 @@ pub fn verify_receipt(
         &receipt.observation_digest,
         &stored_decision,
     )
-    .finish();
+    .finish()?;
     if recomputed != receipt.receipt_digest {
         return Err(AdmissionError::ReceiptMismatch);
     }
@@ -2828,7 +2792,7 @@ pub fn evaluate_batch(
         items,
         policy_revision: policy.revision,
         policy_fingerprint: fingerprint,
-        batch_digest: writer.finish(),
+        batch_digest: writer.finish()?,
     })
 }
 
@@ -3058,6 +3022,145 @@ mod tests {
     }
 
     // -- canonical goldens and input-order independence ---------------------
+
+    // AUTHORED_NOT_RUN under #352/#215. Expected values were computed with
+    // independent .NET SHA256 over the frozen v1 fields, not this writer.
+    #[test]
+    fn retained_v1_sha256_goldens_cover_all_five_domains() {
+        let policy = baseline();
+        let obs = observation("regular");
+        assert_eq!(
+            section_digest(&validated_config())
+                .expect("bounded section")
+                .to_string(),
+            "4feff991969179343c618e7ba63a5ad05aaa56f13afb41d9a560fe2d448c0690",
+        );
+        assert_eq!(
+            policy_fingerprint(&policy).to_hex(),
+            "7844e4e1c9de6b5cb95bcbe649fd207e5d7dcfc91fcc6ebcf4aa2f0b94a2f149",
+        );
+        assert_eq!(
+            observation_digest(&obs).to_hex(),
+            "cfcf2501f0e3cf6c1c720c7babad282c91067c4b32726dde13da501bcb06c918",
+        );
+        let decision = decide("regular");
+        let receipt = issue_receipt(&policy, &obs, &decision).expect("bounded receipt");
+        assert_eq!(
+            hex_encode(receipt.receipt_digest()),
+            "97b082779e52d8bbb3e633fcae4bab9044ad7923cd2a13a27bb8dae8fe94ffe5",
+        );
+        verify_receipt(&receipt, &policy, &obs).expect("retained receipt verifies");
+        let batch = evaluate_batch(
+            &policy,
+            &[obs],
+            DEFAULT_ADMISSION_LIMITS,
+            AdmissionBudget::default_budget(),
+            CancelFlag::live(),
+        )
+        .expect("bounded batch");
+        assert_eq!(
+            hex_encode(batch.batch_digest()),
+            "593cc2231db97dc1ceec9dc443ef8813c75a353f546dc905e5c9425fcd42726d",
+        );
+    }
+
+    #[test]
+    fn retained_domains_and_field_framing_remain_distinct() {
+        let mut first = CanonicalWriter::new(b"eliot-search/admission-policy/v1");
+        first.push_str("ab");
+        first.push_str("c");
+        let mut split = CanonicalWriter::new(b"eliot-search/admission-policy/v1");
+        split.push_str("a");
+        split.push_str("bc");
+        let mut other = CanonicalWriter::new(b"eliot-search/admission-observation/v1");
+        other.push_str("ab");
+        other.push_str("c");
+        assert_ne!(first.bytes, split.bytes);
+        assert_ne!(first.bytes, other.bytes);
+        let digest = first.finish().expect("bounded");
+        assert_ne!(digest, split.finish().expect("bounded"));
+        assert_ne!(digest, other.finish().expect("bounded"));
+    }
+
+    #[test]
+    fn opaque_preimage_bounds_cover_maximum_validated_fields() {
+        let mut input = draft_input();
+        let mut template = input.rules[0].clone();
+        template.source_class = "documentation".to_owned();
+        template.operator = "sensitivity-at-least".to_owned();
+        template.effect = "unsupported".to_owned();
+        template.reason = "REVIEW_METADATA_UNAVAILABLE".to_owned();
+        template.size_threshold = Some(u64::MAX);
+        template.sensitivity_threshold = Some("secret-candidate".to_owned());
+        template.locator_class = Some("normalized-directory".to_owned());
+        template.pattern = Some("x".repeat(MAX_PATTERN_BYTES));
+        input.rules = (0..MAX_POLICY_RULES)
+            .map(|index| {
+                let mut rule = template.clone();
+                rule.id = format!("{index:0>256}");
+                rule.precedence = u32::try_from(index).expect("bounded index");
+                rule
+            })
+            .collect();
+        let policy = normalize_policy(&validate_policy_schema(&input).expect("bounded draft"))
+            .expect("bounded canonical policy");
+        let writer = canonical_policy_writer(&policy);
+        assert_eq!(writer.bytes.len(), 188_352);
+        assert!(writer.bytes.len() < MAX_DIGEST_PREIMAGE_BYTES);
+        policy_fingerprint(&policy);
+
+        let mut raw = observation_input("documentation");
+        raw.locator_class = "normalized-directory".to_owned();
+        raw.location_class = "local-removable".to_owned();
+        raw.source_kind = "directory".to_owned();
+        raw.sensitivity = Some("secret-candidate".to_owned());
+        raw.detector_id = Some("d".repeat(MAX_ID_BYTES));
+        raw.profile_id = Some("p".repeat(MAX_ID_BYTES));
+        raw.byte_size = None;
+        raw.is_generated = None;
+        raw.is_vendor = None;
+        raw.is_binary = None;
+        raw.is_system = None;
+        raw.unavailable_fields = [
+            "byte-size",
+            "generated-flag",
+            "vendor-flag",
+            "binary-flag",
+            "system-flag",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        let obs = validate_observation(&raw, &policy, DEFAULT_ADMISSION_LIMITS)
+            .expect("bounded observation");
+        assert_eq!(canonical_observation_writer(&obs).bytes.len(), 792);
+        observation_digest(&obs);
+    }
+
+    #[test]
+    fn section_exact_ceiling_and_overflow_return_no_partial_digest() {
+        let mut section = validated_config();
+        // Domain+NUL (41), profile length (8), size (8), permissions (3).
+        section.bootstrap_policy_profile = "x".repeat(MAX_DIGEST_PREIMAGE_BYTES - 60);
+        assert!(section_digest(&section).is_ok());
+        section.bootstrap_policy_profile.push('x');
+        assert_eq!(
+            section_digest(&section),
+            Err(AdmissionError::ObservationInvalid)
+        );
+        assert_eq!(
+            AdmissionError::ObservationInvalid.to_string(),
+            "ADMISSION_OBSERVATION_INVALID"
+        );
+
+        let mut writer = CanonicalWriter::new(b"eliot-search/admission-policy/v1");
+        let retained = writer.bytes.clone();
+        writer.append(&vec![0; MAX_DIGEST_PREIMAGE_BYTES]);
+        assert!(writer.exceeded);
+        assert_eq!(writer.bytes, retained);
+        writer.push_str("later");
+        assert_eq!(writer.bytes, retained);
+        assert_eq!(writer.finish(), Err(AdmissionError::ObservationInvalid));
+    }
 
     #[test]
     fn canonical_policy_decision_receipt_goldens_are_stable() {
@@ -3647,8 +3750,8 @@ mod tests {
         assert!(!defaults.allow_vendor);
         assert!(!defaults.allow_binary);
         let validated = validated_config();
-        let first = section_digest(&validated);
-        assert_eq!(section_digest(&validated_config()), first);
+        let first = section_digest(&validated).expect("bounded section");
+        assert_eq!(section_digest(&validated_config()), Ok(first));
         // Unknown keys and wrong types fail closed.
         let mut unknown = compiled_defaults();
         unknown.unknown_keys.push("future-key".to_owned());
