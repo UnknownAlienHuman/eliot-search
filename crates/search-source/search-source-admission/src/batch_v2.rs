@@ -1,5 +1,5 @@
 //! Bounded whole-call v2 admission evaluation with canonical multiset results.
-//! The original caller owns checkpoints; this pure result supplies no receipt authority.
+// The original caller owns checkpoints; this pure result supplies no receipt authority.
 
 use core::fmt;
 
@@ -89,43 +89,43 @@ pub const DEFAULT_BATCH_LIMITS: BatchLimitsV2 = BatchLimitsV2 {
 /// Private composition state, shared by the sole evaluator across occurrences.
 /// This supplies no public operation receipt, accepted flag or new authority.
 pub(super) struct EvaluationMeterV2 {
-    remaining_rule_evaluations: usize,
-    remaining_matched_rule_ids: usize,
-    remaining_reason_contributions: usize,
-    remaining_encoded_bytes: usize,
+    rule_evaluations: usize,
+    matched_rule_ids: usize,
+    reason_contributions: usize,
+    encoded_bytes: usize,
 }
 
 impl EvaluationMeterV2 {
     fn new(limits: BatchLimitsV2) -> Self {
         Self {
-            remaining_rule_evaluations: limits.max_rule_evaluations,
-            remaining_matched_rule_ids: limits.max_matched_rule_ids,
-            remaining_reason_contributions: limits.max_reason_contributions,
-            remaining_encoded_bytes: limits.max_encoded_bytes,
+            rule_evaluations: limits.max_rule_evaluations,
+            matched_rule_ids: limits.max_matched_rule_ids,
+            reason_contributions: limits.max_reason_contributions,
+            encoded_bytes: limits.max_encoded_bytes,
         }
     }
 
     /// Charge the complete canonical rule count before observation/matcher work.
     pub(super) fn charge_rules(&mut self, count: usize) -> Result<(), AdmissionError> {
-        charge(&mut self.remaining_rule_evaluations, count)
+        charge(&mut self.rule_evaluations, count)
     }
 
     /// Call after the per-item ID guard and before each matching String clone.
     pub(super) fn charge_matched_rule_id(&mut self) -> Result<(), AdmissionError> {
-        charge(&mut self.remaining_matched_rule_ids, 1)
+        charge(&mut self.matched_rule_ids, 1)
     }
 
     /// Call only for a new per-item reason, before BTreeSet insertion.
     pub(super) fn charge_reason_contribution(&mut self) -> Result<(), AdmissionError> {
-        charge(&mut self.remaining_reason_contributions, 1)
+        charge(&mut self.reason_contributions, 1)
     }
 
     /// A derived zero is exhaustion, not a public invalid-raw-limit error.
     pub(super) fn encoded_limit(&self, per_frame: usize) -> Result<usize, AdmissionError> {
-        if self.remaining_encoded_bytes == 0 {
+        if self.encoded_bytes == 0 {
             return Err(AdmissionError::BudgetExhausted);
         }
-        Ok(per_frame.min(self.remaining_encoded_bytes))
+        Ok(per_frame.min(self.encoded_bytes))
     }
 
     /// Subtract only successful producer usage, returning its computed digest.
@@ -134,7 +134,7 @@ impl EvaluationMeterV2 {
         output: CanonicalBlake3Output,
     ) -> Result<Blake3Digest32, AdmissionError> {
         charge(
-            &mut self.remaining_encoded_bytes,
+            &mut self.encoded_bytes,
             output.complete_preimage_bytes(),
         )?;
         Ok(output.digest())
