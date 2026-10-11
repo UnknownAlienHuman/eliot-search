@@ -75,6 +75,14 @@ path = "crates/search-source/search-source-admission"
 execution_chain = ["#241", "#320", "#270"]
 
 [[package]]
+name = "search-source-admission-receipt"
+path = "crates/search-source/search-source-admission-receipt"
+execution_chain = ["#424", "#270", "#271"]
+product_path = "partial"
+disposition = "evaluation_only"
+# Permanent source owner; consumer adoption and integrated qualification remain separate.
+
+[[package]]
 name = "search-source-registry"
 path = "crates/search-source/search-source-registry"
 execution_chain = ["#270", "#271", "#272"]
