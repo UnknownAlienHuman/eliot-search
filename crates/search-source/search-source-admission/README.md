@@ -22,6 +22,18 @@ their infallible signatures. No stored identity is relabelled or rebuilt here.
 Caller-specific lower `AdmissionLimits` behavior is unchanged by this absolute
 ceiling; effective v2 policy and limit semantics remain separate work.
 
+Legacy v1 rule patterns remain validated, normalized and fingerprinted diagnostic
+bytes. V1 has no path predicate, so `evaluate`, `issue_receipt`, `verify_receipt`
+and the whole `evaluate_batch` refuse any pattern-bearing policy with the closed
+`ADMISSION_POLICY_SCHEMA_UNSUPPORTED` error before hashing or allocating results.
+Pattern-bearing v1 authority is **LEGACY_DECODE_ONLY**. Policies without patterns
+keep their existing operation and retained v1 bytes. The v2 matcher and relative
+locator owner remain separate work under #241.
+
+Five private refusal/parity/precedence fixtures are **AUTHORED_NOT_RUN** under
+#352/#241/#215. Historical receipt construction exists only inside `cfg(test)`;
+it supplies no alternate production issuer or public proof constructor.
+
 Frozen vectors for all five domains and bounds/overflow fixtures are
 **AUTHORED_NOT_RUN** under #352/#215. Production compilation and source guards do
 not qualify ingestion, Qdrant, Windows installation or the complete product.

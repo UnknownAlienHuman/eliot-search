@@ -120,6 +120,24 @@ source body because baseline admission owns no body classifier.
 
 ## Decision and receipt operations
 
+### Legacy v1 pattern authority boundary (#404)
+
+One private guard refuses any rule with `Some(pattern)` at `evaluate`,
+`evaluate_batch`, `issue_receipt` and `verify_receipt`, using the existing closed
+`ADMISSION_POLICY_SCHEMA_UNSUPPORTED` error. V1 retains patterns for diagnostic
+validation, normalization and fingerprints; it implements no path predicate.
+Pattern-bearing v1 authority is LEGACY_DECODE_ONLY, with no new successful
+decision, batch, receipt or verified receipt. Batch refusal is whole, without
+partial results. Policies without patterns and all retained writers remain
+unchanged; the effective v2 matcher/relative-locator owner belongs to #241.
+
+Evaluation preserves cancellation and zero-budget precedence; batch also retains
+limits/count precedence. Issuance refuses before identities/copies. Verification
+checks receipt schema first, then refuses before identities/copies. Five private
+refusal/parity/precedence fixtures are AUTHORED_NOT_RUN under #352/#241/#215;
+historical receipt helpers are `cfg(test)` only and create no production fallback
+or public proof constructor. No public signature or persisted-byte delta.
+
 ### `evaluate(policy, observation, budget, cancel) -> Result<AdmissionDecision, AdmissionError>`
 
 Applies the closed rule order and returns:

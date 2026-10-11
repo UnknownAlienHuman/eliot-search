@@ -2095,6 +2095,15 @@ fn baseline_reasons(
     Ok(())
 }
 
+// V1 stores patterns but has no path predicate. Retain their diagnostic bytes,
+// but never issue fresh authority by silently treating them as absent.
+fn require_effective_v1_policy(policy: &CanonicalAdmissionPolicy) -> Result<(), AdmissionError> {
+    if policy.rules.iter().any(|rule| rule.pattern.is_some()) {
+        return Err(AdmissionError::PolicySchemaUnsupported);
+    }
+    Ok(())
+}
+
 /// Applies the closed rule order and returns one explicit outcome.
 ///
 /// Cancellation or budget exhaustion returns no successful decision, and no
@@ -2104,6 +2113,7 @@ fn baseline_reasons(
 ///
 /// Returns `ADMISSION_CANCELLED` when cancelled and
 /// `ADMISSION_BUDGET_EXHAUSTED` when the finite budget runs out.
+/// Pattern-bearing v1 policies return `ADMISSION_POLICY_SCHEMA_UNSUPPORTED`.
 pub fn evaluate(
     policy: &CanonicalAdmissionPolicy,
     observation: &AdmissionObservation,
@@ -2116,6 +2126,7 @@ pub fn evaluate(
         return Err(AdmissionError::BudgetExhausted);
     }
 
+    require_effective_v1_policy(policy)?;
     let fingerprint = policy_fingerprint(policy);
     let digest = observation_digest(observation);
     let sensitivity = observation
@@ -2476,11 +2487,13 @@ fn receipt_writer(
 /// # Errors
 ///
 /// Returns `ADMISSION_RECEIPT_MISMATCH` when identities disagree.
+/// Pattern-bearing v1 policies return `ADMISSION_POLICY_SCHEMA_UNSUPPORTED`.
 pub fn issue_receipt(
     policy: &CanonicalAdmissionPolicy,
     observation: &AdmissionObservation,
     decision: &AdmissionDecision,
 ) -> Result<AdmissionReceipt, AdmissionError> {
+    require_effective_v1_policy(policy)?;
     let fingerprint = policy_fingerprint(policy);
     let digest = observation_digest(observation);
     if decision.policy_revision != policy.revision
@@ -2512,7 +2525,8 @@ pub fn issue_receipt(
 ///
 /// # Errors
 ///
-/// Returns `ADMISSION_POLICY_SCHEMA_UNSUPPORTED` for wrong schemas,
+/// Returns `ADMISSION_POLICY_SCHEMA_UNSUPPORTED` for wrong schemas or
+/// pattern-bearing v1 policies,
 /// `ADMISSION_RECEIPT_MISMATCH` for altered or inconsistent receipts, and
 /// `ADMISSION_RECEIPT_STALE` for stale policy fences.
 pub fn verify_receipt(
@@ -2523,6 +2537,7 @@ pub fn verify_receipt(
     if receipt.schema_version != RECEIPT_SCHEMA_VERSION {
         return Err(AdmissionError::PolicySchemaUnsupported);
     }
+    require_effective_v1_policy(current_policy)?;
     let current_fingerprint = policy_fingerprint(current_policy);
     let current_digest = observation_digest(observation);
     if receipt.observation_digest != current_digest {
@@ -2723,6 +2738,8 @@ impl AdmissionBatch {
 /// Returns `ADMISSION_OBSERVATION_INVALID` for empty or over-limit batches,
 /// `ADMISSION_CANCELLED` when cancelled, and `ADMISSION_BUDGET_EXHAUSTED`
 /// when the shared budget runs out.
+/// A pattern-bearing v1 policy refuses the whole batch with
+/// `ADMISSION_POLICY_SCHEMA_UNSUPPORTED`, without partial decisions.
 pub fn evaluate_batch(
     policy: &CanonicalAdmissionPolicy,
     observations: &[AdmissionObservation],
@@ -2739,6 +2756,7 @@ pub fn evaluate_batch(
     if budget_remaining == 0 {
         return Err(AdmissionError::BudgetExhausted);
     }
+    require_effective_v1_policy(policy)?;
     // Canonicalize by observation identity so equal sets in different input
     // orders produce byte-identical batches. Duplicate identities are
     // evaluated once per occurrence (one outcome per input, no silent drop).
@@ -3019,6 +3037,212 @@ mod tests {
     fn canonical_from_draft() -> CanonicalAdmissionPolicy {
         let draft = validate_policy_schema(&draft_input()).expect("draft validates");
         normalize_policy(&draft).expect("draft normalizes")
+    }
+
+    // #404 AUTHORED_NOT_RUN under #352/#241/#215. Historical artifacts below
+    // are private fixture material, never an alternate production issuer.
+    fn legacy_pattern_policy() -> CanonicalAdmissionPolicy {
+        let mut input = draft_input();
+        input.rules[0].pattern = Some("private-marker/**".to_owned());
+        let draft = validate_policy_schema(&input).expect("legacy diagnostic input");
+        normalize_policy(&draft).expect("legacy diagnostic policy")
+    }
+
+    fn legacy_receipt_fixture(
+        policy: &CanonicalAdmissionPolicy,
+        obs: &AdmissionObservation,
+        decision: &AdmissionDecision,
+    ) -> AdmissionReceipt {
+        let fingerprint = policy_fingerprint(policy);
+        let digest = observation_digest(obs);
+        AdmissionReceipt {
+            schema_version: RECEIPT_SCHEMA_VERSION,
+            policy_revision: policy.revision,
+            policy_fingerprint: fingerprint,
+            observation_digest: digest,
+            outcome: decision.outcome,
+            reason_codes: decision.reason_codes.clone(),
+            matched_rule_ids: decision.matched_rule_ids.clone(),
+            sensitivity: decision.sensitivity,
+            receipt_digest: receipt_writer(policy, &fingerprint, obs, &digest, decision)
+                .finish()
+                .expect("bounded historical receipt fixture"),
+        }
+    }
+
+    fn legacy_pattern_artifacts() -> (
+        CanonicalAdmissionPolicy,
+        AdmissionObservation,
+        AdmissionDecision,
+        AdmissionReceipt,
+    ) {
+        let policy = legacy_pattern_policy();
+        let obs = observation("regular");
+        let mut decision = evaluate(
+            &canonical_from_draft(),
+            &obs,
+            AdmissionBudget::default_budget(),
+            CancelFlag::live(),
+        )
+        .expect("real no-pattern decision");
+        // V1 never read pattern during matching. Historical decision data was
+        // identical, while its binding included the stored pattern bytes.
+        decision.policy_fingerprint = policy_fingerprint(&policy);
+        let receipt = legacy_receipt_fixture(&policy, &obs, &decision);
+        (policy, obs, decision, receipt)
+    }
+
+    #[test]
+    fn legacy_pattern_remains_diagnostic_but_cannot_produce_decisions_or_batch() {
+        let policy = legacy_pattern_policy();
+        assert_eq!(
+            policy
+                .rules()
+                .iter()
+                .find(|rule| rule.id == "allow-regular")
+                .expect("retained rule")
+                .pattern
+                .as_deref(),
+            Some("private-marker/**")
+        );
+        assert_ne!(
+            policy_fingerprint(&policy),
+            policy_fingerprint(&canonical_from_draft())
+        );
+        let obs = observation("regular");
+        assert_eq!(
+            evaluate(
+                &policy,
+                &obs,
+                AdmissionBudget::default_budget(),
+                CancelFlag::live()
+            )
+            .expect_err("inert pattern is not a predicate"),
+            AdmissionError::PolicySchemaUnsupported
+        );
+        let observations = [obs, observation("credential")];
+        assert_eq!(
+            evaluate_batch(
+                &policy,
+                &observations,
+                DEFAULT_ADMISSION_LIMITS,
+                AdmissionBudget::default_budget(),
+                CancelFlag::live()
+            )
+            .expect_err("whole batch refused"),
+            AdmissionError::PolicySchemaUnsupported
+        );
+    }
+
+    #[test]
+    fn formerly_same_binding_pattern_decision_cannot_issue_a_new_receipt() {
+        let (policy, obs, decision, _) = legacy_pattern_artifacts();
+        assert_eq!(decision.policy_revision(), policy.revision());
+        assert_eq!(decision.policy_fingerprint(), policy_fingerprint(&policy));
+        assert_eq!(decision.observation_digest(), observation_digest(&obs));
+        assert_eq!(decision.outcome(), AdmissionOutcome::Allow);
+        let error =
+            issue_receipt(&policy, &obs, &decision).expect_err("legacy re-issuance refused");
+        assert_eq!(error, AdmissionError::PolicySchemaUnsupported);
+        assert_eq!(error.to_string(), "ADMISSION_POLICY_SCHEMA_UNSUPPORTED");
+        assert!(!format!("{error:?}").contains("private-marker"));
+    }
+
+    #[test]
+    fn legacy_valid_pattern_receipt_cannot_refresh_verified_authority() {
+        let (policy, obs, decision, receipt) = legacy_pattern_artifacts();
+        assert_eq!(receipt.policy_revision(), policy.revision());
+        assert_eq!(receipt.policy_fingerprint(), policy_fingerprint(&policy));
+        assert_eq!(receipt.observation_digest(), observation_digest(&obs));
+        assert_eq!(receipt.outcome(), AdmissionOutcome::Allow);
+        assert_eq!(
+            *receipt.receipt_digest(),
+            receipt_writer(
+                &policy,
+                &policy_fingerprint(&policy),
+                &obs,
+                &observation_digest(&obs),
+                &decision
+            )
+            .finish()
+            .expect("bounded historical receipt fixture")
+        );
+        assert_eq!(
+            verify_receipt(&receipt, &policy, &obs).expect_err("legacy authority refused"),
+            AdmissionError::PolicySchemaUnsupported
+        );
+    }
+
+    #[test]
+    fn pattern_refusal_preserves_cancellation_budget_and_batch_input_precedence() {
+        let policy = legacy_pattern_policy();
+        let obs = observation("regular");
+        let exhausted = AdmissionBudget {
+            max_rule_evaluations: 0,
+        };
+        assert_eq!(
+            evaluate(&policy, &obs, exhausted, CancelFlag::cancelled()).expect_err("cancel first"),
+            AdmissionError::Cancelled
+        );
+        assert_eq!(
+            evaluate(&policy, &obs, exhausted, CancelFlag::live()).expect_err("budget first"),
+            AdmissionError::BudgetExhausted
+        );
+        assert_eq!(
+            evaluate_batch(
+                &policy,
+                &[],
+                DEFAULT_ADMISSION_LIMITS,
+                AdmissionBudget::default_budget(),
+                CancelFlag::live()
+            )
+            .expect_err("invalid batch first"),
+            AdmissionError::ObservationInvalid
+        );
+        assert_eq!(
+            evaluate_batch(
+                &policy,
+                std::slice::from_ref(&obs),
+                DEFAULT_ADMISSION_LIMITS,
+                exhausted,
+                CancelFlag::live()
+            )
+            .expect_err("batch budget first"),
+            AdmissionError::BudgetExhausted
+        );
+        assert_eq!(
+            evaluate_batch(
+                &policy,
+                &[],
+                DEFAULT_ADMISSION_LIMITS,
+                exhausted,
+                CancelFlag::cancelled()
+            )
+            .expect_err("batch cancel first"),
+            AdmissionError::Cancelled
+        );
+    }
+
+    #[test]
+    fn no_pattern_receipt_keeps_legacy_bytes_and_verification() {
+        let policy = canonical_from_draft();
+        let obs = observation("regular");
+        let decision = evaluate(
+            &policy,
+            &obs,
+            AdmissionBudget::default_budget(),
+            CancelFlag::live(),
+        )
+        .expect("supported no-pattern decision");
+        let historical = legacy_receipt_fixture(&policy, &obs, &decision);
+        let current = issue_receipt(&policy, &obs, &decision).expect("supported issuance");
+        assert_eq!(current, historical);
+        assert_eq!(
+            verify_receipt(&current, &policy, &obs)
+                .expect("supported verification")
+                .receipt(),
+            &historical
+        );
     }
 
     // -- canonical goldens and input-order independence ---------------------
