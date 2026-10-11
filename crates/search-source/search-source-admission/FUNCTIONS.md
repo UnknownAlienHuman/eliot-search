@@ -8,6 +8,12 @@ observations gathered by the owning platform/source boundary.
 
 ## Global rules
 
+The permanent v2 surface is `evaluation_v2::evaluate_v2(policy, observation, scratch, limits, probe)`
+returning immutable `AdmissionDecisionV2`. See [EVALUATION_V2.md](EVALUATION_V2.md) for exact finite
+ceilings, deny/unsupported/review/explicit-Allow resolution, whole-call locator refusal, error cleanup
+and eight-row decision identity. V2 has no implicit baseline Allow or v1 authority fallback. Its pure
+decision does not grant native/source/access/currentness authority or supply a verified receipt.
+
 - every decision binds one canonical policy revision/fingerprint and one canonical observation digest;
 - unknown load-bearing fields, source classes or rule operators fail closed;
 - unconditional safety denies cannot be bypassed by an unspecified/implicit override;
@@ -295,6 +301,7 @@ lock or hard preemption is introduced. Match failures clear all results.
 
 V1 bodies and preimages remain **BYTE_COMPATIBLE**. Future v2 adoption requires
 **VERSIONED_REBUILD**; this slice performs no consumer cutover or v2-to-v1
-facade. Effective evaluation/receipts/batch remain #241/#405. Private causal
+facade. Effective evaluation is supplied by [evaluation_v2](EVALUATION_V2.md);
+receipts/batch remain #241/#405. Private causal
 fixtures are **AUTHORED_NOT_RUN** under #352/#241/#215. Donor provenance and
 source gates do not qualify native, runtime, scale or installed behavior.

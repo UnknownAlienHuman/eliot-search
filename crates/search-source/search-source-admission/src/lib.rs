@@ -44,6 +44,9 @@ use search_contracts::{Blake3Digest32, DigestInputLimit, NonZeroRevision, sha256
 /// Pure bounded relative-locator and versioned observation equality model.
 pub mod observation_v2;
 
+/// Bounded effective v2 evaluation and immutable internally bound decisions.
+pub mod evaluation_v2;
+
 /// Immutable compiled v2 policy and bounded byte-path rule selection.
 pub mod policy_v2;
 

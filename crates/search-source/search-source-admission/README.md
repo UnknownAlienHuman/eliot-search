@@ -6,6 +6,13 @@
 
 Evaluate a versioned deny-by-default source-admission policy without reading source bodies or mutating registry state.
 
+The permanent [effective v2 evaluator](EVALUATION_V2.md) resolves class-scoped compiled rules with
+mandatory safety/completeness checks and emits one immutable internally bound decision. It uses the
+accepted glob matcher and shared canonical digest producer, requires the caller's original checkpoint,
+charges finite complete-preimage/output limits and clears scratch on every refusal. It grants no
+receipt/native/root/access/currentness proof. V1 and accepted policy/observation identities remain exact;
+consumer adoption, receipt/batch and integrated qualification stay separate under #241/#405/#270/#271/#215.
+
 The five retained v1 section/policy/observation/receipt/batch preimages are
 **BYTE_COMPATIBLE**: domain + NUL, big-endian integers, u64 byte-string lengths,
 option tags and field order are unchanged. The sole existing legacy writer charges
@@ -25,8 +32,8 @@ writer. Oversize returns the content-free `ADMISSION_OBSERVATION_INVALID`.
 The legacy return container holds SHA-256 bytes;
 it does not certify BLAKE3 execution. Opaque bounded policy/observation inputs keep
 their infallible signatures. No stored identity is relabelled or rebuilt here.
-Caller-specific lower `AdmissionLimits` behavior is unchanged by this absolute
-ceiling; effective v2 policy and limit semantics remain separate work.
+Caller-specific lower v1 `AdmissionLimits` behavior is unchanged by this absolute
+ceiling; the separate v2 evaluator enforces its own complete operation ceilings.
 
 The public Rust API deliberately replaces writable fields with immutable
 methods. Validated values retain exact v1 SHA bytes (**BYTE_COMPATIBLE**),
@@ -41,8 +48,9 @@ bytes. V1 has no path predicate, so `evaluate`, `issue_receipt`, `verify_receipt
 and the whole `evaluate_batch` refuse any pattern-bearing policy with the closed
 `ADMISSION_POLICY_SCHEMA_UNSUPPORTED` error before hashing or allocating results.
 Pattern-bearing v1 authority is **LEGACY_DECODE_ONLY**. Policies without patterns
-keep their existing operation and retained v1 bytes. The v2 matcher and relative
-locator owner remain separate work under #241.
+keep their existing operation and retained v1 bytes. The accepted v2 matcher and
+relative-locator models feed the separate effective v2 evaluator; receipts and
+consumer adoption remain under #241/#270/#271.
 
 Five private refusal/parity/precedence fixtures are **AUTHORED_NOT_RUN** under
 #352/#241/#215. Historical receipt construction exists only inside `cfg(test)`;
@@ -75,7 +83,8 @@ refuses as BudgetExhausted in the new APIs. Existing `new` retains its fixed cei
 all-error ObservationInvalid behavior. Revalidation recomputes and checks the private identity
 without mutation. Bounded row values may still be copied before serialized-byte charging.
 Private boundary/parity/error/readonly fixtures are **AUTHORED_NOT_RUN**, Q/#215. Other lower
-limits, effective evaluator/decision/receipt/batch and integration remain #405/#241/#270/#271.
+limits, receipt/batch and integration remain #405/#241/#270/#271. Effective evaluation
+and immutable decision identity are supplied by #416.
 
 - canonical policy normalization and fingerprinting
 - path/metadata/format/sensitivity observation evaluation
@@ -108,6 +117,7 @@ lock or hard preemption is introduced. Match failures clear all results.
 
 V1 bodies and preimages remain **BYTE_COMPATIBLE**. Future v2 adoption requires
 **VERSIONED_REBUILD**; this slice performs no consumer cutover or v2-to-v1
-facade. Effective evaluation/receipts/batch remain #241/#405. Private causal
+facade. Effective evaluation is supplied by [evaluation_v2](EVALUATION_V2.md);
+receipts/batch remain #241/#405. Private causal
 fixtures are **AUTHORED_NOT_RUN** under #352/#241/#215. Donor provenance and
 source gates do not qualify native, runtime, scale or installed behavior.
