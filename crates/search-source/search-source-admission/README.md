@@ -82,3 +82,22 @@ matcher behavior, native containment or product qualification.
 - **Delivery wave:** W2 / P03
 - **Soft source-line target:** 4,500
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
+## Compiled v2 path classification (#412)
+
+The additive [`policy_v2`](POLICY_V2.md) module compiles an immutable bounded
+policy with one reviewed `globset` matcher, an owner-computed shared
+CBOR/BLAKE3 fingerprint and reusable policy-bound match storage.
+`compile_policy_v2` accepts raw rules and validated section data;
+`match_path_rules` selects canonical rule indexes from accepted relative bytes.
+It supplies no admission decision, receipt, batch or native authority.
+
+Both calls require a borrowed caller checkpoint for the original absolute
+deadline and live cancellation. Closed `Cancelled`/`DeadlineExceeded` failures
+map to existing cancelled/budget-exhausted errors. No owner clock, context,
+lock or hard preemption is introduced. Match failures clear all results.
+
+V1 bodies and preimages remain **BYTE_COMPATIBLE**. Future v2 adoption requires
+**VERSIONED_REBUILD**; this slice performs no consumer cutover or v2-to-v1
+facade. Effective evaluation/receipts/batch remain #241/#405. Private causal
+fixtures are **AUTHORED_NOT_RUN** under #352/#241/#215. Donor provenance and
+source gates do not qualify native, runtime, scale or installed behavior.

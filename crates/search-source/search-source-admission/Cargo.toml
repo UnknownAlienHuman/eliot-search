@@ -15,6 +15,7 @@ search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
 search-config.workspace = true
+globset.workspace = true
 
 [lints]
 workspace = true
