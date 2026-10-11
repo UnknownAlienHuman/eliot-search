@@ -2,9 +2,29 @@
 
 **Security support for C03/C06 — Source admission policy.**
 
-**Status:** `SOURCE_PRESENT`; deny-by-default policy, decision and receipt source exists, while canonical digest/policy migration and durable source-ingestion composition remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #241 → #110.
+**Status:** `SOURCE_PRESENT`; deny-by-default policy, decision and receipt source exists. #320 replaces copied SHA-256 with the shared digest implementation; effective policy migration and durable source-ingestion composition remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #241 → #110.
 
 Evaluate a versioned deny-by-default source-admission policy without reading source bodies or mutating registry state.
+
+The five retained v1 section/policy/observation/receipt/batch preimages are
+**BYTE_COMPATIBLE**: domain + NUL, big-endian integers, u64 byte-string lengths,
+option tags and field order are unchanged. The sole existing legacy writer charges
+the complete input against the fixed 1 MiB admission ceiling before copying each
+field; a sticky overflow returns no digest. `search-contracts::sha256_exact_bytes`
+executes accepted RustCrypto `sha2 0.10.9` without adding another prefix or codec.
+The admission package contains no SHA compression or padding implementation.
+
+`section_digest` now returns `Result<Blake3Digest32, AdmissionError>` because its
+input's profile string is publicly writable. Oversize returns the content-free
+`ADMISSION_OBSERVATION_INVALID`. The legacy return container holds SHA-256 bytes;
+it does not certify BLAKE3 execution. Opaque bounded policy/observation inputs keep
+their infallible signatures. No stored identity is relabelled or rebuilt here.
+Caller-specific lower `AdmissionLimits` behavior is unchanged by this absolute
+ceiling; effective v2 policy and limit semantics remain separate work.
+
+Frozen vectors for all five domains and bounds/overflow fixtures are
+**AUTHORED_NOT_RUN** under #352/#215. Production compilation and source guards do
+not qualify ingestion, Qdrant, Windows installation or the complete product.
 
 ## Owns
 
