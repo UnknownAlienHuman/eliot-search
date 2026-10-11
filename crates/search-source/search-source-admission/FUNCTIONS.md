@@ -325,7 +325,7 @@ adoption and qualification stay separate under #270/#271/#215.
 
 This removes the whole receipt responsibility and its causal fixtures from this
 owner. Receipt-only9200 permission is historical and grants no new batch growth;
-a complete future batch needs its own measured whole-owner review before edits.
+The complete batch is implemented under #427; #430 records its reduced whole-owner review.
 
 ## Cumulative multiset v2 batch (#427)
 
@@ -373,11 +373,30 @@ V1 and existing policy/observation/decision/receipt identities remain
 BYTE_COMPATIBLE; future batch adoption requires VERSIONED_REBUILD under270/271.
 
 The private evaluator/observation usage seams remain owner-internal;
-existing public single-evaluation and observation signatures remain unchanged.
+existing public batch, single-evaluation and observation signatures remain unchanged.
+The #430 correction moves `EvaluationMeterV2` and its subtraction helper
+into `evaluation_v2`. Its `pub(super)` constructor accepts four admitted `usize`
+maxima: rule evaluations, matched IDs, reason contributions and encoded bytes.
+Batch constructs it only after existing raw validation and calls the unchanged
+`evaluate_v2_metered` worker; public `evaluate_v2` continues to pass `None`.
+The evaluator has no batch type/import dependency. Meter fields, charging bodies,
+original probe/count/byte/error behavior and all identity profiles stay exact.
+
 No native/root/source/access/currentness authority, receipt-leaf change,
-dependency adoption or daemon/ingestion cutover belongs here.
-The fresh projected whole handwritten owner9533 includes all fixtures, exceeds
-the8500 split-review threshold and remains below hard10000; its own pre-edit
-size review/acceptance is required. No earlier size allowance transfers.
-Eleven new private cases and retained cases are AUTHORED_NOT_RUN Q215.
-Production/static source gates are recorded at the exact candidate SHA; this documentation is not qualification evidence. Daemon D387 remains NOT_PASS/unrun.
+dependency adoption or daemon/ingestion cutover belongs here. The concrete
+corrective whole owner is 8,672 physical handwritten Rust lines including all
+retained fixtures (858 fewer than accepted 9,530). This still crosses the 8,500
+split-review threshold. #430 records independent review and manager pre-edit
+acceptance of a new 8,700-line ceiling for this correction only, with final recount
+required. Hard 10,000 stays; no earlier size allowance transfers.
+
+Only the eleven new batch fixture bodies/local scaffolding are removed. Exact
+future names/assertions are inventoried in BATCH_V2.md for #427/#215, without
+moving Rust bodies elsewhere. These cases are deferred and absent in this
+candidate; their historical authored bodies at `21c073e993bde903b35e1cf2a9de5575dfd68bc7`
+were not run. Retained evaluator/observation/policy/v1 fixtures are AUTHORED_NOT_RUN.
+Unrepaired evaluator oracle F1/#428 and receipt-doc F1/#426 remain separate.
+Corrective production/static gate results are recorded at the exact head in #430 and its PR; they are not inherited from #427.
+Daemon D387 remains NOT_PASS/unrun; Q215 integrated execution and native/runtime/
+resource/live-Qdrant/installed/scale qualification are incomplete. Source docs
+and source acceptance do not close #241/#405, Wave2/#235 or Goal.

@@ -106,8 +106,12 @@ The new batch profile's future adoption is VERSIONED_REBUILD under270/271.
 
 Owner-internal `evaluate_v2_metered(..., limits, Option<&mut EvaluationMeterV2>, probe)`
 is pub(super). Public evaluate_v2 delegates with None and retains raw validation;
-the sole batch caller validates limits before passing Some. Meter creation/fields
-are private; its charging methods are pub(super).
+the sole batch caller validates limits before passing Some. In the #430 correction, `evaluation_v2` owns the private meter and subtraction helper. Its
+`pub(super) fn new(rule_evaluations: usize, matched_rule_ids: usize,
+reason_contributions: usize, encoded_bytes: usize) -> Self` receives exactly the
+four already-admitted batch maxima. Fields stay private; charging methods remain
+pub(super) with unchanged bodies. The evaluator imports no batch type; batch
+imports the meter from the evaluator, keeping composition one-way.
 Observation `validate_encoded_limit_with_usage(&self, usize)` is pub(super), returns
 the actual shared CanonicalBlake3Output and retains fingerprint comparison.
 Public validate_encoded_limit still returns Result<(), AdmissionError>.
@@ -115,20 +119,119 @@ No shared usage output is an authority or generic operation receipt.
 
 ## Scope, size and evidence
 
-Owning files: batch_v2.rs; minimal lib module declaration; evaluator meter
-hooks; observation private usage seam; owning README/FUNCTIONS/BATCH_V2 and size
-addendum; exact canonical ledger. No root manifest/lock/dependency/policy/contracts/
+Frozen #430 owning paths: src/batch_v2.rs, src/evaluation_v2.rs,
+AGENTS.md, README.md, FUNCTIONS.md, BATCH_V2.md and the exact canonical ledger.
+The meter/helper moves and batch constructor binding are the production change;
+only the eleven new batch fixture bodies/local helpers and fixture-only prose/imports
+are deleted. No lib/observation/policy/root manifest/lock/dependency/contracts/
 receipt-leaf/daemon/ingestion change. Receipt ownership stays in its permanent leaf.
 Pure evaluation gives no native containment, root/source identity, access or currentness proof.
 
-Fresh projected TOTAL9533 =8198 +1232 batch +78 evaluator +22 observation +3 declaration,
-including eleven new private causal tests and retained fixture code. This crosses8500
-split review and remains below hard10000; explicit independent pre-edit whole-owner
-acceptance is required. No receipt/contracts exception or future blanket growth grant transfers.
-The exact full glue/docs/ledger, size and production/static gates are bound in #427 Ready/freeze. The slice-specific reviewed whole-owner cap is9600; hard10000 remains.
-Gate results belong to the exact reviewed source revision; this document alone proves none. All fixtures are AUTHORED_NOT_RUN Q215;
-daemon D387 remains NOT_PASS/unrun. Source presence or future compilation is not
-runtime/native/live-Qdrant/installed/resource/scale/product qualification.
+The complete corrected owner measures TOTAL 8,672 physical handwritten Rust lines:
+batch 308 + evaluator 1,723 + lib 4,442 + policy 1,303 + observation 896,
+including every retained fixture. This is 858 fewer than accepted TOTAL 9,530.
+It remains above the 8,500 split-review threshold and below hard 10,000.
+Independent split review and manager pre-edit acceptance under #430 bind this
+exact owner to a new 8,700-line ceiling for this correction only; final recount
+is required. The obsolete
+#427 size addendum is removed; no prior allowance or future growth grant transfers.
+There is no forwarding crate, hidden fixture move, duplicate evaluator, reduced
+capacity or changed profile. #430 records the exact ledger closure and pre-edit Ready/freeze.
 
+The eleven batch cases below are deferred and their Rust bodies are absent from
+this corrective candidate. Their prior authored, unexecuted bodies remain in Git
+at `21c073e993bde903b35e1cf2a9de5575dfd68bc7`. Historical evaluator/observation/
+policy/v1 fixtures stay unchanged and AUTHORED_NOT_RUN. This inventory retains
+requirements for later integrated implementation/execution under #427/#215;
+it is neither present tests nor a passing oracle.
 
-Known retained evaluator golden F1/#428 is not a passing oracle. Its minimal canonical-hash correction and integrated execution remain separate.
+Corrective production/static gate results are recorded in #430 and its PR at
+the final corrected SHA; earlier #427 results are not new-head evidence.
+Daemon D387 remains NOT_PASS/unrun. Source presence/compilation is not native,
+runtime, live-Qdrant, installed, resource, scale or product qualification.
+Known retained evaluator golden F1/#428 remains unrepaired and is not a passing
+oracle; its correction/execution and F1/#426 receipt documentation stay separate.
+#241/#405, Wave2/#235 and Goal remain incomplete.
+
+## Deferred exact batch cases (#427/#215)
+
+Names and expectations below retain the historical eleven cases. Numeric values
+are their authored boundary assertions, not observed execution or resource results.
+
+1. `capacity_is_1024_occurrences_and_refusal_has_no_success_value`: 1,024 identical
+   no-rule occurrences yield 1,024 Deny decisions at 450,688 complete bytes;
+   450,687 gives BudgetExhausted. Empty/1,025 inputs are ObservationInvalid;
+   max_items=1 admits one and refuses two.
+2. `permutation_is_a_multiset_with_duplicate_occurrences_retained`: [a,b,a] and
+   [b,a,a] have equal fingerprints/decisions; removing one a changes identity.
+   Three outputs match separately evaluated decisions sorted by observation then
+   decision fingerprints, with nondecreasing pair order.
+3. `exact_actual_bytes_include_both_observations_decisions_and_final_preimage`:
+   no-rule item ceilings 194 observation/177 decision; two items cost
+   2*(194+177)+262=1,004. Independently framed final CBOR is 232 bytes, complete
+   domain-plus-NUL frame 262, and parsed canonical hashing equals batch identity.
+   Generous/exact limits have equal identity/results; aggregate caps
+   [1,193,194,370,371,564,741,742,1003] refuse BudgetExhausted, including zero
+   remaining between frames. Per-item 193/176 refuse; one item fits 564, not 563.
+4. `rule_id_and_losing_reason_charges_precede_winning_category_filter`: two
+   permit+block items require four rules, four IDs and four distinct reason
+   contributions; each returns DenyExplicitRule while retaining both IDs.
+   Reducing any aggregate to three refuses and clears scratch; per-item rules,
+   IDs or reasons limited to one also refuse. Losing Allow contributions count.
+5. `unmatched_rules_still_charge_work_and_same_reason_charges_once_per_item`:
+   two items with one hit/one miss charge four rules, two IDs and two reasons;
+   three rules refuse. Two matching Allow rules per item retain both IDs but
+   charge one AllowExplicitRule reason per item; two contributions fit, one refuses.
+6. `deny_by_default_is_charged_for_every_occurrence_without_implicit_allow`:
+   two no-rule items return Deny/DenyByDefault and need two reason contributions;
+   one refuses BudgetExhausted, with no implicit Allow.
+7. `later_item_refusal_preserves_input_processing_order_and_returns_no_partial_batch`:
+   a good item alone fits 564; good then missing locator refuses
+   ObservationIncomplete under generous limits. At aggregate 371, good then
+   missing refuses BudgetExhausted; missing then good refuses ObservationIncomplete.
+   Every refusal returns an error, not a partial batch.
+8. `all_raw_dimensions_validate_and_entry_checkpoint_wins_with_cleanup`:
+   all five aggregate and five per-item raw dimensions refuse zero/maximum+1,
+   including unused no-rule ceilings and empty input. Seeded match results clear.
+   Entry Cancelled/DeadlineExceeded takes precedence over invalid raw/empty input,
+   maps to Cancelled/BudgetExhausted and clears scratch.
+9. `every_original_checkpoint_including_final_refuses_cleans_and_allows_reuse`:
+   count the healthy two-item probe calls; inject each closed checkpoint failure
+   at every call including final return. Stop at that call, return the mapped
+   error, clear seeded matches, and allow same-scratch retry with the healthy
+   fingerprint and decisions. This specifies cooperative checkpoints, not preemption.
+10. `later_missing_locator_and_final_byte_refusal_clear_previously_populated_scratch`:
+    later missing locator returns ObservationIncomplete and clears seeded matches.
+    Single-ID Allow needs 194 observation+188 decision+193 final=575 bytes;
+    574 refuses at the final frame and clears; 575 permits retry with Allow.
+11. `all_outcomes_survive_and_debug_and_errors_exclude_payload_markers`:
+    ordinary/system/missing-detector/device inputs separately yield
+    Allow/Deny/ReviewRequired/Unsupported; batch retains their sorted decisions.
+    Normal/alternate Debug of batch and missing-locator error exclude detector
+    marker BATCH_PRIVATE_DETECTOR_91, path marker BATCH_PRIVATE_PATH_91,
+    rule ID batch-private-rule-91, private/* pattern and BASELINE_PROFILE text.
+
+## Corrected #427 chronology
+
+Saved issue edit history (`userContentEdits(first:100)`, hasNextPage=false) and
+review records establish the publication/submission times below. Commit times
+come from exact Git objects; the merge event time is GitHub's merged_at field.
+The complete reconciliation is public in #430 comment 6108431996.
+All times are UTC on 2026-10-11.
+
+| Event | Time |
+| --- | --- |
+| #427 body edit to READY/SCOPE_FROZEN | 10:54:23 |
+| First source commit ecbebb74 | 10:54:58 |
+| Second source commit 54d00158 | 10:55:41 |
+| Final source commit 21c073e9 | 10:57:46 |
+| Formal manager COMMENT review 5483058046 | 11:05:46 |
+| PR429 merge event | 11:06:24 |
+| Later review 5483066438, COMMENTED state with blocking text | 11:07:55 |
+
+The published freeze preceded the first commit by 35 seconds; the later blocking
+text was submitted 91 seconds after the recorded merge. These records do not
+support a post-edit freeze or merge-after-that-review claim. The corrective
+layering/fixture scope remains valid independently of those chronology claims.
+Monitoring remains ACTIVE by explicit user direction; its status is not a gate,
+review execution or qualification result. This correction changes no scheduler.

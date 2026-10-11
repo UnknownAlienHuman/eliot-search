@@ -142,7 +142,7 @@ adoption and qualification stay separate under #270/#271/#215.
 
 This removes the whole receipt responsibility and its causal fixtures from this
 owner. Receipt-only9200 permission is historical and grants no new batch growth;
-a complete future batch needs its own measured whole-owner review before edits.
+The complete batch is implemented under #427; #430 records its reduced whole-owner review.
 
 ## Cumulative v2 batch evaluation (#427)
 
@@ -155,6 +155,26 @@ The original caller supplies checkpoints; every refusal clears scratch and retur
 partial success. Fixed1024 capacity and8MiB encoded-work budget are not heap/scale claims.
 Existing single-call/v1 identities and public signatures remain BYTE_COMPATIBLE;
 batch adoption is VERSIONED_REBUILD under #270/#271. No receipt/native/root/access/
-currentness authority is added. Eleven causal batch fixtures are AUTHORED_NOT_RUN;
-retained evaluator golden F1/#428 remains known debt pending its separate correction.
-Source gates are separate from integrated resource/native/runtime qualification #215.
+currentness authority is added.
+
+The #430 correction makes the private cumulative meter evaluator-owned;
+batch passes four validated primitive maxima through an owner-internal constructor.
+The dependency is batch → evaluator, without an evaluator import from batch.
+Public APIs and all metering, probe, error and identity behavior are preserved.
+
+Only the eleven newly added batch fixture bodies and their local scaffolding are
+removed. Their exact named future assertions remain in [BATCH_V2.md](BATCH_V2.md)
+for #427/#215; they are deferred and absent from this candidate. Historical bodies
+remain in Git at `21c073e993bde903b35e1cf2a9de5575dfd68bc7` and were never executed.
+Retained evaluator/observation/policy/v1 fixtures remain **AUTHORED_NOT_RUN**.
+The unrepaired evaluator golden F1/#428 is not a passing oracle; its correction
+and F1/#426 receipt documentation remain separate.
+
+The concrete corrective owner measures 8,672 handwritten Rust lines TOTAL,
+including retained fixtures, down 858 from 9,530. It still requires the 8,500
+threshold whole-owner review; #430 records independent review and manager
+pre-edit acceptance of a new 8,700-line ceiling for this correction only. See AGENTS.md for the unchanged hard stop and
+BATCH_V2.md for the scope and corrected chronology. Exact-head corrective production/static
+gate results are recorded in #430 and its PR; daemon D387 stays **NOT_PASS/unrun**. Source gates do
+not qualify integrated resource/native/runtime/live-Qdrant/installed/scale behavior
+under #215 or complete #241/#405, Wave2/#235 or Goal.
