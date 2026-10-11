@@ -42,6 +42,18 @@ only at this named ingress. UnitSet results use contract types and package-owned
 No materializer, daemon, planner or storage implementation changes are authorized by this exception.
 The unchanged legacy DIRECT profile/layout APIs remain until #331 and never create or verify a v3 set.
 
+### #440 Markdown ingress exception
+
+The [frozen #440 slice](https://github.com/UnknownAlienHuman/eliot-search/issues/440) adds the named
+`MarkdownUnitizationSource` adapter over the existing dependencies. Its borrowed Markdown product,
+request, profiles and revision port are untrusted inputs to `unitize_markdown` and
+`verify_markdown_unit_manifest`. The adapter calls public owning `verify_markdown`, then the unchanged
+raw v3 prepare/build path. It preserves the original AtomicBool and absolute Instant across both.
+Peer types appear only in that named ingress record; structural results expose package-owned views
+and contract Representation/UnitOccurrence. No parser/map verifier, admission authority, storage,
+worker, daemon or consumer behavior is added. Raw v3 stays byte-compatible; the separate structural
+v4 profile requires VERSIONED_REBUILD on #331 adoption. JATS remains a successor #226 slice.
+
 ## Required logical surface
 
 These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API

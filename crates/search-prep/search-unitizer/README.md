@@ -178,3 +178,64 @@ than silent weakening of the current schema. Source admission/storage, materiali
 semantic enrichment, lexical/model encoding, ranking, publication and Qdrant transport remain outside
 this package. See [AGENTS.md](AGENTS.md) for package ownership and the named materializer ingress
 exception.
+
+## Markdown structural v4
+
+The additive #440 path consumes the existing inert Markdown product through the named ingress and
+replays it against the exact retained revision. It constructs all root/heading/paragraph/item/quote/
+code/thematic-break/HTML-block observations and retains the ordered inline observations, selected
+mapped values and both completeness statuses. It introduces no Markdown parser. Root is File,
+heading is Section, all other accepted nodes are Doc. Overlaps and zero-width inline observations
+are retained; only the unchanged raw v3 partition accounts represented=input, omitted=0.
+
+```text
+MarkdownSourceBinding(admitted raw UUIDs, distinct structural RepresentationId)
++ exact immutable Markdown product/request/profiles/RevisionReadPort
++ one original AtomicBool/absolute Instant/lower operation limits
+→ owning verify_markdown
+→ unchanged raw v3 prepare/build
+→ complete structural/inline reconstruction
+→ VerifiedMarkdownUnitSet
+
+v4 canonical decode → proposed MarkdownUnitManifest
+proposed + exact source ingress → whole reconstruction/equality → verified set
+```
+
+Encoding/decoding and a recomputed digest cannot prove completeness. Consistently rehashed missing
+nodes, inline observations or altered metadata must fail full owning replay. Private node/body drafts
+are sealed only after their actual digests exist. New outputs/bytes are immutable and have no Clone.
+Debug contains counts/opaque identities, never selected mapped text or source contents.
+
+The shared canonical CBOR wire uses these exact positional records:
+
+| Record | Ordered fields |
+| --- | --- |
+| Envelope4 | format, version4, body, body_digest |
+| Body12 | full_profile, profile_id, raw_v3_envelope_bytes, structural_uuid, residency, md_product_digest, md_nodes_digest, md_inline_digest, inline_status, reference_status, nodes, inline |
+| Profile7 | md-structural-unitizer/v4, raw_v3_profile_id, md_profile_digest, limits10, algorithm_definition_digest, fixture_definition_digest, semantics |
+| Node12 | ordinal, kind, heading_level, parent_section, physical_parent, heading_section, start, end, mapped_code_info, unit_id, content_digest, full_identity_digest |
+| Inline7 | owner, form, start, end, mapped_text, mapped_destination, mapped_title |
+
+Selected values are null or `[mapped-text,value]`, never exact decoded subanchors. Status tokens are
+`observed-spans-and-selected-values` and `potentially-incomplete`. The profile semantics token is
+`raw-v3-partition/whole-node-observation/mapped-values/v1`. Unknown/missing/extra/wrong-type fields
+refuse. Node identity hashes context plus fields0..8 and10 only; truncated UnitId fields9/11 are
+excluded. Context binds raw v3 provenance/manifest, admitted structural ID, full Markdown product,
+residency and selected profile. The full32 digest is checked beside each derived first16-byte ID,
+including raw v3 occurrences. Physical containment does not constrain logical heading hierarchy.
+
+Limits10 order and hard ceilings: input bytes MAX_CANONICAL_BYTES-128; nodes4096; inline4096;
+metadata each4096; metadata total1MiB; raw units4096; encoded bytes MAX_CANONICAL_BYTES-128;
+canonical128MiB; logical owned128MiB; logical work256MiB. Every dimension is positive and
+operation≤profile≤hard. Metering is cumulative: all nested conservative reservations remain charged,
+new shared hashes debit actual successful complete preimages, and copies are charged first. Decoder
+graph reservation and independent work/storage ceilings can refuse below the standalone byte limit.
+This does not establish physical memory/CPU limits or hard preemption of synchronous donor calls.
+
+Six literal production definitions (model/profile/budget/build/codec/decode, fixed order) bind the
+algorithm; the fixture definition is separately bound. Complete definition caps are256KiB each and
+64KiB for fixtures. Changing source/fixture semantics changes profile identity. v4 is a distinct
+VERSIONED_REBUILD profile; it cannot relabel old v3. #331 owns persisted adoption and legacy DIRECT
+removal. #226 JATS is separate; #441 retains donor-failure/live-enablement checks. All new causal
+fixtures are AUTHORED_NOT_COMPILED/NOT_RUN under #215/#216; source/compiler evidence is not product
+or installed qualification.
