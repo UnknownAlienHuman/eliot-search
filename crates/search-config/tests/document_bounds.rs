@@ -26,7 +26,7 @@ fn set(value: DocumentValue) -> LayerOperation {
 }
 
 fn file(tail: &str, limits: ConfigLimits) -> Result<ConfigDocument, ConfigError> {
-    let bytes = format!("schema_version=1\nprofile='direct'\n{tail}");
+    let bytes = format!("schema_version=2\nprofile='direct'\n{tail}");
     parse_document(bytes.as_bytes(), source(ConfigSourceKind::File), limits)
 }
 
@@ -37,7 +37,8 @@ fn captured(
 ) -> Result<ConfigDocument, ConfigError> {
     let profile =
         (kind == ConfigSourceKind::File).then(|| ProfileId::new("direct").expect("profile"));
-    ConfigDocument::from_entries(1, profile, source(kind), entries, limits)
+    let schema = if kind == ConfigSourceKind::File { 2 } else { 1 };
+    ConfigDocument::from_entries(schema, profile, source(kind), entries, limits)
 }
 
 #[test]
@@ -404,7 +405,7 @@ fn duplicates_reject_without_a_document_or_overwrite() {
         Err(ConfigError::DuplicateKey)
     );
     assert_eq!(
-        file("schema_version=1\n", ConfigLimits::W1),
+        file("schema_version=2\n", ConfigLimits::W1),
         Err(ConfigError::DuplicateKey)
     );
     assert_eq!(
@@ -434,7 +435,7 @@ fn header_semantics_stay_distinct_between_file_and_capture() {
     );
     assert_eq!(
         parse_document(
-            b"schema_version=1\n",
+            b"schema_version=2\n",
             source(ConfigSourceKind::File),
             ConfigLimits::W1
         ),
@@ -482,23 +483,28 @@ fn all_new_zero_ceilings_reject_before_construction() {
 }
 
 #[test]
-fn integer_extrema_and_legacy_underscore_grammar_are_preserved() {
+fn integer_extrema_and_maintained_decimal_grammar_are_preserved() {
     let parsed = file(
-        "[a]\nx=-9223372036854775808\ny=9223372036854775807\nz=-_1\n",
+        "[a]\nx=-9223372036854775808\ny=9223372036854775807\nz=-1_000\n",
         ConfigLimits::W1,
     )
-    .expect("legacy integers");
+    .expect("maintained decimal integers");
     let built = captured(
         ConfigSourceKind::File,
         [
             (path("a", "x"), set(DocumentValue::Integer(i64::MIN))),
             (path("a", "y"), set(DocumentValue::Integer(i64::MAX))),
-            (path("a", "z"), set(DocumentValue::Integer(-1))),
+            (path("a", "z"), set(DocumentValue::Integer(-1_000))),
         ],
         ConfigLimits::W1,
     )
     .expect("captured extrema");
     assert_eq!(parsed, built);
+    // Explicit syntax migration: the old handwritten parser accepted -_1.
+    assert_eq!(
+        file("[a]\nx=-_1\n", ConfigLimits::W1),
+        Err(ConfigError::UnsupportedSyntax)
+    );
     assert_eq!(
         file("[a]\nx=9223372036854775808\n", ConfigLimits::W1),
         Err(ConfigError::ValueOutOfBounds)

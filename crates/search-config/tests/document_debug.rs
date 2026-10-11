@@ -44,7 +44,7 @@ fn debug_forms(value: &impl std::fmt::Debug) -> [String; 2] {
 
 #[test]
 fn captured_and_parsed_profile_text_is_absent_in_both_debug_forms() {
-    let bytes = format!("schema_version=7\nprofile='{PROFILE_MARKER}'\n");
+    let bytes = format!("schema_version=2\nprofile='{PROFILE_MARKER}'\n");
     let parsed = parse_document(
         bytes.as_bytes(),
         source(ConfigSourceKind::File),

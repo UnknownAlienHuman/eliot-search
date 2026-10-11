@@ -12,7 +12,10 @@ fields, requested/selected profiles and supplied source/reset provenance; caller
 Private snapshot compute consumes its existing ordered bounded map, without another sort, full
 preimage or public arbitrary iterator.
 
-This is VERSIONED_REBUILD, independently of the current schema-1 TOML parser. SHA-v1 bytes can be
+This is VERSIONED_REBUILD. The sole current file format is schema 2, `eliot-config-toml@2`,
+implemented through maintained `toml_parser` events. Schema-1 files return
+`UnsupportedSchemaVersion` and require migration. See [TOML_PROFILE_2.md](TOML_PROFILE_2.md).
+SHA-v1 bytes can be
 restored only with `ConfigFingerprint::restore_legacy_v1` for migration/comparison. They cannot
 construct a current effective snapshot. Equality preserves algorithm/profile/revision even if raw
 bytes coincide. The immediate daemon status emits the full tag under its explicit v2 schema and
@@ -29,9 +32,14 @@ fixed primitive metadata. Redacted views charge complete tagged header and entry
 copies/hashing and omit over-budget entries whole. Bounded redacted path digests retain exact
 standard SHA-256 through the shared owner; no production legacy fingerprint encoder remains.
 
-Identity/compatibility/diagnostic fixtures are AUTHORED_NOT_RUN under #352. The maintained TOML
-parser cutover remains #389/#238; integrated/native/installed/scale/release qualification remains #215.
-No donor, manifest or lockfile changes belong to this identity slice.
+File parsing and typed entry admission share one private document builder. Lexer tokens are
+charged before storage growth; donor strings are counted, charged and then filled. The W1 lexer
+ceilings are 131,072 tokens and 4 MiB logical token storage, independently of decoded payload
+budgets. No handwritten TOML grammar, dynamic donor document tree or second parser remains.
+
+Identity, compatibility, parser and diagnostic fixtures are AUTHORED_NOT_RUN under #352.
+Integrated/native/installed/scale/release qualification remains #215; runtime application/readback
+remains #333. Logical limits do not establish measured allocator residency or corpus compatibility.
 
 ## Owns
 

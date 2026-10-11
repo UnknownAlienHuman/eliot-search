@@ -7,7 +7,7 @@ use search_config::{
 use search_contracts::{Blake3Digest32, ProfileId};
 
 /// Exact configuration schema version from `config/sections.toml`.
-pub const DAEMON_CONFIG_SCHEMA_VERSION: u32 = 1;
+pub const DAEMON_CONFIG_SCHEMA_VERSION: u32 = search_config::CONFIG_TOML_SCHEMA_VERSION;
 /// Externally authorized W1 shell profile.
 pub const DAEMON_DIRECT_PROFILE: &str = "direct";
 /// Bounded captured inputs for one composition attempt.

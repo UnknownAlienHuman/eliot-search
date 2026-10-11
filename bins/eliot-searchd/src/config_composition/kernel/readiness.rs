@@ -5,9 +5,8 @@ use search_config::{ConfigFingerprint, ConfigValue, EffectiveConfigSnapshot, red
 use super::registry::daemon_registry;
 use super::snapshot::EffectiveDaemonConfig;
 use super::spec::{
-    CONTROL_NOT_READY, DAEMON_CONFIG_SCHEMA_VERSION, DIRECT_NOT_READY, INDEXED_NOT_ACCEPTED,
-    OPTIONAL_GATE_REQUIRED, QUARANTINED_BLOCKER, SEARCH_NOT_ACCEPTED, daemon_limits, key_name,
-    section_name,
+    CONTROL_NOT_READY, DIRECT_NOT_READY, INDEXED_NOT_ACCEPTED, OPTIONAL_GATE_REQUIRED,
+    QUARANTINED_BLOCKER, SEARCH_NOT_ACCEPTED, daemon_limits, key_name, section_name,
 };
 
 /// Verified dependency state observed by the daemon composition root.
@@ -231,6 +230,7 @@ pub fn config_status_json(effective: &EffectiveDaemonConfig, report: &ReadinessR
             "{{\"event\":\"effective_config_status\",",
             "\"schema\":\"eliot.effective-config-status-v2\",",
             "\"config_schema_version\":{},",
+            "\"supported_file_syntax_profile\":\"{}\",",
             "\"selected_profile\":\"{}\",",
             "\"config_fingerprint\":\"{}\",",
             "\"fingerprint_algorithm\":\"{}\",",
@@ -249,7 +249,8 @@ pub fn config_status_json(effective: &EffectiveDaemonConfig, report: &ReadinessR
             "\"omitted_entries\":{},",
             "\"read_only\":true}}"
         ),
-        DAEMON_CONFIG_SCHEMA_VERSION,
+        effective.snapshot().config_schema_version(),
+        search_config::CONFIG_TOML_PROFILE,
         effective.selected_profile(),
         fingerprint_hex,
         report.fingerprint.algorithm(),

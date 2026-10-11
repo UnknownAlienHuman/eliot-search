@@ -118,6 +118,10 @@ sha2 = { version = "=0.10.9", default-features = false }
 # #250: official read-only Cargo facts, private to the bounded xtask adapter.
 cargo_metadata = { version = "=0.23.1", default-features = false }
 
+# #400/#389: private maintained file syntax events; no donor product tree.
+# Cargo ignores build metadata in requirements; locked artifact/checksum bind spec-1.1.0.
+toml_parser = { version = "=1.1.4", default-features = false, features = ["std"] }
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 unused_must_use = "deny"

@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 search-contracts.workspace = true
+toml_parser.workspace = true
 
 [lints]
 workspace = true

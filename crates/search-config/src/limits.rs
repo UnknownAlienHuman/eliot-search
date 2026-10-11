@@ -9,6 +9,10 @@ pub struct ConfigLimits {
     pub max_document_bytes: usize,
     /// Maximum logical input lines.
     pub max_lines: usize,
+    /// Maximum lexer token count, including EOF, before storage growth.
+    pub max_lex_tokens: usize,
+    /// Maximum requested logical token storage, excluding allocator overhead.
+    pub max_lex_token_storage_bytes: usize,
     /// Maximum registered sections.
     pub max_sections: usize,
     /// Maximum fields per section.
@@ -40,6 +44,8 @@ impl ConfigLimits {
     pub const W1: Self = Self {
         max_document_bytes: 1_048_576,
         max_lines: 16_384,
+        max_lex_tokens: 131_072,
+        max_lex_token_storage_bytes: 4_194_304,
         max_sections: 256,
         max_fields_per_section: 512,
         max_entries_per_layer: 8_192,
@@ -62,6 +68,8 @@ impl ConfigLimits {
     pub const fn validate(self) -> Result<Self, ConfigError> {
         if self.max_document_bytes == 0
             || self.max_lines == 0
+            || self.max_lex_tokens == 0
+            || self.max_lex_token_storage_bytes == 0
             || self.max_sections == 0
             || self.max_fields_per_section == 0
             || self.max_entries_per_layer == 0

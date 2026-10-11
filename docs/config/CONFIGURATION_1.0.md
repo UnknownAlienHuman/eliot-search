@@ -1,5 +1,9 @@
 # ELIOT Search local configuration 1.0
 
+Historical format reference. The current FILE grammar is schema2 `eliot-config-toml@2`, defined in
+[TOML_PROFILE_2.md](../../crates/search-config/TOML_PROFILE_2.md). Schema1 files return
+`UnsupportedSchemaVersion` and require migration; the historical body below is preserved.
+
 **Status:** implementation contract; runtime parsing and reload are not implemented.  
 **Owner of layering:** `search-config`.  
 **Owner of each typed section:** the package listed in `config/sections.toml`.  

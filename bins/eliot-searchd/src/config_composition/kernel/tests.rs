@@ -19,14 +19,14 @@ fn file_doc(text: &str) -> ConfigDocument {
 }
 
 fn direct_file(extra: &str) -> ConfigDocument {
-    let body = format!("schema_version = 1\nprofile = \"direct\"\n{extra}");
+    let body = format!("schema_version = 2\nprofile = \"direct\"\n{extra}");
     file_doc(&body)
 }
 
 #[test]
 fn registry_mirrors_declared_owners_and_reload_classes() {
     let registry = daemon_registry().expect("registry");
-    assert_eq!(registry.config_schema_version(), 1);
+    assert_eq!(registry.config_schema_version(), 2);
     assert_eq!(registry.len(), 7);
     let owner = |section: &str| {
         registry
@@ -146,7 +146,7 @@ fn explicit_reset_restores_compiled_default() {
 fn duplicate_unknown_and_wrong_type_fail_closed() {
     assert!(
         capture_file_document(
-            b"schema_version = 1\nprofile = \"direct\"\n[query]\nlimit = 1\nlimit = 2\n",
+            b"schema_version = 2\nprofile = \"direct\"\n[query]\nlimit = 1\nlimit = 2\n",
             "dup",
         )
         .is_err()
@@ -435,6 +435,10 @@ fn read_only_status_writes_nothing_and_leaks_nothing() {
     assert!(first.contains("\"fingerprint_algorithm\":\"blake3\""));
     assert!(first.contains("\"fingerprint_profile\":\"eliot/cbor/config-snapshot/v2\""));
     assert!(first.contains("\"fingerprint_revision\":2"));
+    // #400 FILE support metadata. AUTHORED_NOT_RUN under #352/#215.
+    assert_eq!(effective.snapshot().config_schema_version(), 2);
+    assert!(first.contains(r#""config_schema_version":2"#));
+    assert!(first.contains(r#""supported_file_syntax_profile":"eliot-config-toml@2""#));
     let mut stale = report;
     stale.fingerprint =
         search_config::ConfigFingerprint::restore_legacy_v1(*stale.fingerprint.as_bytes());
@@ -608,4 +612,25 @@ fn startup_partial_refuses_and_retains_defaults_without_leaks() {
     ));
     assert!(file_error.is_err());
     assert!(!file_error.expect_err("must fail").contains("/definitely/missing"));
+}
+
+// #400 AUTHORED_NOT_RUN under #352/#215.
+#[test]
+fn defaults_only_status_declares_supported_file_format() {
+    let effective = build_effective_defaults().expect("defaults only");
+    let report = derive_readiness(
+        &effective,
+        shell_dependencies(),
+        AcceptedReceipts::default(),
+    );
+    let status = config_status_json(&effective, &report);
+    assert_eq!(
+        effective.snapshot().config_schema_version(),
+        search_config::CONFIG_TOML_SCHEMA_VERSION
+    );
+    assert!(status.contains(r#""config_schema_version":2"#));
+    assert!(status.contains(r#""supported_file_syntax_profile":"eliot-config-toml@2""#));
+    assert!(status.contains(r#""runtime_owner_ready":false"#));
+    assert!(status.contains(r#""search_available":false"#));
+    assert!(!status.contains("accepted_file_syntax_profile"));
 }

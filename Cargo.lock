@@ -1138,6 +1138,7 @@ name = "search-config"
 version = "0.0.0"
 dependencies = [
  "search-contracts",
+ "toml_parser",
 ]
 
 [[package]]
