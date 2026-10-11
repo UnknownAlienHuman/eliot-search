@@ -291,15 +291,16 @@ Unicode data:            18.0.0
 
 unicode-normalization:   0.1.25
 MSRV:                    1.36
-license:                 (MIT OR Apache-2.0) AND Unicode-3.0
-Unicode data generator:  18.0.0
+license:                 MIT OR Apache-2.0
+Unicode data generator:  17.0.0
 ```
 
 Primary source:
 
 - <https://github.com/dtolnay/unicode-ident/blob/1.0.26/Cargo.toml>
-- <https://github.com/unicode-rs/unicode-normalization/blob/master/Cargo.toml>
-- <https://github.com/unicode-rs/unicode-normalization/blob/master/scripts/unicode.py>
+- <https://github.com/unicode-rs/unicode-normalization/blob/5a69b3bafb625caccdec7871a42bed0d9a6604d1/Cargo.toml>
+- <https://github.com/unicode-rs/unicode-normalization/blob/5a69b3bafb625caccdec7871a42bed0d9a6604d1/scripts/unicode.py>
+- <https://crates.io/api/v1/crates/unicode-normalization/0.1.25>
 - <https://www.unicode.org/reports/tr31/>
 - <https://www.unicode.org/reports/tr15/>
 
@@ -310,7 +311,25 @@ unicode-ident = "=1.0.26"
 unicode-normalization = { version = "=0.1.25", default-features = false, features = ["std"] }
 ```
 
-The exact release checksum and resolved data/table identity are recorded at lock time. The profile owns XID and NFC only. It does not implement Unicode full case folding, Turkic behavior, prose segmentation, confusable detection or language-specific identifier semantics. Old vectors remain a legacy profile; changed normalization/data requires a new projection generation.
+Published-archive verification on 2026-10-11 corrects the earlier uniform-Unicode18 claim (#435).
+The exact profile separately binds XID18 and NFC17; NFC17 does not certify canonical equivalence
+for characters newly assigned in Unicode18. Architecture S12.2 permits separately identified data
+editions. The original release pins remain selected (#252 comment6109282117).
+
+Verified archive SHA256s: ident `d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954`;
+normalization `5fd4f6878c9cb28d874b009da9e8d183b5abc80117c40bbd187a1fde336be6e8`.
+Published generated-table SHA256s: ident `10598cfee5bcf3a8ac95bde5d9eb747bcb7d6a18ce65b5d393a14376517d4085`;
+normalization `177d5f08019cc8e335444fcab61aabb7f6309f158f6ebbd7525c73c0e532ec44`.
+The metadata-only probe resolves normalization std → tinyvec1.13.3 alloc/default, no further
+enabled dependencies or custom-build targets. tinyvec archive SHA256 is
+`fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee`, license Zlib OR Apache-2.0 OR MIT;
+manifest MSRV is absent. Exact advisory endpoint screens returned no records for the three selected
+versions; this is bounded endpoint evidence. Integrated lock/feature and production gates are separate.
+
+The profile owns XID and NFC only. It does not implement Unicode full case folding, Turkic behavior,
+prose segmentation, confusable detection or language-specific identifier semantics. Fixture definitions
+are not executed qualification. Old vectors remain separately identified legacy profiles; changed
+normalization/data requires a new projection generation.
 
 # 7. Markdown/JATS — `#226`
 

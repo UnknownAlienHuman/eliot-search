@@ -6,11 +6,13 @@
 
 #[path = "lib.rs"]
 mod analyzer;
+mod code_identifiers;
 mod frozen;
 mod scoring;
 mod sparse;
 
 pub use analyzer::*;
+pub use code_identifiers::*;
 pub use frozen::*;
 pub use scoring::*;
 pub use sparse::*;

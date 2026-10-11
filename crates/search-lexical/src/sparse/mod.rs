@@ -13,6 +13,7 @@ mod encoding;
 mod error;
 mod fingerprint;
 mod mapping;
+mod numerical;
 mod profile;
 mod vector;
 
@@ -33,3 +34,10 @@ pub use profile::{
     QueryTfWeighting, SparseLimits, SparseProfile, SparseQualification, validate_sparse_profile,
 };
 pub use vector::SparseVector;
+
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) use mapping::map_terms_parameters;
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) use numerical::NumericalParameters;
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) use vector::{weight_document_parameters, weight_query_parameters};
