@@ -9,6 +9,7 @@ use crate::analyzer::LexicalAnalysis;
 
 use super::SparseError;
 use super::fingerprint::{SparseFingerprint, fingerprint_bytes};
+use super::numerical::NumericalParameters;
 use super::profile::{CollisionPolicy, SparseLimits, SparseProfile};
 
 /// One sparse index with the distinct normalized terms mapped to it.
@@ -77,6 +78,20 @@ pub fn map_terms(
     limits: SparseLimits,
 ) -> Result<SparseFeatureSet, SparseError> {
     profile.validate()?;
+    map_terms_parameters(
+        analysis,
+        &NumericalParameters::from_profile(profile),
+        limits,
+    )
+}
+
+// Re-exported privately to the sibling code-profile ingress.
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) fn map_terms_parameters(
+    analysis: &LexicalAnalysis,
+    profile: &NumericalParameters,
+    limits: SparseLimits,
+) -> Result<SparseFeatureSet, SparseError> {
     let limits = limits.validate()?;
     let mut by_index = BTreeMap::<u32, SparseFeature>::new();
     let mut collision_pairs = 0_usize;

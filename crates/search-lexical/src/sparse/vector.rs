@@ -8,13 +8,14 @@
 
 use crate::analyzer::LexicalAnalysis;
 
+use super::SparseError;
 use super::fingerprint::{SparseFingerprint, fingerprint_bytes};
 use super::mapping::SparseFeatureSet;
+use super::numerical::NumericalParameters;
 use super::profile::{
-    DocumentTfWeighting, FrozenCorpusStatistics, IdfMode, QueryTfWeighting,
-    SparseLimits, SparseProfile,
+    DocumentTfWeighting, FrozenCorpusStatistics, IdfMode, QueryTfWeighting, SparseLimits,
+    SparseProfile,
 };
-use super::SparseError;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SparseVector {
@@ -24,12 +25,25 @@ pub struct SparseVector {
 
 impl SparseVector {
     pub fn validate(&self, profile: &SparseProfile) -> Result<(), SparseError> {
+        self.validate_parameters(&NumericalParameters::from_profile(profile))
+    }
+
+    pub(crate) fn validate_parameters(
+        &self,
+        profile: &NumericalParameters,
+    ) -> Result<(), SparseError> {
         if self.indices.is_empty() || self.indices.len() != self.values.len() {
             return Err(SparseError::EmptyVector);
         }
         if self.indices.windows(2).any(|pair| pair[0] >= pair[1])
-            || self.indices.iter().any(|index| *index >= profile.index_space)
-            || self.values.iter().any(|value| !value.is_finite() || *value <= 0.0)
+            || self
+                .indices
+                .iter()
+                .any(|index| *index >= profile.index_space)
+            || self
+                .values
+                .iter()
+                .any(|value| !value.is_finite() || *value <= 0.0)
         {
             return Err(SparseError::NonFiniteWeight);
         }
@@ -51,6 +65,24 @@ pub(super) fn weight_document(
     analysis: &LexicalAnalysis,
     features: &SparseFeatureSet,
     profile: &SparseProfile,
+    statistics: Option<&FrozenCorpusStatistics>,
+    limits: SparseLimits,
+) -> Result<SparseVector, SparseError> {
+    weight_document_parameters(
+        analysis,
+        features,
+        &NumericalParameters::from_profile(profile),
+        statistics,
+        limits,
+    )
+}
+
+// Re-exported privately to the sibling code-profile ingress.
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) fn weight_document_parameters(
+    analysis: &LexicalAnalysis,
+    features: &SparseFeatureSet,
+    profile: &NumericalParameters,
     statistics: Option<&FrozenCorpusStatistics>,
     limits: SparseLimits,
 ) -> Result<SparseVector, SparseError> {
@@ -88,6 +120,22 @@ pub(super) fn weight_query(
     statistics: Option<&FrozenCorpusStatistics>,
     limits: SparseLimits,
 ) -> Result<SparseVector, SparseError> {
+    weight_query_parameters(
+        features,
+        &NumericalParameters::from_profile(profile),
+        statistics,
+        limits,
+    )
+}
+
+// Re-exported privately to the sibling code-profile ingress.
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) fn weight_query_parameters(
+    features: &SparseFeatureSet,
+    profile: &NumericalParameters,
+    statistics: Option<&FrozenCorpusStatistics>,
+    limits: SparseLimits,
+) -> Result<SparseVector, SparseError> {
     if features.features.len() > limits.max_vector_values {
         return Err(SparseError::FeatureBudgetExceeded);
     }
@@ -110,9 +158,7 @@ pub(super) fn weight_query(
                     .copied()
                     .unwrap_or(0) as f64;
                 let document_count = statistics.document_count as f64;
-                ((document_count - document_frequency + 0.5)
-                    / (document_frequency + 0.5))
-                    .ln_1p()
+                ((document_count - document_frequency + 0.5) / (document_frequency + 0.5)).ln_1p()
             }
         };
         push_weight(

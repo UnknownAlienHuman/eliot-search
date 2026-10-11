@@ -181,6 +181,11 @@ pub struct AnalyzerConfig {
 }
 
 impl AnalyzerConfig {
+    /// This retained configuration selects the explicitly legacy analyzer mode.
+    pub const fn mode(&self) -> crate::LexicalProfileMode {
+        crate::LexicalProfileMode::Legacy
+    }
+
     /// Creates and validates a deterministic analyzer profile.
     pub fn new(
         analyzer_id: OpaqueId,
@@ -682,7 +687,9 @@ fn normalize_term(value: &str, policy: CaseNormalization) -> String {
     }
 }
 
-fn reject_binary_controls(bytes: &[u8]) -> Result<(), LexicalError> {
+// Shared with the sibling code-profile owner without exporting this policy.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn reject_binary_controls(bytes: &[u8]) -> Result<(), LexicalError> {
     if bytes.contains(&0) {
         return Err(LexicalError::BinaryContent);
     }

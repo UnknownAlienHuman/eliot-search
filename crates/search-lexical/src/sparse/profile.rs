@@ -141,6 +141,18 @@ impl SparseLimits {
         max_collision_pairs: 100_000,
     };
 
+    pub(crate) fn validate_code(self) -> Result<Self, SparseError> {
+        self.validate()?;
+        if self.max_features > Self::BASELINE.max_features
+            || self.max_terms_per_index > Self::BASELINE.max_terms_per_index
+            || self.max_vector_values > Self::BASELINE.max_vector_values
+            || self.max_collision_pairs > Self::BASELINE.max_collision_pairs
+        {
+            return Err(SparseError::InvalidLimits);
+        }
+        Ok(self)
+    }
+
     pub const fn validate(self) -> Result<Self, SparseError> {
         if self.max_features == 0
             || self.max_terms_per_index == 0

@@ -1,9 +1,32 @@
 # Function contract — `search-lexical`
 
-**Status:** W3/P06 logical contract; no encoder implementation or accepted profile exists yet.
+**Status:** legacy analyzer/sparse source and additive code_identifiers@1 source are present.
+Product/profile execution qualification is not established by source presence or identity matching.
 
 The crate owns deterministic local sparse-vector encoding only. It stores no corpus and implements no
 inverted index. One collection generation selects one accepted lexical provider path and profile.
+
+## code_identifiers@1 source operations
+
+- `CodeIdentifiersProfile::new`: immutable internally computed complete shared CBOR/BLAKE3 identity;
+  separately pinned XID18/NFC17 and the exact tinyvec closure. No caller fingerprint/donor override.
+- `CodeIdentifierLimits::new`: positive lower operation ceilings within the identity-bound hard maxima.
+- `CodeIdentifiersProfile::analyze`: bounded maximal XID continuation runs, valid underscore/XID starts,
+  whole then proper snake/adjacent-ASCII camel/acronym spans, token-local NFC and exact original ranges.
+  Invalid parent runs are discarded whole; invalid-start components are filtered after attempt charge.
+  Parent positions/counts and raw expansion counts are separate; dedup is per parent only.
+- `accept_code_identifiers_profile`: compare profile/artifact-set/fixture-definition identities and the
+  existing qualification contract; matching is not external acceptance or execution evidence.
+- `encode_code_document` / `encode_code_query`: same borrowed input and immutable accepted profile,
+  one private new route and shared private numerical bodies, Raw document/Binary query/Qdrant IDF.
+  No new local-statistics/BM25 mode. Old legacy numerical options and public APIs remain unchanged.
+- `validate_code_identifiers_pair`: compare owner-produced new document/query kinds and profile identity.
+  Collection-generation selection/authorization remains with the projection owner.
+
+Artifact-set identity hashes an exact canonical descriptor of published SHA256 release/table facts;
+it is not a relabelled BLAKE3 archive checksum. Compatibility/collision identities bind authored
+synthetic definitions, not a run verdict. All source fixtures remain AUTHORED_NOT_RUN under #215.
+New profile adoption requires VERSIONED_REBUILD; real legacy daemon/frozen consumers remain separate.
 
 ## Profile operations
 
