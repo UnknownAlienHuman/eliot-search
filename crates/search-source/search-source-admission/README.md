@@ -167,10 +167,11 @@ removed. Their exact named future assertions remain in [BATCH_V2.md](BATCH_V2.md
 for #427/#215; they are deferred and absent from this candidate. Historical bodies
 remain in Git at `21c073e993bde903b35e1cf2a9de5575dfd68bc7` and were never executed.
 Retained evaluator/observation/policy/v1 fixtures remain **AUTHORED_NOT_RUN**.
-The unrepaired evaluator golden F1/#428 is not a passing oracle; its correction
-and F1/#426 receipt documentation remain separate.
+#428 corrects the retained evaluator oracle to parsed canonical CBOR/BLAKE3
+after the unchanged independent golden check. The case remains AUTHORED_NOT_RUN
+under #215; receipt documentation F1/#426 remains separate.
 
-The concrete corrective owner measures 8,672 handwritten Rust lines TOTAL,
+At #430, the corrective owner measured 8,672 handwritten Rust lines TOTAL,
 including retained fixtures, down 858 from 9,530. It still requires the 8,500
 threshold whole-owner review; #430 records independent review and manager
 pre-edit acceptance of a new 8,700-line ceiling for this correction only. See AGENTS.md for the unchanged hard stop and

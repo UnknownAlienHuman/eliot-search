@@ -127,7 +127,7 @@ are deleted. No lib/observation/policy/root manifest/lock/dependency/contracts/
 receipt-leaf/daemon/ingestion change. Receipt ownership stays in its permanent leaf.
 Pure evaluation gives no native containment, root/source identity, access or currentness proof.
 
-The complete corrected owner measures TOTAL 8,672 physical handwritten Rust lines:
+At #430, the corrected owner measured TOTAL 8,672 physical handwritten Rust lines:
 batch 308 + evaluator 1,723 + lib 4,442 + policy 1,303 + observation 896,
 including every retained fixture. This is 858 fewer than accepted TOTAL 9,530.
 It remains above the 8,500 split-review threshold and below hard 10,000.
@@ -149,8 +149,9 @@ Corrective production/static gate results are recorded in #430 and its PR at
 the final corrected SHA; earlier #427 results are not new-head evidence.
 Daemon D387 remains NOT_PASS/unrun. Source presence/compilation is not native,
 runtime, live-Qdrant, installed, resource, scale or product qualification.
-Known retained evaluator golden F1/#428 remains unrepaired and is not a passing
-oracle; its correction/execution and F1/#426 receipt documentation stay separate.
+#428 corrects the retained evaluator oracle to parsed canonical CBOR/BLAKE3
+after the unchanged independent golden check. The case remains AUTHORED_NOT_RUN
+under #215; F1/#426 receipt documentation stays separate.
 #241/#405, Wave2/#235 and Goal remain incomplete.
 
 ## Deferred exact batch cases (#427/#215)
