@@ -60,8 +60,9 @@ pub struct NativeRootRequest {
     cancellation: Arc<AtomicBool>,
     id: RequestId,
     digest: [u8; 32],
+    digest_bytes: usize,
     // Native argv survives the caller; it is never logged or reinterpreted.
-    _arguments: Vec<Vec<u8>>,
+    arguments: Vec<Vec<u8>>,
     pub(super) limits: NativeRootLimits,
 }
 
@@ -138,7 +139,8 @@ impl NativeRootRequest {
             cancellation,
             id: RequestId::from_bytes(id),
             digest: *output.digest().as_bytes(),
-            _arguments: native,
+            digest_bytes: output.complete_preimage_bytes(),
+            arguments: native,
             limits,
         })
     }
@@ -149,6 +151,14 @@ impl NativeRootRequest {
 
     pub(super) fn root(&self) -> &Path {
         &self.root
+    }
+
+    pub(super) fn arguments(&self) -> &[Vec<u8>] {
+        &self.arguments
+    }
+
+    pub(super) fn credential_context(&self) -> (Instant, &AtomicBool) {
+        (self.deadline, &self.cancellation)
     }
 
     pub(super) const fn binding(&self) -> (RequestId, [u8; 32]) {
@@ -237,8 +247,14 @@ pub(super) struct NativeWork {
     reads: usize,
     calls: usize,
     opens: usize,
+    canonical_bytes: usize,
+    original_digest_charged: bool,
     #[cfg(test)]
     pub(super) phase_hook: Option<Box<dyn FnMut(&'static str)>>,
+    #[cfg(test)]
+    pub(super) usage_hook: Option<Box<dyn FnMut(&'static str, [usize; 4], usize)>>,
+    #[cfg(test)]
+    pub(super) credential_hook: Option<Box<dyn FnMut(bool, Instant, &AtomicBool)>>,
 }
 
 impl NativeWork {
@@ -248,8 +264,14 @@ impl NativeWork {
             // The request already made exactly one qualified entropy call.
             calls: 1,
             opens: 0,
+            canonical_bytes: 0,
+            original_digest_charged: false,
             #[cfg(test)]
             phase_hook: None,
+            #[cfg(test)]
+            usage_hook: None,
+            #[cfg(test)]
+            credential_hook: None,
         }
     }
 
@@ -271,6 +293,8 @@ impl NativeWork {
         }
         #[cfg(not(test))]
         let _ = phase;
+        #[cfg(test)]
+        self.observe_usage(phase, 0);
         request.check()
     }
 
@@ -314,6 +338,48 @@ impl NativeWork {
             return Err(OwnerError::ContractExhausted);
         }
         Ok(())
+    }
+
+    /// Initialization charges requested write attempts to the same I/O ceiling.
+    pub(super) fn write(
+        &mut self,
+        request: &NativeRootRequest,
+        bytes: usize,
+    ) -> Result<(), OwnerError> {
+        #[cfg(test)]
+        self.observe_usage("write-reservation", bytes);
+        self.read(request, bytes)
+    }
+
+    #[cfg(test)]
+    fn observe_usage(&mut self, phase: &'static str, requested: usize) {
+        if let Some(hook) = &mut self.usage_hook {
+            hook(
+                phase,
+                [self.reads, self.calls, self.opens, self.canonical_bytes],
+                requested,
+            );
+        }
+    }
+
+    /// Complete canonical hash preimages, including the retained request once.
+    pub(super) fn canonical(
+        &mut self,
+        request: &NativeRootRequest,
+        bytes: usize,
+    ) -> Result<(), OwnerError> {
+        request.check()?;
+        let ceiling = request
+            .limits
+            .encoded_bytes
+            .checked_mul(8)
+            .ok_or(OwnerError::ContractExhausted)?
+            .min(4 * 1024 * 1024);
+        if !self.original_digest_charged {
+            charge(&mut self.canonical_bytes, request.digest_bytes, ceiling)?;
+            self.original_digest_charged = true;
+        }
+        charge(&mut self.canonical_bytes, bytes, ceiling)
     }
 }
 

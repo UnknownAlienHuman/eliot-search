@@ -19,6 +19,7 @@ pub(super) struct NativeInstallation {
     pub(super) installation_incarnation_id: [u8; 16],
     initialization_id: [u8; 16],
     native_digest: [u8; 32],
+    pub(super) journal_profile: bool,
 }
 
 impl NativeInstallation {
@@ -76,6 +77,9 @@ pub(super) fn read_snapshot(
     if installation.native_digest != pins.digest(request, work)? {
         return Err(OwnerError::OwnerGuardMismatch);
     }
+    if installation.journal_profile != (pins.files.len() == 11) {
+        return Err(OwnerError::OwnerGuardMismatch);
+    }
     let path_bytes = native_argument(root.as_os_str(), 256 * 1024)?;
     let identity = work.call(request, || native_identity(&pins.files[0]))?;
     // Persisted Windows owner identity is 12 bytes; native pins separately use 20.
@@ -99,6 +103,9 @@ pub(super) fn read_snapshot(
     )?)?;
     let (target, record) = choose_pair(first, second)?;
     let executable = executable_digest(request, work)?;
+    if installation.journal_profile {
+        verify_completed_profile(request, work, pins, &installation, &observed, executable)?;
+    }
     if record.installation_id != installation.installation_id
         || record.installation_incarnation_id != installation.installation_incarnation_id
         || record.data_root_id != *observed.data_root_id.as_bytes()
@@ -119,7 +126,7 @@ pub(super) fn read_snapshot(
     })
 }
 
-fn executable_digest(
+pub(super) fn executable_digest(
     request: &NativeRootRequest,
     work: &mut NativeWork,
 ) -> Result<[u8; 32], OwnerError> {
@@ -167,8 +174,14 @@ pub(super) fn parse_native_installation(bytes: &[u8]) -> Result<NativeInstallati
     let lines: Vec<_> = text.lines().take(8).collect();
     if lines.len() != 7
         || lines[0] != INSTALLATION_MAGIC
-        || lines[1] != "format_version=2"
-        || lines[5] != "layout_profile=legacy-direct-root-v2"
+        || !matches!(
+            (lines[1], lines[5]),
+            ("format_version=2", "layout_profile=legacy-direct-root-v2")
+                | (
+                    "format_version=3",
+                    "layout_profile=legacy-direct-root-v3-journal-v2"
+                )
+        )
     {
         return Err(OwnerError::OwnerRecoveryQuarantined);
     }
@@ -188,7 +201,49 @@ pub(super) fn parse_native_installation(bytes: &[u8]) -> Result<NativeInstallati
         installation_incarnation_id: incarnation_id,
         initialization_id,
         native_digest,
+        journal_profile: lines[1] == "format_version=3",
     })
+}
+
+fn verify_completed_profile(
+    request: &NativeRootRequest,
+    work: &mut NativeWork,
+    pins: &mut NativePins,
+    installation: &NativeInstallation,
+    observed: &ObservedRoot,
+    executable: [u8; 32],
+) -> Result<(), OwnerError> {
+    use super::initialization_journal::{MAX_JOURNAL, decode_journal};
+    let bytes = read_bytes(request, work, &mut pins.files[10], MAX_JOURNAL)?;
+    let journal = decode_journal(&bytes, &mut |bytes| work.canonical(request, bytes))?;
+    let seal = journal
+        .completion
+        .ok_or(OwnerError::OwnerRecoveryQuarantined)?;
+    let subject = journal.subject;
+    if subject.installation != installation.installation_id
+        || subject.incarnation != installation.installation_incarnation_id
+        || subject.initialization != installation.initialization_id
+        || subject.root_id != *observed.data_root_id.as_bytes()
+        || subject.path_digest != observed.canonical_path_digest
+        || subject.volume_digest != observed.volume_identity_digest
+        || subject.executable != executable
+        || seal.native_digest != installation.native_digest
+    {
+        return Err(OwnerError::OwnerGuardMismatch);
+    }
+    for (file, expected) in pins.files.iter().zip(&seal.native_objects) {
+        if work.call(request, || native_identity(file))?.as_slice() != expected {
+            return Err(OwnerError::OwnerGuardMismatch);
+        }
+    }
+    if read_bytes(request, work, &mut pins.files[5], MAX_INSTALLATION_BYTES)?
+        != seal.installation_bytes
+        || read_bytes(request, work, &mut pins.files[8], 65)? != seal.namespace_bytes
+    {
+        return Err(OwnerError::OwnerGuardMismatch);
+    }
+    // No secret or catalog read here: this grants root-owner authority only.
+    request.check()
 }
 
 /// A corrupt peer is never ignored in favor of an older RELEASED record.

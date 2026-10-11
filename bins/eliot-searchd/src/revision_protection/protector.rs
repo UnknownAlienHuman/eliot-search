@@ -6,3 +6,5 @@ mod operations;
 mod windows;
 
 pub(crate) use model::{PROTECTED_OBJECT_EXTENSION, RevisionProtector};
+
+mod initialization;

@@ -9,4 +9,6 @@ mod kernel;
 
 pub use kernel::{LiveOwner, ShutdownReceipt, establish};
 
+pub use kernel::InitializingDataRoot;
+pub use kernel::initialize_new;
 pub use kernel::{NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing};

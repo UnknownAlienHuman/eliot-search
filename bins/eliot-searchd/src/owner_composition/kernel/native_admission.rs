@@ -98,17 +98,12 @@ fn admit_with_work(
     // as absent. Partial or legacy layouts never receive a usable capability.
     let installation = metadata(&request, &mut work, &root.join(INSTALLATION_FILE))?;
     if installation.is_none() {
-        for name in [
-            "control",
-            "revisions",
-            ".eliot-search-owner.lock",
-            ".eliot-search-sealed-owner.lock",
-        ] {
-            if metadata(&request, &mut work, &root.join(name))?.is_some() {
-                return unavailable(request, RootOpenState::OutcomeUnknown);
-            }
-        }
-        return unavailable(request, RootOpenState::Absent);
+        let state = if partial_layout(&request, &mut work, &root)? {
+            RootOpenState::OutcomeUnknown
+        } else {
+            RootOpenState::Absent
+        };
+        return unavailable(request, state);
     }
     let exclusions = acquire_exclusions(&request, &mut work, &root)?;
     let mut installation_file = open_existing(
@@ -123,7 +118,14 @@ fn admit_with_work(
         return unavailable(request, RootOpenState::Unsupported);
     }
     let mutation = request.mode == DataRootOpenMode::OpenExistingMutating;
-    let mut pins = NativePins::acquire(&request, &mut work, &root, mutation)?;
+    let profile = super::native_snapshot::parse_native_installation(&installation_bytes)?;
+    let mut pins = NativePins::acquire_profile(
+        &request,
+        &mut work,
+        &root,
+        mutation,
+        profile.journal_profile,
+    )?;
     let snapshot = read_snapshot(&request, &mut work, &root, &mut pins)?;
     work.arrive(&request, "native-proof")?;
     if snapshot.record.lifecycle != LifecycleState::Released {
@@ -168,7 +170,7 @@ fn admit_with_work(
     finish_admission(capability, successor)
 }
 
-fn acquire_exclusions(
+pub(super) fn acquire_exclusions(
     request: &NativeRootRequest,
     work: &mut NativeWork,
     root: &Path,
@@ -190,7 +192,7 @@ fn acquire_exclusions(
     Ok(exclusions)
 }
 
-fn local_profile_path(root: &Path) -> Result<bool, OwnerError> {
+pub(super) fn local_profile_path(root: &Path) -> Result<bool, OwnerError> {
     let native_path = native_argument(root.as_os_str(), 256 * 1024)?;
     #[cfg(windows)]
     {
@@ -239,6 +241,25 @@ fn finish_admission(
     } else {
         NativeRootAdmission::Inspection(Box::new(capability))
     })
+}
+
+fn partial_layout(
+    request: &NativeRootRequest,
+    work: &mut NativeWork,
+    root: &Path,
+) -> Result<bool, OwnerError> {
+    for name in [
+        super::initialization_journal::JOURNAL_FILE,
+        "control",
+        "revisions",
+        ".eliot-search-owner.lock",
+        ".eliot-search-sealed-owner.lock",
+    ] {
+        if metadata(request, work, &root.join(name))?.is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 fn unavailable(
