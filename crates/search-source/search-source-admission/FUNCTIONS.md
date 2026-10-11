@@ -313,16 +313,16 @@ receipts/batch remain #241/#405. Private causal
 fixtures are **AUTHORED_NOT_RUN** under #352/#241/#215. Donor provenance and
 source gates do not qualify native, runtime, scale or installed behavior.
 
-## Immutable v2 receipt issuance and verification (#420)
+## Permanent v2 receipt owner (#424)
 
-The permanent [receipt_v2](RECEIPT_V2.md) API issues and verifies a private immutable receipt
-embedding the sole effective evaluator's decision. It checks the exact current policy/observation
-fence, four finite caller-selected count/complete-preimage ceilings and the original checkpoint,
-including after the final clone. One shared five-row CBOR/BLAKE3 profile binds the decision
-transitively; no duplicate safety evaluator, supplied digest, public codec or v1 fallback exists.
-Verified Deny/Review/Unsupported remains that outcome. Debug omits source/locator/IDs/profile data.
-Existing v1 and accepted policy/observation/decision bytes remain BYTE_COMPATIBLE; future consumer
-adoption is VERSIONED_REBUILD under #270/#271. Batch/cumulative budgets stay #241/#405, runtime
-#333 and qualification #215. Private causal fixtures are AUTHORED_NOT_RUN; source gates do not
-compile or execute their graph or establish native/live-Qdrant/installed/scale/product exposure.
-The pre-edit receipt-only size review caps aggregate owner Rust at9200 physical; hard10000 remains.
+The complete v2 receipt issuer/verifier and its private provenance values now
+belong to [search-source-admission-receipt](../search-source-admission-receipt/README.md).
+Callers use `search_source_admission_receipt::receipt_v2`; the old module is deleted,
+without a forwarding reexport or duplicate implementation. Policy, observations
+and effective decisions stay in this package. Receipt schema/domain/profile/bytes
+and all existing v1 behavior remain unchanged. Native/root/source/access/currentness
+adoption and qualification stay separate under #270/#271/#215.
+
+This removes the whole receipt responsibility and its causal fixtures from this
+owner. Receipt-only9200 permission is historical and grants no new batch growth;
+a complete future batch needs its own measured whole-owner review before edits.

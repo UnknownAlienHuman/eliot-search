@@ -1,0 +1,18 @@
+[package]
+name = "search-source-admission-receipt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+readme = "README.md"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+search-contracts.workspace = true
+search-source-admission.workspace = true
+
+[lints]
+workspace = true

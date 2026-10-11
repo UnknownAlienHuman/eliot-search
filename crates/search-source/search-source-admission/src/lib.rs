@@ -47,9 +47,6 @@ pub mod observation_v2;
 /// Bounded effective v2 evaluation and immutable internally bound decisions.
 pub mod evaluation_v2;
 
-/// Immutable bounded v2 receipts over producer-derived decisions.
-pub mod receipt_v2;
-
 /// Immutable compiled v2 policy and bounded byte-path rule selection.
 pub mod policy_v2;
 

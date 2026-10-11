@@ -1,7 +1,8 @@
 # Source family rules
 
 - Paths are locators, not identity.
-- `search-source-admission` is the sole source-admission policy evaluator and receipt owner.
+- `search-source-admission` is the sole source-admission policy evaluator and legacy v1 receipt owner.
+- `search-source-admission-receipt` owns permanent v2 receipt issuance and verification over the evaluator's immutable models; dependencies remain one-way.
 - `search-source-registry` stores verified policy bindings/receipts but does not reimplement policy.
 - `search-safe-reader` performs stable no-execute acquisition from an already admitted locator; it does
   not decide admission.
