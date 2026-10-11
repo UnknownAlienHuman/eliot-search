@@ -12,7 +12,6 @@ use search_contracts::{
     NonZeroRevision, blake3_canonical_array_with_usage,
 };
 
-use super::batch_v2::EvaluationMeterV2;
 use super::observation_v2::{AdmissionObservationV2, ObservationFingerprintV2};
 use super::policy_v2::{
     CanonicalRuleV2, CheckpointFailureV2, CompiledAdmissionPolicyV2, MatchBufferV2,
@@ -85,6 +84,70 @@ pub const DEFAULT_EVALUATION_LIMITS: EvaluationLimitsV2 = EvaluationLimitsV2 {
     max_encoded_bytes: MAX_DECISION_PREIMAGE_BYTES,
     max_observation_encoded_bytes: MAX_OBSERVATION_PREIMAGE_BYTES,
 };
+
+/// Private composition state, shared by the sole evaluator across occurrences.
+/// This supplies no public operation receipt, accepted flag or new authority.
+pub(super) struct EvaluationMeterV2 {
+    rule_evaluations: usize,
+    matched_rule_ids: usize,
+    reason_contributions: usize,
+    encoded_bytes: usize,
+}
+
+impl EvaluationMeterV2 {
+    pub(super) fn new(
+        rule_evaluations: usize,
+        matched_rule_ids: usize,
+        reason_contributions: usize,
+        encoded_bytes: usize,
+    ) -> Self {
+        Self {
+            rule_evaluations,
+            matched_rule_ids,
+            reason_contributions,
+            encoded_bytes,
+        }
+    }
+
+    /// Charge the complete canonical rule count before observation/matcher work.
+    pub(super) fn charge_rules(&mut self, count: usize) -> Result<(), AdmissionError> {
+        charge(&mut self.rule_evaluations, count)
+    }
+
+    /// Call after the per-item ID guard and before each matching String clone.
+    pub(super) fn charge_matched_rule_id(&mut self) -> Result<(), AdmissionError> {
+        charge(&mut self.matched_rule_ids, 1)
+    }
+
+    /// Call only for a new per-item reason, before BTreeSet insertion.
+    pub(super) fn charge_reason_contribution(&mut self) -> Result<(), AdmissionError> {
+        charge(&mut self.reason_contributions, 1)
+    }
+
+    /// A derived zero is exhaustion, not a public invalid-raw-limit error.
+    pub(super) fn encoded_limit(&self, per_frame: usize) -> Result<usize, AdmissionError> {
+        if self.encoded_bytes == 0 {
+            return Err(AdmissionError::BudgetExhausted);
+        }
+        Ok(per_frame.min(self.encoded_bytes))
+    }
+
+    /// Subtract only successful producer usage, returning its computed digest.
+    pub(super) fn charge_encoded(
+        &mut self,
+        output: CanonicalBlake3Output,
+    ) -> Result<Blake3Digest32, AdmissionError> {
+        charge(&mut self.encoded_bytes, output.complete_preimage_bytes())?;
+        Ok(output.digest())
+    }
+}
+
+fn charge(remaining: &mut usize, amount: usize) -> Result<(), AdmissionError> {
+    *remaining = remaining
+        .checked_sub(amount)
+        .ok_or(AdmissionError::BudgetExhausted)?;
+    Ok(())
+}
 
 /// Internally computed decision equality bytes, never supplied proof.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

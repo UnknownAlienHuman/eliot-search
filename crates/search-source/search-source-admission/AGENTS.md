@@ -28,15 +28,31 @@ process or network I/O.
 
 Target `src/` ≤ 4,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
 
-## #427 bounded batch size acceptance
+## #430 corrective ownership and size boundary
 
-The manager reviewed the complete admission-owned batch after the real permanent
-receipt-owner split. This exact slice has a whole handwritten Rust ceiling of9,600
-physical lines, including all inline/external fixtures; projected9533 is reviewed
-before source edits. The10,000 hard stop stays unchanged. No prior receipt/contracts
-allowance transfers and no future growth is authorized. New growth needs review.
+The evaluator owns `EvaluationMeterV2` and its private subtraction helper.
+Its owner-internal `pub(super)` constructor accepts four admitted `usize` maxima;
+it does not depend on `BatchLimitsV2`. Batch validates its existing limits before
+constructing that meter and calling the sole evaluator. Keep the module dependency
+one-way: batch → evaluator. Public APIs, field/method charging bodies, probes,
+errors, profiles and the 1024-occurrence multiset contract remain unchanged.
 
-Keep the1024-occurrence multiset contract, all finite metering dimensions and
-causal fixtures. Reuse the sole evaluator and measured shared producer; no sizing
-formula, second encode, duplicate evaluator, forwarding split or partial-success
-fallback. Original probes and all-refusal cleanup stay with the actual owner.
+Remove only the eleven newly added batch fixture bodies and their local helpers
+and fixture-only prose/imports. Do not move those bodies to another source owner
+or test directory to hide size. Retain historical evaluator, observation, policy
+and v1 fixtures. Preserve the exact deferred case/assertion inventory under
+#427/#215 and in [BATCH_V2.md](BATCH_V2.md); removed bodies are absent from this
+corrective candidate, not passing tests. Historical authored bodies were not run.
+
+The complete corrected owner is 8,672 physical handwritten Rust lines TOTAL,
+including every retained fixture: batch 308 + evaluator 1,723 + lib 4,442 +
+policy 1,303 + observation 896. It removes 858 lines from accepted TOTAL 9,530.
+This still exceeds the 8,500 split-review threshold. Independent split review and manager pre-edit acceptance under #430 bind this
+exact owner to a new 8,700-line ceiling for this correction only. Final recount
+is required; the 10,000 hard stop stays.
+The prior batch allowance is obsolete and does not transfer; no new blanket
+growth grant, fixture exclusion or receipt/contracts allowance is implied.
+
+Reuse the measured shared producer; no sizing formula, second encode, duplicate
+evaluator, forwarding split or partial-success fallback. Original probes and
+all-refusal cleanup stay unchanged. Source gates and qualification remain separate.
