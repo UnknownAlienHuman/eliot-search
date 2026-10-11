@@ -239,3 +239,63 @@ VERSIONED_REBUILD profile; it cannot relabel old v3. #331 owns persisted adoptio
 removal. #226 JATS is separate; #441 retains donor-failure/live-enablement checks. All new causal
 fixtures are AUTHORED_NOT_COMPILED/NOT_RUN under #215/#216; source/compiler evidence is not product
 or installed qualification.
+
+## JATS structural v5 — #446
+
+The additive source path consumes the delivered Journal Publishing1.4 strictUTF8 producer through
+`JatsUnitizationSource`; it introduces no XML parser or schema engine. Supplied raw-v3 and distinct
+structural RepresentationId coordinates remain separate. Owning `verify_jats` reopens the exact
+retained revision with the original live flag and absolute deadline, then unchanged raw-v3
+prepare/build supplies the disjoint coverage denominator. Every element gets an occurrence:
+`sec=Section`, all others `Doc`. Article covers its true element extent; prolog/epilog remain raw
+coverage. Nested structural extents never increase represented_bytes.
+
+Retain the producer's entire ordered element/attribute/text/comment inventories, optional declaration
+span and total event calls including EOF. Events are zero-based; declaration reserves event0 when
+present, while a declaration-free article or prolog comment may legitimately start at0. Empty syntax
+has equal opening/closing event ordinal and no closing span. Full physical parents/order/ranges and
+all mapped values/statuses participate in owning reconstruction. Decode supplies an unverified
+proposal; whole expected Eq and terminal original poll are required before a verified set exists.
+
+Encoding is one shared canonical CBOR array:
+
+```
+envelope4 [jats-structural-unit-manifest/v5, 5, body, digest32]
+body18 [profile7, profile_id, raw_v3_bytes, structural_uuid, residency,
+        product_digest, inventory_digest, event_calls, declaration_span_or_null,
+        complete-subset-mapped-values, element_count, attribute_count, text_count,
+        comment_count, element_chunks, attribute_chunks, text_chunks, comment_chunks]
+profile7 [jats-structural-unitizer/v5, raw_profile_id, jats_profile_digest, limits14,
+          algorithm_digest, fixture_digest, closed_semantics]
+element11 [ordinal, kind, parent_or_null, open_event, close_event, opening_span,
+           closing_span_or_null, full_span, content_digest, unit_uuid, full_identity]
+attribute4 [owner, kind, whole_opening_span, mapped_value]
+text5 [owner, event, kind, whole_event_span, mapped_value]
+comment3 [owner_or_null, event, whole_comment_span]
+mapped_value2 [mapped-text, normalized_value]
+```
+
+Each inventory is an array of contiguous256-record chunks; every nonfinal chunk is full and exact
+counts determine the final chunk. All records are committed directly in body18, without another
+chunk hash/reference authority. Attribute/text/comment ordinals are their original array positions.
+Declaration event0 follows the fixed producer policy. Full element occurrence commitments bind the
+complete context/record and original content. Truncated UnitId collision refusal includes all raw
+units; no admission UUID is derived from a digest. Normalized values carry mapped assurance and
+whole-event provenance, never an exact normalized-value subanchor. Scholarly IDs remain observations.
+
+Limits14 order: input1MiB, elements2048, attributes8192, texts8192, comments1024, events65536,
+depth64, mapped16KiB each, mapped512KiB total, raw4096units, envelope4MiB, canonical256MiB,
+logical-owned1GiB, logical-work1GiB. All dimensions are positive and operation≤profile≤hard.
+Independent original raw max_steps plus additional JATS work are reserved before source replay;
+nested raw/replay/canonical/storage reservations are cumulative and never refunded. New hashes use
+the existing shared counted CBOR/BLAKE3 stream and actual successful complete-preimage usage;
+records/copies/temporary graphs are charged first. Conservative outer/raw decode reservations can
+refuse below the encoded ceiling. These are finite logical allowances, not measured RSS/CPU or hard
+preemption of synchronous donor/shared-codec calls.
+
+Six production definitions and the separate fixture definition bind profile identity using existing
+shared digest APIs, with256KiB/64KiB complete-definition ceilings. No new dependency, vendor type,
+runtime worker, document catalogue or durable state is added. v5 requires VERSIONED_REBUILD on
+future #331 adoption; v3/v4/legacy implementations and retained fixtures are preserved. Nine new
+causal fixture functions remain AUTHORED_NOT_COMPILED/NOT_RUN under #215/#216. Full JATS schema
+conformance, native/runtime/scale/installed qualification and source/publication authority are unclaimed.

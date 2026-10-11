@@ -22,6 +22,7 @@ One manager owns commits, root dependency pins and `Cargo.lock`. An exception pe
 | #252 | `search-lexical` | exact Unicode pins/lockfile/profile docs | prose/full fold; Qdrant migration; old-vector reinterpretation |
 | #226.markdown | materializer + unitizer | Markdown pin/lockfile/profile fixtures after required preparation interface | JATS/PDF/rendering; new UnitSet/document catalogue |
 | #226.jats | same owners after Markdown merges | XML pin/lockfile/JATS fixtures | Markdown rewrite; dynamic XML tree; external entities |
+| #446 JATS UnitSet | existing `search-unitizer` only | named borrowed JATS ingress, eight new module/fixture paths, additive lib exports, owning docs and exact ledger rows; no dependencies | materializer/parser/consumer/store changes; new catalogue/admission authority; fixture execution or product qualification |
 | #329 after #259/#262 | point-identity legacy retirement | migrated planner/bridge imports; exact daemon projection caller/fixtures; ledger/docs | new schema/transport/general daemon rewrite; qualification claim |
 
 Rows name ownership envelopes. The exact issue and `SCOPE_FROZEN` block narrow them further. All unlisted nearest-package prohibitions remain effective.

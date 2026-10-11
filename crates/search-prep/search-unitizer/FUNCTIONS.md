@@ -1,6 +1,6 @@
 # Function contract — `search-unitizer`
 
-**Status:** W2/P04 logical contract with an implemented exact UTF-8 UnitSet v3 baseline. Broader operations remain future scope; product qualification is separate.
+**Status:** W2/P04 logical contract with exact UTF-8 UnitSet v3 and additive Markdown v4/JATS v5 source paths. Persistence/adoption and product qualification remain separate.
 
 This package owns deterministic bounded unit occurrences and manifests derived from one exact canonical
 representation. It owns no source/revision storage, materialization, semantic enrichment, lexical/model
@@ -290,3 +290,40 @@ currentness, persistence, indexed publication or product qualification is assert
 Causal fixtures live in `src/markdown_unitset/fixtures.rs` and remain AUTHORED_NOT_COMPILED/NOT_RUN
 until #215/#216. Persistence/caller adoption and legacy DIRECT removal stay #331. The donor OffsetIter
 failure check #441 gates live Markdown enablement separately and does not widen this source slice.
+
+## Additive complete JATS structural UnitSet — #446
+
+`jats-structural-unit-manifest/v5` retains unchanged exact raw-v3 as the sole disjoint coverage
+denominator. Each delivered producer element becomes an occurrence (`sec=Section`, others `Doc`),
+including article whose true extent excludes prolog/epilog. Retain every attribute, text/reference/
+CDATA, comment, optional declaration and event-call count. Normalized values are inert mapped
+metadata with whole-event provenance; exact anchors refer to original XML bytes.
+
+| API | Behavior |
+| --- | --- |
+| `JatsSourceBinding::new(raw, structural)` | Distinct supplied admitted representation IDs; no identity issuance |
+| `JatsUnitizerProfile::new(raw_id, jats_id, limits)` | Immutable internal profile/definition/fixture identity |
+| `unitize_jats(source, profile, budget)` | Owning exact JATS replay, unchanged raw-v3 construction, complete inventory |
+| `canonicalize_jats_unit_manifest(manifest, profile, budget)` | Closed encoding/commitment coherence, no source verification |
+| `decode_jats_unit_manifest(bytes, profile, budget)` | Bounded canonical proposal, never a verified set |
+| `verify_jats_unit_manifest(proposed, source, profile, budget)` | Entire expected reconstruction and Eq before terminal original poll |
+
+Private-field set/manifest/record/byte views have no public constructors or unmetered Clone. The
+named borrowed ingress is the only public materializer peer boundary. Raw and structural unit IDs
+share a collision guard; full occurrence commitments survive truncation. The v5 body retains four
+complete inventories in contiguous fixed256-record chunks, every nonfinal chunk full, plus exact
+counts/statuses/producer commitments/raw-v3 bytes. No second digest/reference or manifest authority.
+
+All14 positive dimensions narrow immutable profile ceilings. Reserve independently the original raw
+max_steps and additional JATS work before replay/port access, plus nested canonical/storage closures
+without refunds. Existing raw-v3 helpers receive the same original flag/deadline. New shared counted
+canonical/BLAKE3 hashes debit actual successful complete preimages; charge construction/copies first.
+Decoder reserves hostile outer and embedded raw graph closures before the shared parser. Lower
+operation limits can conservatively refuse below the wire ceiling. Logical storage/work is not
+measured RSS/CPU or hard synchronous-call preemption.
+
+Full replay compares parents/order/ranges/mapped values/statuses/identities and every inventory;
+rehashed shape-valid omissions do not verify. Versioned v5 requires rebuild on #331 adoption; old
+v3/v4/legacy bytes are unchanged. No source admission/currentness/persistence/publication/product
+qualification follows. Nine private causal fixture functions remain AUTHORED_NOT_COMPILED/NOT_RUN
+under #215/#216; #331 owns adoption/legacy deletion and #438/#441/#443 retain their separate scopes.
