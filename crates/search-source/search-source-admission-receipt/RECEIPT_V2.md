@@ -35,8 +35,12 @@ The accepted eight-row decision fingerprint binds outcome, ordered reasons, cano
 
 Existing v1 and accepted policy/observation/decision types, APIs and preimages remain BYTE_COMPATIBLE. Future stored adoption is VERSIONED_REBUILD under #270/#271. No current consumer is cut over and no persisted receipt codec is supplied here.
 
-## Size and evidence boundary
+## Permanent package owner and evidence boundary
 
-The concrete pre-edit owner-size review covers this complete receipt-only result with an aggregate cap9200 physical Rust lines, below the unchanged hard10000. V1 movement cannot lower aggregate size and is excluded. Batch is a separate serial successor; no later addition inherits this exception.
-
-Private causal fixtures are AUTHORED_NOT_RUN under integrated #215 qualification. Production source checks/strict Clippy/static guards/exact-head reviews establish source delivery only. They do not compile or run the fixture graph, establish product caller exposure, or qualify native/live-Qdrant/runtime/installed/scale behavior. Daemon baseline remains D/#387, NOT_PASS at unchanged normalized diagnostics. Batch/cumulative requirements remain #241/#405, adoption #270/#271, runtime #333 and qualification #215.
+#424 relocates this full implementation and its eight causal fixture groups to
+`search-source-admission-receipt::receipt_v2` over public immutable admission models.
+The old admission receipt_v2 module is deleted without a forwarding reexport or dependency cycle.
+Rust import migration is explicit; the schema/profile/domain/preimages and v1 remain unchanged.
+The initial whole-owner Rust review ceiling is1200 lines, including all fixtures.
+No prior receipt-only9200 allowance transfers. Fixtures remain AUTHORED_NOT_RUN;
+production gates/source review and product/native/resource qualification #215 are separate.

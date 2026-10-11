@@ -12,10 +12,24 @@ use search_contracts::{
     CanonicalValue, ContractError, ContractErrorKind, DigestInputLimit, blake3_canonical_array,
 };
 
-use super::AdmissionError;
-use super::evaluation_v2::{AdmissionDecisionV2, MAX_MATCHED_RULE_IDS, MAX_REASONS};
-use super::observation_v2::{AdmissionObservationV2, MAX_OBSERVATION_PREIMAGE_BYTES};
-use super::policy_v2::{CheckpointFailureV2, CompiledAdmissionPolicyV2, checkpoint};
+use search_source_admission::AdmissionError;
+use search_source_admission::evaluation_v2::{
+    AdmissionDecisionV2, MAX_MATCHED_RULE_IDS, MAX_REASONS,
+};
+use search_source_admission::observation_v2::{
+    AdmissionObservationV2, MAX_OBSERVATION_PREIMAGE_BYTES,
+};
+use search_source_admission::policy_v2::{CheckpointFailureV2, CompiledAdmissionPolicyV2};
+
+// Preserve the original caller-owned checkpoint and closed failure translation.
+fn checkpoint(
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<(), AdmissionError> {
+    probe().map_err(|failure| match failure {
+        CheckpointFailureV2::Cancelled => AdmissionError::Cancelled,
+        CheckpointFailureV2::DeadlineExceeded => AdmissionError::BudgetExhausted,
+    })
+}
 
 /// Distinct receipt schema; the retained v1 receipt schema is unchanged.
 pub const RECEIPT_SCHEMA_VERSION: u32 = 2;
@@ -75,7 +89,7 @@ pub struct ReceiptFingerprintV2(Blake3Digest32);
 impl ReceiptFingerprintV2 {
     /// Complete shared canonical CBOR/BLAKE3 identity bytes.
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; 32] {
+    pub const fn as_bytes(&self) -> &[u8; 32] {
         self.0.as_bytes()
     }
 }
@@ -314,6 +328,10 @@ fn array(values: Vec<CanonicalValue>) -> Result<CanonicalValue, ContractError> {
 
 /// Receipt byte exhaustion maps like the accepted observation contract, not the policy
 /// one: only complete-preimage and sink overflow are budget failures.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Result::map_err passes an owned error to this closed translation."
+)]
 fn encoded_limit_error(error: ContractError) -> AdmissionError {
     if error.kind() == ContractErrorKind::OversizePayload
         && matches!(error.field(), "digest_preimage" | "canonical_sink")
@@ -328,12 +346,14 @@ fn encoded_limit_error(error: ContractError) -> AdmissionError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::evaluation_v2::{DEFAULT_EVALUATION_LIMITS, EvaluationLimitsV2, evaluate_v2};
-    use crate::observation_v2::AdmissionRelativeLocator;
-    use crate::policy_v2::{
+    use search_source_admission::evaluation_v2::{
+        DEFAULT_EVALUATION_LIMITS, EvaluationLimitsV2, evaluate_v2,
+    };
+    use search_source_admission::observation_v2::AdmissionRelativeLocator;
+    use search_source_admission::policy_v2::{
         DEFAULT_COMPILE_LIMITS, PolicyInputV2, PredicateV2, RuleInputV2, compile_policy_v2,
     };
-    use crate::{
+    use search_source_admission::{
         AcceptedCapabilities, DEFAULT_ADMISSION_LIMITS, RuleEffect, SectionPlatform, SourceClass,
         UnvalidatedObservationInput, ValidatedAdmissionConfig, baseline_policy, compiled_defaults,
         validate_observation, validate_section,
@@ -372,7 +392,7 @@ mod tests {
     ) -> CompiledAdmissionPolicyV2 {
         compile_policy_v2(
             &PolicyInputV2 {
-                schema_version: crate::policy_v2::POLICY_SCHEMA_VERSION,
+                schema_version: search_source_admission::policy_v2::POLICY_SCHEMA_VERSION,
                 revision,
                 section,
                 rules,
@@ -401,7 +421,7 @@ mod tests {
             is_system: Some(false),
             sensitivity: Some("public".into()),
             detector_id: Some("detector:fixture".into()),
-            profile_id: Some(crate::BASELINE_PROFILE.into()),
+            profile_id: Some(search_source_admission::BASELINE_PROFILE.into()),
             unavailable_fields: Vec::new(),
             unknown_fields: Vec::new(),
         }
@@ -885,7 +905,7 @@ mod tests {
         let rendered = format!("{baseline:?}");
         assert!(!rendered.contains("src/lib.rs"));
         assert!(!rendered.contains("detector:fixture"));
-        assert!(!rendered.contains(crate::BASELINE_PROFILE));
+        assert!(!rendered.contains(search_source_admission::BASELINE_PROFILE));
         for id in decision.matched_rule_ids() {
             assert!(!rendered.contains(id));
         }

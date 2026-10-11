@@ -9,7 +9,8 @@ The bounded implementation packet is `swarm/assignments/search-source-admission.
 
 - pure canonical `SourceAdmissionPolicy` evaluation
 - deny-by-default source/path/metadata/format/sensitivity rules
-- deterministic decision receipts bound to policy and observation digests
+- deterministic decisions and legacy v1 receipts bound to policy and observation digests
+- v2 receipt issuance/verification belongs to the permanent `search-source-admission-receipt` leaf; do not restore a forwarding module or reverse dependency
 
 ## Forbidden ownership
 
