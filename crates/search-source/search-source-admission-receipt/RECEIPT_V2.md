@@ -37,7 +37,7 @@ Existing v1 and accepted policy/observation/decision types, APIs and preimages r
 
 ## Permanent package owner and evidence boundary
 
-#424 relocates this full implementation and its eight causal fixture groups to 
+#424 relocates this full implementation and its eight causal fixture groups to
 `search-source-admission-receipt::receipt_v2` over public immutable admission models.
 The old admission receipt_v2 module is deleted without a forwarding reexport or dependency cycle.
 Rust import migration is explicit; the schema/profile/domain/preimages and v1 remain unchanged.
