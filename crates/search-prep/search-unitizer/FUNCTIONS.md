@@ -246,3 +246,47 @@ there is no v2 producer or relabelling migration. Batch/deadline-port orchestrat
 generalized request/boundary operations, structural/predicate profiles and v3 transition classification
 remain future scope. Currentness, admission, durable publication and indexed qualification are not
 asserted by the v3 unitizer result.
+
+## Additive Markdown structural UnitSet — #440
+
+The `markdown-structural-unit-manifest/v4` source path retains exact v3 as its sole disjoint raw
+coverage denominator. It observes one occurrence for every Markdown node including root, plus the
+complete ordered yielded inline inventory and selected mapped metadata. Nested/equal structural
+spans are legal observations and never inflate represented_bytes or imply complete reference metadata.
+
+| Public API | Source behavior |
+| --- | --- |
+| `MarkdownSourceBinding::new(raw, structural)` | Admitted coordinates; refuses equal representation IDs; issues no admission |
+| `MarkdownUnitizerProfile::new(raw_id, markdown_id, limits)` | Pure immutable selector/profile; binds all six literal definition digests and fixture bytes internally |
+| `unitize_markdown(source, profile, budget)` | Exact owning Markdown replay, unchanged raw v3 construction, complete structural reconstruction |
+| `canonicalize_markdown_unit_manifest(manifest, profile, budget)` | Bounded closed encoding and commitment parity; no source verification |
+| `decode_markdown_unit_manifest(bytes, profile, budget)` | Closed bounded proposal with profile/shape/identity/encoding coherence; never a verified set |
+| `verify_markdown_unit_manifest(proposed, source, profile, budget)` | Full expected reconstruction and whole manifest comparison, including inline values/order/status |
+
+`VerifiedMarkdownUnitSet` exposes immutable manifest, contract Representation and logical usage.
+Manifest, set, structural/inline records and the new byte wrapper have no public constructors,
+mutation or Clone. The old v3 byte wrapper is unchanged. Private observation/body drafts are sealed
+only after real occurrence/body commitments exist; no provisional zero IDs/digests are used.
+
+Root maps File, headings Section, other accepted nodes Doc. Anchors identify original exact UTF-8
+bytes and the raw input digest. Selected code-info/code/link/title values remain mapped text with
+whole-event provenance. Heading relations and physical containment are separate. All full 32-byte
+commitments participate in the shared raw/structural truncated-ID collision guard.
+
+All ten positive operation limits narrow profile/hard limits. One meter and the original borrowed
+AtomicBool/absolute Instant cover replay, raw preparation, new rows/hashes, codecs and comparison.
+Before every Markdown replay, reserve BOTH raw MaterializationBudget.max_steps and Markdown parser
+work_steps, plus canonical/logical storage caps, without refunds; actual replay counters are reported
+separately. Raw v3 helpers reserve their inspected finite closure. New hashes use shared measured
+complete canonical-array/BLAKE3 bytes; construction and copies are charged first. Decoder reserves
+one logical value/key allowance per input byte plus nested v3 decode costs before the shared parser.
+These conservative reservations can refuse before a dimension's standalone maximum is reached.
+
+Logical storage excludes peer raw/materializer maps, allocator spare capacity and donor/shared-codec
+internals; those retain their own finite limits. Work is logical accounting, not CPU time, RSS or
+hard preemption. Cancellation/deadline refusal returns no complete result. No source admission,
+currentness, persistence, indexed publication or product qualification is asserted.
+
+Causal fixtures live in `src/markdown_unitset/fixtures.rs` and remain AUTHORED_NOT_COMPILED/NOT_RUN
+until #215/#216. Persistence/caller adoption and legacy DIRECT removal stay #331. The donor OffsetIter
+failure check #441 gates live Markdown enablement separately and does not widen this source slice.

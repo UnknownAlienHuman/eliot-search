@@ -44,5 +44,15 @@ pub use manifest::{
 #[cfg(test)]
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
 
+mod markdown_unitset;
+pub use markdown_unitset::{
+    CanonicalMarkdownUnitManifestBytes, MAX_MARKDOWN_UNITIZER_LIMITS, MarkdownInlineObservation,
+    MarkdownMappedValue, MarkdownSourceBinding, MarkdownStructuralUnit, MarkdownUnitManifest,
+    MarkdownUnitizationBudget, MarkdownUnitizationError, MarkdownUnitizationSource,
+    MarkdownUnitizationUsage, MarkdownUnitizerLimits, MarkdownUnitizerProfile,
+    VerifiedMarkdownUnitSet, canonicalize_markdown_unit_manifest, decode_markdown_unit_manifest,
+    unitize_markdown, verify_markdown_unit_manifest,
+};
+
 #[cfg(test)]
 mod tests;
