@@ -120,3 +120,14 @@ but the writer does not edit another package opportunistically.
 The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
 degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
 Compilation alone is insufficient.
+
+## #444 inert JATS boundary review
+
+The exact private quick-xml 0.42.0 dependency with default features disabled is accepted for the
+Publishing 1.4 UTF-8 subset only. Public APIs expose package-owned immutable observations through api;
+no vendor types, source admission, UnitSet, storage, schema runtime or remote execution are added.
+The concrete same-owner split review independently accepts 15,150 whole-owner Rust lines and 2,400
+new JATS-module lines for this slice, including private fixtures. The 10,000-line review threshold
+remains in force; this exception does not inherit or widen #437 and moves/deletes no retained source.
+Production check/strict Clippy and affected guards are source gates; fixtures remain
+AUTHORED_NOT_COMPILED/NOT_RUN under #215/#216. JATS UnitSet and #331 adoption remain separate.

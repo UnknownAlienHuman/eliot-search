@@ -19,6 +19,7 @@ pub mod api;
 mod assurance;
 mod decode;
 mod error;
+mod jats;
 mod legacy_artifact;
 mod legacy_direct;
 mod legacy_direct_profile;

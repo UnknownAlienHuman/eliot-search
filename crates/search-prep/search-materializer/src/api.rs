@@ -26,6 +26,12 @@ pub use crate::decode::{
     DecodedLine, DecodedRepresentation, EncodingDecision, StepCounter, decode_text_or_code,
     detect_or_validate_encoding,
 };
+pub use crate::jats::{
+    JatsAttribute, JatsAttributeKind, JatsComment, JatsElement, JatsElementKind, JatsError,
+    JatsLimits, JatsObservationStatus, JatsOperationLimits, JatsProduct, JatsProfile, JatsSpan,
+    JatsText, JatsTextKind, JatsVerificationReceipt, MAX_JATS_LIMITS, MAX_JATS_PREIMAGE_BYTES,
+    MAX_JATS_TOTAL_CANONICAL_BYTES, materialize_jats, verify_jats,
+};
 pub use crate::legacy_direct::{
     CONTENT_DIGEST_ALGORITHM, DIGEST_ALGORITHM_BLAKE3_256, DIGEST_ALGORITHM_SHA256,
     LEGACY_DIRECT_REPRESENTATION_DOMAIN, LegacyDirectPreparationBinding,

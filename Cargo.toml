@@ -137,6 +137,9 @@ unicode-normalization = { version = "=0.1.25", default-features = false, feature
 # #437: private inert CommonMark events; renderer and optional features disabled.
 pulldown-cmark = { version = "=0.13.1", default-features = false }
 
+# #444: private inert UTF-8 XML events; optional feature families disabled.
+quick-xml = { version = "=0.42.0", default-features = false }
+
 [workspace.lints.rust]
 unsafe_code = "deny"
 unused_must_use = "deny"
