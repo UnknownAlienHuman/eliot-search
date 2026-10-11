@@ -258,13 +258,16 @@ impl NativeRootCapability {
     }
 
     fn unknown_error(&self) -> OwnerError {
-        if let Some(error) = self.poisoned {
-            error
-        } else if self.record.lifecycle == LifecycleState::Released && self.effect_observed {
-            OwnerError::OwnerReleaseOutcomeUnknown
-        } else {
-            OwnerError::OwnerAcquireOutcomeUnknown
-        }
+        self.poisoned.map_or_else(
+            || {
+                if self.record.lifecycle == LifecycleState::Released && self.effect_observed {
+                    OwnerError::OwnerReleaseOutcomeUnknown
+                } else {
+                    OwnerError::OwnerAcquireOutcomeUnknown
+                }
+            },
+            core::convert::identity,
+        )
     }
 
     fn failure(&mut self, error: OwnerError) -> OwnerError {

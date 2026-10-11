@@ -243,6 +243,16 @@ fn valid_native_inspection_is_write_neutral_and_coholds_both_exclusions() {
         admit_existing(other),
         Err(OwnerError::DataRootAlreadyOwned)
     ));
+    let sealed = open_existing(
+        &cap.request,
+        &mut cap.work,
+        &root.0.join(".eliot-search-sealed-owner.lock"),
+        false,
+        true,
+    )
+    .unwrap();
+    assert!(matches!(sealed.try_lock(), Err(TryLockError::WouldBlock)));
+    drop(sealed);
     assert_eq!(
         cap.begin_drain(DrainReason::Shutdown),
         Err(OwnerError::OwnerInvalidTransition)
