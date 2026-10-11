@@ -47,6 +47,9 @@ pub mod observation_v2;
 /// Bounded effective v2 evaluation and immutable internally bound decisions.
 pub mod evaluation_v2;
 
+/// Bounded cumulative v2 evaluation with canonical duplicate-preserving results.
+pub mod batch_v2;
+
 /// Immutable compiled v2 policy and bounded byte-path rule selection.
 pub mod policy_v2;
 

@@ -251,8 +251,8 @@ features and source bytes are excluded.
 ### `evaluate_batch(policy, observations, limits, budget, cancel) -> Result<AdmissionBatch, AdmissionError>`
 
 Validates finite count/encoded bytes, canonicalizes by observation identity and returns one explicit
-outcome per input. Cancellation returns an incomplete batch receipt that cannot authorize any missing or
-unprocessed item; it never silently drops denied/review cases.
+outcome per input. Cancellation or budget exhaustion returns an error without a successful batch
+or partial receipt. A successful batch never silently drops denied/review cases.
 
 ## Cancellation, deadline and retry
 
@@ -326,3 +326,58 @@ adoption and qualification stay separate under #270/#271/#215.
 This removes the whole receipt responsibility and its causal fixtures from this
 owner. Receipt-only9200 permission is historical and grants no new batch growth;
 a complete future batch needs its own measured whole-owner review before edits.
+
+## Cumulative multiset v2 batch (#427)
+
+The additive owning contract is described in
+[BATCH_V2.md](BATCH_V2.md); its exact Ready/freeze and source review are tracked by #427.
+
+`batch_v2::evaluate_batch_v2(policy, observations, scratch, limits, probe)`
+returns `Result<AdmissionBatchV2, AdmissionError>`. Its result is private,
+immutable and complete, with readonly schema/policy/decisions/fingerprint getters.
+It evaluates every occurrence, including duplicates, through the existing
+effective evaluator. Successful decisions are sorted by observation fingerprint
+then decision fingerprint, retaining multiplicity and Deny/Review/Unsupported.
+No incomplete success, receipt, public codec, accepted flag or supplied digest
+is added. Empty or over-limit input refuses; capacity remains 1024 occurrences.
+
+`BatchLimitsV2` admits positive finite `max_items` through1024,
+`max_rule_evaluations` and `max_matched_rule_ids` through131072,
+`max_reason_contributions` through23552, `max_encoded_bytes` through8388608,
+and the existing `EvaluationLimitsV2` in `per_item`.
+Raw dimensions validate once before reserve/work. Canonical rules charge before
+matcher work; matching IDs charge before clone; each new per-item reason charges
+before insertion, including baseline, losing categories and DenyByDefault.
+Repeated reasons charge once within an item and again in another occurrence.
+
+One private meter charges actual complete observation revalidation, decision
+and final batch preimages using the accepted shared counted CBOR/BLAKE3 stream.
+No worst-case reservation, second encode, preimage buffer or local size formula
+is introduced. Derived zero remaining bytes is BudgetExhausted. Counts and
+serialized work are not a heap/resource bound; caller-side model/policy creation
+and separately issued receipts are outside this call's accounting.
+
+The original caller checkpoint wins at entry before raw validation, is reused
+through work and is checked after final result construction. Every error clears
+match results while preserving their policy fence and returns no batch.
+Invalid raw limits/count return ObservationInvalid; actual exhaustion returns
+BudgetExhausted. Existing evaluator refusals propagate. Only shared
+OversizePayload at digest_preimage/canonical_sink maps to BudgetExhausted;
+other shared producer failures map to ObservationInvalid.
+
+Schema2/profile `eliot-admission-batch-multiset@2`, domain
+`eliot/cbor/admission/batch/v2`: header with fixed aggregate maxima, policy
+revision/fingerprint, occurrence count and one sorted observation/decision
+fingerprint pair per occurrence. Sufficient lower limits do not alter equality.
+V1 and existing policy/observation/decision/receipt identities remain
+BYTE_COMPATIBLE; future batch adoption requires VERSIONED_REBUILD under270/271.
+
+The private evaluator/observation usage seams remain owner-internal;
+existing public single-evaluation and observation signatures remain unchanged.
+No native/root/source/access/currentness authority, receipt-leaf change,
+dependency adoption or daemon/ingestion cutover belongs here.
+The fresh projected whole handwritten owner9533 includes all fixtures, exceeds
+the8500 split-review threshold and remains below hard10000; its own pre-edit
+size review/acceptance is required. No earlier size allowance transfers.
+Eleven new private cases and retained cases are AUTHORED_NOT_RUN Q215.
+Production/static source gates are recorded at the exact candidate SHA; this documentation is not qualification evidence. Daemon D387 remains NOT_PASS/unrun.

@@ -143,3 +143,18 @@ adoption and qualification stay separate under #270/#271/#215.
 This removes the whole receipt responsibility and its causal fixtures from this
 owner. Receipt-only9200 permission is historical and grants no new batch growth;
 a complete future batch needs its own measured whole-owner review before edits.
+
+## Cumulative v2 batch evaluation (#427)
+
+The [batch_v2](BATCH_V2.md) API evaluates every input occurrence, including duplicates,
+through the sole effective evaluator and returns one private immutable complete multiset.
+It charges all canonical rule work, matching IDs before clone, new per-item reasons
+before insertion (including losing/baseline/fallback reasons), and actual complete
+observation/decision/final-batch preimages through the single shared counted producer.
+The original caller supplies checkpoints; every refusal clears scratch and returns no
+partial success. Fixed1024 capacity and8MiB encoded-work budget are not heap/scale claims.
+Existing single-call/v1 identities and public signatures remain BYTE_COMPATIBLE;
+batch adoption is VERSIONED_REBUILD under #270/#271. No receipt/native/root/access/
+currentness authority is added. Eleven causal batch fixtures are AUTHORED_NOT_RUN;
+retained evaluator golden F1/#428 remains known debt pending its separate correction.
+Source gates are separate from integrated resource/native/runtime qualification #215.
