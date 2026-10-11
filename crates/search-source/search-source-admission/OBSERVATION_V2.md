@@ -70,6 +70,35 @@ cannot mutate the retained model or supply its fingerprint.
 
 The metadata(), relative_locator(), fingerprint(), component_count() and as_bytes() getters expose immutable data. Equality grants no admission, native-path, source-revision or completeness authority.
 
+## Caller-selected complete-preimage ceilings (#414)
+
+`AdmissionObservationV2::new_with_encoded_limit(metadata, relative_locator, max_encoded_bytes)`
+creates the same immutable model with a caller-selected ceiling.
+`validate_encoded_limit(&self, max_encoded_bytes)` recomputes the retained model through the
+same private helper, compares the private fingerprint and changes nothing. A mismatch refuses
+with `ADMISSION_OBSERVATION_INVALID`; a failed check does not prevent a later valid retry.
+
+Both new APIs first reject zero or values above 16,384 with
+`ADMISSION_OBSERVATION_INVALID`, before domain construction, row copying or hashing. They pass
+the accepted ceiling directly to shared `DigestInputLimit`/`blake3_canonical_array`, which
+charges the complete domain + NUL + CBOR. An exact complete boundary is inclusive. Shared
+`OversizePayload` at `digest_preimage` or `canonical_sink` becomes
+`ADMISSION_BUDGET_EXHAUSTED`; all other shared failures become
+`ADMISSION_OBSERVATION_INVALID`. No rejected call returns a model or partial identity.
+
+The existing `new(metadata, relative_locator)` retains the fixed ceiling and maps every shared
+failure to `ADMISSION_OBSERVATION_INVALID`. The operation ceiling is not another identity row:
+the header still binds the fixed 16,384-byte profile, so equal accepted inputs have identical
+fingerprints at every accepted operation ceiling. No caller ceiling, cached length or accepted
+flag is retained. Existing locator validation, three private model fields and all fifteen rows
+are unchanged.
+
+Rows may copy already bounded metadata/locator values before shared serialized-byte charging;
+lower-ceiling rejection does not promise zero allocation. These pure synchronous model calls
+own no cancellation/deadline context or clock. Future effective evaluator/batch integration
+must keep its original caller checkpoint around them. Other lower dimensions and raw-input
+bounds remain #405; effective decision/receipt/batch remain #241.
+
 ## Compatibility and consumer boundary
 
 VERSIONED_REBUILD if and only if consumers adopt v2. Current v1 is BYTE_COMPATIBLE and
@@ -94,6 +123,10 @@ alias rejection, exact and plus-one per dimension, deterministic and differentia
 missing locator and metadata and profile and domain schema separation, complete metadata and
 relative encoding, and Debug and error non-disclosure are AUTHORED_NOT_RUN under #352, #241 and
 #215. No all-target, test, runtime, native, installed, Qdrant or scale execution is claimed.
+Additional private #414 fixtures cover fixed complete-preimage boundaries and identity parity,
+domain overhead, raw limit validation, retained-model readonly retry and mismatch refusal,
+missing optionals, exact shared error mapping and content-free diagnostics. They too are
+AUTHORED_NOT_RUN under #215; the independent existing golden is retained.
 Integration 267, 270 and 271, runtime 333 and qualification 215 are separate owners.
 
 Full #241, the programme Goal, Wave2 and #235 remain incomplete.

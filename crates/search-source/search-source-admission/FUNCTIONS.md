@@ -145,6 +145,24 @@ VERSIONED_REBUILD, with no migration in this model-only slice. Six private
 causal fixture groups and an independent synthetic golden are AUTHORED_NOT_RUN;
 execution remains under #352/#241/#215.
 
+### Caller-selected v2 observation ceilings (#414)
+
+`AdmissionObservationV2::new_with_encoded_limit(metadata, relative_locator, max_encoded_bytes)`
+and `validate_encoded_limit(&self, max_encoded_bytes)` share one private complete-fingerprint
+producer with the existing `new`. The retained-model check recomputes and compares its private
+fingerprint without mutation. Zero or greater than 16,384 is ObservationInvalid before row work.
+Accepted ceilings are passed directly to the shared complete domain + NUL + CBOR charge. Only
+OversizePayload at shared `digest_preimage`/`canonical_sink` maps to BudgetExhausted in these
+new APIs; every other shared error maps to ObservationInvalid. Legacy `new` retains all-error
+ObservationInvalid behavior. Errors carry no input text and no partial identity is returned.
+
+The operation ceiling does not change the fixed profile/header/rows or retained identity bytes.
+No budget flag, cached length, supplied digest or second model is added. Already bounded row
+values may be copied before the serialized-byte charge. Original caller checkpoints belong to
+future evaluator/batch composition; these pure synchronous data-model calls add none. Private
+boundary/parity/readonly/error cases are AUTHORED_NOT_RUN, Q/#215. Other lower/raw limits remain
+#405 and effective evaluator/receipt/batch remain #241.
+
 ### `validate_observation(input, policy, limits) -> Result<AdmissionObservation, AdmissionError>`
 
 Requires bounded normalized locator class (not unrestricted display path), root/location class,
