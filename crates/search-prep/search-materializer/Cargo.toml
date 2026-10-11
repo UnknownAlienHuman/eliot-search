@@ -19,6 +19,7 @@ blake3 = {
 search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
+pulldown-cmark.workspace = true
 
 [lints]
 workspace = true

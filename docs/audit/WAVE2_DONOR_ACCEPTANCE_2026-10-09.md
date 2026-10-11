@@ -357,6 +357,42 @@ Primary source:
 
 Use `Parser::into_offset_iter()` for event/source ranges. Raw HTML/link/image destinations remain inert metadata under explicit policy; no HTML renderer/resource fetcher is enabled.
 
+### Markdown adoption evidence — 2026-10-11, #437
+
+The published `pulldown-cmark 0.13.1` archive (released 2026-02-23T08:25:58Z) declares MIT and
+Rust 1.71.1. Its `.cargo_vcs_info.json` identifies commit
+`fe3603834daa30450ab9586b6bc58dba4fe1674d`, subdirectory `pulldown-cmark`. Published artifact bytes,
+not a moving repository checkout, supply the adoption provenance. Actual workspace lock/features and
+reviewed cache archives agree on this normal closure:
+
+| Artifact | Workspace features | Archive SHA256 |
+|---|---|---|
+| pulldown-cmark 0.13.1 | none | `83c41efbf8f90ac44de7f3a868f0867851d261b56291732d0cbf7cceaaeb55a6` |
+| bitflags 2.13.2 | none | `3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06` |
+| memchr 2.8.3 | alloc, default, std | `cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98` |
+| unicase 2.10.0 | none | `357cc3acc6a036009fd6c973ed009037c732d60d0b4f6c673e9041497482a28f` |
+
+All three dependency edges are normal and unconditional; the leaves have no further resolved
+dependencies. Pulldown features `getopts`, `html`, `serde`, `simd` and `gen-tests` remain inactive.
+The parser separately uses `Options::empty()`, with no extension dialect or broken-link callback.
+
+Pulldown has a custom-build target. The manager's actual Cargo integration compiled and executed it;
+with `gen-tests` disabled, the published build script selects the empty
+`generate_tests_from_spec()` branch. Earlier metadata-only inspection did not execute that target.
+Neither observation is execution of Markdown fixtures. The three normal leaves declare `build=false`.
+
+`into_offset_iter()` supplies whole-event ranges. Selected decoded code/info/destination/title
+values have mapped whole-event provenance, not exact decoded subranges; Text/HTML observations keep
+raw spans. `ObservedSpansAndSelectedValues` and `PotentiallyIncomplete` references are explicit because
+private donor reference fuel can suppress later metadata. No exhaustive reference claim follows.
+Synchronous donor construction/next are not hard-preemptible and have no donor-memory guarantee;
+input preflight and original operation checkpoints bracket them.
+
+The retained advisory endpoint checks were captured on 2026-10-11 at 13:54:28Z for pulldown and
+13:55:34Z for the normal versions. This is bounded dated evidence, not a fresh ecosystem screen or
+vulnerability-free guarantee. Lock/features/build-target evidence is distinct from final source
+review and #215/#216 execution/qualification. Structural UnitSet, JATS and #331 adoption remain separate.
+
 ## Quick-XML
 
 ```text
@@ -391,7 +427,10 @@ Use the pull reader over retained UTF-8 bytes with all structural checks enabled
 
 ## Sequencing
 
-`#226` is `SELECTED_WITH_CORRECTION` and is blocked by `#257`. Markdown and JATS land separately. Neither parser owns UnitId, complete UnitSet, retained source, access, publication or worker isolation.
+`#226` remains `SELECTED_WITH_CORRECTION`; UnitSet v3 #257 is delivered. #437 delivers the first inert
+Markdown materializer source slice, followed by a mandatory separately versioned structural UnitSet
+in the existing unitizer, then JATS. Persistence/adoption stays #331. Neither parser owns UnitId,
+complete UnitSet authority, retained source, access, publication or worker isolation.
 
 # 8. Unicode prose folding — outside Wave 2 coding
 
