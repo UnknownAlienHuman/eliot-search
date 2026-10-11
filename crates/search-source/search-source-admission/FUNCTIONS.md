@@ -383,8 +383,8 @@ The evaluator has no batch type/import dependency. Meter fields, charging bodies
 original probe/count/byte/error behavior and all identity profiles stay exact.
 
 No native/root/source/access/currentness authority, receipt-leaf change,
-dependency adoption or daemon/ingestion cutover belongs here. At #430, the complete
-corrected owner was 8,672 physical handwritten Rust lines including all
+dependency adoption or daemon/ingestion cutover belongs here. At #430, the
+corrective whole owner was 8,672 physical handwritten Rust lines including all
 retained fixtures (858 fewer than accepted 9,530). This still crosses the 8,500
 split-review threshold. #430 records independent review and manager pre-edit
 acceptance of a new 8,700-line ceiling for this correction only, with final recount
@@ -395,13 +395,10 @@ future names/assertions are inventoried in BATCH_V2.md for #427/#215, without
 moving Rust bodies elsewhere. These cases are deferred and absent in this
 candidate; their historical authored bodies at `21c073e993bde903b35e1cf2a9de5575dfd68bc7`
 were not run. Retained evaluator/observation/policy/v1 fixtures are AUTHORED_NOT_RUN.
-The #428 correction changes the retained evaluator fixture's oracle at source level:
-the same golden-checked 144-byte CBOR is parsed with `parse_canonical_cbor`, then
-hashed using `blake3_canonical` at the complete 177-byte ceiling. The exact golden
-and 144/177/176/194/193 assertions remain unchanged and AUTHORED_NOT_RUN under #215.
-This is no executed/passing-oracle claim or production/API/profile/checkpoint change.
-Receipt-doc F1/#426 remains separate. The #430 production/static records apply to
-that exact reviewed head, not #428; #428 production/static records belong to its exact reviewed head in #428 and its PR.
+#428 corrects only the retained evaluator oracle to parsed canonical CBOR/BLAKE3
+after its unchanged golden check; the case remains AUTHORED_NOT_RUN under #215.
+Receipt-doc F1/#426 remains separate.
+Corrective production/static gate results are recorded at the exact head in #430 and its PR; they are not inherited from #427.
 Daemon D387 remains NOT_PASS/unrun; Q215 integrated execution and native/runtime/
 resource/live-Qdrant/installed/scale qualification are incomplete. Source docs
 and source acceptance do not close #241/#405, Wave2/#235 or Goal.
