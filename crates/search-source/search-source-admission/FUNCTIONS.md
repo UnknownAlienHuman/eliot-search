@@ -178,6 +178,13 @@ signals, detector/profile identities and explicit unavailable fields.
 Unavailable load-bearing observation yields review/deny according to the policy; it never defaults to
 allow. The operation performs no I/O.
 
+The raw unavailable-marker list is capped at the eight closed names before its first traversal or
+clone. A longer list returns `ObservationInvalid`, including when it contains an unknown token.
+Earlier limits, unknown fields, policy-rule count and class/kind parses retain their precedence.
+Within the cap, unknown, duplicate, missing and contradictory marker behavior stays exact. Every
+previously accepted observation and its v1/v2 identity bytes remain **BYTE_COMPATIBLE**. This bounds
+the validator's list work; it makes no claim about allocations already performed by its caller.
+
 ### `observation_digest(observation) -> AdmissionObservationDigest`
 
 Hashes canonical content-free observation fields and classifier/profile identities. It does not hash
