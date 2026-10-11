@@ -10,6 +10,13 @@ use core::time::Duration;
 
 use super::model::clear_bytes;
 
+mod context;
+use context::{LegacyCheckpoint, RootSecretCheckpoint};
+pub use context::{
+    LegacyRevisionRootSecretContextError, load_existing_legacy_revision_root_secret_with_context,
+    load_or_create_legacy_revision_root_secret_with_context,
+};
+
 /// Exact legacy revision platform root-secret byte length.
 pub const LEGACY_REVISION_ROOT_SECRET_BYTES: usize = 32;
 
@@ -18,9 +25,9 @@ mod windows;
 
 mod pairing;
 pub use pairing::{
-    ProviderPairingCredential, ProviderPairingCredentialError,
-    ProviderPairingCredentialIntent, load_provider_pairing_credential,
-    load_provider_pairing_credential_record, publish_provider_pairing_credential,
+    ProviderPairingCredential, ProviderPairingCredentialError, ProviderPairingCredentialIntent,
+    load_provider_pairing_credential, load_provider_pairing_credential_record,
+    publish_provider_pairing_credential,
 };
 
 #[cfg(test)]
@@ -59,9 +66,7 @@ impl LegacyRevisionRootSecret {
         &self.bytes
     }
 
-    fn expose_secret_mut(
-        &mut self,
-    ) -> &mut [u8; LEGACY_REVISION_ROOT_SECRET_BYTES] {
+    fn expose_secret_mut(&mut self) -> &mut [u8; LEGACY_REVISION_ROOT_SECRET_BYTES] {
         &mut self.bytes
     }
 }
@@ -97,7 +102,7 @@ pub enum LegacyRevisionRootSecretError {
     CredentialTooLarge,
     /// A successful write read back different secret bytes.
     CredentialReadbackMismatch,
-    /// Bounded write/readback retries ended without a verified credential.
+    /// Acquisition exhausted its bound or a possible publication was not verified.
     CredentialWriteOutcomeUnknown,
     /// Existing protected objects require a credential that remained absent.
     MissingExistingCredential,
@@ -112,17 +117,11 @@ impl LegacyRevisionRootSecretError {
         match self {
             Self::UnsupportedPlatform => "WINDOWS_REVISION_KEY_UNSUPPORTED_PLATFORM",
             Self::CredentialReadFailed(_) => "WINDOWS_REVISION_KEY_READ_FAILED",
-            Self::CredentialReadbackInvalid => {
-                "WINDOWS_REVISION_KEY_READBACK_INVALID"
-            }
+            Self::CredentialReadbackInvalid => "WINDOWS_REVISION_KEY_READBACK_INVALID",
             Self::CredentialWriteFailed(_) => "WINDOWS_REVISION_KEY_WRITE_FAILED",
             Self::CredentialTooLarge => "WINDOWS_REVISION_KEY_TOO_LARGE",
-            Self::CredentialReadbackMismatch => {
-                "WINDOWS_REVISION_KEY_READBACK_MISMATCH"
-            }
-            Self::CredentialWriteOutcomeUnknown => {
-                "WINDOWS_REVISION_KEY_WRITE_OUTCOME_UNKNOWN"
-            }
+            Self::CredentialReadbackMismatch => "WINDOWS_REVISION_KEY_READBACK_MISMATCH",
+            Self::CredentialWriteOutcomeUnknown => "WINDOWS_REVISION_KEY_WRITE_OUTCOME_UNKNOWN",
             Self::MissingExistingCredential => "WINDOWS_REVISION_KEY_MISSING",
             Self::RandomGenerationFailed(_) => "WINDOWS_REVISION_RNG_FAILED",
         }
@@ -141,8 +140,7 @@ impl LegacyRevisionRootSecretError {
 impl fmt::Display for LegacyRevisionRootSecretError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::CredentialReadFailed(code)
-            | Self::CredentialWriteFailed(code) => {
+            Self::CredentialReadFailed(code) | Self::CredentialWriteFailed(code) => {
                 write!(formatter, "{}:{code}", self.code())
             }
             Self::RandomGenerationFailed(status) => {
@@ -161,7 +159,11 @@ pub fn load_existing_legacy_revision_root_secret(
     namespace_id: &[u8; 32],
 ) -> Result<Option<LegacyRevisionRootSecret>, LegacyRevisionRootSecretError> {
     let mut platform = windows::WindowsCredentialPlatform;
-    platform.read_credential(&credential_target(namespace_id))
+    read_with_platform(
+        &mut platform,
+        &credential_target(namespace_id),
+        &LegacyCheckpoint,
+    )
 }
 
 /// Reads the existing namespace root secret without creating or mutating it.
@@ -176,7 +178,7 @@ pub fn load_existing_legacy_revision_root_secret(
 ///
 /// A missing secret is created only when the caller has already established
 /// [`LegacyRevisionRootSecretRequirement::CreateIfMissing`]. Every candidate
-/// write is serialized by the package-owned named mutex and rechecks the
+/// invocation attempts at most one write, serialized by the named mutex, after rechecking the
 /// credential after acquiring that lock, so a concurrently published key is
 /// never overwritten by a stale generated candidate.
 #[cfg(windows)]
@@ -225,72 +227,140 @@ fn load_or_create_with_platform<P: RootSecretPlatform>(
     namespace_id: &[u8; 32],
     requirement: LegacyRevisionRootSecretRequirement,
 ) -> Result<LegacyRevisionRootSecret, LegacyRevisionRootSecretError> {
+    load_or_create_checked(platform, namespace_id, requirement, &LegacyCheckpoint)
+}
+
+fn read_with_platform<P: RootSecretPlatform, C: RootSecretCheckpoint>(
+    platform: &mut P,
+    target: &[u16],
+    context: &C,
+) -> Result<Option<LegacyRevisionRootSecret>, C::Error> {
+    context.check()?;
+    let observed = platform.read_credential(target);
+    context.check()?;
+    observed.map_err(C::Error::from)
+}
+
+fn sleep_with_platform<P: RootSecretPlatform, C: RootSecretCheckpoint>(
+    platform: &mut P,
+    duration: Duration,
+    context: &C,
+) -> Result<(), C::Error> {
+    context.check()?;
+    platform.sleep(context.limit_sleep(duration));
+    context.check()
+}
+
+fn load_or_create_checked<P: RootSecretPlatform, C: RootSecretCheckpoint>(
+    platform: &mut P,
+    namespace_id: &[u8; 32],
+    requirement: LegacyRevisionRootSecretRequirement,
+    context: &C,
+) -> Result<LegacyRevisionRootSecret, C::Error> {
+    context.check()?;
     let target = credential_target(namespace_id);
-    if let Some(secret) = platform.read_credential(&target)? {
+    if let Some(secret) = read_with_platform(platform, &target, context)? {
+        context.check()?;
         return Ok(secret);
     }
 
     match requirement {
         LegacyRevisionRootSecretRequirement::RequireExisting => {
             for attempt in 0..ROOT_SECRET_ATTEMPTS {
-                platform.sleep(retry_delay(attempt));
-                let Ok(_guard) = platform.acquire_vault_lock() else {
+                sleep_with_platform(platform, retry_delay(attempt), context)?;
+                context.check()?;
+                let acquired = platform.acquire_vault_lock();
+                context.check()?;
+                let Ok(guard) = acquired else {
                     continue;
                 };
-                if let Some(secret) = platform.read_credential(&target)? {
+                if let Some(secret) = read_with_platform(platform, &target, context)? {
+                    drop(guard);
+                    context.check()?;
                     return Ok(secret);
                 }
             }
-            Err(LegacyRevisionRootSecretError::MissingExistingCredential)
+            context.check()?;
+            Err(LegacyRevisionRootSecretError::MissingExistingCredential.into())
         }
         LegacyRevisionRootSecretRequirement::CreateIfMissing => {
-            let mut generated = platform.generate_root_secret()?;
+            context.check()?;
+            let candidate = platform.generate_root_secret();
+            context.check()?;
+            let mut generated = candidate.map_err(C::Error::from)?;
             for attempt in 0..ROOT_SECRET_ATTEMPTS {
                 if attempt > 0 {
-                    platform.sleep(retry_delay(attempt));
+                    sleep_with_platform(platform, retry_delay(attempt), context)?;
                 }
-                let Ok(_guard) = platform.acquire_vault_lock() else {
+                context.check()?;
+                let acquired = platform.acquire_vault_lock();
+                context.check()?;
+                let Ok(guard) = acquired else {
                     continue;
                 };
 
                 // Another process may have created the credential after our
                 // initial read but before this lock acquisition. Re-read while
                 // serialized and adopt that key instead of overwriting it.
-                match platform.read_credential(&target) {
-                    Ok(Some(existing)) => return Ok(existing),
+                context.check()?;
+                let observed = platform.read_credential(&target);
+                context.check()?;
+                match observed {
+                    Ok(Some(existing)) => {
+                        drop(guard);
+                        context.check()?;
+                        return Ok(existing);
+                    }
                     Ok(None) => {}
                     Err(error) if error.is_transient_vault_outcome() => continue,
-                    Err(error) => return Err(error),
+                    Err(error) => return Err(error.into()),
                 }
 
-                if let Err(error) =
-                    platform.write_credential(&target, &mut generated)
-                {
-                    if error.is_transient_vault_outcome() {
-                        continue;
-                    }
-                    return Err(error);
-                }
-                match platform.read_credential(&target) {
-                    Ok(Some(observed)) => {
-                        if !constant_time_equal(
-                            generated.expose_secret(),
-                            observed.expose_secret(),
-                        ) {
-                            return Err(
-                                LegacyRevisionRootSecretError::CredentialReadbackMismatch,
-                            );
-                        }
-                        return Ok(generated);
-                    }
-                    Ok(None) => {}
-                    Err(error) if error.is_transient_vault_outcome() => {}
-                    Err(error) => return Err(error),
-                }
+                // Publication is terminal: after dispatch, no path re-enters the
+                // acquisition loop, regardless of the write/readback outcome.
+                publish_once(platform, &target, &mut generated, context)?;
+                drop(guard);
+                context.check().map_err(|_| {
+                    C::Error::from(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown)
+                })?;
+                return Ok(generated);
             }
-            Err(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown)
+            context.check()?;
+            Err(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown.into())
         }
     }
+}
+
+fn publish_once<P: RootSecretPlatform, C: RootSecretCheckpoint>(
+    platform: &mut P,
+    target: &[u16],
+    generated: &mut LegacyRevisionRootSecret,
+    context: &C,
+) -> Result<(), C::Error> {
+    context.check()?;
+    // Calling the native seam crosses the possible-effect boundary, even when
+    // it reports failure. All subsequent failures conservatively remain unknown.
+    let written = platform.write_credential(target, generated);
+    let checked = context.check();
+    if written.is_err() || checked.is_err() {
+        return Err(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown.into());
+    }
+    context.check().map_err(|_| {
+        C::Error::from(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown)
+    })?;
+    let observed = platform.read_credential(target);
+    let checked = context.check();
+    if checked.is_err() {
+        return Err(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown.into());
+    }
+    match observed {
+        Ok(Some(observed))
+            if constant_time_equal(generated.expose_secret(), observed.expose_secret()) => {}
+        _ => return Err(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown.into()),
+    }
+    context
+        .check()
+        .map_err(|_| C::Error::from(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown))
 }
 
 fn credential_target(namespace_id: &[u8; 32]) -> Vec<u16> {
