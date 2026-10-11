@@ -89,7 +89,7 @@ pub struct ReceiptFingerprintV2(Blake3Digest32);
 impl ReceiptFingerprintV2 {
     /// Complete shared canonical CBOR/BLAKE3 identity bytes.
     #[must_use]
-    pub fn as_bytes(&self) -> &[u8; 32] {
+    pub const fn as_bytes(&self) -> &[u8; 32] {
         self.0.as_bytes()
     }
 }
@@ -328,6 +328,10 @@ fn array(values: Vec<CanonicalValue>) -> Result<CanonicalValue, ContractError> {
 
 /// Receipt byte exhaustion maps like the accepted observation contract, not the policy
 /// one: only complete-preimage and sink overflow are budget failures.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Result::map_err passes an owned error to this closed translation."
+)]
 fn encoded_limit_error(error: ContractError) -> AdmissionError {
     if error.kind() == ContractErrorKind::OversizePayload
         && matches!(error.field(), "digest_preimage" | "canonical_sink")
