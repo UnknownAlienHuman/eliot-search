@@ -54,5 +54,15 @@ pub use markdown_unitset::{
     unitize_markdown, verify_markdown_unit_manifest,
 };
 
+mod jats_unitset;
+pub use jats_unitset::{
+    CanonicalJatsUnitManifestBytes, JatsMappedValue, JatsSourceBinding, JatsStructuralUnit,
+    JatsUnitAttribute, JatsUnitComment, JatsUnitManifest, JatsUnitSpan, JatsUnitText,
+    JatsUnitizationBudget, JatsUnitizationError, JatsUnitizationSource, JatsUnitizationUsage,
+    JatsUnitizerLimits, JatsUnitizerProfile, MAX_JATS_UNITIZER_LIMITS, VerifiedJatsUnitSet,
+    canonicalize_jats_unit_manifest, decode_jats_unit_manifest, unitize_jats,
+    verify_jats_unit_manifest,
+};
+
 #[cfg(test)]
 mod tests;

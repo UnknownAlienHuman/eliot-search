@@ -52,7 +52,26 @@ raw v3 prepare/build path. It preserves the original AtomicBool and absolute Ins
 Peer types appear only in that named ingress record; structural results expose package-owned views
 and contract Representation/UnitOccurrence. No parser/map verifier, admission authority, storage,
 worker, daemon or consumer behavior is added. Raw v3 stays byte-compatible; the separate structural
-v4 profile requires VERSIONED_REBUILD on #331 adoption. JATS remains a successor #226 slice.
+v4 profile requires VERSIONED_REBUILD on #331 adoption. JATS has its separately frozen #446 ingress.
+
+### #446 JATS ingress and size exception
+
+The [frozen #446 slice](https://github.com/UnknownAlienHuman/eliot-search/issues/446) adds only the
+named borrowed `JatsUnitizationSource` over existing dependencies. `unitize_jats` and
+`verify_jats_unit_manifest` call owning `verify_jats`, then unchanged raw-v3 prepare/build, with the
+original AtomicBool and absolute Instant. Retain every element/attribute/text/comment, optional
+declaration and event count; whole expected reconstruction decides completeness. Peer types appear
+only in this named ingress, results use contract/package-owned immutable views. No parser/map
+verifier, admission, storage, worker, daemon or consumer behavior changes. Raw/v3/Markdown/legacy
+source and retained fixtures are preserved. Additive structural v5 requires VERSIONED_REBUILD on
+#331 adoption; decode remains a proposal.
+
+Independent concrete pre-Ready size review accepts simultaneous slice-only ceilings of **2,750 JATS
+module lines / 9,998 whole-owner hand-written Rust lines**, retaining the hard **10,000** threshold.
+The reviewed prototype is 2,711 lines including 635 private fixture lines; every final glue/lint/format
+change is recounted. No inherited allowance, fixture deletion or artificial source relocation.
+Finite logical work/storage limits are not CPU/RSS measurements or hard donor preemption.
+Production check/strict Clippy/static gates are source evidence; #215/#216 execute the authored cases.
 
 ## Required logical surface
 
