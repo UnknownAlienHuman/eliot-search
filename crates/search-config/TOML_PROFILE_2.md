@@ -24,11 +24,17 @@ schema_version = 2
 profile = "direct"
 ```
 
-Missing or unsupported schema gives `UnsupportedSchemaVersion`; missing/non-string profile gives
-`ProfileNotAuthorized`. A repeated root header gives `DuplicateKey`. Root keys other than these two
-give `UnknownKey`. Table names `profile` and `schema_version` conflict with root scalars and give
-`DuplicateTable`. Inside an ordinary section, fields with those names are scoped fields; the registry
-decides whether they are known. No syntax implicitly returns to root scope.
+An absent schema header returns `UnsupportedSchemaVersion`. A scalar boolean schema also reaches
+schema validation and returns `UnsupportedSchemaVersion`; a scalar string or unsupported aggregate
+shape is rejected earlier as `UnsupportedSyntax`, and a decimal outside i64 returns
+`ValueOutOfBounds` before schema comparison. An absent profile returns `ProfileNotAuthorized`;
+scalar integer/boolean profiles also return `ProfileNotAuthorized`, while arrays, inline tables and
+multiline strings are rejected earlier as `UnsupportedSyntax`. These codes describe the earliest
+closed failure, not a universal error for every malformed header spelling. A repeated root header
+gives `DuplicateKey`. Root keys other than these two give `UnknownKey`. Table names `profile` and
+`schema_version` conflict with root scalars and give `DuplicateTable`. Inside an ordinary section,
+fields with those names are scoped fields; the registry decides whether they are known. No syntax
+implicitly returns to root scope.
 
 Only flat bare-name tables and bare keys are supported, subject to existing typed name validation.
 Values are booleans, decimal i64 integers, single-line basic/literal strings and flat string arrays.
