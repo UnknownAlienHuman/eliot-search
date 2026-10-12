@@ -84,17 +84,71 @@ pub fn unprotect_legacy_revision_current_user(
     Err(LegacyRevisionDpapiError::UnsupportedPlatform)
 }
 
+#[path = "dpapi/context.rs"]
+mod context;
+pub use context::{
+    ContextualLegacyRevisionDpapiError, ContextualLegacyRevisionDpapiResult,
+    LegacyRevisionDpapiContext, LegacyRevisionDpapiWork,
+};
+
+/// Protects frozen inner-envelope bytes under the original caller context.
+///
+/// Native output capacity is charged after unchanged 65MiB validation and before
+/// copying. No credential, envelope, source policy or persistence is introduced.
+pub fn protect_legacy_revision_current_user_with_context<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    input: &mut [u8],
+    entropy: &[u8; 32],
+) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+    #[cfg(windows)]
+    {
+        windows::legacy_revision_with_context(context, input, entropy, true)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (input, entropy);
+        context::stage(context, || {
+            Err(LegacyRevisionDpapiError::UnsupportedPlatform)
+        })
+        .map_err(Into::into)
+    }
+}
+
+/// Decrypts frozen ciphertext under the original caller context.
+///
+/// The result remains untrusted inner-envelope bytes; the caller must verify the
+/// existing bindings/digest and precharge its own subsequent plaintext copy.
+pub fn unprotect_legacy_revision_current_user_with_context<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    input: &mut [u8],
+    entropy: &[u8; 32],
+) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+    #[cfg(windows)]
+    {
+        windows::legacy_revision_with_context(context, input, entropy, false)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (input, entropy);
+        context::stage(context, || {
+            Err(LegacyRevisionDpapiError::UnsupportedPlatform)
+        })
+        .map_err(Into::into)
+    }
+}
+
 #[cfg(windows)]
 mod windows {
+    use super::context::{self, CopiedBytes, KernelError, LegacyContext};
+    use super::{ContextualLegacyRevisionDpapiResult, LegacyRevisionDpapiContext};
     use core::ffi::c_void;
     use core::ptr::{null, null_mut};
     use core::slice;
 
     use super::super::model::{clear_bytes, validate_secret};
     use super::super::{
-        DpapiError, LegacyRevisionDpapiError, MAX_LEGACY_REVISION_DPAPI_BYTES,
-        MAX_PROTECTED_BYTES, MAX_SECRET_BYTES, PROTECTED_SECRET_VERSION,
-        ProtectedSecret, ProtectionScope, SecretBytes,
+        DpapiError, LegacyRevisionDpapiError, MAX_LEGACY_REVISION_DPAPI_BYTES, MAX_PROTECTED_BYTES,
+        MAX_SECRET_BYTES, PROTECTED_SECRET_VERSION, ProtectedSecret, ProtectionScope, SecretBytes,
     };
 
     const CRYPTPROTECT_UI_FORBIDDEN: u32 = 0x0000_0001;
@@ -167,17 +221,41 @@ mod windows {
             &raw mut self.blob
         }
 
-        fn into_vec(mut self) -> Result<Vec<u8>, NativeOutputError> {
-            let length = usize::try_from(self.blob.size)
-                .map_err(|_| NativeOutputError::LengthOverflow)?;
-            if self.blob.data.is_null() || length == 0 || length > self.maximum {
-                return Err(NativeOutputError::Invalid);
-            }
-            // SAFETY: the non-null DPAPI allocation is live for its reported,
-            // bounded length until this owner clears and frees it.
-            let output = unsafe { slice::from_raw_parts(self.blob.data, length) }.to_vec();
-            self.clear_and_free(length);
-            Ok(output)
+        fn copy_out<C: LegacyRevisionDpapiContext>(
+            &self,
+            c: &mut C,
+            contextual: bool,
+        ) -> Result<CopiedBytes, KernelError<RawDpapiError, C::Error>> {
+            let length = context::stage(c, || {
+                let length = usize::try_from(self.blob.size)
+                    .map_err(|_| RawDpapiError::Output(NativeOutputError::LengthOverflow))?;
+                if self.blob.data.is_null() || length == 0 || length > self.maximum {
+                    return Err(RawDpapiError::Output(NativeOutputError::Invalid));
+                }
+                Ok(length)
+            })?;
+            // SAFETY: exact reported length is validated above while this
+            // owner retains the native allocation through explicit finish.
+            // copy debits actual accepted capacity BEFORE allocation/copy.
+            let bytes = unsafe { slice::from_raw_parts(self.blob.data, length) };
+            context::copy(c, bytes, contextual)
+        }
+
+        fn finish<C: LegacyRevisionDpapiContext>(
+            self,
+            c: &mut C,
+            result: Result<CopiedBytes, KernelError<RawDpapiError, C::Error>>,
+        ) -> Result<CopiedBytes, KernelError<RawDpapiError, C::Error>> {
+            // Metadata alone determines mandatory bounded clearing, including
+            // native-error and post-refusal paths. An oversized invalid result
+            // keeps the accepted free-only policy; it grants no unbounded scan.
+            let reported = usize::try_from(self.blob.size).unwrap_or(0);
+            let actual = if !self.blob.data.is_null() && reported <= self.maximum {
+                reported
+            } else {
+                0
+            };
+            context::finish_native_clear(c, actual, result, || drop(self))
         }
 
         fn clear_and_free(&mut self, length: usize) {
@@ -242,13 +320,8 @@ mod windows {
     struct EntropyCopy(Vec<u8>);
 
     impl EntropyCopy {
-        fn new(bytes: &[u8]) -> Self {
-            Self(bytes.to_vec())
-        }
-
         fn blob(&mut self) -> Result<DataBlob, RawDpapiError> {
-            let size = u32::try_from(self.0.len())
-                .map_err(|_| RawDpapiError::InputTooLarge)?;
+            let size = u32::try_from(self.0.len()).map_err(|_| RawDpapiError::InputTooLarge)?;
             Ok(DataBlob {
                 size,
                 data: self.0.as_mut_ptr(),
@@ -266,8 +339,7 @@ mod windows {
         if bytes.len() > maximum {
             return Err(RawDpapiError::InputTooLarge);
         }
-        let size = u32::try_from(bytes.len())
-            .map_err(|_| RawDpapiError::InputTooLarge)?;
+        let size = u32::try_from(bytes.len()).map_err(|_| RawDpapiError::InputTooLarge)?;
         Ok(DataBlob {
             size,
             data: bytes.as_ptr().cast_mut(),
@@ -280,65 +352,116 @@ mod windows {
         unsafe { GetLastError() }
     }
 
+    fn run_bytes<C: LegacyRevisionDpapiContext>(
+        c: &mut C,
+        input: &[u8],
+        entropy: &[u8],
+        maximum_input: usize,
+        maximum_output: usize,
+        protecting: bool,
+        contextual: bool,
+    ) -> Result<Vec<u8>, KernelError<RawDpapiError, C::Error>> {
+        let input = context::stage(c, || input_blob(input, maximum_input))?;
+        context::reserve(c, !protecting)?;
+        let copied = context::copy(c, entropy, contextual);
+        let copied = context::after(c, copied)?;
+        let mut entropy = EntropyCopy(copied.take());
+        let mut output = NativeOutput::new(maximum_output);
+        let mut description = NativeDescription::new();
+        let result = (|| {
+            let entropy_blob = context::stage(c, || entropy.blob())?;
+            context::stage(c, || {
+                // SAFETY: borrowed input and owned entropy remain live; output
+                // and description are initialized native-allocation guards.
+                let succeeded = unsafe {
+                    if protecting {
+                        CryptProtectData(
+                            &raw const input,
+                            null(),
+                            &raw const entropy_blob,
+                            null_mut(),
+                            null_mut(),
+                            CRYPTPROTECT_UI_FORBIDDEN,
+                            output.as_mut_ptr(),
+                        )
+                    } else {
+                        CryptUnprotectData(
+                            &raw const input,
+                            description.as_mut_ptr(),
+                            &raw const entropy_blob,
+                            null_mut(),
+                            null_mut(),
+                            CRYPTPROTECT_UI_FORBIDDEN,
+                            output.as_mut_ptr(),
+                        )
+                    }
+                };
+                if succeeded == 0 {
+                    // The possible GetLastError attempt was reserved BEFORE
+                    // dispatch; capture immediately before any callback/poll.
+                    return Err(RawDpapiError::Platform(platform_error()));
+                }
+                Ok(())
+            })?;
+            output.copy_out(c, contextual)
+        })();
+        // Explicit finish owns every ordinary Result path after native/copy:
+        // account actual clear first, then clear/free regardless of refusal.
+        // Drop remains the resource-safety fallback for unwinding.
+        let result = output.finish(c, result);
+        // Preserve output -> description -> entropy -> final checkpoint order.
+        drop(description);
+        drop(entropy);
+        context::after(c, result).map(CopiedBytes::take)
+    }
     fn protect_bytes(
         input: &[u8],
         entropy: &[u8],
         maximum_input: usize,
         maximum_output: usize,
     ) -> Result<Vec<u8>, RawDpapiError> {
-        let input = input_blob(input, maximum_input)?;
-        let mut entropy = EntropyCopy::new(entropy);
-        let entropy_blob = entropy.blob()?;
-        let mut output = NativeOutput::new(maximum_output);
-        // SAFETY: input and entropy blobs point to live slices for the call;
-        // output is initialized and becomes owned by `NativeOutput` on success.
-        let succeeded = unsafe {
-            CryptProtectData(
-                &raw const input,
-                null(),
-                &raw const entropy_blob,
-                null_mut(),
-                null_mut(),
-                CRYPTPROTECT_UI_FORBIDDEN,
-                output.as_mut_ptr(),
-            )
-        };
-        if succeeded == 0 {
-            return Err(RawDpapiError::Platform(platform_error()));
-        }
-        output.into_vec().map_err(RawDpapiError::Output)
+        context::legacy(run_bytes(
+            &mut LegacyContext,
+            input,
+            entropy,
+            maximum_input,
+            maximum_output,
+            true,
+            false,
+        ))
     }
-
     fn unprotect_bytes(
         input: &[u8],
         entropy: &[u8],
         maximum_input: usize,
         maximum_output: usize,
     ) -> Result<Vec<u8>, RawDpapiError> {
-        let input = input_blob(input, maximum_input)?;
-        let mut entropy = EntropyCopy::new(entropy);
-        let entropy_blob = entropy.blob()?;
-        let mut output = NativeOutput::new(maximum_output);
-        let mut description = NativeDescription::new();
-        // SAFETY: input and entropy blobs point to live slices for the call;
-        // output/description become caller-owned LocalAlloc allocations on success.
-        let succeeded = unsafe {
-            CryptUnprotectData(
-                &raw const input,
-                description.as_mut_ptr(),
-                &raw const entropy_blob,
-                null_mut(),
-                null_mut(),
-                CRYPTPROTECT_UI_FORBIDDEN,
-                output.as_mut_ptr(),
-            )
-        };
-        if succeeded == 0 {
-            return Err(RawDpapiError::Platform(platform_error()));
-        }
-        // No description was supplied during protection. Windows may still
-        // return an allocation; `NativeDescription` releases it on every path.
-        output.into_vec().map_err(RawDpapiError::Output)
+        context::legacy(run_bytes(
+            &mut LegacyContext,
+            input,
+            entropy,
+            maximum_input,
+            maximum_output,
+            false,
+            false,
+        ))
+    }
+    pub(super) fn legacy_revision_with_context<C: LegacyRevisionDpapiContext>(
+        c: &mut C,
+        input: &mut [u8],
+        entropy: &[u8; 32],
+        protecting: bool,
+    ) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+        run_bytes(
+            c,
+            input,
+            entropy,
+            MAX_LEGACY_REVISION_DPAPI_BYTES,
+            MAX_LEGACY_REVISION_DPAPI_BYTES,
+            protecting,
+            true,
+        )
+        .map_err(|error| error.map_object(|e| map_legacy_error(e, protecting)).into())
     }
 
     pub(super) fn protect_short_secret(
@@ -376,9 +499,7 @@ mod windows {
             | RawDpapiError::Output(NativeOutputError::LengthOverflow) => {
                 DpapiError::LengthOverflow
             }
-            RawDpapiError::Output(NativeOutputError::Invalid) => {
-                DpapiError::InvalidPlatformOutput
-            }
+            RawDpapiError::Output(NativeOutputError::Invalid) => DpapiError::InvalidPlatformOutput,
             RawDpapiError::Platform(code) => DpapiError::PlatformFailure(code),
         }
     }
@@ -409,10 +530,7 @@ mod windows {
         .map_err(|error| map_legacy_error(error, false))
     }
 
-    fn map_legacy_error(
-        error: RawDpapiError,
-        protecting: bool,
-    ) -> LegacyRevisionDpapiError {
+    fn map_legacy_error(error: RawDpapiError, protecting: bool) -> LegacyRevisionDpapiError {
         match error {
             RawDpapiError::InputTooLarge => LegacyRevisionDpapiError::InputTooLarge,
             RawDpapiError::Output(NativeOutputError::LengthOverflow) => {
@@ -424,9 +542,7 @@ mod windows {
             RawDpapiError::Platform(code) if protecting => {
                 LegacyRevisionDpapiError::ProtectFailed(code)
             }
-            RawDpapiError::Platform(code) => {
-                LegacyRevisionDpapiError::UnprotectFailed(code)
-            }
+            RawDpapiError::Platform(code) => LegacyRevisionDpapiError::UnprotectFailed(code),
         }
     }
 }
