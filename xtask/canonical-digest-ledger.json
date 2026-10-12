@@ -45512,7 +45512,7 @@
       "signal": "raw-construction-review",
       "count": 1,
       "test": false,
-      "source_sha256": "ac153d124419eabfcaaded4efa98eaa89b8e5c12ae90b605a010a47e7b49bc50",
+      "source_sha256": "d4a09b49afe27e0aaf75d27f76ddf7b7bac53da3c68c4fa162cd79efa3df2913",
       "classification": "wire-store-decode",
       "owner_issue": 307,
       "phase": "owner-migration-preserve-bytes",

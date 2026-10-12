@@ -15,7 +15,9 @@
 //! - short lifecycle secrets use [`SecretBytes`], [`ProtectionScope`] and
 //!   [`ProtectedSecret`];
 //! - the frozen legacy revision compatibility path accepts exact envelope bytes
-//!   plus the already-derived 32-byte optional entropy.
+//!   plus the already-derived 32-byte optional entropy; additive contextual
+//!   functions charge validated native output before copying, preserve paired
+//!   causes and retain original caller accounting through native release.
 //!
 //! The optional `test-credential-cleanup` feature adds one exact-namespace,
 //! readback-verified cleanup operation for native test harnesses.
