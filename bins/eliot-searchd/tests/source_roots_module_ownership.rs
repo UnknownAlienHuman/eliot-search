@@ -310,3 +310,19 @@ fn native_registration_inspection_reuses_codec_and_currentness_without_recovery(
     assert!(!native.contains("remove_file"));
     assert!(!native.contains("rename("));
 }
+#[test]
+fn native_source_change_prepares_existing_codec_and_currentness_before_effects() {
+    let root = crate_root();
+    let plan = read(&root, "src/source_roots/kernel/registration.rs");
+    for required in ["struct PreparedSourceRootChange", "replacement: Option<Vec<u8>>",
+        "encode_legacy_source_root_catalog", ".observe(index, state)", ".insert(index, super::SourceRootState::Available)",
+        ".remove(index)", "BoundedOutput", "retained_revisions_revoked", "access_granted"]
+    { assert!(plan.contains(required)); }
+    for forbidden in ["persist_entries", "recover_interrupted_update", "mark_reconciled_synced",
+        "DirectStore", "DataRootGuard", "File::create", "remove_file", "rename("]
+    { assert!(!plan.contains(forbidden)); }
+    let catalog = read(&root, "src/source_roots/kernel/catalog.rs").replace("\r\n", "\n");
+    for marker in ["pub(crate) fn add(", "pub(crate) fn remove(", "fn commit("] {
+        assert!(catalog.contains(&format!("#[cfg(test)]\n    {marker}")));
+    }
+}

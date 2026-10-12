@@ -76,6 +76,87 @@ impl core::fmt::Debug for NativeRootRequest {
 }
 
 impl NativeRootRequest {
+    /// Closed validation output when no request could be constructed. It retains
+    /// the caller's original deadline/flag/limits and mints no root authority.
+    pub(crate) fn emit_validation_refusal(
+        deadline: Instant,
+        cancellation: &AtomicBool,
+        limits: NativeRootLimits,
+        writer: &mut impl std::io::Write,
+        error: OwnerError,
+    ) -> Result<(), OwnerError> {
+        let line = format!("{{\"error\":\"{}\"}}\n", error.code());
+        if line.len() > 1024 {
+            return Err(OwnerError::ContractExhausted);
+        }
+        let mut attempted = false;
+        let mut requested_bytes = 0;
+        let mut calls = 1; // Reserve construction's at-most-one entropy seam.
+        let result = (|| {
+            let mut remaining = line.as_bytes();
+            while !remaining.is_empty() {
+                check_context(deadline, cancellation)?;
+                charge(&mut requested_bytes, remaining.len(), limits.read_bytes)?;
+                charge(&mut calls, 1, limits.native_calls)?;
+                attempted = true;
+                let count = writer
+                    .write(remaining)
+                    .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
+                check_context(deadline, cancellation)?;
+                if count == 0 || count > remaining.len() {
+                    return Err(OwnerError::OwnerAcquireOutcomeUnknown);
+                }
+                remaining = &remaining[count..];
+            }
+            check_context(deadline, cancellation)?;
+            charge(&mut calls, 1, limits.native_calls)?;
+            attempted = true;
+            writer
+                .flush()
+                .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
+            check_context(deadline, cancellation)
+        })();
+        result.map_err(|error| {
+            cancellation.store(true, Ordering::Release);
+            if attempted {
+                OwnerError::OwnerAcquireOutcomeUnknown
+            } else {
+                error
+            }
+        })
+    }
+
+    /// The paired catalog commands retain the complete native/config invocation.
+    /// Selection does not publish owner state or grant mutation authority.
+    pub(crate) fn for_source_registration(
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<(Self, Vec<OsString>), OwnerError> {
+        let mut request = Self::new(
+            DataRootOpenMode::OpenExistingMutating,
+            arguments,
+            deadline,
+            cancellation,
+            limits,
+        )?;
+        let (selected, _) = crate::config_composition::strip_config_args_os(arguments)
+            .map_err(|_| OwnerError::OwnerOperationConflict)?;
+        if selected.len() != 3
+            || selected[1].is_empty()
+            || !matches!(
+                selected[0].to_str(),
+                Some("--register-source-root" | "--unregister-source-root")
+            )
+        {
+            return Err(OwnerError::OwnerOperationConflict);
+        }
+        request.root = PathBuf::from(&selected[1]);
+        request.check()?;
+        Ok((request, selected))
+    }
+
     /// Retains the complete native invocation while selecting the service root
     /// through the existing configuration argument parser. Admission stays read-only.
     pub(crate) fn for_service(
@@ -338,6 +419,27 @@ impl NativeRootRequest {
             .try_borrow_mut()
             .map_err(|_| OwnerError::OwnerInvalidTransition)?;
         let work = retained.get_or_insert_with(NativeWork::new);
+        self.emit_using_work(work, writer, line)
+    }
+
+    // Catalog validation refusals borrow the original admission meter. Public
+    // refusal emission continues to retain its own supplied meter above.
+    pub(super) fn emit_using_work(
+        &self,
+        work: &mut NativeWork,
+        writer: &mut impl std::io::Write,
+        line: &str,
+    ) -> Result<(), OwnerError> {
+        if let Some(error) = self.terminal_refusal.get() {
+            return Err(error);
+        }
+        if let Err(error) = self.check() {
+            self.terminal_refusal.set(Some(error));
+            return Err(error);
+        }
+        if line.len() > 1024 {
+            return Err(OwnerError::ContractExhausted);
+        }
         let mut attempted = false;
         let result = (|| {
             work.canonical(self, 0)?;

@@ -6,5 +6,6 @@
 
 #[path = "source_roots/kernel.rs"]
 mod kernel;
+pub use kernel::{PreparedSourceRootChange, SourceRootAction};
 
 pub use kernel::*;

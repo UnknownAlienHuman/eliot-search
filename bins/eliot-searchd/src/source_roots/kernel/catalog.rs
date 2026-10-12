@@ -13,15 +13,18 @@ use super::error::SourceRootError;
 use super::model::{SourceRootEntry, SourceRootView};
 use super::path::{
     canonicalize_configured_set, canonicalize_new_root,
-    ensure_no_overlap, ensure_outside_data_root, path_text, probe_root,
+    ensure_outside_data_root, path_text, probe_root,
     reject_symlink, sync_directory,
 };
 use super::registry::{
     load_configured_paths, persist_entries, recover_interrupted_update,
 };
 use super::spec::MAX_SOURCE_ROOTS;
+#[cfg(test)]
+use super::path::ensure_no_overlap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 enum RegistrationMutation {
     Insert {
         position: usize,
@@ -156,6 +159,7 @@ impl SourceRootCatalog {
             .collect()
     }
 
+    #[cfg(test)]
     pub(crate) fn add(
         &mut self,
         requested: &Path,
@@ -205,6 +209,7 @@ impl SourceRootCatalog {
     }
 
     /// Removes observation registration without revoking retained revisions.
+    #[cfg(test)]
     pub(crate) fn remove(&mut self, requested: &Path) -> Result<String, SourceRootError> {
         self.ensure_usable()?;
         let index = self
@@ -227,6 +232,7 @@ impl SourceRootCatalog {
         Ok(removed)
     }
 
+    #[cfg(test)]
     fn commit(
         &mut self,
         staged: Vec<SourceRootEntry>,

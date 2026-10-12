@@ -6,6 +6,7 @@
 
 #[path = "owner_composition/kernel.rs"]
 mod kernel;
+pub use kernel::{NativeRegistrationOperation, SourceDirectoryMetadata, run_source_registration};
 
 #[cfg(test)]
 pub use kernel::ShutdownReceipt;

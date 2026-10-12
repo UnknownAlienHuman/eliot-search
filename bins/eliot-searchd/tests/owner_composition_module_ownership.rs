@@ -146,3 +146,25 @@ fn owner_regression_corpus_is_separate() {
         assert!(tests.contains(&format!("fn {case}(")), "lost test {case}");
     }
 }
+#[test]
+fn paired_registration_keeps_source_preflight_and_child_custody_before_owner_effects() {
+    let root = crate_root();
+    let source = read(&root, "src/owner_composition/kernel/registration_mutation.rs");
+    let driver = source.split("fn run_with_work(").nth(1).unwrap();
+    assert!(driver.find("PreparedSourceRootChange::prepare").unwrap()
+        < driver.find("finish_in_place").unwrap());
+    assert!(driver.find("finish_in_place").unwrap() < driver.find("holder.catalog.publish").unwrap());
+    for forbidden in ["DirectStore", "credential_call", "create_dir", "remove_file", "fs::rename",
+        "release_cleanly().ok", "DataRootGuard"]
+    { assert!(!source.contains(forbidden)); }
+    assert!(source.contains("registration-exclusions-released"));
+    assert!(source.contains("OwnerReleaseOutcomeUnknown"));
+    assert!(source.contains("owner.work.write"));
+    let holder = source.split("struct RegistrationHolder").nth(1).unwrap().split("impl RegistrationHolder").next().unwrap();
+    assert!(holder.find("catalog:").unwrap() < holder.find("owner:").unwrap());
+    let abi = read(&root, "src/owner_composition/kernel/registration_native.rs");
+    assert!(abi.find("if result != 0").unwrap() < abi.find("File::from_raw_handle").unwrap());
+    assert!(!abi.contains("STATUS_OBJECT_PATH_NOT_FOUND"));
+    assert!(abi.contains("root: parent.as_raw_handle()"));
+    assert!(abi.contains("flags: 0"));
+}

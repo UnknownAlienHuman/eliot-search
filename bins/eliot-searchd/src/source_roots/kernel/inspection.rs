@@ -1,11 +1,13 @@
 //! One immutable registration observation; it cannot acknowledge synchronization.
 
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use search_source_registry::SourceRootCurrentness;
 
-use crate::owner_composition::NativeReadOperation;
+use crate::owner_composition::{
+    NativeReadOperation, NativeRegistrationOperation, SourceDirectoryMetadata as Metadata,
+};
 use crate::service_output::json_string;
 
 use super::SourceRootState;
@@ -15,15 +17,22 @@ use super::registry::decode_configured_paths;
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
 
 pub struct SourceRootInspection {
-    paths: Vec<PathBuf>,
-    currentness: SourceRootCurrentness,
+    pub(super) paths: Vec<PathBuf>,
+    pub(super) currentness: SourceRootCurrentness,
 }
 
 impl SourceRootInspection {
     pub(crate) fn read(operation: &mut NativeReadOperation<'_>) -> Result<Self, String> {
         let bytes = operation.registration_bytes()?;
+        Self::read_using(bytes.as_deref(), operation)
+    }
+
+    pub(super) fn read_using(
+        bytes: Option<&[u8]>,
+        operation: &mut impl SourceRootProbes,
+    ) -> Result<Self, String> {
+        operation.checkpoint()?;
         let mut paths = bytes
-            .as_deref()
             .map(decode_configured_paths)
             .transpose()
             .map_err(|error| error.code().to_owned())?
@@ -50,7 +59,7 @@ impl SourceRootInspection {
         Ok(output.0)
     }
 
-    fn write_output(&self, writer: &mut impl Write) -> io::Result<()> {
+    pub(super) fn write_output(&self, writer: &mut impl Write) -> io::Result<()> {
         for (position, path) in self.paths.iter().enumerate() {
             let path =
                 path_text(path).map_err(|_| io::Error::other("SOURCE_ROOT_PATH_NOT_UTF8"))?;
@@ -110,14 +119,11 @@ impl SourceRootInspection {
     }
 }
 
-fn observe(
-    operation: &mut NativeReadOperation<'_>,
-    path: &std::path::Path,
+pub(super) fn observe(
+    operation: &mut impl SourceRootProbes,
+    path: &Path,
 ) -> Result<SourceRootState, String> {
-    let metadata = match operation
-        .source_root_metadata(path)
-        .map_err(|error| error.code().to_owned())?
-    {
+    let metadata = match operation.source_root_metadata(path)? {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             return Ok(SourceRootState::Missing);
@@ -130,19 +136,14 @@ fn observe(
     if !metadata.is_dir() {
         return Ok(SourceRootState::NotDirectory);
     }
-    Ok(
-        match operation
-            .source_root_canonicalize(path)
-            .map_err(|error| error.code().to_owned())?
-        {
-            Ok(canonical) if canonical == path => SourceRootState::Available,
-            Ok(_) => SourceRootState::Unsafe,
-            Err(_) => SourceRootState::Unverifiable,
-        },
-    )
+    Ok(match operation.source_root_canonicalize(path)? {
+        Ok(canonical) if canonical == path => SourceRootState::Available,
+        Ok(_) => SourceRootState::Unsafe,
+        Err(_) => SourceRootState::Unverifiable,
+    })
 }
 
-struct BoundedOutput(Vec<u8>);
+pub(super) struct BoundedOutput(pub(super) Vec<u8>);
 
 impl Write for BoundedOutput {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
@@ -158,6 +159,44 @@ impl Write for BoundedOutput {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+/// Two closed native callers share source policy and currentness, not authority.
+pub(super) trait SourceRootProbes {
+    fn root(&self) -> &Path;
+    fn checkpoint(&mut self) -> Result<(), String>;
+    fn source_root_metadata(&mut self, path: &Path) -> Result<io::Result<Metadata>, String>;
+    fn source_root_canonicalize(&mut self, path: &Path) -> Result<io::Result<PathBuf>, String>;
+}
+
+impl SourceRootProbes for NativeReadOperation<'_> {
+    fn root(&self) -> &Path {
+        Self::root(self)
+    }
+    fn checkpoint(&mut self) -> Result<(), String> {
+        Self::checkpoint(self).map_err(|error| error.code().to_owned())
+    }
+    fn source_root_metadata(&mut self, path: &Path) -> Result<io::Result<Metadata>, String> {
+        Self::source_root_metadata(self, path).map_err(|error| error.code().to_owned())
+    }
+    fn source_root_canonicalize(&mut self, path: &Path) -> Result<io::Result<PathBuf>, String> {
+        Self::source_root_canonicalize(self, path).map_err(|error| error.code().to_owned())
+    }
+}
+
+impl SourceRootProbes for NativeRegistrationOperation<'_> {
+    fn root(&self) -> &Path {
+        Self::root(self)
+    }
+    fn checkpoint(&mut self) -> Result<(), String> {
+        Self::checkpoint(self).map_err(|error| error.code().to_owned())
+    }
+    fn source_root_metadata(&mut self, path: &Path) -> Result<io::Result<Metadata>, String> {
+        Self::source_root_metadata(self, path).map_err(|error| error.code().to_owned())
+    }
+    fn source_root_canonicalize(&mut self, path: &Path) -> Result<io::Result<PathBuf>, String> {
+        Self::source_root_canonicalize(self, path).map_err(|error| error.code().to_owned())
     }
 }
 

@@ -17,3 +17,22 @@ command and complete named dependency ceilings are8200/1150/30100; they are spec
 Keep<=30production paths/2500churn. Registration/removal/sync, mutations, repair and recovery remain
 separate #355 successors. All authored fixtures remain NOT_COMPILED/NOT_RUN under Q/#215; production
 compilation and source review do not qualify Windows sharing, race behavior or the installed product.
+
+## Catalog-only registration/removal — #463
+
+The source owner prepares a consumed immutable replacement/output plan using the existing inspection,
+currentness, path policy and shared v1 codec. All preparation precedes native ACTIVE publication.
+Duplicate lookup precedes the32-root cap and emits the existing observation without catalog rewrite;
+unregister checks the exact stored path before canonicalization, allowing removal of a missing root.
+Insertion/removal changes currentness once; final removal retains the exact header-only catalog.
+LF/UTF8/sorting/512-byte locators and64KiB catalog/output ceilings remain unchanged.
+
+Actual native publication belongs to owner_composition: retained parent-relative original/staged
+custody, exact readback, no-replacement rename and exact-handle backup disposition. This module cannot
+open DIRECT/credentials, publish lifecycle, recover catalog sidecars or mint source/access authority.
+Legacy paired handlers/catalog mutation become test-only. Sync remains a separate #355 successor.
+
+Fresh reviewed source family1913physical Rust lines/12files is within2100; simultaneous native9500,
+command1300 and complete named closure32000 limits include all retained/new fixtures/oracles and
+both process fixtures. #463 freezes exact paths before adoption; no old child budget transfers.
+Fixtures/oracles remain AUTHORED_NOT_COMPILED/NOT_RUN; Q/#215 owns execution and product qualification.

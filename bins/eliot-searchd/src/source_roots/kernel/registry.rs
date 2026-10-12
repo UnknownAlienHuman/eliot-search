@@ -171,7 +171,7 @@ fn remove_plain_file_if_present(path: &Path) -> Result<(), SourceRootError> {
     }
 }
 
-fn map_codec_error(error: LegacySourceRootCatalogError) -> SourceRootError {
+pub(super) const fn map_codec_error(error: LegacySourceRootCatalogError) -> SourceRootError {
     match error {
         LegacySourceRootCatalogError::TooManyRoots => SourceRootError::RootLimitExceeded,
         LegacySourceRootCatalogError::FileTooLarge => SourceRootError::ConfigTooLarge,

@@ -467,3 +467,13 @@ fn terminal_phase_refuses_ack_and_drop_never_publishes_release() {
         NativeRootAdmission::Unavailable(RootOpenState::OutcomeUnknown, _)
     ));
 }
+// Appended callback shares the existing fixture owner; original fixtures above
+// stay unchanged and all native execution remains deferred to #215.
+#[cfg(windows)]
+pub(super) fn with_released_registration_fixture(
+    run: impl FnOnce(&Path, &Path),
+) {
+    let root = Scratch::released();
+    let source = Scratch::empty();
+    run(&root.0, &source.0);
+}

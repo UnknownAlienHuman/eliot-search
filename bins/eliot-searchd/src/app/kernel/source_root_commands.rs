@@ -20,6 +20,7 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
     let command = arguments.first().map(String::as_str).unwrap_or_default();
     let expected = match command {
         "--sync-source-roots" => 2,
+        #[cfg(test)]
         "--register-source-root" | "--unregister-source-root" => 3,
         _ => return Err("SOURCE_ROOT_USAGE_ERROR".to_owned()),
     };
@@ -28,6 +29,7 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
     }
     let mut owner = DataRootGuard::acquire(Path::new(&arguments[1]))?;
     match command {
+        #[cfg(test)]
         "--register-source-root" => {
             let view = owner.source_roots_mut().add(Path::new(&arguments[2]))
                 .map_err(|error| error.code().to_owned())?;
@@ -36,6 +38,7 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
                 escape_json(&view.path),
             );
         }
+        #[cfg(test)]
         "--unregister-source-root" => {
             let path = owner.source_roots_mut().remove(Path::new(&arguments[2]))
                 .map_err(|error| error.code().to_owned())?;

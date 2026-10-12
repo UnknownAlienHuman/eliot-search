@@ -175,3 +175,30 @@ source_roots1800(actual1678/11), native8200(actual7985/24), commands1150(actual1
 named closure30100(actual29875/179). This is a dependency footprint, not daemon-wide write authority.
 Owning fixtures remain AUTHORED_NOT_COMPILED/NOT_RUN; native sharing/absence races, no-write inventories,
 late deadline/fault/resource/installed proof remain Q/#215. Source delivery is not product readiness.
+
+## Paired registration/removal — #463
+
+`--register-source-root ROOT SOURCE` and `--unregister-source-root ROOT SOURCE` now select the
+existing native mutating root through the original native/config argv. Catalog/source/output
+preflight runs under RELEASED custody before ACTIVE. Malformed arity preserves the fixed error
+frame before admission; constructor and catalog refusal retain the original deadline/flag/meter.
+No DIRECT store, credential, ingestion, synchronization or access authority is acquired.
+
+The private Windows adapter uses fixed names beneath the retained control handle, synchronous
+no-reparse opens and exact one-link file custody. Staged bytes are charged, synced and read back;
+original-to-backup and stage-to-primary renames request no replacement. Exact primary name/identity
+and bytes are checked before disposition/close of the held backup and absence readback. No pathname
+unlink, rollback, recovery or blind replay occurs. Non-Windows and uncertain state refuse.
+
+Duplicate registration preserves catalog bytes; exact stored-path removal works for a now-missing
+registered root. The source owner prepares bounded unchanged v1/JSON semantics. Output is a catalog
+observation, not a completed-release receipt. Every acquired owner reaches child-before-exclusion
+teardown and original polling; failure never attempts further clean lifecycle writes. Native10/11,
+installation/owner/source/revision/protection profiles and initialization history remain unchanged.
+
+Exact-child simultaneous physical Rust ceilings: source2100, native9500, commands1300, complete
+named closure32000, including all fixtures/oracles/adapter families and both process fixtures.
+The reviewed proposal is1913/12,9370/27,1205/12,31642/184. These are inclusive footprint limits,
+not daemon-wide write authority. Owning fixtures remain AUTHORED_NOT_COMPILED/NOT_RUN; native races,
+sharing/hardlinks/reparse, original late expiry, I/O/teardown faults/restart/resources and installed
+evidence remain Q/#215. Sync and other mutation/control/recovery paths retain their separate owners.
