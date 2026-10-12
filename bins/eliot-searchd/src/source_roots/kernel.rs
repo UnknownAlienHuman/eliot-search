@@ -12,12 +12,15 @@ mod model;
 mod path;
 #[path = "kernel/registry.rs"]
 mod registry;
+#[path = "kernel/registration.rs"]
+mod registration;
 #[path = "kernel/spec.rs"]
 mod spec;
 
 pub use catalog::SourceRootCatalog;
 pub use error::SourceRootError;
 pub use inspection::SourceRootInspection;
+pub use registration::{PreparedSourceRootChange, SourceRootAction};
 pub use model::SourceRootView;
 pub use registry::{RootMigrationInput, migration_input};
 pub use search_source_registry::{

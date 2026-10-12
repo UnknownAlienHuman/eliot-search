@@ -210,3 +210,14 @@ fn source_root_inspection_is_catalog_only_and_keeps_the_original_output_operatio
     assert!(child.contains("registration-custody-released"));
     assert!(!child.contains("NativeWork::new"));
 }
+#[test]
+fn paired_registration_route_keeps_original_native_request_and_excludes_sync_startup() {
+    let root = crate_root();
+    let entry = read(&root, "src/secure_commands/kernel/entry.rs");
+    assert!(entry.contains("source_registration::run(&raw, started)"));
+    let route = read(&root, "src/secure_commands/kernel/source_registration.rs");
+    for required in ["for_source_registration", "run_source_registration", "SOURCE_ROOT_USAGE_ERROR"]
+    { assert!(route.contains(required)); }
+    for forbidden in ["DirectStore", "DataRootGuard", "sync_directory(", "admit_existing(", "request.emit"]
+    { assert!(!route.contains(forbidden)); }
+}

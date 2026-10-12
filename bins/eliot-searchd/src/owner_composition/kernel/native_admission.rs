@@ -66,6 +66,72 @@ fn admit_with_work(
     request: NativeRootRequest,
     mut work: NativeWork,
 ) -> Result<NativeRootAdmission, OwnerError> {
+    let acquired = match acquire_existing(&request, &mut work)? {
+        Ok(acquired) => acquired,
+        Err(state) => return unavailable(request, work, state),
+    };
+    let (capability, successor) = acquired.bind(request, work);
+    finish_admission(capability, successor)
+}
+
+// Acquisition owns RELEASED custody, but borrows the caller's one original
+// context/meter. Semantic preflight may therefore finish before ACTIVE exists.
+struct AcquiredNativeRoot {
+    pins: NativePins,
+    root: PathBuf,
+    installation: NativeInstallation,
+    record: DurableOwnerRecord,
+    target: usize,
+    selected_key_binding: Option<[u8; 32]>,
+    mutation: bool,
+    successor: Option<DurableOwnerRecord>,
+    bound_root: File,
+    exclusions: Vec<File>,
+}
+
+impl AcquiredNativeRoot {
+    fn bind(
+        self,
+        request: NativeRootRequest,
+        work: NativeWork,
+    ) -> (NativeRootCapability, Option<DurableOwnerRecord>) {
+        let Self {
+            pins,
+            root,
+            installation,
+            record,
+            target,
+            selected_key_binding,
+            mutation,
+            successor,
+            bound_root,
+            exclusions,
+        } = self;
+        (
+            NativeRootCapability {
+                pins,
+                root,
+                installation,
+                record,
+                target,
+                selected_key_binding,
+                request,
+                work,
+                mutation,
+                poisoned: None,
+                effect_observed: false,
+                bound_root,
+                exclusions,
+            },
+            successor,
+        )
+    }
+}
+
+fn acquire_existing(
+    request: &NativeRootRequest,
+    work: &mut NativeWork,
+) -> Result<Result<AcquiredNativeRoot, RootOpenState>, OwnerError> {
     request.check()?;
     if !cfg!(windows)
         || matches!(
@@ -73,64 +139,54 @@ fn admit_with_work(
             DataRootOpenMode::InitializeNew | DataRootOpenMode::OpenNamedRecovery
         )
     {
-        return unavailable(request, work, RootOpenState::Unsupported);
+        return Ok(Err(RootOpenState::Unsupported));
     }
-    let Some(root_metadata) = metadata(&request, &mut work, request.root())? else {
-        return unavailable(request, work, RootOpenState::Absent);
+    let Some(root_metadata) = metadata(request, work, request.root())? else {
+        return Ok(Err(RootOpenState::Absent));
     };
     if !root_metadata.is_dir()
         || root_metadata.file_type().is_symlink()
         || super::codec::is_reparse(&root_metadata)
     {
-        return unavailable(request, work, RootOpenState::Unsupported);
+        return Ok(Err(RootOpenState::Unsupported));
     }
-    let root = work.call(&request, || {
+    let root = work.call(request, || {
         fs::canonicalize(request.root()).map_err(|_| OwnerError::DataRootInvalid)
     })?;
     if !local_profile_path(&root)? {
-        return unavailable(request, work, RootOpenState::Unsupported);
+        return Ok(Err(RootOpenState::Unsupported));
     }
     // Retain the physical root before opening either exclusion locator.
-    let bound_root = open_existing(&request, &mut work, &root, true, false)?;
-    if let Some(state) = barriers(&request, &mut work, &root)? {
-        return unavailable(request, work, state);
+    let bound_root = open_existing(request, work, &root, true, false)?;
+    if let Some(state) = barriers(request, work, &root)? {
+        return Ok(Err(state));
     }
     // Both absent locks plus no installation/layout evidence can be inspected
     // as absent. Partial or legacy layouts never receive a usable capability.
-    let installation = metadata(&request, &mut work, &root.join(INSTALLATION_FILE))?;
+    let installation = metadata(request, work, &root.join(INSTALLATION_FILE))?;
     if installation.is_none() {
-        let state = if partial_layout(&request, &mut work, &root)? {
+        let state = if partial_layout(request, work, &root)? {
             RootOpenState::OutcomeUnknown
         } else {
             RootOpenState::Absent
         };
-        return unavailable(request, work, state);
+        return Ok(Err(state));
     }
-    let exclusions = acquire_exclusions(&request, &mut work, &root)?;
-    let mut installation_file = open_existing(
-        &request,
-        &mut work,
-        &root.join(INSTALLATION_FILE),
-        false,
-        false,
-    )?;
-    let installation_bytes = read_bytes(&request, &mut work, &mut installation_file, 1024)?;
+    let exclusions = acquire_exclusions(request, work, &root)?;
+    let mut installation_file =
+        open_existing(request, work, &root.join(INSTALLATION_FILE), false, false)?;
+    let installation_bytes = read_bytes(request, work, &mut installation_file, 1024)?;
     if installation_bytes.starts_with(b"ELIOT-SEARCH-INSTALLATION-V1\nformat_version=1\n") {
-        return unavailable(request, work, RootOpenState::Unsupported);
+        return Ok(Err(RootOpenState::Unsupported));
     }
     let mutation = request.mode == DataRootOpenMode::OpenExistingMutating;
     let profile = super::native_snapshot::parse_native_installation(&installation_bytes)?;
-    let mut pins = NativePins::acquire_profile(
-        &request,
-        &mut work,
-        &root,
-        mutation,
-        profile.journal_profile,
-    )?;
-    let snapshot = read_snapshot(&request, &mut work, &root, &mut pins)?;
-    work.arrive(&request, "native-proof")?;
+    let mut pins =
+        NativePins::acquire_profile(request, work, &root, mutation, profile.journal_profile)?;
+    let snapshot = read_snapshot(request, work, &root, &mut pins)?;
+    work.arrive(request, "native-proof")?;
     if snapshot.record.lifecycle != LifecycleState::Released {
-        return unavailable(request, work, RootOpenState::OutcomeUnknown);
+        return Ok(Err(RootOpenState::OutcomeUnknown));
     }
     let decision = classify_root_open(request.mode, RootOpenState::Initialized);
     if !matches!(
@@ -140,7 +196,7 @@ fn admit_with_work(
         return Err(OwnerError::OwnerInvalidTransition);
     }
     let successor = if mutation {
-        Some(work.call(&request, || {
+        Some(work.call(request, || {
             plan_successor(
                 &snapshot.installation.owner_binding(),
                 &snapshot.observed,
@@ -151,22 +207,18 @@ fn admit_with_work(
     } else {
         None
     };
-    let capability = NativeRootCapability {
+    Ok(Ok(AcquiredNativeRoot {
         pins,
         root,
         installation: snapshot.installation,
         record: snapshot.record,
         target: snapshot.target,
         selected_key_binding: snapshot.selected_key_binding,
-        request,
-        work,
         mutation,
-        poisoned: None,
-        effect_observed: false,
+        successor,
         bound_root,
         exclusions,
-    };
-    finish_admission(capability, successor)
+    }))
 }
 
 pub(super) fn acquire_exclusions(
@@ -219,6 +271,18 @@ fn finish_admission(
     mut capability: NativeRootCapability,
     successor: Option<DurableOwnerRecord>,
 ) -> Result<NativeRootAdmission, OwnerError> {
+    finish_in_place(&mut capability, successor)?;
+    Ok(if capability.mutation {
+        NativeRootAdmission::Mutation(Box::new(capability))
+    } else {
+        NativeRootAdmission::Inspection(Box::new(capability))
+    })
+}
+
+fn finish_in_place(
+    capability: &mut NativeRootCapability,
+    successor: Option<DurableOwnerRecord>,
+) -> Result<(), OwnerError> {
     if let Some(record) = successor {
         capability.publish(record)?;
     } else {
@@ -235,11 +299,7 @@ fn finish_admission(
             }
         })?;
     capability.check_context()?;
-    Ok(if capability.mutation {
-        NativeRootAdmission::Mutation(Box::new(capability))
-    } else {
-        NativeRootAdmission::Inspection(Box::new(capability))
-    })
+    Ok(())
 }
 
 fn partial_layout(
@@ -431,6 +491,7 @@ impl NativeRootCapability {
             })?;
             let mut offset = 0;
             while offset < bytes.len() {
+                self.work.write(&self.request, bytes.len() - offset)?;
                 let count = self.work.call(&self.request, || {
                     file.write(&bytes[offset..])
                         .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)
@@ -519,3 +580,7 @@ impl NativeBindingView<'_> {
 #[path = "read_child.rs"]
 mod read_child;
 pub use read_child::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
+
+#[path = "registration_mutation.rs"]
+mod registration_mutation;
+pub use registration_mutation::{NativeRegistrationOperation, run_source_registration};

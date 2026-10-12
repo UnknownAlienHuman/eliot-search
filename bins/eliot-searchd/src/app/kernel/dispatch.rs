@@ -159,10 +159,11 @@ fn run() -> Result<(), String> {
         }
         #[cfg(test)]
         "--serve-data-root" => serve_legacy(&arguments)?,
+        #[cfg(test)]
         "--source-roots"
         | "--register-source-root"
-        | "--unregister-source-root"
-        | "--sync-source-roots" => super::source_root_commands::run(&arguments)?,
+        | "--unregister-source-root" => super::source_root_commands::run(&arguments)?,
+        "--sync-source-roots" => super::source_root_commands::run(&arguments)?,
         "--scan-stdin" | "--scan-stdin-ascii-insensitive" => {
             require_argument_count(&arguments, 2)?;
             cmd_scan_stdin(&arguments, argument)?;

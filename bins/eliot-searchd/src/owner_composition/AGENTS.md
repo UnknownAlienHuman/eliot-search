@@ -97,3 +97,22 @@ Original argv/context/meter survive child-before-exclusion teardown and final po
 Malformed arity keeps the legacy fixed error frame before admission without padded request authority.
 Preserve old fixtures/codec/native profiles; registration/sync/mutations remain #355 successors.
 Inherited D387 remains NOT_PASS. All fixtures and native/race/installed evidence remain Q/#215.
+
+## Paired catalog registration/removal — #463
+
+This exact child owns native catalog custody/publication, with only pure source-root preparation
+and closed paired-command/legacy-dispatch adapters. Its fresh simultaneous physical Rust ceilings
+are source_roots2100, native9500, commands1300 and complete named closure32000; reviewed proposal
+sizes1913/12,9370/27,1205/12,31642/184 include all retained/new fixtures/oracles, full adapter families
+and both process fixtures. Keep<=30production paths/2500churn; no daemon-wide or successor allowance.
+The exact paths and pre-adoption SCOPE_FROZEN are in #463; earlier child ceilings stay child-specific.
+
+Acquire RELEASED existing custody with the original request/meter; prepare source policy/catalog and
+bounded output before ACTIVE. Fixed catalog names resolve relative to the retained control handle.
+Retain exact one-link original/staged objects, charged writes and exact readback before no-replacement
+publication and exact-handle backup disposition/close. Failures retain artifacts/fencing; no path
+unlink, rollback, recovery, fresh request or work allowance. Children/pins close before exclusions,
+with original contextual polling after each teardown group. Failed work never publishes clean release.
+Native10/native11 and v1 bytes remain BYTE_COMPATIBLE. DIRECT/credentials/ingestion/sync/current-workspace
+authority and all other mutation/recovery callers remain outside. Paired legacy handlers become test-only.
+Owning fixtures/oracles remain AUTHORED_NOT_COMPILED/NOT_RUN; D387 NOT_PASS and Q215 remain explicit.

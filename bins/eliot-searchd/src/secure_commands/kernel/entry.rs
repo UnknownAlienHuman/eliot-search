@@ -17,6 +17,13 @@ pub fn maybe_run() -> Option<ExitCode> {
         return Some(emit_process_error("USAGE_ERROR"));
     };
     if let Some(command) = arguments.first().and_then(|value| value.to_str())
+        && super::source_registration::is_registration(command)
+    {
+        return Some(if super::source_registration::run(&raw, started).is_ok() {
+            ExitCode::SUCCESS
+        } else { ExitCode::from(2) });
+    }
+    if let Some(command) = arguments.first().and_then(|value| value.to_str())
         && super::read::is_read(command)
     {
         return Some(match super::read::run(&raw, started) {
