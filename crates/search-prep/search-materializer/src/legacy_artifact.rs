@@ -10,8 +10,8 @@
 
 use core::fmt;
 use std::ffi::OsStr;
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::fs::{self, File};
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// Native observations required by the package-owned preparation-artifact lifecycle.
@@ -175,7 +175,7 @@ pub fn read_legacy_preparation_artifact<P>(
 where
     P: LegacyPreparationArtifactPlatform,
 {
-    read_artifact(platform, path, maximum_bytes, None)
+    context::legacy_read(platform, path, maximum_bytes)
 }
 
 /// Publishes one exact immutable preparation artifact without replacement.
@@ -184,10 +184,6 @@ where
 ///
 /// Returns a typed failure for invalid names/bounds, I/O or platform failure,
 /// immutable conflict, changed identity, uncertain publication or cleanup.
-#[expect(
-    clippy::case_sensitive_file_extension_comparisons,
-    reason = "Canonical temporary artifact names require the exact lowercase .tmp suffix; case-insensitive matching would widen the closed filename grammar."
-)]
 pub fn publish_legacy_preparation_artifact<P>(
     platform: &P,
     directory: &Path,
@@ -199,107 +195,14 @@ pub fn publish_legacy_preparation_artifact<P>(
 where
     P: LegacyPreparationArtifactPlatform,
 {
-    if bytes.len() > maximum_bytes {
-        return Err(LegacyPreparationArtifactError::SizeInvalid);
-    }
-    if !valid_local_name(final_name)
-        || !valid_local_name(temporary_name)
-        || final_name == temporary_name
-        || !temporary_name.starts_with('.')
-        || !temporary_name.ends_with(".tmp")
-    {
-        return Err(LegacyPreparationArtifactError::LocalNameInvalid);
-    }
-
-    ensure_child_directory(platform, directory)?;
-    let final_path = directory.join(final_name);
-    let temporary_path = directory.join(temporary_name);
-    match fs::symlink_metadata(&final_path) {
-        Ok(_) => {
-            let existing = read_artifact(platform, &final_path, maximum_bytes, None)?;
-            if existing.bytes() != bytes {
-                return Err(LegacyPreparationArtifactError::ImmutableConflict);
-            }
-            let encoded_bytes = existing.encoded_bytes();
-            let identity = existing.identity;
-            return Ok(LegacyPreparationArtifactReceipt {
-                identity,
-                encoded_bytes,
-                reused: true,
-            });
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(LegacyPreparationArtifactError::ObjectInspect(error)),
-    }
-
-    let mut temporary = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .open(&temporary_path)
-        .map_err(LegacyPreparationArtifactError::Create)?;
-    let metadata = temporary
-        .metadata()
-        .map_err(LegacyPreparationArtifactError::Create)?;
-    if !regular(&metadata) {
-        return Err(LegacyPreparationArtifactError::ObjectInvalid);
-    }
-    let temporary_identity = platform
-        .identity(&temporary)
-        .map_err(LegacyPreparationArtifactError::Platform)?;
-    let mut staging = TemporaryArtifactGuard {
+    context::legacy_publish(
         platform,
-        path: temporary_path,
-        identity: temporary_identity.clone(),
-        cleanup_armed: true,
-    };
-    platform
-        .verify_locator(&temporary, &staging.path)
-        .map_err(LegacyPreparationArtifactError::Platform)?;
-
-    if let Err(error) = temporary.write_all(bytes).and_then(|()| temporary.sync_all()) {
-        drop(temporary);
-        return Err(LegacyPreparationArtifactError::Write(error));
-    }
-    drop(temporary);
-
-    let staged = read_artifact(
-        platform,
-        &staging.path,
+        directory,
+        final_name,
+        temporary_name,
+        bytes,
         maximum_bytes,
-        Some(&temporary_identity),
-    )?;
-    if staged.bytes() != bytes {
-        return Err(LegacyPreparationArtifactError::ReadbackMismatch);
-    }
-
-    let reused = match fs::hard_link(&staging.path, &final_path) {
-        Ok(()) => false,
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => true,
-        Err(error) => return Err(LegacyPreparationArtifactError::PublishOutcomeUnknown(error)),
-    };
-    if let Err(error) = platform.sync_directory(directory) {
-        return Err(LegacyPreparationArtifactError::PublishPlatformOutcomeUnknown(error));
-    }
-    let final_artifact = read_artifact(platform, &final_path, maximum_bytes, None)?;
-    if final_artifact.bytes() != bytes {
-        return Err(LegacyPreparationArtifactError::ImmutableConflict);
-    }
-    if !reused && final_artifact.identity() != &temporary_identity {
-        return Err(LegacyPreparationArtifactError::IdentityChanged);
-    }
-    let encoded_bytes = final_artifact.encoded_bytes();
-    let identity = final_artifact.identity;
-
-    staging.cleanup()?;
-    platform
-        .sync_directory(directory)
-        .map_err(LegacyPreparationArtifactError::PublishPlatformOutcomeUnknown)?;
-    Ok(LegacyPreparationArtifactReceipt {
-        identity,
-        encoded_bytes,
-        reused,
-    })
+    )
 }
 
 struct TemporaryArtifactGuard<'a, P>
@@ -331,118 +234,6 @@ where
     fn drop(&mut self) {
         let _ = self.cleanup();
     }
-}
-
-fn read_artifact<P>(
-    platform: &P,
-    path: &Path,
-    maximum_bytes: usize,
-    expected_identity: Option<&P::Identity>,
-) -> Result<LegacyPreparationArtifactRead<P::Identity>, LegacyPreparationArtifactError<P::Error>>
-where
-    P: LegacyPreparationArtifactPlatform,
-{
-    let parent = path
-        .parent()
-        .ok_or(LegacyPreparationArtifactError::ParentMissing)?;
-    platform
-        .validate_directory(parent)
-        .map_err(LegacyPreparationArtifactError::Platform)?;
-    let before = fs::symlink_metadata(path)
-        .map_err(LegacyPreparationArtifactError::ObjectInspect)?;
-    let before_len = usize::try_from(before.len())
-        .map_err(|_| LegacyPreparationArtifactError::SizeInvalid)?;
-    if !regular(&before) || before_len > maximum_bytes {
-        return Err(if before_len > maximum_bytes {
-            LegacyPreparationArtifactError::SizeInvalid
-        } else {
-            LegacyPreparationArtifactError::ObjectInvalid
-        });
-    }
-
-    let mut file = File::open(path).map_err(LegacyPreparationArtifactError::ObjectRead)?;
-    let opened = file
-        .metadata()
-        .map_err(LegacyPreparationArtifactError::ObjectRead)?;
-    if !regular(&opened)
-        || opened.len() != before.len()
-        || opened.modified().ok() != before.modified().ok()
-    {
-        return Err(LegacyPreparationArtifactError::ReadbackMismatch);
-    }
-    platform
-        .verify_locator(&file, path)
-        .map_err(LegacyPreparationArtifactError::Platform)?;
-    let identity = platform
-        .identity(&file)
-        .map_err(LegacyPreparationArtifactError::Platform)?;
-    if expected_identity.is_some_and(|expected| expected != &identity) {
-        return Err(LegacyPreparationArtifactError::IdentityChanged);
-    }
-
-    let mut artifact_bytes = Vec::with_capacity(before_len);
-    let limit = u64::try_from(maximum_bytes)
-        .unwrap_or(u64::MAX)
-        .saturating_add(1);
-    (&mut file)
-        .take(limit)
-        .read_to_end(&mut artifact_bytes)
-        .map_err(LegacyPreparationArtifactError::ObjectRead)?;
-    let after = file
-        .metadata()
-        .map_err(LegacyPreparationArtifactError::ObjectRead)?;
-    if artifact_bytes.len() != before_len
-        || artifact_bytes.len() > maximum_bytes
-        || after.len() != before.len()
-        || after.modified().ok() != before.modified().ok()
-    {
-        return Err(LegacyPreparationArtifactError::ReadbackMismatch);
-    }
-    platform
-        .verify_locator(&file, path)
-        .map_err(LegacyPreparationArtifactError::Platform)?;
-    let after_identity = platform
-        .identity(&file)
-        .map_err(LegacyPreparationArtifactError::Platform)?;
-    if after_identity != identity {
-        return Err(LegacyPreparationArtifactError::IdentityChanged);
-    }
-    Ok(LegacyPreparationArtifactRead {
-        bytes: artifact_bytes,
-        identity,
-    })
-}
-
-fn ensure_child_directory<P>(
-    platform: &P,
-    directory: &Path,
-) -> Result<(), LegacyPreparationArtifactError<P::Error>>
-where
-    P: LegacyPreparationArtifactPlatform,
-{
-    let parent = directory
-        .parent()
-        .ok_or(LegacyPreparationArtifactError::ParentMissing)?;
-    platform
-        .validate_directory(parent)
-        .map_err(LegacyPreparationArtifactError::Platform)?;
-    match fs::symlink_metadata(directory) {
-        Ok(_) => {}
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            match fs::create_dir(directory) {
-                Ok(()) => {}
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(error) => return Err(LegacyPreparationArtifactError::DirectoryCreate(error)),
-            }
-            platform
-                .sync_directory(parent)
-                .map_err(LegacyPreparationArtifactError::Platform)?;
-        }
-        Err(error) => return Err(LegacyPreparationArtifactError::ObjectInspect(error)),
-    }
-    platform
-        .validate_directory(directory)
-        .map_err(LegacyPreparationArtifactError::Platform)
 }
 
 fn cleanup_exact<P>(
@@ -484,6 +275,10 @@ fn valid_local_name(name: &str) -> bool {
 fn regular(metadata: &fs::Metadata) -> bool {
     metadata.is_file() && !metadata.file_type().is_symlink()
 }
+
+#[path = "legacy_artifact/context.rs"]
+mod context;
+pub use context::*;
 
 #[cfg(test)]
 mod tests;

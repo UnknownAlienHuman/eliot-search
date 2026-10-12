@@ -131,3 +131,25 @@ new JATS-module lines for this slice, including private fixtures. The 10,000-lin
 remains in force; this exception does not inherit or widen #437 and moves/deletes no retained source.
 Production check/strict Clippy and affected guards are source gates; fixtures remain
 AUTHORED_NOT_COMPILED/NOT_RUN under #215/#216. JATS UnitSet and #331 adoption remain separate.
+
+## #468 contextual legacy preparation-artifact boundary
+
+This slice adds original-context exact read/no-clobber publication inside the existing artifact owner.
+Mandatory platform callbacks borrow the same mutable caller context and meter their internal attempts;
+the kernel charges filesystem work, logical capacity, byte comparisons, short/Interrupted I/O and EOF.
+Contextual calls install no cleanup guard or staging unlink, including success. Redacted
+PREPARATION_ARTIFACT_* failures preserve component-local attempted effects and paired platform/refusal
+causes. Receipts grant no source, cleanup, recovery or enclosing-request completion authority.
+
+The fresh #468 exception is limited to these frozen paths: whole owner <=16,500 physical Rust lines/
+85 files; context subtree <=1,550 (production <=1,000, private fixtures <=550); artifact source/private
+fixture family <=2,100; production churn <=1,350 and complete Rust churn <=2,000. The 7,000 soft source
+target and 10,000 whole-owner review threshold remain. This exception inherits no earlier allowance.
+Measured: whole owner 16,328/85; context 986+535=1,521; artifact family 1,995, including all four retained
+legacy fixtures. The 306-line owning oracle is also included in the whole-owner count.
+
+Legacy signatures/errors, basename grammar, opaque persisted bytes and cleanup/handle ordering remain
+unchanged. No native caller, #331 persistence, canonical CAS or #348 reconciliation is activated.
+Six contextual fixture groups are AUTHORED_NOT_COMPILED/NOT_RUN under #215; source adoption alone is
+not native/runtime/product qualification. Production/static gates and final exact-head review remain
+the manager's responsibility.
