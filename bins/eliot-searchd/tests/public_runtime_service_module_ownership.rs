@@ -7,6 +7,7 @@ fn crate_root() -> PathBuf {
 fn read(root: &Path, relative: &str) -> String {
     std::fs::read_to_string(root.join(relative))
         .unwrap_or_else(|error| panic!("cannot read {relative}: {error}"))
+        .replace("\r\n", "\n")
 }
 
 #[test]
