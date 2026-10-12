@@ -4,6 +4,8 @@
 //! framing/rendering, connection state, child outcome mapping and workspace
 //! currentness are isolated behind the stable provider-composition facade.
 
+// Canonical connections consume the optional access/query composition.
+#[cfg(feature = "wave4-query")]
 #[path = "kernel/canonical.rs"]
 mod canonical;
 #[path = "kernel/capability.rs"]
@@ -25,6 +27,7 @@ mod router;
 #[path = "kernel/spec.rs"]
 mod spec;
 
+#[cfg(feature = "wave4-query")]
 pub use canonical::*;
 pub use capability::*;
 pub use child::*;
