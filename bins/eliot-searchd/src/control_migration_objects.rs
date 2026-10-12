@@ -5,12 +5,16 @@
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Instant;
+#[cfg(test)]
+use std::time::Duration;
 use zeroize::Zeroizing;
 
 #[path = "control_migration_directories.rs"]
+#[cfg(test)]
 mod directories;
 #[path = "control_migration_orphans.rs"]
+#[cfg(test)]
 mod orphans;
 #[path = "control_migration_plan.rs"]
 mod source_plan;
@@ -19,19 +23,28 @@ use super::{DirectStore, RevisionMetadata, MAX_REVISION_OBJECT_BYTES, REVISION_D
     legacy_path, protected_path, read_regular_file, verify_plaintext, verify_revision_identity};
 use super::storage_io::ensure_directory;
 use crate::revision_protection::RevisionProtector;
-use crate::{development::MAX_SCAN_INPUT_BYTES, service_output::json_string, sha256};
+use crate::{development::MAX_SCAN_INPUT_BYTES, sha256};
+#[cfg(test)]
+use crate::service_output::json_string;
 
+#[cfg(test)]
 const MAX_PAGE_REVISIONS: usize = 16;
+#[cfg(test)]
 const MAX_PAGE_SOURCE_BYTES: u64 = 256 * 1024 * 1024;
+#[cfg(test)]
 const MAX_PAGE_STORED_BYTES: u64 = 512 * 1024 * 1024;
+#[cfg(test)]
 const MAX_PAGE_BYTES: usize = 60 * 1024;
+#[cfg(test)]
 const DEADLINE: Duration = Duration::from_secs(30);
 
+#[cfg(test)]
 struct ObjectEvidence {
     encoded_bytes: u64,
     encoded_sha256: [u8; 32],
 }
 
+#[cfg(test)]
 impl ObjectEvidence {
     fn from_bytes(bytes: &[u8]) -> Self {
         Self { encoded_bytes: bytes.len() as u64, encoded_sha256: sha256::digest(bytes) }
@@ -47,10 +60,13 @@ impl ObjectEvidence {
 
 struct RevisionReadback {
     bytes: Zeroizing<Vec<u8>>,
+    #[cfg(test)]
     plaintext: Option<ObjectEvidence>,
+    #[cfg(test)]
     protected: Option<ObjectEvidence>,
 }
 
+#[cfg(test)]
 impl RevisionReadback {
     fn stored_bytes(&self) -> u64 {
         self.plaintext.as_ref().map_or(0, |value| value.encoded_bytes)
@@ -72,11 +88,13 @@ impl RevisionReadback {
 }
 
 /// Administrative bookmark; a caller can choose a suffix, not assert prior work.
+#[cfg(test)]
 struct Cursor {
     checkpoint: [u8; 32],
     after: String,
 }
 
+#[cfg(test)]
 impl Cursor {
     fn parse(value: &str) -> Result<Self, String> {
         // r2.<checkpoint hex>.<last revision hex>; reject before byte slicing.
@@ -111,6 +129,7 @@ impl DirectStore {
     /// Each result binds the same source-chain snapshot as control-migration-page.
     /// This is not an atomic filesystem snapshot or a complete canonical import:
     /// an importer must revalidate these object fingerprints before cutover.
+    #[cfg(test)]
     pub(crate) fn inspect_migration_revisions(&self, cursor: Option<&str>) -> Result<String, String> {
         // The same administrative command has an explicit physical-orphan mode.
         // Subsequent o1 bookmarks keep that mode; an ordinary r2 page never mixes it.
@@ -240,6 +259,7 @@ fn read_revision_objects_at(
     let protected_path = protected_path(root, &metadata.revision_id)?;
     let plaintext_path = legacy_path(root, &metadata.revision_id)?;
     let encoded = read_optional(&protected_path, MAX_REVISION_OBJECT_BYTES)?;
+    #[cfg(test)]
     let protected = encoded.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
     let mut protected_bytes = if let Some(encoded) = encoded.as_ref() {
         check_deadline(deadline)?;
@@ -252,6 +272,7 @@ fn read_revision_objects_at(
     check_deadline(deadline)?;
     let plaintext_bytes = read_optional(&plaintext_path, MAX_SCAN_INPUT_BYTES)?;
     if let Some(bytes) = plaintext_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
+    #[cfg(test)]
     let plaintext = plaintext_bytes.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
     if let Some(bytes) = protected_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
     if let (Some(protected), Some(plaintext)) = (protected_bytes.as_ref(), plaintext_bytes.as_ref())
@@ -266,7 +287,13 @@ fn read_revision_objects_at(
         (None, None) => return Err("DIRECT_REVISION_MISSING".to_owned()),
     };
     check_deadline(deadline)?;
-    Ok(RevisionReadback { bytes, plaintext, protected })
+    Ok(RevisionReadback {
+        bytes,
+        #[cfg(test)]
+        plaintext,
+        #[cfg(test)]
+        protected,
+    })
 }
 
 fn read_optional(path: &Path, maximum: usize) -> Result<Option<Zeroizing<Vec<u8>>>, String> {

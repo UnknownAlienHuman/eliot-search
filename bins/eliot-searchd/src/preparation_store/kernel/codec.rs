@@ -128,6 +128,7 @@ pub(crate) fn protection(
 }
 
 #[must_use]
+#[cfg(test)]
 pub(crate) fn extension(
     protector: &RevisionProtector,
 ) -> &'static str {
@@ -164,6 +165,7 @@ pub(crate) fn decode_reference(
 }
 
 /// Shared wire validation independent of the active protection backend.
+#[cfg(test)]
 pub(crate) fn decode_reference_fields(
     saved: &[u8],
     key: &[u8; 32],

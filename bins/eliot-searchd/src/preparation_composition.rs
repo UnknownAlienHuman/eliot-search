@@ -29,6 +29,7 @@ pub fn validate_revision(revision: &str) -> Result<(), String> {
 /// A stored record may describe an unsupported-input gap, not a searchable layout.
 /// This response acknowledges storage only; it does not grant access or completeness.
 /// Legacy contract preserved for existing service callers (`public_runtime_service`).
+#[cfg(test)]
 pub fn emit_prepared(
     writer: &mut impl Write,
     revision: &str,

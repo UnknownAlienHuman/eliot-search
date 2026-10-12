@@ -56,6 +56,7 @@ pub(super) fn manifest_files(root: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 /// Migration never creates a missing directory or silently drops pending writes.
+#[cfg(test)]
 pub(super) fn migration_files(
     data_root: &Path,
     maximum: usize,

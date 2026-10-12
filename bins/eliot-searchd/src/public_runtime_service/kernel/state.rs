@@ -8,6 +8,7 @@ use crate::direct_store::DirectStore;
 use crate::result_handles::ResultHandleCatalog;
 use crate::storage_security::StorageSecurityStatus;
 
+#[cfg(test)]
 use super::session::MutationAttempt;
 
 pub(super) struct CommandState<'a, W: Write> {
@@ -17,6 +18,7 @@ pub(super) struct CommandState<'a, W: Write> {
     pub(super) handles: &'a mut ResultHandleCatalog,
     pub(super) canonical_root: &'a Path,
     pub(super) storage: &'a mut StorageSecurityStatus,
+    #[cfg(test)]
     pub(super) attempt: &'a mut MutationAttempt,
 }
 

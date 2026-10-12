@@ -28,6 +28,7 @@ pub(super) struct MutationAttempt {
 }
 
 impl MutationAttempt {
+    #[cfg(test)]
     pub(super) const fn arm(&mut self) {
         self.dispatched = true;
     }
