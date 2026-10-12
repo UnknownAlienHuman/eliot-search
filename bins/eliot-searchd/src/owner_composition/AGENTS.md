@@ -79,3 +79,21 @@ separate #355/#356/#348 successors. Preserve old fixtures and fail-closed unsupp
 The new invocation/native and changed ownership fixtures are AUTHORED_NOT_COMPILED/NOT_RUN under #215.
 Final exact-head independent source review is required before merge. Production compilation and
 strict baseline comparison do not establish native/runtime/installed/product acceptance.
+
+## Catalog-only registration observation — #461
+
+This child has independently accepted simultaneous physical Rust ceilings: source_roots plus oracle
+1800(actual1678/11files), native custody plus oracle8200(actual7985/24), closed commands plus oracle
+1150(actual1072/11), complete named dependency closure30100(actual29875/179). All retained/new
+fixtures, family oracles, full source-root/config/provider families and both process fixtures are
+included. The closure count is not a daemon-wide source allowance. Keep30production paths/2500churn.
+No previous service/initializer/one-shot budget transfers. A successor requires its own review.
+
+Only --source-roots enters this catalog-only native operation; branch before DIRECT/credential
+startup. Retain optional catalog handle/identity/metadata as auxiliary custody outside native10/11.
+Check pending sidecars and held-object state at each seam and full locator binding around output.
+No catalog recovery, state creation, lifecycle publication or synchronization acknowledgement.
+Original argv/context/meter survive child-before-exclusion teardown and final post-release polling.
+Malformed arity keeps the legacy fixed error frame before admission without padded request authority.
+Preserve old fixtures/codec/native profiles; registration/sync/mutations remain #355 successors.
+Inherited D387 remains NOT_PASS. All fixtures and native/race/installed evidence remain Q/#215.

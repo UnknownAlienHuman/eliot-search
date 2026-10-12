@@ -275,3 +275,38 @@ fn source_root_regression_corpus_is_separate() {
         assert!(tests.contains(&format!("fn {case}(")), "lost test {case}");
     }
 }
+
+#[test]
+fn native_registration_inspection_reuses_codec_and_currentness_without_recovery() {
+    let root = crate_root();
+    let inspection = read(&root, "src/source_roots/kernel/inspection.rs");
+    for required in [
+        "registration_bytes",
+        "decode_configured_paths",
+        "canonicalize_configured_set",
+        "ensure_outside_data_root",
+        "SourceRootCurrentness",
+        "source_root_metadata",
+        "source_root_canonicalize",
+    ] {
+        assert!(inspection.contains(required));
+    }
+    for forbidden in [
+        "DataRootGuard",
+        "DirectStore",
+        "load_owned",
+        "recover_interrupted_update",
+        "mark_reconciled_synced",
+        "std::fs",
+    ] {
+        assert!(!inspection.contains(forbidden));
+    }
+    let native = read(&root, "src/owner_composition/kernel/registration_read.rs");
+    assert!(native.contains("path.with_extension(\"tmp\")"));
+    assert!(native.contains("path.with_extension(\"bak\")"));
+    assert!(native.contains("open_initialization"));
+    assert!(native.contains("registration-custody-released"));
+    assert!(!native.contains("create("));
+    assert!(!native.contains("remove_file"));
+    assert!(!native.contains("rename("));
+}

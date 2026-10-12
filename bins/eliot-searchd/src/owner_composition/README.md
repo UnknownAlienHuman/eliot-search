@@ -158,3 +158,20 @@ separate #355/#356/#348 successors. Preserve old fixtures and fail-closed unsupp
 The new invocation/native and changed ownership fixtures are AUTHORED_NOT_COMPILED/NOT_RUN under #215.
 Final exact-head independent source review is required before merge. Production compilation and
 strict baseline comparison do not establish native/runtime/installed/product acceptance.
+
+## Catalog-only registration observation — #461
+
+`--source-roots` consumes the existing inspection request through a catalog-only one-shot operation.
+Optional registration custody retains actual read-only identity/length/mtime without adding a pin
+to persisted native10/native11. Pending sidecars refuse with no recovery; missing catalog remains an
+empty registration observation. Named charged metadata/canonicalize seams preserve existing gaps.
+The source-root owner prepares complete64KiB-bounded ordered output. Original request/meter own
+every short write/flush and final post-release checkpoint; auxiliary handle closes before exclusions.
+No DIRECT startup, credentials, owner lifecycle or sync acknowledgement is reached. Mutable source
+root and other normal caller families remain #355 successors. Persisted bytes remain BYTE_COMPATIBLE.
+
+Fresh simultaneous physical Rust ceilings include every retained/new fixture and oracle:
+source_roots1800(actual1678/11), native8200(actual7985/24), commands1150(actual1072/11), complete
+named closure30100(actual29875/179). This is a dependency footprint, not daemon-wide write authority.
+Owning fixtures remain AUTHORED_NOT_COMPILED/NOT_RUN; native sharing/absence races, no-write inventories,
+late deadline/fault/resource/installed proof remain Q/#215. Source delivery is not product readiness.

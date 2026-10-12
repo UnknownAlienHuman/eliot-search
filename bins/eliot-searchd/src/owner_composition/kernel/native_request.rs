@@ -122,7 +122,7 @@ impl NativeRootRequest {
         let (selected, _) = crate::config_composition::strip_config_args_os(arguments)
             .map_err(|_| OwnerError::OwnerOperationConflict)?;
         let expected = match selected.first().and_then(|arg| arg.to_str()) {
-            Some("--health-data-root" | "--list-sources" | "--verify-root") => 2,
+            Some("--health-data-root" | "--list-sources" | "--verify-root" | "--source-roots") => 2,
             Some("--search-root" | "--search-root-ascii-insensitive") => 3,
             Some("--read-revision") => 5,
             _ => return Err(OwnerError::OwnerOperationConflict),

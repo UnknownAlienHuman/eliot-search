@@ -190,3 +190,23 @@ fn one_shot_reads_use_existing_native_custody_and_the_shared_output_adapter() {
     assert!(invocation.contains("one-shot-custody-released"));
     assert!(!invocation.contains("NativeRootRequest::new"));
 }
+
+#[test]
+fn source_root_inspection_is_catalog_only_and_keeps_the_original_output_operation() {
+    let root = crate_root();
+    let route = read(&root, "src/secure_commands/kernel/source_roots.rs");
+    assert!(route.contains("SourceRootInspection::read(operation)"));
+    assert!(route.contains("operation.emit_registration"));
+    assert!(route.contains("!operation.output_attempted()"));
+    assert!(!route.contains("read_startup"));
+    assert!(!route.contains("NativeRootRequest::new"));
+    assert!(!route.contains("credential"));
+    let lifetime = read(&root, "src/owner_composition/kernel/registration_read.rs");
+    let child = lifetime
+        .split("pub(crate) fn run_registration_one_shot<T>(")
+        .nth(1)
+        .unwrap();
+    assert!(child.find("drop(operation)").unwrap() < child.find("drop((pins,").unwrap());
+    assert!(child.contains("registration-custody-released"));
+    assert!(!child.contains("NativeWork::new"));
+}
