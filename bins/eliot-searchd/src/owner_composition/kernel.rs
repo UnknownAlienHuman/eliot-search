@@ -42,6 +42,7 @@ mod native_objects;
 mod native_request;
 #[path = "kernel/native_snapshot.rs"]
 mod native_snapshot;
+pub use native_admission::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 pub use native_admission::{NativeRootAdmission, admit_existing};
 pub use native_request::{NativeRootLimits, NativeRootRequest};
 

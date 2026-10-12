@@ -10,15 +10,17 @@ use search_domain::{
     AdmissionState, CancellationState, MutationObservation, MutationOutcomeClass, MutationStart,
     PostconditionState, SafetyState,
 };
-use search_runtime_owner::{
-    DrainReason, OwnerError, OwnerGuard, classify_owner_mutation_boundary,
-};
+use search_runtime_owner::{OwnerError, OwnerGuard, classify_owner_mutation_boundary};
 
-use crate::owner_composition::{LiveOwner, ShutdownReceipt};
+use crate::owner_composition::LiveOwner;
+#[cfg(test)]
+use crate::owner_composition::ShutdownReceipt;
 use crate::sealed_root_lock::SealedRootLease;
 #[cfg(windows)]
 use crate::sealed_root_lock::SealedRootLockError;
 use crate::source_roots::SourceRootCatalog;
+#[cfg(test)]
+use search_runtime_owner::DrainReason;
 
 /// Named OS ownership-primitive profile for one data-root lock file.
 ///
@@ -129,8 +131,8 @@ pub struct DataRootGuard {
 impl DataRootGuard {
     /// Acquires the OS lock before restoring roots or publishing readiness.
     pub(crate) fn acquire(path: &Path) -> Result<Self, String> {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|error| format!("DATA_ROOT_OPEN_ERROR:{error}"))?;
+        let metadata =
+            fs::symlink_metadata(path).map_err(|error| format!("DATA_ROOT_OPEN_ERROR:{error}"))?;
         if metadata.file_type().is_symlink() || is_reparse(&metadata) {
             return Err("DATA_ROOT_LINK_DENIED".to_owned());
         }
@@ -235,11 +237,13 @@ impl DataRootGuard {
     }
 
     /// Bound monotone owner epoch of this live incarnation.
+    #[cfg(test)]
     pub(crate) const fn epoch(&self) -> u64 {
         self.owner.epoch().get()
     }
 
     /// Whether the predecessor left an unreleased record behind.
+    #[cfg(test)]
     pub(crate) const fn recovered_previous_active(&self) -> bool {
         self.owner.recovered_previous_active()
     }
@@ -257,6 +261,7 @@ impl DataRootGuard {
     ///
     /// A poisoned or already-released guard is refused with the closed
     /// owner-policy code.
+    #[cfg(test)]
     pub(crate) fn begin_drain(&mut self, reason: DrainReason) -> Result<(), String> {
         self.owner
             .begin_drain(reason)
@@ -273,6 +278,7 @@ impl DataRootGuard {
     ///
     /// Release without a prior drain, or an unprovable durable outcome,
     /// fails closed with the closed owner-policy code.
+    #[cfg(test)]
     pub(crate) fn release_cleanly(mut self) -> Result<ShutdownReceipt, String> {
         self.owner
             .release_cleanly()

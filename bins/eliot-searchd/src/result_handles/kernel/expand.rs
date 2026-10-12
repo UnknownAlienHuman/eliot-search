@@ -1,9 +1,11 @@
 //! Live-authorized exact expansion and immutable provenance revalidation.
 
+#[cfg(test)]
+use crate::direct_store::DirectStore;
 use std::time::Instant;
 
 use crate::continuation::LiveExpansionBarrier;
-use crate::direct_store::{DirectStore, RevisionSlice};
+use crate::direct_store::{DirectRead, RevisionSlice};
 use crate::source_fence::digest as source_fence;
 
 use super::catalog::ResultHandleCatalog;
@@ -16,7 +18,7 @@ impl ResultHandleCatalog {
     #[cfg(test)]
     pub(crate) fn expand(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         token: &str,
         byte_start: u64,
         byte_end: u64,
@@ -33,7 +35,7 @@ impl ResultHandleCatalog {
     #[cfg(test)]
     pub(crate) fn expand_with_live_barrier(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         token: &str,
         byte_start: u64,
         byte_end: u64,
@@ -46,7 +48,7 @@ impl ResultHandleCatalog {
     /// Retains the handle borrow and original deadline through response delivery.
     pub(crate) fn prepare_expand(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         token: &str,
         byte_start: u64,
         byte_end: u64,
@@ -64,7 +66,7 @@ impl ResultHandleCatalog {
     /// namespace, fence, source, revision and readback revalidation.
     fn prepare_expand_with_live_barrier(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         token: &str,
         byte_start: u64,
         byte_end: u64,
@@ -105,8 +107,12 @@ impl ResultHandleCatalog {
             self.expire();
             return Err(ResultHandleError::Expired);
         }
-        if record.namespace_id != store.namespace_id()
-            || record.source_fence_digest != source_fence(store)
+        if record.namespace_id
+            != store
+                .namespace_id()
+                .map_err(|_| ResultHandleError::SourceFenceChanged)?
+            || record.source_fence_digest
+                != source_fence(store).map_err(|_| ResultHandleError::SourceFenceChanged)?
         {
             self.records.remove(token);
             self.expire();
@@ -120,6 +126,7 @@ impl ResultHandleCatalog {
         }
         let source = store
             .list_sources()
+            .map_err(|_| ResultHandleError::SourceFenceChanged)?
             .into_iter()
             .find(|source| source.source_id == record.source_id)
             .ok_or(ResultHandleError::SourceUnavailable)?;
@@ -145,8 +152,7 @@ impl ResultHandleCatalog {
             || content_digest != record.content_digest
             || observed_start != byte_start
             || observed_end != byte_end
-            || u64::try_from(bytes.len()).unwrap_or(u64::MAX)
-                != byte_end.saturating_sub(byte_start)
+            || u64::try_from(bytes.len()).unwrap_or(u64::MAX) != byte_end.saturating_sub(byte_start)
         {
             return Err(ResultHandleError::ReadbackMismatch);
         }
@@ -184,7 +190,11 @@ impl<'a> PreparedExpansion<'a> {
         expires_at: Instant,
         now: Instant,
     ) -> Result<Self, ResultHandleError> {
-        let mut prepared = Self { catalog, expansion, expires_at };
+        let mut prepared = Self {
+            catalog,
+            expansion,
+            expires_at,
+        };
         prepared.revalidate_at(now)?;
         Ok(prepared)
     }
@@ -213,7 +223,8 @@ impl<'a> PreparedExpansion<'a> {
         now: Instant,
         emit: impl FnOnce(&ResultHandleExpansion, Instant) -> Result<(), String>,
     ) -> Result<(), String> {
-        self.revalidate_at(now).map_err(|error| error.code().to_owned())?;
+        self.revalidate_at(now)
+            .map_err(|error| error.code().to_owned())?;
         // No post-output check: writer success is not retroactively denied.
         // Dropping the preparation discards its bytes, never advances a cursor
         // or renews the handle. Session failure owns whole-session invalidation.

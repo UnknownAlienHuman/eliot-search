@@ -88,7 +88,7 @@ The new request domains are `eliot/cbor/native-root-request/windows/v1` and
 `eliot/cbor/native-root-request/unix/v1`, with `[mode_tag, native_argv...]` encoded by the shared
 canonical encoder. They are not donor CLI-v1 bytes. The ten-object native digest keeps donor domain
 `eliot/cbor/data-root-native-objects/v1`. Existing installation/owner v1 transcripts, minting and
-fixtures are retained. Normal callers still use their legacy surface until #355's separate cutover.
+fixtures are retained. One-shot callers still use their legacy surface until #355's separate successor cutover.
 Explicit format-3 uses `legacy-direct-root-v3-journal-v2` and the separate native-objects/v2 domain.
 Its persisted compatibility disposition is VERSIONED_REBUILD / explicit new initialization; old
 namespace/log bytes and protection derivations are unchanged. The frozen #344 stack is not merged.
@@ -112,3 +112,26 @@ hard blocking-call preemption are not established by this source slice.
 Production check, strict Clippy comparison and affected static guards establish source delivery only.
 Inherited daemon strict-Clippy debt remains NOT_PASS under #387. Native/product qualification is not
 established by a source review, this documentation, layout presence or a successful owner command.
+
+## Existing-only read service
+
+`--serve-data-root ROOT` now retains native read custody across startup, commands and shutdown.
+Namespace/catalog bytes come from the retained pins and the unchanged strict parser/replay. The
+existing protected read adapter loads only an existing credential and verifies the format3 selected
+binding. Missing/foreign/corrupt/quarantined/unknown roots refuse without initialization or repair.
+Sealed fallible reads keep sticky typed native failure, without mutable inner escape.
+
+Startup retains complete native argv and original deadline/flag through ready output. Each new
+command has a distinct original context/meter. Requested write attempts, short writes and flushes
+consume that context; possible output loss stays unknown. Empty/prohibited command names refuse
+before admission. The private ephemeral refusal profile `eliot/cbor/native-service-refusal/v1`
+binds `[startup RequestId, startup native-argv digest, exact UTF8 rejected command]`, with256KiB
+transport input and the existing512KiB encoded ceiling. It neither widens normal native admission
+nor grants root authority. Mutations/GC/control migration remain explicitly unavailable.
+
+Explicit shutdown retains its original request/meter/flag; EOF captures its own operation before
+teardown. Search-state and store/protector children close before native exclusions. Read serving
+writes no ACTIVE/DRAINING/RELEASED record and terminal output is no durable release receipt.
+Fixtures for original contexts, long refusal followed by health, retained shutdown, short output,
+limits and fail-stop ordering are AUTHORED_NOT_COMPILED/NOT_RUN. Native/fault/resource/installed
+qualification remains #215. One-shot and mutation cutover remain #355 successors.

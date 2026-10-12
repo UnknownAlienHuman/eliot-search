@@ -1,22 +1,28 @@
 //! Process-local live owner authority and guarded drain/release lifecycle.
 
+#[cfg(test)]
 use std::path::PathBuf;
 
 use search_contracts::{DataRootId, InstallationIncarnationId, OwnerEpoch};
+#[cfg(test)]
 use search_runtime_owner::{DrainReason, OwnerError};
 
 use super::record::DurableOwnerRecord;
+#[cfg(test)]
 use super::slots::publish_transition;
+#[cfg(test)]
 use super::spec::{DrainReasonText, LifecycleState};
 
 /// Process-local live owner authority: non-cloneable by construction.
 pub struct LiveOwner {
+    #[cfg(test)]
     pub(super) canonical_root: PathBuf,
     pub(super) installation_incarnation_id: InstallationIncarnationId,
     pub(super) data_root_id: DataRootId,
     pub(super) epoch: OwnerEpoch,
     pub(super) record: DurableOwnerRecord,
     pub(super) recovered_previous_active: bool,
+    #[cfg(test)]
     pub(super) poisoned: bool,
 }
 
@@ -48,6 +54,7 @@ pub struct ShutdownReceipt {
 impl LiveOwner {
     /// Bound monotone owner epoch.
     #[must_use]
+    #[cfg(test)]
     pub const fn epoch(&self) -> OwnerEpoch {
         self.epoch
     }
@@ -55,6 +62,7 @@ impl LiveOwner {
     /// Whether the predecessor held an unreleased (`ACTIVE`/`DRAINING`)
     /// record; a clean `RELEASED` tombstone reports false.
     #[must_use]
+    #[cfg(test)]
     pub const fn recovered_previous_active(&self) -> bool {
         self.recovered_previous_active
     }
@@ -72,6 +80,7 @@ impl LiveOwner {
     }
 
     /// Persists `DRAINING` intent under the live lock; idempotent.
+    #[cfg(test)]
     pub(crate) fn begin_drain(&mut self, reason: DrainReason) -> Result<(), OwnerError> {
         if self.poisoned {
             return Err(OwnerError::OwnerAcquireOutcomeUnknown);
@@ -103,6 +112,7 @@ impl LiveOwner {
     /// Release without a prior drain, a poisoned guard, or an unrecoverable
     /// durable contradiction fails closed; a possible write whose readback
     /// cannot be proven reports the unknown outcome.
+    #[cfg(test)]
     pub(crate) fn release_cleanly(&mut self) -> Result<ShutdownReceipt, OwnerError> {
         if self.poisoned {
             return Err(OwnerError::OwnerReleaseOutcomeUnknown);
@@ -127,6 +137,7 @@ impl LiveOwner {
         }
     }
 
+    #[cfg(test)]
     fn transition_record(
         &self,
         lifecycle: LifecycleState,

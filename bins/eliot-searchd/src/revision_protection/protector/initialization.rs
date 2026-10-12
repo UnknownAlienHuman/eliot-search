@@ -1,4 +1,7 @@
-//! Initializer-only contextual protection; legacy constructors remain unchanged.
+//! Contextual initialization/existing-key protection; legacy constructors remain unchanged.
+
+use std::sync::atomic::AtomicBool;
+use std::time::Instant;
 
 use super::RevisionProtector;
 use crate::owner_composition::InitializingDataRoot;
@@ -91,5 +94,62 @@ const fn context_error(
             OwnerError::OwnerAcquireOutcomeUnknown
         }
         Context::Credential(_) => OwnerError::OwnerRecoveryQuarantined,
+    }
+}
+
+impl RevisionProtector {
+    pub(crate) fn for_existing_read(
+        namespace_id: [u8; 32],
+        selected_binding: Option<[u8; 32]>,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> Result<Self, OwnerError> {
+        #[cfg(windows)]
+        {
+            use search_os_secrets::{
+                derive_legacy_revision_dpapi_entropy, derive_legacy_revision_key_binding,
+            };
+            use search_os_secrets_windows::load_existing_legacy_revision_root_secret_with_context;
+
+            use super::super::envelope::DirectRevisionDigest;
+
+            let secret = load_existing_legacy_revision_root_secret_with_context(
+                &namespace_id,
+                deadline,
+                cancellation,
+            )
+            .map_err(context_error)?
+            .ok_or(OwnerError::OwnerRecoveryQuarantined)?;
+            let key_binding_digest = derive_legacy_revision_key_binding::<DirectRevisionDigest>(
+                &namespace_id,
+                secret.expose_secret(),
+            );
+            let entropy = derive_legacy_revision_dpapi_entropy::<DirectRevisionDigest>(
+                &namespace_id,
+                secret.expose_secret(),
+            );
+            drop(secret);
+            // Install the existing zeroizing Drop before any fallible final check.
+            let protector = Self {
+                namespace_id,
+                key_binding_digest,
+                entropy,
+            };
+            if selected_binding.is_some_and(|expected| expected != key_binding_digest) {
+                return Err(OwnerError::OwnerGuardMismatch);
+            }
+            if cancellation.load(std::sync::atomic::Ordering::Acquire) {
+                return Err(OwnerError::OwnerCancelledBeforeMutation);
+            }
+            if Instant::now() >= deadline {
+                return Err(OwnerError::OwnerDeadlineInvalid);
+            }
+            Ok(protector)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (namespace_id, selected_binding, deadline, cancellation);
+            Err(OwnerError::OwnerRecoveryQuarantined)
+        }
     }
 }

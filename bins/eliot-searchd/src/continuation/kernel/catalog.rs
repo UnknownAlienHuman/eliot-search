@@ -5,22 +5,23 @@ mod prepared;
 
 pub(crate) use prepared::PreparedPage;
 
+#[cfg(test)]
+use crate::direct_store::DirectStore;
 use core::fmt;
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use crate::direct_store::{DirectStore, StoreSearchResult, StoredMatch};
+use crate::direct_store::{DirectRead, StoreSearchResult, StoredMatch};
 use crate::sha256;
 use crate::source_fence::digest as source_fence;
 
 use super::entropy::qualified_entropy_32;
 use super::model::{
-    LiveExpansionBarrier, PageCompletion, PageCoverage, PageTruncation,
-    SearchPage,
+    LiveExpansionBarrier, PageCompletion, PageCoverage, PageTruncation, SearchPage,
 };
 use super::spec::{
-    CONTINUATION_TTL, ContinuationError, MAX_CONTINUATIONS, MAX_GAP_DETAILS,
-    MAX_RETAINED_MATCHES, validate_page_size,
+    CONTINUATION_TTL, ContinuationError, MAX_CONTINUATIONS, MAX_GAP_DETAILS, MAX_RETAINED_MATCHES,
+    validate_page_size,
 };
 
 // A retained window has one owner. Cloning a record would duplicate every
@@ -116,7 +117,7 @@ impl ContinuationCatalog {
     #[cfg(test)]
     pub(crate) fn create_page(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         result: StoreSearchResult,
         page_size: usize,
     ) -> Result<SearchPage, ContinuationError> {
@@ -128,7 +129,7 @@ impl ContinuationCatalog {
     /// Dropping the exclusive preparation leaves no new catalog record.
     pub(crate) fn prepare_page(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         mut result: StoreSearchResult,
         page_size: usize,
     ) -> Result<PreparedPage<'_>, ContinuationError> {
@@ -136,14 +137,17 @@ impl ContinuationCatalog {
         if self.entropy_poisoned {
             return Err(ContinuationError::EntropyUnavailable);
         }
-        if store.namespace_id() != self.namespace_id() {
+        if store
+            .namespace_id()
+            .map_err(|_| ContinuationError::SourceFenceChanged)?
+            != self.namespace_id()
+        {
             return Err(ContinuationError::SourceFenceChanged);
         }
         self.expire();
 
         let total_matches = result.matches.len();
-        let available_capacity =
-            MAX_RETAINED_MATCHES.saturating_sub(self.retained_matches);
+        let available_capacity = MAX_RETAINED_MATCHES.saturating_sub(self.retained_matches);
         let retained_limit = total_matches.min(available_capacity);
         let candidate_window_truncated = retained_limit < total_matches;
         result.matches.truncate(retained_limit);
@@ -172,16 +176,20 @@ impl ContinuationCatalog {
         let page_end = retained_matches.min(page_size);
         let page_matches = result.matches[..page_end].to_vec();
         if page_end == retained_matches {
-            return Ok(PreparedPage::new(self, SearchPage {
-                matches: page_matches,
-                gaps: result.gaps,
-                coverage,
-                page_start: 0,
-                page_end,
-                exhausted: true,
-                continuation_token: None,
-                expires_in_ms: None,
-            }, None));
+            return Ok(PreparedPage::new(
+                self,
+                SearchPage {
+                    matches: page_matches,
+                    gaps: result.gaps,
+                    coverage,
+                    page_start: 0,
+                    page_end,
+                    exhausted: true,
+                    continuation_token: None,
+                    expires_in_ms: None,
+                },
+                None,
+            ));
         }
         if self.records.len() >= MAX_CONTINUATIONS {
             return Err(ContinuationError::CapacityExceeded);
@@ -191,48 +199,47 @@ impl ContinuationCatalog {
         let record = ContinuationRecord {
             namespace_id: self.namespace_id().to_owned(),
             session_tag: self.session_tag,
-            source_fence_digest: source_fence(store),
+            source_fence_digest: source_fence(store)
+                .map_err(|_| ContinuationError::SourceFenceChanged)?,
             matches: result.matches,
             next_index: page_end,
             coverage: coverage.clone(),
             expires_at: Instant::now() + CONTINUATION_TTL,
         };
-        Ok(PreparedPage::new(self, SearchPage {
-            matches: page_matches,
-            gaps: result.gaps,
-            coverage,
-            page_start: 0,
-            page_end,
-            exhausted: false,
-            continuation_token: Some(token),
-            expires_in_ms: Some(
-                u64::try_from(CONTINUATION_TTL.as_millis())
-                    .unwrap_or(u64::MAX),
-            ),
-        }, Some(record)))
+        Ok(PreparedPage::new(
+            self,
+            SearchPage {
+                matches: page_matches,
+                gaps: result.gaps,
+                coverage,
+                page_start: 0,
+                page_end,
+                exhausted: false,
+                continuation_token: Some(token),
+                expires_in_ms: Some(
+                    u64::try_from(CONTINUATION_TTL.as_millis()).unwrap_or(u64::MAX),
+                ),
+            },
+            Some(record),
+        ))
     }
 
     /// Advances one exact window in the existing catalog tests.
     #[cfg(test)]
     pub(crate) fn continue_page(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         token: &str,
         page_size: usize,
     ) -> Result<SearchPage, ContinuationError> {
-        self.continue_page_with_live_barrier(
-            store,
-            token,
-            page_size,
-            LiveExpansionBarrier::clean(),
-        )
+        self.continue_page_with_live_barrier(store, token, page_size, LiveExpansionBarrier::clean())
     }
 
     /// Existing test seam retaining live-barrier denial coverage.
     #[cfg(test)]
     pub(crate) fn continue_page_with_live_barrier(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         token: &str,
         page_size: usize,
         barrier: LiveExpansionBarrier,
@@ -245,7 +252,7 @@ impl ContinuationCatalog {
     /// Preparation never advances or deletes a live window, even a final one.
     pub(crate) fn prepare_continue_page(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         token: &str,
         page_size: usize,
         barrier: LiveExpansionBarrier,
@@ -267,17 +274,18 @@ impl ContinuationCatalog {
             return Err(denial);
         }
 
-        let record = self
-            .records
-            .get(token)
-            .ok_or(ContinuationError::NotFound)?;
+        let record = self.records.get(token).ok_or(ContinuationError::NotFound)?;
         if Instant::now() >= record.expires_at {
             self.drop_window(token);
             self.expire();
             return Err(ContinuationError::Expired);
         }
-        if record.namespace_id != store.namespace_id()
-            || record.source_fence_digest != source_fence(store)
+        if record.namespace_id
+            != store
+                .namespace_id()
+                .map_err(|_| ContinuationError::SourceFenceChanged)?
+            || record.source_fence_digest
+                != source_fence(store).map_err(|_| ContinuationError::SourceFenceChanged)?
         {
             self.drop_window(token);
             self.expire();
@@ -320,10 +328,7 @@ impl ContinuationCatalog {
         page_size: usize,
         mut now: impl FnMut() -> Instant,
     ) -> Result<PreparedPage<'_>, ContinuationError> {
-        let record = self
-            .records
-            .get(token)
-            .ok_or(ContinuationError::NotFound)?;
+        let record = self.records.get(token).ok_or(ContinuationError::NotFound)?;
         let expires_at = record.expires_at;
         if now() >= expires_at {
             self.drop_window(token);
@@ -341,8 +346,7 @@ impl ContinuationCatalog {
             page_start,
             page_end,
             exhausted: page_end == record.matches.len(),
-            continuation_token: (page_end < record.matches.len())
-                .then(|| token.to_owned()),
+            continuation_token: (page_end < record.matches.len()).then(|| token.to_owned()),
             expires_in_ms: None,
         };
         Ok(PreparedPage::existing(self, token, page, expires_at))
@@ -362,9 +366,7 @@ impl ContinuationCatalog {
 
     fn drop_window(&mut self, token: &str) {
         if let Some(record) = self.records.remove(token) {
-            self.retained_matches = self
-                .retained_matches
-                .saturating_sub(record.matches.len());
+            self.retained_matches = self.retained_matches.saturating_sub(record.matches.len());
         }
     }
 
@@ -383,8 +385,8 @@ impl ContinuationCatalog {
 
     fn allocate_token(&self) -> Result<String, ContinuationError> {
         for _ in 0..MAX_CONTINUATIONS.saturating_mul(2) {
-            let material = qualified_entropy_32()
-                .map_err(|_| ContinuationError::EntropyUnavailable)?;
+            let material =
+                qualified_entropy_32().map_err(|_| ContinuationError::EntropyUnavailable)?;
             let token = sha256::hex(&material);
             if !self.records.contains_key(&token) {
                 return Ok(token);

@@ -7,8 +7,11 @@
 #[path = "owner_composition/kernel.rs"]
 mod kernel;
 
-pub use kernel::{LiveOwner, ShutdownReceipt, establish};
+#[cfg(test)]
+pub use kernel::ShutdownReceipt;
+pub use kernel::{LiveOwner, establish};
 
 pub use kernel::InitializingDataRoot;
 pub use kernel::initialize_new;
+pub use kernel::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 pub use kernel::{NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing};

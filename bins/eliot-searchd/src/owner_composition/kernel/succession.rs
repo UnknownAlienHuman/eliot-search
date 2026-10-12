@@ -34,6 +34,7 @@ pub fn establish(canonical_root: &Path) -> Result<LiveOwner, OwnerError> {
         return Err(OwnerError::OwnerRecordDigestMismatch);
     }
     Ok(LiveOwner {
+        #[cfg(test)]
         canonical_root: canonical_root.to_owned(),
         installation_incarnation_id: InstallationIncarnationId::from_bytes(
             record.installation_incarnation_id,
@@ -44,6 +45,7 @@ pub fn establish(canonical_root: &Path) -> Result<LiveOwner, OwnerError> {
         recovered_previous_active: prior
             .as_ref()
             .is_some_and(|previous| previous.lifecycle != LifecycleState::Released),
+        #[cfg(test)]
         poisoned: false,
     })
 }

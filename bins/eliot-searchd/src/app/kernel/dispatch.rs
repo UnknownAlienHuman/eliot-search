@@ -9,8 +9,10 @@ use super::commands::{
     cmd_gc_root, cmd_health_data_root, cmd_index_directory, cmd_index_file,
     cmd_list_sources, cmd_read_revision, cmd_repair_root,
     cmd_retire_source, cmd_scan_file, cmd_scan_stdin, cmd_search_root,
-    cmd_serve_data_root, cmd_verify_root,
+    cmd_verify_root,
 };
+#[cfg(test)]
+use super::commands::cmd_serve_data_root;
 use super::protocol::serve_stdio;
 use super::spec::{Command, help, version_json};
 use super::status::{config_status_line, shell_health_effective};
@@ -71,6 +73,12 @@ fn require_argument_count(
     }
 }
 
+#[cfg(test)]
+fn serve_legacy(arguments: &[String]) -> Result<(), String> {
+    require_argument_count(arguments, 2)?;
+    cmd_serve_data_root(arguments)
+}
+
 fn run() -> Result<(), String> {
     let raw = std::env::args().skip(1).collect::<Vec<_>>();
     let (arguments, _) = crate::config_composition::parse_cli_config_args(&raw)?;
@@ -118,10 +126,8 @@ fn run() -> Result<(), String> {
             serve_stdio(shell_health_effective()?)
                 .map_err(|error| format!("STDIO_ERROR:{error}"))?;
         }
-        "--serve-data-root" => {
-            require_argument_count(&arguments, 2)?;
-            cmd_serve_data_root(&arguments)?;
-        }
+        #[cfg(test)]
+        "--serve-data-root" => serve_legacy(&arguments)?,
         "--source-roots"
         | "--register-source-root"
         | "--unregister-source-root"

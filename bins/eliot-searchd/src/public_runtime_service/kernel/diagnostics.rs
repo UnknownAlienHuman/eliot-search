@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::continuation::ContinuationCatalog;
 use crate::development::Health;
-use crate::direct_store::DirectStore;
+use crate::direct_store::DirectRead;
 use crate::directory_manifest::verify_directory_manifests;
 use crate::result_handles::ResultHandleCatalog;
 use crate::service_output::{emit_provider_status, json_string, write_line};
@@ -30,7 +30,7 @@ pub(super) fn cmd_version(writer: &mut impl Write) -> Result<(), String> {
 
 pub(super) fn cmd_list_sources(
     writer: &mut impl Write,
-    store: &DirectStore,
+    store: &impl DirectRead,
     canonical_root: &Path,
     storage: &mut StorageSecurityStatus,
 ) -> Result<(), String> {
@@ -40,13 +40,13 @@ pub(super) fn cmd_list_sources(
 
 pub(super) fn cmd_status(
     writer: &mut impl Write,
-    store: &DirectStore,
+    store: &impl DirectRead,
     storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     let readiness = current_readiness()?;
     emit_provider_status(
         writer,
-        &store.namespace_id(),
+        &store.namespace_id()?,
         readiness.capabilities.search_available,
         readiness.capabilities.indexed_search_available,
         readiness.capabilities.source_backed_search_available,
@@ -55,10 +55,12 @@ pub(super) fn cmd_status(
     )
 }
 
-fn current_readiness(
-) -> Result<crate::config_composition::ReadinessReport, String> {
-    let cli_args: Vec<String> = env::args().skip(1).collect();
-    let (_, cli) = crate::config_composition::parse_cli_config_args(&cli_args)?;
+pub(super) fn current_readiness() -> Result<crate::config_composition::ReadinessReport, String> {
+    let cli_args = env::args_os().skip(1).take(257).collect::<Vec<_>>();
+    if cli_args.len() > 256 {
+        return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
+    }
+    let (_, cli) = crate::config_composition::strip_config_args_os(&cli_args)?;
     let effective = crate::config_composition::effective_from_process(&cli)?;
     Ok(crate::config_composition::derive_readiness(
         &effective,
@@ -69,15 +71,14 @@ fn current_readiness(
 
 pub(super) fn cmd_health(
     writer: &mut impl Write,
-    store: &DirectStore,
+    store: &impl DirectRead,
     continuations: &mut ContinuationCatalog,
     handles: &mut ResultHandleCatalog,
     canonical_root: &Path,
     storage: &mut StorageSecurityStatus,
 ) -> Result<(), String> {
     let verification = store.verify()?;
-    let manifests =
-        verify_directory_manifests(canonical_root, &store.namespace_id())?;
+    let manifests = verify_directory_manifests(canonical_root, &store.namespace_id()?)?;
     refresh_storage(storage, canonical_root)?;
     let readiness = current_readiness()?;
     let health = Health::from_readiness(&readiness);
@@ -93,7 +94,7 @@ pub(super) fn cmd_health(
                 "\"live_source_handles\":{},\"health\":{},",
                 "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
             ),
-            store.namespace_id(),
+            store.namespace_id()?,
             verification.registered_sources,
             verification.active_sources,
             verification.verified_revisions,
@@ -110,12 +111,11 @@ pub(super) fn cmd_health(
 
 pub(super) fn cmd_verify_manifests(
     writer: &mut impl Write,
-    store: &DirectStore,
+    store: &impl DirectRead,
     canonical_root: &Path,
     storage: &mut StorageSecurityStatus,
 ) -> Result<(), String> {
-    let manifests =
-        verify_directory_manifests(canonical_root, &store.namespace_id())?;
+    let manifests = verify_directory_manifests(canonical_root, &store.namespace_id()?)?;
     refresh_storage(storage, canonical_root)?;
     write_line(
         writer,
@@ -127,7 +127,7 @@ pub(super) fn cmd_verify_manifests(
                 "\"highest_generation\":{},\"source_backed\":true,",
                 "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
             ),
-            store.namespace_id(),
+            store.namespace_id()?,
             manifests.manifest_files,
             manifests.directories,
             manifests.current_entries,
@@ -140,7 +140,7 @@ pub(super) fn cmd_verify_manifests(
 
 pub(super) fn cmd_read_revision(
     writer: &mut impl Write,
-    store: &DirectStore,
+    store: &impl DirectRead,
     canonical_root: &Path,
     storage: &mut StorageSecurityStatus,
     revision_id: &str,
