@@ -24,10 +24,17 @@ fn immutable_revision_object_filesystem_lifecycle_has_one_package_owner() {
     assert!(facade.contains("mod immutable_object;"));
     assert!(facade.contains("pub use immutable_object::*;"));
 
-    let owner = read(
+    let facade = read(
         &root,
         "crates/search-source/search-revision-store/src/immutable_object.rs",
     );
+    assert!(facade.contains("mod context;"));
+    assert!(facade.contains("pub use context::*;"));
+    let kernel = read(
+        &root,
+        "crates/search-source/search-revision-store/src/immutable_object/context.rs",
+    );
+    let owner = format!("{facade}\n{kernel}");
     for required in [
         "pub trait LegacyRevisionObjectPlatform",
         "pub fn read_legacy_revision_object",
@@ -35,7 +42,13 @@ fn immutable_revision_object_filesystem_lifecycle_has_one_package_owner() {
         "OpenOptions",
         "fs::hard_link",
         "fs::remove_file",
-        "read_to_end",
+        "fn read_data",
+        "fn write_data",
+        "reader",
+        "while used < capacity",
+        "while written < bytes.len()",
+        "LegacyRevisionObjectWork::Read(attempted)",
+        "LegacyRevisionObjectWork::Write(attempted)",
         "sync_all",
         "IdentityChanged",
         "PublishOutcomeUnknown",
@@ -45,6 +58,10 @@ fn immutable_revision_object_filesystem_lifecycle_has_one_package_owner() {
             "revision-store lost immutable-object behavior {required}"
         );
     }
+    assert!(!kernel.contains("read_to_end"));
+    assert!(!kernel.contains("write_all"));
+    assert!(kernel.contains("ContextualLegacyRevisionObjectPlatform"));
+    assert!(kernel.contains("staging_cleanup_deferred"));
     for forbidden in [
         "RevisionProtector",
         "DPAPI",

@@ -20,6 +20,8 @@ Admit, retain and reopen immutable source revisions under complete residency ide
 - retention leases and exact reopen
 - copy/re-encrypt transition receipts
 - bounded legacy DIRECT `.bin` / `.dpapi` object I/O during T02 migration
+- explicit borrowed original-context legacy object I/O, cumulative requested-work
+  metering and component-local attempted-effect observations under #466/#356
 - closed legacy revision root/shard/final/temporary filename grammar
 - stable physical inventory classification tags and canonical relative locators
 - deterministic legacy inventory ordering, counts and names/sizes/mtimes digest
@@ -70,6 +72,15 @@ composition. A racing final object is reused only after exact readback; a
 conflicting object is never replaced.
 
 ## Failure surface
+
+Contextual legacy platform callbacks must borrow and internally meter/poll the
+same caller context; there is no default unmetered contextual implementation.
+Contextual publication never installs a cleanup guard or unlinks staging, even
+on verified success. Its receipt reports deferred cleanup by this call, not
+continued stage presence/custody or reconciliation/deletion authority. Legacy
+API/cleanup behavior remains separate until native caller adoption under #355.
+The complete #466 owner/fixtures/oracle Rust ceiling is 7,000 lines; count the
+whole package, without deleting/moving retained fixtures to satisfy it.
 
 Use typed errors/reason codes. Relevant public reasons: `SOURCE_REVISION_UNAVAILABLE`, `RESIDENCY_DOMAIN_MISMATCH`, `CAS_INTEGRITY_MISMATCH`. Never turn a degraded or partial
 state into an apparent success. Possible publication followed by failed durability is outcome-unknown, not an ordinary retryable miss.

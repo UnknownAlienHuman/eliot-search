@@ -6,6 +6,22 @@
 
 Admit, retain and reopen immutable source revisions under complete residency identities.
 
+The legacy immutable-object owner also exposes explicit contextual read and
+publication APIs (#466/#356). They borrow one caller context for every attempted
+filesystem/platform boundary, fallible logical capacity and requested short I/O
+including EOF. The contextual platform port has no default unmetered methods.
+Contextual errors preserve attempted-effect phase and paired platform/refusal
+causes while ordinary rendering remains content-free. A successful receipt binds
+the verified final object and reports that this call deferred stage cleanup; it
+does not certify ongoing stage custody or authorize reconciliation/deletion.
+
+Both APIs share one private kernel with the retained legacy entrypoints. Only
+legacy compatibility installs its historical cleanup guard, with its original
+handle-close ordering. Contextual publication performs no unlink on success,
+error or Drop. Native platform implementation/caller adoption, preparation
+context, request reconciliation and installed qualification remain #355/#356,
+#348 and #215 work. No current native sync capability is claimed by this port.
+
 ## Owns
 
 - residency-key-derived CAS identities
