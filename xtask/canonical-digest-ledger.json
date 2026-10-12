@@ -270,6 +270,11 @@
       "state": "OPEN",
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/466",
       "reviewed_at": "2026-10-12"
+    },
+    "468": {
+      "state": "OPEN",
+      "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/468",
+      "reviewed_at": "2026-10-12"
     }
   },
   "sites": [
@@ -62862,6 +62867,18 @@
       "test": false,
       "classification": "non-digest-surface",
       "owner_issue": 466,
+      "phase": "accepted",
+      "reason": "Private cfg(test) short-read fixture delegates to std::io::Cursor::read over fixed opaque bytes. The conservative scanner marks this helper test=false; it performs ordinary I/O, no digest/crypto/profile construction or production authority."
+    },
+    {
+      "count": 1,
+      "path": "crates/search-prep/search-materializer/src/legacy_artifact/context_tests.rs",
+      "signal": "unresolved-prefix-review",
+      "source_sha256": "e9524ef768f1122bd8211657916b6f543bb2b06471724a942e0066e2db6cc46d",
+      "symbol": "impl[ShortRead]::read",
+      "test": false,
+      "classification": "non-digest-surface",
+      "owner_issue": 468,
       "phase": "accepted",
       "reason": "Private cfg(test) short-read fixture delegates to std::io::Cursor::read over fixed opaque bytes. The conservative scanner marks this helper test=false; it performs ordinary I/O, no digest/crypto/profile construction or production authority."
     }

@@ -351,3 +351,40 @@ omission/order/span/value/declaration/counter mutation refuses; no partial-succe
 
 SOURCE_ONLY: JATS structural UnitSet remains a serial #226 successor, adoption/rebuild #331,
 and ten authored private fixture functions remain NOT_COMPILED/NOT_RUN under #215/#216.
+
+## Contextual legacy preparation-artifact compatibility (#468)
+
+read_legacy_preparation_artifact_with_context(platform, context, path, maximum_bytes) and
+publish_legacy_preparation_artifact_with_context(platform, context, directory, final_name,
+temporary_name, bytes, maximum_bytes) are the additive opaque artifact-storage ports. They are the
+legacy storage compatibility exception to the pure materialization operations above.
+
+LegacyPreparationArtifactContext supplies the caller's original checkpoints, cumulative allowance
+and possible-effect notification. Every mandatory ContextualLegacyPreparationArtifactPlatform<C>
+method borrows that same &mut C and must charge/poll its internal platform closure. One private kernel
+also serves the unchanged legacy APIs through private compatibility adapters. No context is renewed.
+
+Charge filesystem/platform attempts, checked fallible logical buffer/locator capacity and exact byte
+comparisons before dispatch/growth. Read/write attempts use at most 64 KiB slices; short/Interrupted
+attempts and EOF probes consume requested work again. These are logical limits, not actual-transfer,
+CPU/RSS or synchronous-preemption guarantees.
+
+Exact reads fence length/time, locator and native identity. Publication preserves staged/final exact
+readback, no-clobber linking, exact existing reuse and conflict refusal. Contextual publication holds
+the original stage handle through verification and checks its locator before linking. It installs no
+cleanup guard and never automatically unlinks staging on success, refusal, error or resource release.
+Legacy cleanup/handle order, lowercase .tmp grammar and legacy WriteZero Display remain unchanged.
+
+ContextualPreparationArtifactError renders only redacted PREPARATION_ARTIFACT_* codes and retains
+paired object/platform failure plus original refusal. Read-only object_code, context_cause, effect
+and outcome_unknown support later typed composition. Any failed call after a possible Directory,
+Staging or Publication dispatch remains unknown. No enclosing request reconciliation is certified.
+Private read/receipt fields expose exact bytes or observed identity/length/reuse only.
+staging_cleanup_deferred reports this call's stage/no-unlink disposition; false proves neither stage
+absence nor cleanup of earlier attempts, and true does not certify continued physical custody.
+
+BYTE_COMPATIBLE: legacy types/signatures/errors, names, profiles, schema/digest domains and opaque bytes
+remain unchanged. Native callers, #331, canonical CAS and #348 are separate. The six contextual groups,
+including legacy/contextual WriteZero and 39/38 short-I/O/EOF accounting, are
+AUTHORED_NOT_COMPILED/NOT_RUN under #215. Fresh #468 bounds and inclusive counts are recorded in AGENTS.md;
+source adoption is not native/runtime/product qualification.

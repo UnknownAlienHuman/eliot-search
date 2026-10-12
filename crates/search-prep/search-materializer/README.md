@@ -109,3 +109,26 @@ This #444 delivery is SOURCE_ONLY. The structural JATS UnitSet follows serially 
 persistence/caller adoption remains #331 and requires a versioned rebuild. Ten private fixture
 functions are AUTHORED_NOT_COMPILED/NOT_RUN. Official sample, native/resource/installed and product
 qualification remain #215/#216. Existing raw, Markdown and legacy profiles/APIs/bytes are unchanged.
+
+## Contextual legacy preparation-artifact I/O (#468)
+
+read_legacy_preparation_artifact_with_context and publish_legacy_preparation_artifact_with_context
+add explicit borrowed-context exact reads and no-clobber publication for opaque preparation objects
+and references. Mandatory contextual platform callbacks use the caller's same mutable context and
+meter their internal work. The shared kernel preserves original checkpoints/allowance while charging
+filesystem attempts, logical capacity, comparisons, short/Interrupted I/O and EOF. It does not provide
+hard preemption or CPU/RSS guarantees.
+
+The contextual path never installs a cleanup guard or automatically unlinks staging, including
+success. Redacted PREPARATION_ARTIFACT_* failures preserve paired causes and possible-effect status.
+An immutable receipt reports verified final identity/length/reuse and this call's deferred cleanup;
+it grants no source admission, continued stage custody, deletion or request-reconciliation authority.
+Legacy APIs/errors, exact basename grammar, opaque bytes and cleanup order remain unchanged.
+
+This source adoption enables no native caller, #331 persistence, canonical CAS or #348 reconciliation.
+Six owning groups, including WriteZero compatibility and 39/38 short-I/O/EOF cases, remain
+AUTHORED_NOT_COMPILED/NOT_RUN; native/runtime/product qualification remains #215.
+The fresh #468 ceiling is 16,500 whole-owner Rust lines/85 files; measured 16,328/85 includes all retained/
+new fixtures and the oracle. Context is 1,521/1,550 (986 production, 535 fixtures); artifact source/private
+fixture family is 1,995/2,100. The 7,000 soft target and 10,000 review threshold remain; no prior exception
+is inherited. Exact simultaneous churn/subtree bounds and ownership limits are recorded in AGENTS.md.

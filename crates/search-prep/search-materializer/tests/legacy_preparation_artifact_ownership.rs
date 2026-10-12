@@ -24,10 +24,19 @@ fn preparation_artifact_filesystem_lifecycle_has_one_package_owner() {
     assert!(facade.contains("mod legacy_artifact;"));
     assert!(facade.contains("pub use legacy_artifact::*;"));
 
-    let owner = read(
+    let parent = read(
         &root,
         "crates/search-prep/search-materializer/src/legacy_artifact.rs",
     );
+    let kernel = read(
+        &root,
+        "crates/search-prep/search-materializer/src/legacy_artifact/context.rs",
+    );
+    assert!(parent.contains("mod context;"));
+    assert!(parent.contains("pub use context::*;"));
+    assert!(!kernel.contains("read_to_end"));
+    assert!(!kernel.contains("remove_file"));
+    let owner = format!("{parent}\n{kernel}");
     for required in [
         "pub trait LegacyPreparationArtifactPlatform",
         "pub fn read_legacy_preparation_artifact",
@@ -35,7 +44,9 @@ fn preparation_artifact_filesystem_lifecycle_has_one_package_owner() {
         "OpenOptions",
         "fs::hard_link",
         "fs::remove_file",
-        "read_to_end",
+        "LegacyPreparationArtifactWork::Read(attempted)",
+        "LegacyPreparationArtifactWork::Write(attempted)",
+        "try_reserve_exact",
         "sync_all",
         "IdentityChanged",
         "PublishOutcomeUnknown",
