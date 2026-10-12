@@ -56,3 +56,26 @@ Closed refusals precede native/store admission and retain bounded exact rejected
 native admission ceilings stay unchanged. Service mutation/GC/migration remain unavailable.
 Preserve legacy/test fixture bodies; one-shot and mutation cutover remain separately owned by #355.
 Native/execution/product acceptance remains Q/#215; strict inherited D/#387 stays NOT_PASS.
+
+## One-shot existing-only read invocation — #458
+
+The independently reviewed frozen proposal included all family oracles: command909/10,
+native7303/23 and complete named closure20881/132 Rust lines/files. The current inclusive recount
+is command961/10, native7396/23 and complete21040/132, including every retained/new fixture and
+both product entry files. Simultaneous child ceilings are1100/7500/21300 respectively. The old
+7155/22 and18915/112 measurements omitted oracles/entry closure and are superseded.
+Keep <=30 production paths and2500 churn.
+These are one-shot-read-only limits, not transferred service/initializer or daemon-wide allowances.
+
+Normal one-shot health/search/list/verify/read-revision commands retain all native argv, then select
+the actual root through the existing config parser. The same existing-only native read startup owns
+pinned catalog/namespace and existing selected-key adoption. One consumed startup operation carries
+the original deadline/flag/meter through output and child-before-exclusion teardown; no fresh shutdown
+request, owner lifecycle write, credential publication or create-on-read occurs. The shared NativeOutput
+adapter belongs to the sealed read family and is used by both service and one-shot output.
+Legacy duplicate read handlers are test-only; mutation/source-root/preparation/control callers remain
+separate #355/#356/#348 successors. Preserve old fixtures and fail-closed unsupported recovery.
+
+The new invocation/native and changed ownership fixtures are AUTHORED_NOT_COMPILED/NOT_RUN under #215.
+Final exact-head independent source review is required before merge. Production compilation and
+strict baseline comparison do not establish native/runtime/installed/product acceptance.

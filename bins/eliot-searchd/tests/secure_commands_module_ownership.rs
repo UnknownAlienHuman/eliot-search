@@ -30,11 +30,17 @@ fn secure_commands_entry_and_kernel_are_thin() {
     }
 
     let kernel = read(&root, "src/secure_commands/kernel.rs");
-    for module in ["commands", "dispatch", "entry", "output", "store", "support"] {
+    for module in [
+        "commands", "dispatch", "entry", "output", "read", "store", "support",
+    ] {
         assert!(kernel.contains(&format!("mod {module};")));
     }
     assert!(kernel.contains("pub use entry::maybe_run;"));
-    assert!(kernel.len() < 1_500, "kernel grew to {} bytes", kernel.len());
+    assert!(
+        kernel.len() < 1_500,
+        "kernel grew to {} bytes",
+        kernel.len()
+    );
 }
 
 #[test]
@@ -105,7 +111,10 @@ fn secure_command_responsibilities_remain_bounded() {
         "--repair-root",
         "--gc-root",
     ] {
-        assert!(dispatch.contains(command), "lost dispatch command {command}");
+        assert!(
+            dispatch.contains(command),
+            "lost dispatch command {command}"
+        );
     }
     assert!(!dispatch.contains("DataRootGuard::acquire"));
     assert!(!dispatch.contains("guarded_collect_orphan_revisions"));
@@ -132,4 +141,52 @@ fn secure_command_responsibilities_remain_bounded() {
     assert!(output.contains("direct_store_verified"));
     assert!(output.contains("source_list_complete"));
     assert!(output.contains("ExitCode::from(2)"));
+}
+
+#[test]
+fn one_shot_reads_use_existing_native_custody_and_the_shared_output_adapter() {
+    let root = crate_root();
+    let entry = read(&root, "src/secure_commands/kernel/entry.rs");
+    assert!(entry.contains("super::read::run(&raw, started)"));
+    assert!(
+        entry.find("super::read::run(&raw, started)").unwrap()
+            < entry.find("dispatch(command, &raw)").unwrap()
+    );
+    let read_owner = read(&root, "src/secure_commands/kernel/read.rs");
+    assert!(
+        read_owner
+            .split_whitespace()
+            .collect::<String>()
+            .contains("output.flush()")
+    );
+    for marker in [
+        "NativeRootRequest::for_read_one_shot",
+        "admit_existing",
+        ".read_startup()",
+        "startup.run_one_shot",
+        "NativeOutput::new",
+    ] {
+        assert!(read_owner.contains(marker));
+    }
+    for forbidden in [
+        "DirectStore::open",
+        "DataRootGuard",
+        "initialize_new",
+        "begin_drain",
+    ] {
+        assert!(!read_owner.contains(forbidden));
+    }
+    let request = read(&root, "src/owner_composition/kernel/native_request.rs");
+    assert!(request.contains("pub(crate) fn for_read_one_shot("));
+    let lifetime = read(&root, "src/owner_composition/kernel/read_child.rs");
+    let invocation = lifetime
+        .split("pub(crate) fn run_one_shot<T>(")
+        .nth(1)
+        .unwrap()
+        .split("pub(crate) fn identity")
+        .next()
+        .unwrap();
+    assert!(invocation.find("drop(store)").unwrap() < invocation.find("drop((pins,").unwrap());
+    assert!(invocation.contains("one-shot-custody-released"));
+    assert!(!invocation.contains("NativeRootRequest::new"));
 }

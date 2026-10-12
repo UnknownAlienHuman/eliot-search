@@ -1,5 +1,6 @@
 //! Original native root request and cumulative admission work.
 
+use std::cell::{Cell, RefCell};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -64,6 +65,8 @@ pub struct NativeRootRequest {
     // Native argv survives the caller; it is never logged or reinterpreted.
     arguments: Vec<Vec<u8>>,
     pub(super) limits: NativeRootLimits,
+    terminal_work: Box<RefCell<Option<NativeWork>>>,
+    terminal_refusal: Cell<Option<OwnerError>>,
 }
 
 impl core::fmt::Debug for NativeRootRequest {
@@ -100,6 +103,36 @@ impl NativeRootRequest {
         }
         request.check()?;
         Ok(request)
+    }
+
+    /// Retains all native argv, then selects a closed existing-only one-shot root.
+    pub(crate) fn for_read_one_shot(
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<(Self, Vec<OsString>), OwnerError> {
+        let mut request = Self::new(
+            DataRootOpenMode::InspectExistingReadOnly,
+            arguments,
+            deadline,
+            cancellation,
+            limits,
+        )?;
+        let (selected, _) = crate::config_composition::strip_config_args_os(arguments)
+            .map_err(|_| OwnerError::OwnerOperationConflict)?;
+        let expected = match selected.first().and_then(|arg| arg.to_str()) {
+            Some("--health-data-root" | "--list-sources" | "--verify-root") => 2,
+            Some("--search-root" | "--search-root-ascii-insensitive") => 3,
+            Some("--read-revision") => 5,
+            _ => return Err(OwnerError::OwnerOperationConflict),
+        };
+        if selected.len() != expected || selected[1].is_empty() {
+            return Err(OwnerError::OwnerOperationConflict);
+        }
+        request.root = PathBuf::from(&selected[1]);
+        request.check()?;
+        Ok((request, selected))
     }
 
     /// A separately admitted service command has its own original context and
@@ -182,6 +215,8 @@ impl NativeRootRequest {
             digest_bytes: output.complete_preimage_bytes(),
             arguments: self.arguments.clone(),
             limits: self.limits,
+            terminal_work: Box::new(RefCell::new(None)),
+            terminal_refusal: Cell::new(None),
         };
         request.check()?;
         Ok(request)
@@ -256,6 +291,8 @@ impl NativeRootRequest {
             digest_bytes: output.complete_preimage_bytes(),
             arguments: native,
             limits,
+            terminal_work: Box::new(RefCell::new(None)),
+            terminal_refusal: Cell::new(None),
         })
     }
 
@@ -279,42 +316,64 @@ impl NativeRootRequest {
         (self.id, self.digest)
     }
 
-    /// Bounded terminal output retains the original context and cancels on I/O loss.
+    pub(super) fn retain_refusal_work(self, work: NativeWork) -> Self {
+        *self.terminal_work.borrow_mut() = Some(work);
+        self
+    }
+
+    /// Refusal output retains original admission work and a sticky unknown outcome.
     pub fn emit<W: std::io::Write>(&self, writer: &mut W, line: &str) -> Result<(), OwnerError> {
-        self.check()?;
+        if let Some(error) = self.terminal_refusal.get() {
+            return Err(error);
+        }
+        if let Err(error) = self.check() {
+            self.terminal_refusal.set(Some(error));
+            return Err(error);
+        }
         if line.len() > 1024 {
             return Err(OwnerError::ContractExhausted);
         }
+        let mut retained = self
+            .terminal_work
+            .try_borrow_mut()
+            .map_err(|_| OwnerError::OwnerInvalidTransition)?;
+        let work = retained.get_or_insert_with(NativeWork::new);
         let mut attempted = false;
         let result = (|| {
+            work.canonical(self, 0)?;
             for part in [line.as_bytes(), b"\n"] {
                 let mut remaining = part;
                 while !remaining.is_empty() {
-                    self.check()?;
-                    attempted = true;
-                    let count = writer
-                        .write(remaining)
-                        .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
-                    self.check()?;
+                    work.write(self, remaining.len())?;
+                    let count = work.call(self, || {
+                        attempted = true;
+                        writer
+                            .write(remaining)
+                            .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)
+                    })?;
                     if count == 0 || count > remaining.len() {
                         return Err(OwnerError::OwnerAcquireOutcomeUnknown);
                     }
                     remaining = &remaining[count..];
                 }
             }
-            self.check()?;
-            writer
-                .flush()
-                .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)?;
+            work.call(self, || {
+                attempted = true;
+                writer
+                    .flush()
+                    .map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)
+            })?;
             self.check()
         })();
         if let Err(error) = result {
             self.cancellation.store(true, Ordering::Release);
-            return Err(if attempted {
+            let error = if attempted {
                 OwnerError::OwnerAcquireOutcomeUnknown
             } else {
                 error
-            });
+            };
+            self.terminal_refusal.set(Some(error));
+            return Err(error);
         }
         Ok(())
     }

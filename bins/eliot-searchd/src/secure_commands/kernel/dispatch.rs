@@ -2,21 +2,24 @@ use std::ffi::OsString;
 use std::io;
 use std::path::Path;
 
-use crate::service_output::{
-    emit_indexed_source, emit_streaming_search, json_string,
-};
+use crate::service_output::emit_indexed_source;
+#[cfg(test)]
+use crate::service_output::{emit_streaming_search, json_string};
 use crate::storage_security::StorageSecurityStatus;
 
-use super::commands::{
-    cmd_gc_root, cmd_index_directory, cmd_read_revision, cmd_repair_root,
-    cmd_retire_source,
-};
+#[cfg(test)]
+use super::commands::cmd_read_revision;
+use super::commands::{cmd_gc_root, cmd_index_directory, cmd_repair_root, cmd_retire_source};
+#[cfg(test)]
 use super::output::{emit_sources, emit_verification, write_stdout};
-use super::store::{with_store, with_store_mut};
+#[cfg(test)]
+use super::store::with_store;
+use super::store::with_store_mut;
 use super::support::require_count;
 
 pub(super) fn dispatch(command: &str, arguments: &[OsString]) -> Result<(), String> {
     match command {
+        #[cfg(test)]
         "--health-data-root" => {
             require_count(arguments, 2)?;
             with_store(Path::new(&arguments[1]), |root, store, storage| {
@@ -53,6 +56,7 @@ pub(super) fn dispatch(command: &str, arguments: &[OsString]) -> Result<(), Stri
             require_count(arguments, 3)?;
             cmd_index_directory(arguments)
         }
+        #[cfg(test)]
         "--search-root" | "--search-root-ascii-insensitive" => {
             require_count(arguments, 3)?;
             let query = arguments[2]
@@ -60,36 +64,31 @@ pub(super) fn dispatch(command: &str, arguments: &[OsString]) -> Result<(), Stri
                 .ok_or_else(|| "DIRECT_QUERY_NOT_UTF8".to_owned())?;
             with_store(Path::new(&arguments[1]), |_root, store, storage| {
                 store.verify()?;
-                let result = store.search(
-                    query,
-                    command == "--search-root-ascii-insensitive",
-                )?;
+                let result = store.search(query, command == "--search-root-ascii-insensitive")?;
                 let mut output = io::stdout().lock();
-                emit_streaming_search(
-                    &mut output,
-                    &store.namespace_id(),
-                    &result,
-                    storage,
-                )
+                emit_streaming_search(&mut output, &store.namespace_id(), &result, storage)
             })
         }
+        #[cfg(test)]
         "--list-sources" => {
             require_count(arguments, 2)?;
             with_store(Path::new(&arguments[1]), |_root, store, storage| {
                 store.verify()?;
-                emit_sources(store, storage)
+                emit_sources(&mut io::stdout().lock(), store, storage)
             })
         }
+        #[cfg(test)]
         "--verify-root" => {
             require_count(arguments, 2)?;
             with_store(Path::new(&arguments[1]), |_root, store, storage| {
-                emit_verification(store, storage)
+                emit_verification(&mut io::stdout().lock(), store, storage)
             })
         }
         "--retire-source" => {
             require_count(arguments, 3)?;
             cmd_retire_source(arguments)
         }
+        #[cfg(test)]
         "--read-revision" => {
             require_count(arguments, 5)?;
             cmd_read_revision(arguments)

@@ -8,6 +8,8 @@ mod dispatch;
 mod entry;
 #[path = "kernel/output.rs"]
 mod output;
+#[path = "kernel/read.rs"]
+mod read;
 #[path = "kernel/store.rs"]
 mod store;
 #[path = "kernel/support.rs"]

@@ -51,3 +51,7 @@ pub use initialization::{existing_key_binding, initialize_layout as initialize_o
 #[path = "secure_direct_store/existing_read.rs"]
 mod existing_read;
 pub use existing_read::{DirectRead, ExistingReadStore, ReadOnlyStore, open_existing_read};
+
+#[path = "secure_direct_store/existing_read_output.rs"]
+mod existing_read_output;
+pub use existing_read_output::NativeOutput;

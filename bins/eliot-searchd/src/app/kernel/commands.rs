@@ -2,18 +2,18 @@
 
 use std::path::Path;
 
-use crate::development::{
-    DataRootGuard, read_file_bounded, read_stdin_bounded,
-};
+use crate::development::{DataRootGuard, read_file_bounded, read_stdin_bounded};
 use crate::direct_store::DirectStore;
 use crate::maintenance::{collect_orphan_revisions, repair_control_log};
+#[cfg(test)]
 use crate::sha256;
 
-use super::output::{
-    emit_indexed_source, emit_one_shot_scan, emit_store_search,
-};
+#[cfg(test)]
+use super::output::emit_store_search;
+use super::output::{emit_indexed_source, emit_one_shot_scan};
 #[cfg(test)]
 use super::protocol::serve_stdio;
+#[cfg(test)]
 use super::status::direct_health_effective;
 
 fn open_direct_store(root: &Path) -> Result<(DataRootGuard, DirectStore), String> {
@@ -22,10 +22,9 @@ fn open_direct_store(root: &Path) -> Result<(DataRootGuard, DirectStore), String
     Ok((guard, store))
 }
 
+#[cfg(test)]
 fn parse_u64(value: &str, name: &str) -> Result<u64, String> {
-    value
-        .parse::<u64>()
-        .map_err(|_| format!("INVALID_{name}"))
+    value.parse::<u64>().map_err(|_| format!("INVALID_{name}"))
 }
 
 #[cfg(test)]
@@ -36,18 +35,14 @@ pub(super) fn cmd_serve_data_root(arguments: &[String]) -> Result<(), String> {
         "{{\"event\":\"data_root_ready\",\"namespace_id\":\"{}\",\"encrypted_at_rest\":false}}",
         store.namespace_id(),
     );
-    serve_stdio(direct_health_effective()?)
-        .map_err(|error| format!("STDIO_ERROR:{error}"))?;
+    serve_stdio(direct_health_effective()?).map_err(|error| format!("STDIO_ERROR:{error}"))?;
     guard.begin_drain(search_runtime_owner::DrainReason::Shutdown)?;
     guard.release_cleanly().map(|_| ())?;
     drop(store);
     Ok(())
 }
 
-pub(super) fn cmd_scan_stdin(
-    arguments: &[String],
-    argument: &str,
-) -> Result<(), String> {
+pub(super) fn cmd_scan_stdin(arguments: &[String], argument: &str) -> Result<(), String> {
     let text = read_stdin_bounded()?;
     emit_one_shot_scan(
         "stdin",
@@ -59,10 +54,7 @@ pub(super) fn cmd_scan_stdin(
     )
 }
 
-pub(super) fn cmd_scan_file(
-    arguments: &[String],
-    argument: &str,
-) -> Result<(), String> {
+pub(super) fn cmd_scan_file(arguments: &[String], argument: &str) -> Result<(), String> {
     let text = read_file_bounded(Path::new(&arguments[2]))?;
     emit_one_shot_scan(
         "file",
@@ -90,13 +82,12 @@ pub(super) fn cmd_retire_source(arguments: &[String]) -> Result<(), String> {
             "\"revision_id\":\"{}\",\"sequence\":{},",
             "\"active\":false}}"
         ),
-        source.source_id,
-        source.revision_id,
-        source.sequence,
+        source.source_id, source.revision_id, source.sequence,
     );
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn cmd_health_data_root(arguments: &[String]) -> Result<(), String> {
     let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
     let verification = store.verify()?;
@@ -136,19 +127,15 @@ pub(super) fn cmd_index_directory(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn cmd_search_root(
-    arguments: &[String],
-    argument: &str,
-) -> Result<(), String> {
+#[cfg(test)]
+pub(super) fn cmd_search_root(arguments: &[String], argument: &str) -> Result<(), String> {
     let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
-    let result = store.search(
-        &arguments[2],
-        argument == "--search-root-ascii-insensitive",
-    )?;
+    let result = store.search(&arguments[2], argument == "--search-root-ascii-insensitive")?;
     emit_store_search(&store.namespace_id(), &result);
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn cmd_list_sources(arguments: &[String]) -> Result<(), String> {
     let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
     let sources = store.list_sources();
@@ -179,6 +166,7 @@ pub(super) fn cmd_list_sources(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn cmd_verify_root(arguments: &[String]) -> Result<(), String> {
     let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
     let verification = store.verify()?;
@@ -202,6 +190,7 @@ pub(super) fn cmd_verify_root(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn cmd_read_revision(arguments: &[String]) -> Result<(), String> {
     let (_guard, store) = open_direct_store(Path::new(&arguments[1]))?;
     let start = parse_u64(&arguments[3], "START_OFFSET")?;

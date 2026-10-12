@@ -4,13 +4,13 @@ use std::io::{self, Write};
 
 use crate::direct_store::ReadOnlyStore;
 
-pub(super) struct NativeOutput<'a, 'owner, W> {
+pub struct NativeOutput<'a, 'owner, W> {
     child: &'a ReadOnlyStore<'owner>,
     writer: &'a mut W,
 }
 
 impl<'a, 'owner, W: Write> NativeOutput<'a, 'owner, W> {
-    pub(super) const fn new(child: &'a ReadOnlyStore<'owner>, writer: &'a mut W) -> Self {
+    pub(crate) const fn new(child: &'a ReadOnlyStore<'owner>, writer: &'a mut W) -> Self {
         Self { child, writer }
     }
 

@@ -6,13 +6,14 @@ use crate::development::{Health, scan_text};
 use crate::sha256;
 
 use super::commands::{
-    cmd_gc_root, cmd_health_data_root, cmd_index_directory, cmd_index_file,
-    cmd_list_sources, cmd_read_revision, cmd_repair_root,
-    cmd_retire_source, cmd_scan_file, cmd_scan_stdin, cmd_search_root,
-    cmd_verify_root,
+    cmd_gc_root, cmd_index_directory, cmd_index_file, cmd_repair_root, cmd_retire_source,
+    cmd_scan_file, cmd_scan_stdin,
 };
 #[cfg(test)]
-use super::commands::cmd_serve_data_root;
+use super::commands::{
+    cmd_health_data_root, cmd_list_sources, cmd_read_revision, cmd_search_root,
+    cmd_serve_data_root, cmd_verify_root,
+};
 use super::protocol::serve_stdio;
 use super::spec::{Command, help, version_json};
 use super::status::{config_status_line, shell_health_effective};
@@ -32,15 +33,11 @@ fn self_test() -> Result<(), &'static str> {
         crate::config_composition::shell_dependencies(),
         crate::config_composition::AcceptedReceipts::default(),
     );
-    if report.capabilities.search_available
-        || report.capabilities.indexed_search_available
-    {
+    if report.capabilities.search_available || report.capabilities.indexed_search_available {
         return Err("HEALTH_TRUTHFULNESS_FAILED");
     }
     let derived = Health::from_readiness(&report);
-    if derived.capabilities.search_available
-        || derived.capabilities.indexed_search_available
-    {
+    if derived.capabilities.search_available || derived.capabilities.indexed_search_available {
         return Err("HEALTH_TRUTHFULNESS_FAILED");
     }
     if !derived.json().contains("\"search_available\":false") {
@@ -49,8 +46,7 @@ fn self_test() -> Result<(), &'static str> {
     if !health.contains("\"source_backed_search_available\":false") {
         return Err("HEALTH_TRUTHFULNESS_FAILED");
     }
-    let result = scan_text("alpha\nbeta alpha", "alpha", false)
-        .map_err(|_| "SCAN_FAILED")?;
+    let result = scan_text("alpha\nbeta alpha", "alpha", false).map_err(|_| "SCAN_FAILED")?;
     if result.matches.len() != 2 || result.matches[1].line != 1 {
         return Err("SCAN_COORDINATE_FAILED");
     }
@@ -62,10 +58,7 @@ fn self_test() -> Result<(), &'static str> {
     Ok(())
 }
 
-fn require_argument_count(
-    arguments: &[String],
-    expected: usize,
-) -> Result<(), String> {
+fn require_argument_count(arguments: &[String], expected: usize) -> Result<(), String> {
     if arguments.len() == expected {
         Ok(())
     } else {
@@ -79,6 +72,43 @@ fn serve_legacy(arguments: &[String]) -> Result<(), String> {
     cmd_serve_data_root(arguments)
 }
 
+#[cfg(test)]
+fn legacy_read(arguments: &[String], command: &str) -> Option<Result<(), String>> {
+    let result = (|| match command {
+        "--health-data-root" => {
+            require_argument_count(arguments, 2)?;
+            cmd_health_data_root(arguments)
+        }
+        "--search-root" | "--search-root-ascii-insensitive" => {
+            require_argument_count(arguments, 3)?;
+            cmd_search_root(arguments, command)
+        }
+        "--list-sources" => {
+            require_argument_count(arguments, 2)?;
+            cmd_list_sources(arguments)
+        }
+        "--verify-root" => {
+            require_argument_count(arguments, 2)?;
+            cmd_verify_root(arguments)
+        }
+        "--read-revision" => {
+            require_argument_count(arguments, 5)?;
+            cmd_read_revision(arguments)
+        }
+        _ => unreachable!(),
+    });
+    matches!(
+        command,
+        "--health-data-root"
+            | "--search-root"
+            | "--search-root-ascii-insensitive"
+            | "--list-sources"
+            | "--verify-root"
+            | "--read-revision"
+    )
+    .then(result)
+}
+
 fn run() -> Result<(), String> {
     let raw = std::env::args().skip(1).collect::<Vec<_>>();
     let (arguments, _) = crate::config_composition::parse_cli_config_args(&raw)?;
@@ -86,6 +116,11 @@ fn run() -> Result<(), String> {
         print!("{}", help());
         return Ok(());
     };
+
+    #[cfg(test)]
+    if let Some(result) = legacy_read(&arguments, argument) {
+        return result;
+    }
 
     match argument {
         "--help" | "-h" => {
@@ -103,10 +138,6 @@ fn run() -> Result<(), String> {
         "--config-status" => {
             require_argument_count(&arguments, 1)?;
             println!("{}", config_status_line()?);
-        }
-        "--health-data-root" => {
-            require_argument_count(&arguments, 2)?;
-            cmd_health_data_root(&arguments)?;
         }
         "--self-test" => {
             require_argument_count(&arguments, 1)?;
@@ -148,25 +179,9 @@ fn run() -> Result<(), String> {
             require_argument_count(&arguments, 3)?;
             cmd_index_directory(&arguments)?;
         }
-        "--search-root" | "--search-root-ascii-insensitive" => {
-            require_argument_count(&arguments, 3)?;
-            cmd_search_root(&arguments, argument)?;
-        }
-        "--list-sources" => {
-            require_argument_count(&arguments, 2)?;
-            cmd_list_sources(&arguments)?;
-        }
-        "--verify-root" => {
-            require_argument_count(&arguments, 2)?;
-            cmd_verify_root(&arguments)?;
-        }
         "--retire-source" => {
             require_argument_count(&arguments, 3)?;
             cmd_retire_source(&arguments)?;
-        }
-        "--read-revision" => {
-            require_argument_count(&arguments, 5)?;
-            cmd_read_revision(&arguments)?;
         }
         "--repair-root" => {
             require_argument_count(&arguments, 2)?;

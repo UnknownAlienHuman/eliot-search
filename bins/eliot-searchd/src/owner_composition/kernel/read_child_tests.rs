@@ -307,3 +307,202 @@ fn terminal_flush_cancellation_and_prior_output_keep_unknown_outcome() {
     );
     assert!(output.requests.is_empty());
 }
+
+#[test]
+fn one_shot_request_preserves_native_config_argv_and_original_context() {
+    let flag = Arc::new(AtomicBool::new(false));
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let args = [
+        OsString::from("--config-file"),
+        OsString::from("private-config"),
+        OsString::from("--read-revision"),
+        OsString::from("private-root"),
+        OsString::from("private-revision"),
+        OsString::from("0"),
+        OsString::from("8"),
+    ];
+    let limits = request(1024 * 1024 * 1024, 16384, Arc::new(AtomicBool::new(false))).limits;
+    let (invocation, selected) =
+        NativeRootRequest::for_read_one_shot(&args, deadline, Arc::clone(&flag), limits).unwrap();
+    assert_eq!(invocation.root(), std::path::Path::new("private-root"));
+    assert_eq!(invocation.arguments().len(), 7);
+    assert_eq!(selected, args[2..]);
+    assert_eq!(invocation.credential_context().0, deadline);
+    assert!(std::ptr::eq(invocation.credential_context().1, &*flag));
+    flag.store(true, Ordering::Release);
+    assert_eq!(
+        invocation.check(),
+        Err(OwnerError::OwnerCancelledBeforeMutation)
+    );
+    let bad = [
+        OsString::from("--index-file"),
+        OsString::from("not-created"),
+    ];
+    assert!(
+        NativeRootRequest::for_read_one_shot(
+            &bad,
+            deadline,
+            Arc::new(AtomicBool::new(false)),
+            limits,
+        )
+        .is_err()
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn one_shot_output_keeps_original_context_closes_children_and_preserves_owner_slots() {
+    use super::super::super::{NativeRootAdmission, admit_existing, initialize_new};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "search-one-shot-read-{}-{stamp}",
+        std::process::id(),
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let root = std::fs::canonicalize(root).unwrap();
+    let limits = request(1024 * 1024 * 1024, 16384, Arc::new(AtomicBool::new(false))).limits;
+    let init = NativeRootRequest::new(
+        DataRootOpenMode::InitializeNew,
+        &[
+            OsString::from("--initialize-data-root"),
+            root.as_os_str().to_owned(),
+            OsString::from("03030303030303030303030303030303"),
+        ],
+        Instant::now() + Duration::from_secs(120),
+        Arc::new(AtomicBool::new(false)),
+        limits,
+    )
+    .unwrap();
+    initialize_new(init).unwrap().emit(&mut Vec::new()).unwrap();
+    let slots = || {
+        [
+            ".eliot-search-owner-state-a.v1",
+            ".eliot-search-owner-state-b.v1",
+        ]
+        .map(|name| std::fs::read(root.join(name)).unwrap())
+    };
+    let before = slots();
+    for cancel_on_flush in [false, true] {
+        let flag = Arc::new(AtomicBool::new(false));
+        let args = [
+            OsString::from("--health-data-root"),
+            root.as_os_str().to_owned(),
+        ];
+        let (request, _) = NativeRootRequest::for_read_one_shot(
+            &args,
+            Instant::now() + Duration::from_secs(120),
+            Arc::clone(&flag),
+            limits,
+        )
+        .unwrap();
+        let NativeRootAdmission::Inspection(owner) = admit_existing(request).unwrap() else {
+            panic!("inspection");
+        };
+        let startup = owner.read_startup().unwrap();
+        let mut sink = ShortOutput {
+            cancel_on_flush: cancel_on_flush.then(|| Arc::clone(&flag)),
+            ..ShortOutput::default()
+        };
+        let result = startup.run_one_shot(|child| {
+            use crate::direct_store::DirectRead;
+            child.verify()?;
+            let competing = NativeRootRequest::new(
+                DataRootOpenMode::InspectExistingReadOnly,
+                &args,
+                Instant::now() + Duration::from_secs(120),
+                Arc::new(AtomicBool::new(false)),
+                limits,
+            )
+            .unwrap();
+            assert!(admit_existing(competing).is_err());
+            let mut output = crate::direct_store::NativeOutput::new(child, &mut sink);
+            output
+                .write_all(b"verified\n")
+                .map_err(|_| "OUTPUT_FAILED".to_owned())?;
+            output.flush().map_err(|_| "OUTPUT_FAILED".to_owned())
+        });
+        if cancel_on_flush {
+            assert_eq!(
+                result,
+                Err(OwnerError::OwnerAcquireOutcomeUnknown.code().to_owned())
+            );
+        } else {
+            assert_eq!(result, Ok(()));
+        }
+        assert_eq!(sink.requests, vec![9, 6, 3]);
+        assert_eq!(sink.flushes, 1);
+        assert_eq!(slots(), before);
+        let (request, _) = NativeRootRequest::for_read_one_shot(
+            &args,
+            Instant::now() + Duration::from_secs(120),
+            Arc::new(AtomicBool::new(false)),
+            limits,
+        )
+        .unwrap();
+        assert!(matches!(
+            admit_existing(request).unwrap(),
+            NativeRootAdmission::Inspection(_)
+        ));
+    }
+    // Qualification retains the native root and credential; no blind cleanup.
+}
+
+#[test]
+fn refusal_output_cannot_reset_consumed_admission_work() {
+    let req = request(1024 * 1024, 2, Arc::new(AtomicBool::new(false)));
+    let mut work = NativeWork::new();
+    work.call(&req, || Ok(())).unwrap();
+    let req = req.retain_refusal_work(work);
+    let mut output = ShortOutput::default();
+    assert_eq!(
+        req.emit(&mut output, "{}"),
+        Err(OwnerError::ContractExhausted)
+    );
+    assert!(output.requests.is_empty());
+    assert_eq!(output.flushes, 0);
+}
+
+#[test]
+fn refusal_context_cannot_revive_after_cancellation_is_cleared() {
+    let flag = Arc::new(AtomicBool::new(false));
+    let req = request(1024 * 1024, 16384, Arc::clone(&flag));
+    let mut output = ShortOutput::default();
+    flag.store(true, Ordering::Release);
+    assert_eq!(
+        req.emit(&mut output, "{}"),
+        Err(OwnerError::OwnerCancelledBeforeMutation)
+    );
+    flag.store(false, Ordering::Release);
+    assert_eq!(
+        req.emit(&mut output, "{}"),
+        Err(OwnerError::OwnerCancelledBeforeMutation)
+    );
+    assert!(output.requests.is_empty());
+    assert_eq!(output.flushes, 0);
+}
+
+#[test]
+fn refusal_flush_uncertainty_cannot_be_replayed_after_flag_clear() {
+    let flag = Arc::new(AtomicBool::new(false));
+    let req = request(1024 * 1024, 16384, Arc::clone(&flag));
+    let mut output = ShortOutput {
+        cancel_on_flush: Some(Arc::clone(&flag)),
+        ..ShortOutput::default()
+    };
+    assert_eq!(
+        req.emit(&mut output, "{}"),
+        Err(OwnerError::OwnerAcquireOutcomeUnknown)
+    );
+    let calls = output.requests.clone();
+    flag.store(false, Ordering::Release);
+    assert_eq!(
+        req.emit(&mut output, "{}"),
+        Err(OwnerError::OwnerAcquireOutcomeUnknown)
+    );
+    assert_eq!(output.requests, calls);
+    assert_eq!(output.flushes, 1);
+}
