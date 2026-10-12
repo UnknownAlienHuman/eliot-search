@@ -31,7 +31,6 @@ fn public_runtime_entry_and_kernel_are_thin() {
         "session",
         "spec",
         "state",
-        "native_output",
     ] {
         assert!(kernel.contains(&format!("mod {module};")));
     }
@@ -136,6 +135,15 @@ fn public_runtime_responsibilities_stay_separated() {
         );
     }
     assert!(runtime.contains("session::serve"));
+    assert!(runtime.contains("use crate::direct_store::NativeOutput;"));
+    assert!(
+        !root
+            .join("src/public_runtime_service/kernel/native_output.rs")
+            .exists()
+    );
+    let output = read(&root, "src/secure_direct_store/existing_read_output.rs");
+    assert!(output.contains("child.write_output(self.writer, bytes)"));
+    assert!(output.contains("child.flush_output(self.writer)"));
     assert!(!runtime.contains("DataRootGuard::acquire"));
     assert!(!runtime.contains("DirectStore::open"));
     assert!(!runtime.contains("guard.begin_drain"));

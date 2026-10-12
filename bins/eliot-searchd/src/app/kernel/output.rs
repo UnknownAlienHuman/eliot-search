@@ -1,7 +1,9 @@
 //! Stable JSON event emission for one-shot and DIRECT corpus commands.
 
 use crate::development::{ScanResult, scan_text};
-use crate::direct_store::{IndexedSource, StoreSearchResult};
+use crate::direct_store::IndexedSource;
+#[cfg(test)]
+use crate::direct_store::StoreSearchResult;
 use crate::sha256;
 
 pub(super) fn emit_one_shot_scan(
@@ -37,11 +39,7 @@ pub(super) fn emit_one_shot_scan(
     Ok(())
 }
 
-fn emit_scan_matches(
-    result: &ScanResult,
-    content_digest: &str,
-    source_backed: bool,
-) {
+fn emit_scan_matches(result: &ScanResult, content_digest: &str, source_backed: bool) {
     for item in &result.matches {
         let evidence_id = sha256::hex(&sha256::digest_parts(
             b"eliot-search/one-shot-evidence/v1",
@@ -103,10 +101,8 @@ pub(super) fn emit_indexed_source(source: &IndexedSource) {
     );
 }
 
-pub(super) fn emit_store_search(
-    namespace_id: &str,
-    result: &StoreSearchResult,
-) {
+#[cfg(test)]
+pub(super) fn emit_store_search(namespace_id: &str, result: &StoreSearchResult) {
     println!(
         concat!(
             "{{\"event\":\"corpus_search_started\",",
@@ -114,9 +110,7 @@ pub(super) fn emit_store_search(
             "\"active_sources\":{},\"source_backed\":true,",
             "\"durable_revision\":true,\"encrypted_at_rest\":false}}"
         ),
-        namespace_id,
-        result.registered_sources,
-        result.active_sources,
+        namespace_id, result.registered_sources, result.active_sources,
     );
     for gap in &result.gaps {
         println!(
@@ -124,9 +118,7 @@ pub(super) fn emit_store_search(
                 "{{\"event\":\"source_gap\",\"source_id\":\"{}\",",
                 "\"revision_id\":\"{}\",\"reason\":\"{}\"}}"
             ),
-            gap.source_id,
-            gap.revision_id,
-            gap.reason,
+            gap.source_id, gap.revision_id, gap.reason,
         );
     }
     for item in &result.matches {

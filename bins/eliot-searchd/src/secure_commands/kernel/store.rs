@@ -2,15 +2,13 @@ use std::path::Path;
 
 use crate::development::DataRootGuard;
 use crate::direct_store::DirectStore;
+#[cfg(test)]
 use crate::storage_security::StorageSecurityStatus;
 
+#[cfg(test)]
 pub(super) fn with_store<T>(
     root: &Path,
-    operation: impl FnOnce(
-        &Path,
-        &DirectStore,
-        &StorageSecurityStatus,
-    ) -> Result<T, String>,
+    operation: impl FnOnce(&Path, &DirectStore, &StorageSecurityStatus) -> Result<T, String>,
 ) -> Result<T, String> {
     let guard = DataRootGuard::acquire(root)?;
     let store = DirectStore::open(guard.canonical_root())?;

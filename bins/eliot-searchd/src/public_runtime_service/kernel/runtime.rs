@@ -19,10 +19,10 @@ use search_runtime_owner::{OwnerError, RootOpenState};
 
 use super::diagnostics::current_readiness;
 use super::dispatch::{command_refusal, execute_command};
-use super::native_output::NativeOutput;
 use super::session::{self, MutationAttempt, ServiceControl};
 use super::spec::{MAX_COMMAND_BYTES, PROTOCOL_VERSION};
 use super::state::invalidate_search_state;
+use crate::direct_store::NativeOutput;
 
 fn operation_context(started: Instant) -> Result<(Instant, Arc<AtomicBool>), OwnerError> {
     let deadline = started

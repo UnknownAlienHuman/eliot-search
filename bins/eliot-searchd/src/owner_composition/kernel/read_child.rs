@@ -122,6 +122,10 @@ impl NativeReadOperation<'_> {
         self.verify()
     }
 
+    pub(crate) const fn output_attempted(&self) -> bool {
+        self.output_attempted
+    }
+
     pub(crate) fn cancel_output(&self) {
         let request = match &self.context {
             None => &self.owner.request,
@@ -223,6 +227,58 @@ impl NativeReadStartup {
                 output_attempted: false,
             },
         )
+    }
+
+    /// One invocation retains its original startup request and cumulative meter.
+    /// All children close before exclusions, without a new shutdown request.
+    pub(crate) fn run_one_shot<T>(
+        mut self,
+        execute: impl FnOnce(&crate::direct_store::ReadOnlyStore<'_>) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let child = self.read();
+        let result = execute(&child);
+        let checkpoint = child.native_checkpoint();
+        let operation = child.into_operation();
+        let attempted = operation.output_attempted;
+        drop(operation);
+        let Self { store, mut owner } = self;
+        drop(store);
+        let closing = NativeReadOperation {
+            owner: &mut owner,
+            context: None,
+            output_attempted: attempted,
+        }
+        .verify();
+        let NativeRootCapability {
+            pins,
+            root,
+            installation,
+            record,
+            request,
+            mut work,
+            bound_root,
+            exclusions,
+            ..
+        } = *owner;
+        let children_closed = work.arrive(&request, "one-shot-children-closed");
+        drop((pins, root, installation, record, bound_root, exclusions));
+        let released = work.arrive(&request, "one-shot-custody-released");
+        checkpoint
+            .and(closing)
+            .and(children_closed)
+            .and(released)
+            .map_err(|error| {
+                let error = if attempted {
+                    OwnerError::OwnerAcquireOutcomeUnknown
+                } else {
+                    error
+                };
+                error.code().to_owned()
+            })?;
+        if attempted && result.is_err() {
+            return Err(OwnerError::OwnerAcquireOutcomeUnknown.code().to_owned());
+        }
+        result
     }
 
     pub(crate) fn identity(&mut self) -> Result<ReadServiceIdentity, OwnerError> {

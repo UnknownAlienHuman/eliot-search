@@ -7,11 +7,15 @@ use crate::direct_store::DirectStore;
 use crate::maintenance::repair_control_log;
 use crate::maintenance_guard::guarded_collect_orphan_revisions;
 use crate::service_output::{emit_indexed_source, json_string, write_line};
+#[cfg(test)]
 use crate::sha256;
 use crate::storage_security::StorageSecurityStatus;
 
 use super::output::write_stdout;
-use super::store::{with_store, with_store_mut};
+#[cfg(test)]
+use super::store::with_store;
+use super::store::with_store_mut;
+#[cfg(test)]
 use super::support::{MAX_DIAGNOSTIC_REVISION_SLICE_BYTES, parse_u64};
 
 pub(super) fn cmd_index_directory(arguments: &[OsString]) -> Result<(), String> {
@@ -67,6 +71,7 @@ pub(super) fn cmd_retire_source(arguments: &[OsString]) -> Result<(), String> {
     })
 }
 
+#[cfg(test)]
 pub(super) fn cmd_read_revision(arguments: &[OsString]) -> Result<(), String> {
     let revision_id = arguments[2]
         .to_str()

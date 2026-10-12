@@ -104,6 +104,10 @@ impl<'owner> ReadOnlyStore<'owner> {
         self.native_refusal.get()
     }
 
+    pub(crate) fn output_attempted(&self) -> bool {
+        self.operation.borrow().output_attempted()
+    }
+
     pub(crate) fn cancel_output(&self) {
         self.operation.borrow().cancel_output();
     }
@@ -131,6 +135,10 @@ impl<'owner> ReadOnlyStore<'owner> {
             .map_err(|error| std::io::Error::other(error.code()))?;
         let result = self.operation.borrow_mut().flush_output(writer);
         self.output_result(result)
+    }
+
+    pub(crate) fn into_operation(self) -> NativeReadOperation<'owner> {
+        self.operation.into_inner()
     }
 
     pub(crate) fn retain_shutdown(

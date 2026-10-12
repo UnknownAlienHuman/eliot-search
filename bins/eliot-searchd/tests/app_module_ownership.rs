@@ -19,14 +19,23 @@ fn app_entry_and_kernel_are_thin_stable_facades() {
 
     let kernel = read(&root, "src/app/kernel.rs");
     for module in [
-        "commands", "dispatch", "output", "protocol", "source_root_commands",
-        "spec", "status",
+        "commands",
+        "dispatch",
+        "output",
+        "protocol",
+        "source_root_commands",
+        "spec",
+        "status",
     ] {
         assert!(kernel.contains(&format!("mod {module};")));
     }
     assert!(kernel.contains("pub use dispatch::run_main;"));
     assert!(kernel.contains("mod tests;"));
-    assert!(kernel.len() < 2_000, "kernel grew to {} bytes", kernel.len());
+    assert!(
+        kernel.len() < 2_000,
+        "kernel grew to {} bytes",
+        kernel.len()
+    );
 
     for source in [&entry, &kernel] {
         for forbidden in [
@@ -114,4 +123,22 @@ fn app_responsibilities_stay_separated() {
     let tests = read(&root, "src/app/kernel/tests.rs");
     assert!(tests.contains("oversized_frame_terminates_session_without_executing_suffix"));
     assert!(tests.contains("valid_control_session_reports_health_and_clean_shutdown"));
+}
+
+#[test]
+fn legacy_one_shot_read_handlers_cannot_enter_the_primary_fallback() {
+    let root = crate_root();
+    let commands = read(&root, "src/app/kernel/commands.rs").replace("\r\n", "\n");
+    for name in [
+        "cmd_health_data_root",
+        "cmd_search_root",
+        "cmd_list_sources",
+        "cmd_verify_root",
+        "cmd_read_revision",
+    ] {
+        assert!(commands.contains(&format!("#[cfg(test)]\npub(super) fn {name}(")));
+    }
+    let dispatch = read(&root, "src/app/kernel/dispatch.rs").replace("\r\n", "\n");
+    assert!(dispatch.contains("#[cfg(test)]\nfn legacy_read("));
+    assert!(dispatch.contains("#[cfg(test)]\n    if let Some(result) = legacy_read("));
 }

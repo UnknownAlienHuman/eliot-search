@@ -73,27 +73,27 @@ fn admit_with_work(
             DataRootOpenMode::InitializeNew | DataRootOpenMode::OpenNamedRecovery
         )
     {
-        return unavailable(request, RootOpenState::Unsupported);
+        return unavailable(request, work, RootOpenState::Unsupported);
     }
     let Some(root_metadata) = metadata(&request, &mut work, request.root())? else {
-        return unavailable(request, RootOpenState::Absent);
+        return unavailable(request, work, RootOpenState::Absent);
     };
     if !root_metadata.is_dir()
         || root_metadata.file_type().is_symlink()
         || super::codec::is_reparse(&root_metadata)
     {
-        return unavailable(request, RootOpenState::Unsupported);
+        return unavailable(request, work, RootOpenState::Unsupported);
     }
     let root = work.call(&request, || {
         fs::canonicalize(request.root()).map_err(|_| OwnerError::DataRootInvalid)
     })?;
     if !local_profile_path(&root)? {
-        return unavailable(request, RootOpenState::Unsupported);
+        return unavailable(request, work, RootOpenState::Unsupported);
     }
     // Retain the physical root before opening either exclusion locator.
     let bound_root = open_existing(&request, &mut work, &root, true, false)?;
     if let Some(state) = barriers(&request, &mut work, &root)? {
-        return unavailable(request, state);
+        return unavailable(request, work, state);
     }
     // Both absent locks plus no installation/layout evidence can be inspected
     // as absent. Partial or legacy layouts never receive a usable capability.
@@ -104,7 +104,7 @@ fn admit_with_work(
         } else {
             RootOpenState::Absent
         };
-        return unavailable(request, state);
+        return unavailable(request, work, state);
     }
     let exclusions = acquire_exclusions(&request, &mut work, &root)?;
     let mut installation_file = open_existing(
@@ -116,7 +116,7 @@ fn admit_with_work(
     )?;
     let installation_bytes = read_bytes(&request, &mut work, &mut installation_file, 1024)?;
     if installation_bytes.starts_with(b"ELIOT-SEARCH-INSTALLATION-V1\nformat_version=1\n") {
-        return unavailable(request, RootOpenState::Unsupported);
+        return unavailable(request, work, RootOpenState::Unsupported);
     }
     let mutation = request.mode == DataRootOpenMode::OpenExistingMutating;
     let profile = super::native_snapshot::parse_native_installation(&installation_bytes)?;
@@ -130,7 +130,7 @@ fn admit_with_work(
     let snapshot = read_snapshot(&request, &mut work, &root, &mut pins)?;
     work.arrive(&request, "native-proof")?;
     if snapshot.record.lifecycle != LifecycleState::Released {
-        return unavailable(request, RootOpenState::OutcomeUnknown);
+        return unavailable(request, work, RootOpenState::OutcomeUnknown);
     }
     let decision = classify_root_open(request.mode, RootOpenState::Initialized);
     if !matches!(
@@ -263,13 +263,17 @@ fn partial_layout(
 
 fn unavailable(
     request: NativeRootRequest,
+    work: NativeWork,
     state: RootOpenState,
 ) -> Result<NativeRootAdmission, OwnerError> {
     request.check()?;
     if request.mode != DataRootOpenMode::InspectExistingReadOnly {
         return Err(OwnerError::OwnerRecoveryQuarantined);
     }
-    Ok(NativeRootAdmission::Unavailable(state, request))
+    Ok(NativeRootAdmission::Unavailable(
+        state,
+        request.retain_refusal_work(work),
+    ))
 }
 
 impl NativeRootCapability {
