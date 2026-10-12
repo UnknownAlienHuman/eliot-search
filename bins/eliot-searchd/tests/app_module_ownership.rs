@@ -142,3 +142,27 @@ fn legacy_one_shot_read_handlers_cannot_enter_the_primary_fallback() {
     assert!(dispatch.contains("#[cfg(test)]\nfn legacy_read("));
     assert!(dispatch.contains("#[cfg(test)]\n    if let Some(result) = legacy_read("));
 }
+
+#[test]
+fn source_root_listing_cannot_reach_the_legacy_registration_owner() {
+    let root = crate_root();
+    let entry = read(&root, "src/secure_commands/kernel/read.rs");
+    assert!(entry.contains("| \"--source-roots\""));
+    assert!(entry.contains("owner.run_registration_one_shot(super::source_roots::execute)"));
+    let legacy = read(&root, "src/app/kernel/source_root_commands.rs");
+    let selector = legacy
+        .split("let expected = match command")
+        .nth(1)
+        .unwrap()
+        .split("if arguments.len()")
+        .next()
+        .unwrap();
+    assert!(!selector.contains("--source-roots"));
+    for retained in [
+        "--register-source-root",
+        "--unregister-source-root",
+        "--sync-source-roots",
+    ] {
+        assert!(selector.contains(retained));
+    }
+}

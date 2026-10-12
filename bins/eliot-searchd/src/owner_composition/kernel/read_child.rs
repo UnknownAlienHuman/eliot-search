@@ -18,6 +18,7 @@ pub struct NativeReadOperation<'owner> {
     owner: &'owner mut NativeRootCapability,
     context: ReadContext,
     output_attempted: bool,
+    registration: Option<registration_read::RegistrationPin>,
 }
 
 impl NativeReadOperation<'_> {
@@ -52,8 +53,12 @@ impl NativeReadOperation<'_> {
             None => (&*request, work),
             Some((request, work)) => (&*request, work),
         };
+        let registration = &self.registration;
         let result = request.check().and_then(|()| {
-            operation(
+            if let Some(pin) = registration {
+                pin.check(request, work)?;
+            }
+            let result = operation(
                 NativeBindingView {
                     pins,
                     root,
@@ -66,7 +71,13 @@ impl NativeReadOperation<'_> {
                 request,
                 work,
                 &mut self.output_attempted,
-            )
+            );
+            result.and_then(|value| {
+                if let Some(pin) = registration {
+                    pin.check(request, work)?;
+                }
+                Ok(value)
+            })
         });
         let checkpoint = request.check();
         let result = result
@@ -85,7 +96,8 @@ impl NativeReadOperation<'_> {
     }
 
     pub(crate) fn verify(&mut self) -> Result<(), OwnerError> {
-        self.with_binding(|binding, request, work, _| binding.verify(request, work).map(|_| ()))
+        self.with_binding(|binding, request, work, _| binding.verify(request, work).map(|_| ()))?;
+        self.verify_registration()
     }
 
     pub(crate) fn root(&self) -> &std::path::Path {
@@ -210,6 +222,7 @@ impl NativeReadStartup {
             owner: &mut owner,
             context: None,
             output_attempted: false,
+            registration: None,
         };
         operation.verify()?;
         let store = crate::direct_store::open_existing_read(&mut operation)?;
@@ -225,6 +238,7 @@ impl NativeReadStartup {
                 owner: &mut self.owner,
                 context: None,
                 output_attempted: false,
+                registration: None,
             },
         )
     }
@@ -247,6 +261,7 @@ impl NativeReadStartup {
             owner: &mut owner,
             context: None,
             output_attempted: attempted,
+            registration: None,
         }
         .verify();
         let NativeRootCapability {
@@ -363,6 +378,7 @@ impl NativeReadService {
             owner: &mut self.owner,
             context: Some((request, NativeWork::new())),
             output_attempted: false,
+            registration: None,
         };
         operation.verify()?;
         Ok(crate::direct_store::ReadOnlyStore::new(
@@ -484,6 +500,7 @@ impl NativeReadClosed {
                 owner: &mut owner,
                 context: Some((request, work)),
                 output_attempted,
+                registration: None,
             };
             operation.verify()?;
             let Some((request, mut work)) = operation.context else {
@@ -511,3 +528,6 @@ impl NativeReadClosed {
 #[cfg(test)]
 #[path = "read_child_tests.rs"]
 mod tests;
+
+#[path = "registration_read.rs"]
+mod registration_read;

@@ -506,3 +506,328 @@ fn refusal_flush_uncertainty_cannot_be_replayed_after_flag_clear() {
     assert_eq!(output.requests, calls);
     assert_eq!(output.flushes, 1);
 }
+
+#[test]
+fn registration_selector_preserves_native_config_context_and_rejects_arity() {
+    let flag = Arc::new(AtomicBool::new(false));
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let args = [
+        OsString::from("--config-file"),
+        OsString::from("private-config"),
+        OsString::from("--source-roots"),
+        OsString::from("private-root"),
+    ];
+    let limits = request(1024 * 1024 * 1024, 16384, Arc::clone(&flag)).limits;
+    let (request, selected) =
+        NativeRootRequest::for_read_one_shot(&args, deadline, Arc::clone(&flag), limits).unwrap();
+    assert_eq!(selected, args[2..]);
+    assert_eq!(request.arguments().len(), args.len());
+    assert_eq!(request.credential_context().0, deadline);
+    assert!(std::ptr::eq(request.credential_context().1, &*flag));
+    for bad in [
+        vec![OsString::from("--source-roots")],
+        vec![
+            OsString::from("--source-roots"),
+            OsString::from("private-root"),
+            OsString::from("extra"),
+        ],
+    ] {
+        assert!(
+            NativeRootRequest::for_read_one_shot(&bad, deadline, Arc::clone(&flag), limits)
+                .is_err()
+        );
+    }
+    flag.store(true, Ordering::Release);
+    assert_eq!(
+        request.check(),
+        Err(OwnerError::OwnerCancelledBeforeMutation)
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn registration_catalog_refuses_corrupt_and_pending_bytes_without_recovery_or_writes() {
+    use super::super::super::{NativeRootAdmission, admit_existing, initialize_new};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "search-registration-read-{}-{stamp}",
+        std::process::id()
+    ));
+    let absent = root.with_extension("absent");
+    let limits = request(1024 * 1024 * 1024, 16384, Arc::new(AtomicBool::new(false))).limits;
+    let invocation = |root: &std::path::Path, flag: Arc<AtomicBool>| {
+        NativeRootRequest::for_read_one_shot(
+            &[
+                OsString::from("--source-roots"),
+                root.as_os_str().to_owned(),
+            ],
+            Instant::now() + Duration::from_secs(120),
+            flag,
+            limits,
+        )
+        .unwrap()
+        .0
+    };
+    assert!(matches!(
+        admit_existing(invocation(&absent, Arc::new(AtomicBool::new(false)))).unwrap(),
+        NativeRootAdmission::Unavailable(_, _)
+    ));
+    assert!(!absent.exists());
+    std::fs::create_dir(&root).unwrap();
+    let root = std::fs::canonicalize(root).unwrap();
+    initialize_new(
+        NativeRootRequest::new(
+            DataRootOpenMode::InitializeNew,
+            &[
+                OsString::from("--initialize-data-root"),
+                root.as_os_str().to_owned(),
+                OsString::from("04040404040404040404040404040404"),
+            ],
+            Instant::now() + Duration::from_secs(120),
+            Arc::new(AtomicBool::new(false)),
+            limits,
+        )
+        .unwrap(),
+    )
+    .unwrap()
+    .emit(&mut Vec::new())
+    .unwrap();
+    let catalog = root.join("control/source-roots.v1");
+    let sources = root.with_extension("sources");
+    std::fs::create_dir(&sources).unwrap();
+    let sources = std::fs::canonicalize(sources).unwrap();
+    let available = sources.join("a-available");
+    std::fs::create_dir(&available).unwrap();
+    let available = std::fs::canonicalize(available).unwrap();
+    let missing = sources.join("b-missing");
+    let not_directory = sources.join("c-file");
+    std::fs::write(&not_directory, b"retained-source").unwrap();
+    let not_directory = std::fs::canonicalize(not_directory).unwrap();
+    let nonempty = format!(
+        "# ELIOT Search source roots v1\n{}\n{}\n{}\n",
+        not_directory.to_str().unwrap(),
+        missing.to_str().unwrap(),
+        available.to_str().unwrap(),
+    );
+    let slots = [
+        ".eliot-search-owner-state-a.v1",
+        ".eliot-search-owner-state-b.v1",
+    ]
+    .map(|name| std::fs::read(root.join(name)).unwrap());
+    for (bytes, sidecar, expected) in [
+        (None, None, None),
+        (Some(nonempty.as_bytes()), None, None),
+        (
+            Some(b"# ELIOT Search source roots v1\n".as_slice()),
+            None,
+            None,
+        ),
+        (
+            Some(b"corrupt\n".as_slice()),
+            None,
+            Some("SOURCE_ROOT_CATALOG_CORRUPT"),
+        ),
+        (
+            Some(b"# ELIOT Search source roots v1\n".as_slice()),
+            Some("bak"),
+            Some("SOURCE_ROOT_UPDATE_OUTCOME_UNKNOWN"),
+        ),
+        (
+            Some(b"# ELIOT Search source roots v1\n".as_slice()),
+            Some("tmp"),
+            Some("SOURCE_ROOT_UPDATE_OUTCOME_UNKNOWN"),
+        ),
+    ] {
+        if catalog.exists() {
+            std::fs::remove_file(&catalog).unwrap();
+        }
+        if let Some(bytes) = bytes {
+            std::fs::write(&catalog, bytes).unwrap();
+        }
+        if let Some(extension) = sidecar {
+            std::fs::write(catalog.with_extension(extension), b"retained-pending").unwrap();
+        }
+        let NativeRootAdmission::Inspection(owner) =
+            admit_existing(invocation(&root, Arc::new(AtomicBool::new(false)))).unwrap()
+        else {
+            panic!("inspection");
+        };
+        let result = owner.run_registration_one_shot(|operation| {
+            let result = crate::source_roots::SourceRootInspection::read(operation);
+            if let Some(code) = expected {
+                assert!(matches!(&result, Err(error) if error == code));
+                result.map(|_| ())
+            } else {
+                let output = result?.output()?;
+                let text = String::from_utf8(output.clone()).unwrap();
+                if bytes == Some(nonempty.as_bytes()) {
+                    let paths = [&available, &missing, &not_directory];
+                    let states = ["available", "missing", "not_directory"];
+                    let mut expected_rows: Vec<_> = paths.iter().zip(states).enumerate().map(
+                        |(position, (path, state))| format!(
+                            "{{\"event\":\"source_root\",\"position\":{position},\"path\":{},\"state\":\"{state}\"}}",
+                            crate::service_output::json_string(path.to_str().unwrap()),
+                        ),
+                    ).collect();
+                    expected_rows.extend([
+                        "{\"event\":\"source_gap\",\"position\":1,\"reason\":\"OBSERVATION_GAP_MISSING\",\"state\":\"missing\"}".to_owned(),
+                        "{\"event\":\"source_gap\",\"position\":2,\"reason\":\"OBSERVATION_GAP_NOT_DIRECTORY\",\"state\":\"not_directory\"}".to_owned(),
+                        concat!(
+                            "{\"event\":\"source_roots_complete\",\"configured\":3,\"available\":1,",
+                            "\"unavailable\":2,\"gaps\":2,\"reconciliation_generation\":1,",
+                            "\"watcher_pending\":0,\"watcher_overflowed\":false,",
+                            "\"proven_reason\":\"ROOTS_GAP_BLOCKS_CURRENTNESS\",\"current_workspace_proven\":false}"
+                        ).to_owned(),
+                    ]);
+                    assert_eq!(text, expected_rows.join("\n") + "\n");
+                } else {
+                    assert!(text.contains("\"configured\":0"));
+                }
+                operation.emit_registration(&mut Vec::new(), &output)
+            }
+        });
+        if let Some(code) = expected {
+            assert_eq!(result, Err(code.to_owned()));
+        } else {
+            assert_eq!(result, Ok(()));
+        }
+        assert_eq!(std::fs::read(&catalog).ok().as_deref(), bytes);
+        for (name, before) in [
+            ".eliot-search-owner-state-a.v1",
+            ".eliot-search-owner-state-b.v1",
+        ]
+        .into_iter()
+        .zip(&slots)
+        {
+            assert_eq!(&std::fs::read(root.join(name)).unwrap(), before);
+        }
+        if let Some(extension) = sidecar {
+            assert_eq!(
+                std::fs::read(catalog.with_extension(extension)).unwrap(),
+                b"retained-pending"
+            );
+            std::fs::remove_file(catalog.with_extension(extension)).unwrap();
+        }
+    }
+    // Retain native root/credential evidence; qualification owns cleanup.
+}
+
+#[cfg(windows)]
+#[test]
+fn registration_output_retains_pin_original_work_and_terminal_cancellation() {
+    use super::super::super::{NativeRootAdmission, admit_existing, initialize_new};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "search-registration-terminal-{}-{stamp}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let root = std::fs::canonicalize(root).unwrap();
+    let limits = request(1024 * 1024 * 1024, 16384, Arc::new(AtomicBool::new(false))).limits;
+    let args = [
+        OsString::from("--source-roots"),
+        root.as_os_str().to_owned(),
+    ];
+    initialize_new(
+        NativeRootRequest::new(
+            DataRootOpenMode::InitializeNew,
+            &[
+                OsString::from("--initialize-data-root"),
+                root.as_os_str().to_owned(),
+                OsString::from("05050505050505050505050505050505"),
+            ],
+            Instant::now() + Duration::from_secs(120),
+            Arc::new(AtomicBool::new(false)),
+            limits,
+        )
+        .unwrap(),
+    )
+    .unwrap()
+    .emit(&mut Vec::new())
+    .unwrap();
+    let catalog = root.join("control/source-roots.v1");
+    std::fs::write(&catalog, b"# ELIOT Search source roots v1\n").unwrap();
+    for mode in [0, 1, 2] {
+        let flag = Arc::new(AtomicBool::new(false));
+        let invocation = || {
+            NativeRootRequest::for_read_one_shot(
+                &args,
+                Instant::now() + Duration::from_secs(120),
+                Arc::clone(&flag),
+                limits,
+            )
+            .unwrap()
+            .0
+        };
+        let NativeRootAdmission::Inspection(owner) = admit_existing(invocation()).unwrap() else {
+            panic!("inspection");
+        };
+        let mut sink = ShortOutput {
+            cancel_on_flush: (mode == 1).then(|| Arc::clone(&flag)),
+            ..ShortOutput::default()
+        };
+        let result = owner.run_registration_one_shot(|operation| {
+            assert!(admit_existing(invocation()).is_err());
+            assert_eq!(
+                operation.registration_bytes()?,
+                Some(b"# ELIOT Search source roots v1\n".to_vec())
+            );
+            // The retained catalog excludes writes before every output and teardown.
+            assert!(
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(&catalog)
+                    .is_err()
+            );
+            if mode == 2 {
+                use std::cell::Cell;
+                use std::rc::Rc;
+                let used = Rc::new(Cell::new(0));
+                let captured = Rc::clone(&used);
+                operation
+                    .with_binding(|_, request, work, _| {
+                        work.usage_hook = Some(Box::new(move |_, usage, _| captured.set(usage[0])));
+                        work.arrive(request, "registration-original-meter")?;
+                        work.read(request, 1024 * 1024 * 1024 - used.get())?;
+                        work.usage_hook = None;
+                        Ok(())
+                    })
+                    .map_err(|error| error.code().to_owned())?;
+                assert!(operation.owner.poisoned.is_none());
+            }
+            operation.emit_registration(&mut sink, b"verified\n")
+        });
+        match mode {
+            0 => {
+                assert_eq!(result, Ok(()));
+                assert_eq!(sink.requests, vec![9, 6, 3]);
+            }
+            1 => assert_eq!(
+                result,
+                Err(OwnerError::OwnerAcquireOutcomeUnknown.code().to_owned())
+            ),
+            _ => {
+                assert_eq!(result, Err(OwnerError::ContractExhausted.code().to_owned()));
+                assert!(sink.requests.is_empty());
+            }
+        }
+        flag.store(false, Ordering::Release);
+        assert!(matches!(
+            admit_existing(invocation()).unwrap(),
+            NativeRootAdmission::Inspection(_)
+        ));
+        assert_eq!(
+            std::fs::read(&catalog).unwrap(),
+            b"# ELIOT Search source roots v1\n"
+        );
+    }
+    // Retain native root/credential evidence; qualification owns cleanup.
+}

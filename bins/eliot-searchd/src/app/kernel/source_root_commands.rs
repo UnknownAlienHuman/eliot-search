@@ -1,6 +1,6 @@
 //! Local owner-fenced observation-root commands for the primary daemon.
 //!
-//! Every command holds the single live [`DataRootGuard`] for its whole
+//! Registration/sync commands hold the single live [`DataRootGuard`] for their whole
 //! lifetime. A running daemon that already holds the data-root lock denies a
 //! second acquirer with `DATA_ROOT_ALREADY_OWNED`; the CLI never opens
 //! another owner for a live service. Watcher notifications stay hints inside
@@ -19,7 +19,7 @@ use crate::source_roots::SourceRootCatalog;
 pub fn run(arguments: &[String]) -> Result<(), String> {
     let command = arguments.first().map(String::as_str).unwrap_or_default();
     let expected = match command {
-        "--source-roots" | "--sync-source-roots" => 2,
+        "--sync-source-roots" => 2,
         "--register-source-root" | "--unregister-source-root" => 3,
         _ => return Err("SOURCE_ROOT_USAGE_ERROR".to_owned()),
     };

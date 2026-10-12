@@ -25,6 +25,7 @@ pub(super) fn is_read(command: &str) -> bool {
             | "--list-sources"
             | "--verify-root"
             | "--read-revision"
+            | "--source-roots"
     )
 }
 
@@ -34,6 +35,10 @@ pub(super) enum ReadExit {
 }
 
 pub(super) fn run(arguments: &[OsString], started: Instant) -> ReadExit {
+    match super::source_roots::emit_usage_refusal(arguments, &mut io::stderr().lock()) {
+        Ok(false) => {}
+        Ok(true) | Err(_) => return ReadExit::Failed,
+    }
     match try_run(arguments, started) {
         Ok(()) => ReadExit::Completed,
         Err(_) => ReadExit::Failed,
@@ -62,9 +67,14 @@ fn try_run(arguments: &[OsString], started: Instant) -> Result<(), String> {
         return Err(error);
     }
     let startup = match admit_existing(request).map_err(|error| error.code().to_owned())? {
-        NativeRootAdmission::Inspection(owner) => owner
-            .read_startup()
-            .map_err(|error| error.code().to_owned())?,
+        NativeRootAdmission::Inspection(owner) => {
+            if selected[0] == "--source-roots" {
+                return owner.run_registration_one_shot(super::source_roots::execute);
+            }
+            owner
+                .read_startup()
+                .map_err(|error| error.code().to_owned())?
+        }
         NativeRootAdmission::Unavailable(RootOpenState::Absent, request) => {
             request
                 .emit(
