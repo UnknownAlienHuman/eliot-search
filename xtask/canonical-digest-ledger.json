@@ -265,6 +265,11 @@
       "state": "OPEN",
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/458",
       "reviewed_at": "2026-10-11"
+    },
+    "466": {
+      "state": "OPEN",
+      "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/466",
+      "reviewed_at": "2026-10-12"
     }
   },
   "sites": [
@@ -62847,6 +62852,18 @@
       "owner_issue": 458,
       "phase": "accepted",
       "reason": "Renders the exact retained revision slice digest and hex-encoded returned bytes; this format macro performs no digest computation or identity framing. Existing source-backed fields and read validation remain authoritative."
+    },
+    {
+      "count": 1,
+      "path": "crates/search-source/search-revision-store/src/immutable_object/context/tests.rs",
+      "signal": "unresolved-prefix-review",
+      "source_sha256": "9b6fad65faeef6e1f5f6b455f463600176f7421e49590b028067272d581b5f40",
+      "symbol": "impl[ShortRead]::read",
+      "test": false,
+      "classification": "non-digest-surface",
+      "owner_issue": 466,
+      "phase": "accepted",
+      "reason": "Private cfg(test) short-read fixture delegates to std::io::Cursor::read over fixed opaque bytes. The conservative scanner marks this helper test=false; it performs ordinary I/O, no digest/crypto/profile construction or production authority."
     }
   ]
 }

@@ -10,8 +10,8 @@
 
 use core::fmt;
 use std::ffi::OsStr;
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::fs::{self, File};
+use std::io;
 use std::path::{Path, PathBuf};
 
 /// Native observations required by the package-owned immutable-object lifecycle.
@@ -139,15 +139,25 @@ impl<E: fmt::Display> fmt::Display for LegacyRevisionObjectError<E> {
             Self::ParentMissing => formatter.write_str("revision object parent missing"),
             Self::LocalNameInvalid => formatter.write_str("revision object local name invalid"),
             Self::SizeInvalid => formatter.write_str("revision object size invalid"),
-            Self::DirectoryCreate(error) => write!(formatter, "revision directory create failed: {error}"),
-            Self::ObjectInspect(error) => write!(formatter, "revision object inspect failed: {error}"),
+            Self::DirectoryCreate(error) => {
+                write!(formatter, "revision directory create failed: {error}")
+            }
+            Self::ObjectInspect(error) => {
+                write!(formatter, "revision object inspect failed: {error}")
+            }
             Self::ObjectInvalid => formatter.write_str("revision object invalid"),
             Self::ObjectRead(error) => write!(formatter, "revision object read failed: {error}"),
             Self::ReadbackMismatch => formatter.write_str("revision object readback mismatch"),
             Self::Create(error) => write!(formatter, "revision object create failed: {error}"),
             Self::Write(error) => write!(formatter, "revision object write failed: {error}"),
-            Self::PublishOutcomeUnknown(error) => write!(formatter, "revision object publish outcome unknown: {error}"),
-            Self::PublishPlatformOutcomeUnknown(error) => write!(formatter, "revision object publish durability unknown: {error}"),
+            Self::PublishOutcomeUnknown(error) => write!(
+                formatter,
+                "revision object publish outcome unknown: {error}"
+            ),
+            Self::PublishPlatformOutcomeUnknown(error) => write!(
+                formatter,
+                "revision object publish durability unknown: {error}"
+            ),
             Self::ImmutableConflict => formatter.write_str("revision object immutable conflict"),
             Self::IdentityChanged => formatter.write_str("revision object identity changed"),
             Self::Cleanup(error) => write!(formatter, "revision object cleanup failed: {error}"),
@@ -155,11 +165,7 @@ impl<E: fmt::Display> fmt::Display for LegacyRevisionObjectError<E> {
     }
 }
 
-impl<E> std::error::Error for LegacyRevisionObjectError<E>
-where
-    E: fmt::Debug + fmt::Display,
-{
-}
+impl<E> std::error::Error for LegacyRevisionObjectError<E> where E: fmt::Debug + fmt::Display {}
 
 /// Reads one complete immutable revision object through one opened file.
 ///
@@ -178,7 +184,7 @@ pub fn read_legacy_revision_object<P>(
 where
     P: LegacyRevisionObjectPlatform,
 {
-    read_object(platform, path, maximum_bytes, None)
+    context::legacy_read(platform, path, maximum_bytes)
 }
 
 /// Publishes one exact immutable legacy revision object without replacement.
@@ -203,111 +209,14 @@ pub fn publish_legacy_revision_object<P>(
 where
     P: LegacyRevisionObjectPlatform,
 {
-    if bytes.len() > maximum_bytes {
-        return Err(LegacyRevisionObjectError::SizeInvalid);
-    }
-    if !valid_local_name(final_name)
-        || !valid_local_name(temporary_name)
-        || final_name == temporary_name
-        || !temporary_name.starts_with('.')
-        || !temporary_name.ends_with(".tmp")
-    {
-        return Err(LegacyRevisionObjectError::LocalNameInvalid);
-    }
-
-    ensure_child_directory(platform, directory)?;
-    let final_path = directory.join(final_name);
-    let temporary_path = directory.join(temporary_name);
-
-    match fs::symlink_metadata(&final_path) {
-        Ok(_) => {
-            let existing = read_object(platform, &final_path, maximum_bytes, None)?;
-            if existing.bytes() != bytes {
-                return Err(LegacyRevisionObjectError::ImmutableConflict);
-            }
-            let encoded_bytes = existing.encoded_bytes();
-            let identity = existing.identity;
-            return Ok(LegacyRevisionObjectReceipt {
-                identity,
-                encoded_bytes,
-                reused: true,
-            });
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(LegacyRevisionObjectError::ObjectInspect(error)),
-    }
-
-    let mut temporary = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .open(&temporary_path)
-        .map_err(LegacyRevisionObjectError::Create)?;
-    let metadata = temporary
-        .metadata()
-        .map_err(LegacyRevisionObjectError::Create)?;
-    if !regular(&metadata) {
-        return Err(LegacyRevisionObjectError::ObjectInvalid);
-    }
-    let temporary_identity = platform
-        .identity(&temporary)
-        .map_err(LegacyRevisionObjectError::Platform)?;
-    let mut staging = TemporaryObjectGuard {
+    context::legacy_publish(
         platform,
-        path: temporary_path,
-        identity: temporary_identity.clone(),
-        cleanup_armed: true,
-    };
-    platform
-        .verify_locator(&temporary, &staging.path)
-        .map_err(LegacyRevisionObjectError::Platform)?;
-
-    if let Err(error) = temporary.write_all(bytes).and_then(|()| temporary.sync_all()) {
-        drop(temporary);
-        return Err(LegacyRevisionObjectError::Write(error));
-    }
-    drop(temporary);
-
-    let staged = read_object(
-        platform,
-        &staging.path,
+        directory,
+        final_name,
+        temporary_name,
+        bytes,
         maximum_bytes,
-        Some(&temporary_identity),
-    )?;
-    if staged.bytes() != bytes {
-        return Err(LegacyRevisionObjectError::ReadbackMismatch);
-    }
-
-    let reused = match fs::hard_link(&staging.path, &final_path) {
-        Ok(()) => false,
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => true,
-        Err(error) => {
-            return Err(LegacyRevisionObjectError::PublishOutcomeUnknown(error));
-        }
-    };
-    if let Err(error) = platform.sync_directory(directory) {
-        return Err(LegacyRevisionObjectError::PublishPlatformOutcomeUnknown(error));
-    }
-
-    let final_object = read_object(platform, &final_path, maximum_bytes, None)?;
-    if final_object.bytes() != bytes {
-        return Err(LegacyRevisionObjectError::ImmutableConflict);
-    }
-    if !reused && final_object.identity() != &temporary_identity {
-        return Err(LegacyRevisionObjectError::IdentityChanged);
-    }
-    let encoded_bytes = final_object.encoded_bytes();
-    let identity = final_object.identity;
-
-    staging.cleanup()?;
-    platform
-        .sync_directory(directory)
-        .map_err(LegacyRevisionObjectError::PublishPlatformOutcomeUnknown)?;
-    Ok(LegacyRevisionObjectReceipt {
-        identity,
-        encoded_bytes,
-        reused,
-    })
+    )
 }
 
 struct TemporaryObjectGuard<'a, P>
@@ -339,118 +248,6 @@ where
     fn drop(&mut self) {
         let _ = self.cleanup();
     }
-}
-
-fn read_object<P>(
-    platform: &P,
-    path: &Path,
-    maximum_bytes: usize,
-    expected_identity: Option<&P::Identity>,
-) -> Result<LegacyRevisionObjectRead<P::Identity>, LegacyRevisionObjectError<P::Error>>
-where
-    P: LegacyRevisionObjectPlatform,
-{
-    let parent = path
-        .parent()
-        .ok_or(LegacyRevisionObjectError::ParentMissing)?;
-    platform
-        .validate_directory(parent)
-        .map_err(LegacyRevisionObjectError::Platform)?;
-    let before = fs::symlink_metadata(path)
-        .map_err(LegacyRevisionObjectError::ObjectInspect)?;
-    let before_len = usize::try_from(before.len())
-        .map_err(|_| LegacyRevisionObjectError::SizeInvalid)?;
-    if !regular(&before) || before_len > maximum_bytes {
-        return Err(if before_len > maximum_bytes {
-            LegacyRevisionObjectError::SizeInvalid
-        } else {
-            LegacyRevisionObjectError::ObjectInvalid
-        });
-    }
-
-    let mut file = File::open(path).map_err(LegacyRevisionObjectError::ObjectRead)?;
-    let opened = file
-        .metadata()
-        .map_err(LegacyRevisionObjectError::ObjectRead)?;
-    if !regular(&opened)
-        || opened.len() != before.len()
-        || opened.modified().ok() != before.modified().ok()
-    {
-        return Err(LegacyRevisionObjectError::ReadbackMismatch);
-    }
-    platform
-        .verify_locator(&file, path)
-        .map_err(LegacyRevisionObjectError::Platform)?;
-    let identity = platform
-        .identity(&file)
-        .map_err(LegacyRevisionObjectError::Platform)?;
-    if expected_identity.is_some_and(|expected| expected != &identity) {
-        return Err(LegacyRevisionObjectError::IdentityChanged);
-    }
-
-    let mut object_bytes = Vec::with_capacity(before_len);
-    let limit = u64::try_from(maximum_bytes)
-        .unwrap_or(u64::MAX)
-        .saturating_add(1);
-    (&mut file)
-        .take(limit)
-        .read_to_end(&mut object_bytes)
-        .map_err(LegacyRevisionObjectError::ObjectRead)?;
-    let after = file
-        .metadata()
-        .map_err(LegacyRevisionObjectError::ObjectRead)?;
-    if object_bytes.len() != before_len
-        || object_bytes.len() > maximum_bytes
-        || after.len() != before.len()
-        || after.modified().ok() != before.modified().ok()
-    {
-        return Err(LegacyRevisionObjectError::ReadbackMismatch);
-    }
-    platform
-        .verify_locator(&file, path)
-        .map_err(LegacyRevisionObjectError::Platform)?;
-    let after_identity = platform
-        .identity(&file)
-        .map_err(LegacyRevisionObjectError::Platform)?;
-    if after_identity != identity {
-        return Err(LegacyRevisionObjectError::IdentityChanged);
-    }
-    Ok(LegacyRevisionObjectRead {
-        bytes: object_bytes,
-        identity,
-    })
-}
-
-fn ensure_child_directory<P>(
-    platform: &P,
-    directory: &Path,
-) -> Result<(), LegacyRevisionObjectError<P::Error>>
-where
-    P: LegacyRevisionObjectPlatform,
-{
-    let parent = directory
-        .parent()
-        .ok_or(LegacyRevisionObjectError::ParentMissing)?;
-    platform
-        .validate_directory(parent)
-        .map_err(LegacyRevisionObjectError::Platform)?;
-    match fs::symlink_metadata(directory) {
-        Ok(_) => {}
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            match fs::create_dir(directory) {
-                Ok(()) => {}
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(error) => return Err(LegacyRevisionObjectError::DirectoryCreate(error)),
-            }
-            platform
-                .sync_directory(parent)
-                .map_err(LegacyRevisionObjectError::Platform)?;
-        }
-        Err(error) => return Err(LegacyRevisionObjectError::ObjectInspect(error)),
-    }
-    platform
-        .validate_directory(directory)
-        .map_err(LegacyRevisionObjectError::Platform)
 }
 
 fn cleanup_exact<P>(
@@ -492,6 +289,10 @@ fn valid_local_name(name: &str) -> bool {
 fn regular(metadata: &fs::Metadata) -> bool {
     metadata.is_file() && !metadata.file_type().is_symlink()
 }
+
+#[path = "immutable_object/context.rs"]
+mod context;
+pub use context::*;
 
 #[cfg(test)]
 mod tests;

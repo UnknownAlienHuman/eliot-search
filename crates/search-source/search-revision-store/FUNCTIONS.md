@@ -270,6 +270,39 @@ locked. Lower quota produces future retention pressure, not direct unsafe deleti
 
 ## Cancellation, deadlines, idempotency and crash semantics
 
+### Contextual legacy immutable objects (#466/#356)
+
+`read_legacy_revision_object_with_context` and
+`publish_legacy_revision_object_with_context` borrow the original
+`LegacyRevisionObjectContext`. Its checkpoint, cumulative work charging and
+possible-effect notification do not manufacture a root/source/request authority,
+deadline, cancellation flag or replacement allowance.
+
+`ContextualLegacyRevisionObjectPlatform` requires explicit metered directory,
+locator, identity and directory-durability callbacks with the same context;
+implementations must charge/poll their internal opens/native calls/allocations.
+The shared private kernel charges requested 64KiB read/write attempts (including
+short/Interrupted retries and EOF), fallible object/locator capacity, comparisons
+and other filesystem/platform attempts, with post-call and terminal polls.
+Logical work counters are not RSS or proof that synchronous calls are preemptible.
+
+Contextual failures retain component-local directory/staging/publication attempt
+phase, original caller refusal and any preceding object/platform failure.
+`object_code` gives a stable redacted classification; `context_cause` explicitly
+borrows the caller's own refusal. Standard Debug/Display/error chains expose no
+raw bytes, locator or platform error. Possible effects are unknown on refusal.
+
+The contextual path performs no stage unlink on success/error/Drop. Its receipt
+contains verified final identity/length/reuse and `staging_cleanup_deferred`,
+which describes this call's no-cleanup disposition rather than continued stage
+presence or cleanup/replay/reconciliation authority. Legacy entrypoints preserve
+their signatures, errors, exact grammar and close-before-readback/cleanup order;
+their private compatibility adapter alone selects the historical cleanup guard.
+No native production caller is activated by this prerequisite. Native caller,
+preparation and reconciliation adoption remains serialized under #355/#356/#348.
+All six new owning fixture groups and the adapted source oracle are
+AUTHORED_NOT_COMPILED/NOT_RUN until integrated qualification under #215.
+
 - address/residency/anchor validation is pure/deterministic;
 - write/delete/control uncertainty is resolved by exact object/operation readback;
 - immutable object publication is atomic or explicitly unknown/conflicting;
