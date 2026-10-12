@@ -2,11 +2,14 @@
 
 use std::path::Path;
 
+#[cfg(test)]
 use zeroize::Zeroizing;
 
 use super::DirectStore;
 use super::super::preparation_store;
-use crate::plaintext_direct_store::{IndexedSource, RevisionMetadata, SourceSummary};
+use crate::plaintext_direct_store::{IndexedSource, SourceSummary};
+#[cfg(test)]
+use crate::plaintext_direct_store::RevisionMetadata;
 
 impl DirectStore {
     /// Stable namespace identity retained with the data root.
@@ -56,6 +59,7 @@ impl DirectStore {
     }
 
     /// Prepares a retained revision without rereading a current source path.
+    #[cfg(test)]
     pub(crate) fn prepare_revision(
         &self,
         revision_id: &str,

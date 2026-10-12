@@ -20,6 +20,7 @@ pub const QUARANTINE_CLEAR_FAILED: &str = "SERVICE_CATALOG_QUARANTINE_CLEAR_FAIL
 
 const QUARANTINE_FILE: &str = "catalog-quarantine.marker";
 const QUARANTINE_TMP: &str = "catalog-quarantine.tmp";
+#[cfg(test)]
 const MAX_MARKER_BYTES: u64 = 256;
 const MARKER_PAYLOAD: &[u8] =
     b"ELIOT_SEARCH_CATALOG_QUARANTINE_V1\nreason=SERVICE_MUTATION_OUTCOME_UNKNOWN\n";
@@ -119,6 +120,7 @@ pub fn arm(root: &Path) -> Result<(), String> {
 /// Returns `SERVICE_CATALOG_QUARANTINED` when the marker is present but not
 /// exactly the armed payload, and `SERVICE_CATALOG_QUARANTINE_CLEAR_FAILED`
 /// when the exact marker cannot be removed.
+#[cfg(test)]
 pub fn clear(root: &Path) -> Result<(), String> {
     let marker = marker_path(root);
     let metadata = match fs::symlink_metadata(&marker) {
@@ -153,6 +155,7 @@ fn marker_path(root: &Path) -> PathBuf {
     root.join("control").join(QUARANTINE_FILE)
 }
 
+#[cfg(test)]
 fn is_link(value: &fs::Metadata) -> bool {
     #[cfg(windows)]
     {

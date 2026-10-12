@@ -3,7 +3,9 @@
 //! No original file, policy, namespace owner or visible source state is modified.
 
 use std::path::Path;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+#[cfg(test)]
+use std::time::Duration;
 
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{
@@ -13,9 +15,12 @@ use search_control_redb::migration::{
 };
 
 use super::super::storage_io::{
-    ensure_child_directory, ensure_directory, sync_directory,
+    ensure_directory, sync_directory,
 };
+#[cfg(test)]
+use super::super::storage_io::ensure_child_directory;
 use super::{DirectStore, check_deadline, sha256};
+#[cfg(test)]
 use crate::development::DataRootGuard;
 
 #[path = "control_migration_redb.rs"]
@@ -25,6 +30,7 @@ mod content_readback;
 #[path = "control_migration_cutover.rs"]
 mod cutover;
 
+#[cfg(test)]
 const PLAN_DEADLINE: Duration = Duration::from_secs(120);
 
 impl DirectStore {
@@ -32,6 +38,7 @@ impl DirectStore {
     /// chooses the *import target*, not the original namespace or live NTFS identity.
     /// Same source history/target/profile gives the same file and IDs. No timestamps
     /// or random data enter its contents, so a lost acknowledgement can be retried.
+    #[cfg(test)]
     pub(crate) fn stage_source_migration_plan(
         &self,
         owner: &DataRootGuard,

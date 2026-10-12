@@ -1,11 +1,14 @@
 //! Closed service command scalar and byte codecs.
 
+#[cfg(test)]
 use std::ffi::OsString;
+#[cfg(test)]
 use std::path::PathBuf;
 
 use crate::continuation::MAX_PAGE_SIZE;
 use crate::development::MAX_SCAN_QUERY_BYTES;
 
+#[cfg(test)]
 use super::spec::MAX_PATH_BYTES;
 
 pub(super) fn parse_search_mode(value: &str) -> Result<bool, String> {
@@ -32,17 +35,18 @@ pub(super) fn decode_query(value: &str) -> Result<String, String> {
         .map_err(|_| "SERVICE_QUERY_NOT_UTF8".to_owned())
 }
 
+#[cfg(test)]
 pub(super) fn decode_path(value: &str) -> Result<PathBuf, String> {
     decode_os_string(&decode_hex(value, MAX_PATH_BYTES)?).map(PathBuf::from)
 }
 
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn decode_os_string(bytes: &[u8]) -> Result<OsString, String> {
     use std::os::unix::ffi::OsStringExt;
     Ok(OsString::from_vec(bytes.to_vec()))
 }
 
-#[cfg(windows)]
+#[cfg(all(test, windows))]
 fn decode_os_string(bytes: &[u8]) -> Result<OsString, String> {
     use std::os::windows::ffi::OsStringExt;
     if !bytes.len().is_multiple_of(2) {
@@ -57,7 +61,7 @@ fn decode_os_string(bytes: &[u8]) -> Result<OsString, String> {
     Ok(OsString::from_wide(&wide))
 }
 
-#[cfg(not(any(unix, windows)))]
+#[cfg(all(test, not(any(unix, windows))))]
 fn decode_os_string(bytes: &[u8]) -> Result<OsString, String> {
     String::from_utf8(bytes.to_vec())
         .map(OsString::from)

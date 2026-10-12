@@ -84,6 +84,13 @@ fn public_runtime_responsibilities_stay_separated() {
 
     let dispatch = read(&root, "src/public_runtime_service/kernel/dispatch.rs");
     assert!(dispatch.contains("catalog_quarantine::check"));
+    assert!(dispatch.contains("with_read_command(command, |name|"));
+    assert!(dispatch.contains("SERVICE_MUTATION_UNAVAILABLE"));
+    assert!(dispatch.contains("#[cfg(test)]\nfn execute_mutating_command"));
+    assert!(dispatch.contains("#[cfg(test)]\nfn execute_quarantined_writes"));
+    assert!(kernel_is_test_only_mutation(&root));
+    assert!(runtime.contains("service_mutations_available"));
+    assert!(runtime.contains("service_control_migration_available"));
     assert!(dispatch.contains("catalog_quarantine::arm"));
     assert!(dispatch.contains("catalog_quarantine::clear"));
     assert!(dispatch.contains("state.attempt.arm()"));
@@ -118,4 +125,9 @@ fn public_runtime_responsibilities_stay_separated() {
         !root.join("src/service_session_tests.rs").exists(),
         "obsolete root-level session tests returned"
     );
+}
+
+fn kernel_is_test_only_mutation(root: &Path) -> bool {
+    read(root, "src/public_runtime_service/kernel.rs")
+        .contains("#[cfg(test)]\nmod mutation;")
 }

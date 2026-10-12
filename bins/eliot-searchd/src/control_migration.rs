@@ -6,29 +6,39 @@
 //! Root registration, directory manifests, payload verification and canonical
 //! H5 mapping are separate migration inputs, not implied by this source page.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::time::{Duration, Instant};
+#[cfg(test)]
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+#[cfg(test)]
+use std::time::Duration;
+use std::time::Instant;
+#[cfg(test)]
+use super::Path;
 
 #[path = "source_migration_mapping.rs"]
 mod mapping;
 
 use super::{
-    CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE, Path,
+    CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
     SOURCE_LOG_FILE, SourceRecord, SourceState, ZERO_DIGEST, read_namespace,
     replay_registry, sha256,
 };
 
 const PAGE_EVENTS: usize = 32;
+#[cfg(test)]
 const MAX_PAGE_BYTES: usize = 60 * 1024;
+#[cfg(test)]
 const REPLAY_DEADLINE: Duration = Duration::from_secs(30);
 
 /// Administrative bookmark, not authentication or proof of a processed prefix.
+#[cfg(test)]
 struct Cursor {
     snapshot: [u8; 32],
     after: u64,
     event_digest: String,
 }
 
+#[cfg(test)]
 impl Cursor {
     fn parse(value: &str) -> Result<Self, String> {
         if value.len() > 153 || !value.is_ascii() {
@@ -108,6 +118,7 @@ impl DirectStore {
     /// `expected_namespace` is taken from the admitted live store, never a client.
     /// Returned JSON is one bounded event-first frame for the existing transport.
     /// A malformed suffix or stale cursor produces no acknowledged partial page.
+    #[cfg(test)]
     pub(crate) fn inspect_control_history(
         root: &Path,
         expected_namespace: &str,

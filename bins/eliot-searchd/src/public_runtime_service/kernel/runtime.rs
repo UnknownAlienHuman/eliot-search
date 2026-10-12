@@ -54,6 +54,8 @@ pub(super) fn run_service(root: &Path) -> Result<(), String> {
                 "\"registered_sources\":{},\"active_sources\":{},",
                 "\"directory_manifests\":{},",
                 "\"runtime_owner_ready\":true,\"direct_store_ready\":true,",
+                "\"service_mutations_available\":false,",
+                "\"service_control_migration_available\":false,",
                 "\"owner_epoch\":{},\"recovered_previous_active\":{},",
                 "\"installation_incarnation_id\":\"{}\",",
                 "\"data_root_id\":\"{}\",",
