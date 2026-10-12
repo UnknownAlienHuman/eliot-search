@@ -11,6 +11,8 @@ mod entry;
 #[path = "kernel/mutation.rs"]
 #[cfg(test)]
 mod mutation;
+#[path = "kernel/native_output.rs"]
+mod native_output;
 #[path = "kernel/output_deadline.rs"]
 mod output_deadline;
 #[path = "kernel/query.rs"]

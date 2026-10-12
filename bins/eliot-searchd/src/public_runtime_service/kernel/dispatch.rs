@@ -2,9 +2,11 @@
 
 use std::io::Write;
 
+#[cfg(test)]
 use crate::catalog_quarantine;
 #[cfg(test)]
 use crate::direct_store::PreparationCursor;
+use crate::direct_store::{DirectRead, ReadOnlyStore};
 use crate::service_output::write_line;
 
 #[cfg(test)]
@@ -20,37 +22,27 @@ use super::mutation::{
 };
 use super::query::{cmd_continue, cmd_expand_handle, cmd_search_page, cmd_streaming_search};
 use super::reporting::emit_verification;
-use super::session::{MutationAttempt, ServiceControl};
-use super::state::{CommandState, invalidate_search_state};
+use super::session::ServiceControl;
+#[cfg(test)]
+use super::state::CommandState;
+use super::state::ReadCommandState;
 
 pub(super) fn execute_command(
     command: &str,
-    store: &mut crate::direct_store::DirectStore,
+    store: &ReadOnlyStore<'_>,
     continuations: &mut crate::continuation::ContinuationCatalog,
     handles: &mut crate::result_handles::ResultHandleCatalog,
-    owner: &crate::development::DataRootGuard,
     storage: &mut crate::storage_security::StorageSecurityStatus,
-    operation: (&mut impl Write, &mut MutationAttempt),
+    writer: &mut impl Write,
 ) -> Result<ServiceControl, String> {
-    let (writer, _attempt) = operation;
     with_read_command(command, |name| {
-        let canonical_root = owner.canonical_root();
-        if let Err(quarantined) = catalog_quarantine::check(canonical_root) {
-            let _ = invalidate_search_state(continuations, handles);
-            return Err(quarantined);
-        }
-        let fields = command.split('\t').collect::<Vec<_>>();
+        store.checkpoint()?;
+        let root = store.root();
+        let fields = command.split('\t').take(6).collect::<Vec<_>>();
         match (name, fields.as_slice()) {
-            ("health", [_]) => cmd_health(
-                writer,
-                store,
-                continuations,
-                handles,
-                canonical_root,
-                storage,
-            )?,
+            ("health", [_]) => cmd_health(writer, store, continuations, handles, &root, storage)?,
             ("status", [_]) => {
-                refresh_storage(storage, canonical_root)?;
+                refresh_storage(storage, &root)?;
                 cmd_status(writer, store, storage)?;
             }
             ("version", [_]) => cmd_version(writer)?,
@@ -59,25 +51,21 @@ pub(super) fn execute_command(
                 return Ok(ServiceControl::Stop);
             }
             ("verify", [_]) => {
-                refresh_storage(storage, canonical_root)?;
-                emit_verification(writer, store, canonical_root, storage)?;
+                refresh_storage(storage, &root)?;
+                emit_verification(writer, store, &root, storage)?;
             }
             ("verify-directory-manifests", [_]) => {
-                cmd_verify_manifests(writer, store, canonical_root, storage)?;
+                cmd_verify_manifests(writer, store, &root, storage)?;
             }
-            ("list-sources", [_]) => {
-                cmd_list_sources(writer, store, canonical_root, storage)?;
-            }
+            ("list-sources", [_]) => cmd_list_sources(writer, store, &root, storage)?,
             _ => {
-                let mut state = CommandState {
+                let mut state = ReadCommandState {
                     writer,
                     store,
                     continuations,
                     handles,
-                    canonical_root,
+                    canonical_root: &root,
                     storage,
-                    #[cfg(test)]
-                    attempt: _attempt,
                 };
                 execute_read_command(name, fields.as_slice(), &mut state)?;
             }
@@ -85,15 +73,25 @@ pub(super) fn execute_command(
         Ok(ServiceControl::Continue)
     })
 }
-
 fn with_read_command(
     command: &str,
     route: impl FnOnce(&str) -> Result<ServiceControl, String>,
 ) -> Result<ServiceControl, String> {
+    if let Some(code) = command_refusal(command) {
+        return Err(code.to_owned());
+    }
     let name = command
         .split('\t')
         .next()
         .ok_or_else(|| "SERVICE_COMMAND_EMPTY".to_owned())?;
+    route(name)
+}
+
+pub(super) fn command_refusal(command: &str) -> Option<&'static str> {
+    let name = command.split('\t').next().unwrap_or_default();
+    if name.is_empty() {
+        return Some("SERVICE_COMMAND_INVALID");
+    }
     if matches!(
         name,
         "prepare-root"
@@ -108,15 +106,15 @@ fn with_read_command(
             | "control-migration-page"
             | "control-migration-directories"
     ) {
-        return Err("SERVICE_MUTATION_UNAVAILABLE".to_owned());
+        return Some("SERVICE_MUTATION_UNAVAILABLE");
     }
-    route(name)
+    None
 }
 
-fn execute_read_command<W: Write>(
+fn execute_read_command<W: Write, S: DirectRead>(
     name: &str,
     fields: &[&str],
-    state: &mut CommandState<'_, W>,
+    state: &mut ReadCommandState<'_, W, S>,
 ) -> Result<(), String> {
     match (name, fields) {
         ("search", [_, mode, query_hex]) => cmd_streaming_search(state, mode, query_hex)?,
@@ -152,16 +150,16 @@ fn execute_mutating_command<W: Write>(
     }
     match (name, fields) {
         ("search", [_, mode, query_hex]) => {
-            cmd_streaming_search(state, mode, query_hex)?;
+            cmd_streaming_search(&mut reborrow_read(state), mode, query_hex)?;
         }
         ("search-page", [_, mode, page_size, query_hex]) => {
-            cmd_search_page(state, mode, page_size, query_hex)?;
+            cmd_search_page(&mut reborrow_read(state), mode, page_size, query_hex)?;
         }
         ("continue", [_, token, page_size]) => {
-            cmd_continue(state, token, page_size)?;
+            cmd_continue(&mut reborrow_read(state), token, page_size)?;
         }
         ("expand-handle", [_, token, start, end]) => {
-            cmd_expand_handle(state, token, start, end)?;
+            cmd_expand_handle(&mut reborrow_read(state), token, start, end)?;
         }
         ("read-revision", [_, revision_id, start, end]) => {
             cmd_read_revision(
@@ -200,6 +198,20 @@ fn execute_mutating_command<W: Write>(
         _ => return Err("SERVICE_COMMAND_INVALID".to_owned()),
     }
     Ok(())
+}
+
+#[cfg(test)]
+fn reborrow_read<'borrow, W: Write>(
+    state: &'borrow mut CommandState<'_, W>,
+) -> ReadCommandState<'borrow, W, crate::direct_store::DirectStore> {
+    ReadCommandState {
+        writer: &mut *state.writer,
+        store: &*state.store,
+        continuations: &mut *state.continuations,
+        handles: &mut *state.handles,
+        canonical_root: state.canonical_root,
+        storage: &mut *state.storage,
+    }
 }
 
 #[cfg(test)]

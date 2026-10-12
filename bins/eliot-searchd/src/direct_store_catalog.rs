@@ -4,16 +4,16 @@
 //! digest-chain, idempotency and immutable-identity replay semantics are delegated
 //! to `search-source-registry`; readers never maintain a second revision map.
 
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Cursor, Read};
 
 #[path = "control_migration.rs"]
 mod migration;
 
 use super::{
-    CONTROL_DIRECTORY, DirectDigest, DirectStore, File, MAX_LOG_BYTES,
-    MAX_LOG_LINE_BYTES, MAX_SCAN_INPUT_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
-    Path, RegistryState, SOURCE_LOG_FILE, SOURCE_LOG_HEADER, SourceRecord,
-    SourceState, ZERO_DIGEST, ensure_regular_file, is_reparse, sha256,
+    CONTROL_DIRECTORY, DirectDigest, DirectStore, File, MAX_LOG_BYTES, MAX_LOG_LINE_BYTES,
+    MAX_SCAN_INPUT_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE, Path, RegistryState, SOURCE_LOG_FILE,
+    SOURCE_LOG_HEADER, SourceRecord, SourceState, ZERO_DIGEST, ensure_regular_file, is_reparse,
+    sha256,
 };
 
 /// Exact immutable object binding. Global event sequence is not a source revision.
@@ -109,6 +109,14 @@ pub(super) fn read_namespace(path: &Path) -> Result<[u8; 32], String> {
     if value.len() > 256 || u64::try_from(value.len()).ok() != Some(metadata.len()) {
         return Err("DIRECT_NAMESPACE_INVALID".to_owned());
     }
+    parse_namespace(value.as_bytes())
+}
+
+pub(super) fn parse_namespace(bytes: &[u8]) -> Result<[u8; 32], String> {
+    if bytes.len() > 256 {
+        return Err("DIRECT_NAMESPACE_INVALID".to_owned());
+    }
+    let value = std::str::from_utf8(bytes).map_err(|_| "DIRECT_NAMESPACE_INVALID".to_owned())?;
     sha256::decode_digest(value.trim()).ok_or_else(|| "DIRECT_NAMESPACE_INVALID".to_owned())
 }
 
@@ -133,7 +141,8 @@ fn replay_registry(
     mut observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
 ) -> Result<RegistryState, String> {
     ensure_regular_file(path)?;
-    let file = File::open(path).map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
+    let file =
+        File::open(path).map_err(|error| format!("DIRECT_CONTROL_LOG_OPEN_ERROR:{error}"))?;
     let before = file
         .metadata()
         .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?;
@@ -144,14 +153,32 @@ fn replay_registry(
         return Err("DIRECT_CONTROL_LOG_TOO_LARGE".to_owned());
     }
     let mut reader = BufReader::new(file);
+    let (state, consumed) = replay_registry_reader(&mut reader, &mut observe)?;
+    let after = reader
+        .get_ref()
+        .metadata()
+        .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?;
+    if consumed != before.len()
+        || before.len() != after.len()
+        || before.modified().ok() != after.modified().ok()
+    {
+        return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+    }
+    Ok(state)
+}
+
+pub(super) fn replay_registry_reader(
+    reader: &mut impl BufRead,
+    mut observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
+) -> Result<(RegistryState, u64), String> {
     let mut consumed = 0_u64;
     let mut line = String::new();
-    read_log_line(&mut reader, &mut line, &mut consumed)?;
+    read_log_line(reader, &mut line, &mut consumed)?;
     if line.trim_end_matches(['\r', '\n']) != SOURCE_LOG_HEADER {
         return Err("DIRECT_CONTROL_LOG_HEADER_INVALID".to_owned());
     }
     let mut state = RegistryState::default();
-    while read_log_line(&mut reader, &mut line, &mut consumed)? != 0 {
+    while read_log_line(reader, &mut line, &mut consumed)? != 0 {
         if state.event_count >= MAX_SOURCE_EVENTS {
             return Err("DIRECT_SOURCE_EVENT_LIMIT_EXCEEDED".to_owned());
         }
@@ -171,17 +198,7 @@ fn replay_registry(
         observe(&record, state.latest.get(&record.source_id))?;
         state.commit_record(record);
     }
-    let after = reader
-        .get_ref()
-        .metadata()
-        .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?;
-    if consumed != before.len()
-        || before.len() != after.len()
-        || before.modified().ok() != after.modified().ok()
-    {
-        return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
-    }
-    Ok(state)
+    Ok((state, consumed))
 }
 
 fn read_log_line(
@@ -197,8 +214,7 @@ fn read_log_line(
     let read = Read::take(&mut *reader, line_limit)
         .read_line(line)
         .map_err(|error| format!("DIRECT_CONTROL_LOG_READ_ERROR:{error}"))?;
-    let read_bytes = u64::try_from(read)
-        .map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
+    let read_bytes = u64::try_from(read).map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
     *consumed = consumed
         .checked_add(read_bytes)
         .filter(|total| *total <= MAX_LOG_BYTES)
@@ -210,4 +226,23 @@ fn read_log_line(
         return Err("DIRECT_CONTROL_LOG_UNTERMINATED".to_owned());
     }
     Ok(read)
+}
+
+impl DirectStore {
+    pub(crate) fn from_existing_bytes(
+        operation: &crate::owner_composition::NativeReadOperation<'_>,
+        namespace: &[u8],
+        log: &[u8],
+    ) -> Result<Self, String> {
+        let namespace_id = parse_namespace(namespace)?;
+        let (registry, consumed) = replay_registry_reader(&mut Cursor::new(log), |_, _| Ok(()))?;
+        if u64::try_from(log.len()).ok() != Some(consumed) {
+            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+        }
+        Ok(Self {
+            root: operation.root().to_owned(),
+            namespace_id,
+            registry,
+        })
+    }
 }

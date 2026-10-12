@@ -20,10 +20,7 @@ enum SlotRead {
     Unreadable,
 }
 
-pub(super) fn read_slot(
-    canonical_root: &Path,
-    slot: Slot,
-) -> Option<Box<DurableOwnerRecord>> {
+pub(super) fn read_slot(canonical_root: &Path, slot: Slot) -> Option<Box<DurableOwnerRecord>> {
     match read_slot_raw(canonical_root, slot) {
         SlotRead::Valid(record) => Some(record),
         SlotRead::Missing | SlotRead::Unreadable => None,
@@ -106,6 +103,7 @@ pub(super) fn write_slot(
 ///
 /// A predecessor that no longer matches the live guard quarantines instead
 /// of overwriting foreign state.
+#[cfg(test)]
 pub(super) fn publish_transition(
     canonical_root: &Path,
     current: &DurableOwnerRecord,

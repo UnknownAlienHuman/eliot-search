@@ -39,3 +39,20 @@ Production Rust1.98 locked/offline check and strict Clippy plus affected static 
 gates. Unchanged daemon D387 diagnostics stay NOT_PASS and are compared exactly. Private native
 fixtures remain authored NOT_COMPILED/NOT_RUN until integrated qualification under #215. This slice
 adds nine journal and nine Windows-native cases; source acceptance is not native/product readiness.
+
+## Existing-only native read service — #456
+
+This successor has its own independently reviewed7000 physical Rust-line ceiling for the full
+owner_composition family, including every retained/new fixture; actual6930/22. The complete named
+closure includes all fixture-bearing native/service/plaintext/secure/protection/continuation/handle
+families and immediate narrow adapters:16967/93 under17000. Keep30production paths and2500churn.
+These service-only allowances do not transfer to one-shots, mutations or daemon-wide code.
+
+The service borrows sealed fallible reads from retained existing-only native custody. It adopts the
+existing namespace/log and existing selected credential; format3 completion binding must match.
+No normal service create-or-open, migration, owner lifecycle write or fresh release receipt exists.
+Distinct startup/command/shutdown original contexts survive output and child-before-custody teardown.
+Closed refusals precede native/store admission and retain bounded exact rejected UTF8 bytes; normal
+native admission ceilings stay unchanged. Service mutation/GC/migration remain unavailable.
+Preserve legacy/test fixture bodies; one-shot and mutation cutover remain separately owned by #355.
+Native/execution/product acceptance remains Q/#215; strict inherited D/#387 stays NOT_PASS.

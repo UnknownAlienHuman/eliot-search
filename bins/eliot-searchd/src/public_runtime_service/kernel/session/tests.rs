@@ -201,7 +201,7 @@ fn silent_client_timeout_is_typed_and_never_dispatched_or_retried() {
         });
         assert_eq!(result, Err(code.to_owned()), "{kind:?}");
         let output = String::from_utf8(output).unwrap();
-        assert!(output.contains(code), "{output}");
+        assert!(output.is_empty(), "no context-free error frame: {output}");
         assert!(!output.contains("data_root_stopped"));
     }
 }

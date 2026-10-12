@@ -3,20 +3,19 @@
 use std::io::Write;
 use std::path::Path;
 
-use crate::direct_store::DirectStore;
+use crate::direct_store::DirectRead;
 use crate::directory_manifest::verify_directory_manifests;
 use crate::service_output::{json_string, write_line};
 use crate::storage_security::StorageSecurityStatus;
 
 pub(super) fn emit_verification(
     writer: &mut impl Write,
-    store: &DirectStore,
+    store: &impl DirectRead,
     canonical_root: &Path,
     storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
     let verification = store.verify()?;
-    let manifests =
-        verify_directory_manifests(canonical_root, &store.namespace_id())?;
+    let manifests = verify_directory_manifests(canonical_root, &store.namespace_id()?)?;
     write_line(
         writer,
         &format!(
@@ -29,7 +28,7 @@ pub(super) fn emit_verification(
                 "\"manifest_directories\":{},\"source_backed\":true,",
                 "\"storage_security\":{},\"encrypted_at_rest\":{}}}"
             ),
-            store.namespace_id(),
+            store.namespace_id()?,
             verification.source_events,
             verification.registered_sources,
             verification.active_sources,
@@ -46,10 +45,10 @@ pub(super) fn emit_verification(
 
 pub(super) fn emit_source_list(
     writer: &mut impl Write,
-    store: &DirectStore,
+    store: &impl DirectRead,
     storage: &StorageSecurityStatus,
 ) -> Result<(), String> {
-    let sources = store.list_sources();
+    let sources = store.list_sources()?;
     for source in &sources {
         write_line(
             writer,
@@ -81,7 +80,7 @@ pub(super) fn emit_source_list(
                 "\"diagnostic_internal_identifiers\":true,",
                 "\"storage_backend\":{},\"encrypted_at_rest\":{}}}"
             ),
-            store.namespace_id(),
+            store.namespace_id()?,
             sources.len(),
             json_string(storage.backend),
             storage.encrypted_at_rest,

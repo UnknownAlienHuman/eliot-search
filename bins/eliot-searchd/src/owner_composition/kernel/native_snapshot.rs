@@ -36,6 +36,8 @@ pub(super) struct NativeSnapshot {
     pub(super) observed: ObservedRoot,
     pub(super) record: DurableOwnerRecord,
     pub(super) target: usize,
+    // Verified format3 completion metadata only; no credential is read here.
+    pub(super) selected_key_binding: Option<[u8; 32]>,
 }
 
 /// Only fixed known absence is accepted. Unknown metadata outcomes fail closed.
@@ -103,9 +105,18 @@ pub(super) fn read_snapshot(
     )?)?;
     let (target, record) = choose_pair(first, second)?;
     let executable = executable_digest(request, work)?;
-    if installation.journal_profile {
-        verify_completed_profile(request, work, pins, &installation, &observed, executable)?;
-    }
+    let selected_key_binding = if installation.journal_profile {
+        Some(verify_completed_profile(
+            request,
+            work,
+            pins,
+            &installation,
+            &observed,
+            executable,
+        )?)
+    } else {
+        None
+    };
     if record.installation_id != installation.installation_id
         || record.installation_incarnation_id != installation.installation_incarnation_id
         || record.data_root_id != *observed.data_root_id.as_bytes()
@@ -123,6 +134,7 @@ pub(super) fn read_snapshot(
         observed,
         record,
         target,
+        selected_key_binding,
     })
 }
 
@@ -212,7 +224,7 @@ fn verify_completed_profile(
     installation: &NativeInstallation,
     observed: &ObservedRoot,
     executable: [u8; 32],
-) -> Result<(), OwnerError> {
+) -> Result<[u8; 32], OwnerError> {
     use super::initialization_journal::{MAX_JOURNAL, decode_journal};
     let bytes = read_bytes(request, work, &mut pins.files[10], MAX_JOURNAL)?;
     let journal = decode_journal(&bytes, &mut |bytes| work.canonical(request, bytes))?;
@@ -243,7 +255,8 @@ fn verify_completed_profile(
         return Err(OwnerError::OwnerGuardMismatch);
     }
     // No secret or catalog read here: this grants root-owner authority only.
-    request.check()
+    request.check()?;
+    Ok(seal.selected_key_binding)
 }
 
 /// A corrupt peer is never ignored in favor of an older RELEASED record.

@@ -73,6 +73,120 @@ impl core::fmt::Debug for NativeRootRequest {
 }
 
 impl NativeRootRequest {
+    /// Retains the complete native invocation while selecting the service root
+    /// through the existing configuration argument parser. Admission stays read-only.
+    pub(crate) fn for_service(
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<Self, OwnerError> {
+        // The existing constructor applies count/native-byte/hash bounds before
+        // the configuration parser can traverse or copy the invocation.
+        let mut request = Self::new(
+            DataRootOpenMode::InspectExistingReadOnly,
+            arguments,
+            deadline,
+            cancellation,
+            limits,
+        )?;
+        let (selected, _) = crate::config_composition::strip_config_args_os(arguments)
+            .map_err(|_| OwnerError::OwnerOperationConflict)?;
+        match selected.as_slice() {
+            [command, root] if command == "--serve-data-root" && !root.is_empty() => {
+                request.root = PathBuf::from(root);
+            }
+            _ => return Err(OwnerError::OwnerOperationConflict),
+        }
+        request.check()?;
+        Ok(request)
+    }
+
+    /// A separately admitted service command has its own original context and
+    /// finite meter. It retains the startup argv/root; it cannot renew startup
+    /// or any unfinished command and grants no native authority on its own.
+    pub(super) fn service_command(
+        &self,
+        command: &str,
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+    ) -> Result<Self, OwnerError> {
+        check_context(deadline, &cancellation)?;
+        if self.arguments.len() >= self.limits.arguments {
+            return Err(OwnerError::ContractExhausted);
+        }
+        let mut arguments = Vec::new();
+        arguments
+            .try_reserve_exact(self.arguments.len() + 1)
+            .map_err(|_| OwnerError::ContractExhausted)?;
+        for argument in &self.arguments {
+            check_context(deadline, &cancellation)?;
+            arguments.push(restore_native_argument(argument)?);
+        }
+        arguments.push(OsString::from(command));
+        let mut request = Self::new(
+            DataRootOpenMode::InspectExistingReadOnly,
+            &arguments,
+            deadline,
+            cancellation,
+            self.limits,
+        )?;
+        request.root.clone_from(&self.root);
+        request.check()?;
+        Ok(request)
+    }
+
+    /// Refusal binds exact transport bytes separately from native argv admission.
+    /// Its private caller emits only a closed error; this grants no root authority.
+    pub(super) fn service_refusal(
+        &self,
+        command: &str,
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+    ) -> Result<Self, OwnerError> {
+        check_context(deadline, &cancellation)?;
+        if command.len() > 256 * 1024 {
+            return Err(OwnerError::ContractExhausted);
+        }
+        let domain = CanonicalDigestDomain::parse("eliot/cbor/native-service-refusal/v1")
+            .map_err(|_| OwnerError::DataRootInvalid)?;
+        let rows = [
+            self.id.as_bytes().as_slice(),
+            self.digest.as_slice(),
+            command.as_bytes(),
+        ]
+        .into_iter()
+        .map(|bytes| BoundedBytes::new(bytes.to_vec()).map(CanonicalValue::Bytes));
+        let output = blake3_canonical_array_with_usage(
+            &domain,
+            3,
+            rows,
+            DigestInputLimit::new(self.limits.encoded_bytes)
+                .map_err(|_| OwnerError::ContractExhausted)?,
+        )
+        .map_err(|_| OwnerError::ContractExhausted)?;
+        check_context(deadline, &cancellation)?;
+        let mut id = [0; 16];
+        crate::qualified_entropy::fill_qualified_entropy(&mut id)
+            .map_err(|_| OwnerError::OwnerIdentityAmbiguous)?;
+        if id == [0; 16] {
+            return Err(OwnerError::OwnerIdentityAmbiguous);
+        }
+        let request = Self {
+            mode: DataRootOpenMode::InspectExistingReadOnly,
+            root: self.root.clone(),
+            deadline,
+            cancellation,
+            id: RequestId::from_bytes(id),
+            digest: *output.digest().as_bytes(),
+            digest_bytes: output.complete_preimage_bytes(),
+            arguments: self.arguments.clone(),
+            limits: self.limits,
+        };
+        request.check()?;
+        Ok(request)
+    }
+
     pub fn new(
         mode: DataRootOpenMode,
         arguments: &[OsString],
@@ -214,6 +328,33 @@ fn check_context(deadline: Instant, cancellation: &AtomicBool) -> Result<(), Own
         return Err(OwnerError::OwnerDeadlineInvalid);
     }
     Ok(())
+}
+
+fn restore_native_argument(bytes: &[u8]) -> Result<OsString, OwnerError> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStringExt;
+        if !bytes.len().is_multiple_of(2) {
+            return Err(OwnerError::OwnerOperationConflict);
+        }
+        let units: Vec<_> = bytes
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        Ok(OsString::from_wide(&units))
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        Ok(OsString::from_vec(bytes.to_vec()))
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        let _ = bytes;
+        Err(OwnerError::DataRootInvalid)
+    }
 }
 
 pub(super) fn native_argument(argument: &OsStr, ceiling: usize) -> Result<Vec<u8>, OwnerError> {

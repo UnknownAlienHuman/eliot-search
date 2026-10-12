@@ -25,12 +25,17 @@ pub(super) enum ServiceControl {
 #[derive(Default)]
 pub(super) struct MutationAttempt {
     dispatched: bool,
+    native_refusal: Option<search_runtime_owner::OwnerError>,
 }
 
 impl MutationAttempt {
     #[cfg(test)]
     pub(super) const fn arm(&mut self) {
         self.dispatched = true;
+    }
+
+    pub(super) fn refuse_native(&mut self, error: search_runtime_owner::OwnerError) {
+        self.native_refusal.get_or_insert(error);
     }
 }
 
@@ -40,6 +45,12 @@ pub(super) struct SessionOutput<'a, W> {
     inner: &'a mut W,
     failed: bool,
     started: bool,
+}
+
+impl<W> SessionOutput<'_, W> {
+    pub(super) const fn incomplete(&self) -> bool {
+        self.failed || self.started
+    }
 }
 
 impl<W: Write> Write for SessionOutput<'_, W> {
@@ -93,7 +104,6 @@ pub(super) fn serve<R: BufRead, W: Write>(
                     LineError::Timeout => "SERVICE_READ_TIMEOUT",
                     LineError::Io(_) => "SERVICE_READ_ERROR",
                 };
-                write_error(writer, code)?;
                 return Err(code.to_owned());
             }
         };
@@ -104,6 +114,11 @@ pub(super) fn serve<R: BufRead, W: Write>(
             started: false,
         };
         let result = execute(&command, &mut output, &mut attempt);
+        if let Some(error) = attempt.native_refusal {
+            // Typed native refusal is final. No raw storage-error wording can
+            // reclassify it, and no context-free error frame is appended.
+            return Err(error.code().to_owned());
+        }
         if output.failed || (output.started && result.is_err()) {
             // A logical failure after successful writes (for example the
             // next frame exceeding its size bound) also leaves an incomplete

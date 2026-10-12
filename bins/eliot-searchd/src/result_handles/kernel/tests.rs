@@ -1,5 +1,5 @@
-use super::*;
 use super::model::ResultHandleRecord;
+use super::*;
 
 use std::fs;
 use std::path::PathBuf;
@@ -55,12 +55,7 @@ impl Fixture {
         self.store.list_sources().into_iter().next().unwrap()
     }
 
-    fn handle_match(
-        &self,
-        byte_start: usize,
-        byte_end: usize,
-        index: usize,
-    ) -> StoredMatch {
+    fn handle_match(&self, byte_start: usize, byte_end: usize, index: usize) -> StoredMatch {
         let summary = self.summary();
         StoredMatch {
             source_id: summary.source_id,
@@ -108,7 +103,11 @@ fn handle_tokens_are_unique_opaque() {
     }
     tokens.sort();
     tokens.dedup();
-    assert_eq!(tokens.len(), 3, "every handle mints a distinct opaque token");
+    assert_eq!(
+        tokens.len(),
+        3,
+        "every handle mints a distinct opaque token"
+    );
 }
 
 #[test]
@@ -404,10 +403,7 @@ fn expired_handles_reaped_by_next_operation() {
     let public = catalog
         .mint_page(
             &fixture.store,
-            &[
-                fixture.handle_match(0, 4, 0),
-                fixture.handle_match(4, 8, 1),
-            ],
+            &[fixture.handle_match(0, 4, 0), fixture.handle_match(4, 8, 1)],
         )
         .unwrap();
     assert!(catalog.force_expire_for_tests(&public[0].source_handle));
@@ -427,7 +423,7 @@ fn foreign_session_tag_is_not_found() {
     catalog.records.insert(
         token.clone(),
         ResultHandleRecord {
-            source_fence_digest: source_fence(&fixture.store),
+            source_fence_digest: source_fence(&fixture.store).expect("fixture metadata"),
             source_id: summary.source_id,
             revision_id: summary.revision_id,
             content_digest: summary.content_digest,
@@ -455,5 +451,8 @@ fn catalog_debug_redacts_tokens() {
     let token = public.first().unwrap().source_handle.clone();
     let rendered = format!("{catalog:?}");
     assert!(rendered.contains("live_handles"), "{rendered}");
-    assert!(!rendered.contains(&token), "plaintext tokens never reach debug output");
+    assert!(
+        !rendered.contains(&token),
+        "plaintext tokens never reach debug output"
+    );
 }

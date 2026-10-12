@@ -9,7 +9,7 @@ use search_runtime_owner::{
     DataRootOpenMode, DrainReason, OwnerError, RootOpenDecision, RootOpenState, classify_root_open,
 };
 
-use super::lifecycle::ShutdownReceipt;
+use super::ShutdownReceipt;
 use super::native_objects::{NativePins, metadata, native_identity, open_existing, read_bytes};
 use super::native_request::{NativeRootRequest, NativeWork, native_argument};
 use super::native_snapshot::{NativeInstallation, barriers, read_snapshot};
@@ -40,6 +40,7 @@ pub struct NativeRootCapability {
     installation: NativeInstallation,
     record: DurableOwnerRecord,
     target: usize,
+    selected_key_binding: Option<[u8; 32]>,
     request: NativeRootRequest,
     work: NativeWork,
     mutation: bool,
@@ -132,13 +133,10 @@ fn admit_with_work(
         return unavailable(request, RootOpenState::OutcomeUnknown);
     }
     let decision = classify_root_open(request.mode, RootOpenState::Initialized);
-    if decision
-        != if mutation {
-            RootOpenDecision::RequireLiveOwner
-        } else {
-            RootOpenDecision::ReadExisting
-        }
-    {
+    if !matches!(
+        (mutation, decision),
+        (true, RootOpenDecision::RequireLiveOwner) | (false, RootOpenDecision::ReadExisting)
+    ) {
         return Err(OwnerError::OwnerInvalidTransition);
     }
     let successor = if mutation {
@@ -159,6 +157,7 @@ fn admit_with_work(
         installation: snapshot.installation,
         record: snapshot.record,
         target: snapshot.target,
+        selected_key_binding: snapshot.selected_key_binding,
         request,
         work,
         mutation,
@@ -309,28 +308,24 @@ impl NativeRootCapability {
             return Err(error);
         }
         self.check_context()?;
-        self.pins
-            .verify_locators(&self.request, &mut self.work, &self.root)?;
-        // Prove the actual locked handles protect this exact pinned layout.
-        // Retaining unrelated locks is insufficient even if all pins match.
-        for (held, pinned) in std::iter::once(&self.bound_root)
-            .chain(self.exclusions.iter())
-            .zip(&self.pins.files[..3])
-        {
-            let identity = self.work.call(&self.request, || native_identity(held))?;
-            if self.work.call(&self.request, || native_identity(pinned))? != identity {
-                return Err(OwnerError::OwnerGuardMismatch);
-            }
+        let snapshot = NativeBindingView {
+            pins: &mut self.pins,
+            root: &self.root,
+            installation: &self.installation,
+            record: &self.record,
+            selected_key_binding: self.selected_key_binding,
+            bound_root: &self.bound_root,
+            exclusions: &self.exclusions,
         }
-        if barriers(&self.request, &mut self.work, &self.root)?.is_some() {
-            return Err(OwnerError::OwnerRecoveryQuarantined);
-        }
-        let snapshot = read_snapshot(&self.request, &mut self.work, &self.root, &mut self.pins)?;
-        if snapshot.installation != self.installation || snapshot.record != self.record {
-            return Err(OwnerError::OwnerGuardMismatch);
-        }
+        .verify(&self.request, &mut self.work)?;
         self.target = snapshot.target;
         self.check_context()
+    }
+
+    pub(crate) fn read_startup(
+        self: Box<Self>,
+    ) -> Result<read_child::NativeReadStartup, OwnerError> {
+        read_child::NativeReadStartup::open(self)
     }
 
     pub fn inspect(&mut self) -> Result<NativeRootMetadata, OwnerError> {
@@ -472,3 +467,51 @@ impl NativeRootCapability {
 #[cfg(test)]
 #[path = "native_tests.rs"]
 mod native_tests;
+
+// A view of the same retained custody. Admission and service operations share
+// this verifier; the view cannot be constructed by a product caller.
+struct NativeBindingView<'a> {
+    pins: &'a mut NativePins,
+    root: &'a Path,
+    installation: &'a NativeInstallation,
+    record: &'a DurableOwnerRecord,
+    selected_key_binding: Option<[u8; 32]>,
+    bound_root: &'a File,
+    exclusions: &'a [File],
+}
+
+impl NativeBindingView<'_> {
+    fn verify(
+        self,
+        request: &NativeRootRequest,
+        work: &mut NativeWork,
+    ) -> Result<super::native_snapshot::NativeSnapshot, OwnerError> {
+        request.check()?;
+        self.pins.verify_locators(request, work, self.root)?;
+        for (held, pinned) in std::iter::once(self.bound_root)
+            .chain(self.exclusions.iter())
+            .zip(&self.pins.files[..3])
+        {
+            let identity = work.call(request, || native_identity(held))?;
+            if work.call(request, || native_identity(pinned))? != identity {
+                return Err(OwnerError::OwnerGuardMismatch);
+            }
+        }
+        if barriers(request, work, self.root)?.is_some() {
+            return Err(OwnerError::OwnerRecoveryQuarantined);
+        }
+        let snapshot = read_snapshot(request, work, self.root, self.pins)?;
+        if &snapshot.installation != self.installation
+            || &snapshot.record != self.record
+            || snapshot.selected_key_binding != self.selected_key_binding
+        {
+            return Err(OwnerError::OwnerGuardMismatch);
+        }
+        request.check()?;
+        Ok(snapshot)
+    }
+}
+
+#[path = "read_child.rs"]
+mod read_child;
+pub use read_child::{NativeReadOperation, NativeReadStartup, RetainedShutdown};

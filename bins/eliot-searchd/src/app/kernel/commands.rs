@@ -12,6 +12,7 @@ use crate::sha256;
 use super::output::{
     emit_indexed_source, emit_one_shot_scan, emit_store_search,
 };
+#[cfg(test)]
 use super::protocol::serve_stdio;
 use super::status::direct_health_effective;
 
@@ -27,6 +28,7 @@ fn parse_u64(value: &str, name: &str) -> Result<u64, String> {
         .map_err(|_| format!("INVALID_{name}"))
 }
 
+#[cfg(test)]
 pub(super) fn cmd_serve_data_root(arguments: &[String]) -> Result<(), String> {
     let (mut guard, store) = open_direct_store(Path::new(&arguments[1]))?;
     store.verify()?;

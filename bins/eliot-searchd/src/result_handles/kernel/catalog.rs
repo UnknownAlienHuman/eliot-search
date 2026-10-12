@@ -5,12 +5,14 @@ mod prepared;
 
 pub(crate) use prepared::PreparedHandles;
 
+#[cfg(test)]
+use crate::direct_store::DirectStore;
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 use crate::continuation::qualified_entropy_32;
-use crate::direct_store::{DirectStore, StoredMatch};
+use crate::direct_store::{DirectRead, StoredMatch};
 use crate::sha256;
 use crate::source_fence::digest as source_fence;
 
@@ -78,7 +80,7 @@ impl ResultHandleCatalog {
     #[cfg(test)]
     pub(crate) fn mint_page(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         matches: &[StoredMatch],
     ) -> Result<Vec<PublicHandledMatch>, ResultHandleError> {
         let mut prepared = self.prepare_mint_page(store, matches)?;
@@ -90,13 +92,17 @@ impl ResultHandleCatalog {
     /// Any preparation, diagnostics or output error may drop the whole batch.
     pub(crate) fn prepare_mint_page(
         &mut self,
-        store: &DirectStore,
+        store: &impl DirectRead,
         matches: &[StoredMatch],
     ) -> Result<PreparedHandles<'_>, ResultHandleError> {
         if self.entropy_poisoned {
             return Err(ResultHandleError::EntropyUnavailable);
         }
-        if store.namespace_id() != self.namespace_id() {
+        if store
+            .namespace_id()
+            .map_err(|_| ResultHandleError::SourceFenceChanged)?
+            != self.namespace_id()
+        {
             return Err(ResultHandleError::SourceFenceChanged);
         }
         self.expire();
@@ -105,13 +111,13 @@ impl ResultHandleCatalog {
         }
         let summaries = store
             .list_sources()
+            .map_err(|_| ResultHandleError::SourceFenceChanged)?
             .into_iter()
             .map(|source| (source.source_id.clone(), source))
             .collect::<BTreeMap<_, _>>();
-        let fence = source_fence(store);
+        let fence = source_fence(store).map_err(|_| ResultHandleError::SourceFenceChanged)?;
         let expires_at = Instant::now() + RESULT_HANDLE_TTL;
-        let expires_in_ms =
-            u64::try_from(RESULT_HANDLE_TTL.as_millis()).unwrap_or(u64::MAX);
+        let expires_in_ms = u64::try_from(RESULT_HANDLE_TTL.as_millis()).unwrap_or(u64::MAX);
         let mut staged = Vec::with_capacity(matches.len());
         let mut reserved = BTreeSet::new();
 
@@ -179,8 +185,7 @@ impl ResultHandleCatalog {
 
     pub(super) fn expire(&mut self) {
         let now = Instant::now();
-        self.records
-            .retain(|_, record| record.expires_at > now);
+        self.records.retain(|_, record| record.expires_at > now);
     }
 
     fn allocate_token(

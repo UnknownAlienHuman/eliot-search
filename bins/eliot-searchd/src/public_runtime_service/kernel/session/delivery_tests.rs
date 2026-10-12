@@ -1,8 +1,32 @@
 //! Exercises the real fail-stop session loop with in-memory I/O and callbacks.
 
-use std::io::{Cursor, Write};
+use std::io::{BufRead, Cursor, Write};
+
+use search_runtime_owner::OwnerError;
 
 use super::{MUTATION_UNKNOWN, OUTPUT_FAILED, ServiceControl, serve};
+
+#[test]
+fn empty_line_refusal_preserves_the_following_health_exchange() {
+    let mut reader = Cursor::new(b"\nhealth\n");
+    let mut writer = Vec::new();
+    let mut health = 0;
+    let result = serve(&mut reader, &mut writer, 1024, |command, output, _| {
+        if let Some(code) = super::super::dispatch::command_refusal(command) {
+            crate::service_output::write_error(output, code)?;
+            return Ok(ServiceControl::Continue);
+        }
+        assert_eq!(command, "health");
+        health += 1;
+        output.write_all(b"health-complete\n").unwrap();
+        Ok(ServiceControl::Continue)
+    });
+    assert_eq!(result, Ok(()));
+    assert_eq!(health, 1);
+    let rendered = String::from_utf8(writer).unwrap();
+    assert!(rendered.contains("SERVICE_COMMAND_INVALID"));
+    assert!(rendered.ends_with("health-complete\n"));
+}
 
 #[test]
 fn logical_failure_after_output_does_not_append_error_or_consume_next_request() {
@@ -11,13 +35,18 @@ fn logical_failure_after_output_does_not_append_error_or_consume_next_request() 
     let mut calls = 0;
     let result = serve(&mut reader, &mut writer, 1024, |_, output, _| {
         calls += 1;
-        output.write_all(b"{\"event\":\"search_page_started\"}\n").unwrap();
+        output
+            .write_all(b"{\"event\":\"search_page_started\"}\n")
+            .unwrap();
         Err("SERVICE_RESPONSE_TOO_LARGE".into())
     });
     assert_eq!(result, Err(OUTPUT_FAILED.to_owned()));
     assert_eq!(calls, 1);
     assert_eq!(reader.position(), 6);
-    assert_eq!(writer.as_slice(), b"{\"event\":\"search_page_started\"}\n".as_slice());
+    assert_eq!(
+        writer.as_slice(),
+        b"{\"event\":\"search_page_started\"}\n".as_slice()
+    );
 }
 
 #[test]
@@ -97,5 +126,79 @@ fn zero_length_successful_write_and_flush_do_not_start_a_response() {
     });
     assert_eq!(result, Ok(()));
     assert_eq!(calls, 2);
-    assert!(String::from_utf8(writer).unwrap().contains("SERVICE_ARGUMENT_INVALID"));
+    assert!(
+        String::from_utf8(writer)
+            .unwrap()
+            .contains("SERVICE_ARGUMENT_INVALID")
+    );
+}
+
+#[test]
+fn native_refusal_before_output_leaves_next_command_unread() {
+    let refusal = OwnerError::OwnerGuardMismatch;
+    let mut reader = Cursor::new(b"first\nsecond\n");
+    let mut writer = Vec::new();
+    let mut calls = 0;
+    let result = serve(&mut reader, &mut writer, 1024, |command, _, attempt| {
+        calls += 1;
+        assert_eq!(command, "first");
+        attempt.refuse_native(refusal);
+        Err("PRIVATE_ERROR_SENTINEL".to_owned())
+    });
+    assert_eq!(result, Err(refusal.code().to_owned()));
+    assert_eq!(calls, 1);
+    assert_eq!(reader.position(), 6);
+    assert_eq!(reader.fill_buf().unwrap(), b"second\n");
+    assert!(writer.is_empty());
+}
+
+#[test]
+fn native_refusal_overrides_successful_callback_without_an_extra_frame() {
+    let refusal = OwnerError::OwnerGuardMismatch;
+    let mut reader = Cursor::new(b"first\nsecond\n");
+    let mut writer = Vec::new();
+    let mut calls = 0;
+    let result = serve(
+        &mut reader,
+        &mut writer,
+        1024,
+        |command, output, attempt| {
+            calls += 1;
+            assert_eq!(command, "first");
+            output.write_all(b"complete\n").unwrap();
+            output.flush().unwrap();
+            attempt.refuse_native(refusal);
+            Ok(ServiceControl::Continue)
+        },
+    );
+    assert_eq!(result, Err(refusal.code().to_owned()));
+    assert_eq!(calls, 1);
+    assert_eq!(reader.position(), 6);
+    assert_eq!(reader.fill_buf().unwrap(), b"second\n");
+    assert_eq!(writer.as_slice(), b"complete\n");
+}
+
+#[test]
+fn validation_with_native_error_wording_remains_recoverable() {
+    let refusal = OwnerError::OwnerGuardMismatch;
+    let mut reader = Cursor::new(b"invalid\nvalid\n");
+    let mut writer = Vec::new();
+    let mut calls = 0;
+    let result = serve(&mut reader, &mut writer, 1024, |command, output, _| {
+        calls += 1;
+        match command {
+            "invalid" => Err(refusal.code().to_owned()),
+            "valid" => {
+                output.write_all(b"complete\n").unwrap();
+                Ok(ServiceControl::Stop)
+            }
+            _ => panic!("unexpected command"),
+        }
+    });
+    assert_eq!(result, Ok(()));
+    assert_eq!(calls, 2);
+    assert_eq!(reader.position(), 14);
+    let rendered = String::from_utf8(writer).unwrap();
+    assert!(rendered.contains(refusal.code()));
+    assert!(rendered.ends_with("complete\n"));
 }
