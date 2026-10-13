@@ -530,4 +530,4 @@ impl NativeReadClosed {
 mod tests;
 
 #[path = "registration_read.rs"]
-mod registration_read;
+pub(super) mod registration_read;

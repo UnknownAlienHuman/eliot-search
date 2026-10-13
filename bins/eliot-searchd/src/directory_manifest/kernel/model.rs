@@ -22,6 +22,7 @@ pub struct DirectoryManifest {
 
 /// Result of explicit directory reconciliation.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub struct DirectorySyncResult {
     pub(crate) namespace_id: String,
     pub(crate) directory_digest: String,

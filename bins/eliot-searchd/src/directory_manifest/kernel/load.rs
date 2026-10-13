@@ -19,6 +19,7 @@ use super::spec::{
     MAX_MANIFEST_LINE_BYTES,
 };
 
+#[cfg(test)]
 pub(super) fn load_latest_manifest(
     root: &Path,
     namespace_id: &str,

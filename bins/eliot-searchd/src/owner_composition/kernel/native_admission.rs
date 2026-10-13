@@ -581,6 +581,10 @@ impl NativeBindingView<'_> {
 mod read_child;
 pub use read_child::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 
+#[path = "source_sync.rs"]
+mod source_sync;
+pub use source_sync::{NativeSyncPreflightOperation, run_source_sync_preflight};
+
 #[path = "registration_mutation.rs"]
 mod registration_mutation;
 pub use registration_mutation::{NativeRegistrationOperation, run_source_registration};

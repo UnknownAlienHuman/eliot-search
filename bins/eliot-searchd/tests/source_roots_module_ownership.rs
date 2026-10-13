@@ -310,6 +310,24 @@ fn native_registration_inspection_reuses_codec_and_currentness_without_recovery(
     assert!(!native.contains("remove_file"));
     assert!(!native.contains("rename("));
 }
+
+#[test]
+fn sync_preflight_uses_complete_existing_policy_without_acknowledgement() {
+    let root = crate_root();
+    let inspection = read(&root, "src/source_roots/kernel/inspection.rs");
+    let preflight = inspection.split("pub fn preflight_sync(").nth(1).unwrap()
+        .split("pub struct SourceRootInspection").next().unwrap();
+    for required in [
+        ".registration_bytes()", "SourceRootInspection::read_using",
+        "current_workspace_truth()", "truth.configured == 0", "!truth.source_current",
+        "truth.unavailable != 0", "truth.gap_count != 0", "operation.verify()",
+    ] { assert!(preflight.contains(required), "missing {required}"); }
+    assert!(inspection.contains("impl SourceRootProbes for NativeSyncPreflightOperation"));
+    assert!(!preflight.contains("mark_reconciled_synced"));
+    assert!(!preflight.contains("SourceRootCatalog"));
+    let catalog = read(&root, "src/source_roots/kernel/catalog.rs").replace("\r\n", "\n");
+    assert!(catalog.contains("#[cfg(test)]\n    pub(crate) fn mark_reconciled_synced"));
+}
 #[test]
 fn native_source_change_prepares_existing_codec_and_currentness_before_effects() {
     let root = crate_root();
