@@ -252,9 +252,15 @@ fn sync_preflight_keeps_native_context_and_has_no_effect_path() {
         < native.find("holder.terminal(output, code)").unwrap());
     assert_eq!(native.matches(".write(frame.as_bytes())").count(), 1);
     assert!(native.find("drop((registration, bytes))").unwrap()
-        < native.find("close_owner(owner)").unwrap());
+        < native.find("close_owner(owner, output_attempted)").unwrap());
     assert!(native.find("drop((pins, root, installation, record, bound_root))").unwrap()
         < native.find("drop(exclusions)").unwrap());
+    let close = native.split("fn close_owner(").nth(1).unwrap()
+        .split("// Exactly one complete frame write;").next().unwrap();
+    assert!(close.contains("if output_attempted && result.is_err()"));
+    assert!(close.contains(".store(true, Ordering::Release)"));
+    assert!(close.contains("return Err(OwnerError::OwnerAcquireOutcomeUnknown)"));
+    assert!(native.contains("close_owner(owner, emitted.is_ok())"));
     for source in [&route, &native] {
         for forbidden in [
             "DataRootGuard", "DirectStore", "RevisionProtector", "sync_directory(",

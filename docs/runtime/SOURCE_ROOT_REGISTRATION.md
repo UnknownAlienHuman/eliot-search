@@ -39,7 +39,8 @@ After valid preflight the command emits one bounded content-free refusal:
 
 This command currently constructs no mutable store or protector, traverses no source files, writes
 no storage/credential/lifecycle state and never acknowledges currentness. It exits unsuccessfully.
-A short/failed write or flush has unknown output outcome and is never followed by another frame.
+A short/failed write, flush or post-output close checkpoint has unknown output outcome, cancels the
+original operation and is never followed by another frame.
 Registration closes before native pins/records/root custody; exclusions release last. Existing-only
 store/credential composition and contextual sync effects are separate serial successors under #475.
 The legacy create-or-open/effectful sync implementation remains only for deferred test fixtures.

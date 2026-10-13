@@ -40,13 +40,7 @@ impl SyncHolder {
             ..
         } = self;
         drop((registration, bytes));
-        close_owner(owner).map_err(|error| {
-            if output_attempted {
-                OwnerError::OwnerAcquireOutcomeUnknown
-            } else {
-                error
-            }
-        })
+        close_owner(owner, output_attempted)
     }
 
     fn terminal(&mut self, writer: &mut impl Write, code: &str) -> Result<(), OwnerError> {
@@ -62,7 +56,7 @@ impl SyncHolder {
     }
 }
 
-fn close_owner(mut owner: NativeRootCapability) -> Result<(), OwnerError> {
+fn close_owner(mut owner: NativeRootCapability, output_attempted: bool) -> Result<(), OwnerError> {
     let child = owner
         .work
         .arrive(&owner.request, "sync-registration-closed");
@@ -81,7 +75,15 @@ fn close_owner(mut owner: NativeRootCapability) -> Result<(), OwnerError> {
     let pins = work.arrive(&request, "sync-pins-closed");
     drop(exclusions);
     let exclusions = work.arrive(&request, "sync-exclusions-released");
-    child.and(pins).and(exclusions)
+    let result = child.and(pins).and(exclusions);
+    if output_attempted && result.is_err() {
+        request
+            .credential_context()
+            .1
+            .store(true, Ordering::Release);
+        return Err(OwnerError::OwnerAcquireOutcomeUnknown);
+    }
+    result
 }
 
 // Exactly one complete frame write; short/failed output is unknown, never retried.
@@ -159,7 +161,7 @@ pub fn run_source_sync_preflight(
                 _ => unreachable!(),
             };
             let emitted = emit(&owner.request, &mut owner.work, output, code);
-            let closed = close_owner(owner);
+            let closed = close_owner(owner, emitted.is_ok());
             emitted
                 .and(closed)
                 .map_err(|error| error.code().to_owned())?;
