@@ -188,6 +188,14 @@ impl BoundSession {
     ///
     /// Errors after output starts and unwinding disconnect the session. Validation
     /// errors before output do not consume provider/event sequence or terminal state.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the provider sequence previewed for this event, or a retained
+    /// progress guard, is missing while replacing its entry after successful output.
+    /// Both are unreachable under this exclusive session borrow: the sequence was
+    /// observed from the same ledger before output, and the guard was read from it
+    /// to validate this same request.
     pub fn deliver_provider_event<E>(
         &mut self,
         request: &mut AdmittedProviderRequest,

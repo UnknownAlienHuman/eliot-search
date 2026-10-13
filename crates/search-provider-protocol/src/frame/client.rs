@@ -186,14 +186,13 @@ fn validate_direction(kind: MessageKind, direction: Direction) -> Result<()> {
 fn validate_shape(envelope: &ProviderEnvelope, direction: Direction) -> Result<()> {
     validate_direction(envelope.message_kind, direction)?;
     envelope.validate().map_err(|_| ProtocolError::InvalidEnvelope)?;
-    if let ProviderBodyV1::Request(body) = &envelope.body {
-        if body.recipe_request.request_id != envelope.request_id
+    if let ProviderBodyV1::Request(body) = &envelope.body
+        && (body.recipe_request.request_id != envelope.request_id
             || body.grant.binding_id != envelope.binding_id
-            || body.grant.installation_incarnation_id != envelope.installation_incarnation_id
+            || body.grant.installation_incarnation_id != envelope.installation_incarnation_id)
         {
             return Err(ProtocolError::InvalidBody);
         }
-    }
     if let ProviderBodyV1::Result(body) = &envelope.body {
         response::validate_result_identity(&body.result, envelope)?;
     }
@@ -202,7 +201,7 @@ fn validate_shape(envelope: &ProviderEnvelope, direction: Direction) -> Result<(
 
 /// Encode the exact standalone-grant response body schema without adding a
 /// transport frame or authenticated response envelope.
-pub(crate) fn encode_grant_response_schema(
+pub fn encode_grant_response_schema(
     body: &StandaloneGrantResponseBodyV1,
 ) -> Result<Vec<u8>> {
     let mut output = Encoder::new(MAX_STANDALONE_GRANT_RESPONSE_BYTES);
@@ -228,7 +227,7 @@ pub(crate) fn encode_grant_response_schema(
 
 /// Decode the exact standalone-grant response body schema and reject alternate
 /// spellings by re-encoding the decoded value.
-pub(crate) fn decode_grant_response_schema(
+pub fn decode_grant_response_schema(
     bytes: &[u8],
 ) -> Result<StandaloneGrantResponseBodyV1> {
     if bytes.is_empty() || bytes.len() > MAX_STANDALONE_GRANT_RESPONSE_BYTES {

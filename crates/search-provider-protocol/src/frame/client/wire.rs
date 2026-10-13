@@ -62,12 +62,12 @@ impl Encoder {
     }
 
     pub(super) fn binary(&mut self, bytes: &[u8]) -> Result<()> {
-        let length = encoded_length(bytes.len())?;
-        self.room(length.checked_add(2).ok_or(ProtocolError::FrameTooLarge)?)?;
         // The contracts crate's base64 helpers are private. Encode directly
         // into this bounded wire buffer, without an expanded temporary string.
         const ALPHABET: &[u8; 64] =
             b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+        let length = encoded_length(bytes.len())?;
+        self.room(length.checked_add(2).ok_or(ProtocolError::FrameTooLarge)?)?;
         self.raw(b"\"")?;
         for chunk in bytes.chunks(3) {
             let first = chunk[0];
@@ -79,7 +79,7 @@ impl Encoder {
                 ALPHABET[usize::from(((second & 15) << 2) | (third >> 6))],
                 ALPHABET[usize::from(third & 63)],
             ];
-            self.raw(&encoded[..chunk.len() + 1])?;
+            self.raw(&encoded[..=chunk.len()])?;
         }
         self.raw(b"\"")
     }

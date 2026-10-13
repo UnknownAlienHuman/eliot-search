@@ -87,6 +87,6 @@ impl PackageOpaque for RequestCancellation {
 
 impl CancellationProbe for RequestCancellation {
     fn is_cancelled(&self) -> bool {
-        RequestCancellation::is_cancelled(self)
+        Self::is_cancelled(self)
     }
 }
