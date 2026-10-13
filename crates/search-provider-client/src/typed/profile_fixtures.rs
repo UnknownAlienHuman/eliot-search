@@ -8,7 +8,9 @@
 
 #[cfg(test)]
 mod fixtures {
+    use std::cell::RefCell;
     use std::io::{self, Read, Write};
+    use std::rc::Rc;
     use std::time::{Duration, Instant};
 
     use search_contracts::{
@@ -17,7 +19,7 @@ mod fixtures {
     };
     use search_provider_protocol::{
         BindingContext, BindingKey, ClientNonce, PairingChallenge, PairingMachine, ProofDigest,
-        ServerNonce, SessionId, TypedTransportProfileV1, TransportPeer, authenticate_binding,
+        ServerNonce, SessionId, TransportPeer, TypedTransportProfileV1, authenticate_binding,
     };
 
     use crate::TypedProviderSession;
@@ -28,10 +30,29 @@ mod fixtures {
     struct ProfileStream {
         pending: Vec<u8>,
         open: bool,
+        reflect_offer: bool,
+        emitted: Rc<RefCell<Vec<u8>>>,
     }
 
     impl Read for ProfileStream {
         fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            if self.pending.is_empty() && self.reflect_offer {
+                let reflected_proof = {
+                    let emitted = self.emitted.borrow();
+                    let proof_start = emitted
+                        .len()
+                        .checked_sub(TypedTransportProfileV1::PROOF_BYTES)
+                        .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidData))?;
+                    emitted
+                        .get(proof_start..)
+                        .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidData))?
+                        .to_vec()
+                };
+                self.pending
+                    .extend_from_slice(TypedTransportProfileV1::PREFACE);
+                self.pending.extend_from_slice(&reflected_proof);
+                self.reflect_offer = false;
+            }
             let count = bytes.len().min(self.pending.len());
             let moved: Vec<u8> = self.pending.drain(..count).collect();
             bytes[..count].copy_from_slice(&moved);
@@ -49,6 +70,7 @@ mod fixtures {
 
     impl Write for ProfileStream {
         fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.emitted.borrow_mut().extend_from_slice(bytes);
             Ok(bytes.len())
         }
 
@@ -122,54 +144,28 @@ mod fixtures {
     }
 
     /// Runs the real profile owner against one synthetic server reply.
-    /// Runs the real profile owner against one synthetic server reply.
     ///
     /// The peer holds the stream open after the reply, so a complete reply can
     /// finish without the peer closing underneath it.
-    fn open(reply: Vec<u8>) -> Result<TypedProviderSession, TypedClientError> {
+    fn open_with_stream(
+        reply: Vec<u8>,
+        open: bool,
+        reflect_offer: bool,
+    ) -> (
+        Result<TypedProviderSession, TypedClientError>,
+        Rc<RefCell<Vec<u8>>>,
+    ) {
         let handoff = handoff();
+        let emitted = Rc::new(RefCell::new(Vec::new()));
         let never = || false;
-        let budget =
-            SetupBudget::from_deadline(Instant::now() + Duration::from_secs(60), &never)
-                .expect("synthetic setup budget");
-        TypedProviderSession::from_paired_socket(
-            SocketIo::from_local_stream(ProfileStream { pending: reply, open: true }),
-            handoff.binding,
-            handoff.ceremony,
-            handoff.key,
-            handoff.nonce,
-            search_provider_protocol::DEFAULT_PROTOCOL_LIMITS,
-            &budget,
-        )
-    }
-
-    /// The offer digest this client computes over its own offer transcript.
-    fn offer_digest() -> ProofDigest {
-        let handoff = handoff();
-        let pairing = handoff.ceremony.into_verified().expect("pairing");
-        let session = pairing.session();
-        let transcript =
-            TypedTransportProfileV1::offer_transcript(&session, &handoff.nonce);
-        handoff.key.with_bytes(|bytes| {
-            let mut hasher = blake3::Hasher::new_keyed(bytes);
-            for part in transcript {
-                hasher.update(part);
-            }
-            ProofDigest::from_bytes(*hasher.finalize().as_bytes())
-        })
-    }
-
-    /// Same owner path, but the peer closes without any reply bytes.
-    fn open_closed() -> Result<TypedProviderSession, TypedClientError> {
-        let handoff = handoff();
-        let never = || false;
-        let budget =
-            SetupBudget::from_deadline(Instant::now() + Duration::from_secs(60), &never)
-                .expect("synthetic setup budget");
-        TypedProviderSession::from_paired_socket(
+        let budget = SetupBudget::from_deadline(Instant::now() + Duration::from_secs(60), &never)
+            .expect("synthetic setup budget");
+        let result = TypedProviderSession::from_paired_socket(
             SocketIo::from_local_stream(ProfileStream {
-                pending: Vec::new(),
-                open: false,
+                pending: reply,
+                open,
+                reflect_offer,
+                emitted: Rc::clone(&emitted),
             }),
             handoff.binding,
             handoff.ceremony,
@@ -177,7 +173,43 @@ mod fixtures {
             handoff.nonce,
             search_provider_protocol::DEFAULT_PROTOCOL_LIMITS,
             &budget,
-        )
+        );
+        (result, emitted)
+    }
+
+    fn open(reply: Vec<u8>) -> Result<TypedProviderSession, TypedClientError> {
+        open_with_stream(reply, true, false).0
+    }
+
+    /// Expected proofs used only to check the bytes the client actually wrote.
+    fn expected_profile_domain_proofs() -> (ProofDigest, ProofDigest) {
+        let handoff = handoff();
+        let pairing = handoff.ceremony.into_verified().expect("pairing");
+        let ceremony_id = pairing.session();
+        let offer_transcript =
+            TypedTransportProfileV1::offer_transcript(&ceremony_id, &handoff.nonce);
+        let accept_transcript =
+            TypedTransportProfileV1::accept_transcript(&ceremony_id, &handoff.nonce);
+        let offer = handoff.key.with_bytes(|bytes| {
+            let mut hasher = blake3::Hasher::new_keyed(bytes);
+            for part in offer_transcript {
+                hasher.update(part);
+            }
+            ProofDigest::from_bytes(*hasher.finalize().as_bytes())
+        });
+        let accept = handoff.key.with_bytes(|bytes| {
+            let mut hasher = blake3::Hasher::new_keyed(bytes);
+            for part in accept_transcript {
+                hasher.update(part);
+            }
+            ProofDigest::from_bytes(*hasher.finalize().as_bytes())
+        });
+        (offer, accept)
+    }
+
+    /// Same owner path, but the peer closes without any reply bytes.
+    fn open_closed() -> Result<TypedProviderSession, TypedClientError> {
+        open_with_stream(Vec::new(), false, false).0
     }
 
     #[test]
@@ -195,10 +227,30 @@ mod fixtures {
     fn reflected_client_offer_proof_cannot_satisfy_the_separate_accept_domain() {
         // The server must prove its own accept transcript; echoing the client's
         // offer proof fails closed and never activates the session.
-        let mut reply = TypedTransportProfileV1::PREFACE.to_vec();
-        reply.extend_from_slice(offer_digest().as_bytes());
+        let (result, emitted) = open_with_stream(Vec::new(), true, true);
+        let (offer, accept) = expected_profile_domain_proofs();
+        let emitted = emitted.borrow();
+        let preface_end = TypedTransportProfileV1::PREFACE.len();
+        assert_eq!(
+            emitted.get(..preface_end),
+            Some(TypedTransportProfileV1::PREFACE),
+            "client emitted the typed-profile preface"
+        );
+        let emitted_proof = emitted
+            .get(preface_end..)
+            .expect("captured client offer proof");
+        assert_eq!(
+            emitted_proof,
+            offer.as_bytes(),
+            "outgoing proof authenticates the offer transcript"
+        );
+        assert_ne!(
+            emitted_proof,
+            accept.as_bytes(),
+            "outgoing proof must not use the server accept domain"
+        );
         assert!(matches!(
-            open(reply),
+            result,
             Err(TypedClientError::Protocol(
                 search_provider_protocol::ProtocolError::AuthenticationFailed
             ))

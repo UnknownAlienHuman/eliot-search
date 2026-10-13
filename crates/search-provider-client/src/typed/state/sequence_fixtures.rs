@@ -15,7 +15,7 @@ mod fixtures {
     use std::io::{self, Read, Write};
     use std::rc::Rc;
     use std::task::Poll;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use search_contracts::{
         AccessPartitionId, BindingId, BoundedList, BoundedNonContentMetadata,
@@ -34,9 +34,13 @@ mod fixtures {
     };
     use search_provider_protocol::{
         BindingContext, BindingKey, ClientEnvelopeCodec, ClientNonce, DEFAULT_PROTOCOL_LIMITS,
-        PairingChallenge, PairingMachine, ProofDigest, ProtocolError, ProviderFrameTranscript,
-        ServerEnvelopeCodec, ServerNonce, SessionId, SessionMachine, StandaloneGrantRequestV1,
-        TransportPeer, authenticate_binding, verify_proof,
+        FRAME_PREFIX_BYTES, FrameCodec, PairingChallenge, PairingMachine, ProofDigest,
+        ProtocolError, ProviderFrameTranscript, RequestStatus, ServerEnvelopeCodec, ServerNonce,
+        SessionId, SessionMachine, StandaloneGrantRequestV1, StandaloneGrantResponseBodyV1,
+        TransportPeer, TypedTransportProfileV1, authenticate_binding,
+        decode_standalone_grant_envelope, decode_standalone_grant_request, encode_response,
+        encode_standalone_grant_response_body, response_transcript, seal_response,
+        standalone_grant_envelope_transcript, verify_proof, verify_standalone_grant_envelope_proof,
     };
 
     use super::super::State;
@@ -75,8 +79,10 @@ mod fixtures {
         records: VecDeque<Vec<u8>>,
         eof_when_empty: bool,
         fail_write_after: Option<usize>,
+        first_flush_delay: Option<Duration>,
         written: Rc<Cell<usize>>,
         captured_write: Rc<RefCell<Vec<u8>>>,
+        read_records: Rc<Cell<usize>>,
     }
 
     impl QueuedPeer {
@@ -91,8 +97,10 @@ mod fixtures {
                     records: records.into_iter().collect(),
                     eof_when_empty,
                     fail_write_after: None,
+                    first_flush_delay: None,
                     written: Rc::clone(&written),
                     captured_write: Rc::clone(&captured_write),
+                    read_records: Rc::new(Cell::new(0)),
                 },
                 written,
                 captured_write,
@@ -106,6 +114,16 @@ mod fixtures {
             let (mut peer, written, captured_write) = Self::new(records, false);
             peer.fail_write_after = Some(bytes);
             (peer, written, captured_write)
+        }
+
+        fn with_first_flush_delay(
+            records: Vec<Vec<u8>>,
+            delay: Duration,
+        ) -> (Self, Rc<Cell<usize>>, Rc<RefCell<Vec<u8>>>, Rc<Cell<usize>>) {
+            let (mut peer, written, captured_write) = Self::new(records, false);
+            peer.first_flush_delay = Some(delay);
+            let read_records = Rc::clone(&peer.read_records);
+            (peer, written, captured_write, read_records)
         }
     }
 
@@ -124,6 +142,7 @@ mod fixtures {
             let drained = front.is_empty();
             if drained {
                 self.records.pop_front();
+                self.read_records.set(self.read_records.get() + 1);
             }
             Ok(count)
         }
@@ -149,6 +168,9 @@ mod fixtures {
         }
 
         fn flush(&mut self) -> io::Result<()> {
+            if let Some(delay) = self.first_flush_delay.take() {
+                std::thread::sleep(delay);
+            }
             Ok(())
         }
     }
@@ -416,6 +438,134 @@ mod fixtures {
         let mut record = frame.as_slice().to_vec();
         record.extend_from_slice(proof.as_bytes());
         record
+    }
+
+    fn keyed_transcript(key: &BindingKey, transcript: &[u8]) -> ProofDigest {
+        key.with_bytes(|bytes| {
+            ProofDigest::from_bytes(*blake3::keyed_hash(bytes, transcript).as_bytes())
+        })
+    }
+
+    /// One fully authenticated first grant-response record; its response body is
+    /// intentionally held back so the client stalls on the second response read.
+    fn signed_grant_response_header(request_id: RequestId) -> Vec<u8> {
+        let status = RequestStatus::Ok;
+        let body = StandaloneGrantResponseBodyV1::Claims(grant());
+        let body_bytes = encode_standalone_grant_response_body(status, &body)
+            .expect("canonical successful grant response body");
+        let body_digest = ProofDigest::from_bytes(*blake3::hash(&body_bytes).as_bytes());
+        let version = ProtocolVersion { major: 1, minor: 0 };
+        let unsigned = seal_response(
+            version,
+            server_nonce(),
+            request_id,
+            status,
+            body_digest,
+            ProofDigest::from_bytes([0; 32]),
+        );
+        let transcript = response_transcript(&unsigned);
+        let response_proof = keyed_transcript(&pairing_key(), &transcript);
+        let response = seal_response(
+            version,
+            server_nonce(),
+            request_id,
+            status,
+            body_digest,
+            response_proof,
+        );
+        let frame = encode_response(&response, DEFAULT_PROTOCOL_LIMITS)
+            .expect("canonical authenticated grant response envelope");
+        let record_proof = keyed_parts(
+            &pairing_key(),
+            ProviderFrameTranscript::response(ceremony_session(), server_nonce(), frame.as_slice())
+                .parts(),
+        );
+        let mut record = frame.as_slice().to_vec();
+        record.extend_from_slice(record_proof.as_bytes());
+        record
+    }
+
+    fn take_record<'a>(wire: &'a [u8], offset: &mut usize) -> (&'a [u8], ProofDigest) {
+        let prefix_end = (*offset)
+            .checked_add(FRAME_PREFIX_BYTES)
+            .expect("frame-prefix offset");
+        let prefix: [u8; FRAME_PREFIX_BYTES] = wire
+            .get(*offset..prefix_end)
+            .expect("complete outgoing frame prefix")
+            .try_into()
+            .expect("fixed frame-prefix size");
+        let frame_len = TypedTransportProfileV1::frame_length(prefix, DEFAULT_PROTOCOL_LIMITS)
+            .expect("valid outgoing frame length");
+        let frame_end = (*offset)
+            .checked_add(frame_len)
+            .expect("outgoing frame end");
+        let proof_end = frame_end
+            .checked_add(TypedTransportProfileV1::PROOF_BYTES)
+            .expect("outgoing proof end");
+        let frame = wire
+            .get(*offset..frame_end)
+            .expect("complete outgoing frame");
+        let proof: [u8; TypedTransportProfileV1::PROOF_BYTES] = wire
+            .get(frame_end..proof_end)
+            .expect("complete outgoing record proof")
+            .try_into()
+            .expect("fixed outgoing proof size");
+        *offset = proof_end;
+        (frame, ProofDigest::from_bytes(proof))
+    }
+
+    fn verify_outgoing_grant_records(
+        wire: &[u8],
+        request_id: RequestId,
+        request: &StandaloneGrantRequestV1,
+    ) {
+        let mut offset = 0;
+        let (envelope_frame, envelope_record_proof) = take_record(wire, &mut offset);
+        let expected_envelope_record_proof = keyed_parts(
+            &pairing_key(),
+            ProviderFrameTranscript::request(ceremony_session(), server_nonce(), envelope_frame)
+                .parts(),
+        );
+        assert!(verify_proof(
+            &expected_envelope_record_proof,
+            &envelope_record_proof
+        ));
+
+        let versions = ProtocolRange::new(
+            ProtocolVersion { major: 1, minor: 0 },
+            ProtocolVersion { major: 1, minor: 0 },
+        )
+        .expect("supported versions");
+        let envelope =
+            decode_standalone_grant_envelope(envelope_frame, DEFAULT_PROTOCOL_LIMITS, versions)
+                .expect("complete typed grant request envelope");
+        assert_eq!(envelope.version(), ProtocolVersion { major: 1, minor: 0 });
+        assert_eq!(envelope.server_nonce(), &server_nonce());
+        assert_eq!(envelope.request_id(), &request_id);
+        let envelope_transcript = standalone_grant_envelope_transcript(&envelope);
+        let expected_envelope_proof = keyed_transcript(&pairing_key(), &envelope_transcript);
+        verify_standalone_grant_envelope_proof(&envelope, &expected_envelope_proof)
+            .expect("grant envelope proof authenticates its request and body digest");
+
+        let (body_frame, body_record_proof) = take_record(wire, &mut offset);
+        let expected_body_record_proof = keyed_parts(
+            &pairing_key(),
+            ProviderFrameTranscript::request(ceremony_session(), server_nonce(), body_frame)
+                .parts(),
+        );
+        assert!(verify_proof(
+            &expected_body_record_proof,
+            &body_record_proof
+        ));
+        let body_payload = FrameCodec::decode(body_frame, DEFAULT_PROTOCOL_LIMITS)
+            .expect("complete typed grant request body frame");
+        let decoded_request = decode_standalone_grant_request(body_payload.as_slice())
+            .expect("canonical typed grant request body");
+        assert_eq!(&decoded_request, request);
+        let observed_body_digest =
+            ProofDigest::from_bytes(*blake3::hash(body_payload.as_slice()).as_bytes());
+        assert!(verify_proof(envelope.body_digest(), &observed_body_digest));
+        assert_eq!(offset, wire.len(), "exactly two complete request records");
     }
 
     /// The same record with a corrupted trailer, so the body is never released.
@@ -690,7 +840,14 @@ mod fixtures {
 
     #[test]
     fn the_original_grant_deadline_covers_both_command_writes_and_response_wait() {
-        let (peer, written, _) = QueuedPeer::new(Vec::new(), false);
+        const GRANT_DEADLINE: Duration = Duration::from_secs(6);
+        const FIRST_WRITE_DELAY: Duration = Duration::from_secs(3);
+        let request_id = RequestId::from_bytes([0x46; 16]);
+        let request = grant_request();
+        let (peer, written, captured_write, read_records) = QueuedPeer::with_first_flush_delay(
+            vec![signed_grant_response_header(request_id)],
+            FIRST_WRITE_DELAY,
+        );
         let state = owner_with_peer(peer);
         let mut owner = TypedProviderSession { state: Some(state) };
         owner
@@ -700,17 +857,27 @@ mod fixtures {
             .bind_trusted_installation_id(InstallationId::from_bytes([0x52; 16]))
             .expect("independent trust fixture");
 
+        let started = Instant::now();
         let error = owner
-            .request_standalone_grant(
-                RequestId::from_bytes([0x46; 16]),
-                grant_request(),
-                Duration::from_millis(250),
-            )
-            .expect_err("the peer withholds the first grant response record");
+            .request_standalone_grant(request_id, request.clone(), GRANT_DEADLINE)
+            .expect_err("the peer stalls after its first authenticated response record");
+        let elapsed = started.elapsed();
         assert!(matches!(error, TypedClientError::DeadlineExpired));
+        assert_eq!(
+            read_records.get(),
+            1,
+            "first authenticated reply was delivered"
+        );
+        let captured_write = captured_write.borrow();
+        assert_eq!(written.get(), captured_write.len());
+        verify_outgoing_grant_records(&captured_write, request_id, &request);
         assert!(
-            written.get() > 0,
-            "both command records were peer-visible before timeout"
+            elapsed >= GRANT_DEADLINE - Duration::from_secs(1),
+            "the original deadline includes the earlier write-phase budget"
+        );
+        assert!(
+            elapsed < GRANT_DEADLINE + Duration::from_millis(1_500),
+            "response waiting did not receive a renewed grant deadline"
         );
         assert_eq!(error.outcome_class(), crate::OutcomeClass::Unknown);
         assert!(owner.state.is_none(), "grant timeout drops the sole owner");
