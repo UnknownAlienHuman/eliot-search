@@ -168,6 +168,9 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
     }
 
     pub(crate) fn checkpoint(&self) -> Result<(), String> {
+        if self.dpapi_first_refusal.get().is_some() {
+            return Err(self.dpapi_failure().public_reason().to_owned());
+        }
         if self.unexpected_source_effect.get() {
             return Err("DIRECT_MIGRATION_SOURCE_WRITE_FORBIDDEN".to_owned());
         }
@@ -179,6 +182,9 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
     }
 
     pub(crate) fn charge(&self, work: LegacyRevisionObjectWork) -> Result<(), String> {
+        if self.dpapi_first_refusal.get().is_some() {
+            return Err(self.dpapi_failure().public_reason().to_owned());
+        }
         if self.unexpected_source_effect.get() {
             return Err("DIRECT_MIGRATION_SOURCE_WRITE_FORBIDDEN".to_owned());
         }
@@ -204,6 +210,9 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
     }
 
     fn dpapi_checkpoint(&self) -> Result<(), MigrationDpapiContextFailure> {
+        if self.dpapi_first_refusal.get().is_some() {
+            return Err(self.dpapi_failure());
+        }
         if self.unexpected_source_effect.get() {
             return Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::SourceWriteForbidden));
         }
@@ -218,6 +227,9 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
     }
 
     fn dpapi_charge(&self, work: LegacyRevisionObjectWork) -> Result<(), MigrationDpapiContextFailure> {
+        if self.dpapi_first_refusal.get().is_some() {
+            return Err(self.dpapi_failure());
+        }
         if self.unexpected_source_effect.get() {
             return Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::SourceWriteForbidden));
         }

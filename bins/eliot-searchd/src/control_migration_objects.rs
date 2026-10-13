@@ -293,21 +293,28 @@ fn read_revision_objects_at_with_context(
         revision_charge(context, Work::Allocate(usize::try_from(metadata.byte_length)
             .map_err(|_| "DIRECT_REVISION_LENGTH_MISMATCH".to_owned())?))?;
         let decoded = context.map_or_else(
-            || protector.unprotect(
-                encoded, &metadata.revision_id, &metadata.content_digest, metadata.byte_length,
-            ).map(Zeroizing::new),
+            || {
+                let decoded = protector.unprotect(
+                    encoded, &metadata.revision_id, &metadata.content_digest, metadata.byte_length,
+                ).map(Zeroizing::new);
+                revision_checkpoint(deadline, None)?;
+                decoded
+            },
             |context| {
                 #[cfg(windows)]
-                { protector.unprotect_with_context(
-                    context, encoded, &metadata.revision_id, &metadata.content_digest,
-                    metadata.byte_length,
-                ) }
+                {
+                    let decoded = protector.unprotect_with_context(
+                        context, encoded, &metadata.revision_id, &metadata.content_digest,
+                        metadata.byte_length,
+                    )?;
+                    revision_checkpoint(deadline, Some(context))?;
+                    Ok(decoded)
+                }
                 #[cfg(not(windows))]
                 { let _ = context; Err("DIRECT_REVISION_ENCRYPTION_UNAVAILABLE".to_owned()) }
             },
-        );
-        revision_checkpoint(deadline, context)?;
-        Some(decoded?)
+        )?;
+        Some(decoded)
     } else { None };
     drop(encoded);
     revision_checkpoint(deadline, context)?;
