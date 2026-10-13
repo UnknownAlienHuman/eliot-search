@@ -887,6 +887,7 @@ fn control(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, family: Family) -> 
         match io::metadata(source, &path)? {
             io::Observed::Object(meta) if meta.is_dir() => {
                 // Every known metadata container is visited, not mistaken for a file.
+                stream.item(family, Status::Gap, 35, [subject, ZERO, ZERO], [meta.len(), 0, 0])?;
                 control_directory(stream, &path, family, 0)
             }
             _ => control_file(stream, &path, family, subject, residue),
@@ -923,6 +924,7 @@ fn control_directory(
         let subject = io::fingerprint(source, &name.key)?;
         match io::metadata(source, &path)? {
             io::Observed::Object(meta) if meta.is_dir() => {
+                stream.item(family, Status::Gap, 35, [subject, ZERO, ZERO], [meta.len(), depth as u64 + 1, 0])?;
                 control_directory(stream, &path, family, depth + 1)
             }
             _ => control_file(stream, &path, family, subject, family == Family::Residue),

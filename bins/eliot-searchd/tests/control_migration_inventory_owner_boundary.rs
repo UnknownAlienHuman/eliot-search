@@ -230,3 +230,27 @@ fn unknown_control_representation_is_incomplete_instead_of_silently_skipped() {
     assert!(unknown_format.contains("Status::Unsupported"));
     assert!(unknown_format.contains("[subject, ZERO, ZERO]"));
 }
+
+#[test]
+fn empty_temporary_control_directory_has_a_metadata_row_before_recursion() {
+    let fixture = Fixture::new();
+    let control = fixture.0.join("control");
+    let temporary = control.join("empty.pending");
+    std::fs::create_dir_all(&temporary).unwrap();
+    let source = fixture.source();
+    let mut directories = Vec::new();
+    inventory_io::visit(&source, &control, |name| { directories.push(name.value.clone()); Ok(()) }).unwrap();
+    assert_eq!(directories, [std::ffi::OsString::from("empty.pending")]);
+    let mut children = 0;
+    assert_eq!(inventory_io::visit(&source, &temporary, |_| { children += 1; Ok(()) }).unwrap(), None);
+    assert_eq!(children, 0);
+    // Source ownership guard: both the selected root container and nested
+    // containers are accounted before recursion even when native I/O is empty.
+    let scanner = include_str!("../src/control_migration_inventory/scan.rs");
+    let initial = scanner.split("// Every known metadata container").nth(1).unwrap()
+        .split("control_directory(stream, &path, family, 0)").next().unwrap();
+    assert!(initial.contains("Status::Gap, 35"));
+    let recursive = scanner.split("fn control_directory(").nth(1).unwrap()
+        .split("control_directory(stream, &path, family, depth + 1)").next().unwrap();
+    assert!(recursive.contains("Status::Gap, 35"));
+}
