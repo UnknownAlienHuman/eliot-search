@@ -21,6 +21,7 @@ fn binding() -> LegacyInventoryBinding {
             request_blake3: [5; 32],
             record_blake3: [6; 32],
             physical_blake3: [7; 32],
+            native_limits: [256, 262_144, 524_288, 1_073_741_824, 16_384, 256],
             epoch: 8,
             generation: 9,
         },
@@ -56,7 +57,7 @@ fn source_row() -> SourceImportRow {
 
 fn expected_header() -> String {
     format!(
-        "H\teliot.legacy-inventory.v1\t{}\t{}\t{}\t{}\tblake3:{}\tblake3:{}\tblake3:{}\t8\t9\t123e4567-e89b-12d3-a456-426614174000\tsha256:{}\tsha256:{}\tsha256:{}:14\t2000000\t536870912\t32\tauthority=none\n",
+        "H\teliot.legacy-inventory.v1\t{}\t{}\t{}\t{}\tblake3:{}\tblake3:{}\tblake3:{}\t8\t9\t123e4567-e89b-12d3-a456-426614174000\tsha256:{}\tsha256:{}\tsha256:{}:14\t2000000\t536870912\t32\tnative-limits=256,262144,524288,1073741824,16384,256\tauthority=none\n",
         repeated_hex(1, 16),
         repeated_hex(2, 16),
         repeated_hex(3, 16),
@@ -345,7 +346,7 @@ fn row_and_byte_caps_are_finite_and_never_truncate() {
     assert_eq!(over_row.finish(), Err(LegacyInventoryError::Accounting));
 
     let byte_limited = LegacyInventoryLimits {
-        encoded_bytes: 667,
+        encoded_bytes: expected_header().len() as u64 + 32,
         ..LegacyInventoryLimits::BASELINE
     };
     let mut encoder = LegacyInventoryEncoder::new(byte_limited).expect("header-sized byte cap");
@@ -364,6 +365,23 @@ fn row_and_byte_caps_are_finite_and_never_truncate() {
     );
     assert_eq!(encoder.summary, before, "byte rejection changed accounting");
     assert_eq!(encoder.finish(), Err(LegacyInventoryError::Accounting));
+}
+
+#[test]
+fn actual_native_allowance_is_distinct_and_a_missing_limit_poisoned_the_header() {
+    let mut first = LegacyInventoryEncoder::new(LegacyInventoryLimits::BASELINE).unwrap();
+    let baseline = first.header(binding()).unwrap();
+    let mut changed = binding();
+    changed.owner.native_limits[3] -= 1;
+    let mut second = LegacyInventoryEncoder::new(LegacyInventoryLimits::BASELINE).unwrap();
+    assert_ne!(baseline, second.header(changed).unwrap());
+
+    let mut absent = binding();
+    absent.owner.native_limits[4] = 0;
+    let mut refused = LegacyInventoryEncoder::new(LegacyInventoryLimits::BASELINE).unwrap();
+    assert_eq!(refused.header(absent), Err(LegacyInventoryError::Accounting));
+    assert_eq!(refused.summary, LegacyInventorySummary::default());
+    assert_eq!(refused.finish(), Err(LegacyInventoryError::Accounting));
 }
 
 #[test]

@@ -46,7 +46,7 @@ pub fn migration_manifest_files(
 
 /// Inventory's pure visitor validates every generation/entry from bytes read
 /// under original native custody. It never lists paths or collects manifests.
-pub(crate) fn inventory_manifest(
+pub fn inventory_manifest(
     path: &Path, bytes: &[u8], namespace: &[u8; 32],
     visit: impl FnMut([[u8; 32]; 3]) -> Result<(), String>,
 ) -> Result<(u64, u64, [u8; 32], [u8; 32]), String> {

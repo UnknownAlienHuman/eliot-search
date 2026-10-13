@@ -130,6 +130,9 @@ pub struct LegacyInventoryOwner {
     pub record_blake3: [u8; 32],
     /// Verified physical-root binding BLAKE3 digest.
     pub physical_blake3: [u8; 32],
+    /// Exact admitted argument, input, encoding, I/O, native-call and open ceilings.
+    /// This observation neither constructs nor renews the original allowance.
+    pub native_limits: [u64; 6],
     /// Retained owner epoch; this observation does not acquire ACTIVE authority.
     pub epoch: u64,
     /// Retained owner record generation.
@@ -306,7 +309,7 @@ impl LegacyInventoryEncoder {
         &mut self,
         b: &LegacyInventoryBinding,
     ) -> Result<Vec<u8>, LegacyInventoryError> {
-        if self.started || b.owner.epoch == 0 {
+        if self.started || b.owner.epoch == 0 || b.owner.native_limits.contains(&0) {
             return Err(LegacyInventoryError::Accounting);
         }
         let o = b.owner;
@@ -315,7 +318,7 @@ impl LegacyInventoryEncoder {
             |(d, n)| format!("sha256:{}:{n}", hex(d.as_bytes())),
         );
         let row = format!(
-            "H\t{LEGACY_INVENTORY_PROFILE}\t{}\t{}\t{}\t{}\tblake3:{}\tblake3:{}\tblake3:{}\t{}\t{}\t{}\tsha256:{}\tsha256:{}\t{registration}\t{}\t{}\t{}\tauthority=none\n",
+            "H\t{LEGACY_INVENTORY_PROFILE}\t{}\t{}\t{}\t{}\tblake3:{}\tblake3:{}\tblake3:{}\t{}\t{}\t{}\tsha256:{}\tsha256:{}\t{registration}\t{}\t{}\t{}\tnative-limits={},{},{},{},{},{}\tauthority=none\n",
             hex(&o.installation),
             hex(&o.incarnation),
             hex(&o.root),
@@ -330,7 +333,9 @@ impl LegacyInventoryEncoder {
             hex(b.snapshot.as_bytes()),
             self.limits.records,
             self.limits.encoded_bytes,
-            self.limits.page_names
+            self.limits.page_names,
+            o.native_limits[0], o.native_limits[1], o.native_limits[2],
+            o.native_limits[3], o.native_limits[4], o.native_limits[5]
         );
         let bytes = self.row(row)?;
         self.started = true;
@@ -488,7 +493,7 @@ fn dominant_status(counts: &[u64; 7]) -> LegacyInventoryStatus {
 /// Exact new profile descriptor digest; existing chain/row domains are untouched.
 #[must_use]
 pub fn legacy_inventory_profile_digest() -> Sha256Digest32 {
-    Sha256Digest32::from_bytes(Sha256::digest(b"eliot.legacy-inventory.v1\0H,I,E,T,F;12-families;7-statuses;page32;row8192;rows2000000;bytes536870912;authority-none;recovery-unresolved").into())
+    Sha256Digest32::from_bytes(Sha256::digest(b"eliot.legacy-inventory.v1\0H,I,E,T,F;12-families;7-statuses;page32;row8192;rows2000000;bytes536870912;native-limits-6;name2048;chunk65536;parents8;control134217728;objects68157440;authority-none;recovery-unresolved").into())
 }
 
 fn hex(bytes: &[u8]) -> String {

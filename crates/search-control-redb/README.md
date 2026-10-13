@@ -209,3 +209,29 @@ See [function contract](FUNCTIONS.md), [agent instructions](AGENTS.md),
 [earlier readback fences](../../docs/runtime/CONTROL_READBACK_FENCES.md). The snapshot admission
 semantics above supersede the earlier description that every rejected disk publication leaves the
 prior snapshot available to new requests. The prior immutable value itself is still preserved.
+
+## Streamed legacy inventory
+
+`LegacyInventoryEncoder` owns the explicit `eliot.legacy-inventory.v1` metadata
+profile. A header binds the original retained installation/root/operation,
+legacy source snapshot, registration digest and finite limits. Entries are
+streamed under twelve ordered families, seven closed statuses, twelve required
+terminals and one accounting footer. Limits are 32 directory names per page,
+8 KiB per row, two million records and 512 MiB encoded output. Exhaustion refuses
+publication rather than truncating the denominator.
+
+The native migration consumer retains one original request/deadline/cancellation
+and selected existing protector. Directory handles stay pinned across every page;
+reads use no-follow opens, exact same-handle observations and single-link objects.
+The source/root/registration snapshot is revalidated, a complete second stream is
+compared, and publication uses the existing once-only record-artifact lifecycle.
+Unknown publication retains its evidence and remains unresolved.
+
+The stream contains references, identities and counts. It contains no source
+bodies, plaintext/key material or absolute local paths. Readable source events,
+heads, retained revisions, directory generations and preparation bindings use
+their existing owning codecs. Unmapped/unsupported objects and unavailable joins
+remain explicit. Directory/profile gaps are never complete negative evidence.
+The footer grants no verified-candidate, cutover, restart or cleanup authority;
+#268-C/#348, #269, #347 and #215 remain separate product obligations. Existing
+source-map/content/staged-plan bytes and receipts remain unchanged.

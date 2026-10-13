@@ -37,8 +37,20 @@ impl From<&SourceRecord> for RevisionMetadata {
 }
 
 impl DirectStore {
+    pub(crate) fn inventory_root(&self) -> &Path {
+        &self.root
+    }
+
+    pub(crate) const fn inventory_namespace(&self) -> [u8; 32] {
+        self.namespace_id
+    }
+
     pub(crate) fn inventory_heads(&self) -> impl Iterator<Item = &SourceRecord> + '_ {
         self.registry.latest.values()
+    }
+
+    pub(crate) fn inventory_revisions(&self) -> impl ExactSizeIterator<Item = &SourceRecord> + '_ {
+        self.registry.revisions.values()
     }
 
     /// Projects the sole accepted revision inventory without retaining another map.
@@ -196,7 +208,9 @@ pub(super) fn replay_registry_reader_checked(
         checkpoint()?;
         let read = read_log_line(reader, &mut line, &mut consumed)?;
         checkpoint()?;
-        if read == 0 { break; }
+        if read == 0 {
+            break;
+        }
         if state.event_count >= MAX_SOURCE_EVENTS {
             return Err("DIRECT_SOURCE_EVENT_LIMIT_EXCEEDED".to_owned());
         }
@@ -257,7 +271,8 @@ impl DirectStore {
     ) -> Result<Self, String> {
         checkpoint()?;
         let namespace_id = parse_namespace(namespace)?;
-        let (registry, consumed) = replay_registry_reader_checked(&mut Cursor::new(log), |_, _| Ok(()), &mut checkpoint)?;
+        let (registry, consumed) =
+            replay_registry_reader_checked(&mut Cursor::new(log), |_, _| Ok(()), &mut checkpoint)?;
         if u64::try_from(log.len()).ok() != Some(consumed) {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }

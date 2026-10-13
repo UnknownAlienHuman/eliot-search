@@ -212,6 +212,7 @@ impl NativeReadOperation<'_> {
                 request_blake3: request_digest,
                 record_blake3: binding.record.record_digest,
                 physical_blake3: binding.record.volume_identity_digest,
+                native_limits: request.inventory_limits(),
                 epoch: binding.record.epoch,
                 generation: binding.record.generation,
             })

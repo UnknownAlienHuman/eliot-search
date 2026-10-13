@@ -458,6 +458,12 @@ impl NativeRootRequest {
         (self.id, self.digest)
     }
 
+    pub(super) const fn inventory_limits(&self) -> [u64; 6] {
+        [self.limits.arguments as u64, self.limits.input_bytes as u64,
+            self.limits.encoded_bytes as u64, self.limits.read_bytes as u64,
+            self.limits.native_calls as u64, self.limits.opens as u64]
+    }
+
     pub(super) fn retain_refusal_work(self, work: NativeWork) -> Self {
         *self.terminal_work.borrow_mut() = Some(work);
         self
