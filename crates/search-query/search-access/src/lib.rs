@@ -390,9 +390,10 @@ pub struct SafeRetrievalLeg {
 }
 
 /// Compiles finite safe legs. Without a current overlap proof, each membership
-/// remains in its own independent scoring population. Empty scopes and
-/// inconsistent membership bindings fail before any leg is constructed,
-/// including when a caller supplies an overlap proof.
+/// remains in its own independent scoring population.
+///
+/// Empty scopes and inconsistent membership bindings fail before any leg is
+/// constructed, including when a caller supplies an overlap proof.
 ///
 /// # Panics
 ///
@@ -556,9 +557,10 @@ pub enum ContaminationDecision {
 }
 
 /// Discards a whole leg when its candidates, IDF, counts, diversity, or trace
-/// may have been influenced by newly denied or purged material. Regressed or
-/// contradictory live snapshots discard all legs; a leg from a generation
-/// newer than the current snapshot cannot be certified clean either.
+/// may have been influenced by newly denied or purged material.
+///
+/// Regressed or contradictory live snapshots discard all legs; a leg from a
+/// generation newer than the current snapshot cannot be certified clean either.
 #[must_use]
 pub fn classify_contaminated_legs(
     execution: &[LegSecurityPopulation],

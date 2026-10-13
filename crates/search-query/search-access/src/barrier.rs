@@ -235,14 +235,14 @@ impl SecurityMutationBarrier {
             }
             return self.recover_security_mutation(effects);
         }
-        if let Some(completed) = &self.completed {
-            if completed.command.operation_id == command.operation_id {
-                return if completed.command == command {
-                    Ok(completed.receipt.clone())
-                } else {
-                    Err(AccessError::SecurityOperationConflict)
-                };
-            }
+        if let Some(completed) = &self.completed
+            && completed.command.operation_id == command.operation_id
+        {
+            return if completed.command == command {
+                Ok(completed.receipt.clone())
+            } else {
+                Err(AccessError::SecurityOperationConflict)
+            };
         }
         self.validate_command(&command)?;
         // Install before entering ANY adapter; unwind/uncertain return cannot
@@ -343,9 +343,10 @@ impl SecurityMutationBarrier {
     }
 
     fn validate_command(&self, command: &SecurityRestriction) -> Result<(), AccessError> {
-        if command.security_domain_ref != self.domain
-            || command.required_dependents != self.required_dependents
-        {
+        if command.security_domain_ref != self.domain {
+            return Err(AccessError::SecurityOperationConflict);
+        }
+        if command.required_dependents != self.required_dependents {
             return Err(AccessError::SecurityOperationConflict);
         }
         if command.expected_policy_revision != self.policy_revision
@@ -357,9 +358,10 @@ impl SecurityMutationBarrier {
         if command.next_live.fail_closed {
             return Err(AccessError::SecurityFailClosed);
         }
-        if command.next_live.generation <= self.live.generation
-            || command.policy_revision.get() < self.policy_revision.get()
-        {
+        if command.next_live.generation <= self.live.generation {
+            return Err(AccessError::SecurityGenerationRegression);
+        }
+        if command.policy_revision.get() < self.policy_revision.get() {
             return Err(AccessError::SecurityGenerationRegression);
         }
         // This path is membership-restrictive only. Permissive policy changes
