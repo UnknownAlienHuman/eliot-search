@@ -8,13 +8,19 @@ use search_revision_store::LegacyRevisionObjectWork;
 
 struct MigrationSource<'a, 'b, 'c> {
     refused: Cell<bool>,
+    locator_refused: Cell<bool>,
     _borrow: PhantomData<(&'a (), &'b (), &'c ())>,
 }
 impl MigrationSource<'_, '_, '_> {
     fn checkpoint(&self) -> Result<(), String> {
         if self.refused.get() { Err("ORIGINAL_REFUSED".to_owned()) } else { Ok(()) }
     }
-    fn charge(&self, _: LegacyRevisionObjectWork) -> Result<(), String> { self.checkpoint() }
+    fn charge(&self, work: LegacyRevisionObjectWork) -> Result<(), String> {
+        self.checkpoint()?;
+        if self.locator_refused.get() && matches!(work, LegacyRevisionObjectWork::AllocateLocator(_)) {
+            Err("ORIGINAL_LOCATOR_ALLOWANCE_REFUSED".to_owned())
+        } else { Ok(()) }
+    }
 }
 #[path = "../src/control_migration_bootstrap/output.rs"]
 mod output;
@@ -31,7 +37,7 @@ impl Fixture {
 }
 impl Drop for Fixture { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
 fn source() -> MigrationSource<'static, 'static, 'static> {
-    MigrationSource { refused: Cell::new(false), _borrow: PhantomData }
+    MigrationSource { refused: Cell::new(false), locator_refused: Cell::new(false), _borrow: PhantomData }
 }
 
 #[test]
@@ -56,6 +62,15 @@ fn existing_target_is_preserved_and_never_reopened_as_original() {
     assert_eq!(pins.create(&source, "fixture.owner-migration.v1.redb").err().unwrap(),
         "DIRECT_MIGRATION_BOOTSTRAP_EXISTS");
     assert_eq!(std::fs::read(target).unwrap(), b"foreign bytes");
+}
+
+#[test]
+fn locator_reservation_refusal_prevents_ancestor_storage_and_target_creation() {
+    let fixture = Fixture::new(); let source = source();
+    source.locator_refused.set(true);
+    assert_eq!(output::Output::admit(&source, &fixture.0).err().unwrap(),
+        "ORIGINAL_LOCATOR_ALLOWANCE_REFUSED");
+    assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 0);
 }
 
 #[test]

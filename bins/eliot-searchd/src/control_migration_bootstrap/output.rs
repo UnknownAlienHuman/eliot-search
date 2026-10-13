@@ -18,7 +18,8 @@ pub(super) struct Output {
 impl Output {
     pub(super) fn admit(source: &MigrationSource<'_, '_, '_>, directory: &Path) -> Result<Self, String> {
         if !directory.is_absolute() { return Err(INVALID.to_owned()); }
-        let mut pins = Vec::new();
+        source.charge(Work::Allocate(64 * std::mem::size_of::<Pin>()))?;
+        let mut pins = Vec::with_capacity(64);
         let mut path = Some(directory);
         while let Some(current) = path {
             if pins.len() == 64 { return Err(INVALID.to_owned()); }
@@ -27,6 +28,7 @@ impl Output {
             source.charge(Work::Observe)?;
             if !file.metadata().map_err(|_| INVALID.to_owned())?.is_dir() { return Err(INVALID.to_owned()); }
             let identity = observe(source, &file)?;
+            source.charge(Work::AllocateLocator(current.as_os_str().len()))?;
             pins.push(Pin { path: current.to_owned(), file, identity });
             path = current.parent();
         }
@@ -49,6 +51,9 @@ impl Output {
             || !name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_'))
         { return Err(INVALID.to_owned()); }
         let directory = self.pins.first().ok_or_else(|| INVALID.to_owned())?;
+        let locator_bytes = directory.path.as_os_str().len().checked_add(name.len() + 1)
+            .ok_or_else(|| INVALID.to_owned())?;
+        source.charge(Work::AllocateLocator(locator_bytes))?;
         let path = directory.path.join(name);
         source.charge(Work::Open)?;
         let file = new_file(&path)?;
@@ -57,6 +62,7 @@ impl Output {
             let identity = observe(source, &file)?;
             source.charge(Work::Open)?;
             let retained = file.try_clone().map_err(|_| UNKNOWN.to_owned())?;
+            source.charge(Work::AllocateLocator(path.as_os_str().len()))?;
             self.target = Some(Pin { path: path.clone(), file: retained, identity });
             let path_blake3 = path_digest(source, &path)?;
             self.verify(source)?;
