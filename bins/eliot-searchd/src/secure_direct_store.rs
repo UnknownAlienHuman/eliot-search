@@ -27,6 +27,8 @@ mod preparation_store;
 mod revision_writer;
 #[path = "secure_direct_store_storage_io.rs"]
 mod storage_io;
+#[path = "control_migration_context.rs"]
+pub mod migration_context;
 
 pub use kernel::DirectStore;
 pub use plaintext::{
@@ -51,8 +53,8 @@ pub use initialization::{existing_key_binding, initialize_layout as initialize_o
 #[path = "secure_direct_store/existing_read.rs"]
 mod existing_read;
 pub use existing_read::{
-    DirectRead, ExistingReadStore, ExistingSyncStore, ReadOnlyStore, open_existing_read,
-    open_existing_sync,
+    DirectRead, ExistingMigrationStore, ExistingReadStore, ExistingSyncStore, ReadOnlyStore,
+    open_existing_migration, open_existing_read, open_existing_sync,
 };
 
 #[path = "secure_direct_store/existing_read_output.rs"]

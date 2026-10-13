@@ -1,67 +1,182 @@
 //! Offline source-map staging without normal daemon startup or source-state writes.
-//! Uses the normal owner's existing lock file; no competing ownership mechanism,
+//! Uses retained existing-only native custody; no competing ownership mechanism,
 //! credential creation, root recovery, revision conversion or query service is started.
 
-use std::fs::{self, File, Metadata, OpenOptions, TryLockError};
-use std::path::Path;
+use std::ffi::OsString;
+#[cfg(test)]
+use std::fs::{self, File, OpenOptions, TryLockError};
+use std::fs::Metadata;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use search_contracts::SourceNamespaceId;
+use search_runtime_owner::OwnerError;
 
+#[cfg(test)]
 use crate::development::{DataRootGuard, OwnerLockProfile, live_owner_denial};
-use crate::direct_store::DirectStore;
-use crate::plaintext_direct_store;
-use crate::service_output::{json_string, write_line};
+use crate::owner_composition::{
+    NativeReadOperation, NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing,
+};
 use crate::source_roots;
 
 pub fn maybe_run() -> Option<ExitCode> {
-    let args = std::env::args_os().skip(1).collect::<Vec<_>>();
-    if args.first().and_then(|arg| arg.to_str()) != Some("--plan-control-migration") {
+    let started = Instant::now();
+    let arguments = std::env::args_os().skip(1).take(257).collect::<Vec<_>>();
+    let (selected, _) = crate::config_composition::strip_config_args_os(&arguments).ok()?;
+    if selected.first().and_then(|arg| arg.to_str()) != Some("--plan-control-migration") {
         return None;
     }
-    let result = (|| -> Result<(), String> {
-        let [_, root, target, output] = args.as_slice() else {
-            return Err("USAGE_ERROR".to_owned());
-        };
-        let target = target.to_str().and_then(|value| SourceNamespaceId::parse(value).ok())
-            .filter(|value| value.as_bytes() != &[0; 16])
-            .ok_or_else(|| "DIRECT_MIGRATION_TARGET_NAMESPACE_INVALID".to_owned())?;
-        let deadline = Instant::now().checked_add(Duration::from_secs(120))
-            .ok_or_else(|| "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())?;
-        let response = DataRootGuard::with_existing_lock(Path::new(root), |root| {
-            let registration = source_roots::migration_input(root)
-                .map_err(|error| error.code().to_owned())?;
-            // Output must already exist and cannot overlap either original state
-            // or a registered observation root. Do not probe current source paths.
-            let output = canonical_directory(Path::new(output))?;
-            if overlaps(&output, root)
-                || registration.paths.iter().any(|source| overlaps(&output, source))
-            {
-                return Err("DIRECT_MIGRATION_OUTPUT_OVERLAPS_SOURCE".to_owned());
-            }
-            let response = plaintext_direct_store::DirectStore::with_existing_mapping_source(
-                root, deadline, |source| {
-                    DirectStore::stage_mapping_artifact(source, root, target, &output, "", deadline)
-                },
-            )?;
-            if source_roots::migration_input(root).map_err(|error| error.code().to_owned())? != registration {
-                return Err("DIRECT_MIGRATION_ROOT_STATE_CHANGED".to_owned());
-            }
-            Ok(response)
-        })?;
-        write_line(&mut std::io::stdout().lock(), &response)
-            .map_err(|_| "DIRECT_MIGRATION_PLAN_ACK_OUTCOME_UNKNOWN".to_owned())
-    })();
-    Some(match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("{{\"error\":{}}}", json_string(&error));
-            ExitCode::from(2)
-        }
-    })
+    Some(run(&arguments, started))
 }
 
+fn run(arguments: &[OsString], started: Instant) -> ExitCode {
+    let failed = ExitCode::from(2);
+    let Some(deadline) = started.checked_add(Duration::from_secs(120)) else {
+        return failed;
+    };
+    let Ok(limits) = NativeRootLimits::new([
+        256, 256 * 1024, 512 * 1024, 1024 * 1024 * 1024, 16384, 256,
+    ]) else {
+        return failed;
+    };
+    let cancellation = Arc::new(AtomicBool::new(false));
+    let (request, selected) = match NativeRootRequest::for_control_migration_plan(
+        arguments, deadline, Arc::clone(&cancellation), limits,
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = NativeRootRequest::emit_validation_refusal(
+                deadline, &cancellation, limits, &mut std::io::stderr().lock(), error,
+            );
+            return failed;
+        }
+    };
+    let Some(target) = selected[2].to_str().and_then(|value| SourceNamespaceId::parse(value).ok()) else {
+        return failed;
+    };
+    // Admission consumes the original request and its work. There is no fresh
+    // validation/output request after this point, including admission failure.
+    let Ok(admission) = admit_existing(request) else {
+        return failed;
+    };
+    match admission {
+        NativeRootAdmission::Inspection(owner) => owner
+            .run_registration_one_shot(|operation| {
+                let result = stage(operation, target, Path::new(&selected[3]));
+                let (line, exit) = match result {
+                    Ok(receipt) if receipt.len() <= 60 * 1024 => (receipt, ExitCode::SUCCESS),
+                    Ok(_) => (error_frame("DIRECT_MIGRATION_OUTPUT_LIMIT"), failed),
+                    Err(error) => (error_frame(public_reason(&error)), failed),
+                };
+                emit_frame(operation, &mut std::io::stdout().lock(), &line)?;
+                // A successfully emitted refusal is a completed callback, not
+                // an Err after output. Later teardown failures stay unknown.
+                Ok(exit)
+            })
+            .unwrap_or(failed),
+        NativeRootAdmission::Unavailable(_, request) => {
+            let _ = request.emit(
+                &mut std::io::stderr().lock(),
+                &error_frame("DIRECT_MIGRATION_ROOT_UNAVAILABLE"),
+            );
+            failed
+        }
+        NativeRootAdmission::Mutation(_) => failed,
+    }
+}
+
+fn stage(
+    operation: &mut NativeReadOperation<'_>,
+    target: SourceNamespaceId,
+    output: &Path,
+) -> Result<String, String> {
+    let registration = operation.registration_bytes()?;
+    let roots = source_roots::migration_input_from_bytes(operation.root(), registration.as_deref())
+        .map_err(|error| error.code().to_owned())?;
+    let directory = output_directory(operation, output)?;
+    if overlaps(&directory, operation.root())
+        || roots.paths.iter().any(|root| overlaps(&directory, root))
+    {
+        return Err("DIRECT_MIGRATION_OUTPUT_OVERLAP".to_owned());
+    }
+    let receipt = {
+        let store: crate::direct_store::ExistingMigrationStore = crate::direct_store::open_existing_migration(operation)
+            .map_err(|error| error.code().to_owned())?;
+        store.stage_mapping(target, &directory, operation)
+    }?; // Store/protector closes before registration/native custody.
+    if output_directory(operation, &directory)? != directory {
+        return Err("DIRECT_MIGRATION_DIRECTORY_CHANGED".to_owned());
+    }
+    operation.verify().map_err(|error| error.code().to_owned())?;
+    Ok(receipt)
+}
+
+fn output_directory(
+    operation: &mut NativeReadOperation<'_>,
+    path: &Path,
+) -> Result<PathBuf, String> {
+    let invalid = || "DIRECT_MIGRATION_DIRECTORY_INVALID".to_owned();
+    let before = operation.source_root_metadata(path)
+        .map_err(|error| error.code().to_owned())?.map_err(|_| invalid())?;
+    if !before.is_dir() || is_link(&before) { return Err(invalid()); }
+    let canonical = operation.source_root_canonicalize(path)
+        .map_err(|error| error.code().to_owned())?.map_err(|_| invalid())?;
+    let after = operation.source_root_metadata(&canonical)
+        .map_err(|error| error.code().to_owned())?.map_err(|_| invalid())?;
+    if !after.is_dir() || is_link(&after) { return Err(invalid()); }
+    Ok(canonical)
+}
+
+fn emit_frame(
+    operation: &mut NativeReadOperation<'_>,
+    writer: &mut impl Write,
+    line: &str,
+) -> Result<(), String> {
+    if line.is_empty() || line.len() > 60 * 1024 || line.bytes().any(|byte| matches!(byte, b'\n' | b'\r')) {
+        return Err("DIRECT_MIGRATION_OUTPUT_INVALID".to_owned());
+    }
+    operation.verify().map_err(|error| error.code().to_owned())?;
+    operation.migration_charge(search_revision_store::LegacyRevisionObjectWork::Allocate(line.len() + 1))
+        .map_err(|error| error.code().to_owned())?;
+    let frame = format!("{line}\n");
+    let count = operation.write_output(writer, frame.as_bytes())
+        .map_err(|error| error.code().to_owned())?;
+    if count != frame.len() {
+        operation.cancel_output();
+        return Err(OwnerError::OwnerAcquireOutcomeUnknown.code().to_owned());
+    }
+    operation.flush_output(writer).map_err(|error| error.code().to_owned())?;
+    operation.verify().map_err(|error| error.code().to_owned())
+}
+
+fn error_frame(reason: &str) -> String {
+    format!("{{\"error\":\"{reason}\"}}")
+}
+
+// Lower legacy layers can carry private OS details. Only these literal reasons
+// can reach the public command; every other private failure is collapsed.
+fn public_reason(reason: &str) -> &'static str {
+    match reason {
+        "DIRECT_MIGRATION_DIRECTORY_INVALID" => "DIRECT_MIGRATION_DIRECTORY_INVALID",
+        "DIRECT_MIGRATION_DIRECTORY_CHANGED" => "DIRECT_MIGRATION_DIRECTORY_CHANGED",
+        "DIRECT_MIGRATION_OUTPUT_OVERLAP" => "DIRECT_MIGRATION_OUTPUT_OVERLAP",
+        "DIRECT_MIGRATION_CUTOVER_CORRUPT" => "DIRECT_MIGRATION_CUTOVER_CORRUPT",
+        "DIRECT_MIGRATION_CUTOVER_CONFLICT" => "DIRECT_MIGRATION_CUTOVER_CONFLICT",
+        "DIRECT_MIGRATION_CUTOVER_SUPERSEDED" => "DIRECT_MIGRATION_CUTOVER_SUPERSEDED",
+        "DIRECT_MIGRATION_PLAN_READBACK_MISMATCH" => "DIRECT_MIGRATION_PLAN_READBACK_MISMATCH",
+        "DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH" => "DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH",
+        "DIRECT_CONTROL_READBACK_MISMATCH" => "DIRECT_CONTROL_READBACK_MISMATCH",
+        "SOURCE_ROOT_UPDATE_OUTCOME_UNKNOWN" => "SOURCE_ROOT_UPDATE_OUTCOME_UNKNOWN",
+        "SOURCE_ROOT_CATALOG_CORRUPT" => "SOURCE_ROOT_CATALOG_CORRUPT",
+        _ => "DIRECT_MIGRATION_UNAVAILABLE",
+    }
+}
+
+#[cfg(test)]
 impl DataRootGuard {
     /// Borrow an existing canonical data root under its normal exclusive OS lock.
     /// No `DataRootGuard` instance is constructed: its ordinary initializer and
@@ -120,6 +235,7 @@ impl DataRootGuard {
 
 fn overlaps(a: &Path, b: &Path) -> bool { a.starts_with(b) || b.starts_with(a) }
 
+#[cfg(test)]
 fn canonical_directory(path: &Path) -> Result<std::path::PathBuf, String> {
     let invalid = || "DIRECT_MIGRATION_DIRECTORY_INVALID".to_owned();
     let metadata = fs::symlink_metadata(path).map_err(|_| invalid())?;
@@ -130,6 +246,7 @@ fn canonical_directory(path: &Path) -> Result<std::path::PathBuf, String> {
     Ok(canonical)
 }
 
+#[cfg(test)]
 fn regular(metadata: &Metadata) -> bool { metadata.is_file() && !is_link(metadata) }
 fn is_link(metadata: &Metadata) -> bool {
     #[cfg(windows)]
@@ -141,6 +258,7 @@ fn is_link(metadata: &Metadata) -> bool {
     { metadata.file_type().is_symlink() }
 }
 
+#[cfg(test)]
 fn verify_locked_locator(locked: &File, path: &Path) -> Result<(), String> {
     let invalid = || "DATA_ROOT_LOCK_IDENTITY_CHANGED".to_owned();
     if !regular(&fs::symlink_metadata(path).map_err(|_| invalid())?) { return Err(invalid()); }

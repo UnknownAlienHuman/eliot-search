@@ -5,7 +5,9 @@
 //! migration output. Pure UUID derivation, occurrence accounting and redb row
 //! construction live in `search-control-redb::migration`.
 
+#[cfg(test)]
 use std::path::Path;
+use std::io::Cursor;
 use std::time::Instant;
 
 use search_contracts::{Sha256Digest32, SourceNamespaceId};
@@ -20,6 +22,13 @@ use super::{
     SOURCE_LOG_FILE, SourceRecord, SourceState, event_json, read_namespace,
     replay_registry, sha256, snapshot_digest, validate_legacy_event,
 };
+use super::super::{parse_namespace, replay_registry_reader_checked};
+
+fn check_mapping_deadline(deadline: Instant) -> Result<(), String> {
+    if Instant::now() >= deadline {
+        Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+    } else { Ok(()) }
+}
 
 fn mapping_error(error: SourceMappingError) -> String {
     error.code().to_owned()
@@ -156,7 +165,7 @@ impl DirectStore {
         deadline: Instant,
         emit: impl FnMut(&[u8]) -> Result<(), String>,
     ) -> Result<SourceMappingSummary, String> {
-        self.compile_source_mapping_inner(namespace, deadline, emit, None)
+        self.compile_source_mapping_inner(namespace, emit, None, None, &mut || check_mapping_deadline(deadline))
     }
 
     /// Compile textual mapping output and the exact typed import rows in one pass.
@@ -169,39 +178,79 @@ impl DirectStore {
     ) -> Result<SourceMappingSummary, String> {
         self.compile_source_mapping_inner(
             namespace,
-            deadline,
             emit,
             Some(&mut mapped),
+            None,
+            &mut || check_mapping_deadline(deadline),
         )
+    }
+
+    pub(crate) fn compile_source_mapping_from_bytes(
+        &self,
+        target: SourceNamespaceId,
+        namespace: &[u8],
+        log: &[u8],
+        mut checkpoint: impl FnMut() -> Result<(), String>,
+        emit: impl FnMut(&[u8]) -> Result<(), String>,
+    ) -> Result<SourceMappingSummary, String> {
+        self.compile_source_mapping_inner(target, emit, None, Some((namespace, log)), &mut checkpoint)
+    }
+
+    pub(crate) fn compile_source_mapping_with_rows_from_bytes(
+        &self,
+        target: SourceNamespaceId,
+        namespace: &[u8],
+        log: &[u8],
+        mut checkpoint: impl FnMut() -> Result<(), String>,
+        emit: impl FnMut(&[u8]) -> Result<(), String>,
+        mut rows: impl FnMut(SourceImportRow) -> Result<(), String>,
+    ) -> Result<SourceMappingSummary, String> {
+        self.compile_source_mapping_inner(target, emit, Some(&mut rows), Some((namespace, log)), &mut checkpoint)
+    }
+
+    pub(crate) fn verify_migration_snapshot_from_bytes(
+        &self,
+        namespace: &[u8],
+        log: &[u8],
+        mut checkpoint: impl FnMut() -> Result<(), String>,
+    ) -> Result<[u8; 32], String> {
+        checkpoint()?;
+        let captured = parse_namespace(namespace)?;
+        if captured != self.namespace_id { return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned()); }
+        let (state, consumed) = replay_registry_reader_checked(
+            &mut Cursor::new(log),
+            |record, previous| validate_legacy_event(&captured, record, previous),
+            &mut checkpoint,
+        )?;
+        if u64::try_from(log.len()).ok() != Some(consumed) || state != self.registry {
+            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+        }
+        checkpoint()?;
+        Ok(snapshot_digest(&captured, state.last_sequence, &state.last_digest))
     }
 
     fn compile_source_mapping_inner(
         &self,
         namespace: SourceNamespaceId,
-        deadline: Instant,
         mut emit: impl FnMut(&[u8]) -> Result<(), String>,
         mut imported: Option<&mut dyn FnMut(SourceImportRow) -> Result<(), String>>,
+        pinned: Option<(&[u8], &[u8])>,
+        check: &mut dyn FnMut() -> Result<(), String>,
     ) -> Result<SourceMappingSummary, String> {
-        let check = || {
-            if Instant::now() >= deadline {
-                Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
-            } else {
-                Ok(())
-            }
-        };
         check()?;
         let header = self.source_mapping_header(namespace)?;
         let control = self.root.join(CONTROL_DIRECTORY);
-        if read_namespace(&control.join(NAMESPACE_FILE))? != self.namespace_id {
+        let legacy_namespace = match pinned {
+            Some((namespace, _)) => parse_namespace(namespace)?,
+            None => read_namespace(&control.join(NAMESPACE_FILE))?,
+        };
+        if legacy_namespace != self.namespace_id {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
         }
         emit(encode_header(header).as_bytes())?;
         let mut planner = SourceMappingPlanner::new(header, MAX_SOURCE_EVENTS)
             .map_err(mapping_error)?;
-        let state = replay_registry(
-            &control.join(SOURCE_LOG_FILE),
-            |record, previous| {
-                check()?;
+        let mut observe = |record: &SourceRecord, previous: Option<&SourceRecord>| {
                 validate_legacy_event(&header.legacy_namespace, record, previous)?;
                 let mapped = planner
                     .map(legacy_event(record, previous)?)
@@ -210,13 +259,24 @@ impl DirectStore {
                     imported(mapped.import_row())?;
                 }
                 emit(encode_mapped(&mapped, record, previous).as_bytes())
-            },
-        )?;
+            };
+        let state = match pinned {
+            Some((_, log)) => {
+                let (state, consumed) = replay_registry_reader_checked(&mut Cursor::new(log), &mut observe, &mut *check)?;
+                if u64::try_from(log.len()).ok() != Some(consumed) {
+                    return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+                }
+                state
+            }
+            None => replay_registry(&control.join(SOURCE_LOG_FILE), |record, previous| {
+                check()?;
+                observe(record, previous)
+            })?,
+        };
         check()?;
         let summary = planner.finish().map_err(mapping_error)?;
         if state != self.registry
-            || read_namespace(&control.join(NAMESPACE_FILE))?
-                != self.namespace_id
+            || pinned.is_none() && read_namespace(&control.join(NAMESPACE_FILE))? != self.namespace_id
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
@@ -226,6 +286,7 @@ impl DirectStore {
     }
 
     /// Borrow only the existing immutable legacy source snapshot for mapping.
+    #[cfg(test)]
     pub(crate) fn with_existing_mapping_source<T>(
         root: &Path,
         deadline: Instant,

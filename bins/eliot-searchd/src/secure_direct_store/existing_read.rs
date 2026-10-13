@@ -20,12 +20,90 @@ fn replay_existing(
     namespace: &[u8],
     log: &[u8],
 ) -> Result<(plaintext::DirectStore, [u8; 32]), OwnerError> {
-    let store = plaintext::DirectStore::from_existing_bytes(root, namespace, log)
+    replay_existing_checked(root, namespace, log, || Ok(()))
+}
+
+fn replay_existing_checked(
+    root: &std::path::Path,
+    namespace: &[u8],
+    log: &[u8],
+    checkpoint: impl FnMut() -> Result<(), String>,
+) -> Result<(plaintext::DirectStore, [u8; 32]), OwnerError> {
+    let store = plaintext::DirectStore::from_existing_bytes_checked(root, namespace, log, checkpoint)
         .map_err(|_| OwnerError::OwnerRecoveryQuarantined)?;
     let namespace_id =
         crate::sha256::decode_digest(&store.namespace_id())
             .ok_or(OwnerError::OwnerGuardMismatch)?;
     Ok((store, namespace_id))
+}
+
+/// Existing-only migration child. It exposes only staging into the caller's
+/// qualified external output, never the store, source traversal or mutation.
+pub struct ExistingMigrationStore {
+    store: DirectStore,
+    namespace: Vec<u8>,
+    log: Vec<u8>,
+}
+
+impl ExistingMigrationStore {
+    pub(crate) fn stage_mapping(
+        &self,
+        target: search_contracts::SourceNamespaceId,
+        directory: &std::path::Path,
+        operation: &mut NativeReadOperation<'_>,
+    ) -> Result<String, String> {
+        operation.verify().map_err(owner_error)?;
+        let binding = self.store.protector.initialization_key_binding().map_err(owner_error)?;
+        if self.store.root != operation.root()
+            || operation.selected_binding().is_some_and(|selected| binding != selected)
+        {
+            return Err(OwnerError::OwnerGuardMismatch.code().to_owned());
+        }
+        let result = {
+            let context = super::migration_context::MigrationContext::new(operation);
+            let input = super::migration_context::NativeMigrationInput {
+                namespace: &self.namespace,
+                log: &self.log,
+                protector: &self.store.protector,
+                context: &context,
+            };
+            let result = DirectStore::stage_mapping_artifact_existing(
+                &self.store.inner, &self.store.root, target, directory, &input,
+            );
+            context.checkpoint()?;
+            result
+        };
+        operation.verify().map_err(owner_error)?;
+        result
+    }
+}
+
+impl core::fmt::Debug for ExistingMigrationStore {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str("ExistingMigrationStore(<opaque>)")
+    }
+}
+
+pub fn open_existing_migration(
+    operation: &mut NativeReadOperation<'_>,
+) -> Result<ExistingMigrationStore, OwnerError> {
+    operation.verify()?;
+    let namespace = operation.namespace_bytes()?;
+    let log = operation.catalog_bytes()?;
+    let root = operation.root().to_owned();
+    let (inner, namespace_id) = replay_existing_checked(&root, &namespace, &log, || {
+        operation.migration_checkpoint().map_err(owner_error)
+    })?;
+    let selected = operation.selected_binding();
+    let protector = operation.credential_call(|deadline, cancellation| {
+        RevisionProtector::for_existing_credential(namespace_id, selected, deadline, cancellation)
+    })?;
+    operation.verify()?;
+    Ok(ExistingMigrationStore {
+        store: DirectStore { root, inner, protector },
+        namespace,
+        log,
+    })
 }
 
 /// Private daemon read surface shared by compatibility callers and the new

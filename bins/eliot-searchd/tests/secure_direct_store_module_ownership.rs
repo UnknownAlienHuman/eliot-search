@@ -166,9 +166,9 @@ fn direct_store_compatibility_and_query_regression_stay_closed() {
 fn existing_sync_child_reuses_replay_and_credential_without_effect_surface() {
     let root = crate_root();
     let source = read(&root, "src/secure_direct_store/existing_read.rs");
-    assert_eq!(source.matches("plaintext::DirectStore::from_existing_bytes(").count(), 1);
+    assert_eq!(source.matches("plaintext::DirectStore::from_existing_bytes_checked(").count(), 1);
     assert_eq!(source.matches("sha256::decode_digest(").count(), 1);
-    assert_eq!(source.matches("RevisionProtector::for_existing_credential(").count(), 2);
+    assert_eq!(source.matches("RevisionProtector::for_existing_credential(").count(), 3);
     let constructor = read(&root, "src/revision_protection/protector/initialization.rs");
     assert_eq!(constructor.matches("fn for_existing_credential(").count(), 1);
     assert!(!constructor.contains("for_existing_read"));
@@ -193,4 +193,25 @@ fn existing_sync_child_reuses_replay_and_credential_without_effect_surface() {
         "protect(", "unprotect(", "index_file(", "sync_directory(", "write_all",
         "read_dir", "create(true)", "mark_reconciled_synced",
     ] { assert!(!open.contains(forbidden), "effect reached sync composition: {forbidden}"); }
+}
+
+#[test]
+fn migration_child_is_closed_and_reuses_pinned_replay_and_selected_credential() {
+    let root = crate_root();
+    let source = read(&root, "src/secure_direct_store/existing_read.rs");
+    let child = source.split("pub struct ExistingMigrationStore {").nth(1).unwrap()
+        .split("impl core::fmt::Debug").next().unwrap();
+    assert_eq!(child.matches("pub(crate) fn ").count(), 1);
+    for required in ["stage_mapping(", "operation.verify()", "operation.selected_binding()",
+        "MigrationContext::new(operation)", "namespace: &self.namespace", "log: &self.log"] {
+        assert!(child.contains(required), "missing migration boundary {required}");
+    }
+    let open = source.split("pub fn open_existing_migration(").nth(1).unwrap()
+        .split("/// Private daemon read surface").next().unwrap();
+    assert_eq!(open.matches("for_existing_credential(").count(), 1);
+    assert!(open.find("replay_existing_checked(").unwrap() < open.find("credential_call(").unwrap());
+    for forbidden in ["impl DirectRead for ExistingMigrationStore", "impl Deref", "pub store:",
+        "DirectStore::open(", "load_or_create(", "for_initialization("] {
+        assert!(!child.contains(forbidden) && !open.contains(forbidden), "migration escape: {forbidden}");
+    }
 }
