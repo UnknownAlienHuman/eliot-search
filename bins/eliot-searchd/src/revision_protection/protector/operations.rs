@@ -4,12 +4,16 @@ use search_os_secrets::{
     LEGACY_REVISION_MAX_PLAINTEXT_BYTES,
     LEGACY_REVISION_MAX_PLAINTEXT_LENGTH,
     LEGACY_REVISION_MAX_PROTECTED_OBJECT_BYTES,
-    LegacyRevisionExpected, decode_legacy_revision_outer,
+    LegacyRevisionBinding, LegacyRevisionExpected, decode_legacy_revision_outer,
 };
 #[cfg(windows)]
 use search_os_secrets::decode_legacy_revision_inner;
 #[cfg(windows)]
 use zeroize::Zeroizing;
+#[cfg(windows)]
+use search_os_secrets_windows::{LegacyRevisionDpapiContext, LegacyRevisionDpapiWork};
+#[cfg(windows)]
+use crate::direct_store::migration_context::{MigrationContext, MigrationDpapiContextFailure};
 
 use super::RevisionProtector;
 use super::super::envelope::{decode_digest, envelope_reason};
@@ -62,6 +66,62 @@ impl RevisionProtector {
         content_digest: &str,
         expected_plaintext_len: u64,
     ) -> Result<Vec<u8>, String> {
+        let (binding, ciphertext) = self.validate_unprotect(
+            object, revision_id, content_digest, expected_plaintext_len,
+        )?;
+        #[cfg(windows)]
+        {
+            let mut ciphertext = Zeroizing::new(ciphertext.to_vec());
+            let inner = Zeroizing::new(native_windows::unprotect_data(
+                ciphertext.as_mut_slice(), &self.entropy,
+            )?);
+            Ok(Self::decode_unprotected_inner(&inner, binding)?.to_vec())
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (binding, ciphertext);
+            Err("DIRECT_REVISION_ENCRYPTION_UNAVAILABLE".to_owned())
+        }
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn unprotect_with_context(
+        &self, context: &MigrationContext<'_, '_>, object: &[u8], revision_id: &str,
+        content_digest: &str, expected_plaintext_len: u64,
+    ) -> Result<Zeroizing<Vec<u8>>, String> {
+        let mut context = context;
+        let (binding, ciphertext) = self.validate_unprotect(
+            object, revision_id, content_digest, expected_plaintext_len,
+        )?;
+        dpapi_charge(&mut context, LegacyRevisionDpapiWork::Allocate(ciphertext.len()))?;
+        let process_bytes = ciphertext.len().checked_mul(2)
+            .ok_or_else(|| "DPAPI_LEGACY_REVISION_INPUT_TOO_LARGE".to_owned())?;
+        dpapi_charge(&mut context, LegacyRevisionDpapiWork::Process(process_bytes))?;
+        dpapi_checkpoint(&mut context)?;
+
+        let mut ciphertext_copy = Zeroizing::new(Vec::new());
+        ciphertext_copy.try_reserve_exact(ciphertext.len())
+            .map_err(|_| "DPAPI_LEGACY_REVISION_ALLOCATION_FAILED".to_owned())?;
+        ciphertext_copy.extend_from_slice(ciphertext);
+        dpapi_checkpoint(&mut context)?;
+
+        let inner = Zeroizing::new(native_windows::unprotect_data_with_context(
+            &mut context, ciphertext_copy.as_mut_slice(), &self.entropy,
+        )?);
+        dpapi_charge(&mut context, LegacyRevisionDpapiWork::Process(inner.len()))?;
+        let plaintext_slice = Self::decode_unprotected_inner(&inner, binding)?;
+        let mut plaintext = Zeroizing::new(Vec::new());
+        plaintext.try_reserve_exact(plaintext_slice.len())
+            .map_err(|_| "DPAPI_LEGACY_REVISION_ALLOCATION_FAILED".to_owned())?;
+        plaintext.extend_from_slice(plaintext_slice);
+        dpapi_checkpoint(&mut context)?;
+        Ok(plaintext)
+    }
+
+    fn validate_unprotect<'a>(
+        &self, object: &'a [u8], revision_id: &str, content_digest: &str,
+        expected_plaintext_len: u64,
+    ) -> Result<(LegacyRevisionBinding, &'a [u8]), String> {
         if object.len() > MAX_PROTECTED_OBJECT_BYTES {
             return Err("DIRECT_REVISION_OBJECT_TOO_LARGE".to_owned());
         }
@@ -87,30 +147,30 @@ impl RevisionProtector {
             content_digest,
             expected_plaintext_len,
         );
-        let (binding, ciphertext) =
-            decode_legacy_revision_outer(object, expected, expected_key)
-                .map_err(envelope_reason)?;
-        #[cfg(windows)]
-        {
-            let mut ciphertext = ciphertext.to_vec();
-            let inner = Zeroizing::new(native_windows::unprotect_data(
-                &mut ciphertext,
-                &self.entropy,
-            )?);
-            // Validate the borrowed plaintext before allocating a return value;
-            // every rejected inner envelope stays inside the zeroizing owner.
-            Ok(
-                decode_legacy_revision_inner::<DirectRevisionDigest>(
-                    &inner, binding,
-                )
-                .map_err(envelope_reason)?
-                .to_vec(),
-            )
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = (binding, ciphertext);
-            Err("DIRECT_REVISION_ENCRYPTION_UNAVAILABLE".to_owned())
-        }
+        decode_legacy_revision_outer(object, expected, expected_key).map_err(envelope_reason)
     }
+
+    #[cfg(windows)]
+    fn decode_unprotected_inner(
+        inner: &[u8], binding: LegacyRevisionBinding,
+    ) -> Result<&[u8], String> {
+        decode_legacy_revision_inner::<DirectRevisionDigest>(inner, binding).map_err(envelope_reason)
+    }
+}
+
+#[cfg(windows)]
+fn context_failure_reason(error: &MigrationDpapiContextFailure) -> String {
+    error.public_reason().to_owned()
+}
+
+#[cfg(windows)]
+fn dpapi_charge(
+    context: &mut &MigrationContext<'_, '_>, work: LegacyRevisionDpapiWork,
+) -> Result<(), String> {
+    LegacyRevisionDpapiContext::charge(context, work).map_err(|error| context_failure_reason(&error))
+}
+
+#[cfg(windows)]
+fn dpapi_checkpoint(context: &mut &MigrationContext<'_, '_>) -> Result<(), String> {
+    LegacyRevisionDpapiContext::checkpoint(context).map_err(|error| context_failure_reason(&error))
 }

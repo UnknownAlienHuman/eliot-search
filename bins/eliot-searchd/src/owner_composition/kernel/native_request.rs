@@ -687,6 +687,21 @@ impl NativeWork {
         charge(&mut self.reads, bytes, request.limits.read_bytes)
     }
 
+    /// Record an actual bounded DPAPI clear after ordinary work has refused.
+    pub(super) const fn account_native_clear(
+        &mut self,
+        request: &NativeRootRequest,
+        actual_bytes: usize,
+    ) -> Result<(), OwnerError> {
+        let Some(total) = self.reads.checked_add(actual_bytes) else {
+            self.reads = usize::MAX;
+            return Err(OwnerError::ContractExhausted);
+        };
+        self.reads = total;
+        if total > request.limits.read_bytes { return Err(OwnerError::ContractExhausted); }
+        Ok(())
+    }
+
     pub(super) fn read_capacity(
         &self,
         request: &NativeRootRequest,

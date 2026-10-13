@@ -42,6 +42,49 @@ fn native_migration_uses_one_context_and_never_dispatches_legacy_marker_effects(
 }
 
 #[test]
+fn retained_revision_unprotect_uses_contextual_dpapi_and_preserves_unknown_reasons() {
+    let root = repository_root();
+    let context = read(&root, "bins/eliot-searchd/src/control_migration_context.rs");
+    for marker in ["impl LegacyRevisionDpapiContext for &MigrationContext",
+        "LegacyRevisionDpapiWork::NativeCall => Work::Observe",
+        "LegacyRevisionDpapiWork::Allocate(bytes) => Work::Allocate(bytes)",
+        "LegacyRevisionDpapiWork::Process(bytes) => Work::Compare(bytes)",
+        "dpapi_account_native_clear", "dpapi_clear_accounting_failed",
+        "dpapi_first_refusal: Rc<Cell<Option<MigrationDpapiFirstRefusal>>>",
+        "fn first_refusal(&self)", "if self.dpapi_first_refusal.get().is_none()",
+        "MigrationDpapiFirstRefusal::NativeOwner(first_refusal)"] {
+        assert!(context.contains(marker), "contextual DPAPI accounting lost {marker}");
+    }
+    let objects = read(&root, "bins/eliot-searchd/src/control_migration_objects.rs");
+    assert!(objects.contains("protector.unprotect_with_context("));
+    let protector = read(&root, "bins/eliot-searchd/src/revision_protection/protector/operations.rs");
+    assert!(protector.matches("self.validate_unprotect(").count() >= 2);
+    assert!(protector.contains("native_windows::unprotect_data_with_context("));
+    assert!(protector.contains("native_windows::unprotect_data("));
+    let dpapi = read(&root, "bins/eliot-searchd/src/revision_protection_windows/dpapi.rs");
+    assert!(dpapi.contains("unprotect_legacy_revision_current_user_with_context("));
+    assert!(dpapi.contains("ContextualLegacyRevisionDpapiError::NativeAndContext"));
+
+    let child = read(&root, "bins/eliot-searchd/src/owner_composition/kernel/read_child.rs");
+    let clear = child.split("pub(crate) fn migration_account_native_clear(").nth(1).unwrap()
+        .split("pub(crate) fn migration_deadline").next().unwrap();
+    assert!(clear.contains("account_native_clear("));
+    assert!(!clear.contains("with_binding("));
+    assert!(!clear.contains("request.check("));
+    assert!(read(&root, "bins/eliot-searchd/src/owner_composition/kernel/native_request.rs")
+        .contains("pub(super) const fn account_native_clear("));
+
+    let command = read(&root, "bins/eliot-searchd/src/source_migration_command.rs");
+    for reason in ["DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN",
+        "DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN",
+        "DIRECT_MIGRATION_IMPORT_PUBLISH_OUTCOME_UNKNOWN",
+        "DPAPI_LEGACY_REVISION_NATIVE_AND_CONTEXT",
+        "DPAPI_LEGACY_REVISION_NATIVE_AND_CONTEXT_CLEAR_ACCOUNTING_FAILED"] {
+        assert!(command.contains(reason), "public migration boundary collapsed {reason}");
+    }
+}
+
+#[test]
 fn cutover_marker_semantics_and_file_lifecycle_belong_to_control_owner() {
     let root = repository_root();
     let schema_owner = read(
