@@ -292,18 +292,20 @@ fn read_revision_objects_at_with_context(
         let protector = protector.ok_or_else(|| "DIRECT_REVISION_KEY_UNAVAILABLE".to_owned())?;
         revision_charge(context, Work::Allocate(usize::try_from(metadata.byte_length)
             .map_err(|_| "DIRECT_REVISION_LENGTH_MISMATCH".to_owned())?))?;
-        let decoded = match context {
-            #[cfg(windows)]
-            Some(context) => protector.unprotect_with_context(
-                context, encoded, &metadata.revision_id, &metadata.content_digest,
-                metadata.byte_length,
-            ),
-            #[cfg(not(windows))]
-            Some(_) => Err("DIRECT_REVISION_ENCRYPTION_UNAVAILABLE".to_owned()),
-            None => protector.unprotect(
+        let decoded = context.map_or_else(
+            || protector.unprotect(
                 encoded, &metadata.revision_id, &metadata.content_digest, metadata.byte_length,
             ).map(Zeroizing::new),
-        };
+            |context| {
+                #[cfg(windows)]
+                { protector.unprotect_with_context(
+                    context, encoded, &metadata.revision_id, &metadata.content_digest,
+                    metadata.byte_length,
+                ) }
+                #[cfg(not(windows))]
+                { let _ = context; Err("DIRECT_REVISION_ENCRYPTION_UNAVAILABLE".to_owned()) }
+            },
+        );
         revision_checkpoint(deadline, context)?;
         Some(decoded?)
     } else { None };

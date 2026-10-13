@@ -151,15 +151,15 @@ impl RevisionProtector {
     }
 
     #[cfg(windows)]
-    fn decode_unprotected_inner<'a>(
-        inner: &'a [u8], binding: LegacyRevisionBinding,
-    ) -> Result<&'a [u8], String> {
+    fn decode_unprotected_inner(
+        inner: &[u8], binding: LegacyRevisionBinding,
+    ) -> Result<&[u8], String> {
         decode_legacy_revision_inner::<DirectRevisionDigest>(inner, binding).map_err(envelope_reason)
     }
 }
 
 #[cfg(windows)]
-fn context_failure_reason(error: MigrationDpapiContextFailure) -> String {
+fn context_failure_reason(error: &MigrationDpapiContextFailure) -> String {
     error.public_reason().to_owned()
 }
 
@@ -167,10 +167,10 @@ fn context_failure_reason(error: MigrationDpapiContextFailure) -> String {
 fn dpapi_charge(
     context: &mut &MigrationContext<'_, '_>, work: LegacyRevisionDpapiWork,
 ) -> Result<(), String> {
-    LegacyRevisionDpapiContext::charge(context, work).map_err(context_failure_reason)
+    LegacyRevisionDpapiContext::charge(context, work).map_err(|error| context_failure_reason(&error))
 }
 
 #[cfg(windows)]
 fn dpapi_checkpoint(context: &mut &MigrationContext<'_, '_>) -> Result<(), String> {
-    LegacyRevisionDpapiContext::checkpoint(context).map_err(context_failure_reason)
+    LegacyRevisionDpapiContext::checkpoint(context).map_err(|error| context_failure_reason(&error))
 }

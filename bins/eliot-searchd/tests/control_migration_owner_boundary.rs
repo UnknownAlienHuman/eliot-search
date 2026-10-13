@@ -72,7 +72,7 @@ fn retained_revision_unprotect_uses_contextual_dpapi_and_preserves_unknown_reaso
     assert!(!clear.contains("with_binding("));
     assert!(!clear.contains("request.check("));
     assert!(read(&root, "bins/eliot-searchd/src/owner_composition/kernel/native_request.rs")
-        .contains("pub(super) fn account_native_clear("));
+        .contains("pub(super) const fn account_native_clear("));
 
     let command = read(&root, "bins/eliot-searchd/src/source_migration_command.rs");
     for reason in ["DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN",

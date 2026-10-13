@@ -207,38 +207,38 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
         if self.unexpected_source_effect.get() {
             return Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::SourceWriteForbidden));
         }
-        match self.operation.try_borrow_mut() {
-            Ok(mut operation) => operation.migration_checkpoint().map_err(|error| {
-                self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(error))
-            }),
-            Err(_) => Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(
+        self.operation.try_borrow_mut().map_or_else(
+            |_| Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(
                 OwnerError::OwnerOperationConflict,
             ))),
-        }
+            |mut operation| operation.migration_checkpoint().map_err(|error| {
+                self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(error))
+            }),
+        )
     }
 
     fn dpapi_charge(&self, work: LegacyRevisionObjectWork) -> Result<(), MigrationDpapiContextFailure> {
         if self.unexpected_source_effect.get() {
             return Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::SourceWriteForbidden));
         }
-        match self.operation.try_borrow_mut() {
-            Ok(mut operation) => operation.migration_charge(work).map_err(|error| {
-                self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(error))
-            }),
-            Err(_) => Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(
+        self.operation.try_borrow_mut().map_or_else(
+            |_| Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(
                 OwnerError::OwnerOperationConflict,
             ))),
-        }
+            |mut operation| operation.migration_charge(work).map_err(|error| {
+                self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(error))
+            }),
+        )
     }
 
     fn dpapi_account_native_clear(
         &self, actual_bytes: usize,
     ) -> Result<(), MigrationDpapiContextFailure> {
         let was_refused = self.dpapi_first_refusal.get().is_some();
-        let result = match self.operation.try_borrow_mut() {
-            Ok(mut operation) => operation.migration_account_native_clear(actual_bytes),
-            Err(_) => Err((OwnerError::OwnerOperationConflict, true)),
-        };
+        let result = self.operation.try_borrow_mut().map_or(
+            Err((OwnerError::OwnerOperationConflict, true)),
+            |mut operation| operation.migration_account_native_clear(actual_bytes),
+        );
         match result {
             Ok(()) if !was_refused => Ok(()),
             Ok(()) => Err(self.dpapi_failure()),

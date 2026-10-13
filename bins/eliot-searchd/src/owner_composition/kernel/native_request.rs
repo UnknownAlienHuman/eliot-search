@@ -688,7 +688,7 @@ impl NativeWork {
     }
 
     /// Record an actual bounded DPAPI clear after ordinary work has refused.
-    pub(super) fn account_native_clear(
+    pub(super) const fn account_native_clear(
         &mut self,
         request: &NativeRootRequest,
         actual_bytes: usize,
