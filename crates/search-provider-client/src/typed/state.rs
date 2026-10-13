@@ -1,6 +1,8 @@
 //! Client send history and response correlation, using shared protocol owners.
 
 mod grant;
+#[cfg(test)]
+mod sequence_fixtures;
 
 use std::collections::BTreeMap;
 use std::task::Poll;

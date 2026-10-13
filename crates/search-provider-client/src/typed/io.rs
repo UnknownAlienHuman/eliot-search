@@ -19,6 +19,9 @@ const READ_BYTES: usize = 16 * 1024;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod record_fixtures;
+
 /// One already-connected local byte stream owned by the typed client.
 ///
 /// The framing, pairing and request state machines depend only on finite

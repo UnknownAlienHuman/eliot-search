@@ -8,6 +8,8 @@
 mod io;
 mod native;
 mod state;
+#[cfg(test)]
+mod profile_fixtures;
 
 #[cfg(feature = "legacy-loopback-compatibility")]
 pub use native::NativeClientBinding;
