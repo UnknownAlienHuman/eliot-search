@@ -48,6 +48,15 @@ impl LegacyRevisionObjectEvidence {
 ///
 /// The inventory and page must remain equal to their planning snapshot, and
 /// every evidence record must correspond positionally to the selected entry.
+///
+/// # Errors
+///
+/// Returns [`LegacyRevisionInventoryError::UnexpectedObject`] when the page
+/// belongs to a different inventory or its evidence count/order does not match
+/// the selected entries. Returns [`LegacyRevisionInventoryError::ObjectLimit`]
+/// if a page index cannot be represented as `u64`, and
+/// [`LegacyRevisionInventoryError::PageTooLarge`] when the rendered response
+/// exceeds its fixed byte bound.
 pub fn render_legacy_revision_inventory_report<D: LegacyRevisionInventoryDigest>(
     namespace_id: &str,
     catalog_snapshot: &[u8; 32],

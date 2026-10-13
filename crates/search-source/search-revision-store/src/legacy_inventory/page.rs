@@ -28,6 +28,12 @@ pub struct LegacyRevisionInventoryCursor {
 
 impl LegacyRevisionInventoryCursor {
     /// Parses the exact `o1.<lower-hex-64>.<canonical-decimal>` grammar.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LegacyRevisionInventoryError::CursorInvalid`] when the value
+    /// exceeds its byte bound, is non-ASCII, has a malformed prefix/component
+    /// count or lowercase digest, or uses an overlarge or noncanonical index.
     pub fn parse(value: &str) -> Result<Self, LegacyRevisionInventoryError> {
         if value.len() > MAX_CURSOR_BYTES || !value.is_ascii() {
             return Err(LegacyRevisionInventoryError::CursorInvalid);
@@ -165,6 +171,14 @@ pub fn legacy_revision_inventory_checkpoint<D: LegacyRevisionInventoryDigest>(
 }
 
 /// Selects one bounded deterministic page from an immutable inventory.
+///
+/// # Errors
+///
+/// Returns [`LegacyRevisionInventoryError::CursorStale`] when the cursor
+/// checkpoint differs or its index exceeds the inventory. Returns
+/// [`LegacyRevisionInventoryError::NoProgress`] when entries remain but the
+/// page bounds cannot admit one, and [`LegacyRevisionInventoryError::ObjectLimit`]
+/// if advancing the page index overflows.
 pub fn plan_legacy_revision_inventory_page(
     inventory: &LegacyRevisionInventory,
     checkpoint: [u8; 32],

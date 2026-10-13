@@ -84,6 +84,13 @@ pub struct LegacyRevisionInventoryEntry {
 
 impl LegacyRevisionInventoryEntry {
     /// Creates one validated normalized physical observation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LegacyRevisionInventoryError::UnexpectedObject`] when the
+    /// locator is not a recognized shard-relative object, its filename's
+    /// physical class does not agree with `kind`, its encoded size exceeds
+    /// the admitted maximum, or `modified_nanos` is at least one second.
     pub fn new(
         relative_locator: String,
         encoded_bytes: u64,
@@ -249,6 +256,15 @@ impl LegacyRevisionInventory {
 /// Shards and entries are sorted internally. Duplicate shards/locators,
 /// missing shard parents, malformed timestamps, inconsistent physical classes
 /// and all fixed-limit violations fail closed.
+///
+/// # Errors
+///
+/// Returns [`LegacyRevisionInventoryError::UnexpectedObject`] for invalid or
+/// duplicate shards, entries without a declared shard, or duplicate locators.
+/// Returns [`LegacyRevisionInventoryError::ShardLimit`] or
+/// [`LegacyRevisionInventoryError::ObjectLimit`] when the respective count
+/// limit is exceeded, and [`LegacyRevisionInventoryError::BytesExceeded`]
+/// if the aggregate unreferenced byte count overflows.
 pub fn build_legacy_revision_inventory<D: LegacyRevisionInventoryDigest>(
     shards: Vec<String>,
     entries: Vec<LegacyRevisionInventoryEntry>,
