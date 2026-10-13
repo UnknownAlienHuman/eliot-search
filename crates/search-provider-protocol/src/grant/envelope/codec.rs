@@ -172,7 +172,7 @@ impl<'a> Cursor<'a> {
         let input = &self.bytes[self.position..end];
         self.position = end;
         let mut output = [0_u8; N];
-        for (index, pair) in input.chunks_exact(2).enumerate() {
+        for (index, pair) in input.as_chunks::<2>().0.iter().enumerate() {
             output[index] = (hex_value(pair[0]).ok_or(ProtocolError::InvalidEnvelope)? << 4)
                 | hex_value(pair[1]).ok_or(ProtocolError::InvalidEnvelope)?;
         }

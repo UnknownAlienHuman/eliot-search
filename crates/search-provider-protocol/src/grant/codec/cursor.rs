@@ -153,7 +153,7 @@ impl<'a> Cursor<'a> {
             return Err(ProtocolError::InvalidBody);
         }
         let mut output = Vec::with_capacity(token.len() / 2);
-        for pair in token.chunks_exact(2) {
+        for pair in token.as_chunks::<2>().0 {
             output.push((lower_hex(pair[0]).ok_or(ProtocolError::InvalidBody)? << 4)
                 | lower_hex(pair[1]).ok_or(ProtocolError::InvalidBody)?);
         }
@@ -170,7 +170,7 @@ fn decode_hex_exact<const N: usize>(token: &[u8]) -> Result<[u8; N], ProtocolErr
         return Err(ProtocolError::InvalidBody);
     }
     let mut output = [0_u8; N];
-    for (index, pair) in token.chunks_exact(2).enumerate() {
+    for (index, pair) in token.as_chunks::<2>().0.iter().enumerate() {
         output[index] = (lower_hex(pair[0]).ok_or(ProtocolError::InvalidBody)? << 4)
             | lower_hex(pair[1]).ok_or(ProtocolError::InvalidBody)?;
     }

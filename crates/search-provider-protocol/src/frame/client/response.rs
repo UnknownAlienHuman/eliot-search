@@ -113,10 +113,10 @@ pub(super) fn validate_result_identity(
         RecipeResultV1::ExpandHandle(value) => Some((value.header.request_id, &value.header.result_fence)),
         RecipeResultV1::CompileExactScan(_) | RecipeResultV1::ExecuteExactScan(_) => None,
     };
-    if let Some((request_id, fence)) = identity {
-        if request_id != envelope.request_id || !same_incarnation(fence, envelope) {
-            return Err(ProtocolError::InvalidBody);
-        }
+    if let Some((request_id, fence)) = identity
+        && (request_id != envelope.request_id || !same_incarnation(fence, envelope))
+    {
+        return Err(ProtocolError::InvalidBody);
     }
     Ok(())
 }

@@ -41,6 +41,13 @@ impl BoundSession {
     /// Contradictory target bookkeeping disconnects rather than claiming success.
     /// Once a control is accepted, its signal is irreversible: output error,
     /// post-output clock failure or unwind disconnects, without rollback/retry.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the provider sequence reserved for this cancel response was not
+    /// accepted under the exclusive session borrow. This is unreachable: the exact
+    /// value was previewed from the same ledger before output, and the pending
+    /// output guard excludes admission, disconnect or another emission.
     pub fn cancel_provider_request<E>(
         &mut self,
         frame: &[u8],

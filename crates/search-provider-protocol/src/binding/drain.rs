@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// Internal owner shared by one bound session, its external drain handle and
 /// every admitted request cancellation probe.
 #[derive(Clone)]
-pub(crate) struct SessionDrainState {
+pub struct SessionDrainState {
     requested: Arc<AtomicBool>,
     closed: Arc<AtomicBool>,
 }

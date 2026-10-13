@@ -55,7 +55,7 @@ impl<T: Schema> Schema for Option<T> {
 
 impl<T: Schema> Schema for Box<T> {
     fn put(&self, output: &mut Encoder) -> Result<()> { self.as_ref().put(output) }
-    fn get(input: &mut Decoder<'_>) -> Result<Self> { T::get(input).map(Box::new) }
+    fn get(input: &mut Decoder<'_>) -> Result<Self> { T::get(input).map(Self::new) }
 }
 
 fn put_sequence<'a, T: Schema + 'a>(

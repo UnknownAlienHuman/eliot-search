@@ -50,7 +50,7 @@ pub fn decode_standalone_grant_request(
         cursor.parse_uuid(SourceMembershipId::from_bytes)
     })?;
     cursor.expect(b",\"targets\":")?;
-    let targets = cursor.parse_array(|cursor| cursor.parse_target())?;
+    let targets = cursor.parse_array(super::cursor::Cursor::parse_target)?;
     cursor.expect(b",\"partitions\":")?;
     let partitions = cursor.parse_array(|cursor| {
         cursor.parse_uuid(AccessPartitionId::from_bytes)
