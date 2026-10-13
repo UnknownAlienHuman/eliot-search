@@ -26,11 +26,55 @@ use crate::source_roots;
 pub fn maybe_run() -> Option<ExitCode> {
     let started = Instant::now();
     let arguments = std::env::args_os().skip(1).take(257).collect::<Vec<_>>();
-    let (selected, _) = crate::config_composition::strip_config_args_os(&arguments).ok()?;
-    if selected.first().and_then(|arg| arg.to_str()) != Some("--plan-control-migration") {
+    if MigrationRoute::from_arguments(&arguments).is_none() {
         return None;
     }
     Some(run(&arguments, started))
+}
+
+/// The two offline migration commands share one route shape. The demanded flag
+/// selects the admitted constructor and the staging stage; each constructor
+/// keeps the caller's raw argv, absolute deadline, cancellation and limits.
+#[derive(Clone, Copy)]
+enum MigrationRoute {
+    Plan,
+    Bootstrap,
+}
+
+impl MigrationRoute {
+    fn from_arguments(arguments: &[OsString]) -> Option<Self> {
+        // Route selection keeps the original dispatch behaviour, which
+        // recognized the demanded flag on the configuration-stripped
+        // invocation, so a leading config pair still routes the command here.
+        // Only that stripped view is read to choose a route; the raw argv is
+        // never rewritten and still reaches the constructor, its raw-args
+        // digest and its custody exactly as the caller supplied it.
+        let (selected, _) = crate::config_composition::strip_config_args_os(arguments).ok()?;
+        match selected.first().and_then(|argument| argument.to_str()) {
+            Some("--plan-control-migration") => Some(Self::Plan),
+            Some("--bootstrap-control-migration") => Some(Self::Bootstrap),
+            _ => None,
+        }
+    }
+
+    fn construct(
+        self,
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<(NativeRootRequest, Vec<OsString>), OwnerError> {
+        match self {
+            Self::Plan => NativeRootRequest::for_control_migration_plan(
+                arguments, deadline, cancellation, limits,
+            ),
+            Self::Bootstrap => NativeRootRequest::for_control_migration_bootstrap(
+                arguments, deadline, cancellation, limits,
+            ),
+        }
+    }
+
+    const fn is_bootstrap(self) -> bool { matches!(self, Self::Bootstrap) }
 }
 
 fn run(arguments: &[OsString], started: Instant) -> ExitCode {
@@ -44,7 +88,10 @@ fn run(arguments: &[OsString], started: Instant) -> ExitCode {
         return failed;
     };
     let cancellation = Arc::new(AtomicBool::new(false));
-    let (request, selected) = match NativeRootRequest::for_control_migration_plan(
+    let Some(route) = MigrationRoute::from_arguments(arguments) else {
+        return failed;
+    };
+    let (request, selected) = match route.construct(
         arguments, deadline, Arc::clone(&cancellation), limits,
     ) {
         Ok(value) => value,
@@ -66,7 +113,7 @@ fn run(arguments: &[OsString], started: Instant) -> ExitCode {
     match admission {
         NativeRootAdmission::Inspection(owner) => owner
             .run_registration_one_shot(|operation| {
-                let result = stage(operation, target, Path::new(&selected[3]));
+                let result = stage(operation, target, Path::new(&selected[3]), route.is_bootstrap());
                 let (line, exit) = match result {
                     Ok(receipt) if receipt.len() <= 60 * 1024 => (receipt, ExitCode::SUCCESS),
                     Ok(_) => (error_frame("DIRECT_MIGRATION_OUTPUT_LIMIT"), failed),
@@ -93,6 +140,7 @@ fn stage(
     operation: &mut NativeReadOperation<'_>,
     target: SourceNamespaceId,
     output: &Path,
+    bootstrap: bool,
 ) -> Result<String, String> {
     let registration = operation.registration_bytes()?;
     let roots = source_roots::migration_input_from_bytes(operation.root(), registration.as_deref())
@@ -106,7 +154,11 @@ fn stage(
     let receipt = {
         let store: crate::direct_store::ExistingMigrationStore = crate::direct_store::open_existing_migration(operation)
             .map_err(|error| error.code().to_owned())?;
-        store.stage_mapping(target, &directory, operation, registration.as_deref())
+        if bootstrap {
+            store.stage_bootstrap(target, &directory, operation, registration.as_deref())
+        } else {
+            store.stage_mapping(target, &directory, operation, registration.as_deref())
+        }
     }?; // Store/protector closes before registration/native custody.
     if output_directory(operation, &directory)? != directory {
         return Err("DIRECT_MIGRATION_DIRECTORY_CHANGED".to_owned());
@@ -161,6 +213,13 @@ fn error_frame(reason: &str) -> String {
 // can reach the public command; every other private failure is collapsed.
 fn public_reason(reason: &str) -> &'static str {
     match reason {
+        // The bootstrap stage refuses on its own terms. These four reasons are
+        // the complete public vocabulary of that stage; every other bootstrap
+        // failure stays collapsed below.
+        "DIRECT_MIGRATION_BOOTSTRAP_INVALID" => "DIRECT_MIGRATION_BOOTSTRAP_INVALID",
+        "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN" => "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN",
+        "DIRECT_MIGRATION_BOOTSTRAP_EXISTS" => "DIRECT_MIGRATION_BOOTSTRAP_EXISTS",
+        "DIRECT_MIGRATION_BOOTSTRAP_CONTEXT_REFUSED" => "DIRECT_MIGRATION_BOOTSTRAP_CONTEXT_REFUSED",
         "DIRECT_MIGRATION_DIRECTORY_INVALID" => "DIRECT_MIGRATION_DIRECTORY_INVALID",
         "DIRECT_MIGRATION_DIRECTORY_CHANGED" => "DIRECT_MIGRATION_DIRECTORY_CHANGED",
         "DIRECT_MIGRATION_OUTPUT_OVERLAP" => "DIRECT_MIGRATION_OUTPUT_OVERLAP",
@@ -247,6 +306,76 @@ impl DataRootGuard {
 }
 
 fn overlaps(a: &Path, b: &Path) -> bool { a.starts_with(b) || b.starts_with(a) }
+
+#[cfg(test)]
+mod migration_route_tests {
+    use super::MigrationRoute;
+    use std::ffi::OsString;
+
+    fn plan() -> Vec<OsString> {
+        ["--plan-control-migration", "unopened-root", "10000000-0000-0000-0000-000000000001",
+            "unopened-output"].map(OsString::from).to_vec()
+    }
+
+    fn bootstrap() -> Vec<OsString> {
+        ["--bootstrap-control-migration", "unopened-root", "10000000-0000-0000-0000-000000000002",
+            "unopened-output"].map(OsString::from).to_vec()
+    }
+
+    fn with_config_prefix(mut arguments: Vec<OsString>) -> Vec<OsString> {
+        arguments.insert(1, OsString::from("unread-config.toml"));
+        arguments.insert(0, OsString::from("--config-file"));
+        arguments
+    }
+
+    #[test]
+    fn selects_each_command_from_the_config_stripped_invocation() {
+        assert!(MigrationRoute::from_arguments(&plan()).is_some());
+        assert!(MigrationRoute::from_arguments(&bootstrap()).is_some());
+        // A configuration prefix must not hide the demanded flag from routing.
+        assert!(MigrationRoute::from_arguments(&with_config_prefix(plan())).is_some());
+        assert!(MigrationRoute::from_arguments(&with_config_prefix(bootstrap())).is_some());
+    }
+
+    #[test]
+    fn config_prefix_keeps_the_route_consistent_between_selection_and_staging() {
+        for arguments in [plan(), bootstrap()] {
+            let route = MigrationRoute::from_arguments(&arguments).expect("route selected");
+            let prefixed = MigrationRoute::from_arguments(&with_config_prefix(arguments.clone()))
+                .expect("route survives a configuration prefix");
+            assert_eq!(route.is_bootstrap(), prefixed.is_bootstrap());
+        }
+    }
+
+    #[test]
+    fn route_selection_observes_only_the_stripped_invocation_and_keeps_raw_argv() {
+        let raw = with_config_prefix(bootstrap());
+        let route = MigrationRoute::from_arguments(&raw).expect("route selected");
+        assert!(route.is_bootstrap());
+        // Selection is read-only: the caller's argv still starts with the
+        // configuration pair, so the bootstrap flag was never hoisted into the
+        // raw slice that the constructor digests as supplied.
+        assert_eq!(raw[0].to_str(), Some("--config-file"));
+        assert_eq!(raw[1].to_str(), Some("unread-config.toml"));
+        assert_eq!(raw[2].to_str(), Some("--bootstrap-control-migration"));
+        let raw = with_config_prefix(plan());
+        let route = MigrationRoute::from_arguments(&raw).expect("route selected");
+        assert!(!route.is_bootstrap());
+        assert_eq!(raw[2].to_str(), Some("--plan-control-migration"));
+    }
+
+    #[test]
+    fn unrelated_command_is_not_selected_as_either_route() {
+        for arguments in [
+            vec![OsString::from("--serve-data-root"), OsString::from("root")],
+            vec![OsString::from("--bootstrap-control-migratn"), OsString::from("root"),
+                OsString::from("10000000-0000-0000-0000-000000000002"), OsString::from("output")],
+            vec![],
+        ] {
+            assert!(MigrationRoute::from_arguments(&arguments).is_none());
+        }
+    }
+}
 
 #[cfg(test)]
 fn canonical_directory(path: &Path) -> Result<std::path::PathBuf, String> {

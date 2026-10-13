@@ -136,6 +136,9 @@ fn main() -> ExitCode {
                 "  eliot-searchd --plan-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
                 "Requires an existing unowned root and an existing, separate output directory.\n",
                 "Preserves source state; writes a mapping draft only, without redb import or cutover.\n",
+                "\nOFFLINE SOURCE-MAPPING BOOTSTRAP:\n",
+                "  eliot-searchd --bootstrap-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
+                "Same existing-only custody as the plan command; bootstrap stages a distinct bootstrap entry.\n",
                 "\nPROVIDER TRANSPORT:\n",
                 "  Canonical startup uses installation-scoped local IPC.\n",
                 "  TCP ports, endpoint files and token files are not accepted by the primary build.\n"
