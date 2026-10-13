@@ -29,6 +29,8 @@ use crate::development::DataRootGuard;
 mod redb_import;
 #[path = "control_migration_content.rs"]
 mod content_readback;
+#[path = "control_migration_inventory.rs"]
+mod inventory;
 #[path = "control_migration_cutover.rs"]
 mod cutover;
 
@@ -164,6 +166,10 @@ impl DirectStore {
             cutover::gate_staging_against_marker(source_root, target, header.catalog_snapshot)?;
         }
         source.checkpoint()?;
+
+        if let Some(input) = native {
+            inventory::stage(&source, source_root, target, directory, input)?;
+        }
 
         let temporary_name = temporary_staging_name()?;
         source.checkpoint()?;

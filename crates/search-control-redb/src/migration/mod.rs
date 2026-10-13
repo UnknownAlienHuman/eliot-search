@@ -18,6 +18,7 @@ mod cutover;
 mod cutover_artifact;
 mod mapping;
 mod model;
+mod inventory;
 mod output_artifact;
 mod output_lock;
 mod readback;
@@ -53,6 +54,10 @@ pub use model::{
     SourceImportBinding, SourceImportCounts, SourceImportRow,
     SourceLifecycleFlags,
 };
+pub use inventory::{LEGACY_INVENTORY_PROFILE, LEGACY_INVENTORY_FAMILIES,
+    LegacyInventoryFamily, LegacyInventoryStatus, LegacyInventoryOwner,
+    LegacyInventoryLimits, LegacyInventoryBinding, LegacyInventorySummary,
+    LegacyInventoryError, LegacyInventoryEncoder, legacy_inventory_profile_digest};
 pub use output_artifact::{
     SourceImportOutputArtifact, SourceImportOutputArtifactError,
     SourceImportOutputArtifactPlatform, SourceImportPendingArtifact,

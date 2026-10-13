@@ -196,3 +196,16 @@ quarantine—never fabricated success.
 - `control` config fixed durability/migration floors and change classification;
 - public API/vendor-type and debug/content-disclosure guards;
 - fake storage/publisher/clock ports prove orchestration independence.
+
+## Versioned legacy-inventory stream
+
+`LegacyInventoryEncoder::{header,item,source_event,end_family,finish}` provides
+one bounded metadata encoder for `eliot.legacy-inventory.v1`. Family order and
+per-status counters belong to this owner. Complete accounting requires all
+12 terminals and finite record/byte limits; gaps, unreadable and unsupported
+observations cannot prove a complete denominator. Original native custody,
+physical enumeration, revision acquisition and protection remain composition
+observations, never codec-issued authority. Existing `SourceImportRecordArtifact`
+owns staging, complete second-stream comparison and once-only publication.
+No footer authorizes #268-C acceptance, #269 cutover, #348 restart reconciliation
+or #347 cleanup. Native/fault/installed qualification remains #215.

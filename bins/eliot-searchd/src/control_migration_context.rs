@@ -4,11 +4,11 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
-use search_revision_store::{LegacyRevisionObjectContext, LegacyRevisionObjectWork};
-use search_runtime_owner::OwnerError;
 use search_contracts::SourceNamespaceId;
 use search_control_redb::migration::{SourceImportRow, SourceMappingHeader, SourceMappingSummary};
 use search_os_secrets_windows::{LegacyRevisionDpapiContext, LegacyRevisionDpapiWork};
+use search_revision_store::{LegacyRevisionObjectContext, LegacyRevisionObjectWork};
+use search_runtime_owner::OwnerError;
 
 use crate::owner_composition::NativeReadOperation;
 use crate::plaintext_direct_store;
@@ -19,6 +19,8 @@ pub struct NativeMigrationInput<'view, 'operation, 'owner> {
     pub(crate) log: &'view [u8],
     pub(crate) protector: &'view RevisionProtector,
     pub(crate) context: &'view MigrationContext<'operation, 'owner>,
+    pub(crate) inventory_owner: search_control_redb::migration::LegacyInventoryOwner,
+    pub(crate) registration: Option<&'view [u8]>,
 }
 
 // Borrowed inputs only. Both native and residual legacy callers use the same
@@ -35,11 +37,23 @@ impl<'view, 'operation, 'owner> MigrationSource<'view, 'operation, 'owner> {
         deadline: Instant,
         native: Option<&'view NativeMigrationInput<'view, 'operation, 'owner>>,
     ) -> Self {
-        Self { source, native, deadline }
+        Self {
+            source,
+            native,
+            deadline,
+        }
     }
 
     pub(crate) const fn native(&self) -> Option<&NativeMigrationInput<'view, 'operation, 'owner>> {
         self.native
+    }
+
+    pub(crate) fn inventory_root(&self) -> &std::path::Path {
+        self.source.inventory_root()
+    }
+
+    pub(crate) const fn inventory_namespace(&self) -> [u8; 32] {
+        self.source.inventory_namespace()
     }
 
     pub(crate) fn checkpoint(&self) -> Result<(), String> {
@@ -53,10 +67,14 @@ impl<'view, 'operation, 'owner> MigrationSource<'view, 'operation, 'owner> {
     }
 
     pub(crate) fn charge(&self, work: LegacyRevisionObjectWork) -> Result<(), String> {
-        self.native.map_or_else(|| self.checkpoint(), |native| native.context.charge(work))
+        self.native
+            .map_or_else(|| self.checkpoint(), |native| native.context.charge(work))
     }
 
-    pub(crate) fn source_mapping_header(&self, target: SourceNamespaceId) -> Result<SourceMappingHeader, String> {
+    pub(crate) fn source_mapping_header(
+        &self,
+        target: SourceNamespaceId,
+    ) -> Result<SourceMappingHeader, String> {
         self.checkpoint()?;
         let header = self.source.source_mapping_header(target)?;
         self.checkpoint()?;
@@ -67,16 +85,41 @@ impl<'view, 'operation, 'owner> MigrationSource<'view, 'operation, 'owner> {
         self.checkpoint()?;
         let snapshot = self.native.map_or_else(
             || self.source.verify_migration_snapshot(deadline),
-            |native| self.source.verify_migration_snapshot_from_bytes(
-                native.namespace, native.log, || native.context.checkpoint(),
-            ),
+            |native| {
+                self.source.verify_migration_snapshot_from_bytes(
+                    native.namespace,
+                    native.log,
+                    || native.context.checkpoint(),
+                )
+            },
         )?;
         self.checkpoint()?;
         Ok(snapshot)
     }
 
-    pub(crate) fn retained_revisions(&self) -> impl ExactSizeIterator<Item = plaintext_direct_store::RevisionMetadata> + '_ {
+    pub(crate) fn retained_revisions(
+        &self,
+    ) -> impl ExactSizeIterator<Item = plaintext_direct_store::RevisionMetadata> + '_ {
         self.source.retained_revisions()
+    }
+
+    pub(crate) fn retained_revision(
+        &self,
+        id: &str,
+    ) -> Option<plaintext_direct_store::RevisionMetadata> {
+        self.source.retained_revision(id)
+    }
+
+    pub(crate) fn inventory_heads(
+        &self,
+    ) -> impl Iterator<Item = &search_source_registry::LegacyDirectSourceRecord> + '_ {
+        self.source.inventory_heads()
+    }
+
+    pub(crate) fn inventory_revisions(
+        &self,
+    ) -> impl ExactSizeIterator<Item = &search_source_registry::LegacyDirectSourceRecord> + '_ {
+        self.source.inventory_revisions()
     }
 
     pub(crate) fn compile_source_mapping(
@@ -87,7 +130,11 @@ impl<'view, 'operation, 'owner> MigrationSource<'view, 'operation, 'owner> {
     ) -> Result<SourceMappingSummary, String> {
         match self.native {
             Some(native) => self.source.compile_source_mapping_from_bytes(
-                target, native.namespace, native.log, || native.context.checkpoint(), emit,
+                target,
+                native.namespace,
+                native.log,
+                || native.context.checkpoint(),
+                emit,
             ),
             None => self.source.compile_source_mapping(target, deadline, emit),
         }
@@ -102,9 +149,16 @@ impl<'view, 'operation, 'owner> MigrationSource<'view, 'operation, 'owner> {
     ) -> Result<SourceMappingSummary, String> {
         match self.native {
             Some(native) => self.source.compile_source_mapping_with_rows_from_bytes(
-                target, native.namespace, native.log, || native.context.checkpoint(), emit, rows,
+                target,
+                native.namespace,
+                native.log,
+                || native.context.checkpoint(),
+                emit,
+                rows,
             ),
-            None => self.source.compile_source_mapping_with_rows(target, deadline, emit, rows),
+            None => self
+                .source
+                .compile_source_mapping_with_rows(target, deadline, emit, rows),
         }
     }
 }
@@ -143,8 +197,9 @@ impl MigrationDpapiContextFailure {
         } else {
             match self.first_refusal() {
                 Some(MigrationDpapiFirstRefusal::NativeOwner(error)) => error.code(),
-                Some(MigrationDpapiFirstRefusal::SourceWriteForbidden) =>
-                    "DIRECT_MIGRATION_SOURCE_WRITE_FORBIDDEN",
+                Some(MigrationDpapiFirstRefusal::SourceWriteForbidden) => {
+                    "DIRECT_MIGRATION_SOURCE_WRITE_FORBIDDEN"
+                }
                 None => "DPAPI_LEGACY_REVISION_CONTEXT_REFUSED",
             }
         }
@@ -165,6 +220,35 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
 
     pub(crate) const fn deadline(&self) -> Instant {
         self.deadline
+    }
+
+    pub(crate) fn inventory_reobserve(
+        &self,
+        input: &NativeMigrationInput<'_, '_, '_>,
+    ) -> Result<(), String> {
+        self.checkpoint()?;
+        let mut operation = self
+            .operation
+            .try_borrow_mut()
+            .map_err(|_| OwnerError::OwnerOperationConflict.code().to_owned())?;
+        let owner = operation
+            .migration_inventory_owner()
+            .map_err(|error| error.code().to_owned())?;
+        let namespace = operation
+            .namespace_bytes()
+            .map_err(|error| error.code().to_owned())?;
+        let log = operation
+            .catalog_bytes()
+            .map_err(|error| error.code().to_owned())?;
+        operation
+            .migration_charge(LegacyRevisionObjectWork::Compare(
+                namespace.len() + log.len(),
+            ))
+            .map_err(|error| error.code().to_owned())?;
+        if owner != input.inventory_owner || namespace != input.namespace || log != input.log {
+            return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
+        }
+        operation.verify().map_err(|error| error.code().to_owned())
     }
 
     pub(crate) fn checkpoint(&self) -> Result<(), String> {
@@ -217,16 +301,23 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
             return Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::SourceWriteForbidden));
         }
         self.operation.try_borrow_mut().map_or_else(
-            |_| Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(
-                OwnerError::OwnerOperationConflict,
-            ))),
-            |mut operation| operation.migration_checkpoint().map_err(|error| {
-                self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(error))
-            }),
+            |_| {
+                Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(
+                    OwnerError::OwnerOperationConflict,
+                )))
+            },
+            |mut operation| {
+                operation.migration_checkpoint().map_err(|error| {
+                    self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(error))
+                })
+            },
         )
     }
 
-    fn dpapi_charge(&self, work: LegacyRevisionObjectWork) -> Result<(), MigrationDpapiContextFailure> {
+    fn dpapi_charge(
+        &self,
+        work: LegacyRevisionObjectWork,
+    ) -> Result<(), MigrationDpapiContextFailure> {
         if self.dpapi_first_refusal.get().is_some() {
             return Err(self.dpapi_failure());
         }
@@ -234,17 +325,22 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
             return Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::SourceWriteForbidden));
         }
         self.operation.try_borrow_mut().map_or_else(
-            |_| Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(
-                OwnerError::OwnerOperationConflict,
-            ))),
-            |mut operation| operation.migration_charge(work).map_err(|error| {
-                self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(error))
-            }),
+            |_| {
+                Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(
+                    OwnerError::OwnerOperationConflict,
+                )))
+            },
+            |mut operation| {
+                operation.migration_charge(work).map_err(|error| {
+                    self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(error))
+                })
+            },
         )
     }
 
     fn dpapi_account_native_clear(
-        &self, actual_bytes: usize,
+        &self,
+        actual_bytes: usize,
     ) -> Result<(), MigrationDpapiContextFailure> {
         let was_refused = self.dpapi_first_refusal.get().is_some();
         let result = self.operation.try_borrow_mut().map_or(
@@ -255,7 +351,9 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
             Ok(()) if !was_refused => Ok(()),
             Ok(()) => Err(self.dpapi_failure()),
             Err((first_refusal, clear_accounting_failed)) => {
-                if clear_accounting_failed { self.dpapi_clear_accounting_failed.set(true); }
+                if clear_accounting_failed {
+                    self.dpapi_clear_accounting_failed.set(true);
+                }
                 Err(self.dpapi_refusal(MigrationDpapiFirstRefusal::NativeOwner(first_refusal)))
             }
         }

@@ -170,6 +170,56 @@ pub(super) fn load_manifest_input(
     Ok((manifest, text))
 }
 
+/// Canonical migration visitor: fixed header plus one borrowed entry at a time.
+pub(super) fn visit_manifest_bytes(
+    path: &Path, bytes: &[u8], namespace: &[u8; 32],
+    mut visit: impl FnMut([[u8; 32]; 3]) -> Result<(), String>,
+) -> Result<(u64, u64, [u8; 32], [u8; 32]), String> {
+    let invalid = || "DIRECT_MANIFEST_INVENTORY_INVALID".to_owned();
+    if bytes.len() > MAX_MANIFEST_BYTES || bytes.last() != Some(&b'\n') { return Err(invalid()); }
+    let text = std::str::from_utf8(bytes).map_err(|_| invalid())?;
+    let (header, body) = text.split_once('\n').ok_or_else(invalid)?;
+    let mut fields = header.split('\t');
+    if fields.next() != Some(MANIFEST_HEADER) { return Err(invalid()); }
+    let namespace_text = fields.next().ok_or_else(invalid)?;
+    let directory = fields.next().ok_or_else(invalid)?;
+    let generation_text = fields.next().ok_or_else(invalid)?;
+    let expected = fields.next().ok_or_else(invalid)?;
+    if fields.next().is_some() { return Err(invalid()); }
+    for value in [namespace_text, directory, expected] { validate_digest(value, "DIRECT_MANIFEST_INVENTORY_INVALID")?; }
+    let generation = generation_text.parse::<u64>().map_err(|_| invalid())?;
+    if generation == 0 || generation.to_string() != generation_text
+        || crate::sha256::decode_digest(namespace_text).as_ref() != Some(namespace) { return Err(invalid()); }
+    let mut previous: Option<&str> = None;
+    let mut count = 0_u64;
+    for line in body.split_terminator('\n') {
+        if line.is_empty() || line.len() > MAX_MANIFEST_LINE_BYTES { return Err(invalid()); }
+        let mut fields = line.split('\t');
+        if fields.next() != Some("V1") { return Err(invalid()); }
+        let mut references = [[0; 32]; 3];
+        let source = fields.next().ok_or_else(invalid)?;
+        let path_digest = fields.next().ok_or_else(invalid)?;
+        let revision = fields.next().ok_or_else(invalid)?;
+        if fields.next().is_some() || previous.is_some_and(|value| value >= source) { return Err(invalid()); }
+        for (slot, value) in references.iter_mut().zip([source, path_digest, revision]) {
+            validate_digest(value, "DIRECT_MANIFEST_INVENTORY_INVALID")?;
+            *slot = crate::sha256::decode_digest(value).ok_or_else(invalid)?;
+        }
+        count += 1;
+        if count > MAX_MANIFEST_ENTRIES as u64 { return Err(invalid()); }
+        visit(references)?;
+        previous = Some(source);
+    }
+    let digest = crate::sha256::digest_parts(b"eliot-search/direct-directory-manifest/v1",
+        &[namespace_text.as_bytes(), directory.as_bytes(), &generation.to_be_bytes(), body.as_bytes()]);
+    if crate::sha256::hex(&digest) != expected { return Err(invalid()); }
+    let manifest = DirectoryManifest { namespace_id: namespace_text.to_owned(),
+        directory_digest: directory.to_owned(), generation, entries: BTreeMap::new(),
+        manifest_digest: expected.to_owned() };
+    validate_filename(path, &manifest)?;
+    Ok((generation, count, crate::sha256::decode_digest(directory).ok_or_else(invalid)?, digest))
+}
+
 /// Verifies every immutable directory manifest and selects one unambiguous
 /// highest generation per directory.
 pub fn verify_directory_manifests(

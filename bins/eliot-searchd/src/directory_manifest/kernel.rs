@@ -5,7 +5,6 @@ mod codec;
 #[path = "kernel/load.rs"]
 mod load;
 #[path = "kernel/migration.rs"]
-#[cfg(test)]
 mod migration;
 #[path = "kernel/model.rs"]
 mod model;
@@ -21,14 +20,13 @@ mod spec;
 mod sync;
 
 pub use load::verify_directory_manifests;
+pub use migration::inventory_manifest;
 #[cfg(test)]
 pub use migration::{migration_manifest, migration_manifest_files};
 #[cfg(test)]
-pub use model::{
-    DirectoryEntry, DirectoryManifest, DirectoryManifestVerification,
-};
-#[cfg(test)]
 pub use model::DirectorySyncResult;
+#[cfg(test)]
+pub use model::{DirectoryEntry, DirectoryManifest, DirectoryManifestVerification};
 #[cfg(test)]
 pub use paths::path_identity_bytes;
 #[cfg(test)]
