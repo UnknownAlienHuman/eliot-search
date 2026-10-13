@@ -74,6 +74,10 @@ pub use record_artifact::{
     SourceImportRecordArtifact, SourceImportRecordArtifactError,
     SourceImportRecordArtifactObservation, SourceImportRecordReadback,
     SourceImportVerifiedRecordArtifact, inspect_source_import_record_artifact,
+    SourceImportRecordArtifactPlatform, SourceImportRecordArtifactPublication,
+    SourceImportRecordArtifactPublicationDisposition, SourceImportRecordArtifactCleanupDisposition,
+    SourceImportRecordArtifactCurrentState, SourceImportRecordArtifactInspection,
+    SourceImportRecordArtifactResolution, classify_source_import_record_artifact,
 };
 pub use record_chain::{
     MAX_SOURCE_IMPORT_RECORD_BYTES, MAX_SOURCE_IMPORT_ROW_BYTES,

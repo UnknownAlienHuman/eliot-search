@@ -10,7 +10,7 @@ use search_control_redb::migration::{
     SourceContentManifest, SourceImportBinding, SourceImportCounts,
     SourceImportOutputArtifact, SourceImportOutputArtifactError,
     SourceImportOutputArtifactPlatform, SourceImportOutputLockPlatform,
-    SourceImportRecordArtifactError, SourceImportRecordChain,
+    SourceImportRecordArtifactError, SourceImportRecordChain, SourceImportRecordArtifactPlatform,
     SourceImportRecordChainError, SourceMappingImport, SourceMappingReadback,
     inspect_source_import_record_artifact,
 };
@@ -302,6 +302,25 @@ impl SourceImportOutputArtifactPlatform for DaemonImportOutputPlatform {
         file: &File,
     ) -> Result<Self::Identity, Self::Error> {
         native_identity(file)
+    }
+}
+
+impl SourceImportRecordArtifactPlatform for DaemonImportOutputPlatform {
+    fn sync_record_artifact_directory(&self, path: &Path) -> Result<(), Self::Error> {
+        #[cfg(unix)]
+        { sync_directory(path) }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            // FILE_FLAG_BACKUP_SEMANTICS admits a directory handle. GENERIC_WRITE
+            // is required for FlushFileBuffers. Errors stay publication-unknown;
+            // power-loss/installed qualification remains #215.
+            std::fs::OpenOptions::new().read(true).write(true)
+                .custom_flags(0x0200_0000).open(path).and_then(|file| file.sync_all())
+                .map_err(|_| "DIRECT_MIGRATION_RECORD_DIRECTORY_SYNC_FAILED".to_owned())
+        }
+        #[cfg(not(any(windows, unix)))]
+        { Err("DIRECT_MIGRATION_RECORD_DIRECTORY_SYNC_UNSUPPORTED".to_owned()) }
     }
 }
 

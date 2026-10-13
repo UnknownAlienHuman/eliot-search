@@ -1,29 +1,68 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use super::*;
-use crate::migration::{
-    SourceImportOutputArtifactPlatform, SourceImportOutputLockPlatform,
-};
+use crate::migration::{SourceImportOutputArtifactPlatform, SourceImportOutputLockPlatform};
 
 #[derive(Clone, Debug)]
 struct TestPlatform {
     identity: Arc<AtomicU64>,
+    files: Arc<Mutex<BTreeMap<usize, u64>>>,
+    paths: Arc<Mutex<BTreeMap<std::path::PathBuf, u64>>>,
+    sync_fail: Arc<AtomicBool>,
+    final_fail: Arc<AtomicBool>,
+    syncs: Arc<AtomicU64>,
+    replace_on_sync: Arc<Mutex<Option<std::path::PathBuf>>>,
 }
 
 impl TestPlatform {
     fn new() -> Self {
         Self {
             identity: Arc::new(AtomicU64::new(1)),
+            files: Arc::default(),
+            paths: Arc::default(),
+            sync_fail: Arc::default(),
+            final_fail: Arc::default(),
+            syncs: Arc::default(),
+            replace_on_sync: Arc::default(),
         }
     }
 
     fn replace_identity(&self) {
         self.identity.store(2, Ordering::SeqCst);
+    }
+
+    fn set_identity(&self, path: &Path, identity: u64) {
+        self.paths
+            .lock()
+            .expect("path IDs")
+            .insert(path.to_owned(), identity);
+    }
+}
+
+// These are injected IDs attached to opened fixture handles, not native identity
+// qualification. Handles are keys only; timestamps/file-index APIs are not used.
+fn handle_key(file: &fs::File) -> usize {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        file.as_raw_handle() as usize
+    }
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        usize::try_from(file.as_raw_fd()).expect("fixture fd")
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        let _ = file;
+        panic!("unsupported fixture platform")
     }
 }
 
@@ -38,15 +77,29 @@ impl SourceImportOutputLockPlatform for TestPlatform {
         Ok(())
     }
 
-    fn verify_locator(
-        &self,
-        _expected: &fs::File,
-        path: &Path,
-    ) -> Result<(), Self::Error> {
+    fn verify_locator(&self, expected: &fs::File, path: &Path) -> Result<(), Self::Error> {
         let metadata = fs::symlink_metadata(path)?;
         if metadata.file_type().is_symlink() || !metadata.is_file() {
             return Err(io::Error::other("invalid locator"));
         }
+        if self.final_fail.load(Ordering::SeqCst)
+            && path.file_name() == Some(OsStr::new("artifact.source-map.v1"))
+        {
+            return Err(io::Error::other("injected final readback refusal"));
+        }
+        let identity = self
+            .paths
+            .lock()
+            .expect("path IDs")
+            .get(path)
+            .copied()
+            .unwrap_or_else(|| self.identity.load(Ordering::SeqCst));
+        // Explicit fault observations; the operation's captured ID never changes.
+        // Rebinding also avoids stale synthetic entries when an OS handle is reused.
+        self.files
+            .lock()
+            .expect("file IDs")
+            .insert(handle_key(expected), identity);
         Ok(())
     }
 
@@ -58,11 +111,31 @@ impl SourceImportOutputLockPlatform for TestPlatform {
 impl SourceImportOutputArtifactPlatform for TestPlatform {
     type Identity = u64;
 
-    fn identity(
-        &self,
-        _file: &fs::File,
-    ) -> Result<Self::Identity, Self::Error> {
-        Ok(self.identity.load(Ordering::SeqCst))
+    fn identity(&self, file: &fs::File) -> Result<Self::Identity, Self::Error> {
+        self.files
+            .lock()
+            .expect("file IDs")
+            .get(&handle_key(file))
+            .copied()
+            .ok_or_else(|| io::Error::other("unbound fixture handle"))
+    }
+}
+
+impl SourceImportRecordArtifactPlatform for TestPlatform {
+    fn sync_record_artifact_directory(&self, _path: &Path) -> Result<(), Self::Error> {
+        self.syncs.fetch_add(1, Ordering::SeqCst);
+        if let Some(path) = self
+            .replace_on_sync
+            .lock()
+            .expect("sync replacement")
+            .take()
+        {
+            self.set_identity(&path, 2);
+        }
+        if self.sync_fail.load(Ordering::SeqCst) {
+            return Err(io::Error::other("injected directory sync refusal"));
+        }
+        Ok(())
     }
 }
 
@@ -122,7 +195,11 @@ fn exact_second_pass_publication_and_final_inspection_are_package_owned() {
     assert_eq!(published.chain(), &expected_chain);
     assert_eq!(published.encoded_bytes(), expected_bytes);
     assert_eq!(published.name(), "artifact.source-map.v1");
-    assert!(!fixture.0.join(".source-map.test.tmp").exists());
+    assert!(fixture.0.join(".source-map.test.tmp").exists());
+    assert_eq!(
+        published.cleanup_disposition(),
+        SourceImportRecordArtifactCleanupDisposition::DeferredTo347
+    );
 
     let observed = inspect_source_import_record_artifact(
         &platform,
@@ -162,8 +239,7 @@ fn existing_different_final_is_never_overwritten() {
     let fixture = Fixture::new();
     let platform = TestPlatform::new();
     let deadline = deadline();
-    fs::write(fixture.0.join("artifact.source-map.v1"), b"other\n")
-        .expect("precreate final");
+    fs::write(fixture.0.join("artifact.source-map.v1"), b"other\n").expect("precreate final");
     let mut staging = SourceImportRecordArtifact::create(
         &fixture.0,
         ".source-map.conflict.tmp",
@@ -178,12 +254,13 @@ fn existing_different_final_is_never_overwritten() {
     let verified = readback.finish(deadline).expect("verified");
     assert!(matches!(
         verified.publish("artifact.source-map.v1", deadline),
-        Err(SourceImportRecordArtifactError::ImmutableConflict)
+        Err(SourceImportRecordArtifactError::PublishOutcomeUnknown)
     ));
     assert_eq!(
         fs::read(fixture.0.join("artifact.source-map.v1")).expect("read final"),
         b"other\n"
     );
+    assert!(fixture.0.join(".source-map.conflict.tmp").exists());
 }
 
 #[test]
@@ -214,12 +291,340 @@ fn nonlocal_temporary_and_final_names_are_rejected() {
     let platform = TestPlatform::new();
     let deadline = deadline();
     assert!(matches!(
-        SourceImportRecordArtifact::create(
-            &fixture.0,
-            "../escape.tmp",
-            platform,
-            deadline,
-        ),
+        SourceImportRecordArtifact::create(&fixture.0, "../escape.tmp", platform, deadline,),
         Err(SourceImportRecordArtifactError::TemporaryNameInvalid)
     ));
+}
+
+fn prepared(
+    fixture: &Fixture,
+    platform: TestPlatform,
+) -> SourceImportRecordArtifactPublication<TestPlatform> {
+    let mut artifact = SourceImportRecordArtifact::create(
+        &fixture.0,
+        ".source-map.retained.tmp",
+        platform,
+        deadline(),
+    )
+    .expect("create");
+    artifact.push(b"alpha\n", deadline()).expect("row");
+    let mut replay = artifact
+        .freeze(deadline())
+        .expect("freeze")
+        .begin_readback(deadline())
+        .expect("readback");
+    replay.compare(b"alpha\n", deadline()).expect("compare");
+    replay
+        .finish(deadline())
+        .expect("verified")
+        .prepare_publication("artifact.source-map.v1", deadline())
+        .expect("prepare")
+}
+
+fn assert_unknown(
+    result: Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<io::Error>>,
+) {
+    assert!(matches!(
+        result,
+        Err(SourceImportRecordArtifactError::PublishOutcomeUnknown)
+    ));
+}
+
+#[test]
+fn unclassified_link_error_retains_original_and_never_dispatches_twice() {
+    let fixture = Fixture::new();
+    let mut operation = prepared(&fixture, TestPlatform::new());
+    let dispatches = AtomicU64::new(0);
+    assert_unknown(operation.publish_once_using(deadline(), |_, _| {
+        dispatches.fetch_add(1, Ordering::SeqCst);
+        Err(io::Error::other("unknown link effect"))
+    }));
+    assert_eq!(
+        operation.disposition(),
+        SourceImportRecordArtifactPublicationDisposition::RetainedUnknown
+    );
+    assert_eq!(operation.rows(), 1);
+    assert_eq!(operation.encoded_bytes(), 6);
+    assert_eq!(
+        operation.staging_name(),
+        OsStr::new(".source-map.retained.tmp")
+    );
+    assert_unknown(operation.publish_once_using(deadline(), |_, _| {
+        dispatches.fetch_add(1, Ordering::SeqCst);
+        panic!("second dispatch")
+    }));
+    assert_unknown(operation.resolve_same_process(deadline()));
+    assert_eq!(dispatches.load(Ordering::SeqCst), 1);
+    drop(operation);
+    assert_eq!(
+        fs::read(fixture.0.join(".source-map.retained.tmp")).expect("retained"),
+        b"alpha\n"
+    );
+    assert!(!fixture.0.join("artifact.source-map.v1").exists());
+}
+
+#[test]
+fn possible_link_effect_resolves_only_with_original_handle_sync_and_readback() {
+    let fixture = Fixture::new();
+    let platform = TestPlatform::new();
+    let mut operation = prepared(&fixture, platform.clone());
+    let original = &operation
+        .frozen
+        .owned
+        .as_ref()
+        .expect("owner")
+        .original_file;
+    assert_eq!(original.metadata().expect("held original").len(), 6);
+    assert_unknown(
+        operation.publish_once_using(deadline(), |stage, final_path| {
+            fs::hard_link(stage, final_path)?;
+            Err(io::Error::other("effect completed, outcome unknown"))
+        }),
+    );
+    let receipt = operation
+        .resolve_same_process(deadline())
+        .expect("resolve with original");
+    assert_eq!(
+        receipt.cleanup_disposition(),
+        SourceImportRecordArtifactCleanupDisposition::DeferredTo347
+    );
+    assert_eq!(platform.syncs.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        operation.disposition(),
+        SourceImportRecordArtifactPublicationDisposition::VerifiedCleanupDeferred
+    );
+    assert!(matches!(
+        operation.resolve_same_process(deadline()),
+        Err(SourceImportRecordArtifactError::Closed)
+    ));
+    assert!(matches!(
+        operation.publish_once(deadline()),
+        Err(SourceImportRecordArtifactError::Closed)
+    ));
+    drop(operation);
+    assert!(fixture.0.join(".source-map.retained.tmp").exists());
+    assert!(fixture.0.join("artifact.source-map.v1").exists());
+}
+
+#[test]
+fn link_success_sync_refusal_is_unknown_and_retains_both_objects() {
+    let fixture = Fixture::new();
+    let platform = TestPlatform::new();
+    let mut operation = prepared(&fixture, platform.clone());
+    platform.sync_fail.store(true, Ordering::SeqCst);
+    assert_unknown(operation.publish_once(deadline()));
+    assert_unknown(operation.resolve_same_process(deadline()));
+    assert_eq!(
+        operation.disposition(),
+        SourceImportRecordArtifactPublicationDisposition::RetainedUnknown
+    );
+    platform.sync_fail.store(false, Ordering::SeqCst);
+    operation
+        .resolve_same_process(deadline())
+        .expect("sync then readback resolves");
+    assert_eq!(platform.syncs.load(Ordering::SeqCst), 3);
+    drop(operation);
+    assert_eq!(
+        fs::read(fixture.0.join(".source-map.retained.tmp")).expect("stage"),
+        b"alpha\n"
+    );
+    assert_eq!(
+        fs::read(fixture.0.join("artifact.source-map.v1")).expect("final"),
+        b"alpha\n"
+    );
+}
+
+#[test]
+fn post_dispatch_readback_and_identity_refusals_retain_unknown() {
+    for identity_refusal in [false, true] {
+        let fixture = Fixture::new();
+        let platform = TestPlatform::new();
+        let mut operation = prepared(&fixture, platform.clone());
+        if identity_refusal {
+            *platform.replace_on_sync.lock().expect("fault") =
+                Some(fixture.0.join("artifact.source-map.v1"));
+        } else {
+            platform.final_fail.store(true, Ordering::SeqCst);
+        }
+        assert_unknown(operation.publish_once(deadline()));
+        drop(operation);
+        assert!(fixture.0.join(".source-map.retained.tmp").exists());
+        assert!(fixture.0.join("artifact.source-map.v1").exists());
+    }
+}
+
+#[test]
+fn late_deadline_after_dispatch_is_retained_unknown() {
+    let fixture = Fixture::new();
+    let mut operation = prepared(&fixture, TestPlatform::new());
+    let expired_after_dispatch = Instant::now() + Duration::from_millis(20);
+    assert_unknown(
+        operation.publish_once_using(expired_after_dispatch, |stage, final_path| {
+            fs::hard_link(stage, final_path)?;
+            std::thread::sleep(expired_after_dispatch.saturating_duration_since(Instant::now()));
+            Ok(())
+        }),
+    );
+    drop(operation);
+    assert!(fixture.0.join(".source-map.retained.tmp").exists());
+    assert!(fixture.0.join("artifact.source-map.v1").exists());
+}
+
+#[test]
+fn equal_byte_replacements_cannot_complete_original_operation() {
+    for replace_final in [false, true] {
+        let fixture = Fixture::new();
+        let platform = TestPlatform::new();
+        let mut operation = prepared(&fixture, platform.clone());
+        assert_unknown(
+            operation.publish_once_using(deadline(), |stage, final_path| {
+                fs::hard_link(stage, final_path)?;
+                Err(io::Error::other("unknown"))
+            }),
+        );
+        platform.set_identity(&fixture.0.join(".source-map.retained.tmp"), 2);
+        if replace_final {
+            platform.set_identity(&fixture.0.join("artifact.source-map.v1"), 2);
+        }
+        assert_eq!(
+            operation.classify_current(deadline()).state(),
+            SourceImportRecordArtifactCurrentState::Replaced
+        );
+        assert_unknown(operation.resolve_same_process(deadline()));
+        drop(operation);
+        assert_eq!(
+            fs::read(fixture.0.join(".source-map.retained.tmp")).expect("stage"),
+            b"alpha\n"
+        );
+        assert_eq!(
+            fs::read(fixture.0.join("artifact.source-map.v1")).expect("final"),
+            b"alpha\n"
+        );
+    }
+}
+
+#[test]
+fn eight_read_only_states_are_always_unresolved_without_original_owner_join() {
+    use SourceImportRecordArtifactCurrentState as State;
+    let fixture = Fixture::new();
+    let platform = TestPlatform::new();
+    let mut chain = SourceImportRecordChain::new();
+    chain.push(b"alpha\n").expect("row");
+    let digest = chain.finish();
+    let stage = fixture.0.join(".source-map.observed.tmp");
+    let final_path = fixture.0.join("artifact.source-map.v1");
+    let classify = || {
+        let result = classify_source_import_record_artifact(
+            &platform,
+            &fixture.0,
+            ".source-map.observed.tmp",
+            "artifact.source-map.v1",
+            (&digest, 1, 6),
+            deadline(),
+        );
+        assert_eq!(
+            result.resolution(),
+            SourceImportRecordArtifactResolution::Unresolved
+        );
+        result.state()
+    };
+    assert_eq!(classify(), State::Missing);
+    fs::write(&stage, b"alpha\n").expect("stage");
+    assert_eq!(classify(), State::StageExact);
+    fs::hard_link(&stage, &final_path).expect("final");
+    assert_eq!(classify(), State::BothExactSameObject);
+    platform.set_identity(&final_path, 2);
+    assert_eq!(classify(), State::BothExactDistinctObjects);
+    fs::remove_file(&stage).expect("fixture removes stage");
+    assert_eq!(classify(), State::FinalExact);
+    fs::write(&stage, b"other\n").expect("conflict");
+    assert_eq!(classify(), State::Conflict);
+    fs::remove_file(&stage).expect("fixture removes conflict");
+    fs::create_dir(&stage).expect("invalid shape");
+    assert_eq!(classify(), State::Replaced);
+    let result = classify_source_import_record_artifact(
+        &platform,
+        &fixture.0,
+        ".source-map.observed.tmp",
+        "artifact.source-map.v1",
+        (&digest, 1, 6),
+        Instant::now(),
+    );
+    assert_eq!(result.state(), State::Unavailable);
+    assert_eq!(
+        result.resolution(),
+        SourceImportRecordArtifactResolution::Unresolved
+    );
+    assert_eq!(
+        platform.syncs.load(Ordering::SeqCst),
+        0,
+        "classifier never syncs/mutates"
+    );
+    assert_eq!(fs::read(final_path).expect("final preserved"), b"alpha\n");
+}
+
+#[test]
+fn lost_proof_never_mints_restart_success_or_cleanup() {
+    let fixture = Fixture::new();
+    let platform = TestPlatform::new();
+    let mut operation = prepared(&fixture, platform.clone());
+    let chain = *operation.chain();
+    assert_unknown(
+        operation.publish_once_using(deadline(), |stage, final_path| {
+            fs::hard_link(stage, final_path)?;
+            Err(io::Error::other("unknown"))
+        }),
+    );
+    drop(operation);
+    let current = classify_source_import_record_artifact(
+        &platform,
+        &fixture.0,
+        ".source-map.retained.tmp",
+        "artifact.source-map.v1",
+        (&chain, 1, 6),
+        deadline(),
+    );
+    assert_eq!(
+        current.state(),
+        SourceImportRecordArtifactCurrentState::BothExactSameObject
+    );
+    assert_eq!(
+        current.resolution(),
+        SourceImportRecordArtifactResolution::Unresolved
+    );
+    assert_eq!(platform.syncs.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        fs::read_dir(&fixture.0).expect("directory").count(),
+        2,
+        "no sidecar"
+    );
+}
+
+#[test]
+fn consuming_publish_sync_failure_drops_only_handles() {
+    let fixture = Fixture::new();
+    let platform = TestPlatform::new();
+    let mut artifact = SourceImportRecordArtifact::create(
+        &fixture.0,
+        ".source-map.adapter.tmp",
+        platform.clone(),
+        deadline(),
+    )
+    .expect("create");
+    artifact.push(b"alpha\n", deadline()).expect("row");
+    let mut replay = artifact
+        .freeze(deadline())
+        .expect("freeze")
+        .begin_readback(deadline())
+        .expect("readback");
+    replay.compare(b"alpha\n", deadline()).expect("compare");
+    platform.sync_fail.store(true, Ordering::SeqCst);
+    assert_unknown(
+        replay
+            .finish(deadline())
+            .expect("verified")
+            .publish("artifact.source-map.v1", deadline()),
+    );
+    assert!(fixture.0.join(".source-map.adapter.tmp").exists());
+    assert!(fixture.0.join("artifact.source-map.v1").exists());
 }

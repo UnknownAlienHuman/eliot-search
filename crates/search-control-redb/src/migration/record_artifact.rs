@@ -3,8 +3,8 @@
 //! Mapping plans and source-content manifests are newline-delimited,
 //! content-free metadata artifacts authenticated by [`SourceImportRecordChain`].
 //! This module owns temporary-file creation, exact second-pass comparison,
-//! no-clobber hard-link publication, final record-chain readback and safe
-//! temporary cleanup. The injected platform owns only native identity,
+//! one-shot no-clobber publication, retained unknown evidence and readback.
+//! Original-object cleanup is deferred to #347. The platform owns native identity,
 //! locator admission and directory durability observations.
 
 #![allow(clippy::module_name_repetitions)]
@@ -18,8 +18,8 @@ use std::time::{Instant, SystemTime};
 
 use super::output_artifact::SourceImportOutputArtifactPlatform;
 use super::{
-    MAX_SOURCE_IMPORT_RECORD_BYTES, MAX_SOURCE_IMPORT_ROW_BYTES,
-    SourceImportRecordChain, SourceImportRecordChainError,
+    MAX_SOURCE_IMPORT_RECORD_BYTES, MAX_SOURCE_IMPORT_ROW_BYTES, SourceImportRecordChain,
+    SourceImportRecordChainError,
 };
 
 /// Closed immutable-record-artifact failure.
@@ -65,49 +65,27 @@ impl<E: fmt::Display> fmt::Display for SourceImportRecordArtifactError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Platform(error) => error.fmt(formatter),
-            Self::DeadlineExceeded => {
-                formatter.write_str("record artifact deadline exceeded")
-            }
+            Self::DeadlineExceeded => formatter.write_str("record artifact deadline exceeded"),
             Self::TemporaryNameInvalid => {
                 formatter.write_str("record artifact temporary name invalid")
             }
-            Self::FinalNameInvalid => {
-                formatter.write_str("record artifact final name invalid")
-            }
-            Self::CreateFailed => {
-                formatter.write_str("record artifact create failed")
-            }
+            Self::FinalNameInvalid => formatter.write_str("record artifact final name invalid"),
+            Self::CreateFailed => formatter.write_str("record artifact create failed"),
             Self::Closed => formatter.write_str("record artifact closed"),
-            Self::WriteFailed => {
-                formatter.write_str("record artifact write failed")
-            }
-            Self::SyncFailed => {
-                formatter.write_str("record artifact sync failed")
-            }
-            Self::ObjectInvalid => {
-                formatter.write_str("record artifact object invalid")
-            }
-            Self::ReadFailed => {
-                formatter.write_str("record artifact read failed")
-            }
+            Self::WriteFailed => formatter.write_str("record artifact write failed"),
+            Self::SyncFailed => formatter.write_str("record artifact sync failed"),
+            Self::ObjectInvalid => formatter.write_str("record artifact object invalid"),
+            Self::ReadFailed => formatter.write_str("record artifact read failed"),
             Self::ComparisonReadFailed => {
                 formatter.write_str("record artifact comparison read failed")
             }
-            Self::ReadbackMismatch => {
-                formatter.write_str("record artifact readback mismatch")
-            }
+            Self::ReadbackMismatch => formatter.write_str("record artifact readback mismatch"),
             Self::PublishOutcomeUnknown => {
                 formatter.write_str("record artifact publish outcome unknown")
             }
-            Self::ImmutableConflict => {
-                formatter.write_str("record artifact immutable conflict")
-            }
-            Self::IdentityChanged => {
-                formatter.write_str("record artifact identity changed")
-            }
-            Self::CleanupFailed => {
-                formatter.write_str("record artifact cleanup failed")
-            }
+            Self::ImmutableConflict => formatter.write_str("record artifact immutable conflict"),
+            Self::IdentityChanged => formatter.write_str("record artifact identity changed"),
+            Self::CleanupFailed => formatter.write_str("record artifact cleanup failed"),
             Self::RecordChain(error) => error.fmt(formatter),
         }
     }
@@ -123,11 +101,18 @@ impl<E> From<SourceImportRecordChainError> for SourceImportRecordArtifactError<E
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceImportRecordArtifactObservation<I> {
     chain: [u8; 32],
+    rows: u64,
     encoded_bytes: u64,
     identity: I,
 }
 
 impl<I> SourceImportRecordArtifactObservation<I> {
+    /// Exact number of complete records.
+    #[must_use]
+    pub const fn rows(&self) -> u64 {
+        self.rows
+    }
+
     /// Exact frozen record-chain digest.
     #[must_use]
     pub const fn chain(&self) -> &[u8; 32] {
@@ -157,6 +142,12 @@ pub struct SourceImportPublishedRecordArtifact {
 }
 
 impl SourceImportPublishedRecordArtifact {
+    /// Original-object deletion is not qualified by the current native owner.
+    #[must_use]
+    pub const fn cleanup_disposition(&self) -> SourceImportRecordArtifactCleanupDisposition {
+        SourceImportRecordArtifactCleanupDisposition::DeferredTo347
+    }
+
     /// Final local artifact basename.
     #[must_use]
     pub fn name(&self) -> &str {
@@ -190,53 +181,80 @@ where
     directory: PathBuf,
     path: PathBuf,
     identity: P::Identity,
-    cleanup_armed: bool,
+    original_file: File,
 }
 
-impl<P> OwnedStaging<P>
-where
-    P: SourceImportOutputArtifactPlatform,
-{
-    fn cleanup(
-        &mut self,
-    ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
-        if !core::mem::replace(&mut self.cleanup_armed, false) {
-            return Ok(());
-        }
-        let metadata = match fs::symlink_metadata(&self.path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(());
-            }
-            Err(_) => return Err(SourceImportRecordArtifactError::IdentityChanged),
-        };
-        if !regular(&metadata) {
-            return Err(SourceImportRecordArtifactError::IdentityChanged);
-        }
-        let file = File::open(&self.path)
-            .map_err(|_| SourceImportRecordArtifactError::IdentityChanged)?;
-        self.platform
-            .verify_locator(&file, &self.path)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        let identity = self
-            .platform
-            .identity(&file)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        if identity != self.identity {
-            return Err(SourceImportRecordArtifactError::IdentityChanged);
-        }
-        drop(file);
-        fs::remove_file(&self.path)
-            .map_err(|_| SourceImportRecordArtifactError::CleanupFailed)
+/// Required record-specific durability observation, without a default no-op.
+pub trait SourceImportRecordArtifactPlatform: SourceImportOutputArtifactPlatform {
+    /// Flushes the admitted directory after a possible record publication.
+    /// # Errors
+    /// Unsupported or failed synchronization must fail closed.
+    fn sync_record_artifact_directory(&self, directory: &Path) -> Result<(), Self::Error>;
+}
+
+/// No path-based deletion is accepted as original-object cleanup.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceImportRecordArtifactCleanupDisposition {
+    /// Retain the original staging locator until native cleanup is qualified.
+    DeferredTo347,
+}
+
+/// Process-local publication disposition; no variant grants restart authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceImportRecordArtifactPublicationDisposition {
+    /// No publication dispatch has occurred.
+    Prepared,
+    /// Possible effects retain the original object and all locators.
+    RetainedUnknown,
+    /// Same-process durability and readback completed; staging remains retained.
+    VerifiedCleanupDeferred,
+}
+
+/// Bounded current evidence, never a publication or cleanup decision.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceImportRecordArtifactCurrentState {
+    /// Neither locator is present.
+    Missing,
+    /// Only staging has the expected complete records.
+    StageExact,
+    /// Only final has the expected complete records.
+    FinalExact,
+    /// Both exact locators currently name one native object.
+    BothExactSameObject,
+    /// Both exact locators currently name distinct native objects.
+    BothExactDistinctObjects,
+    /// A present locator has conflicting records or cardinality.
+    Conflict,
+    /// A locator/object changed identity or has an inadmissible shape.
+    Replaced,
+    /// Admission, readback or the bounded deadline was unavailable.
+    Unavailable,
+}
+
+/// Observations cannot replace #348's durable original-operation linkage.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SourceImportRecordArtifactResolution {
+    /// No retry, success or cleanup authority is established.
+    Unresolved,
+}
+
+/// Content-free, read-only classification; deliberately has no completion API.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SourceImportRecordArtifactInspection {
+    state: SourceImportRecordArtifactCurrentState,
+}
+
+impl SourceImportRecordArtifactInspection {
+    /// Current evidence only.
+    #[must_use]
+    pub const fn state(&self) -> SourceImportRecordArtifactCurrentState {
+        self.state
     }
-}
 
-impl<P> Drop for OwnedStaging<P>
-where
-    P: SourceImportOutputArtifactPlatform,
-{
-    fn drop(&mut self) {
-        let _ = self.cleanup();
+    /// Always unresolved without the accepted durable owner join in #348.
+    #[must_use]
+    pub const fn resolution(&self) -> SourceImportRecordArtifactResolution {
+        SourceImportRecordArtifactResolution::Unresolved
     }
 }
 
@@ -287,8 +305,14 @@ where
         platform
             .verify_locator(&file, &path)
             .map_err(SourceImportRecordArtifactError::Platform)?;
+        let original_file = file
+            .try_clone()
+            .map_err(|_| SourceImportRecordArtifactError::CreateFailed)?;
+        platform
+            .verify_locator(&original_file, &path)
+            .map_err(SourceImportRecordArtifactError::Platform)?;
         let identity = platform
-            .identity(&file)
+            .identity(&original_file)
             .map_err(SourceImportRecordArtifactError::Platform)?;
         Ok(Self {
             writer: Some(BufWriter::new(file)),
@@ -297,7 +321,7 @@ where
                 directory: directory.to_owned(),
                 path,
                 identity,
-                cleanup_armed: true,
+                original_file,
             }),
             chain: SourceImportRecordChain::new(),
         })
@@ -331,7 +355,8 @@ where
     pub fn freeze(
         mut self,
         deadline: Instant,
-    ) -> Result<SourceImportFrozenRecordArtifact<P>, SourceImportRecordArtifactError<P::Error>> {
+    ) -> Result<SourceImportFrozenRecordArtifact<P>, SourceImportRecordArtifactError<P::Error>>
+    {
         check_deadline(deadline)?;
         let mut writer = self
             .writer
@@ -362,6 +387,7 @@ where
         drop(writer);
         check_deadline(deadline)?;
         let chain = core::mem::take(&mut self.chain);
+        let rows = chain.rows();
         let encoded_bytes = chain.encoded_bytes();
         let digest = chain.finish();
         let owned = self
@@ -371,6 +397,7 @@ where
         Ok(SourceImportFrozenRecordArtifact {
             owned: Some(owned),
             chain: digest,
+            rows,
             encoded_bytes,
         })
     }
@@ -383,6 +410,7 @@ where
 {
     owned: Option<OwnedStaging<P>>,
     chain: [u8; 32],
+    rows: u64,
     encoded_bytes: u64,
 }
 
@@ -483,7 +511,8 @@ where
     pub fn finish(
         mut self,
         deadline: Instant,
-    ) -> Result<SourceImportVerifiedRecordArtifact<P>, SourceImportRecordArtifactError<P::Error>> {
+    ) -> Result<SourceImportVerifiedRecordArtifact<P>, SourceImportRecordArtifactError<P::Error>>
+    {
         check_deadline(deadline)?;
         let mut reader = self
             .reader
@@ -502,7 +531,8 @@ where
             .as_ref()
             .ok_or(SourceImportRecordArtifactError::Closed)?;
         let observed = core::mem::take(&mut self.observed);
-        if observed.encoded_bytes() != frozen.encoded_bytes
+        if observed.rows() != frozen.rows
+            || observed.encoded_bytes() != frozen.encoded_bytes
             || observed.finish() != frozen.chain
         {
             return Err(SourceImportRecordArtifactError::ReadbackMismatch);
@@ -515,9 +545,7 @@ where
             .get_ref()
             .metadata()
             .map_err(|_| SourceImportRecordArtifactError::ReadbackMismatch)?;
-        if after.len() != frozen.encoded_bytes
-            || after.modified().ok() != self.before_modified
-        {
+        if after.len() != frozen.encoded_bytes || after.modified().ok() != self.before_modified {
             return Err(SourceImportRecordArtifactError::ReadbackMismatch);
         }
         owned
@@ -553,92 +581,276 @@ where
 
 impl<P> SourceImportVerifiedRecordArtifact<P>
 where
-    P: SourceImportOutputArtifactPlatform,
+    P: SourceImportRecordArtifactPlatform,
 {
-    /// Publishes by no-clobber hard link, verifies the final record chain and
-    /// removes only the original temporary object.
+    /// Captures process-local original inputs before any publication dispatch.
+    /// The original file has remained open since creation. Nothing is serialized.
     ///
     /// # Errors
-    ///
-    /// Returns a name, object, read, record-chain, immutable-conflict,
-    /// identity, cleanup, platform or deadline failure. An unclassified
-    /// hard-link error remains outcome-unknown.
-    pub fn publish(
+    /// Invalid names, original readback or admission fail before dispatch.
+    pub fn prepare_publication(
         mut self,
         final_name: &str,
         deadline: Instant,
-    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>> {
+    ) -> Result<SourceImportRecordArtifactPublication<P>, SourceImportRecordArtifactError<P::Error>>
+    {
         check_deadline(deadline)?;
         if !valid_local_name(final_name) {
             return Err(SourceImportRecordArtifactError::FinalNameInvalid);
         }
         let frozen = self
             .frozen
-            .as_ref()
+            .take()
             .ok_or(SourceImportRecordArtifactError::Closed)?;
         let owned = frozen
             .owned
             .as_ref()
             .ok_or(SourceImportRecordArtifactError::Closed)?;
-        let staging = inspect_record_file(
+        let final_path = owned.directory.join(final_name);
+        if final_path == owned.path {
+            return Err(SourceImportRecordArtifactError::FinalNameInvalid);
+        }
+        let publication = SourceImportRecordArtifactPublication {
+            frozen,
+            final_path,
+            final_name: final_name.to_owned(),
+            disposition: SourceImportRecordArtifactPublicationDisposition::Prepared,
+            reused: false,
+        };
+        publication.verify_original(deadline)?;
+        Ok(publication)
+    }
+
+    /// Existing consuming adapter: one attempt, retained staging on every exit.
+    /// Dropping this adapter loses process-local proof, never deletes evidence.
+    /// # Errors
+    /// Every uncertain post-dispatch outcome keeps `PublishOutcomeUnknown`.
+    pub fn publish(
+        self,
+        final_name: &str,
+        deadline: Instant,
+    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
+    {
+        self.prepare_publication(final_name, deadline)?
+            .publish_once(deadline)
+    }
+}
+
+/// One original in-process operation. Private fields cannot be reminted from
+/// current paths/identities. Drop closes handles only; no locator is deleted.
+pub struct SourceImportRecordArtifactPublication<P>
+where
+    P: SourceImportRecordArtifactPlatform,
+{
+    frozen: SourceImportFrozenRecordArtifact<P>,
+    final_path: PathBuf,
+    final_name: String,
+    disposition: SourceImportRecordArtifactPublicationDisposition,
+    reused: bool,
+}
+
+impl<P> SourceImportRecordArtifactPublication<P>
+where
+    P: SourceImportRecordArtifactPlatform,
+{
+    /// Content-free explicit publication disposition.
+    #[must_use]
+    pub const fn disposition(&self) -> SourceImportRecordArtifactPublicationDisposition {
+        self.disposition
+    }
+
+    /// Original complete record chain.
+    #[must_use]
+    pub const fn chain(&self) -> &[u8; 32] {
+        &self.frozen.chain
+    }
+
+    /// Original row count.
+    #[must_use]
+    pub const fn rows(&self) -> u64 {
+        self.frozen.rows
+    }
+
+    /// Original encoded byte count.
+    #[must_use]
+    pub const fn encoded_bytes(&self) -> u64 {
+        self.frozen.encoded_bytes
+    }
+
+    /// Original local staging basename.
+    #[must_use]
+    pub fn staging_name(&self) -> &OsStr {
+        self.frozen.owned.as_ref().map_or_else(
+            || OsStr::new(""),
+            |owned| owned.path.file_name().unwrap_or_else(|| OsStr::new("")),
+        )
+    }
+
+    /// Bound final basename.
+    #[must_use]
+    pub fn final_name(&self) -> &str {
+        &self.final_name
+    }
+
+    /// Dispatches at most one link. Failures after dispatch retain original proof.
+    /// # Errors
+    /// Pre-dispatch failures stay typed; possible effects remain unknown.
+    pub fn publish_once(
+        &mut self,
+        deadline: Instant,
+    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
+    {
+        self.publish_once_using(deadline, |stage, final_path| {
+            fs::hard_link(stage, final_path)
+        })
+    }
+
+    fn publish_once_using(
+        &mut self,
+        deadline: Instant,
+        link: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
+    {
+        if self.disposition == SourceImportRecordArtifactPublicationDisposition::RetainedUnknown {
+            return Err(SourceImportRecordArtifactError::PublishOutcomeUnknown);
+        }
+        if self.disposition != SourceImportRecordArtifactPublicationDisposition::Prepared {
+            return Err(SourceImportRecordArtifactError::Closed);
+        }
+        self.verify_original(deadline)?;
+        let owned = self
+            .frozen
+            .owned
+            .as_ref()
+            .ok_or(SourceImportRecordArtifactError::Closed)?;
+        // From here on every exit retains staging. No destructor or retry runs.
+        self.disposition = SourceImportRecordArtifactPublicationDisposition::RetainedUnknown;
+        self.reused = match link(&owned.path, &self.final_path) {
+            Ok(()) => false,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
+            Err(_) => return Err(SourceImportRecordArtifactError::PublishOutcomeUnknown),
+        };
+        self.resolve_same_process(deadline)
+    }
+
+    /// Synchronizes and revalidates the retained original object; never links.
+    /// This requires the live object created before dispatch, not an inspection.
+    /// # Errors
+    /// Missing/replaced/conflicting objects, sync or late refusal remain unknown.
+    pub fn resolve_same_process(
+        &mut self,
+        deadline: Instant,
+    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
+    {
+        if self.disposition != SourceImportRecordArtifactPublicationDisposition::RetainedUnknown {
+            return Err(SourceImportRecordArtifactError::Closed);
+        }
+        self.sync_and_verify_final(deadline)
+            .map_err(|_| SourceImportRecordArtifactError::PublishOutcomeUnknown)?;
+        self.disposition =
+            SourceImportRecordArtifactPublicationDisposition::VerifiedCleanupDeferred;
+        Ok(SourceImportPublishedRecordArtifact {
+            name: self.final_name.clone(),
+            chain: self.frozen.chain,
+            encoded_bytes: self.frozen.encoded_bytes,
+            reused: self.reused,
+        })
+    }
+
+    /// Read-only evidence relative to this retained original identity.
+    #[must_use]
+    pub fn classify_current(&self, deadline: Instant) -> SourceImportRecordArtifactInspection {
+        let Some(owned) = self.frozen.owned.as_ref() else {
+            return inspection(SourceImportRecordArtifactCurrentState::Unavailable);
+        };
+        classify_paths(
             &owned.platform,
             &owned.path,
-            frozen.encoded_bytes,
+            &self.final_path,
+            (
+                &self.frozen.chain,
+                self.frozen.rows,
+                self.frozen.encoded_bytes,
+            ),
+            Some(&owned.identity),
+            deadline,
+        )
+    }
+
+    fn verify_original(
+        &self,
+        deadline: Instant,
+    ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
+        check_deadline(deadline)?;
+        let owned = self
+            .frozen
+            .owned
+            .as_ref()
+            .ok_or(SourceImportRecordArtifactError::Closed)?;
+        owned
+            .platform
+            .verify_locator(&owned.original_file, &owned.path)
+            .map_err(SourceImportRecordArtifactError::Platform)?;
+        if owned
+            .platform
+            .identity(&owned.original_file)
+            .map_err(SourceImportRecordArtifactError::Platform)?
+            != owned.identity
+        {
+            return Err(SourceImportRecordArtifactError::IdentityChanged);
+        }
+        let stage = inspect_record_file(
+            &owned.platform,
+            &owned.path,
+            self.frozen.encoded_bytes,
             Some(&owned.identity),
             deadline,
         )?;
-        if staging.chain != frozen.chain {
+        self.verify_records(&stage)
+    }
+
+    fn verify_records(
+        &self,
+        observation: &SourceImportRecordArtifactObservation<P::Identity>,
+    ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
+        if observation.chain != self.frozen.chain
+            || observation.rows != self.frozen.rows
+            || observation.encoded_bytes != self.frozen.encoded_bytes
+        {
             return Err(SourceImportRecordArtifactError::ReadbackMismatch);
         }
+        Ok(())
+    }
 
-        let final_path = owned.directory.join(final_name);
-        let reused = match fs::hard_link(&owned.path, &final_path) {
-            Ok(()) => false,
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
-            Err(_) => {
-                return Err(SourceImportRecordArtifactError::PublishOutcomeUnknown);
-            }
-        };
+    fn sync_and_verify_final(
+        &self,
+        deadline: Instant,
+    ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
+        self.verify_original(deadline)?;
+        let owned = self
+            .frozen
+            .owned
+            .as_ref()
+            .ok_or(SourceImportRecordArtifactError::Closed)?;
+        owned
+            .original_file
+            .sync_all()
+            .map_err(|_| SourceImportRecordArtifactError::SyncFailed)?;
         owned
             .platform
-            .sync_directory(&owned.directory)
+            .sync_record_artifact_directory(&owned.directory)
             .map_err(SourceImportRecordArtifactError::Platform)?;
-        let published = inspect_record_file(
+        self.verify_original(deadline)?;
+        let final_artifact = inspect_record_file(
             &owned.platform,
-            &final_path,
-            frozen.encoded_bytes,
-            None,
+            &self.final_path,
+            self.frozen.encoded_bytes,
+            Some(&owned.identity),
             deadline,
         )?;
-        if published.chain != frozen.chain {
-            return Err(SourceImportRecordArtifactError::ImmutableConflict);
-        }
-        if !reused && published.identity != owned.identity {
-            return Err(SourceImportRecordArtifactError::IdentityChanged);
-        }
-
-        let chain = frozen.chain;
-        let encoded_bytes = frozen.encoded_bytes;
-        let mut frozen = self
-            .frozen
-            .take()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        let mut owned = frozen
-            .owned
-            .take()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        owned.cleanup()?;
-        owned
-            .platform
-            .sync_directory(&owned.directory)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        check_deadline(deadline)?;
-        Ok(SourceImportPublishedRecordArtifact {
-            name: final_name.to_owned(),
-            chain,
-            encoded_bytes,
-            reused,
-        })
+        self.verify_records(&final_artifact)?;
+        // Complete original readback again after final readback and late callbacks.
+        self.verify_original(deadline)
     }
 }
 
@@ -654,11 +866,132 @@ pub fn inspect_source_import_record_artifact<P>(
     path: &Path,
     expected_bytes: u64,
     deadline: Instant,
-) -> Result<SourceImportRecordArtifactObservation<P::Identity>, SourceImportRecordArtifactError<P::Error>>
+) -> Result<
+    SourceImportRecordArtifactObservation<P::Identity>,
+    SourceImportRecordArtifactError<P::Error>,
+>
 where
     P: SourceImportOutputArtifactPlatform,
 {
     inspect_record_file(platform, path, expected_bytes, None, deadline)
+}
+
+/// Observes current stage/final evidence without any mutation or completion.
+///
+/// `expected` is (complete chain, rows, encoded bytes), never an identity proof.
+/// Every result remains unresolved after restart until #348 supplies its join.
+#[must_use]
+pub fn classify_source_import_record_artifact<P: SourceImportOutputArtifactPlatform>(
+    platform: &P,
+    directory: &Path,
+    staging_name: &str,
+    final_name: &str,
+    expected: (&[u8; 32], u64, u64),
+    deadline: Instant,
+) -> SourceImportRecordArtifactInspection {
+    if !valid_temporary_name(staging_name) {
+        return inspection(SourceImportRecordArtifactCurrentState::Unavailable);
+    }
+    if !valid_local_name(final_name) || staging_name == final_name {
+        return inspection(SourceImportRecordArtifactCurrentState::Unavailable);
+    }
+    classify_paths(
+        platform,
+        &directory.join(staging_name),
+        &directory.join(final_name),
+        expected,
+        None,
+        deadline,
+    )
+}
+
+enum CurrentLocation<I> {
+    Missing,
+    Exact(I),
+    Conflict,
+    Replaced,
+    Unavailable,
+}
+
+const fn inspection(
+    state: SourceImportRecordArtifactCurrentState,
+) -> SourceImportRecordArtifactInspection {
+    SourceImportRecordArtifactInspection { state }
+}
+
+fn classify_paths<P: SourceImportOutputArtifactPlatform>(
+    platform: &P,
+    stage: &Path,
+    final_path: &Path,
+    expected: (&[u8; 32], u64, u64),
+    original: Option<&P::Identity>,
+    deadline: Instant,
+) -> SourceImportRecordArtifactInspection {
+    use CurrentLocation::{Conflict, Exact, Missing, Replaced, Unavailable};
+    use SourceImportRecordArtifactCurrentState as State;
+    if expected.2 > MAX_SOURCE_IMPORT_RECORD_BYTES
+        || expected.1 > expected.2
+        || (expected.1 == 0) != (expected.2 == 0)
+        || check_deadline::<P::Error>(deadline).is_err()
+        || stage
+            .parent()
+            .is_none_or(|parent| platform.validate_directory(parent).is_err())
+    {
+        return inspection(State::Unavailable);
+    }
+    let stage = current_location(platform, stage, expected, original, deadline);
+    let final_artifact = current_location(platform, final_path, expected, original, deadline);
+    let classification = match (stage, final_artifact) {
+        (Unavailable, _) | (_, Unavailable) => State::Unavailable,
+        (Replaced, _) | (_, Replaced) => State::Replaced,
+        (Conflict, _) | (_, Conflict) => State::Conflict,
+        (Missing, Missing) => State::Missing,
+        (Exact(_), Missing) => State::StageExact,
+        (Missing, Exact(_)) => State::FinalExact,
+        (Exact(stage), Exact(final_artifact)) if stage == final_artifact => {
+            State::BothExactSameObject
+        }
+        (Exact(_), Exact(_)) => State::BothExactDistinctObjects,
+    };
+    if check_deadline::<P::Error>(deadline).is_err() {
+        inspection(State::Unavailable)
+    } else {
+        inspection(classification)
+    }
+}
+
+fn current_location<P: SourceImportOutputArtifactPlatform>(
+    platform: &P,
+    path: &Path,
+    expected: (&[u8; 32], u64, u64),
+    original: Option<&P::Identity>,
+    deadline: Instant,
+) -> CurrentLocation<P::Identity> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return CurrentLocation::Missing;
+        }
+        Err(_) => return CurrentLocation::Unavailable,
+    };
+    if !regular(&metadata) {
+        return CurrentLocation::Replaced;
+    }
+    if metadata.len() != expected.2 {
+        return CurrentLocation::Conflict;
+    }
+    match inspect_record_file(platform, path, expected.2, original, deadline) {
+        Ok(observed) if observed.chain == *expected.0 && observed.rows == expected.1 => {
+            CurrentLocation::Exact(observed.identity)
+        }
+        Ok(_) | Err(SourceImportRecordArtifactError::RecordChain(_)) => CurrentLocation::Conflict,
+        Err(
+            SourceImportRecordArtifactError::IdentityChanged
+            | SourceImportRecordArtifactError::ReadbackMismatch
+            | SourceImportRecordArtifactError::ObjectInvalid,
+        ) => CurrentLocation::Replaced,
+        Err(_) => CurrentLocation::Unavailable,
+    }
 }
 
 struct OpenedRecord {
@@ -686,13 +1019,12 @@ where
     platform
         .validate_directory(parent)
         .map_err(SourceImportRecordArtifactError::Platform)?;
-    let before = fs::symlink_metadata(path)
-        .map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
+    let before =
+        fs::symlink_metadata(path).map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
     if !regular(&before) || before.len() != expected_bytes {
         return Err(SourceImportRecordArtifactError::ObjectInvalid);
     }
-    let file = File::open(path)
-        .map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
+    let file = File::open(path).map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
     let opened = file
         .metadata()
         .map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
@@ -724,19 +1056,19 @@ fn inspect_record_file<P>(
     expected_bytes: u64,
     expected_identity: Option<&P::Identity>,
     deadline: Instant,
-) -> Result<SourceImportRecordArtifactObservation<P::Identity>, SourceImportRecordArtifactError<P::Error>>
+) -> Result<
+    SourceImportRecordArtifactObservation<P::Identity>,
+    SourceImportRecordArtifactError<P::Error>,
+>
 where
     P: SourceImportOutputArtifactPlatform,
 {
-    let opened = open_record_file(
-        platform,
-        path,
-        expected_bytes,
-        expected_identity,
-        deadline,
-    )?;
+    let opened = open_record_file(platform, path, expected_bytes, expected_identity, deadline)?;
     let before_modified = opened.modified;
     let mut reader = BufReader::new(opened.file);
+    let before_identity = platform
+        .identity(reader.get_ref())
+        .map_err(SourceImportRecordArtifactError::Platform)?;
     let mut row = Vec::new();
     let mut chain = SourceImportRecordChain::new();
     loop {
@@ -771,21 +1103,30 @@ where
     let identity = platform
         .identity(reader.get_ref())
         .map_err(SourceImportRecordArtifactError::Platform)?;
-    if expected_identity.is_some_and(|expected| expected != &identity) {
+    if identity != before_identity
+        || expected_identity.is_some_and(|expected| expected != &identity)
+    {
         return Err(SourceImportRecordArtifactError::IdentityChanged);
     }
+    let verified = reader
+        .get_ref()
+        .metadata()
+        .map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
+    if verified.len() != expected_bytes || verified.modified().ok() != before_modified {
+        return Err(SourceImportRecordArtifactError::ReadbackMismatch);
+    }
     check_deadline(deadline)?;
+    let rows = chain.rows();
     Ok(SourceImportRecordArtifactObservation {
         chain: chain.finish(),
+        rows,
         encoded_bytes: expected_bytes,
         identity,
     })
 }
 
 fn valid_temporary_name(name: &str) -> bool {
-    valid_local_name(name)
-        && name.starts_with(".source-map.")
-        && name.as_bytes().ends_with(b".tmp")
+    valid_local_name(name) && name.starts_with(".source-map.") && name.as_bytes().ends_with(b".tmp")
 }
 
 fn valid_local_name(name: &str) -> bool {
@@ -798,9 +1139,7 @@ fn regular(metadata: &fs::Metadata) -> bool {
     metadata.is_file() && !metadata.file_type().is_symlink()
 }
 
-fn check_deadline<E>(
-    deadline: Instant,
-) -> Result<(), SourceImportRecordArtifactError<E>> {
+fn check_deadline<E>(deadline: Instant) -> Result<(), SourceImportRecordArtifactError<E>> {
     if Instant::now() >= deadline {
         Err(SourceImportRecordArtifactError::DeadlineExceeded)
     } else {

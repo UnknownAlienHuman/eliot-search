@@ -254,8 +254,11 @@ fn source_import_record_chain_and_artifact_lifecycle_have_one_owner() {
         "pub struct SourceImportRecordArtifact",
         "pub struct SourceImportRecordReadback",
         "inspect_source_import_record_artifact",
+        "SourceImportRecordArtifactPublication",
+        "classify_source_import_record_artifact",
+        "resolve_same_process",
+        "sync_and_verify_final",
         "fs::hard_link",
-        "fs::remove_file",
         "read_until",
     ] {
         assert!(
@@ -263,6 +266,14 @@ fn source_import_record_chain_and_artifact_lifecycle_have_one_owner() {
             "control owner is missing immutable artifact behavior {required}"
         );
     }
+
+    for forbidden in ["fs::remove_file", "Drop for OwnedStaging", "cleanup_armed", "proof.v1", "ELIOT-RECORD-OP"] {
+        assert!(!artifact_owner.contains(forbidden), "record artifact restored unqualified cleanup/restart authority: {forbidden}");
+    }
+    let adapter = read(&root, "bins/eliot-searchd/src/control_migration_redb.rs");
+    assert!(adapter.contains("impl SourceImportRecordArtifactPlatform"));
+    assert!(adapter.contains("sync_record_artifact_directory"));
+    assert!(adapter.contains("0x0200_0000"));
 
     let plan = read(
         &root,
