@@ -50,7 +50,10 @@ pub use initialization::{existing_key_binding, initialize_layout as initialize_o
 
 #[path = "secure_direct_store/existing_read.rs"]
 mod existing_read;
-pub use existing_read::{DirectRead, ExistingReadStore, ReadOnlyStore, open_existing_read};
+pub use existing_read::{
+    DirectRead, ExistingReadStore, ExistingSyncStore, ReadOnlyStore, open_existing_read,
+    open_existing_sync,
+};
 
 #[path = "secure_direct_store/existing_read_output.rs"]
 mod existing_read_output;

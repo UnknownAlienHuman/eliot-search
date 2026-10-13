@@ -161,3 +161,36 @@ fn direct_store_compatibility_and_query_regression_stay_closed() {
     assert!(tests.contains("corpus_snapshot(guard.canonical_root())"));
     assert!(tests.len() < 12_000, "regression corpus grew to {} bytes", tests.len());
 }
+
+#[test]
+fn existing_sync_child_reuses_replay_and_credential_without_effect_surface() {
+    let root = crate_root();
+    let source = read(&root, "src/secure_direct_store/existing_read.rs");
+    assert_eq!(source.matches("plaintext::DirectStore::from_existing_bytes(").count(), 1);
+    assert_eq!(source.matches("sha256::decode_digest(").count(), 1);
+    assert_eq!(source.matches("RevisionProtector::for_existing_credential(").count(), 2);
+    let constructor = read(&root, "src/revision_protection/protector/initialization.rs");
+    assert_eq!(constructor.matches("fn for_existing_credential(").count(), 1);
+    assert!(!constructor.contains("for_existing_read"));
+    let child = source.split("pub struct ExistingSyncStore {").nth(1).unwrap()
+        .split("impl core::fmt::Debug").next().unwrap();
+    assert!(child.contains("store: DirectStore"));
+    assert!(!child.contains("pub store:"));
+    assert_eq!(child.matches("pub(crate) fn ").count(), 1);
+    for required in [
+        "self.store.root != operation.root()", "operation.selected_binding()",
+        "self.store.protector.initialization_key_binding()?", "operation.verify()",
+    ] { assert!(child.contains(required), "missing closed child check {required}"); }
+    for forbidden in ["impl DirectRead for ExistingSyncStore", "impl Deref", "for_existing_read"] {
+        assert!(!source.contains(forbidden), "sync child escape: {forbidden}");
+    }
+    let open = source.split("pub fn open_existing_sync(").nth(1).unwrap()
+        .split("fn owner_error(").next().unwrap();
+    assert!(open.find("replay_existing(").unwrap() < open.find("credential_call(").unwrap());
+    assert_eq!(open.matches("operation.verify()?").count(), 2);
+    for forbidden in [
+        "DirectStore::open", "verify_control", "for_initialization", "load_or_create",
+        "protect(", "unprotect(", "index_file(", "sync_directory(", "write_all",
+        "read_dir", "create(true)", "mark_reconciled_synced",
+    ] { assert!(!open.contains(forbidden), "effect reached sync composition: {forbidden}"); }
+}

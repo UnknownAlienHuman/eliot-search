@@ -98,7 +98,12 @@ const fn context_error(
 }
 
 impl RevisionProtector {
-    pub(crate) fn for_existing_read(
+    /// The one existing-only credential constructor, shared by read and sync
+    /// composition. It loads the already-existing namespace root credential,
+    /// derives the byte-compatible binding and DPAPI entropy, installs the
+    /// zeroizing Drop before any fallible final check, verifies the selected
+    /// binding and never creates, replaces or republishes a credential.
+    pub(crate) fn for_existing_credential(
         namespace_id: [u8; 32],
         selected_binding: Option<[u8; 32]>,
         deadline: Instant,

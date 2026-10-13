@@ -3,17 +3,21 @@
 use std::fs::{self, Metadata};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use search_runtime_owner::OwnerError;
 
+use super::super::native_objects::read_bytes;
 use super::super::native_request::{NativeRootRequest, NativeWork};
 use super::super::spec::LifecycleState;
 use super::read_child::registration_read::RegistrationPin;
 use super::{NativeRootCapability, acquire_existing};
 
-// Field order closes the registration child before native pins/exclusions on Drop.
+// Field order closes the store/protector child, then registration and the
+// retained bytes, before the original native custody and exclusions.
 struct SyncHolder {
+    store: Option<crate::direct_store::ExistingSyncStore>,
     registration: RegistrationPin,
     bytes: Option<Vec<u8>>,
     consumed: bool,
@@ -31,14 +35,30 @@ impl SyncHolder {
         }
     }
 
+    fn verify_store(&mut self) -> Result<(), OwnerError> {
+        let Self { store, registration, bytes, consumed, owner, .. } = self;
+        let mut operation = NativeSyncPreflightOperation {
+            owner,
+            registration,
+            bytes,
+            consumed,
+        };
+        match store {
+            Some(store) => store.verify_binding(&mut operation),
+            None => operation.verify(),
+        }
+    }
+
     fn close(self) -> Result<(), OwnerError> {
         let Self {
+            store,
             registration,
             bytes,
             owner,
             output_attempted,
             ..
         } = self;
+        drop(store);
         drop((registration, bytes));
         close_owner(owner, output_attempted)
     }
@@ -169,6 +189,7 @@ pub fn run_source_sync_preflight(
         }
     };
     let mut holder = SyncHolder {
+        store: None,
         registration,
         bytes,
         consumed: false,
@@ -176,11 +197,14 @@ pub fn run_source_sync_preflight(
         owner,
     };
     let preflight = crate::source_roots::preflight_sync(&mut holder.operation());
-    let checked = holder
-        .operation()
-        .verify()
-        .map_err(|error| error.code().to_owned());
-    let outcome = checked.and(preflight);
+    let composed = preflight.and_then(|()| {
+        let store = crate::direct_store::open_existing_sync(&mut holder.operation())
+            .map_err(|error| error.code().to_owned())?;
+        holder.store = Some(store);
+        Ok(())
+    });
+    let checked = holder.verify_store().map_err(|error| error.code().to_owned());
+    let outcome = checked.and(composed);
     let code = outcome
         .as_ref()
         .err()
@@ -204,6 +228,36 @@ pub struct NativeSyncPreflightOperation<'owner> {
 impl NativeSyncPreflightOperation<'_> {
     pub(crate) fn root(&self) -> &Path {
         &self.owner.root
+    }
+    pub(crate) const fn selected_binding(&self) -> Option<[u8; 32]> {
+        self.owner.selected_key_binding
+    }
+    pub(crate) fn namespace_bytes(&mut self) -> Result<Vec<u8>, OwnerError> {
+        self.checkpoint()?;
+        let result = read_bytes(
+            &self.owner.request, &mut self.owner.work, &mut self.owner.pins.files[8], 256,
+        );
+        let checkpoint = self.checkpoint();
+        result.and_then(|bytes| checkpoint.map(|()| bytes))
+    }
+    pub(crate) fn catalog_bytes(&mut self) -> Result<Vec<u8>, OwnerError> {
+        self.checkpoint()?;
+        let result = read_bytes(
+            &self.owner.request, &mut self.owner.work, &mut self.owner.pins.files[9],
+            512 * 1024 * 1024,
+        );
+        let checkpoint = self.checkpoint();
+        result.and_then(|bytes| checkpoint.map(|()| bytes))
+    }
+    pub(crate) fn credential_call<T>(
+        &mut self,
+        read: impl FnOnce(Instant, &AtomicBool) -> Result<T, OwnerError>,
+    ) -> Result<T, OwnerError> {
+        self.checkpoint()?;
+        let (deadline, cancellation) = self.owner.request.credential_context();
+        let result = self.owner.work.call(&self.owner.request, || read(deadline, cancellation));
+        let checkpoint = self.checkpoint();
+        result.and_then(|value| checkpoint.map(|()| value))
     }
     pub(crate) fn checkpoint(&mut self) -> Result<(), OwnerError> {
         if !self.owner.mutation

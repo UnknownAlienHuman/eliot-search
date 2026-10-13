@@ -4,12 +4,28 @@ use std::cell::{Cell, RefCell};
 
 use search_runtime_owner::OwnerError;
 
-use super::{DirectStore, RevisionSlice, SourceSummary, StoreSearchResult, StoreVerification};
-use crate::owner_composition::NativeReadOperation;
+use super::{DirectStore, RevisionSlice, SourceSummary, StoreSearchResult, StoreVerification, plaintext};
+use crate::owner_composition::{NativeReadOperation, NativeSyncPreflightOperation};
 use crate::revision_protection::RevisionProtector;
 
 mod sealed {
     pub trait Sealed {}
+}
+
+/// The one owner-neutral replay of already-existing namespace and source-log
+/// bytes. It parses namespace identity and replays the registry exactly as the
+/// read path does; neither caller may initialize, migrate or repair anything.
+fn replay_existing(
+    root: &std::path::Path,
+    namespace: &[u8],
+    log: &[u8],
+) -> Result<(plaintext::DirectStore, [u8; 32]), OwnerError> {
+    let store = plaintext::DirectStore::from_existing_bytes(root, namespace, log)
+        .map_err(|_| OwnerError::OwnerRecoveryQuarantined)?;
+    let namespace_id =
+        crate::sha256::decode_digest(&store.namespace_id())
+            .ok_or(OwnerError::OwnerGuardMismatch)?;
+    Ok((store, namespace_id))
 }
 
 /// Private daemon read surface shared by compatibility callers and the new
@@ -55,6 +71,36 @@ pub struct ReadOnlyStore<'owner> {
     store: &'owner ExistingReadStore,
     operation: RefCell<NativeReadOperation<'owner>>,
     native_refusal: Cell<Option<OwnerError>>,
+}
+
+/// Closed child owned by native sync custody while the durable owner stays
+/// RELEASED. It owns the replayed store and the selected existing protector and
+/// exposes only an immutable binding check in this slice: no mutation,
+/// traversal, publication, read surface, escape or inner accessor.
+pub struct ExistingSyncStore {
+    store: DirectStore,
+}
+
+impl ExistingSyncStore {
+    /// Checks immutable child bindings, then the retained native/registration pins.
+    pub(crate) fn verify_binding(
+        &self,
+        operation: &mut NativeSyncPreflightOperation<'_>,
+    ) -> Result<(), OwnerError> {
+        let selected = self.store.protector.initialization_key_binding()?;
+        if self.store.root != operation.root()
+            || operation.selected_binding().is_some_and(|expected| expected != selected)
+        {
+            return Err(OwnerError::OwnerGuardMismatch);
+        }
+        operation.verify()
+    }
+}
+
+impl core::fmt::Debug for ExistingSyncStore {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str("ExistingSyncStore(<opaque>)")
+    }
 }
 
 // The kernel never escapes this adapter. Only verified borrowed operations
@@ -185,14 +231,11 @@ pub fn open_existing_read(
     operation.verify()?;
     let namespace = operation.namespace_bytes()?;
     let log = operation.catalog_bytes()?;
-    let inner = super::plaintext::DirectStore::from_existing_bytes(operation, &namespace, &log)
-        .map_err(|_| OwnerError::OwnerRecoveryQuarantined)?;
+    let (inner, namespace_id) = replay_existing(operation.root(), &namespace, &log)?;
     drop(log);
-    let namespace_id = crate::sha256::decode_digest(&inner.namespace_id())
-        .ok_or(OwnerError::OwnerGuardMismatch)?;
     let selected = operation.selected_binding();
     let protector = operation.credential_call(|deadline, cancellation| {
-        RevisionProtector::for_existing_read(namespace_id, selected, deadline, cancellation)
+        RevisionProtector::for_existing_credential(namespace_id, selected, deadline, cancellation)
     })?;
     let store = DirectStore {
         root: operation.root().to_owned(),
@@ -201,6 +244,31 @@ pub fn open_existing_read(
     };
     operation.verify()?;
     Ok(ExistingReadStore { store })
+}
+
+/// Composes the closed sync child from the same already-existing bytes and the
+/// same selected credential. The operation is borrow-only native custody: this
+/// function performs no traversal, publication, lifecycle or currentness
+/// effect and never creates or replaces a credential.
+pub fn open_existing_sync(
+    operation: &mut NativeSyncPreflightOperation<'_>,
+) -> Result<ExistingSyncStore, OwnerError> {
+    operation.verify()?;
+    let namespace = operation.namespace_bytes()?;
+    let log = operation.catalog_bytes()?;
+    let (inner, namespace_id) = replay_existing(operation.root(), &namespace, &log)?;
+    drop(log);
+    let selected = operation.selected_binding();
+    let protector = operation.credential_call(|deadline, cancellation| {
+        RevisionProtector::for_existing_credential(namespace_id, selected, deadline, cancellation)
+    })?;
+    let store = DirectStore {
+        root: operation.root().to_owned(),
+        inner,
+        protector,
+    };
+    operation.verify()?;
+    Ok(ExistingSyncStore { store })
 }
 
 fn owner_error(error: OwnerError) -> String {
