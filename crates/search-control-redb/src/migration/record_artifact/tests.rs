@@ -164,6 +164,40 @@ fn deadline() -> Instant {
     Instant::now() + Duration::from_secs(5)
 }
 
+#[cfg(windows)]
+#[test]
+fn metadata_visible_open_refusal_is_unavailable_not_replaced() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let fixture = Fixture::new();
+    let name = ".source-map.unavailable.tmp";
+    let path = fixture.0.join(name);
+    let mut held = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .share_mode(0)
+        .open(&path)
+        .expect("exclusive fixture handle");
+    held.write_all(b"alpha\n").expect("row");
+    held.sync_all().expect("row sync");
+    assert!(fs::symlink_metadata(&path).expect("metadata").is_file());
+    assert!(fs::File::open(&path).is_err());
+
+    let mut chain = SourceImportRecordChain::new();
+    chain.push(b"alpha\n").expect("record");
+    let expected = chain.finish();
+    let observed = classify_source_import_record_artifact(
+        &TestPlatform::new(),
+        &fixture.0,
+        name,
+        "unavailable.source-map.v1",
+        (&expected, 1, 6),
+        deadline(),
+    );
+    assert_eq!(observed.state(), SourceImportRecordArtifactCurrentState::Unavailable);
+    assert_eq!(observed.resolution(), SourceImportRecordArtifactResolution::Unresolved);
+}
+
 #[test]
 fn exact_second_pass_publication_and_final_inspection_are_package_owned() {
     let fixture = Fixture::new();

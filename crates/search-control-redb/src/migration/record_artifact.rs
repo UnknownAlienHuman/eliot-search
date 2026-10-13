@@ -1024,10 +1024,10 @@ where
     if !regular(&before) || before.len() != expected_bytes {
         return Err(SourceImportRecordArtifactError::ObjectInvalid);
     }
-    let file = File::open(path).map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
+    let file = File::open(path).map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
     let opened = file
         .metadata()
-        .map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
+        .map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
     if !opened.is_file()
         || opened.len() != expected_bytes
         || opened.modified().ok() != before.modified().ok()
