@@ -15,6 +15,8 @@ use std::path::Path;
 mod io;
 #[path = "control_migration_inventory/scan.rs"]
 mod scan;
+#[path = "control_migration_inventory/preparation_links.rs"]
+mod preparation_links;
 
 pub(super) fn stage(
     source: &MigrationSource<'_, '_, '_>,

@@ -463,13 +463,12 @@ fn preparation(
                     .value
                     .to_str()
                     .and_then(|name| classify_legacy_preparation_inventory_name(tree, name));
-                let status = classified.map_or(Status::Unsupported, |value| {
-                    if value.kind().tag() == "uncommitted_temporary_object" {
-                        Status::Orphan
-                    } else {
-                        Status::Present
-                    }
-                });
+                let status = match classified {
+                    None => Status::Unsupported,
+                    Some(value) if value.kind().tag() == "uncommitted_temporary_object" => Status::Orphan,
+                    Some(value) if super::preparation_links::is_linked(source, root, tree, &digest(value.id())?, &name.value)? => Status::Present,
+                    Some(_) => Status::Gap,
+                };
                 if let Some(value) = classified
                     && !shard
                         .value
@@ -484,17 +483,15 @@ fn preparation(
                         [0; 3],
                     );
                 }
-                if residue_only && status == Status::Present {
-                    return Ok(());
-                }
                 match io::read(
                     source,
                     &path.join(&name.value),
                     LEGACY_REVISION_MAX_OBJECT_BYTES,
                 )? {
                     Ok(bytes) => {
+                        if residue_only && status == Status::Present { return Ok(()); }
                         let evidence = io::fingerprint(source, &bytes)?;
-                        if tree == PrepTree::References && status == Status::Present {
+                        if tree == PrepTree::References && matches!(status, Status::Present | Status::Gap) {
                             let key = classified
                                 .map(|value| digest(value.id()))
                                 .transpose()?
@@ -502,7 +499,7 @@ fn preparation(
                             match decode_legacy_preparation_reference(&bytes, &key) {
                                 Ok(reference) => stream.item(
                                     family,
-                                    Status::Present,
+                                    status,
                                     12,
                                     [key, *reference.manifest_digest(), evidence],
                                     [
@@ -570,7 +567,7 @@ fn preparation(
 
 // The materializer owns the complete persisted frame and BLAKE3 representation
 // preimage. Composition supplies the primitive exactly as its existing codec.
-struct PreparationRepresentationDigest;
+pub(super) struct PreparationRepresentationDigest;
 impl LegacyPreparationStoreDigest for PreparationRepresentationDigest {
     fn digest(bytes: &[u8]) -> [u8; 32] {
         sha256::digest(bytes)
@@ -876,6 +873,13 @@ fn control(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, family: Family) -> 
             _ => false,
         };
         if !selected {
+            if family == Family::Residue && !matches!(text,
+                "namespace.id" | "source-events.log" | "source-roots.v1" | "directory-manifests" | "control-cutover.v1") {
+                // The name does not identify an owning parser. Account for the
+                // whole unknown representation without reading possible secrets.
+                let subject = io::fingerprint(source, &name.key)?;
+                return stream.item(family, Status::Gap, 34, [subject, ZERO, ZERO], [0; 3]);
+            }
             return Ok(());
         }
         let subject = io::fingerprint(source, &name.key)?;
@@ -994,9 +998,9 @@ fn directory_outcome(
     Ok(())
 }
 
-fn digest(value: &str) -> Result<[u8; 32], String> {
+pub(super) fn digest(value: &str) -> Result<[u8; 32], String> {
     sha256::decode_digest(value).ok_or_else(changed)
 }
-fn changed() -> String {
+pub(super) fn changed() -> String {
     "DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned()
 }

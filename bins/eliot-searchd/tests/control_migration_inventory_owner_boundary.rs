@@ -12,10 +12,14 @@ struct MigrationSource<'a, 'b, 'c> {
     root: &'a Path,
     calls: Cell<usize>,
     refusal: Cell<bool>,
+    revisions: Vec<FixtureRevision>,
     _lifetimes: PhantomData<(&'b (), &'c ())>,
 }
 impl MigrationSource<'_, '_, '_> {
     fn inventory_root(&self) -> &Path { self.root }
+    fn inventory_namespace(&self) -> [u8; 32] { [0x12; 32] }
+    fn inventory_revisions(&self) -> impl ExactSizeIterator<Item = &FixtureRevision> { self.revisions.iter() }
+    fn native(&self) -> Option<FixtureInput> { Some(FixtureInput { protector: FixtureProtector }) }
     fn charge(&self, _: Work) -> Result<(), String> {
         self.checkpoint()?;
         self.calls.set(self.calls.get() + 1);
@@ -25,10 +29,31 @@ impl MigrationSource<'_, '_, '_> {
         if self.refusal.get() { Err("ORIGINAL_CONTEXT_REFUSED".to_owned()) } else { Ok(()) }
     }
 }
+struct FixtureRevision { source_id: String, revision_id: String, content_digest: String, byte_length: u64 }
+struct FixtureInput { protector: FixtureProtector }
+struct FixtureProtector;
+impl FixtureProtector { fn backend_name(&self) -> &'static str { "fixture-preparation" } }
+mod direct_preparation {
+    pub fn canonical_materializer_digest() -> Result<[u8; 32], &'static str> { Ok([0x13; 32]) }
+    pub fn canonical_unitizer_digest() -> Result<[u8; 32], &'static str> { Ok([0x14; 32]) }
+}
+mod scan {
+    use search_materializer::api::LegacyPreparationStoreDigest;
+    pub struct PreparationRepresentationDigest;
+    impl LegacyPreparationStoreDigest for PreparationRepresentationDigest {
+        fn digest(bytes: &[u8]) -> [u8; 32] { super::sha256::digest(bytes) }
+        fn digest_parts(domain: &[u8], parts: &[&[u8]]) -> [u8; 32] { super::sha256::digest_parts(domain, parts) }
+    }
+    pub fn digest(value: &str) -> Result<[u8; 32], String> { super::sha256::decode_digest(value).ok_or_else(changed) }
+    pub fn changed() -> String { "DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned() }
+}
 #[path = "../src/sha256.rs"]
 mod sha256;
 #[path = "../src/control_migration_inventory/io.rs"]
 mod inventory_io;
+use inventory_io as io;
+#[path = "../src/control_migration_inventory/preparation_links.rs"]
+mod preparation_links;
 
 struct Fixture(PathBuf);
 impl Fixture {
@@ -41,7 +66,7 @@ impl Fixture {
         Self(path)
     }
     fn source(&self) -> MigrationSource<'_, '_, '_> {
-        MigrationSource { root: &self.0, calls: Cell::new(0), refusal: Cell::new(false), _lifetimes: PhantomData }
+        MigrationSource { root: &self.0, calls: Cell::new(0), refusal: Cell::new(false), revisions: Vec::new(), _lifetimes: PhantomData }
     }
 }
 impl Drop for Fixture {
@@ -143,4 +168,55 @@ fn multi_link_object_is_a_gap_and_no_content_is_returned() {
     std::fs::hard_link(&object, fixture.0.join("alias.bin")).unwrap();
     let source = fixture.source();
     assert!(matches!(inventory_io::read(&source, &object, 64).unwrap(), Err(Status::Gap)));
+}
+
+#[test]
+fn stale_unmapped_preparation_is_not_a_current_link_and_dangling_links_are_refused() {
+    use search_materializer::api::{encode_legacy_preparation_binding, encode_legacy_preparation_reference,
+        derive_legacy_preparation_lookup_key, derive_legacy_preparation_object_id,
+        legacy_preparation_object_relative_locator, legacy_preparation_reference_relative_locator,
+        LegacyDirectPreparationBinding, LegacyPreparationProtection, LegacyPreparationInventoryTree as Tree};
+    let fixture = Fixture::new();
+    let mut source = fixture.source();
+    source.revisions.push(FixtureRevision { source_id: "21".repeat(32), revision_id: "22".repeat(32),
+        content_digest: "23".repeat(32), byte_length: 17 });
+    let binding = encode_legacy_preparation_binding(&LegacyDirectPreparationBinding {
+        namespace: [0x12; 32], source_id: [0x21; 32], revision_id: [0x22; 32], content_digest: [0x23; 32],
+        byte_length: 17, materializer_digest: [0x13; 32], unitizer_digest: [0x14; 32] });
+    let key = derive_legacy_preparation_lookup_key::<scan::PreparationRepresentationDigest>(&binding, "fixture-preparation");
+    let object = derive_legacy_preparation_object_id::<scan::PreparationRepresentationDigest>(&binding, "fixture-preparation", &[0x24; 32]);
+    let reference_path = fixture.0.join("preparation").join(legacy_preparation_reference_relative_locator(&key));
+    let object_path = fixture.0.join("preparation").join(legacy_preparation_object_relative_locator(&object, LegacyPreparationProtection::Plaintext));
+    std::fs::create_dir_all(reference_path.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(object_path.parent().unwrap()).unwrap();
+    let reference = encode_legacy_preparation_reference(&key, &[0x24; 32], 300, LegacyPreparationProtection::Plaintext).unwrap();
+    std::fs::write(&reference_path, reference).unwrap();
+    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::References, &key, reference_path.file_name().unwrap()).unwrap(), "missing target is a dangling link");
+    std::fs::write(&object_path, b"bounded synthetic object").unwrap();
+    assert!(preparation_links::is_linked(&source, &fixture.0, Tree::References, &key, reference_path.file_name().unwrap()).unwrap());
+    assert!(preparation_links::is_linked(&source, &fixture.0, Tree::Objects, &object, object_path.file_name().unwrap()).unwrap());
+    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::Objects, &object, std::ffi::OsStr::new("wrong.dpapi")).unwrap(), "protection locator cannot be relabelled");
+    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::References, &[0x99; 32], std::ffi::OsStr::new("stale.ref")).unwrap(), "unmapped reference is not silently current");
+    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::Objects, &[0x99; 32], std::ffi::OsStr::new("stale.bin")).unwrap(), "unmapped object is not silently current");
+}
+
+#[test]
+fn unknown_control_representation_is_incomplete_instead_of_silently_skipped() {
+    let fixture = Fixture::new();
+    let control = fixture.0.join("control");
+    std::fs::create_dir_all(control.join("unrecognized" )).unwrap();
+    std::fs::write(control.join("unrecognized/residue.tmp"), b"private bytes must not be read by unknown metadata handling").unwrap();
+    let source = fixture.source();
+    let mut names = Vec::new();
+    assert_eq!(inventory_io::visit(&source, &control, |name| { names.push(name.value.clone()); Ok(()) }).unwrap(), None);
+    assert_eq!(names, [std::ffi::OsString::from("unrecognized")]);
+    // Static ownership guard: the real visitor's unmatched branch emits an
+    // incomplete row before its skip, and does not dispatch a body reader.
+    let scanner = include_str!("../src/control_migration_inventory/scan.rs");
+    let unmatched = scanner.split("if !selected {").nth(1).unwrap().split("let subject = io::fingerprint").next().unwrap();
+    assert!(unmatched.contains("family == Family::Residue"));
+    let dispatch = scanner.split("if !selected {").nth(1).unwrap().split("let path = directory.join").next().unwrap();
+    assert!(dispatch.contains("Status::Gap, 34"));
+    assert!(!dispatch.contains("control_file("));
+    assert!(!dispatch.contains("io::read("));
 }
