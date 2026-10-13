@@ -26,9 +26,7 @@ use crate::source_roots;
 pub fn maybe_run() -> Option<ExitCode> {
     let started = Instant::now();
     let arguments = std::env::args_os().skip(1).take(257).collect::<Vec<_>>();
-    if MigrationRoute::from_arguments(&arguments).is_none() {
-        return None;
-    }
+    MigrationRoute::from_arguments(&arguments)?;
     Some(run(&arguments, started))
 }
 
@@ -160,10 +158,17 @@ fn stage(
             store.stage_mapping(target, &directory, operation, registration.as_deref())
         }
     }?; // Store/protector closes before registration/native custody.
-    if output_directory(operation, &directory)? != directory {
-        return Err("DIRECT_MIGRATION_DIRECTORY_CHANGED".to_owned());
+    let observed = output_directory(operation, &directory).map_err(|error| {
+        if bootstrap { "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned() } else { error }
+    })?;
+    if observed != directory {
+        return Err(if bootstrap { "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN" }
+            else { "DIRECT_MIGRATION_DIRECTORY_CHANGED" }.to_owned());
     }
-    operation.verify().map_err(|error| error.code().to_owned())?;
+    operation.verify().map_err(|error| {
+        if bootstrap { "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned() }
+        else { error.code().to_owned() }
+    })?;
     Ok(receipt)
 }
 

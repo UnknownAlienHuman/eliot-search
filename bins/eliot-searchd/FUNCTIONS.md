@@ -1,5 +1,12 @@
 # Function contract — `eliot-searchd`
 
+The explicit offline bootstrap command composes the `search-control-redb`
+original-operation bootstrap and inventory producer under one retained native
+read child. The output pins and target are external/inactive; source custody is
+never relabelled ACTIVE. Only the package-owned first-phase receipt is emitted.
+No normal serving, complete candidate or cleanup authority follows; native,
+restart/fault and installed qualification remain separate.
+
 **Status:** progressive W1–W10 composition contract; no daemon business/runtime implementation or
 accepted wave receipt exists.
 

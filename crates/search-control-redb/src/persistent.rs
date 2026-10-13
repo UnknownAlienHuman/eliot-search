@@ -27,6 +27,11 @@ mod quarantine;
 mod diagnostics;
 mod publication;
 mod port;
+mod bootstrap;
+
+pub use bootstrap::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBootstrapFailure,
+    MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
+    MigrationBootstrapPlatform, MigrationBootstrapReceipt, MigrationBootstrapWork};
 
 pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,

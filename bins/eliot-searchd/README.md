@@ -41,3 +41,14 @@ reap a child or close inherited pipe handles remains failed/unknown cleanup, nev
 release. The proxy exits rather than silently retaining a serving worker. This is not process-tree
 containment or proof against an uninterruptible OS syscall; native owner/job qualification remains.
 
+`--bootstrap-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY` creates
+one original-operation-bound inactive target before inventory publication. It uses
+retained existing-only source/registration/protector custody and no-follow output
+ancestor/target pins. The returned `eliot.migration-bootstrap.v1` receipt records
+this first phase and explicitly reports `complete_candidate_not_performed`.
+Existing targets are never reopened as original proof; uncertainty preserves the
+target/artifact and grants no retry, restart reconciliation, cleanup or serving.
+This command does not also create a legacy v2 import. Full mapping continues in
+this target under the next accepted profile. The old plan command and formats are
+unchanged and remain unable to authorize a complete candidate or authority cutover.
+

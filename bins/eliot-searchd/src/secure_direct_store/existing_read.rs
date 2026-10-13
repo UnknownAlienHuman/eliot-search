@@ -46,6 +46,30 @@ pub struct ExistingMigrationStore {
 }
 
 impl ExistingMigrationStore {
+    pub(crate) fn stage_bootstrap(
+        &self, target: search_contracts::SourceNamespaceId, directory: &std::path::Path,
+        operation: &mut NativeReadOperation<'_>, registration: Option<&[u8]>,
+    ) -> Result<String, String> {
+        operation.verify().map_err(owner_error)?;
+        let binding = self.store.protector.initialization_key_binding().map_err(owner_error)?;
+        if self.store.root != operation.root()
+            || operation.selected_binding().is_some_and(|selected| binding != selected)
+        { return Err(OwnerError::OwnerGuardMismatch.code().to_owned()); }
+        let result = {
+            let inventory_owner = operation.migration_inventory_owner().map_err(owner_error)?;
+            let context = super::migration_context::MigrationContext::new(operation);
+            let input = super::migration_context::NativeMigrationInput {
+                namespace: &self.namespace, log: &self.log, protector: &self.store.protector,
+                context: &context, inventory_owner, registration,
+            };
+            DirectStore::stage_owner_bootstrap_existing(
+                &self.store.inner, &self.store.root, target, directory, &input,
+            )?
+        };
+        operation.verify().map_err(|_| "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned())?;
+        Ok(result)
+    }
+
     pub(crate) fn stage_mapping(
         &self,
         target: search_contracts::SourceNamespaceId,

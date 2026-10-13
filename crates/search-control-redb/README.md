@@ -235,3 +235,11 @@ remain explicit. Directory/profile gaps are never complete negative evidence.
 The footer grants no verified-candidate, cutover, restart or cleanup authority;
 #268-C/#348, #269, #347 and #215 remain separate product obligations. Existing
 source-map/content/staged-plan bytes and receipts remain unchanged.
+
+The separate `MigrationBootstrap` owner records the actual original operation and
+inventory publication attempt in the single future inactive target, using the
+existing three-table journal and immediate conditional readback. Its borrowed
+native callback reserves finite logical work under the original absolute deadline.
+The result is first-phase metadata, not a verified candidate. A failed/unknown
+phase cannot dispatch; a possible publication followed by refusal retains evidence
+and cannot retry. Old source-map/content/import/plan bytes remain unchanged.
