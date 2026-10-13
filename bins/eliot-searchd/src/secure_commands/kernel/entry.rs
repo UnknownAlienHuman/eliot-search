@@ -16,12 +16,25 @@ pub fn maybe_run() -> Option<ExitCode> {
     let Ok((arguments, _)) = crate::config_composition::strip_config_args_os(&raw) else {
         return Some(emit_process_error("USAGE_ERROR"));
     };
+    if arguments
+        .first()
+        .and_then(|value| value.to_str())
+        .is_some_and(super::source_sync::is_sync)
+    {
+        return Some(if super::source_sync::run(&raw, started).is_ok() {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(2)
+        });
+    }
     if let Some(command) = arguments.first().and_then(|value| value.to_str())
         && super::source_registration::is_registration(command)
     {
         return Some(if super::source_registration::run(&raw, started).is_ok() {
             ExitCode::SUCCESS
-        } else { ExitCode::from(2) });
+        } else {
+            ExitCode::from(2)
+        });
     }
     if let Some(command) = arguments.first().and_then(|value| value.to_str())
         && super::read::is_read(command)

@@ -76,6 +76,32 @@ impl core::fmt::Debug for NativeRootRequest {
 }
 
 impl NativeRootRequest {
+    /// Retains native/config argv for the effect-free existing-mutation sync caller.
+    pub(crate) fn for_source_sync(
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<Self, OwnerError> {
+        let mut request = Self::new(
+            DataRootOpenMode::OpenExistingMutating,
+            arguments,
+            deadline,
+            cancellation,
+            limits,
+        )?;
+        let (selected, _) = crate::config_composition::strip_config_args_os(arguments)
+            .map_err(|_| OwnerError::OwnerOperationConflict)?;
+        match selected.as_slice() {
+            [command, root] if command == "--sync-source-roots" && !root.is_empty() => {
+                request.root = PathBuf::from(root);
+            }
+            _ => return Err(OwnerError::OwnerOperationConflict),
+        }
+        request.check()?;
+        Ok(request)
+    }
+
     /// Closed validation output when no request could be constructed. It retains
     /// the caller's original deadline/flag/limits and mints no root authority.
     pub(crate) fn emit_validation_refusal(

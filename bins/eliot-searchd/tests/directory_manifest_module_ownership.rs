@@ -143,10 +143,21 @@ fn directory_manifest_format_and_limits_stay_closed() {
         "DIRECT_MANIFEST_GENERATION_AMBIGUOUS",
         "DIRECT_MANIFEST_DIGEST_MISMATCH",
         "DIRECT_MANIFEST_SOURCE_DUPLICATE",
-        "DIRECT_MANIFEST_FILENAME_MISMATCH",
     ] {
         assert!(load.contains(reason), "lost manifest reason {reason}");
     }
+    let codec = read(&root, "src/directory_manifest/kernel/codec.rs");
+    assert!(codec.contains("DIRECT_MANIFEST_FILENAME_MISMATCH"));
+    assert!(load.contains("validate_filename(path, &manifest)?"));
+
+    let kernel = read(&root, "src/directory_manifest/kernel.rs").replace("\r\n", "\n");
+    for module in ["persist", "sync"] {
+        assert!(kernel.contains(&format!("#[cfg(test)]\nmod {module};")));
+    }
+    for module in ["codec", "load", "model", "paths", "spec"] {
+        assert!(kernel.contains(&format!("#[path = \"kernel/{module}.rs\"]\nmod {module};")));
+    }
+    assert!(kernel.contains("pub use load::verify_directory_manifests;"));
 
     let paths = read(&root, "src/directory_manifest/kernel/paths.rs");
     assert!(paths.contains("DIRECT_MIGRATION_MANIFEST_PENDING"));

@@ -10,18 +10,20 @@ mod inspection;
 mod model;
 #[path = "kernel/path.rs"]
 mod path;
-#[path = "kernel/registry.rs"]
-mod registry;
 #[path = "kernel/registration.rs"]
 mod registration;
+#[path = "kernel/registry.rs"]
+mod registry;
 #[path = "kernel/spec.rs"]
 mod spec;
 
 pub use catalog::SourceRootCatalog;
 pub use error::SourceRootError;
 pub use inspection::SourceRootInspection;
-pub use registration::{PreparedSourceRootChange, SourceRootAction};
+pub use inspection::preflight_sync;
+#[cfg(test)]
 pub use model::SourceRootView;
+pub use registration::{PreparedSourceRootChange, SourceRootAction};
 pub use registry::{RootMigrationInput, migration_input};
 pub use search_source_registry::{
     CurrentWorkspaceTruth, ObservationGap, ObservationGapReason, ReconciliationCursor,

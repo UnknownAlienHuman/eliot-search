@@ -10,10 +10,12 @@ mod entry;
 mod output;
 #[path = "kernel/read.rs"]
 mod read;
-#[path = "kernel/source_roots.rs"]
-mod source_roots;
 #[path = "kernel/source_registration.rs"]
 mod source_registration;
+#[path = "kernel/source_roots.rs"]
+mod source_roots;
+#[path = "kernel/source_sync.rs"]
+mod source_sync;
 #[path = "kernel/store.rs"]
 mod store;
 #[path = "kernel/support.rs"]

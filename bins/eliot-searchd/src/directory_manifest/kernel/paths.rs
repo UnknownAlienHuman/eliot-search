@@ -1,7 +1,7 @@
 //! Manifest-root containment, discovery and platform path identity.
 
 use std::fs;
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -34,6 +34,7 @@ pub(super) fn existing_manifest_root(
     }
 }
 
+#[cfg(test)]
 pub(super) fn manifest_root(data_root: &Path) -> Result<PathBuf, String> {
     let control = data_root.join(CONTROL_DIRECTORY);
     ensure_directory(&control)?;
@@ -129,12 +130,14 @@ pub(super) fn ensure_regular_file(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(unix)]
+#[cfg(test)]
 pub fn path_identity_bytes(path: &Path) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt;
     path.as_os_str().as_bytes().to_vec()
 }
 
 #[cfg(windows)]
+#[cfg(test)]
 pub fn path_identity_bytes(path: &Path) -> Vec<u8> {
     use std::os::windows::ffi::OsStrExt;
     path.as_os_str()
@@ -144,6 +147,7 @@ pub fn path_identity_bytes(path: &Path) -> Vec<u8> {
 }
 
 #[cfg(not(any(unix, windows)))]
+#[cfg(test)]
 pub fn path_identity_bytes(path: &Path) -> Vec<u8> {
     path.to_string_lossy().as_bytes().to_vec()
 }
@@ -161,6 +165,7 @@ pub(super) fn is_reparse(_metadata: &std::fs::Metadata) -> bool {
 }
 
 #[cfg(unix)]
+#[cfg(test)]
 pub(super) fn sync_manifest_directory(path: &Path) -> Result<(), String> {
     File::open(path)
         .and_then(|file| file.sync_all())
@@ -170,4 +175,5 @@ pub(super) fn sync_manifest_directory(path: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
+#[cfg(test)]
 pub(super) const fn sync_manifest_directory(_path: &Path) {}

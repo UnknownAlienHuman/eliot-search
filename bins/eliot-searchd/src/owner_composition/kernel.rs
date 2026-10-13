@@ -46,8 +46,9 @@ pub use std::fs::Metadata as SourceDirectoryMetadata;
 #[path = "kernel/registration_native.rs"]
 mod registration_native;
 pub use native_admission::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
-pub use native_admission::{NativeRootAdmission, admit_existing};
 pub use native_admission::{NativeRegistrationOperation, run_source_registration};
+pub use native_admission::{NativeRootAdmission, admit_existing};
+pub use native_admission::{NativeSyncPreflightOperation, run_source_sync_preflight};
 pub use native_request::{NativeRootLimits, NativeRootRequest};
 
 #[path = "kernel/initialization.rs"]

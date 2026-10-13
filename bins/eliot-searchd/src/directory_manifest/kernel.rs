@@ -12,19 +12,24 @@ mod model;
 #[path = "kernel/paths.rs"]
 mod paths;
 #[path = "kernel/persist.rs"]
+#[cfg(test)]
 mod persist;
 #[path = "kernel/spec.rs"]
 mod spec;
 #[path = "kernel/sync.rs"]
+#[cfg(test)]
 mod sync;
 
 pub use load::verify_directory_manifests;
 #[cfg(test)]
 pub use migration::{migration_manifest, migration_manifest_files};
+#[cfg(test)]
 pub use model::{
     DirectoryEntry, DirectoryManifest, DirectoryManifestVerification,
-    DirectorySyncResult,
 };
 #[cfg(test)]
+pub use model::DirectorySyncResult;
+#[cfg(test)]
 pub use paths::path_identity_bytes;
+#[cfg(test)]
 pub use sync::sync_directory;

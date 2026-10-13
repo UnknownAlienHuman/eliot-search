@@ -221,3 +221,52 @@ fn paired_registration_route_keeps_original_native_request_and_excludes_sync_sta
     for forbidden in ["DirectStore", "DataRootGuard", "sync_directory(", "admit_existing(", "request.emit"]
     { assert!(!route.contains(forbidden)); }
 }
+
+#[test]
+fn sync_preflight_keeps_native_context_and_has_no_effect_path() {
+    let root = crate_root();
+    let entry = read(&root, "src/secure_commands/kernel/entry.rs");
+    let selected = entry.find("source_sync::run(&raw, started)").unwrap();
+    assert!(selected < entry.find("dispatch(command, &raw)").unwrap());
+    let route = read(&root, "src/secure_commands/kernel/source_sync.rs");
+    assert!(route.contains("selected.len() != 2"));
+    assert!(route.find("selected.len() != 2").unwrap()
+        < route.find("NativeRootRequest::for_source_sync").unwrap());
+    assert!(route.contains("started\n        .checked_add"));
+    assert!(route.contains("run_source_sync_preflight(request"));
+    let request = read(&root, "src/owner_composition/kernel/native_request.rs");
+    let constructor = request.split("pub(crate) fn for_source_sync(").nth(1).unwrap()
+        .split("pub(crate) fn emit_validation_refusal(").next().unwrap();
+    assert!(constructor.contains("DataRootOpenMode::OpenExistingMutating"));
+    assert!(constructor.contains("strip_config_args_os(arguments)"));
+    assert!(constructor.contains("request.root = PathBuf::from(root)"));
+    let native = read(&root, "src/owner_composition/kernel/source_sync.rs");
+    for required in [
+        "acquire_existing(&request, &mut work)", "acquired.bind(request, work)",
+        "RegistrationPin::acquire", "SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE",
+        "self.bytes.take()", "*self.consumed = true", "self.output_attempted = true",
+        "count != frame.len()", "LifecycleState::Released",
+        "self.owner.verify()?", ".registration\n            .verify",
+    ] { assert!(native.contains(required), "missing {required}"); }
+    assert!(native.find("let checked = holder").unwrap()
+        < native.find("holder.terminal(output, code)").unwrap());
+    assert_eq!(native.matches(".write(frame.as_bytes())").count(), 1);
+    assert!(native.find("drop((registration, bytes))").unwrap()
+        < native.find("close_owner(owner, output_attempted)").unwrap());
+    assert!(native.find("drop((pins, root, installation, record, bound_root))").unwrap()
+        < native.find("drop(exclusions)").unwrap());
+    let close = native.split("fn close_owner(").nth(1).unwrap()
+        .split("// Exactly one complete frame write;").next().unwrap();
+    assert!(close.contains("if output_attempted && result.is_err()"));
+    assert!(close.contains(".store(true, Ordering::Release)"));
+    assert!(close.contains("return Err(OwnerError::OwnerAcquireOutcomeUnknown)"));
+    assert!(native.contains("close_owner(owner, emitted.is_ok())"));
+    for source in [&route, &native] {
+        for forbidden in [
+            "DataRootGuard", "DirectStore", "RevisionProtector", "sync_directory(",
+            "collect_regular_files", "finish_in_place", "mark_reconciled_synced",
+            "write_all", "println!", "create(true)", "rename(", "remove_file(",
+            "protect(", "unprotect(",
+        ] { assert!(!source.contains(forbidden), "sync regained {forbidden}"); }
+    }
+}

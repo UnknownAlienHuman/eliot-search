@@ -16,3 +16,4 @@ pub use kernel::InitializingDataRoot;
 pub use kernel::initialize_new;
 pub use kernel::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 pub use kernel::{NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing};
+pub use kernel::{NativeSyncPreflightOperation, run_source_sync_preflight};

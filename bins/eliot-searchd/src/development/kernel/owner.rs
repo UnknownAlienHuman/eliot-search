@@ -124,7 +124,7 @@ pub struct DataRootGuard {
     sealed: Option<SealedRootLease>,
     file: File,
     canonical_root: PathBuf,
-    source_roots: SourceRootCatalog,
+    _source_roots: SourceRootCatalog,
     owner: LiveOwner,
 }
 
@@ -226,7 +226,7 @@ impl DataRootGuard {
             sealed,
             file,
             canonical_root,
-            source_roots,
+            _source_roots: source_roots,
             owner,
         })
     }
@@ -285,12 +285,14 @@ impl DataRootGuard {
             .map_err(|error| error.code().to_owned())
     }
 
+    #[cfg(test)]
     pub(crate) const fn source_roots(&self) -> &SourceRootCatalog {
-        &self.source_roots
+        &self._source_roots
     }
 
+    #[cfg(test)]
     pub(crate) const fn source_roots_mut(&mut self) -> &mut SourceRootCatalog {
-        &mut self.source_roots
+        &mut self._source_roots
     }
 }
 

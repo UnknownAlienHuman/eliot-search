@@ -5,10 +5,12 @@ use std::path::{Path, PathBuf};
 
 use super::model::{DirectoryEntry, DirectoryManifest};
 use super::spec::{
-    MANIFEST_HEADER, MAX_MANIFEST_BYTES, MAX_MANIFEST_ENTRIES,
+    MAX_MANIFEST_BYTES, MAX_MANIFEST_ENTRIES,
     MAX_MANIFEST_LINE_BYTES,
 };
 use crate::sha256;
+#[cfg(test)]
+use super::spec::MANIFEST_HEADER;
 
 pub(super) fn build_manifest(
     namespace_id: String,
@@ -49,6 +51,7 @@ pub(super) fn build_manifest(
     })
 }
 
+#[cfg(test)]
 pub(super) fn encode_manifest(
     manifest: &DirectoryManifest,
 ) -> Result<String, String> {

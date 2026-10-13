@@ -4,16 +4,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use search_source_registry::{
-    CurrentWorkspaceTruth, ObservationGap, ReconciliationCursor,
-    SourceRootCurrentness, SourceRootCurrentnessError, SourceRootState,
+    SourceRootCurrentness, SourceRootCurrentnessError,
     WatcherHint, WatcherHintKind,
 };
+#[cfg(test)]
+use search_source_registry::{CurrentWorkspaceTruth, ObservationGap, ReconciliationCursor, SourceRootState};
 
 use super::error::SourceRootError;
-use super::model::{SourceRootEntry, SourceRootView};
+use super::model::SourceRootEntry;
+#[cfg(test)]
+use super::model::SourceRootView;
 use super::path::{
     canonicalize_configured_set, canonicalize_new_root,
-    ensure_outside_data_root, path_text, probe_root,
+    ensure_outside_data_root, probe_root,
     reject_symlink, sync_directory,
 };
 use super::registry::{
@@ -21,7 +24,7 @@ use super::registry::{
 };
 use super::spec::MAX_SOURCE_ROOTS;
 #[cfg(test)]
-use super::path::ensure_no_overlap;
+use super::path::{ensure_no_overlap, path_text};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg(test)]
@@ -113,14 +116,17 @@ impl SourceRootCatalog {
         Ok(catalog)
     }
 
+    #[cfg(test)]
     pub(crate) fn configured_count(&self) -> usize {
         self.entries.len()
     }
 
+    #[cfg(test)]
     pub(crate) fn available_count(&self) -> usize {
         self.currentness.available_count()
     }
 
+    #[cfg(test)]
     pub(crate) fn unavailable_count(&self) -> usize {
         self.currentness.unavailable_count()
     }
@@ -138,6 +144,7 @@ impl SourceRootCatalog {
         self.currentness.reconcile(&observed)
     }
 
+    #[cfg(test)]
     pub(crate) fn available_paths(&self) -> Vec<(usize, &Path)> {
         if self.currentness.update_outcome_unknown() {
             return Vec::new();
@@ -152,6 +159,7 @@ impl SourceRootCatalog {
             .collect()
     }
 
+    #[cfg(test)]
     pub(crate) fn views(&self) -> Result<Vec<SourceRootView>, SourceRootError> {
         self.ensure_usable()?;
         (0..self.entries.len())
@@ -266,6 +274,7 @@ impl SourceRootCatalog {
         }
     }
 
+    #[cfg(test)]
     fn view(&self, index: usize) -> Result<SourceRootView, SourceRootError> {
         self.ensure_usable()?;
         let entry = self
@@ -310,20 +319,24 @@ impl SourceRootCatalog {
     }
 
     /// Returns explicit bounded gaps blocking currentness.
+    #[cfg(test)]
     pub(crate) fn observation_gaps(&self) -> Vec<ObservationGap> {
         self.currentness.observation_gaps()
     }
 
+    #[cfg(test)]
     pub(crate) fn reconciliation_cursor(&self) -> ReconciliationCursor {
         self.currentness.reconciliation_cursor()
     }
 
     /// Computes source/workspace truth without index truth.
+    #[cfg(test)]
     pub(crate) fn current_workspace_truth(&self) -> CurrentWorkspaceTruth {
         self.currentness.current_workspace_truth()
     }
 
     /// Marks the current reconciliation generation as sync-proven.
+    #[cfg(test)]
     pub(crate) fn mark_reconciled_synced(&mut self) -> bool {
         self.currentness.mark_reconciled_synced()
     }

@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use search_source_registry::SourceRootCurrentness;
 
 use crate::owner_composition::{
-    NativeReadOperation, NativeRegistrationOperation, SourceDirectoryMetadata as Metadata,
+    NativeReadOperation, NativeRegistrationOperation, NativeSyncPreflightOperation,
+    SourceDirectoryMetadata as Metadata,
 };
 use crate::service_output::json_string;
 
@@ -15,6 +16,23 @@ use super::path::{canonicalize_configured_set, ensure_outside_data_root, is_repa
 use super::registry::decode_configured_paths;
 
 const MAX_OUTPUT_BYTES: usize = 64 * 1024;
+
+/// Complete existing root policy/currentness preflight; never acknowledges sync.
+pub fn preflight_sync(operation: &mut NativeSyncPreflightOperation<'_>) -> Result<(), String> {
+    let bytes = operation
+        .registration_bytes()
+        .map_err(|error| error.code().to_owned())?;
+    let inspection = SourceRootInspection::read_using(bytes.as_deref(), operation)?;
+    let truth = inspection.currentness.current_workspace_truth();
+    if truth.configured == 0
+        || !truth.source_current
+        || truth.unavailable != 0
+        || truth.gap_count != 0
+    {
+        return Err("SOURCE_ROOT_SYNC_UNAVAILABLE".to_owned());
+    }
+    operation.verify().map_err(|error| error.code().to_owned())
+}
 
 pub struct SourceRootInspection {
     pub(super) paths: Vec<PathBuf>,
@@ -186,6 +204,21 @@ impl SourceRootProbes for NativeReadOperation<'_> {
 }
 
 impl SourceRootProbes for NativeRegistrationOperation<'_> {
+    fn root(&self) -> &Path {
+        Self::root(self)
+    }
+    fn checkpoint(&mut self) -> Result<(), String> {
+        Self::checkpoint(self).map_err(|error| error.code().to_owned())
+    }
+    fn source_root_metadata(&mut self, path: &Path) -> Result<io::Result<Metadata>, String> {
+        Self::source_root_metadata(self, path).map_err(|error| error.code().to_owned())
+    }
+    fn source_root_canonicalize(&mut self, path: &Path) -> Result<io::Result<PathBuf>, String> {
+        Self::source_root_canonicalize(self, path).map_err(|error| error.code().to_owned())
+    }
+}
+
+impl SourceRootProbes for NativeSyncPreflightOperation<'_> {
     fn root(&self) -> &Path {
         Self::root(self)
     }

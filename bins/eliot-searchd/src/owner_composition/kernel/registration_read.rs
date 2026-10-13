@@ -12,7 +12,7 @@ use super::super::super::native_objects::{
 };
 use super::{NativeReadOperation, NativeRootCapability, NativeRootRequest, NativeWork};
 
-pub(super) struct RegistrationPin {
+pub(in super::super) struct RegistrationPin {
     path: PathBuf,
     file: Option<File>,
     identity: Vec<u8>,
@@ -36,7 +36,7 @@ impl RegistrationPin {
         Ok(false)
     }
 
-    fn acquire(
+    pub(in super::super) fn acquire(
         request: &NativeRootRequest,
         work: &mut NativeWork,
         root: &Path,
@@ -80,7 +80,7 @@ impl RegistrationPin {
 
     /// Retained read-only/no-delete handles keep the catalog and pinned parents
     /// stable between full locator checkpoints. Every seam polls pending state.
-    pub(super) fn check(
+    pub(in super::super) fn check(
         &self,
         request: &NativeRootRequest,
         work: &mut NativeWork,
@@ -107,7 +107,7 @@ impl RegistrationPin {
         request.check()
     }
 
-    pub(super) fn verify(
+    pub(in super::super) fn verify(
         &self,
         request: &NativeRootRequest,
         work: &mut NativeWork,

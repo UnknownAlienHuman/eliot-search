@@ -167,12 +167,17 @@ fn source_root_listing_cannot_reach_the_legacy_registration_owner() {
     }
 }
 #[test]
-fn paired_registration_legacy_selectors_are_test_only_and_sync_stays_separate() {
+fn registration_and_sync_legacy_selectors_are_test_only() {
     let root = crate_root();
     let dispatch = read(&root, "src/app/kernel/dispatch.rs").replace("\r\n", "\n");
     assert!(dispatch.contains("#[cfg(test)]\n        \"--source-roots\""));
-    assert!(dispatch.contains("\"--sync-source-roots\" => super::source_root_commands::run"));
+    assert!(dispatch.contains("#[cfg(test)]\n        \"--sync-source-roots\" => super::source_root_commands::run"));
     let legacy = read(&root, "src/app/kernel/source_root_commands.rs").replace("\r\n", "\n");
     assert!(legacy.contains("#[cfg(test)]\n        \"--register-source-root\" =>"));
     assert!(legacy.contains("#[cfg(test)]\n        \"--unregister-source-root\" =>"));
+    for owner in ["pub fn run(", "fn emit_catalog_state(", "fn sync_registered("] {
+        assert!(legacy.contains(&format!("#[cfg(test)]\n{owner}")));
+    }
+    // Generic error escaping is still required by production dispatch.
+    assert!(legacy.contains("pub fn escape_json("));
 }
