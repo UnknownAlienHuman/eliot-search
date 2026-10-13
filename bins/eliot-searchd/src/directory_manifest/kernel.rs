@@ -5,7 +5,6 @@ mod codec;
 #[path = "kernel/load.rs"]
 mod load;
 #[path = "kernel/migration.rs"]
-#[cfg(test)]
 mod migration;
 #[path = "kernel/model.rs"]
 mod model;
@@ -21,6 +20,7 @@ mod spec;
 mod sync;
 
 pub use load::verify_directory_manifests;
+pub(crate) use migration::inventory_manifest;
 #[cfg(test)]
 pub use migration::{migration_manifest, migration_manifest_files};
 #[cfg(test)]

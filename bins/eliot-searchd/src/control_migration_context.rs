@@ -19,6 +19,8 @@ pub struct NativeMigrationInput<'view, 'operation, 'owner> {
     pub(crate) log: &'view [u8],
     pub(crate) protector: &'view RevisionProtector,
     pub(crate) context: &'view MigrationContext<'operation, 'owner>,
+    pub(crate) inventory_owner: search_control_redb::migration::LegacyInventoryOwner,
+    pub(crate) registration: Option<&'view [u8]>,
 }
 
 // Borrowed inputs only. Both native and residual legacy callers use the same
@@ -77,6 +79,14 @@ impl<'view, 'operation, 'owner> MigrationSource<'view, 'operation, 'owner> {
 
     pub(crate) fn retained_revisions(&self) -> impl ExactSizeIterator<Item = plaintext_direct_store::RevisionMetadata> + '_ {
         self.source.retained_revisions()
+    }
+
+    pub(crate) fn retained_revision(&self, id: &str) -> Option<plaintext_direct_store::RevisionMetadata> {
+        self.source.retained_revision(id)
+    }
+
+    pub(crate) fn inventory_heads(&self) -> impl Iterator<Item = &plaintext_direct_store::SourceRecord> + '_ {
+        self.source.inventory_heads()
     }
 
     pub(crate) fn compile_source_mapping(
@@ -165,6 +175,21 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
 
     pub(crate) const fn deadline(&self) -> Instant {
         self.deadline
+    }
+
+    pub(crate) fn inventory_reobserve(&self, input: &NativeMigrationInput<'_, '_, '_>) -> Result<(), String> {
+        self.checkpoint()?;
+        let mut operation = self.operation.try_borrow_mut()
+            .map_err(|_| OwnerError::OwnerOperationConflict.code().to_owned())?;
+        let owner = operation.migration_inventory_owner().map_err(|error| error.code().to_owned())?;
+        let namespace = operation.namespace_bytes().map_err(|error| error.code().to_owned())?;
+        let log = operation.catalog_bytes().map_err(|error| error.code().to_owned())?;
+        operation.migration_charge(LegacyRevisionObjectWork::Compare(namespace.len() + log.len()))
+            .map_err(|error| error.code().to_owned())?;
+        if owner != input.inventory_owner || namespace != input.namespace || log != input.log {
+            return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
+        }
+        operation.verify().map_err(|error| error.code().to_owned())
     }
 
     pub(crate) fn checkpoint(&self) -> Result<(), String> {

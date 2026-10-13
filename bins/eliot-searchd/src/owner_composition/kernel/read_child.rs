@@ -196,6 +196,28 @@ impl NativeReadOperation<'_> {
         request.credential_context().0
     }
 
+    /// Observe the actual child request under this retained custody, never a
+    /// caller-selected identity or another operation's startup request.
+    pub(crate) fn migration_inventory_owner(
+        &mut self,
+    ) -> Result<search_control_redb::migration::LegacyInventoryOwner, OwnerError> {
+        self.verify()?;
+        self.with_binding(|binding, request, _, _| {
+            let (invocation, request_digest) = request.binding();
+            Ok(search_control_redb::migration::LegacyInventoryOwner {
+                installation: binding.record.installation_id,
+                incarnation: binding.record.installation_incarnation_id,
+                root: binding.record.data_root_id,
+                invocation: *invocation.as_bytes(),
+                request_blake3: request_digest,
+                record_blake3: binding.record.record_digest,
+                physical_blake3: binding.record.volume_identity_digest,
+                epoch: binding.record.epoch,
+                generation: binding.record.generation,
+            })
+        })
+    }
+
     pub(crate) const fn output_attempted(&self) -> bool {
         self.output_attempted
     }

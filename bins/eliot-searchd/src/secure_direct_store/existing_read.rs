@@ -51,6 +51,7 @@ impl ExistingMigrationStore {
         target: search_contracts::SourceNamespaceId,
         directory: &std::path::Path,
         operation: &mut NativeReadOperation<'_>,
+        registration: Option<&[u8]>,
     ) -> Result<String, String> {
         operation.verify().map_err(owner_error)?;
         let binding = self.store.protector.initialization_key_binding().map_err(owner_error)?;
@@ -60,12 +61,15 @@ impl ExistingMigrationStore {
             return Err(OwnerError::OwnerGuardMismatch.code().to_owned());
         }
         let result = {
+            let inventory_owner = operation.migration_inventory_owner().map_err(owner_error)?;
             let context = super::migration_context::MigrationContext::new(operation);
             let input = super::migration_context::NativeMigrationInput {
                 namespace: &self.namespace,
                 log: &self.log,
                 protector: &self.store.protector,
                 context: &context,
+                inventory_owner,
+                registration,
             };
             let result = DirectStore::stage_mapping_artifact_existing(
                 &self.store.inner, &self.store.root, target, directory, &input,

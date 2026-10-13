@@ -37,6 +37,10 @@ impl From<&SourceRecord> for RevisionMetadata {
 }
 
 impl DirectStore {
+    pub(crate) fn inventory_heads(&self) -> impl Iterator<Item = &SourceRecord> + '_ {
+        self.registry.latest.values()
+    }
+
     /// Projects the sole accepted revision inventory without retaining another map.
     pub(crate) fn retained_revisions(
         &self,

@@ -106,7 +106,7 @@ fn stage(
     let receipt = {
         let store: crate::direct_store::ExistingMigrationStore = crate::direct_store::open_existing_migration(operation)
             .map_err(|error| error.code().to_owned())?;
-        store.stage_mapping(target, &directory, operation)
+        store.stage_mapping(target, &directory, operation, registration.as_deref())
     }?; // Store/protector closes before registration/native custody.
     if output_directory(operation, &directory)? != directory {
         return Err("DIRECT_MIGRATION_DIRECTORY_CHANGED".to_owned());
@@ -170,6 +170,9 @@ fn public_reason(reason: &str) -> &'static str {
         "DIRECT_MIGRATION_PLAN_READBACK_MISMATCH" => "DIRECT_MIGRATION_PLAN_READBACK_MISMATCH",
         "DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH" => "DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH",
         "DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN" => "DIRECT_MIGRATION_PLAN_PUBLISH_OUTCOME_UNKNOWN",
+        "DIRECT_MIGRATION_INVENTORY_PUBLISH_OUTCOME_UNKNOWN" => "DIRECT_MIGRATION_INVENTORY_PUBLISH_OUTCOME_UNKNOWN",
+        "DIRECT_MIGRATION_INVENTORY_CHANGED" => "DIRECT_MIGRATION_INVENTORY_CHANGED",
+        "DIRECT_MIGRATION_INVENTORY_LIMIT" => "DIRECT_MIGRATION_INVENTORY_LIMIT",
         "DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN" => "DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN",
         "DIRECT_MIGRATION_IMPORT_PUBLISH_OUTCOME_UNKNOWN" => "DIRECT_MIGRATION_IMPORT_PUBLISH_OUTCOME_UNKNOWN",
         "DPAPI_LEGACY_REVISION_CONTEXT_REFUSED" => "DPAPI_LEGACY_REVISION_CONTEXT_REFUSED",
