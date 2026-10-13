@@ -230,7 +230,7 @@ fn read_log_line(
 
 impl DirectStore {
     pub(crate) fn from_existing_bytes(
-        operation: &crate::owner_composition::NativeReadOperation<'_>,
+        root: &Path,
         namespace: &[u8],
         log: &[u8],
     ) -> Result<Self, String> {
@@ -240,7 +240,7 @@ impl DirectStore {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
         Ok(Self {
-            root: operation.root().to_owned(),
+            root: root.to_owned(),
             namespace_id,
             registry,
         })

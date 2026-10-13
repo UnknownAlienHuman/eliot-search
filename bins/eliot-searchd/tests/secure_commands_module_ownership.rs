@@ -250,6 +250,24 @@ fn sync_preflight_keeps_native_context_and_has_no_effect_path() {
     ] { assert!(native.contains(required), "missing {required}"); }
     assert!(native.find("let checked = holder").unwrap()
         < native.find("holder.terminal(output, code)").unwrap());
+    let preflight = native.find("crate::source_roots::preflight_sync").unwrap();
+    let composed = native.find("preflight.and_then(|()|").unwrap();
+    let opened = native.find("crate::direct_store::open_existing_sync").unwrap();
+    assert!(preflight < composed && composed < opened);
+    assert!(opened < native.find("holder.verify_store()").unwrap());
+    assert_eq!(native.matches("open_existing_sync(").count(), 1);
+    assert!(native.find("store: Option<").unwrap()
+        < native.find("registration: RegistrationPin").unwrap());
+    let child_close = native.split("fn close(self)").nth(1).unwrap()
+        .split("fn terminal(").next().unwrap();
+    assert!(child_close.find("drop(store)").unwrap()
+        < child_close.find("drop((registration, bytes))").unwrap());
+    for required in [
+        "store.verify_binding(&mut operation)", "self.owner.pins.files[8]",
+        "self.owner.pins.files[9]", "512 * 1024 * 1024",
+        "self.owner.request.credential_context()", "let checkpoint = self.checkpoint();",
+    ] { assert!(native.contains(required), "missing retained child seam {required}"); }
+    assert_eq!(native.matches("NativeWork::new()").count(), 1);
     assert_eq!(native.matches(".write(frame.as_bytes())").count(), 1);
     assert!(native.find("drop((registration, bytes))").unwrap()
         < native.find("close_owner(owner, output_attempted)").unwrap());

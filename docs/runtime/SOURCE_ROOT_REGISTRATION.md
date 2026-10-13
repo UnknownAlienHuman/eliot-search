@@ -19,7 +19,7 @@ eliot-searchd --unregister-source-root DATA_ROOT SOURCE_DIRECTORY
 Registration is retained across process restarts. Unregistering stops this explicit observation path;
 it neither revokes access to retained revisions nor purges them. Source IDs are not catalog positions.
 
-## Current sync source contract — effect-free preflight
+## Current sync source contract — existing store, no effects
 
 `--sync-source-roots DATA_ROOT` retains the registered list without additional source arguments.
 Exactly two selected arguments are required after config selection; malformed arity keeps the fixed
@@ -29,7 +29,11 @@ The command acquires `OpenExistingMutating` custody but leaves the durable owner
 the accepted registration pin, consumes its bounded bytes once and reuses the existing codec, path
 policy and complete `SourceRootInspection`/`SourceRootCurrentness` observation. Zero roots, observation
 gaps, missing/unsafe/non-directory/unverifiable roots and pending registration `.tmp`/`.bak` state
-refuse. Registration and native custody are revalidated before the terminal output attempt.
+refuse. Only after successful complete preflight, the command reads existing namespace/source-log
+bytes from held native pins, replays the existing catalog and loads the selected existing root
+credential. Read and sync composition share the same replay and credential constructors.
+A closed store/protector child exposes no effect or read surface. Its immutable root/selected-binding
+checks and retained native/registration verification precede the terminal output attempt.
 
 After valid preflight the command emits one bounded content-free refusal:
 
@@ -37,12 +41,14 @@ After valid preflight the command emits one bounded content-free refusal:
 {"error":"SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE","complete":false,"effects_may_have_committed":false}
 ```
 
-This command currently constructs no mutable store or protector, traverses no source files, writes
-no storage/credential/lifecycle state and never acknowledges currentness. It exits unsuccessfully.
+This command traverses no source files, writes no storage/credential/lifecycle state and never
+acknowledges currentness. Missing or mismatched existing state fails closed; no credential is created,
+replaced or repaired. Persisted namespace/source-log/credential bytes remain compatible.
+The command exits unsuccessfully.
 A short/failed write, flush or post-output close checkpoint has unknown output outcome, cancels the
 original operation and is never followed by another frame.
-Registration closes before native pins/records/root custody; exclusions release last. Existing-only
-store/credential composition and contextual sync effects are separate serial successors under #475.
+Store/protector closes before registration, then native pins/records/root custody; exclusions release
+last. Contextual sync effects and successful lifecycle remain the next serial successor under #475.
 The legacy create-or-open/effectful sync implementation remains only for deferred test fixtures.
 
 ## Failure semantics
@@ -74,7 +80,8 @@ one terminal attempt, old-route unreachability, no effects and child-before-pare
 Clippy debt requires exact base/candidate attribution; new diagnostics block delivery.
 
 Deferred #215 cases include config argv/arity, missing and unsafe roots, registration replacement and
-pending sidecars, cancellation/deadline at each seam, short/failed output, release ordering and exact
-durable-state equality before/after preflight. Legacy effectful process fixtures remain historical
+pending sidecars, existing replay/credential mismatch or absence, preflight-before-credential ordering,
+cancellation/deadline at each seam, short/failed output, release ordering and exact durable-state
+equality before/after the command. Legacy effectful process fixtures remain historical
 until separately updated for their owning successor. Source checks do not establish native, installed,
 real-Qdrant or product qualification.
