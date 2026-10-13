@@ -1,5 +1,5 @@
 //! Sequence/replay and progressive/terminal fixtures for the private client response engine.
-//! `AUTHORED_EXECUTED: 9 focused client-engine cases passed on 2026-10-13`.
+//! Focused client-engine cases; execution evidence is recorded at the accepted head.
 //!
 //! Synthetic owner fixtures over one private `State`. Each case encodes the provider record with
 //! the real `ServerEnvelopeCodec` and MACs it with the real keyed
@@ -527,6 +527,33 @@ mod fixtures {
         let held = state.requests.get(&request).expect("still pending");
         assert_eq!(held.events.next_expected(), Some(3));
         assert_eq!(held.progress.expect("progress retained").completed(), 2);
+    }
+
+    #[test]
+    fn authenticated_progress_regression_preserves_all_cursors_and_can_recover() {
+        let request = RequestId::from_bytes([0x23; 16]);
+        let mut state = owner(vec![
+            signed(&progressed(request, 1, 1, 1)),
+            signed(&progressed(request, 2, 2, 0)),
+            signed(&progressed(request, 2, 2, 2)),
+            signed(&terminated(request, 3)),
+        ]);
+        send_profile_request(&mut state, request);
+        state.receive().expect("first progress");
+
+        assert!(matches!(
+            state.poll_receive(QUANTUM),
+            Err(TypedClientError::Protocol(ProtocolError::ProgressRegression))
+        ));
+        let held = state.requests.get(&request).expect("no terminal on refusal");
+        assert_eq!(held.events.next_expected(), Some(2));
+        assert_eq!(held.progress.expect("original progress").completed(), 1);
+        assert_eq!(state.session.sequences().provider().next_expected(), Some(2));
+
+        assert_eq!(state.receive().expect("same sequence recovers").connection_sequence, 2);
+        assert_eq!(state.requests.get(&request).unwrap().progress.unwrap().completed(), 2);
+        assert_eq!(state.receive().expect("terminal").message_kind, MessageKind::Cancelled);
+        assert!(state.requests.is_empty());
     }
 
     #[test]

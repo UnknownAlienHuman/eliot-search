@@ -1,4 +1,4 @@
-//! Typed record framing fixtures. `AUTHORED_NOT_RUN`.
+//! Typed record framing fixtures. Fixture execution evidence is recorded at the accepted head.
 //!
 //! Synthetic owner fixtures for the partial, oversized and truncated record
 //! paths of one connected byte stream. No platform connector, native

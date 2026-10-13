@@ -1,4 +1,4 @@
-//! Typed transport profile acknowledgement fixtures. `AUTHORED_NOT_RUN`.
+//! Typed transport profile acknowledgement fixtures. Fixture execution evidence is recorded at the accepted head.
 //!
 //! Synthetic owner fixtures for the post-pairing typed-profile negotiation on
 //! one already-connected local stream. No platform connector, native
