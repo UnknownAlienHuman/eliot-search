@@ -115,7 +115,6 @@ impl Drop for ProviderCredentialBlob {
 impl WindowsCredentialPlatform {
     /// Reads one bounded provider record without applying the legacy 32-byte shape.
     pub(super) fn read_provider_credential(
-        &mut self,
         target: &[u16],
     ) -> Result<Option<ProviderCredentialBlob>, LegacyRevisionRootSecretError> {
         let mut pointer = null_mut::<CredentialW>();
@@ -168,7 +167,6 @@ impl WindowsCredentialPlatform {
 
     /// Writes one already-versioned provider record through the existing owner.
     pub(super) fn write_provider_credential(
-        &mut self,
         target: &[u16],
         blob: &mut ProviderCredentialBlob,
     ) -> Result<(), LegacyRevisionRootSecretError> {

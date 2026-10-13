@@ -260,7 +260,7 @@ mod native {
         remaining: &mut dyn FnMut() -> Option<Duration>,
     ) -> Result<Option<ProviderPairingCredential>, Error> {
         checkpoint(remaining)?;
-        let observed = WindowsCredentialPlatform.read_provider_credential(&name(PREFIX, locator))
+        let observed = WindowsCredentialPlatform::read_provider_credential(&name(PREFIX, locator))
             .map_err(Error::Read)?;
         checkpoint(remaining)?;
         let record = observed.as_ref().map(decode).transpose()?;
@@ -284,17 +284,16 @@ mod native {
                 .map_err(|()| Error::LockUnavailable)? { break lock; }
         };
         checkpoint(remaining)?;
-        let mut platform = WindowsCredentialPlatform;
-        let prior = platform.read_provider_credential(&target).map_err(Error::Read)?;
+        let prior = WindowsCredentialPlatform::read_provider_credential(&target).map_err(Error::Read)?;
         checkpoint(remaining)?;
         if let Some(prior) = prior {
             return if same_record(&expected, &prior) { Ok(()) } else { Err(Error::KeyConflict) };
         }
         checkpoint(remaining)?;
-        platform.write_provider_credential(&target, &mut expected)
+        WindowsCredentialPlatform::write_provider_credential(&target, &mut expected)
             .map_err(|error| Error::WriteOutcomeUnknown(Some(error)))?;
         checkpoint(remaining).map_err(|_| Error::WriteOutcomeUnknown(None))?;
-        let observed = platform.read_provider_credential(&target)
+        let observed = WindowsCredentialPlatform::read_provider_credential(&target)
             .map_err(|error| Error::WriteOutcomeUnknown(Some(error)))?;
         checkpoint(remaining).map_err(|_| Error::WriteOutcomeUnknown(None))?;
         if !observed.as_ref().is_some_and(|value| same_record(&expected, value)) {
