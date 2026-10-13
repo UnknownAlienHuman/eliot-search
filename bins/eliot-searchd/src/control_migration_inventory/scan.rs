@@ -932,16 +932,19 @@ fn control_directory(
 }
 
 fn control_file(
-    stream: &mut Stream<'_, '_, '_, '_>,
-    path: &Path,
-    family: Family,
-    subject: [u8; 32],
-    orphan: bool,
+    stream: &mut Stream<'_, '_, '_, '_>, path: &Path, family: Family,
+    subject: [u8; 32], orphan: bool,
 ) -> Result<(), String> {
     let source = stream.source;
-    if path.file_name().and_then(|value| value.to_str()) != Some("control-cutover.v1") {
-        // A keyword or extension is not a format admission. The parent visit
-        // retains the no-follow directory chain; unknown bodies stay unread.
+    let supported = path.strip_prefix(source.inventory_root()).ok().is_some_and(|relative| {
+        let mut parts = relative.components();
+        parts.next() == Some(std::path::Component::Normal(std::ffi::OsStr::new("control")))
+            && parts.next() == Some(std::path::Component::Normal(std::ffi::OsStr::new("control-cutover.v1")))
+            && parts.next().is_none()
+    });
+    if !supported {
+        // Only the canonical root-relative locator admits the owning decoder.
+        // Parent visits retain no-follow pins; unknown/nested bodies stay unread.
         let (status, size) = match io::metadata(source, path)? {
             io::Observed::Missing => (Status::Gap, 0),
             io::Observed::Refused(status) => (status, 0),
@@ -952,51 +955,18 @@ fn control_file(
     match io::read(source, path, io::CONTROL_BYTES)? {
         Ok(bytes) => {
             let fingerprint = io::fingerprint(source, &bytes)?;
-            if path.file_name().and_then(|value| value.to_str()) == Some("control-cutover.v1") {
-                match search_control_redb::migration::ControlCutoverMarker::decode(&bytes) {
-                    Ok(marker) => stream.item(
-                        family,
-                        Status::Present,
-                        15,
-                        [subject, fingerprint, marker.catalog_snapshot],
-                        [marker.epoch, bytes.len() as u64, 0],
-                    ),
-                    Err(_) => stream.item(
-                        family,
-                        Status::Corrupt,
-                        15,
-                        [subject, fingerprint, ZERO],
-                        [bytes.len() as u64, 0, 0],
-                    ),
-                }
-            } else {
-                stream.item(
-                    family,
-                    if orphan {
-                        Status::Orphan
-                    } else {
-                        Status::Present
-                    },
-                    14,
-                    [subject, fingerprint, ZERO],
-                    [bytes.len() as u64, 0, 0],
-                )
+            match search_control_redb::migration::ControlCutoverMarker::decode(&bytes) {
+                Ok(marker) => stream.item(family, Status::Present, 15,
+                    [subject, fingerprint, marker.catalog_snapshot], [marker.epoch, bytes.len() as u64, 0]),
+                Err(_) => stream.item(family, Status::Corrupt, 15,
+                    [subject, fingerprint, ZERO], [bytes.len() as u64, 0, 0]),
             }
         }
-        Err(status) => stream.item(
-            family,
-            if status == Status::AbsentProven {
-                Status::Gap
-            } else {
-                status
-            },
-            14,
-            [subject, ZERO, ZERO],
-            [0; 3],
-        ),
+        Err(status) => stream.item(family,
+            if status == Status::AbsentProven { Status::Gap } else { status },
+            14, [subject, ZERO, ZERO], [0; 3]),
     }
 }
-
 fn directory_outcome(
     stream: &mut Stream<'_, '_, '_, '_>,
     family: Family,

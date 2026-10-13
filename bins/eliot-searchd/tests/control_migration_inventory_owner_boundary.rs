@@ -225,7 +225,8 @@ fn unknown_control_representation_is_incomplete_instead_of_silently_skipped() {
     assert!(!dispatch.contains("control_file("));
     assert!(!dispatch.contains("io::read("));
     let unknown_format = scanner.split("fn control_file(").nth(1).unwrap().split("match io::read(").next().unwrap();
-    assert!(unknown_format.contains("!= Some(\"control-cutover.v1\")"));
+    assert!(unknown_format.contains("strip_prefix(source.inventory_root())"));
+    assert!(unknown_format.contains("parts.next().is_none()"));
     assert!(unknown_format.contains("Status::Unsupported"));
     assert!(unknown_format.contains("[subject, ZERO, ZERO]"));
 }
