@@ -138,6 +138,9 @@ fn page_callback_drift_cannot_turn_disappearance_into_complete_absence() {
     std::fs::write(directory.join("000"), [1]).unwrap();
     let source = fixture.source();
     let outcome = inventory_io::visit(&source, &directory, |_| {
+        // NTFS directory-write timestamps can share a coarse clock tick. Make
+        // this timestamp-boundary fixture cross it before changing membership.
+        std::thread::sleep(std::time::Duration::from_millis(50));
         std::fs::write(directory.join("new"), [2]).unwrap();
         Ok(())
     });
@@ -198,6 +201,8 @@ fn stale_unmapped_preparation_is_not_a_current_link_and_dangling_links_are_refus
     assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::Objects, &object, std::ffi::OsStr::new("wrong.dpapi")).unwrap(), "protection locator cannot be relabelled");
     assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::References, &[0x99; 32], std::ffi::OsStr::new("stale.ref")).unwrap(), "unmapped reference is not silently current");
     assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::Objects, &[0x99; 32], std::ffi::OsStr::new("stale.bin")).unwrap(), "unmapped object is not silently current");
+    std::fs::hard_link(&object_path, fixture.0.join("external-alias.bin")).unwrap();
+    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::References, &key, reference_path.file_name().unwrap()).unwrap(), "target containment refusal cannot be downgraded to metadata presence");
 }
 
 #[test]
@@ -219,4 +224,8 @@ fn unknown_control_representation_is_incomplete_instead_of_silently_skipped() {
     assert!(dispatch.contains("Status::Gap, 34"));
     assert!(!dispatch.contains("control_file("));
     assert!(!dispatch.contains("io::read("));
+    let unknown_format = scanner.split("fn control_file(").nth(1).unwrap().split("match io::read(").next().unwrap();
+    assert!(unknown_format.contains("!= Some(\"control-cutover.v1\")"));
+    assert!(unknown_format.contains("Status::Unsupported"));
+    assert!(unknown_format.contains("[subject, ZERO, ZERO]"));
 }

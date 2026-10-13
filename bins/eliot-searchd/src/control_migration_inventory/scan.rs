@@ -939,6 +939,16 @@ fn control_file(
     orphan: bool,
 ) -> Result<(), String> {
     let source = stream.source;
+    if path.file_name().and_then(|value| value.to_str()) != Some("control-cutover.v1") {
+        // A keyword or extension is not a format admission. The parent visit
+        // retains the no-follow directory chain; unknown bodies stay unread.
+        let (status, size) = match io::metadata(source, path)? {
+            io::Observed::Missing => (Status::Gap, 0),
+            io::Observed::Refused(status) => (status, 0),
+            io::Observed::Object(meta) => (Status::Unsupported, meta.len()),
+        };
+        return stream.item(family, status, 14, [subject, ZERO, ZERO], [size, 0, u64::from(orphan)]);
+    }
     match io::read(source, path, io::CONTROL_BYTES)? {
         Ok(bytes) => {
             let fingerprint = io::fingerprint(source, &bytes)?;

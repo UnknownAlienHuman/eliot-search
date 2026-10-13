@@ -41,7 +41,9 @@ pub(super) fn is_linked(source: &MigrationSource<'_, '_, '_>, root: &Path,
         source.charge(Work::AllocateLocator(2048))?;
         let target = root.join(LEGACY_PREPARATION_DIRECTORY)
             .join(legacy_preparation_object_relative_locator(&object, reference.protection()));
-        return Ok(matches!(io::metadata(source, &target)?, io::Observed::Object(meta) if meta.is_file() && !io::is_reparse(&meta)));
+        // Presence alone cannot resolve intermediate parents. Use the same
+        // pinned no-follow, single-link reader before accepting a target link.
+        return Ok(io::read(source, &target, LEGACY_PREPARATION_MAX_OBJECT_BYTES)?.is_ok());
     }
     Ok(false)
 }
