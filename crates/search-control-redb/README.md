@@ -20,6 +20,50 @@ The disk file is not an authenticated ciphertext format; this adapter assumes ex
 Capability owners must validate payload semantics: a technical class tag alone does not prove that
 arbitrary bytes are content-free.
 
+## Record-artifact retention (#345)
+
+The original staging `File` is retained from creation through freeze, exact replay,
+publication, synchronization and readback. Record-artifact Drop never removes a
+locator; successful publication reports `DeferredTo347` cleanup. The package has
+no qualified original-object unlink operation. Even pre-publication errors retain
+staging instead of attempting the old check-then-path-unlink cleanup.
+
+`SourceImportVerifiedRecordArtifact::prepare_publication` creates a private-field
+`SourceImportRecordArtifactPublication` containing the original handle/native
+identity, original local staging/final names and exact chain/row/byte counts.
+`publish_once` permits one no-clobber link dispatch. Before dispatch the disposition
+becomes `RetainedUnknown`; every uncertain link, directory sync, readback, identity
+or late-deadline result preserves it. `resolve_same_process` never links: it requires
+that live original object, performs fallible synchronization and post-sync exact
+readback, and can finish once with `VerifiedCleanupDeferred`. Equal-byte objects
+with a different original identity cannot complete the operation.
+
+The existing consuming `publish` adapter uses this same one-shot implementation.
+Its daemon consumers remain `control_migration_plan.rs` and
+`control_migration_content.rs`; their existing unknown reasons and output frames
+are unchanged. Dropping the adapter on an unknown result loses its in-memory proof
+but retains filesystem evidence. A known conflicting final observed after dispatch
+also remains unknown; it is never overwritten or deleted.
+
+`classify_source_import_record_artifact` reports only current evidence: Missing,
+StageExact, FinalExact, BothExactSameObject, BothExactDistinctObjects, Conflict,
+Replaced or Unavailable. Its result always reports `Unresolved` and has no retry,
+success or cleanup API. `classify_current` additionally checks the live operation's
+original identity but still grants no authority. Losing the original operation,
+including process restart, cannot remint it from current names, bytes or identity.
+Durable request/root-owner/publication-phase linkage remains #348 under #268/#269.
+No proof sidecar, identity serializer or migration schema is added.
+
+The record-specific platform seam requires a fallible directory flush. The daemon
+uses a read/write Windows directory handle with `FILE_FLAG_BACKUP_SEMANTICS` and
+`sync_all`, or the existing Unix directory sync. The bounded current-token Windows
+probe of that call succeeded; this is not power-loss or installed qualification.
+Focused owner fixtures use injected identities and sync failures; losing their
+operation models proof loss within one process, not an executed process restart.
+Native replacement/deletion/power-loss qualification remains #347/#215. Record
+rows, chains, domains, final names, source-map/content receipts and inactive redb
+bytes remain unchanged.
+
 ## Atomic record preconditions
 
 `ConditionalControlMutation` combines an existing `ControlMutation` with bounded

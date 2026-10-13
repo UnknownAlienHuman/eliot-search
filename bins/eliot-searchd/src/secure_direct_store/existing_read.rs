@@ -69,12 +69,12 @@ impl ExistingMigrationStore {
             };
             let result = DirectStore::stage_mapping_artifact_existing(
                 &self.store.inner, &self.store.root, target, directory, &input,
-            );
+            )?;
             context.checkpoint()?;
             result
         };
         operation.verify().map_err(owner_error)?;
-        result
+        Ok(result)
     }
 }
 
