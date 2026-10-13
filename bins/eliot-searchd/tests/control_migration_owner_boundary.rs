@@ -11,6 +11,34 @@ fn repository_root() -> PathBuf {
 fn read(root: &Path, relative: &str) -> String {
     std::fs::read_to_string(root.join(relative))
         .unwrap_or_else(|error| panic!("cannot read {relative}: {error}"))
+        .replace("\r\n", "\n")
+}
+
+#[test]
+fn native_migration_uses_one_context_and_never_dispatches_legacy_marker_effects() {
+    let root = repository_root();
+    let source = read(&root, "bins/eliot-searchd/src/source_migration_command.rs");
+    let command = source.split("#[cfg(test)]\nimpl DataRootGuard").next().unwrap();
+    for required in ["for_control_migration_plan(", "admit_existing(request)",
+        "run_registration_one_shot(", "migration_input_from_bytes(", "open_existing_migration(operation)"] {
+        assert!(command.contains(required), "missing original migration custody: {required}");
+    }
+    for forbidden in ["with_existing_lock(", "with_existing_mapping_source(", "RevisionProtector::open_existing(",
+        "source_roots::migration_input(", "DirectStore::open(", "finish_in_place("] {
+        assert!(!command.contains(forbidden), "legacy migration dispatch restored: {forbidden}");
+    }
+    let plan = read(&root, "bins/eliot-searchd/src/control_migration_plan.rs");
+    let native_marker = plan.split("fn gate_native_staging(").nth(1).unwrap()
+        .split("pub(super) fn temporary_staging_name(").next().unwrap();
+    assert!(native_marker.contains("State::Corrupt => Err("));
+    assert!(!native_marker.contains("catalog_quarantine"));
+    assert!(!native_marker.contains("publish_control_cutover_marker"));
+    let objects = read(&root, "bins/eliot-searchd/src/secure_direct_store_storage_io.rs");
+    assert!(objects.contains("read_legacy_revision_object_with_context("));
+    assert!(objects.contains("ContextualLegacyRevisionObjectPlatform<C>"));
+    let context = read(&root, "bins/eliot-searchd/src/control_migration_context.rs");
+    assert!(context.contains("try_borrow_mut()"));
+    assert!(context.contains("unexpected_source_effect.set(true)"));
 }
 
 #[test]

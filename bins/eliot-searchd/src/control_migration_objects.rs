@@ -21,8 +21,10 @@ mod source_plan;
 
 use super::{DirectStore, RevisionMetadata, MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY,
     legacy_path, protected_path, read_regular_file, verify_plaintext, verify_revision_identity};
-use super::storage_io::ensure_directory;
-use crate::revision_protection::RevisionProtector;
+use super::storage_io::{ensure_directory, join_revision_path, read_revision_object_with_context, revision_object_path_with_context};
+use super::migration_context::MigrationContext;
+use search_revision_store::LegacyRevisionObjectWork as Work;
+use crate::revision_protection::{RevisionProtector, PROTECTED_OBJECT_EXTENSION};
 use crate::{development::MAX_SCAN_INPUT_BYTES, sha256};
 #[cfg(test)]
 use crate::service_output::json_string;
@@ -243,38 +245,78 @@ fn read_import_revision(
     read_revision_objects_at(root, protector, metadata, false, Some(deadline)).map(|readback| readback.bytes)
 }
 
+fn read_import_revision_with_context(
+    root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
+    context: &MigrationContext<'_, '_>,
+) -> Result<Zeroizing<Vec<u8>>, String> {
+    read_revision_objects_at_with_context(
+        root, protector, metadata, false, Some(context.deadline()), Some(context),
+    ).map(|readback| readback.bytes)
+}
+
 fn read_revision_objects_at(
     root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
     require_protected: bool, deadline: Option<Instant>,
 ) -> Result<RevisionReadback, String> {
-    check_deadline(deadline)?;
+    read_revision_objects_at_with_context(root, protector, metadata, require_protected, deadline, None)
+}
+
+fn read_revision_objects_at_with_context(
+    root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
+    require_protected: bool, deadline: Option<Instant>, context: Option<&MigrationContext<'_, '_>>,
+) -> Result<RevisionReadback, String> {
+    revision_checkpoint(deadline, context)?;
+    revision_charge(context, Work::Compare(metadata.revision_id.len()))?;
     verify_revision_identity(metadata)?;
     if metadata.byte_length > MAX_SCAN_INPUT_BYTES as u64 {
         return Err("DIRECT_REVISION_LENGTH_MISMATCH".to_owned());
     }
-    ensure_directory(root)?;
-    let revisions = root.join(REVISION_DIRECTORY);
-    ensure_directory(&revisions)?;
-    ensure_directory(&revisions.join(&metadata.revision_id[..2]))?;
-    let protected_path = protected_path(root, &metadata.revision_id)?;
-    let plaintext_path = legacy_path(root, &metadata.revision_id)?;
-    let encoded = read_optional(&protected_path, MAX_REVISION_OBJECT_BYTES)?;
+    revision_directory(root, deadline, context)?;
+    let revisions = join_revision_path(root, Path::new(REVISION_DIRECTORY), context)?;
+    revision_directory(&revisions, deadline, context)?;
+    let shard = join_revision_path(&revisions, Path::new(&metadata.revision_id[..2]), context)?;
+    revision_directory(&shard, deadline, context)?;
+    let protected_path = context.map_or_else(
+        || protected_path(root, &metadata.revision_id),
+        |context| revision_object_path_with_context(root, &metadata.revision_id, PROTECTED_OBJECT_EXTENSION, Some(context)),
+    )?;
+    let plaintext_path = context.map_or_else(
+        || legacy_path(root, &metadata.revision_id),
+        |context| revision_object_path_with_context(root, &metadata.revision_id, "bin", Some(context)),
+    )?;
+    let encoded = read_optional(&protected_path, MAX_REVISION_OBJECT_BYTES, deadline, context)?;
     #[cfg(test)]
     let protected = encoded.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
     let mut protected_bytes = if let Some(encoded) = encoded.as_ref() {
-        check_deadline(deadline)?;
+        revision_checkpoint(deadline, context)?;
         let protector = protector.ok_or_else(|| "DIRECT_REVISION_KEY_UNAVAILABLE".to_owned())?;
-        Some(Zeroizing::new(protector.unprotect(
+        revision_charge(context, Work::Allocate(usize::try_from(metadata.byte_length)
+            .map_err(|_| "DIRECT_REVISION_LENGTH_MISMATCH".to_owned())?))?;
+        revision_charge(context, Work::Observe)?;
+        let decoded = protector.unprotect(
             encoded, &metadata.revision_id, &metadata.content_digest, metadata.byte_length,
-        )?))
+        );
+        revision_checkpoint(deadline, context)?;
+        Some(Zeroizing::new(decoded?))
     } else { None };
     drop(encoded);
-    check_deadline(deadline)?;
-    let plaintext_bytes = read_optional(&plaintext_path, MAX_SCAN_INPUT_BYTES)?;
-    if let Some(bytes) = plaintext_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
+    revision_checkpoint(deadline, context)?;
+    let plaintext_bytes = read_optional(&plaintext_path, MAX_SCAN_INPUT_BYTES, deadline, context)?;
+    if let Some(bytes) = plaintext_bytes.as_ref() {
+        revision_charge(context, Work::Compare(bytes.len()))?;
+        verify_plaintext(metadata, bytes)?;
+        revision_checkpoint(deadline, context)?;
+    }
     #[cfg(test)]
     let plaintext = plaintext_bytes.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
-    if let Some(bytes) = protected_bytes.as_ref() { verify_plaintext(metadata, bytes)?; }
+    if let Some(bytes) = protected_bytes.as_ref() {
+        revision_charge(context, Work::Compare(bytes.len()))?;
+        verify_plaintext(metadata, bytes)?;
+        revision_checkpoint(deadline, context)?;
+    }
+    if let (Some(protected), Some(_)) = (protected_bytes.as_ref(), plaintext_bytes.as_ref()) {
+        revision_charge(context, Work::Compare(protected.len()))?;
+    }
     if let (Some(protected), Some(plaintext)) = (protected_bytes.as_ref(), plaintext_bytes.as_ref())
         && protected.as_slice() != plaintext.as_slice()
     {
@@ -286,7 +328,7 @@ fn read_revision_objects_at(
         (None, Some(_)) => return Err("DIRECT_REVISION_PROTECTION_INCOMPLETE".to_owned()),
         (None, None) => return Err("DIRECT_REVISION_MISSING".to_owned()),
     };
-    check_deadline(deadline)?;
+    revision_checkpoint(deadline, context)?;
     Ok(RevisionReadback {
         bytes,
         #[cfg(test)]
@@ -296,13 +338,41 @@ fn read_revision_objects_at(
     })
 }
 
-fn read_optional(path: &Path, maximum: usize) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
-    match fs::symlink_metadata(path) {
-        Ok(_) => read_regular_file(path, maximum, "DIRECT_REVISION_OBJECT_READ_FAILED")
-            .map(Zeroizing::new).map(Some),
+fn read_optional(
+    path: &Path, maximum: usize, deadline: Option<Instant>, context: Option<&MigrationContext<'_, '_>>,
+) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
+    revision_checkpoint(deadline, context)?;
+    revision_charge(context, Work::Observe)?;
+    let inspected = fs::symlink_metadata(path);
+    revision_checkpoint(deadline, context)?;
+    match inspected {
+        Ok(_) => {
+            let read = context.map_or_else(
+                || read_regular_file(path, maximum, "DIRECT_REVISION_OBJECT_READ_FAILED"),
+                |context| read_revision_object_with_context(path, maximum, context),
+            );
+            revision_checkpoint(deadline, context)?;
+            read.map(Zeroizing::new).map(Some)
+        }
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
         Err(_) => Err("DIRECT_REVISION_OBJECT_INSPECTION_FAILED".to_owned()),
     }
+}
+
+fn revision_checkpoint(deadline: Option<Instant>, context: Option<&MigrationContext<'_, '_>>) -> Result<(), String> {
+    context.map_or_else(|| check_deadline(deadline), MigrationContext::checkpoint)
+}
+
+fn revision_charge(context: Option<&MigrationContext<'_, '_>>, work: Work) -> Result<(), String> {
+    context.map_or(Ok(()), |context| context.charge(work))
+}
+
+fn revision_directory(path: &Path, deadline: Option<Instant>, context: Option<&MigrationContext<'_, '_>>) -> Result<(), String> {
+    revision_checkpoint(deadline, context)?;
+    revision_charge(context, Work::Observe)?;
+    let result = ensure_directory(path);
+    revision_checkpoint(deadline, context)?;
+    result
 }
 
 fn check_deadline(deadline: Option<Instant>) -> Result<(), String> {

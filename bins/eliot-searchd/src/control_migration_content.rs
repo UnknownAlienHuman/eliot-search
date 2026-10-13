@@ -19,12 +19,13 @@ use search_control_redb::migration::{
 };
 use zeroize::Zeroizing;
 
-use crate::plaintext_direct_store::DirectStore;
+use super::super::super::migration_context::MigrationSource;
+use search_revision_store::LegacyRevisionObjectWork as Work;
 use crate::revision_protection::RevisionProtector;
 
-use super::super::read_import_revision;
+use super::super::{read_import_revision, read_import_revision_with_context};
 use super::{
-    check_deadline, ensure_directory, sha256, temporary_staging_name,
+    ensure_directory, sha256, temporary_staging_name,
 };
 
 pub(super) struct ContentArtifact {
@@ -37,19 +38,23 @@ pub(super) struct ContentArtifact {
 }
 
 /// Publication is inert until the complete importer consumes its exact bindings.
-/// Each verification pass rereads every retained object with a fresh protector;
+/// Each verification pass rereads every retained object with the selected protector;
 /// no digest cache can hide a missing or changed source during the second pass.
 pub(super) fn stage(
-    source: &DirectStore,
+    source: &MigrationSource<'_, '_, '_>,
     root: &Path,
     target: SourceNamespaceId,
     source_plan: [u8; 32],
     directory: &Path,
     deadline: Instant,
 ) -> Result<ContentArtifact, String> {
-    check_deadline(Some(deadline))?;
+    source.checkpoint()?;
+    source.charge(Work::Observe)?;
     ensure_directory(directory)?;
+    source.checkpoint()?;
     let temporary_name = temporary_staging_name()?;
+    source.checkpoint()?;
+    source.charge(Work::Open)?;
     let mut artifact = SourceImportRecordArtifact::create(
         directory,
         &temporary_name,
@@ -57,6 +62,7 @@ pub(super) fn stage(
         deadline,
     )
     .map_err(content_artifact_reason)?;
+    source.checkpoint()?;
     let counts = compile(
         source,
         root,
@@ -64,14 +70,18 @@ pub(super) fn stage(
         source_plan,
         deadline,
         |row| {
+            source.charge(Work::Write(row.len()))?;
             artifact
                 .push(row, deadline)
-                .map_err(content_artifact_reason)
+                .map_err(content_artifact_reason)?;
+            source.checkpoint()
         },
     )?;
+    source.checkpoint()?;
     let frozen = artifact
         .freeze(deadline)
         .map_err(content_artifact_reason)?;
+    source.checkpoint()?;
     let digest = *frozen.chain();
     let length = frozen.encoded_bytes();
 
@@ -80,6 +90,7 @@ pub(super) fn stage(
     let mut readback = frozen
         .begin_readback(deadline)
         .map_err(content_artifact_reason)?;
+    source.checkpoint()?;
     let observed = compile(
         source,
         root,
@@ -87,28 +98,34 @@ pub(super) fn stage(
         source_plan,
         deadline,
         |row| {
+            source.charge(Work::Compare(row.len()))?;
             readback
                 .compare(row, deadline)
-                .map_err(content_artifact_reason)
+                .map_err(content_artifact_reason)?;
+            source.checkpoint()
         },
     )?;
     if observed != counts {
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
+    source.checkpoint()?;
     let verified = readback
         .finish(deadline)
         .map_err(content_artifact_reason)?;
+    source.checkpoint()?;
     let name = format!("{}.source-content.v1", sha256::hex(&digest));
+    source.checkpoint()?;
     let published = verified
         .publish(&name, deadline)
         .map_err(content_artifact_reason)?;
+    source.checkpoint()?;
     if published.chain() != &digest
         || published.encoded_bytes() != length
         || published.name() != name.as_str()
     {
         return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
     }
-    check_deadline(Some(deadline))?;
+    source.checkpoint()?;
     Ok(ContentArtifact {
         name,
         chain: digest,
@@ -120,14 +137,14 @@ pub(super) fn stage(
 }
 
 fn compile(
-    source: &DirectStore,
+    source: &MigrationSource<'_, '_, '_>,
     root: &Path,
     target: SourceNamespaceId,
     source_plan: [u8; 32],
     deadline: Instant,
     mut emit: impl FnMut(&[u8]) -> Result<(), String>,
 ) -> Result<SourceContentManifestSummary, String> {
-    check_deadline(Some(deadline))?;
+    source.checkpoint()?;
     let source_header = source.source_mapping_header(target)?;
     if source.verify_migration_snapshot(deadline)?
         != source_header.catalog_snapshot
@@ -136,12 +153,16 @@ fn compile(
     }
 
     #[cfg(windows)]
-    let protector = RevisionProtector::open_existing(source_header.legacy_namespace)?;
+    let legacy_protector = if source.native().is_none() {
+        RevisionProtector::open_existing(source_header.legacy_namespace)?
+    } else { None };
     #[cfg(not(windows))]
-    let protector = Some(RevisionProtector::open(
+    let legacy_protector = if source.native().is_none() { Some(RevisionProtector::open(
         source_header.legacy_namespace,
         &root.join("revisions"),
-    )?);
+    )?) } else { None };
+    let protector = source.native().map(|input| input.protector).or(legacy_protector.as_ref());
+    source.checkpoint()?;
 
     let expected = source.retained_revisions().len() as u64;
     let mut encoder = SourceContentManifestEncoder::new(
@@ -162,13 +183,17 @@ fn compile(
     emit(&header_row)?;
 
     for metadata in source.retained_revisions() {
-        check_deadline(Some(deadline))?;
-        let bytes =
-            read_import_revision(root, protector.as_ref(), &metadata, deadline)?;
+        source.checkpoint()?;
+        let bytes = source.native().map_or_else(
+            || read_import_revision(root, protector, &metadata, deadline),
+            |input| read_import_revision_with_context(root, protector, &metadata, input.context),
+        )?;
+        source.checkpoint()?;
         let mut hasher = Zeroizing::new(blake3::Hasher::new());
         for chunk in bytes.chunks(256 * 1024) {
-            check_deadline(Some(deadline))?;
+            source.charge(Work::Compare(chunk.len()))?;
             hasher.update(chunk);
+            source.checkpoint()?;
         }
         let digest =
             Blake3Digest32::from_bytes(*hasher.finalize().as_bytes());
@@ -191,7 +216,7 @@ fn compile(
     }
     let (end_row, summary) = encoder.finish().map_err(encoding_reason)?;
     emit(&end_row)?;
-    check_deadline(Some(deadline))?;
+    source.checkpoint()?;
     Ok(summary)
 }
 

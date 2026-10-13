@@ -212,6 +212,41 @@ impl NativeRootRequest {
         Ok(request)
     }
 
+    /// Retains the complete native/config invocation for the offline migration
+    /// plan command under existing read-only custody. Selection is closed:
+    /// command spelling, exact arity, non-empty root and a syntactically valid
+    /// non-zero target namespace are refused before any root I/O.
+    pub(crate) fn for_control_migration_plan(
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<(Self, Vec<OsString>), OwnerError> {
+        let mut request = Self::new(
+            DataRootOpenMode::InspectExistingReadOnly,
+            arguments,
+            deadline,
+            cancellation,
+            limits,
+        )?;
+        let (selected, _) = crate::config_composition::strip_config_args_os(arguments)
+            .map_err(|_| OwnerError::OwnerOperationConflict)?;
+        let [command, root, target, output] = selected.as_slice() else {
+            return Err(OwnerError::OwnerOperationConflict);
+        };
+        if command != "--plan-control-migration" || root.is_empty() || output.is_empty() {
+            return Err(OwnerError::OwnerOperationConflict);
+        }
+        target
+            .to_str()
+            .and_then(|value| search_contracts::SourceNamespaceId::parse(value).ok())
+            .filter(|value| value.as_bytes() != &[0; 16])
+            .ok_or(OwnerError::OwnerOperationConflict)?;
+        request.root = PathBuf::from(root);
+        request.check()?;
+        Ok((request, selected))
+    }
+
     /// Retains all native argv, then selects a closed existing-only one-shot root.
     pub(crate) fn for_read_one_shot(
         arguments: &[OsString],
@@ -720,4 +755,62 @@ fn charge(total: &mut usize, amount: usize, ceiling: usize) -> Result<(), OwnerE
     }
     *total = next;
     Ok(())
+}
+
+#[cfg(test)]
+mod migration_selector_tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn limits() -> NativeRootLimits {
+        NativeRootLimits::new([256, 256 * 1024, 512 * 1024, 1024 * 1024 * 1024, 16384, 256]).unwrap()
+    }
+
+    fn invocation() -> Vec<OsString> {
+        ["--plan-control-migration", "unopened-root", "10000000-0000-0000-0000-000000000001", "unopened-output"]
+            .map(OsString::from).to_vec()
+    }
+
+    #[test]
+    fn retains_native_config_argv_and_original_context_without_opening_locators() {
+        let selected = invocation();
+        let mut arguments = vec![OsString::from("--config-file"), OsString::from("unread-config.toml")];
+        arguments.extend(selected.iter().cloned());
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let cancellation = Arc::new(AtomicBool::new(false));
+        let (request, actual) = NativeRootRequest::for_control_migration_plan(
+            &arguments, deadline, Arc::clone(&cancellation), limits(),
+        ).unwrap();
+        assert_eq!(actual, selected);
+        assert_eq!(request.root, PathBuf::from("unopened-root"));
+        assert_eq!(request.mode, DataRootOpenMode::InspectExistingReadOnly);
+        let expected = arguments.iter().map(|value| native_argument(value, 256 * 1024).unwrap()).collect::<Vec<_>>();
+        assert_eq!(request.arguments(), expected);
+        assert_eq!(request.deadline, deadline);
+        assert!(Arc::ptr_eq(&request.cancellation, &cancellation));
+        cancellation.store(true, Ordering::Release);
+        assert!(request.check().is_err());
+    }
+
+    #[test]
+    fn rejects_extra_missing_empty_and_invalid_selected_arguments() {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let refused = |arguments: &[OsString]| assert!(NativeRootRequest::for_control_migration_plan(
+            arguments, deadline, Arc::new(AtomicBool::new(false)), limits(),
+        ).is_err());
+        let valid = invocation();
+        refused(&valid[..3]);
+        let mut extra = valid.clone();
+        extra.push(OsString::from("extra"));
+        refused(&extra);
+        for (index, value) in [(0, "--other-command"), (1, ""), (2, "invalid"),
+            (2, "00000000-0000-0000-0000-000000000000"), (3, "")] {
+            let mut arguments = valid.clone();
+            arguments[index] = OsString::from(value);
+            refused(&arguments);
+        }
+        assert!(NativeRootRequest::for_control_migration_plan(
+            &valid, Instant::now(), Arc::new(AtomicBool::new(false)), limits(),
+        ).is_err());
+    }
 }

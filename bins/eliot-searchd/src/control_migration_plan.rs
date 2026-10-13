@@ -20,6 +20,8 @@ use super::super::storage_io::{
 #[cfg(test)]
 use super::super::storage_io::ensure_child_directory;
 use super::{DirectStore, check_deadline, sha256};
+use super::super::migration_context::{MigrationSource, NativeMigrationInput};
+use search_revision_store::LegacyRevisionObjectWork as Work;
 #[cfg(test)]
 use crate::development::DataRootGuard;
 
@@ -80,6 +82,7 @@ impl DirectStore {
     /// No source store is initialized. Payload readback resolves existing Windows
     /// credentials only; no credential or source object is created or converted.
     /// A returned locator is relative to the explicitly named location scope.
+    #[cfg(test)]
     pub(crate) fn stage_mapping_artifact(
         source: &crate::plaintext_direct_store::DirectStore,
         source_root: &Path,
@@ -111,6 +114,31 @@ impl DirectStore {
         locator_prefix: &'static str,
         deadline: Instant,
     ) -> Result<SourceMigrationStagedPlan, String> {
+        Self::stage_mapping_artifact_input(source, source_root, target, directory, locator_prefix, deadline, None)
+    }
+
+    pub(crate) fn stage_mapping_artifact_existing(
+        source: &crate::plaintext_direct_store::DirectStore,
+        source_root: &Path,
+        target: SourceNamespaceId,
+        directory: &Path,
+        native: &NativeMigrationInput<'_, '_, '_>,
+    ) -> Result<String, String> {
+        Self::stage_mapping_artifact_input(
+            source, source_root, target, directory, "", native.context.deadline(), Some(native),
+        ).map(|plan| plan.render_json())
+    }
+
+    fn stage_mapping_artifact_input(
+        source: &crate::plaintext_direct_store::DirectStore,
+        source_root: &Path,
+        target: SourceNamespaceId,
+        directory: &Path,
+        locator_prefix: &'static str,
+        deadline: Instant,
+        native: Option<&NativeMigrationInput<'_, '_, '_>>,
+    ) -> Result<SourceMigrationStagedPlan, String> {
+        let source = MigrationSource::new(source, deadline, native);
         let location = match locator_prefix {
             "" => SourceMigrationPlanLocation::ExplicitOutputDirectory,
             "control/migration-plans/" => {
@@ -119,21 +147,27 @@ impl DirectStore {
             "control/" => SourceMigrationPlanLocation::DataRootControl,
             _ => return Err("DIRECT_MIGRATION_OUTPUT_INVALID".to_owned()),
         };
-        check_deadline(Some(deadline))?;
+        source.checkpoint()?;
+        source.charge(Work::Observe)?;
         ensure_directory(directory)?;
+        source.checkpoint()?;
         let header = source.source_mapping_header(target)?;
         if source.verify_migration_snapshot(deadline)?
             != header.catalog_snapshot
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        cutover::gate_staging_against_marker(
-            source_root,
-            target,
-            header.catalog_snapshot,
-        )?;
+        source.charge(Work::Observe)?;
+        if source.native().is_some() {
+            gate_native_staging(source_root, target, header.catalog_snapshot)?;
+        } else {
+            cutover::gate_staging_against_marker(source_root, target, header.catalog_snapshot)?;
+        }
+        source.checkpoint()?;
 
         let temporary_name = temporary_staging_name()?;
+        source.checkpoint()?;
+        source.charge(Work::Open)?;
         let mut artifact = SourceImportRecordArtifact::create(
             directory,
             &temporary_name,
@@ -141,31 +175,43 @@ impl DirectStore {
             deadline,
         )
         .map_err(plan_artifact_reason)?;
+        source.checkpoint()?;
         let summary = source.compile_source_mapping(target, deadline, |row| {
+            source.charge(Work::Write(row.len()))?;
             artifact
                 .push(row, deadline)
-                .map_err(plan_artifact_reason)
+                .map_err(plan_artifact_reason)?;
+            source.checkpoint()
         })?;
+        source.checkpoint()?;
         let frozen = artifact.freeze(deadline).map_err(plan_artifact_reason)?;
+        source.checkpoint()?;
         let digest = *frozen.chain();
         let bytes = frozen.encoded_bytes();
 
         let mut readback = frozen
             .begin_readback(deadline)
             .map_err(plan_artifact_reason)?;
+        source.checkpoint()?;
         let replayed = source.compile_source_mapping(target, deadline, |row| {
+            source.charge(Work::Compare(row.len()))?;
             readback
                 .compare(row, deadline)
-                .map_err(plan_artifact_reason)
+                .map_err(plan_artifact_reason)?;
+            source.checkpoint()
         })?;
         if replayed != summary {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
+        source.checkpoint()?;
         let verified = readback.finish(deadline).map_err(plan_artifact_reason)?;
+        source.checkpoint()?;
         let name = format!("{}.source-map.v1", sha256::hex(&digest));
+        source.checkpoint()?;
         let published = verified
             .publish(&name, deadline)
             .map_err(plan_artifact_reason)?;
+        source.checkpoint()?;
         if published.chain() != &digest
             || published.encoded_bytes() != bytes
             || published.name() != name
@@ -175,7 +221,7 @@ impl DirectStore {
         let reused = published.reused();
 
         let content = content_readback::stage(
-            source,
+            &source,
             source_root,
             target,
             digest,
@@ -183,7 +229,7 @@ impl DirectStore {
             deadline,
         )?;
         let (database_name, database_reused) = redb_import::store(
-            source,
+            &source,
             target,
             directory,
             digest,
@@ -196,20 +242,23 @@ impl DirectStore {
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        if verify_record_artifact(
+        source.checkpoint()?;
+        let plan_readback = verify_record_artifact(
             &directory.join(&name),
             bytes,
             deadline,
-        )? != digest
-            || verify_record_artifact(
-                &directory.join(&content.name),
-                content.encoded_bytes,
-                deadline,
-            )? != content.chain
-        {
+        )?;
+        source.checkpoint()?;
+        let content_readback = verify_record_artifact(
+            &directory.join(&content.name),
+            content.encoded_bytes,
+            deadline,
+        )?;
+        source.checkpoint()?;
+        if plan_readback != digest || content_readback != content.chain {
             return Err("DIRECT_MIGRATION_PLAN_READBACK_MISMATCH".to_owned());
         }
-        check_deadline(Some(deadline))?;
+        source.checkpoint()?;
         Ok(SourceMigrationStagedPlan {
             target,
             catalog_snapshot: header.catalog_snapshot,
@@ -226,6 +275,16 @@ impl DirectStore {
             content_records: content.records,
             content_source_bytes: content.source_bytes,
         })
+    }
+}
+
+fn gate_native_staging(root: &Path, target: SourceNamespaceId, snapshot: [u8; 32]) -> Result<(), String> {
+    use search_control_redb::migration::{ControlCutoverMarkerFileState as State, resolve_control_cutover_marker};
+    match resolve_control_cutover_marker(&redb_import::DaemonImportOutputPlatform, root) {
+        State::Absent => Ok(()),
+        State::Valid(committed) if committed.marker.target == target && committed.marker.catalog_snapshot == snapshot => Ok(()),
+        State::Valid(_) => Err("DIRECT_MIGRATION_CUTOVER_SUPERSEDED".to_owned()),
+        State::Corrupt => Err("DIRECT_MIGRATION_CUTOVER_CORRUPT".to_owned()),
     }
 }
 

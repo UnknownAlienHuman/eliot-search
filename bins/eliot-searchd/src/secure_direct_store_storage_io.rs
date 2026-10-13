@@ -21,13 +21,17 @@ use search_materializer::{
     publish_legacy_preparation_artifact, read_legacy_preparation_artifact,
 };
 use search_revision_store::{
+    ContextualLegacyRevisionObjectPlatform, LegacyRevisionObjectContext,
     LegacyRevisionObjectError, LegacyRevisionObjectPlatform,
+    LegacyRevisionObjectPlatformFailure as PlatformFailure, LegacyRevisionObjectWork as Work,
     publish_legacy_revision_object, read_legacy_revision_object,
+    read_legacy_revision_object_with_context,
 };
 
 use crate::development::MAX_SCAN_INPUT_BYTES;
 use crate::revision_protection::PROTECTED_OBJECT_EXTENSION;
 use crate::sha256;
+use super::migration_context::MigrationContext;
 
 use super::{
     MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY, RevisionMetadata,
@@ -65,6 +69,29 @@ pub(super) fn read_revision_object(
     read_legacy_revision_object(&DaemonImmutableObjectPlatform, path, max_bytes)
         .map(|observed| observed.into_bytes())
         .map_err(|error| revision_read_reason(error, error_prefix))
+}
+
+pub(super) fn read_revision_object_with_context(
+    path: &Path,
+    max_bytes: usize,
+    context: &MigrationContext<'_, '_>,
+) -> Result<Vec<u8>, String> {
+    let mut object_context = context;
+    read_legacy_revision_object_with_context(
+        &DaemonImmutableObjectPlatform, &mut object_context, path, max_bytes,
+    )
+    .map(search_revision_store::ContextualRevisionObjectRead::into_bytes)
+    .map_err(|error| {
+        error.context_cause().cloned().unwrap_or_else(|| match error.object_code() {
+            Some("REVISION_OBJECT_PARENT_MISSING") => "DIRECT_REVISION_PARENT_MISSING",
+            Some("REVISION_OBJECT_NAME_INVALID") => "DIRECT_REVISION_FILENAME_INVALID",
+            Some("REVISION_OBJECT_SIZE_INVALID") => "DIRECT_REVISION_OBJECT_READ_FAILED:TOO_LARGE",
+            Some("REVISION_OBJECT_INVALID") => "DIRECT_FILE_INVALID",
+            Some("REVISION_OBJECT_READBACK_MISMATCH") => "DIRECT_REVISION_OBJECT_READ_FAILED:LENGTH_MISMATCH",
+            Some("REVISION_OBJECT_IDENTITY_CHANGED") => "DIRECT_REVISION_OBJECT_CHANGED",
+            _ => "DIRECT_REVISION_OBJECT_READ_FAILED",
+        }.to_owned())
+    })
 }
 
 pub(super) fn persist_immutable_object(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -178,13 +205,41 @@ fn revision_object_path(
     revision_id: &str,
     extension: &str,
 ) -> Result<PathBuf, String> {
+    revision_object_path_with_context(root, revision_id, extension, None)
+}
+
+pub(super) fn revision_object_path_with_context(
+    root: &Path,
+    revision_id: &str,
+    extension: &str,
+    context: Option<&MigrationContext<'_, '_>>,
+) -> Result<PathBuf, String> {
+    if let Some(context) = context { context.charge(Work::Compare(revision_id.len()))?; }
     if sha256::decode_digest(revision_id).is_none() {
         return Err("DIRECT_REVISION_ID_INVALID".to_owned());
     }
-    Ok(root
-        .join(REVISION_DIRECTORY)
-        .join(&revision_id[..2])
-        .join(format!("{revision_id}.{extension}")))
+    let directory = join_revision_path(root, Path::new(REVISION_DIRECTORY), context)?;
+    let shard = join_revision_path(&directory, Path::new(&revision_id[..2]), context)?;
+    if let Some(context) = context {
+        context.charge(Work::AllocateLocator(revision_id.len() + extension.len() + 1))?;
+    }
+    let name = format!("{revision_id}.{extension}");
+    join_revision_path(&shard, Path::new(&name), context)
+}
+
+pub(super) fn join_revision_path(
+    parent: &Path, child: &Path, context: Option<&MigrationContext<'_, '_>>,
+) -> Result<PathBuf, String> {
+    if let Some(context) = context {
+        let capacity = parent.as_os_str().as_encoded_bytes().len()
+            .checked_add(child.as_os_str().as_encoded_bytes().len())
+            .and_then(|length| length.checked_add(1))
+            .ok_or_else(|| "DIRECT_REVISION_FILENAME_INVALID".to_owned())?;
+        context.charge(Work::AllocateLocator(capacity))?;
+    }
+    let path = parent.join(child);
+    if let Some(context) = context { context.checkpoint()?; }
+    Ok(path)
 }
 
 pub(super) fn ensure_directory(path: &Path) -> Result<(), String> {
@@ -241,6 +296,77 @@ impl LegacyRevisionObjectPlatform for DaemonImmutableObjectPlatform {
     }
 }
 
+// Every nested observation/open is reserved against the original caller before
+// dispatch. These bounded synchronous platform calls remain non-preemptible.
+fn platform_step<C: LegacyRevisionObjectContext, T>(
+    context: &mut C, work: Work, execute: impl FnOnce() -> Result<T, String>,
+) -> Result<T, PlatformFailure<String, C::Error>> {
+    context.checkpoint().map_err(PlatformFailure::Context)?;
+    context.charge(work).map_err(PlatformFailure::Context)?;
+    let result = execute();
+    let checkpoint = context.checkpoint();
+    match (result, checkpoint) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(platform), Ok(())) => Err(PlatformFailure::Platform(platform)),
+        (Ok(_), Err(context)) => Err(PlatformFailure::Context(context)),
+        (Err(platform), Err(context)) => Err(PlatformFailure::AfterPlatform { platform, context }),
+    }
+}
+
+impl<C: LegacyRevisionObjectContext> ContextualLegacyRevisionObjectPlatform<C>
+    for DaemonImmutableObjectPlatform
+{
+    fn validate_directory_contextual(
+        &self, context: &mut C, path: &Path,
+    ) -> Result<(), PlatformFailure<String, C::Error>> {
+        platform_step(context, Work::Observe, || ensure_directory(path))
+    }
+
+    fn verify_locator_contextual(
+        &self, context: &mut C, expected: &File, path: &Path,
+    ) -> Result<(), PlatformFailure<String, C::Error>> {
+        let parent = path.parent().ok_or_else(|| PlatformFailure::Platform(
+            "DIRECT_REVISION_PARENT_MISSING".to_owned(),
+        ))?;
+        self.validate_directory_contextual(context, parent)?;
+        platform_step(context, Work::Observe, || ensure_regular_file(path))?;
+        let current = platform_step(context, Work::Open, || File::open(path)
+            .map_err(|_| "DIRECT_REVISION_OBJECT_READ_FAILED".to_owned()))?;
+        if self.identity_contextual(context, &current)? != self.identity_contextual(context, expected)? {
+            return Err(PlatformFailure::Platform("DIRECT_REVISION_OBJECT_CHANGED".to_owned()));
+        }
+        Ok(())
+    }
+
+    fn identity_contextual(
+        &self, context: &mut C, file: &File,
+    ) -> Result<Self::Identity, PlatformFailure<String, C::Error>> {
+        let metadata = platform_step(context, Work::Observe, || file.metadata()
+            .map_err(|_| "DIRECT_REVISION_OBJECT_CHANGED".to_owned()))?;
+        // native_file::observe performs three fixed same-handle Win32 calls.
+        // Reserve all three before entering that bounded, non-preemptible helper.
+        #[cfg(windows)]
+        for _ in 0..3 { context.charge(Work::Observe).map_err(PlatformFailure::Context)?; }
+        context.checkpoint().map_err(PlatformFailure::Context)?;
+        let result = native_identity_from_metadata(file, &metadata);
+        let checkpoint = context.checkpoint();
+        match (result, checkpoint) {
+            (Ok(value), Ok(())) => Ok(value),
+            (Err(platform), Ok(())) => Err(PlatformFailure::Platform(platform)),
+            (Ok(_), Err(context)) => Err(PlatformFailure::Context(context)),
+            (Err(platform), Err(context)) => Err(PlatformFailure::AfterPlatform { platform, context }),
+        }
+    }
+
+    fn sync_directory_contextual(
+        &self, context: &mut C, _path: &Path,
+    ) -> Result<(), PlatformFailure<String, C::Error>> {
+        context.checkpoint().map_err(PlatformFailure::Context)?;
+        // This adapter is a read consumer. Durability is never dispatched.
+        Err(PlatformFailure::Platform("DIRECT_MIGRATION_SOURCE_WRITE_FORBIDDEN".to_owned()))
+    }
+}
+
 impl LegacyPreparationArtifactPlatform for DaemonImmutableObjectPlatform {
     type Identity = (u64, u64);
     type Error = String;
@@ -284,7 +410,11 @@ fn native_identity(file: &File) -> Result<(u64, u64), String> {
     let metadata = file
         .metadata()
         .map_err(|_| "DIRECT_REVISION_OBJECT_CHANGED".to_owned())?;
-    if !metadata.is_file() || is_reparse(&metadata) {
+    native_identity_from_metadata(file, &metadata)
+}
+
+fn native_identity_from_metadata(file: &File, metadata: &Metadata) -> Result<(u64, u64), String> {
+    if !metadata.is_file() || is_reparse(metadata) {
         return Err("DIRECT_REVISION_OBJECT_CHANGED".to_owned());
     }
     #[cfg(unix)]

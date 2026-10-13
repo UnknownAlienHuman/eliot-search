@@ -169,16 +169,30 @@ fn replay_registry(
 
 pub(super) fn replay_registry_reader(
     reader: &mut impl BufRead,
-    mut observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
+    observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
 ) -> Result<(RegistryState, u64), String> {
+    replay_registry_reader_checked(reader, observe, || Ok(()))
+}
+
+pub(super) fn replay_registry_reader_checked(
+    reader: &mut impl BufRead,
+    mut observe: impl FnMut(&SourceRecord, Option<&SourceRecord>) -> Result<(), String>,
+    mut checkpoint: impl FnMut() -> Result<(), String>,
+) -> Result<(RegistryState, u64), String> {
+    checkpoint()?;
     let mut consumed = 0_u64;
     let mut line = String::new();
     read_log_line(reader, &mut line, &mut consumed)?;
+    checkpoint()?;
     if line.trim_end_matches(['\r', '\n']) != SOURCE_LOG_HEADER {
         return Err("DIRECT_CONTROL_LOG_HEADER_INVALID".to_owned());
     }
     let mut state = RegistryState::default();
-    while read_log_line(reader, &mut line, &mut consumed)? != 0 {
+    loop {
+        checkpoint()?;
+        let read = read_log_line(reader, &mut line, &mut consumed)?;
+        checkpoint()?;
+        if read == 0 { break; }
         if state.event_count >= MAX_SOURCE_EVENTS {
             return Err("DIRECT_SOURCE_EVENT_LIMIT_EXCEEDED".to_owned());
         }
@@ -197,7 +211,9 @@ pub(super) fn replay_registry_reader(
             .map_err(|error| error.code().to_owned())?;
         observe(&record, state.latest.get(&record.source_id))?;
         state.commit_record(record);
+        checkpoint()?;
     }
+    checkpoint()?;
     Ok((state, consumed))
 }
 
@@ -229,16 +245,19 @@ fn read_log_line(
 }
 
 impl DirectStore {
-    pub(crate) fn from_existing_bytes(
+    pub(crate) fn from_existing_bytes_checked(
         root: &Path,
         namespace: &[u8],
         log: &[u8],
+        mut checkpoint: impl FnMut() -> Result<(), String>,
     ) -> Result<Self, String> {
+        checkpoint()?;
         let namespace_id = parse_namespace(namespace)?;
-        let (registry, consumed) = replay_registry_reader(&mut Cursor::new(log), |_, _| Ok(()))?;
+        let (registry, consumed) = replay_registry_reader_checked(&mut Cursor::new(log), |_, _| Ok(()), &mut checkpoint)?;
         if u64::try_from(log.len()).ok() != Some(consumed) {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
+        checkpoint()?;
         Ok(Self {
             root: root.to_owned(),
             namespace_id,

@@ -191,6 +191,7 @@ pub struct RootMigrationInput {
 }
 
 /// Reads registration without invoking catalog recovery or acquiring an owner.
+#[cfg(test)]
 pub fn migration_input(data_root: &Path) -> Result<RootMigrationInput, SourceRootError> {
     reject_symlink(data_root)?;
     let canonical = fs::canonicalize(data_root).map_err(SourceRootError::RootIo)?;
@@ -212,14 +213,27 @@ pub fn migration_input(data_root: &Path) -> Result<RootMigrationInput, SourceRoo
         }
     }
     let file_bytes = read_configured_bytes(&path)?;
+    migration_input_from_bytes(&canonical, file_bytes.as_deref())
+}
+
+/// The one decode policy for a retained registration: exact codec, canonical
+/// configured set and data-root exclusion, with no filesystem access. The
+/// pinned-bytes callers and the path-based readers share this helper so a
+/// migration cannot decode registration under a second, weaker policy.
+pub fn migration_input_from_bytes(
+    data_root: &Path,
+    file_bytes: Option<&[u8]>,
+) -> Result<RootMigrationInput, SourceRootError> {
     let mut paths = file_bytes
-        .as_deref()
         .map(decode_configured_paths)
         .transpose()?
         .unwrap_or_default();
     canonicalize_configured_set(&mut paths)?;
     for path in &paths {
-        ensure_outside_data_root(path, &canonical)?;
+        ensure_outside_data_root(path, data_root)?;
     }
-    Ok(RootMigrationInput { paths, file_bytes })
+    Ok(RootMigrationInput {
+        paths,
+        file_bytes: file_bytes.map(<[u8]>::to_vec),
+    })
 }

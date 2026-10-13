@@ -41,6 +41,7 @@ pub enum OwnerLockProfile {
     /// Sealed co-hold file name; the effect is owned by [`SealedRootLease`].
     Sealed,
     /// Offline migration borrower of the primary lock (no marker cleanup).
+    #[cfg(test)]
     MigrationOutput,
 }
 
@@ -56,7 +57,9 @@ impl OwnerLockProfile {
     #[must_use]
     pub(crate) const fn file_name(self) -> &'static str {
         match self {
-            Self::Direct | Self::MigrationOutput => Self::DIRECT_LOCK_FILE,
+            Self::Direct => Self::DIRECT_LOCK_FILE,
+            #[cfg(test)]
+            Self::MigrationOutput => Self::DIRECT_LOCK_FILE,
             Self::Sealed => Self::SEALED_LOCK_FILE,
         }
     }

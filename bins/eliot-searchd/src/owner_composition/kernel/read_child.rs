@@ -134,6 +134,48 @@ impl NativeReadOperation<'_> {
         self.verify()
     }
 
+    // Per-row polling keeps the retained registration checks and original
+    // request. Full native locator verification brackets the migration child.
+    pub(crate) fn migration_checkpoint(&mut self) -> Result<(), OwnerError> {
+        self.with_binding(|_, request, work, _| work.arrive(request, "migration-checkpoint"))
+    }
+
+    /// Reserve one migration seam against the original invocation's allowance.
+    /// Reservations grant no source mutation or new root/locator authority.
+    pub(crate) fn migration_charge(
+        &mut self,
+        attempt: search_revision_store::LegacyRevisionObjectWork,
+    ) -> Result<(), OwnerError> {
+        use search_revision_store::LegacyRevisionObjectWork as Work;
+        self.with_binding(|_, request, work, _| match attempt {
+            Work::Observe => work.call(request, || Ok(())),
+            Work::Open => {
+                work.open(request)?;
+                work.call(request, || Ok(()))
+            }
+            Work::Read(bytes) => {
+                work.read(request, bytes)?;
+                work.call(request, || Ok(()))
+            }
+            Work::Write(bytes) => {
+                work.write(request, bytes)?;
+                work.call(request, || Ok(()))
+            }
+            // Buffer capacity consumes the unchanged byte allowance too.
+            Work::Allocate(bytes) | Work::Compare(bytes) => work.read(request, bytes),
+            Work::AllocateLocator(bytes) => work.canonical(request, bytes),
+            Work::Effect => Err(OwnerError::OwnerInvalidTransition),
+        })
+    }
+
+    pub(crate) fn migration_deadline(&self) -> Instant {
+        let request = match &self.context {
+            None => &self.owner.request,
+            Some((request, _)) => request,
+        };
+        request.credential_context().0
+    }
+
     pub(crate) const fn output_attempted(&self) -> bool {
         self.output_attempted
     }

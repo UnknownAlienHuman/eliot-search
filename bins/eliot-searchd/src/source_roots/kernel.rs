@@ -24,7 +24,9 @@ pub use inspection::preflight_sync;
 #[cfg(test)]
 pub use model::SourceRootView;
 pub use registration::{PreparedSourceRootChange, SourceRootAction};
-pub use registry::{RootMigrationInput, migration_input};
+#[cfg(test)]
+pub use registry::migration_input;
+pub use registry::migration_input_from_bytes;
 pub use search_source_registry::{
     CurrentWorkspaceTruth, ObservationGap, ObservationGapReason, ReconciliationCursor,
     SourceRootState, WatcherHint, WatcherHintKind,
