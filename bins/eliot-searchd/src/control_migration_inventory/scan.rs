@@ -936,7 +936,7 @@ fn control_file(
     subject: [u8; 32], orphan: bool,
 ) -> Result<(), String> {
     let source = stream.source;
-    let supported = path.strip_prefix(source.inventory_root()).ok().is_some_and(|relative| {
+    let supported = path.strip_prefix(source.inventory_root()).is_ok_and(|relative| {
         let mut parts = relative.components();
         parts.next() == Some(std::path::Component::Normal(std::ffi::OsStr::new("control")))
             && parts.next() == Some(std::path::Component::Normal(std::ffi::OsStr::new("control-cutover.v1")))
