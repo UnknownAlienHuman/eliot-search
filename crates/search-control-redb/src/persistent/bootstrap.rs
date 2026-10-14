@@ -93,6 +93,8 @@ pub enum MigrationBootstrapWork {
     Allocate(usize),
     /// Bounded metadata read/compare capacity before observation.
     Read(usize),
+    /// Bounded in-memory metadata copying, comparison or hashing work.
+    Process(usize),
     /// Bounded metadata staging or durability dispatch.
     Write(usize),
 }

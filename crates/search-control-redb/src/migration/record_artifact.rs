@@ -12,9 +12,10 @@
 use core::fmt;
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
+use crate::{ControlError, MigrationBootstrapWork as Work};
 
 use super::output_artifact::SourceImportOutputArtifactPlatform;
 use super::{
@@ -25,6 +26,8 @@ use super::{
 /// Closed immutable-record-artifact failure.
 #[derive(Debug)]
 pub enum SourceImportRecordArtifactError<E> {
+    /// The original borrowed context refused work; its caller retains its cause.
+    Context(ControlError),
     /// Injected platform observation failed.
     Platform(E),
     /// The cooperative operation deadline elapsed.
@@ -64,6 +67,7 @@ pub enum SourceImportRecordArtifactError<E> {
 impl<E: fmt::Display> fmt::Display for SourceImportRecordArtifactError<E> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Context(error) => error.fmt(formatter),
             Self::Platform(error) => error.fmt(formatter),
             Self::DeadlineExceeded => formatter.write_str("record artifact deadline exceeded"),
             Self::TemporaryNameInvalid => {
@@ -263,9 +267,104 @@ pub struct SourceImportRecordArtifact<P>
 where
     P: SourceImportOutputArtifactPlatform,
 {
-    writer: Option<BufWriter<File>>,
+    writer: Option<RecordWriter>,
     owned: Option<OwnedStaging<P>>,
     chain: SourceImportRecordChain,
+}
+
+const BUFFER_BYTES: usize = 8192;
+const INERT: fn(Work) -> Result<(), ControlError> = |_| Ok(());
+
+fn reserve<E>(deadline: Instant, work: &dyn Fn(Work) -> Result<(), ControlError>, unit: Work)
+    -> Result<(), SourceImportRecordArtifactError<E>> {
+    check_deadline(deadline)?;
+    work(unit).map_err(SourceImportRecordArtifactError::Context)?;
+    check_deadline(deadline)
+}
+
+fn call<E, T>(deadline: Instant, work: &dyn Fn(Work) -> Result<(), ControlError>, unit: Work,
+    action: impl FnOnce() -> Result<T, SourceImportRecordArtifactError<E>>,
+) -> Result<T, SourceImportRecordArtifactError<E>> {
+    reserve(deadline, work, unit)?;
+    let result = action();
+    let checkpoint = reserve(deadline, work, Work::Checkpoint);
+    result.and_then(|value| checkpoint.map(|()| value))
+}
+
+// No I/O in Drop: buffered staging bytes never flush after a refusal.
+struct RecordWriter { file: File, pending: Vec<u8> }
+impl RecordWriter {
+    fn append<E>(&mut self, row: &[u8], deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<(), SourceImportRecordArtifactError<E>> {
+        if self.pending.len() + row.len() > BUFFER_BYTES { self.flush(deadline, work)?; }
+        reserve(deadline, work, Work::Process(row.len()))?;
+        self.pending.extend_from_slice(row);
+        reserve(deadline, work, Work::Checkpoint)
+    }
+    fn flush<E>(&mut self, deadline: Instant, work: &dyn Fn(Work) -> Result<(), ControlError>)
+        -> Result<(), SourceImportRecordArtifactError<E>> {
+        let mut offset = 0;
+        while offset < self.pending.len() {
+            let remaining = &self.pending[offset..];
+            let count = call(deadline, work, Work::Write(remaining.len()), ||
+                self.file.write(remaining).map_err(|_| SourceImportRecordArtifactError::WriteFailed))?;
+            if count == 0 || count > remaining.len() { return Err(SourceImportRecordArtifactError::WriteFailed); }
+            offset += count;
+        }
+        self.pending.clear();
+        Ok(())
+    }
+}
+
+fn fill<'a, E>(reader: &'a mut BufReader<File>, deadline: Instant,
+    work: &dyn Fn(Work) -> Result<(), ControlError>,
+) -> Result<&'a [u8], SourceImportRecordArtifactError<E>> {
+    if reader.buffer().is_empty() {
+        reserve(deadline, work, Work::Read(reader.capacity()))?;
+        // Admit buffer processing once per actual fill, not the remaining
+        // buffer capacity again for every short logical row.
+        reserve(deadline, work, Work::Process(reader.capacity()))?;
+    }
+    reserve(deadline, work, Work::Checkpoint)?;
+    let bytes = reader.fill_buf().map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
+    reserve(deadline, work, Work::Checkpoint)?;
+    Ok(bytes)
+}
+
+fn read_exact<E>(reader: &mut BufReader<File>, target: &mut [u8], deadline: Instant,
+    work: &dyn Fn(Work) -> Result<(), ControlError>,
+) -> Result<(), SourceImportRecordArtifactError<E>> {
+    let mut offset = 0;
+    while offset < target.len() {
+        let available = fill(reader, deadline, work)?;
+        if available.is_empty() { return Err(SourceImportRecordArtifactError::ComparisonReadFailed); }
+        let count = available.len().min(target.len() - offset);
+        reserve(deadline, work, Work::Process(count))?;
+        target[offset..offset + count].copy_from_slice(&available[..count]);
+        reader.consume(count);
+        offset += count;
+    }
+    Ok(())
+}
+
+fn read_row<E>(reader: &mut BufReader<File>, row: &mut Vec<u8>, deadline: Instant,
+    work: &dyn Fn(Work) -> Result<(), ControlError>,
+) -> Result<(), SourceImportRecordArtifactError<E>> {
+    row.clear();
+    loop {
+        let available = fill(reader, deadline, work)?;
+        if available.is_empty() { return Ok(()); }
+        let newline = available.iter().position(|byte| *byte == b'\n');
+        let count = newline.map_or(available.len(), |index| index + 1)
+            .min(MAX_SOURCE_IMPORT_ROW_BYTES + 1 - row.len());
+        reserve(deadline, work, Work::Process(count))?;
+        row.extend_from_slice(&available[..count]);
+        reader.consume(count);
+        if newline.is_some_and(|index| index < count) || row.len() > MAX_SOURCE_IMPORT_ROW_BYTES {
+            return Ok(());
+        }
+    }
 }
 
 impl<P> SourceImportRecordArtifact<P>
@@ -288,43 +387,34 @@ where
         platform: P,
         deadline: Instant,
     ) -> Result<Self, SourceImportRecordArtifactError<P::Error>> {
-        check_deadline(deadline)?;
-        if !valid_temporary_name(temporary_name) {
-            return Err(SourceImportRecordArtifactError::TemporaryNameInvalid);
-        }
-        platform
-            .validate_directory(directory)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
+        Self::create_with_context(directory, temporary_name, platform, deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn create_with_context(
+        directory: &Path,
+        temporary_name: &str,
+        platform: P,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<Self, SourceImportRecordArtifactError<P::Error>> {
+        reserve(deadline, work, Work::Allocate(BUFFER_BYTES + directory.as_os_str().len() * 4 + temporary_name.len() * 2))?;
+        if !valid_temporary_name(temporary_name) { return Err(SourceImportRecordArtifactError::TemporaryNameInvalid); }
+        call(deadline, work, Work::Read(0), || platform.validate_directory(directory).map_err(SourceImportRecordArtifactError::Platform))?;
         let path = directory.join(temporary_name);
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(|_| SourceImportRecordArtifactError::CreateFailed)?;
-        platform
-            .verify_locator(&file, &path)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        let original_file = file
-            .try_clone()
-            .map_err(|_| SourceImportRecordArtifactError::CreateFailed)?;
-        platform
-            .verify_locator(&original_file, &path)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        let identity = platform
-            .identity(&original_file)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        Ok(Self {
-            writer: Some(BufWriter::new(file)),
-            owned: Some(OwnedStaging {
-                platform,
-                directory: directory.to_owned(),
-                path,
-                identity,
-                original_file,
-            }),
-            chain: SourceImportRecordChain::new(),
-        })
+        let mut pending = Vec::new();
+        pending.try_reserve_exact(BUFFER_BYTES).map_err(|_| SourceImportRecordArtifactError::CreateFailed)?;
+        let file = call(deadline, work, Work::Open, || OpenOptions::new().read(true).write(true).create_new(true)
+            .open(&path).map_err(|_| SourceImportRecordArtifactError::CreateFailed))?;
+        call(deadline, work, Work::Read(0), || platform.verify_locator(&file, &path).map_err(SourceImportRecordArtifactError::Platform))?;
+        let original_file = call(deadline, work, Work::Open, || file.try_clone().map_err(|_| SourceImportRecordArtifactError::CreateFailed))?;
+        call(deadline, work, Work::Read(0), || platform.verify_locator(&original_file, &path).map_err(SourceImportRecordArtifactError::Platform))?;
+        let identity = call(deadline, work, Work::Read(0), || platform.identity(&original_file).map_err(SourceImportRecordArtifactError::Platform))?;
+        Ok(Self { writer: Some(RecordWriter { file, pending }), owned: Some(OwnedStaging {
+            platform, directory: directory.to_owned(), path, identity, original_file,
+        }), chain: SourceImportRecordChain::new() })
     }
 
     /// Appends one canonical newline-terminated record.
@@ -337,14 +427,21 @@ where
         row: &[u8],
         deadline: Instant,
     ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
-        check_deadline(deadline)?;
+        self.push_with_context(row, deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn push_with_context(
+        &mut self,
+        row: &[u8],
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
+        reserve(deadline, work, Work::Process(row.len()))?;
         self.chain.push(row)?;
-        self.writer
-            .as_mut()
-            .ok_or(SourceImportRecordArtifactError::Closed)?
-            .write_all(row)
-            .map_err(|_| SourceImportRecordArtifactError::WriteFailed)?;
-        check_deadline(deadline)
+        self.writer.as_mut().ok_or(SourceImportRecordArtifactError::Closed)?.append(row, deadline, work)
     }
 
     /// Flushes, syncs and closes the temporary writer before exact readback.
@@ -353,53 +450,36 @@ where
     ///
     /// Returns a write/sync/platform/identity/deadline failure.
     pub fn freeze(
-        mut self,
+        self,
         deadline: Instant,
     ) -> Result<SourceImportFrozenRecordArtifact<P>, SourceImportRecordArtifactError<P::Error>>
     {
-        check_deadline(deadline)?;
-        let mut writer = self
-            .writer
-            .take()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        writer
-            .flush()
-            .map_err(|_| SourceImportRecordArtifactError::WriteFailed)?;
-        writer
-            .get_ref()
-            .sync_all()
-            .map_err(|_| SourceImportRecordArtifactError::SyncFailed)?;
-        let owned = self
-            .owned
-            .as_ref()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        owned
-            .platform
-            .verify_locator(writer.get_ref(), &owned.path)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        let identity = owned
-            .platform
-            .identity(writer.get_ref())
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        if identity != owned.identity {
-            return Err(SourceImportRecordArtifactError::IdentityChanged);
-        }
+        self.freeze_with_context(deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn freeze_with_context(
+        mut self,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportFrozenRecordArtifact<P>, SourceImportRecordArtifactError<P::Error>>
+    {
+        reserve(deadline, work, Work::Checkpoint)?;
+        let mut writer = self.writer.take().ok_or(SourceImportRecordArtifactError::Closed)?;
+        writer.flush(deadline, work)?;
+        call(deadline, work, Work::Write(0), || writer.file.sync_all().map_err(|_| SourceImportRecordArtifactError::SyncFailed))?;
+        let owned = self.owned.as_ref().ok_or(SourceImportRecordArtifactError::Closed)?;
+        call(deadline, work, Work::Read(0), || owned.platform.verify_locator(&writer.file, &owned.path).map_err(SourceImportRecordArtifactError::Platform))?;
+        let identity = call(deadline, work, Work::Read(0), || owned.platform.identity(&writer.file).map_err(SourceImportRecordArtifactError::Platform))?;
+        if identity != owned.identity { return Err(SourceImportRecordArtifactError::IdentityChanged); }
         drop(writer);
-        check_deadline(deadline)?;
+        reserve(deadline, work, Work::Process(64))?;
         let chain = core::mem::take(&mut self.chain);
-        let rows = chain.rows();
-        let encoded_bytes = chain.encoded_bytes();
-        let digest = chain.finish();
-        let owned = self
-            .owned
-            .take()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        Ok(SourceImportFrozenRecordArtifact {
-            owned: Some(owned),
-            chain: digest,
-            rows,
-            encoded_bytes,
-        })
+        let rows = chain.rows(); let encoded_bytes = chain.encoded_bytes(); let digest = chain.finish();
+        let owned = self.owned.take().ok_or(SourceImportRecordArtifactError::Closed)?;
+        Ok(SourceImportFrozenRecordArtifact { owned: Some(owned), chain: digest, rows, encoded_bytes })
     }
 }
 
@@ -439,24 +519,23 @@ where
         self,
         deadline: Instant,
     ) -> Result<SourceImportRecordReadback<P>, SourceImportRecordArtifactError<P::Error>> {
-        let owned = self
-            .owned
-            .as_ref()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        let opened = open_record_file(
-            &owned.platform,
-            &owned.path,
-            self.encoded_bytes,
-            Some(&owned.identity),
-            deadline,
-        )?;
-        Ok(SourceImportRecordReadback {
-            reader: Some(BufReader::new(opened.file)),
-            frozen: Some(self),
-            before_modified: opened.modified,
-            observed: SourceImportRecordChain::new(),
-            buffer: [0_u8; MAX_SOURCE_IMPORT_ROW_BYTES],
-        })
+        self.begin_readback_with_context(deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn begin_readback_with_context(
+        self,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportRecordReadback<P>, SourceImportRecordArtifactError<P::Error>> {
+        reserve(deadline, work, Work::Allocate(BUFFER_BYTES + MAX_SOURCE_IMPORT_ROW_BYTES))?;
+        let owned = self.owned.as_ref().ok_or(SourceImportRecordArtifactError::Closed)?;
+        let opened = open_record_file_with_context(&owned.platform, &owned.path, self.encoded_bytes, Some(&owned.identity), deadline, work)?;
+        Ok(SourceImportRecordReadback { reader: Some(BufReader::with_capacity(BUFFER_BYTES, opened.file)),
+            frozen: Some(self), before_modified: opened.modified, observed: SourceImportRecordChain::new(),
+            buffer: [0_u8; MAX_SOURCE_IMPORT_ROW_BYTES] })
     }
 }
 
@@ -487,19 +566,25 @@ where
         row: &[u8],
         deadline: Instant,
     ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
-        check_deadline(deadline)?;
+        self.compare_with_context(row, deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn compare_with_context(
+        &mut self,
+        row: &[u8],
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
+        reserve(deadline, work, Work::Process(row.len()))?;
         self.observed.push(row)?;
-        let reader = self
-            .reader
-            .as_mut()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        reader
-            .read_exact(&mut self.buffer[..row.len()])
-            .map_err(|_| SourceImportRecordArtifactError::ComparisonReadFailed)?;
-        if self.buffer[..row.len()] != *row {
-            return Err(SourceImportRecordArtifactError::ReadbackMismatch);
-        }
-        check_deadline(deadline)
+        let reader = self.reader.as_mut().ok_or(SourceImportRecordArtifactError::Closed)?;
+        read_exact(reader, &mut self.buffer[..row.len()], deadline, work)?;
+        reserve(deadline, work, Work::Process(row.len()))?;
+        if self.buffer[..row.len()] != *row { return Err(SourceImportRecordArtifactError::ReadbackMismatch); }
+        reserve(deadline, work, Work::Checkpoint)
     }
 
     /// Requires exact EOF, chain, byte count, metadata and native identity.
@@ -509,65 +594,40 @@ where
     /// Returns a comparison-read, mismatch, platform, identity, closed-state or
     /// deadline failure.
     pub fn finish(
-        mut self,
+        self,
         deadline: Instant,
     ) -> Result<SourceImportVerifiedRecordArtifact<P>, SourceImportRecordArtifactError<P::Error>>
     {
-        check_deadline(deadline)?;
-        let mut reader = self
-            .reader
-            .take()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        let mut extra = [0_u8; 1];
-        if reader
-            .read(&mut extra)
-            .map_err(|_| SourceImportRecordArtifactError::ComparisonReadFailed)?
-            != 0
-        {
-            return Err(SourceImportRecordArtifactError::ReadbackMismatch);
-        }
-        let frozen = self
-            .frozen
-            .as_ref()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
+        self.finish_with_context(deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn finish_with_context(
+        mut self,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportVerifiedRecordArtifact<P>, SourceImportRecordArtifactError<P::Error>>
+    {
+        reserve(deadline, work, Work::Checkpoint)?;
+        let mut reader = self.reader.take().ok_or(SourceImportRecordArtifactError::Closed)?;
+        if !fill(&mut reader, deadline, work)?.is_empty() { return Err(SourceImportRecordArtifactError::ReadbackMismatch); }
+        let frozen = self.frozen.as_ref().ok_or(SourceImportRecordArtifactError::Closed)?;
+        reserve(deadline, work, Work::Process(64))?;
         let observed = core::mem::take(&mut self.observed);
-        if observed.rows() != frozen.rows
-            || observed.encoded_bytes() != frozen.encoded_bytes
-            || observed.finish() != frozen.chain
-        {
+        if observed.rows() != frozen.rows || observed.encoded_bytes() != frozen.encoded_bytes || observed.finish() != frozen.chain {
             return Err(SourceImportRecordArtifactError::ReadbackMismatch);
         }
-        let owned = frozen
-            .owned
-            .as_ref()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        let after = reader
-            .get_ref()
-            .metadata()
-            .map_err(|_| SourceImportRecordArtifactError::ReadbackMismatch)?;
-        if after.len() != frozen.encoded_bytes || after.modified().ok() != self.before_modified {
-            return Err(SourceImportRecordArtifactError::ReadbackMismatch);
-        }
-        owned
-            .platform
-            .verify_locator(reader.get_ref(), &owned.path)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        let identity = owned
-            .platform
-            .identity(reader.get_ref())
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        if identity != owned.identity {
-            return Err(SourceImportRecordArtifactError::IdentityChanged);
-        }
-        check_deadline(deadline)?;
+        let owned = frozen.owned.as_ref().ok_or(SourceImportRecordArtifactError::Closed)?;
+        let after = call(deadline, work, Work::Read(0), || reader.get_ref().metadata().map_err(|_| SourceImportRecordArtifactError::ReadbackMismatch))?;
+        if after.len() != frozen.encoded_bytes || after.modified().ok() != self.before_modified { return Err(SourceImportRecordArtifactError::ReadbackMismatch); }
+        call(deadline, work, Work::Read(0), || owned.platform.verify_locator(reader.get_ref(), &owned.path).map_err(SourceImportRecordArtifactError::Platform))?;
+        let identity = call(deadline, work, Work::Read(0), || owned.platform.identity(reader.get_ref()).map_err(SourceImportRecordArtifactError::Platform))?;
+        if identity != owned.identity { return Err(SourceImportRecordArtifactError::IdentityChanged); }
+        reserve(deadline, work, Work::Checkpoint)?;
         drop(reader);
-        let frozen = self
-            .frozen
-            .take()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        Ok(SourceImportVerifiedRecordArtifact {
-            frozen: Some(frozen),
-        })
+        Ok(SourceImportVerifiedRecordArtifact { frozen: self.frozen.take() })
     }
 }
 
@@ -589,35 +649,34 @@ where
     /// # Errors
     /// Invalid names, original readback or admission fail before dispatch.
     pub fn prepare_publication(
-        mut self,
+        self,
         final_name: &str,
         deadline: Instant,
     ) -> Result<SourceImportRecordArtifactPublication<P>, SourceImportRecordArtifactError<P::Error>>
     {
-        check_deadline(deadline)?;
-        if !valid_local_name(final_name) {
-            return Err(SourceImportRecordArtifactError::FinalNameInvalid);
-        }
-        let frozen = self
-            .frozen
-            .take()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        let owned = frozen
-            .owned
-            .as_ref()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
+        self.prepare_publication_with_context(final_name, deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn prepare_publication_with_context(
+        mut self,
+        final_name: &str,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportRecordArtifactPublication<P>, SourceImportRecordArtifactError<P::Error>>
+    {
+        reserve(deadline, work, Work::Checkpoint)?;
+        if !valid_local_name(final_name) { return Err(SourceImportRecordArtifactError::FinalNameInvalid); }
+        let frozen = self.frozen.take().ok_or(SourceImportRecordArtifactError::Closed)?;
+        let owned = frozen.owned.as_ref().ok_or(SourceImportRecordArtifactError::Closed)?;
+        reserve(deadline, work, Work::Allocate(owned.directory.as_os_str().len() * 2 + final_name.len() * 4))?;
         let final_path = owned.directory.join(final_name);
-        if final_path == owned.path {
-            return Err(SourceImportRecordArtifactError::FinalNameInvalid);
-        }
-        let publication = SourceImportRecordArtifactPublication {
-            frozen,
-            final_path,
-            final_name: final_name.to_owned(),
-            disposition: SourceImportRecordArtifactPublicationDisposition::Prepared,
-            reused: false,
-        };
-        publication.verify_original(deadline)?;
+        if final_path == owned.path { return Err(SourceImportRecordArtifactError::FinalNameInvalid); }
+        let publication = SourceImportRecordArtifactPublication { frozen, final_path, final_name: final_name.to_owned(),
+            disposition: SourceImportRecordArtifactPublicationDisposition::Prepared, reused: false };
+        publication.verify_original_with_context(deadline, work)?;
         Ok(publication)
     }
 
@@ -631,8 +690,20 @@ where
         deadline: Instant,
     ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
     {
-        self.prepare_publication(final_name, deadline)?
-            .publish_once(deadline)
+        self.publish_with_context(final_name, deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn publish_with_context(
+        self,
+        final_name: &str,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
+    {
+        self.prepare_publication_with_context(final_name, deadline, work)?.publish_once_with_context(deadline, work)
     }
 }
 
@@ -709,37 +780,49 @@ where
         deadline: Instant,
     ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
     {
-        self.publish_once_using(deadline, |stage, final_path| {
-            fs::hard_link(stage, final_path)
-        })
+        self.publish_once_with_context(deadline, &INERT)
     }
 
-    fn publish_once_using(
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn publish_once_with_context(
         &mut self,
         deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
+    {
+        self.publish_once_using_with_context(deadline, work, |stage, final_path| fs::hard_link(stage, final_path))
+    }
+
+    #[cfg(test)]
+    fn publish_once_using(&mut self, deadline: Instant,
+        link: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>> {
+        self.publish_once_using_with_context(deadline, &INERT, link)
+    }
+    fn publish_once_using_with_context(
+        &mut self,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
         link: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
     ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
     {
-        if self.disposition == SourceImportRecordArtifactPublicationDisposition::RetainedUnknown {
-            return Err(SourceImportRecordArtifactError::PublishOutcomeUnknown);
-        }
-        if self.disposition != SourceImportRecordArtifactPublicationDisposition::Prepared {
-            return Err(SourceImportRecordArtifactError::Closed);
-        }
-        self.verify_original(deadline)?;
-        let owned = self
-            .frozen
-            .owned
-            .as_ref()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        // From here on every exit retains staging. No destructor or retry runs.
+        if self.disposition == SourceImportRecordArtifactPublicationDisposition::RetainedUnknown { return Err(SourceImportRecordArtifactError::PublishOutcomeUnknown); }
+        if self.disposition != SourceImportRecordArtifactPublicationDisposition::Prepared { return Err(SourceImportRecordArtifactError::Closed); }
+        self.verify_original_with_context(deadline, work)?;
+        let owned = self.frozen.owned.as_ref().ok_or(SourceImportRecordArtifactError::Closed)?;
+        // Fence before the last original-context reservation: refusal cannot
+        // dispatch, and this object cannot blindly retry through another API.
         self.disposition = SourceImportRecordArtifactPublicationDisposition::RetainedUnknown;
-        self.reused = match link(&owned.path, &self.final_path) {
+        let result = call::<P::Error, _>(deadline, work, Work::Write(0), || Ok(link(&owned.path, &self.final_path)))
+            .map_err(|_| SourceImportRecordArtifactError::PublishOutcomeUnknown)?;
+        self.reused = match result {
             Ok(()) => false,
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => true,
             Err(_) => return Err(SourceImportRecordArtifactError::PublishOutcomeUnknown),
         };
-        self.resolve_same_process(deadline)
+        self.resolve_same_process_with_context(deadline, work)
     }
 
     /// Synchronizes and revalidates the retained original object; never links.
@@ -751,19 +834,26 @@ where
         deadline: Instant,
     ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
     {
-        if self.disposition != SourceImportRecordArtifactPublicationDisposition::RetainedUnknown {
-            return Err(SourceImportRecordArtifactError::Closed);
-        }
-        self.sync_and_verify_final(deadline)
-            .map_err(|_| SourceImportRecordArtifactError::PublishOutcomeUnknown)?;
-        self.disposition =
-            SourceImportRecordArtifactPublicationDisposition::VerifiedCleanupDeferred;
-        Ok(SourceImportPublishedRecordArtifact {
-            name: self.final_name.clone(),
-            chain: self.frozen.chain,
-            encoded_bytes: self.frozen.encoded_bytes,
-            reused: self.reused,
-        })
+        self.resolve_same_process_with_context(deadline, &INERT)
+    }
+
+    /// The same owning engine under the original borrowed context.
+    /// # Errors
+    /// Returns the owning failure or original-context refusal; possible publication stays unknown.
+    pub fn resolve_same_process_with_context(
+        &mut self,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<P::Error>>
+    {
+        if self.disposition != SourceImportRecordArtifactPublicationDisposition::RetainedUnknown { return Err(SourceImportRecordArtifactError::Closed); }
+        self.sync_and_verify_final_with_context(deadline, work).map_err(|_| SourceImportRecordArtifactError::PublishOutcomeUnknown)?;
+        reserve::<P::Error>(deadline, work, Work::Allocate(self.final_name.len())).map_err(|_| SourceImportRecordArtifactError::PublishOutcomeUnknown)?;
+        let receipt = SourceImportPublishedRecordArtifact { name: self.final_name.clone(), chain: self.frozen.chain,
+            encoded_bytes: self.frozen.encoded_bytes, reused: self.reused };
+        reserve::<P::Error>(deadline, work, Work::Checkpoint).map_err(|_| SourceImportRecordArtifactError::PublishOutcomeUnknown)?;
+        self.disposition = SourceImportRecordArtifactPublicationDisposition::VerifiedCleanupDeferred;
+        Ok(receipt)
     }
 
     /// Read-only evidence relative to this retained original identity.
@@ -786,35 +876,18 @@ where
         )
     }
 
-    fn verify_original(
+    fn verify_original_with_context(
         &self,
         deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
     ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
-        check_deadline(deadline)?;
-        let owned = self
-            .frozen
-            .owned
-            .as_ref()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        owned
-            .platform
-            .verify_locator(&owned.original_file, &owned.path)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        if owned
-            .platform
-            .identity(&owned.original_file)
-            .map_err(SourceImportRecordArtifactError::Platform)?
-            != owned.identity
-        {
-            return Err(SourceImportRecordArtifactError::IdentityChanged);
-        }
-        let stage = inspect_record_file(
-            &owned.platform,
-            &owned.path,
-            self.frozen.encoded_bytes,
-            Some(&owned.identity),
-            deadline,
-        )?;
+        reserve(deadline, work, Work::Checkpoint)?;
+        let owned = self.frozen.owned.as_ref().ok_or(SourceImportRecordArtifactError::Closed)?;
+        call(deadline, work, Work::Read(0), || owned.platform.verify_locator(&owned.original_file, &owned.path).map_err(SourceImportRecordArtifactError::Platform))?;
+        let identity = call(deadline, work, Work::Read(0), || owned.platform.identity(&owned.original_file).map_err(SourceImportRecordArtifactError::Platform))?;
+        if identity != owned.identity { return Err(SourceImportRecordArtifactError::IdentityChanged); }
+        let stage = inspect_record_file_with_context(&owned.platform, &owned.path, self.frozen.encoded_bytes,
+            Some(&owned.identity), deadline, work)?;
         self.verify_records(&stage)
     }
 
@@ -831,35 +904,20 @@ where
         Ok(())
     }
 
-    fn sync_and_verify_final(
+    fn sync_and_verify_final_with_context(
         &self,
         deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
     ) -> Result<(), SourceImportRecordArtifactError<P::Error>> {
-        self.verify_original(deadline)?;
-        let owned = self
-            .frozen
-            .owned
-            .as_ref()
-            .ok_or(SourceImportRecordArtifactError::Closed)?;
-        owned
-            .original_file
-            .sync_all()
-            .map_err(|_| SourceImportRecordArtifactError::SyncFailed)?;
-        owned
-            .platform
-            .sync_record_artifact_directory(&owned.directory)
-            .map_err(SourceImportRecordArtifactError::Platform)?;
-        self.verify_original(deadline)?;
-        let final_artifact = inspect_record_file(
-            &owned.platform,
-            &self.final_path,
-            self.frozen.encoded_bytes,
-            Some(&owned.identity),
-            deadline,
-        )?;
+        self.verify_original_with_context(deadline, work)?;
+        let owned = self.frozen.owned.as_ref().ok_or(SourceImportRecordArtifactError::Closed)?;
+        call(deadline, work, Work::Write(0), || owned.original_file.sync_all().map_err(|_| SourceImportRecordArtifactError::SyncFailed))?;
+        call(deadline, work, Work::Write(0), || owned.platform.sync_record_artifact_directory(&owned.directory).map_err(SourceImportRecordArtifactError::Platform))?;
+        self.verify_original_with_context(deadline, work)?;
+        let final_artifact = inspect_record_file_with_context(&owned.platform, &self.final_path,
+            self.frozen.encoded_bytes, Some(&owned.identity), deadline, work)?;
         self.verify_records(&final_artifact)?;
-        // Complete original readback again after final readback and late callbacks.
-        self.verify_original(deadline)
+        self.verify_original_with_context(deadline, work)
     }
 }
 
@@ -1008,63 +1066,46 @@ struct OpenedRecord {
     modified: Option<SystemTime>,
 }
 
-fn open_record_file<P>(
+fn open_record_file_with_context<P>(
     platform: &P,
     path: &Path,
     expected_bytes: u64,
     expected_identity: Option<&P::Identity>,
     deadline: Instant,
+    work: &dyn Fn(Work) -> Result<(), ControlError>,
 ) -> Result<OpenedRecord, SourceImportRecordArtifactError<P::Error>>
 where
     P: SourceImportOutputArtifactPlatform,
 {
-    check_deadline(deadline)?;
-    if expected_bytes > MAX_SOURCE_IMPORT_RECORD_BYTES {
+    reserve(deadline, work, Work::Checkpoint)?;
+    if expected_bytes > MAX_SOURCE_IMPORT_RECORD_BYTES { return Err(SourceImportRecordArtifactError::ObjectInvalid); }
+    let parent = path.parent().ok_or(SourceImportRecordArtifactError::ObjectInvalid)?;
+    call(deadline, work, Work::Read(0), || platform.validate_directory(parent).map_err(SourceImportRecordArtifactError::Platform))?;
+    let before = call(deadline, work, Work::Read(0), || fs::symlink_metadata(path).map_err(|_| SourceImportRecordArtifactError::ObjectInvalid))?;
+    if !regular(&before) || before.len() != expected_bytes { return Err(SourceImportRecordArtifactError::ObjectInvalid); }
+    let file = call(deadline, work, Work::Open, || File::open(path).map_err(|_| SourceImportRecordArtifactError::ReadFailed))?;
+    let opened = call(deadline, work, Work::Read(0), || file.metadata().map_err(|_| SourceImportRecordArtifactError::ReadFailed))?;
+    if !opened.is_file() || opened.len() != expected_bytes || opened.modified().ok() != before.modified().ok() {
         return Err(SourceImportRecordArtifactError::ObjectInvalid);
     }
-    let parent = path
-        .parent()
-        .ok_or(SourceImportRecordArtifactError::ObjectInvalid)?;
-    platform
-        .validate_directory(parent)
-        .map_err(SourceImportRecordArtifactError::Platform)?;
-    let before =
-        fs::symlink_metadata(path).map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)?;
-    if !regular(&before) || before.len() != expected_bytes {
-        return Err(SourceImportRecordArtifactError::ObjectInvalid);
-    }
-    let file = File::open(path).map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
-    let opened = file
-        .metadata()
-        .map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
-    if !opened.is_file()
-        || opened.len() != expected_bytes
-        || opened.modified().ok() != before.modified().ok()
-    {
-        return Err(SourceImportRecordArtifactError::ObjectInvalid);
-    }
-    platform
-        .verify_locator(&file, path)
-        .map_err(SourceImportRecordArtifactError::Platform)?;
-    let identity = platform
-        .identity(&file)
-        .map_err(SourceImportRecordArtifactError::Platform)?;
-    if expected_identity.is_some_and(|expected| expected != &identity) {
-        return Err(SourceImportRecordArtifactError::IdentityChanged);
-    }
-    check_deadline(deadline)?;
-    Ok(OpenedRecord {
-        file,
-        modified: opened.modified().ok(),
-    })
+    call(deadline, work, Work::Read(0), || platform.verify_locator(&file, path).map_err(SourceImportRecordArtifactError::Platform))?;
+    let identity = call(deadline, work, Work::Read(0), || platform.identity(&file).map_err(SourceImportRecordArtifactError::Platform))?;
+    if expected_identity.is_some_and(|expected| expected != &identity) { return Err(SourceImportRecordArtifactError::IdentityChanged); }
+    Ok(OpenedRecord { file, modified: opened.modified().ok() })
 }
 
-fn inspect_record_file<P>(
+fn inspect_record_file<P: SourceImportOutputArtifactPlatform>(platform: &P, path: &Path,
+    expected_bytes: u64, expected_identity: Option<&P::Identity>, deadline: Instant,
+) -> Result<SourceImportRecordArtifactObservation<P::Identity>, SourceImportRecordArtifactError<P::Error>> {
+    inspect_record_file_with_context(platform, path, expected_bytes, expected_identity, deadline, &INERT)
+}
+fn inspect_record_file_with_context<P>(
     platform: &P,
     path: &Path,
     expected_bytes: u64,
     expected_identity: Option<&P::Identity>,
     deadline: Instant,
+    work: &dyn Fn(Work) -> Result<(), ControlError>,
 ) -> Result<
     SourceImportRecordArtifactObservation<P::Identity>,
     SourceImportRecordArtifactError<P::Error>,
@@ -1072,66 +1113,37 @@ fn inspect_record_file<P>(
 where
     P: SourceImportOutputArtifactPlatform,
 {
-    let opened = open_record_file(platform, path, expected_bytes, expected_identity, deadline)?;
+    reserve(deadline, work, Work::Allocate(BUFFER_BYTES + MAX_SOURCE_IMPORT_ROW_BYTES + 1))?;
+    let opened = open_record_file_with_context(platform, path, expected_bytes, expected_identity, deadline, work)?;
     let before_modified = opened.modified;
-    let mut reader = BufReader::new(opened.file);
-    let before_identity = platform
-        .identity(reader.get_ref())
-        .map_err(SourceImportRecordArtifactError::Platform)?;
+    let mut reader = BufReader::with_capacity(BUFFER_BYTES, opened.file);
+    let before_identity = call(deadline, work, Work::Read(0), || platform.identity(reader.get_ref()).map_err(SourceImportRecordArtifactError::Platform))?;
     let mut row = Vec::new();
+    row.try_reserve_exact(MAX_SOURCE_IMPORT_ROW_BYTES + 1).map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
     let mut chain = SourceImportRecordChain::new();
     loop {
-        check_deadline(deadline)?;
-        row.clear();
-        let read = Read::take(
-            &mut reader,
-            u64::try_from(MAX_SOURCE_IMPORT_ROW_BYTES)
-                .unwrap_or(u64::MAX)
-                .saturating_add(1),
-        )
-        .read_until(b'\n', &mut row)
-        .map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
-        if read == 0 {
-            break;
-        }
+        reserve(deadline, work, Work::Checkpoint)?;
+        read_row(&mut reader, &mut row, deadline, work)?;
+        if row.is_empty() { break; }
+        reserve(deadline, work, Work::Process(row.len()))?;
         chain.push(&row)?;
     }
-    let after = reader
-        .get_ref()
-        .metadata()
-        .map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
-    if chain.encoded_bytes() != expected_bytes
-        || after.len() != expected_bytes
-        || after.modified().ok() != before_modified
-    {
+    let after = call(deadline, work, Work::Read(0), || reader.get_ref().metadata().map_err(|_| SourceImportRecordArtifactError::ReadFailed))?;
+    if chain.encoded_bytes() != expected_bytes || after.len() != expected_bytes || after.modified().ok() != before_modified {
         return Err(SourceImportRecordArtifactError::ReadbackMismatch);
     }
-    platform
-        .verify_locator(reader.get_ref(), path)
-        .map_err(SourceImportRecordArtifactError::Platform)?;
-    let identity = platform
-        .identity(reader.get_ref())
-        .map_err(SourceImportRecordArtifactError::Platform)?;
-    if identity != before_identity
-        || expected_identity.is_some_and(|expected| expected != &identity)
-    {
+    call(deadline, work, Work::Read(0), || platform.verify_locator(reader.get_ref(), path).map_err(SourceImportRecordArtifactError::Platform))?;
+    let identity = call(deadline, work, Work::Read(0), || platform.identity(reader.get_ref()).map_err(SourceImportRecordArtifactError::Platform))?;
+    if identity != before_identity || expected_identity.is_some_and(|expected| expected != &identity) {
         return Err(SourceImportRecordArtifactError::IdentityChanged);
     }
-    let verified = reader
-        .get_ref()
-        .metadata()
-        .map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
+    let verified = call(deadline, work, Work::Read(0), || reader.get_ref().metadata().map_err(|_| SourceImportRecordArtifactError::ReadFailed))?;
     if verified.len() != expected_bytes || verified.modified().ok() != before_modified {
         return Err(SourceImportRecordArtifactError::ReadbackMismatch);
     }
-    check_deadline(deadline)?;
+    reserve(deadline, work, Work::Process(64))?;
     let rows = chain.rows();
-    Ok(SourceImportRecordArtifactObservation {
-        chain: chain.finish(),
-        rows,
-        encoded_bytes: expected_bytes,
-        identity,
-    })
+    Ok(SourceImportRecordArtifactObservation { chain: chain.finish(), rows, encoded_bytes: expected_bytes, identity })
 }
 
 fn valid_temporary_name(name: &str) -> bool {

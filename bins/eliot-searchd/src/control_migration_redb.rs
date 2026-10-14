@@ -338,6 +338,7 @@ fn record_artifact_read_reason(
     error: SourceImportRecordArtifactError<String>,
 ) -> String {
     match error {
+        SourceImportRecordArtifactError::Context(_) => "DIRECT_MIGRATION_UNAVAILABLE".to_owned(),
         SourceImportRecordArtifactError::Platform(reason) => reason,
         SourceImportRecordArtifactError::DeadlineExceeded => {
             "DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned()
