@@ -15,6 +15,7 @@ mod existing;
 #[path = "revision_protection_windows/inventory.rs"]
 mod inventory;
 #[cfg(test)]
+#[path = "revision_protection_windows/test_cleanup.rs"]
 mod test_cleanup;
 
 pub(super) use credential::load_or_create_root_secret;

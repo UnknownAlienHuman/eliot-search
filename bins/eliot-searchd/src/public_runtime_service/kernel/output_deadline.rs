@@ -84,4 +84,5 @@ impl<W: Write> Write for DeadlineOutput<'_, W> {
 }
 
 #[cfg(test)]
+#[path = "output_deadline/tests.rs"]
 mod tests;

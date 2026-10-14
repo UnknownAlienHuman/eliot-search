@@ -19,7 +19,7 @@ fn set<T: Ord, const LIMIT: usize>(
     BoundedSet::from_items(values).expect("bounded set")
 }
 
-fn policy() -> AuthoritativeGrantPolicy {
+fn fixture_policy() -> AuthoritativeGrantPolicy {
     AuthoritativeGrantPolicy {
         binding_id: BindingId::from_bytes([1; 16]),
         binding_generation: 4,
@@ -52,7 +52,7 @@ fn policy() -> AuthoritativeGrantPolicy {
     }
 }
 
-fn request() -> StandaloneGrantRequest {
+fn fixture_request() -> StandaloneGrantRequest {
     StandaloneGrantRequest {
         operation_id: OpaqueId::new("operation-1").expect("operation"),
         binding_id: BindingId::from_bytes([1; 16]),
@@ -163,8 +163,8 @@ impl GrantTimeSource for FixedTime {
 
 #[test]
 fn minted_claims_are_exactly_the_requested_authorized_subset() {
-    let policy = policy();
-    let request = request();
+    let policy = fixture_policy();
+    let request = fixture_request();
     let mut issuer = FakeIssuer::default();
 
     let grant = mint_standalone_grant(&mut issuer, &request, &policy).expect("grant minted");
@@ -207,8 +207,8 @@ fn minted_claims_are_exactly_the_requested_authorized_subset() {
 
 #[test]
 fn portfolio_revision_is_retained_only_for_requested_portfolio_scope() {
-    let policy = policy();
-    let mut request = request();
+    let policy = fixture_policy();
+    let mut request = fixture_request();
     request.requested_corpus_or_portfolio_ids = set([CorpusOrPortfolioId::Portfolio(
         ReferencePortfolioId::from_bytes([21; 16]),
     )]);
@@ -232,8 +232,8 @@ fn portfolio_revision_is_retained_only_for_requested_portfolio_scope() {
 
 #[test]
 fn foreign_scope_fails_before_the_issuer_runs() {
-    let policy = policy();
-    let mut request = request();
+    let policy = fixture_policy();
+    let mut request = fixture_request();
     request.requested_membership_ids = set([membership(99)]);
     let mut issuer = FakeIssuer::default();
 
@@ -246,8 +246,8 @@ fn foreign_scope_fails_before_the_issuer_runs() {
 
 #[test]
 fn requested_ceilings_and_permissions_never_widen_policy() {
-    let policy = policy();
-    let mut request = request();
+    let policy = fixture_policy();
+    let mut request = fixture_request();
     request.requested_sensitivity_ceiling = SensitivityClass::SecretCandidate;
     let mut issuer = FakeIssuer::default();
     assert_eq!(
@@ -256,9 +256,9 @@ fn requested_ceilings_and_permissions_never_widen_policy() {
     );
     assert_eq!(issuer.calls, 0);
 
-    let mut policy = policy();
+    let mut policy = fixture_policy();
     policy.exact_scan_permission = false;
-    let mut request = request();
+    let mut request = fixture_request();
     request.requested_exact_scan_permission = true;
     let mut issuer = FakeIssuer::default();
     assert_eq!(
@@ -270,8 +270,8 @@ fn requested_ceilings_and_permissions_never_widen_policy() {
 
 #[test]
 fn equal_operation_reconstructs_and_conflicting_input_is_rejected() {
-    let policy = policy();
-    let request = request();
+    let policy = fixture_policy();
+    let request = fixture_request();
     let mut issuer = FakeIssuer::default();
 
     let first = mint_standalone_grant(&mut issuer, &request, &policy).expect("first");
@@ -288,8 +288,8 @@ fn equal_operation_reconstructs_and_conflicting_input_is_rejected() {
 
 #[test]
 fn stale_generation_and_foreign_receipt_fail_closed() {
-    let policy = policy();
-    let mut stale = request();
+    let policy = fixture_policy();
+    let mut stale = fixture_request();
     stale.expected_policy_generation += 1;
     let mut issuer = FakeIssuer::default();
     assert_eq!(
@@ -303,15 +303,15 @@ fn stale_generation_and_foreign_receipt_fail_closed() {
         ..FakeIssuer::default()
     };
     assert_eq!(
-        mint_standalone_grant(&mut issuer, &request(), &policy),
+        mint_standalone_grant(&mut issuer, &fixture_request(), &policy),
         Err(GrantMintError::IssuerReceiptMismatch)
     );
 }
 
 #[test]
 fn bounded_issuer_replays_exactly_and_never_evicts_operation_identity() {
-    let policy = policy();
-    let request = request();
+    let policy = fixture_policy();
+    let request = fixture_request();
     let mut issuer = BoundedStandaloneGrantIssuer::new(
         CounterEntropy::default(),
         FixedTime,
@@ -343,8 +343,8 @@ fn bounded_issuer_replays_exactly_and_never_evicts_operation_identity() {
 
 #[test]
 fn bounded_issuer_rejects_repeated_entropy_instead_of_reusing_identity() {
-    let policy = policy();
-    let request = request();
+    let policy = fixture_policy();
+    let request = fixture_request();
     let mut issuer = BoundedStandaloneGrantIssuer::new(ConstantEntropy, FixedTime, 2, 2)
         .expect("issuer");
     mint_standalone_grant(&mut issuer, &request, &policy).expect("first");

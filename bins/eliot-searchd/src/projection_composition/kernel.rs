@@ -30,4 +30,5 @@ pub use model::{
 };
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

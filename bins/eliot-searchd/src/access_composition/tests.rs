@@ -1,8 +1,10 @@
 use super::*;
 use search_access::{
     AccessModality, AuthoritativeAccessSnapshot, AuthoritativePolicyState,
-    GrantClaims, GrantValidationContext, IndexedRouteFence,
-    MembershipAccessBinding, NamespacePolicyFence, RequestedMembershipScope,
+    AccessError, GrantClaims, GrantValidationContext, IndexedRouteFence,
+    LiveSecurityState, MembershipAccessBinding, NamespacePolicyFence,
+    PreRetrievalPlan, PreRetrievalRequest, RequestedMembershipScope,
+    compile_pre_retrieval,
 };
 use search_contracts::{
     AccessPolicyRevision, BindingId, Blake3Digest32, CollectionGenerationId,

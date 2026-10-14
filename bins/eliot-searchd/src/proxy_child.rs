@@ -24,4 +24,5 @@ pub(super) use pipe::write_admitted_line;
 pub(super) use spec::ChildLimits;
 
 #[cfg(test)]
+#[path = "proxy_child/tests.rs"]
 mod tests;
