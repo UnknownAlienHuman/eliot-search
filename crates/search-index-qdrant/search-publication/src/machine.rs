@@ -10,7 +10,7 @@ pub use abort::{
 pub use restore::PublicationRestoreInput;
 
 use search_contracts::{Blake3Digest32, Epoch, OpaqueId, ReceiptRef};
-use search_point_identity::PointId128;
+use search_point_identity::s11::PointId128;
 use search_projection_planner::{ManifestDiff, ProjectionManifest, diff_manifests};
 
 use crate::{
@@ -492,7 +492,7 @@ impl PublicationCoordinator {
             .map(|entry| entry.point_id)
             .collect::<BTreeSet<_>>();
         let memberships = affected
-            .map(|entry| entry.projection_membership_id.clone())
+            .map(|entry| entry.projection_membership_id)
             .collect::<BTreeSet<_>>();
         if fence.transaction_id != transaction.prepared.transaction_id
             || fence.target_epoch != transaction.target_epoch

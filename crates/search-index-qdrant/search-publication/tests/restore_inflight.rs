@@ -4,10 +4,11 @@
 use std::collections::BTreeMap;
 
 use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, Epoch, NonZeroRevision, OpaqueId, OwnerEpoch,
-    ReceiptRef,
+    AccessPartitionId, Blake3Digest32, CollectionGenerationId, Epoch, InstallationIncarnationId,
+    OpaqueId, OwnerEpoch, ProjectionMembershipId, ProjectionProfileSetId, ReceiptRef,
+    ScoringDocumentId, ScoringPartitionId, SourceMembershipId, UnitId,
 };
-use search_point_identity::{PointId128, PointIdentityKey, ProjectionKind};
+use search_point_identity::s11::PointId128;
 use search_projection_planner::{ProjectionManifest, ProjectionManifestEntry, diff_manifests};
 use search_publication::*;
 
@@ -27,7 +28,7 @@ fn reference(value: &str) -> ReceiptRef {
     ReceiptRef::new(format!("fixture:{value}")).unwrap()
 }
 const fn point(value: u8) -> PointId128 {
-    PointId128::from_bytes([value; 16])
+    PointId128::from_stored_bytes([value; 16])
 }
 fn guards() -> PublicationGuards {
     PublicationGuards {
@@ -47,31 +48,19 @@ fn manifest(points: &[u8]) -> ProjectionManifest {
             .copied()
             .map(|n| ProjectionManifestEntry {
                 point_id: point(n),
-                identity_key: PointIdentityKey {
-                    namespace_id: id("namespace"),
-                    source_id: id("source"),
-                    source_revision: NonZeroRevision::new(u64::from(n) + 1).unwrap(),
-                    unit_ordinal: 0,
-                    source_byte_start: 0,
-                    source_byte_end: 1,
-                    projection_kind: ProjectionKind::Lexical,
-                    projection_fingerprint: digest(1),
-                    projection_schema_revision: NonZeroRevision::new(1).unwrap(),
-                    source_membership_id: id("source-member"),
-                    projection_membership_id: id("projection-member"),
-                    representation_digest: digest(n.wrapping_add(10)),
-                    unit_digest: digest(n.wrapping_add(11)),
-                    scoring_partition_digest: digest(n.wrapping_add(12)),
-                    collection_generation_digest: digest(n.wrapping_add(13)),
-                },
-                source_membership_id: id("source-member"),
-                projection_membership_id: id("projection-member"),
+                point_identity_digest_256: digest(n.wrapping_add(10)),
+                source_membership_id: SourceMembershipId::from_bytes([7; 16]),
+                projection_membership_id: ProjectionMembershipId::from_bytes([1; 16]),
+                unit_id: UnitId::from_bytes([n; 16]),
+                collection_generation_id: CollectionGenerationId::from_bytes([1; 16]),
+                installation_incarnation_id: InstallationIncarnationId::from_bytes([1; 16]),
+                access_partition_id: AccessPartitionId::from_bytes([1; 16]),
+                scoring_partition_id: ScoringPartitionId::from_bytes([1; 16]),
+                scoring_document_id: ScoringDocumentId::from_bytes([n; 16]),
+                projection_profile_set_id: ProjectionProfileSetId::new("lexical-sparse-v1").unwrap(),
                 unit_digest: digest(n),
                 reference_digest: digest(n),
-                representation_digest: digest(n.wrapping_add(10)),
-                scoring_partition_digest: digest(n.wrapping_add(12)),
-                collection_generation_digest: digest(n.wrapping_add(13)),
-                payload_digest: digest(n),
+                payload_identity: digest(n),
                 vector_digests: BTreeMap::new(),
             })
             .collect(),
@@ -590,7 +579,7 @@ fn recorded_compensating_never_returns_to_forward_progress_even_when_all_ids_are
 fn conflicting_physical_ids_and_unpaired_manifests_cannot_enter_rehydration() {
     let mut conflict = input(0, true);
     conflict.prepared.new_manifest = conflict.prepared.old_manifest.clone().unwrap();
-    conflict.prepared.new_manifest.entries[0].payload_digest = digest(99);
+    conflict.prepared.new_manifest.entries[0].payload_identity = digest(99);
     assert_eq!(
         PublicationCoordinator::restore_inflight(conflict, 32).unwrap_err(),
         PublicationError::InvalidPreparedPublication
