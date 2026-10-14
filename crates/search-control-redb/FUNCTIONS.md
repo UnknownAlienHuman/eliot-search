@@ -16,6 +16,9 @@ Schema 5 is VERSIONED_REBUILD. Reserved codecs also run during open/recovery and
 snapshot verification; old-schema collisions refuse. Existing seven classes,
 three physical tables and active limits remain unchanged. Wrapped state and
 operation values must fit the 64 KiB baseline; no silent splitting or limit rise.
+The unshipped schema-5 family map includes Root tag 4 with Identity class. Root
+key/value bytes remain source-owner validated opaque metadata; tags 1/2/3 and
+the original-operation codec/join remain unchanged.
 
 **Status:** concrete disk persistence and schema-5 registry reservation are implemented.
 Complete #268 candidate adoption, #269 serving cutover and native/fault/installed

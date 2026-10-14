@@ -149,6 +149,7 @@ pub(super) fn decode_record(
             1 => RegistryStateFamily::Source,
             2 => RegistryStateFamily::Membership,
             3 => RegistryStateFamily::Generation,
+            4 => RegistryStateFamily::Root,
             _ => return Err(ControlError::StoreCorrupt),
         };
         let owner_key = input.bytes()?.to_vec();

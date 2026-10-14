@@ -23,6 +23,8 @@ pub enum RegistryStateFamily {
     Membership,
     /// Owner-encoded active corpus generation.
     Generation,
+    /// Owner-encoded complete root metadata; no native custody or admission authority.
+    Root,
 }
 impl RegistryStateFamily {
     pub(super) const fn tag(self) -> u8 {
@@ -30,11 +32,12 @@ impl RegistryStateFamily {
             Self::Source => 1,
             Self::Membership => 2,
             Self::Generation => 3,
+            Self::Root => 4,
         }
     }
     pub(super) const fn class(self) -> ControlRecordClass {
         match self {
-            Self::Source => ControlRecordClass::Identity,
+            Self::Source | Self::Root => ControlRecordClass::Identity,
             Self::Membership => ControlRecordClass::State,
             Self::Generation => ControlRecordClass::Revision,
         }

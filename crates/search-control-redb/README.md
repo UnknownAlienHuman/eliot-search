@@ -15,7 +15,11 @@ visibility initialization before normal registry writes.
 Root constructs `RegistryStateKey` from a closed family and the source owner's
 complete canonical key bytes, and `RegistryStateChange` from exact before/after
 metadata bytes. Source, membership and generation use Identity, State and Revision
-respectively. `RegistryMutationRequest::new` retains the complete original opaque
+respectively. Root metadata uses Identity and storage family tag 4; existing
+Source/Membership/Generation tags 1/2/3 stay unchanged. Root key/value bytes remain
+opaque here and require source-owner/daemon semantic validation. This extends the
+unshipped schema-5 descriptor, without creating schema 6 or adopting unknown tags.
+`RegistryMutationRequest::new` retains the complete original opaque
 operation ID, original journal generation, independent registry revision,
 owner-computed command digest and canonical operation/delta envelope.
 
