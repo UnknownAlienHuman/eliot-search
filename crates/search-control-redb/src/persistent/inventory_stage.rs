@@ -199,6 +199,56 @@ impl OwnerInventoryStage {
         Ok(())
     }
 
+    fn seal_inventory<F, E>(
+        &self,
+        summary: &LegacyInventorySummary,
+        check: &OriginalCheck<'_, F, E>,
+    ) -> Result<Vec<u8>, ControlError>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        check.reserve(Work::Allocate(
+            709 + std::mem::size_of::<LegacyInventoryDecoder>(),
+        ))?;
+        check.reserve(Work::Process(709))?;
+        let sealed = seal(summary);
+        check.reserve(Work::Write(sealed.len()))?;
+        let commit = (|| {
+            check.check(Point::BeforeWrite)?;
+            let mut write = self
+                .source
+                .owner
+                .bootstrap
+                .journal
+                .database
+                .begin_write()
+                .map_err(|_| ControlError::StoreUnavailable)?;
+            write.set_durability(Durability::Immediate);
+            {
+                let mut meta = write
+                    .open_table(META)
+                    .map_err(|_| ControlError::StoreCorrupt)?;
+                require(&meta, "profile", &self.marker)?;
+                require(&meta, "progress", &progress(&self.flushed))?;
+                if meta.len().map_err(|_| ControlError::StoreUnavailable)? != 2
+                    || meta
+                        .insert("sealed", sealed.as_slice())
+                        .map_err(|_| ControlError::StoreUnavailable)?
+                        .is_some()
+                {
+                    return Err(ControlError::MigrationUnverified);
+                }
+            }
+            check.check(Point::BeforeCommit)?;
+            write
+                .commit()
+                .map_err(|_| ControlError::CommitOutcomeUnknown)?;
+            check.check(Point::AfterCommit)
+        })();
+        commit.map_err(|_| ControlError::CommitOutcomeUnknown)?;
+        Ok(sealed)
+    }
+
     /// Seals only the fully decoded stream matching its original published artifact.
     /// # Errors
     /// Missing/footer/proof mismatch or unknown seal produces no readback capability.
@@ -237,45 +287,7 @@ impl OwnerInventoryStage {
                 return Err(ControlError::MigrationUnverified);
             }
             self.flush(&check)?;
-            check.reserve(Work::Allocate(
-                709 + std::mem::size_of::<LegacyInventoryDecoder>(),
-            ))?;
-            check.reserve(Work::Process(709))?;
-            let sealed = seal(&summary);
-            check.reserve(Work::Write(sealed.len()))?;
-            let commit = (|| {
-                check.check(Point::BeforeWrite)?;
-                let mut write = self
-                    .source
-                    .owner
-                    .bootstrap
-                    .journal
-                    .database
-                    .begin_write()
-                    .map_err(|_| ControlError::StoreUnavailable)?;
-                write.set_durability(Durability::Immediate);
-                {
-                    let mut meta = write
-                        .open_table(META)
-                        .map_err(|_| ControlError::StoreCorrupt)?;
-                    require(&meta, "profile", &self.marker)?;
-                    require(&meta, "progress", &progress(&self.flushed))?;
-                    if meta.len().map_err(|_| ControlError::StoreUnavailable)? != 2
-                        || meta
-                            .insert("sealed", sealed.as_slice())
-                            .map_err(|_| ControlError::StoreUnavailable)?
-                            .is_some()
-                    {
-                        return Err(ControlError::MigrationUnverified);
-                    }
-                }
-                check.check(Point::BeforeCommit)?;
-                write
-                    .commit()
-                    .map_err(|_| ControlError::CommitOutcomeUnknown)?;
-                check.check(Point::AfterCommit)
-            })();
-            commit.map_err(|_| ControlError::CommitOutcomeUnknown)?;
+            let sealed = self.seal_inventory(&summary, &check)?;
             self.source.owner.bootstrap.journal.verify_checked(&check)?;
             check.reserve(Work::Read(MAX_SOURCE_IMPORT_ROW_BYTES))?;
             let transaction = self

@@ -270,3 +270,19 @@ Any comparison error latches; retry or finish cannot produce a receipt. The rece
 retains the original database owner and reports
 `complete_inventory_candidate_not_performed`. It grants no full inventory adoption,
 cutover, serving, restart reconciliation or cleanup authority.
+
+## Original all-row inventory stage
+
+`OwnerSourceMappedReceipt::into_inventory_stage` consumes the original owner;
+`OwnerInventoryStage::{push,begin_readback}` decodes and batches every canonical
+inventory row in that same database. It seals only the exact original published
+chain/rows/bytes, with encoder-derived complete family accounting. No caller
+summary, current path or digest can construct this state.
+
+`OwnerInventoryReadback::{compare,finish}` compares a complete regenerated stream,
+the persisted full denominator and every source-event index binding. Errors latch
+and cannot produce `OwnerInventoryMappedReceipt`. The receipt exposes all five
+source counts and all twelve family status arrays; it grants no semantic candidate,
+normal journal, serving, restart or cleanup authority. Old four/seven-table profiles
+remain separately admitted. Original work/deadline/cancellation applies to every
+buffer/decoder/hash/read/write phase. Native execution remains #215.

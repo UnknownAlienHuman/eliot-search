@@ -95,6 +95,25 @@ installed qualification remain #215.
 
 ## Atomic record preconditions
 
+## Complete inventory metadata adoption (#509)
+
+The original source-mapped receipt can consume itself into `OwnerInventoryStage`.
+It adds two bounded metadata tables to the same inactive database, under the
+explicit nine-table profile. Normal control and old import opens reject this
+profile. The strict inventory decoder reuses the existing H/I/E/T/F encoder;
+every row, all twelve terminals and the footer must re-encode exactly.
+
+Adoption uses 256-row batches and binds the full stream chain, row count and byte
+count to the original published inventory. Readback compares every independently
+recompiled row and verifies each source event through the existing source-map
+indices and all five accounting dimensions. Refusal latches. A duplicate terminal
+after all families refuses rather than indexing past the family array.
+
+The opaque receipt reports all family counts and denominator outcomes, plus the
+remaining `complete_semantic_candidate_not_performed` gap. Metadata references do
+not substitute for semantic root/publication/security adoption, a verified cutover
+candidate, restart linkage or cleanup. Native/installed qualification remains #215.
+
 `ConditionalControlMutation` combines an existing `ControlMutation` with bounded
 `ControlRecordCondition::exact(key, value)` or `::absent(key)` assertions. The public
 `transact_conditionally` and `recover_conditional_transaction` entrypoints require an

@@ -190,3 +190,31 @@ fn inventory_readback_original_refusal_is_sticky_and_never_yields_receipt() {
         error.control
     );
 }
+
+#[test]
+fn duplicate_terminal_after_all_twelve_families_refuses_without_panicking() {
+    let inventory = stream(&rows());
+    let observed = binding();
+    let mut decoder = LegacyInventoryDecoder::new(
+        LegacyInventoryBinding {
+            owner: observed.owner,
+            target: observed.target,
+            namespace: observed.legacy_namespace,
+            snapshot: observed.catalog_snapshot,
+            registration: observed.registration,
+        },
+        LegacyInventoryLimits::BASELINE,
+    )
+    .unwrap();
+    for row in &inventory[..inventory.len() - 1] {
+        decoder.push(row).unwrap();
+    }
+    assert_eq!(
+        decoder.push(&inventory[inventory.len() - 2]).err().unwrap(),
+        LegacyInventoryError::Accounting
+    );
+    assert_eq!(
+        decoder.finish().err().unwrap(),
+        LegacyInventoryError::Accounting
+    );
+}

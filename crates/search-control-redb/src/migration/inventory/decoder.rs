@@ -269,7 +269,8 @@ impl LegacyInventoryDecoder {
             .encoder
             .as_mut()
             .ok_or(LegacyInventoryError::Accounting)?;
-        let family = LegacyInventoryFamily::ALL[encoder.family];
+        let family = *LegacyInventoryFamily::ALL.get(encoder.family)
+            .ok_or(LegacyInventoryError::Accounting)?;
         let counts = encoder.summary.counts[encoder.family];
         let status = super::dominant_status(&counts);
         let incomplete = counts[LegacyInventoryStatus::Gap as usize] > 0
