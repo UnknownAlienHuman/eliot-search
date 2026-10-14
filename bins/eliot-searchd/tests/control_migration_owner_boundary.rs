@@ -66,7 +66,7 @@ fn retained_revision_unprotect_uses_contextual_dpapi_and_preserves_unknown_reaso
     assert!(dpapi.contains("ContextualLegacyRevisionDpapiError::NativeAndContext"));
 
     let child = read(&root, "bins/eliot-searchd/src/owner_composition/kernel/read_child.rs");
-    let clear = child.split("pub(crate) fn migration_account_native_clear(").nth(1).unwrap()
+    let clear = child.split("pub(crate) const fn migration_account_native_clear(").nth(1).unwrap()
         .split("pub(crate) fn migration_deadline").next().unwrap();
     assert!(clear.contains("account_native_clear("));
     assert!(!clear.contains("with_binding("));
