@@ -378,7 +378,12 @@ fn read_exact<E>(
 ) -> Result<(), SourceImportRecordArtifactError<E>> {
     let mut offset = 0;
     while offset < target.len() {
-        let available = fill(reader, deadline, work)?;
+        let available = fill(reader, deadline, work).map_err(|error| match error {
+            SourceImportRecordArtifactError::ReadFailed => {
+                SourceImportRecordArtifactError::ComparisonReadFailed
+            }
+            other => other,
+        })?;
         if available.is_empty() {
             return Err(SourceImportRecordArtifactError::ComparisonReadFailed);
         }
@@ -766,7 +771,13 @@ where
             .reader
             .take()
             .ok_or(SourceImportRecordArtifactError::Closed)?;
-        if !fill(&mut reader, deadline, work)?.is_empty() {
+        let available = fill(&mut reader, deadline, work).map_err(|error| match error {
+            SourceImportRecordArtifactError::ReadFailed => {
+                SourceImportRecordArtifactError::ComparisonReadFailed
+            }
+            other => other,
+        })?;
+        if !available.is_empty() {
             return Err(SourceImportRecordArtifactError::ReadbackMismatch);
         }
         let frozen = self
