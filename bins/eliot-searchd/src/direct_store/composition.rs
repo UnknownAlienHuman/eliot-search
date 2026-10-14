@@ -13,7 +13,12 @@ mod identity;
 #[path = "composition/registry.rs"]
 mod registry;
 
+#[cfg(not(test))]
 pub(super) use admission::AdmissionPolicy;
+// The Git fixture includes this file in a nested canonical module and forwards
+// the same owner type through its crate-visible fixture facade.
+#[cfg(test)]
+pub(crate) use admission::AdmissionPolicy;
 #[cfg(test)]
 pub(crate) use admission::SOURCE_ADMISSION_DENIED;
 #[cfg(test)]
