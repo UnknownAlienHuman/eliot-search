@@ -218,7 +218,7 @@ readback, comparison, preparation and publication methods borrow the existing
 deadline-only APIs use the same kernel with an inert callback. No callback,
 context or renewed allowance is retained in an artifact.
 
-`Open`, `Read`, `Write`, `Allocate`, `Process`, `Observe` and `Checkpoint` work is
+`Open`, `Read`, `Write`, `Allocate`, `Process` and `Checkpoint` work is
 admitted before the corresponding inner operation. Reader processing is charged
 per actual refill, row copying and hashing separately; interrupted I/O attempts
 require fresh admission. The private writer flushes explicitly and never on Drop.
