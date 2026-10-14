@@ -4,7 +4,7 @@ use super::{bootstrap, inventory, redb_import::DaemonImportOutputPlatform,
     temporary_staging_name, sha256};
 use search_contracts::SourceNamespaceId;
 use search_control_redb::{ControlError, MigrationBootstrapFailure, MigrationBootstrapWork};
-use search_control_redb::migration::{SourceImportRecordArtifact, SourceImportRecordArtifactError,
+use search_control_redb::migration::{SourceImportRecordArtifact,
     SourceImportRecordArtifactPublication, SourceImportRecordChain, SourceMappingSummary};
 use search_revision_store::LegacyRevisionObjectWork as Work;
 use std::path::Path;
@@ -61,38 +61,38 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
 fn prepare_source_map(source: &MigrationSource<'_, '_, '_>, target: SourceNamespaceId,
     directory: &Path, input: &NativeMigrationInput<'_, '_, '_>)
     -> Result<(SourceImportRecordArtifactPublication<DaemonImportOutputPlatform>, SourceMappingSummary), String> {
+    // Borrow the admitted operation only; no renewed deadline or meter.
+    let artifact_context = super::inventory::ArtifactContext::new(source);
+    let work = |unit| artifact_context.reserve(unit);
     source.checkpoint()?;
     source.charge(Work::Allocate(256))?;
     let temporary = temporary_staging_name()?;
     source.charge(Work::Open)?;
-    let mut artifact = SourceImportRecordArtifact::create(directory, &temporary,
-        DaemonImportOutputPlatform, input.context.deadline()).map_err(|error| artifact_reason(&error))?;
+    let mut artifact = SourceImportRecordArtifact::create_with_context(directory, &temporary,
+        DaemonImportOutputPlatform, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     let first = source.compile_source_mapping(target, input.context.deadline(), |row| {
         source.charge(Work::Write(row.len()))?;
-        artifact.push(row, input.context.deadline()).map_err(|error| artifact_reason(&error))?;
+        artifact.push_with_context(row, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
     })?;
-    let frozen = artifact.freeze(input.context.deadline()).map_err(|error| artifact_reason(&error))?;
+    let frozen = artifact.freeze_with_context(input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     let chain = *frozen.chain();
     source.charge(Work::Open)?;
-    let mut compare = frozen.begin_readback(input.context.deadline()).map_err(|error| artifact_reason(&error))?;
+    let mut compare = frozen.begin_readback_with_context(input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     let second = source.compile_source_mapping(target, input.context.deadline(), |row| {
         source.charge(Work::Compare(row.len()))?;
-        compare.compare(row, input.context.deadline()).map_err(|error| artifact_reason(&error))?;
+        compare.compare_with_context(row, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
     })?;
     if first != second { return Err("DIRECT_MIGRATION_SOURCE_STAGE_READBACK_MISMATCH".to_owned()); }
     input.context.inventory_reobserve(input)?;
-    let verified = compare.finish(input.context.deadline()).map_err(|error| artifact_reason(&error))?;
+    let verified = compare.finish_with_context(input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     source.charge(Work::Allocate(128))?;
     let name = format!("{}.source-map.v1", sha256::hex(&chain));
-    let publication = verified.prepare_publication(&name, input.context.deadline()).map_err(|error| artifact_reason(&error))?;
+    let publication = verified.prepare_publication_with_context(&name, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     Ok((publication, first))
 }
 
-fn artifact_reason(error: &SourceImportRecordArtifactError<String>) -> String {
-    if matches!(error, SourceImportRecordArtifactError::PublishOutcomeUnknown) { unknown() } else { invalid() }
-}
 fn reason(error: &MigrationBootstrapFailure<String>) -> String {
     if error.first_context.is_some() {
         return "DIRECT_MIGRATION_SOURCE_STAGE_CONTEXT_OUTCOME_UNKNOWN".to_owned();

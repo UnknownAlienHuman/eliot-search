@@ -204,7 +204,8 @@ impl MigrationBootstrap {
             self.write(ATTEMPT_KEY, attempt.clone(), None, OPERATION_KEY, &check)?;
             check.check(Point::BeforeWrite)?;
             dispatched = true;
-            let published = publication.publish_once(deadline)
+            let published = publication
+                .publish_once_with_context(deadline, &|unit| check.reserve(unit))
                 .map_err(|_| ControlError::CommitOutcomeUnknown)?;
             check.check(Point::AfterCommit)?;
             // publish_once syncs/readbacks the same original file identity, rows,
