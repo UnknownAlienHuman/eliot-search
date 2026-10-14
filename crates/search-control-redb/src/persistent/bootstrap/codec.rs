@@ -1,7 +1,7 @@
 //! New finite metadata profile. Existing import/record artifact bytes are unchanged.
 use super::{ControlError, MigrationBootstrapBinding, MigrationBootstrapIdentity,
     MigrationBootstrapIdentityProfile, MigrationBootstrapPlatform};
-use crate::migration::SourceImportRecordArtifactPublication;
+use crate::migration::{SourceImportRecordArtifactPublication, LegacyInventoryProfile};
 use search_contracts::Blake3Digest32;
 
 pub(super) const PROFILE: &[u8] = b"eliot.migration-bootstrap.v1\0released-native-read\0inventory-only\0no-candidate\0key=128;value=4096;records=8;live-bytes=32768;mutation-items=3;receipts=8;cache=8388608;metadata-work=8192;attempts=1;names=200;output-parents=64;utf16-path=32768\0";
@@ -46,12 +46,13 @@ pub(super) fn attempt<P: MigrationBootstrapPlatform>(original: Blake3Digest32,
     let stage = publication.staging_name().to_str().ok_or(ControlError::MigrationUnverified)?;
     let final_name = publication.final_name();
     local_name(stage)?; local_name(final_name)?;
-    if final_name != format!("{}.legacy-inventory.v1", hex(publication.chain())) || stage == final_name
+    let profile = inventory_profile(publication)?;
+    if stage == final_name
         || publication.rows() == 0 || publication.encoded_bytes() == 0
     { return Err(ControlError::MigrationUnverified); }
     let mut bytes = Vec::with_capacity(1024);
     bytes.extend_from_slice(b"eliot.migration-inventory-attempt.v1\0");
-    bytes.extend_from_slice(crate::migration::legacy_inventory_profile_digest().as_bytes());
+    bytes.extend_from_slice(profile.digest().as_bytes());
     bytes.extend_from_slice(original.as_bytes());
     bytes.push(phase);
     identity(&mut bytes, native)?;
@@ -63,6 +64,17 @@ pub(super) fn attempt<P: MigrationBootstrapPlatform>(original: Blake3Digest32,
     bytes.extend_from_slice(&publication.rows().to_le_bytes());
     bytes.extend_from_slice(&publication.encoded_bytes().to_le_bytes());
     Ok(bytes)
+}
+
+pub(super) fn inventory_profile<P: MigrationBootstrapPlatform>(
+    publication: &SourceImportRecordArtifactPublication<P>,
+) -> Result<LegacyInventoryProfile, ControlError> {
+    for profile in [LegacyInventoryProfile::V1, LegacyInventoryProfile::LocationV2] {
+        if publication.final_name() == format!("{}.{}", hex(publication.chain()), profile.artifact_suffix()) {
+            return Ok(profile);
+        }
+    }
+    Err(ControlError::MigrationUnverified)
 }
 
 fn identity(bytes: &mut Vec<u8>, value: MigrationBootstrapIdentity) -> Result<(), ControlError> {

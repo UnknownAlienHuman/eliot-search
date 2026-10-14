@@ -33,6 +33,34 @@ fn binding() -> LegacyInventoryBinding {
     }
 }
 
+#[test]
+fn location_v2_is_explicit_and_old_decoder_keeps_frozen_v1_semantics() {
+    let limits = LegacyInventoryLimits::BASELINE;
+    let mut old = LegacyInventoryEncoder::new(limits).unwrap();
+    assert_eq!(old.header(binding()).unwrap(), expected_header().into_bytes());
+    assert_eq!(LegacyInventoryProfile::V1.digest(), legacy_inventory_profile_digest());
+    assert_ne!(LegacyInventoryProfile::LocationV2.digest(), LegacyInventoryProfile::V1.digest());
+    for selected in [LegacyInventoryProfile::V1, LegacyInventoryProfile::LocationV2] {
+        let mut encoder = LegacyInventoryEncoder::with_profile(limits, selected).unwrap();
+        let mut decoder = LegacyInventoryDecoder::with_profile(binding(), limits, selected).unwrap();
+        let header = encoder.header(binding()).unwrap();
+        assert_eq!(decoder.push(&header).unwrap(), LegacyInventoryDecodedRow::Header);
+        let other = if selected == LegacyInventoryProfile::V1 {
+            LegacyInventoryProfile::LocationV2
+        } else { LegacyInventoryProfile::V1 };
+        let mut mismatch = LegacyInventoryDecoder::with_profile(binding(), limits, other).unwrap();
+        assert!(mismatch.push(&header).is_err());
+        assert!(mismatch.push(&header).is_err());
+        for family in LegacyInventoryFamily::ALL {
+            let row = encoder.end_family(family, LegacyInventoryStatus::AbsentProven, true).unwrap();
+            decoder.push(&row).unwrap();
+        }
+        let (footer, summary) = encoder.finish().unwrap();
+        assert_eq!(decoder.push(&footer).unwrap(), LegacyInventoryDecodedRow::Footer(summary));
+        assert_eq!(decoder.finish().unwrap(), summary);
+    }
+}
+
 fn source_row() -> SourceImportRow {
     SourceImportRow {
         sequence: 1,

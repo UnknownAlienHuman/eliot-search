@@ -2,6 +2,19 @@
 
 **Status:** W1/P02 logical contract; no redb dependency, schema migration or fault evidence is accepted.
 
+Inventory codecs select one explicit LegacyInventoryProfile. Existing constructors
+and descriptor bytes retain V1 basename semantics; LocationV2 selects distinct
+header/footer names, descriptor and artifact suffix. The original publication
+attempt stores that selected descriptor, and its opaque completed proof selects
+both same-database adoption and independent readback decoders. Header/profile
+mismatches refuse rather than reinterpret retained V1 references.
+
+V2 physical subjects are correlation digests over bounded root-relative normal
+native components with explicit platform, count and length framing. Kind 16
+binds failed directory observations, kind 36 successful ones, and kind 37 pairs
+a preparation-reference locator with its semantic key and exact evidence digest.
+These records grant no source, cleanup or cutover authority.
+
 This package owns the bounded durable control journal and immutable control-snapshot reconstruction. It
 is never a searchable corpus and stores no source bodies, extracted text, postings, vectors or ordinary
 query history.

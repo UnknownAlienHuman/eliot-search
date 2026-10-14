@@ -55,7 +55,7 @@ pub use model::{
     SourceLifecycleFlags,
 };
 pub use inventory::{LEGACY_INVENTORY_PROFILE, LEGACY_INVENTORY_FAMILIES,
-    LegacyInventoryFamily, LegacyInventoryStatus, LegacyInventoryOwner,
+    LegacyInventoryProfile, LegacyInventoryFamily, LegacyInventoryStatus, LegacyInventoryOwner,
     LegacyInventoryLimits, LegacyInventoryBinding, LegacyInventorySummary,
     LegacyInventoryError, LegacyInventoryEncoder,
     LegacyInventoryDecodedRow, LegacyInventoryDecoder,

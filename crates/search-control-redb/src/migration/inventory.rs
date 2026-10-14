@@ -11,6 +11,43 @@ pub use decoder::{LegacyInventoryDecodedRow, LegacyInventoryDecoder};
 
 /// Independent inventory wire profile; existing mapping profiles are unchanged.
 pub const LEGACY_INVENTORY_PROFILE: &str = "eliot.legacy-inventory.v1";
+/// Explicit wire semantics; old basename evidence is never a V2 locator.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LegacyInventoryProfile {
+    /// Frozen original basename-reference profile.
+    V1,
+    /// Root-relative, component-framed native physical locator references.
+    LocationV2,
+}
+
+impl LegacyInventoryProfile {
+    /// Exact header/footer profile name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::V1 => LEGACY_INVENTORY_PROFILE,
+            Self::LocationV2 => "eliot.legacy-inventory.v2",
+        }
+    }
+    /// Exact suffix of the original published inventory artifact.
+    #[must_use]
+    pub const fn artifact_suffix(self) -> &'static str {
+        match self {
+            Self::V1 => "legacy-inventory.v1",
+            Self::LocationV2 => "legacy-inventory.v2",
+        }
+    }
+    /// Profile descriptor; neither digest grants migration/cutover authority.
+    #[must_use]
+    pub fn digest(self) -> Sha256Digest32 {
+        match self {
+            Self::V1 => legacy_inventory_profile_digest(),
+            Self::LocationV2 => Sha256Digest32::from_bytes(Sha256::digest(
+                b"eliot.legacy-inventory.v2\0H,I,E,T,F;12-families;7-statuses;page32;row8192;rows2000000;bytes536870912;native-limits-6;name2048;chunk65536;parents8;control134217728;objects68157440;authority-none;recovery-unresolved;physical-subject=sha256(native-locator);locator-domain=eliot-search/legacy-inventory/native-locator/v2;domain-nul;platform-u8:1=utf16be,2=unix-native,3=other-native;components-u16be:0..8;component-length-u32be:1..2048;normal-root-relative-components;kind16=failed-directory-locator;kind22=selected-profile;kind36=observed-directory-locator;kind37=locator,key,evidence;correlation-only"
+            ).into()),
+        }
+    }
+}
 /// Number of mandatory family terminals.
 pub const LEGACY_INVENTORY_FAMILIES: usize = 12;
 
@@ -230,6 +267,7 @@ impl std::error::Error for LegacyInventoryError {}
 
 /// One bounded encoder. Each returned row must be streamed before the next call.
 pub struct LegacyInventoryEncoder {
+    profile: LegacyInventoryProfile,
     limits: LegacyInventoryLimits,
     summary: LegacyInventorySummary,
     family: usize,
@@ -242,7 +280,14 @@ impl LegacyInventoryEncoder {
     /// # Errors
     /// Returns `Limit` for rejected component limits.
     pub fn new(limits: LegacyInventoryLimits) -> Result<Self, LegacyInventoryError> {
+        Self::with_profile(limits, LegacyInventoryProfile::V1)
+    }
+    /// Starts one explicitly selected profile without changing retained V1 bytes.
+    /// # Errors
+    /// Returns Limit for invalid component ceilings.
+    pub fn with_profile(limits: LegacyInventoryLimits, profile: LegacyInventoryProfile) -> Result<Self, LegacyInventoryError> {
         Ok(Self {
+            profile,
             limits: limits.validate()?,
             summary: LegacyInventorySummary::default(),
             family: 0,
@@ -303,8 +348,8 @@ impl LegacyInventoryEncoder {
             return Err(LegacyInventoryError::Accounting);
         }
         let row = self.row(format!(
-            "F\t{LEGACY_INVENTORY_PROFILE}\t12\t{}\t{}\trecovery=unresolved\tcutover=none\n",
-            self.summary.records, self.summary.encoded_bytes
+            "F\t{}\t12\t{}\t{}\trecovery=unresolved\tcutover=none\n",
+            self.profile.name(), self.summary.records, self.summary.encoded_bytes
         ))?;
         Ok((row, self.summary))
     }
@@ -322,7 +367,8 @@ impl LegacyInventoryEncoder {
             |(d, n)| format!("sha256:{}:{n}", hex(d.as_bytes())),
         );
         let row = format!(
-            "H\t{LEGACY_INVENTORY_PROFILE}\t{}\t{}\t{}\t{}\tblake3:{}\tblake3:{}\tblake3:{}\t{}\t{}\t{}\tsha256:{}\tsha256:{}\t{registration}\t{}\t{}\t{}\tnative-limits={},{},{},{},{},{}\tauthority=none\n",
+            "H\t{}\t{}\t{}\t{}\t{}\tblake3:{}\tblake3:{}\tblake3:{}\t{}\t{}\t{}\tsha256:{}\tsha256:{}\t{registration}\t{}\t{}\t{}\tnative-limits={},{},{},{},{},{}\tauthority=none\n",
+            self.profile.name(),
             hex(&o.installation),
             hex(&o.incarnation),
             hex(&o.root),

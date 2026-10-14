@@ -19,6 +19,15 @@ index scratch, comparison bytes and linear permutation work are admitted before
 use. Explicit merge ordering has at most `n * ceil(log2(n))` key comparisons.
 The directory is reobserved after the visitors, not only after enumeration.
 
+The native producer selects eliot.legacy-inventory.v2. Physical subjects bind
+root-relative native component bytes, including tree, parent and shard, with
+length framing and a platform tag. Successful directory observations and decoded
+preparation reference/key pairs retain that binding. The SHA-256 locator is
+correlation only and grants no source, deletion or cutover authority. V1 evidence
+keeps its original basename interpretation in the owning codec; publication and
+same-target adoption retain the exact selected profile. Absolute paths and
+arbitrary bodies do not enter these metadata rows.
+
 One pass-local preparation link view is shared by Preparation and Residue;
 the second complete stream independently rebuilds it. Construction reads each
 retained reference and its target at most once; physical lookups do not reopen

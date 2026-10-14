@@ -70,6 +70,82 @@ pub(super) fn native_name(name: &std::ffi::OsStr) -> Vec<u8> {
     }
 }
 
+// V2 correlation only: root-relative native components, never a source identity
+// or permission to delete. The original operation admits allocation and hashing.
+pub(super) fn locator(
+    source: &MigrationSource<'_, '_, '_>,
+    path: &Path,
+) -> Result<[u8; 32], String> {
+    let bytes = locator_preimage(source.inventory_root(), path, |length| {
+        source.charge(Work::Compare(length))?;
+        source.charge(Work::Allocate(length))
+    })?;
+    fingerprint(source, &bytes)
+}
+
+pub(super) fn child_locator(
+    source: &MigrationSource<'_, '_, '_>,
+    directory: &Path,
+    name: &std::ffi::OsStr,
+) -> Result<[u8; 32], String> {
+    source.charge(Work::Allocate(
+        native_length(directory.as_os_str()).saturating_add(native_length(name)).saturating_add(2),
+    ))?;
+    locator(source, &directory.join(name))
+}
+
+fn locator_preimage(
+    root: &Path,
+    path: &Path,
+    admit: impl FnOnce(usize) -> Result<(), String>,
+) -> Result<Vec<u8>, String> {
+    const DOMAIN: &[u8] = b"eliot-search/legacy-inventory/native-locator/v2\0";
+    let relative = path.strip_prefix(root).map_err(|_| changed())?;
+    let mut count = 0_u16;
+    let mut length = DOMAIN.len() + 3;
+    for part in relative.components() {
+        let Component::Normal(name) = part else { return Err(changed()); };
+        count = count.checked_add(1).ok_or_else(changed)?;
+        let bytes = native_length(name);
+        if usize::from(count) > MAX_PARENTS || bytes == 0 || bytes > NAME_BYTES {
+            return Err(changed());
+        }
+        length = length.checked_add(4 + bytes).ok_or_else(changed)?;
+    }
+    admit(length)?;
+    let mut bytes = Vec::with_capacity(length);
+    bytes.extend_from_slice(DOMAIN);
+    bytes.push(if cfg!(windows) { 1 } else if cfg!(unix) { 2 } else { 3 });
+    bytes.extend_from_slice(&count.to_be_bytes());
+    for part in relative.components() {
+        let Component::Normal(name) = part else { return Err(changed()); };
+        let size = u32::try_from(native_length(name)).map_err(|_| changed())?;
+        bytes.extend_from_slice(&size.to_be_bytes());
+        append_native(&mut bytes, name);
+    }
+    Ok(bytes)
+}
+
+fn native_length(name: &std::ffi::OsStr) -> usize {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        name.encode_wide().count().saturating_mul(2)
+    }
+    #[cfg(not(windows))]
+    { name.as_encoded_bytes().len() }
+}
+
+fn append_native(bytes: &mut Vec<u8>, name: &std::ffi::OsStr) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        for unit in name.encode_wide() { bytes.extend_from_slice(&unit.to_be_bytes()); }
+    }
+    #[cfg(not(windows))]
+    { bytes.extend_from_slice(name.as_encoded_bytes()); }
+}
+
 pub(super) fn is_reparse(metadata: &Metadata) -> bool {
     #[cfg(windows)]
     {
@@ -488,4 +564,49 @@ pub(super) fn fingerprint(
     let digest = sha256::digest(bytes);
     source.checkpoint()?;
     Ok(digest)
+}
+
+#[cfg(test)]
+mod locator_tests {
+    use super::*;
+
+    fn encoded(relative: &str) -> Vec<u8> {
+        let root = Path::new("inventory-root");
+        locator_preimage(root, &root.join(relative), |_| Ok(())).unwrap()
+    }
+
+    #[test]
+    fn location_evidence_distinguishes_parent_tree_and_component_boundaries() {
+        let original = encoded("revisions/aa/note.bin");
+        for relocated in ["revisions/bb/note.bin", "preparation/aa/note.bin",
+            "revisions/a/anote.bin", "revisions/aa-note/bin"] {
+            assert_ne!(sha256::digest(&original), sha256::digest(&encoded(relocated)));
+        }
+        let other_root = Path::new("another-local-root");
+        assert_eq!(original, locator_preimage(other_root,
+            &other_root.join("revisions/aa/note.bin"), |_| Ok(())).unwrap());
+    }
+
+    #[test]
+    fn invalid_locator_refuses_before_allocation_admission() {
+        let root = Path::new("inventory-root");
+        for path in [Path::new("elsewhere/item").to_path_buf(),
+            root.join("../outside"), root.join("a/b/c/d/e/f/g/h/i"),
+            root.join("x".repeat(NAME_BYTES + 1))] {
+            assert!(locator_preimage(root, &path, |_| panic!("must not admit")).is_err());
+        }
+        assert!(locator_preimage(root, &root.join("valid"),
+            |_| Err("ORIGINAL_REFUSAL".to_owned())).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_locator_preserves_nonunicode_utf16_without_lossy_conversion() {
+        use std::os::windows::ffi::OsStringExt;
+        let root = Path::new("inventory-root");
+        let name = OsString::from_wide(&[0xd800, 0x0061]);
+        let bytes = locator_preimage(root, &root.join(name), |_| Ok(())).unwrap();
+        assert!(bytes.ends_with(&[0, 0, 0, 4, 0xd8, 0, 0, 0x61]));
+        assert_ne!(bytes, encoded("\u{fffd}a"));
+    }
 }
