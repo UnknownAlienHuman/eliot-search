@@ -110,6 +110,18 @@ impl RevisionProtector {
         )?);
         dpapi_charge(&mut context, LegacyRevisionDpapiWork::Process(inner.len()))?;
         let plaintext_slice = Self::decode_unprotected_inner(&inner, binding)?;
+        // This site owns the final plaintext buffer, so it reserves it explicitly:
+        // the allocation itself plus the copy and its guaranteed `Zeroizing` wipe,
+        // matching the ciphertext copy above and the shared kernel `copy`.
+        // `decode_unprotected_inner` validated this length against the immutable
+        // binding, so `2 * len` cannot overflow on a real input; the checked form
+        // still refuses instead of wrapping, before any allocation is attempted.
+        let plaintext_bytes = plaintext_slice.len();
+        let plaintext_process_bytes = plaintext_bytes
+            .checked_mul(2)
+            .ok_or_else(|| "DPAPI_LEGACY_REVISION_INPUT_TOO_LARGE".to_owned())?;
+        dpapi_charge(&mut context, LegacyRevisionDpapiWork::Allocate(plaintext_bytes))?;
+        dpapi_charge(&mut context, LegacyRevisionDpapiWork::Process(plaintext_process_bytes))?;
         let mut plaintext = Zeroizing::new(Vec::new());
         plaintext.try_reserve_exact(plaintext_slice.len())
             .map_err(|_| "DPAPI_LEGACY_REVISION_ALLOCATION_FAILED".to_owned())?;
