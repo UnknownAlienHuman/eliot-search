@@ -170,7 +170,7 @@ impl NativeReadOperation<'_> {
 
     /// Mandatory cleanup accounting bypasses sticky checkpoints but reuses the
     /// admitted request and meter. It never admits further ordinary work.
-    pub(crate) fn migration_account_native_clear(
+    pub(crate) const fn migration_account_native_clear(
         &mut self, actual_bytes: usize,
     ) -> Result<(), (OwnerError, bool)> {
         let first_refusal = self.owner.poisoned;
