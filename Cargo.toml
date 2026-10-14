@@ -19,7 +19,6 @@ members = [
     "crates/search-prep/search-unitizer",
     "crates/search-prep/search-code-enricher",
     "crates/search-lexical",
-    "crates/search-model-provider",
     "crates/search-index-qdrant/search-projection-planner",
     "crates/search-index-qdrant/search-point-identity",
     "crates/search-index-qdrant/search-qdrant-supervisor",
@@ -80,7 +79,6 @@ search-materializer = { path = "crates/search-prep/search-materializer" }
 search-unitizer = { path = "crates/search-prep/search-unitizer" }
 search-code-enricher = { path = "crates/search-prep/search-code-enricher" }
 search-lexical = { path = "crates/search-lexical" }
-search-model-provider = { path = "crates/search-model-provider" }
 search-projection-planner = { path = "crates/search-index-qdrant/search-projection-planner" }
 search-point-identity = { path = "crates/search-index-qdrant/search-point-identity" }
 search-qdrant-supervisor = { path = "crates/search-index-qdrant/search-qdrant-supervisor" }
