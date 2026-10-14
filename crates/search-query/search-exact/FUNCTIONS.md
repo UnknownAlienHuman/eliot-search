@@ -3,6 +3,21 @@
 **Status:** SOURCE_PRESENT for literal, proof and exact-spine source; authoritative
 denominator/readback integration and installed qualification remain incomplete.
 
+The pure checkpoint API now accepts plan, completed IDs and paired receipt
+references without a caller digest callback. It hashes the bounded payload through
+the shared real BLAKE3 primitive under eliot/raw/exact-checkpoint/v2. The payload
+contains fixed-width plan ID/fingerprint/denominator/predicate digests, a u64
+big-endian pair count, then each revision ID and u64 big-endian receipt length
+followed by exact receipt bytes. Creation and resume reuse this one encoder and
+require unique completed IDs from the frozen denominator. Resume recomputes the
+payload before skipping work and compares it with both stored and independently
+retained expected digests. Injected V1 checkpoints are not reinterpreted as V2.
+Receipt execution provenance and live product authorization remain owned by #249.
+
+The executor reserves each attempted item's full byte allowance before dispatch
+and never refunds a failed predicate. Successful scanned coverage is separate;
+all denominator items retain explicit failures when allowance is exhausted.
+
 `literal::scan_chunks` uses one private Aho-Corasick 1.1.5 contiguous NFA with Standard
 semantics, caller-selected ASCII insensitivity and prefilter disabled. It preserves
 validation precedence, borrowed chunk state, overlaps, byte coordinates and the
