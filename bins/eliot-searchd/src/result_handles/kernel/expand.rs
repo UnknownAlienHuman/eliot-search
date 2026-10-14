@@ -233,4 +233,5 @@ impl<'a> PreparedExpansion<'a> {
 }
 
 #[cfg(test)]
+#[path = "expand/deadline_tests.rs"]
 mod deadline_tests;

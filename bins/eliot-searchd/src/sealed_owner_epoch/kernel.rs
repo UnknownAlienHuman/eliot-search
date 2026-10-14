@@ -29,4 +29,5 @@ pub fn latest_sealed_head(
 }
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

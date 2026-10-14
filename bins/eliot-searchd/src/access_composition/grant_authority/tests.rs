@@ -196,7 +196,7 @@ impl StandaloneGrantIssuer for CountingIssuer {
     }
 }
 
-fn authority(
+fn fixture_authority(
     source: SequencedPolicySource,
     issuer_calls: Rc<Cell<usize>>,
 ) -> SessionBoundGrantAuthority<SequencedPolicySource, CountingIssuer> {
@@ -213,7 +213,7 @@ fn active_authenticated_standalone_session_mints_after_equal_policy_reads() {
         [policy.clone(), policy.clone()],
         Rc::clone(&source_calls),
     );
-    let mut authority = authority(source, Rc::clone(&issuer_calls));
+    let mut authority = fixture_authority(source, Rc::clone(&issuer_calls));
 
     let grant = authority
         .mint(&session, &request())
@@ -233,7 +233,7 @@ fn inactive_or_non_standalone_session_never_reads_policy_or_calls_issuer() {
         [policy(), policy()],
         Rc::clone(&source_calls),
     );
-    let mut authority = authority(source, Rc::clone(&issuer_calls));
+    let mut authority = fixture_authority(source, Rc::clone(&issuer_calls));
     let mut inactive = bound_session(PeerRole::StandaloneCli);
     let _ = inactive.disconnect();
     assert_eq!(
@@ -249,7 +249,7 @@ fn inactive_or_non_standalone_session_never_reads_policy_or_calls_issuer() {
         [policy(), policy()],
         Rc::clone(&source_calls),
     );
-    let mut authority = authority(source, Rc::clone(&issuer_calls));
+    let mut authority = fixture_authority(source, Rc::clone(&issuer_calls));
     let managed = bound_session(PeerRole::ClientAdapter);
     assert_eq!(
         authority.mint(&managed, &request()),
@@ -280,7 +280,7 @@ fn foreign_binding_or_incarnation_policy_fails_before_issuer() {
             [foreign.clone(), foreign],
             Rc::clone(&source_calls),
         );
-        let mut authority = authority(source, Rc::clone(&issuer_calls));
+        let mut authority = fixture_authority(source, Rc::clone(&issuer_calls));
         assert_eq!(
             authority.mint(&bound_session(PeerRole::StandaloneCli), &request()),
             Err(GrantAuthorityError::PolicyBindingMismatch)
@@ -302,7 +302,7 @@ fn policy_change_or_second_read_failure_discards_issued_claims() {
         [before, after],
         Rc::clone(&source_calls),
     );
-    let mut authority = authority(source, Rc::clone(&issuer_calls));
+    let mut authority = fixture_authority(source, Rc::clone(&issuer_calls));
     assert_eq!(
         authority.mint(&session, &request()),
         Err(GrantAuthorityError::PolicyChangedDuringIssuance)
@@ -317,7 +317,7 @@ fn policy_change_or_second_read_failure_discards_issued_claims() {
         Rc::clone(&source_calls),
     );
     source.fail_on_call = Some(2);
-    let mut authority = authority(source, Rc::clone(&issuer_calls));
+    let mut authority = fixture_authority(source, Rc::clone(&issuer_calls));
     assert_eq!(
         authority.mint(&session, &request()),
         Err(GrantAuthorityError::PolicyChangedDuringIssuance)
@@ -335,7 +335,7 @@ fn exact_mint_failure_is_preserved_and_skips_second_policy_read() {
         [policy(), policy()],
         Rc::clone(&source_calls),
     );
-    let mut authority = authority(source, Rc::clone(&issuer_calls));
+    let mut authority = fixture_authority(source, Rc::clone(&issuer_calls));
     let mut request = request();
     request.binding_id = BindingId::from_bytes([88; 16]);
 

@@ -19,4 +19,5 @@ pub use model::*;
 pub use spec::*;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

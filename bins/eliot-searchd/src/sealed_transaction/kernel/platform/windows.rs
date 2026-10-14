@@ -15,4 +15,5 @@ pub(crate) use put::put_idempotent;
 pub(crate) use status::{inspect_transaction, transaction_status};
 
 #[cfg(test)]
+#[path = "windows/tests.rs"]
 mod tests;

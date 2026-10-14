@@ -12,4 +12,5 @@ pub use owner::*;
 pub use scan::*;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

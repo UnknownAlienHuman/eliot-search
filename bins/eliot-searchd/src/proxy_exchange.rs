@@ -18,4 +18,5 @@ pub(super) use parser::event_name;
 pub(super) use reply::Reply;
 
 #[cfg(test)]
+#[path = "proxy_exchange/tests.rs"]
 mod tests;

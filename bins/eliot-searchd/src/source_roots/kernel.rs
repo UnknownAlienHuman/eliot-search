@@ -40,4 +40,5 @@ pub use spec::{
 pub(super) use spec::HEADER;
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

@@ -17,4 +17,5 @@ pub use model::{
 pub use spec::{MAX_OPERATION_ID_BYTES, SealedTransactionError};
 
 #[cfg(test)]
+#[path = "kernel/tests.rs"]
 mod tests;

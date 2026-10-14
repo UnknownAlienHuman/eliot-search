@@ -10,6 +10,7 @@ use search_os_secrets::{
 #[cfg(windows)]
 use zeroize::Zeroizing;
 
+use crate::sha256;
 use super::*;
 
 struct TestDigest;
