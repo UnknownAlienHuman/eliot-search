@@ -231,9 +231,6 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
             .operation
             .try_borrow_mut()
             .map_err(|_| OwnerError::OwnerOperationConflict.code().to_owned())?;
-        let owner = operation
-            .migration_inventory_owner()
-            .map_err(|error| error.code().to_owned())?;
         let namespace = operation
             .namespace_bytes()
             .map_err(|error| error.code().to_owned())?;
@@ -245,10 +242,17 @@ impl<'operation, 'owner> MigrationContext<'operation, 'owner> {
                 namespace.len() + log.len(),
             ))
             .map_err(|error| error.code().to_owned())?;
+        // These are private observations of the already admitted control
+        // handles, not source-body reads. The owner observation performs the
+        // complete locator/access/owner/key/barrier check after both reads and
+        // before any compared metadata can escape this transaction.
+        let owner = operation
+            .migration_inventory_owner()
+            .map_err(|error| error.code().to_owned())?;
         if owner != input.inventory_owner || namespace != input.namespace || log != input.log {
             return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
         }
-        operation.verify().map_err(|error| error.code().to_owned())
+        Ok(())
     }
 
     pub(crate) fn checkpoint(&self) -> Result<(), String> {
