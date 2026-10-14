@@ -15,6 +15,7 @@
 use std::fs::{self, File, Metadata};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeroize::Zeroizing;
 
 use search_materializer::{
     LegacyPreparationArtifactError, LegacyPreparationArtifactPlatform,
@@ -42,13 +43,13 @@ pub(super) fn read_plaintext_path(
     path: &Path,
     metadata: &RevisionMetadata,
 ) -> Result<Vec<u8>, String> {
-    let bytes = read_revision_object(
+    let mut bytes = Zeroizing::new(read_revision_object(
         path,
         MAX_SCAN_INPUT_BYTES,
         "DIRECT_REVISION_READ_ERROR",
-    )?;
+    )?);
     verify_plaintext(metadata, &bytes)?;
-    Ok(bytes)
+    Ok(std::mem::take(&mut *bytes))
 }
 
 pub(super) fn read_regular_file(
@@ -75,12 +76,12 @@ pub(super) fn read_revision_object_with_context(
     path: &Path,
     max_bytes: usize,
     context: &MigrationContext<'_, '_>,
-) -> Result<Vec<u8>, String> {
+) -> Result<Zeroizing<Vec<u8>>, String> {
     let mut object_context = context;
     read_legacy_revision_object_with_context(
         &DaemonImmutableObjectPlatform, &mut object_context, path, max_bytes,
     )
-    .map(search_revision_store::ContextualRevisionObjectRead::into_bytes)
+    .map(|observed| Zeroizing::new(observed.into_bytes()))
     .map_err(|error| {
         error.context_cause().cloned().unwrap_or_else(|| match error.object_code() {
             Some("REVISION_OBJECT_PARENT_MISSING") => "DIRECT_REVISION_PARENT_MISSING",

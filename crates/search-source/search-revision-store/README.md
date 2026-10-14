@@ -50,3 +50,8 @@ context, request reconciliation and installed qualification remain #355/#356,
 - **Delivery wave:** W2 / P04
 - **Soft source-line target:** 8,000
 - **Agent instructions:** [AGENTS.md](AGENTS.md)
+
+Immutable-object buffers have private zeroizing ownership through every read
+refusal and post-read identity check. Explicit legacy byte extraction transfers
+cleanup responsibility to the caller. This memory-lifetime guarantee does not
+interpret source contents or grant source, decryption or deletion authority.

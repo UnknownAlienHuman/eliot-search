@@ -53,11 +53,10 @@ impl<I> LegacyRevisionObjectRead<I> {
     /// Consumes the observation and returns its exact bytes.
     #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
-        // `identity` is moved out before the buffer, so the guard is the only
-        // thing this call still owns when it wipes and then hands over the
-        // still-charged reserve. Nothing fallible happens between the take and
-        // the return.
-        let LegacyRevisionObjectRead { mut bytes, identity } = self;
+        // Keep the buffer guarded while identity is released. The explicit
+        // legacy handoff then transfers the unchanged allocation without a
+        // fallible step; the receiving caller owns its cleanup.
+        let Self { mut bytes, identity } = self;
         drop(identity);
         mem::take(&mut *bytes)
     }

@@ -651,6 +651,13 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
         let capacity = size
             .checked_add(1)
             .ok_or(Failure::Object(ObjectError::SizeInvalid))?;
+        // Admit the eventual bounded wipe before any bytes can be read.
+        // Drop still cleans up after the original context has refused.
+        self.call(
+            LegacyRevisionObjectWork::Compare(capacity),
+            ContextualRevisionObjectEffect::NotAttempted,
+            || Ok(()),
+        )?;
         let mut bytes = self.call(
             LegacyRevisionObjectWork::Allocate(capacity),
             ContextualRevisionObjectEffect::NotAttempted,

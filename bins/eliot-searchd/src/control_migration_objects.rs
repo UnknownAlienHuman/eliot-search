@@ -363,11 +363,11 @@ fn read_optional(
     match inspected {
         Ok(_) => {
             let read = context.map_or_else(
-                || read_regular_file(path, maximum, "DIRECT_REVISION_OBJECT_READ_FAILED"),
+                || read_regular_file(path, maximum, "DIRECT_REVISION_OBJECT_READ_FAILED").map(Zeroizing::new),
                 |context| read_revision_object_with_context(path, maximum, context),
             );
             revision_checkpoint(deadline, context)?;
-            read.map(Zeroizing::new).map(Some)
+            read.map(Some)
         }
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
         Err(_) => Err("DIRECT_REVISION_OBJECT_INSPECTION_FAILED".to_owned()),
