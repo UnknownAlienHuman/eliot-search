@@ -355,6 +355,11 @@
       "state": "OPEN",
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/528",
       "reviewed_at": "2026-10-14"
+    },
+    "529": {
+      "state": "OPEN",
+      "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/529",
+      "reviewed_at": "2026-10-14"
     }
   },
   "sites": [
@@ -364,7 +369,7 @@
       "signal": "dependency-review",
       "count": 1,
       "test": false,
-      "source_sha256": "9903c5542712417fe51d0260018dc1a3e5189a932f91fbba407cb4139bf7a6f7",
+      "source_sha256": "e8a58f3665b757d4bd4ac8d38effaa7962137e21ce1db37194040903df3957b8",
       "classification": "dependency-edge",
       "owner_issue": 237,
       "phase": "accepted",
@@ -376,7 +381,7 @@
       "signal": "dependency-review",
       "count": 1,
       "test": false,
-      "source_sha256": "9903c5542712417fe51d0260018dc1a3e5189a932f91fbba407cb4139bf7a6f7",
+      "source_sha256": "e8a58f3665b757d4bd4ac8d38effaa7962137e21ce1db37194040903df3957b8",
       "classification": "dependency-edge",
       "owner_issue": 237,
       "phase": "accepted",
@@ -45247,78 +45252,6 @@
       "source_sha256": "e650cafca57498c83e164937dc2ecd2c4638aa88f3a0a926656597a64a13136c",
       "classification": "opaque-value-use",
       "owner_issue": 237,
-      "phase": "accepted",
-      "reason": "This exact AST key is a type, import or interface reference only; it proves no algorithm execution. Body calls, constructors and macro definitions are separately inventoried and reviewed."
-    },
-    {
-      "path": "crates/search-research-export-adapter/src/export.rs",
-      "symbol": "ExportManifest",
-      "signal": "digest-type-review",
-      "count": 1,
-      "test": false,
-      "source_sha256": "1fe37fe008a6bc8559cdf6b38c788abdf914a8466e88370d04a700187ce4979f",
-      "classification": "opaque-value-use",
-      "owner_issue": 216,
-      "phase": "accepted",
-      "reason": "This exact AST key is a type, import or interface reference only; it proves no algorithm execution. Body calls, constructors and macro definitions are separately inventoried and reviewed."
-    },
-    {
-      "path": "crates/search-research-export-adapter/src/export.rs",
-      "symbol": "ResearchExportBuilder",
-      "signal": "digest-type-review",
-      "count": 1,
-      "test": false,
-      "source_sha256": "1fe37fe008a6bc8559cdf6b38c788abdf914a8466e88370d04a700187ce4979f",
-      "classification": "opaque-value-use",
-      "owner_issue": 216,
-      "phase": "accepted",
-      "reason": "This exact AST key is a type, import or interface reference only; it proves no algorithm execution. Body calls, constructors and macro definitions are separately inventoried and reviewed."
-    },
-    {
-      "path": "crates/search-research-export-adapter/src/export.rs",
-      "symbol": "ResearchItem",
-      "signal": "digest-type-review",
-      "count": 1,
-      "test": false,
-      "source_sha256": "1fe37fe008a6bc8559cdf6b38c788abdf914a8466e88370d04a700187ce4979f",
-      "classification": "opaque-value-use",
-      "owner_issue": 216,
-      "phase": "accepted",
-      "reason": "This exact AST key is a type, import or interface reference only; it proves no algorithm execution. Body calls, constructors and macro definitions are separately inventoried and reviewed."
-    },
-    {
-      "path": "crates/search-research-export-adapter/src/export.rs",
-      "symbol": "impl[ResearchExportBuilder]::finalize",
-      "signal": "digest-type-review",
-      "count": 1,
-      "test": false,
-      "source_sha256": "1fe37fe008a6bc8559cdf6b38c788abdf914a8466e88370d04a700187ce4979f",
-      "classification": "opaque-value-use",
-      "owner_issue": 216,
-      "phase": "accepted",
-      "reason": "This exact AST key is a type, import or interface reference only; it proves no algorithm execution. Body calls, constructors and macro definitions are separately inventoried and reviewed."
-    },
-    {
-      "path": "crates/search-research-export-adapter/src/export.rs",
-      "symbol": "impl[ResearchExportBuilder]::push_item",
-      "signal": "digest-type-review",
-      "count": 1,
-      "test": false,
-      "source_sha256": "1fe37fe008a6bc8559cdf6b38c788abdf914a8466e88370d04a700187ce4979f",
-      "classification": "opaque-value-use",
-      "owner_issue": 216,
-      "phase": "accepted",
-      "reason": "This exact AST key is a type, import or interface reference only; it proves no algorithm execution. Body calls, constructors and macro definitions are separately inventoried and reviewed."
-    },
-    {
-      "path": "crates/search-research-export-adapter/src/export.rs",
-      "symbol": "use[search_contracts::{group}]",
-      "signal": "digest-import-review",
-      "count": 1,
-      "test": false,
-      "source_sha256": "1fe37fe008a6bc8559cdf6b38c788abdf914a8466e88370d04a700187ce4979f",
-      "classification": "opaque-value-use",
-      "owner_issue": 216,
       "phase": "accepted",
       "reason": "This exact AST key is a type, import or interface reference only; it proves no algorithm execution. Body calls, constructors and macro definitions are separately inventoried and reviewed."
     },

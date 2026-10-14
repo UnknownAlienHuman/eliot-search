@@ -1,6 +1,6 @@
 schema_version = 1
 project = "eliot-search"
-status = "BOUNDED_PACKAGE_MAP_NOT_IMPLEMENTED"
+status = "DOCUMENTATION_ONLY_NOT_IMPLEMENTED"
 package = "search-research-export-adapter"
 path = "crates/search-research-export-adapter"
 kind = "lib"
@@ -13,12 +13,13 @@ assignment = "swarm/assignments/search-research-export-adapter.md"
 function_source = "FOUNDATION_CONTRACT"
 qualification = "NONE"
 config_sections = []
-declared_dependencies = ["search-contracts", "search-domain", "search-ports", "search-provider-protocol"]
+# Proposed dependencies belong to the preserved design, not a current Cargo closure.
+declared_dependencies = []
 module_count = 10
 operation_count = 10
 documentation_node_count = 99
 principle_node_count = 1
-outbound_dependency_count = 4
+outbound_dependency_count = 0
 inbound_dependency_count = 0
 architecture_relation_count = 8
 configuration_relation_count = 0
