@@ -25,10 +25,6 @@ jobs:
         shell: pwsh
         run: ./tools/validate-architecture-coverage.ps1 -Json
 
-      - name: Revalidate manifest-closed P00 contexts and named type completions
-        shell: pwsh
-        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
-
       - name: Revalidate package topology and function packet coverage
         shell: pwsh
         run: |

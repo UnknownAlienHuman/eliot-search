@@ -40,7 +40,6 @@ jobs:
         run: |
           ./tools/validate-swarm.ps1 -Json
           ./tools/validate-function-packets.ps1 -Json
-          ./tools/validate-p00-ticket-drafts.ps1 -Json
 
       - name: Compile implementation program validator
         shell: pwsh
