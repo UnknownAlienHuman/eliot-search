@@ -82,3 +82,12 @@ pub use search_contracts::protocol::{JsonFramePayload, ProviderEnvelope};
 pub use search_contracts::{ProtocolRange, ProtocolVersion, RequestId};
 
 pub use api::*;
+
+/// Additive progressive evidence/orientation frame wire schema (#213).
+pub use frame::{
+    decode_evidence_frame, decode_evidence_request, decode_evidence_result, decode_orient_scope_request,
+    decode_retrieve_evidence_request, encode_evidence_frame, encode_evidence_request, encode_evidence_result,
+    encode_orient_scope_request, encode_retrieve_evidence_request, evidence_frame_order,
+    peek_evidence_frame, EVIDENCE_FRAME_SCHEMA_VERSION, EVIDENCE_RECIPE_SCHEMA_VERSION,
+    EvidenceRecipeRequestV2, EvidenceRecipeResultV2,
+};

@@ -19,6 +19,16 @@ mod json;
 mod transport;
 
 pub use client::{ClientEnvelopeCodec, ServerEnvelopeCodec};
+pub use client::evidence_schema::{
+    decode_evidence_request, decode_evidence_result, decode_orient_scope_request, decode_retrieve_evidence_request,
+    encode_evidence_request, encode_evidence_result, encode_orient_scope_request, encode_retrieve_evidence_request,
+    EvidenceRecipeRequestV2, EvidenceRecipeResultV2, EVIDENCE_RECIPE_SCHEMA_VERSION,
+};
+
+pub use client::evidence_frames_schema::{
+    decode_evidence_frame, encode_evidence_frame, evidence_frame_order, peek_evidence_frame,
+    EVIDENCE_FRAME_SCHEMA_VERSION,
+};
 pub(crate) use client::{decode_grant_response_schema, encode_grant_response_schema};
 pub use transport::{TypedRecordBuffer, TypedTransportProfileV1};
 

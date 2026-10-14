@@ -1,4 +1,4 @@
-//! #386 exact-byte compatibility vectors. AUTHORED_NOT_RUN.
+//! #386 exact-byte compatibility vectors. `AUTHORED_NOT_RUN`.
 use search_contracts::{
     CanonicalDigestDomain, ContractErrorKind, DigestInputLimit, MAX_CANONICAL_BYTES,
     sha256_exact_bytes, sha256_raw,
