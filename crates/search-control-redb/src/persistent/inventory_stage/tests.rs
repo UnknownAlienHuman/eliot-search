@@ -13,8 +13,12 @@ fn okay(_: Work) -> Result<(), ()> {
 }
 
 fn stream(events: &[SourceImportRow]) -> Vec<Vec<u8>> {
+    stream_profile(events, crate::migration::LegacyInventoryProfile::V1)
+}
+
+fn stream_profile(events: &[SourceImportRow], profile: crate::migration::LegacyInventoryProfile) -> Vec<Vec<u8>> {
     let observed = binding();
-    let mut encoder = LegacyInventoryEncoder::new(LegacyInventoryLimits::BASELINE).unwrap();
+    let mut encoder = LegacyInventoryEncoder::with_profile(LegacyInventoryLimits::BASELINE, profile).unwrap();
     let mut result = vec![
         encoder
             .header(LegacyInventoryBinding {
@@ -42,6 +46,10 @@ fn stream(events: &[SourceImportRow]) -> Vec<Vec<u8>> {
 }
 
 fn mapped(scratch: &Scratch, inventory: &[Vec<u8>]) -> OwnerSourceMappedReceipt {
+    mapped_profile(scratch, inventory, crate::migration::LegacyInventoryProfile::V1)
+}
+
+fn mapped_profile(scratch: &Scratch, inventory: &[Vec<u8>], profile: crate::migration::LegacyInventoryProfile) -> OwnerSourceMappedReceipt {
     let mut bootstrap =
         MigrationBootstrap::create(scratch.file(), binding(), deadline(), fixture_digest, okay)
             .unwrap();
@@ -58,8 +66,8 @@ fn mapped(scratch: &Scratch, inventory: &[Vec<u8>]) -> OwnerSourceMappedReceipt 
     }
     let frozen = writer.freeze(deadline()).unwrap();
     let name = format!(
-        "{}.legacy-inventory.v1",
-        crate::persistent::bootstrap::codec::hex(frozen.chain())
+        "{}.{}",
+        crate::persistent::bootstrap::codec::hex(frozen.chain()), profile.artifact_suffix()
     );
     let mut compare = frozen.begin_readback(deadline()).unwrap();
     for row in inventory {
@@ -89,6 +97,31 @@ fn mapped(scratch: &Scratch, inventory: &[Vec<u8>]) -> OwnerSourceMappedReceipt 
         readback.compare(&row, deadline(), okay).unwrap();
     }
     readback.finish(deadline(), okay).unwrap()
+}
+
+#[test]
+fn location_v2_adoption_uses_original_publication_profile_in_one_database() {
+    let profile = crate::migration::LegacyInventoryProfile::LocationV2;
+    let inventory = stream_profile(&rows(), profile);
+    let scratch = Scratch::new();
+    let mut stage = mapped_profile(&scratch, &inventory, profile)
+        .into_inventory_stage(deadline(), okay).unwrap();
+    for row in &inventory { stage.push(row, deadline(), okay).unwrap(); }
+    let mut reader = stage.begin_readback(deadline(), okay).unwrap();
+    for row in &inventory { reader.compare(row, deadline(), okay).unwrap(); }
+    let receipt = reader.finish(deadline(), okay).unwrap();
+    assert!(receipt.render_json().contains("complete_semantic_candidate_not_performed"));
+    for (published, encoded) in [
+        (crate::migration::LegacyInventoryProfile::V1, profile),
+        (profile, crate::migration::LegacyInventoryProfile::V1),
+    ] {
+        let scratch = Scratch::new();
+        let inventory = stream_profile(&rows(), encoded);
+        let mut stage = mapped_profile(&scratch, &inventory, published)
+            .into_inventory_stage(deadline(), okay).unwrap();
+        assert!(stage.push(&inventory[0], deadline(), okay).is_err());
+        assert!(stage.push(&inventory[0], deadline(), okay).is_err());
+    }
 }
 
 fn readback(scratch: &Scratch, inventory: &[Vec<u8>]) -> OwnerInventoryReadback {

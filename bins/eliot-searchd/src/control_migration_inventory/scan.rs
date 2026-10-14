@@ -2,7 +2,7 @@
 
 use super::{Family, NativeMigrationInput, Status, Stream, Work, io, sha256};
 use search_contracts::SourceNamespaceId;
-use search_control_redb::migration::{LegacyInventoryLimits, legacy_inventory_profile_digest};
+use search_control_redb::migration::{LegacyInventoryLimits, LegacyInventoryProfile};
 use search_materializer::api::{
     LEGACY_PREPARATION_BINDING_BYTES, LEGACY_PREPARATION_DIRECTORY,
     LEGACY_PREPARATION_MAX_OBJECT_BYTES, LEGACY_PREPARATION_REFERENCE_BYTES,
@@ -82,7 +82,7 @@ fn limits(stream: &mut Stream<'_, '_, '_, '_>) -> Result<(), String> {
             Family::Limits,
             Status::Present,
             22,
-            [*legacy_inventory_profile_digest().as_bytes(), ZERO, ZERO],
+            [*LegacyInventoryProfile::LocationV2.digest().as_bytes(), ZERO, ZERO],
             [
                 LegacyInventoryLimits::BASELINE.records,
                 LegacyInventoryLimits::BASELINE.encoded_bytes,
@@ -215,7 +215,7 @@ fn manifests(
     let namespace = source.source_mapping_header(target)?.legacy_namespace;
     let outcome = io::visit(source, &directory, |name| {
         let path = directory.join(&name.value);
-        let subject = io::fingerprint(source, &name.key)?;
+        let subject = io::locator(source, &path)?;
         match io::read(source, &path, io::CONTROL_BYTES)? {
             Ok(bytes) => {
                 let evidence = io::fingerprint(source, &bytes)?;
@@ -271,7 +271,7 @@ fn manifests(
         }
         Ok(())
     })?;
-    directory_outcome(stream, Family::DirectoryManifests, outcome)?;
+    directory_outcome(stream, Family::DirectoryManifests, &directory, outcome)?;
     // Physical exhaustion cannot prove an entirely lost historical generation.
     stream.item(
         Family::DirectoryManifests,
@@ -363,12 +363,12 @@ fn revision_tree(
                 family,
                 Status::Unsupported,
                 10,
-                [io::fingerprint(source, &shard.key)?, ZERO, ZERO],
+                [io::locator(source, &path)?, ZERO, ZERO],
                 [0; 3],
             );
         }
         let outcome = io::visit(source, &path, |name| {
-            let subject = io::fingerprint(source, &name.key)?;
+            let subject = io::child_locator(source, &path, &name.value)?;
             let classified = name
                 .value
                 .to_str()
@@ -430,9 +430,9 @@ fn revision_tree(
                 ),
             }
         })?;
-        directory_outcome(stream, family, outcome)
+        directory_outcome(stream, family, &path, outcome)
     })?;
-    directory_outcome(stream, family, outcome)
+    directory_outcome(stream, family, &directory, outcome)
 }
 
 fn preparation(
@@ -467,12 +467,12 @@ fn preparation(
                     family,
                     Status::Unsupported,
                     12,
-                    [io::fingerprint(source, &shard.key)?, ZERO, ZERO],
+                    [io::locator(source, &path)?, ZERO, ZERO],
                     [0; 3],
                 );
             }
             let outcome = io::visit(source, &path, |name| {
-                let subject = io::fingerprint(source, &name.key)?;
+                let subject = io::child_locator(source, &path, &name.value)?;
                 let classified = name
                     .value
                     .to_str()
@@ -511,7 +511,12 @@ fn preparation(
                                 .transpose()?
                                 .ok_or_else(changed)?;
                             match decode_legacy_preparation_reference(&bytes, &key) {
-                                Ok(reference) => stream.item(
+                                Ok(reference) => {
+                                    // Keep the semantic key and its exact physical
+                                    // observation paired without changing key authority.
+                                    stream.item(family, status, 37,
+                                        [subject, key, evidence], [bytes.len() as u64, 0, 0])?;
+                                    stream.item(
                                     family,
                                     status,
                                     12,
@@ -521,7 +526,8 @@ fn preparation(
                                         u64::from(reference.protection().tag()),
                                         LEGACY_PREPARATION_REFERENCE_BYTES as u64,
                                     ],
-                                ),
+                                    )
+                                },
                                 Err(_) => stream.item(
                                     family,
                                     Status::Corrupt,
@@ -561,9 +567,9 @@ fn preparation(
                     ),
                 }
             })?;
-            directory_outcome(stream, family, outcome)
+            directory_outcome(stream, family, &path, outcome)
         })?;
-        directory_outcome(stream, family, outcome)?;
+        directory_outcome(stream, family, &directory, outcome)?;
     }
     if residue_only {
         Ok(())
@@ -834,7 +840,7 @@ fn unknown_preparation_children(
         if name.value.to_str().is_some_and(|name| PrepTree::from_directory_name(name).is_some()) {
             return Ok(());
         }
-        let subject = io::fingerprint(source, &name.key)?;
+        let subject = io::child_locator(source, &directory, &name.value)?;
         let child = directory.join(&name.value);
         let (status, bytes) = match io::metadata(source, &child)? {
             io::Observed::Missing => (Status::Gap, 0),
@@ -844,7 +850,7 @@ fn unknown_preparation_children(
         };
         stream.item(Family::Residue, status, 34, [subject, ZERO, ZERO], [bytes, 0, 0])
     })?;
-    directory_outcome(stream, Family::Residue, outcome)
+    directory_outcome(stream, Family::Residue, &directory, outcome)
 }
 fn residue(stream: &mut Stream<'_, '_, '_, '_>, root: &Path) -> Result<(), String> {
     revision_tree(stream, root, Family::Residue, true)?;
@@ -874,7 +880,7 @@ fn unknown_root_objects(stream: &mut Stream<'_, '_, '_, '_>, root: &Path) -> Res
         }) {
             return Ok(());
         }
-        let subject = io::fingerprint(source, &name.key)?;
+        let subject = io::child_locator(source, root, &name.value)?;
         let (status, bytes) = match io::metadata(source, &root.join(&name.value))? {
             io::Observed::Missing => (Status::Gap, 0),
             io::Observed::Refused(status) => (status, 0),
@@ -888,7 +894,7 @@ fn unknown_root_objects(stream: &mut Stream<'_, '_, '_, '_>, root: &Path) -> Res
             [bytes, 0, 0],
         )
     })?;
-    directory_outcome(stream, Family::Residue, outcome)
+    directory_outcome(stream, Family::Residue, root, outcome)
 }
 
 fn control(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, family: Family) -> Result<(), String> {
@@ -922,12 +928,12 @@ fn control(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, family: Family) -> 
                 "namespace.id" | "source-events.log" | "source-roots.v1" | "directory-manifests" | "control-cutover.v1") {
                 // The name does not identify an owning parser. Account for the
                 // whole unknown representation without reading possible secrets.
-                let subject = io::fingerprint(source, &name.key)?;
+                let subject = io::child_locator(source, &directory, &name.value)?;
                 return stream.item(family, Status::Gap, 34, [subject, ZERO, ZERO], [0; 3]);
             }
             return Ok(());
         }
-        let subject = io::fingerprint(source, &name.key)?;
+        let subject = io::child_locator(source, &directory, &name.value)?;
         let path = directory.join(&name.value);
         match io::metadata(source, &path)? {
             io::Observed::Object(meta) if meta.is_dir() => {
@@ -938,7 +944,7 @@ fn control(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, family: Family) -> 
             _ => control_file(stream, &path, family, subject, residue),
         }
     })?;
-    directory_outcome(stream, family, outcome)?;
+    directory_outcome(stream, family, &directory, outcome)?;
     if family == Family::Publications || family == Family::Security {
         // A legacy layout has no complete authoritative H5 reference denominator.
         stream.item(family, Status::Gap, 24, [ZERO; 3], [0; 3])?;
@@ -959,14 +965,14 @@ fn control_directory(
             family,
             Status::Unsupported,
             14,
-            [ZERO; 3],
+            [io::locator(stream.source, directory)?, ZERO, ZERO],
             [depth as u64, 0, 0],
         );
     }
     let source = stream.source;
     let outcome = io::visit(source, directory, |name| {
         let path = directory.join(&name.value);
-        let subject = io::fingerprint(source, &name.key)?;
+        let subject = io::locator(source, &path)?;
         match io::metadata(source, &path)? {
             io::Observed::Object(meta) if meta.is_dir() => {
                 stream.item(family, Status::Gap, 35, [subject, ZERO, ZERO], [meta.len(), depth as u64 + 1, 0])?;
@@ -975,7 +981,7 @@ fn control_directory(
             _ => control_file(stream, &path, family, subject, family == Family::Residue),
         }
     })?;
-    directory_outcome(stream, family, outcome)
+    directory_outcome(stream, family, directory, outcome)
 }
 
 fn control_file(
@@ -1017,10 +1023,14 @@ fn control_file(
 fn directory_outcome(
     stream: &mut Stream<'_, '_, '_, '_>,
     family: Family,
+    directory: &Path,
     outcome: Option<Status>,
 ) -> Result<(), String> {
+    let subject = io::locator(stream.source, directory)?;
     if let Some(status) = outcome {
-        stream.item(family, status, 16, [ZERO; 3], [0; 3])?;
+        stream.item(family, status, 16, [subject, ZERO, ZERO], [0; 3])?;
+    } else {
+        stream.item(family, Status::Present, 36, [subject, ZERO, ZERO], [0; 3])?;
     }
     Ok(())
 }

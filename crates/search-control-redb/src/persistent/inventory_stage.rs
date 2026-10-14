@@ -63,7 +63,9 @@ impl OwnerSourceMappedReceipt {
                 snapshot: original.catalog_snapshot,
                 registration: original.registration,
             };
-            let decoder = LegacyInventoryDecoder::new(binding, LegacyInventoryLimits::BASELINE)
+            let profile = self.owner.bootstrap.completed_inventory.as_ref()
+                .ok_or(ControlError::MigrationUnverified)?.profile;
+            let decoder = LegacyInventoryDecoder::with_profile(binding, LegacyInventoryLimits::BASELINE, profile)
                 .map_err(codec_error)?;
             let marker = marker(&self)?;
             self.owner.bootstrap.write_guarded(
@@ -286,6 +288,7 @@ impl OwnerInventoryStage {
             {
                 return Err(ControlError::MigrationUnverified);
             }
+            let profile = proof.profile;
             self.flush(&check)?;
             let sealed = self.seal_inventory(&summary, &check)?;
             self.source.owner.bootstrap.journal.verify_checked(&check)?;
@@ -325,7 +328,7 @@ impl OwnerInventoryStage {
                 &|unit| check.reserve(unit),
             )?;
             let decoder =
-                LegacyInventoryDecoder::new(self.binding, LegacyInventoryLimits::BASELINE)
+                LegacyInventoryDecoder::with_profile(self.binding, LegacyInventoryLimits::BASELINE, profile)
                     .map_err(codec_error)?;
             check.check(Point::ReadComplete)?;
             Ok(OwnerInventoryReadback {

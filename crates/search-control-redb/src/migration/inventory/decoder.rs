@@ -10,7 +10,7 @@
 use super::{
     LegacyInventoryBinding, LegacyInventoryEncoder, LegacyInventoryError,
     LegacyInventoryFamily, LegacyInventoryLimits, LegacyInventoryStatus,
-    LegacyInventorySummary,
+    LegacyInventorySummary, LegacyInventoryProfile,
 };
 use crate::migration::{
     SourceImportRow, SourceLifecycleFlags, MAX_SOURCE_IMPORT_ROW_BYTES,
@@ -75,7 +75,18 @@ impl LegacyInventoryDecoder {
         expected_binding: LegacyInventoryBinding,
         limits: LegacyInventoryLimits,
     ) -> Result<Self, LegacyInventoryError> {
-        let encoder = LegacyInventoryEncoder::new(limits)?;
+        Self::with_profile(expected_binding, limits, LegacyInventoryProfile::V1)
+    }
+
+    /// Selects only the profile bound by the retained original publication.
+    /// # Errors
+    /// Returns Limit for invalid component ceilings.
+    pub fn with_profile(
+        expected_binding: LegacyInventoryBinding,
+        limits: LegacyInventoryLimits,
+        profile: LegacyInventoryProfile,
+    ) -> Result<Self, LegacyInventoryError> {
+        let encoder = LegacyInventoryEncoder::with_profile(limits, profile)?;
         Ok(Self {
             encoder: Some(encoder),
             binding: Some(expected_binding),

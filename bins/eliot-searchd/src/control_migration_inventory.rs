@@ -5,7 +5,7 @@ use super::{redb_import::DaemonImportOutputPlatform, sha256, temporary_staging_n
 use search_contracts::{Sha256Digest32, SourceNamespaceId};
 use search_control_redb::migration::{
     LegacyInventoryBinding, LegacyInventoryEncoder, LegacyInventoryFamily as Family,
-    LegacyInventoryLimits, LegacyInventoryStatus as Status, LegacyInventorySummary,
+    LegacyInventoryLimits, LegacyInventoryProfile, LegacyInventoryStatus as Status, LegacyInventorySummary,
     MAX_SOURCE_IMPORT_ROW_BYTES, SourceImportRecordArtifact, SourceImportRecordArtifactError,
 };
 use search_revision_store::LegacyRevisionObjectWork as Work;
@@ -114,7 +114,7 @@ fn stage_inner(
         .finish_with_context(input.context.deadline(), &work)
         .map_err(|error| artifact_context.reason(error))?;
     source.charge(Work::Allocate(128))?;
-    let name = format!("{}.legacy-inventory.v1", sha256::hex(&chain));
+    let name = format!("{}.{}", sha256::hex(&chain), LegacyInventoryProfile::LocationV2.artifact_suffix());
     if let Some((journal, checkpoint)) = bootstrap {
         let mut original = verified.prepare_publication_with_context(&name, input.context.deadline(), &work)
             .map_err(|error| artifact_context.reason(error))?;
@@ -176,7 +176,7 @@ pub(super) fn compile(
     let mut stream = Stream {
         source,
         sink,
-        encoder: LegacyInventoryEncoder::new(LegacyInventoryLimits::BASELINE)
+        encoder: LegacyInventoryEncoder::with_profile(LegacyInventoryLimits::BASELINE, LegacyInventoryProfile::LocationV2)
             .map_err(codec_reason)?,
         statuses: [0; 7],
         complete: true,

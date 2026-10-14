@@ -129,6 +129,7 @@ pub struct MigrationBootstrap {
 
 // Minted only after the original artifact outcome's exact durable readback.
 struct CompletedInventory {
+    profile: crate::migration::LegacyInventoryProfile,
     original: Blake3Digest32,
     attempt: Vec<u8>,
     chain: [u8; 32],
@@ -199,6 +200,7 @@ impl MigrationBootstrap {
                 .map_err(|_| ControlError::MigrationUnverified)?;
             let identity = platform.bootstrap_identity(original_identity);
             let original_blake3 = (self.digest)(&codec::framed(b"original", &self.original));
+            let profile = codec::inventory_profile(publication)?;
             let attempt = codec::attempt(original_blake3, publication, identity, 0)?;
             // This conditional immediate transaction performs exact post-state readback.
             // Its committed phase means "dispatch may occur", never success.
@@ -216,6 +218,7 @@ impl MigrationBootstrap {
             self.write(ATTEMPT_KEY, completed.clone(), Some(attempt), OPERATION_KEY, &check)?;
             check.check(Point::LifecycleComplete)?;
             self.completed_inventory = Some(CompletedInventory {
+                profile,
                 original: original_blake3, attempt: completed,
                 chain: *publication.chain(), rows: publication.rows(), bytes: publication.encoded_bytes(),
             });
