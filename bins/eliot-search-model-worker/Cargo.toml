@@ -11,11 +11,5 @@ readme = "README.md"
 name = "eliot-search-model-worker"
 path = "src/main.rs"
 
-[dependencies]
-search-contracts.workspace = true
-search-ports.workspace = true
-search-provider-protocol.workspace = true
-search-model-provider.workspace = true
-
 [lints]
 workspace = true
