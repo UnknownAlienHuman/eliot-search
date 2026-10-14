@@ -5,12 +5,20 @@ use crate::ControlError;
 use super::{ROW_BYTES, codec};
 
 /// One canonical occurrence's original object binding.
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "The sibling persistent owner uses this type through the crate-private migration reexport."
+)]
 pub(crate) struct ContentRevisionBinding {
     pub(crate) legacy_pair: [u8; 64],
     pub(crate) content_sha256: [u8; 32],
     pub(crate) source_bytes: u64,
 }
 
+#[expect(
+    clippy::redundant_pub_crate,
+    reason = "The sibling persistent owner uses this helper through the crate-private migration reexport."
+)]
 pub(crate) fn content_revision_binding(
     canonical_revision: &[u8],
     sequence: u64,

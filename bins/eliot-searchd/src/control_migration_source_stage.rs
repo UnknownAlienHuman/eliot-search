@@ -68,6 +68,31 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     let receipt = inventory_reader.finish(input.context.deadline(), reserve).map_err(|error| reason(&error))?;
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
+    let mut content_owner = receipt.into_content_stage(
+        source.retained_revisions().len() as u64, input.context.deadline(), reserve,
+    ).map_err(|error| content_reason(&error, "ADMISSION"))?;
+    let (mut content_publication, expected_content) = super::content_readback::prepare_owned(
+        source, root, target, *binding.plan_chain.as_bytes(), directory, input,
+    )?;
+    input.context.inventory_reobserve(input)?;
+    content_owner.publish_content(&mut content_publication, &DaemonImportOutputPlatform,
+        input.context.deadline(), reserve).map_err(|error| content_reason(&error, "PUBLISH"))?;
+    let first_content = super::content_readback::compile(
+        source, root, target, *binding.plan_chain.as_bytes(), input.context.deadline(),
+        |row| content_owner.push(row, input.context.deadline(), reserve).map_err(|error| content_reason(&error, "IMPORT")),
+    )?;
+    if first_content != expected_content { return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned()); }
+    input.context.inventory_reobserve(input)?;
+    let mut content_reader = content_owner.begin_readback(input.context.deadline(), reserve)
+        .map_err(|error| content_reason(&error, "READBACK"))?;
+    let second_content = super::content_readback::compile(
+        source, root, target, *binding.plan_chain.as_bytes(), input.context.deadline(),
+        |row| content_reader.compare(row, input.context.deadline(), reserve).map_err(|error| content_reason(&error, "READBACK")),
+    )?;
+    if second_content != expected_content { return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned()); }
+    input.context.inventory_reobserve(input)?;
+    let receipt = content_reader.finish(input.context.deadline(), reserve).map_err(|error| content_reason(&error, "READBACK"))?;
+    input.context.inventory_reobserve(input)?;
     bootstrap::verify_output(&output, source).map_err(|_| unknown())?;
     source.charge(Work::Allocate(16 * 1024)).map_err(|_| unknown())?;
     source.charge(Work::Compare(16 * 1024)).map_err(|_| unknown())?;
@@ -103,6 +128,18 @@ fn prepare_source_map(source: &MigrationSource<'_, '_, '_>, target: SourceNamesp
     let name = format!("{}.source-map.v1", sha256::hex(&chain));
     let publication = verified.prepare_publication_with_context(&name, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     Ok((publication, first))
+}
+
+fn content_reason(error: &MigrationBootstrapFailure<String>, phase: &str) -> String {
+    let outcome = if matches!(error.control, ControlError::CommitOutcomeUnknown) {
+        "OUTCOME_UNKNOWN"
+    } else {
+        "REFUSED"
+    };
+    let code = format!("DIRECT_MIGRATION_CONTENT_{phase}_{outcome}");
+    // Context callbacks return public reason codes only. Preserve the first
+    // refusal alongside the uncertain mutation status; never report success.
+    error.first_context.as_ref().map_or_else(|| code.clone(), |cause| format!("{code}:{cause}"))
 }
 
 fn reason(error: &MigrationBootstrapFailure<String>) -> String {

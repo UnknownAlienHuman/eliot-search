@@ -3,9 +3,19 @@
 The offline `--stage-source-control-migration ROOT TARGET_UUID OUTPUT_DIRECTORY`
 route keeps the original native read operation, registration/protector custody,
 deadline, allowance and output pins. It composes completed bootstrap inventory,
-two-pass source-map publication, same-database mapping import and full readback.
-The owning partial receipt reports `complete_inventory_candidate_not_performed`;
+two-pass source-map publication, same-database mapping/inventory adoption and
+original-bound source-content publication, import and full readback.
+The owning partial receipt reports complete_semantic_candidate_not_performed;
 this route grants no serving, candidate, cutover, restart or cleanup authority.
+
+Content uses the frozen source-content v1 encoder/decoder and rereads retained
+plaintext for every artifact verification, import and independent comparison pass.
+The original request supplies all native and record-artifact work; no new deadline,
+directory, source inventory or digest cache is created. A linear traversal of
+canonical revision occurrences joins exact legacy source/revision references to
+the imported SHA/length/BLAKE3 facts. Reused legacy objects do not collapse A/B/A
+occurrences. Missing historical content remains an explicit gap; wrong bindings,
+orphan content and unknown publication cannot issue a partial success receipt.
 
 Contextual legacy unprotect uses the original startup request/work pair or the
 separately admitted command pair for mandatory native-clear accounting, including
