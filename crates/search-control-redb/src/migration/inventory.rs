@@ -5,6 +5,10 @@ use core::fmt;
 use search_contracts::{Sha256Digest32, SourceNamespaceId};
 use sha2::{Digest, Sha256};
 
+mod decoder;
+
+pub use decoder::{LegacyInventoryDecodedRow, LegacyInventoryDecoder};
+
 /// Independent inventory wire profile; existing mapping profiles are unchanged.
 pub const LEGACY_INVENTORY_PROFILE: &str = "eliot.legacy-inventory.v1";
 /// Number of mandatory family terminals.
