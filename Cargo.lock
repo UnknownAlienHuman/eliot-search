@@ -1534,6 +1534,7 @@ dependencies = [
  "search-contracts",
  "search-domain",
  "search-ports",
+ "zeroize",
 ]
 
 [[package]]

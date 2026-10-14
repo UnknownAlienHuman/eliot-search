@@ -359,3 +359,13 @@ AUTHORED_NOT_COMPILED/NOT_RUN until integrated qualification under #215.
 - ordinary sweep/security purge receipts remain distinct and never claim secure erase;
 - fake control/lifecycle/source ports prove no policy/retention ownership leakage;
 - public/default diagnostics contain no source bodies, secrets or unrestricted paths.
+
+## Opaque read-buffer ownership
+
+Legacy immutable-object reads keep their buffer in a private zeroizing guard
+before the first read and through partial-read, length, native-identity and
+terminal-context refusals. The same original context reserves bounded wipe work
+before allocation; cleanup does not depend on a later successful checkpoint.
+The public read observation and explicit `into_bytes() -> Vec<u8>` handoff stay
+compatible. An extracting caller owns subsequent cleanup. The daemon contextual
+adapter installs its private guard immediately, before any fallible checkpoint.
