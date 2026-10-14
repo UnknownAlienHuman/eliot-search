@@ -273,14 +273,6 @@ product_path = "absent"
 disposition = "optional_disabled"
 
 [[package]]
-name = "search-research-export-adapter"
-path = "crates/search-research-export-adapter"
-execution_chain = ["#216", "#228", "#229", "#230", "#231"]
-product_path = "absent"
-disposition = "optional_disabled"
-consumers = ["#301", "#302", "#243"]
-
-[[package]]
 name = "eliot-searchd"
 path = "bins/eliot-searchd"
 execution_chain = ["#266", "#269", "#270", "#271", "#109", "#235", "#116", "#307", "#308", "#310", "#274", "#275", "#276", "#290", "#278", "#291", "#293", "#294", "#279", "#280", "#213", "#277", "#296", "#232", "#297", "#298", "#281", "#300", "#301", "#302", "#303", "#304", "#305", "#243", "#244", "#245", "#264", "#315", "#321"]

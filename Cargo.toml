@@ -43,7 +43,6 @@ members = [
     "crates/search-provider-protocol",
     "crates/search-provider-client",
     "crates/search-eliot-adapter",
-    "crates/search-research-export-adapter",
     "bins/eliot-searchd",
     "bins/eliot-search",
     "bins/eliot-search-model-worker",
@@ -105,7 +104,6 @@ search-provider-protocol = { path = "crates/search-provider-protocol" }
 search-provider-client = { path = "crates/search-provider-client" }
 search-provider-transport-windows = { path = "crates/search-runtime/search-provider-transport-windows" }
 search-eliot-adapter = { path = "crates/search-eliot-adapter" }
-search-research-export-adapter = { path = "crates/search-research-export-adapter" }
 
 # Single vendor-SDK pin. Only search-qdrant-bridge may inherit this
 # dependency; its exact version must match the qualified client receipt.
