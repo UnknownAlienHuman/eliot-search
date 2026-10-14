@@ -35,9 +35,6 @@ pub(crate) mod owner_composition;
 #[path = "direct_store.rs"]
 mod plaintext_direct_store;
 mod preparation_composition;
-#[cfg(feature = "wave3-index")]
-#[allow(dead_code)]
-mod projection_composition;
 mod protocol_io;
 mod provider_composition;
 mod public_runtime_service;

@@ -105,7 +105,7 @@ fn complete_exclusion_keeps_its_exact_scope_evidence_and_requires_both_acknowled
         transaction_id: id("tx-1"),
         target_epoch: epoch(1),
         excluded_point_ids: [point(1), point(2)].into_iter().collect(),
-        excluded_projection_memberships: [id("membership-1"), id("membership-2")]
+        excluded_projection_memberships: [ProjectionMembershipId::from_bytes([1; 16]), ProjectionMembershipId::from_bytes([2; 16])]
             .into_iter()
             .collect(),
         excluded_scope_digest: digest(8),

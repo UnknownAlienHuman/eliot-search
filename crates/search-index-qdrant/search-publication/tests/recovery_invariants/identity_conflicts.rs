@@ -25,27 +25,24 @@ fn assert_rejected(old: &ProjectionManifest, new: ProjectionManifest) {
 #[test]
 fn every_immutable_entry_field_participates_in_collision_rejection() {
     let old = manifest(&[2]);
-    for field in 0..16 {
+    for field in 0..15 {
         let mut new = old.clone();
         let entry = &mut new.entries[0];
         match field {
-            0 => entry.identity_key.namespace_id = id("other-namespace"),
-            1 => entry.identity_key.source_id = id("other-source"),
-            2 => entry.identity_key.source_revision = NonZeroRevision::new(99).unwrap(),
-            3 => entry.identity_key.unit_ordinal += 1,
-            4 => {
-                entry.identity_key.source_byte_start = 1;
-                entry.identity_key.source_byte_end = 2;
-            }
-            5 => entry.identity_key.source_byte_end = 2,
-            6 => entry.identity_key.projection_kind = ProjectionKind::ExactMetadata,
-            7 => entry.identity_key.projection_fingerprint = digest(99),
-            8 => entry.identity_key.projection_schema_revision = NonZeroRevision::new(2).unwrap(),
-            9 => entry.source_membership_id = id("other-source-membership"),
-            10 => entry.projection_membership_id = id("other-projection-membership"),
+            0 => entry.point_identity_digest_256 = digest(99),
+            1 => entry.source_membership_id = SourceMembershipId::from_bytes([99; 16]),
+            2 => entry.projection_membership_id = ProjectionMembershipId::from_bytes([99; 16]),
+            3 => entry.unit_id = UnitId::from_bytes([99; 16]),
+            4 => entry.collection_generation_id = CollectionGenerationId::from_bytes([99; 16]),
+            5 => entry.installation_incarnation_id = InstallationIncarnationId::from_bytes([99; 16]),
+            6 => entry.access_partition_id = AccessPartitionId::from_bytes([99; 16]),
+            7 => entry.scoring_partition_id = ScoringPartitionId::from_bytes([99; 16]),
+            8 => entry.scoring_document_id = ScoringDocumentId::from_bytes([99; 16]),
+            9 => entry.projection_profile_set_id = ProjectionProfileSetId::new("other-fixture-v1").unwrap(),
+            10 => entry.payload_identity = digest(99),
             11 => entry.unit_digest = digest(99),
             12 => entry.reference_digest = digest(99),
-            13 => entry.payload_digest = digest(99),
+            13 => { entry.vector_digests.insert("changed".to_owned(), digest(99)); }
             14 => {
                 entry
                     .vector_digests
@@ -90,7 +87,7 @@ fn collision_at_any_position_is_rejected_with_no_partial_reservation() {
     let old = manifest(&[1, 3, 5]);
     for index in [0, 2, 4] {
         let mut new = manifest(&[1, 2, 3, 4, 5, 6]);
-        new.entries[index].payload_digest = digest(99);
+        new.entries[index].payload_identity = digest(99);
         assert_rejected(&old, new);
     }
 }
@@ -147,7 +144,7 @@ fn rejecting_a_collision_does_not_prevent_a_corrected_submission() {
     let old = manifest(&[1]);
     let mut machine = coordinator(&old);
     let mut bad = old.clone();
-    bad.entries[0].payload_digest = digest(9);
+    bad.entries[0].payload_identity = digest(9);
     assert!(
         machine
             .submit(prepared(Some(old.clone()), bad, "bad"))
@@ -193,7 +190,7 @@ fn exhaustive_small_manifest_pairs_never_overlap_staged_and_retired_ids() {
                 let mut new = subset(new_mask);
                 if changed {
                     for entry in &mut new.entries {
-                        entry.payload_digest = digest(99);
+                        entry.payload_identity = digest(99);
                     }
                 }
                 let overlap = changed && old_mask & new_mask != 0;
