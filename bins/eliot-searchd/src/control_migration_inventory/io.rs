@@ -2,11 +2,16 @@
 
 use super::{MigrationSource, sha256};
 use search_control_redb::migration::LegacyInventoryStatus as Status;
-use search_revision_store::LegacyRevisionObjectWork as Work;
+use search_revision_store::{
+    LegacyRevisionObjectWork as Work, LegacyRevisionProtection,
+    LEGACY_REVISION_DIRECTORY, LEGACY_REVISION_MAX_OBJECT_BYTES,
+    legacy_revision_object_relative_locator,
+};
+use std::cell::RefCell;
 use std::ffi::OsString;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::Read;
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use zeroize::Zeroizing;
 
 pub(super) const PAGE_NAMES: usize = 32;
@@ -246,6 +251,245 @@ fn changed() -> String {
 }
 fn limit() -> String {
     "DIRECT_MIGRATION_INVENTORY_LIMIT".to_owned()
+}
+
+/// One held final representation. Its snapshot describes this original handle,
+/// not a body digest or a replacement opened later through the locator.
+pub(super) struct PinnedRevisionRepresentation {
+    file: File,
+    protection: LegacyRevisionProtection,
+    snapshot: eliot_searchd::native_file::Observation,
+    metadata: Metadata,
+}
+
+impl PinnedRevisionRepresentation {
+    pub(super) const fn protection(&self) -> LegacyRevisionProtection {
+        self.protection
+    }
+
+    pub(super) const fn native_identity(&self) -> (u64, u64) {
+        (self.snapshot.volume_serial as u64, self.snapshot.file_index)
+    }
+
+    pub(super) const fn encoded_bytes(&self) -> u64 {
+        self.snapshot.length
+    }
+
+    pub(super) const fn snapshot(&self) -> &eliot_searchd::native_file::Observation {
+        &self.snapshot
+    }
+
+    pub(super) const fn metadata(&self) -> &Metadata {
+        &self.metadata
+    }
+}
+
+/// Read-only custody for one revision's at-most-two final representations.
+/// Open before the source-owner callback and keep this value alive until its
+/// observations and both explicit absences have been checked afterward.
+pub(super) struct PinnedRevisionRepresentations<'a, 'view, 'operation, 'owner> {
+    source: &'a MigrationSource<'view, 'operation, 'owner>,
+    paths: [PathBuf; 2],
+    originals: [Option<PinnedRevisionRepresentation>; 2],
+    parents: Vec<File>,
+    parent_snapshots: [Option<eliot_searchd::native_file::Observation>; MAX_PARENTS],
+}
+
+impl<'a, 'view, 'operation, 'owner>
+    PinnedRevisionRepresentations<'a, 'view, 'operation, 'owner>
+{
+    /// Proven missing-both is `AbsentProven`; all other native refusals keep
+    /// their inventory status. An invalid ID or observed drift is an error.
+    pub(super) fn open(
+        source: &'a MigrationSource<'view, 'operation, 'owner>,
+        revision_id: &str,
+    ) -> Result<Result<Self, Status>, String> {
+        source.checkpoint()?;
+        if revision_id.len() != 64 { return Err(changed()); }
+        source.charge(Work::Compare(revision_id.len()))?;
+        source.charge(Work::AllocateLocator(2 * (64 + 2 + 1 + 6)))?;
+        let plain = legacy_revision_object_relative_locator(revision_id, LegacyRevisionProtection::Plaintext)
+            .ok_or_else(changed)?;
+        let protected = legacy_revision_object_relative_locator(revision_id, LegacyRevisionProtection::Protected)
+            .ok_or_else(changed)?;
+        if !cfg!(windows) { return Ok(Err(Status::Unsupported)); }
+        source.charge(Work::Allocate(std::mem::size_of::<Self>()))?;
+        source.charge(Work::AllocateLocator(2 * (native_length(source.inventory_root().as_os_str())
+            + LEGACY_REVISION_DIRECTORY.len() * 2 + 80 * 2)))?;
+        let directory = source.inventory_root().join(LEGACY_REVISION_DIRECTORY);
+        let paths = [directory.join(plain), directory.join(protected)];
+        let parents = match pin_parents(source, &paths[0], false)? {
+            Ok(parents) => parents,
+            Err(status) => return Ok(Err(status)),
+        };
+        let mut parent_snapshots = [None; MAX_PARENTS];
+        for (index, file) in parents.iter().enumerate() {
+            parent_snapshots[index] = match revision_pin_observation(source, file)? {
+                Ok(snapshot) => Some(snapshot),
+                Err(status) => return Ok(Err(status)),
+            };
+        }
+        let mut originals = [None, None];
+        for (index, protection) in [LegacyRevisionProtection::Plaintext, LegacyRevisionProtection::Protected]
+            .into_iter().enumerate()
+        {
+            originals[index] = match pin_final_revision(source, &paths[index], protection)? {
+                Ok(original) => original,
+                Err(status) => return Ok(Err(status)),
+            };
+        }
+        let held = Self { source, paths, originals, parents, parent_snapshots };
+        if let Err(status) = held.verify_same_original()? { return Ok(Err(status)); }
+        if held.originals.iter().all(Option::is_none) { return Ok(Err(Status::AbsentProven)); }
+        Ok(Ok(held))
+    }
+
+    /// Each protection class has its own presence, identity and encoded length.
+    pub(super) fn representation(
+        &self, protection: LegacyRevisionProtection,
+    ) -> Option<&PinnedRevisionRepresentation> {
+        self.originals[revision_protection_index(protection)].as_ref()
+    }
+
+    /// Outer absence means no raw representation; a present raw observation
+    /// with no original native identity never matches a production pin.
+    pub(super) fn verify_readback(
+        &self, protection: LegacyRevisionProtection,
+        raw: Option<(Option<(u64, u64)>, u64)>,
+    ) -> Result<(), String> {
+        self.source.checkpoint()?;
+        match (self.representation(protection), raw) {
+            (None, None) => Ok(()),
+            (Some(held), Some((Some(identity), length)))
+                if identity == held.native_identity() && length == held.encoded_bytes() => Ok(()),
+            _ => Err(changed()),
+        }
+    }
+
+    /// Reobserve held originals and pinned parents after the callback, without
+    /// body reads. Locator metadata only rejects drift; it grants no authority.
+    pub(super) fn verify_same_original(&self) -> Result<Result<(), Status>, String> {
+        self.source.checkpoint()?;
+        for (index, path) in self.paths.iter().enumerate() {
+            match &self.originals[index] {
+                None => match metadata(self.source, path)? {
+                    Observed::Missing => {}
+                    Observed::Refused(status) => return Ok(Err(status)),
+                    Observed::Object(_) => return Err(changed()),
+                },
+                Some(original) => {
+                    self.source.charge(Work::Observe)?;
+                    let current = original.file.metadata();
+                    self.source.checkpoint()?;
+                    let current = match current {
+                        Ok(current) => current,
+                        Err(_) => return Ok(Err(Status::Unreadable)),
+                    };
+                    if !current.is_file() || !unchanged(&original.metadata, &current) { return Err(changed()); }
+                    let snapshot = match revision_pin_observation(self.source, &original.file)? {
+                        Ok(snapshot) => snapshot,
+                        Err(status) => return Ok(Err(status)),
+                    };
+                    if snapshot != original.snapshot { return Err(changed()); }
+                    if let Err(status) = revision_pin_single_link(self.source, &original.file)? {
+                        return Ok(Err(status));
+                    }
+                    match metadata(self.source, path)? {
+                        Observed::Object(current) if current.is_file()
+                            && unchanged(&original.metadata, &current) => {}
+                        Observed::Refused(status) => return Ok(Err(status)),
+                        _ => return Err(changed()),
+                    }
+                }
+            }
+        }
+        for (index, file) in self.parents.iter().enumerate() {
+            let snapshot = match revision_pin_observation(self.source, file)? {
+                Ok(snapshot) => snapshot,
+                Err(status) => return Ok(Err(status)),
+            };
+            if Some(snapshot) != self.parent_snapshots[index] { return Err(changed()); }
+        }
+        self.source.checkpoint()?;
+        Ok(Ok(()))
+    }
+}
+
+fn revision_protection_index(protection: LegacyRevisionProtection) -> usize {
+    match protection {
+        LegacyRevisionProtection::Plaintext => 0,
+        LegacyRevisionProtection::Protected => 1,
+    }
+}
+
+fn pin_final_revision(
+    source: &MigrationSource<'_, '_, '_>, path: &Path, protection: LegacyRevisionProtection,
+) -> Result<Result<Option<PinnedRevisionRepresentation>, Status>, String> {
+    let before = match metadata(source, path)? {
+        Observed::Missing => return Ok(Ok(None)),
+        Observed::Refused(status) => return Ok(Err(status)),
+        Observed::Object(meta) if meta.is_file() => meta,
+        Observed::Object(_) => return Ok(Err(Status::Corrupt)),
+    };
+    if before.len() > LEGACY_REVISION_MAX_OBJECT_BYTES as u64 { return Err(limit()); }
+    source.charge(Work::Open)?;
+    let file = open_nofollow(path, false);
+    source.checkpoint()?;
+    let file = match file {
+        Ok(file) => file,
+        Err(_) => return Ok(Err(Status::Unreadable)),
+    };
+    source.charge(Work::Observe)?;
+    let held = file.metadata();
+    source.checkpoint()?;
+    let held = match held {
+        Ok(held) => held,
+        Err(_) => return Ok(Err(Status::Unreadable)),
+    };
+    if !held.is_file() || !unchanged(&before, &held) { return Err(changed()); }
+    let snapshot = match revision_pin_observation(source, &file)? {
+        Ok(snapshot) => snapshot,
+        Err(status) => return Ok(Err(status)),
+    };
+    if snapshot.length != held.len() { return Err(changed()); }
+    if let Err(status) = revision_pin_single_link(source, &file)? { return Ok(Err(status)); }
+    Ok(Ok(Some(PinnedRevisionRepresentation { file, protection, snapshot, metadata: held })))
+}
+
+fn revision_pin_observation(
+    source: &MigrationSource<'_, '_, '_>, file: &File,
+) -> Result<Result<eliot_searchd::native_file::Observation, Status>, String> {
+    use eliot_searchd::native_file::ObservationError;
+    let refusal = RefCell::new(None);
+    let observed = eliot_searchd::native_file::observe_with_check(file, &|before| {
+        let result = if before { source.charge(Work::Observe) } else { source.checkpoint() };
+        result.map_err(|cause| {
+            refusal.borrow_mut().get_or_insert(cause);
+            ObservationError::ObservationFailed
+        })
+    });
+    if let Some(cause) = refusal.into_inner() { return Err(cause); }
+    Ok(observed.map_err(|error| match error {
+        ObservationError::UnsupportedPlatform | ObservationError::UnsupportedHandle
+        | ObservationError::UnsupportedFileSystem => Status::Unsupported,
+        ObservationError::ReparsePointDenied => Status::Gap,
+        ObservationError::ObservationFailed => Status::Unreadable,
+    }))
+}
+
+fn revision_pin_single_link(
+    source: &MigrationSource<'_, '_, '_>, file: &File,
+) -> Result<Result<(), Status>, String> {
+    source.checkpoint()?;
+    // The existing hardlink observer performs these three fixed native calls.
+    #[cfg(windows)]
+    for _ in 0..3 { source.charge(Work::Observe)?; }
+    let links = eliot_searchd::native_file::hardlink_count(file);
+    source.checkpoint()?;
+    Ok(match links {
+        Ok(1) => Ok(()),
+        _ => Err(Status::Gap),
+    })
 }
 
 /// One pinned, deterministic enumeration of a complete directory.
@@ -608,5 +852,110 @@ mod locator_tests {
         let bytes = locator_preimage(root, &root.join(name), |_| Ok(())).unwrap();
         assert!(bytes.ends_with(&[0, 0, 0, 4, 0xd8, 0, 0, 0x61]));
         assert_ne!(bytes, encoded("\u{fffd}a"));
+    }
+}
+
+// These fixtures exercise local NTFS pin/refusal behavior only. They do not
+// qualify a NativeMigrationInput, the full co-producer or installed cutover.
+#[cfg(all(test, windows))]
+mod revision_pin_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    struct Scratch { root: PathBuf }
+
+    impl Scratch {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let stamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos();
+            let root = std::env::temp_dir().join(format!("search-revision-pins-{}-{stamp}-{}",
+                std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            fs::create_dir_all(root.join("revisions/aa")).expect("scratch shard");
+            Self { root }
+        }
+
+        fn path(&self, protection: LegacyRevisionProtection) -> PathBuf {
+            self.root.join(LEGACY_REVISION_DIRECTORY)
+                .join(legacy_revision_object_relative_locator(REVISION, protection).expect("locator"))
+        }
+
+        fn store(&self) -> crate::plaintext_direct_store::DirectStore {
+            crate::plaintext_direct_store::DirectStore::open(&self.root).expect("fixture catalog")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            // Only this fixture's freshly created, uniquely named temp root.
+            assert_eq!(self.root.parent(), Some(std::env::temp_dir().as_path()));
+            assert!(self.root.file_name().unwrap().to_str().unwrap().starts_with("search-revision-pins-"));
+            fs::remove_dir_all(&self.root).expect("drop scratch after pins");
+        }
+    }
+
+    #[test]
+    fn both_originals_deny_write_delete_and_match_only_their_own_readback() {
+        let scratch = Scratch::new();
+        fs::write(scratch.path(LegacyRevisionProtection::Plaintext), b"plain").expect("plain");
+        fs::write(scratch.path(LegacyRevisionProtection::Protected), b"protected wire").expect("wire");
+        let store = scratch.store();
+        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        let held = PinnedRevisionRepresentations::open(&source, REVISION).expect("open").unwrap_or_else(|_| panic!("pins refused"));
+        let mut facts = Vec::new();
+        for protection in [LegacyRevisionProtection::Plaintext, LegacyRevisionProtection::Protected] {
+            let path = scratch.path(protection);
+            assert!(OpenOptions::new().write(true).open(&path).is_err(), "write must be denied while held");
+            assert!(fs::remove_file(&path).is_err(), "delete must be denied while held");
+            let mut reopened = File::open(&path).expect("source owner's read-only reopen");
+            let observed = identity(&reopened).expect("same native observer");
+            let mut bytes = Vec::new();
+            reopened.read_to_end(&mut bytes).expect("callback read");
+            let id = (u64::from(observed.volume_serial), observed.file_index);
+            held.verify_readback(protection, Some((Some(id), bytes.len() as u64))).expect("own fact");
+            let pinned = held.representation(protection).expect("representation");
+            assert_eq!(pinned.protection(), protection);
+            assert_eq!(*pinned.snapshot(), observed);
+            assert_eq!(pinned.metadata().len(), bytes.len() as u64);
+            assert!(held.verify_readback(protection, Some((None, bytes.len() as u64))).is_err());
+            assert!(held.verify_readback(protection, Some((Some(id), bytes.len() as u64 + 1))).is_err());
+            facts.push((id, bytes.len() as u64));
+        }
+        assert!(held.verify_readback(LegacyRevisionProtection::Plaintext, Some((Some(facts[1].0), facts[0].1))).is_err());
+        held.verify_same_original().expect("stable originals").unwrap_or_else(|_| panic!("verification refused"));
+    }
+
+    #[test]
+    fn missing_both_is_explicit_and_missing_counterpart_is_rechecked() {
+        let scratch = Scratch::new();
+        let store = scratch.store();
+        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::AbsentProven))));
+        assert!(PinnedRevisionRepresentations::open(&source, "../outside").is_err());
+        fs::write(scratch.path(LegacyRevisionProtection::Plaintext), b"plain").expect("plain");
+        let held = PinnedRevisionRepresentations::open(&source, REVISION).expect("open").unwrap_or_else(|_| panic!("pins refused"));
+        assert!(held.representation(LegacyRevisionProtection::Protected).is_none());
+        held.verify_readback(LegacyRevisionProtection::Protected, None).expect("explicit absence");
+        assert!(held.verify_readback(LegacyRevisionProtection::Plaintext, None).is_err());
+        fs::write(scratch.path(LegacyRevisionProtection::Protected), b"late wire").expect("new counterpart");
+        assert!(held.verify_same_original().is_err(), "late presence cannot match prior absence");
+    }
+
+    #[test]
+    fn hardlink_and_second_representation_refusal_release_all_leaf_pins() {
+        let scratch = Scratch::new();
+        let plain = scratch.path(LegacyRevisionProtection::Plaintext);
+        fs::write(&plain, b"plain").expect("plain");
+        let alias = scratch.root.join("alias.bin");
+        fs::hard_link(&plain, &alias).expect("hardlink fixture");
+        let store = scratch.store();
+        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::Gap))));
+        fs::remove_file(alias).expect("remove alias");
+        fs::create_dir(scratch.path(LegacyRevisionProtection::Protected)).expect("wrong-kind counterpart");
+        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::Corrupt))));
+        assert!(OpenOptions::new().write(true).open(plain).is_ok(), "refusal must release the first leaf pin");
     }
 }
