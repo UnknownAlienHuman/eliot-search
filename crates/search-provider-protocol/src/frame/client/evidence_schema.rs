@@ -15,16 +15,18 @@
 use search_contracts::evidence::{
     EvidenceCardV1, EvidenceGroup, EvidenceGroupKind, EvidenceHints, EvidenceIntent,
     EvidenceRelation, EvidenceRelationKind, ExactCheckTemplate, OrientScopeRequestV2,
-    OrientScopeResultV2, OrientationCard, OrientationDimension, OrientationGroup,
-    OrientationHints, PublicCardSource, PublicCurrentnessState, PublicScopeSelector,
-    RecipeIdV2, RetrieveEvidenceRequestV2, RetrieveEvidenceResultV2,
+    OrientScopeResultV2, OrientationCard, OrientationDimension, OrientationGroup, OrientationHints,
+    PublicCardSource, PublicCurrentnessState, PublicScopeSelector, RecipeIdV2,
+    RetrieveEvidenceRequestV2, RetrieveEvidenceResultV2,
 };
 use search_contracts::ids::{RepresentationId, UnitId};
 use search_contracts::query::{PriorityClass, QueryExecutionBudget};
 use search_contracts::source::{UnitKind, UnitOccurrence};
 
+use super::wire::{Decoder, Encoder, Result, Schema, record, tagged};
+use crate::config::DEFAULT_PROTOCOL_LIMITS;
 use crate::error::ProtocolError;
-use super::wire::{Decoder, Encoder, Result, Schema, record};
+use crate::frame::FrameCodec;
 
 /// Schema version of the additive new-generation recipe envelope.
 pub const EVIDENCE_RECIPE_SCHEMA_VERSION: u16 = 2;
@@ -90,6 +92,15 @@ impl EvidenceRecipeResultV2 {
     }
 }
 
+tagged!(EvidenceRecipeRequestV2 {
+    RetrieveEvidence => "retrieve_evidence@1",
+    OrientScope => "orient_scope@1",
+});
+tagged!(EvidenceRecipeResultV2 {
+    RetrieveEvidence => "retrieve_evidence@1",
+    OrientScope => "orient_scope@1",
+});
+
 /// Declares the shared bounded schema for one closed additive wire vocabulary.
 macro_rules! registry {
     ($($name:ident),+ $(,)?) => { $(
@@ -103,47 +114,96 @@ macro_rules! registry {
 }
 
 registry!(
-    EvidenceIntent, OrientationDimension, EvidenceRelationKind, PublicCurrentnessState,
-    EvidenceGroupKind, PriorityClass, RecipeIdV2, UnitKind,
+    EvidenceIntent,
+    OrientationDimension,
+    EvidenceRelationKind,
+    PublicCurrentnessState,
+    EvidenceGroupKind,
+    PriorityClass,
+    RecipeIdV2,
+    UnitKind,
 );
 
 impl Schema for UnitId {
-    fn put(&self, output: &mut Encoder) -> Result<()> { output.text(&self.to_string()) }
+    fn put(&self, output: &mut Encoder) -> Result<()> {
+        output.text(&self.to_string())
+    }
     fn get(input: &mut Decoder<'_>) -> Result<Self> {
         Self::parse(&input.text(36)?).map_err(|_| ProtocolError::InvalidBody)
     }
 }
 
 impl Schema for RepresentationId {
-    fn put(&self, output: &mut Encoder) -> Result<()> { output.text(&self.to_string()) }
+    fn put(&self, output: &mut Encoder) -> Result<()> {
+        output.text(&self.to_string())
+    }
     fn get(input: &mut Decoder<'_>) -> Result<Self> {
         Self::parse(&input.text(36)?).map_err(|_| ProtocolError::InvalidBody)
     }
 }
 
 record!(UnitOccurrence {
-    unit_id, representation_id, unit_kind, ordinal, native_anchor, structural_identity,
+    unit_id,
+    representation_id,
+    unit_kind,
+    ordinal,
+    native_anchor,
+    structural_identity,
     configuration_predicate,
 });
-record!(PublicCardSource { source_id, revision, representation_profile });
-record!(EvidenceHints { authorized_source_ids, suggested_exact_handles });
-record!(OrientationHints { authorized_source_ids, suggested_exact_handles });
-record!(QueryExecutionBudget {
-    priority_class, deadline_ms, max_scoring_legs, max_prefetch_candidates_per_leg,
-    max_validated_candidates, max_source_read_bytes, max_exact_scan_items, max_exact_scan_bytes,
-    max_materialized_result_bytes, max_cpu_ms, max_memory_bytes,
+record!(PublicCardSource {
+    source_id,
+    revision,
+    representation_profile
 });
-record!(EvidenceRelation { kind, evidence_handle });
+record!(EvidenceHints {
+    authorized_source_ids,
+    suggested_exact_handles
+});
+record!(OrientationHints {
+    authorized_source_ids,
+    suggested_exact_handles
+});
+record!(QueryExecutionBudget {
+    priority_class,
+    deadline_ms,
+    max_scoring_legs,
+    max_prefetch_candidates_per_leg,
+    max_validated_candidates,
+    max_source_read_bytes,
+    max_exact_scan_items,
+    max_exact_scan_bytes,
+    max_materialized_result_bytes,
+    max_cpu_ms,
+    max_memory_bytes,
+});
+record!(EvidenceRelation {
+    kind,
+    evidence_handle
+});
 record!(EvidenceCardV1 {
     card_id, evidence_role, source, unit, handle, bounded_preview, producer_assurance,
     freshness, currentness, lineage, relations, ambiguity_group, score_profile, trace_ref,
 } => |value: &EvidenceCardV1| value.validate().map_err(|_| ProtocolError::InvalidBody));
-record!(EvidenceGroup { group_id, kind, card_ids });
-record!(ExactCheckTemplate { template_id, rationale, predicate, native_anchor });
+record!(EvidenceGroup {
+    group_id,
+    kind,
+    card_ids
+});
+record!(ExactCheckTemplate {
+    template_id,
+    rationale,
+    predicate,
+    native_anchor
+});
 record!(OrientationCard {
     card_id, dimension, source, unit, handle, producer_assurance, freshness, currentness, rank_key,
+} => |value: &OrientationCard| value.validate().map_err(|_| ProtocolError::InvalidBody));
+record!(OrientationGroup {
+    group_id,
+    dimension,
+    card_ids
 });
-record!(OrientationGroup { group_id, dimension, card_ids });
 
 impl Schema for PublicScopeSelector {
     fn put(&self, output: &mut Encoder) -> Result<()> {
@@ -153,7 +213,10 @@ impl Schema for PublicScopeSelector {
                 output.tag("workspace_revision")?;
                 value.put(output)?;
             }
-            Self::CorpusRevision { corpus_id, membership_revision } => {
+            Self::CorpusRevision {
+                corpus_id,
+                membership_revision,
+            } => {
                 output.tag("corpus_revision")?;
                 output.open(b'{')?;
                 let mut first = true;
@@ -163,7 +226,10 @@ impl Schema for PublicScopeSelector {
                 membership_revision.put(output)?;
                 output.close(b'}')?;
             }
-            Self::PortfolioRevision { portfolio_id, portfolio_revision } => {
+            Self::PortfolioRevision {
+                portfolio_id,
+                portfolio_revision,
+            } => {
                 output.tag("portfolio_revision")?;
                 output.open(b'{')?;
                 let mut first = true;
@@ -192,7 +258,10 @@ impl Schema for PublicScopeSelector {
                 input.field(&mut first, "membership_revision")?;
                 let membership_revision = Schema::get(input)?;
                 input.close(b'}')?;
-                Self::CorpusRevision { corpus_id, membership_revision }
+                Self::CorpusRevision {
+                    corpus_id,
+                    membership_revision,
+                }
             }
             "portfolio_revision" => {
                 input.open(b'{')?;
@@ -202,7 +271,10 @@ impl Schema for PublicScopeSelector {
                 input.field(&mut first, "portfolio_revision")?;
                 let portfolio_revision = Schema::get(input)?;
                 input.close(b'}')?;
-                Self::PortfolioRevision { portfolio_id, portfolio_revision }
+                Self::PortfolioRevision {
+                    portfolio_id,
+                    portfolio_revision,
+                }
             }
             "overlay_revision" => Self::OverlayRevision(Schema::get(input)?),
             _ => return Err(ProtocolError::InvalidBody),
@@ -238,7 +310,8 @@ fn put_versioned(output: &mut Encoder, recipe: RecipeIdV2) -> Result<()> {
     output.field(&mut first, "v")?;
     EVIDENCE_RECIPE_SCHEMA_VERSION.put(output)?;
     output.field(&mut first, "recipe")?;
-    output.text(recipe.as_str())
+    output.text(recipe.as_str())?;
+    output.field(&mut first, "body")
 }
 
 fn open_versioned(bytes: &[u8]) -> Result<Decoder<'_>> {
@@ -248,6 +321,7 @@ fn open_versioned(bytes: &[u8]) -> Result<Decoder<'_>> {
     if bytes.len() > MAX_EVIDENCE_SCHEMA_BYTES {
         return Err(ProtocolError::FrameTooLarge);
     }
+    FrameCodec::validate_payload(bytes, DEFAULT_PROTOCOL_LIMITS)?;
     let mut input = Decoder::new(bytes);
     input.open(b'{')?;
     Ok(input)
@@ -266,15 +340,13 @@ fn read_versioned(input: &mut Decoder<'_>, expected: RecipeIdV2) -> Result<()> {
     if recipe != expected {
         return Err(ProtocolError::InvalidBody);
     }
+    input.field(&mut first, "body")?;
     Ok(())
 }
 
 /// Encodes the exact `retrieve_evidence@1` request schema.
 pub fn encode_retrieve_evidence_request(value: &RetrieveEvidenceRequestV2) -> Result<Vec<u8>> {
-    let mut output = Encoder::new(MAX_EVIDENCE_SCHEMA_BYTES);
-    put_versioned(&mut output, RecipeIdV2::RetrieveEvidence)?;
-    value.put(&mut output)?;
-    output.finish()
+    encode_evidence_request(&EvidenceRecipeRequestV2::RetrieveEvidence(value.clone()))
 }
 
 /// Decodes the exact `retrieve_evidence@1` request schema.
@@ -285,7 +357,9 @@ pub fn encode_retrieve_evidence_request(value: &RetrieveEvidenceRequestV2) -> Re
 pub fn decode_retrieve_evidence_request(bytes: &[u8]) -> Result<RetrieveEvidenceRequestV2> {
     let mut input = open_versioned(bytes)?;
     read_versioned(&mut input, RecipeIdV2::RetrieveEvidence)?;
-    let value = Schema::get(&mut input)?;
+    let EvidenceRecipeRequestV2::RetrieveEvidence(value) = Schema::get(&mut input)? else {
+        return Err(ProtocolError::InvalidBody);
+    };
     input.close(b'}')?;
     input.finish()?;
     if encode_retrieve_evidence_request(&value)?.as_slice() != bytes {
@@ -296,17 +370,16 @@ pub fn decode_retrieve_evidence_request(bytes: &[u8]) -> Result<RetrieveEvidence
 
 /// Encodes the exact `orient_scope@1` request schema.
 pub fn encode_orient_scope_request(value: &OrientScopeRequestV2) -> Result<Vec<u8>> {
-    let mut output = Encoder::new(MAX_EVIDENCE_SCHEMA_BYTES);
-    put_versioned(&mut output, RecipeIdV2::OrientScope)?;
-    value.put(&mut output)?;
-    output.finish()
+    encode_evidence_request(&EvidenceRecipeRequestV2::OrientScope(value.clone()))
 }
 
 /// Decodes the exact `orient_scope@1` request schema.
 pub fn decode_orient_scope_request(bytes: &[u8]) -> Result<OrientScopeRequestV2> {
     let mut input = open_versioned(bytes)?;
     read_versioned(&mut input, RecipeIdV2::OrientScope)?;
-    let value = Schema::get(&mut input)?;
+    let EvidenceRecipeRequestV2::OrientScope(value) = Schema::get(&mut input)? else {
+        return Err(ProtocolError::InvalidBody);
+    };
     input.close(b'}')?;
     input.finish()?;
     if encode_orient_scope_request(&value)?.as_slice() != bytes {
@@ -317,13 +390,12 @@ pub fn decode_orient_scope_request(bytes: &[u8]) -> Result<OrientScopeRequestV2>
 
 /// Encodes one exact additive new-generation result schema.
 pub fn encode_evidence_result(value: &EvidenceRecipeResultV2) -> Result<Vec<u8>> {
+    value.validate()?;
     let mut output = Encoder::new(MAX_EVIDENCE_SCHEMA_BYTES);
     put_versioned(&mut output, value.recipe_id())?;
-    match value {
-        EvidenceRecipeResultV2::RetrieveEvidence(result) => result.put(&mut output)?,
-        EvidenceRecipeResultV2::OrientScope(result) => result.put(&mut output)?,
-    }
-    output.finish()
+    value.put(&mut output)?;
+    output.close(b'}')?;
+    finish_json(output)
 }
 
 /// Decodes one exact additive new-generation result schema.
@@ -342,18 +414,57 @@ pub fn decode_evidence_result(bytes: &[u8]) -> Result<EvidenceRecipeResultV2> {
     input.field(&mut first, "recipe")?;
     let tag = input.text(64)?;
     let recipe = RecipeIdV2::parse(&tag).map_err(|_| ProtocolError::InvalidBody)?;
-    let value = match recipe {
-        RecipeIdV2::RetrieveEvidence => {
-            EvidenceRecipeResultV2::RetrieveEvidence(Schema::get(&mut input)?)
-        }
-        RecipeIdV2::OrientScope => {
-            EvidenceRecipeResultV2::OrientScope(Schema::get(&mut input)?)
-        }
-    };
+    input.field(&mut first, "body")?;
+    let value = EvidenceRecipeResultV2::get(&mut input)?;
+    if value.recipe_id() != recipe {
+        return Err(ProtocolError::InvalidBody);
+    }
     input.close(b'}')?;
     input.finish()?;
     value.validate()?;
     if encode_evidence_result(&value)?.as_slice() != bytes {
+        return Err(ProtocolError::InvalidBody);
+    }
+    Ok(value)
+}
+
+fn finish_json(output: Encoder) -> Result<Vec<u8>> {
+    let bytes = output.finish()?;
+    FrameCodec::validate_payload(&bytes, DEFAULT_PROTOCOL_LIMITS)?;
+    Ok(bytes)
+}
+
+/// Encodes either additive recipe request as bounded canonical JSON.
+/// Encoding validates shape only; the scope and profile remain untrusted references.
+pub fn encode_evidence_request(value: &EvidenceRecipeRequestV2) -> Result<Vec<u8>> {
+    value.validate()?;
+    let mut output = Encoder::new(MAX_EVIDENCE_SCHEMA_BYTES);
+    put_versioned(&mut output, value.recipe_id())?;
+    value.put(&mut output)?;
+    output.close(b'}')?;
+    finish_json(output)
+}
+
+/// Dispatches either additive request and rejects disagreement between envelope and body.
+/// Successful decoding grants no source, scope, profile or currentness authority.
+pub fn decode_evidence_request(bytes: &[u8]) -> Result<EvidenceRecipeRequestV2> {
+    let mut input = open_versioned(bytes)?;
+    let mut first = true;
+    input.field(&mut first, "v")?;
+    if u16::get(&mut input)? != EVIDENCE_RECIPE_SCHEMA_VERSION {
+        return Err(ProtocolError::NoCompatibleVersion);
+    }
+    input.field(&mut first, "recipe")?;
+    let recipe = RecipeIdV2::parse(&input.text(64)?).map_err(|_| ProtocolError::InvalidBody)?;
+    input.field(&mut first, "body")?;
+    let value = EvidenceRecipeRequestV2::get(&mut input)?;
+    if value.recipe_id() != recipe {
+        return Err(ProtocolError::InvalidBody);
+    }
+    input.close(b'}')?;
+    input.finish()?;
+    value.validate()?;
+    if encode_evidence_request(&value)?.as_slice() != bytes {
         return Err(ProtocolError::InvalidBody);
     }
     Ok(value)

@@ -42,6 +42,7 @@ pub(crate) use impl_wire_enum;
 pub mod authority;
 pub mod bounds;
 pub mod evidence;
+pub mod evidence_frames;
 pub mod canonical;
 pub mod digest;
 pub mod error;

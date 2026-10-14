@@ -18,11 +18,15 @@
 
 mod grant;
 pub mod evidence_schema;
+pub mod evidence_frames_schema;
 mod primitives;
 mod recipe;
 mod response;
 mod source;
 mod wire;
+
+#[cfg(test)]
+mod evidence_compat_213;
 
 use search_contracts::{
     BoundedBytes, CancelBody, HelloBody, JsonFramePayload, MessageKind, ProtocolRange,

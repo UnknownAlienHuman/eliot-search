@@ -231,6 +231,7 @@ pub struct RetrieveEvidenceRequestV2 {
 
 impl RetrieveEvidenceRequestV2 {
     pub fn validate(&self) -> Result<(), ContractError> {
+        validate_question(&self.question)?;
         self.scope.validate()?;
         self.optional_hints.validate()?;
         validate_global_budget(&self.budgets)?;
@@ -253,6 +254,7 @@ pub struct OrientScopeRequestV2 {
 
 impl OrientScopeRequestV2 {
     pub fn validate(&self) -> Result<(), ContractError> {
+        validate_question(&self.question)?;
         self.scope.validate()?;
         self.optional_hints.validate()?;
         validate_global_budget(&self.budgets)?;
@@ -288,6 +290,7 @@ pub struct EvidenceCardV1 {
 
 impl EvidenceCardV1 {
     pub fn validate(&self) -> Result<(), ContractError> {
+        validate_card_source(&self.source, &self.unit)?;
         Ok(())
     }
 }
@@ -349,6 +352,13 @@ pub struct OrientationCard {
     pub rank_key: crate::BoundedNonContentRankingTrace,
 }
 
+impl OrientationCard {
+    /// Checks public identity/range consistency, never source authority or live access.
+    pub fn validate(&self) -> Result<(), ContractError> {
+        validate_card_source(&self.source, &self.unit)
+    }
+}
+
 /// One grouped orientation cluster with an exact content-free digest key.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrientationGroup {
@@ -378,6 +388,9 @@ impl OrientScopeResultV2 {
     pub fn validate(&self) -> Result<(), ContractError> {
         self.resolved_scope.validate()?;
         self.coverage.validate()?;
+        for card in &self.entry_points {
+            card.validate()?;
+        }
         Ok(())
     }
 }
@@ -425,7 +438,42 @@ fn validate_global_budget(budgets: &PublicQueryBudgets) -> Result<(), ContractEr
         || budgets.max_cpu_ms == 0
         || budgets.max_memory_bytes == 0
     {
-        return Err(ContractError::new(ContractErrorKind::InvalidRange, "public_query_budgets"));
+        return Err(ContractError::new(
+            ContractErrorKind::InvalidRange,
+            "public_query_budgets",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_question(
+    question: &crate::BoundedText<MAX_QUESTION_BYTES>,
+) -> Result<(), ContractError> {
+    if question.as_str().trim().is_empty() {
+        return Err(ContractError::new(ContractErrorKind::Empty, "question"));
+    }
+    Ok(())
+}
+
+fn validate_card_source(
+    source: &PublicCardSource,
+    unit: &crate::UnitOccurrence,
+) -> Result<(), ContractError> {
+    unit.native_anchor.validate()?;
+    if source.source_id != source.revision.source_id {
+        return Err(ContractError::new(
+            ContractErrorKind::FamilyMismatch,
+            "card.source_revision",
+        ));
+    }
+    if let NativeAnchor::TextBytes(anchor) = &unit.native_anchor
+        && (anchor.content_digest != source.revision.content_digest
+            || anchor.byte_end_exclusive_0 > source.revision.byte_length)
+    {
+        return Err(ContractError::new(
+            ContractErrorKind::ContradictoryState,
+            "card.source_range",
+        ));
     }
     Ok(())
 }
