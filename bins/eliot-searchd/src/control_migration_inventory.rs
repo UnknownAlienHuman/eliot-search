@@ -54,11 +54,6 @@ pub(super) struct StagedInventory {
     pub(super) publication: SourceImportRecordArtifactPublication<DaemonImportOutputPlatform>,
 }
 
-pub(super) struct PreparedInventoryInputs<'a> {
-    pub(super) content: &'a mut super::content_readback::PreparedContent,
-    pub(super) mapping: &'a mut super::source_stage::PreparedSourceMap,
-}
-
 pub(super) fn stage(
     source: &MigrationSource<'_, '_, '_>,
     root: &Path,
@@ -66,7 +61,7 @@ pub(super) fn stage(
     directory: &Path,
     input: &NativeMigrationInput<'_, '_, '_>,
 ) -> Result<(), String> {
-    stage_inner(source, root, target, directory, input, None, None).map(|_| ())
+    stage_inner(source, root, target, directory, input, None).map(|_| ())
 }
 
 pub(super) fn stage_owned<F: Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), String>>(
@@ -74,25 +69,110 @@ pub(super) fn stage_owned<F: Fn(search_control_redb::MigrationBootstrapWork) -> 
     directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
     journal: &mut search_control_redb::MigrationBootstrap, checkpoint: F,
 ) -> Result<StagedInventory, String> {
-    stage_inner(source, root, target, directory, input, Some((journal, &checkpoint)), None)?
+    stage_inner(source, root, target, directory, input, Some((journal, &checkpoint)))?
         .ok_or_else(|| "DIRECT_MIGRATION_BOOTSTRAP_INVALID".to_owned())
 }
 
-pub(super) fn stage_owned_with_artifacts(
+/// Produce both existing artifacts from the same two independent source passes.
+/// Neither original is published until both streams have completed comparison.
+pub(super) fn stage_owned_joint(
     source: &MigrationSource<'_, '_, '_>, root: &Path, target: SourceNamespaceId,
     directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
-    bootstrap: BootstrapDispatch<'_>,
-    artifacts: PreparedInventoryInputs<'_>,
-) -> Result<StagedInventory, String> {
-    stage_inner(source, root, target, directory, input, Some(bootstrap), Some(artifacts))?
-        .ok_or_else(|| "DIRECT_MIGRATION_BOOTSTRAP_INVALID".to_owned())
+    source_plan: [u8; 32], bootstrap: BootstrapDispatch<'_>,
+    mapping: &mut super::source_stage::PreparedSourceMap,
+) -> Result<(StagedInventory, super::content_readback::PreparedContent), String> {
+    input.context.inventory_reobserve(input)?;
+    let inventory_context = ArtifactContext::new(source);
+    let inventory_work = |unit| inventory_context.reserve(unit);
+    let content_context = ArtifactContext::new(source);
+    let content_work = |unit| content_context.reserve(unit);
+    source.charge(Work::Allocate(256))?;
+    let inventory_temporary = temporary_staging_name()?;
+    let mut inventory_writer = SourceImportRecordArtifact::create_with_context(
+        directory, &inventory_temporary, DaemonImportOutputPlatform, input.context.deadline(), &inventory_work,
+    ).map_err(|error| inventory_context.reason(error))?;
+    source.charge(Work::Allocate(256))?;
+    let content_temporary = temporary_staging_name()?;
+    let mut content_writer = SourceImportRecordArtifact::create_with_context(
+        directory, &content_temporary, DaemonImportOutputPlatform, input.context.deadline(), &content_work,
+    ).map_err(|error| super::content_readback::owned_artifact_reason(&content_context, error))?;
+    let (first_inventory, first_content, content_header) = {
+        let mut content_sink = |row: &[u8]| {
+            content_writer.push_with_context(row, input.context.deadline(), &content_work)
+                .map_err(|error| super::content_readback::owned_artifact_reason(&content_context, error))?;
+            source.checkpoint()
+        };
+        let mut content = super::content_readback::ContentPass::new(
+            source, target, source_plan, input.context.deadline(), &mut content_sink,
+        )?;
+        let header = content.header();
+        let inventory = compile_inventory(source, root, target, input, &mut |row| {
+            inventory_writer.push_with_context(row, input.context.deadline(), &inventory_work)
+                .map_err(|error| inventory_context.reason(error))?;
+            source.checkpoint()
+        }, Some(&mut *mapping), Some(&mut content))?;
+        (inventory, content.finish(source, input.context.deadline())?, header)
+    };
+    input.context.inventory_reobserve(input)?;
+    let inventory_frozen = inventory_writer.freeze_with_context(input.context.deadline(), &inventory_work)
+        .map_err(|error| inventory_context.reason(error))?;
+    let content_frozen = content_writer.freeze_with_context(input.context.deadline(), &content_work)
+        .map_err(|error| super::content_readback::owned_artifact_reason(&content_context, error))?;
+    let inventory_chain = *inventory_frozen.chain();
+    let content_chain = *content_frozen.chain();
+    let mut inventory_compare = inventory_frozen.begin_readback_with_context(input.context.deadline(), &inventory_work)
+        .map_err(|error| inventory_context.reason(error))?;
+    let mut content_compare = content_frozen.begin_readback_with_context(input.context.deadline(), &content_work)
+        .map_err(|error| super::content_readback::owned_artifact_reason(&content_context, error))?;
+    let (second_inventory, second_content) = {
+        let mut content_sink = |row: &[u8]| {
+            content_compare.compare_with_context(row, input.context.deadline(), &content_work)
+                .map_err(|error| super::content_readback::owned_artifact_reason(&content_context, error))?;
+            source.checkpoint()
+        };
+        let mut content = super::content_readback::ContentPass::new(
+            source, target, source_plan, input.context.deadline(), &mut content_sink,
+        )?;
+        let inventory = compile_inventory(source, root, target, input, &mut |row| {
+            inventory_compare.compare_with_context(row, input.context.deadline(), &inventory_work)
+                .map_err(|error| inventory_context.reason(error))?;
+            source.checkpoint()
+        }, Some(&mut *mapping), Some(&mut content))?;
+        (inventory, content.finish(source, input.context.deadline())?)
+    };
+    if first_inventory != second_inventory || first_content != second_content {
+        return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
+    }
+    input.context.inventory_reobserve(input)?;
+    let inventory_verified = inventory_compare.finish_with_context(input.context.deadline(), &inventory_work)
+        .map_err(|error| inventory_context.reason(error))?;
+    let content_verified = content_compare.finish_with_context(input.context.deadline(), &content_work)
+        .map_err(|error| super::content_readback::owned_artifact_reason(&content_context, error))?;
+    source.charge(Work::Allocate(256))?;
+    let content_name = format!("{}.source-content.v1", sha256::hex(&content_chain));
+    let content_publication = content_verified.prepare_publication_with_context(
+        &content_name, input.context.deadline(), &content_work,
+    ).map_err(|error| super::content_readback::owned_artifact_reason(&content_context, error))?;
+    let content = super::content_readback::PreparedContent::from_verified(
+        content_publication, content_header, first_content,
+    )?;
+    let inventory_name = format!("{}.{}", sha256::hex(&inventory_chain), LegacyInventoryProfile::LocationV2.artifact_suffix());
+    let mut inventory_publication = inventory_verified.prepare_publication_with_context(
+        &inventory_name, input.context.deadline(), &inventory_work,
+    ).map_err(|error| inventory_context.reason(error))?;
+    input.context.inventory_reobserve(input)?;
+    let (journal, checkpoint) = bootstrap;
+    let receipt = journal.publish_inventory(&mut inventory_publication, &DaemonImportOutputPlatform,
+        input.context.deadline(), checkpoint).map_err(super::bootstrap::reason)?;
+    input.context.inventory_reobserve(input)
+        .map_err(|_| "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned())?;
+    Ok((StagedInventory { receipt, publication: inventory_publication }, content))
 }
 
 fn stage_inner(
     source: &MigrationSource<'_, '_, '_>, root: &Path, target: SourceNamespaceId,
     directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
     bootstrap: Option<BootstrapDispatch<'_>>,
-    mut artifacts: Option<PreparedInventoryInputs<'_>>,
 ) -> Result<Option<StagedInventory>, String> {
     input.context.inventory_reobserve(input)?;
     let artifact_context = ArtifactContext::new(source);
@@ -107,12 +187,12 @@ fn stage_inner(
         &work,
     )
     .map_err(|error| artifact_context.reason(error))?;
-    let first = compile_with_content(source, root, target, input, &mut |row| {
+    let first = compile_inventory(source, root, target, input, &mut |row| {
         artifact
             .push_with_context(row, input.context.deadline(), &work)
             .map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
-    }, artifacts.as_mut())?;
+    }, None, None)?;
     input.context.inventory_reobserve(input)?;
     let frozen = artifact
         .freeze_with_context(input.context.deadline(), &work)
@@ -122,12 +202,12 @@ fn stage_inner(
     let mut compare = frozen
         .begin_readback_with_context(input.context.deadline(), &work)
         .map_err(|error| artifact_context.reason(error))?;
-    let second = compile_with_content(source, root, target, input, &mut |row| {
+    let second = compile_inventory(source, root, target, input, &mut |row| {
         compare
             .compare_with_context(row, input.context.deadline(), &work)
             .map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
-    }, artifacts.as_mut())?;
+    }, None, None)?;
     if first != second {
         return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
     }
@@ -180,13 +260,14 @@ fn artifact_reason(error: SourceImportRecordArtifactError<String>) -> String {
     }
 }
 
-fn compile_with_content(
+fn compile_inventory(
     source: &MigrationSource<'_, '_, '_>,
     root: &Path,
     target: SourceNamespaceId,
     input: &NativeMigrationInput<'_, '_, '_>,
     sink: &mut dyn FnMut(&[u8]) -> Result<(), String>,
-    mut artifacts: Option<&mut PreparedInventoryInputs<'_>>,
+    mut mapping: Option<&mut super::source_stage::PreparedSourceMap>,
+    mut content: Option<&mut super::content_readback::ContentPass<'_>>,
 ) -> Result<LegacyInventorySummary, String> {
     let header = source.source_mapping_header(target)?;
     let registration = input.registration.map(|bytes| {
@@ -220,10 +301,10 @@ fn compile_with_content(
     for family in Family::ALL {
         stream.statuses = [0; 7];
         stream.complete = true;
-        if let Some(artifacts) = artifacts.as_mut() && family == Family::Revisions {
-            scan::revisions_from_content(&mut stream, root, input, artifacts.content)?;
-        } else if let Some(artifacts) = artifacts.as_mut() && family == Family::Sources {
-            scan::sources_from_mapping(&mut stream, target, input, artifacts.mapping)?;
+        if let Some(content) = content.as_deref_mut() && family == Family::Revisions {
+            scan::revisions_with_content(&mut stream, root, input, content)?;
+        } else if let Some(mapping) = mapping.as_deref_mut() && family == Family::Sources {
+            scan::sources_from_mapping(&mut stream, target, input, mapping)?;
         } else {
             scan::family(&mut stream, family, root, target, input)?;
         }

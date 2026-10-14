@@ -48,12 +48,11 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     let mut mapping_artifact = prepare_source_map(source, target, directory, input)?;
     let expected = mapping_artifact.summary;
     let binding = header.import_binding(*mapping_artifact.publication.chain());
-    let mut content_artifact = super::content_readback::prepare_owned(
-        source, root, target, *binding.plan_chain.as_bytes(), directory, input,
-    )?;
-    let mut inventory_artifact = inventory::stage_owned_with_artifacts(source, root, target, directory, input,
+    let (mut inventory_artifact, mut content_artifact) = inventory::stage_owned_joint(
+        source, root, target, directory, input, *binding.plan_chain.as_bytes(),
         (&mut journal, &|work| { bootstrap::reserve(source, work)?; bootstrap::verify_output(&output, source) }),
-        inventory::PreparedInventoryInputs { content: &mut content_artifact, mapping: &mut mapping_artifact })?;
+        &mut mapping_artifact,
+    )?;
     let reserve = |work| {
         bootstrap::reserve(source, work)?;
         if matches!(work, MigrationBootstrapWork::Open | MigrationBootstrapWork::Write(0)) {
