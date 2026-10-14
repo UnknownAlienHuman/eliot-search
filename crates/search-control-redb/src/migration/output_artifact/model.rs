@@ -1,14 +1,14 @@
+use super::super::record_artifact::{SourceImportRecordArtifactError, call};
+use crate::{ControlError, MigrationBootstrapWork as Work};
 use std::fmt;
 use std::fs::File;
+use std::path::Path;
+use std::time::Instant;
 
-use super::super::output_lock::{
-    SourceImportOutputLockError, SourceImportOutputLockPlatform,
-};
+use super::super::output_lock::{SourceImportOutputLockError, SourceImportOutputLockPlatform};
 
 /// Platform identity observation required by the package-owned artifact lifecycle.
-pub trait SourceImportOutputArtifactPlatform:
-    SourceImportOutputLockPlatform + Clone
-{
+pub trait SourceImportOutputArtifactPlatform: SourceImportOutputLockPlatform + Clone {
     /// Stable native identity for one opened regular file.
     type Identity: Clone + Eq;
 
@@ -18,10 +18,56 @@ pub trait SourceImportOutputArtifactPlatform:
     ///
     /// Returns the platform error when it cannot determine the file's stable
     /// native identity.
-    fn identity(
+    fn identity(&self, file: &File) -> Result<Self::Identity, Self::Error>;
+
+    /// Borrowed record-operation identity observation. Native implementations
+    /// with multiple dispatches must override this simple-port compatibility adapter.
+    /// # Errors
+    /// Original refusal and platform failures remain distinct.
+    fn record_identity_with_context(
         &self,
         file: &File,
-    ) -> Result<Self::Identity, Self::Error>;
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<Self::Identity, SourceImportRecordArtifactError<Self::Error>> {
+        call(deadline, work, Work::Read(0), || {
+            self.identity(file)
+                .map_err(SourceImportRecordArtifactError::Platform)
+        })
+    }
+
+    /// Validates one directory under the original record-operation context.
+    /// Nested native operations require an overriding contextual implementation.
+    /// # Errors
+    /// Refusal prevents the next dispatch.
+    fn record_directory_with_context(
+        &self,
+        path: &Path,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<(), SourceImportRecordArtifactError<Self::Error>> {
+        call(deadline, work, Work::Read(0), || {
+            self.validate_directory(path)
+                .map_err(SourceImportRecordArtifactError::Platform)
+        })
+    }
+
+    /// Verifies the locator without hiding any nested native open or observation.
+    /// Qualified native implementations must override the simple-port adapter.
+    /// # Errors
+    /// Refusal or changed identity prevents further work.
+    fn record_locator_with_context(
+        &self,
+        file: &File,
+        path: &Path,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<(), SourceImportRecordArtifactError<Self::Error>> {
+        call(deadline, work, Work::Read(0), || {
+            self.verify_locator(file, path)
+                .map_err(SourceImportRecordArtifactError::Platform)
+        })
+    }
 }
 
 /// Closed artifact-lifecycle failures plus exact platform and lock failures.
@@ -52,24 +98,14 @@ impl<E: fmt::Display> SourceImportOutputArtifactError<E> {
         match self {
             Self::Lock(error) => error.into_reason(),
             Self::Platform(error) => error.to_string(),
-            Self::ObjectInvalid => {
-                "DIRECT_MIGRATION_IMPORT_OBJECT_INVALID".to_owned()
-            }
-            Self::OpenFailed => {
-                "DIRECT_MIGRATION_IMPORT_OPEN_FAILED".to_owned()
-            }
-            Self::CreateFailed => {
-                "DIRECT_MIGRATION_IMPORT_CREATE_FAILED".to_owned()
-            }
-            Self::IdentityChanged => {
-                "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned()
-            }
+            Self::ObjectInvalid => "DIRECT_MIGRATION_IMPORT_OBJECT_INVALID".to_owned(),
+            Self::OpenFailed => "DIRECT_MIGRATION_IMPORT_OPEN_FAILED".to_owned(),
+            Self::CreateFailed => "DIRECT_MIGRATION_IMPORT_CREATE_FAILED".to_owned(),
+            Self::IdentityChanged => "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned(),
             Self::PublishOutcomeUnknown => {
                 "DIRECT_MIGRATION_IMPORT_PUBLISH_OUTCOME_UNKNOWN".to_owned()
             }
-            Self::CleanupFailed => {
-                "DIRECT_MIGRATION_IMPORT_CLEANUP_FAILED".to_owned()
-            }
+            Self::CleanupFailed => "DIRECT_MIGRATION_IMPORT_CLEANUP_FAILED".to_owned(),
         }
     }
 }

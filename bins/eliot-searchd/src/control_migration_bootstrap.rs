@@ -66,6 +66,7 @@ pub(super) fn reserve(source: &MigrationSource<'_, '_, '_>, work: MigrationBoots
         MigrationBootstrapWork::Open => source.charge(Work::Open),
         MigrationBootstrapWork::Allocate(bytes) => source.charge(Work::Allocate(bytes)),
         MigrationBootstrapWork::Read(bytes) => source.charge(Work::Read(bytes)),
+        MigrationBootstrapWork::Process(bytes) => source.charge(Work::Compare(bytes)),
         MigrationBootstrapWork::Write(bytes) => source.charge(Work::Write(bytes)),
     }
 }

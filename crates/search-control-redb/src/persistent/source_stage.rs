@@ -90,7 +90,9 @@ impl OwnerBoundSourceStage {
                 STAGE_KEY, self.profile.clone(), &check)?;
             check.check(Point::BeforeWrite)?;
             dispatched = true;
-            let published = publication.publish_once(deadline).map_err(|_| ControlError::CommitOutcomeUnknown)?;
+            let published = publication
+                .publish_once_with_context(deadline, &|unit| check.reserve(unit))
+                .map_err(|_| ControlError::CommitOutcomeUnknown)?;
             check.check(Point::AfterCommit)?;
             if published.reused() { return Err(ControlError::CommitOutcomeUnknown); }
             let completed = codec::attempt(&self.profile, self.binding, publication, identity, 1)?;

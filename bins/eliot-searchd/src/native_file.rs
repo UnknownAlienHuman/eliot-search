@@ -85,7 +85,19 @@ impl Observation {
 /// Returns a closed failure for unsupported platform/handle/filesystem, reparse
 /// objects or unsuccessful native observation. There is no path/zero fallback.
 pub fn observe(file: &File) -> Result<Observation, ObservationError> {
-    platform::observe(file)
+    observe_with_check(file, &|_| Ok(()))
+}
+
+/// Reuses the same observation engine with a checkpoint around each native call.
+///
+/// The hook receives true before dispatch and false after it; only the former
+/// admits native work. An unsupported platform only polls with false.
+/// The caller owns the original deadline and work admission; this hook creates neither.
+/// # Errors
+/// A refused checkpoint or unsupported/failed observation returns no identity.
+pub fn observe_with_check(file: &File, check: &dyn Fn(bool) -> Result<(), ObservationError>)
+    -> Result<Observation, ObservationError> {
+    platform::observe_with_check(file, check)
 }
 
 /// Returns the exact hardlink count of one already-open object.
@@ -103,7 +115,8 @@ pub fn hardlink_count(file: &File) -> Result<u32, ObservationError> {
 mod platform {
     use super::{File, Observation, ObservationError};
 
-    pub(super) fn observe(_file: &File) -> Result<Observation, ObservationError> {
+    pub(super) fn observe_with_check(_file: &File, check: &dyn Fn(bool) -> Result<(), ObservationError>) -> Result<Observation, ObservationError> {
+        check(false)?;
         Err(ObservationError::UnsupportedPlatform)
     }
 
