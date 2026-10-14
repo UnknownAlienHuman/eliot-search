@@ -1,23 +1,20 @@
 use std::ffi::OsString;
-use std::io;
-use std::path::Path;
-
-use crate::service_output::emit_indexed_source;
+#[cfg(test)]
+use std::{io, path::Path};
 #[cfg(test)]
 use crate::service_output::{emit_streaming_search, json_string};
-use crate::storage_security::StorageSecurityStatus;
-
 #[cfg(test)]
 use super::commands::cmd_read_revision;
-use super::commands::{cmd_gc_root, cmd_index_directory, cmd_repair_root, cmd_retire_source};
 #[cfg(test)]
 use super::output::{emit_sources, emit_verification, write_stdout};
 #[cfg(test)]
 use super::store::with_store;
-use super::store::with_store_mut;
+#[cfg(test)]
 use super::support::require_count;
 
-pub(super) fn dispatch(command: &str, arguments: &[OsString]) -> Result<(), String> {
+pub(super) fn dispatch(command: &str, _arguments: &[OsString]) -> Result<(), String> {
+    #[cfg(test)]
+    let arguments = _arguments;
     match command {
         #[cfg(test)]
         "--health-data-root" => {
@@ -42,19 +39,8 @@ pub(super) fn dispatch(command: &str, arguments: &[OsString]) -> Result<(), Stri
                 Ok(())
             })
         }
-        "--index-file" => {
-            require_count(arguments, 3)?;
-            with_store_mut(Path::new(&arguments[1]), |root, store| {
-                let indexed = store.index_file(Path::new(&arguments[2]))?;
-                store.verify()?;
-                let storage = StorageSecurityStatus::inspect(root)?;
-                let mut output = io::stdout().lock();
-                emit_indexed_source(&mut output, &indexed, 0, 0, &storage)
-            })
-        }
-        "--index-directory" => {
-            require_count(arguments, 3)?;
-            cmd_index_directory(arguments)
+        "--index-file" | "--index-directory" | "--retire-source" | "--repair-root" | "--gc-root" => {
+            Err(super::support::LEGACY_EFFECTS_UNAVAILABLE.to_owned())
         }
         #[cfg(test)]
         "--search-root" | "--search-root-ascii-insensitive" => {
@@ -84,22 +70,10 @@ pub(super) fn dispatch(command: &str, arguments: &[OsString]) -> Result<(), Stri
                 emit_verification(&mut io::stdout().lock(), store, storage)
             })
         }
-        "--retire-source" => {
-            require_count(arguments, 3)?;
-            cmd_retire_source(arguments)
-        }
         #[cfg(test)]
         "--read-revision" => {
             require_count(arguments, 5)?;
             cmd_read_revision(arguments)
-        }
-        "--repair-root" => {
-            require_count(arguments, 2)?;
-            cmd_repair_root(arguments)
-        }
-        "--gc-root" => {
-            require_count(arguments, 3)?;
-            cmd_gc_root(arguments)
         }
         _ => Err("UNKNOWN_PERSISTENT_COMMAND".to_owned()),
     }

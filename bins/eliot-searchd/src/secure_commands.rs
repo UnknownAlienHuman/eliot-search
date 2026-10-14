@@ -7,3 +7,4 @@
 mod kernel;
 
 pub use kernel::maybe_run;
+pub use kernel::{LEGACY_EFFECTS_UNAVAILABLE, maybe_refuse_legacy_effects};

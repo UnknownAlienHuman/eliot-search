@@ -5,10 +5,7 @@ use std::process::ExitCode;
 use crate::development::{Health, scan_text};
 use crate::sha256;
 
-use super::commands::{
-    cmd_gc_root, cmd_index_directory, cmd_index_file, cmd_repair_root, cmd_retire_source,
-    cmd_scan_file, cmd_scan_stdin,
-};
+use super::commands::{cmd_scan_file, cmd_scan_stdin};
 #[cfg(test)]
 use super::commands::{
     cmd_health_data_root, cmd_list_sources, cmd_read_revision, cmd_search_root,
@@ -173,25 +170,8 @@ fn run() -> Result<(), String> {
             require_argument_count(&arguments, 3)?;
             cmd_scan_file(&arguments, argument)?;
         }
-        "--index-file" => {
-            require_argument_count(&arguments, 3)?;
-            cmd_index_file(&arguments)?;
-        }
-        "--index-directory" => {
-            require_argument_count(&arguments, 3)?;
-            cmd_index_directory(&arguments)?;
-        }
-        "--retire-source" => {
-            require_argument_count(&arguments, 3)?;
-            cmd_retire_source(&arguments)?;
-        }
-        "--repair-root" => {
-            require_argument_count(&arguments, 2)?;
-            cmd_repair_root(&arguments)?;
-        }
-        "--gc-root" => {
-            require_argument_count(&arguments, 3)?;
-            cmd_gc_root(&arguments)?;
+        "--index-file" | "--index-directory" | "--retire-source" | "--repair-root" | "--gc-root" => {
+            return Err(crate::secure_commands::LEGACY_EFFECTS_UNAVAILABLE.to_owned());
         }
         _ => return Err(format!("UNKNOWN_ARGUMENT:{argument}")),
     }
