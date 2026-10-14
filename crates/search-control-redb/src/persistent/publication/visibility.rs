@@ -12,7 +12,7 @@ use super::super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCo
     PersistentControlJournal, ReadTransaction, operation_from, is_corruption};
 use super::codec as intent_codec;
 
-mod codec;
+pub(in crate::persistent) mod codec;
 mod validation;
 mod succession;
 pub use succession::PublicationSuccessor;
@@ -23,11 +23,18 @@ mod tests;
 /// bindings and provider authority. Schemas 1-3 require explicit verified
 /// migration and are never reinterpreted as this layout.
 pub const PUBLICATION_VISIBILITY_SCHEMA_VERSION: u32 = 4;
-const STATE: &[u8] = b"collection_route/visibility/v1";
+pub(in crate::persistent) const STATE: &[u8] = b"collection_route/visibility/v1";
 const RECEIPTS: &[u8] = b"publication_receipts/visible/v1/";
 const MANIFESTS: &[u8] = b"projection_memberships/manifest/v1/";
 const SHADOWS: &[u8] = b"shadow_fences/publication/v1/";
 const RETIRED: &[u8] = b"publication_receipts/retired/v1/";
+
+pub(super) fn require_initialized(read: &ReadTransaction, limits: JournalLimits) -> Result<(), ControlError> {
+    use super::super::{RECORDS, decode_value, map_table_error, map_storage_error};
+    let table = read.open_table(RECORDS).map_err(map_table_error)?;
+    let value = table.get(STATE).map_err(|e| map_storage_error(&e))?.ok_or(ControlError::SchemaMismatch)?;
+    codec::read_state(&decode_value(value.value(), limits)?).map(|_| ())
+}
 
 // Ordinary shared-port writes and deletes cannot manufacture visibility or
 // bypass manifest/shadow/receipt guards. Typed commands use these same keys.
@@ -228,6 +235,11 @@ impl PersistentControlJournal {
     ) -> Result<ControlCommitReceipt, ControlCallError> {
         let budget = Budget::new(context);
         let result = (|| {
+            // Schema 5 seeds Indexed only with its atomic profile initializer.
+            // Later transitions lack an accepted source/access-counter contract.
+            if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+                return Err(ControlError::MigrationUnverified);
+            }
             self.ensure_available()?; budget.check(Point::Start)?; require_schema(self)?;
             if state.visible_epoch.get() != 0 || state.last_receipt.is_some()
                 || state.guards.owner_epoch != self.identity.owner_epoch { return Err(ControlError::InvalidValue); }
@@ -313,7 +325,7 @@ impl PersistentControlJournal {
             }
             self.transact_conditionally_checked(command, boundary, check)
         })();
-        if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION
+        if crate::has_visibility_schema(self.identity.schema_version)
             && result.as_ref().err().is_some_and(|error| is_corruption(*error)) { self.quarantined = true; }
         result
     }
@@ -330,8 +342,10 @@ pub(super) fn validate_initial_intent(snapshot: &JournalReadSnapshot, intent: &P
     Ok(())
 }
 
-const fn require_schema(journal: &PersistentControlJournal) -> Result<(), ControlError> {
-    if journal.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION { Ok(()) }
+fn require_schema(journal: &PersistentControlJournal) -> Result<(), ControlError> {
+    if crate::has_visibility_schema(journal.identity.schema_version) {
+        crate::persistent::operating_profile::require_indexed(journal)
+    }
     else { Err(ControlError::SchemaUnsupported) }
 }
 fn key(bytes: &[u8], limits: JournalLimits) -> Result<ControlKey, ControlError> { ControlKey::new(bytes.to_vec(), limits) }

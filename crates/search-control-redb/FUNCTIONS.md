@@ -1,6 +1,53 @@
 # Function contract — `search-control-redb`
 
-**Status:** W1/P02 logical contract; no redb dependency, schema migration or fault evidence is accepted.
+## Frozen schema-5 operating profile
+
+- `JournalOperatingProfile`: closed Direct / Indexed / MigrationInert observation.
+- `JournalProfileInitialization`: Direct, Indexed with actual supplied visibility,
+  or MigrationInert; no default, readiness boolean or caller-created verified state.
+- `initialize_operating_profile`: exact generation-zero conditional commit of the
+  immutable reserved profile and, only for Indexed, existing validated visibility.
+- `recover_operating_profile_initialization`: inspect the exact original command;
+  preserve historical replay and unknown/conflict classifications without rewriting.
+- `operating_profile`: bounded current technical observation, never serving authority.
+
+Direct registry/control writes need no Qdrant route. Indexed visibility/intent paths
+retain their semantic validation. MigrationInert cannot bind normal registry or
+publish/admit a current snapshot. Generic mutation cannot write/delete the profile.
+The original profile codec/operation join is checked on disk verification and snapshot
+publication. Schemas 1/2/3/4 and v1 bootstrap semantics remain unchanged.
+Later Direct-to-Indexed and inert adoption explicitly refuse until a separately
+accepted exact owner/source/access-counter transition contract exists. Root owns
+native v2 creation and source admission; this package mints none of those authorities.
+
+## Concrete registry reservation (#269)
+
+- `RegistryMutationRequest::new`: finite owner-supplied metadata and exact before
+  values; keeps original journal generation and separate registry revision.
+- `ControlPortCommand::Registry`: typed route through the existing borrowed
+  journal/publisher port, with snapshot suspension after dispatch.
+- `PersistentControlJournal::commit_registry_batch`: one conditional atomic
+  transaction, immutable full-ID operation and exact target readback.
+- `recover_registry_batch`: original-command recovery; no blind re-execution.
+- `lookup_registry_operation`: targeted immutable lookup/proven absence with
+  actual identity, journal generation and registry revision coordinates.
+- `read_registry_operation_targets`: exact envelope and all requested targets
+  from one coherent read, with no catalog/history scan or semantic callback.
+- `limits`: actual executing bounds copied from the journal, also on its bound port.
+- `read_registry_snapshot`: complete coherent technical restart observations;
+  source-owner semantic restore and admission decoding remain Root's responsibility.
+
+Schema 5 is VERSIONED_REBUILD. Reserved codecs also run during open/recovery and
+snapshot verification; old-schema collisions refuse. Existing seven classes,
+three physical tables and active limits remain unchanged. Wrapped state and
+operation values must fit the 64 KiB baseline; no silent splitting or limit rise.
+The unshipped schema-5 family map includes Root tag 4 with Identity class. Root
+key/value bytes remain source-owner validated opaque metadata; tags 1/2/3 and
+the original-operation codec/join remain unchanged.
+
+**Status:** concrete disk persistence and schema-5 registry reservation are implemented.
+Complete #268 candidate adoption, #269 serving cutover and native/fault/installed
+qualification remain separate, incomplete work.
 
 Inventory codecs select one explicit LegacyInventoryProfile. Existing constructors
 and descriptor bytes retain V1 basename semantics; LocationV2 selects distinct

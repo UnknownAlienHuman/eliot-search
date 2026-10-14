@@ -79,7 +79,10 @@ impl PersistentControlJournal {
         check: &dyn Check,
     ) -> Result<ControlSnapshot, ControlError> {
         check.check(Point::SnapshotRebuild)?;
-        if matches!(self.identity.schema_version, super::PUBLICATION_INTENT_SCHEMA_VERSION | super::PUBLICATION_VISIBILITY_SCHEMA_VERSION) {
+        if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+            super::operating_profile::normal(super::operating_profile::snapshot_mode(&readback, self.limits)?)?;
+        }
+        if crate::has_intent_schema(self.identity.schema_version) {
             super::publication::require_resolved(&readback.records)?;
         }
         let snapshot = rebuild_control_snapshot(readback, self.identity, self.limits)?;

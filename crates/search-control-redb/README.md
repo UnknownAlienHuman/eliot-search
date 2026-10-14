@@ -2,6 +2,89 @@
 
 Bounded technical control state, never a searchable corpus.
 
+## Registry reservation and atomic storage (#269)
+
+Disposition: **VERSIONED_REBUILD**, journal schema **5**. The three physical tables
+and seven record-class tags are unchanged. Schema 5 adds the exact reserved
+namespace `eliot.control.registry.v1/`; old schemas refuse colliding records on
+open/readback and cannot execute registry commands. There is no in-place adoption
+or automatic migration. The schema descriptor binds the prefix and wrapper codecs.
+Schema 5 has a mandatory, package-owned operating-profile record. Schemas 1/2/3/4
+and the legacy v1 migration bootstrap retain their existing semantics.
+
+### Frozen operating-profile contract
+
+This slice starts from c5556f3 and changes only this package. The unshipped schema-5
+descriptor versions the reserved operating-profile key and codec before integration.
+`JournalOperatingProfile` is the closed Direct / Indexed / MigrationInert enum.
+`JournalProfileInitialization` selects Direct, Indexed with an explicitly supplied
+`PublicationVisibilityState`, or MigrationInert. `initialize_operating_profile`
+atomically installs the immutable profile at generation zero; Indexed installs its
+validated initial visibility in the same transaction. Exact initialization recovery
+uses the original command and operation identity and never repeats a write.
+
+Direct permits bounded registry/control metadata and published technical snapshots
+without any indexed route. It rejects indexed intent/visibility/manifest/receipt
+keys. Indexed requires the complete existing visibility validator. MigrationInert
+permits only inert Migration-class control writes and refuses normal registry ports,
+provider admission and current serving snapshots. Its source/inventory/content table
+capabilities remain private to the original live migration owner.
+
+Generic writes/deletes cannot replace the operating-profile record. Open, explicit
+verification, recovery and snapshot publication validate its codec and original
+generation-zero operation receipt. A nonempty schema-5 journal without the record
+refuses; no automatic adoption or default mode exists. Binding/dispatch retains the
+same publisher suspension and exact disk-generation checks.
+
+Direct-to-Indexed and MigrationInert adoption remain explicit refusals in this slice.
+Control has no accepted authoritative source/access-counter binding with which to
+validate a later transition. Existing visibility initialization cannot seed a route
+after Direct writes or invent collection IDs, counters or policy authority. Native
+v2 creation and actual source-owner admission inputs remain Root's integration work.
+
+Root constructs `RegistryStateKey` from a closed family and the source owner's
+complete canonical key bytes, and `RegistryStateChange` from exact before/after
+metadata bytes. Source, membership and generation use Identity, State and Revision
+respectively. Root metadata uses Identity and storage family tag 4; existing
+Source/Membership/Generation tags 1/2/3 stay unchanged. Root key/value bytes remain
+opaque here and require source-owner/daemon semantic validation. This extends the
+unshipped schema-5 descriptor, without creating schema 6 or adopting unknown tags.
+`RegistryMutationRequest::new` retains the complete original opaque
+operation ID, original journal generation, independent registry revision,
+owner-computed command digest and canonical operation/delta envelope.
+
+`PersistentControlJournal::commit_registry_batch` uses the existing conditional
+kernel to compare exact classes/bytes or absence and atomically write every state,
+the immutable operation envelope and registry revision. Generic mutations cannot
+write/delete reserved keys. `ControlPortCommand::Registry` exposes the same path
+through `BoundControlJournal`, suspending snapshot admission until verified disk
+publication. The raw ID remains in the envelope; SHA-256 is only its technical
+backend index and is never relabelled BLAKE3 or used as source/admission authority.
+
+Normal commit readback reads the exact operation, revision and requested targets
+from one transaction, without rebuilding the full catalog/history. The separate
+`read_registry_snapshot` is a complete bounded startup/recovery read. It joins
+operation envelopes to the actual backend receipt ledger and exposes original
+owner bytes for Root's semantic decoders. `recover_registry_batch` requires the
+original command/generation; historical replay acknowledges the old receipt while
+returning current targets, without writing obsolete values back. Late readback
+failure retains the original pending fence and cannot unblock another mutation.
+
+All wrapped values, including the complete immutable operation envelope, must fit
+the active journal value limit (baseline 64 KiB). Canonical keys plus storage
+framing must fit the key limit. For D targets, writes plus conditions consume
+`2*D+4` items. Refusal occurs before dispatch; no limit inflation, truncation,
+splitting an atomic batch or additional database is provided. A source-owner
+256 KiB envelope ceiling does not imply it fits this storage profile.
+
+This package validates technical namespace/class/framing/bounds and atomicity.
+Root must validate actual PreparedBatch/key/state/admission semantics, provide
+original owner-issued admission inputs, restore source-owned state, and perform
+the verified #268/#269 native cutover. No source-registry dependency, admission
+evaluator, source-byte acquisition, serving fallback or qualification is added.
+Disk reopen/lost-acknowledgement component fixtures do not qualify native custody,
+power loss, external publication outcome or installed serving.
+
 `PersistentControlJournal` uses pinned redb 2.6.3 without Python features. It provides atomic
 record/header/receipt transactions, exact-input replay protection, unknown-commit recovery,
 read-only snapshots and explicit owner-epoch handoff. Vendor types stay private. The in-memory
@@ -20,7 +103,24 @@ The disk file is not an authenticated ciphertext format; this adapter assumes ex
 Capability owners must validate payload semantics: a technical class tag alone does not prove that
 arbitrary bytes are content-free.
 
+### Targeted registry reads
+
+The normal registry adapter uses `lookup_registry_operation(id, context)`, then
+decodes immutable owner bytes outside the database and calls
+`read_registry_operation_targets(envelope, keys, context)`. Both methods also
+exist on `BoundControlJournal`. `RegistryOperationLookup::Absent` carries actual
+identity/journal-generation/registry-revision coordinates; `Committed` contains
+`RegistryOperationObservation` with those current coordinates and the unchanged
+original `envelope()`. The second call rechecks that exact envelope and all keys
+in one read transaction. Missing targets, changed envelopes, duplicates, active
+bounds and pending/unknown state refuse without partial output or false absence.
+Neither normal lookup scans the full catalog/history. Missing revision metadata
+requires one bounded empty-prefix observation; operation absence checks the real
+backend receipt as well. `limits()` on journal/bound port returns the executing
+profile for adapter preflight. The complete startup snapshot API remains separate.
+
 ## Record-artifact retention (#345)
+
 
 The original staging `File` is retained from creation through freeze, exact replay,
 publication, synchronization and readback. Record-artifact Drop never removes a

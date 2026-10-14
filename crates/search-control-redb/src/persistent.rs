@@ -27,7 +27,11 @@ mod quarantine;
 mod diagnostics;
 mod publication;
 mod port;
+mod registry;
 mod bootstrap;
+mod operating_profile;
+
+pub use operating_profile::{JournalOperatingProfile, JournalProfileInitialization};
 
 pub use bootstrap::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBootstrapFailure,
     MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
@@ -37,6 +41,10 @@ pub use bootstrap::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryM
 pub use bootstrap::{OwnerContentStage, OwnerContentReadback, OwnerContentMappedReceipt};
 
 pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
+pub use registry::{RegistryStateFamily, RegistryStateKey, RegistryStateChange,
+    RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
+    RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,
+    RegistryOperationLookup, RegistryOperationObservation};
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
     PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
@@ -161,6 +169,10 @@ impl PersistentControlJournal {
     /// Verified exact installation/root/owner/path/schema binding.
     #[must_use]
     pub const fn identity(&self) -> JournalIdentity { self.identity }
+
+    /// Active executing storage limits, not a caller's separate preflight profile.
+    #[must_use]
+    pub const fn limits(&self) -> JournalLimits { self.limits }
 
     /// Diagnostic count of successful initialization, data commits, owner handoffs and quarantine writes.
     /// Reads, recovery and idempotent replay do not increment it; this is not an I/O metric.
@@ -296,7 +308,8 @@ impl PersistentControlJournal {
             }
             let key = ControlKey::new(key.value().to_vec(), self.limits).map_err(|_| ControlError::StoreCorrupt)?;
             let value = decode_value(value.value(), self.limits)?;
-            if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) {
+            registry::validate_record(self.identity.schema_version, &key, &value, self.limits)?;
+            if crate::has_intent_schema(self.identity.schema_version) {
                 publication::validate_record(&key, &value)?;
             }
             total = total.checked_add(as_u64(value.len())?).ok_or(ControlError::StoreCorrupt)?;
@@ -304,12 +317,15 @@ impl PersistentControlJournal {
             records.push((key, value));
         }
         if total != header.value_bytes { return Err(ControlError::StoreCorrupt); }
-        if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) {
+        if crate::has_intent_schema(self.identity.schema_version) {
             publication::verify_absence(read, header.generation, self.limits, &records, check)?;
         }
         check.check(Point::ReadComplete)?;
         let snapshot = JournalReadSnapshot { identity: self.identity, generation: header.generation, records };
-        if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+        registry::validate_snapshot(read, &snapshot, self.limits, check)?;
+        if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+            operating_profile::validate_snapshot(self, read, &snapshot, check)?;
+        } else if crate::has_visibility_schema(self.identity.schema_version) {
             publication::visibility::validate_snapshot(read, &snapshot, self.limits, check)?;
         }
         Ok(snapshot)
@@ -355,7 +371,7 @@ impl PersistentControlJournal {
 
 fn validate_identity(identity: JournalIdentity) -> Result<JournalIdentity, ControlError> {
     identity.validate()?;
-    if !matches!(identity.schema_version, 1 | PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) {
+    if !matches!(identity.schema_version, 1 | PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION | crate::REGISTRY_JOURNAL_SCHEMA_VERSION) {
         return Err(ControlError::SchemaUnsupported);
     }
     Ok(identity)

@@ -10,6 +10,12 @@ mod identity;
 mod persistent;
 mod snapshot_guard;
 mod conditions;
+const fn has_visibility_schema(version: u32) -> bool {
+    matches!(version, 4 | identity::REGISTRY_JOURNAL_SCHEMA_VERSION)
+}
+const fn has_intent_schema(version: u32) -> bool {
+    version == 2 || has_visibility_schema(version)
+}
 pub mod policy_codec;
 pub mod access_policy;
 pub mod provider_authority;
@@ -20,6 +26,7 @@ pub mod migration;
 pub use reference::*;
 pub use identity::*;
 pub use persistent::PublicationSuccessor;
+pub use persistent::{JournalOperatingProfile, JournalProfileInitialization};
 pub use persistent::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 pub use persistent::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
 pub use persistent::{OwnerContentStage, OwnerContentReadback, OwnerContentMappedReceipt};
@@ -27,6 +34,10 @@ pub use persistent::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBoo
     MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
     MigrationBootstrapPlatform, MigrationBootstrapReceipt, MigrationBootstrapWork};
 pub use persistent::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
+pub use persistent::{RegistryStateFamily, RegistryStateKey, RegistryStateChange,
+    RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
+    RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,
+    RegistryOperationLookup, RegistryOperationObservation};
 pub use conditions::{ConditionalControlMutation, ControlRecordCondition};
 pub use persistent::{ControlCallError, ControlInterruption, PersistentControlJournal,
     ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest,

@@ -10,7 +10,7 @@ const RECEIPT_MAGIC: &[u8; 8] = b"ELIVRC01";
 const MANIFEST_MAGIC: &[u8; 8] = b"ELIMRF01";
 const SHADOW_MAGIC: &[u8; 8] = b"ELISHW01";
 
-pub(super) fn state(state: &PublicationVisibilityState, limits: JournalLimits) -> Result<ControlValue, ControlError> {
+pub(in crate::persistent) fn state(state: &PublicationVisibilityState, limits: JournalLimits) -> Result<ControlValue, ControlError> {
     if (state.visible_epoch.get() == 0) != state.last_receipt.is_none() { return Err(ControlError::InvalidValue); }
     let mut out = STATE_MAGIC.to_vec();
     out.extend_from_slice(state.collection_generation_id.as_bytes());
@@ -29,7 +29,7 @@ pub(super) fn state(state: &PublicationVisibilityState, limits: JournalLimits) -
     ControlValue::new(ControlRecordClass::Revision, out, limits)
 }
 
-pub(super) fn read_state(value: &ControlValue) -> Result<PublicationVisibilityState, ControlError> {
+pub(in crate::persistent) fn read_state(value: &ControlValue) -> Result<PublicationVisibilityState, ControlError> {
     let mut input = Input::new(value, ControlRecordClass::Revision, *STATE_MAGIC)?;
     let collection_generation_id = CollectionGenerationId::from_bytes(input.take()?);
     let schema_identity_digest = Blake3Digest32::from_bytes(input.take()?);

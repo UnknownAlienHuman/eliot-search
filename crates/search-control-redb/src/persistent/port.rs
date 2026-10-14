@@ -16,7 +16,7 @@ use crate::conditions::validate_conditions;
 use super::operation::{Budget, Check, Point};
 use super::{Boundary, ControlCallError, ControlQuarantineReceipt, ControlQuarantineRequest,
     JournalReadSnapshot, JournalWriteCounters, PersistentControlJournal,
-    PUBLICATION_VISIBILITY_SCHEMA_VERSION, validate_mutation};
+    validate_mutation};
 
 /// Redacted shared-port error retaining the existing closed journal reason.
 /// Cross-port classification preserves cancellation, deadlines and unknown outcomes.
@@ -31,6 +31,8 @@ pub type ControlPortError = PortError<ControlError>;
 pub enum ControlPortCommand {
     /// Technical writes with exact value/absence and generation preconditions.
     Records(ConditionalControlMutation),
+    /// Complete finite registry metadata with owner-prepared opaque bytes.
+    Registry(super::RegistryMutationRequest),
     /// First intent or one permitted existing-intent transition.
     PublicationIntent(PublicationIntentUpdate),
     /// Exact next reservation after a durably committed, published predecessor.
@@ -41,6 +43,7 @@ impl ControlPortCommand {
     const fn id(&self) -> MutationId {
         match self {
             Self::Records(command) => command.mutation().id(),
+            Self::Registry(command) => command.control_operation_id(),
             Self::PublicationIntent(command) => command.port_operation_id(),
             Self::PublicationSuccessor(command) => command.port_operation_id(),
         }
@@ -85,9 +88,10 @@ impl PersistentControlJournal {
     pub fn bind_control_port<'a, C: CancellationProbe>(
         &'a mut self, publisher: &'a mut ControlSnapshotPublisher,
     ) -> Result<BoundControlJournal<'a, C>, ControlError> {
-        if self.identity.schema_version != PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+        if !crate::has_visibility_schema(self.identity.schema_version) {
             return Err(ControlError::SchemaUnsupported);
         }
+        self.require_normal_profile(&super::Unscoped)?;
         publisher.begin_disk_publication(self.identity)?;
         Ok(BoundControlJournal { journal: self, publisher, cancellation: PhantomData })
     }
@@ -128,6 +132,10 @@ impl<C: CancellationProbe> ControlJournalPort for BoundControlJournal<'_, C> {
                     self.validate_record_command(command, &budget)?;
                     budget.check(Point::Validated)?;
                     self.journal.transact_conditionally_checked(command.clone(), Boundary::Normal, &budget)
+                }
+                ControlPortCommand::Registry(command) => {
+                    self.journal.commit_registry_checked(command, Boundary::Normal, &budget)
+                        .map(super::RegistryCommitReadback::into_receipt)
                 }
                 ControlPortCommand::PublicationIntent(command) => {
                     self.journal.persist_intent_checked(command, Boundary::Normal, &budget)
@@ -205,11 +213,42 @@ impl<C: CancellationProbe> ControlSnapshotPort for BoundControlJournal<'_, C> {
             || snapshot.identity != self.journal.identity {
             return Err(admission_failure(ControlError::IdentityMismatch));
         }
+        if snapshot.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+            let key = crate::ControlKey::new(super::operating_profile::KEY.to_vec(), self.journal.limits)
+                .map_err(admission_failure)?;
+            let mode = super::operating_profile::mode_value(snapshot.records.binary_search_by(|(k, _)| k.cmp(&key))
+                .ok().and_then(|index| snapshot.records.get(index)).map(|(_, value)| value), self.journal.limits)
+                .map_err(admission_failure)?;
+            super::operating_profile::normal(mode).map_err(admission_failure)?;
+        }
         Ok(snapshot)
     }
 }
 
 impl<C: CancellationProbe> BoundControlJournal<'_, C> {
+    /// Actual limits of the executing borrowed journal.
+    #[must_use]
+    pub const fn limits(&self) -> crate::JournalLimits { self.journal.limits() }
+
+    /// Targeted immutable-operation lookup on the recovery plane, without publication.
+    ///
+    /// # Errors
+    /// Partial/unknown/pending or interrupted state is an error, never absence.
+    pub fn lookup_registry_operation(&self, id: &OpaqueId, context: &OperationContext<C>)
+        -> Result<super::RegistryOperationLookup, ControlPortError> {
+        self.journal.lookup_registry_operation(id, context).map_err(|error| failure(error, None))
+    }
+
+    /// Recheck an immutable envelope and all supplied keys in one bounded read.
+    ///
+    /// # Errors
+    /// Changed operations, missing/duplicate/oversized targets and interruptions refuse.
+    pub fn read_registry_operation_targets(&self, expected: &super::RegistryOperationEnvelope,
+        keys: &[super::RegistryStateKey], context: &OperationContext<C>,
+    ) -> Result<super::RegistryTransactionReadback, ControlPortError> {
+        self.journal.read_registry_operation_targets(expected, keys, context)
+            .map_err(|error| failure(error, None))
+    }
     /// Recovers the original command, including exact record preconditions.
     /// No write is retried and no publisher fence is cleared by this operation.
     ///
@@ -228,6 +267,14 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
                 ControlPortCommand::Records(command) => {
                     self.validate_record_command(command, &budget)?;
                     command
+                }
+                ControlPortCommand::Registry(command) => {
+                    if self.journal.identity.schema_version != crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+                        return Err(ControlError::SchemaUnsupported);
+                    }
+                    self.journal.require_normal_profile(&budget)?;
+                    generated = command.command(self.journal.limits)?;
+                    &generated
                 }
                 ControlPortCommand::PublicationIntent(command) => {
                     generated = command.command(self.journal.limits)?;
