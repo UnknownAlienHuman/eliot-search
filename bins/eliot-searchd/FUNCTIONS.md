@@ -16,6 +16,9 @@ canonical revision occurrences joins exact legacy source/revision references to
 the imported SHA/length/BLAKE3 facts. Reused legacy objects do not collapse A/B/A
 occurrences. Missing historical content remains an explicit gap; wrong bindings,
 orphan content and unknown publication cannot issue a partial success receipt.
+The final CLI filter admits only exact content phase/outcome codes and recognized
+literal cause suffixes. An unrecognized/private cause is collapsed while preserving
+the public content outcome; it cannot inject source paths or JSON frame contents.
 
 Contextual legacy unprotect uses the original startup request/work pair or the
 separately admitted command pair for mandatory native-clear accounting, including
