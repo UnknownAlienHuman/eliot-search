@@ -21,12 +21,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
     Blake3Digest32, BoundedCanonicalBytes, BoundedList, BoundedNonContentMetadata, BoundedSet,
-    BufferSnapshotId, CatalogRevision, CoverageDenominatorKind, ExactCompletenessRequirements,
-    ExactConclusion, ExactExecutionReport, ExactInputDomain, ExactItemFailure,
-    ExactItemFailureKind, ExactMatch, ExactPredicate, ExactPredicateKind, ExactScanDenominator,
-    ExactScanPlan, ExactScanPlanRef, MAX_LIST_ITEMS, MAX_RAW_BYTES, MAX_REASON_CODES,
-    PlanFingerprint, PlanId, ProfileId, ReceiptRef, SearchReasonCodeV1, SourceRevisionId,
-    SourceRevisionRef,
+    BufferSnapshotId, CanonicalDigestDomain, CatalogRevision, CoverageDenominatorKind,
+    DigestInputLimit, ExactCompletenessRequirements, ExactConclusion, ExactExecutionReport,
+    ExactInputDomain, ExactItemFailure, ExactItemFailureKind, ExactMatch, ExactPredicate,
+    ExactPredicateKind, ExactScanDenominator, ExactScanPlan, ExactScanPlanRef, MAX_LIST_ITEMS,
+    MAX_RAW_BYTES, MAX_REASON_CODES, PlanFingerprint, PlanId, ProfileId, ReceiptRef,
+    SearchReasonCodeV1, SourceRevisionId, SourceRevisionRef, blake3_raw,
 };
 
 /// Closed exact-plane failure surface.
@@ -1106,6 +1106,7 @@ pub fn execute_exact_scan(
 
     let mut executions = Vec::new();
     let mut scanned_bytes = 0_u64;
+    let mut reserved_bytes = 0_u64;
     let mut matched_count = 0_usize;
     let mut cancelled = false;
     let mut timed_out = false;
@@ -1153,12 +1154,11 @@ pub fn execute_exact_scan(
             )?);
             continue;
         };
-        let proposed_bytes = scanned_bytes
+        let proposed_bytes = reserved_bytes
             .checked_add(item.revision.byte_length)
             .ok_or(ExactError::ExactBudgetExhausted)?;
         if proposed_bytes > budget.max_bytes {
             timed_out = true;
-            by_revision.remove(&item.revision.revision_id);
             executions.push(item_failure(
                 item.revision.revision_id,
                 ExactItemFailureKind::Timeout,
@@ -1166,6 +1166,7 @@ pub fn execute_exact_scan(
             )?);
             continue;
         }
+        reserved_bytes = proposed_bytes;
         let execution = execute_item(plan, permit, item, &readback, engine, projector)?;
         scanned_bytes = scanned_bytes
             .checked_add(execution.scanned_bytes)
@@ -1350,8 +1351,28 @@ pub fn checkpoint_execution(
     plan: &CompiledExactScan,
     completed_items: Vec<SourceRevisionId>,
     result_receipt_refs: Vec<ReceiptRef>,
-    blake3_256: impl Fn(&[u8]) -> [u8; 32],
 ) -> Result<ExactCheckpoint, ExactError> {
+    let checkpoint_digest = digest_checkpoint(plan, &completed_items, &result_receipt_refs)?;
+    Ok(ExactCheckpoint {
+        plan_ref: plan.plan_ref(),
+        denominator_digest: plan.denominator.denominator_digest,
+        predicate_digest: plan.predicate.predicate_digest,
+        completed_items: BoundedList::new(completed_items)
+            .map_err(|_| ExactError::ContractViolation)?,
+        result_receipt_refs: BoundedList::new(result_receipt_refs)
+            .map_err(|_| ExactError::ContractViolation)?,
+        checkpoint_digest,
+    })
+}
+
+// V2 uses the accepted real BLAKE3 primitive. Old injected V1 digests do not
+// authenticate restored fields and are never accepted by reinterpretation.
+fn digest_checkpoint(
+    plan: &CompiledExactScan,
+    completed_items: &[SourceRevisionId],
+    result_receipt_refs: &[ReceiptRef],
+) -> Result<Blake3Digest32, ExactError> {
+    const DOMAIN: &str = "eliot/raw/exact-checkpoint/v2";
     if completed_items.len() != result_receipt_refs.len() || completed_items.len() > MAX_LIST_ITEMS
     {
         return Err(ExactError::ExactReportInvalid);
@@ -1366,26 +1387,27 @@ pub fn checkpoint_execution(
     if completed.len() != completed_items.len() || !completed.is_subset(&denominator) {
         return Err(ExactError::ExactReportInvalid);
     }
-    let mut bytes = Vec::new();
-    append(&mut bytes, b"eliot-search/exact-checkpoint/v1")?;
+    let size = result_receipt_refs.iter().try_fold(120_usize, |size, receipt| {
+        size.checked_add(24).and_then(|size| size.checked_add(receipt.as_str().len()))
+            .ok_or(ExactError::ExactBudgetExhausted)
+    })?;
+    if size > MAX_RAW_BYTES.saturating_sub(DOMAIN.len() + 1) {
+        return Err(ExactError::ExactBudgetExhausted);
+    }
+    let mut bytes = Vec::with_capacity(size);
     bytes.extend_from_slice(plan.contract.plan_id.as_bytes());
     bytes.extend_from_slice(plan.contract.plan_fingerprint.as_bytes());
     bytes.extend_from_slice(plan.denominator.denominator_digest.as_bytes());
     bytes.extend_from_slice(plan.predicate.predicate_digest.as_bytes());
-    for (item, receipt) in completed_items.iter().zip(&result_receipt_refs) {
+    let count = u64::try_from(completed_items.len()).map_err(|_| ExactError::ExactBudgetExhausted)?;
+    bytes.extend_from_slice(&count.to_be_bytes());
+    for (item, receipt) in completed_items.iter().zip(result_receipt_refs) {
         bytes.extend_from_slice(item.as_bytes());
         append(&mut bytes, receipt.as_str().as_bytes())?;
     }
-    Ok(ExactCheckpoint {
-        plan_ref: plan.plan_ref(),
-        denominator_digest: plan.denominator.denominator_digest,
-        predicate_digest: plan.predicate.predicate_digest,
-        completed_items: BoundedList::new(completed_items)
-            .map_err(|_| ExactError::ContractViolation)?,
-        result_receipt_refs: BoundedList::new(result_receipt_refs)
-            .map_err(|_| ExactError::ContractViolation)?,
-        checkpoint_digest: Blake3Digest32::from_bytes(blake3_256(&bytes)),
-    })
+    let domain = CanonicalDigestDomain::parse(DOMAIN).map_err(|_| ExactError::ContractViolation)?;
+    let limit = DigestInputLimit::new(MAX_RAW_BYTES).map_err(|_| ExactError::ContractViolation)?;
+    blake3_raw(&domain, &bytes, limit).map_err(|_| ExactError::ExactBudgetExhausted)
 }
 
 /// Verifies a checkpoint and returns unfinished items in frozen order.
@@ -1400,6 +1422,12 @@ pub fn resume_execution(
         || checkpoint.checkpoint_digest != expected_checkpoint_digest
         || checkpoint.completed_items.len() != checkpoint.result_receipt_refs.len()
     {
+        return Err(ExactError::ExactReportInvalid);
+    }
+    let actual = digest_checkpoint(
+        plan, checkpoint.completed_items.as_slice(), checkpoint.result_receipt_refs.as_slice(),
+    )?;
+    if actual != expected_checkpoint_digest {
         return Err(ExactError::ExactReportInvalid);
     }
     let completed = checkpoint

@@ -1140,7 +1140,6 @@ fn checkpoint_resume_restart_from_retained_bytes() {
         &scope.plan,
         vec![first_id],
         vec![ReceiptRef::new("test-checkpoint-receipt/1").expect("receipt")],
-        test_blake,
     )
     .expect("checkpoint");
     let remaining =
@@ -1151,6 +1150,35 @@ fn checkpoint_resume_restart_from_retained_bytes() {
         Some(second_id),
         "resume continues in frozen order"
     );
+
+    let trusted = checkpoint.checkpoint_digest;
+    for id in [second_id, SourceRevisionId::from_bytes(uuid16(0xFFFF))] {
+        let mut changed = checkpoint.clone();
+        changed.completed_items = BoundedList::new(vec![id]).unwrap();
+        assert_eq!(resume_execution(&scope.plan, &changed, trusted), Err(ExactError::ExactReportInvalid));
+    }
+    let mut changed = checkpoint.clone();
+    changed.result_receipt_refs = BoundedList::new(vec![ReceiptRef::new("changed/receipt").unwrap()]).unwrap();
+    assert_eq!(resume_execution(&scope.plan, &changed, trusted), Err(ExactError::ExactReportInvalid));
+    let mut changed = checkpoint.clone();
+    changed.completed_items = BoundedList::new(vec![first_id, first_id]).unwrap();
+    changed.result_receipt_refs = BoundedList::new(vec![
+        ReceiptRef::new("paired/1").unwrap(), ReceiptRef::new("paired/2").unwrap(),
+    ]).unwrap();
+    assert_eq!(resume_execution(&scope.plan, &changed, trusted), Err(ExactError::ExactReportInvalid));
+    let mut old_oracle = checkpoint.clone();
+    old_oracle.checkpoint_digest = digest_byte(0x42);
+    assert_eq!(resume_execution(&scope.plan, &old_oracle, old_oracle.checkpoint_digest),
+        Err(ExactError::ExactReportInvalid));
+    let paired = checkpoint_execution(&scope.plan, vec![first_id, second_id], vec![
+        ReceiptRef::new("paired/1").unwrap(), ReceiptRef::new("paired/2").unwrap(),
+    ]).unwrap();
+    let mut changed = paired.clone();
+    changed.result_receipt_refs = BoundedList::new(vec![
+        ReceiptRef::new("paired/2").unwrap(), ReceiptRef::new("paired/1").unwrap(),
+    ]).unwrap();
+    assert_eq!(resume_execution(&scope.plan, &changed, paired.checkpoint_digest),
+        Err(ExactError::ExactReportInvalid));
 
     // Checkpoint forgery and accounting contradictions fail closed.
     assert_eq!(
@@ -1165,7 +1193,6 @@ fn checkpoint_resume_restart_from_retained_bytes() {
                 ReceiptRef::new("test-checkpoint-receipt/1").expect("receipt"),
                 ReceiptRef::new("test-checkpoint-receipt/2").expect("receipt"),
             ],
-            test_blake,
         )
         .is_err()
     );
@@ -1174,7 +1201,6 @@ fn checkpoint_resume_restart_from_retained_bytes() {
             &scope.plan,
             vec![SourceRevisionId::from_bytes(uuid16(0xFFFF))],
             vec![ReceiptRef::new("test-checkpoint-receipt/1").expect("receipt")],
-            test_blake,
         )
         .is_err()
     );
@@ -1186,7 +1212,6 @@ fn checkpoint_resume_restart_from_retained_bytes() {
                 ReceiptRef::new("test-checkpoint-receipt/1").expect("receipt"),
                 ReceiptRef::new("test-checkpoint-receipt/2").expect("receipt"),
             ],
-            test_blake,
         )
         .is_err()
     );
@@ -1330,6 +1355,30 @@ fn live_barrier_revalidation_matrix() {
         ),
         Err(ExactError::ExactDenominatorDrift)
     );
+}
+
+#[test]
+fn failed_predicates_cannot_refund_the_cumulative_byte_allowance() {
+    let mut scope = proof_scope("aaaa", "aaaa", "a", 0xB8, 0x37);
+    let third = denominator_item(13, 23, ExactInputDomain::DecodedText, b"aaaa", "third/inventory");
+    scope.capture.items.push(third.0.clone());
+    let mut profile = literal_profile(ExactInputDomain::DecodedText);
+    profile.max_matches_per_item = 1;
+    let predicate = compile_literal(profile, b"a");
+    let denominator = freeze_denominator(scope.capture.clone(), strict_requirements(), test_blake).unwrap();
+    scope.plan = compile_exact_scan(plan_identity(0xB8), predicate, denominator, strict_requirements()).unwrap();
+    let report = execute_scope(&scope, vec![
+        healthy_readback(&scope.first.0, scope.first.1.clone()),
+        healthy_readback(&scope.second.0, scope.second.1.clone()),
+        healthy_readback(&third.0, third.1),
+    ], &live_control(), ExactExecutionBudget { max_items: 3, max_bytes: 4, max_matches: 1 });
+    assert_eq!(report.conclusion, ExactConclusion::Incomplete);
+    assert_eq!(report.scanned_items, 0);
+    assert!(report.timed_out);
+    assert_eq!(report.unreadable_items.len(), 3);
+    let failures = report.unreadable_items.iter().map(|item| item.failure_kind).collect::<Vec<_>>();
+    assert_eq!(failures.iter().filter(|kind| **kind == ExactItemFailureKind::PredicateError).count(), 1);
+    assert_eq!(failures.iter().filter(|kind| **kind == ExactItemFailureKind::Timeout).count(), 2);
 }
 
 #[test]
