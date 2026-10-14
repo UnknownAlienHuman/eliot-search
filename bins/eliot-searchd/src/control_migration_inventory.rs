@@ -157,6 +157,7 @@ fn compile(
             .map_err(codec_reason)?,
         statuses: [0; 7],
         complete: true,
+        preparation_links: None,
     };
     stream.reserve_row()?;
     let row = stream
@@ -204,6 +205,7 @@ struct Stream<'a, 'view, 'operation, 'owner> {
     encoder: LegacyInventoryEncoder,
     statuses: [u64; 7],
     complete: bool,
+    preparation_links: Option<std::sync::Arc<preparation_links::View>>,
 }
 
 impl Stream<'_, '_, '_, '_> {

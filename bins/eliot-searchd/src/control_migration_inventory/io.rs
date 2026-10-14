@@ -309,14 +309,22 @@ pub(super) fn visit(
 // Two index buffers avoid cloning names or allocating sorting scratch inside
 // an opaque comparator. Each merge pass is bounded and polls the same context.
 fn order_names(source: &MigrationSource<'_, '_, '_>, names: &mut [Name]) -> Result<(), String> {
-    let count = names.len();
+    let key_bytes = names.iter().map(|name| name.key.len()).max().unwrap_or(0);
+    order_metadata(source, names, key_bytes, |left, right| left.key.cmp(&right.key))?;
+    if names.windows(2).any(|pair| pair[0].key == pair[1].key) { return Err(changed()); }
+    source.checkpoint()
+}
+
+pub(super) fn order_metadata<T>(source: &MigrationSource<'_, '_, '_>, values: &mut [T],
+    key_bytes: usize, compare: impl Fn(&T, &T) -> std::cmp::Ordering,
+) -> Result<(), String> {
+    let count = values.len();
     if count < 2 { return Ok(()); }
     let passes = usize::try_from((count - 1).ilog2() + 1).map_err(|_| limit())?;
-    let key_bytes = names.iter().map(|name| name.key.len()).max().unwrap_or(0);
     let index_bytes = std::mem::size_of::<usize>();
     let operations = count.checked_mul(passes + 1).ok_or_else(limit)?;
     let compare_bytes = operations.checked_mul(2 * key_bytes + 2 * index_bytes)
-        .and_then(|bytes| bytes.checked_add(3 * count * std::mem::size_of::<Name>()))
+        .and_then(|bytes| bytes.checked_add(3 * count * std::mem::size_of::<T>()))
         .ok_or_else(limit)?;
     source.charge(Work::Allocate(2 * count * index_bytes))?;
     source.charge(Work::Compare(compare_bytes))?;
@@ -326,32 +334,32 @@ fn order_names(source: &MigrationSource<'_, '_, '_>, names: &mut [Name]) -> Resu
     scratch.try_reserve_exact(count).map_err(|_| limit())?;
     order.extend(0..count);
     scratch.resize(count, 0);
-    merge_order(names, &mut order, &mut scratch, || source.checkpoint())?;
+    merge_order(values, &compare, &mut order, &mut scratch, || source.checkpoint())?;
     // Convert sorted-position -> original-position into the inverse permutation.
     for (position, original) in order.into_iter().enumerate() { scratch[original] = position; }
     for position in 0..count {
         while scratch[position] != position {
             let target = scratch[position];
-            names.swap(position, target);
+            values.swap(position, target);
             scratch.swap(position, target);
         }
     }
-    if names.windows(2).any(|pair| pair[0].key == pair[1].key) { return Err(changed()); }
     source.checkpoint()
 }
 
-fn merge_order(names: &[Name], order: &mut Vec<usize>, scratch: &mut Vec<usize>,
+fn merge_order<T>(values: &[T], compare: &impl Fn(&T, &T) -> std::cmp::Ordering,
+    order: &mut Vec<usize>, scratch: &mut Vec<usize>,
     mut checkpoint: impl FnMut() -> Result<(), String>,
 ) -> Result<(), String> {
     let mut width = 1;
-    while width < names.len() {
+    while width < values.len() {
         let mut start = 0;
-        while start < names.len() {
-            let middle = (start + width).min(names.len());
-            let end = (middle + width).min(names.len());
+        while start < values.len() {
+            let middle = (start + width).min(values.len());
+            let end = (middle + width).min(values.len());
             let (mut left, mut right) = (start, middle);
             for destination in &mut scratch[start..end] {
-                if right == end || (left < middle && names[order[left]].key <= names[order[right]].key) {
+                if right == end || (left < middle && compare(&values[order[left]], &values[order[right]]).is_le()) {
                     *destination = order[left]; left += 1;
                 } else {
                     *destination = order[right]; right += 1;

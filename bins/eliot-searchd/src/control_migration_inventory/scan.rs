@@ -98,7 +98,10 @@ fn limits(stream: &mut Stream<'_, '_, '_, '_>) -> Result<(), String> {
     stream.item(Family::Limits, Status::Present, 32, [ZERO; 3],
         [io::MAX_PARENTS as u64,
             search_source_registry::LEGACY_SOURCE_ROOT_CATALOG_MAX_ROOTS as u64,
-            search_source_registry::LEGACY_SOURCE_ROOT_CATALOG_MAX_BYTES as u64])
+            search_source_registry::LEGACY_SOURCE_ROOT_CATALOG_MAX_BYTES as u64])?;
+    stream.item(Family::Limits, Status::Present, 33, [ZERO; 3],
+        [io::DIRECTORY_NAMES as u64, super::preparation_links::MAX_LINKS as u64,
+            (2 * std::mem::size_of::<usize>()) as u64])
 }
 
 fn sources(stream: &mut Stream<'_, '_, '_, '_>, target: SourceNamespaceId) -> Result<(), String> {
@@ -440,6 +443,17 @@ fn preparation(
 ) -> Result<(), String> {
     let source = stream.source;
     let base = root.join(LEGACY_PREPARATION_DIRECTORY);
+    // Both families share one pass-local metadata view. A second complete
+    // stream has its own Stream and independently rebuilds the view.
+    let linkage = if let Some(view) = &stream.preparation_links {
+        std::sync::Arc::clone(view)
+    } else {
+            source.charge(Work::Allocate(std::mem::size_of::<super::preparation_links::View>()
+                + 2 * std::mem::size_of::<usize>()))?;
+            let view = std::sync::Arc::new(super::preparation_links::view(source, root)?);
+            stream.preparation_links = Some(std::sync::Arc::clone(&view));
+            view
+    };
     for tree in [PrepTree::References, PrepTree::Objects] {
         let directory = base.join(tree.directory_name());
         let outcome = io::visit(source, &directory, |shard| {
@@ -466,7 +480,7 @@ fn preparation(
                 let status = match classified {
                     None => Status::Unsupported,
                     Some(value) if value.kind().tag() == "uncommitted_temporary_object" => Status::Orphan,
-                    Some(value) if super::preparation_links::is_linked(source, root, tree, &digest(value.id())?, &name.value)? => Status::Present,
+                    Some(value) if super::preparation_links::is_linked(source, &linkage, tree, &digest(value.id())?, &name.value)? => Status::Present,
                     Some(_) => Status::Gap,
                 };
                 if let Some(value) = classified
@@ -802,10 +816,41 @@ fn preparation_manifest(
     }
 }
 
+
+// The preparation root is a known tree, but its direct children are not limited
+// to the two owned tree directories. Unknown entries are accounted for here as
+// content-free metadata observations with the existing classifier and statuses:
+// an unknown file stays Unsupported, an unknown directory or refused locator
+// stays Gap, and no unknown body is read or recursively walked. Walking an
+// arbitrary unknown subtree could traverse unbounded content, so the child
+// itself is the complete disposition for the residue family.
+fn unknown_preparation_children(
+    stream: &mut Stream<'_, '_, '_, '_>,
+    root: &Path,
+) -> Result<(), String> {
+    let source = stream.source;
+    let directory = root.join(LEGACY_PREPARATION_DIRECTORY);
+    let outcome = io::visit(source, &directory, |name| {
+        if name.value.to_str().is_some_and(|name| PrepTree::from_directory_name(name).is_some()) {
+            return Ok(());
+        }
+        let subject = io::fingerprint(source, &name.key)?;
+        let child = directory.join(&name.value);
+        let (status, bytes) = match io::metadata(source, &child)? {
+            io::Observed::Missing => (Status::Gap, 0),
+            io::Observed::Refused(status) => (status, 0),
+            io::Observed::Object(meta) if meta.is_dir() => (Status::Gap, meta.len()),
+            io::Observed::Object(meta) => (Status::Unsupported, meta.len()),
+        };
+        stream.item(Family::Residue, status, 34, [subject, ZERO, ZERO], [bytes, 0, 0])
+    })?;
+    directory_outcome(stream, Family::Residue, outcome)
+}
 fn residue(stream: &mut Stream<'_, '_, '_, '_>, root: &Path) -> Result<(), String> {
     revision_tree(stream, root, Family::Residue, true)?;
     preparation(stream, root, Family::Residue, true)?;
     control(stream, root, Family::Residue)?;
+    unknown_preparation_children(stream, root)?;
     unknown_root_objects(stream, root)
 }
 
