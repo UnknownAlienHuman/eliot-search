@@ -20,7 +20,7 @@ pub(super) struct ArtifactContext<'a, 'view, 'operation, 'owner> {
     first: RefCell<Option<String>>,
 }
 impl<'a, 'view, 'operation, 'owner> ArtifactContext<'a, 'view, 'operation, 'owner> {
-    pub(super) fn new(source: &'a MigrationSource<'view, 'operation, 'owner>) -> Self {
+    pub(super) const fn new(source: &'a MigrationSource<'view, 'operation, 'owner>) -> Self {
         Self { source, first: RefCell::new(None) }
     }
     pub(super) fn reserve(&self, work: MigrationBootstrapWork) -> Result<(), ControlError> {
@@ -77,7 +77,6 @@ fn stage_inner(
     let work = |unit| artifact_context.reserve(unit);
     source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES))?;
     let temporary = temporary_staging_name()?;
-    source.charge(Work::Open)?;
     let mut artifact = SourceImportRecordArtifact::create_with_context(
         directory,
         &temporary,
@@ -87,25 +86,21 @@ fn stage_inner(
     )
     .map_err(|error| artifact_context.reason(error))?;
     let first = compile(source, root, target, input, &mut |row| {
-        source.charge(Work::Write(row.len()))?;
         artifact
             .push_with_context(row, input.context.deadline(), &work)
             .map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
     })?;
     input.context.inventory_reobserve(input)?;
-    source.charge(Work::Observe)?;
     let frozen = artifact
         .freeze_with_context(input.context.deadline(), &work)
         .map_err(|error| artifact_context.reason(error))?;
     let chain = *frozen.chain();
     let encoded_bytes = frozen.encoded_bytes();
-    source.charge(Work::Open)?;
     let mut compare = frozen
         .begin_readback_with_context(input.context.deadline(), &work)
         .map_err(|error| artifact_context.reason(error))?;
     let second = compile(source, root, target, input, &mut |row| {
-        source.charge(Work::Compare(row.len()))?;
         compare
             .compare_with_context(row, input.context.deadline(), &work)
             .map_err(|error| artifact_context.reason(error))?;
@@ -115,13 +110,11 @@ fn stage_inner(
         return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
     }
     input.context.inventory_reobserve(input)?;
-    source.charge(Work::Observe)?;
     let verified = compare
         .finish_with_context(input.context.deadline(), &work)
         .map_err(|error| artifact_context.reason(error))?;
     source.charge(Work::Allocate(128))?;
     let name = format!("{}.legacy-inventory.v1", sha256::hex(&chain));
-    source.charge(Work::Observe)?;
     if let Some((journal, checkpoint)) = bootstrap {
         let mut original = verified.prepare_publication_with_context(&name, input.context.deadline(), &work)
             .map_err(|error| artifact_context.reason(error))?;

@@ -64,6 +64,28 @@ Native replacement/deletion/power-loss qualification remains #347/#215. Record
 rows, chains, domains, final names, source-map/content receipts and inactive redb
 bytes remain unchanged.
 
+## Original-context record I/O (#497)
+
+The record lifecycle's `*_with_context` methods borrow the caller's original
+`MigrationBootstrapWork` callback and deadline for creation, buffering, exact
+readback and publication. Inventory and owned source-stage composition use these
+methods through their existing original allowance. Legacy deadline-only methods
+delegate to the same implementation with an inert callback.
+
+The kernel admits each actual open, read refill, write attempt, allocation and
+processing pass before work, with checkpoints around native observations, sync
+and link effects. Interrupted reads and writes retry only after fresh admission.
+Short rows share one admitted reader refill. The explicit writer buffer performs
+no I/O on Drop, so refusal cannot trigger a later implicit flush.
+
+Publication becomes retained unknown before its last pre-link admission. A late
+refusal retains both locators and the actual new/reused link outcome for the
+existing same-process resolution. It cannot authorize a second dispatch or
+cleanup. Complete identity, chain, row, EOF and durability checks remain in place;
+all full inspections are still required and charged. Focused component fixtures
+exercise local file I/O with injected identities; native cancellation, fault and
+installed qualification remain #215.
+
 ## Atomic record preconditions
 
 `ConditionalControlMutation` combines an existing `ControlMutation` with bounded

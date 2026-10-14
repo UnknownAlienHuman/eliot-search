@@ -67,20 +67,16 @@ fn prepare_source_map(source: &MigrationSource<'_, '_, '_>, target: SourceNamesp
     source.checkpoint()?;
     source.charge(Work::Allocate(256))?;
     let temporary = temporary_staging_name()?;
-    source.charge(Work::Open)?;
     let mut artifact = SourceImportRecordArtifact::create_with_context(directory, &temporary,
         DaemonImportOutputPlatform, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     let first = source.compile_source_mapping(target, input.context.deadline(), |row| {
-        source.charge(Work::Write(row.len()))?;
         artifact.push_with_context(row, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
     })?;
     let frozen = artifact.freeze_with_context(input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     let chain = *frozen.chain();
-    source.charge(Work::Open)?;
     let mut compare = frozen.begin_readback_with_context(input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
     let second = source.compile_source_mapping(target, input.context.deadline(), |row| {
-        source.charge(Work::Compare(row.len()))?;
         compare.compare_with_context(row, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
     })?;

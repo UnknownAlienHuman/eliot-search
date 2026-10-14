@@ -167,30 +167,72 @@ fn deadline() -> Instant {
 #[test]
 fn contextual_artifact_refused_flush_never_runs_in_drop() {
     let fixture = Fixture::new();
-    let mut writer = SourceImportRecordArtifact::create_with_context(&fixture.0,
-        ".source-map.context.tmp", TestPlatform::new(), deadline(), &INERT).unwrap();
-    writer.push_with_context(b"alpha\n", deadline(), &INERT).unwrap();
-    let failure = writer.freeze_with_context(deadline(), &|work| {
-        if matches!(work, Work::Write(_)) { Err(ControlError::ReadCancelled) } else { Ok(()) }
-    }).err().unwrap();
-    assert!(matches!(failure, SourceImportRecordArtifactError::Context(ControlError::ReadCancelled)));
-    assert_eq!(fs::metadata(fixture.0.join(".source-map.context.tmp")).unwrap().len(), 0);
+    let mut writer = SourceImportRecordArtifact::create_with_context(
+        &fixture.0,
+        ".source-map.context.tmp",
+        TestPlatform::new(),
+        deadline(),
+        &INERT,
+    )
+    .unwrap();
+    writer
+        .push_with_context(b"alpha\n", deadline(), &INERT)
+        .unwrap();
+    let failure = writer
+        .freeze_with_context(deadline(), &|work| {
+            if matches!(work, Work::Write(_)) {
+                Err(ControlError::ReadCancelled)
+            } else {
+                Ok(())
+            }
+        })
+        .err()
+        .unwrap();
+    assert!(matches!(
+        failure,
+        SourceImportRecordArtifactError::Context(ControlError::ReadCancelled)
+    ));
+    assert_eq!(
+        fs::metadata(fixture.0.join(".source-map.context.tmp"))
+            .unwrap()
+            .len(),
+        0
+    );
 }
 
 #[test]
 fn contextual_artifact_scan_refusal_stops_before_publication() {
     let fixture = Fixture::new();
     let platform = TestPlatform::new();
-    let mut writer = SourceImportRecordArtifact::create(&fixture.0,
-        ".source-map.context.tmp", platform, deadline()).unwrap();
+    let mut writer = SourceImportRecordArtifact::create(
+        &fixture.0,
+        ".source-map.context.tmp",
+        platform,
+        deadline(),
+    )
+    .unwrap();
     writer.push(b"alpha\n", deadline()).unwrap();
-    let mut reader = writer.freeze(deadline()).unwrap().begin_readback(deadline()).unwrap();
+    let mut reader = writer
+        .freeze(deadline())
+        .unwrap()
+        .begin_readback(deadline())
+        .unwrap();
     reader.compare(b"alpha\n", deadline()).unwrap();
     let verified = reader.finish(deadline()).unwrap();
-    let failure = verified.prepare_publication_with_context("artifact.source-map.v1", deadline(), &|work| {
-        if matches!(work, Work::Read(bytes) if bytes > 0) { Err(ControlError::BudgetExceeded) } else { Ok(()) }
-    }).err().unwrap();
-    assert!(matches!(failure, SourceImportRecordArtifactError::Context(ControlError::BudgetExceeded)));
+    let failure = verified
+        .prepare_publication_with_context("artifact.source-map.v1", deadline(), &|work| {
+            if matches!(work, Work::Read(bytes) if bytes > 0) {
+                Err(ControlError::BudgetExceeded)
+            } else {
+                Ok(())
+            }
+        })
+        .err()
+        .unwrap();
+    assert!(matches!(
+        failure,
+        SourceImportRecordArtifactError::Context(ControlError::BudgetExceeded)
+    ));
     assert!(!fixture.0.join("artifact.source-map.v1").exists());
     assert!(fixture.0.join(".source-map.context.tmp").exists());
 }
@@ -200,11 +242,18 @@ fn contextual_artifact_last_prelink_refusal_cannot_dispatch_or_retry() {
     let fixture = Fixture::new();
     let mut operation = prepared(&fixture, TestPlatform::new());
     let failure = operation.publish_once_with_context(deadline(), &|work| {
-        if matches!(work, Work::Write(_)) { Err(ControlError::ReadCancelled) } else { Ok(()) }
+        if matches!(work, Work::Write(_)) {
+            Err(ControlError::ReadCancelled)
+        } else {
+            Ok(())
+        }
     });
     assert_unknown(failure);
     assert!(!fixture.0.join("artifact.source-map.v1").exists());
-    assert_eq!(operation.disposition(), SourceImportRecordArtifactPublicationDisposition::RetainedUnknown);
+    assert_eq!(
+        operation.disposition(),
+        SourceImportRecordArtifactPublicationDisposition::RetainedUnknown
+    );
     assert_unknown(operation.publish_once(deadline()));
     assert!(!fixture.0.join("artifact.source-map.v1").exists());
 }
@@ -217,11 +266,16 @@ fn contextual_artifact_postlink_refusal_retains_both_locators() {
     assert_unknown(operation.publish_once_with_context(deadline(), &|_| {
         if fixture.0.join("artifact.source-map.v1").exists() {
             Err(ControlError::ReadCancelled)
-        } else { Ok(()) }
+        } else {
+            Ok(())
+        }
     }));
     assert!(fixture.0.join(staging).exists());
     assert!(fixture.0.join("artifact.source-map.v1").exists());
-    assert_eq!(operation.disposition(), SourceImportRecordArtifactPublicationDisposition::RetainedUnknown);
+    assert_eq!(
+        operation.disposition(),
+        SourceImportRecordArtifactPublicationDisposition::RetainedUnknown
+    );
     assert_unknown(operation.publish_once(deadline()));
 }
 
@@ -229,9 +283,16 @@ fn contextual_artifact_postlink_refusal_retains_both_locators() {
 fn contextual_artifact_short_rows_pay_for_buffer_fills_not_each_remaining_window() {
     use std::cell::Cell;
     let fixture = Fixture::new();
-    let mut writer = SourceImportRecordArtifact::create(&fixture.0,
-        ".source-map.short-rows.tmp", TestPlatform::new(), deadline()).unwrap();
-    for _ in 0..1024 { writer.push(b"a\n", deadline()).unwrap(); }
+    let mut writer = SourceImportRecordArtifact::create(
+        &fixture.0,
+        ".source-map.short-rows.tmp",
+        TestPlatform::new(),
+        deadline(),
+    )
+    .unwrap();
+    for _ in 0..1024 {
+        writer.push(b"a\n", deadline()).unwrap();
+    }
     let frozen = writer.freeze(deadline()).unwrap();
     let read = Cell::new(0_usize);
     let process = Cell::new(0_usize);
@@ -243,11 +304,53 @@ fn contextual_artifact_short_rows_pay_for_buffer_fills_not_each_remaining_window
         }
         Ok(())
     };
-    let mut reader = frozen.begin_readback_with_context(deadline(), &work).unwrap();
-    for _ in 0..1024 { reader.compare_with_context(b"a\n", deadline(), &work).unwrap(); }
+    let mut reader = frozen
+        .begin_readback_with_context(deadline(), &work)
+        .unwrap();
+    for _ in 0..1024 {
+        reader
+            .compare_with_context(b"a\n", deadline(), &work)
+            .unwrap();
+    }
     reader.finish_with_context(deadline(), &work).unwrap();
-    assert!(read.get() <= 3 * BUFFER_BYTES, "read reservation {}", read.get());
-    assert!(process.get() <= 8 * BUFFER_BYTES, "processing reservation {}", process.get());
+    assert!(
+        read.get() <= 3 * BUFFER_BYTES,
+        "read reservation {}",
+        read.get()
+    );
+    assert!(
+        process.get() <= 8 * BUFFER_BYTES,
+        "processing reservation {}",
+        process.get()
+    );
+}
+
+#[test]
+fn contextual_artifact_reuse_outcome_survives_postlink_refusal() {
+    use std::cell::Cell;
+    let fixture = Fixture::new();
+    let mut operation = prepared(&fixture, TestPlatform::new());
+    fs::hard_link(
+        fixture.0.join(operation.staging_name()),
+        fixture.0.join(operation.final_name()),
+    )
+    .unwrap();
+    let admitted = Cell::new(false);
+    assert_unknown(operation.publish_once_with_context(deadline(), &|work| {
+        if matches!(work, Work::Write(0)) {
+            admitted.set(true);
+            Ok(())
+        } else if admitted.get() {
+            Err(ControlError::ReadCancelled)
+        } else {
+            Ok(())
+        }
+    }));
+    let resolved = operation.resolve_same_process(deadline()).unwrap();
+    assert!(
+        resolved.reused(),
+        "an AlreadyExists outcome must not become a new publication"
+    );
 }
 
 #[cfg(windows)]
@@ -280,8 +383,14 @@ fn metadata_visible_open_refusal_is_unavailable_not_replaced() {
         (&expected, 1, 6),
         deadline(),
     );
-    assert_eq!(observed.state(), SourceImportRecordArtifactCurrentState::Unavailable);
-    assert_eq!(observed.resolution(), SourceImportRecordArtifactResolution::Unresolved);
+    assert_eq!(
+        observed.state(),
+        SourceImportRecordArtifactCurrentState::Unavailable
+    );
+    assert_eq!(
+        observed.resolution(),
+        SourceImportRecordArtifactResolution::Unresolved
+    );
 }
 
 #[test]

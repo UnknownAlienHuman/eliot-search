@@ -210,6 +210,24 @@ owns staging, complete second-stream comparison and once-only publication.
 No footer authorizes #268-C acceptance, #269 cutover, #348 restart reconciliation
 or #347 cleanup. Native/fault/installed qualification remains #215.
 
+## Contextual immutable record lifecycle
+
+`SourceImportRecordArtifact::{create,push,freeze}_with_context` and contextual
+readback, comparison, preparation and publication methods borrow the existing
+`MigrationBootstrapWork` callback together with the original `Instant`. The
+deadline-only APIs use the same kernel with an inert callback. No callback,
+context or renewed allowance is retained in an artifact.
+
+`Open`, `Read`, `Write`, `Allocate`, `Process`, `Observe` and `Checkpoint` work is
+admitted before the corresponding inner operation. Reader processing is charged
+per actual refill, row copying and hashing separately; interrupted I/O attempts
+require fresh admission. The private writer flushes explicitly and never on Drop.
+Pre-effect refusal prevents link dispatch; post-effect refusal is unknown and
+preserves original identity, locators and the actual reused outcome. Native
+composition retains the first original refusal cause. Exact inspections and
+same-process-only resolution are unchanged; this adds no cleanup or restart
+authority.
+
 ## Original migration bootstrap
 
 `MigrationBootstrap::create` initializes the caller-created single future inactive

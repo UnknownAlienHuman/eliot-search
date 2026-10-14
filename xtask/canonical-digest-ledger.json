@@ -21591,15 +21591,39 @@
     },
     {
       "path": "crates/search-control-redb/src/migration/record_artifact.rs",
-      "symbol": "impl[SourceImportRecordReadback]::compare",
+      "symbol": "impl[SourceImportRecordReadback]::compare_with_context",
       "signal": "unresolved-prefix-review",
       "count": 2,
       "test": false,
-      "source_sha256": "eb22901650004fcf0bb2e1154f444eaf73e8479ecffcb9a96a6b7c6014f015f9",
+      "source_sha256": "a961ba53e3e57475e1d960db9826c32ebf38618b922a05c88f109c8667ac269f",
       "classification": "non-digest-surface",
       "owner_issue": 268,
       "phase": "owner-removal",
       "reason": "Symbol matched a scan heuristic but is not a digest surface; recorded to prevent a false-positive allowlist entry."
+    },
+    {
+      "path": "crates/search-control-redb/src/migration/record_artifact.rs",
+      "symbol": "read_exact",
+      "signal": "unresolved-prefix-review",
+      "count": 1,
+      "test": false,
+      "source_sha256": "a961ba53e3e57475e1d960db9826c32ebf38618b922a05c88f109c8667ac269f",
+      "classification": "non-digest-surface",
+      "owner_issue": 268,
+      "phase": "owner-removal",
+      "reason": "Bounded exact byte-copy helper; it neither defines nor truncates a digest."
+    },
+    {
+      "path": "crates/search-control-redb/src/migration/record_artifact.rs",
+      "symbol": "read_row",
+      "signal": "unresolved-prefix-review",
+      "count": 1,
+      "test": false,
+      "source_sha256": "a961ba53e3e57475e1d960db9826c32ebf38618b922a05c88f109c8667ac269f",
+      "classification": "non-digest-surface",
+      "owner_issue": 268,
+      "phase": "owner-removal",
+      "reason": "Bounded newline-delimited row reader; it neither defines nor truncates a digest."
     },
     {
       "path": "crates/search-control-redb/src/migration/record_chain.rs",
