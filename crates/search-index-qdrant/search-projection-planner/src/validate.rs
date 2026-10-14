@@ -1,92 +1,129 @@
-//! Exact verified-membership coverage for one membership-scoped plan.
+//! Private descriptor lookup and exact coverage over the owner-verified set.
 //!
-//! Completeness is proven against the owner-verified unit set through an
-//! indexed membership pass, never through a nested rescan of every expected
-//! unit against every planned unit. Coverage is tracked on the same pass that
-//! admits the planned units, so a large plan costs one hash lookup per unit
-//! rather than `expected_units x planned_units` comparisons.
+//! The descriptor map is built once. Each planned unit performs one ordered
+//! map lookup; no planned unit scans the full verified set. With N units,
+//! building and admitting the set costs O(N log N), then coverage costs O(N).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::UnitId;
-use search_unitizer::VerifiedUnitSet;
+use search_unitizer::{UnitDescriptor, VerifiedUnitSet};
 
 use crate::error::ProjectionError;
 
-/// One ordered membership index over the complete verified unit set.
-///
-/// The index is derived from the authoritative set during the same pass that
-/// admits the planned units, so coverage and membership can never disagree.
-/// Duplicate ordinals and duplicate identities are both refused rather than
-/// collapsed, because a repeated unit is not a complete set. Fields are private
-/// and the constructor is private: a caller can neither mint nor substitute an
-/// index, so the verified set remains the single completeness authority.
-pub struct VerifiedUnitIndex {
-    /// Exact unit identities keyed by their canonical ordinal.
-    by_ordinal: BTreeMap<u64, UnitId>,
-    /// Exact unit identities retained for duplicate detection.
-    identities: BTreeSet<UnitId>,
+struct IndexedUnit<'a> {
+    descriptor: &'a UnitDescriptor,
+    covered: bool,
 }
 
-impl VerifiedUnitIndex {
-    /// Builds the ordered index from the owner-verified set.
-    pub(crate) fn build(unit_set: &VerifiedUnitSet) -> Result<Self, ProjectionError> {
-        let mut by_ordinal: BTreeMap<u64, UnitId> = BTreeMap::new();
-        let mut identities: BTreeSet<UnitId> = BTreeSet::new();
+/// Borrowed descriptors and coverage, constructed only from the verified owner.
+// Preserve sibling-module access without widening this helper's visibility.
+#[allow(clippy::redundant_pub_crate)]
+pub(super) struct VerifiedUnitIndex<'a> {
+    by_id: BTreeMap<UnitId, IndexedUnit<'a>>,
+    #[cfg(test)]
+    lookup_count: usize,
+}
+
+impl<'a> VerifiedUnitIndex<'a> {
+    /// Index each verified descriptor once, refusing duplicate IDs or ordinals.
+    pub(super) fn build(unit_set: &'a VerifiedUnitSet) -> Result<Self, ProjectionError> {
+        let mut by_id = BTreeMap::new();
+        let mut ordinals = BTreeSet::new();
         for descriptor in unit_set.units() {
-            let occurrence = descriptor.occurrence();
-            if !identities.insert(occurrence.unit_id) {
-                return Err(ProjectionError::DuplicateUnit);
-            }
-            if by_ordinal
-                .insert(occurrence.ordinal, occurrence.unit_id)
-                .is_some()
+            if !ordinals.insert(descriptor.occurrence().ordinal)
+                || by_id
+                    .insert(
+                        descriptor.unit_id(),
+                        IndexedUnit {
+                            descriptor,
+                            covered: false,
+                        },
+                    )
+                    .is_some()
             {
                 return Err(ProjectionError::DuplicateUnit);
             }
         }
         Ok(Self {
-            by_ordinal,
-            identities,
+            by_id,
+            #[cfg(test)]
+            lookup_count: 0,
         })
     }
 
-    /// Records one planned unit against the verified set.
-    ///
-    /// Every planned unit must belong to the exact set: an absent ordinal, an
-    /// absent identity or a mismatched identity fails closed. A repeated
-    /// planned unit fails as a duplicate rather than being collapsed.
-    pub(crate) fn admit(&self,
-        ordinal: u64,
-        unit_id: UnitId,
-        covered: &mut BTreeSet<u64>,
-    ) -> Result<(), ProjectionError> {
-        let expected = self
-            .by_ordinal
-            .get(&ordinal)
-            .ok_or(ProjectionError::ScopeMismatch)?;
-        if *expected != unit_id || !self.identities.contains(&unit_id) {
-            return Err(ProjectionError::ScopeMismatch);
+    /// Find and cover one exact ID, returning the owner's descriptor.
+    pub(super) fn admit(&mut self, unit_id: UnitId) -> Result<&'a UnitDescriptor, ProjectionError> {
+        #[cfg(test)]
+        {
+            self.lookup_count += 1;
         }
-        if !covered.insert(ordinal) {
+        let unit = self
+            .by_id
+            .get_mut(&unit_id)
+            .ok_or(ProjectionError::ScopeMismatch)?;
+        if unit.covered {
             return Err(ProjectionError::DuplicateUnit);
+        }
+        unit.covered = true;
+        Ok(unit.descriptor)
+    }
+
+    /// Require coverage of every verified ID, including its original occurrence.
+    pub(super) fn prove_complete(&self) -> Result<(), ProjectionError> {
+        if self.by_id.values().any(|unit| !unit.covered) {
+            return Err(ProjectionError::MissingUnitReceipt);
         }
         Ok(())
     }
+}
 
-    /// Proves the covered ordinals equal the complete verified set exactly.
-    ///
-    /// Genuine coverage, not a count comparison: any uncovered verified unit
-    /// fails closed as an incomplete plan.
-    pub(crate) fn prove_complete(&self, covered: &BTreeSet<u64>) -> Result<(), ProjectionError> {
-        if covered.len() != self.by_ordinal.len() {
-            return Err(ProjectionError::MissingUnitReceipt);
-        }
-        for ordinal in self.by_ordinal.keys() {
-            if !covered.contains(ordinal) {
-                return Err(ProjectionError::MissingUnitReceipt);
+#[cfg(test)]
+#[path = "../tests/support/mod.rs"]
+mod fixture;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn coverage_uses_one_descriptor_lookup_per_unit_in_both_orders() {
+        let set = fixture::verified_unit_set(&"abcde\n".repeat(512));
+        assert_eq!(set.units().len(), 512);
+        for reversed in [false, true] {
+            let mut index = VerifiedUnitIndex::build(&set).expect("verified index");
+            let mut descriptors: Vec<_> = set.units().iter().collect();
+            if reversed {
+                descriptors.reverse();
             }
+            for descriptor in descriptors {
+                let admitted = index.admit(descriptor.unit_id()).expect("owner descriptor");
+                assert!(std::ptr::eq(admitted, descriptor));
+            }
+            index.prove_complete().expect("complete coverage");
+            assert_eq!(index.lookup_count, set.units().len());
         }
-        Ok(())
+    }
+
+    #[test]
+    fn missing_duplicate_and_foreign_ids_cannot_cover_the_set() {
+        let set = fixture::verified_unit_set("alpha\nbeta\ngamma\n");
+        assert!(set.units().len() > 1);
+        let mut index = VerifiedUnitIndex::build(&set).expect("verified index");
+        let unit_id = set.units()[0].unit_id();
+        index.admit(unit_id).expect("first occurrence");
+        assert_eq!(
+            index.prove_complete(),
+            Err(ProjectionError::MissingUnitReceipt)
+        );
+        assert_eq!(index.admit(unit_id), Err(ProjectionError::DuplicateUnit));
+        assert_eq!(
+            index.admit(UnitId::from_bytes([0xab; 16])),
+            Err(ProjectionError::ScopeMismatch)
+        );
+        assert_eq!(
+            index.prove_complete(),
+            Err(ProjectionError::MissingUnitReceipt)
+        );
     }
 }

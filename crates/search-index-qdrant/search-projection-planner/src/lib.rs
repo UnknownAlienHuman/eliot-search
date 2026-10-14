@@ -15,6 +15,11 @@
 //! - complete unit-set membership belongs to `search-unitizer`; no caller
 //!   `expected_units`, count or digest can substitute for its verification;
 //! - Qdrant transport, source truth and access authority are not owned here.
+//!
+//! Scope coordinates and vector requirements are caller-supplied candidate
+//! inputs. Their consistency with the verified unit set is checked here;
+//! registry admission, profile acceptance and lineage verification are still
+//! required from their owners before publication (#259 acceptance pending).
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -43,11 +48,9 @@ pub use model::{
 };
 pub use plan::{PlanningScope, plan_projection, validate_scope_binding};
 pub use point::validate_membership_isolation;
-pub use validate::VerifiedUnitIndex;
 
-use search_contracts::indexed::CollectionSchema;
 use search_contracts::ProjectionMembershipId;
-use search_unitizer::VerifiedUnitSet;
+use search_contracts::indexed::CollectionSchema;
 
 /// Requires exactly one membership where an array could alias point sets.
 pub fn require_single_membership(
@@ -62,16 +65,6 @@ pub fn require_single_membership(
         .ok_or(ProjectionError::MembershipArrayForbidden)
 }
 
-/// Builds the exact ordered membership index over the verified unit set.
-///
-/// The index is derived from the authoritative set with a private constructor,
-/// so a caller can neither mint nor substitute one.
-pub fn build_verified_unit_index(
-    unit_set: &VerifiedUnitSet,
-) -> Result<VerifiedUnitIndex, ProjectionError> {
-    VerifiedUnitIndex::build(unit_set)
-}
-
 /// Proves one manifest reconstructs exactly its point specifications.
 ///
 /// Recomputes every entry from the exact point specs and compares full
@@ -82,8 +75,8 @@ pub fn verify_manifest_reconstruction(
     scope: &PlanningScope,
     budget: ProjectionBudget,
 ) -> Result<(), ProjectionError> {
-    let rebuilt =
-        plan::rebuild_manifest(points, scope, budget).map_err(|_| ProjectionError::ManifestMismatch)?;
+    let rebuilt = plan::rebuild_manifest(points, scope, budget)
+        .map_err(|_| ProjectionError::ManifestMismatch)?;
     if rebuilt == *manifest {
         Ok(())
     } else {

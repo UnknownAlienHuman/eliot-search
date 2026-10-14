@@ -152,8 +152,8 @@ pub fn descriptor() -> V3UnitizerProfileDescriptor {
         max_unit_scalars: 16,
         max_unit_lines: 16,
         max_anchor_depth: 1,
-        max_manifest_bytes: 128 * 1024,
-        max_steps: 100_000,
+        max_manifest_bytes: 512 * 1024,
+        max_steps: 1_000_000,
         fixture_digest: Blake3Digest32::from_bytes([7; 32]),
     }
 }
@@ -161,8 +161,8 @@ pub fn descriptor() -> V3UnitizerProfileDescriptor {
 /// Finite bounded budget for the unitizer ingress.
 fn budget(cancelled: &AtomicBool) -> UnitizationBudget<'_> {
     UnitizationBudget {
-        max_steps: 100_000,
-        max_encoded_bytes: 128 * 1024,
+        max_steps: 1_000_000,
+        max_encoded_bytes: 512 * 1024,
         deadline: Instant::now() + Duration::from_secs(60),
         cancelled,
     }
@@ -189,12 +189,17 @@ pub fn verified_unit_set(text: &str) -> VerifiedUnitSet {
     let binding = binding();
     let profile = validate_v3_unitizer_profile(&descriptor()).expect("v3 profile validates");
     let (product, request, materializer) =
-        materialize_product(text.as_bytes(), &opaque_source(&binding), 1)
-            .expect("materialize");
+        materialize_product(text.as_bytes(), &opaque_source(&binding), 1).expect("materialize");
     let cancel = AtomicBool::new(false);
     let budget = budget(&cancel);
-    let input =
-        prepare_unit_set_input(binding, &product, &request, &materializer, &profile, &budget)
-            .expect("prepare unit set input");
+    let input = prepare_unit_set_input(
+        binding,
+        &product,
+        &request,
+        &materializer,
+        &profile,
+        &budget,
+    )
+    .expect("prepare unit set input");
     build_unit_manifest(&input, &profile, &budget).expect("build unit manifest")
 }

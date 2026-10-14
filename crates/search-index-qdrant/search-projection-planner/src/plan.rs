@@ -5,15 +5,15 @@
 //! one exact prepared vector product per unit into exact point specs, one
 //! exact S9.5 payload and one canonical manifest.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use search_contracts::indexed::{
     MAX_STORED_VECTOR_VALUES, PointPayload, VectorRequirement, VectorValue,
 };
 use search_contracts::{
-    BoundedBytes, BoundedList, BoundedMap, Blake3Digest32, CanonicalDigestDomain, CanonicalKey,
-    CanonicalText, CanonicalValue, DigestInputLimit, Epoch, RepresentationId, ScoringDocumentId,
-    SourceRevisionId, UnitId, blake3_canonical, MAX_CANONICAL_BYTES,
+    Blake3Digest32, BoundedBytes, BoundedList, BoundedMap, CanonicalDigestDomain, CanonicalKey,
+    CanonicalText, CanonicalValue, DigestInputLimit, Epoch, MAX_CANONICAL_BYTES, RepresentationId,
+    ScoringDocumentId, SourceRevisionId, UnitId, blake3_canonical,
 };
 use search_point_identity::s11::{
     POINT_KEY_SCHEMA_VERSION, PointIdentityLimits, PointRole, ProjectionPointKey,
@@ -37,25 +37,26 @@ const SCORING_DOCUMENT_DOMAIN: &str = "eliot/cbor/projection-scoring-document/v1
 /// Frozen domain for one named-vector identity.
 const NAMED_VECTOR_DOMAIN: &str = "eliot/cbor/projection-named-vector/v1";
 
-/// Complete exact planning scope for one membership-scoped plan.
+/// Candidate coordinates for one membership-scoped plan.
 ///
-/// Every field is an opaque verified observation from its owner; ordinary
-/// constructible data is never described as authority here.
+/// These public fields do not prove registry admission, accepted profiles or
+/// verified lineage. Planning checks source/representation consistency against
+/// the unitizer owner; the remaining authority boundary is pending under #259.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlanningScope {
-    /// Exactly one admitted source-to-projection membership binding.
+    /// Exactly one proposed source-to-projection membership binding.
     pub membership: ProjectionMembershipBinding,
     /// Exact target publication epoch, at least 1.
     pub valid_from_epoch: Epoch,
     /// Optional exclusive upper epoch for points retired by this plan.
     pub valid_until_epoch_exclusive: Option<Epoch>,
-    /// Optional repository lineage observation.
+    /// Optional caller-supplied repository lineage coordinate.
     pub lineage: LineageObservation,
     /// Exact immutable point identity limits.
     pub identity_limits: PointIdentityLimits,
 }
 
-/// Proves the unit set binds the exact representation the membership projects.
+/// Checks candidate source/revision/representation against verified provenance.
 ///
 /// The complete set is package-verified and bound to
 /// `Representation.unit_manifest_digest`; no caller list, count or digest can
@@ -72,8 +73,20 @@ pub fn validate_scope_binding(
     if unit_set.units().len() > budget.max_points {
         return Err(ProjectionError::UnitSetTooLarge);
     }
-    if unit_set.representation().representation_id != scope.membership.representation_id {
+    let representation = unit_set.representation();
+    let binding = unit_set.manifest().provenance().binding();
+    if representation.representation_id != scope.membership.representation_id
+        || binding.representation_id != scope.membership.representation_id
+    {
         return Err(ProjectionError::RepresentationMismatch);
+    }
+    if binding.source_id != scope.membership.source_id
+        || binding.source_revision_id != scope.membership.source_revision_id
+        || binding.materialization_id != representation.materialization_id
+        || representation.unit_manifest_digest != unit_set.manifest_digest()
+        || representation.unitizer_profile_id != *unit_set.manifest().profile_id()
+    {
+        return Err(ProjectionError::ScopeMismatch);
     }
     Ok(())
 }
@@ -110,7 +123,10 @@ fn validate_unit_vectors(
         if total_stored > MAX_STORED_VECTOR_VALUES as usize {
             return Err(ProjectionError::StoredVectorValuesExceeded);
         }
-        digests.insert(name.to_owned(), vector_digest(name, *requirement, &vector.value)?);
+        digests.insert(
+            name.to_owned(),
+            vector_digest(name, *requirement, &vector.value)?,
+        );
     }
     if digests.len() != requirements.len() {
         return Err(ProjectionError::MissingVector);
@@ -216,7 +232,7 @@ fn derive_scoring_document_id(
 #[allow(clippy::too_many_arguments)]
 fn build_payload(
     scope: &PlanningScope,
-    unit_id: UnitId,
+    descriptor: &UnitDescriptor,
     point_identity_digest_256: Blake3Digest32,
     scoring_document_id: ScoringDocumentId,
     planned: &PlannedUnit,
@@ -230,11 +246,11 @@ fn build_payload(
         scope.membership.source_id,
         scope.membership.source_revision_id,
         scope.membership.representation_id,
-        unit_id,
+        descriptor.unit_id(),
         point_identity_digest_256,
         scoring_document_id,
         scope.membership.projection_profile_set_id.clone(),
-        planned.unit_kind,
+        descriptor.occurrence().unit_kind,
         planned.modality,
         planned.language_or_format.clone(),
         planned.entity_kind,
@@ -253,8 +269,18 @@ fn build_payload(
 fn build_point(
     scope: &PlanningScope,
     planned: &PlannedUnit,
+    descriptor: &UnitDescriptor,
     requirements: &BTreeMap<String, VectorRequirement>,
 ) -> Result<PointSpec, ProjectionError> {
+    if planned.unit_digest != descriptor.unit_content_digest()
+        || planned.reference_digest != descriptor.reference_digest()
+        || planned.unit_kind != descriptor.occurrence().unit_kind
+    {
+        return Err(ProjectionError::ScopeMismatch);
+    }
+    if descriptor.occurrence().representation_id != scope.membership.representation_id {
+        return Err(ProjectionError::RepresentationMismatch);
+    }
     let vector_digests = validate_unit_vectors(&planned.vectors, requirements)?;
     let scoring_document_id = derive_scoring_document_id(
         scope.membership.source_revision_id,
@@ -275,12 +301,14 @@ fn build_point(
     let identity = derive_point_identity(&key, scope.identity_limits)?;
     let payload = build_payload(
         scope,
-        planned.unit_id,
+        descriptor,
         identity.full_digest(),
         scoring_document_id,
         planned,
     )?;
-    let payload_identity = payload.identity().map_err(|_| ProjectionError::InvalidManifest)?;
+    let payload_identity = payload
+        .identity()
+        .map_err(|_| ProjectionError::InvalidManifest)?;
     let payload_cbor = payload
         .to_canonical_cbor()
         .map_err(|_| ProjectionError::InvalidManifest)?;
@@ -291,8 +319,8 @@ fn build_point(
             payload_cbor,
             payload_identity,
             vector_digests,
-            unit_digest: planned.unit_digest,
-            reference_digest: planned.reference_digest,
+            unit_digest: descriptor.unit_content_digest(),
+            reference_digest: descriptor.reference_digest(),
         },
     })
 }
@@ -328,18 +356,6 @@ fn manifest_entry(
     })
 }
 
-/// Locates one verified descriptor by its exact unit identity.
-fn find_descriptor(
-    unit_set: &VerifiedUnitSet,
-    unit_id: UnitId,
-) -> Result<&UnitDescriptor, ProjectionError> {
-    unit_set
-        .units()
-        .iter()
-        .find(|descriptor| descriptor.unit_id() == unit_id)
-        .ok_or(ProjectionError::ScopeMismatch)
-}
-
 /// Plans one complete membership-scoped projection.
 ///
 /// Every verified unit must contribute exactly one planned unit carrying its
@@ -367,18 +383,15 @@ pub fn plan_projection(
         return Err(ProjectionError::UnitSetTooLarge);
     }
 
-    // One indexed membership pass replaces every per-unit linear rescan, so
-    // admitted coverage costs one lookup per unit rather than
-    // expected_units x planned_units comparisons.
-    let index = VerifiedUnitIndex::build(unit_set)?;
-    let mut covered: BTreeSet<u64> = BTreeSet::new();
+    // Build descriptor references once, then perform one ordered map lookup
+    // per planned unit. Coverage is tracked in that same lookup (O(N log N)).
+    let mut index = VerifiedUnitIndex::build(unit_set)?;
     let mut points: Vec<PointSpec> = Vec::with_capacity(planned_units.len());
     for planned in planned_units {
-        let descriptor = find_descriptor(unit_set, planned.unit_id)?;
-        index.admit(descriptor.occurrence().ordinal, planned.unit_id, &mut covered)?;
-        points.push(build_point(scope, planned, requirements)?);
+        let descriptor = index.admit(planned.unit_id)?;
+        points.push(build_point(scope, planned, descriptor, requirements)?);
     }
-    index.prove_complete(&covered)?;
+    index.prove_complete()?;
 
     points.sort_by_key(|point| point.point_id);
     let manifest = rebuild_manifest(&points, scope, budget)?;

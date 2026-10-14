@@ -2,8 +2,8 @@
 //!
 //! Every fixture below builds a real `VerifiedUnitSet` through the public
 //! materializer and unitizer owners, then plans one exact membership-scoped
-//! projection. No case invents unit identity, membership authority, payload
-//! schema or a second planner.
+//! candidate projection. Scope coordinates are not registry authority; the
+//! cases check exact unitizer facts without introducing a second planner.
 
 mod support;
 
@@ -18,9 +18,9 @@ use search_contracts::{
 use search_point_identity::s11::{DEFAULT_LIMITS, PointRole};
 use search_projection_planner::{
     LineageObservation, PlannedUnit, PlannedVector, PlanningScope, ProjectionBudget,
-    ProjectionError, ProjectionMembershipBinding, ProjectionPlan, diff_manifests,
-    plan_projection, require_single_membership, validate_membership_isolation,
-    validate_scope_binding, verify_manifest_reconstruction,
+    ProjectionError, ProjectionMembershipBinding, ProjectionPlan, diff_manifests, plan_projection,
+    require_single_membership, validate_membership_isolation, validate_scope_binding,
+    verify_manifest_reconstruction,
 };
 use support::{ProfileId, verified_unit_set};
 
@@ -103,9 +103,14 @@ fn complete_verified_unit_set_yields_exact_deterministic_plan() {
     let set = verified_unit_set(text);
     let units = planned_units(text);
     let requirements = lexical_requirement();
-    let plan =
-        plan_projection(&set, &scope(), &units, &requirements, ProjectionBudget::BASELINE)
-            .expect("complete plan");
+    let plan = plan_projection(
+        &set,
+        &scope(),
+        &units,
+        &requirements,
+        ProjectionBudget::BASELINE,
+    )
+    .expect("complete plan");
     assert_eq!(plan.points.len(), set.units().len());
     assert_eq!(plan.manifest.entries.len(), set.units().len());
     validate_membership_isolation(&plan).expect("one membership per point");
@@ -138,7 +143,13 @@ fn missing_verified_unit_fails_closed() {
     let requirements = lexical_requirement();
     let dropped = units.iter().skip(1).cloned().collect::<Vec<_>>();
     assert_eq!(
-        plan_projection(&set, &scope(), &dropped, &requirements, ProjectionBudget::BASELINE),
+        plan_projection(
+            &set,
+            &scope(),
+            &dropped,
+            &requirements,
+            ProjectionBudget::BASELINE
+        ),
         Err(ProjectionError::UnitSetTooLarge)
     );
     let mut foreign = units.clone();
@@ -148,7 +159,13 @@ fn missing_verified_unit_fails_closed() {
         ..units[0].clone()
     });
     assert_eq!(
-        plan_projection(&set, &scope(), &foreign, &requirements, ProjectionBudget::BASELINE),
+        plan_projection(
+            &set,
+            &scope(),
+            &foreign,
+            &requirements,
+            ProjectionBudget::BASELINE
+        ),
         Err(ProjectionError::ScopeMismatch)
     );
 }
@@ -162,16 +179,137 @@ fn duplicate_unit_refused_and_representation_binding_enforced() {
     let mut duplicated = units.clone();
     duplicated.push(units[0].clone());
     assert_eq!(
-        plan_projection(&set, &scope(), &duplicated, &requirements, ProjectionBudget::BASELINE),
+        plan_projection(
+            &set,
+            &scope(),
+            &duplicated,
+            &requirements,
+            ProjectionBudget::BASELINE
+        ),
         Err(ProjectionError::UnitSetTooLarge)
     );
+    let mut same_count_duplicate = units;
+    assert!(same_count_duplicate.len() > 1);
+    same_count_duplicate[1] = same_count_duplicate[0].clone();
+    assert_eq!(
+        plan_projection(
+            &set,
+            &scope(),
+            &same_count_duplicate,
+            &requirements,
+            ProjectionBudget::BASELINE
+        ),
+        Err(ProjectionError::DuplicateUnit)
+    );
     let mut wrong = scope();
-    wrong.membership.representation_id =
-        search_contracts::RepresentationId::from_bytes([0x99; 16]);
+    wrong.membership.representation_id = search_contracts::RepresentationId::from_bytes([0x99; 16]);
     assert_eq!(
         validate_scope_binding(&set, &wrong, ProjectionBudget::BASELINE),
         Err(ProjectionError::RepresentationMismatch)
     );
+}
+
+#[test]
+fn forged_unit_digests_and_kind_are_refused_before_point_construction() {
+    let text = "alpha\nbeta\ngamma\n";
+    let set = verified_unit_set(text);
+    let units = planned_units(text);
+    let requirements = lexical_requirement();
+    let replacement = search_contracts::Blake3Digest32::from_bytes([0xee; 32]);
+    assert_ne!(replacement, units[0].unit_digest);
+    assert_ne!(replacement, units[0].reference_digest);
+    for field in 0..3 {
+        let mut forged = units.clone();
+        match field {
+            0 => forged[0].unit_digest = replacement,
+            1 => forged[0].reference_digest = replacement,
+            2 => forged[0].unit_kind = search_contracts::UnitKind::ImageRegion,
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            plan_projection(
+                &set,
+                &scope(),
+                &forged,
+                &requirements,
+                ProjectionBudget::BASELINE
+            ),
+            Err(ProjectionError::ScopeMismatch)
+        );
+    }
+
+    let plan = plan_projection(
+        &set,
+        &scope(),
+        &units,
+        &requirements,
+        ProjectionBudget::BASELINE,
+    )
+    .expect("owner facts accepted");
+    let owner_by_id: BTreeMap<_, _> = set
+        .units()
+        .iter()
+        .map(|unit| (unit.unit_id(), unit))
+        .collect();
+    for point in &plan.points {
+        let descriptor = owner_by_id[&point.identity.key().unit_id];
+        assert_eq!(
+            point.expected_readback.unit_digest,
+            descriptor.unit_content_digest()
+        );
+        assert_eq!(
+            point.expected_readback.reference_digest,
+            descriptor.reference_digest()
+        );
+        let payload = search_contracts::indexed::PointPayload::from_canonical_cbor(
+            point.expected_readback.payload_cbor.as_slice(),
+        )
+        .expect("shared payload codec");
+        assert_eq!(payload.unit_kind, descriptor.occurrence().unit_kind);
+    }
+    for entry in &plan.manifest.entries {
+        let descriptor = owner_by_id[&entry.unit_id];
+        assert_eq!(entry.unit_digest, descriptor.unit_content_digest());
+        assert_eq!(entry.reference_digest, descriptor.reference_digest());
+    }
+}
+
+#[test]
+fn matching_representation_cannot_hide_a_wrong_source_or_revision() {
+    let text = "alpha\nbeta\ngamma\n";
+    let set = verified_unit_set(text);
+    let units = planned_units(text);
+    let binding = set.manifest().provenance().binding();
+    assert_eq!(
+        binding.materialization_id,
+        set.representation().materialization_id
+    );
+    assert_eq!(
+        binding.representation_id,
+        scope().membership.representation_id
+    );
+    for wrong_revision in [false, true] {
+        let mut wrong = scope();
+        if wrong_revision {
+            wrong.membership.source_revision_id = support::SourceRevisionId::from_bytes([0xff; 16]);
+        } else {
+            wrong.membership.source_id = support::SourceId::from_bytes([0xff; 16]);
+        }
+        assert_eq!(
+            validate_scope_binding(&set, &wrong, ProjectionBudget::BASELINE),
+            Err(ProjectionError::ScopeMismatch)
+        );
+        assert_eq!(
+            plan_projection(
+                &set,
+                &wrong,
+                &units,
+                &lexical_requirement(),
+                ProjectionBudget::BASELINE
+            ),
+            Err(ProjectionError::ScopeMismatch)
+        );
+    }
 }
 
 #[test]
@@ -192,16 +330,24 @@ fn membership_array_is_forbidden_and_manifest_binds_one_membership() {
     let set = verified_unit_set(text);
     let units = planned_units(text);
     let requirements = lexical_requirement();
-    let plan =
-        plan_projection(&set, &scope(), &units, &requirements, ProjectionBudget::BASELINE)
-            .expect("plan");
+    let plan = plan_projection(
+        &set,
+        &scope(),
+        &units,
+        &requirements,
+        ProjectionBudget::BASELINE,
+    )
+    .expect("plan");
     assert_eq!(
         plan.source_membership_id,
         SourceMembershipId::from_bytes([0x22; 16])
     );
     for entry in &plan.manifest.entries {
         assert_eq!(entry.source_membership_id, plan.source_membership_id);
-        assert_eq!(entry.projection_membership_id, plan.projection_membership_id);
+        assert_eq!(
+            entry.projection_membership_id,
+            plan.projection_membership_id
+        );
     }
 }
 
@@ -220,7 +366,13 @@ fn missing_duplicate_and_foreign_vector_refused() {
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        plan_projection(&set, &scope(), &subset, &requirements, ProjectionBudget::BASELINE),
+        plan_projection(
+            &set,
+            &scope(),
+            &subset,
+            &requirements,
+            ProjectionBudget::BASELINE
+        ),
         Err(ProjectionError::MissingVector)
     );
 
@@ -232,7 +384,13 @@ fn missing_duplicate_and_foreign_vector_refused() {
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        plan_projection(&set, &scope(), &duplicate, &requirements, ProjectionBudget::BASELINE),
+        plan_projection(
+            &set,
+            &scope(),
+            &duplicate,
+            &requirements,
+            ProjectionBudget::BASELINE
+        ),
         Err(ProjectionError::MissingVector)
     );
 
@@ -247,7 +405,13 @@ fn missing_duplicate_and_foreign_vector_refused() {
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        plan_projection(&set, &scope(), &foreign, &requirements, ProjectionBudget::BASELINE),
+        plan_projection(
+            &set,
+            &scope(),
+            &foreign,
+            &requirements,
+            ProjectionBudget::BASELINE
+        ),
         Err(ProjectionError::VectorNameMismatch)
     );
 }
@@ -272,7 +436,13 @@ fn nonfinite_vector_refused() {
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        plan_projection(&set, &scope(), &nonfinite, &requirements, ProjectionBudget::BASELINE),
+        plan_projection(
+            &set,
+            &scope(),
+            &nonfinite,
+            &requirements,
+            ProjectionBudget::BASELINE
+        ),
         Err(ProjectionError::VectorShapeMismatch)
     );
 }
@@ -286,18 +456,15 @@ fn manifest_diff_separates_exact_create_retain_and_retire() {
     let budget = ProjectionBudget::BASELINE;
     let baseline =
         plan_projection(&set, &scope(), &units, &requirements, budget).expect("baseline");
-    let again =
-        plan_projection(&set, &scope(), &units, &requirements, budget).expect("again");
+    let again = plan_projection(&set, &scope(), &units, &requirements, budget).expect("again");
     let noop = diff_manifests(&baseline.manifest, &again.manifest).expect("noop diff");
     assert_eq!(noop.create.len(), 0);
     assert_eq!(noop.retain.len(), baseline.points.len());
     assert_eq!(noop.retire.len(), 0);
 
     let mut next = scope();
-    next.membership.collection_generation_id =
-        CollectionGenerationId::from_bytes([0x34; 16]);
-    let changed =
-        plan_projection(&set, &next, &units, &requirements, budget).expect("next");
+    next.membership.collection_generation_id = CollectionGenerationId::from_bytes([0x34; 16]);
+    let changed = plan_projection(&set, &next, &units, &requirements, budget).expect("next");
     let diff = diff_manifests(&baseline.manifest, &changed.manifest).expect("diff");
     assert_eq!(diff.create.len(), baseline.points.len());
     assert_eq!(diff.retain.len(), 0);
@@ -311,8 +478,7 @@ fn manifest_reconstruction_proves_rebuilt_bytes_equal_the_plan() {
     let units = planned_units(text);
     let requirements = lexical_requirement();
     let budget = ProjectionBudget::BASELINE;
-    let plan =
-        plan_projection(&set, &scope(), &units, &requirements, budget).expect("plan");
+    let plan = plan_projection(&set, &scope(), &units, &requirements, budget).expect("plan");
     verify_manifest_reconstruction(&plan.manifest, &plan.points, &scope(), budget)
         .expect("reconstruction");
 
@@ -348,7 +514,13 @@ fn zero_epoch_and_sub_budget_refused() {
     let set = verified_unit_set(text);
     let units = planned_units(text);
     assert_eq!(
-        plan_projection(&set, &bad, &units, &lexical_requirement(), ProjectionBudget::BASELINE),
+        plan_projection(
+            &set,
+            &bad,
+            &units,
+            &lexical_requirement(),
+            ProjectionBudget::BASELINE
+        ),
         Err(ProjectionError::ScopeMismatch)
     );
 
@@ -361,7 +533,13 @@ fn zero_epoch_and_sub_budget_refused() {
         max_manifest_bytes: 1024,
     };
     assert_eq!(
-        plan_projection(&narrow_set, &scope(), &narrow_units, &lexical_requirement(), narrow),
+        plan_projection(
+            &narrow_set,
+            &scope(),
+            &narrow_units,
+            &lexical_requirement(),
+            narrow
+        ),
         Err(ProjectionError::UnitSetTooLarge)
     );
 }
@@ -372,9 +550,14 @@ fn plan_exposes_full_s11_identity_every_point() {
     let set = verified_unit_set(text);
     let units = planned_units(text);
     let requirements = lexical_requirement();
-    let plan: ProjectionPlan =
-        plan_projection(&set, &scope(), &units, &requirements, ProjectionBudget::BASELINE)
-            .expect("plan");
+    let plan: ProjectionPlan = plan_projection(
+        &set,
+        &scope(),
+        &units,
+        &requirements,
+        ProjectionBudget::BASELINE,
+    )
+    .expect("plan");
     for point in &plan.points {
         assert_eq!(point.identity.key().point_role, PointRole::Unit);
         let observed: &[u8; 16] = point.point_id.as_bytes();

@@ -1,19 +1,20 @@
 //! Provider-neutral pure planning model for one projection membership.
 //!
-//! Every coordinate here is either an opaque verified observation from its
-//! owner or a deterministic planning product. No value carries source text,
-//! paths, corpus or repository names, access subjects, query text or vendor
-//! metadata.
+//! Public input coordinates are candidate data, not authority observations.
+//! The unitizer owns complete membership and occurrence facts; registry,
+//! profile and lineage acceptance still require their owners (#259 pending).
+//! No value carries source text, paths, corpus or repository names, access
+//! subjects, query text or vendor metadata.
 
 use std::collections::BTreeMap;
 
 use search_contracts::{
     AccessPartitionId, Blake3Digest32, BoundedName, CollectionGenerationId,
-    InstallationIncarnationId, ProjectionMembershipId, ProjectionProfileSetId, RepresentationId,
-    RepositoryLineageId, ScoringDocumentId, ScoringPartitionId, SourceId, SourceMembershipId,
+    InstallationIncarnationId, ProjectionMembershipId, ProjectionProfileSetId, RepositoryLineageId,
+    RepresentationId, ScoringDocumentId, ScoringPartitionId, SourceId, SourceMembershipId,
     SourceRevisionId, UnitId,
 };
-use search_point_identity::s11::{PointIdentity, PointId128};
+use search_point_identity::s11::{PointId128, PointIdentity};
 
 /// Conservative finite pure-planning limits.
 ///
@@ -44,15 +45,16 @@ impl ProjectionBudget {
     }
 }
 
-/// One admitted source-to-projection membership binding.
+/// Caller-supplied source-to-projection membership coordinates.
 ///
-/// A plan accepts exactly one binding. The source membership is retained in
-/// the control manifest only; it never enters Qdrant payload.
+/// A candidate plan contains exactly one proposed binding. This record does
+/// not prove a registry relationship or grant access/publication authority.
+/// Source membership is retained in the control manifest only.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectionMembershipBinding {
     /// Exactly one Qdrant projection membership.
     pub projection_membership_id: ProjectionMembershipId,
-    /// Authoritative source membership for post-readback resolution.
+    /// Proposed source membership requiring registry validation.
     pub source_membership_id: SourceMembershipId,
     /// Stable source identity the membership projects.
     pub source_id: SourceId,
@@ -66,7 +68,7 @@ pub struct ProjectionMembershipBinding {
     pub collection_generation_id: CollectionGenerationId,
     /// One installation incarnation, independent of physical root paths.
     pub installation_incarnation_id: InstallationIncarnationId,
-    /// The accepted projection profile set identity.
+    /// Proposed projection profile set identity requiring owner acceptance.
     pub projection_profile_set_id: ProjectionProfileSetId,
     /// Immutable access partition used for pre-scoring filtering.
     pub access_partition_id: AccessPartitionId,
@@ -74,10 +76,10 @@ pub struct ProjectionMembershipBinding {
     pub scoring_partition_id: ScoringPartitionId,
 }
 
-/// Optional repository lineage observation used only as an opaque coordinate.
+/// Caller-supplied lineage coordinate requiring owner verification.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LineageObservation {
-    /// Exact lineage coordinate, absent for unobserved sources.
+    /// Proposed lineage coordinate, absent when not supplied.
     pub repository_lineage_id: Option<RepositoryLineageId>,
 }
 
@@ -90,7 +92,7 @@ pub struct LineageObservation {
 pub struct PlannedUnit {
     /// Exact unit occurrence identity in the verified set.
     pub unit_id: UnitId,
-    /// Exact occurrence kind from the shared closed vocabulary.
+    /// Proposed kind, checked against the owner's occurrence kind.
     pub unit_kind: search_contracts::UnitKind,
     /// Content modality of the unit.
     pub modality: search_contracts::Modality,
@@ -100,9 +102,9 @@ pub struct PlannedUnit {
     pub entity_kind: Option<search_contracts::EntityKind>,
     /// Optional normalized symbol key.
     pub normalized_symbol_key: Option<search_contracts::BoundedSymbolKey>,
-    /// Exact unit-content digest retained by the manifest.
+    /// Proposed content digest, checked against the owner's exact digest.
     pub unit_digest: Blake3Digest32,
-    /// Exact native-reference/coordinate digest retained by the manifest.
+    /// Proposed reference digest, checked against the owner's exact digest.
     pub reference_digest: Blake3Digest32,
     /// One exact named vector per schema requirement, each exactly once.
     pub vectors: Vec<PlannedVector>,
