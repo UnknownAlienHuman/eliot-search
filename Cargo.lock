@@ -1388,10 +1388,13 @@ dependencies = [
 name = "search-projection-planner"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-contracts",
  "search-domain",
+ "search-materializer",
  "search-point-identity",
  "search-ports",
+ "search-unitizer",
 ]
 
 [[package]]

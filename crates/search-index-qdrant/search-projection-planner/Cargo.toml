@@ -15,6 +15,11 @@ search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
 search-point-identity.workspace = true
+search-unitizer.workspace = true
+
+[dev-dependencies]
+blake3.workspace = true
+search-materializer.workspace = true
 
 [lints]
 workspace = true
