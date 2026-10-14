@@ -2,7 +2,7 @@
 
 **Optional isolated P16 model worker.**
 
-**Status:** complete worker contract; binary/runtime/model are unselected and implementation is blocked.
+**Status:** the dependency-free binary is an explicit refusal stub. Its existing unavailable-invocation fixtures remain; no model runtime/profile is selected or qualified. The unused model-provider dependency closure was removed under #528.
 
 Hosts one exact qualified model profile over private daemon-only IPC with finite resource, cancellation,
 content-minimization, crash-isolation and removal semantics. It never opens Search stores/index or an

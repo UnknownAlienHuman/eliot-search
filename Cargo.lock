@@ -412,12 +412,6 @@ dependencies = [
 [[package]]
 name = "eliot-search-model-worker"
 version = "0.0.0"
-dependencies = [
- "search-contracts",
- "search-model-provider",
- "search-ports",
- "search-provider-protocol",
-]
 
 [[package]]
 name = "eliot-searchd"
@@ -1329,15 +1323,6 @@ dependencies = [
  "blake3",
  "pulldown-cmark",
  "quick-xml",
- "search-contracts",
- "search-domain",
- "search-ports",
-]
-
-[[package]]
-name = "search-model-provider"
-version = "0.0.0"
-dependencies = [
  "search-contracts",
  "search-domain",
  "search-ports",
