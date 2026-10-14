@@ -53,8 +53,24 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     }
     let receipt = reader.finish(input.context.deadline(), reserve).map_err(|error| reason(&error))?;
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
+    let mut inventory_owner = receipt.into_inventory_stage(input.context.deadline(), reserve)
+        .map_err(|error| reason(&error))?;
+    let first = inventory::compile(source, root, target, input, &mut |row| {
+        inventory_owner.push(row, input.context.deadline(), reserve).map_err(|error| reason(&error))
+    })?;
+    input.context.inventory_reobserve(input).map_err(|_| unknown())?;
+    let mut inventory_reader = inventory_owner.begin_readback(input.context.deadline(), reserve)
+        .map_err(|error| reason(&error))?;
+    let second = inventory::compile(source, root, target, input, &mut |row| {
+        inventory_reader.compare(row, input.context.deadline(), reserve).map_err(|error| reason(&error))
+    })?;
+    if first != second { return Err(unknown()); }
+    input.context.inventory_reobserve(input).map_err(|_| unknown())?;
+    let receipt = inventory_reader.finish(input.context.deadline(), reserve).map_err(|error| reason(&error))?;
+    input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     bootstrap::verify_output(&output, source).map_err(|_| unknown())?;
-    source.charge(Work::Allocate(4096)).map_err(|_| unknown())?;
+    source.charge(Work::Allocate(16 * 1024)).map_err(|_| unknown())?;
+    source.charge(Work::Compare(16 * 1024)).map_err(|_| unknown())?;
     Ok(receipt.render_json())
 }
 

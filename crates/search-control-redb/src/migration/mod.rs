@@ -57,7 +57,9 @@ pub use model::{
 pub use inventory::{LEGACY_INVENTORY_PROFILE, LEGACY_INVENTORY_FAMILIES,
     LegacyInventoryFamily, LegacyInventoryStatus, LegacyInventoryOwner,
     LegacyInventoryLimits, LegacyInventoryBinding, LegacyInventorySummary,
-    LegacyInventoryError, LegacyInventoryEncoder, legacy_inventory_profile_digest};
+    LegacyInventoryError, LegacyInventoryEncoder,
+    LegacyInventoryDecodedRow, LegacyInventoryDecoder,
+    legacy_inventory_profile_digest};
 pub use output_artifact::{
     SourceImportOutputArtifact, SourceImportOutputArtifactError,
     SourceImportOutputArtifactPlatform, SourceImportPendingArtifact,
