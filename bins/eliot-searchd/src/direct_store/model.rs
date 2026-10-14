@@ -5,12 +5,14 @@ use std::path::PathBuf;
 use search_source_registry::LegacyDirectDigest;
 
 pub(super) use search_source_registry::{
-    LEGACY_DIRECT_LOG_HEADER as SOURCE_LOG_HEADER, LEGACY_DIRECT_ZERO_DIGEST as ZERO_DIGEST,
+    LEGACY_DIRECT_LOG_HEADER as SOURCE_LOG_HEADER,
     LegacyDirectRegistryState as RegistryState, LegacyDirectSourceRecord as SourceRecord,
     LegacyDirectSourceState as SourceState,
 };
 
 use crate::sha256;
+#[cfg(test)]
+pub(super) use search_source_registry::LEGACY_DIRECT_ZERO_DIGEST as ZERO_DIGEST;
 #[cfg(test)]
 pub(super) use search_source_registry::{
     LegacyDirectIdentityStrength as IdentityStrength, LegacyDirectRecordDraft as RecordDraft,

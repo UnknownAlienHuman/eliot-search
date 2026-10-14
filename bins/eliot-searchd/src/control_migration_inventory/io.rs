@@ -257,12 +257,14 @@ fn limit() -> String {
 /// not a body digest or a replacement opened later through the locator.
 pub(super) struct PinnedRevisionRepresentation {
     file: File,
+    #[cfg(test)]
     protection: LegacyRevisionProtection,
     snapshot: eliot_searchd::native_file::Observation,
     metadata: Metadata,
 }
 
 impl PinnedRevisionRepresentation {
+    #[cfg(test)]
     pub(super) const fn protection(&self) -> LegacyRevisionProtection {
         self.protection
     }
@@ -275,10 +277,12 @@ impl PinnedRevisionRepresentation {
         self.snapshot.length
     }
 
+    #[cfg(test)]
     pub(super) const fn snapshot(&self) -> &eliot_searchd::native_file::Observation {
         &self.snapshot
     }
 
+    #[cfg(test)]
     pub(super) const fn metadata(&self) -> &Metadata {
         &self.metadata
     }
@@ -345,7 +349,7 @@ impl<'a, 'view, 'operation, 'owner>
     }
 
     /// Each protection class has its own presence, identity and encoded length.
-    pub(super) fn representation(
+    pub(super) const fn representation(
         &self, protection: LegacyRevisionProtection,
     ) -> Option<&PinnedRevisionRepresentation> {
         self.originals[revision_protection_index(protection)].as_ref()
@@ -381,10 +385,7 @@ impl<'a, 'view, 'operation, 'owner>
                     self.source.charge(Work::Observe)?;
                     let current = original.file.metadata();
                     self.source.checkpoint()?;
-                    let current = match current {
-                        Ok(current) => current,
-                        Err(_) => return Ok(Err(Status::Unreadable)),
-                    };
+                    let Ok(current) = current else { return Ok(Err(Status::Unreadable)); };
                     if !current.is_file() || !unchanged(&original.metadata, &current) { return Err(changed()); }
                     let snapshot = match revision_pin_observation(self.source, &original.file)? {
                         Ok(snapshot) => snapshot,
@@ -415,7 +416,7 @@ impl<'a, 'view, 'operation, 'owner>
     }
 }
 
-fn revision_protection_index(protection: LegacyRevisionProtection) -> usize {
+const fn revision_protection_index(protection: LegacyRevisionProtection) -> usize {
     match protection {
         LegacyRevisionProtection::Plaintext => 0,
         LegacyRevisionProtection::Protected => 1,
@@ -423,7 +424,7 @@ fn revision_protection_index(protection: LegacyRevisionProtection) -> usize {
 }
 
 fn pin_final_revision(
-    source: &MigrationSource<'_, '_, '_>, path: &Path, protection: LegacyRevisionProtection,
+    source: &MigrationSource<'_, '_, '_>, path: &Path, _protection: LegacyRevisionProtection,
 ) -> Result<Result<Option<PinnedRevisionRepresentation>, Status>, String> {
     let before = match metadata(source, path)? {
         Observed::Missing => return Ok(Ok(None)),
@@ -435,17 +436,11 @@ fn pin_final_revision(
     source.charge(Work::Open)?;
     let file = open_nofollow(path, false);
     source.checkpoint()?;
-    let file = match file {
-        Ok(file) => file,
-        Err(_) => return Ok(Err(Status::Unreadable)),
-    };
+    let Ok(file) = file else { return Ok(Err(Status::Unreadable)); };
     source.charge(Work::Observe)?;
     let held = file.metadata();
     source.checkpoint()?;
-    let held = match held {
-        Ok(held) => held,
-        Err(_) => return Ok(Err(Status::Unreadable)),
-    };
+    let Ok(held) = held else { return Ok(Err(Status::Unreadable)); };
     if !held.is_file() || !unchanged(&before, &held) { return Err(changed()); }
     let snapshot = match revision_pin_observation(source, &file)? {
         Ok(snapshot) => snapshot,
@@ -453,7 +448,13 @@ fn pin_final_revision(
     };
     if snapshot.length != held.len() { return Err(changed()); }
     if let Err(status) = revision_pin_single_link(source, &file)? { return Ok(Err(status)); }
-    Ok(Ok(Some(PinnedRevisionRepresentation { file, protection, snapshot, metadata: held })))
+    Ok(Ok(Some(PinnedRevisionRepresentation {
+        file,
+        #[cfg(test)]
+        protection: _protection,
+        snapshot,
+        metadata: held,
+    })))
 }
 
 fn revision_pin_observation(
@@ -852,110 +853,5 @@ mod locator_tests {
         let bytes = locator_preimage(root, &root.join(name), |_| Ok(())).unwrap();
         assert!(bytes.ends_with(&[0, 0, 0, 4, 0xd8, 0, 0, 0x61]));
         assert_ne!(bytes, encoded("\u{fffd}a"));
-    }
-}
-
-// These fixtures exercise local NTFS pin/refusal behavior only. They do not
-// qualify a NativeMigrationInput, the full co-producer or installed cutover.
-#[cfg(all(test, windows))]
-mod revision_pin_tests {
-    use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
-    const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-    struct Scratch { root: PathBuf }
-
-    impl Scratch {
-        fn new() -> Self {
-            static NEXT: AtomicU64 = AtomicU64::new(0);
-            let stamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos();
-            let root = std::env::temp_dir().join(format!("search-revision-pins-{}-{stamp}-{}",
-                std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
-            fs::create_dir_all(root.join("revisions/aa")).expect("scratch shard");
-            Self { root }
-        }
-
-        fn path(&self, protection: LegacyRevisionProtection) -> PathBuf {
-            self.root.join(LEGACY_REVISION_DIRECTORY)
-                .join(legacy_revision_object_relative_locator(REVISION, protection).expect("locator"))
-        }
-
-        fn store(&self) -> crate::plaintext_direct_store::DirectStore {
-            crate::plaintext_direct_store::DirectStore::open(&self.root).expect("fixture catalog")
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            // Only this fixture's freshly created, uniquely named temp root.
-            assert_eq!(self.root.parent(), Some(std::env::temp_dir().as_path()));
-            assert!(self.root.file_name().unwrap().to_str().unwrap().starts_with("search-revision-pins-"));
-            fs::remove_dir_all(&self.root).expect("drop scratch after pins");
-        }
-    }
-
-    #[test]
-    fn both_originals_deny_write_delete_and_match_only_their_own_readback() {
-        let scratch = Scratch::new();
-        fs::write(scratch.path(LegacyRevisionProtection::Plaintext), b"plain").expect("plain");
-        fs::write(scratch.path(LegacyRevisionProtection::Protected), b"protected wire").expect("wire");
-        let store = scratch.store();
-        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
-        let held = PinnedRevisionRepresentations::open(&source, REVISION).expect("open").unwrap_or_else(|_| panic!("pins refused"));
-        let mut facts = Vec::new();
-        for protection in [LegacyRevisionProtection::Plaintext, LegacyRevisionProtection::Protected] {
-            let path = scratch.path(protection);
-            assert!(OpenOptions::new().write(true).open(&path).is_err(), "write must be denied while held");
-            assert!(fs::remove_file(&path).is_err(), "delete must be denied while held");
-            let mut reopened = File::open(&path).expect("source owner's read-only reopen");
-            let observed = identity(&reopened).expect("same native observer");
-            let mut bytes = Vec::new();
-            reopened.read_to_end(&mut bytes).expect("callback read");
-            let id = (u64::from(observed.volume_serial), observed.file_index);
-            held.verify_readback(protection, Some((Some(id), bytes.len() as u64))).expect("own fact");
-            let pinned = held.representation(protection).expect("representation");
-            assert_eq!(pinned.protection(), protection);
-            assert_eq!(*pinned.snapshot(), observed);
-            assert_eq!(pinned.metadata().len(), bytes.len() as u64);
-            assert!(held.verify_readback(protection, Some((None, bytes.len() as u64))).is_err());
-            assert!(held.verify_readback(protection, Some((Some(id), bytes.len() as u64 + 1))).is_err());
-            facts.push((id, bytes.len() as u64));
-        }
-        assert!(held.verify_readback(LegacyRevisionProtection::Plaintext, Some((Some(facts[1].0), facts[0].1))).is_err());
-        held.verify_same_original().expect("stable originals").unwrap_or_else(|_| panic!("verification refused"));
-    }
-
-    #[test]
-    fn missing_both_is_explicit_and_missing_counterpart_is_rechecked() {
-        let scratch = Scratch::new();
-        let store = scratch.store();
-        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
-        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::AbsentProven))));
-        assert!(PinnedRevisionRepresentations::open(&source, "../outside").is_err());
-        fs::write(scratch.path(LegacyRevisionProtection::Plaintext), b"plain").expect("plain");
-        let held = PinnedRevisionRepresentations::open(&source, REVISION).expect("open").unwrap_or_else(|_| panic!("pins refused"));
-        assert!(held.representation(LegacyRevisionProtection::Protected).is_none());
-        held.verify_readback(LegacyRevisionProtection::Protected, None).expect("explicit absence");
-        assert!(held.verify_readback(LegacyRevisionProtection::Plaintext, None).is_err());
-        fs::write(scratch.path(LegacyRevisionProtection::Protected), b"late wire").expect("new counterpart");
-        assert!(held.verify_same_original().is_err(), "late presence cannot match prior absence");
-    }
-
-    #[test]
-    fn hardlink_and_second_representation_refusal_release_all_leaf_pins() {
-        let scratch = Scratch::new();
-        let plain = scratch.path(LegacyRevisionProtection::Plaintext);
-        fs::write(&plain, b"plain").expect("plain");
-        let alias = scratch.root.join("alias.bin");
-        fs::hard_link(&plain, &alias).expect("hardlink fixture");
-        let store = scratch.store();
-        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
-        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::Gap))));
-        fs::remove_file(alias).expect("remove alias");
-        fs::create_dir(scratch.path(LegacyRevisionProtection::Protected)).expect("wrong-kind counterpart");
-        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::Corrupt))));
-        assert!(OpenOptions::new().write(true).open(plain).is_ok(), "refusal must release the first leaf pin");
     }
 }

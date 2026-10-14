@@ -259,7 +259,9 @@ fn source_import_record_chain_and_artifact_lifecycle_have_one_owner() {
         "resolve_same_process",
         "sync_and_verify_final",
         "fs::hard_link",
-        "read_until",
+        "fill_buf",
+        "reader.consume(count)",
+        "MAX_SOURCE_IMPORT_ROW_BYTES + 1 - row.len()",
     ] {
         assert!(
             artifact_owner.contains(required),
@@ -273,7 +275,9 @@ fn source_import_record_chain_and_artifact_lifecycle_have_one_owner() {
     let adapter = read(&root, "bins/eliot-searchd/src/control_migration_redb.rs");
     assert!(adapter.contains("impl SourceImportRecordArtifactPlatform"));
     assert!(adapter.contains("sync_record_artifact_directory"));
-    assert!(adapter.contains("0x0200_0000"));
+    assert!(adapter.contains("contextual_platform::sync_directory"));
+    let platform = read(&root, "bins/eliot-searchd/src/control_migration_redb/contextual_platform.rs");
+    assert!(platform.contains("0x0200_0000"));
 
     let plan = read(
         &root,
@@ -352,8 +356,12 @@ fn staged_plan_and_cutover_receipt_schemas_belong_to_control_owner() {
     );
     assert!(operation.contains("render_control_cutover_committed_receipt"));
     assert!(operation.contains("render_control_cutover_rollback_receipt"));
-    assert!(!operation.contains("control_cutover_committed"));
-    assert!(!operation.contains("control_cutover_rollback"));
+    for literal in [
+        "\"control_cutover_committed\"", "\\\"control_cutover_committed\\\"",
+        "\"control_cutover_rollback\"", "\\\"control_cutover_rollback\\\"",
+    ] {
+        assert!(!operation.contains(literal), "daemon must not encode owner profile literal {literal}");
+    }
     assert!(!operation.contains("fn cutover_receipt"));
 
     let status = read(

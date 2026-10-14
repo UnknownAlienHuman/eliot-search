@@ -73,14 +73,20 @@ pub(super) fn stage_owned<F: Fn(search_control_redb::MigrationBootstrapWork) -> 
         .ok_or_else(|| "DIRECT_MIGRATION_BOOTSTRAP_INVALID".to_owned())
 }
 
+pub(super) struct JointArtifactInputs<'mapping, 'bootstrap> {
+    pub(super) source_plan: [u8; 32],
+    pub(super) bootstrap: BootstrapDispatch<'bootstrap>,
+    pub(super) mapping: &'mapping mut super::source_stage::PreparedSourceMap,
+}
+
 /// Produce both existing artifacts from the same two independent source passes.
 /// Neither original is published until both streams have completed comparison.
 pub(super) fn stage_owned_joint(
     source: &MigrationSource<'_, '_, '_>, root: &Path, target: SourceNamespaceId,
     directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
-    source_plan: [u8; 32], bootstrap: BootstrapDispatch<'_>,
-    mapping: &mut super::source_stage::PreparedSourceMap,
+    inputs: JointArtifactInputs<'_, '_>,
 ) -> Result<(StagedInventory, super::content_readback::PreparedContent), String> {
+    let JointArtifactInputs { source_plan, bootstrap, mapping } = inputs;
     input.context.inventory_reobserve(input)?;
     let inventory_context = ArtifactContext::new(source);
     let inventory_work = |unit| inventory_context.reserve(unit);

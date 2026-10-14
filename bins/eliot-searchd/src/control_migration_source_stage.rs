@@ -49,9 +49,12 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     let expected = mapping_artifact.summary;
     let binding = header.import_binding(*mapping_artifact.publication.chain());
     let (mut inventory_artifact, mut content_artifact) = inventory::stage_owned_joint(
-        source, root, target, directory, input, *binding.plan_chain.as_bytes(),
-        (&mut journal, &|work| { bootstrap::reserve(source, work)?; bootstrap::verify_output(&output, source) }),
-        &mut mapping_artifact,
+        source, root, target, directory, input,
+        inventory::JointArtifactInputs {
+            source_plan: *binding.plan_chain.as_bytes(),
+            bootstrap: (&mut journal, &|work| { bootstrap::reserve(source, work)?; bootstrap::verify_output(&output, source) }),
+            mapping: &mut mapping_artifact,
+        },
     )?;
     let reserve = |work| {
         bootstrap::reserve(source, work)?;
