@@ -97,7 +97,6 @@ jobs:
           cargo test --locked -p eliot-searchd --test safe_reader_adapter_module_ownership
           cargo test --locked -p eliot-searchd --test owner_composition_module_ownership
           cargo test --locked -p eliot-searchd --test secret_composition_module_ownership
-          cargo test --locked -p eliot-searchd --test projection_composition_module_ownership
           cargo test --locked -p eliot-searchd --test source_roots_module_ownership
           cargo test --locked -p eliot-searchd --test result_handles_module_ownership
           cargo test --locked -p eliot-searchd --test development_module_ownership

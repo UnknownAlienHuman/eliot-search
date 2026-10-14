@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use search_point_identity::PointId128;
+use search_point_identity::s11::PointId128;
 use search_projection_planner::{ProjectionManifest, diff_manifests};
 
 use crate::{

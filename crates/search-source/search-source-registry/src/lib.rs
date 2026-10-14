@@ -35,6 +35,7 @@ pub mod error;
 pub mod legacy_root_catalog;
 pub mod membership;
 pub mod portfolio;
+pub mod portfolio_history;
 pub mod recovery;
 pub mod revision;
 pub mod root;
@@ -45,6 +46,10 @@ pub mod view;
 
 #[cfg(test)]
 mod revision_tests;
+
+#[cfg(test)]
+#[path = "portfolio_history_tests.rs"]
+mod portfolio_history_tests;
 
 #[path = "source/legacy_direct.rs"]
 mod source_legacy_direct;
@@ -60,6 +65,8 @@ pub use legacy_root_catalog::{
 };
 pub use membership::{MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership};
 pub use portfolio::PortfolioItem;
+pub use portfolio_history::{ImmutablePortfolioRevision, PortfolioCurrentPointer,
+    PortfolioHistory, PortfolioRevisionKey, PortfolioRevisionRecord};
 pub use recovery::{
     NamespaceCutover, RegistryBatch, RegistryChange, RegistryOperation, RegistryReceipt,
     SourceRegistry,

@@ -5,16 +5,16 @@ use std::path::PathBuf;
 use search_source_registry::LegacyDirectDigest;
 
 pub(super) use search_source_registry::{
-    LEGACY_DIRECT_LOG_HEADER as SOURCE_LOG_HEADER,
-    LEGACY_DIRECT_ZERO_DIGEST as ZERO_DIGEST,
-    LegacyDirectIdentityStrength as IdentityStrength,
-    LegacyDirectRecordDraft as RecordDraft,
-    LegacyDirectRegistryState as RegistryState,
-    LegacyDirectSourceRecord as SourceRecord,
+    LEGACY_DIRECT_LOG_HEADER as SOURCE_LOG_HEADER, LEGACY_DIRECT_ZERO_DIGEST as ZERO_DIGEST,
+    LegacyDirectRegistryState as RegistryState, LegacyDirectSourceRecord as SourceRecord,
     LegacyDirectSourceState as SourceState,
 };
 
 use crate::sha256;
+#[cfg(test)]
+pub(super) use search_source_registry::{
+    LegacyDirectIdentityStrength as IdentityStrength, LegacyDirectRecordDraft as RecordDraft,
+};
 
 pub(super) const CONTROL_DIRECTORY: &str = "control";
 pub(super) const REVISION_DIRECTORY: &str = "revisions";
@@ -23,7 +23,9 @@ pub(super) const SOURCE_LOG_FILE: &str = "source-events.log";
 pub(super) const MAX_LOG_BYTES: u64 = 512 * 1024 * 1024;
 pub(super) const MAX_LOG_LINE_BYTES: usize = 256 * 1024;
 pub(super) const MAX_SOURCE_EVENTS: usize = 2_000_000;
+#[cfg(test)]
 pub(super) const MAX_DIRECTORY_FILES: usize = 100_000;
+#[cfg(test)]
 pub(super) const MAX_DIRECTORY_DEPTH: usize = 128;
 
 pub(super) struct DirectDigest;
@@ -40,6 +42,7 @@ impl LegacyDirectDigest for DirectDigest {
 
 /// Result of indexing one exact final-handle file snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub struct IndexedSource {
     pub(crate) source_id: String,
     pub(crate) revision_id: String,
@@ -119,6 +122,7 @@ pub struct RevisionSlice {
 }
 
 #[derive(Clone, Debug)]
+#[cfg(test)]
 pub(super) struct FileSnapshot {
     pub(super) path_digest: String,
     pub(super) file_identity_digest: String,
@@ -145,20 +149,15 @@ mod tests {
             operation_id: "55".repeat(32),
             state: SourceState::Active,
             source_id: "11".repeat(32),
-            revision_id:
-                "466aa7a6a3f6ba26be1e7eb2b890e8049015b95c419d2877ebad6494d979b1ae"
-                    .to_owned(),
+            revision_id: "466aa7a6a3f6ba26be1e7eb2b890e8049015b95c419d2877ebad6494d979b1ae"
+                .to_owned(),
             content_digest: "22".repeat(32),
             byte_length: 3,
             file_identity_digest: "33".repeat(32),
             path_digest: "44".repeat(32),
             identity_strength: IdentityStrength::Native,
         };
-        let record = SourceRecord::from_draft::<DirectDigest>(
-            1,
-            ZERO_DIGEST.to_owned(),
-            draft,
-        );
+        let record = SourceRecord::from_draft::<DirectDigest>(1, ZERO_DIGEST.to_owned(), draft);
         assert_eq!(
             record.record_digest,
             "80def9b4b29a19423784d4216e229fc7579528696fb200f8f9df0c6cd3265d41"

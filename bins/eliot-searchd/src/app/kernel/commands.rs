@@ -2,20 +2,27 @@
 
 use std::path::Path;
 
-use crate::development::{DataRootGuard, read_file_bounded, read_stdin_bounded};
+#[cfg(test)]
+use crate::development::DataRootGuard;
+use crate::development::{read_file_bounded, read_stdin_bounded};
+#[cfg(test)]
 use crate::direct_store::DirectStore;
+#[cfg(test)]
 use crate::maintenance::{collect_orphan_revisions, repair_control_log};
 #[cfg(test)]
 use crate::sha256;
 
 #[cfg(test)]
 use super::output::emit_store_search;
-use super::output::{emit_indexed_source, emit_one_shot_scan};
+#[cfg(test)]
+use super::output::emit_indexed_source;
+use super::output::emit_one_shot_scan;
 #[cfg(test)]
 use super::protocol::serve_stdio;
 #[cfg(test)]
 use super::status::direct_health_effective;
 
+#[cfg(test)]
 fn open_direct_store(root: &Path) -> Result<(DataRootGuard, DirectStore), String> {
     let guard = DataRootGuard::acquire(root)?;
     let store = DirectStore::open(guard.canonical_root())?;
@@ -66,6 +73,7 @@ pub(super) fn cmd_scan_file(arguments: &[String], argument: &str) -> Result<(), 
     )
 }
 
+#[cfg(test)]
 pub(super) fn cmd_index_file(arguments: &[String]) -> Result<(), String> {
     let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
     let indexed = store.index_file(Path::new(&arguments[2]))?;
@@ -73,6 +81,7 @@ pub(super) fn cmd_index_file(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn cmd_retire_source(arguments: &[String]) -> Result<(), String> {
     let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
     let source = store.retire_source(&arguments[2])?;
@@ -106,6 +115,7 @@ pub(super) fn cmd_health_data_root(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn cmd_index_directory(arguments: &[String]) -> Result<(), String> {
     let (_guard, mut store) = open_direct_store(Path::new(&arguments[1]))?;
     let indexed = store.index_directory(Path::new(&arguments[2]))?;
@@ -213,6 +223,7 @@ pub(super) fn cmd_read_revision(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn cmd_repair_root(arguments: &[String]) -> Result<(), String> {
     let guard = DataRootGuard::acquire(Path::new(&arguments[1]))?;
     let repair = repair_control_log(guard.canonical_root())?;
@@ -235,6 +246,7 @@ pub(super) fn cmd_repair_root(arguments: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn cmd_gc_root(arguments: &[String]) -> Result<(), String> {
     let apply = match arguments[2].as_str() {
         "--dry-run" => false,

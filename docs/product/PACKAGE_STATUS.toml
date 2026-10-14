@@ -134,13 +134,6 @@ path = "crates/search-lexical"
 execution_chain = ["#252", "#253", "#254", "#221"]
 
 [[package]]
-name = "search-model-provider"
-path = "crates/search-model-provider"
-execution_chain = ["#216", "#221"]
-product_path = "absent"
-disposition = "optional_disabled"
-
-[[package]]
 name = "search-projection-planner"
 path = "crates/search-index-qdrant/search-projection-planner"
 execution_chain = ["#259"]
@@ -271,14 +264,6 @@ path = "crates/search-eliot-adapter"
 execution_chain = ["#219"]
 product_path = "absent"
 disposition = "optional_disabled"
-
-[[package]]
-name = "search-research-export-adapter"
-path = "crates/search-research-export-adapter"
-execution_chain = ["#216", "#228", "#229", "#230", "#231"]
-product_path = "absent"
-disposition = "optional_disabled"
-consumers = ["#301", "#302", "#243"]
 
 [[package]]
 name = "eliot-searchd"

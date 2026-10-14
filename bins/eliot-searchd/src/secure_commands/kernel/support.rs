@@ -2,6 +2,16 @@ use std::ffi::OsString;
 
 pub(super) const MAX_DIAGNOSTIC_REVISION_SLICE_BYTES: u64 = 24 * 1024;
 
+/// Legacy mutations and cleanup have no accepted operation-bound effect owner.
+pub const LEGACY_EFFECTS_UNAVAILABLE: &str = "LEGACY_EFFECTS_UNAVAILABLE";
+
+pub(super) fn is_unavailable_effect(command: &str) -> bool {
+    matches!(
+        command,
+        "--index-file" | "--index-directory" | "--retire-source" | "--repair-root" | "--gc-root"
+    )
+}
+
 pub(super) fn is_persistent_command(command: &str) -> bool {
     matches!(
         command,
@@ -38,18 +48,12 @@ pub(super) const fn help() -> &'static str {
         "  eliot-searchd --scan-file QUERY FILE\n",
         "  eliot-searchd --scan-file-ascii-insensitive QUERY FILE\n\n",
         "PERSISTENT DIRECT CORPUS:\n",
-        "  eliot-searchd --index-file ROOT FILE\n",
-        "  eliot-searchd --index-directory ROOT DIRECTORY\n",
         "  eliot-searchd --search-root ROOT QUERY\n",
         "  eliot-searchd --search-root-ascii-insensitive ROOT QUERY\n",
         "  eliot-searchd --list-sources ROOT\n",
         "  eliot-searchd --verify-root ROOT\n",
-        "  eliot-searchd --retire-source ROOT SOURCE_ID\n",
         "  eliot-searchd --read-revision ROOT REVISION_ID START END\n\n",
-        "MAINTENANCE:\n",
-        "  eliot-searchd --repair-root ROOT\n",
-        "  eliot-searchd --gc-root ROOT --dry-run\n",
-        "  eliot-searchd --gc-root ROOT --apply\n\n",
+        "Legacy write and cleanup commands are unavailable.\n\n",
         "PROVIDER TRANSPORT:\n",
         "  Canonical startup uses installation-scoped local IPC.\n",
         "  TCP ports, endpoint files and token files are unavailable in the primary build.\n\n",
@@ -60,6 +64,7 @@ pub(super) const fn help() -> &'static str {
     )
 }
 
+#[cfg(test)]
 pub(super) fn require_count(arguments: &[OsString], expected: usize) -> Result<(), String> {
     if arguments.len() == expected {
         Ok(())

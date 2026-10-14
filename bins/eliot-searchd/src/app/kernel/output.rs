@@ -1,6 +1,7 @@
 //! Stable JSON event emission for one-shot and DIRECT corpus commands.
 
 use crate::development::{ScanResult, scan_text};
+#[cfg(test)]
 use crate::direct_store::IndexedSource;
 #[cfg(test)]
 use crate::direct_store::StoreSearchResult;
@@ -81,6 +82,7 @@ fn emit_scan_matches(result: &ScanResult, content_digest: &str, source_backed: b
     );
 }
 
+#[cfg(test)]
 pub(super) fn emit_indexed_source(source: &IndexedSource) {
     println!(
         concat!(

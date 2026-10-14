@@ -6,7 +6,9 @@
 //! reference set. Both operations require the data-root owner lock.
 
 use std::collections::BTreeSet;
-use std::fs::{self, File, Metadata, OpenOptions};
+#[cfg(test)]
+use std::fs::OpenOptions;
+use std::fs::{self, File, Metadata};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -23,6 +25,7 @@ const MAX_REVISION_OBJECTS: usize = 2_000_000;
 
 /// Result of explicit torn-tail repair.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub struct LogRepairResult {
     pub(crate) repaired: bool,
     pub(crate) removed_bytes: usize,
@@ -58,6 +61,7 @@ struct LogInventory {
 }
 
 /// Removes only an uncommitted unterminated final event.
+#[cfg(test)]
 pub fn repair_control_log(root: &Path) -> Result<LogRepairResult, String> {
     let control = root.join(CONTROL_DIRECTORY);
     ensure_directory(&control)?;
@@ -102,8 +106,7 @@ pub fn repair_control_log(root: &Path) -> Result<LogRepairResult, String> {
         .open(&log_path)
         .map_err(|error| format!("DIRECT_REPAIR_OPEN_ERROR:{error}"))?;
     file.set_len(
-        u64::try_from(prefix_len)
-            .map_err(|_| "DIRECT_REPAIR_OFFSET_OVERFLOW".to_owned())?,
+        u64::try_from(prefix_len).map_err(|_| "DIRECT_REPAIR_OFFSET_OVERFLOW".to_owned())?,
     )
     .and_then(|()| file.sync_all())
     .map_err(|error| format!("DIRECT_REPAIR_TRUNCATE_ERROR:{error}"))?;
@@ -175,8 +178,8 @@ pub fn collect_orphan_revisions(
                 .checked_add(object.byte_length)
                 .ok_or_else(|| "DIRECT_GC_BYTES_OVERFLOW".to_owned())?;
         }
-        for entry in fs::read_dir(&revisions)
-            .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
+        for entry in
+            fs::read_dir(&revisions).map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
         {
             let path = entry
                 .map_err(|error| format!("DIRECT_GC_READ_ERROR:{error}"))?
@@ -262,10 +265,7 @@ fn collect_candidates(
             let path = entry.path();
             let metadata = fs::symlink_metadata(&path)
                 .map_err(|error| format!("DIRECT_GC_METADATA_ERROR:{error}"))?;
-            if metadata.file_type().is_symlink()
-                || is_reparse(&metadata)
-                || !metadata.is_file()
-            {
+            if metadata.file_type().is_symlink() || is_reparse(&metadata) || !metadata.is_file() {
                 tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
                 continue;
             }
@@ -276,23 +276,20 @@ fn collect_candidates(
                     format,
                 } => {
                     if !revision_id.starts_with(shard_name.as_ref()) {
-                        tally.unexpected_objects =
-                            tally.unexpected_objects.saturating_add(1);
+                        tally.unexpected_objects = tally.unexpected_objects.saturating_add(1);
                         continue;
                     }
                     let referenced = inventory.referenced_revisions.contains(&revision_id);
                     match format {
                         RevisionObjectFormat::Plaintext => {
-                            tally.plaintext_objects =
-                                tally.plaintext_objects.saturating_add(1);
+                            tally.plaintext_objects = tally.plaintext_objects.saturating_add(1);
                             if referenced {
                                 tally.referenced_plaintext_objects =
                                     tally.referenced_plaintext_objects.saturating_add(1);
                             }
                         }
                         RevisionObjectFormat::Protected => {
-                            tally.protected_objects =
-                                tally.protected_objects.saturating_add(1);
+                            tally.protected_objects = tally.protected_objects.saturating_add(1);
                             if referenced {
                                 tally.referenced_protected_objects =
                                     tally.referenced_protected_objects.saturating_add(1);
@@ -380,8 +377,7 @@ fn verify_complete_log(bytes: &[u8]) -> Result<LogInventory, String> {
     if !bytes.ends_with(b"\n") {
         return Err("DIRECT_CONTROL_LOG_UNTERMINATED".to_owned());
     }
-    let text = core::str::from_utf8(bytes)
-        .map_err(|_| "DIRECT_CONTROL_LOG_NOT_UTF8".to_owned())?;
+    let text = core::str::from_utf8(bytes).map_err(|_| "DIRECT_CONTROL_LOG_NOT_UTF8".to_owned())?;
     let mut lines = text.split_terminator('\n');
     let header = lines
         .next()
@@ -416,9 +412,7 @@ fn verify_complete_log(bytes: &[u8]) -> Result<LogInventory, String> {
         {
             return Err("DIRECT_CONTROL_LOG_CHAIN_INVALID".to_owned());
         }
-        if !matches!(fields[4], "A" | "R")
-            || !matches!(fields[11], "native" | "path-bound")
-        {
+        if !matches!(fields[4], "A" | "R") || !matches!(fields[11], "native" | "path-bound") {
             return Err("DIRECT_CONTROL_LOG_ENUM_INVALID".to_owned());
         }
         fields[8]

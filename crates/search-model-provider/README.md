@@ -2,7 +2,7 @@
 
 **C12 — Optional model profile and scoring boundary.**
 
-**Status:** complete W10/P16 function contract; no model/runtime/provider selected or implemented.
+**Status:** documentation-only W10/P16 contract; no Cargo package or runtime API exists. The unused provider scaffold was removed under #528. No model/runtime/provider is selected or qualified.
 
 Owns versioned dense/multivector/rerank profiles, bounded input/output validation, provider-neutral
 worker requests, content-free receipts, migration classification and removal validation.
