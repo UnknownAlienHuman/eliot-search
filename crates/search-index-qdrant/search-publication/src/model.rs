@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use search_contracts::{Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, ReceiptRef};
-use search_point_identity::PointId128;
+use search_point_identity::s11::PointId128;
 use search_projection_planner::ProjectionManifest;
 
 /// Shared publication guard value; this re-export preserves the existing import path.
@@ -159,7 +159,7 @@ pub struct AbandonFence {
     pub excluded_point_ids: BTreeSet<PointId128>,
     /// Complete affected projection memberships excluded before retrieval and IDF.
     /// Excluding only `excluded_point_ids` does not establish this wider fence.
-    pub excluded_projection_memberships: BTreeSet<OpaqueId>,
+    pub excluded_projection_memberships: BTreeSet<search_contracts::ProjectionMembershipId>,
     /// Exact affected membership/partition-set digest supplied by the scope owner.
     pub excluded_scope_digest: Blake3Digest32,
     /// Durable exclusion receipt.

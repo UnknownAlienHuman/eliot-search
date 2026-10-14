@@ -2,10 +2,11 @@
 //! these tests exercise pure decisions, not redb, Qdrant, or process recovery.
 
 use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, Epoch, NonZeroRevision, OpaqueId, OwnerEpoch,
-    ReceiptRef,
+    AccessPartitionId, Blake3Digest32, CollectionGenerationId, Epoch, InstallationIncarnationId,
+    OpaqueId, OwnerEpoch, ProjectionMembershipId, ProjectionProfileSetId, ReceiptRef,
+    ScoringDocumentId, ScoringPartitionId, SourceMembershipId, UnitId,
 };
-use search_point_identity::{PointId128, PointIdentityKey, ProjectionKind};
+use search_point_identity::s11::PointId128;
 use search_projection_planner::{ProjectionManifest, ProjectionManifestEntry, diff_manifests};
 use search_publication::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -30,7 +31,7 @@ fn reference(name: &str) -> ReceiptRef {
     ReceiptRef::new(format!("fixture:{name}")).unwrap()
 }
 const fn point(value: u8) -> PointId128 {
-    PointId128::from_bytes([value; 16])
+    PointId128::from_stored_bytes([value; 16])
 }
 fn guards() -> PublicationGuards {
     PublicationGuards {
@@ -49,31 +50,19 @@ fn manifest(points: &[u8]) -> ProjectionManifest {
         .copied()
         .map(|n| ProjectionManifestEntry {
             point_id: point(n),
-            identity_key: PointIdentityKey {
-                namespace_id: id("namespace"),
-                source_id: id("source"),
-                source_revision: NonZeroRevision::new(u64::from(n) + 1).unwrap(),
-                unit_ordinal: 0,
-                source_byte_start: 0,
-                source_byte_end: 1,
-                projection_kind: ProjectionKind::Lexical,
-                projection_fingerprint: digest(1),
-                projection_schema_revision: NonZeroRevision::new(1).unwrap(),
-                source_membership_id: id("source-member"),
-                projection_membership_id: id(&format!("membership-{n}")),
-                representation_digest: digest(n.wrapping_add(10)),
-                unit_digest: digest(n.wrapping_add(11)),
-                scoring_partition_digest: digest(n.wrapping_add(12)),
-                collection_generation_digest: digest(n.wrapping_add(13)),
-            },
-            source_membership_id: id("source-member"),
-            projection_membership_id: id(&format!("membership-{n}")),
+            point_identity_digest_256: digest(n.wrapping_add(10)),
+            source_membership_id: SourceMembershipId::from_bytes([7; 16]),
+            projection_membership_id: ProjectionMembershipId::from_bytes([n; 16]),
+            unit_id: UnitId::from_bytes([n; 16]),
+            collection_generation_id: CollectionGenerationId::from_bytes([1; 16]),
+            installation_incarnation_id: InstallationIncarnationId::from_bytes([1; 16]),
+            access_partition_id: AccessPartitionId::from_bytes([1; 16]),
+            scoring_partition_id: ScoringPartitionId::from_bytes([1; 16]),
+            scoring_document_id: ScoringDocumentId::from_bytes([n; 16]),
+            projection_profile_set_id: ProjectionProfileSetId::new("lexical-sparse-v1").unwrap(),
             unit_digest: digest(n),
             reference_digest: digest(n),
-            representation_digest: digest(n.wrapping_add(10)),
-            scoring_partition_digest: digest(n.wrapping_add(12)),
-            collection_generation_digest: digest(n.wrapping_add(13)),
-            payload_digest: digest(n),
+            payload_identity: digest(n),
             vector_digests: BTreeMap::new(),
         })
         .collect();
@@ -276,14 +265,14 @@ fn reconstruction_requires_the_explicit_resolved_reservation_floor() {
 #[test]
 fn exhausted_floor_does_not_wrap_or_consume_an_active_slot() {
     let mut machine =
-        PublicationCoordinator::new(epoch(0), epoch(i64::MAX - 1), None, None, 32).unwrap();
+        PublicationCoordinator::new(epoch(0), epoch(search_contracts::MAX_QDRANT_EPOCH), None, None, 32).unwrap();
     assert_eq!(
         machine.submit(prepared(None, manifest(&[]), "overflow")),
         Err(PublicationError::ContractExhausted)
     );
     assert!(machine.active().is_none());
     assert_eq!(machine.visible_epoch(), epoch(0));
-    assert_eq!(machine.last_reserved_epoch(), epoch(i64::MAX - 1));
+    assert_eq!(machine.last_reserved_epoch(), epoch(search_contracts::MAX_QDRANT_EPOCH));
 }
 
 #[test]
@@ -393,7 +382,7 @@ fn compensation_receipt_is_bound_to_its_reservation_not_just_transaction_name() 
 fn changed_content_with_a_distinct_id_still_requires_two_sided_compensation() {
     let old = manifest(&[1]);
     let mut new = manifest(&[2]);
-    new.entries[0].payload_digest = digest(99);
+    new.entries[0].payload_identity = digest(99);
     let mut machine = durable(Some(old), new);
     let plan = machine.begin_compensation_plan().unwrap();
     assert_eq!(plan.staged_ids, vec![point(2)]);
@@ -411,20 +400,8 @@ fn changed_content_with_a_distinct_id_still_requires_two_sided_compensation() {
 fn overlapping_changed_and_deleted_diff_is_rejected_before_publication() {
     let old = manifest(&[1, 2]);
     let mut new = manifest(&[2]);
-    new.entries[0].payload_digest = digest(99);
-    let difference = diff_manifests(&old, &new).unwrap();
-    assert!(
-        difference
-            .create
-            .iter()
-            .any(|entry| entry.point_id == point(2))
-    );
-    assert!(
-        difference
-            .retire
-            .iter()
-            .any(|entry| entry.point_id == point(2))
-    );
+    new.entries[0].payload_identity = digest(99);
+    assert_eq!(diff_manifests(&old, &new), Err(search_projection_planner::ProjectionError::ManifestMismatch));
     let mut machine =
         PublicationCoordinator::new(epoch(0), epoch(0), Some(old.clone()), Some(digest(1)), 32)
             .unwrap();
@@ -454,14 +431,14 @@ fn point_only_or_incomplete_membership_fence_cannot_abandon() {
     );
     fence
         .excluded_projection_memberships
-        .insert(id("membership-1"));
+        .insert(ProjectionMembershipId::from_bytes([1; 16]));
     assert_eq!(
         machine.abandon(&fence),
         Err(PublicationError::AbandonFenceMissing)
     );
     fence
         .excluded_projection_memberships
-        .insert(id("membership-2"));
+        .insert(ProjectionMembershipId::from_bytes([2; 16]));
     machine.abandon(&fence).unwrap();
     abort_support::acknowledge(&mut machine);
     machine.finalize_aborted().unwrap();

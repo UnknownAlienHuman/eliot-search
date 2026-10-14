@@ -10,8 +10,10 @@ use super::admission::{
     AdmissionPolicy, build_observation, issue_receipt, outcome, verify_receipt,
 };
 use super::identity;
+#[cfg(test)]
 use crate::sha256;
 
+#[cfg(test)]
 const MAX_PRIOR_SOURCES: usize = 2_000_000;
 const MAX_SNAPSHOT_BYTES: usize = 64 * 1024 * 1024;
 
@@ -33,6 +35,7 @@ pub(crate) struct RegistryView {
 }
 
 impl RegistryView {
+    #[cfg(test)]
     pub(crate) fn build(
         prior: Vec<PriorSourceView>,
         policy: &AdmissionPolicy,
@@ -64,6 +67,7 @@ impl RegistryView {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn get(&self, source_id: &str) -> Option<PriorSourceView> {
         self.by_id.get(source_id).cloned()
     }
@@ -93,9 +97,7 @@ impl RegistryView {
         match outcome(receipt) {
             AdmissionOutcome::Allow => Ok(()),
             AdmissionOutcome::Deny => Err("SOURCE_ADMISSION_DENIED".to_owned()),
-            AdmissionOutcome::ReviewRequired => {
-                Err("SOURCE_ADMISSION_REVIEW_REQUIRED".to_owned())
-            }
+            AdmissionOutcome::ReviewRequired => Err("SOURCE_ADMISSION_REVIEW_REQUIRED".to_owned()),
             AdmissionOutcome::Unsupported => Err("SOURCE_KIND_UNSUPPORTED".to_owned()),
         }
     }
@@ -132,10 +134,9 @@ pub(crate) fn plan_snapshot(
         identity_strength,
         &view.identity_candidates(),
     )?;
-    let byte_length = u64::try_from(snapshot_bytes.len())
-        .map_err(|_| "SOURCE_TOO_LARGE".to_owned())?;
-    let revision_id =
-        identity::derive_revision_id(&source_id, content_digest, byte_length)?;
+    let byte_length =
+        u64::try_from(snapshot_bytes.len()).map_err(|_| "SOURCE_TOO_LARGE".to_owned())?;
+    let revision_id = identity::derive_revision_id(&source_id, content_digest, byte_length)?;
 
     Ok(CanonicalPlan {
         source_id,

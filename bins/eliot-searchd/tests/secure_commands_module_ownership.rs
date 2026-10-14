@@ -7,6 +7,100 @@ fn crate_root() -> PathBuf {
 fn read(root: &Path, relative: &str) -> String {
     std::fs::read_to_string(root.join(relative))
         .unwrap_or_else(|error| panic!("cannot read {relative}: {error}"))
+        .replace("\r\n", "\n")
+}
+
+#[test]
+fn legacy_effects_refuse_before_native_routes_and_every_fallback() {
+    let root = crate_root();
+    let entry = read(&root, "src/entry.rs");
+    let main = entry
+        .split("fn main() -> ExitCode {")
+        .nth(1)
+        .expect("primary main");
+    let refusal = main
+        .find("secure_commands::maybe_refuse_legacy_effects()")
+        .expect("early refusal");
+    let native = main
+        .find("native_root_command::maybe_run")
+        .expect("native route");
+    assert!(refusal < native);
+    assert!(main.contains(".or_else(secure_commands::maybe_run)"));
+    assert!(main.contains(".unwrap_or_else(app::run_main)"));
+
+    for relative in [
+        "src/secure_commands/kernel/dispatch.rs",
+        "src/app/kernel/dispatch.rs",
+    ] {
+        let dispatch = read(&root, relative);
+        assert!(dispatch.contains("LEGACY_EFFECTS_UNAVAILABLE"));
+        for command in [
+            "--index-file",
+            "--index-directory",
+            "--retire-source",
+            "--repair-root",
+            "--gc-root",
+        ] {
+            assert!(
+                dispatch.contains(command),
+                "{relative} lost explicit refusal for {command}"
+            );
+        }
+        for effect in [
+            "cmd_index_file",
+            "cmd_index_directory",
+            "cmd_retire_source",
+            "cmd_repair_root",
+            "cmd_gc_root",
+            "with_store_mut",
+        ] {
+            assert!(
+                !dispatch.contains(effect),
+                "{relative} can still dispatch {effect}"
+            );
+        }
+    }
+    let kernel = read(&root, "src/secure_commands/kernel.rs").replace("\r\n", "\n");
+    for module in ["commands", "store"] {
+        assert!(kernel.contains(&format!(
+            "#[cfg(test)]\n#[path = \"kernel/{module}.rs\"]\nmod {module};"
+        )));
+    }
+    let commands = read(&root, "src/app/kernel/commands.rs").replace("\r\n", "\n");
+    for name in [
+        "cmd_index_file",
+        "cmd_index_directory",
+        "cmd_retire_source",
+        "cmd_repair_root",
+        "cmd_gc_root",
+    ] {
+        assert!(
+            commands.contains(&format!("#[cfg(test)]\npub(super) fn {name}(")),
+            "{name} must stay test-only"
+        );
+    }
+    for relative in [
+        "src/secure_commands/kernel/support.rs",
+        "src/app/kernel/spec.rs",
+    ] {
+        let help = read(&root, relative)
+            .split("const fn help()")
+            .nth(1)
+            .expect("help owner")
+            .split("\n}")
+            .next()
+            .unwrap()
+            .to_owned();
+        for flag in [
+            "--index-file",
+            "--index-directory",
+            "--retire-source",
+            "--repair-root",
+            "--gc-root",
+        ] {
+            assert!(!help.contains(flag), "{relative} advertises {flag}");
+        }
+    }
 }
 
 #[test]
@@ -216,10 +310,22 @@ fn paired_registration_route_keeps_original_native_request_and_excludes_sync_sta
     let entry = read(&root, "src/secure_commands/kernel/entry.rs");
     assert!(entry.contains("source_registration::run(&raw, started)"));
     let route = read(&root, "src/secure_commands/kernel/source_registration.rs");
-    for required in ["for_source_registration", "run_source_registration", "SOURCE_ROOT_USAGE_ERROR"]
-    { assert!(route.contains(required)); }
-    for forbidden in ["DirectStore", "DataRootGuard", "sync_directory(", "admit_existing(", "request.emit"]
-    { assert!(!route.contains(forbidden)); }
+    for required in [
+        "for_source_registration",
+        "run_source_registration",
+        "SOURCE_ROOT_USAGE_ERROR",
+    ] {
+        assert!(route.contains(required));
+    }
+    for forbidden in [
+        "DirectStore",
+        "DataRootGuard",
+        "sync_directory(",
+        "admit_existing(",
+        "request.emit",
+    ] {
+        assert!(!route.contains(forbidden));
+    }
 }
 
 #[test]

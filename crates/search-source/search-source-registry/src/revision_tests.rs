@@ -328,7 +328,7 @@ fn source_revision_occurrences_are_fresh_sequential_and_operation_recoverable() 
         decode_source_revision_record(&record_bytes).expect("record decoding"),
         first.revision
     );
-    let mut malformed_record = record_bytes.clone();
+    let mut malformed_record = record_bytes;
     malformed_record.push(0);
     assert_eq!(
         decode_source_revision_record(&malformed_record),

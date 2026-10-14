@@ -1,4 +1,6 @@
-use std::io::{self, Write};
+#[cfg(test)]
+use std::io;
+use std::io::Write;
 use std::process::ExitCode;
 
 use crate::direct_store::{DirectRead, SourceSummary};
@@ -83,6 +85,7 @@ fn emit_source(writer: &mut impl Write, source: &SourceSummary) -> Result<(), St
     )
 }
 
+#[cfg(test)]
 pub(super) fn write_stdout(value: &str) -> Result<(), String> {
     let mut output = io::stdout().lock();
     write_line(&mut output, value)

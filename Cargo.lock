@@ -412,12 +412,6 @@ dependencies = [
 [[package]]
 name = "eliot-search-model-worker"
 version = "0.0.0"
-dependencies = [
- "search-contracts",
- "search-model-provider",
- "search-ports",
- "search-provider-protocol",
-]
 
 [[package]]
 name = "eliot-searchd"
@@ -1335,15 +1329,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "search-model-provider"
-version = "0.0.0"
-dependencies = [
- "search-contracts",
- "search-domain",
- "search-ports",
-]
-
-[[package]]
 name = "search-os-secrets"
 version = "0.0.0"
 dependencies = [
@@ -1388,10 +1373,13 @@ dependencies = [
 name = "search-projection-planner"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "search-contracts",
  "search-domain",
+ "search-materializer",
  "search-point-identity",
  "search-ports",
+ "search-unitizer",
 ]
 
 [[package]]
@@ -1465,16 +1453,6 @@ dependencies = [
  "search-contracts",
  "search-domain",
  "search-ports",
-]
-
-[[package]]
-name = "search-research-export-adapter"
-version = "0.0.0"
-dependencies = [
- "search-contracts",
- "search-domain",
- "search-ports",
- "search-provider-protocol",
 ]
 
 [[package]]

@@ -11,6 +11,7 @@ use crate::endpoint_client;
 use crate::provider_client::{self, UnsignedRequest};
 
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+const LEGACY_EFFECTS_UNAVAILABLE: &str = "LEGACY_EFFECTS_UNAVAILABLE";
 
 const fn help() -> &'static str {
     concat!(
@@ -31,18 +32,12 @@ const fn help() -> &'static str {
         "  eliot-search scan-file QUERY FILE [--daemon PATH]\n",
         "  eliot-search scan-file-ascii-insensitive QUERY FILE [--daemon PATH]\n\n",
         "PERSISTENT DIRECT CORPUS:\n",
-        "  eliot-search index-file ROOT FILE [--daemon PATH]\n",
-        "  eliot-search index-directory ROOT DIRECTORY [--daemon PATH]\n",
         "  eliot-search search-root ROOT QUERY [--daemon PATH]\n",
         "  eliot-search search-root-ascii-insensitive ROOT QUERY [--daemon PATH]\n",
         "  eliot-search list-sources ROOT [--daemon PATH]\n",
         "  eliot-search verify-root ROOT [--daemon PATH]\n",
-        "  eliot-search retire-source ROOT SOURCE_ID [--daemon PATH]\n",
         "  eliot-search read-revision ROOT REVISION_ID START END [--daemon PATH]\n\n",
-        "MAINTENANCE:\n",
-        "  eliot-search repair-root ROOT [--daemon PATH]\n",
-        "  eliot-search gc-root ROOT --dry-run [--daemon PATH]\n",
-        "  eliot-search gc-root ROOT --apply [--daemon PATH]\n\n",
+        "Legacy write and cleanup commands are unavailable.\n\n",
         "The CLI prints newline-delimited JSON. Persistent DIRECT results are ",
         "source-backed by immutable revision readback. The current development ",
         "revision store is plaintext and reports encrypted_at_rest=false.\n",
@@ -278,18 +273,16 @@ fn run() -> Result<(), String> {
         "scan-file-ascii-insensitive" => {
             forward("--scan-file-ascii-insensitive", tail, 2, false)?;
         }
-        "index-file" => forward("--index-file", tail, 2, false)?,
-        "index-directory" => forward("--index-directory", tail, 2, false)?,
+        "index-file" | "index-directory" | "retire-source" | "repair-root" | "gc-root" => {
+            return Err(LEGACY_EFFECTS_UNAVAILABLE.to_owned());
+        }
         "search-root" => forward("--search-root", tail, 2, false)?,
         "search-root-ascii-insensitive" => {
             forward("--search-root-ascii-insensitive", tail, 2, false)?;
         }
         "list-sources" => forward("--list-sources", tail, 1, false)?,
         "verify-root" => forward("--verify-root", tail, 1, false)?,
-        "retire-source" => forward("--retire-source", tail, 2, false)?,
         "read-revision" => forward("--read-revision", tail, 4, false)?,
-        "repair-root" => forward("--repair-root", tail, 1, false)?,
-        "gc-root" => forward("--gc-root", tail, 2, false)?,
         _ => return Err(format!("UNKNOWN_COMMAND:{command}")),
     }
     Ok(())
@@ -304,7 +297,11 @@ pub fn run_main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{{\"error\":\"{}\"}}", error.replace('"', "'"));
-            ExitCode::from(provider_client::exit_for_error(&error))
+            ExitCode::from(if error == LEGACY_EFFECTS_UNAVAILABLE {
+                2
+            } else {
+                provider_client::exit_for_error(&error)
+            })
         }
     }
 }

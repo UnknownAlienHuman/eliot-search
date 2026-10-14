@@ -13,8 +13,10 @@ mod identity;
 #[path = "composition/registry.rs"]
 mod registry;
 
-pub(crate) use admission::{
-    AdmissionPolicy, SOURCE_ADMISSION_DENIED, SourceAdmissionConfig,
-};
+pub(super) use admission::AdmissionPolicy;
+#[cfg(test)]
+pub(crate) use admission::SOURCE_ADMISSION_DENIED;
+#[cfg(test)]
+pub(crate) use admission::SourceAdmissionConfig;
 pub(crate) use identity::derive_git_stable_digest;
 pub(crate) use registry::{PriorSourceView, RegistryView, plan_snapshot};

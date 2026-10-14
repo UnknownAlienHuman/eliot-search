@@ -1,4 +1,4 @@
-//! #396 causal array-row fixtures. AUTHORED_NOT_RUN under #352.
+//! #396 causal array-row fixtures. `AUTHORED_NOT_RUN` under #352.
 
 use std::cell::Cell;
 

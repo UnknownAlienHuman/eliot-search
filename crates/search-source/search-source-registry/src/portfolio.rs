@@ -17,6 +17,9 @@ use crate::error::{
     cancelled_before_commit, registry_mutation,
 };
 use crate::membership::{MembershipKey, MembershipLifecycle, MembershipRecord};
+use crate::portfolio_history::{
+    ImmutablePortfolioRevision, PortfolioHistory, PortfolioRevisionKey,
+};
 use crate::source::{RegisteredSource, SourceLifecycle};
 
 /// One active admitted portfolio item.
@@ -28,7 +31,11 @@ pub struct PortfolioItem {
     pub membership: MembershipRecord,
 }
 
-/// Registry-owned reference portfolio record.
+/// Legacy reference portfolio record retained for the existing current view.
+///
+/// Storage authority is the immutable history in [`PortfolioHistory`]. This
+/// record is a derived projection of the revision named by the current
+/// pointer and is never written to independently.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReferencePortfolioRecord {
     /// Stable portfolio identity.
@@ -50,6 +57,9 @@ pub struct PublishPortfolioRequest {
     pub portfolio_id: ReferencePortfolioId,
     /// Exact portfolio revision to publish.
     pub portfolio_revision: search_contracts::PortfolioRevision,
+    /// Exact current target observed by the proposer; None requires absence.
+    /// This guard applies to new publication, not a historical replay.
+    pub expected_current: Option<PortfolioRevisionKey>,
     /// Explicit ordered membership precedence.
     pub membership_precedence: Vec<SourceMembershipId>,
     /// Whether an explicitly empty scope is permitted.
@@ -65,11 +75,12 @@ pub struct PortfolioReceipt {
     pub portfolio_revision: search_contracts::PortfolioRevision,
     /// Registry revision after commit.
     pub registry_revision: u64,
-    /// Stable operation identity.
+    /// Operation that originally committed the returned publication.
+    /// Identical-content reuse returns that original identity, not a new acknowledgment.
     pub operation_id: OpaqueId,
     /// Content-free durability receipt.
     pub receipt: ReceiptRef,
-    /// Whether this receipt came from exact idempotency replay.
+    /// Whether this returns an already committed immutable publication.
     pub replayed: bool,
 }
 
@@ -79,8 +90,9 @@ pub struct PortfolioReceipt {
 /// Invalid membership refs or finite-bound violations return
 /// [`RegistryError::ReferencePortfolioInvalid`].
 #[allow(clippy::too_many_arguments)]
-pub fn publish_reference_portfolio<C, P>(
+pub(crate) fn publish_reference_portfolio<C, P>(
     portfolios: &mut BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord>,
+    history: &mut PortfolioHistory,
     memberships: &BTreeMap<MembershipKey, MembershipRecord>,
     reverse_index: &BTreeMap<SourceMembershipId, MembershipKey>,
     sources: &BTreeMap<SourceIdentity, RegisteredSource>,
@@ -112,6 +124,53 @@ where
     }
     if request.membership_precedence.is_empty() && !request.allow_empty {
         return Err(RegistryError::ReferenceScopeEmpty);
+    }
+    let key = PortfolioRevisionKey::new(request.portfolio_id, request.portfolio_revision);
+    if let Some(existing) = control_port
+        .load_entry(operation_id, context)
+        .map_err(|_| RegistryError::DurabilityRejected)?
+    {
+        if existing.mutation_digest != mutation_digest
+            || existing.kind != JournalEntryKind::PortfolioPublish
+        {
+            return Err(RegistryError::OperationConflict);
+        }
+        let record = history
+            .revision(&key)
+            .ok_or(RegistryError::MutationOutcomeUnknown)?;
+        if record.membership_precedence() != request.membership_precedence
+            || record.operation_id() != operation_id
+        {
+            return Err(RegistryError::OperationConflict);
+        }
+        if record.registry_revision() != existing.after_revision
+            || record.last_receipt() != &existing.receipt
+        {
+            return Err(RegistryError::MutationOutcomeUnknown);
+        }
+        return Ok(PortfolioReceipt {
+            portfolio_id: request.portfolio_id,
+            portfolio_revision: record.portfolio_revision(),
+            registry_revision: existing.after_revision,
+            operation_id: operation_id.clone(),
+            receipt: existing.receipt,
+            replayed: true,
+        });
+    }
+    if let Some(record) = history.revision(&key) {
+        if record.membership_precedence() != request.membership_precedence {
+            return Err(RegistryError::ReferencePortfolioInvalid);
+        }
+        return Ok(PortfolioReceipt {
+            portfolio_id: request.portfolio_id,
+            portfolio_revision: record.portfolio_revision(),
+            registry_revision: record.registry_revision(),
+            // No operation was committed for this request. Return the
+            // original publication identity instead of acknowledging O2.
+            operation_id: record.operation_id().clone(),
+            receipt: record.last_receipt().clone(),
+            replayed: true,
+        });
     }
     let mut seen = std::collections::BTreeSet::new();
     for membership_id in &request.membership_precedence {
@@ -146,42 +205,33 @@ where
         JournalEntryKind::PortfolioPublish,
         receipt.clone(),
     );
-    if let Some(existing) = control_port
-        .load_entry(operation_id, context)
-        .map_err(|_| RegistryError::DurabilityRejected)?
-    {
-        if existing.mutation_digest != mutation_digest {
-            return Err(RegistryError::OperationConflict);
-        }
-        let record = portfolios
-            .get(&request.portfolio_id)
-            .ok_or(RegistryError::MutationOutcomeUnknown)?;
-        return Ok(PortfolioReceipt {
-            portfolio_id: request.portfolio_id,
-            portfolio_revision: record.portfolio_revision,
-            registry_revision: record.registry_revision,
-            operation_id: operation_id.clone(),
-            receipt: record.last_receipt.clone(),
-            replayed: true,
-        });
-    }
-    if portfolios.len() >= limits.max_portfolios && !portfolios.contains_key(&request.portfolio_id)
+    if !portfolios.contains_key(&request.portfolio_id) && portfolios.len() >= limits.max_portfolios
     {
         return Err(RegistryError::CapacityExceeded);
     }
+    let prepared = history.prepare_publication(
+        key,
+        ImmutablePortfolioRevision::new(request.membership_precedence.clone()),
+        next_registry_revision,
+        receipt,
+        operation_id,
+        limits.max_portfolio_revisions,
+        request.expected_current,
+    )?;
+    let projected = ReferencePortfolioRecord {
+        portfolio_id: prepared.record.portfolio_id(),
+        portfolio_revision: prepared.record.portfolio_revision(),
+        membership_precedence: prepared.record.membership_precedence().to_vec(),
+        registry_revision: prepared.record.registry_revision(),
+        last_receipt: prepared.record.last_receipt().clone(),
+    };
     control_port
         .persist_entry(&entry, context, &mutation)
         .map_err(|_| RegistryError::DurabilityRejected)?;
-    portfolios.insert(
-        request.portfolio_id,
-        ReferencePortfolioRecord {
-            portfolio_id: request.portfolio_id,
-            portfolio_revision: request.portfolio_revision,
-            membership_precedence: request.membership_precedence.clone(),
-            registry_revision: next_registry_revision,
-            last_receipt: receipt.clone(),
-        },
-    );
+    // This port persists a receipt, not the complete registry state. All
+    // fallible preparation precedes dispatch; installation cannot refuse.
+    history.install(prepared);
+    portfolios.insert(request.portfolio_id, projected);
     Ok(PortfolioReceipt {
         portfolio_id: request.portfolio_id,
         portfolio_revision: request.portfolio_revision,

@@ -1,5 +1,521 @@
 //! Normative qualification evidence for `search-source-registry`.
 
+#[test]
+fn portfolio_replay_returns_original_operation_before_o2_commits_another_revision() {
+    use crate::portfolio_history::PortfolioRevisionKey;
+    use search_contracts::PortfolioRevision;
+    let (mut registry, mut port, _) = registry_with_view();
+    let ctx = context(cancel());
+    let ids: Vec<_> = registry
+        .memberships()
+        .values()
+        .map(super::membership::MembershipRecord::membership_id)
+        .collect();
+    let id = ReferencePortfolioId::from_bytes([44; 16]);
+    let a1 = PublishPortfolioRequest {
+        portfolio_id: id,
+        portfolio_revision: PortfolioRevision::new(1),
+        expected_current: None,
+        membership_precedence: vec![ids[0]],
+        allow_empty: false,
+    };
+    let o1 = opaque("O1");
+    let o2 = opaque("O2");
+    let original = api::publish_reference_portfolio(
+        &mut registry,
+        &a1,
+        &o1,
+        digest(10),
+        &receipt("O1/A1"),
+        &mut port,
+        &ctx,
+    )
+    .expect("O1 commits A1");
+    let state = api::registry_snapshot(&registry);
+    let entries = port.len();
+    let replay = api::publish_reference_portfolio(
+        &mut registry,
+        &a1,
+        &o2,
+        digest(10),
+        &receipt("must-not-ack-O2"),
+        &mut port,
+        &ctx,
+    )
+    .expect("O2 observes the identical immutable record");
+    let mut expected = original;
+    expected.replayed = true;
+    assert_eq!(
+        replay, expected,
+        "return O1's original publication, never a fabricated O2 receipt"
+    );
+    assert_eq!(port.len(), entries);
+    assert!(port.load_entry(&o2, &ctx).expect("O2 lookup").is_none());
+    assert_eq!(api::registry_snapshot(&registry), state);
+    let a2 = PublishPortfolioRequest {
+        portfolio_id: id,
+        portfolio_revision: PortfolioRevision::new(2),
+        expected_current: Some(PortfolioRevisionKey::new(id, PortfolioRevision::new(1))),
+        membership_precedence: vec![ids[1]],
+        allow_empty: false,
+    };
+    let next = api::publish_reference_portfolio(
+        &mut registry,
+        &a2,
+        &o2,
+        digest(11),
+        &receipt("O2/A2"),
+        &mut port,
+        &ctx,
+    )
+    .expect("unacknowledged O2 can now actually commit A2");
+    assert!(!next.replayed);
+    assert_eq!(next.operation_id, o2);
+    assert_eq!(port.len(), entries + 1);
+    let entry = port
+        .load_entry(&o2, &ctx)
+        .expect("O2 lookup")
+        .expect("actual O2 binding");
+    assert_eq!(entry.mutation_digest, digest(11));
+    assert_eq!(entry.receipt, next.receipt);
+    assert_eq!(
+        api::publish_reference_portfolio(
+            &mut registry,
+            &a1,
+            &o2,
+            digest(10),
+            &receipt("O2/A1"),
+            &mut port,
+            &ctx,
+        ),
+        Err(RegistryError::OperationConflict),
+        "O2 is bound only to its actual A2 publication"
+    );
+    assert_eq!(
+        registry
+            .portfolio_history()
+            .revision(&PortfolioRevisionKey::new(id, PortfolioRevision::new(1),))
+            .expect("A1 retained")
+            .operation_id(),
+        &o1
+    );
+    assert_eq!(
+        registry
+            .portfolio_history()
+            .revision(&PortfolioRevisionKey::new(id, PortfolioRevision::new(2),))
+            .expect("A2 retained")
+            .operation_id(),
+        &o2
+    );
+}
+
+#[test]
+fn portfolio_public_producer_refuses_stale_expected_pointer_before_dispatch() {
+    use crate::portfolio_history::PortfolioRevisionKey;
+    use search_contracts::PortfolioRevision;
+    let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
+    let mut port = journal();
+    let ctx = context(cancel());
+    let id = ReferencePortfolioId::from_bytes([45; 16]);
+    let first = PublishPortfolioRequest {
+        portfolio_id: id,
+        portfolio_revision: PortfolioRevision::new(1),
+        expected_current: None,
+        membership_precedence: vec![],
+        allow_empty: true,
+    };
+    api::publish_reference_portfolio(
+        &mut registry,
+        &first,
+        &opaque("A1"),
+        digest(20),
+        &receipt("A1"),
+        &mut port,
+        &ctx,
+    )
+    .expect("first pointer");
+    let stale = PublishPortfolioRequest {
+        portfolio_id: id,
+        portfolio_revision: PortfolioRevision::new(2),
+        expected_current: Some(PortfolioRevisionKey::new(id, PortfolioRevision::new(1))),
+        membership_precedence: vec![],
+        allow_empty: true,
+    };
+    let competing = PublishPortfolioRequest {
+        portfolio_revision: PortfolioRevision::new(3),
+        ..stale.clone()
+    };
+    api::publish_reference_portfolio(
+        &mut registry,
+        &competing,
+        &opaque("A3"),
+        digest(21),
+        &receipt("A3"),
+        &mut port,
+        &ctx,
+    )
+    .expect("competing pointer move");
+    let entries = port.len();
+    let state = api::registry_snapshot(&registry);
+    assert_eq!(
+        api::publish_reference_portfolio(
+            &mut registry,
+            &stale,
+            &opaque("stale-A2"),
+            digest(22),
+            &receipt("stale-A2"),
+            &mut port,
+            &ctx
+        ),
+        Err(RegistryError::ReferenceScopeEmpty)
+    );
+    assert_eq!(
+        port.len(),
+        entries,
+        "the internally fresh global revision cannot authorize a stale pointer proposal"
+    );
+    assert_eq!(api::registry_snapshot(&registry), state);
+    assert!(
+        registry
+            .portfolio_history()
+            .revision(&PortfolioRevisionKey::new(id, PortfolioRevision::new(2)))
+            .is_none()
+    );
+    let fresh = PublishPortfolioRequest {
+        expected_current: Some(PortfolioRevisionKey::new(id, PortfolioRevision::new(3))),
+        ..stale
+    };
+    let another_id = PublishPortfolioRequest {
+        portfolio_id: ReferencePortfolioId::from_bytes([46; 16]),
+        expected_current: None,
+        ..first
+    };
+    api::publish_reference_portfolio(
+        &mut registry,
+        &another_id,
+        &opaque("other-id"),
+        digest(23),
+        &receipt("other-id"),
+        &mut port,
+        &ctx,
+    )
+    .expect("unrelated global revision");
+    api::publish_reference_portfolio(
+        &mut registry,
+        &fresh,
+        &opaque("fresh-A2"),
+        digest(24),
+        &receipt("fresh-A2"),
+        &mut port,
+        &ctx,
+    )
+    .expect("an exact per-ID guard survives unrelated global mutations");
+    assert_eq!(registry.portfolios().len(), 2);
+}
+
+#[test]
+fn portfolio_history_public_path_retains_two_ids_three_revisions_and_old_replay() {
+    use crate::portfolio_history::PortfolioRevisionKey;
+    use search_contracts::PortfolioRevision;
+    let (mut registry, mut port, _) = registry_with_view();
+    let ctx = context(cancel());
+    let ids: Vec<_> = registry
+        .memberships()
+        .values()
+        .map(super::membership::MembershipRecord::membership_id)
+        .collect();
+    let a = ReferencePortfolioId::from_bytes([41; 16]);
+    let b = ReferencePortfolioId::from_bytes([42; 16]);
+    let requests = [
+        PublishPortfolioRequest {
+            portfolio_id: a,
+            portfolio_revision: PortfolioRevision::new(1),
+            expected_current: None,
+            membership_precedence: vec![ids[0]],
+            allow_empty: false,
+        },
+        PublishPortfolioRequest {
+            portfolio_id: b,
+            portfolio_revision: PortfolioRevision::new(1),
+            expected_current: None,
+            membership_precedence: vec![ids[1]],
+            allow_empty: false,
+        },
+        PublishPortfolioRequest {
+            portfolio_id: a,
+            portfolio_revision: PortfolioRevision::new(2),
+            expected_current: Some(PortfolioRevisionKey::new(a, PortfolioRevision::new(1))),
+            membership_precedence: ids.clone(),
+            allow_empty: false,
+        },
+        PublishPortfolioRequest {
+            portfolio_id: a,
+            portfolio_revision: PortfolioRevision::new(3),
+            expected_current: Some(PortfolioRevisionKey::new(a, PortfolioRevision::new(2))),
+            membership_precedence: vec![ids[1], ids[0]],
+            allow_empty: false,
+        },
+    ];
+    let mut published = Vec::new();
+    for (index, request) in requests.iter().enumerate() {
+        published.push(
+            api::publish_reference_portfolio(
+                &mut registry,
+                request,
+                &opaque(&format!("history-operation:{index}")),
+                digest(u8::try_from(index).expect("fixture index")),
+                &receipt(&format!("history-receipt:{index}")),
+                &mut port,
+                &ctx,
+            )
+            .expect("public publication"),
+        );
+    }
+    assert_eq!(registry.portfolios().len(), 2);
+    assert_eq!(
+        registry
+            .portfolios()
+            .get(&b)
+            .expect("second id")
+            .portfolio_revision
+            .get(),
+        1
+    );
+    assert_eq!(
+        registry
+            .portfolio_history()
+            .current_key(a)
+            .expect("first id")
+            .portfolio_revision
+            .get(),
+        3
+    );
+    for request in &requests {
+        let record = registry
+            .portfolio_history()
+            .revision(&PortfolioRevisionKey::new(
+                request.portfolio_id,
+                request.portfolio_revision,
+            ))
+            .expect("each historical revision");
+        assert_eq!(
+            record.membership_precedence(),
+            request.membership_precedence
+        );
+    }
+    let frozen = api::registry_snapshot(&registry);
+    let frozen_digest = api::snapshot_digest(&frozen).expect("full snapshot digest");
+    let before_entries = port.len();
+    let replay = api::publish_reference_portfolio(
+        &mut registry,
+        &requests[0],
+        &opaque("history-operation:0"),
+        digest(0),
+        &receipt("ignored-replay-receipt"),
+        &mut port,
+        &ctx,
+    )
+    .expect("replay after two newer revisions and another identity");
+    let mut expected = published[0].clone();
+    expected.replayed = true;
+    assert_eq!(replay, expected);
+    assert_eq!(api::registry_snapshot(&registry), frozen);
+    assert_eq!(port.len(), before_entries);
+    let mut conflict = requests[0].clone();
+    conflict.membership_precedence = vec![ids[1]];
+    assert_eq!(
+        api::publish_reference_portfolio(
+            &mut registry,
+            &conflict,
+            &opaque("new-conflicting-operation"),
+            digest(90),
+            &receipt("conflict"),
+            &mut port,
+            &ctx,
+        ),
+        Err(RegistryError::ReferencePortfolioInvalid)
+    );
+    assert_eq!(
+        port.len(),
+        before_entries,
+        "conflict precedes receipt dispatch"
+    );
+    assert_eq!(api::registry_snapshot(&registry), frozen);
+    let same_key = api::publish_reference_portfolio(
+        &mut registry,
+        &requests[0],
+        &opaque("identical-content-operation"),
+        digest(91),
+        &receipt("ignored-identical-receipt"),
+        &mut port,
+        &ctx,
+    )
+    .expect("same immutable key and content");
+    assert!(same_key.replayed);
+    assert_eq!(same_key.receipt, published[0].receipt);
+    assert_eq!(same_key.operation_id, published[0].operation_id);
+    assert_eq!(port.len(), before_entries);
+    assert_eq!(
+        api::snapshot_digest(&api::registry_snapshot(&registry)).expect("unchanged"),
+        frozen_digest
+    );
+    let validated = api::validate_live_snapshot(&registry).expect("coherent history");
+    assert_eq!(validated.snapshot().portfolio_history.len(), 4);
+    let mut malformed = frozen;
+    malformed
+        .portfolios
+        .get_mut(&a)
+        .expect("alias")
+        .membership_precedence
+        .reverse();
+    assert_eq!(
+        api::validate_registry_snapshot(&malformed, registry.limits()).err(),
+        Some(RegistryError::SnapshotInvalid),
+        "current alias cannot redefine immutable history"
+    );
+}
+
+#[test]
+fn portfolio_history_preparation_refusal_leaves_receipt_port_and_memory_unchanged() {
+    use search_contracts::PortfolioRevision;
+    let limits = crate::error::RegistryLimits {
+        max_portfolio_revisions: 1,
+        ..DEFAULT_REGISTRY_LIMITS
+    };
+    let mut registry = SourceRegistry::new(limits).expect("bounded registry");
+    let mut port = journal();
+    let ctx = context(cancel());
+    let mut request = PublishPortfolioRequest {
+        portfolio_id: ReferencePortfolioId::from_bytes([43; 16]),
+        portfolio_revision: PortfolioRevision::new(1),
+        expected_current: None,
+        membership_precedence: vec![],
+        allow_empty: true,
+    };
+    api::publish_reference_portfolio(
+        &mut registry,
+        &request,
+        &opaque("first"),
+        digest(1),
+        &receipt("first"),
+        &mut port,
+        &ctx,
+    )
+    .expect("first");
+    let frozen = api::registry_snapshot(&registry);
+    let entries = port.len();
+    request.portfolio_revision = PortfolioRevision::new(2);
+    request.expected_current = registry
+        .portfolio_history()
+        .current_key(request.portfolio_id);
+    assert_eq!(
+        api::publish_reference_portfolio(
+            &mut registry,
+            &request,
+            &opaque("over-limit"),
+            digest(2),
+            &receipt("over-limit"),
+            &mut port,
+            &ctx
+        ),
+        Err(RegistryError::CapacityExceeded)
+    );
+    assert_eq!(port.len(), entries);
+    assert_eq!(api::registry_snapshot(&registry), frozen);
+    let prepared_registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("new registry");
+    let rejected = prepared_registry.portfolio_history().prepare_publication(
+        crate::portfolio_history::PortfolioRevisionKey::new(
+            request.portfolio_id,
+            request.portfolio_revision,
+        ),
+        crate::portfolio_history::ImmutablePortfolioRevision::new(vec![
+                search_contracts::SourceMembershipId::from_bytes([1; 16]);
+                search_contracts::MAX_COLLECTION_ITEMS + 1
+            ]),
+        1,
+        &receipt("too-large"),
+        &opaque("too-large"),
+        10,
+        None,
+    );
+    assert_eq!(
+        rejected.err(),
+        Some(RegistryError::ReferencePortfolioInvalid)
+    );
+    assert!(prepared_registry.portfolio_history().is_empty());
+    let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("fresh registry");
+    let mut one_entry_port = InMemoryRegistryJournal::new(1).expect("bounded port");
+    request.portfolio_revision = PortfolioRevision::new(1);
+    request.expected_current = None;
+    api::publish_reference_portfolio(
+        &mut registry,
+        &request,
+        &opaque("only-entry"),
+        digest(3),
+        &receipt("only-entry"),
+        &mut one_entry_port,
+        &ctx,
+    )
+    .expect("one entry");
+    let frozen = api::registry_snapshot(&registry);
+    request.portfolio_revision = PortfolioRevision::new(2);
+    request.expected_current = registry
+        .portfolio_history()
+        .current_key(request.portfolio_id);
+    assert_eq!(
+        api::publish_reference_portfolio(
+            &mut registry,
+            &request,
+            &opaque("refused-entry"),
+            digest(4),
+            &receipt("refused-entry"),
+            &mut one_entry_port,
+            &ctx
+        ),
+        Err(RegistryError::DurabilityRejected)
+    );
+    assert_eq!(
+        api::registry_snapshot(&registry),
+        frozen,
+        "prepared memory installs only after receipt success"
+    );
+}
+
+#[test]
+fn portfolio_history_snapshot_digest_binds_every_ownership_field() {
+    let (registry, _, namespace) = registry_with_namespace();
+    let snapshot = api::registry_snapshot(&registry);
+    let original = api::snapshot_digest(&snapshot).expect("baseline");
+    for field in 0..11 {
+        let mut changed = snapshot.clone();
+        let owner = changed.ownerships.get_mut(&namespace).expect("owner");
+        match field {
+            0 => owner.source_namespace_id = SourceNamespaceId::from_bytes([32; 16]),
+            1 => owner.owner_system_id = opaque("different-owner"),
+            2 => {
+                owner.owner_installation_incarnation_id =
+                    InstallationIncarnationId::from_bytes([33; 16]);
+            }
+            3 => owner.owner_epoch = OwnerEpoch::new(2).expect("epoch"),
+            4 => owner.ownership_record_revision = NonZeroRevision::new(2).expect("revision"),
+            5 => owner.source_owner_generation = SourceOwnerGeneration::from_bytes([34; 32]),
+            6 => owner.source_admission_policy_revision = search_contracts::PolicyRevision::new(2),
+            7 => owner.status = NamespaceOwnershipStatus::CutoverPrepared,
+            8 => owner.status = NamespaceOwnershipStatus::Fenced,
+            9 => owner.status = NamespaceOwnershipStatus::Retired,
+            _ => owner.cutover_receipt_ref = Some(receipt("changed-cutover")),
+        }
+        assert_ne!(
+            api::snapshot_digest(&changed).expect("changed ownership"),
+            original,
+            "ownership field {field} must bind even when all other fields are identical"
+        );
+    }
+    let mut changed = snapshot;
+    changed.ownerships.clear();
+    assert_ne!(api::snapshot_digest(&changed).expect("absence"), original);
+}
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
@@ -862,6 +1378,7 @@ fn empty_reference_portfolio_reason() {
             &PublishPortfolioRequest {
                 portfolio_id: ReferencePortfolioId::from_bytes([1; 16]),
                 portfolio_revision: search_contracts::PortfolioRevision::new(1),
+                expected_current: None,
                 membership_precedence: Vec::new(),
                 allow_empty: false,
             },
@@ -878,6 +1395,7 @@ fn empty_reference_portfolio_reason() {
         &PublishPortfolioRequest {
             portfolio_id: ReferencePortfolioId::from_bytes([1; 16]),
             portfolio_revision: search_contracts::PortfolioRevision::new(1),
+            expected_current: None,
             membership_precedence: Vec::new(),
             allow_empty: true,
         },
@@ -1587,6 +2105,7 @@ fn portfolio_admitted_only() {
             &PublishPortfolioRequest {
                 portfolio_id: ReferencePortfolioId::from_bytes([5; 16]),
                 portfolio_revision: search_contracts::PortfolioRevision::new(1),
+                expected_current: None,
                 membership_precedence: vec![bound.membership_id],
                 allow_empty: false,
             },

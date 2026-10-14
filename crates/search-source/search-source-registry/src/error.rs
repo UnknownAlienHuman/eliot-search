@@ -37,6 +37,12 @@ pub struct RegistryLimits {
     pub max_journal_entries: usize,
     /// Maximum retained reference portfolios.
     pub max_portfolios: usize,
+    /// Maximum retained immutable portfolio revisions across all identities.
+    ///
+    /// This ceiling bounds total history, not one latest record per identity.
+    /// A single portfolio may hold many revisions while the aggregate stays
+    /// beneath this bound.
+    pub max_portfolio_revisions: usize,
     /// Maximum retained namespace ownership records.
     pub max_namespaces: usize,
 }
@@ -53,6 +59,7 @@ impl RegistryLimits {
             || self.max_roots == 0
             || self.max_journal_entries == 0
             || self.max_portfolios == 0
+            || self.max_portfolio_revisions == 0
             || self.max_namespaces == 0
         {
             Err(RegistryError::InvalidLimits)
@@ -73,6 +80,7 @@ pub const DEFAULT_REGISTRY_LIMITS: RegistryLimits = RegistryLimits {
     max_roots: 100_000,
     max_journal_entries: 2_000_000,
     max_portfolios: 100_000,
+    max_portfolio_revisions: 4_000_000,
     max_namespaces: 100_000,
 };
 

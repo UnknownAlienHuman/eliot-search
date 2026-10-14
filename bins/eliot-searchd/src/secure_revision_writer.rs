@@ -1,19 +1,18 @@
 //! Revision bytes must exist and verify exactly before catalog publication.
 
+#[cfg(test)]
+use super::IndexedSource;
+#[cfg(test)]
+use super::storage_io::legacy_path;
 use std::fs;
 use std::io;
 use std::path::Path;
 use zeroize::Zeroizing;
 
-use super::storage_io::{
-    legacy_path, persist_revision_object, protected_path,
-    read_revision_object,
-};
-use super::{
-    IndexedSource, MAX_REVISION_OBJECT_BYTES, RevisionMetadata, RevisionProtector,
-    verify_plaintext,
-};
+use super::storage_io::{persist_revision_object, protected_path, read_revision_object};
+use super::{MAX_REVISION_OBJECT_BYTES, RevisionMetadata, RevisionProtector, verify_plaintext};
 
+#[cfg(test)]
 pub(super) fn persist_before_publication(
     root: &Path,
     protector: &RevisionProtector,
@@ -66,11 +65,8 @@ pub(super) fn persist_verified(
         // Never overwrite or re-encrypt a conflicting object under the same ID.
         Ok(_) => {}
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            let protected = protector.protect(
-                &metadata.revision_id,
-                &metadata.content_digest,
-                plaintext,
-            )?;
+            let protected =
+                protector.protect(&metadata.revision_id, &metadata.content_digest, plaintext)?;
             persist_revision_object(&path, &protected)?;
         }
         Err(_) => return Err("DIRECT_REVISION_PROTECTED_METADATA_ERROR".to_owned()),

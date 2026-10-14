@@ -23,6 +23,7 @@ use crate::membership::{
     MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership, derive_membership_id,
 };
 use crate::portfolio::{PortfolioItem, ReferencePortfolioRecord};
+use crate::portfolio_history::PortfolioHistory;
 use crate::root::RootRecord;
 use crate::snapshot::ValidatedRegistrySnapshot;
 use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
@@ -288,6 +289,7 @@ pub struct SourceRegistry {
     memberships: BTreeMap<MembershipKey, MembershipRecord>,
     reverse_memberships: BTreeMap<search_contracts::SourceMembershipId, MembershipKey>,
     portfolios: BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord>,
+    portfolio_history: PortfolioHistory,
     namespaces: BTreeMap<search_contracts::SourceNamespaceId, NamespaceCutoverState>,
     active_generations: BTreeMap<OpaqueId, NonZeroRevision>,
     operations: Vec<(OpaqueId, Blake3Digest32, RegistryReceipt)>,
@@ -304,6 +306,7 @@ impl SourceRegistry {
             memberships: BTreeMap::new(),
             reverse_memberships: BTreeMap::new(),
             portfolios: BTreeMap::new(),
+            portfolio_history: PortfolioHistory::new(),
             namespaces: BTreeMap::new(),
             active_generations: BTreeMap::new(),
             operations: Vec::new(),
@@ -376,13 +379,6 @@ impl SourceRegistry {
         &mut self.reverse_memberships
     }
 
-    /// Mutable portfolios for normative portfolio operations.
-    pub fn portfolios_mut(
-        &mut self,
-    ) -> &mut BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord> {
-        &mut self.portfolios
-    }
-
     /// Mutable namespace cutover states.
     pub fn namespaces_mut(
         &mut self,
@@ -425,6 +421,15 @@ impl SourceRegistry {
     #[must_use]
     pub const fn portfolios(&self) -> &BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord> {
         &self.portfolios
+    }
+
+    /// Immutable portfolio history with every retained revision and pointer.
+    ///
+    /// Historical revisions stay readable after any pointer move, so an old
+    /// query or handle keeps its exact interpretation.
+    #[must_use]
+    pub const fn portfolio_history(&self) -> &PortfolioHistory {
+        &self.portfolio_history
     }
 
     /// Immutable namespace states.
@@ -476,19 +481,21 @@ impl SourceRegistry {
 
     /// Split mutable access for portfolio publication.
     #[allow(clippy::type_complexity)]
-    pub fn portfolio_parts_mut(
+    pub(crate) fn portfolio_parts_mut(
         &mut self,
     ) -> (
         &BTreeMap<SourceIdentity, RegisteredSource>,
         &BTreeMap<MembershipKey, MembershipRecord>,
         &BTreeMap<search_contracts::SourceMembershipId, MembershipKey>,
         &mut BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord>,
+        &mut PortfolioHistory,
     ) {
         (
             &self.sources,
             &self.memberships,
             &self.reverse_memberships,
             &mut self.portfolios,
+            &mut self.portfolio_history,
         )
     }
 
