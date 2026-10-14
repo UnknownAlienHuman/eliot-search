@@ -14,6 +14,7 @@ use search_contracts::{
 use crate::error::{RegistryError, RegistryLimits};
 use crate::membership::{MembershipKey, MembershipLifecycle, MembershipRecord};
 use crate::portfolio::ReferencePortfolioRecord;
+use crate::portfolio_history::PortfolioHistory;
 use crate::root::RootRecord;
 use crate::source::{RegisteredSource, SourceLifecycle};
 
@@ -30,6 +31,11 @@ pub struct RegistrySnapshot {
     pub memberships: BTreeMap<MembershipKey, MembershipRecord>,
     /// Reference portfolios.
     pub portfolios: BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord>,
+    /// Immutable portfolio revisions and the guarded current pointer.
+    ///
+    /// Every retained revision stays readable after any pointer move, so an
+    /// old query or handle keeps its exact interpretation.
+    pub portfolio_history: PortfolioHistory,
     /// Active corpus generations.
     pub active_generations: BTreeMap<OpaqueId, NonZeroRevisionAlias>,
     /// Namespace ownership records.
@@ -131,9 +137,44 @@ pub fn validate_registry_snapshot(
             }
         }
     }
+    validate_portfolio_history(&snapshot.portfolio_history, limits)?;
     Ok(ValidatedRegistrySnapshot {
         inner: snapshot.clone(),
     })
+}
+
+/// Validates the immutable portfolio history and its guarded current pointer.
+///
+/// Every retained revision is keyed by its own content and every current
+/// pointer must name a retained revision. A pointer to an absent revision is
+/// refused rather than treated as an empty scope, so a history gap stays
+/// explicit instead of silently degrading to nothing.
+fn validate_portfolio_history(
+    history: &PortfolioHistory,
+    limits: RegistryLimits,
+) -> Result<(), RegistryError> {
+    if history.revisions.len() > limits.max_portfolio_revisions {
+        return Err(RegistryError::CapacityExceeded);
+    }
+    for (key, record) in &history.revisions {
+        if record.key != *key
+            || record.revision.membership_precedence().len() > limits.max_portfolio_items
+        {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+        let mut seen = BTreeSet::new();
+        for membership_id in record.revision.membership_precedence() {
+            if !seen.insert(*membership_id) {
+                return Err(RegistryError::SnapshotInvalid);
+            }
+        }
+    }
+    if let Some(pointer) = &history.current
+        && history.revision(&pointer.target).is_none()
+    {
+        return Err(RegistryError::SnapshotInvalid);
+    }
+    Ok(())
 }
 
 /// Computes a domain-separated canonical digest over technical registry state
@@ -171,6 +212,23 @@ pub fn snapshot_digest(snapshot: &RegistrySnapshot) -> RegistrySnapshotDigest {
         hasher.mix_bytes(id.as_bytes());
         hasher.mix_u64(record.portfolio_revision.get());
         hasher.mix_u64(record.registry_revision);
+    }
+    let history = &snapshot.portfolio_history;
+    hasher.mix_usize(history.revisions.len());
+    for (key, record) in &history.revisions {
+        hasher.mix_bytes(key.portfolio_id.as_bytes());
+        hasher.mix_u64(key.portfolio_revision.get());
+        hasher.mix_bytes(record.content_digest().as_bytes());
+        hasher.mix_u64(record.registry_revision);
+    }
+    match &history.current {
+        Some(pointer) => {
+            hasher.mix_u8(1);
+            hasher.mix_bytes(pointer.target.portfolio_id.as_bytes());
+            hasher.mix_u64(pointer.target.portfolio_revision.get());
+            hasher.mix_u64(pointer.pointer_revision.get());
+        }
+        None => hasher.mix_u8(0),
     }
     hasher.mix_usize(snapshot.active_generations.len());
     for (corpus, generation) in &snapshot.active_generations {
@@ -219,6 +277,10 @@ impl FnvDigest {
 
     fn mix_usize(&mut self, value: usize) {
         self.mix_u64(value as u64);
+    }
+
+    fn mix_u8(&mut self, value: u8) {
+        self.mix_bytes(&[value]);
     }
 
     fn finish(self) -> Blake3Digest32 {

@@ -86,6 +86,7 @@ pub fn registry_snapshot(registry: &SourceRegistry) -> RegistrySnapshot {
         sources: registry.sources().clone(),
         memberships: registry.memberships().clone(),
         portfolios: registry.portfolios().clone(),
+        portfolio_history: registry.portfolio_history().clone(),
         active_generations: registry.active_generations_snapshot().clone(),
         ownerships,
     }

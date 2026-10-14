@@ -23,6 +23,7 @@ use crate::membership::{
     MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership, derive_membership_id,
 };
 use crate::portfolio::{PortfolioItem, ReferencePortfolioRecord};
+use crate::portfolio_history::PortfolioHistory;
 use crate::root::RootRecord;
 use crate::snapshot::ValidatedRegistrySnapshot;
 use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
@@ -288,6 +289,7 @@ pub struct SourceRegistry {
     memberships: BTreeMap<MembershipKey, MembershipRecord>,
     reverse_memberships: BTreeMap<search_contracts::SourceMembershipId, MembershipKey>,
     portfolios: BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord>,
+    portfolio_history: PortfolioHistory,
     namespaces: BTreeMap<search_contracts::SourceNamespaceId, NamespaceCutoverState>,
     active_generations: BTreeMap<OpaqueId, NonZeroRevision>,
     operations: Vec<(OpaqueId, Blake3Digest32, RegistryReceipt)>,
@@ -304,6 +306,7 @@ impl SourceRegistry {
             memberships: BTreeMap::new(),
             reverse_memberships: BTreeMap::new(),
             portfolios: BTreeMap::new(),
+            portfolio_history: PortfolioHistory::new(),
             namespaces: BTreeMap::new(),
             active_generations: BTreeMap::new(),
             operations: Vec::new(),
@@ -425,6 +428,23 @@ impl SourceRegistry {
     #[must_use]
     pub const fn portfolios(&self) -> &BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord> {
         &self.portfolios
+    }
+
+    /// Immutable portfolio history with every retained revision and pointer.
+    ///
+    /// Historical revisions stay readable after any pointer move, so an old
+    /// query or handle keeps its exact interpretation.
+    #[must_use]
+    pub const fn portfolio_history(&self) -> &PortfolioHistory {
+        &self.portfolio_history
+    }
+
+    /// Mutable portfolio history for normative publication and pointer moves.
+    ///
+    /// Accessibility is limited to the guarded operations on
+    /// [`PortfolioHistory`]; no caller can drop a retained revision here.
+    pub const fn portfolio_history_mut(&mut self) -> &mut PortfolioHistory {
+        &mut self.portfolio_history
     }
 
     /// Immutable namespace states.
