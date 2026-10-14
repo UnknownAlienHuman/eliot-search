@@ -379,13 +379,6 @@ impl SourceRegistry {
         &mut self.reverse_memberships
     }
 
-    /// Mutable portfolios for normative portfolio operations.
-    pub fn portfolios_mut(
-        &mut self,
-    ) -> &mut BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord> {
-        &mut self.portfolios
-    }
-
     /// Mutable namespace cutover states.
     pub fn namespaces_mut(
         &mut self,
@@ -439,14 +432,6 @@ impl SourceRegistry {
         &self.portfolio_history
     }
 
-    /// Mutable portfolio history for normative publication and pointer moves.
-    ///
-    /// Accessibility is limited to the guarded operations on
-    /// [`PortfolioHistory`]; no caller can drop a retained revision here.
-    pub const fn portfolio_history_mut(&mut self) -> &mut PortfolioHistory {
-        &mut self.portfolio_history
-    }
-
     /// Immutable namespace states.
     #[must_use]
     pub const fn namespaces(
@@ -496,19 +481,21 @@ impl SourceRegistry {
 
     /// Split mutable access for portfolio publication.
     #[allow(clippy::type_complexity)]
-    pub fn portfolio_parts_mut(
+    pub(crate) fn portfolio_parts_mut(
         &mut self,
     ) -> (
         &BTreeMap<SourceIdentity, RegisteredSource>,
         &BTreeMap<MembershipKey, MembershipRecord>,
         &BTreeMap<search_contracts::SourceMembershipId, MembershipKey>,
         &mut BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord>,
+        &mut PortfolioHistory,
     ) {
         (
             &self.sources,
             &self.memberships,
             &self.reverse_memberships,
             &mut self.portfolios,
+            &mut self.portfolio_history,
         )
     }
 

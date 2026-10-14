@@ -7,37 +7,83 @@
 //! `ReferencePortfolioRevision` contract reference could change meaning.
 //!
 //! This module keeps every revision append-only and moves the only mutable
-//! state into a separate guarded current pointer. Same key with identical
-//! canonical content replays the exact retained record. Same key with different
-//! content refuses, because overwriting an accepted revision would rewrite
-//! history that queries still reference. Reclaiming an old revision is
-//! explicit retention work and never occurs here.
+//! state into guarded current pointers. Pointers are per portfolio identity,
+//! so publishing one portfolio never erases another identity's current
+//! selection. Same key with identical canonical content replays the exact
+//! retained record. Same key with different content refuses, because
+//! overwriting an accepted revision would rewrite history that queries still
+//! reference. Reclaiming an old revision is explicit retention work and never
+//! occurs here.
 //!
-//! The pointer carries only the exact target revision, its own pointer
-//! revision, the expected-current guard and the operation identity. It never
-//! carries membership precedence or any other record content, so moving the
-//! pointer cannot redefine the revision it targets.
+//! A pointer carries only the exact target revision, its own pointer revision,
+//! the expected-current guard and the operation identity. It never carries
+//! membership precedence or any other record content, so moving the pointer
+//! cannot redefine the revision it targets.
 
-use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, PortfolioRevision,
-    ReceiptRef, ReferencePortfolioId, SourceMembershipId};
+use std::collections::BTreeMap;
+
+use search_contracts::{
+    BoundedBytes, BoundedList, BoundedMap, CanonicalDigestDomain, CanonicalKey, CanonicalText,
+    CanonicalValue, ContractError, DigestInputLimit, MAX_CANONICAL_BYTES, MAX_MAP_ENTRIES,
+    NonZeroRevision, OpaqueId, PortfolioRevision, ReceiptRef, ReferencePortfolioId,
+    SourceMembershipId, blake3_canonical,
+};
 
 use crate::error::RegistryError;
 
-/// Domain separator for the canonical portfolio-revision content preimage.
-const REVISION_DOMAIN: &[u8] = b"eliot-search/portfolio-revision/v1\0";
-/// Domain separator for the canonical current-pointer preimage.
-const POINTER_DOMAIN: &[u8] = b"eliot-search/portfolio-current-pointer/v1\0";
-/// Magic prefix of the frozen canonical portfolio-revision record bytes.
-const RECORD_MAGIC: &[u8; 4] = b"ELPR";
+/// Domain for the canonical portfolio-revision content digest.
+const REVISION_DIGEST_DOMAIN: &str = "eliot/cbor/portfolio-revision/v1";
+/// Domain for the canonical portfolio current-pointer digest.
+const POINTER_DIGEST_DOMAIN: &str = "eliot/cbor/portfolio-current-pointer/v1";
 /// Frozen canonical portfolio-revision record version.
 const RECORD_VERSION: u8 = 1;
 /// Canonical current-pointer record version.
 const POINTER_VERSION: u8 = 1;
 
+/// Frozen digest domain, parsed from a compile-time constant.
+fn digest_domain(name: &'static str) -> CanonicalDigestDomain {
+    CanonicalDigestDomain::parse(name).expect("frozen digest domain")
+}
+
+/// Finite preimage ceiling for one canonical digest call.
+fn digest_limit() -> DigestInputLimit {
+    DigestInputLimit::new(MAX_CANONICAL_BYTES).expect("canonical digest ceiling")
+}
+
+/// Bounded canonical text value.
+fn canonical_text(value: &str) -> Result<CanonicalValue, ContractError> {
+    CanonicalText::new(value).map(CanonicalValue::Text)
+}
+
+/// Bounded canonical identity value.
+fn canonical_uuid(value: &[u8; 16]) -> Result<CanonicalValue, ContractError> {
+    BoundedBytes::new(value.to_vec()).map(CanonicalValue::Bytes)
+}
+
+/// Bounded canonical revision value.
+fn canonical_u64(value: u64) -> CanonicalValue {
+    CanonicalValue::U64(value)
+}
+
+/// Bounded canonical list of rows.
+fn canonical_list(rows: Vec<CanonicalValue>) -> Result<CanonicalValue, ContractError> {
+    BoundedList::new(rows).map(CanonicalValue::Array)
+}
+
+/// Builds one bounded canonical object from validated entries.
+fn canonical_object(
+    entries: Vec<(&'static str, CanonicalValue)>,
+) -> Result<CanonicalValue, ContractError> {
+    BoundedMap::<CanonicalKey, CanonicalValue, MAX_MAP_ENTRIES>::from_entries(
+        entries
+            .into_iter()
+            .map(|(key, value)| CanonicalKey::new_non_empty(key).map(|key| (key, value)))
+            .collect::<Result<Vec<_>, _>>()?,
+    )
+    .map(CanonicalValue::Object)
+}
+
 /// Immutable key of one portfolio revision: identity plus exact revision.
-///
-/// The pair, not the identity, is the storage key. Two revisions of one
-/// portfolio are two distinct immutable records.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PortfolioRevisionKey {
     /// Stable portfolio identity.
@@ -53,7 +99,10 @@ impl PortfolioRevisionKey {
         portfolio_id: ReferencePortfolioId,
         portfolio_revision: PortfolioRevision,
     ) -> Self {
-        Self { portfolio_id, portfolio_revision }
+        Self {
+            portfolio_id,
+            portfolio_revision,
+        }
     }
 
     /// Stable portfolio identity of this key.
@@ -67,17 +116,25 @@ impl PortfolioRevisionKey {
     pub const fn portfolio_revision(&self) -> PortfolioRevision {
         self.portfolio_revision
     }
+
+    /// Canonical value binding the exact identity and revision.
+    fn canonical_value(&self) -> Result<CanonicalValue, ContractError> {
+        canonical_object(vec![
+            (
+                "portfolio_id",
+                canonical_uuid(self.portfolio_id.as_bytes())?,
+            ),
+            (
+                "portfolio_revision",
+                canonical_u64(self.portfolio_revision.get()),
+            ),
+        ])
+    }
 }
 
 /// Immutable content of one published reference-portfolio revision.
-///
-/// Ordered membership precedence is record content, not a pointer target, so
-/// adding, removing or reordering members yields another revision instead of
-/// mutating a prior one. Durability references are deliberately excluded from
-/// the content preimage so a replayed receipt cannot redefine a revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ImmutablePortfolioRevision {
-    /// Ordered membership precedence of this exact revision.
     membership_precedence: Vec<SourceMembershipId>,
 }
 
@@ -85,7 +142,9 @@ impl ImmutablePortfolioRevision {
     /// Creates one immutable revision from an explicitly ordered precedence.
     #[must_use]
     pub const fn new(membership_precedence: Vec<SourceMembershipId>) -> Self {
-        Self { membership_precedence }
+        Self {
+            membership_precedence,
+        }
     }
 
     /// Exact ordered membership precedence of this revision.
@@ -94,147 +153,62 @@ impl ImmutablePortfolioRevision {
         &self.membership_precedence
     }
 
-    /// Canonical content preimage of this exact revision.
+    /// Canonical value of this exact revision content.
     ///
-    /// The preimage binds a versioned domain, the exact precedence length and
-    /// every membership identity in order. Order is part of identity, so a
-    /// permutation is a different revision rather than a relabelling.
-    #[must_use]
-    pub fn canonical_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(
-            REVISION_DOMAIN.len() + 8 + 16 * self.membership_precedence.len(),
-        );
-        bytes.extend_from_slice(REVISION_DOMAIN);
-        bytes.push(RECORD_VERSION);
-        bytes.extend_from_slice(&(self.membership_precedence.len() as u64).to_be_bytes());
+    /// Order is part of identity, so a permutation is a different revision
+    /// rather than a relabelling. Durability references are excluded.
+    fn canonical_value(&self) -> Result<CanonicalValue, ContractError> {
+        let mut rows = Vec::with_capacity(self.membership_precedence.len());
         for membership_id in &self.membership_precedence {
-            bytes.extend_from_slice(membership_id.as_bytes());
+            rows.push(canonical_uuid(membership_id.as_bytes())?);
         }
-        bytes
+        canonical_object(vec![
+            ("record_version", canonical_u64(u64::from(RECORD_VERSION))),
+            ("membership_precedence", canonical_list(rows)?),
+        ])
     }
 
-    /// Canonical content digest of this exact revision.
+    /// Canonical content digest through the accepted digest owner.
     ///
-    /// The digest covers ordered membership content only. Receipt references,
-    /// registry revisions and operation identities never enter revision
-    /// identity, so re-issuing durability metadata cannot redefine a revision.
-    #[must_use]
-    pub fn content_digest(&self) -> Blake3Digest32 {
-        Blake3Digest32::from_bytes(*blake3::hash(&self.canonical_bytes()).as_bytes())
-    }
-}
-
-/// One retained immutable portfolio revision record.
-///
-/// The record stores the exact revision content plus the content-free
-/// durability metadata observed when it was published. It never rewrites
-/// another revision of the same portfolio.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PortfolioRevisionRecord {
-    /// Exact immutable key of this record.
-    pub key: PortfolioRevisionKey,
-    /// Immutable revision content.
-    pub revision: ImmutablePortfolioRevision,
-    /// Registry revision that published this record.
-    pub registry_revision: u64,
-    /// Content-free durability receipt of this publication.
-    pub last_receipt: ReceiptRef,
-}
-
-impl PortfolioRevisionRecord {
-    /// Canonical content digest of the retained revision.
-    #[must_use]
-    pub fn content_digest(&self) -> Blake3Digest32 {
-        self.revision.content_digest()
-    }
-
-    /// Full canonical preimage binding key and content for durable storage.
+    /// The digest covers ordered membership content only. Receipt
+    /// references, registry revisions and operation identities never enter
+    /// revision identity, so re-issuing durability metadata cannot redefine
+    /// a revision. An over-ceiling preimage yields no digest.
     ///
-    /// The preimage is the frozen wire form of one immutable record. It binds
-    /// the exact identity and revision to the ordered content, so a record
-    /// decoded from bytes is compared against its own re-encoding.
-    #[must_use]
-    pub fn canonical_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(160 + self.revision.canonical_bytes().len());
-        bytes.extend_from_slice(RECORD_MAGIC);
-        bytes.push(RECORD_VERSION);
-        bytes.extend_from_slice(self.key.portfolio_id.as_bytes());
-        bytes.extend_from_slice(&self.key.portfolio_revision.get().to_be_bytes());
-        bytes.extend_from_slice(&self.registry_revision.to_be_bytes());
-        let receipt = self.last_receipt.as_str().as_bytes();
-        bytes.extend_from_slice(&(receipt.len() as u64).to_be_bytes());
-        bytes.extend_from_slice(receipt);
-        bytes.extend_from_slice(self.content_digest().as_bytes());
-        bytes.extend_from_slice(&self.revision.canonical_bytes());
-        bytes
-    }
-}
-
-/// Guarded current pointer for one portfolio identity.
-///
-/// The pointer is the only mutable portfolio state. It names an immutable
-/// target revision and never carries membership content, so a pointer move
-/// cannot redefine the revision it targets.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PortfolioCurrentPointer {
-    /// Exact immutable target revision selected by this pointer.
-    pub target: PortfolioRevisionKey,
-    /// Monotone pointer revision; a skipped or regressed value conflicts.
-    pub pointer_revision: NonZeroRevision,
-    /// Operation identity that last moved this pointer.
-    pub operation_id: OpaqueId,
-    /// Content-free durability receipt of the last pointer move.
-    pub last_receipt: ReceiptRef,
-}
-
-impl PortfolioCurrentPointer {
-    /// Canonical preimage binding target, pointer revision and operation.
-    ///
-    /// Membership precedence is deliberately absent: the pointer binds the
-    /// target revision identity so a pointer cannot be the only copy of the
-    /// revision content.
-    #[must_use]
-    pub fn canonical_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(POINTER_DOMAIN.len() + 96);
-        bytes.extend_from_slice(POINTER_DOMAIN);
-        bytes.push(POINTER_VERSION);
-        bytes.extend_from_slice(self.target.portfolio_id.as_bytes());
-        bytes.extend_from_slice(&self.target.portfolio_revision.get().to_be_bytes());
-        bytes.extend_from_slice(&self.pointer_revision.get().to_be_bytes());
-        bytes.extend_from_slice(self.operation_id.as_str().as_bytes());
-        bytes
-    }
-
-    /// Canonical digest of this exact pointer state.
-    #[must_use]
-    pub fn pointer_digest(&self) -> Blake3Digest32 {
-        Blake3Digest32::from_bytes(*blake3::hash(&self.canonical_bytes()).as_bytes())
+    /// # Errors
+    /// Returns the underlying canonical encode or bound failure.
+    pub fn content_digest(&self) -> Result<search_contracts::Blake3Digest32, ContractError> {
+        blake3_canonical(
+            &digest_domain(REVISION_DIGEST_DOMAIN),
+            &self.canonical_value()?,
+            digest_limit(),
+        )
     }
 }
 
 /// Append-only immutable portfolio history across portfolio identities.
 ///
-/// Retaining every revision is the point. The total retained record count is
+/// Retaining every revision is the point. The retained record count is
 /// bounded by one explicit aggregate ceiling, so history is bounded in total
 /// rather than limited to one latest record per identity.
+///
+/// Current pointers are stored per portfolio identity. Publishing or moving
+/// one identity never erases another identity current selection, and an
+/// exact operation replay returns the historical publication receipt and
+/// revisions even after another identity has published.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PortfolioHistory {
-    /// Every retained immutable revision, ordered by exact key.
-    pub revisions: std::collections::BTreeMap<PortfolioRevisionKey, PortfolioRevisionRecord>,
-    /// Guarded current pointer, present only after an explicit move.
-    pub current: Option<PortfolioCurrentPointer>,
-    /// Total retained revisions across every portfolio identity.
-    pub total_records: u64,
+    revisions: BTreeMap<PortfolioRevisionKey, PortfolioRevisionRecord>,
+    current: BTreeMap<ReferencePortfolioId, PortfolioCurrentPointer>,
 }
 
 impl PortfolioHistory {
-    /// Creates an empty history with no current pointer.
+    /// Creates an empty history with no current pointers.
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            revisions: std::collections::BTreeMap::new(),
-            current: None,
-            total_records: 0,
+            revisions: BTreeMap::new(),
+            current: BTreeMap::new(),
         }
     }
 
@@ -256,19 +230,35 @@ impl PortfolioHistory {
         self.revisions.get(key)
     }
 
-    /// Exact current target revision key, if a pointer exists.
-    ///
-    /// The returned key always resolves to a retained record; a pointer naming
-    /// an absent revision is refused by construction rather than returned.
-    #[must_use]
-    pub fn current_key(&self) -> Option<PortfolioRevisionKey> {
-        self.current.as_ref().map(|pointer| pointer.target)
+    /// Every retained revision, ordered by exact key, for bounded reads.
+    pub fn revisions(&self) -> impl Iterator<Item = &PortfolioRevisionRecord> {
+        self.revisions.values()
     }
 
-    /// Exact current immutable revision, resolved through the guard.
+    /// Current pointer of one exact portfolio identity, if any.
     #[must_use]
-    pub fn current_revision(&self) -> Option<&PortfolioRevisionRecord> {
-        self.current_key()
+    pub fn current_pointer(
+        &self,
+        portfolio_id: ReferencePortfolioId,
+    ) -> Option<&PortfolioCurrentPointer> {
+        self.current.get(&portfolio_id)
+    }
+
+    /// Exact current target revision of one portfolio identity, if any.
+    #[must_use]
+    pub fn current_key(&self, portfolio_id: ReferencePortfolioId) -> Option<PortfolioRevisionKey> {
+        self.current
+            .get(&portfolio_id)
+            .map(PortfolioCurrentPointer::target)
+    }
+
+    /// Exact current immutable revision of one portfolio identity, if any.
+    #[must_use]
+    pub fn current_revision(
+        &self,
+        portfolio_id: ReferencePortfolioId,
+    ) -> Option<&PortfolioRevisionRecord> {
+        self.current_key(portfolio_id)
             .as_ref()
             .and_then(|key| self.revisions.get(key))
     }
@@ -277,17 +267,31 @@ impl PortfolioHistory {
     ///
     /// Same key with identical content replays the exact retained record. Same
     /// key with different content refuses, because an accepted revision is
-    /// immutable. The total retained record ceiling is aggregate, not per
-    /// identity, so a portfolio with many revisions cannot exhaust history
-    /// while another identity holds none.
+    /// immutable. The aggregate record ceiling is not per identity, so one
+    /// portfolio with many revisions cannot exhaust history while another
+    /// identity holds none.
     ///
     /// # Errors
-    ///
     /// Returns [`RegistryError::ReferencePortfolioInvalid`] for a conflicting
     /// retained revision and [`RegistryError::CapacityExceeded`] when the
     /// aggregate retained-record ceiling is already reached.
-    pub fn publish_revision(
+    #[cfg(test)]
+    pub(crate) fn publish_revision(
         &mut self,
+        key: PortfolioRevisionKey,
+        revision: ImmutablePortfolioRevision,
+        registry_revision: u64,
+        receipt: &ReceiptRef,
+        total_limit: usize,
+    ) -> Result<PortfolioRevisionRecord, RegistryError> {
+        let record =
+            self.prepare_revision(key, revision, registry_revision, receipt, total_limit)?;
+        self.revisions.insert(key, record.clone());
+        Ok(record)
+    }
+
+    fn prepare_revision(
+        &self,
         key: PortfolioRevisionKey,
         revision: ImmutablePortfolioRevision,
         registry_revision: u64,
@@ -301,6 +305,12 @@ impl PortfolioHistory {
                 Err(RegistryError::ReferencePortfolioInvalid)
             };
         }
+        if key.portfolio_revision.get() == 0 || registry_revision == 0 {
+            return Err(RegistryError::ReferencePortfolioInvalid);
+        }
+        revision
+            .content_digest()
+            .map_err(|_| RegistryError::ReferencePortfolioInvalid)?;
         if self.revisions.len() >= total_limit {
             return Err(RegistryError::CapacityExceeded);
         }
@@ -310,27 +320,25 @@ impl PortfolioHistory {
             registry_revision,
             last_receipt: receipt.clone(),
         };
-        self.revisions.insert(key, record.clone());
-        self.total_records = self.revisions.len() as u64;
         Ok(record)
     }
 
-    /// Moves the guarded current pointer under an exact expected-current guard.
+    /// Moves the guarded current pointer of one exact portfolio identity.
     ///
     /// A stale expected-current, a skipped or regressed pointer revision, or a
     /// competing move conflicts. A move never mutates the target revision and
     /// never deletes a prior revision, so an older pointer move leaves the
-    /// previous target permanently readable.
+    /// previous target permanently readable. Other identities are untouched.
     ///
     /// # Errors
-    ///
     /// Returns [`RegistryError::ReferencePortfolioInvalid`] when the target
     /// revision is not retained, [`RegistryError::ReferenceScopeEmpty`] when
-    /// the expected-current guard does not match the retained pointer,
+    /// an expected-current guard does not match the retained pointer,
     /// [`RegistryError::MembershipGenerationMismatch`] for a non-advancing
     /// pointer revision and [`RegistryError::OperationConflict`] when the
-    /// same operation identity already moved this pointer elsewhere.
-    pub fn move_current(
+    /// same operation identity already moved this identity elsewhere.
+    #[cfg(test)]
+    pub(crate) fn move_current(
         &mut self,
         key: PortfolioRevisionKey,
         pointer_revision: NonZeroRevision,
@@ -341,12 +349,42 @@ impl PortfolioHistory {
         if !self.revisions.contains_key(&key) {
             return Err(RegistryError::ReferencePortfolioInvalid);
         }
-        match (&self.current, expected_current) {
-            (Some(retained), Some(expected)) if retained.target != expected => {
-                return Err(RegistryError::ReferenceScopeEmpty);
+        let pointer = self.prepare_pointer(
+            key,
+            pointer_revision,
+            expected_current,
+            operation_id,
+            receipt,
+        )?;
+        self.current.insert(key.portfolio_id, pointer.clone());
+        Ok(pointer)
+    }
+
+    fn prepare_pointer(
+        &self,
+        key: PortfolioRevisionKey,
+        pointer_revision: NonZeroRevision,
+        expected_current: Option<PortfolioRevisionKey>,
+        operation_id: &OpaqueId,
+        receipt: &ReceiptRef,
+    ) -> Result<PortfolioCurrentPointer, RegistryError> {
+        let retained = self.current.get(&key.portfolio_id);
+        match (retained, expected_current) {
+            (Some(retained), Some(expected)) => {
+                if retained.target != expected {
+                    return Err(RegistryError::ReferenceScopeEmpty);
+                }
+                if retained.pointer_revision.checked_next().ok() != Some(pointer_revision) {
+                    return Err(RegistryError::MembershipGenerationMismatch);
+                }
+                if retained.operation_id == *operation_id && retained.target != key {
+                    return Err(RegistryError::OperationConflict);
+                }
             }
             (None, Some(_)) => return Err(RegistryError::ReferenceScopeEmpty),
-            (Some(_) | None, None) | (Some(_), Some(_)) => {}
+            (Some(_), None) => return Err(RegistryError::ReferenceScopeEmpty),
+            (None, None) if pointer_revision.get() == 1 => {}
+            (None, None) => return Err(RegistryError::MembershipGenerationMismatch),
         }
         let pointer = PortfolioCurrentPointer {
             target: key,
@@ -354,19 +392,84 @@ impl PortfolioHistory {
             operation_id: operation_id.clone(),
             last_receipt: receipt.clone(),
         };
-        if let Some(retained) = &self.current {
-            if retained.pointer_revision >= pointer_revision {
-                return Err(RegistryError::MembershipGenerationMismatch);
-            }
-            if retained.operation_id == pointer.operation_id
-                && retained.target != pointer.target
-            {
-                return Err(RegistryError::OperationConflict);
-            }
-        }
-        self.current = Some(pointer.clone());
+        pointer
+            .pointer_digest()
+            .map_err(|_| RegistryError::ReferencePortfolioInvalid)?;
         Ok(pointer)
     }
+
+    /// Prepares bounded record and pointer values before receipt persistence.
+    pub(crate) fn prepare_publication(
+        &self,
+        key: PortfolioRevisionKey,
+        revision: ImmutablePortfolioRevision,
+        registry_revision: u64,
+        receipt: &ReceiptRef,
+        operation_id: &OpaqueId,
+        total_limit: usize,
+    ) -> Result<PreparedPortfolioPublication, RegistryError> {
+        let record =
+            self.prepare_revision(key, revision, registry_revision, receipt, total_limit)?;
+        let next = self
+            .current_pointer(key.portfolio_id)
+            .map_or_else(
+                || NonZeroRevision::new(1),
+                |pointer| pointer.pointer_revision().checked_next(),
+            )
+            .map_err(|_| RegistryError::ContractExhausted)?;
+        let pointer = self.prepare_pointer(
+            key,
+            next,
+            self.current_key(key.portfolio_id),
+            operation_id,
+            receipt,
+        )?;
+        Ok(PreparedPortfolioPublication { record, pointer })
+    }
+
+    /// Installs values whose complete validation preceded receipt dispatch.
+    pub(crate) fn install(&mut self, prepared: PreparedPortfolioPublication) {
+        self.current
+            .insert(prepared.pointer.target.portfolio_id, prepared.pointer);
+        self.revisions.insert(prepared.record.key, prepared.record);
+    }
+
+    /// Guarded current pointers in identity order.
+    pub fn current_pointers(
+        &self,
+    ) -> impl Iterator<Item = (&ReferencePortfolioId, &PortfolioCurrentPointer)> {
+        self.current.iter()
+    }
+
+    /// Derived current view of every identity that has a current pointer.
+    ///
+    /// The returned entries are projections of the immutable revision named
+    /// by each identity pointer. They are never storage authority, so
+    /// mutating a returned entry cannot change which revisions are retained.
+    #[must_use]
+    pub fn current_view(&self) -> BTreeMap<ReferencePortfolioId, PortfolioCurrentView> {
+        self.current
+            .iter()
+            .filter_map(|(portfolio_id, pointer)| {
+                let record = self.revisions.get(&pointer.target)?;
+                Some((
+                    *portfolio_id,
+                    PortfolioCurrentView {
+                        portfolio_id: record.key.portfolio_id,
+                        portfolio_revision: record.key.portfolio_revision,
+                        membership_precedence: record.revision.membership_precedence().to_vec(),
+                        registry_revision: record.registry_revision,
+                        last_receipt: record.last_receipt.clone(),
+                    },
+                ))
+            })
+            .collect()
+    }
+}
+
+pub(crate) struct PreparedPortfolioPublication {
+    pub(crate) record: PortfolioRevisionRecord,
+    pointer: PortfolioCurrentPointer,
 }
 
 impl Default for PortfolioHistory {
@@ -375,3 +478,140 @@ impl Default for PortfolioHistory {
     }
 }
 
+/// Derived current view of one portfolio identity.
+///
+/// This is a projection of the immutable revision named by the current
+/// pointer, not storage. Mutating a returned view cannot change which
+/// revisions are retained or which pointer is current.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PortfolioCurrentView {
+    /// Stable portfolio identity.
+    pub portfolio_id: ReferencePortfolioId,
+    /// Exact revision named by the current pointer.
+    pub portfolio_revision: PortfolioRevision,
+    /// Ordered membership precedence of that exact revision.
+    pub membership_precedence: Vec<SourceMembershipId>,
+    /// Registry revision that published the named revision.
+    pub registry_revision: u64,
+    /// Content-free durability receipt of that publication.
+    pub last_receipt: ReceiptRef,
+}
+
+/// One retained immutable portfolio revision record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PortfolioRevisionRecord {
+    key: PortfolioRevisionKey,
+    revision: ImmutablePortfolioRevision,
+    registry_revision: u64,
+    last_receipt: ReceiptRef,
+}
+
+impl PortfolioRevisionRecord {
+    /// Exact immutable key of this record.
+    #[must_use]
+    pub const fn key(&self) -> PortfolioRevisionKey {
+        self.key
+    }
+
+    /// Exact ordered membership precedence of this revision.
+    #[must_use]
+    pub fn membership_precedence(&self) -> &[SourceMembershipId] {
+        self.revision.membership_precedence()
+    }
+
+    /// Stable portfolio identity of this record.
+    #[must_use]
+    pub const fn portfolio_id(&self) -> ReferencePortfolioId {
+        self.key.portfolio_id
+    }
+
+    /// Exact immutable revision of this record.
+    #[must_use]
+    pub const fn portfolio_revision(&self) -> PortfolioRevision {
+        self.key.portfolio_revision
+    }
+
+    /// Registry revision that published this record.
+    #[must_use]
+    pub const fn registry_revision(&self) -> u64 {
+        self.registry_revision
+    }
+
+    /// Content-free durability receipt of this publication.
+    #[must_use]
+    pub const fn last_receipt(&self) -> &ReceiptRef {
+        &self.last_receipt
+    }
+
+    /// Canonical content digest of the retained revision.
+    ///
+    /// # Errors
+    /// Returns the underlying canonical encode or bound failure.
+    pub fn content_digest(&self) -> Result<search_contracts::Blake3Digest32, ContractError> {
+        self.revision.content_digest()
+    }
+}
+
+/// Guarded current pointer for one portfolio identity.
+///
+/// The pointer is the only mutable portfolio state. It names an immutable
+/// target revision and never carries membership content, so a pointer move
+/// cannot redefine the revision it targets.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PortfolioCurrentPointer {
+    target: PortfolioRevisionKey,
+    pointer_revision: NonZeroRevision,
+    operation_id: OpaqueId,
+    last_receipt: ReceiptRef,
+}
+
+impl PortfolioCurrentPointer {
+    /// Exact immutable target revision selected by this pointer.
+    #[must_use]
+    pub const fn target(&self) -> PortfolioRevisionKey {
+        self.target
+    }
+
+    /// Monotone pointer revision; a skipped or regressed value conflicts.
+    #[must_use]
+    pub const fn pointer_revision(&self) -> NonZeroRevision {
+        self.pointer_revision
+    }
+
+    /// Operation identity that last moved this pointer.
+    #[must_use]
+    pub const fn operation_id(&self) -> &OpaqueId {
+        &self.operation_id
+    }
+
+    /// Content-free durability receipt of the last pointer move.
+    #[must_use]
+    pub const fn last_receipt(&self) -> &ReceiptRef {
+        &self.last_receipt
+    }
+
+    /// Canonical value binding target, pointer revision and operation.
+    fn canonical_value(&self) -> Result<CanonicalValue, ContractError> {
+        canonical_object(vec![
+            ("pointer_version", canonical_u64(u64::from(POINTER_VERSION))),
+            ("target", self.target.canonical_value()?),
+            (
+                "pointer_revision",
+                canonical_u64(self.pointer_revision.get()),
+            ),
+            ("operation", canonical_text(self.operation_id.as_str())?),
+        ])
+    }
+
+    /// Canonical digest of this exact pointer state.
+    ///
+    /// # Errors
+    /// Returns the underlying canonical encode or bound failure.
+    pub fn pointer_digest(&self) -> Result<search_contracts::Blake3Digest32, ContractError> {
+        blake3_canonical(
+            &digest_domain(POINTER_DIGEST_DOMAIN),
+            &self.canonical_value()?,
+            digest_limit(),
+        )
+    }
+}

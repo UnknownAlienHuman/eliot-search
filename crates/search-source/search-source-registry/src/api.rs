@@ -100,8 +100,9 @@ pub fn validate_live_snapshot(
 }
 
 /// Computes the canonical digest of live registry state.
-#[must_use]
-pub fn live_snapshot_digest(registry: &SourceRegistry) -> RegistrySnapshotDigest {
+pub fn live_snapshot_digest(
+    registry: &SourceRegistry,
+) -> Result<RegistrySnapshotDigest, RegistryError> {
     snapshot_digest(&registry_snapshot(registry))
 }
 
@@ -438,11 +439,10 @@ where
         .checked_add(1)
         .ok_or(RegistryError::RegistryRevisionOverflow)?;
     let limits = registry.limits();
-    let generations = registry.active_generations_snapshot().clone();
-    let _ = generations;
-    let (sources, memberships, reverse, portfolios) = registry.portfolio_parts_mut();
+    let (sources, memberships, reverse, portfolios, history) = registry.portfolio_parts_mut();
     let out = crate::portfolio::publish_reference_portfolio(
         portfolios,
+        history,
         memberships,
         reverse,
         sources,

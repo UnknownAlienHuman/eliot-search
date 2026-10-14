@@ -1,7 +1,8 @@
 //! Focused proofs for immutable portfolio history and guarded pointers.
 
-use search_contracts::{NonZeroRevision, OpaqueId, PortfolioRevision, ReferencePortfolioId,
-    SourceMembershipId};
+use search_contracts::{
+    NonZeroRevision, OpaqueId, PortfolioRevision, ReferencePortfolioId, SourceMembershipId,
+};
 
 use crate::error::RegistryError;
 use crate::portfolio_history::{
@@ -57,7 +58,13 @@ fn three_revisions_stay_resolvable_after_pointer_moves() {
         .expect("third revision");
     assert_eq!(history.len(), 3, "no revision is replaced by a later one");
     history
-        .move_current(second, pointer_revision(1), None, &operation(1), &receipt("p1"))
+        .move_current(
+            second,
+            pointer_revision(1),
+            None,
+            &operation(1),
+            &receipt("p1"),
+        )
         .expect("first pointer move");
     history
         .move_current(
@@ -68,19 +75,26 @@ fn three_revisions_stay_resolvable_after_pointer_moves() {
             &receipt("p2"),
         )
         .expect("second pointer move");
-    assert_eq!(history.current_key(), Some(third), "pointer names newest");
     assert_eq!(
-        history.revision(&first).map(|record| record.revision.membership_precedence()),
+        history.current_key(portfolio_id(1)),
+        Some(third),
+        "pointer names newest"
+    );
+    assert_eq!(
+        history
+            .revision(&first)
+            .map(super::portfolio_history::PortfolioRevisionRecord::membership_precedence),
         Some(&[membership(7)][..]),
         "oldest revision keeps its exact interpretation",
     );
     assert_eq!(
-        history.revision(&second).expect("second retained")
-            .revision
+        history
+            .revision(&second)
+            .expect("second retained")
             .membership_precedence(),
         &[membership(7), membership(8)],
     );
-    let current = history.current_revision().expect("current");
+    let current = history.current_revision(portfolio_id(1)).expect("current");
     let retained = history.revision(&third).expect("third retained");
     assert_eq!(current, retained, "current resolves the newest revision");
 }
@@ -95,7 +109,10 @@ fn same_key_same_content_replays_and_different_content_conflicts() {
     let again = history
         .publish_revision(target, content(&[3]), 1, &receipt("r1"), 16)
         .expect("identical replay");
-    assert_eq!(replayed, again, "same key and content replay the exact record");
+    assert_eq!(
+        replayed, again,
+        "same key and content replay the exact record"
+    );
     assert_eq!(history.len(), 1, "replay retains one record, not two");
     let conflict = history.publish_revision(target, content(&[4]), 2, &receipt("r2"), 16);
     assert_eq!(
@@ -104,8 +121,11 @@ fn same_key_same_content_replays_and_different_content_conflicts() {
         "same key with different content refuses to rewrite history",
     );
     assert_eq!(
-        history.revision(&target).expect("retained").revision,
-        content(&[3]),
+        history
+            .revision(&target)
+            .expect("retained")
+            .membership_precedence(),
+        content(&[3]).membership_precedence(),
         "the conflicting content is not stored",
     );
 }
@@ -117,8 +137,7 @@ fn membership_order_is_part_of_revision_identity() {
     history
         .publish_revision(target, content(&[1, 2]), 1, &receipt("r1"), 16)
         .expect("ordered publication");
-    let reordered = history
-        .publish_revision(target, content(&[2, 1]), 1, &receipt("r1"), 16);
+    let reordered = history.publish_revision(target, content(&[2, 1]), 1, &receipt("r1"), 16);
     assert_eq!(
         reordered.err(),
         Some(RegistryError::ReferencePortfolioInvalid),
@@ -138,7 +157,13 @@ fn pointer_move_conflicts_are_fail_closed_and_retain_history() {
         .publish_revision(second, content(&[2]), 2, &receipt("r2"), 16)
         .expect("second");
     history
-        .move_current(first, pointer_revision(1), None, &operation(1), &receipt("p1"))
+        .move_current(
+            first,
+            pointer_revision(1),
+            None,
+            &operation(1),
+            &receipt("p1"),
+        )
         .expect("initial move");
     assert_eq!(
         history
@@ -155,26 +180,74 @@ fn pointer_move_conflicts_are_fail_closed_and_retain_history() {
     );
     assert_eq!(
         history
-            .move_current(second, pointer_revision(1), Some(first), &operation(3), &receipt("p3"))
+            .move_current(
+                second,
+                pointer_revision(1),
+                Some(first),
+                &operation(3),
+                &receipt("p3")
+            )
             .err(),
         Some(RegistryError::MembershipGenerationMismatch),
         "a skipped or regressed pointer revision refuses the move",
     );
     assert_eq!(
         history
-            .move_current(second, pointer_revision(2), Some(first), &operation(1), &receipt("p4"))
+            .move_current(
+                second,
+                pointer_revision(2),
+                Some(first),
+                &operation(1),
+                &receipt("p4")
+            )
             .err(),
         Some(RegistryError::OperationConflict),
         "one operation identity cannot move the pointer to two targets",
     );
     assert_eq!(
         history
-            .move_current(key(4, 9), pointer_revision(2), Some(first), &operation(4), &receipt("p5"))
+            .move_current(
+                key(4, 9),
+                pointer_revision(2),
+                Some(first),
+                &operation(4),
+                &receipt("p5")
+            )
             .err(),
         Some(RegistryError::ReferencePortfolioInvalid),
         "a pointer cannot name an unpublished revision",
     );
-    assert_eq!(history.current_key(), Some(first), "pointer never moved");
+    assert_eq!(
+        history
+            .move_current(
+                second,
+                pointer_revision(2),
+                None,
+                &operation(7),
+                &receipt("p7")
+            )
+            .err(),
+        Some(RegistryError::ReferenceScopeEmpty),
+        "None requires absence even with a strictly advancing revision",
+    );
+    assert_eq!(
+        history
+            .move_current(
+                second,
+                pointer_revision(3),
+                Some(first),
+                &operation(8),
+                &receipt("p8")
+            )
+            .err(),
+        Some(RegistryError::MembershipGenerationMismatch),
+        "pointer revisions cannot skip a step",
+    );
+    assert_eq!(
+        history.current_key(portfolio_id(4)),
+        Some(first),
+        "pointer never moved"
+    );
     assert_eq!(history.len(), 2, "every conflict retains history intact");
 }
 
@@ -192,19 +265,15 @@ fn aggregate_history_ceiling_bounds_total_records_not_latest_per_identity() {
             )
             .unwrap_or_else(|error| panic!("revision {index} accepted: {error}"));
     }
-    let overflow = history.publish_revision(
-        key(5, 4),
-        content(&[4]),
-        4,
-        &receipt("r"),
-        3,
-    );
+    let overflow = history.publish_revision(key(5, 4), content(&[4]), 4, &receipt("r"), 3);
     assert_eq!(
         overflow.err(),
         Some(RegistryError::CapacityExceeded),
         "the aggregate record ceiling is enforced",
     );
-    assert_eq!(history.total_records, 3);
-    assert_eq!(history.len(), 3, "all three revisions of one identity survive");
+    assert_eq!(
+        history.len(),
+        3,
+        "all three revisions of one identity survive"
+    );
 }
-
