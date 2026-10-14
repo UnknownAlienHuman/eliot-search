@@ -251,10 +251,31 @@ impl NativeRootRequest {
         )
     }
 
-    /// Shared private construction for the two offline migration commands.
+    /// The source-stage sibling of the offline mapping plan and bootstrap. It
+    /// admits exactly `--stage-source-control-migration`, keeps the same
+    /// existing read-only profile and closed selection, and retains the raw
+    /// argv as supplied: the demanded flag is compared, never rewritten, so
+    /// the raw-args digest, request and custody stay bound to the original
+    /// invocation.
+    pub(crate) fn for_source_control_migration(
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<(Self, Vec<OsString>), OwnerError> {
+        Self::control_migration(
+            "--stage-source-control-migration",
+            arguments,
+            deadline,
+            cancellation,
+            limits,
+        )
+    }
+
+    /// Shared private construction for the offline migration commands.
     /// Only the demanded flag literal differs; the caller's raw argv, absolute
     /// deadline, cancellation handle and limits decide admission and custody
-    /// identically for both.
+    /// identically for every one of them.
     fn control_migration(
         command: &str,
         arguments: &[OsString],
@@ -878,6 +899,62 @@ mod migration_selector_tests {
     fn bootstrap_invocation() -> Vec<OsString> {
         ["--bootstrap-control-migration", "unopened-root", "10000000-0000-0000-0000-000000000002",
             "unopened-output"].map(OsString::from).to_vec()
+    }
+
+    fn source_stage_invocation() -> Vec<OsString> {
+        ["--stage-source-control-migration", "unopened-root",
+            "10000000-0000-0000-0000-000000000003", "unopened-output"].map(OsString::from).to_vec()
+    }
+
+    #[test]
+    fn source_stage_route_retains_raw_config_argv_and_original_context_without_rewriting_the_flag() {
+        let selected = source_stage_invocation();
+        let mut arguments = vec![OsString::from("--config-file"), OsString::from("unread-config.toml")];
+        arguments.extend(selected.iter().cloned());
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let cancellation = Arc::new(AtomicBool::new(false));
+        let (request, actual) = NativeRootRequest::for_source_control_migration(
+            &arguments, deadline, Arc::clone(&cancellation), limits(),
+        ).unwrap();
+        // The selected flag stays the demanded literal; no synthetic argv replaces it.
+        assert_eq!(actual, selected);
+        assert_eq!(actual[0], OsString::from("--stage-source-control-migration"));
+        assert_eq!(request.root, PathBuf::from("unopened-root"));
+        assert_eq!(request.mode, DataRootOpenMode::InspectExistingReadOnly);
+        // The raw-args binding is computed from the caller's own argv bytes.
+        let expected = arguments.iter()
+            .map(|value| native_argument(value, 256 * 1024).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(request.arguments(), expected);
+        assert_eq!(request.deadline, deadline);
+        assert!(Arc::ptr_eq(&request.cancellation, &cancellation));
+        cancellation.store(true, Ordering::Release);
+        assert!(request.check().is_err());
+    }
+
+    #[test]
+    fn source_stage_route_refuses_other_flags_extra_missing_empty_and_invalid_target() {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let refused = |arguments: &[OsString]| assert!(NativeRootRequest::for_source_control_migration(
+            arguments, deadline, Arc::new(AtomicBool::new(false)), limits(),
+        ).is_err());
+        // The plan and bootstrap flags never satisfy the source-stage constructor.
+        refused(&invocation()[..4]);
+        refused(&bootstrap_invocation()[..4]);
+        for (index, value) in [(0, "--plan-control-migration"), (0, "--bootstrap-control-migration"),
+            (0, "--stage-source-control-migratn"), (0, "--stage-source-control-migrationx"),
+            (1, ""), (2, "invalid"), (2, "00000000-0000-0000-0000-000000000000"), (3, "")] {
+            let mut arguments = source_stage_invocation();
+            arguments[index] = OsString::from(value);
+            refused(&arguments);
+        }
+        let mut extra = source_stage_invocation();
+        extra.push(OsString::from("extra"));
+        refused(&extra);
+        refused(&source_stage_invocation()[..3]);
+        assert!(NativeRootRequest::for_source_control_migration(
+            &source_stage_invocation(), Instant::now(), Arc::new(AtomicBool::new(false)), limits(),
+        ).is_err());
     }
 
     #[test]

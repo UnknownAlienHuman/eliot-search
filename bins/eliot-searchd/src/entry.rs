@@ -139,6 +139,10 @@ fn main() -> ExitCode {
                 "\nOFFLINE SOURCE-MAPPING BOOTSTRAP:\n",
                 "  eliot-searchd --bootstrap-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
                 "Same existing-only custody as the plan command; bootstrap stages a distinct bootstrap entry.\n",
+                "\nOFFLINE SOURCE-MAPPING SOURCE STAGE:\n",
+                "  eliot-searchd --stage-source-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
+                "Same existing-only custody as the bootstrap command; it consumes that bootstrap and\n",
+                "stages the source mapping in the same target, reading every row back before its receipt.\n",
                 "\nPROVIDER TRANSPORT:\n",
                 "  Canonical startup uses installation-scoped local IPC.\n",
                 "  TCP ports, endpoint files and token files are not accepted by the primary build.\n"

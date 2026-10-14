@@ -30,13 +30,14 @@ pub fn maybe_run() -> Option<ExitCode> {
     Some(run(&arguments, started))
 }
 
-/// The two offline migration commands share one route shape. The demanded flag
+/// The offline migration commands share one route shape. The demanded flag
 /// selects the admitted constructor and the staging stage; each constructor
 /// keeps the caller's raw argv, absolute deadline, cancellation and limits.
 #[derive(Clone, Copy)]
 enum MigrationRoute {
     Plan,
     Bootstrap,
+    SourceStage,
 }
 
 impl MigrationRoute {
@@ -51,6 +52,7 @@ impl MigrationRoute {
         match selected.first().and_then(|argument| argument.to_str()) {
             Some("--plan-control-migration") => Some(Self::Plan),
             Some("--bootstrap-control-migration") => Some(Self::Bootstrap),
+            Some("--stage-source-control-migration") => Some(Self::SourceStage),
             _ => None,
         }
     }
@@ -69,10 +71,15 @@ impl MigrationRoute {
             Self::Bootstrap => NativeRootRequest::for_control_migration_bootstrap(
                 arguments, deadline, cancellation, limits,
             ),
+            Self::SourceStage => NativeRootRequest::for_source_control_migration(
+                arguments, deadline, cancellation, limits,
+            ),
         }
     }
 
+    #[cfg(test)]
     const fn is_bootstrap(self) -> bool { matches!(self, Self::Bootstrap) }
+    const fn is_source_stage(self) -> bool { matches!(self, Self::SourceStage) }
 }
 
 fn run(arguments: &[OsString], started: Instant) -> ExitCode {
@@ -111,7 +118,7 @@ fn run(arguments: &[OsString], started: Instant) -> ExitCode {
     match admission {
         NativeRootAdmission::Inspection(owner) => owner
             .run_registration_one_shot(|operation| {
-                let result = stage(operation, target, Path::new(&selected[3]), route.is_bootstrap());
+                let result = stage(operation, target, Path::new(&selected[3]), route);
                 let (line, exit) = match result {
                     Ok(receipt) if receipt.len() <= 60 * 1024 => (receipt, ExitCode::SUCCESS),
                     Ok(_) => (error_frame("DIRECT_MIGRATION_OUTPUT_LIMIT"), failed),
@@ -138,7 +145,7 @@ fn stage(
     operation: &mut NativeReadOperation<'_>,
     target: SourceNamespaceId,
     output: &Path,
-    bootstrap: bool,
+    route: MigrationRoute,
 ) -> Result<String, String> {
     let registration = operation.registration_bytes()?;
     let roots = source_roots::migration_input_from_bytes(operation.root(), registration.as_deref())
@@ -152,24 +159,42 @@ fn stage(
     let receipt = {
         let store: crate::direct_store::ExistingMigrationStore = crate::direct_store::open_existing_migration(operation)
             .map_err(|error| error.code().to_owned())?;
-        if bootstrap {
-            store.stage_bootstrap(target, &directory, operation, registration.as_deref())
-        } else {
-            store.stage_mapping(target, &directory, operation, registration.as_deref())
+        match route {
+            MigrationRoute::Plan => {
+                store.stage_mapping(target, &directory, operation, registration.as_deref())
+            }
+            MigrationRoute::Bootstrap => {
+                store.stage_bootstrap(target, &directory, operation, registration.as_deref())
+            }
+            // The source stage consumes the retained bootstrap and publishes
+            // its own mapping profile inside the store before readback.
+            MigrationRoute::SourceStage => store.stage_source_mapping(
+                target, &directory, operation, registration.as_deref(),
+            ),
         }
     }?; // Store/protector closes before registration/native custody.
     let observed = output_directory(operation, &directory).map_err(|error| {
-        if bootstrap { "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned() } else { error }
+        post_effect_unknown(route, error)
     })?;
     if observed != directory {
-        return Err(if bootstrap { "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN" }
-            else { "DIRECT_MIGRATION_DIRECTORY_CHANGED" }.to_owned());
+        return Err(post_effect_unknown(route, "DIRECT_MIGRATION_DIRECTORY_CHANGED".to_owned()));
     }
     operation.verify().map_err(|error| {
-        if bootstrap { "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned() }
-        else { error.code().to_owned() }
+        post_effect_unknown(route, error.code().to_owned())
     })?;
     Ok(receipt)
+}
+
+/// A refusal after a published stage never reports as a clean denial. Bootstrap
+/// and source stage both publish before readback, so each collapses its own
+/// later refusals to its own unknown outcome; the plan publishes nothing and
+/// keeps its ordinary reasons.
+fn post_effect_unknown(route: MigrationRoute, reason: String) -> String {
+    match route {
+        MigrationRoute::Plan => reason,
+        MigrationRoute::Bootstrap => "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned(),
+        MigrationRoute::SourceStage => "DIRECT_MIGRATION_SOURCE_STAGE_OUTCOME_UNKNOWN".to_owned(),
+    }
 }
 
 fn output_directory(
@@ -223,6 +248,13 @@ fn public_reason(reason: &str) -> &'static str {
         // failure stays collapsed below.
         "DIRECT_MIGRATION_BOOTSTRAP_INVALID" => "DIRECT_MIGRATION_BOOTSTRAP_INVALID",
         "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN" => "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN",
+        "DIRECT_MIGRATION_SOURCE_STAGE_INVALID" => "DIRECT_MIGRATION_SOURCE_STAGE_INVALID",
+        "DIRECT_MIGRATION_SOURCE_STAGE_OUTCOME_UNKNOWN" => "DIRECT_MIGRATION_SOURCE_STAGE_OUTCOME_UNKNOWN",
+        // Paired original-source-context plus published stage effect: the
+        // stable public shape of an unknown outcome that a bounded context
+        // observation accompanied. The private cause stays collapsed.
+        "DIRECT_MIGRATION_SOURCE_STAGE_CONTEXT_OUTCOME_UNKNOWN" => "DIRECT_MIGRATION_SOURCE_STAGE_CONTEXT_OUTCOME_UNKNOWN",
+        "DIRECT_MIGRATION_SOURCE_STAGE_READBACK_MISMATCH" => "DIRECT_MIGRATION_SOURCE_STAGE_READBACK_MISMATCH",
         "DIRECT_MIGRATION_BOOTSTRAP_EXISTS" => "DIRECT_MIGRATION_BOOTSTRAP_EXISTS",
         "DIRECT_MIGRATION_BOOTSTRAP_CONTEXT_REFUSED" => "DIRECT_MIGRATION_BOOTSTRAP_CONTEXT_REFUSED",
         "DIRECT_MIGRATION_DIRECTORY_INVALID" => "DIRECT_MIGRATION_DIRECTORY_INVALID",
@@ -375,6 +407,47 @@ mod migration_route_tests {
             vec![OsString::from("--serve-data-root"), OsString::from("root")],
             vec![OsString::from("--bootstrap-control-migratn"), OsString::from("root"),
                 OsString::from("10000000-0000-0000-0000-000000000002"), OsString::from("output")],
+            vec![],
+        ] {
+            assert!(MigrationRoute::from_arguments(&arguments).is_none());
+        }
+    }
+
+    fn source_stage() -> Vec<OsString> {
+        ["--stage-source-control-migration", "unopened-root",
+            "10000000-0000-0000-0000-000000000003", "unopened-output"]
+            .map(OsString::from)
+            .to_vec()
+    }
+
+    #[test]
+    fn selects_the_source_stage_command_from_the_config_stripped_invocation() {
+        assert!(MigrationRoute::from_arguments(&source_stage()).is_some());
+        // A configuration prefix must not hide the demanded flag from routing.
+        assert!(MigrationRoute::from_arguments(&with_config_prefix(source_stage())).is_some());
+    }
+
+    #[test]
+    fn source_stage_route_selection_observes_only_the_stripped_invocation_and_keeps_raw_argv() {
+        let raw = with_config_prefix(source_stage());
+        let route = MigrationRoute::from_arguments(&raw).expect("route selected");
+        assert!(route.is_source_stage());
+        assert!(!route.is_bootstrap());
+        // Selection is read-only: the caller's argv still starts with the
+        // configuration pair, so the stage flag was never hoisted into the raw
+        // slice that the constructor digests as supplied.
+        assert_eq!(raw[0].to_str(), Some("--config-file"));
+        assert_eq!(raw[1].to_str(), Some("unread-config.toml"));
+        assert_eq!(raw[2].to_str(), Some("--stage-source-control-migration"));
+    }
+
+    #[test]
+    fn source_stage_misspelling_is_not_selected() {
+        for arguments in [
+            vec![OsString::from("--stage-source-control-migratn"), OsString::from("root"),
+                OsString::from("10000000-0000-0000-0000-000000000003"), OsString::from("output")],
+            vec![OsString::from("--stage-source-control-migrationx"), OsString::from("root"),
+                OsString::from("10000000-0000-0000-0000-000000000003"), OsString::from("output")],
             vec![],
         ] {
             assert!(MigrationRoute::from_arguments(&arguments).is_none());
