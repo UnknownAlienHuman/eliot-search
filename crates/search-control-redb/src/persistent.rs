@@ -34,6 +34,7 @@ pub use bootstrap::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBoot
     MigrationBootstrapPlatform, MigrationBootstrapReceipt, MigrationBootstrapWork};
 pub use bootstrap::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 pub use bootstrap::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
+pub use bootstrap::{OwnerContentStage, OwnerContentReadback, OwnerContentMappedReceipt};
 
 pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
@@ -58,6 +59,7 @@ enum TableProfile {
     ControlOnly,
     SourceStage(Vec<u8>),
     InventoryStage { source: Vec<u8>, inventory: Vec<u8> },
+    ContentStage { source: Vec<u8>, inventory: Vec<u8>, content: Vec<u8> },
 }
 
 /// Concrete redb owner. Vendor values, guards, paths and errors stay private.
@@ -368,9 +370,15 @@ fn verify_tables(read: &ReadTransaction, profile: &TableProfile) -> Result<(), C
         "eliot.import.inventory.meta.v1", "eliot.import.inventory.rows.v1",
         "eliot.import.source-map.events.v1", "eliot.import.source-map.meta.v1",
         "eliot.import.source-map.revisions.v1", "eliot.import.source-map.sources.v1"];
+    let content = ["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1",
+        "eliot.import.content.by-legacy.v1", "eliot.import.content.meta.v1", "eliot.import.content.rows.v1",
+        "eliot.import.inventory.meta.v1", "eliot.import.inventory.rows.v1",
+        "eliot.import.source-map.events.v1", "eliot.import.source-map.meta.v1",
+        "eliot.import.source-map.revisions.v1", "eliot.import.source-map.sources.v1"];
     let expected = match profile { TableProfile::ControlOnly => control.as_slice(),
         TableProfile::SourceStage(_) => combined.as_slice(),
-        TableProfile::InventoryStage { .. } => inventory.as_slice() };
+        TableProfile::InventoryStage { .. } => inventory.as_slice(),
+        TableProfile::ContentStage { .. } => content.as_slice() };
     let mut names = read.list_tables().map_err(|error| map_storage_error(&error))?
         .take(expected.len() + 1).map(|table| table.name().to_owned()).collect::<Vec<_>>();
     names.sort();
@@ -379,7 +387,8 @@ fn verify_tables(read: &ReadTransaction, profile: &TableProfile) -> Result<(), C
     { return Err(ControlError::SchemaMismatch); }
     let source_profile = match profile {
         TableProfile::ControlOnly => None,
-        TableProfile::SourceStage(source) | TableProfile::InventoryStage { source, .. } => Some(source),
+        TableProfile::SourceStage(source) | TableProfile::InventoryStage { source, .. }
+        | TableProfile::ContentStage { source, .. } => Some(source),
     };
     if let Some(expected) = source_profile {
         let definition: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.import.source-map.meta.v1");
@@ -389,11 +398,22 @@ fn verify_tables(read: &ReadTransaction, profile: &TableProfile) -> Result<(), C
             return Err(ControlError::IdentityMismatch);
         }
     }
-    if let TableProfile::InventoryStage { inventory, .. } = profile {
+    let inventory_profile = match profile {
+        TableProfile::InventoryStage { inventory, .. }
+        | TableProfile::ContentStage { inventory, .. } => Some(inventory),
+        _ => None,
+    };
+    if let Some(inventory) = inventory_profile {
         let definition: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.import.inventory.meta.v1");
         let table = read.open_table(definition).map_err(map_table_error)?;
         if table.get("profile").map_err(|error| map_storage_error(&error))?
             .is_none_or(|value| value.value() != inventory.as_slice()) { return Err(ControlError::IdentityMismatch); }
+    }
+    if let TableProfile::ContentStage { content, .. } = profile {
+        let definition: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.import.content.meta.v1");
+        let table = read.open_table(definition).map_err(map_table_error)?;
+        if table.get("profile").map_err(|error| map_storage_error(&error))?
+            .is_none_or(|value| value.value() != content.as_slice()) { return Err(ControlError::IdentityMismatch); }
     }
     Ok(())
 }

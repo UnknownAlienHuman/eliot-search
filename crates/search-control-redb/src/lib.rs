@@ -22,6 +22,7 @@ pub use identity::*;
 pub use persistent::PublicationSuccessor;
 pub use persistent::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 pub use persistent::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
+pub use persistent::{OwnerContentStage, OwnerContentReadback, OwnerContentMappedReceipt};
 pub use persistent::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBootstrapFailure,
     MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
     MigrationBootstrapPlatform, MigrationBootstrapReceipt, MigrationBootstrapWork};

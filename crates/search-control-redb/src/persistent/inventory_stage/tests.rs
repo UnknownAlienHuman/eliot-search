@@ -5,6 +5,7 @@ use super::*;
 use crate::MigrationBootstrap;
 use crate::migration::{
     LegacyInventoryEncoder, LegacyInventoryFamily as Family, LegacyInventoryStatus as Status,
+    SourceContentManifestEncoder, SourceContentManifestHeader,
     SourceImportRecordArtifact, SourceImportRow,
 };
 
@@ -132,6 +133,149 @@ fn readback(scratch: &Scratch, inventory: &[Vec<u8>]) -> OwnerInventoryReadback 
         stage.push(row, deadline(), okay).unwrap();
     }
     stage.begin_readback(deadline(), okay).unwrap()
+}
+
+fn empty_content_artifact(
+    scratch: &Scratch,
+    platform: Platform,
+    header: SourceContentManifestHeader,
+) -> (
+    Vec<Vec<u8>>,
+    crate::migration::SourceImportRecordArtifactPublication<Platform>,
+) {
+    let mut encoder = SourceContentManifestEncoder::new(header).unwrap();
+    let rows = vec![encoder.header_row().unwrap(), encoder.finish().unwrap().0];
+    let mut writer = SourceImportRecordArtifact::create(
+        &scratch.0,
+        ".source-map.content-stage.tmp",
+        platform,
+        deadline(),
+    )
+    .unwrap();
+    for row in &rows {
+        writer.push(row, deadline()).unwrap();
+    }
+    let frozen = writer.freeze(deadline()).unwrap();
+    let final_name = format!(
+        "{}.source-content.v1",
+        crate::persistent::bootstrap::codec::hex(frozen.chain())
+    );
+    let mut comparison = frozen.begin_readback(deadline()).unwrap();
+    for row in &rows {
+        comparison.compare(row, deadline()).unwrap();
+    }
+    let publication = comparison
+        .finish(deadline())
+        .unwrap()
+        .prepare_publication(&final_name, deadline())
+        .unwrap();
+    (rows, publication)
+}
+
+#[test]
+fn unknown_content_publication_keeps_the_original_attempt_and_blocks_retry() {
+    let scratch = Scratch::new();
+    let inventory = stream(&rows());
+    let mut inventory_readback = readback(&scratch, &inventory);
+    for row in &inventory {
+        inventory_readback.compare(row, deadline(), okay).unwrap();
+    }
+    let receipt = inventory_readback.finish(deadline(), okay).unwrap();
+    let original = binding();
+    let header = SourceContentManifestHeader {
+        target_namespace: original.target,
+        legacy_namespace: original.legacy_namespace,
+        catalog_snapshot: original.catalog_snapshot,
+        source_plan: search_contracts::Sha256Digest32::from_bytes(
+            *receipt.owner.source.artifact.chain(),
+        ),
+        expected_objects: 0,
+    };
+    let platform = Platform::default();
+    let (rows, mut publication) = empty_content_artifact(&scratch, platform.clone(), header);
+    let final_name = publication.final_name().to_owned();
+    let mut stage = receipt.into_content_stage(0, deadline(), okay).unwrap();
+
+    platform
+        .cancel_after_sync
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    let failure = stage
+        .publish_content(&mut publication, &platform, deadline(), |_| {
+            if platform.canceled.load(std::sync::atomic::Ordering::Relaxed) {
+                Err("original refused after content link")
+            } else {
+                Ok(())
+            }
+        })
+        .err()
+        .unwrap();
+    assert_eq!(failure.control, ControlError::CommitOutcomeUnknown);
+    assert_eq!(failure.first_context, Some("original refused after content link"));
+    assert!(scratch.0.join(&final_name).is_file());
+    assert_eq!(stage.table_count_for_test(), 9);
+    assert_eq!(
+        stage
+            .publish_content(&mut publication, &platform, deadline(), okay)
+            .err()
+            .unwrap()
+            .control,
+        ControlError::CommitOutcomeUnknown
+    );
+    assert_eq!(
+        stage.push(&rows[0], deadline(), okay).err().unwrap().control,
+        ControlError::CommitOutcomeUnknown
+    );
+}
+
+#[test]
+fn empty_content_stream_is_read_back_as_explicit_missing_occurrences() {
+    let scratch = Scratch::new();
+    let inventory = stream(&rows());
+    let mut inventory_readback = readback(&scratch, &inventory);
+    for row in &inventory {
+        inventory_readback.compare(row, deadline(), okay).unwrap();
+    }
+    let receipt = inventory_readback.finish(deadline(), okay).unwrap();
+    let expected = counts();
+    let original = binding();
+    let header = SourceContentManifestHeader {
+        target_namespace: original.target,
+        legacy_namespace: original.legacy_namespace,
+        catalog_snapshot: original.catalog_snapshot,
+        source_plan: search_contracts::Sha256Digest32::from_bytes(
+            *receipt.owner.source.artifact.chain(),
+        ),
+        expected_objects: 0,
+    };
+    let platform = Platform::default();
+    let (content_rows, mut publication) =
+        empty_content_artifact(&scratch, platform.clone(), header);
+    let mut stage = receipt.into_content_stage(0, deadline(), okay).unwrap();
+    stage
+        .publish_content(&mut publication, &platform, deadline(), okay)
+        .unwrap();
+    assert_eq!(stage.table_count_for_test(), 12);
+    for row in &content_rows {
+        stage.push(row, deadline(), okay).unwrap();
+    }
+    let mut content_readback = stage.begin_readback(deadline(), okay).unwrap();
+    for row in &content_rows {
+        content_readback.compare(row, deadline(), okay).unwrap();
+    }
+    let receipt = content_readback.finish(deadline(), okay).unwrap();
+    let json = receipt.render_json();
+    assert!(json.contains(&format!(
+        "\"occurrences\":{},\"retained_events\":{},\"retirements\":{}",
+        expected.occurrences, expected.retained_events, expected.retirements
+    )));
+    assert!(json.contains(&format!(
+        "\"joined_occurrences\":0,\"missing_content_references\":{},\"orphan_content_objects\":0",
+        expected.occurrences
+    )));
+    assert!(json.contains("complete_semantic_candidate_not_performed"));
+    assert!(json.contains("\"recovery\":\"unresolved\""));
+    assert!(json.contains("\"cleanup\":\"deferred_to_347\""));
+    assert!(json.contains("\"cutover\":\"none\""));
 }
 
 #[test]

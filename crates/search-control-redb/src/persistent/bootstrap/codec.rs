@@ -4,7 +4,7 @@ use super::{ControlError, MigrationBootstrapBinding, MigrationBootstrapIdentity,
 use crate::migration::{SourceImportRecordArtifactPublication, LegacyInventoryProfile};
 use search_contracts::Blake3Digest32;
 
-pub(super) const PROFILE: &[u8] = b"eliot.migration-bootstrap.v1\0released-native-read\0inventory-only\0no-candidate\0key=128;value=4096;records=8;live-bytes=32768;mutation-items=3;receipts=8;cache=8388608;metadata-work=8192;attempts=1;names=200;output-parents=64;utf16-path=32768\0";
+pub(super) const PROFILE: &[u8] = b"eliot.migration-bootstrap.v1\0released-native-read\0inventory-only\0no-candidate\0key=128;value=4096;records=8;live-bytes=32768;mutation-items=3;receipts=8;idempotency-operations=9;cache=8388608;metadata-work=8192;attempts=1;names=200;output-parents=64;utf16-path=32768\0";
 
 pub(super) fn original(binding: &MigrationBootstrapBinding) -> Result<Vec<u8>, ControlError> {
     if binding.owner.epoch == 0 || binding.owner.generation == 0
