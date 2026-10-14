@@ -14,6 +14,10 @@ use crate::{ControlError, MigrationBootstrapFailure, MigrationBootstrapWork as W
 
 use super::{OriginalCheck, OwnerSourceMappedReceipt};
 
+#[path = "inventory_stage/content_stage.rs"]
+mod content_stage;
+pub use content_stage::{OwnerContentMappedReceipt, OwnerContentReadback, OwnerContentStage};
+
 const ROWS: TableDefinition<u64, &[u8]> = TableDefinition::new("eliot.import.inventory.rows.v1");
 const META: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.import.inventory.meta.v1");
 const STAGE_KEY: &[u8] = b"migration/inventory-stage/v1/binding";

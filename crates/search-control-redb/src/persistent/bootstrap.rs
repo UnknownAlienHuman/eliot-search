@@ -20,10 +20,11 @@ mod codec;
 mod source_stage;
 pub use source_stage::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 pub use source_stage::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
+pub use source_stage::{OwnerContentMappedReceipt, OwnerContentReadback, OwnerContentStage};
 
 const LIMITS: JournalLimits = JournalLimits {
     max_key_bytes: 128, max_value_bytes: 4096, max_records: 8,
-    max_total_value_bytes: 32 * 1024, max_mutation_items: 3, max_operation_records: 8,
+    max_total_value_bytes: 32 * 1024, max_mutation_items: 3, max_operation_records: 9,
 };
 const OPERATION_KEY: &[u8] = b"migration/bootstrap/v1/original";
 const ATTEMPT_KEY: &[u8] = b"migration/bootstrap/v1/inventory-attempt";

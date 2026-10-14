@@ -16,6 +16,10 @@ use super::{
     ControlError, MAX_BYTES, MAX_ROWS, SourceImportBinding, SourceImportCounts,
 };
 
+mod decoder;
+
+pub use decoder::{SourceContentManifestDecodedRow, SourceContentManifestDecoder};
+
 const CONTENT_PROFILE: &[u8] =
     b"eliot/source-content/v1;retained-plaintext;sha256-verified;blake3-256;no-normalization";
 

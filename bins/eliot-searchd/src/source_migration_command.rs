@@ -238,9 +238,38 @@ fn error_frame(reason: &str) -> String {
     format!("{{\"error\":\"{reason}\"}}")
 }
 
+// Composite content errors preserve the phase/outcome and only an already
+// accepted literal cause. Private OS details never become JSON frame contents.
+fn public_reason(reason: &str) -> &str {
+    if let Some((code, cause)) = reason.split_once(':')
+        && let Some(code) = public_content_reason(code) {
+        return if literal_public_reason(cause) == "DIRECT_MIGRATION_UNAVAILABLE" {
+            code
+        } else {
+            reason
+        };
+    }
+    literal_public_reason(reason)
+}
+
+fn public_content_reason(reason: &str) -> Option<&'static str> {
+    match reason {
+        "DIRECT_MIGRATION_CONTENT_ADMISSION_REFUSED" => Some("DIRECT_MIGRATION_CONTENT_ADMISSION_REFUSED"),
+        "DIRECT_MIGRATION_CONTENT_ADMISSION_OUTCOME_UNKNOWN" => Some("DIRECT_MIGRATION_CONTENT_ADMISSION_OUTCOME_UNKNOWN"),
+        "DIRECT_MIGRATION_CONTENT_PUBLISH_REFUSED" => Some("DIRECT_MIGRATION_CONTENT_PUBLISH_REFUSED"),
+        "DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN" => Some("DIRECT_MIGRATION_CONTENT_PUBLISH_OUTCOME_UNKNOWN"),
+        "DIRECT_MIGRATION_CONTENT_IMPORT_REFUSED" => Some("DIRECT_MIGRATION_CONTENT_IMPORT_REFUSED"),
+        "DIRECT_MIGRATION_CONTENT_IMPORT_OUTCOME_UNKNOWN" => Some("DIRECT_MIGRATION_CONTENT_IMPORT_OUTCOME_UNKNOWN"),
+        "DIRECT_MIGRATION_CONTENT_READBACK_REFUSED" => Some("DIRECT_MIGRATION_CONTENT_READBACK_REFUSED"),
+        "DIRECT_MIGRATION_CONTENT_READBACK_OUTCOME_UNKNOWN" => Some("DIRECT_MIGRATION_CONTENT_READBACK_OUTCOME_UNKNOWN"),
+        _ => None,
+    }
+}
+
 // Lower legacy layers can carry private OS details. Only these literal reasons
 // can reach the public command; every other private failure is collapsed.
-fn public_reason(reason: &str) -> &'static str {
+fn literal_public_reason(reason: &str) -> &'static str {
+    if let Some(code) = public_content_reason(reason) { return code; }
     match reason {
         // The bootstrap stage refuses on its own terms. These four reasons are
         // the complete public vocabulary of that stage; every other bootstrap

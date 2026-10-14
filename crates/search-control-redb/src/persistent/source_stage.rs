@@ -14,6 +14,7 @@ mod codec;
 #[path = "inventory_stage.rs"]
 mod inventory_stage;
 pub use inventory_stage::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
+pub use inventory_stage::{OwnerContentMappedReceipt, OwnerContentReadback, OwnerContentStage};
 
 const STAGE_KEY: &[u8] = b"migration/source-stage/v1/binding";
 const MAP_ATTEMPT_KEY: &[u8] = b"migration/source-stage/v1/map-attempt";

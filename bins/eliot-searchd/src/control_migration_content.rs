@@ -15,7 +15,7 @@ use search_control_redb::migration::{
     SourceContentManifestEncoder, SourceContentManifestEncodingError,
     SourceContentManifestHeader, SourceContentManifestSummary,
     SourceContentObjectReadback, SourceImportRecordArtifact,
-    SourceImportRecordArtifactError, source_content_profile_digest,
+    SourceImportRecordArtifactError, SourceImportRecordArtifactPublication, source_content_profile_digest,
 };
 use zeroize::Zeroizing;
 
@@ -27,6 +27,7 @@ use super::super::{read_import_revision, read_import_revision_with_context};
 use super::{
     ensure_directory, sha256, temporary_staging_name,
 };
+use super::super::super::migration_context::NativeMigrationInput;
 
 pub(super) struct ContentArtifact {
     pub(super) name: String,
@@ -136,7 +137,7 @@ pub(super) fn stage(
     })
 }
 
-fn compile(
+pub(super) fn compile(
     source: &MigrationSource<'_, '_, '_>,
     root: &Path,
     target: SourceNamespaceId,
@@ -165,6 +166,8 @@ fn compile(
     source.checkpoint()?;
 
     let expected = source.retained_revisions().len() as u64;
+    source.charge(Work::Allocate(search_control_redb::migration::MAX_SOURCE_IMPORT_ROW_BYTES))?;
+    source.charge(Work::Compare(search_control_redb::migration::MAX_SOURCE_IMPORT_ROW_BYTES))?;
     let mut encoder = SourceContentManifestEncoder::new(
         SourceContentManifestHeader {
             target_namespace: target,
@@ -197,6 +200,8 @@ fn compile(
         }
         let digest =
             Blake3Digest32::from_bytes(*hasher.finalize().as_bytes());
+        source.charge(Work::Allocate(search_control_redb::migration::MAX_SOURCE_IMPORT_ROW_BYTES))?;
+        source.charge(Work::Compare(search_control_redb::migration::MAX_SOURCE_IMPORT_ROW_BYTES))?;
         let row = encoder
             .object_row(SourceContentObjectReadback {
                 legacy_source_id: legacy_digest(&metadata.source_id)?,
@@ -214,15 +219,76 @@ fn compile(
     {
         return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
     }
+    source.charge(Work::Allocate(search_control_redb::migration::MAX_SOURCE_IMPORT_ROW_BYTES))?;
+    source.charge(Work::Compare(search_control_redb::migration::MAX_SOURCE_IMPORT_ROW_BYTES))?;
     let (end_row, summary) = encoder.finish().map_err(encoding_reason)?;
     emit(&end_row)?;
     source.checkpoint()?;
     Ok(summary)
 }
 
+// Original command only: retain the verified original handle and defer its
+// once-only publication to the same-database owner. No new directory or meter.
+pub(super) fn prepare_owned(
+    source: &MigrationSource<'_, '_, '_>,
+    root: &Path,
+    target: SourceNamespaceId,
+    source_plan: [u8; 32],
+    directory: &Path,
+    input: &NativeMigrationInput<'_, '_, '_>,
+) -> Result<(
+    SourceImportRecordArtifactPublication<super::redb_import::DaemonImportOutputPlatform>,
+    SourceContentManifestSummary,
+), String> {
+    input.context.inventory_reobserve(input)?;
+    let artifact_context = super::inventory::ArtifactContext::new(source);
+    let work = |unit| artifact_context.reserve(unit);
+    source.charge(Work::Allocate(256))?;
+    let temporary = temporary_staging_name()?;
+    let mut writer = SourceImportRecordArtifact::create_with_context(
+        directory, &temporary, super::redb_import::DaemonImportOutputPlatform,
+        input.context.deadline(), &work,
+    ).map_err(|error| owned_artifact_reason(&artifact_context, error))?;
+    let first = compile(source, root, target, source_plan, input.context.deadline(), |row| {
+        writer.push_with_context(row, input.context.deadline(), &work)
+            .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
+        source.checkpoint()
+    })?;
+    input.context.inventory_reobserve(input)?;
+    let frozen = writer.freeze_with_context(input.context.deadline(), &work)
+        .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
+    let chain = *frozen.chain();
+    let mut compare = frozen.begin_readback_with_context(input.context.deadline(), &work)
+        .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
+    let second = compile(source, root, target, source_plan, input.context.deadline(), |row| {
+        compare.compare_with_context(row, input.context.deadline(), &work)
+            .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
+        source.checkpoint()
+    })?;
+    if first != second { return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned()); }
+    input.context.inventory_reobserve(input)?;
+    let verified = compare.finish_with_context(input.context.deadline(), &work)
+        .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
+    source.charge(Work::Allocate(128))?;
+    let name = format!("{}.source-content.v1", sha256::hex(&chain));
+    let publication = verified.prepare_publication_with_context(
+        &name, input.context.deadline(), &work,
+    ).map_err(|error| owned_artifact_reason(&artifact_context, error))?;
+    Ok((publication, first))
+}
+
 fn legacy_digest(value: &str) -> Result<Sha256Digest32, String> {
     Sha256Digest32::parse_hex(value)
         .map_err(|_| "DIRECT_CONTROL_READBACK_MISMATCH".to_owned())
+}
+
+fn owned_artifact_reason(
+    context: &super::inventory::ArtifactContext<'_, '_, '_, '_>,
+    error: SourceImportRecordArtifactError<String>,
+) -> String {
+    let reason = context.reason(error);
+    reason.strip_prefix("DIRECT_MIGRATION_INVENTORY_")
+        .map_or_else(|| reason.clone(), |suffix| format!("DIRECT_MIGRATION_CONTENT_{suffix}"))
 }
 
 fn encoding_reason(error: SourceContentManifestEncodingError) -> String {

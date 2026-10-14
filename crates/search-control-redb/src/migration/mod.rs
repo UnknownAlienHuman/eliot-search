@@ -13,6 +13,7 @@ use crate::ControlError;
 
 mod codec;
 mod content;
+mod content_mapping;
 mod cutover;
 #[allow(clippy::module_name_repetitions)]
 mod cutover_artifact;
@@ -28,11 +29,13 @@ mod record_chain;
 mod writer;
 
 pub use content::{
-    SourceContentManifest, SourceContentManifestEncoder,
+    SourceContentManifest, SourceContentManifestDecodedRow,
+    SourceContentManifestDecoder, SourceContentManifestEncoder,
     SourceContentManifestEncodingError, SourceContentManifestHeader,
     SourceContentManifestSummary, SourceContentObjectReadback,
     source_content_profile_digest,
 };
+pub(crate) use content_mapping::{ContentRevisionBinding, content_revision_binding};
 pub use cutover::{
     CONTROL_CUTOVER_MARKER_FILE, CONTROL_CUTOVER_STAGED_DATABASE_SCHEMA,
     ControlCutoverMarker, ControlCutoverMarkerError,

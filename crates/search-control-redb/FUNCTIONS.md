@@ -212,6 +212,16 @@ quarantine—never fabricated success.
 
 ## Versioned legacy-inventory stream
 
+The original inactive inventory receipt may continue into an explicit content
+stage over the same retained database. Only an original-bound, once-published
+source-content v1 artifact admits bounded row/index adoption. Both canonical wire
+rows and their technical identity index require independent readback, and every
+canonical occurrence is joined against exact legacy source/revision, SHA and length
+fields. Header/footer bytes remain owned by the frozen encoder and strict decoder.
+The extended content table profile is unavailable to old or normal journal opens.
+The receipt remains partial: semantic candidate, serving, restart, residency and
+cleanup authority are not issued; #268/#269/#347/#348/#215 remain separate owners.
+
 `LegacyInventoryEncoder::{header,item,source_event,end_family,finish}` provides
 one bounded metadata encoder for `eliot.legacy-inventory.v1`. Family order and
 per-status counters belong to this owner. Complete accounting requires all
