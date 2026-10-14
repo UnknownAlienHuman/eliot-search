@@ -14709,18 +14709,6 @@
       "reason": "Exact AST test context or tests-directory fixture; no production compute acceptance is asserted."
     },
     {
-      "path": "bins/eliot-searchd/tests/projection_composition_module_ownership.rs",
-      "symbol": "projection_responsibilities_stay_separated_and_vendor_free",
-      "signal": "digest-macro-review",
-      "count": 4,
-      "test": true,
-      "source_sha256": "ffbdce2b21b2981436bab258f082f1aba771ecc6bf962ada6fdd1a57aee8a56d",
-      "classification": "test-vector",
-      "owner_issue": 321,
-      "phase": "accepted",
-      "reason": "Exact AST test context or tests-directory fixture; no production compute acceptance is asserted."
-    },
-    {
       "path": "bins/eliot-searchd/tests/provider_process.rs",
       "symbol": "ServerChallenge",
       "signal": "digest-type-review",
