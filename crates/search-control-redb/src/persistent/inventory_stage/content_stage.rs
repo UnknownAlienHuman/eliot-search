@@ -242,12 +242,16 @@ impl OwnerContentStage {
             initialize_content_tables(self, &published, &completed, &check)?;
             check.reserve(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES))?;
             let decoder = SourceContentManifestDecoder::new(self.header).map_err(encoding_error)?;
+            // Do not install a writable owner until the original context has
+            // accepted the final observation. A one-shot refusal stays unknown
+            // even if a later invocation of the same callback would permit work.
+            check.check(Point::MutationComplete)?;
             self.published = Some(published);
             self.artifact_rows = Some(publication.rows());
             self.attempt = Some(completed);
             self.decoder = Some(decoder);
             self.phase = ContentPhase::Writing;
-            check.check(Point::MutationComplete)
+            Ok(())
         })();
         result.map_err(|control| {
             check.failure(if dispatched {

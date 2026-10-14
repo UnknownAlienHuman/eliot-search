@@ -230,6 +230,77 @@ fn unknown_content_publication_keeps_the_original_attempt_and_blocks_retry() {
     );
 }
 
+fn unpublished_empty_content_stage(scratch: &Scratch) -> (
+    OwnerContentStage,
+    Vec<Vec<u8>>,
+    crate::migration::SourceImportRecordArtifactPublication<Platform>,
+    Platform,
+) {
+    let inventory = stream(&rows());
+    let mut reader = readback(scratch, &inventory);
+    for row in &inventory { reader.compare(row, deadline(), okay).unwrap(); }
+    let receipt = reader.finish(deadline(), okay).unwrap();
+    let original = binding();
+    let header = SourceContentManifestHeader {
+        target_namespace: original.target,
+        legacy_namespace: original.legacy_namespace,
+        catalog_snapshot: original.catalog_snapshot,
+        source_plan: search_contracts::Sha256Digest32::from_bytes(*receipt.owner.source.artifact.chain()),
+        expected_objects: 0,
+    };
+    let platform = Platform::default();
+    let (content_rows, publication) = content_artifact(scratch, platform.clone(), header, &[]);
+    (receipt.into_content_stage(0, deadline(), okay).unwrap(), content_rows, publication, platform)
+}
+
+#[test]
+fn final_content_publication_refusal_cannot_be_revived_by_the_same_callback() {
+    use std::cell::{Cell, RefCell};
+    // Discover the actual successful boundary trace instead of hard-coding a
+    // callback ordinal. The fault is injected only at its last checkpoint.
+    let probe_scratch = Scratch::new();
+    let (mut probe, _, mut probe_publication, probe_platform) = unpublished_empty_content_stage(&probe_scratch);
+    let successful_work = RefCell::new(Vec::new());
+    probe.publish_content(&mut probe_publication, &probe_platform, deadline(), |work| {
+        successful_work.borrow_mut().push(work);
+        Ok::<(), &str>(())
+    }).unwrap();
+    let successful_work = successful_work.into_inner();
+    assert_eq!(successful_work.last(), Some(&Work::Checkpoint));
+
+    let scratch = Scratch::new();
+    let (mut stage, content_rows, mut publication, platform) = unpublished_empty_content_stage(&scratch);
+    let final_name = publication.final_name().to_owned();
+    let observed = RefCell::new(Vec::new());
+    let refused = Cell::new(false);
+    let original_callback = |work| {
+        let mut observed = observed.borrow_mut();
+        observed.push(work);
+        if observed.len() == successful_work.len() && !refused.replace(true) {
+            Err("original terminal checkpoint refused once")
+        } else {
+            Ok(())
+        }
+    };
+    let failure = stage.publish_content(&mut publication, &platform, deadline(), original_callback)
+        .err().unwrap();
+    assert_eq!(*observed.borrow(), successful_work);
+    assert!(refused.get());
+    assert_eq!(failure.control, ControlError::CommitOutcomeUnknown);
+    assert_eq!(failure.first_context, Some("original terminal checkpoint refused once"));
+    assert!(scratch.0.join(final_name).is_file());
+    assert_eq!(stage.table_count_for_test(), 12);
+    // The very same callback permits subsequent observations; the owner must
+    // remain unusable rather than inherit that later permission.
+    original_callback(Work::Checkpoint).unwrap();
+    assert_eq!(stage.publish_content(&mut publication, &platform, deadline(), original_callback)
+        .err().unwrap().control, ControlError::CommitOutcomeUnknown);
+    assert_eq!(stage.push(&content_rows[0], deadline(), original_callback)
+        .err().unwrap().control, ControlError::CommitOutcomeUnknown);
+    assert_eq!(stage.begin_readback(deadline(), original_callback)
+        .err().unwrap().control, ControlError::CommitOutcomeUnknown);
+}
+
 #[test]
 fn empty_content_stream_is_read_back_as_explicit_missing_occurrences() {
     let scratch = Scratch::new();
