@@ -228,7 +228,7 @@ impl GitTree {
         Ok((matches.len() == 1).then(|| matches.remove(0)))
     }
 
-    /// Reads one exact regular committed blob with the planner byte ceiling.
+    /// Reads one exact regular committed blob with the product byte ceiling.
     ///
     /// # Errors
     ///
@@ -276,7 +276,7 @@ impl GitTree {
         if size > max_bytes {
             return Err(GitTreeError::new(
                 "CONTEXT_BUDGET_EXCEEDED",
-                format!("committed file exceeds planner byte ceiling: {path}"),
+                format!("committed file exceeds product byte ceiling: {path}"),
             ));
         }
         let output = run_git(
