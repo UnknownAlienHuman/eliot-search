@@ -26,7 +26,7 @@ use crate::query::LegExecutionState;
 use crate::reasons::SearchReasonCodeV1;
 use crate::results::Coverage;
 use crate::{ContractError, ContractErrorKind};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Closed ordered frame vocabulary of one additive progressive exchange.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -330,6 +330,38 @@ impl EvidenceTerminalFrame {
             return Err(ContractError::new(
                 ContractErrorKind::InvalidTaggedVariant,
                 "terminal_frame.kind",
+            ));
+        }
+        // Summary presence is not completion: bind each summary to one unique
+        // requested leg. Partial/failure may omit legs; success may not.
+        let mut requested = BTreeSet::new();
+        for leg in &self.coverage.requested_legs {
+            if !requested.insert(&leg.leg_ref) {
+                return Err(ContractError::new(
+                    ContractErrorKind::Duplicate,
+                    "terminal_frame.duplicate_requested_leg",
+                ));
+            }
+        }
+        let mut executed = BTreeSet::new();
+        for summary in &self.coverage.executed_legs {
+            if !requested.contains(&summary.leg_ref) {
+                return Err(ContractError::new(
+                    ContractErrorKind::FamilyMismatch,
+                    "terminal_frame.foreign_executed_leg",
+                ));
+            }
+            if !executed.insert(&summary.leg_ref) {
+                return Err(ContractError::new(
+                    ContractErrorKind::Duplicate,
+                    "terminal_frame.duplicate_executed_leg",
+                ));
+            }
+        }
+        if self.terminal == EvidenceTerminalKind::Success && executed != requested {
+            return Err(ContractError::new(
+                ContractErrorKind::ContradictoryState,
+                "terminal_frame.success_with_missing_execution",
             ));
         }
         // A success terminal may never claim complete-negative coverage without

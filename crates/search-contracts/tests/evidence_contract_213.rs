@@ -288,3 +288,122 @@ fn v1_recipe_registry_spelling_is_unchanged() {
         );
     }
 }
+
+fn terminal_requesting_one_leg() -> EvidenceTerminalFrame {
+    EvidenceTerminalFrame {
+        header: EvidenceFrameHeader {
+            request_id: RequestId::from_bytes([1; 16]),
+            kind: EvidenceFrameKind::Terminal,
+            event_sequence: 3,
+            profile_id: ProfileId::new("lexical-v1").expect("profile"),
+        },
+        terminal: EvidenceTerminalKind::Success,
+        coverage: Coverage {
+            requested_legs: BoundedList::new(vec![LegDescriptor {
+                leg_ref: OpaqueId::new("L").expect("leg"),
+                leg_kind: LegKind::Lexical,
+                scoring_partition_ref: None,
+                profile_id: ProfileId::new("lexical-v1").expect("profile"),
+            }])
+            .expect("requested"),
+            executed_legs: BoundedList::empty(),
+            represented_memberships: BoundedSet::empty(),
+            represented_source_lineages: BoundedSet::empty(),
+            omitted_or_failed_legs: BoundedList::empty(),
+            candidate_validation_gaps: BoundedList::empty(),
+            observation_freshness: ObservationFreshness {
+                state: ObservationFreshnessState::Unknown,
+                observation_cursor_revision: ObservationCursorRevision::new(1),
+                observed_age_ms: None,
+            },
+            unknowns: BoundedList::empty(),
+            denominator_kind: CoverageDenominatorKind::CandidateScope,
+        },
+        reason_codes: BoundedSet::empty(),
+        budget_exhausted: false,
+    }
+}
+fn completed_leg(name: &str) -> LegExecutionSummary {
+    LegExecutionSummary {
+        leg_ref: OpaqueId::new(name).expect("leg"),
+        state: LegExecutionState::Completed,
+        nominated_count: 0,
+        validated_count: 0,
+        reason_codes: BoundedSet::empty(),
+        receipt_ref: ReceiptRef::new("fixture-only").expect("receipt"),
+    }
+}
+
+#[test]
+fn success_requires_execution_of_each_requested_leg_even_for_zero_results() {
+    let mut terminal = terminal_requesting_one_leg();
+    terminal
+        .coverage
+        .validate()
+        .expect("generic coverage shape is valid");
+    assert!(
+        terminal.validate().is_err(),
+        "no summaries must not mean work completed"
+    );
+    terminal.coverage.executed_legs = BoundedList::new(vec![completed_leg("L")]).expect("summary");
+    terminal
+        .validate()
+        .expect("completed leg with zero candidates is legitimate success");
+    for state in [
+        LegExecutionState::Partial,
+        LegExecutionState::Failed,
+        LegExecutionState::Cancelled,
+        LegExecutionState::DiscardedContaminated,
+    ] {
+        let mut incomplete = completed_leg("L");
+        incomplete.state = state;
+        terminal.coverage.executed_legs = BoundedList::new(vec![incomplete]).expect("summary");
+        assert!(terminal.validate().is_err(), "{state:?} cannot be success");
+    }
+}
+
+#[test]
+fn terminal_leg_accounting_rejects_duplicate_or_foreign_ids() {
+    for kind in EvidenceTerminalKind::ALL {
+        let mut terminal = terminal_requesting_one_leg();
+        terminal.terminal = kind;
+        terminal.coverage.executed_legs =
+            BoundedList::new(vec![completed_leg("L"), completed_leg("L")]).expect("summaries");
+        assert!(
+            terminal.validate().is_err(),
+            "duplicate summaries cannot cover another leg"
+        );
+        terminal.coverage.executed_legs =
+            BoundedList::new(vec![completed_leg("foreign")]).expect("summary");
+        assert!(
+            terminal.validate().is_err(),
+            "foreign completed leg is not requested"
+        );
+        terminal.coverage.executed_legs =
+            BoundedList::new(vec![completed_leg("L")]).expect("summary");
+        let requested = terminal
+            .coverage
+            .requested_legs
+            .iter()
+            .next()
+            .expect("leg")
+            .clone();
+        terminal.coverage.requested_legs =
+            BoundedList::new(vec![requested.clone(), requested]).expect("legs");
+        assert!(
+            terminal.validate().is_err(),
+            "duplicate requested IDs are malformed"
+        );
+    }
+}
+
+#[test]
+fn partial_and_failure_may_report_missing_execution_without_claiming_success() {
+    let mut terminal = terminal_requesting_one_leg();
+    for kind in [EvidenceTerminalKind::Partial, EvidenceTerminalKind::Failure] {
+        terminal.terminal = kind;
+        terminal
+            .validate()
+            .expect("absence of execution remains a non-success outcome");
+    }
+}

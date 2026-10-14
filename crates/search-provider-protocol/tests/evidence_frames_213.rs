@@ -544,3 +544,67 @@ fn both_result_families_round_trip_nonempty_and_zero_with_strict_refusals() {
         }
     }
 }
+
+#[test]
+fn zero_result_success_requires_exact_completed_leg_accounting_on_the_wire() {
+    let mut terminal = EvidenceTerminalFrame {
+        header: header(EvidenceFrameKind::Terminal, 3),
+        terminal: EvidenceTerminalKind::Success,
+        coverage: coverage(CoverageDenominatorKind::CandidateScope),
+        reason_codes: BoundedSet::empty(),
+        budget_exhausted: false,
+    };
+    terminal.coverage.requested_legs = BoundedList::new(vec![LegDescriptor {
+        leg_ref: OpaqueId::new("L").expect("leg"),
+        leg_kind: LegKind::Lexical,
+        scoring_partition_ref: None,
+        profile_id: profile(),
+    }])
+    .expect("requested");
+    assert!(proto::encode_evidence_frame(&EvidenceFrameV2::Terminal(terminal.clone())).is_err());
+    terminal.terminal = EvidenceTerminalKind::Partial;
+    let partial = EvidenceFrameV2::Terminal(terminal.clone());
+    let wire = proto::encode_evidence_frame(&partial).expect("honest partial");
+    assert_json(&wire);
+    assert_eq!(
+        proto::decode_evidence_frame(&wire).expect("decode partial"),
+        partial
+    );
+
+    terminal.terminal = EvidenceTerminalKind::Success;
+    terminal.coverage.executed_legs = BoundedList::new(vec![LegExecutionSummary {
+        leg_ref: OpaqueId::new("L").expect("leg"),
+        state: LegExecutionState::Completed,
+        nominated_count: 0,
+        validated_count: 0,
+        reason_codes: BoundedSet::empty(),
+        receipt_ref: ReceiptRef::new("fixture-only").expect("receipt"),
+    }])
+    .expect("summary");
+    let success = EvidenceFrameV2::Terminal(terminal);
+    let wire = proto::encode_evidence_frame(&success).expect("zero matches after completed leg");
+    assert_json(&wire);
+    assert_eq!(
+        proto::decode_evidence_frame(&wire).expect("decode success"),
+        success
+    );
+    let text = String::from_utf8(wire).expect("text");
+    let summary = r#"{"leg_ref":"L","state":"completed","nominated_count":0,"validated_count":0,"reason_codes":[],"receipt_ref":"fixture-only"}"#;
+    let executed = format!(r#""executed_legs":[{summary}]"#);
+    for replacement in [
+        r#""executed_legs":[]"#.to_owned(),
+        format!(r#""executed_legs":[{summary},{summary}]"#),
+        format!(
+            r#""executed_legs":[{}]"#,
+            summary.replace(r#""leg_ref":"L""#, r#""leg_ref":"foreign""#)
+        ),
+        format!(
+            r#""executed_legs":[{}]"#,
+            summary.replace(r#""state":"completed""#, r#""state":"partial""#)
+        ),
+    ] {
+        let forged = mutate(&text, &executed, &replacement);
+        assert_json(forged.as_bytes());
+        assert!(proto::decode_evidence_frame(forged.as_bytes()).is_err());
+    }
+}
