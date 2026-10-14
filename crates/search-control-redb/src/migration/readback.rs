@@ -30,7 +30,18 @@ impl SourceMappingComparison {
     ) -> Result<Self, ControlError> {
         validate_counts(expected, binding)?;
         if let Some(content) = content { content.validate_counts(expected)?; }
-        let (prefix, sealed) = read_mapping_in(database, binding, content, owner_profile, deadline, work)?;
+        let (prefix, sealed) = read_mapping_in(database, binding, content, owner_profile, None, deadline, work)?;
+        if !sealed || prefix.expected != expected { return Err(ControlError::MigrationUnverified); }
+        Ok(Self { prefix })
+    }
+
+    pub(crate) fn begin_inventory_in(database: &Database, binding: SourceImportBinding,
+        expected: SourceImportCounts, owner_profile: &[u8], inventory_profile: &[u8],
+        deadline: Instant, work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<Self, ControlError> {
+        validate_counts(expected, binding)?;
+        let (prefix, sealed) = read_mapping_in(database, binding, None,
+            Some(owner_profile), Some(inventory_profile), deadline, work)?;
         if !sealed || prefix.expected != expected { return Err(ControlError::MigrationUnverified); }
         Ok(Self { prefix })
     }
@@ -257,15 +268,18 @@ pub(super) fn open_import(
         .set_cache_size(8 * 1024 * 1024)
         .create_file(file)
         .map_err(|_| ControlError::StoreUnavailable)?;
-    let (prefix, sealed) = read_mapping_in(&database, binding, content, None, deadline, &INERT_WORK)?;
+    let (prefix, sealed) = read_mapping_in(&database, binding, content, None, None, deadline, &INERT_WORK)?;
     Ok((database, prefix, sealed))
 }
 
 fn read_mapping_in(database: &Database, binding: SourceImportBinding,
-    content: Option<SourceContentManifest>, owner_profile: Option<&[u8]>, deadline: Instant,
+    content: Option<SourceContentManifest>, owner_profile: Option<&[u8]>, inventory_profile: Option<&[u8]>, deadline: Instant,
     work: &dyn Fn(Work) -> Result<(), ControlError>,
 ) -> Result<(PrefixReadback, bool), ControlError> {
     if owner_profile.is_some_and(|profile| profile.is_empty() || profile.len() > 4096) {
+        return Err(ControlError::BudgetExceeded);
+    }
+    if inventory_profile.is_some_and(|profile| profile.is_empty() || profile.len() > 4096 || owner_profile.is_none()) {
         return Err(ControlError::BudgetExceeded);
     }
     reserve(deadline, work, Work::Allocate(8192))?;
@@ -275,12 +289,6 @@ fn read_mapping_in(database: &Database, binding: SourceImportBinding,
     let read = database
         .begin_read()
         .map_err(|_| ControlError::StoreUnavailable)?;
-    let names = read
-        .list_tables()
-        .map_err(|_| ControlError::StoreCorrupt)?
-        .take(8)
-        .map(|table| table.name().to_owned())
-        .collect::<std::collections::BTreeSet<_>>();
     let mut required = [META.name(), EVENTS.name(), SOURCES.name(), REVISIONS.name()]
         .into_iter()
         .map(str::to_owned)
@@ -289,6 +297,13 @@ fn read_mapping_in(database: &Database, binding: SourceImportBinding,
         required.extend(["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1"]
             .into_iter().map(str::to_owned));
     }
+    if inventory_profile.is_some() {
+        required.extend(["eliot.import.inventory.meta.v1", "eliot.import.inventory.rows.v1"]
+            .into_iter().map(str::to_owned));
+    }
+    let names = read.list_tables().map_err(|_| ControlError::StoreCorrupt)?
+        .take(required.len() + 1).map(|table| table.name().to_owned())
+        .collect::<std::collections::BTreeSet<_>>();
     if names != required
         || read
             .list_multimap_tables()
@@ -297,6 +312,12 @@ fn read_mapping_in(database: &Database, binding: SourceImportBinding,
             .is_some()
     {
         return Err(ControlError::SchemaMismatch);
+    }
+    if let Some(expected) = inventory_profile {
+        let definition: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("eliot.import.inventory.meta.v1");
+        let meta = read.open_table(definition).map_err(|_| ControlError::StoreCorrupt)?;
+        if meta.get("profile").map_err(|_| ControlError::StoreCorrupt)?
+            .is_none_or(|value| value.value() != expected) { return Err(ControlError::IdentityMismatch); }
     }
     let (counts, sealed) = {
         let meta = read

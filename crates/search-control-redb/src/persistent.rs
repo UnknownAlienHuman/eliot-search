@@ -33,6 +33,7 @@ pub use bootstrap::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBoot
     MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
     MigrationBootstrapPlatform, MigrationBootstrapReceipt, MigrationBootstrapWork};
 pub use bootstrap::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
+pub use bootstrap::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
 
 pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
@@ -56,6 +57,7 @@ const CACHE_BYTES: usize = 8 * 1024 * 1024;
 enum TableProfile {
     ControlOnly,
     SourceStage(Vec<u8>),
+    InventoryStage { source: Vec<u8>, inventory: Vec<u8> },
 }
 
 /// Concrete redb owner. Vendor values, guards, paths and errors stay private.
@@ -362,21 +364,36 @@ fn verify_tables(read: &ReadTransaction, profile: &TableProfile) -> Result<(), C
     let combined = ["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1",
         "eliot.import.source-map.events.v1", "eliot.import.source-map.meta.v1",
         "eliot.import.source-map.revisions.v1", "eliot.import.source-map.sources.v1"];
+    let inventory = ["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1",
+        "eliot.import.inventory.meta.v1", "eliot.import.inventory.rows.v1",
+        "eliot.import.source-map.events.v1", "eliot.import.source-map.meta.v1",
+        "eliot.import.source-map.revisions.v1", "eliot.import.source-map.sources.v1"];
     let expected = match profile { TableProfile::ControlOnly => control.as_slice(),
-        TableProfile::SourceStage(_) => combined.as_slice() };
+        TableProfile::SourceStage(_) => combined.as_slice(),
+        TableProfile::InventoryStage { .. } => inventory.as_slice() };
     let mut names = read.list_tables().map_err(|error| map_storage_error(&error))?
         .take(expected.len() + 1).map(|table| table.name().to_owned()).collect::<Vec<_>>();
     names.sort();
     if !names.iter().map(String::as_str).eq(expected.iter().copied())
         || read.list_multimap_tables().map_err(|error| map_storage_error(&error))?.next().is_some()
     { return Err(ControlError::SchemaMismatch); }
-    if let TableProfile::SourceStage(expected) = profile {
+    let source_profile = match profile {
+        TableProfile::ControlOnly => None,
+        TableProfile::SourceStage(source) | TableProfile::InventoryStage { source, .. } => Some(source),
+    };
+    if let Some(expected) = source_profile {
         let definition: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.import.source-map.meta.v1");
         let table = read.open_table(definition).map_err(map_table_error)?;
         if table.get("owner_source_stage.v1").map_err(|error| map_storage_error(&error))?
             .is_none_or(|value| value.value() != expected.as_slice()) {
             return Err(ControlError::IdentityMismatch);
         }
+    }
+    if let TableProfile::InventoryStage { inventory, .. } = profile {
+        let definition: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.import.inventory.meta.v1");
+        let table = read.open_table(definition).map_err(map_table_error)?;
+        if table.get("profile").map_err(|error| map_storage_error(&error))?
+            .is_none_or(|value| value.value() != inventory.as_slice()) { return Err(ControlError::IdentityMismatch); }
     }
     Ok(())
 }

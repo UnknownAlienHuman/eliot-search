@@ -19,6 +19,7 @@ mod codec;
 #[path = "source_stage.rs"]
 mod source_stage;
 pub use source_stage::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
+pub use source_stage::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
 
 const LIMITS: JournalLimits = JournalLimits {
     max_key_bytes: 128, max_value_bytes: 4096, max_records: 8,

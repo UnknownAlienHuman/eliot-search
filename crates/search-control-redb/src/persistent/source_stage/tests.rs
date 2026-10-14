@@ -8,7 +8,7 @@ use std::sync::atomic::Ordering;
 
 fn okay(_: MigrationBootstrapWork) -> Result<(), ()> { Ok(()) }
 
-fn rows() -> Vec<SourceImportRow> {
+pub(super) fn rows() -> Vec<SourceImportRow> {
     let hash = |byte| Sha256Digest32::from_bytes([byte; 32]);
     let first = SourceImportRow { sequence: 1, source: SourceId::from_bytes([1; 16]),
         revision: SourceRevisionId::from_bytes([2; 16]), previous_revision: None,
@@ -30,10 +30,10 @@ fn rows() -> Vec<SourceImportRow> {
     retired.previous_source_event = retained.event;
     vec![first, retained, retired]
 }
-fn counts() -> SourceImportCounts {
+pub(super) fn counts() -> SourceImportCounts {
     SourceImportCounts { events: 3, sources: 1, occurrences: 1, retained_events: 1, retirements: 1 }
 }
-fn source_map(scratch: &Scratch, platform: Platform)
+pub(super) fn source_map(scratch: &Scratch, platform: Platform)
     -> SourceImportRecordArtifactPublication<Platform> {
     let mut writer = SourceImportRecordArtifact::create(&scratch.0, ".source-map.mapping-fixture.tmp", platform, deadline()).unwrap();
     writer.push(b"bounded source-map metadata\n", deadline()).unwrap();
@@ -50,7 +50,7 @@ fn completed(scratch: &Scratch) -> MigrationBootstrap {
     owner.publish_inventory(&mut inventory, &platform, deadline(), okay).unwrap();
     owner
 }
-fn map_binding(publication: &SourceImportRecordArtifactPublication<Platform>) -> SourceImportBinding {
+pub(super) fn map_binding(publication: &SourceImportRecordArtifactPublication<Platform>) -> SourceImportBinding {
     SourceImportBinding { target_namespace: binding().target, legacy_namespace: binding().legacy_namespace,
         catalog_snapshot: binding().catalog_snapshot,
         mapping_profile: Sha256Digest32::from_bytes(crate::migration::source_mapping_profile_digest()),

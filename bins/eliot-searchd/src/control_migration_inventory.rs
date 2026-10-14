@@ -158,7 +158,7 @@ fn artifact_reason(error: SourceImportRecordArtifactError<String>) -> String {
     }
 }
 
-fn compile(
+pub(super) fn compile(
     source: &MigrationSource<'_, '_, '_>,
     root: &Path,
     target: SourceNamespaceId,
