@@ -28,7 +28,8 @@ mod record_chain;
 mod writer;
 
 pub use content::{
-    SourceContentManifest, SourceContentManifestEncoder,
+    SourceContentManifest, SourceContentManifestDecodedRow,
+    SourceContentManifestDecoder, SourceContentManifestEncoder,
     SourceContentManifestEncodingError, SourceContentManifestHeader,
     SourceContentManifestSummary, SourceContentObjectReadback,
     source_content_profile_digest,

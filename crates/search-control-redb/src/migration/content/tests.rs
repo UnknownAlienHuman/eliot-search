@@ -118,3 +118,177 @@ fn order_count_and_bounds_fail_closed() {
         Err(SourceContentManifestEncodingError::InvalidState)
     );
 }
+
+fn fixture_header(expected_objects: u64) -> SourceContentManifestHeader {
+    SourceContentManifestHeader {
+        target_namespace: SourceNamespaceId::from_bytes([1; 16]),
+        legacy_namespace: digest(2),
+        catalog_snapshot: digest(3),
+        source_plan: digest(4),
+        expected_objects,
+    }
+}
+
+fn fixture_object() -> SourceContentObjectReadback {
+    SourceContentObjectReadback {
+        legacy_source_id: digest(5),
+        legacy_revision_id: digest(6),
+        content_sha256: digest(7),
+        byte_length: 42,
+        content_blake3: Blake3Digest32::from_bytes([8; 32]),
+    }
+}
+
+fn encoded_rows(
+    header: SourceContentManifestHeader,
+    object: Option<SourceContentObjectReadback>,
+) -> (Vec<Vec<u8>>, SourceContentManifestSummary) {
+    let mut encoder = SourceContentManifestEncoder::new(header).expect("encoder");
+    let mut rows = vec![encoder.header_row().expect("header")];
+    if let Some(object) = object {
+        rows.push(encoder.object_row(object).expect("object"));
+    }
+    let (end, summary) = encoder.finish().expect("end");
+    rows.push(end);
+    (rows, summary)
+}
+
+fn replace_once(row: &[u8], from: &str, to: &str) -> Vec<u8> {
+    String::from_utf8(row.to_vec())
+        .expect("fixture utf8")
+        .replacen(from, to, 1)
+        .into_bytes()
+}
+
+#[test]
+fn decoder_round_trips_empty_and_single_object_manifests() {
+    for expected_objects in [0, 1] {
+        let object = (expected_objects == 1).then(fixture_object);
+        let (rows, expected_summary) = encoded_rows(fixture_header(expected_objects), object);
+        let mut decoder = SourceContentManifestDecoder::new(fixture_header(expected_objects))
+            .expect("decoder");
+
+        assert_eq!(
+            decoder.push(&rows[0]),
+            Ok(SourceContentManifestDecodedRow::Header)
+        );
+        if let Some(object) = object {
+            assert_eq!(
+                decoder.push(&rows[1]),
+                Ok(SourceContentManifestDecodedRow::Object(object))
+            );
+        }
+        let end_index = if object.is_some() { 2 } else { 1 };
+        assert_eq!(
+            decoder.push(&rows[end_index]),
+            Ok(SourceContentManifestDecodedRow::End(expected_summary))
+        );
+        assert_eq!(decoder.finish(), Ok(expected_summary));
+    }
+}
+
+#[test]
+fn decoder_rejects_noncanonical_rows_and_refuses_stickily() {
+    let header = fixture_header(1);
+    let object = fixture_object();
+    let (rows, _) = encoded_rows(header, Some(object));
+    let source = object.legacy_source_id.to_string();
+    let revision = object.legacy_revision_id.to_string();
+    let ordered = format!(
+        "\"legacy_source_id\":\"{source}\",\"legacy_revision_id\":\"{revision}\""
+    );
+    let reordered = format!(
+        "\"legacy_revision_id\":\"{revision}\",\"legacy_source_id\":\"{source}\""
+    );
+    let mut malformed_utf8 = rows[1].clone();
+    let digest_start = malformed_utf8
+        .windows(4)
+        .position(|window| window == b"0505")
+        .expect("source digest");
+    malformed_utf8[digest_start] = 0xff;
+    let missing_lf = rows[1][..rows[1].len() - 1].to_vec();
+    let mut multiple_lf = rows[1].clone();
+    multiple_lf.push(b'\n');
+
+    let invalid_rows = [
+        replace_once(&rows[1], "}\n", ",\"unknown\":0}\n"),
+        replace_once(&rows[1], "\"ordinal\":1,", "\"ordinal\":1,\"ordinal\":1,"),
+        replace_once(
+            &rows[1],
+            "\"legacy_source_id\":\"0",
+            "\"legacy_source_id\":\"\\u0030",
+        ),
+        replace_once(&rows[1], &ordered, &reordered),
+        replace_once(&rows[1], "\"byte_length\":42", "\"byte_length\":042"),
+        malformed_utf8,
+        missing_lf,
+        multiple_lf,
+        b"malformed\n".to_vec(),
+    ];
+
+    for invalid_row in invalid_rows {
+        let mut decoder = SourceContentManifestDecoder::new(header).expect("decoder");
+        decoder.push(&rows[0]).expect("header");
+        let refusal = decoder.push(&invalid_row).expect_err("noncanonical row");
+        assert_eq!(decoder.push(&rows[1]), Err(refusal));
+        assert_eq!(decoder.finish(), Err(refusal));
+    }
+
+    let wrong_algorithm = replace_once(&rows[0], "blake3_256", "sha256");
+    let mut decoder = SourceContentManifestDecoder::new(header).expect("decoder");
+    assert_eq!(
+        decoder.push(&wrong_algorithm),
+        Err(SourceContentManifestEncodingError::InvalidHeader)
+    );
+
+    let other_header = SourceContentManifestHeader {
+        target_namespace: SourceNamespaceId::from_bytes([9; 16]),
+        ..fixture_header(1)
+    };
+    let (foreign_rows, _) = encoded_rows(other_header, Some(object));
+    let mut decoder = SourceContentManifestDecoder::new(header).expect("decoder");
+    assert_eq!(
+        decoder.push(&foreign_rows[0]),
+        Err(SourceContentManifestEncodingError::InvalidHeader)
+    );
+}
+
+#[test]
+fn decoder_rejects_ordinals_footers_trailing_rows_and_oversize() {
+    let header = fixture_header(1);
+    let object = fixture_object();
+    let (rows, _) = encoded_rows(header, Some(object));
+
+    let mut decoder = SourceContentManifestDecoder::new(header).expect("decoder");
+    decoder.push(&rows[0]).expect("header");
+    let wrong_ordinal = replace_once(&rows[1], "\"ordinal\":1", "\"ordinal\":2");
+    assert_eq!(
+        decoder.push(&wrong_ordinal),
+        Err(SourceContentManifestEncodingError::ObjectCountMismatch)
+    );
+
+    let mut decoder = SourceContentManifestDecoder::new(header).expect("decoder");
+    decoder.push(&rows[0]).expect("header");
+    decoder.push(&rows[1]).expect("object");
+    let wrong_footer = replace_once(&rows[2], "\"source_bytes\":42", "\"source_bytes\":43");
+    assert_eq!(
+        decoder.push(&wrong_footer),
+        Err(SourceContentManifestEncodingError::InvalidState)
+    );
+
+    let mut decoder = SourceContentManifestDecoder::new(header).expect("decoder");
+    decoder.push(&rows[0]).expect("header");
+    decoder.push(&rows[1]).expect("object");
+    decoder.push(&rows[2]).expect("end");
+    assert_eq!(
+        decoder.push(&rows[0]),
+        Err(SourceContentManifestEncodingError::InvalidState)
+    );
+
+    let mut decoder = SourceContentManifestDecoder::new(header).expect("decoder");
+    let oversized = vec![b'x'; super::super::MAX_SOURCE_IMPORT_ROW_BYTES + 1];
+    assert_eq!(
+        decoder.push(&oversized),
+        Err(SourceContentManifestEncodingError::ObjectLimitExceeded)
+    );
+}
