@@ -7,6 +7,12 @@ two-pass source-map publication, same-database mapping import and full readback.
 The owning partial receipt reports `complete_inventory_candidate_not_performed`;
 this route grants no serving, candidate, cutover, restart or cleanup authority.
 
+Contextual legacy unprotect uses the original startup request/work pair or the
+separately admitted command pair for mandatory native-clear accounting, including
+after ordinary work refuses. The protector admits its final validated plaintext
+capacity and copy/zeroization work; revision callers do not reserve that same
+capacity again. The revision and preparation consumers share this guarantee.
+
 The explicit offline bootstrap command composes the `search-control-redb`
 original-operation bootstrap and inventory producer under one retained native
 read child. The output pins and target are external/inactive; source custody is
