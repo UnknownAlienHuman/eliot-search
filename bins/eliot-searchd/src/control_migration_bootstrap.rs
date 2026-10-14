@@ -26,7 +26,7 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     output.verify(source).map_err(|_| unknown())?;
     source.charge(Work::Allocate(4096)).map_err(|_| unknown())?;
-    Ok(receipt.render_json())
+    Ok(receipt.receipt.render_json())
 }
 
 pub(super) fn initialize(source: &MigrationSource<'_, '_, '_>, target: SourceNamespaceId,

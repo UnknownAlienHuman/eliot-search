@@ -18,6 +18,7 @@ mod cutover;
 #[allow(clippy::module_name_repetitions)]
 mod cutover_artifact;
 mod mapping;
+mod mapping_codec;
 mod model;
 mod inventory;
 mod output_artifact;
@@ -53,6 +54,8 @@ pub use mapping::{
     SourceMappingError, SourceMappingHeader, SourceMappingPlanner,
     SourceMappingSummary, source_mapping_profile_digest,
 };
+pub use mapping_codec::{SourceMappingManifestDecoder, SourceMappingDecodedRow,
+    encode_source_mapping_header, encode_source_mapping_event, encode_source_mapping_summary};
 pub use model::{
     SourceImportBinding, SourceImportCounts, SourceImportRow,
     SourceLifecycleFlags,
@@ -85,6 +88,7 @@ pub use record_artifact::{
     SourceImportFrozenRecordArtifact, SourceImportPublishedRecordArtifact,
     SourceImportRecordArtifact, SourceImportRecordArtifactError,
     SourceImportRecordArtifactObservation, SourceImportRecordReadback,
+    SourceImportRecordRows,
     SourceImportVerifiedRecordArtifact, inspect_source_import_record_artifact,
     SourceImportRecordArtifactPlatform, SourceImportRecordArtifactPublication,
     SourceImportRecordArtifactPublicationDisposition, SourceImportRecordArtifactCleanupDisposition,

@@ -8,8 +8,13 @@ original-bound source-content publication, import and full readback.
 The owning partial receipt reports complete_semantic_candidate_not_performed;
 this route grants no serving, candidate, cutover, restart or cleanup authority.
 
-Content uses the frozen source-content v1 encoder/decoder and rereads retained
-plaintext for every artifact verification, import and independent comparison pass.
+Content and inventory share two independent source-backed detailed-read passes,
+using the frozen source-content v1 and location-inventory v2 encoders. Each current
+revision's final representations stay pinned through readback and physical-row
+emission. Inventory reuses their exact raw SHA/length/native-identity observations;
+plaintext is released before the next revision. Import and independent target
+readback consume fresh verified cursors over the retained immutable artifacts.
+Temporary/orphan residue remains a separate physical-read denominator.
 The original request supplies all native and record-artifact work; no new deadline,
 directory, source inventory or digest cache is created. A linear traversal of
 canonical revision occurrences joins exact legacy source/revision references to

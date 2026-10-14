@@ -194,15 +194,18 @@ fn stale_unmapped_preparation_is_not_a_current_link_and_dangling_links_are_refus
     std::fs::create_dir_all(object_path.parent().unwrap()).unwrap();
     let reference = encode_legacy_preparation_reference(&key, &[0x24; 32], 300, LegacyPreparationProtection::Plaintext).unwrap();
     std::fs::write(&reference_path, reference).unwrap();
-    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::References, &key, reference_path.file_name().unwrap()).unwrap(), "missing target is a dangling link");
+    let view = preparation_links::view(&source, &fixture.0).unwrap();
+    assert!(!preparation_links::is_linked(&source, &view, Tree::References, &key, reference_path.file_name().unwrap()).unwrap(), "missing target is a dangling link");
     std::fs::write(&object_path, b"bounded synthetic object").unwrap();
-    assert!(preparation_links::is_linked(&source, &fixture.0, Tree::References, &key, reference_path.file_name().unwrap()).unwrap());
-    assert!(preparation_links::is_linked(&source, &fixture.0, Tree::Objects, &object, object_path.file_name().unwrap()).unwrap());
-    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::Objects, &object, std::ffi::OsStr::new("wrong.dpapi")).unwrap(), "protection locator cannot be relabelled");
-    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::References, &[0x99; 32], std::ffi::OsStr::new("stale.ref")).unwrap(), "unmapped reference is not silently current");
-    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::Objects, &[0x99; 32], std::ffi::OsStr::new("stale.bin")).unwrap(), "unmapped object is not silently current");
+    let view = preparation_links::view(&source, &fixture.0).unwrap();
+    assert!(preparation_links::is_linked(&source, &view, Tree::References, &key, reference_path.file_name().unwrap()).unwrap());
+    assert!(preparation_links::is_linked(&source, &view, Tree::Objects, &object, object_path.file_name().unwrap()).unwrap());
+    assert!(!preparation_links::is_linked(&source, &view, Tree::Objects, &object, std::ffi::OsStr::new("wrong.dpapi")).unwrap(), "protection locator cannot be relabelled");
+    assert!(!preparation_links::is_linked(&source, &view, Tree::References, &[0x99; 32], std::ffi::OsStr::new("stale.ref")).unwrap(), "unmapped reference is not silently current");
+    assert!(!preparation_links::is_linked(&source, &view, Tree::Objects, &[0x99; 32], std::ffi::OsStr::new("stale.bin")).unwrap(), "unmapped object is not silently current");
     std::fs::hard_link(&object_path, fixture.0.join("external-alias.bin")).unwrap();
-    assert!(!preparation_links::is_linked(&source, &fixture.0, Tree::References, &key, reference_path.file_name().unwrap()).unwrap(), "target containment refusal cannot be downgraded to metadata presence");
+    let view = preparation_links::view(&source, &fixture.0).unwrap();
+    assert!(!preparation_links::is_linked(&source, &view, Tree::References, &key, reference_path.file_name().unwrap()).unwrap(), "target containment refusal cannot be downgraded to metadata presence");
 }
 
 #[test]

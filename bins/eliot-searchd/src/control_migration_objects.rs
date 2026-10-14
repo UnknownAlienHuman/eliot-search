@@ -21,7 +21,8 @@ mod source_plan;
 
 use super::{DirectStore, RevisionMetadata, MAX_REVISION_OBJECT_BYTES, REVISION_DIRECTORY,
     legacy_path, protected_path, read_regular_file, verify_plaintext, verify_revision_identity};
-use super::storage_io::{ensure_directory, join_revision_path, read_revision_object_with_context, revision_object_path_with_context};
+use super::storage_io::{ensure_directory, join_revision_path, read_revision_object_detailed_with_context,
+    read_revision_object_with_context, revision_object_path_with_context};
 use super::migration_context::MigrationContext;
 use search_revision_store::LegacyRevisionObjectWork as Work;
 use crate::revision_protection::{RevisionProtector, PROTECTED_OBJECT_EXTENSION};
@@ -40,18 +41,64 @@ const MAX_PAGE_BYTES: usize = 60 * 1024;
 #[cfg(test)]
 const DEADLINE: Duration = Duration::from_secs(30);
 
-#[cfg(test)]
-struct ObjectEvidence {
+/// Raw representation facts from one successful revision readback.
+///
+/// Contextual facts retain the original owner's native identity. This is an
+/// observation of that read, not a currentness or continuing-custody receipt.
+pub(super) struct RawObjectEvidence {
     encoded_bytes: u64,
     encoded_sha256: [u8; 32],
+    native_identity: Option<(u64, u64)>,
 }
 
-#[cfg(test)]
-impl ObjectEvidence {
-    fn from_bytes(bytes: &[u8]) -> Self {
-        Self { encoded_bytes: bytes.len() as u64, encoded_sha256: sha256::digest(bytes) }
+impl RawObjectEvidence {
+    /// Exact length of the representation read by the source owner.
+    pub(super) const fn encoded_bytes(&self) -> u64 {
+        self.encoded_bytes
     }
 
+    /// SHA-256 of the raw representation, before any protected decoding.
+    pub(super) const fn encoded_sha256(&self) -> &[u8; 32] {
+        &self.encoded_sha256
+    }
+
+    /// Identity copied from the original contextual read, never a reopened path.
+    /// Only the noncontextual legacy inspection may lack this observation.
+    pub(super) const fn native_identity(&self) -> Option<(u64, u64)> {
+        self.native_identity
+    }
+
+    fn from_encoded(
+        object: &RevisionObjectRead, deadline: Option<Instant>, context: Option<&MigrationContext<'_, '_>>,
+    ) -> Result<Self, String> {
+        revision_charge(context, Work::Compare(object.bytes.len()))?;
+        let encoded_sha256 = sha256::digest(&object.bytes);
+        revision_checkpoint(deadline, context)?;
+        Ok(Self {
+            encoded_bytes: object.encoded_bytes,
+            encoded_sha256,
+            native_identity: object.native_identity,
+        })
+    }
+
+    // Called only after verify_plaintext has proved this exact buffer's SHA
+    // and length. Reuse that verified SHA rather than hashing it again.
+    fn from_verified_plaintext(
+        object: &RevisionObjectRead, metadata: &RevisionMetadata, deadline: Option<Instant>,
+        context: Option<&MigrationContext<'_, '_>>,
+    ) -> Result<Self, String> {
+        revision_charge(context, Work::Compare(metadata.content_digest.len()))?;
+        let encoded_sha256 = sha256::decode_digest(&metadata.content_digest)
+            .ok_or_else(|| "DIRECT_REVISION_CONTENT_MISMATCH".to_owned())?;
+        revision_checkpoint(deadline, context)?;
+        Ok(Self {
+            encoded_bytes: object.encoded_bytes,
+            encoded_sha256,
+            native_identity: object.native_identity,
+        })
+    }
+
+    #[cfg(test)]
     fn json(value: Option<&Self>) -> String {
         value.map_or_else(|| "null".to_owned(), |value| format!(
             "{{\"encoded_bytes\":{},\"encoded_sha256\":\"{}\"}}",
@@ -60,12 +107,49 @@ impl ObjectEvidence {
     }
 }
 
-struct RevisionReadback {
+// Raw representation hashing and observation capture are explicitly selected,
+// never added to normal serving or the existing bytes-only import paths.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum RevisionReadbackMode {
+    BytesOnly,
+    RawEvidence,
+}
+
+// One raw buffer and its original read observation; no additional body copy.
+struct RevisionObjectRead {
     bytes: Zeroizing<Vec<u8>>,
-    #[cfg(test)]
-    plaintext: Option<ObjectEvidence>,
-    #[cfg(test)]
-    protected: Option<ObjectEvidence>,
+    encoded_bytes: u64,
+    native_identity: Option<(u64, u64)>,
+}
+
+/// One validated revision and its at-most-two raw representation facts.
+/// No facts escape if decoding, plaintext verification or copy agreement fails.
+pub(super) struct RevisionReadback {
+    bytes: Zeroizing<Vec<u8>>,
+    plaintext: Option<RawObjectEvidence>,
+    protected: Option<RawObjectEvidence>,
+}
+
+impl RevisionReadback {
+    /// Validated plaintext borrowed for the current revision only.
+    pub(super) fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    /// Facts for the plaintext representation, when it was present.
+    pub(super) const fn plaintext(&self) -> Option<&RawObjectEvidence> {
+        self.plaintext.as_ref()
+    }
+
+    /// Facts for the protected wire representation, when it was present.
+    pub(super) const fn protected(&self) -> Option<&RawObjectEvidence> {
+        self.protected.as_ref()
+    }
+
+    /// Preserve the historical bytes-only result without another body read.
+    pub(super) fn into_bytes(self) -> Zeroizing<Vec<u8>> {
+        self.bytes
+    }
 }
 
 #[cfg(test)]
@@ -84,7 +168,7 @@ impl RevisionReadback {
             ),
             json_string(&revision.source_id), json_string(&revision.revision_id),
             json_string(&revision.content_digest), revision.byte_length,
-            ObjectEvidence::json(self.plaintext.as_ref()), ObjectEvidence::json(self.protected.as_ref()), preparation,
+            RawObjectEvidence::json(self.plaintext.as_ref()), RawObjectEvidence::json(self.protected.as_ref()), preparation,
         )
     }
 }
@@ -121,7 +205,7 @@ impl DirectStore {
     /// representation when present. A bad protected object never falls back to
     /// plaintext, and dangling links cannot be mistaken for an absent object.
     pub(super) fn read_revision_detailed(&self, metadata: &RevisionMetadata) -> Result<Vec<u8>, String> {
-        let mut observed = self.read_revision_objects(metadata, None)?;
+        let mut observed = self.read_revision_objects(metadata, None, RevisionReadbackMode::BytesOnly)?;
         // Transfer the successful bytes to the existing caller; rejected buffers
         // and temporary plaintext copies stay inside their zeroizing owners.
         Ok(std::mem::take(&mut *observed.bytes))
@@ -177,7 +261,7 @@ impl DirectStore {
                 break;
             }
             let metadata = pending.next().ok_or_else(|| "DIRECT_MIGRATION_NO_PROGRESS".to_owned())?;
-            let observed = self.read_revision_objects(&metadata, Some(deadline))?;
+            let observed = self.read_revision_objects(&metadata, Some(deadline), RevisionReadbackMode::RawEvidence)?;
             let preparation = super::preparation_store::inspect(
                 &self.root, &self.protector, &self.namespace_id(), &metadata, &observed.bytes, deadline,
             )?;
@@ -229,9 +313,9 @@ impl DirectStore {
     }
 
     fn read_revision_objects(
-        &self, metadata: &RevisionMetadata, deadline: Option<Instant>,
+        &self, metadata: &RevisionMetadata, deadline: Option<Instant>, mode: RevisionReadbackMode,
     ) -> Result<RevisionReadback, String> {
-        read_revision_objects_at(&self.root, Some(&self.protector), metadata, cfg!(windows), deadline)
+        read_revision_objects_at(&self.root, Some(&self.protector), metadata, cfg!(windows), deadline, mode)
     }
 }
 
@@ -242,7 +326,8 @@ fn read_import_revision(
     root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
     deadline: Instant,
 ) -> Result<Zeroizing<Vec<u8>>, String> {
-    read_revision_objects_at(root, protector, metadata, false, Some(deadline)).map(|readback| readback.bytes)
+    read_revision_objects_at(root, protector, metadata, false, Some(deadline), RevisionReadbackMode::BytesOnly)
+        .map(RevisionReadback::into_bytes)
 }
 
 fn read_import_revision_with_context(
@@ -250,20 +335,33 @@ fn read_import_revision_with_context(
     context: &MigrationContext<'_, '_>,
 ) -> Result<Zeroizing<Vec<u8>>, String> {
     read_revision_objects_at_with_context(
-        root, protector, metadata, false, Some(context.deadline()), Some(context),
-    ).map(|readback| readback.bytes)
+        root, protector, metadata, false, Some(context.deadline()), Some(context), RevisionReadbackMode::BytesOnly,
+    ).map(RevisionReadback::into_bytes)
+}
+
+/// Detailed import read under the original caller context, without extra I/O.
+/// Each present raw fact carries the exact original contextual identity; no
+/// replacement-locator observation or substitute identity is supplied.
+pub(super) fn read_import_revision_detailed_with_context(
+    root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
+    context: &MigrationContext<'_, '_>,
+) -> Result<RevisionReadback, String> {
+    read_revision_objects_at_with_context(
+        root, protector, metadata, false, Some(context.deadline()), Some(context), RevisionReadbackMode::RawEvidence,
+    )
 }
 
 fn read_revision_objects_at(
     root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
-    require_protected: bool, deadline: Option<Instant>,
+    require_protected: bool, deadline: Option<Instant>, mode: RevisionReadbackMode,
 ) -> Result<RevisionReadback, String> {
-    read_revision_objects_at_with_context(root, protector, metadata, require_protected, deadline, None)
+    read_revision_objects_at_with_context(root, protector, metadata, require_protected, deadline, None, mode)
 }
 
 fn read_revision_objects_at_with_context(
     root: &Path, protector: Option<&RevisionProtector>, metadata: &RevisionMetadata,
     require_protected: bool, deadline: Option<Instant>, context: Option<&MigrationContext<'_, '_>>,
+    mode: RevisionReadbackMode,
 ) -> Result<RevisionReadback, String> {
     revision_checkpoint(deadline, context)?;
     revision_charge(context, Work::Compare(metadata.revision_id.len()))?;
@@ -284,10 +382,14 @@ fn read_revision_objects_at_with_context(
         || legacy_path(root, &metadata.revision_id),
         |context| revision_object_path_with_context(root, &metadata.revision_id, "bin", Some(context)),
     )?;
-    let encoded = read_optional(&protected_path, MAX_REVISION_OBJECT_BYTES, deadline, context)?;
-    #[cfg(test)]
-    let protected = encoded.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
+    let encoded = read_optional(&protected_path, MAX_REVISION_OBJECT_BYTES, deadline, context, mode)?;
+    let protected = if mode == RevisionReadbackMode::RawEvidence {
+        encoded.as_ref()
+            .map(|object| RawObjectEvidence::from_encoded(object, deadline, context))
+            .transpose()?
+    } else { None };
     let mut protected_bytes = if let Some(encoded) = encoded.as_ref() {
+        let encoded = &encoded.bytes;
         revision_checkpoint(deadline, context)?;
         let protector = protector.ok_or_else(|| "DIRECT_REVISION_KEY_UNAVAILABLE".to_owned())?;
         let decoded = context.map_or_else(
@@ -316,14 +418,16 @@ fn read_revision_objects_at_with_context(
     } else { None };
     drop(encoded);
     revision_checkpoint(deadline, context)?;
-    let plaintext_bytes = read_optional(&plaintext_path, MAX_SCAN_INPUT_BYTES, deadline, context)?;
-    if let Some(bytes) = plaintext_bytes.as_ref() {
+    let plaintext_bytes = read_optional(&plaintext_path, MAX_SCAN_INPUT_BYTES, deadline, context, mode)?;
+    let plaintext = if let Some(object) = plaintext_bytes.as_ref() {
+        let bytes = &object.bytes;
         revision_charge(context, Work::Compare(bytes.len()))?;
         verify_plaintext(metadata, bytes)?;
         revision_checkpoint(deadline, context)?;
-    }
-    #[cfg(test)]
-    let plaintext = plaintext_bytes.as_deref().map(|bytes| ObjectEvidence::from_bytes(bytes));
+        if mode == RevisionReadbackMode::RawEvidence {
+            Some(RawObjectEvidence::from_verified_plaintext(object, metadata, deadline, context)?)
+        } else { None }
+    } else { None };
     if let Some(bytes) = protected_bytes.as_ref() {
         revision_charge(context, Work::Compare(bytes.len()))?;
         verify_plaintext(metadata, bytes)?;
@@ -333,39 +437,55 @@ fn read_revision_objects_at_with_context(
         revision_charge(context, Work::Compare(protected.len()))?;
     }
     if let (Some(protected), Some(plaintext)) = (protected_bytes.as_ref(), plaintext_bytes.as_ref())
-        && protected.as_slice() != plaintext.as_slice()
+        && protected.as_slice() != plaintext.bytes.as_slice()
     {
         return Err("DIRECT_REVISION_IMMUTABLE_CONFLICT".to_owned());
     }
     let bytes = match (protected_bytes.take(), plaintext_bytes) {
         (Some(bytes), _) => bytes,
-        (None, Some(bytes)) if !require_protected => bytes,
+        (None, Some(object)) if !require_protected => object.bytes,
         (None, Some(_)) => return Err("DIRECT_REVISION_PROTECTION_INCOMPLETE".to_owned()),
         (None, None) => return Err("DIRECT_REVISION_MISSING".to_owned()),
     };
     revision_checkpoint(deadline, context)?;
     Ok(RevisionReadback {
         bytes,
-        #[cfg(test)]
         plaintext,
-        #[cfg(test)]
         protected,
     })
 }
 
 fn read_optional(
     path: &Path, maximum: usize, deadline: Option<Instant>, context: Option<&MigrationContext<'_, '_>>,
-) -> Result<Option<Zeroizing<Vec<u8>>>, String> {
+    mode: RevisionReadbackMode,
+) -> Result<Option<RevisionObjectRead>, String> {
     revision_checkpoint(deadline, context)?;
     revision_charge(context, Work::Observe)?;
     let inspected = fs::symlink_metadata(path);
     revision_checkpoint(deadline, context)?;
     match inspected {
         Ok(_) => {
-            let read = context.map_or_else(
-                || read_regular_file(path, maximum, "DIRECT_REVISION_OBJECT_READ_FAILED").map(Zeroizing::new),
-                |context| read_revision_object_with_context(path, maximum, context),
-            );
+            let read = match context {
+                Some(context) if mode == RevisionReadbackMode::RawEvidence => {
+                    read_revision_object_detailed_with_context(path, maximum, context).map(|observed| {
+                        let native_identity = Some(*observed.identity());
+                        let encoded_bytes = observed.encoded_bytes();
+                        RevisionObjectRead {
+                            bytes: Zeroizing::new(observed.into_bytes()),
+                            encoded_bytes,
+                            native_identity,
+                        }
+                    })
+                }
+                _ => context.map_or_else(
+                    || read_regular_file(path, maximum, "DIRECT_REVISION_OBJECT_READ_FAILED").map(Zeroizing::new),
+                    |context| read_revision_object_with_context(path, maximum, context),
+                ).map(|bytes| RevisionObjectRead {
+                    encoded_bytes: bytes.len() as u64,
+                    bytes,
+                    native_identity: None,
+                }),
+            };
             revision_checkpoint(deadline, context)?;
             read.map(Some)
         }

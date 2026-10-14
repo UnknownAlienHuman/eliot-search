@@ -16,6 +16,7 @@ use search_materializer::api::{
 };
 use search_revision_store::{
     LEGACY_REVISION_DIRECTORY, LEGACY_REVISION_MAX_OBJECT_BYTES, LegacyRevisionPhysicalKind,
+    LegacyRevisionProtection,
     classify_legacy_revision_inventory_name, is_legacy_revision_inventory_shard,
 };
 use std::path::Path;
@@ -118,30 +119,39 @@ fn sources(stream: &mut Stream<'_, '_, '_, '_>, target: SourceNamespaceId) -> Re
         target,
         source.native().ok_or_else(changed)?.context.deadline(),
         |_| source.checkpoint(),
-        |row| {
-            stream.reserve_row()?;
-            let encoded = stream
-                .encoder
-                .source_event(&row)
-                .map_err(super::codec_reason)?;
-            stream.statuses[Status::Present as usize] += 1;
-            stream.send(&encoded)?;
-            if row.lifecycle.opens_revision() {
-                stream.item(
-                    Family::Sources,
-                    Status::Present,
-                    3,
-                    [
-                        *row.legacy_source.as_bytes(),
-                        *row.legacy_revision.as_bytes(),
-                        *row.event.as_bytes(),
-                    ],
-                    [row.occurrence, row.sequence, row.source_bytes],
-                )?;
-            }
-            Ok(())
-        },
+        |row| source_event(stream, &row),
     )?;
+    source_heads(stream)
+}
+
+fn source_event(stream: &mut Stream<'_, '_, '_, '_>, row: &search_control_redb::migration::SourceImportRow) -> Result<(), String> {
+    stream.reserve_row()?;
+    let encoded = stream.encoder.source_event(row).map_err(super::codec_reason)?;
+    stream.statuses[Status::Present as usize] += 1;
+    stream.send(&encoded)?;
+    if row.lifecycle.opens_revision() {
+        stream.item(Family::Sources, Status::Present, 3,
+            [*row.legacy_source.as_bytes(), *row.legacy_revision.as_bytes(), *row.event.as_bytes()],
+            [row.occurrence, row.sequence, row.source_bytes])?;
+    }
+    Ok(())
+}
+
+pub(super) fn sources_from_mapping(
+    stream: &mut Stream<'_, '_, '_, '_>, target: SourceNamespaceId,
+    input: &NativeMigrationInput<'_, '_, '_>, mapping: &mut super::super::source_stage::PreparedSourceMap,
+) -> Result<(), String> {
+    let source = stream.source;
+    let header = source.source_mapping_header(target)?;
+    stream.item(Family::Sources, Status::Present, 2,
+        [header.legacy_namespace, header.catalog_snapshot, ZERO],
+        [header.expected_events, header.expected_sources, 0])?;
+    mapping.visit(source, input, |row| source_event(stream, &row))?;
+    source_heads(stream)
+}
+
+fn source_heads(stream: &mut Stream<'_, '_, '_, '_>) -> Result<(), String> {
+    let source = stream.source;
     for head in source.inventory_heads() {
         source.charge(Work::Compare(192))?;
         stream.item(
@@ -331,7 +341,7 @@ fn revisions(
             [revision.byte_length, 0, 0],
         )?;
     }
-    revision_tree(stream, root, Family::Revisions, false)?;
+    revision_tree(stream, root, Family::Revisions, false, None)?;
     if stream.statuses.iter().all(|count| *count == 0) {
         stream.item(
             Family::Revisions,
@@ -344,11 +354,128 @@ fn revisions(
     Ok(())
 }
 
+pub(super) fn revisions_with_content(
+    stream: &mut Stream<'_, '_, '_, '_>,
+    root: &Path,
+    input: &NativeMigrationInput<'_, '_, '_>,
+    content: &mut super::super::content_readback::ContentPass<'_>,
+) -> Result<(), String> {
+    let source = stream.source;
+    // Keep the accepted inventory ordering: all logical kind-9 rows precede
+    // physical rows. They remain inert until every referenced body is verified
+    // and both complete artifacts finish their independent second pass.
+    for revision in source.inventory_revisions() {
+        source.charge(Work::Compare(512))?;
+        stream.item(Family::Revisions, Status::Present, 9,
+            [digest(&revision.revision_id)?, digest(&revision.content_digest)?, digest(&revision.source_id)?],
+            [revision.byte_length, 0, 0])?;
+    }
+    let mut revisions = source.retained_revisions();
+    let mut current: Option<CurrentRevision<'_, '_, '_, '_>> = None;
+    revision_tree(stream, root, Family::Revisions, false, Some(&mut |stream, id, protection, subject| {
+        if current.as_ref().is_none_or(|held| held.id != id) {
+            if let Some(held) = current.take() { held.finish()?; }
+            source.charge(Work::Allocate(512))?;
+            let metadata = revisions.next().ok_or_else(changed)?;
+            if metadata.revision_id != id { return Err(changed()); }
+            let pins = match io::PinnedRevisionRepresentations::open(source, id)? {
+                Ok(pins) => pins,
+                Err(status) => {
+                    stream.item(Family::Revisions,
+                        if status == Status::AbsentProven { Status::Gap } else { status },
+                        10, [subject, ZERO, digest(id)?], [0; 3])?;
+                    return Err(changed());
+                }
+            };
+            let readback = super::super::super::read_import_revision_detailed_with_context(
+                root, Some(input.protector), &metadata, input.context,
+            )?;
+            source.checkpoint()?;
+            let raw = [readback.plaintext().map(CurrentRaw::capture), readback.protected().map(CurrentRaw::capture)];
+            for (index, kind) in [LegacyRevisionProtection::Plaintext, LegacyRevisionProtection::Protected]
+                .into_iter().enumerate()
+            {
+                pins.verify_readback(kind, raw[index].map(|fact| (fact.identity, fact.length)))?;
+            }
+            pins.verify_same_original()?.map_err(|_| changed())?;
+            content.observe(source, &metadata, &readback)?;
+            // Only two fixed-size raw observations survive into the next name;
+            // the current plaintext is released before another revision starts.
+            drop(readback);
+            current = Some(CurrentRevision { id: metadata.revision_id, pins, raw, seen: [false; 2] });
+        }
+        let held = current.as_mut().ok_or_else(changed)?;
+        let index = protection_index(protection);
+        if held.seen[index] { return Err(changed()); }
+        let raw = held.raw[index].ok_or_else(changed)?;
+        held.pins.verify_same_original()?.map_err(|_| changed())?;
+        let (refs, counts) = raw.physical_row(subject, digest(id)?);
+        stream.item(Family::Revisions, Status::Present, 10, refs, counts)?;
+        held.seen[index] = true;
+        held.pins.verify_same_original()?.map_err(|_| changed())?;
+        Ok(())
+    }))?;
+    if let Some(held) = current.take() { held.finish()?; }
+    if revisions.next().is_some() { return Err(changed()); }
+    if stream.statuses.iter().all(|count| *count == 0) {
+        stream.item(Family::Revisions, Status::AbsentProven, 9, [ZERO; 3], [0; 3])?;
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
+struct CurrentRaw {
+    identity: Option<(u64, u64)>,
+    length: u64,
+    sha256: [u8; 32],
+}
+
+impl CurrentRaw {
+    const fn capture(raw: &super::super::super::RawObjectEvidence) -> Self {
+        Self { identity: raw.native_identity(), length: raw.encoded_bytes(), sha256: *raw.encoded_sha256() }
+    }
+
+    const fn physical_row(self, subject: [u8; 32], reference: [u8; 32]) -> ([[u8; 32]; 3], [u64; 3]) {
+        ([subject, self.sha256, reference], [self.length, 0, 0])
+    }
+}
+
+struct CurrentRevision<'a, 'view, 'operation, 'owner> {
+    id: String,
+    pins: io::PinnedRevisionRepresentations<'a, 'view, 'operation, 'owner>,
+    raw: [Option<CurrentRaw>; 2],
+    seen: [bool; 2],
+}
+
+impl CurrentRevision<'_, '_, '_, '_> {
+    fn finish(self) -> Result<(), String> {
+        for index in 0..2 {
+            if self.raw[index].is_some() != self.seen[index] { return Err(changed()); }
+        }
+        self.pins.verify_same_original()?.map_err(|_| changed())
+    }
+}
+
+const fn protection_index(protection: LegacyRevisionProtection) -> usize {
+    match protection {
+        LegacyRevisionProtection::Plaintext => 0,
+        LegacyRevisionProtection::Protected => 1,
+    }
+}
+
+type RevisionCapture<'visitor> = dyn for<'stream, 'view, 'operation, 'owner> FnMut(
+    &mut Stream<'stream, 'view, 'operation, 'owner>,
+    &str,
+    LegacyRevisionProtection,
+    [u8; 32],
+) -> Result<(), String> + 'visitor;
+
 fn revision_tree(
     stream: &mut Stream<'_, '_, '_, '_>,
     root: &Path,
     family: Family,
     residue_only: bool,
+    mut captured: Option<&mut RevisionCapture<'_>>,
 ) -> Result<(), String> {
     let source = stream.source;
     let directory = root.join(LEGACY_REVISION_DIRECTORY);
@@ -392,6 +519,12 @@ fn revision_tree(
                     let temporary = value.physical_kind() == LegacyRevisionPhysicalKind::Temporary;
                     if residue_only && referenced && !temporary {
                         return Ok(());
+                    }
+                    if referenced && !residue_only
+                        && let LegacyRevisionPhysicalKind::Final(protection) = value.physical_kind()
+                        && let Some(consume) = captured.as_deref_mut()
+                    {
+                        return consume(stream, value.id(), protection, subject);
                     }
                     (
                         if temporary || !referenced {
@@ -853,7 +986,7 @@ fn unknown_preparation_children(
     directory_outcome(stream, Family::Residue, &directory, outcome)
 }
 fn residue(stream: &mut Stream<'_, '_, '_, '_>, root: &Path) -> Result<(), String> {
-    revision_tree(stream, root, Family::Residue, true)?;
+    revision_tree(stream, root, Family::Residue, true, None)?;
     preparation(stream, root, Family::Residue, true)?;
     control(stream, root, Family::Residue)?;
     unknown_preparation_children(stream, root)?;
@@ -1040,4 +1173,227 @@ pub(super) fn digest(value: &str) -> Result<[u8; 32], String> {
 }
 pub(super) fn changed() -> String {
     "DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned()
+}
+
+#[cfg(all(test, windows))]
+mod co_production_tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+    use search_contracts::Sha256Digest32;
+    use search_control_redb::migration::LegacyInventoryEncoder;
+
+    const ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    struct Scratch { root: PathBuf }
+    impl Scratch {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+            let root = std::env::temp_dir().join(format!("search-coproduction-{}-{stamp}-{}",
+                std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            fs::create_dir_all(root.join("revisions/aa")).unwrap();
+            fs::write(root.join(format!("revisions/aa/{ID}.bin")), b"plain").unwrap();
+            fs::write(root.join(format!("revisions/aa/{ID}.dpapi")), b"raw protected wire").unwrap();
+            Self { root }
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            assert_eq!(self.root.parent(), Some(std::env::temp_dir().as_path()));
+            assert!(self.root.file_name().unwrap().to_str().unwrap().starts_with("search-coproduction-"));
+            fs::remove_dir_all(&self.root).unwrap();
+        }
+    }
+
+    fn capture_physical(
+        source: &super::super::MigrationSource<'_, '_, '_>,
+        pins: &io::PinnedRevisionRepresentations<'_, '_, '_, '_>,
+    ) -> [Option<CurrentRaw>; 2] {
+        let mut facts = [None; 2];
+        for (index, protection) in [LegacyRevisionProtection::Plaintext, LegacyRevisionProtection::Protected]
+            .into_iter().enumerate()
+        {
+            let path = source.inventory_root().join(LEGACY_REVISION_DIRECTORY)
+                .join(search_revision_store::legacy_revision_object_relative_locator(ID, protection).unwrap());
+            let bytes = io::read(source, &path, LEGACY_REVISION_MAX_OBJECT_BYTES).unwrap().unwrap();
+            let held = pins.representation(protection).unwrap();
+            facts[index] = Some(CurrentRaw { identity: Some(held.native_identity()),
+                length: bytes.len() as u64, sha256: io::fingerprint(source, &bytes).unwrap() });
+        }
+        facts
+    }
+
+    #[test]
+    fn co_production_physical_rows_keep_location_v2_raw_bytes() {
+        let scratch = Scratch::new();
+        let store = crate::plaintext_direct_store::DirectStore::open(&scratch.root).unwrap();
+        let source = super::super::MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        let pins = io::PinnedRevisionRepresentations::open(&source, ID).unwrap().unwrap_or_else(|_| panic!("pins"));
+        let raw = capture_physical(&source, &pins);
+        for (index, protection) in [LegacyRevisionProtection::Plaintext, LegacyRevisionProtection::Protected]
+            .into_iter().enumerate()
+        {
+            let path = source.inventory_root().join(LEGACY_REVISION_DIRECTORY)
+                .join(search_revision_store::legacy_revision_object_relative_locator(ID, protection).unwrap());
+            let subject = io::locator(&source, &path).unwrap();
+            let reference = digest(ID).unwrap();
+            let bytes = io::read(&source, &path, LEGACY_REVISION_MAX_OBJECT_BYTES).unwrap().unwrap();
+            let baseline = ([subject, io::fingerprint(&source, &bytes).unwrap(), reference], [bytes.len() as u64, 0, 0]);
+            let projected = raw[index].unwrap().physical_row(subject, reference);
+            assert_eq!(projected, baseline);
+            // Same accepted encoder and selected profile; neither native ID
+            // nor a plaintext BLAKE substitutes for the protected raw SHA.
+            let mut old = LegacyInventoryEncoder::with_profile(LegacyInventoryLimits::BASELINE, LegacyInventoryProfile::LocationV2).unwrap();
+            let mut new = LegacyInventoryEncoder::with_profile(LegacyInventoryLimits::BASELINE, LegacyInventoryProfile::LocationV2).unwrap();
+            let binding = sample_binding();
+            assert_eq!(old.header(binding.clone()).unwrap(), new.header(binding).unwrap());
+            for family in Family::ALL {
+                if family == Family::Revisions { break; }
+                old.item(family, Status::AbsentProven, 0, [Sha256Digest32::from_bytes(ZERO); 3], [0; 3]).unwrap();
+                new.item(family, Status::AbsentProven, 0, [Sha256Digest32::from_bytes(ZERO); 3], [0; 3]).unwrap();
+                old.end_family(family, Status::AbsentProven, true).unwrap();
+                new.end_family(family, Status::AbsentProven, true).unwrap();
+            }
+            assert_eq!(old.item(Family::Revisions, Status::Present, 10, baseline.0.map(Sha256Digest32::from_bytes), baseline.1).unwrap(),
+                new.item(Family::Revisions, Status::Present, 10, projected.0.map(Sha256Digest32::from_bytes), projected.1).unwrap());
+        }
+    }
+
+    #[test]
+    fn co_production_refuses_unconsumed_present_representation() {
+        let scratch = Scratch::new();
+        let store = crate::plaintext_direct_store::DirectStore::open(&scratch.root).unwrap();
+        let source = super::super::MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        let pins = io::PinnedRevisionRepresentations::open(&source, ID).unwrap().unwrap_or_else(|_| panic!("pins"));
+        let raw = capture_physical(&source, &pins);
+        let current = CurrentRevision { id: ID.to_owned(), pins, raw, seen: [true, false] };
+        assert_eq!(current.finish(), Err(changed()));
+    }
+
+    fn sample_binding() -> search_control_redb::migration::LegacyInventoryBinding {
+        search_control_redb::migration::LegacyInventoryBinding {
+            owner: search_control_redb::migration::LegacyInventoryOwner {
+                installation: [1; 16], incarnation: [2; 16], root: [3; 16], invocation: [4; 16],
+                request_blake3: [5; 32], record_blake3: [6; 32], physical_blake3: [7; 32],
+                epoch: 1, generation: 1, native_limits: [1; 6],
+            },
+            target: SourceNamespaceId::from_bytes([8; 16]),
+            namespace: Sha256Digest32::from_bytes([9; 32]), snapshot: Sha256Digest32::from_bytes([10; 32]),
+            registration: None,
+        }
+    }
+}
+
+// These fixtures exercise local NTFS pin/refusal behavior only. They do not
+// qualify a NativeMigrationInput, the full co-producer or installed cutover.
+#[cfg(all(test, windows))]
+mod revision_pin_tests {
+    use super::super::io::PinnedRevisionRepresentations;
+    use super::super::super::super::super::migration_context::MigrationSource;
+    use search_revision_store::{LegacyRevisionProtection, LEGACY_REVISION_DIRECTORY, legacy_revision_object_relative_locator};
+    use std::fs::{self, File, OpenOptions};
+    use std::io::Read;
+    use std::path::PathBuf;
+    use search_control_redb::migration::LegacyInventoryStatus as Status;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    const REVISION: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    struct Scratch { root: PathBuf }
+
+    impl Scratch {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let stamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos();
+            let root = std::env::temp_dir().join(format!("search-revision-pins-{}-{stamp}-{}",
+                std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            fs::create_dir_all(root.join("revisions/aa")).expect("scratch shard");
+            Self { root }
+        }
+
+        fn path(&self, protection: LegacyRevisionProtection) -> PathBuf {
+            self.root.join(LEGACY_REVISION_DIRECTORY)
+                .join(legacy_revision_object_relative_locator(REVISION, protection).expect("locator"))
+        }
+
+        fn store(&self) -> crate::plaintext_direct_store::DirectStore {
+            crate::plaintext_direct_store::DirectStore::open(&self.root).expect("fixture catalog")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            // Only this fixture's freshly created, uniquely named temp root.
+            assert_eq!(self.root.parent(), Some(std::env::temp_dir().as_path()));
+            assert!(self.root.file_name().unwrap().to_str().unwrap().starts_with("search-revision-pins-"));
+            fs::remove_dir_all(&self.root).expect("drop scratch after pins");
+        }
+    }
+
+    #[test]
+    fn both_originals_deny_write_delete_and_match_only_their_own_readback() {
+        let scratch = Scratch::new();
+        fs::write(scratch.path(LegacyRevisionProtection::Plaintext), b"plain").expect("plain");
+        fs::write(scratch.path(LegacyRevisionProtection::Protected), b"protected wire").expect("wire");
+        let store = scratch.store();
+        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        let held = PinnedRevisionRepresentations::open(&source, REVISION).expect("open").unwrap_or_else(|_| panic!("pins refused"));
+        let mut facts = Vec::new();
+        for protection in [LegacyRevisionProtection::Plaintext, LegacyRevisionProtection::Protected] {
+            let path = scratch.path(protection);
+            assert!(OpenOptions::new().write(true).open(&path).is_err(), "write must be denied while held");
+            assert!(fs::remove_file(&path).is_err(), "delete must be denied while held");
+            let mut reopened = File::open(&path).expect("source owner's read-only reopen");
+            let observed = eliot_searchd::native_file::observe_with_check(&reopened, &|_| Ok(())).expect("same native observer");
+            let mut bytes = Vec::new();
+            reopened.read_to_end(&mut bytes).expect("callback read");
+            let id = (u64::from(observed.volume_serial), observed.file_index);
+            held.verify_readback(protection, Some((Some(id), bytes.len() as u64))).expect("own fact");
+            let pinned = held.representation(protection).expect("representation");
+            assert_eq!(pinned.protection(), protection);
+            assert_eq!(*pinned.snapshot(), observed);
+            assert_eq!(pinned.metadata().len(), bytes.len() as u64);
+            assert!(held.verify_readback(protection, Some((None, bytes.len() as u64))).is_err());
+            assert!(held.verify_readback(protection, Some((Some(id), bytes.len() as u64 + 1))).is_err());
+            facts.push((id, bytes.len() as u64));
+        }
+        assert!(held.verify_readback(LegacyRevisionProtection::Plaintext, Some((Some(facts[1].0), facts[0].1))).is_err());
+        held.verify_same_original().expect("stable originals").unwrap_or_else(|_| panic!("verification refused"));
+    }
+
+    #[test]
+    fn missing_both_is_explicit_and_missing_counterpart_is_rechecked() {
+        let scratch = Scratch::new();
+        let store = scratch.store();
+        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::AbsentProven))));
+        assert!(PinnedRevisionRepresentations::open(&source, "../outside").is_err());
+        fs::write(scratch.path(LegacyRevisionProtection::Plaintext), b"plain").expect("plain");
+        let held = PinnedRevisionRepresentations::open(&source, REVISION).expect("open").unwrap_or_else(|_| panic!("pins refused"));
+        assert!(held.representation(LegacyRevisionProtection::Protected).is_none());
+        held.verify_readback(LegacyRevisionProtection::Protected, None).expect("explicit absence");
+        assert!(held.verify_readback(LegacyRevisionProtection::Plaintext, None).is_err());
+        fs::write(scratch.path(LegacyRevisionProtection::Protected), b"late wire").expect("new counterpart");
+        assert!(held.verify_same_original().is_err(), "late presence cannot match prior absence");
+    }
+
+    #[test]
+    fn hardlink_and_second_representation_refusal_release_all_leaf_pins() {
+        let scratch = Scratch::new();
+        let plain = scratch.path(LegacyRevisionProtection::Plaintext);
+        fs::write(&plain, b"plain").expect("plain");
+        let alias = scratch.root.join("alias.bin");
+        fs::hard_link(&plain, &alias).expect("hardlink fixture");
+        let store = scratch.store();
+        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::Gap))));
+        fs::remove_file(alias).expect("remove alias");
+        fs::create_dir(scratch.path(LegacyRevisionProtection::Protected)).expect("wrong-kind counterpart");
+        assert!(matches!(PinnedRevisionRepresentations::open(&source, REVISION), Ok(Err(Status::Corrupt))));
+        assert!(OpenOptions::new().write(true).open(plain).is_ok(), "refusal must release the first leaf pin");
+    }
 }

@@ -22,6 +22,7 @@ use search_materializer::{
     publish_legacy_preparation_artifact, read_legacy_preparation_artifact,
 };
 use search_revision_store::{
+    ContextualRevisionObjectRead,
     ContextualLegacyRevisionObjectPlatform, LegacyRevisionObjectContext,
     LegacyRevisionObjectError, LegacyRevisionObjectPlatform,
     LegacyRevisionObjectPlatformFailure as PlatformFailure, LegacyRevisionObjectWork as Work,
@@ -77,11 +78,21 @@ pub(super) fn read_revision_object_with_context(
     max_bytes: usize,
     context: &MigrationContext<'_, '_>,
 ) -> Result<Zeroizing<Vec<u8>>, String> {
+    read_revision_object_detailed_with_context(path, max_bytes, context)
+        .map(|observed| Zeroizing::new(observed.into_bytes()))
+}
+
+// Preserve the exact owner's native identity before the bytes-only adapter
+// consumes it. No path is reopened and no second work allowance is created.
+pub(super) fn read_revision_object_detailed_with_context(
+    path: &Path,
+    max_bytes: usize,
+    context: &MigrationContext<'_, '_>,
+) -> Result<ContextualRevisionObjectRead<(u64, u64)>, String> {
     let mut object_context = context;
     read_legacy_revision_object_with_context(
         &DaemonImmutableObjectPlatform, &mut object_context, path, max_bytes,
     )
-    .map(|observed| Zeroizing::new(observed.into_bytes()))
     .map_err(|error| {
         error.context_cause().cloned().unwrap_or_else(|| match error.object_code() {
             Some("REVISION_OBJECT_PARENT_MISSING") => "DIRECT_REVISION_PARENT_MISSING",

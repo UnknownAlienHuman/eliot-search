@@ -12,16 +12,21 @@ use std::time::Instant;
 
 use search_contracts::{Sha256Digest32, SourceNamespaceId};
 use search_control_redb::migration::{
-    LegacySourceMappingEvent, LegacySourceMappingState, MappedSourceEvent,
+    LegacySourceMappingEvent, LegacySourceMappingState,
     SourceImportRow, SourceMappingError, SourceMappingHeader,
-    SourceMappingPlanner, SourceMappingSummary, source_mapping_profile_digest,
+    SourceMappingPlanner, SourceMappingSummary,
+    encode_source_mapping_header, encode_source_mapping_event, encode_source_mapping_summary,
 };
+#[cfg(test)]
+use search_control_redb::migration::{MappedSourceEvent, source_mapping_profile_digest};
 
 use super::{
     CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
-    SOURCE_LOG_FILE, SourceRecord, SourceState, event_json, read_namespace,
+    SOURCE_LOG_FILE, SourceRecord, SourceState, read_namespace,
     replay_registry, sha256, snapshot_digest, validate_legacy_event,
 };
+#[cfg(test)]
+use super::event_json;
 use super::super::{parse_namespace, replay_registry_reader_checked};
 
 fn check_mapping_deadline(deadline: Instant) -> Result<(), String> {
@@ -66,6 +71,7 @@ fn legacy_event(
     })
 }
 
+#[cfg(test)]
 fn encode_mapped(
     mapped: &MappedSourceEvent,
     record: &SourceRecord,
@@ -93,6 +99,7 @@ fn encode_mapped(
     )
 }
 
+#[cfg(test)]
 fn encode_header(header: SourceMappingHeader) -> String {
     format!(
         concat!(
@@ -116,6 +123,7 @@ fn encode_header(header: SourceMappingHeader) -> String {
     )
 }
 
+#[cfg(test)]
 fn encode_summary(summary: SourceMappingSummary) -> String {
     format!(
         concat!(
@@ -247,18 +255,19 @@ impl DirectStore {
         if legacy_namespace != self.namespace_id {
             return Err("DIRECT_MIGRATION_NAMESPACE_MISMATCH".to_owned());
         }
-        emit(encode_header(header).as_bytes())?;
+        emit(&encode_source_mapping_header(header))?;
         let mut planner = SourceMappingPlanner::new(header, MAX_SOURCE_EVENTS)
             .map_err(mapping_error)?;
         let mut observe = |record: &SourceRecord, previous: Option<&SourceRecord>| {
                 validate_legacy_event(&header.legacy_namespace, record, previous)?;
+                let event = legacy_event(record, previous)?;
                 let mapped = planner
-                    .map(legacy_event(record, previous)?)
+                    .map(event)
                     .map_err(mapping_error)?;
                 if let Some(imported) = imported.as_mut() {
                     imported(mapped.import_row())?;
                 }
-                emit(encode_mapped(&mapped, record, previous).as_bytes())
+                emit(&encode_source_mapping_event(&mapped, &event))
             };
         let state = match pinned {
             Some((_, log)) => {
@@ -280,7 +289,7 @@ impl DirectStore {
         {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
-        emit(encode_summary(summary).as_bytes())?;
+        emit(&encode_source_mapping_summary(summary))?;
         check()?;
         Ok(summary)
     }
@@ -329,5 +338,32 @@ impl DirectStore {
             return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
         }
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod codec_compatibility {
+    use super::*;
+    use search_source_registry::LegacyDirectIdentityStrength;
+
+    #[test]
+    fn shared_mapping_codec_preserves_legacy_daemon_header_event_and_footer() {
+        let header = SourceMappingHeader::new(SourceNamespaceId::from_bytes([1; 16]),
+            [2; 32], [9; 32], 1, 1, 16).unwrap();
+        assert_eq!(encode_source_mapping_header(header), encode_header(header).as_bytes());
+        for identity_strength in [LegacyDirectIdentityStrength::Native, LegacyDirectIdentityStrength::PathBound] {
+            let record = SourceRecord { sequence: 1, previous_digest: "00".repeat(32),
+                operation_id: "07".repeat(32), state: SourceState::Active,
+                source_id: "03".repeat(32), revision_id: "05".repeat(32),
+                content_digest: "06".repeat(32), byte_length: 42,
+                file_identity_digest: "08".repeat(32), path_digest: "0a".repeat(32),
+                identity_strength, record_digest: "04".repeat(32) };
+            let event = legacy_event(&record, None).unwrap();
+            let mut planner = SourceMappingPlanner::new(header, 16).unwrap();
+            let mapped = planner.map(event).unwrap();
+            assert_eq!(encode_source_mapping_event(&mapped, &event), encode_mapped(&mapped, &record, None).as_bytes());
+            let summary = planner.finish().unwrap();
+            assert_eq!(encode_source_mapping_summary(summary), encode_summary(summary).as_bytes());
+        }
     }
 }

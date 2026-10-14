@@ -88,17 +88,22 @@ fn original_refusal_and_relative_or_escaped_output_fail_closed() {
 fn bootstrap_uses_one_target_before_inventory_and_cannot_run_legacy_import() {
     // A source ownership guard, not a runtime command proof.
     let bootstrap = include_str!("../src/control_migration_bootstrap.rs");
-    assert!(bootstrap.find("MigrationBootstrap::create(").unwrap()
-        < bootstrap.find("inventory::stage_owned(").unwrap());
+    let stage = bootstrap.split("pub(super) fn stage(").nth(1).unwrap()
+        .split("pub(super) fn initialize(").next().unwrap();
+    assert!(stage.find("initialize(").unwrap() < stage.find("inventory::stage_owned(").unwrap());
+    let initialize = bootstrap.split("pub(super) fn initialize(").nth(1).unwrap();
+    assert_eq!(initialize.matches("MigrationBootstrap::create(").count(), 1);
     assert!(!bootstrap.contains("redb_import::store("));
     assert!(!bootstrap.contains("owner.inspect("));
     let inventory = include_str!("../src/control_migration_inventory.rs");
     let owned = inventory.split("if let Some((journal, checkpoint)) = bootstrap").nth(1).unwrap()
         .split("let published = verified").next().unwrap();
-    assert!(owned.contains("prepare_publication("));
+    assert!(owned.contains("prepare_publication_with_context("));
     assert!(owned.contains("journal.publish_inventory("));
     let owner = include_str!("../../../crates/search-control-redb/src/persistent/bootstrap.rs");
     let dispatch = owner.split("pub fn publish_inventory").nth(1).unwrap();
-    assert!(dispatch.find("self.write(ATTEMPT_KEY").unwrap() < dispatch.find("publication.publish_once(").unwrap());
+    assert!(dispatch.find("self.write(ATTEMPT_KEY").unwrap()
+        < dispatch.find(".publish_once_with_context(").unwrap());
+    assert!(dispatch.contains("&|unit| check.reserve(unit)"));
     assert!(owner.contains("complete_candidate_not_performed"));
 }

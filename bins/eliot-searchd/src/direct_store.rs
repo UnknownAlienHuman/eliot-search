@@ -31,14 +31,13 @@ pub use model::IndexedSource;
 use model::{
     CONTROL_DIRECTORY, DirectDigest, MAX_LOG_BYTES, MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS,
     NAMESPACE_FILE, RegistryState, SOURCE_LOG_FILE, SOURCE_LOG_HEADER, SourceRecord, SourceState,
-    ZERO_DIGEST,
 };
 pub use model::{
     DirectStore, RevisionSlice, SourceSummary, StoreGap, StoreSearchResult, StoreVerification,
     StoredMatch,
 };
 #[cfg(test)]
-use model::{FileSnapshot, MAX_DIRECTORY_FILES, RecordDraft};
+use model::{FileSnapshot, MAX_DIRECTORY_FILES, RecordDraft, ZERO_DIGEST};
 #[cfg(test)]
 use store::{collect_regular_files, ensure_directory, path_identity_bytes, read_file_snapshot};
 use store::{ensure_regular_file, is_reparse};

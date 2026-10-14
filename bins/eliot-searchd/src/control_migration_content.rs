@@ -16,6 +16,7 @@ use search_control_redb::migration::{
     SourceContentManifestHeader, SourceContentManifestSummary,
     SourceContentObjectReadback, SourceImportRecordArtifact,
     SourceImportRecordArtifactError, SourceImportRecordArtifactPublication, source_content_profile_digest,
+    MAX_SOURCE_IMPORT_ROW_BYTES,
 };
 use zeroize::Zeroizing;
 
@@ -27,7 +28,6 @@ use super::super::{read_import_revision, read_import_revision_with_context};
 use super::{
     ensure_directory, sha256, temporary_staging_name,
 };
-use super::super::super::migration_context::NativeMigrationInput;
 
 pub(super) struct ContentArtifact {
     pub(super) name: String,
@@ -36,6 +36,24 @@ pub(super) struct ContentArtifact {
     pub(super) source_bytes: u64,
     pub(super) encoded_bytes: u64,
     pub(super) profile: [u8; 32],
+}
+
+// Constructed only after both independent source-backed artifact passes finish.
+pub(super) struct PreparedContent {
+    pub(super) publication: SourceImportRecordArtifactPublication<super::redb_import::DaemonImportOutputPlatform>,
+}
+
+impl PreparedContent {
+    pub(super) fn from_verified(
+        publication: SourceImportRecordArtifactPublication<super::redb_import::DaemonImportOutputPlatform>,
+        header: SourceContentManifestHeader,
+        summary: SourceContentManifestSummary,
+    ) -> Result<Self, String> {
+        if summary.objects != header.expected_objects {
+            return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
+        }
+        Ok(Self { publication })
+    }
 }
 
 /// Publication is inert until the complete importer consumes its exact bindings.
@@ -192,24 +210,10 @@ pub(super) fn compile(
             |input| read_import_revision_with_context(root, protector, &metadata, input.context),
         )?;
         source.checkpoint()?;
-        let mut hasher = Zeroizing::new(blake3::Hasher::new());
-        for chunk in bytes.chunks(256 * 1024) {
-            source.charge(Work::Compare(chunk.len()))?;
-            hasher.update(chunk);
-            source.checkpoint()?;
-        }
-        let digest =
-            Blake3Digest32::from_bytes(*hasher.finalize().as_bytes());
         source.charge(Work::Allocate(search_control_redb::migration::MAX_SOURCE_IMPORT_ROW_BYTES))?;
         source.charge(Work::Compare(search_control_redb::migration::MAX_SOURCE_IMPORT_ROW_BYTES))?;
         let row = encoder
-            .object_row(SourceContentObjectReadback {
-                legacy_source_id: legacy_digest(&metadata.source_id)?,
-                legacy_revision_id: legacy_digest(&metadata.revision_id)?,
-                content_sha256: legacy_digest(&metadata.content_digest)?,
-                byte_length: metadata.byte_length,
-                content_blake3: digest,
-            })
+            .object_row(object_observation(source, &metadata, &bytes)?)
             .map_err(encoding_reason)?;
         emit(&row)?;
     }
@@ -227,54 +231,85 @@ pub(super) fn compile(
     Ok(summary)
 }
 
-// Original command only: retain the verified original handle and defer its
-// once-only publication to the same-database owner. No new directory or meter.
-pub(super) fn prepare_owned(
-    source: &MigrationSource<'_, '_, '_>,
-    root: &Path,
-    target: SourceNamespaceId,
-    source_plan: [u8; 32],
-    directory: &Path,
-    input: &NativeMigrationInput<'_, '_, '_>,
-) -> Result<(
-    SourceImportRecordArtifactPublication<super::redb_import::DaemonImportOutputPlatform>,
-    SourceContentManifestSummary,
-), String> {
-    input.context.inventory_reobserve(input)?;
-    let artifact_context = super::inventory::ArtifactContext::new(source);
-    let work = |unit| artifact_context.reserve(unit);
-    source.charge(Work::Allocate(256))?;
-    let temporary = temporary_staging_name()?;
-    let mut writer = SourceImportRecordArtifact::create_with_context(
-        directory, &temporary, super::redb_import::DaemonImportOutputPlatform,
-        input.context.deadline(), &work,
-    ).map_err(|error| owned_artifact_reason(&artifact_context, error))?;
-    let first = compile(source, root, target, source_plan, input.context.deadline(), |row| {
-        writer.push_with_context(row, input.context.deadline(), &work)
-            .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
+/// The existing v1 encoder driven by the inventory's pinned source read.
+/// The sink streams rows into the original artifact or its independent compare.
+pub(super) struct ContentPass<'sink> {
+    encoder: SourceContentManifestEncoder,
+    header: SourceContentManifestHeader,
+    sink: &'sink mut dyn FnMut(&[u8]) -> Result<(), String>,
+}
+
+impl<'sink> ContentPass<'sink> {
+    pub(super) fn new(
+        source: &MigrationSource<'_, '_, '_>, target: SourceNamespaceId,
+        source_plan: [u8; 32], deadline: Instant,
+        sink: &'sink mut dyn FnMut(&[u8]) -> Result<(), String>,
+    ) -> Result<Self, String> {
+        let source_header = source.source_mapping_header(target)?;
+        if source.verify_migration_snapshot(deadline)? != source_header.catalog_snapshot {
+            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+        }
+        let header = SourceContentManifestHeader {
+            target_namespace: target,
+            legacy_namespace: Sha256Digest32::from_bytes(source_header.legacy_namespace),
+            catalog_snapshot: Sha256Digest32::from_bytes(source_header.catalog_snapshot),
+            source_plan: Sha256Digest32::from_bytes(source_plan),
+            expected_objects: source.retained_revisions().len() as u64,
+        };
+        source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+        source.charge(Work::Compare(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+        let mut encoder = SourceContentManifestEncoder::new(header).map_err(encoding_reason)?;
+        sink(&encoder.header_row().map_err(encoding_reason)?)?;
+        source.checkpoint()?;
+        Ok(Self { encoder, header, sink })
+    }
+
+    pub(super) const fn header(&self) -> SourceContentManifestHeader { self.header }
+
+    pub(super) fn observe(
+        &mut self, source: &MigrationSource<'_, '_, '_>,
+        metadata: &crate::plaintext_direct_store::RevisionMetadata,
+        readback: &super::super::RevisionReadback,
+    ) -> Result<(), String> {
+        let object = object_observation(source, metadata, readback.bytes())?;
+        source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+        source.charge(Work::Compare(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+        (self.sink)(&self.encoder.object_row(object).map_err(encoding_reason)?)?;
         source.checkpoint()
-    })?;
-    input.context.inventory_reobserve(input)?;
-    let frozen = writer.freeze_with_context(input.context.deadline(), &work)
-        .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
-    let chain = *frozen.chain();
-    let mut compare = frozen.begin_readback_with_context(input.context.deadline(), &work)
-        .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
-    let second = compile(source, root, target, source_plan, input.context.deadline(), |row| {
-        compare.compare_with_context(row, input.context.deadline(), &work)
-            .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
-        source.checkpoint()
-    })?;
-    if first != second { return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned()); }
-    input.context.inventory_reobserve(input)?;
-    let verified = compare.finish_with_context(input.context.deadline(), &work)
-        .map_err(|error| owned_artifact_reason(&artifact_context, error))?;
-    source.charge(Work::Allocate(128))?;
-    let name = format!("{}.source-content.v1", sha256::hex(&chain));
-    let publication = verified.prepare_publication_with_context(
-        &name, input.context.deadline(), &work,
-    ).map_err(|error| owned_artifact_reason(&artifact_context, error))?;
-    Ok((publication, first))
+    }
+
+    pub(super) fn finish(
+        mut self, source: &MigrationSource<'_, '_, '_>, deadline: Instant,
+    ) -> Result<SourceContentManifestSummary, String> {
+        if source.verify_migration_snapshot(deadline)? != *self.header.catalog_snapshot.as_bytes() {
+            return Err("DIRECT_CONTROL_READBACK_MISMATCH".to_owned());
+        }
+        source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+        source.charge(Work::Compare(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+        let (row, summary) = self.encoder.finish().map_err(encoding_reason)?;
+        (self.sink)(&row)?;
+        source.checkpoint()?;
+        Ok(summary)
+    }
+}
+
+fn object_observation(
+    source: &MigrationSource<'_, '_, '_>, metadata: &crate::plaintext_direct_store::RevisionMetadata,
+    bytes: &[u8],
+) -> Result<SourceContentObjectReadback, String> {
+    let mut hasher = Zeroizing::new(blake3::Hasher::new());
+    for chunk in bytes.chunks(256 * 1024) {
+        source.charge(Work::Compare(chunk.len()))?;
+        hasher.update(chunk);
+        source.checkpoint()?;
+    }
+    Ok(SourceContentObjectReadback {
+        legacy_source_id: legacy_digest(&metadata.source_id)?,
+        legacy_revision_id: legacy_digest(&metadata.revision_id)?,
+        content_sha256: legacy_digest(&metadata.content_digest)?,
+        byte_length: metadata.byte_length,
+        content_blake3: Blake3Digest32::from_bytes(*hasher.finalize().as_bytes()),
+    })
 }
 
 fn legacy_digest(value: &str) -> Result<Sha256Digest32, String> {
@@ -282,7 +317,7 @@ fn legacy_digest(value: &str) -> Result<Sha256Digest32, String> {
         .map_err(|_| "DIRECT_CONTROL_READBACK_MISMATCH".to_owned())
 }
 
-fn owned_artifact_reason(
+pub(super) fn owned_artifact_reason(
     context: &super::inventory::ArtifactContext<'_, '_, '_, '_>,
     error: SourceImportRecordArtifactError<String>,
 ) -> String {
@@ -345,5 +380,67 @@ fn content_artifact_reason(
         SourceImportRecordArtifactError::RecordChain(error) => {
             error.code().to_owned()
         }
+    }
+}
+
+#[cfg(test)]
+mod co_production_tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+    struct Scratch { root: PathBuf }
+    impl Scratch {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+            let root = std::env::temp_dir().join(format!("search-content-parity-{}-{stamp}-{}",
+                std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            fs::create_dir_all(root.join("data")).unwrap();
+            Self { root }
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            assert_eq!(self.root.parent(), Some(std::env::temp_dir().as_path()));
+            assert!(self.root.file_name().unwrap().to_str().unwrap().starts_with("search-content-parity-"));
+            fs::remove_dir_all(&self.root).unwrap();
+        }
+    }
+
+    #[test]
+    fn co_production_content_v1_byte_parity_and_incomplete_stream_refusal() {
+        let scratch = Scratch::new();
+        let input = scratch.root.join("input.rs");
+        fs::write(&input, b"fn bounded_fixture() {}\n").unwrap();
+        let mut store = crate::plaintext_direct_store::DirectStore::open(&scratch.root.join("data")).unwrap();
+        store.index_file(&input).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let source = MigrationSource::new(&store, deadline, None);
+        let target = SourceNamespaceId::from_bytes([17; 16]);
+        let plan = [23; 32];
+        let mut baseline = Vec::new();
+        let expected = compile(&source, source.inventory_root(), target, plan, deadline, |row| {
+            baseline.push(row.to_vec()); Ok(())
+        }).unwrap();
+        let mut produced = Vec::new();
+        let mut sink = |row: &[u8]| { produced.push(row.to_vec()); Ok(()) };
+        let mut pass = ContentPass::new(&source, target, plan, deadline, &mut sink).unwrap();
+        for metadata in source.retained_revisions() {
+            // A real legacy readback verifies plaintext SHA/length/identity;
+            // this fixture proves wire parity, not NativeCtx co-production.
+            let readback = super::super::super::read_revision_objects_at(
+                source.inventory_root(), None, &metadata, false, Some(deadline),
+                super::super::super::RevisionReadbackMode::RawEvidence,
+            ).unwrap();
+            pass.observe(&source, &metadata, &readback).unwrap();
+        }
+        assert_eq!(pass.finish(&source, deadline).unwrap(), expected);
+        assert_eq!(produced, baseline);
+        let mut discard = |_: &[u8]| Ok(());
+        let incomplete = ContentPass::new(&source, target, plan, deadline, &mut discard).unwrap();
+        assert!(incomplete.finish(&source, deadline).is_err());
     }
 }
