@@ -345,6 +345,11 @@
       "state": "OPEN",
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/521",
       "reviewed_at": "2026-10-14"
+    },
+    "527": {
+      "state": "OPEN",
+      "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/527",
+      "reviewed_at": "2026-10-14"
     }
   },
   "sites": [
@@ -55098,7 +55103,7 @@
       "signal": "unresolved-prefix-review",
       "count": 1,
       "test": false,
-      "source_sha256": "6b02357f78786cd1acb276b26aabed5f20ea90ce6f7534bca62c09a4ab30bf93",
+      "source_sha256": "0903f12caefa216c735131f4b3d05df836b527e556faaa73bc307900c076c06a",
       "classification": "typed-schema-encoding",
       "owner_issue": 214,
       "phase": "owner-migration-preserve-bytes",
@@ -55218,7 +55223,7 @@
       "signal": "digest-import-review",
       "count": 3,
       "test": false,
-      "source_sha256": "a3ae9e1d6b57cb8edd943a7b49ff8a9c9f3e6c698e0dd5d50ea196832fa85cc1",
+      "source_sha256": "042e0d485d9785076bff50f59f3ed14c38423e5f35d3a1af2e50b6aba7430f8f",
       "classification": "opaque-value-use",
       "owner_issue": 214,
       "phase": "accepted",
@@ -55230,7 +55235,7 @@
       "signal": "digest-import-review",
       "count": 1,
       "test": false,
-      "source_sha256": "a3ae9e1d6b57cb8edd943a7b49ff8a9c9f3e6c698e0dd5d50ea196832fa85cc1",
+      "source_sha256": "042e0d485d9785076bff50f59f3ed14c38423e5f35d3a1af2e50b6aba7430f8f",
       "classification": "opaque-value-use",
       "owner_issue": 214,
       "phase": "accepted",

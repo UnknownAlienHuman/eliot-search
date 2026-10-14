@@ -1,6 +1,11 @@
 //! Repository path, advisory output and context-source fences.
+//!
+//! The generic repository-path grammar and containment predicate are product-owned in
+//! `crate::product_git_helper`. The legacy planner names below delegate to that single
+//! implementation and are kept only for alias compatibility until #214 removes them.
 
 use super::spec::{CONTROL_ROOTS, PLAN_ARTIFACT_ROOT};
+use crate::product_git_helper::{helper_safe_path, helper_under};
 
 /// Repository-relative safe path check.
 ///
@@ -8,27 +13,13 @@ use super::spec::{CONTROL_ROOTS, PLAN_ARTIFACT_ROOT};
 /// empty or parent segments after dropping single-dot segments.
 #[must_use]
 pub fn safe_path(value: &str) -> bool {
-    if value.is_empty() {
-        return false;
-    }
-    let grammar = value.split('/').all(|part| {
-        !part.is_empty()
-            && part.bytes().all(|byte| {
-                byte.is_ascii_alphanumeric()
-                    || matches!(byte, b'.' | b'_' | b'-')
-            })
-    });
-    grammar
-        && value
-            .split('/')
-            .filter(|part| *part != ".")
-            .all(|part| part != "..")
+    helper_safe_path(value)
 }
 
 /// Path equality or strict `prefix/` containment.
 #[must_use]
 pub fn under(path: &str, prefix: &str) -> bool {
-    path == prefix || path.starts_with(&format!("{prefix}/"))
+    helper_under(path, prefix)
 }
 
 /// Stdout half of advisory output selection.
