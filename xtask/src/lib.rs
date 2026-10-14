@@ -29,7 +29,5 @@ pub mod package_maps;
 mod package_status;
 pub mod qdrant_boundary;
 pub mod ticket_drafts;
-pub mod ticket_issuance_builder;
-pub mod ticket_issuance_validation;
 pub mod ticket_planner;
 pub mod validate_accepted_evidence;
