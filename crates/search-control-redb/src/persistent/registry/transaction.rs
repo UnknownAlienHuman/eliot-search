@@ -123,8 +123,8 @@ impl PersistentControlJournal {
     ) -> Result<CommitRecoveryDecision, ControlCallError> {
         let budget = Budget::new(context);
         let result = (|| {
-            self.require_registry_schema()?;
             budget.check(Point::Start)?;
+            self.require_registry_schema(&budget)?;
             let command = request.command(self.limits)?;
             self.recover_transaction_with_conditions_checked(
                 command.mutation(),
@@ -167,8 +167,8 @@ impl PersistentControlJournal {
         boundary: Boundary,
         check: &dyn Check,
     ) -> Result<RegistryCommitReadback, ControlError> {
-        self.require_registry_schema()?;
         check.check(Point::Start)?;
+        self.require_registry_schema(check)?;
         self.ensure_available()?;
         let read = self
             .database
@@ -176,7 +176,7 @@ impl PersistentControlJournal {
             .map_err(|_| ControlError::StoreUnavailable)?;
         self.header_from(&read)?;
         check.check(Point::ReadRecord)?;
-        super::super::publication::require_registry_base(&read, self.limits)?;
+        super::super::publication::require_registry_base(self, &read, self.limits)?;
         drop(read);
         let command = request.command(self.limits)?;
         let result = transaction::execute_registry(
@@ -274,7 +274,7 @@ impl PersistentControlJournal {
         &self,
         check: &dyn Check,
     ) -> Result<RegistryReadSnapshot, ControlError> {
-        self.require_registry_schema()?;
+        self.require_registry_schema(check)?;
         self.ensure_available()?;
         check.check(Point::Start)?;
         let read = self
@@ -285,9 +285,9 @@ impl PersistentControlJournal {
         extract(&snapshot, self.limits, check)
     }
 
-    const fn require_registry_schema(&self) -> Result<(), ControlError> {
+    fn require_registry_schema(&self, check: &dyn Check) -> Result<(), ControlError> {
         if self.identity.schema_version == REGISTRY_JOURNAL_SCHEMA_VERSION {
-            Ok(())
+            self.require_normal_profile(check)
         } else {
             Err(ControlError::SchemaUnsupported)
         }

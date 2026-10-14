@@ -159,6 +159,9 @@ impl PersistentControlJournal {
             .begin_read()
             .map_err(|_| ControlError::StoreUnavailable)?;
         let header = self.header_from(&read)?;
+        super::super::operating_profile::normal(super::super::operating_profile::read_mode(
+            &read, self.identity, self.limits,
+        )?)?;
         check.check(Point::ReadHeader)?;
         Ok((read, header))
     }

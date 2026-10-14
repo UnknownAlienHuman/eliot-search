@@ -8,9 +8,13 @@
 use core::fmt;
 use search_contracts::{Blake3Digest32, PublicationIntent, PublicationIntentState};
 use search_ports::{CancellationProbe, OperationContext};
-pub(super) fn require_registry_base(read: &super::ReadTransaction, limits: super::JournalLimits)
+pub(super) fn require_registry_base(journal: &PersistentControlJournal, read: &super::ReadTransaction, limits: super::JournalLimits)
     -> Result<(), super::ControlError> {
-    visibility::require_initialized(read, limits)
+    match super::operating_profile::read_mode(read, journal.identity, limits)? {
+        super::JournalOperatingProfile::Direct => Ok(()),
+        super::JournalOperatingProfile::Indexed => visibility::require_initialized(read, limits),
+        super::JournalOperatingProfile::MigrationInert => Err(super::ControlError::MigrationUnverified),
+    }
 }
 
 use crate::{ConditionalControlMutation, ControlRecordCondition, ControlRecordClass,
@@ -36,7 +40,7 @@ mod tests;
 /// No in-place schema-1 migration is implemented or implicitly performed.
 pub const PUBLICATION_INTENT_SCHEMA_VERSION: u32 = 2;
 
-const KEY: &[u8] = b"publication_intents/current/v1";
+pub(in crate::persistent) const KEY: &[u8] = b"publication_intents/current/v1";
 
 /// Immutable exact-input update for the durable publication intent.
 ///
@@ -210,6 +214,7 @@ impl PersistentControlJournal {
         if !crate::has_visibility_schema(self.identity.schema_version) {
             return Err(ControlError::SchemaUnsupported);
         }
+        super::operating_profile::require_indexed(self)?;
         let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
         let snapshot = self.verify_from_checked(&read, check)?;
         // Reuse the existing relationship validator; all observations stay in
@@ -259,8 +264,10 @@ impl PersistentControlJournal {
         })
     }
 
-    const fn require_intent_schema(&self) -> Result<(), ControlError> {
-        if crate::has_intent_schema(self.identity.schema_version) { Ok(()) }
+    fn require_intent_schema(&self) -> Result<(), ControlError> {
+        if crate::has_intent_schema(self.identity.schema_version) {
+            super::operating_profile::require_indexed(self)
+        }
         else { Err(ControlError::SchemaUnsupported) }
     }
 

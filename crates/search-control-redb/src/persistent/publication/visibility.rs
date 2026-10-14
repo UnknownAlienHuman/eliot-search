@@ -12,7 +12,7 @@ use super::super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCo
     PersistentControlJournal, ReadTransaction, operation_from, is_corruption};
 use super::codec as intent_codec;
 
-mod codec;
+pub(in crate::persistent) mod codec;
 mod validation;
 mod succession;
 pub use succession::PublicationSuccessor;
@@ -23,7 +23,7 @@ mod tests;
 /// bindings and provider authority. Schemas 1-3 require explicit verified
 /// migration and are never reinterpreted as this layout.
 pub const PUBLICATION_VISIBILITY_SCHEMA_VERSION: u32 = 4;
-const STATE: &[u8] = b"collection_route/visibility/v1";
+pub(in crate::persistent) const STATE: &[u8] = b"collection_route/visibility/v1";
 const RECEIPTS: &[u8] = b"publication_receipts/visible/v1/";
 const MANIFESTS: &[u8] = b"projection_memberships/manifest/v1/";
 const SHADOWS: &[u8] = b"shadow_fences/publication/v1/";
@@ -235,6 +235,11 @@ impl PersistentControlJournal {
     ) -> Result<ControlCommitReceipt, ControlCallError> {
         let budget = Budget::new(context);
         let result = (|| {
+            // Schema 5 seeds Indexed only with its atomic profile initializer.
+            // Later transitions lack an accepted source/access-counter contract.
+            if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+                return Err(ControlError::MigrationUnverified);
+            }
             self.ensure_available()?; budget.check(Point::Start)?; require_schema(self)?;
             if state.visible_epoch.get() != 0 || state.last_receipt.is_some()
                 || state.guards.owner_epoch != self.identity.owner_epoch { return Err(ControlError::InvalidValue); }
@@ -337,8 +342,10 @@ pub(super) fn validate_initial_intent(snapshot: &JournalReadSnapshot, intent: &P
     Ok(())
 }
 
-const fn require_schema(journal: &PersistentControlJournal) -> Result<(), ControlError> {
-    if crate::has_visibility_schema(journal.identity.schema_version) { Ok(()) }
+fn require_schema(journal: &PersistentControlJournal) -> Result<(), ControlError> {
+    if crate::has_visibility_schema(journal.identity.schema_version) {
+        crate::persistent::operating_profile::require_indexed(journal)
+    }
     else { Err(ControlError::SchemaUnsupported) }
 }
 fn key(bytes: &[u8], limits: JournalLimits) -> Result<ControlKey, ControlError> { ControlKey::new(bytes.to_vec(), limits) }

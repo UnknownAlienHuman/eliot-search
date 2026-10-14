@@ -1,5 +1,25 @@
 # Function contract — `search-control-redb`
 
+## Frozen schema-5 operating profile
+
+- `JournalOperatingProfile`: closed Direct / Indexed / MigrationInert observation.
+- `JournalProfileInitialization`: Direct, Indexed with actual supplied visibility,
+  or MigrationInert; no default, readiness boolean or caller-created verified state.
+- `initialize_operating_profile`: exact generation-zero conditional commit of the
+  immutable reserved profile and, only for Indexed, existing validated visibility.
+- `recover_operating_profile_initialization`: inspect the exact original command;
+  preserve historical replay and unknown/conflict classifications without rewriting.
+- `operating_profile`: bounded current technical observation, never serving authority.
+
+Direct registry/control writes need no Qdrant route. Indexed visibility/intent paths
+retain their semantic validation. MigrationInert cannot bind normal registry or
+publish/admit a current snapshot. Generic mutation cannot write/delete the profile.
+The original profile codec/operation join is checked on disk verification and snapshot
+publication. Schemas 1/2/3/4 and v1 bootstrap semantics remain unchanged.
+Later Direct-to-Indexed and inert adoption explicitly refuse until a separately
+accepted exact owner/source/access-counter transition contract exists. Root owns
+native v2 creation and source admission; this package mints none of those authorities.
+
 ## Concrete registry reservation (#269)
 
 - `RegistryMutationRequest::new`: finite owner-supplied metadata and exact before

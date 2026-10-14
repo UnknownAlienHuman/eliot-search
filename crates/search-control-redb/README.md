@@ -9,8 +9,38 @@ and seven record-class tags are unchanged. Schema 5 adds the exact reserved
 namespace `eliot.control.registry.v1/`; old schemas refuse colliding records on
 open/readback and cannot execute registry commands. There is no in-place adoption
 or automatic migration. The schema descriptor binds the prefix and wrapper codecs.
-Schema 5 preserves the existing publication/provider contracts, including explicit
-visibility initialization before normal registry writes.
+Schema 5 has a mandatory, package-owned operating-profile record. Schemas 1/2/3/4
+and the legacy v1 migration bootstrap retain their existing semantics.
+
+### Frozen operating-profile contract
+
+This slice starts from c5556f3 and changes only this package. The unshipped schema-5
+descriptor versions the reserved operating-profile key and codec before integration.
+`JournalOperatingProfile` is the closed Direct / Indexed / MigrationInert enum.
+`JournalProfileInitialization` selects Direct, Indexed with an explicitly supplied
+`PublicationVisibilityState`, or MigrationInert. `initialize_operating_profile`
+atomically installs the immutable profile at generation zero; Indexed installs its
+validated initial visibility in the same transaction. Exact initialization recovery
+uses the original command and operation identity and never repeats a write.
+
+Direct permits bounded registry/control metadata and published technical snapshots
+without any indexed route. It rejects indexed intent/visibility/manifest/receipt
+keys. Indexed requires the complete existing visibility validator. MigrationInert
+permits only inert Migration-class control writes and refuses normal registry ports,
+provider admission and current serving snapshots. Its source/inventory/content table
+capabilities remain private to the original live migration owner.
+
+Generic writes/deletes cannot replace the operating-profile record. Open, explicit
+verification, recovery and snapshot publication validate its codec and original
+generation-zero operation receipt. A nonempty schema-5 journal without the record
+refuses; no automatic adoption or default mode exists. Binding/dispatch retains the
+same publisher suspension and exact disk-generation checks.
+
+Direct-to-Indexed and MigrationInert adoption remain explicit refusals in this slice.
+Control has no accepted authoritative source/access-counter binding with which to
+validate a later transition. Existing visibility initialization cannot seed a route
+after Direct writes or invent collection IDs, counters or policy authority. Native
+v2 creation and actual source-owner admission inputs remain Root's integration work.
 
 Root constructs `RegistryStateKey` from a closed family and the source owner's
 complete canonical key bytes, and `RegistryStateChange` from exact before/after

@@ -49,7 +49,7 @@ pub(super) fn execute_with_conditions(
     boundary: Boundary,
     check: &dyn Check,
 ) -> Result<ControlCommitReceipt, ControlError> {
-    execute_scoped(journal, mutation, conditions, boundary, check, false).map(|(receipt, _)| receipt)
+    execute_scoped(journal, mutation, conditions, boundary, check, Scope::General).map(|(receipt, _)| receipt)
 }
 
 pub(super) fn execute_registry(
@@ -59,8 +59,17 @@ pub(super) fn execute_registry(
     boundary: Boundary,
     check: &dyn Check,
 ) -> Result<(ControlCommitReceipt, [u8; 32]), ControlError> {
-    execute_scoped(journal, mutation, conditions, boundary, check, true)
+    execute_scoped(journal, mutation, conditions, boundary, check, Scope::Registry)
 }
+
+pub(super) fn execute_profile(journal: &mut PersistentControlJournal, mutation: &ControlMutation,
+    conditions: &[ControlRecordCondition], boundary: Boundary, check: &dyn Check,
+) -> Result<ControlCommitReceipt, ControlError> {
+    execute_scoped(journal, mutation, conditions, boundary, check, Scope::Profile).map(|(receipt, _)| receipt)
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Scope { General, Registry, Profile }
 
 fn execute_scoped(
     journal: &mut PersistentControlJournal,
@@ -68,7 +77,7 @@ fn execute_scoped(
     conditions: &[ControlRecordCondition],
     boundary: Boundary,
     check: &dyn Check,
-    registry: bool,
+    scope: Scope,
 ) -> Result<(ControlCommitReceipt, [u8; 32]), ControlError> {
     // Production fences are inert by construction; the test helper below
     // consumes the boundary to exercise every fault-injection arm.
@@ -77,18 +86,12 @@ fn execute_scoped(
     journal.ensure_available()?;
     check.check(Point::Start)?;
     let changed_keys = validate_mutation(mutation, journal.limits)?;
-    for key in &changed_keys {
-        if super::registry::reserved(key.as_bytes()) != registry {
-            // The dedicated registry path changes only its namespace. Generic
-            // calls may neither replace nor delete a reserved registry record.
-            return Err(ControlError::InvalidKey);
-        }
-    }
     validate_conditions(mutation, conditions, journal.limits, || check.check(Point::PlanRecord))?;
     let fingerprint = bind_conditions(request_fingerprint(journal.identity, mutation)?, conditions,
         || check.check(Point::PlanRecord))?;
     check.check(Point::Validated)?;
     let read = journal.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
+    validate_scope(journal, &read, mutation, &changed_keys, scope)?;
     let plan = match plan_commit(journal, &read, mutation, conditions, changed_keys, fingerprint, check)? {
         PlanOutcome::Replay(receipt) => return Ok((receipt, fingerprint)),
         PlanOutcome::Stage(plan) => plan,
@@ -183,6 +186,38 @@ fn execute_scoped(
     journal.pending = None;
     journal.committed_writes = journal.committed_writes.saturating_add(1);
     Ok((receipt, fingerprint))
+}
+
+fn validate_scope(journal: &PersistentControlJournal, read: &ReadTransaction, mutation: &ControlMutation,
+    changed_keys: &[ControlKey], scope: Scope,
+) -> Result<(), ControlError> {
+    for key in changed_keys {
+        if super::registry::reserved(key.as_bytes()) != (scope == Scope::Registry) {
+            // The dedicated registry path changes only its namespace. Generic
+            // calls may neither replace nor delete a reserved registry record.
+            return Err(ControlError::InvalidKey);
+        }
+        if journal.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION
+            && ((key.as_bytes() == super::operating_profile::KEY && scope != Scope::Profile)
+                || (scope == Scope::Profile && key.as_bytes() != super::operating_profile::KEY
+                    && key.as_bytes() != super::publication::visibility::STATE)) {
+            return Err(ControlError::InvalidKey);
+        }
+    }
+    if journal.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION && scope != Scope::Profile {
+        use super::operating_profile::JournalOperatingProfile;
+        let mode = super::operating_profile::read_mode(read, journal.identity, journal.limits)?;
+        if scope == Scope::Registry { super::operating_profile::normal(mode)?; }
+        if mode != JournalOperatingProfile::Indexed
+            && changed_keys.iter().any(|key| super::publication::port_reserved_key(key.as_bytes())) {
+            return Err(ControlError::MigrationUnverified);
+        }
+        if mode == JournalOperatingProfile::MigrationInert && mutation.writes().iter()
+            .any(|write| write.value.class() != crate::ControlRecordClass::Migration) {
+            return Err(ControlError::MigrationUnverified);
+        }
+    }
+    Ok(())
 }
 
 fn plan_commit(

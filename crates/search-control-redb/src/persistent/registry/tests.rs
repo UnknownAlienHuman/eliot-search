@@ -97,14 +97,17 @@ impl Scratch {
             .unwrap();
         let mut journal =
             PersistentControlJournal::create(file, identity(version), LIMITS).unwrap();
-        journal
-            .initialize_publication_visibility(
-                visibility(),
+        if version == 5 {
+            journal.initialize_operating_profile(
+                crate::JournalProfileInitialization::Indexed(visibility()),
                 MutationId([9; 32]),
                 Blake3Digest32::from_bytes([8; 32]),
                 &context(),
-            )
-            .unwrap();
+            ).unwrap();
+        } else {
+            journal.initialize_publication_visibility(visibility(), MutationId([9; 32]),
+                Blake3Digest32::from_bytes([8; 32]), &context()).unwrap();
+        }
         journal
     }
     fn reopen(&self) -> PersistentControlJournal {

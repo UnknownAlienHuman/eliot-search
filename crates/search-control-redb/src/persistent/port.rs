@@ -91,6 +91,7 @@ impl PersistentControlJournal {
         if !crate::has_visibility_schema(self.identity.schema_version) {
             return Err(ControlError::SchemaUnsupported);
         }
+        self.require_normal_profile(&super::Unscoped)?;
         publisher.begin_disk_publication(self.identity)?;
         Ok(BoundControlJournal { journal: self, publisher, cancellation: PhantomData })
     }
@@ -212,6 +213,14 @@ impl<C: CancellationProbe> ControlSnapshotPort for BoundControlJournal<'_, C> {
             || snapshot.identity != self.journal.identity {
             return Err(admission_failure(ControlError::IdentityMismatch));
         }
+        if snapshot.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+            let key = crate::ControlKey::new(super::operating_profile::KEY.to_vec(), self.journal.limits)
+                .map_err(admission_failure)?;
+            let mode = super::operating_profile::mode_value(snapshot.records.binary_search_by(|(k, _)| k.cmp(&key))
+                .ok().and_then(|index| snapshot.records.get(index)).map(|(_, value)| value), self.journal.limits)
+                .map_err(admission_failure)?;
+            super::operating_profile::normal(mode).map_err(admission_failure)?;
+        }
         Ok(snapshot)
     }
 }
@@ -263,6 +272,7 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
                     if self.journal.identity.schema_version != crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
                         return Err(ControlError::SchemaUnsupported);
                     }
+                    self.journal.require_normal_profile(&budget)?;
                     generated = command.command(self.journal.limits)?;
                     &generated
                 }

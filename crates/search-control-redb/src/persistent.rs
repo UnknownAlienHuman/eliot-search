@@ -29,6 +29,9 @@ mod publication;
 mod port;
 mod registry;
 mod bootstrap;
+mod operating_profile;
+
+pub use operating_profile::{JournalOperatingProfile, JournalProfileInitialization};
 
 pub use bootstrap::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBootstrapFailure,
     MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
@@ -320,7 +323,9 @@ impl PersistentControlJournal {
         check.check(Point::ReadComplete)?;
         let snapshot = JournalReadSnapshot { identity: self.identity, generation: header.generation, records };
         registry::validate_snapshot(read, &snapshot, self.limits, check)?;
-        if crate::has_visibility_schema(self.identity.schema_version) {
+        if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+            operating_profile::validate_snapshot(self, read, &snapshot, check)?;
+        } else if crate::has_visibility_schema(self.identity.schema_version) {
             publication::visibility::validate_snapshot(read, &snapshot, self.limits, check)?;
         }
         Ok(snapshot)
