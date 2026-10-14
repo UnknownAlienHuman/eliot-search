@@ -283,9 +283,16 @@ impl PortfolioHistory {
         registry_revision: u64,
         receipt: &ReceiptRef,
         total_limit: usize,
+        operation_id: &OpaqueId,
     ) -> Result<PortfolioRevisionRecord, RegistryError> {
-        let record =
-            self.prepare_revision(key, revision, registry_revision, receipt, total_limit)?;
+        let record = self.prepare_revision(
+            key,
+            revision,
+            registry_revision,
+            receipt,
+            total_limit,
+            operation_id,
+        )?;
         self.revisions.insert(key, record.clone());
         Ok(record)
     }
@@ -297,6 +304,7 @@ impl PortfolioHistory {
         registry_revision: u64,
         receipt: &ReceiptRef,
         total_limit: usize,
+        operation_id: &OpaqueId,
     ) -> Result<PortfolioRevisionRecord, RegistryError> {
         if let Some(retained) = self.revisions.get(&key) {
             return if retained.revision == revision {
@@ -319,6 +327,7 @@ impl PortfolioHistory {
             revision,
             registry_revision,
             last_receipt: receipt.clone(),
+            operation_id: operation_id.clone(),
         };
         Ok(record)
     }
@@ -407,9 +416,16 @@ impl PortfolioHistory {
         receipt: &ReceiptRef,
         operation_id: &OpaqueId,
         total_limit: usize,
+        expected_current: Option<PortfolioRevisionKey>,
     ) -> Result<PreparedPortfolioPublication, RegistryError> {
-        let record =
-            self.prepare_revision(key, revision, registry_revision, receipt, total_limit)?;
+        let record = self.prepare_revision(
+            key,
+            revision,
+            registry_revision,
+            receipt,
+            total_limit,
+            operation_id,
+        )?;
         let next = self
             .current_pointer(key.portfolio_id)
             .map_or_else(
@@ -417,13 +433,7 @@ impl PortfolioHistory {
                 |pointer| pointer.pointer_revision().checked_next(),
             )
             .map_err(|_| RegistryError::ContractExhausted)?;
-        let pointer = self.prepare_pointer(
-            key,
-            next,
-            self.current_key(key.portfolio_id),
-            operation_id,
-            receipt,
-        )?;
+        let pointer = self.prepare_pointer(key, next, expected_current, operation_id, receipt)?;
         Ok(PreparedPortfolioPublication { record, pointer })
     }
 
@@ -504,9 +514,15 @@ pub struct PortfolioRevisionRecord {
     revision: ImmutablePortfolioRevision,
     registry_revision: u64,
     last_receipt: ReceiptRef,
+    operation_id: OpaqueId,
 }
 
 impl PortfolioRevisionRecord {
+    /// Original operation that committed this immutable publication.
+    #[must_use]
+    pub const fn operation_id(&self) -> &OpaqueId {
+        &self.operation_id
+    }
     /// Exact immutable key of this record.
     #[must_use]
     pub const fn key(&self) -> PortfolioRevisionKey {

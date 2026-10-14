@@ -198,7 +198,7 @@ fn validate_portfolio_history(
     Ok(())
 }
 
-/// Computes the version-2 canonical digest of every snapshot field.
+/// Computes the version-3 canonical digest of every snapshot field.
 ///
 /// The flattened ownership projection does not persist cutover preparation,
 /// fence or activation state. Those remain in NamespaceCutoverState.

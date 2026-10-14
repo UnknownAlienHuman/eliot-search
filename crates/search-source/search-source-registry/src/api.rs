@@ -418,7 +418,7 @@ where
 // Portfolio operations
 // ---------------------------------------------------------------------------
 
-/// Publishes one reference portfolio revision durably through the control port.
+/// Publishes a guarded portfolio revision through the existing receipt port.
 #[allow(clippy::too_many_arguments)]
 pub fn publish_reference_portfolio<C, P>(
     registry: &mut SourceRegistry,

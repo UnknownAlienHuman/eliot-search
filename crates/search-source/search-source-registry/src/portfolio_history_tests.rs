@@ -48,13 +48,27 @@ fn three_revisions_stay_resolvable_after_pointer_moves() {
     let second = key(1, 2);
     let third = key(1, 3);
     history
-        .publish_revision(first, content(&[7]), 1, &receipt("r1"), 16)
+        .publish_revision(first, content(&[7]), 1, &receipt("r1"), 16, &operation(0))
         .expect("first revision");
     history
-        .publish_revision(second, content(&[7, 8]), 2, &receipt("r2"), 16)
+        .publish_revision(
+            second,
+            content(&[7, 8]),
+            2,
+            &receipt("r2"),
+            16,
+            &operation(0),
+        )
         .expect("second revision");
     history
-        .publish_revision(third, content(&[7, 9]), 3, &receipt("r3"), 16)
+        .publish_revision(
+            third,
+            content(&[7, 9]),
+            3,
+            &receipt("r3"),
+            16,
+            &operation(0),
+        )
         .expect("third revision");
     assert_eq!(history.len(), 3, "no revision is replaced by a later one");
     history
@@ -104,17 +118,18 @@ fn same_key_same_content_replays_and_different_content_conflicts() {
     let mut history = PortfolioHistory::new();
     let target = key(2, 1);
     let replayed = history
-        .publish_revision(target, content(&[3]), 1, &receipt("r1"), 16)
+        .publish_revision(target, content(&[3]), 1, &receipt("r1"), 16, &operation(0))
         .expect("first publication");
     let again = history
-        .publish_revision(target, content(&[3]), 1, &receipt("r1"), 16)
+        .publish_revision(target, content(&[3]), 1, &receipt("r1"), 16, &operation(0))
         .expect("identical replay");
     assert_eq!(
         replayed, again,
         "same key and content replay the exact record"
     );
     assert_eq!(history.len(), 1, "replay retains one record, not two");
-    let conflict = history.publish_revision(target, content(&[4]), 2, &receipt("r2"), 16);
+    let conflict =
+        history.publish_revision(target, content(&[4]), 2, &receipt("r2"), 16, &operation(0));
     assert_eq!(
         conflict.err(),
         Some(RegistryError::ReferencePortfolioInvalid),
@@ -135,9 +150,23 @@ fn membership_order_is_part_of_revision_identity() {
     let mut history = PortfolioHistory::new();
     let target = key(3, 1);
     history
-        .publish_revision(target, content(&[1, 2]), 1, &receipt("r1"), 16)
+        .publish_revision(
+            target,
+            content(&[1, 2]),
+            1,
+            &receipt("r1"),
+            16,
+            &operation(0),
+        )
         .expect("ordered publication");
-    let reordered = history.publish_revision(target, content(&[2, 1]), 1, &receipt("r1"), 16);
+    let reordered = history.publish_revision(
+        target,
+        content(&[2, 1]),
+        1,
+        &receipt("r1"),
+        16,
+        &operation(0),
+    );
     assert_eq!(
         reordered.err(),
         Some(RegistryError::ReferencePortfolioInvalid),
@@ -151,10 +180,10 @@ fn pointer_move_conflicts_are_fail_closed_and_retain_history() {
     let first = key(4, 1);
     let second = key(4, 2);
     history
-        .publish_revision(first, content(&[1]), 1, &receipt("r1"), 16)
+        .publish_revision(first, content(&[1]), 1, &receipt("r1"), 16, &operation(0))
         .expect("first");
     history
-        .publish_revision(second, content(&[2]), 2, &receipt("r2"), 16)
+        .publish_revision(second, content(&[2]), 2, &receipt("r2"), 16, &operation(0))
         .expect("second");
     history
         .move_current(
@@ -262,10 +291,12 @@ fn aggregate_history_ceiling_bounds_total_records_not_latest_per_identity() {
                 index,
                 &receipt("r"),
                 3,
+                &operation(0),
             )
             .unwrap_or_else(|error| panic!("revision {index} accepted: {error}"));
     }
-    let overflow = history.publish_revision(key(5, 4), content(&[4]), 4, &receipt("r"), 3);
+    let overflow =
+        history.publish_revision(key(5, 4), content(&[4]), 4, &receipt("r"), 3, &operation(0));
     assert_eq!(
         overflow.err(),
         Some(RegistryError::CapacityExceeded),

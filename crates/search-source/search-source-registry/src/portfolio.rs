@@ -57,6 +57,9 @@ pub struct PublishPortfolioRequest {
     pub portfolio_id: ReferencePortfolioId,
     /// Exact portfolio revision to publish.
     pub portfolio_revision: search_contracts::PortfolioRevision,
+    /// Exact current target observed by the proposer; None requires absence.
+    /// This guard applies to new publication, not a historical replay.
+    pub expected_current: Option<PortfolioRevisionKey>,
     /// Explicit ordered membership precedence.
     pub membership_precedence: Vec<SourceMembershipId>,
     /// Whether an explicitly empty scope is permitted.
@@ -72,11 +75,12 @@ pub struct PortfolioReceipt {
     pub portfolio_revision: search_contracts::PortfolioRevision,
     /// Registry revision after commit.
     pub registry_revision: u64,
-    /// Stable operation identity.
+    /// Operation that originally committed the returned publication.
+    /// Identical-content reuse returns that original identity, not a new acknowledgment.
     pub operation_id: OpaqueId,
     /// Content-free durability receipt.
     pub receipt: ReceiptRef,
-    /// Whether this receipt came from exact idempotency replay.
+    /// Whether this returns an already committed immutable publication.
     pub replayed: bool,
 }
 
@@ -134,7 +138,9 @@ where
         let record = history
             .revision(&key)
             .ok_or(RegistryError::MutationOutcomeUnknown)?;
-        if record.membership_precedence() != request.membership_precedence {
+        if record.membership_precedence() != request.membership_precedence
+            || record.operation_id() != operation_id
+        {
             return Err(RegistryError::OperationConflict);
         }
         if record.registry_revision() != existing.after_revision
@@ -159,7 +165,9 @@ where
             portfolio_id: request.portfolio_id,
             portfolio_revision: record.portfolio_revision(),
             registry_revision: record.registry_revision(),
-            operation_id: operation_id.clone(),
+            // No operation was committed for this request. Return the
+            // original publication identity instead of acknowledging O2.
+            operation_id: record.operation_id().clone(),
             receipt: record.last_receipt().clone(),
             replayed: true,
         });
@@ -208,6 +216,7 @@ where
         receipt,
         operation_id,
         limits.max_portfolio_revisions,
+        request.expected_current,
     )?;
     let projected = ReferencePortfolioRecord {
         portfolio_id: prepared.record.portfolio_id(),
