@@ -4,7 +4,28 @@ use std::time::Instant;
 
 use super::dispatch::dispatch;
 use super::output::emit_process_error;
-use super::support::{help, is_persistent_command};
+use super::support::{
+    LEGACY_EFFECTS_UNAVAILABLE, help, is_persistent_command, is_unavailable_effect,
+};
+
+/// Refuses legacy effects before any native route, root owner or store opens.
+/// Global configuration flags are only stripped; their files are never read.
+pub fn maybe_refuse_legacy_effects() -> Option<ExitCode> {
+    let raw = env::args_os().skip(1).take(257).collect::<Vec<_>>();
+    if raw
+        .first()
+        .and_then(|value| value.to_str())
+        .is_some_and(is_unavailable_effect)
+    {
+        return Some(emit_process_error(LEGACY_EFFECTS_UNAVAILABLE));
+    }
+    let (arguments, _) = crate::config_composition::strip_config_args_os(&raw).ok()?;
+    arguments
+        .first()
+        .and_then(|value| value.to_str())
+        .filter(|command| is_unavailable_effect(command))
+        .map(|_| emit_process_error(LEGACY_EFFECTS_UNAVAILABLE))
+}
 
 /// Intercepts every persistent DIRECT one-shot command plus primary help.
 pub fn maybe_run() -> Option<ExitCode> {
@@ -16,6 +37,13 @@ pub fn maybe_run() -> Option<ExitCode> {
     let Ok((arguments, _)) = crate::config_composition::strip_config_args_os(&raw) else {
         return Some(emit_process_error("USAGE_ERROR"));
     };
+    if arguments
+        .first()
+        .and_then(|value| value.to_str())
+        .is_some_and(is_unavailable_effect)
+    {
+        return Some(emit_process_error(LEGACY_EFFECTS_UNAVAILABLE));
+    }
     if arguments
         .first()
         .and_then(|value| value.to_str())

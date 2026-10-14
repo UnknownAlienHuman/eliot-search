@@ -2,6 +2,7 @@
 
 #[path = "kernel/codec.rs"]
 mod codec;
+#[cfg(test)]
 #[path = "kernel/indexed.rs"]
 mod indexed;
 #[path = "kernel/page.rs"]
@@ -12,6 +13,7 @@ mod provider;
 mod streaming;
 
 pub use codec::{MAX_RESPONSE_BYTES, json_string, write_error, write_line};
+#[cfg(test)]
 pub use indexed::emit_indexed_source;
 pub use page::emit_search_page;
 pub use provider::{emit_handle_expansion, emit_provider_status};

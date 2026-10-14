@@ -19,6 +19,8 @@ use plaintext::{RevisionMetadata, verify_revision_identity};
 
 #[path = "secure_direct_store/kernel.rs"]
 mod kernel;
+#[path = "control_migration_context.rs"]
+pub mod migration_context;
 #[path = "control_migration_objects.rs"]
 mod migration_objects;
 #[path = "preparation_store.rs"]
@@ -27,13 +29,12 @@ mod preparation_store;
 mod revision_writer;
 #[path = "secure_direct_store_storage_io.rs"]
 mod storage_io;
-#[path = "control_migration_context.rs"]
-pub mod migration_context;
 
 pub use kernel::DirectStore;
+#[cfg(test)]
+pub use plaintext::IndexedSource;
 pub use plaintext::{
-    IndexedSource, RevisionSlice, SourceSummary, StoreGap, StoreSearchResult, StoreVerification,
-    StoredMatch,
+    RevisionSlice, SourceSummary, StoreGap, StoreSearchResult, StoreVerification, StoredMatch,
 };
 pub use preparation_store::{PreparationBatch, PreparationCursor};
 

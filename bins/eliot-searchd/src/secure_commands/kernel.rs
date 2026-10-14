@@ -1,5 +1,6 @@
 //! Persistent DIRECT command composition behind the stable facade.
 
+#[cfg(test)]
 #[path = "kernel/commands.rs"]
 mod commands;
 #[path = "kernel/dispatch.rs"]
@@ -16,9 +17,12 @@ mod source_registration;
 mod source_roots;
 #[path = "kernel/source_sync.rs"]
 mod source_sync;
+#[cfg(test)]
 #[path = "kernel/store.rs"]
 mod store;
 #[path = "kernel/support.rs"]
 mod support;
 
 pub use entry::maybe_run;
+pub use entry::maybe_refuse_legacy_effects;
+pub use support::LEGACY_EFFECTS_UNAVAILABLE;

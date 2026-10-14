@@ -1,15 +1,19 @@
 //! Source-catalog mutation and retained-revision preparation entrypoints.
 
+#[cfg(test)]
 use std::path::Path;
 
 #[cfg(test)]
 use zeroize::Zeroizing;
 
-use super::DirectStore;
+#[cfg(test)]
 use super::super::preparation_store;
-use crate::plaintext_direct_store::{IndexedSource, SourceSummary};
+use super::DirectStore;
+#[cfg(test)]
+use crate::plaintext_direct_store::IndexedSource;
 #[cfg(test)]
 use crate::plaintext_direct_store::RevisionMetadata;
+use crate::plaintext_direct_store::SourceSummary;
 
 impl DirectStore {
     /// Stable namespace identity retained with the data root.
@@ -18,25 +22,19 @@ impl DirectStore {
     }
 
     /// Revision bytes and saved preparation both precede source publication.
-    pub(crate) fn index_file(
-        &mut self,
-        path: &Path,
-    ) -> Result<IndexedSource, String> {
+    #[cfg(test)]
+    pub(crate) fn index_file(&mut self, path: &Path) -> Result<IndexedSource, String> {
         let namespace = self.inner.namespace_id();
         let root = &self.root;
         let protector = &self.protector;
-        self.inner.index_file_with_writer(path, &mut |_, source, bytes| {
-            preparation_store::persist_source(
-                root,
-                protector,
-                &namespace,
-                source,
-                bytes,
-            )
-        })
+        self.inner
+            .index_file_with_writer(path, &mut |_, source, bytes| {
+                preparation_store::persist_source(root, protector, &namespace, source, bytes)
+            })
     }
 
     /// Every batch member crosses the same revision/preparation barrier.
+    #[cfg(test)]
     pub(crate) fn index_directory(
         &mut self,
         directory: &Path,
@@ -44,18 +42,10 @@ impl DirectStore {
         let namespace = self.inner.namespace_id();
         let root = &self.root;
         let protector = &self.protector;
-        self.inner.index_directory_with_writer(
-            directory,
-            &mut |_, source, bytes| {
-                preparation_store::persist_source(
-                    root,
-                    protector,
-                    &namespace,
-                    source,
-                    bytes,
-                )
-            },
-        )
+        self.inner
+            .index_directory_with_writer(directory, &mut |_, source, bytes| {
+                preparation_store::persist_source(root, protector, &namespace, source, bytes)
+            })
     }
 
     /// Prepares a retained revision without rereading a current source path.
@@ -81,10 +71,8 @@ impl DirectStore {
     }
 
     /// Retires one source without deleting retained revision objects.
-    pub(crate) fn retire_source(
-        &mut self,
-        source_id: &str,
-    ) -> Result<SourceSummary, String> {
+    #[cfg(test)]
+    pub(crate) fn retire_source(&mut self, source_id: &str) -> Result<SourceSummary, String> {
         self.inner.retire_source(source_id)
     }
 

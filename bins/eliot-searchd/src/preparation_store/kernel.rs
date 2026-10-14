@@ -21,15 +21,15 @@ pub use batch::{PreparationBatch, PreparationCursor};
 #[cfg(test)]
 pub(crate) use inspect::{PreparationEvidence, inspect as inspect_preparation};
 pub(crate) use load::load as load_preparation;
-pub(crate) use persist::persist_source;
 #[cfg(test)]
 pub(crate) use persist::persist as persist_preparation;
+#[cfg(test)]
+pub(crate) use persist::persist_source;
 
 // Re-exported only for the existing migration-inventory child module.
 #[cfg(test)]
 pub(crate) use codec::{
-    binding, decode_reference, decode_reference_fields, extension,
-    lookup_key, object_id,
+    binding, decode_reference, decode_reference_fields, extension, lookup_key, object_id,
 };
 #[cfg(test)]
 pub(crate) use spec::{MAX_OBJECT_BYTES, REF_BYTES};

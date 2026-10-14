@@ -29,6 +29,7 @@ mod endpoint;
 #[path = "source_composition.rs"]
 mod git_source_composition;
 mod maintenance;
+#[cfg(test)]
 mod maintenance_guard;
 mod native_root_command;
 pub(crate) mod owner_composition;
@@ -100,7 +101,8 @@ const fn maybe_run_legacy_loopback() -> Option<ExitCode> {
 }
 
 fn main() -> ExitCode {
-    let result = native_root_command::maybe_run()
+    let result = secure_commands::maybe_refuse_legacy_effects()
+        .or_else(native_root_command::maybe_run)
         .or_else(source_migration_command::maybe_run)
         .or_else(preparation_composition::maybe_run)
         .or_else(maybe_run_legacy_loopback)

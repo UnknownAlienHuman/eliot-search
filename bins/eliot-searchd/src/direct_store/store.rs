@@ -1,30 +1,40 @@
 //! Data-root I/O and orchestration for the development DIRECT corpus.
 
-use std::fs::{self, File, Metadata, OpenOptions};
+#[cfg(test)]
+use std::fs::File;
+use std::fs::{self, Metadata, OpenOptions};
 #[cfg(test)]
 use std::io::Read;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(test)]
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(test)]
 use search_safe_reader::SafeReadError;
 
+#[cfg(test)]
 use crate::development::MAX_SCAN_INPUT_BYTES;
+#[cfg(test)]
+use crate::safe_reader_adapter;
+#[cfg(test)]
 use crate::safe_reader_adapter::{AdapterError, FullReadError};
-use crate::{safe_reader_adapter, sha256};
+use crate::sha256;
 
-use super::catalog::{load_registry, read_namespace};
 #[cfg(test)]
 use super::catalog::{RevisionMetadata, verify_revision_identity};
+use super::catalog::{load_registry, read_namespace};
 use super::model::{
-    CONTROL_DIRECTORY, DirectDigest, DirectStore, FileSnapshot, IdentityStrength,
-    MAX_DIRECTORY_DEPTH, MAX_DIRECTORY_FILES, MAX_LOG_BYTES,
-    MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE, REVISION_DIRECTORY,
-    RecordDraft, SOURCE_LOG_FILE, SOURCE_LOG_HEADER, SourceRecord, SourceState,
-    SourceSummary,
+    CONTROL_DIRECTORY, DirectStore, NAMESPACE_FILE, REVISION_DIRECTORY, SOURCE_LOG_FILE,
+    SOURCE_LOG_HEADER, SourceRecord, SourceState, SourceSummary,
 };
 #[cfg(test)]
-use super::model::{IndexedSource, StoreVerification};
+use super::model::{
+    DirectDigest, FileSnapshot, IdentityStrength, IndexedSource, MAX_DIRECTORY_DEPTH,
+    MAX_DIRECTORY_FILES, MAX_LOG_BYTES, MAX_LOG_LINE_BYTES, MAX_SOURCE_EVENTS, RecordDraft,
+    StoreVerification,
+};
 
 impl DirectStore {
     /// Opens or initializes the content-minimized control layout.
@@ -61,6 +71,7 @@ impl DirectStore {
     }
 
     /// Retires one source from future corpus search without deleting revisions.
+    #[cfg(test)]
     pub(crate) fn retire_source(&mut self, source_id: &str) -> Result<SourceSummary, String> {
         validate_digest_text(source_id, "DIRECT_SOURCE_ID_INVALID")?;
         let existing = self
@@ -111,9 +122,7 @@ impl DirectStore {
         let mut verified_revisions = 0_usize;
         let mut total_revision_bytes = 0_u64;
         for record in reloaded.revisions.values() {
-            let bytes = self
-                .read_verified_revision(record)
-                .map_err(str::to_owned)?;
+            let bytes = self.read_verified_revision(record).map_err(str::to_owned)?;
             total_revision_bytes = total_revision_bytes
                 .checked_add(
                     u64::try_from(bytes.len())
@@ -144,14 +153,8 @@ impl DirectStore {
         bytes: &[u8],
     ) -> Result<(), String> {
         validate_digest_text(revision_id, "DIRECT_REVISION_ID_INVALID")?;
-        validate_digest_text(
-            expected_content_digest,
-            "DIRECT_CONTENT_DIGEST_INVALID",
-        )?;
-        let shard = self
-            .root
-            .join(REVISION_DIRECTORY)
-            .join(&revision_id[..2]);
+        validate_digest_text(expected_content_digest, "DIRECT_CONTENT_DIGEST_INVALID")?;
+        let shard = self.root.join(REVISION_DIRECTORY).join(&revision_id[..2]);
         ensure_child_directory(&shard)?;
         let path = shard.join(format!("{revision_id}.bin"));
         if path.exists() {
@@ -189,6 +192,7 @@ impl DirectStore {
         verify_revision_path(&path, expected_content_digest, bytes.len())
     }
 
+    #[cfg(test)]
     pub(super) fn append_drafts(
         &mut self,
         drafts: Vec<RecordDraft>,
@@ -211,6 +215,7 @@ impl DirectStore {
 
     /// Appends already validated encoded events to the control log and verifies
     /// exact readback before replacing the in-memory registry.
+    #[cfg(test)]
     fn append_encoded_records(
         &mut self,
         encoded: &str,
@@ -226,8 +231,8 @@ impl DirectStore {
             .metadata()
             .map_err(|error| format!("DIRECT_CONTROL_LOG_METADATA_ERROR:{error}"))?
             .len();
-        let encoded_bytes = u64::try_from(encoded.len())
-            .map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
+        let encoded_bytes =
+            u64::try_from(encoded.len()).map_err(|_| "DIRECT_CONTROL_LOG_TOO_LARGE".to_owned())?;
         if current_bytes
             .checked_add(encoded_bytes)
             .is_none_or(|bytes| bytes > MAX_LOG_BYTES)
@@ -272,8 +277,7 @@ impl DirectStore {
         }
         let mut file = File::open(&path).map_err(|_| "DIRECT_REVISION_OPEN_FAILED")?;
         let mut bytes = Vec::with_capacity(
-            usize::try_from(record.byte_length)
-                .map_err(|_| "DIRECT_REVISION_LENGTH_MISMATCH")?,
+            usize::try_from(record.byte_length).map_err(|_| "DIRECT_REVISION_LENGTH_MISMATCH")?,
         );
         (&mut file)
             .take(u64::try_from(MAX_SCAN_INPUT_BYTES + 1).unwrap_or(u64::MAX))
@@ -359,6 +363,7 @@ fn initialize_log(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn read_file_snapshot(
     path: &Path,
     data_root: &Path,
@@ -411,6 +416,7 @@ pub(super) fn read_file_snapshot(
 ///
 /// Historical callers pass relative CLI paths; the kernel admits absolute
 /// locators only, so relativize here instead of inside the adapter.
+#[cfg(test)]
 fn absolutize_source(path: &Path) -> Result<PathBuf, String> {
     if path.is_absolute() {
         return Ok(path.to_path_buf());
@@ -421,6 +427,7 @@ fn absolutize_source(path: &Path) -> Result<PathBuf, String> {
 
 /// Maps a kernel-verified read failure to the DIRECT namespace without
 /// paths, bytes or raw OS error text.
+#[cfg(test)]
 fn map_full_read_error(error: FullReadError, limit_error: &str) -> String {
     match error {
         FullReadError::Adapter(adapter) => match adapter {
@@ -449,9 +456,7 @@ fn map_full_read_error(error: FullReadError, limit_error: &str) -> String {
             | SafeReadError::HandleChangedDuringRead
             | SafeReadError::BackendFailure => "DIRECT_SOURCE_CHANGED_DURING_READ".to_owned(),
             SafeReadError::RootIdentityMismatch => "DIRECT_SOURCE_ESCAPE_DENIED".to_owned(),
-            SafeReadError::UnsupportedFileKind => {
-                "DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned()
-            }
+            SafeReadError::UnsupportedFileKind => "DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned(),
             SafeReadError::ReparseBoundaryDenied => "DIRECT_SOURCE_LINK_DENIED".to_owned(),
             SafeReadError::SecurityDenied | SafeReadError::SecurityRevisionMismatch => {
                 "DIRECT_SOURCE_ACCESS_DENIED".to_owned()
@@ -488,6 +493,7 @@ pub(super) fn path_identity_bytes(path: &Path) -> Vec<u8> {
     path.to_string_lossy().as_bytes().to_vec()
 }
 
+#[cfg(test)]
 pub(super) fn collect_regular_files(
     directory: &Path,
     data_root: &Path,
@@ -554,8 +560,8 @@ fn verify_revision_path(
     expected_length: usize,
 ) -> Result<(), String> {
     ensure_regular_file(path)?;
-    let metadata = fs::metadata(path)
-        .map_err(|error| format!("DIRECT_REVISION_METADATA_ERROR:{error}"))?;
+    let metadata =
+        fs::metadata(path).map_err(|error| format!("DIRECT_REVISION_METADATA_ERROR:{error}"))?;
     if metadata.len() != u64::try_from(expected_length).unwrap_or(u64::MAX) {
         return Err("DIRECT_REVISION_LENGTH_MISMATCH".to_owned());
     }
@@ -574,6 +580,7 @@ fn verify_revision_path(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn validate_digest_text(value: &str, error: &'static str) -> Result<(), String> {
     if sha256::decode_digest(value).is_some() {
         Ok(())
