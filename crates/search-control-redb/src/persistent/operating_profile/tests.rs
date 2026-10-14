@@ -466,6 +466,43 @@ fn operating_profile_initialization_unknown_conflict_exact_recovery_and_historic
 }
 
 #[test]
+fn operating_profile_indexed_genesis_refuses_valid_equal_size_seed_substitution() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    journal
+        .initialize_operating_profile(
+            JournalProfileInitialization::Indexed(visibility()),
+            INIT,
+            DIGEST,
+            &context(),
+        )
+        .unwrap();
+    let mut substituted = visibility();
+    substituted.collection_generation_id = CollectionGenerationId::from_bytes([99; 16]);
+    let expected =
+        super::super::publication::visibility::codec::state(&visibility(), LIMITS).unwrap();
+    let replacement =
+        super::super::publication::visibility::codec::state(&substituted, LIMITS).unwrap();
+    assert_eq!(expected.as_bytes().len(), replacement.as_bytes().len());
+    let write = journal.database.begin_write().unwrap();
+    {
+        let mut records = write.open_table(RECORDS).unwrap();
+        let encoded = encode_value(&replacement);
+        records
+            .insert(
+                super::super::publication::visibility::STATE,
+                encoded.as_slice(),
+            )
+            .unwrap();
+    }
+    write.commit().unwrap();
+    assert!(journal.read_snapshot().is_err());
+    assert!(journal.read_publication_visibility(&context()).is_err());
+    drop(journal);
+    assert!(scratch.open().is_err());
+}
+
+#[test]
 fn operating_profile_codec_original_join_and_old_schema_semantics() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(5);

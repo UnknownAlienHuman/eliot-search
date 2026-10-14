@@ -368,6 +368,22 @@ pub(super) fn validate_snapshot(
     {
         return Err(ControlError::StoreCorrupt);
     }
+    let mut keys = command
+        .mutation()
+        .writes()
+        .iter()
+        .map(|write| write.key.clone())
+        .collect::<Vec<_>>();
+    keys.sort();
+    super::transaction::verify_replay(
+        journal,
+        read,
+        &header,
+        &operation.receipt,
+        command.mutation(),
+        &keys,
+        check,
+    )?;
     match record.initial.mode() {
         JournalOperatingProfile::Indexed => {
             super::publication::visibility::validate_snapshot(
