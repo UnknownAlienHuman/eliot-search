@@ -208,7 +208,7 @@ pub fn resolve_source_view(
     excluded.sort();
     Ok(ResolvedSourceView {
         registry_revision: inner.revision,
-        registry_digest: snapshot_digest(inner),
+        registry_digest: snapshot_digest(inner)?,
         corpus_id: request.corpus_id.clone(),
         generation: request.generation,
         allowed_memberships: allowed,
@@ -279,7 +279,7 @@ pub fn verify_view(
     if view.registry_revision != inner.revision {
         return Err(RegistryError::SourceViewStale);
     }
-    if view.registry_digest != snapshot_digest(inner) {
+    if view.registry_digest != snapshot_digest(inner)? {
         return Err(RegistryError::SourceViewStale);
     }
     for namespace in view
