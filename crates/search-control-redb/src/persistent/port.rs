@@ -217,6 +217,29 @@ impl<C: CancellationProbe> ControlSnapshotPort for BoundControlJournal<'_, C> {
 }
 
 impl<C: CancellationProbe> BoundControlJournal<'_, C> {
+    /// Actual limits of the executing borrowed journal.
+    #[must_use]
+    pub const fn limits(&self) -> crate::JournalLimits { self.journal.limits() }
+
+    /// Targeted immutable-operation lookup on the recovery plane, without publication.
+    ///
+    /// # Errors
+    /// Partial/unknown/pending or interrupted state is an error, never absence.
+    pub fn lookup_registry_operation(&self, id: &OpaqueId, context: &OperationContext<C>)
+        -> Result<super::RegistryOperationLookup, ControlPortError> {
+        self.journal.lookup_registry_operation(id, context).map_err(|error| failure(error, None))
+    }
+
+    /// Recheck an immutable envelope and all supplied keys in one bounded read.
+    ///
+    /// # Errors
+    /// Changed operations, missing/duplicate/oversized targets and interruptions refuse.
+    pub fn read_registry_operation_targets(&self, expected: &super::RegistryOperationEnvelope,
+        keys: &[super::RegistryStateKey], context: &OperationContext<C>,
+    ) -> Result<super::RegistryTransactionReadback, ControlPortError> {
+        self.journal.read_registry_operation_targets(expected, keys, context)
+            .map_err(|error| failure(error, None))
+    }
     /// Recovers the original command, including exact record preconditions.
     /// No write is retried and no publisher fence is cleared by this operation.
     ///

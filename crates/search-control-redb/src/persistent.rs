@@ -40,7 +40,8 @@ pub use bootstrap::{OwnerContentStage, OwnerContentReadback, OwnerContentMappedR
 pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use registry::{RegistryStateFamily, RegistryStateKey, RegistryStateChange,
     RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
-    RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback};
+    RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,
+    RegistryOperationLookup, RegistryOperationObservation};
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
     PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
@@ -165,6 +166,10 @@ impl PersistentControlJournal {
     /// Verified exact installation/root/owner/path/schema binding.
     #[must_use]
     pub const fn identity(&self) -> JournalIdentity { self.identity }
+
+    /// Active executing storage limits, not a caller's separate preflight profile.
+    #[must_use]
+    pub const fn limits(&self) -> JournalLimits { self.limits }
 
     /// Diagnostic count of successful initialization, data commits, owner handoffs and quarantine writes.
     /// Reads, recovery and idempotent replay do not increment it; this is not an I/O metric.

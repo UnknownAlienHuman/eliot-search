@@ -9,6 +9,11 @@
 - `PersistentControlJournal::commit_registry_batch`: one conditional atomic
   transaction, immutable full-ID operation and exact target readback.
 - `recover_registry_batch`: original-command recovery; no blind re-execution.
+- `lookup_registry_operation`: targeted immutable lookup/proven absence with
+  actual identity, journal generation and registry revision coordinates.
+- `read_registry_operation_targets`: exact envelope and all requested targets
+  from one coherent read, with no catalog/history scan or semantic callback.
+- `limits`: actual executing bounds copied from the journal, also on its bound port.
 - `read_registry_snapshot`: complete coherent technical restart observations;
   source-owner semantic restore and admission decoding remain Root's responsibility.
 

@@ -73,7 +73,24 @@ The disk file is not an authenticated ciphertext format; this adapter assumes ex
 Capability owners must validate payload semantics: a technical class tag alone does not prove that
 arbitrary bytes are content-free.
 
+### Targeted registry reads
+
+The normal registry adapter uses `lookup_registry_operation(id, context)`, then
+decodes immutable owner bytes outside the database and calls
+`read_registry_operation_targets(envelope, keys, context)`. Both methods also
+exist on `BoundControlJournal`. `RegistryOperationLookup::Absent` carries actual
+identity/journal-generation/registry-revision coordinates; `Committed` contains
+`RegistryOperationObservation` with those current coordinates and the unchanged
+original `envelope()`. The second call rechecks that exact envelope and all keys
+in one read transaction. Missing targets, changed envelopes, duplicates, active
+bounds and pending/unknown state refuse without partial output or false absence.
+Neither normal lookup scans the full catalog/history. Missing revision metadata
+requires one bounded empty-prefix observation; operation absence checks the real
+backend receipt as well. `limits()` on journal/bound port returns the executing
+profile for adapter preflight. The complete startup snapshot API remains separate.
+
 ## Record-artifact retention (#345)
+
 
 The original staging `File` is retained from creation through freeze, exact replay,
 publication, synchronization and readback. Record-artifact Drop never removes a

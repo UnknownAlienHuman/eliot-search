@@ -35,7 +35,8 @@ pub use persistent::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBoo
 pub use persistent::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use persistent::{RegistryStateFamily, RegistryStateKey, RegistryStateChange,
     RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
-    RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback};
+    RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,
+    RegistryOperationLookup, RegistryOperationObservation};
 pub use conditions::{ConditionalControlMutation, ControlRecordCondition};
 pub use persistent::{ControlCallError, ControlInterruption, PersistentControlJournal,
     ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest,

@@ -582,3 +582,262 @@ fn registry_root_family_roundtrips_disk_snapshot_and_original_operation_recovery
     );
     assert_eq!(replay.readback().operation().journal_generation_before(), 1);
 }
+
+#[test]
+fn registry_targeted_lookup_proves_absence_and_rechecks_immutable_current_targets() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    let first = request("targeted:first", 1, 0, None, b"A");
+    assert_eq!(journal.limits(), LIMITS);
+    assert_eq!(
+        journal
+            .lookup_registry_operation(first.envelope().operation_id(), &context())
+            .unwrap(),
+        RegistryOperationLookup::Absent {
+            identity: identity(5),
+            journal_generation: 1,
+            registry_revision: 0
+        }
+    );
+    journal.commit_registry_batch(&first, &context()).unwrap();
+    let RegistryOperationLookup::Committed(observed) = journal
+        .lookup_registry_operation(first.envelope().operation_id(), &context())
+        .unwrap()
+    else {
+        panic!("operation");
+    };
+    assert_eq!(
+        (
+            observed.identity(),
+            observed.journal_generation(),
+            observed.registry_revision()
+        ),
+        (identity(5), 2, 1)
+    );
+    assert_eq!(observed.envelope(), first.envelope());
+    journal
+        .commit_registry_batch(
+            &request("targeted:second", 2, 1, Some(b"A"), b"B"),
+            &context(),
+        )
+        .unwrap();
+    // The first immutable operation is unchanged, while final coordinates/targets
+    // all come from one newer coherent read. No mixed-generation state is returned.
+    let read = journal
+        .read_registry_operation_targets(observed.envelope(), &[state_key()], &context())
+        .unwrap();
+    assert_eq!(
+        (read.journal_generation(), read.registry_revision()),
+        (3, 2)
+    );
+    assert_eq!(read.operation(), first.envelope());
+    assert_eq!(read.states()[0].canonical_bytes(), b"B");
+    let mut forged = observed.envelope().clone();
+    forged.owner_bytes.push(0);
+    assert_eq!(
+        journal
+            .read_registry_operation_targets(&forged, &[state_key()], &context())
+            .unwrap_err()
+            .control_error(),
+        ControlError::OperationConflict
+    );
+    let mut publisher = ControlSnapshotPublisher::new();
+    let port = journal.bind_control_port::<Cancel>(&mut publisher).unwrap();
+    assert_eq!(port.limits(), LIMITS);
+    assert!(matches!(
+        port.lookup_registry_operation(first.envelope().operation_id(), &context())
+            .unwrap(),
+        RegistryOperationLookup::Committed(_)
+    ));
+    assert_eq!(
+        port.read_registry_operation_targets(first.envelope(), &[state_key()], &context())
+            .unwrap()
+            .registry_revision(),
+        2
+    );
+}
+
+#[test]
+fn registry_targeted_duplicate_missing_and_active_key_bounds_refuse_whole_read() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    let first = request("targeted:bounds", 1, 0, None, b"A");
+    journal.commit_registry_batch(&first, &context()).unwrap();
+    assert_eq!(
+        journal
+            .read_registry_operation_targets(
+                first.envelope(),
+                &[state_key(), state_key()],
+                &context()
+            )
+            .unwrap_err()
+            .control_error(),
+        ControlError::DuplicateMutationKey
+    );
+    let missing =
+        RegistryStateKey::new(RegistryStateFamily::Root, b"missing-root".to_vec(), LIMITS).unwrap();
+    assert_eq!(
+        journal
+            .read_registry_operation_targets(first.envelope(), &[missing], &context())
+            .unwrap_err()
+            .control_error(),
+        ControlError::StoreCorrupt
+    );
+    let oversized = RegistryStateKey::new(
+        RegistryStateFamily::Root,
+        vec![1; 5000],
+        JournalLimits {
+            max_key_bytes: 8192,
+            ..LIMITS
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        journal
+            .read_registry_operation_targets(first.envelope(), &[oversized], &context())
+            .unwrap_err()
+            .control_error(),
+        ControlError::BudgetExceeded
+    );
+    assert_eq!(
+        journal
+            .read_registry_operation_targets(first.envelope(), &[], &context())
+            .unwrap_err()
+            .control_error(),
+        ControlError::BudgetExceeded
+    );
+    assert_eq!(
+        journal
+            .read_registry_operation_targets(
+                first.envelope(),
+                &vec![state_key(); LIMITS.max_mutation_items + 1],
+                &context()
+            )
+            .unwrap_err()
+            .control_error(),
+        ControlError::BudgetExceeded
+    );
+}
+
+#[test]
+fn registry_targeted_pending_and_partial_state_never_return_absent() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    let first = request("targeted:unknown", 1, 0, None, b"A");
+    assert_eq!(
+        journal.commit_registry_checked(&first, Boundary::LostAcknowledgement, &Unscoped),
+        Err(ControlError::CommitOutcomeUnknown)
+    );
+    assert_eq!(
+        journal
+            .lookup_registry_operation(first.envelope().operation_id(), &context())
+            .unwrap_err()
+            .control_error(),
+        ControlError::CommitOutcomeUnknown
+    );
+    assert_eq!(
+        journal
+            .read_registry_operation_targets(first.envelope(), &[state_key()], &context())
+            .unwrap_err()
+            .control_error(),
+        ControlError::CommitOutcomeUnknown
+    );
+    journal.recover_registry_batch(&first, &context()).unwrap();
+    // Keep record/value counters exact while damaging just the revision locator.
+    let write = journal.database.begin_write().unwrap();
+    {
+        let mut table = write.open_table(RECORDS).unwrap();
+        let raw = table.remove(REVISION).unwrap().unwrap().value().to_vec();
+        table
+            .insert(b"unrelated-counter".as_slice(), raw.as_slice())
+            .unwrap();
+    }
+    write.commit().unwrap();
+    assert_eq!(
+        journal
+            .lookup_registry_operation(&OpaqueId::new("uncommitted-id").unwrap(), &context())
+            .unwrap_err()
+            .control_error(),
+        ControlError::StoreCorrupt
+    );
+}
+
+#[test]
+fn registry_targeted_detached_operation_receipt_is_error_not_absence() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    let first = request("targeted:detached", 1, 0, None, b"A");
+    journal.commit_registry_batch(&first, &context()).unwrap();
+    let key = codec::operation_key(first.envelope().operation_id(), LIMITS).unwrap();
+    let write = journal.database.begin_write().unwrap();
+    {
+        let mut table = write.open_table(RECORDS).unwrap();
+        let raw = table
+            .remove(key.as_bytes())
+            .unwrap()
+            .unwrap()
+            .value()
+            .to_vec();
+        table
+            .insert(b"detached-operation".as_slice(), raw.as_slice())
+            .unwrap();
+    }
+    write.commit().unwrap();
+    assert_eq!(
+        journal
+            .lookup_registry_operation(first.envelope().operation_id(), &context())
+            .unwrap_err()
+            .control_error(),
+        ControlError::StoreCorrupt
+    );
+}
+
+#[test]
+fn registry_targeted_normal_lookup_work_is_independent_of_history_length() {
+    struct Count(Cell<usize>);
+    impl Check for Count {
+        fn check(&self, point: Point) -> Result<(), ControlError> {
+            if matches!(
+                point,
+                Point::ReadRecord | Point::ReadOperation | Point::Readback
+            ) {
+                self.0.set(self.0.get() + 1);
+            }
+            Ok(())
+        }
+    }
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    let first = request("targeted:scaling-first", 1, 0, None, b"A");
+    journal.commit_registry_batch(&first, &context()).unwrap();
+    let count = Count(Cell::new(0));
+    journal
+        .lookup_registry_checked(first.envelope().operation_id(), &count)
+        .unwrap();
+    journal
+        .read_registry_targets_checked(first.envelope(), &[state_key()], &count)
+        .unwrap();
+    let expected = count.0.get();
+    for revision in 1..8 {
+        journal
+            .commit_registry_batch(
+                &request(
+                    &format!("targeted:scaling-{revision}"),
+                    revision + 1,
+                    revision,
+                    Some(b"A"),
+                    b"A",
+                ),
+                &context(),
+            )
+            .unwrap();
+        let count = Count(Cell::new(0));
+        journal
+            .lookup_registry_checked(first.envelope().operation_id(), &count)
+            .unwrap();
+        journal
+            .read_registry_targets_checked(first.envelope(), &[state_key()], &count)
+            .unwrap();
+        assert_eq!(count.0.get(), expected);
+    }
+}

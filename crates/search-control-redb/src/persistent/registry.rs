@@ -1,5 +1,6 @@
 //! Finite technical registry storage. Source semantics stay with the caller.
 mod codec;
+mod lookup;
 #[cfg(test)]
 mod tests;
 mod transaction;
@@ -301,6 +302,54 @@ impl RegistryReadSnapshot {
 pub struct RegistryCommitReadback {
     receipt: ControlCommitReceipt,
     readback: RegistryTransactionReadback,
+}
+
+/// Proven operation absence or immutable operation metadata from one bounded read.
+/// Neither variant supplies source admission, native custody or serving authority.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RegistryOperationLookup {
+    /// Both operation row and backend receipt are absent at these exact coordinates.
+    Absent {
+        /// Actual verified journal identity.
+        identity: JournalIdentity,
+        /// Actual global journal generation of this read.
+        journal_generation: u64,
+        /// Actual independent registry revision of this read.
+        registry_revision: u64,
+    },
+    /// Exact immutable envelope and its current coherent observation coordinates.
+    Committed(RegistryOperationObservation),
+}
+
+/// Current observation coordinates, kept separate from immutable original inputs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegistryOperationObservation {
+    identity: JournalIdentity,
+    journal_generation: u64,
+    registry_revision: u64,
+    envelope: RegistryOperationEnvelope,
+}
+impl RegistryOperationObservation {
+    /// Actual journal identity observed with this envelope.
+    #[must_use]
+    pub const fn identity(&self) -> JournalIdentity {
+        self.identity
+    }
+    /// Current journal generation, not the original operation generation.
+    #[must_use]
+    pub const fn journal_generation(&self) -> u64 {
+        self.journal_generation
+    }
+    /// Current independent registry revision.
+    #[must_use]
+    pub const fn registry_revision(&self) -> u64 {
+        self.registry_revision
+    }
+    /// Immutable original envelope; current coordinates do not rewrite it.
+    #[must_use]
+    pub const fn envelope(&self) -> &RegistryOperationEnvelope {
+        &self.envelope
+    }
 }
 
 /// One coherent operation and its requested current targets, not a full catalog.
