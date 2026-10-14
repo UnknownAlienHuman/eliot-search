@@ -28,6 +28,7 @@ pub mod p00_acceptance;
 pub mod package_maps;
 mod package_status;
 pub mod qdrant_boundary;
+pub mod product_git_helper;
 pub mod ticket_drafts;
 pub mod ticket_planner;
 pub mod validate_accepted_evidence;

@@ -4,6 +4,10 @@
 //! schema constants, canonical serialization/digests, scalar grammars, path
 //! fences, selection decisions, context topology and registry selectors.
 //! Immutable Git-tree reads and full planner orchestration remain separate.
+//!
+//! The generic repository-path grammar, containment predicate and planner read ceiling are
+//! product-owned in `crate::product_git_helper`. The re-exports here and in `path`/`spec` are
+//! legacy aliases kept behaviour-identical until #214 removes them.
 
 mod canonical;
 mod context;

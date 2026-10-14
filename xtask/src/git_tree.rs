@@ -10,7 +10,7 @@ use std::process::{Command, Output};
 
 use toml::Value;
 
-use crate::ticket_planner::{safe_path, PLANNER_FILE_BYTE_CEILING};
+use crate::product_git_helper::{helper_safe_path, HELPER_FILE_BYTE_CEILING};
 
 /// One exact Git tree entry.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -177,7 +177,7 @@ impl GitTree {
     /// Repository or UTF-8 decoding failures return
     /// `GIT_REPOSITORY_INVALID`. Unsafe paths return `Ok(None)`.
     pub fn entry(&self, path: &str) -> Result<Option<GitTreeEntry>, GitTreeError> {
-        if !safe_path(path) {
+        if !helper_safe_path(path) {
             return Ok(None);
         }
         let output = run_git(
@@ -238,7 +238,7 @@ impl GitTree {
         &self,
         path: &str,
     ) -> Result<(Vec<u8>, GitTreeEntry), GitTreeError> {
-        self.read_bytes_bounded(path, PLANNER_FILE_BYTE_CEILING)
+        self.read_bytes_bounded(path, HELPER_FILE_BYTE_CEILING)
     }
 
     /// Reads one exact regular committed blob with an explicit byte ceiling.
@@ -349,7 +349,7 @@ impl GitTree {
     ///
     /// Unsafe prefixes or malformed output fail closed.
     pub fn list_files(&self, prefix: &str) -> Result<Vec<String>, GitTreeError> {
-        if !safe_path(prefix) {
+        if !helper_safe_path(prefix) {
             return Err(GitTreeError::new(
                 "CONTROL_SCHEMA_MISMATCH",
                 format!("unsafe tree prefix: {prefix}"),

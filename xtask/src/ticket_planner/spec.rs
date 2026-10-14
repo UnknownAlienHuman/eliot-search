@@ -1,5 +1,7 @@
 //! Closed schema, reason and field registries for ticket issuance planning.
 
+use crate::product_git_helper::HELPER_FILE_BYTE_CEILING;
+
 /// Schema-v2 planner record version.
 pub const SCHEMA_VERSION: i64 = 2;
 /// Advisory plan record kind.
@@ -245,7 +247,10 @@ pub const SPLIT_REVIEW_TOTAL_LINES: i64 = 8500;
 /// Hard total-line budget.
 pub const HARD_TOTAL_LINES: i64 = 10_000;
 /// Per-file planner read ceiling.
-pub const PLANNER_FILE_BYTE_CEILING: u64 = 4 * 1024 * 1024;
+///
+/// Identical to the product-owned `HELPER_FILE_BYTE_CEILING` and retained only as a legacy
+/// alias until #214 removes the last controller reader.
+pub const PLANNER_FILE_BYTE_CEILING: u64 = HELPER_FILE_BYTE_CEILING;
 /// Declared-context total byte ceiling.
 pub const CONTEXT_TOTAL_BYTE_CEILING: u64 = 16 * 1024 * 1024;
 /// Canonical plan artifact byte ceiling.
