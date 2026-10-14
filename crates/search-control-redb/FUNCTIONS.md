@@ -228,6 +228,13 @@ composition retains the first original refusal cause. Exact inspections and
 same-process-only resolution are unchanged; this adds no cleanup or restart
 authority.
 
+The record platform's contextual directory/locator/identity/durability methods
+must expose nested native work. Simple observer ports have compatibility defaults;
+qualified native ports override them. The daemon admits each actual locator or
+directory open, metadata observation and Windows identity dispatch, with original
+checkpoints between them. Legacy native methods use the same engine with an inert
+hook; no second observer, deadline or allowance is created.
+
 ## Original migration bootstrap
 
 `MigrationBootstrap::create` initializes the caller-created single future inactive

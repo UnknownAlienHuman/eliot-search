@@ -194,6 +194,22 @@ pub trait SourceImportRecordArtifactPlatform: SourceImportOutputArtifactPlatform
     /// # Errors
     /// Unsupported or failed synchronization must fail closed.
     fn sync_record_artifact_directory(&self, directory: &Path) -> Result<(), Self::Error>;
+
+    /// Directory durability under the original context. Implementations which
+    /// open a handle must override this adapter and admit that open separately.
+    /// # Errors
+    /// Unqualified/refused durability remains a failure, never a no-op.
+    fn sync_record_directory_with_context(
+        &self,
+        directory: &Path,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<(), SourceImportRecordArtifactError<Self::Error>> {
+        call(deadline, work, Work::Write(0), || {
+            self.sync_record_artifact_directory(directory)
+                .map_err(SourceImportRecordArtifactError::Platform)
+        })
+    }
 }
 
 /// No path-based deletion is accepted as original-object cleanup.
@@ -285,7 +301,7 @@ fn reserve<E>(
     check_deadline(deadline)
 }
 
-fn call<E, T>(
+pub(super) fn call<E, T>(
     deadline: Instant,
     work: &dyn Fn(Work) -> Result<(), ControlError>,
     unit: Work,
@@ -464,11 +480,7 @@ where
         if !valid_temporary_name(temporary_name) {
             return Err(SourceImportRecordArtifactError::TemporaryNameInvalid);
         }
-        call(deadline, work, Work::Read(0), || {
-            platform
-                .validate_directory(directory)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
+        platform.record_directory_with_context(directory, deadline, work)?;
         let path = directory.join(temporary_name);
         let mut pending = Vec::new();
         pending
@@ -482,25 +494,13 @@ where
                 .open(&path)
                 .map_err(|_| SourceImportRecordArtifactError::CreateFailed)
         })?;
-        call(deadline, work, Work::Read(0), || {
-            platform
-                .verify_locator(&file, &path)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
+        platform.record_locator_with_context(&file, &path, deadline, work)?;
         let original_file = call(deadline, work, Work::Open, || {
             file.try_clone()
                 .map_err(|_| SourceImportRecordArtifactError::CreateFailed)
         })?;
-        call(deadline, work, Work::Read(0), || {
-            platform
-                .verify_locator(&original_file, &path)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
-        let identity = call(deadline, work, Work::Read(0), || {
-            platform
-                .identity(&original_file)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
+        platform.record_locator_with_context(&original_file, &path, deadline, work)?;
+        let identity = platform.record_identity_with_context(&original_file, deadline, work)?;
         Ok(Self {
             writer: Some(RecordWriter { file, pending }),
             owned: Some(OwnedStaging {
@@ -582,18 +582,12 @@ where
             .owned
             .as_ref()
             .ok_or(SourceImportRecordArtifactError::Closed)?;
-        call(deadline, work, Work::Read(0), || {
-            owned
-                .platform
-                .verify_locator(&writer.file, &owned.path)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
-        let identity = call(deadline, work, Work::Read(0), || {
-            owned
-                .platform
-                .identity(&writer.file)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
+        owned
+            .platform
+            .record_locator_with_context(&writer.file, &owned.path, deadline, work)?;
+        let identity = owned
+            .platform
+            .record_identity_with_context(&writer.file, deadline, work)?;
         if identity != owned.identity {
             return Err(SourceImportRecordArtifactError::IdentityChanged);
         }
@@ -805,18 +799,16 @@ where
         if after.len() != frozen.encoded_bytes || after.modified().ok() != self.before_modified {
             return Err(SourceImportRecordArtifactError::ReadbackMismatch);
         }
-        call(deadline, work, Work::Read(0), || {
+        owned.platform.record_locator_with_context(
+            reader.get_ref(),
+            &owned.path,
+            deadline,
+            work,
+        )?;
+        let identity =
             owned
                 .platform
-                .verify_locator(reader.get_ref(), &owned.path)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
-        let identity = call(deadline, work, Work::Read(0), || {
-            owned
-                .platform
-                .identity(reader.get_ref())
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
+                .record_identity_with_context(reader.get_ref(), deadline, work)?;
         if identity != owned.identity {
             return Err(SourceImportRecordArtifactError::IdentityChanged);
         }
@@ -1140,18 +1132,16 @@ where
             .owned
             .as_ref()
             .ok_or(SourceImportRecordArtifactError::Closed)?;
-        call(deadline, work, Work::Read(0), || {
+        owned.platform.record_locator_with_context(
+            &owned.original_file,
+            &owned.path,
+            deadline,
+            work,
+        )?;
+        let identity =
             owned
                 .platform
-                .verify_locator(&owned.original_file, &owned.path)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
-        let identity = call(deadline, work, Work::Read(0), || {
-            owned
-                .platform
-                .identity(&owned.original_file)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
+                .record_identity_with_context(&owned.original_file, deadline, work)?;
         if identity != owned.identity {
             return Err(SourceImportRecordArtifactError::IdentityChanged);
         }
@@ -1196,12 +1186,9 @@ where
                 .sync_all()
                 .map_err(|_| SourceImportRecordArtifactError::SyncFailed)
         })?;
-        call(deadline, work, Work::Write(0), || {
-            owned
-                .platform
-                .sync_record_artifact_directory(&owned.directory)
-                .map_err(SourceImportRecordArtifactError::Platform)
-        })?;
+        owned
+            .platform
+            .sync_record_directory_with_context(&owned.directory, deadline, work)?;
         self.verify_original_with_context(deadline, work)?;
         let final_artifact = inspect_record_file_with_context(
             &owned.platform,
@@ -1379,11 +1366,7 @@ where
     let parent = path
         .parent()
         .ok_or(SourceImportRecordArtifactError::ObjectInvalid)?;
-    call(deadline, work, Work::Read(0), || {
-        platform
-            .validate_directory(parent)
-            .map_err(SourceImportRecordArtifactError::Platform)
-    })?;
+    platform.record_directory_with_context(parent, deadline, work)?;
     let before = call(deadline, work, Work::Read(0), || {
         fs::symlink_metadata(path).map_err(|_| SourceImportRecordArtifactError::ObjectInvalid)
     })?;
@@ -1403,16 +1386,8 @@ where
     {
         return Err(SourceImportRecordArtifactError::ObjectInvalid);
     }
-    call(deadline, work, Work::Read(0), || {
-        platform
-            .verify_locator(&file, path)
-            .map_err(SourceImportRecordArtifactError::Platform)
-    })?;
-    let identity = call(deadline, work, Work::Read(0), || {
-        platform
-            .identity(&file)
-            .map_err(SourceImportRecordArtifactError::Platform)
-    })?;
+    platform.record_locator_with_context(&file, path, deadline, work)?;
+    let identity = platform.record_identity_with_context(&file, deadline, work)?;
     if expected_identity.is_some_and(|expected| expected != &identity) {
         return Err(SourceImportRecordArtifactError::IdentityChanged);
     }
@@ -1470,11 +1445,8 @@ where
     )?;
     let before_modified = opened.modified;
     let mut reader = BufReader::with_capacity(BUFFER_BYTES, opened.file);
-    let before_identity = call(deadline, work, Work::Read(0), || {
-        platform
-            .identity(reader.get_ref())
-            .map_err(SourceImportRecordArtifactError::Platform)
-    })?;
+    let before_identity =
+        platform.record_identity_with_context(reader.get_ref(), deadline, work)?;
     let mut row = Vec::new();
     row.try_reserve_exact(MAX_SOURCE_IMPORT_ROW_BYTES + 1)
         .map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
@@ -1500,16 +1472,8 @@ where
     {
         return Err(SourceImportRecordArtifactError::ReadbackMismatch);
     }
-    call(deadline, work, Work::Read(0), || {
-        platform
-            .verify_locator(reader.get_ref(), path)
-            .map_err(SourceImportRecordArtifactError::Platform)
-    })?;
-    let identity = call(deadline, work, Work::Read(0), || {
-        platform
-            .identity(reader.get_ref())
-            .map_err(SourceImportRecordArtifactError::Platform)
-    })?;
+    platform.record_locator_with_context(reader.get_ref(), path, deadline, work)?;
+    let identity = platform.record_identity_with_context(reader.get_ref(), deadline, work)?;
     if identity != before_identity
         || expected_identity.is_some_and(|expected| expected != &identity)
     {

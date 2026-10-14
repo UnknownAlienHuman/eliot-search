@@ -57,8 +57,8 @@ unsafe extern "system" {
     ) -> i32;
 }
 
-pub(super) fn observe(file: &File) -> Result<Observation, ObservationError> {
-    let info = file_information(file)?;
+pub(super) fn observe_with_check(file: &File, check: &dyn Fn(bool) -> Result<(), ObservationError>) -> Result<Observation, ObservationError> {
+    let info = file_information_with_check(file, check)?;
     Ok(Observation {
         volume_serial: info.volume_serial,
         file_index: (u64::from(info.index_high) << 32) | u64::from(info.index_low),
@@ -70,17 +70,21 @@ pub(super) fn observe(file: &File) -> Result<Observation, ObservationError> {
 }
 
 pub(super) fn hardlink_count(file: &File) -> Result<u32, ObservationError> {
-    Ok(file_information(file)?.links)
+    Ok(file_information_with_check(file, &|_| Ok(()))?.links)
 }
 
-fn file_information(file: &File) -> Result<FileInformation, ObservationError> {
+fn file_information_with_check(file: &File, check: &dyn Fn(bool) -> Result<(), ObservationError>) -> Result<FileInformation, ObservationError> {
     let handle = file.as_raw_handle();
+    check(true)?;
     // SAFETY: `file` owns this live handle throughout the synchronous call.
-    if unsafe { GetFileType(handle) } != FILE_TYPE_DISK {
+    let kind = unsafe { GetFileType(handle) };
+    check(false)?;
+    if kind != FILE_TYPE_DISK {
         return Err(ObservationError::UnsupportedHandle);
     }
     let mut filesystem_name = [0_u16; 32];
     let mut volume_serial = 0_u32;
+    check(true)?;
     // SAFETY: optional buffers are null with zero lengths; supplied pointers
     // reference live, correctly sized writable values. Nothing is retained.
     let volume_ok = unsafe {
@@ -95,6 +99,7 @@ fn file_information(file: &File) -> Result<FileInformation, ObservationError> {
             32,
         )
     };
+    check(false)?;
     if volume_ok == 0 {
         return Err(ObservationError::ObservationFailed);
     }
@@ -103,9 +108,12 @@ fn file_information(file: &File) -> Result<FileInformation, ObservationError> {
         return Err(ObservationError::UnsupportedFileSystem);
     }
     let mut info = FileInformation::default();
+    check(true)?;
     // SAFETY: layout is asserted above; output is initialized and uniquely
     // borrowed. The borrowed File keeps the handle valid; failure is checked.
-    if unsafe { GetFileInformationByHandle(handle, &raw mut info) } == 0 {
+    let result = unsafe { GetFileInformationByHandle(handle, &raw mut info) };
+    check(false)?;
+    if result == 0 {
         return Err(ObservationError::ObservationFailed);
     }
     if info.volume_serial != volume_serial {

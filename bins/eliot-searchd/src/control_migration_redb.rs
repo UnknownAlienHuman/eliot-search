@@ -19,6 +19,10 @@ use super::content_readback::ContentArtifact;
 use super::{ensure_directory, sha256, sync_directory};
 use super::super::super::migration_context::MigrationSource;
 use search_revision_store::LegacyRevisionObjectWork as Work;
+use search_control_redb::{ControlError, MigrationBootstrapWork};
+
+#[path = "control_migration_redb/contextual_platform.rs"]
+mod contextual_platform;
 
 type ImportOutput = SourceImportOutputArtifact<DaemonImportOutputPlatform>;
 
@@ -303,24 +307,35 @@ impl SourceImportOutputArtifactPlatform for DaemonImportOutputPlatform {
     ) -> Result<Self::Identity, Self::Error> {
         native_identity(file)
     }
+
+    fn record_identity_with_context(&self, file: &File, deadline: Instant,
+        work: &dyn Fn(MigrationBootstrapWork) -> Result<(), ControlError>)
+        -> Result<Self::Identity, SourceImportRecordArtifactError<String>> {
+        contextual_platform::identity(file, &|unit| contextual_platform::reserve(deadline, work, unit))
+    }
+
+    fn record_directory_with_context(&self, path: &Path, deadline: Instant,
+        work: &dyn Fn(MigrationBootstrapWork) -> Result<(), ControlError>)
+        -> Result<(), SourceImportRecordArtifactError<String>> {
+        contextual_platform::directory(path, &|unit| contextual_platform::reserve(deadline, work, unit))
+    }
+
+    fn record_locator_with_context(&self, file: &File, path: &Path, deadline: Instant,
+        work: &dyn Fn(MigrationBootstrapWork) -> Result<(), ControlError>)
+        -> Result<(), SourceImportRecordArtifactError<String>> {
+        contextual_platform::locator(file, path, &|unit| contextual_platform::reserve(deadline, work, unit))
+    }
 }
 
 impl SourceImportRecordArtifactPlatform for DaemonImportOutputPlatform {
     fn sync_record_artifact_directory(&self, path: &Path) -> Result<(), Self::Error> {
-        #[cfg(unix)]
-        { sync_directory(path) }
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            // FILE_FLAG_BACKUP_SEMANTICS admits a directory handle. GENERIC_WRITE
-            // is required for FlushFileBuffers. Errors stay publication-unknown;
-            // power-loss/installed qualification remains #215.
-            std::fs::OpenOptions::new().read(true).write(true)
-                .custom_flags(0x0200_0000).open(path).and_then(|file| file.sync_all())
-                .map_err(|_| "DIRECT_MIGRATION_RECORD_DIRECTORY_SYNC_FAILED".to_owned())
-        }
-        #[cfg(not(any(windows, unix)))]
-        { Err("DIRECT_MIGRATION_RECORD_DIRECTORY_SYNC_UNSUPPORTED".to_owned()) }
+        contextual_platform::sync_directory(path, &|_| Ok(())).map_err(contextual_platform::inert_reason)
+    }
+
+    fn sync_record_directory_with_context(&self, path: &Path, deadline: Instant,
+        work: &dyn Fn(MigrationBootstrapWork) -> Result<(), ControlError>)
+        -> Result<(), SourceImportRecordArtifactError<String>> {
+        contextual_platform::sync_directory(path, &|unit| contextual_platform::reserve(deadline, work, unit))
     }
 }
 
@@ -374,39 +389,11 @@ fn record_artifact_read_reason(
 }
 
 fn native_identity(file: &File) -> Result<(u64, u64), String> {
-    let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
-    let metadata = file.metadata().map_err(|_| invalid())?;
-    if !regular(&metadata) {
-        return Err(invalid());
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        Ok((metadata.dev(), metadata.ino()))
-    }
-    #[cfg(windows)]
-    {
-        let observed =
-            eliot_searchd::native_file::observe(file).map_err(|_| invalid())?;
-        Ok((u64::from(observed.volume_serial), observed.file_index))
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        Err("DIRECT_MIGRATION_LOCK_PLATFORM_UNSUPPORTED".to_owned())
-    }
+    contextual_platform::identity(file, &|_| Ok(())).map_err(contextual_platform::inert_reason)
 }
 
 fn verify_locator(expected: &File, path: &Path) -> Result<(), String> {
-    let invalid = || "DIRECT_MIGRATION_IMPORT_IDENTITY_CHANGED".to_owned();
-    ensure_directory(path.parent().ok_or_else(invalid)?)?;
-    if !regular(&fs::symlink_metadata(path).map_err(|_| invalid())?) {
-        return Err(invalid());
-    }
-    let current = File::open(path).map_err(|_| invalid())?;
-    if native_identity(&current)? != native_identity(expected)? {
-        return Err(invalid());
-    }
-    Ok(())
+    contextual_platform::locator(expected, path, &|_| Ok(())).map_err(contextual_platform::inert_reason)
 }
 
 fn regular(metadata: &fs::Metadata) -> bool {

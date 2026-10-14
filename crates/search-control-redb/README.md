@@ -78,6 +78,13 @@ and link effects. Interrupted reads and writes retry only after fresh admission.
 Short rows share one admitted reader refill. The explicit writer buffer performs
 no I/O on Drop, so refusal cannot trigger a later implicit flush.
 
+The native record platform overrides the simple-port contextual adapters. Its
+locator verification admits the actual file open separately from directory/file
+metadata and opened-handle observations. Directory synchronization admits its
+directory open and flush separately. The existing Windows identity reader polls
+and admits each of its three native dispatches; after-dispatch polls do not charge
+another observation. Inert callers reuse those same physical implementations.
+
 Publication becomes retained unknown before its last pre-link admission. A late
 refusal retains both locators and the actual new/reused link outcome for the
 existing same-process resolution. It cannot authorize a second dispatch or
