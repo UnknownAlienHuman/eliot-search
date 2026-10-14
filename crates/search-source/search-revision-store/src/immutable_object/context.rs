@@ -5,6 +5,7 @@ use std::convert::Infallible;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::Path;
+use zeroize::Zeroizing;
 
 use super::{
     LegacyRevisionObjectError as ObjectError, LegacyRevisionObjectPlatform as Platform,
@@ -612,6 +613,9 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
         if expected.is_some_and(|value| value != &identity) {
             return Err(Failure::Object(ObjectError::IdentityChanged));
         }
+        // The buffer arrives already guarded, so every remaining refusal below
+        // drops it through the guard instead of an ordinary free. `len` still
+        // reads through the guard without widening the return type.
         let bytes = self.read_data(&mut file, size)?;
         let used = bytes.len();
         let after = self.call(
@@ -643,7 +647,7 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
         self.context.checkpoint().map_err(Failure::Context)?;
         Ok(ObjectRead { bytes, identity })
     }
-    fn read_data(&mut self, reader: &mut impl Read, size: usize) -> ResultFor<P, C, Vec<u8>> {
+    fn read_data(&mut self, reader: &mut impl Read, size: usize) -> ResultFor<P, C, Zeroizing<Vec<u8>>> {
         let capacity = size
             .checked_add(1)
             .ok_or(Failure::Object(ObjectError::SizeInvalid))?;
@@ -656,7 +660,9 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
                     .try_reserve_exact(capacity)
                     .map_err(|_| ObjectError::SizeInvalid)?;
                 bytes.resize(capacity, 0);
-                Ok(bytes)
+                // The guard is installed inside the charged allocation action,
+                // so it owns the buffer before the first read attempt.
+                Ok(Zeroizing::new(bytes))
             },
         )?;
         let mut used = 0;

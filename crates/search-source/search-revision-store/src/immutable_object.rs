@@ -9,10 +9,12 @@
 #![allow(clippy::module_name_repetitions)]
 
 use core::fmt;
+use core::mem;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
+use zeroize::Zeroizing;
 
 /// Native observations required by the package-owned immutable-object lifecycle.
 pub trait LegacyRevisionObjectPlatform {
@@ -37,7 +39,7 @@ pub trait LegacyRevisionObjectPlatform {
 /// One exact immutable-object read.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LegacyRevisionObjectRead<I> {
-    bytes: Vec<u8>,
+    bytes: Zeroizing<Vec<u8>>,
     identity: I,
 }
 
@@ -51,7 +53,13 @@ impl<I> LegacyRevisionObjectRead<I> {
     /// Consumes the observation and returns its exact bytes.
     #[must_use]
     pub fn into_bytes(self) -> Vec<u8> {
-        self.bytes
+        // `identity` is moved out before the buffer, so the guard is the only
+        // thing this call still owns when it wipes and then hands over the
+        // still-charged reserve. Nothing fallible happens between the take and
+        // the return.
+        let LegacyRevisionObjectRead { mut bytes, identity } = self;
+        drop(identity);
+        mem::take(&mut *bytes)
     }
 
     /// Stable identity observed before and after the read.
