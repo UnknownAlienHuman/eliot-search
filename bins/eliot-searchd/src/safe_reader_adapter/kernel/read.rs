@@ -1,6 +1,8 @@
 //! Whole-file translation through the shared safe-reader kernel.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(test)]
+use std::path::PathBuf;
 
 use search_contracts::{Blake3Digest32, NonZeroRevision};
 use search_safe_reader::{SafeReadBackend, SafeReadError};
@@ -8,9 +10,7 @@ use search_safe_reader::{SafeReadBackend, SafeReadError};
 use super::backend::FinalHandleBackend;
 use super::identity::file_identity_digest;
 use super::path::{DerivedLocator, derive_locator};
-use super::spec::{
-    ADAPTER_MAX_ATTEMPTS, ADAPTER_SINGLE_READ_BYTES, AdapterError,
-};
+use super::spec::{ADAPTER_MAX_ATTEMPTS, ADAPTER_SINGLE_READ_BYTES, AdapterError};
 
 /// Exact full-file product of one kernel-verified read.
 #[derive(Debug)]
@@ -19,11 +19,14 @@ pub struct FullFileRead {
     pub bytes: Vec<u8>,
     /// Stable identity material in the historical DIRECT encoding, used by
     /// the caller to derive its retained identity digests.
+    #[cfg(test)]
     pub identity_material: Vec<u8>,
     /// Whether the material is a native stable identity rather than a
     /// path-bound fallback.
+    #[cfg(test)]
     pub identity_native: bool,
     /// Canonical final path proven inside the admitted root.
+    #[cfg(test)]
     pub canonical_final: PathBuf,
     /// Exact source byte size observed before and after the read.
     pub source_bytes: u64,
@@ -117,11 +120,16 @@ pub fn read_full_file_via_kernel(
                 SafeReadError::HandleChangedDuringRead,
             ));
         }
-        let material = probe_material(&locator, file_digest)?;
+        let _material = probe_material(&locator, file_digest)?;
+        #[cfg(test)]
+        let material = _material;
         return Ok(FullFileRead {
             bytes: Vec::new(),
+            #[cfg(test)]
             identity_material: material.0,
+            #[cfg(test)]
             identity_native: material.1,
+            #[cfg(test)]
             canonical_final: locator.canonical_final,
             source_bytes: 0,
         });
@@ -166,11 +174,16 @@ pub fn read_full_file_via_kernel(
     )
     .map_err(FullReadError::Kernel)?;
     debug_assert_eq!(result.bytes().len(), length);
-    let material = probe_material(&locator, file_digest)?;
+    let _material = probe_material(&locator, file_digest)?;
+    #[cfg(test)]
+    let material = _material;
     Ok(FullFileRead {
         bytes: result.bytes().to_vec(),
+        #[cfg(test)]
         identity_material: material.0,
+        #[cfg(test)]
         identity_native: material.1,
+        #[cfg(test)]
         canonical_final: locator.canonical_final,
         source_bytes,
     })

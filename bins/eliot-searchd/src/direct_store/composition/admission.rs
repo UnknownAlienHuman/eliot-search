@@ -6,12 +6,15 @@ use search_source_admission as kernel;
 
 use super::classifier;
 
+#[cfg(test)]
 pub(super) const BASELINE_POLICY_REVISION: u64 = 1;
+#[cfg(test)]
 pub(super) const BASELINE_MAX_FILE_BYTES: u64 = kernel::DEFAULT_MAX_FILE_BYTES;
-pub(crate) const SOURCE_ADMISSION_DENIED: &str =
-    kernel::AdmissionError::AdmissionDenied.code();
+#[cfg(test)]
+pub(crate) const SOURCE_ADMISSION_DENIED: &str = kernel::AdmissionError::AdmissionDenied.code();
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub(crate) struct SourceAdmissionConfig {
     pub(crate) revision: u64,
     pub(crate) max_file_bytes: u64,
@@ -20,6 +23,7 @@ pub(crate) struct SourceAdmissionConfig {
     pub(crate) allow_binary: bool,
 }
 
+#[cfg(test)]
 impl SourceAdmissionConfig {
     pub(crate) const fn baseline() -> Self {
         Self {
@@ -39,17 +43,19 @@ pub(crate) struct AdmissionPolicy {
 }
 
 impl AdmissionPolicy {
+    #[cfg(test)]
     pub(crate) fn baseline() -> Self {
         Self::from_config(SourceAdmissionConfig::baseline())
             .expect("baseline admission configuration is canonical")
     }
 
+    #[cfg(test)]
     pub(crate) fn from_config(config: SourceAdmissionConfig) -> Result<Self, String> {
         let input = policy_input(config);
-        let draft = kernel::validate_policy_schema(&input)
-            .map_err(|error| error.code().to_owned())?;
-        let canonical = kernel::normalize_policy(&draft)
-            .map_err(|error| error.code().to_owned())?;
+        let draft =
+            kernel::validate_policy_schema(&input).map_err(|error| error.code().to_owned())?;
+        let canonical =
+            kernel::normalize_policy(&draft).map_err(|error| error.code().to_owned())?;
         let fingerprint = kernel::policy_fingerprint(&canonical).to_hex();
         Ok(Self {
             canonical,
@@ -61,15 +67,18 @@ impl AdmissionPolicy {
         &self.canonical
     }
 
+    #[cfg(test)]
     pub(super) fn revision(&self) -> u64 {
         self.canonical.revision().get()
     }
 
+    #[cfg(test)]
     pub(super) fn fingerprint(&self) -> &str {
         &self.fingerprint
     }
 }
 
+#[cfg(test)]
 fn policy_input(config: SourceAdmissionConfig) -> kernel::UnvalidatedPolicyInput {
     let mut rules = vec![
         rule(
@@ -168,6 +177,7 @@ fn policy_input(config: SourceAdmissionConfig) -> kernel::UnvalidatedPolicyInput
     }
 }
 
+#[cfg(test)]
 fn rule(
     id: &str,
     precedence: u32,
@@ -214,12 +224,8 @@ pub(super) fn build_observation(
         unavailable_fields: Vec::new(),
         unknown_fields: Vec::new(),
     };
-    kernel::validate_observation(
-        &input,
-        policy.canonical(),
-        kernel::DEFAULT_ADMISSION_LIMITS,
-    )
-    .map_err(|error| error.code().to_owned())
+    kernel::validate_observation(&input, policy.canonical(), kernel::DEFAULT_ADMISSION_LIMITS)
+        .map_err(|error| error.code().to_owned())
 }
 
 pub(super) fn issue_receipt(

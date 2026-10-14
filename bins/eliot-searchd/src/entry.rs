@@ -29,6 +29,7 @@ mod endpoint;
 #[path = "source_composition.rs"]
 mod git_source_composition;
 mod maintenance;
+#[cfg(test)]
 mod maintenance_guard;
 mod native_root_command;
 pub(crate) mod owner_composition;

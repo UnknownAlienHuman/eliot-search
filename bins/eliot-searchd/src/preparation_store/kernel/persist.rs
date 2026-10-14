@@ -7,26 +7,24 @@ use std::path::Path;
 use search_materializer::api::encode_legacy_preparation_manifest;
 use zeroize::Zeroizing;
 
+#[cfg(test)]
+use super::super::super::IndexedSource;
+use super::super::super::storage_io::{
+    ensure_child_directory, persist_immutable_object, read_regular_file, sync_directory,
+};
+use super::super::super::{RevisionMetadata, RevisionProtector, verify_plaintext};
 use super::codec::{
-    binding, lookup_key, object_file_name, object_id, object_shard, read_object,
-    reference,
+    binding, lookup_key, object_file_name, object_id, object_shard, read_object, reference,
 };
 use super::paths::directories;
 use super::spec::REF_BYTES;
-use super::super::super::storage_io::{
-    ensure_child_directory, persist_immutable_object, read_regular_file,
-    sync_directory,
-};
-use super::super::super::{
-    IndexedSource, RevisionMetadata, RevisionProtector, verify_plaintext,
-};
 use crate::direct_preparation::{
-    CANONICAL_MATERIALIZER_REVISION, CANONICAL_UNITIZER_REVISION,
-    CanonicalPreparationReceipt, canonical_materializer_digest,
-    canonical_unitizer_digest,
+    CANONICAL_MATERIALIZER_REVISION, CANONICAL_UNITIZER_REVISION, CanonicalPreparationReceipt,
+    canonical_materializer_digest, canonical_unitizer_digest,
 };
 use crate::sha256;
 
+#[cfg(test)]
 pub(crate) fn persist_source(
     root: &Path,
     protector: &RevisionProtector,
@@ -49,6 +47,7 @@ pub(crate) fn persist_source(
 /// Object publication and exact readback precede its reference, which in turn
 /// precedes the source-catalog event. Conflicting immutable bytes are never
 /// replaced.
+#[cfg(test)]
 pub(crate) fn persist(
     root: &Path,
     protector: &RevisionProtector,
@@ -56,8 +55,7 @@ pub(crate) fn persist(
     metadata: &RevisionMetadata,
     source: &[u8],
 ) -> Result<Option<&'static str>, String> {
-    persist_canonical(root, protector, namespace, metadata, source)
-        .map(|receipt| receipt.gap)
+    persist_canonical(root, protector, namespace, metadata, source).map(|receipt| receipt.gap)
 }
 
 /// Canonical publication returning representation and profile provenance.
@@ -68,9 +66,7 @@ pub(crate) fn persist_canonical(
     metadata: &RevisionMetadata,
     source: &[u8],
 ) -> Result<CanonicalPreparationReceipt, String> {
-    use crate::direct_preparation::{
-        encode_canonical_preparation, preparation_gap as gap_of,
-    };
+    use crate::direct_preparation::{encode_canonical_preparation, preparation_gap as gap_of};
 
     verify_plaintext(metadata, source)?;
     let binding = binding(namespace, metadata)?;
@@ -82,10 +78,8 @@ pub(crate) fn persist_canonical(
         .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
     let content_bytes = sha256::decode_digest(&metadata.content_digest)
         .ok_or_else(|| "DIRECT_PREPARATION_BINDING_INVALID".to_owned())?;
-    let materializer_digest =
-        canonical_materializer_digest().map_err(str::to_owned)?;
-    let unitizer_digest =
-        canonical_unitizer_digest().map_err(str::to_owned)?;
+    let materializer_digest = canonical_materializer_digest().map_err(str::to_owned)?;
+    let unitizer_digest = canonical_unitizer_digest().map_err(str::to_owned)?;
     let (representation, body) = encode_canonical_preparation(
         source,
         &namespace_bytes,
@@ -118,16 +112,8 @@ pub(crate) fn persist_canonical(
     sync_directory(&objects)?;
     #[cfg(not(unix))]
     sync_directory(&objects);
-    let object_path = object_shard_path.join(object_file_name(
-        &object_id,
-        protector,
-    )?);
-    let expected_ref = reference(
-        &key,
-        digest,
-        manifest.len() as u64,
-        protector,
-    )?;
+    let object_path = object_shard_path.join(object_file_name(&object_id, protector)?);
+    let expected_ref = reference(&key, digest, manifest.len() as u64, protector)?;
 
     match fs::symlink_metadata(&reference_path) {
         Ok(_) => {
@@ -137,16 +123,12 @@ pub(crate) fn persist_canonical(
                 "DIRECT_PREPARATION_REFERENCE_READ_FAILED",
             )?;
             if observed != expected_ref {
-                return Err(
-                    "DIRECT_PREPARATION_REFERENCE_CONFLICT".to_owned(),
-                );
+                return Err("DIRECT_PREPARATION_REFERENCE_CONFLICT".to_owned());
             }
         }
         Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(_) => {
-            return Err(
-                "DIRECT_PREPARATION_REFERENCE_READ_FAILED".to_owned(),
-            );
+            return Err("DIRECT_PREPARATION_REFERENCE_READ_FAILED".to_owned());
         }
     }
 
@@ -154,11 +136,7 @@ pub(crate) fn persist_canonical(
         Ok(_) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => {
             let encoded = Zeroizing::new(if protector.encrypts_new_objects() {
-                protector.protect(
-                    &object_id,
-                    &sha256::hex(&digest),
-                    &manifest,
-                )?
+                protector.protect(&object_id, &sha256::hex(&digest), &manifest)?
             } else {
                 manifest.to_vec()
             });
