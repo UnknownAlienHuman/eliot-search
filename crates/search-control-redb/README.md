@@ -93,8 +93,6 @@ all full inspections are still required and charged. Focused component fixtures
 exercise local file I/O with injected identities; native cancellation, fault and
 installed qualification remain #215.
 
-## Atomic record preconditions
-
 ## Complete inventory metadata adoption (#509)
 
 The original source-mapped receipt can consume itself into `OwnerInventoryStage`.
@@ -113,6 +111,8 @@ The opaque receipt reports all family counts and denominator outcomes, plus the
 remaining `complete_semantic_candidate_not_performed` gap. Metadata references do
 not substitute for semantic root/publication/security adoption, a verified cutover
 candidate, restart linkage or cleanup. Native/installed qualification remains #215.
+
+## Atomic record preconditions
 
 `ConditionalControlMutation` combines an existing `ControlMutation` with bounded
 `ControlRecordCondition::exact(key, value)` or `::absent(key)` assertions. The public
