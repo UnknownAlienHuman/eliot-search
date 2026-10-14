@@ -92,7 +92,11 @@ pub(super) fn is_linked(source: &MigrationSource<'_, '_, '_>, view: &View,
         PrepTree::References => (view.references.len(), 32),
         PrepTree::Objects => (view.objects.len(), view.object_key_bytes),
     };
-    let comparisons = usize::try_from(count.checked_ilog2().unwrap_or(0) + 1).map_err(|_| limit())?;
+    // std's shrinking interval can require ceil(log2(n)) probes and one
+    // final comparison; floor(log2(n)) undercounts non-powers of two.
+    let comparisons = if count < 2 { count } else {
+        usize::try_from((count - 1).ilog2() + 2).map_err(|_| limit())?
+    };
     source.charge(Work::Compare(2 * key_bytes * comparisons))?;
     Ok(match tree {
         PrepTree::References => view.reference(physical),
