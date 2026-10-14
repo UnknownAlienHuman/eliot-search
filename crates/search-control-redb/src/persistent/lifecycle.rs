@@ -238,6 +238,7 @@ const fn from_database(
 ) -> PersistentControlJournal {
     PersistentControlJournal {
         database, identity, limits, committed_writes, pending: None, quarantined: false,
+        table_profile: super::TableProfile::ControlOnly,
         #[cfg(test)]
         work: super::TestWork::new(),
     }

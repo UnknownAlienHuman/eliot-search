@@ -15,6 +15,41 @@ use super::model::{
     SourceImportBinding, SourceImportCounts, SourceImportRow,
 };
 use super::{EVENTS, META, REVISIONS, SOURCES};
+use super::writer::{INERT_WORK, OWNER_MARKER, reserve};
+use crate::MigrationBootstrapWork as Work;
+
+/// A pinned comparison over the database retained by the original owner.
+#[expect(clippy::redundant_pub_crate, reason = "The sibling persistent owner receives this state through a crate-private reexport.")]
+pub(crate) struct SourceMappingComparison { prefix: PrefixReadback }
+
+impl SourceMappingComparison {
+    pub(crate) fn begin_in(database: &Database, binding: SourceImportBinding,
+        content: Option<SourceContentManifest>, expected: SourceImportCounts,
+        owner_profile: Option<&[u8]>, deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<Self, ControlError> {
+        validate_counts(expected, binding)?;
+        if let Some(content) = content { content.validate_counts(expected)?; }
+        let (prefix, sealed) = read_mapping_in(database, binding, content, owner_profile, deadline, work)?;
+        if !sealed || prefix.expected != expected { return Err(ControlError::MigrationUnverified); }
+        Ok(Self { prefix })
+    }
+
+    pub(crate) fn compare(&mut self, row: &SourceImportRow, deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<(), ControlError> {
+        self.prefix.compare_checked(row, deadline, work)
+    }
+
+    pub(crate) fn finish(self, deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportCounts, ControlError> {
+        reserve(deadline, work, Work::Checkpoint)?;
+        let verified = self.prefix.compared;
+        self.prefix.finish(deadline)?;
+        Ok(verified)
+    }
+}
 
 /// One reopened, coherent redb read transaction for exact compiler-to-target comparison.
 /// It neither writes records nor exposes active-source or query admission operations.
@@ -122,6 +157,14 @@ impl PrefixReadback {
         row: &SourceImportRow,
         deadline: Instant,
     ) -> Result<(), ControlError> {
+        self.compare_checked(row, deadline, &INERT_WORK)
+    }
+
+    pub(super) fn compare_checked(&mut self, row: &SourceImportRow, deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<(), ControlError> {
+        reserve(deadline, work, Work::Allocate(super::ROW_BYTES))?;
+        reserve(deadline, work, Work::Read(3 * super::ROW_BYTES + 96))?;
         check(deadline)?;
         if row.sequence != self.compared.events + 1
             || row.sequence > self.expected.events
@@ -184,7 +227,7 @@ impl PrefixReadback {
         {
             return Err(ControlError::StoreCorrupt);
         }
-        check(deadline)?;
+        reserve(deadline, work, Work::Checkpoint)?;
         self.compared.add(row);
         Ok(())
     }
@@ -207,27 +250,45 @@ pub(super) fn open_import(
     deadline: Instant,
 ) -> Result<(Database, PrefixReadback, bool), ControlError> {
     check(deadline)?;
-    let encoded = binding.encode()?;
-    let content_bytes = content.map(|value| value.encode(binding)).transpose()?;
+    binding.encode()?;
+    content.map(|value| value.encode(binding)).transpose()?;
     check_file(&file, false)?;
     let database = Database::builder()
         .set_cache_size(8 * 1024 * 1024)
         .create_file(file)
         .map_err(|_| ControlError::StoreUnavailable)?;
-    check(deadline)?;
+    let (prefix, sealed) = read_mapping_in(&database, binding, content, None, deadline, &INERT_WORK)?;
+    Ok((database, prefix, sealed))
+}
+
+fn read_mapping_in(database: &Database, binding: SourceImportBinding,
+    content: Option<SourceContentManifest>, owner_profile: Option<&[u8]>, deadline: Instant,
+    work: &dyn Fn(Work) -> Result<(), ControlError>,
+) -> Result<(PrefixReadback, bool), ControlError> {
+    if owner_profile.is_some_and(|profile| profile.is_empty() || profile.len() > 4096) {
+        return Err(ControlError::BudgetExceeded);
+    }
+    reserve(deadline, work, Work::Allocate(8192))?;
+    reserve(deadline, work, Work::Read(8192))?;
+    let encoded = binding.encode()?;
+    let content_bytes = content.map(|value| value.encode(binding)).transpose()?;
     let read = database
         .begin_read()
         .map_err(|_| ControlError::StoreUnavailable)?;
     let names = read
         .list_tables()
         .map_err(|_| ControlError::StoreCorrupt)?
-        .take(5)
+        .take(8)
         .map(|table| table.name().to_owned())
         .collect::<std::collections::BTreeSet<_>>();
-    let required = [META.name(), EVENTS.name(), SOURCES.name(), REVISIONS.name()]
+    let mut required = [META.name(), EVENTS.name(), SOURCES.name(), REVISIONS.name()]
         .into_iter()
         .map(str::to_owned)
         .collect::<std::collections::BTreeSet<_>>();
+    if owner_profile.is_some() {
+        required.extend(["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1"]
+            .into_iter().map(str::to_owned));
+    }
     if names != required
         || read
             .list_multimap_tables()
@@ -242,13 +303,17 @@ pub(super) fn open_import(
             .open_table(META)
             .map_err(|_| ControlError::StoreCorrupt)?;
         if meta.len().map_err(|_| ControlError::StoreCorrupt)?
-            != 2 + u64::from(content.is_some())
+            != 2 + u64::from(content.is_some()) + u64::from(owner_profile.is_some())
             || meta
                 .get("binding")
                 .map_err(|_| ControlError::StoreCorrupt)?
                 .is_none_or(|value| value.value() != encoded)
         {
             return Err(ControlError::StoreCorrupt);
+        }
+        if meta.get(OWNER_MARKER).map_err(|_| ControlError::StoreCorrupt)?
+            .as_ref().map(redb::AccessGuard::value) != owner_profile {
+            return Err(ControlError::IdentityMismatch);
         }
         let stored_content = meta
             .get("content_manifest")
@@ -285,9 +350,8 @@ pub(super) fn open_import(
     {
         return Err(ControlError::StoreCorrupt);
     }
-    check(deadline)?;
+    reserve(deadline, work, Work::Checkpoint)?;
     Ok((
-        database,
         PrefixReadback {
             read,
             expected: counts,

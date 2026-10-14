@@ -32,6 +32,7 @@ mod bootstrap;
 pub use bootstrap::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBootstrapFailure,
     MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
     MigrationBootstrapPlatform, MigrationBootstrapReceipt, MigrationBootstrapWork};
+pub use bootstrap::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 
 pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
@@ -50,6 +51,13 @@ const RECORDS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("eliot.contr
 const OPERATIONS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("eliot.control.operations.v1");
 const CACHE_BYTES: usize = 8 * 1024 * 1024;
 
+// This capability is never reconstructed by generic create/open. Only the
+// live consuming source-stage owner may admit its additional inert tables.
+enum TableProfile {
+    ControlOnly,
+    SourceStage(Vec<u8>),
+}
+
 /// Concrete redb owner. Vendor values, guards, paths and errors stay private.
 ///
 /// This is not a search database. Record classes describe technical metadata;
@@ -63,6 +71,7 @@ pub struct PersistentControlJournal {
     pending: Option<(MutationId, [u8; 32])>,
     quarantined: bool,
     committed_writes: u64,
+    table_profile: TableProfile,
     #[cfg(test)]
     work: TestWork,
 }
@@ -252,7 +261,7 @@ impl PersistentControlJournal {
     }
 
     fn header_from(&self, read: &ReadTransaction) -> Result<Header, ControlError> {
-        verify_tables(read)?;
+        verify_tables(read, &self.table_profile)?;
         let meta = read.open_table(META).map_err(map_table_error)?;
         quarantine::require_unquarantined(&meta)?;
         if meta.len().map_err(|error| map_storage_error(&error))? != 1 { return Err(ControlError::StoreCorrupt); }
@@ -348,13 +357,27 @@ fn validate_identity(identity: JournalIdentity) -> Result<JournalIdentity, Contr
     Ok(identity)
 }
 
-fn verify_tables(read: &ReadTransaction) -> Result<(), ControlError> {
+fn verify_tables(read: &ReadTransaction, profile: &TableProfile) -> Result<(), ControlError> {
+    let control = ["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1"];
+    let combined = ["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1",
+        "eliot.import.source-map.events.v1", "eliot.import.source-map.meta.v1",
+        "eliot.import.source-map.revisions.v1", "eliot.import.source-map.sources.v1"];
+    let expected = match profile { TableProfile::ControlOnly => control.as_slice(),
+        TableProfile::SourceStage(_) => combined.as_slice() };
     let mut names = read.list_tables().map_err(|error| map_storage_error(&error))?
-        .take(4).map(|table| table.name().to_owned()).collect::<Vec<_>>();
+        .take(expected.len() + 1).map(|table| table.name().to_owned()).collect::<Vec<_>>();
     names.sort();
-    if !names.iter().map(String::as_str).eq(["eliot.control.meta.v1", "eliot.control.operations.v1", "eliot.control.records.v1"])
+    if !names.iter().map(String::as_str).eq(expected.iter().copied())
         || read.list_multimap_tables().map_err(|error| map_storage_error(&error))?.next().is_some()
     { return Err(ControlError::SchemaMismatch); }
+    if let TableProfile::SourceStage(expected) = profile {
+        let definition: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.import.source-map.meta.v1");
+        let table = read.open_table(definition).map_err(map_table_error)?;
+        if table.get("owner_source_stage.v1").map_err(|error| map_storage_error(&error))?
+            .is_none_or(|value| value.value() != expected.as_slice()) {
+            return Err(ControlError::IdentityMismatch);
+        }
+    }
     Ok(())
 }
 

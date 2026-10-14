@@ -68,6 +68,8 @@ pub use output_lock::{
     SourceImportOutputLockPlatform,
 };
 pub use readback::SourceMappingReadback;
+pub(crate) use readback::SourceMappingComparison;
+pub(crate) use writer::SourceMappingWriteState;
 pub use receipts::{
     ControlCutoverStatusProjection, ControlCutoverStatusState,
     SourceMigrationPlanLocation, SourceMigrationStagedPlan,

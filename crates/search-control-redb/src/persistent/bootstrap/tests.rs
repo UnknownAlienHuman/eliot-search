@@ -7,26 +7,26 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, atomic::{AtomicBool, AtomicU64, Ordering}};
 use std::time::Duration;
 
-struct Scratch(PathBuf);
+pub(super) struct Scratch(pub(super) PathBuf);
 impl Scratch {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!("eliot-bootstrap-{}-{}-{}",
             std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
                 .unwrap().as_nanos(), NEXT.fetch_add(1, Ordering::Relaxed)));
         std::fs::create_dir(&path).unwrap(); Self(path)
     }
-    fn file(&self) -> File {
+    pub(super) fn file(&self) -> File {
         std::fs::OpenOptions::new().read(true).write(true).create_new(true)
             .open(self.0.join("target.redb")).unwrap()
     }
 }
 impl Drop for Scratch { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); } }
 
-fn deadline() -> Instant { Instant::now() + Duration::from_secs(30) }
+pub(super) fn deadline() -> Instant { Instant::now() + Duration::from_secs(30) }
 // Injected deterministic fixture function, deliberately not a crypto algorithm.
 // Production invokes the composition-owned real BLAKE3 primitive instead.
-fn fixture_digest(bytes: &[u8]) -> Blake3Digest32 {
+pub(super) fn fixture_digest(bytes: &[u8]) -> Blake3Digest32 {
     let mut output = [0_u8; 32];
     for (index, byte) in bytes.iter().enumerate() {
         let slot = index % 32;
@@ -34,11 +34,11 @@ fn fixture_digest(bytes: &[u8]) -> Blake3Digest32 {
     }
     Blake3Digest32::from_bytes(output)
 }
-fn identity(file: u64) -> MigrationBootstrapIdentity {
+pub(super) fn identity(file: u64) -> MigrationBootstrapIdentity {
     MigrationBootstrapIdentity { profile: MigrationBootstrapIdentityProfile::WindowsFileIndex64,
         volume: 1, file }
 }
-fn binding() -> MigrationBootstrapBinding {
+pub(super) fn binding() -> MigrationBootstrapBinding {
     MigrationBootstrapBinding {
         owner: LegacyInventoryOwner { installation: [1;16], incarnation: [2;16], root: [3;16],
             invocation: [4;16], request_blake3: [5;32], record_blake3: [6;32], physical_blake3: [7;32],
@@ -51,7 +51,11 @@ fn binding() -> MigrationBootstrapBinding {
 }
 
 #[derive(Clone, Debug, Default)]
-struct Platform { cancel_after_sync: Arc<AtomicBool>, canceled: Arc<AtomicBool>, fail_sync: Arc<AtomicBool> }
+pub(super) struct Platform {
+    pub(super) cancel_after_sync: Arc<AtomicBool>,
+    pub(super) canceled: Arc<AtomicBool>,
+    pub(super) fail_sync: Arc<AtomicBool>,
+}
 impl SourceImportOutputLockPlatform for Platform {
     type Error = std::io::Error;
     fn validate_directory(&self, path: &Path) -> Result<(), Self::Error> {
@@ -75,7 +79,7 @@ impl SourceImportRecordArtifactPlatform for Platform {
 impl MigrationBootstrapPlatform for Platform {
     fn bootstrap_identity(&self, value: &u64) -> MigrationBootstrapIdentity { identity(*value) }
 }
-fn artifact(scratch: &Scratch, platform: Platform) -> SourceImportRecordArtifactPublication<Platform> {
+pub(super) fn artifact(scratch: &Scratch, platform: Platform) -> SourceImportRecordArtifactPublication<Platform> {
     let deadline = deadline();
     let mut writer = SourceImportRecordArtifact::create(&scratch.0, ".source-map.fixture.tmp", platform, deadline).unwrap();
     writer.push(b"fixture metadata row\n", deadline).unwrap();

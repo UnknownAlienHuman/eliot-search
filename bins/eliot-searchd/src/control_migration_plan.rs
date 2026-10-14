@@ -33,6 +33,8 @@ mod content_readback;
 mod inventory;
 #[path = "control_migration_bootstrap.rs"]
 mod bootstrap;
+#[path = "control_migration_source_stage.rs"]
+mod source_stage;
 #[path = "control_migration_cutover.rs"]
 mod cutover;
 
@@ -40,6 +42,14 @@ mod cutover;
 const PLAN_DEADLINE: Duration = Duration::from_secs(120);
 
 impl DirectStore {
+    pub(crate) fn stage_owner_source_mapping_existing(
+        source: &crate::plaintext_direct_store::DirectStore, source_root: &Path,
+        target: SourceNamespaceId, directory: &Path, native: &NativeMigrationInput<'_, '_, '_>,
+    ) -> Result<String, String> {
+        let source = MigrationSource::new(source, native.context.deadline(), Some(native));
+        source_stage::stage(&source, source_root, target, directory, native)
+    }
+
     pub(crate) fn stage_owner_bootstrap_existing(
         source: &crate::plaintext_direct_store::DirectStore, source_root: &Path,
         target: SourceNamespaceId, directory: &Path, native: &NativeMigrationInput<'_, '_, '_>,
