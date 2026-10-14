@@ -49,6 +49,27 @@ pub(super) fn execute_with_conditions(
     boundary: Boundary,
     check: &dyn Check,
 ) -> Result<ControlCommitReceipt, ControlError> {
+    execute_scoped(journal, mutation, conditions, boundary, check, false).map(|(receipt, _)| receipt)
+}
+
+pub(super) fn execute_registry(
+    journal: &mut PersistentControlJournal,
+    mutation: &ControlMutation,
+    conditions: &[ControlRecordCondition],
+    boundary: Boundary,
+    check: &dyn Check,
+) -> Result<(ControlCommitReceipt, [u8; 32]), ControlError> {
+    execute_scoped(journal, mutation, conditions, boundary, check, true)
+}
+
+fn execute_scoped(
+    journal: &mut PersistentControlJournal,
+    mutation: &ControlMutation,
+    conditions: &[ControlRecordCondition],
+    boundary: Boundary,
+    check: &dyn Check,
+    registry: bool,
+) -> Result<(ControlCommitReceipt, [u8; 32]), ControlError> {
     // Production fences are inert by construction; the test helper below
     // consumes the boundary to exercise every fault-injection arm.
     #[cfg(not(test))]
@@ -56,13 +77,20 @@ pub(super) fn execute_with_conditions(
     journal.ensure_available()?;
     check.check(Point::Start)?;
     let changed_keys = validate_mutation(mutation, journal.limits)?;
+    for key in &changed_keys {
+        if super::registry::reserved(key.as_bytes()) != registry {
+            // The dedicated registry path changes only its namespace. Generic
+            // calls may neither replace nor delete a reserved registry record.
+            return Err(ControlError::InvalidKey);
+        }
+    }
     validate_conditions(mutation, conditions, journal.limits, || check.check(Point::PlanRecord))?;
     let fingerprint = bind_conditions(request_fingerprint(journal.identity, mutation)?, conditions,
         || check.check(Point::PlanRecord))?;
     check.check(Point::Validated)?;
     let read = journal.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
     let plan = match plan_commit(journal, &read, mutation, conditions, changed_keys, fingerprint, check)? {
-        PlanOutcome::Replay(receipt) => return Ok(receipt),
+        PlanOutcome::Replay(receipt) => return Ok((receipt, fingerprint)),
         PlanOutcome::Stage(plan) => plan,
     };
     let StagePlan { before, after, receipt, operation, operation_bytes, fingerprint } = *plan;
@@ -154,7 +182,7 @@ pub(super) fn execute_with_conditions(
     check.check(Point::MutationComplete).map_err(|_| ControlError::CommitOutcomeUnknown)?;
     journal.pending = None;
     journal.committed_writes = journal.committed_writes.saturating_add(1);
-    Ok(receipt)
+    Ok((receipt, fingerprint))
 }
 
 fn plan_commit(

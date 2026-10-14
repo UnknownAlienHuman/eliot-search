@@ -8,6 +8,10 @@
 use core::fmt;
 use search_contracts::{Blake3Digest32, PublicationIntent, PublicationIntentState};
 use search_ports::{CancellationProbe, OperationContext};
+pub(super) fn require_registry_base(read: &super::ReadTransaction, limits: super::JournalLimits)
+    -> Result<(), super::ControlError> {
+    visibility::require_initialized(read, limits)
+}
 
 use crate::{ConditionalControlMutation, ControlRecordCondition, ControlRecordClass,
     ControlValue, ControlWrite};
@@ -203,7 +207,7 @@ impl PersistentControlJournal {
         -> Result<Option<crate::PublicationRecoveryCheckpoint>, ControlError> {
         self.ensure_available()?;
         check.check(Point::Start)?;
-        if self.identity.schema_version != PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+        if !crate::has_visibility_schema(self.identity.schema_version) {
             return Err(ControlError::SchemaUnsupported);
         }
         let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
@@ -256,7 +260,7 @@ impl PersistentControlJournal {
     }
 
     const fn require_intent_schema(&self) -> Result<(), ControlError> {
-        if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION) { Ok(()) }
+        if crate::has_intent_schema(self.identity.schema_version) { Ok(()) }
         else { Err(ControlError::SchemaUnsupported) }
     }
 
@@ -267,7 +271,7 @@ impl PersistentControlJournal {
         let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
         let header = self.header_from(&read)?;
         check.check(Point::ReadHeader)?;
-        if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+        if crate::has_visibility_schema(self.identity.schema_version) {
             self.snapshot_from_checked(&read, check)?;
         }
         let records = read.open_table(RECORDS).map_err(map_table_error)?;
@@ -301,7 +305,7 @@ impl PersistentControlJournal {
                     || (prepared_owner < self.identity.owner_epoch && !recovery_state)) {
                     return Err(ControlError::GenerationMismatch);
                 }
-                if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION {
+                if crate::has_visibility_schema(self.identity.schema_version) {
                     let snapshot = self.snapshot_from_checked(&read, check)?;
                     if !replay && update.previous.is_none() {
                         visibility::validate_initial_intent(&snapshot, &update.next, self.limits)?;
@@ -315,7 +319,7 @@ impl PersistentControlJournal {
             }
             self.transact_conditionally_checked(command, boundary, check)
         })();
-        if matches!(self.identity.schema_version, PUBLICATION_INTENT_SCHEMA_VERSION | PUBLICATION_VISIBILITY_SCHEMA_VERSION)
+        if crate::has_intent_schema(self.identity.schema_version)
             && result.as_ref().err().is_some_and(|error| is_corruption(*error)) {
             self.quarantined = true;
         }

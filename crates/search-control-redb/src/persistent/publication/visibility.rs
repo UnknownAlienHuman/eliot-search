@@ -29,6 +29,13 @@ const MANIFESTS: &[u8] = b"projection_memberships/manifest/v1/";
 const SHADOWS: &[u8] = b"shadow_fences/publication/v1/";
 const RETIRED: &[u8] = b"publication_receipts/retired/v1/";
 
+pub(super) fn require_initialized(read: &ReadTransaction, limits: JournalLimits) -> Result<(), ControlError> {
+    use super::super::{RECORDS, decode_value, map_table_error, map_storage_error};
+    let table = read.open_table(RECORDS).map_err(map_table_error)?;
+    let value = table.get(STATE).map_err(|e| map_storage_error(&e))?.ok_or(ControlError::SchemaMismatch)?;
+    codec::read_state(&decode_value(value.value(), limits)?).map(|_| ())
+}
+
 // Ordinary shared-port writes and deletes cannot manufacture visibility or
 // bypass manifest/shadow/receipt guards. Typed commands use these same keys.
 pub(super) fn port_reserved_key(key: &[u8]) -> bool {
@@ -313,7 +320,7 @@ impl PersistentControlJournal {
             }
             self.transact_conditionally_checked(command, boundary, check)
         })();
-        if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION
+        if crate::has_visibility_schema(self.identity.schema_version)
             && result.as_ref().err().is_some_and(|error| is_corruption(*error)) { self.quarantined = true; }
         result
     }
@@ -331,7 +338,7 @@ pub(super) fn validate_initial_intent(snapshot: &JournalReadSnapshot, intent: &P
 }
 
 const fn require_schema(journal: &PersistentControlJournal) -> Result<(), ControlError> {
-    if journal.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION { Ok(()) }
+    if crate::has_visibility_schema(journal.identity.schema_version) { Ok(()) }
     else { Err(ControlError::SchemaUnsupported) }
 }
 fn key(bytes: &[u8], limits: JournalLimits) -> Result<ControlKey, ControlError> { ControlKey::new(bytes.to_vec(), limits) }

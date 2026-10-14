@@ -6,7 +6,7 @@ use super::{MutationId, Blake3Digest32, PublicationIntent, PublicationVisibility
     ControlWrite, intent_codec, ControlRecordCondition, STATE, codec, ControlMutation,
     PersistentControlJournal, CancellationProbe, OperationContext, ControlCommitReceipt,
     ControlCallError, Budget, Boundary, CommitRecoveryDecision, Check, Point, require_schema,
-    operation_from, RECEIPTS, PUBLICATION_VISIBILITY_SCHEMA_VERSION, is_corruption,
+    operation_from, RECEIPTS, is_corruption,
     JournalReadSnapshot};
 use crate::ControlSnapshotPublisher;
 
@@ -181,7 +181,7 @@ impl PersistentControlJournal {
             }
             self.transact_conditionally_checked(command, boundary, check)
         })();
-        if self.identity.schema_version == PUBLICATION_VISIBILITY_SCHEMA_VERSION
+        if crate::has_visibility_schema(self.identity.schema_version)
             && result.as_ref().err().is_some_and(|error| is_corruption(*error))
         {
             self.quarantined = true;

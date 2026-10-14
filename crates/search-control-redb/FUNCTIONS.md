@@ -1,6 +1,25 @@
 # Function contract — `search-control-redb`
 
-**Status:** W1/P02 logical contract; no redb dependency, schema migration or fault evidence is accepted.
+## Concrete registry reservation (#269)
+
+- `RegistryMutationRequest::new`: finite owner-supplied metadata and exact before
+  values; keeps original journal generation and separate registry revision.
+- `ControlPortCommand::Registry`: typed route through the existing borrowed
+  journal/publisher port, with snapshot suspension after dispatch.
+- `PersistentControlJournal::commit_registry_batch`: one conditional atomic
+  transaction, immutable full-ID operation and exact target readback.
+- `recover_registry_batch`: original-command recovery; no blind re-execution.
+- `read_registry_snapshot`: complete coherent technical restart observations;
+  source-owner semantic restore and admission decoding remain Root's responsibility.
+
+Schema 5 is VERSIONED_REBUILD. Reserved codecs also run during open/recovery and
+snapshot verification; old-schema collisions refuse. Existing seven classes,
+three physical tables and active limits remain unchanged. Wrapped state and
+operation values must fit the 64 KiB baseline; no silent splitting or limit rise.
+
+**Status:** concrete disk persistence and schema-5 registry reservation are implemented.
+Complete #268 candidate adoption, #269 serving cutover and native/fault/installed
+qualification remain separate, incomplete work.
 
 Inventory codecs select one explicit LegacyInventoryProfile. Existing constructors
 and descriptor bytes retain V1 basename semantics; LocationV2 selects distinct

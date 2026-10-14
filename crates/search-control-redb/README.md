@@ -2,6 +2,55 @@
 
 Bounded technical control state, never a searchable corpus.
 
+## Registry reservation and atomic storage (#269)
+
+Disposition: **VERSIONED_REBUILD**, journal schema **5**. The three physical tables
+and seven record-class tags are unchanged. Schema 5 adds the exact reserved
+namespace `eliot.control.registry.v1/`; old schemas refuse colliding records on
+open/readback and cannot execute registry commands. There is no in-place adoption
+or automatic migration. The schema descriptor binds the prefix and wrapper codecs.
+Schema 5 preserves the existing publication/provider contracts, including explicit
+visibility initialization before normal registry writes.
+
+Root constructs `RegistryStateKey` from a closed family and the source owner's
+complete canonical key bytes, and `RegistryStateChange` from exact before/after
+metadata bytes. Source, membership and generation use Identity, State and Revision
+respectively. `RegistryMutationRequest::new` retains the complete original opaque
+operation ID, original journal generation, independent registry revision,
+owner-computed command digest and canonical operation/delta envelope.
+
+`PersistentControlJournal::commit_registry_batch` uses the existing conditional
+kernel to compare exact classes/bytes or absence and atomically write every state,
+the immutable operation envelope and registry revision. Generic mutations cannot
+write/delete reserved keys. `ControlPortCommand::Registry` exposes the same path
+through `BoundControlJournal`, suspending snapshot admission until verified disk
+publication. The raw ID remains in the envelope; SHA-256 is only its technical
+backend index and is never relabelled BLAKE3 or used as source/admission authority.
+
+Normal commit readback reads the exact operation, revision and requested targets
+from one transaction, without rebuilding the full catalog/history. The separate
+`read_registry_snapshot` is a complete bounded startup/recovery read. It joins
+operation envelopes to the actual backend receipt ledger and exposes original
+owner bytes for Root's semantic decoders. `recover_registry_batch` requires the
+original command/generation; historical replay acknowledges the old receipt while
+returning current targets, without writing obsolete values back. Late readback
+failure retains the original pending fence and cannot unblock another mutation.
+
+All wrapped values, including the complete immutable operation envelope, must fit
+the active journal value limit (baseline 64 KiB). Canonical keys plus storage
+framing must fit the key limit. For D targets, writes plus conditions consume
+`2*D+4` items. Refusal occurs before dispatch; no limit inflation, truncation,
+splitting an atomic batch or additional database is provided. A source-owner
+256 KiB envelope ceiling does not imply it fits this storage profile.
+
+This package validates technical namespace/class/framing/bounds and atomicity.
+Root must validate actual PreparedBatch/key/state/admission semantics, provide
+original owner-issued admission inputs, restore source-owned state, and perform
+the verified #268/#269 native cutover. No source-registry dependency, admission
+evaluator, source-byte acquisition, serving fallback or qualification is added.
+Disk reopen/lost-acknowledgement component fixtures do not qualify native custody,
+power loss, external publication outcome or installed serving.
+
 `PersistentControlJournal` uses pinned redb 2.6.3 without Python features. It provides atomic
 record/header/receipt transactions, exact-input replay protection, unknown-commit recovery,
 read-only snapshots and explicit owner-epoch handoff. Vendor types stay private. The in-memory

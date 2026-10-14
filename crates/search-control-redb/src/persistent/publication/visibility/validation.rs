@@ -1,6 +1,6 @@
 //! Request bounds and coherent snapshot relationships, before exposure or writes.
 use super::{Check, ControlError, ControlKey, ControlValue, JournalLimits, JournalReadSnapshot,
-    MANIFESTS, PUBLICATION_VISIBILITY_SCHEMA_VERSION, PublicationIntentState,
+    MANIFESTS, PublicationIntentState,
     PublicationVisibilityState, Point, RECEIPTS, RETIRED, ReadTransaction, SHADOWS, STATE,
     VisibleEpochCommit, codec, id_key, intent_codec, key, operation_from};
 use std::collections::BTreeSet;
@@ -66,7 +66,7 @@ pub(in crate::persistent) fn validate_record(key: &ControlKey, value: &ControlVa
 pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot: &JournalReadSnapshot,
     limits: JournalLimits, check: &dyn Check)
     -> Result<Option<PublicationVisibilityState>, ControlError> {
-    if snapshot.identity.schema_version != PUBLICATION_VISIBILITY_SCHEMA_VERSION { return Err(ControlError::SchemaUnsupported); }
+    if !crate::has_visibility_schema(snapshot.identity.schema_version) { return Err(ControlError::SchemaUnsupported); }
     check.check(Point::ReadRecord)?;
     let state = match find(snapshot, STATE) {
         Some(value) => codec::read_state(value)?,
