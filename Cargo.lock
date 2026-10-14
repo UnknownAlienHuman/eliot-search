@@ -1468,16 +1468,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "search-research-export-adapter"
-version = "0.0.0"
-dependencies = [
- "search-contracts",
- "search-domain",
- "search-ports",
- "search-provider-protocol",
-]
-
-[[package]]
 name = "search-result-projector"
 version = "0.0.0"
 dependencies = [
