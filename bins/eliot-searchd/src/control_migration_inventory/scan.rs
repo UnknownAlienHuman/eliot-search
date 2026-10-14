@@ -344,6 +344,38 @@ fn revisions(
     Ok(())
 }
 
+pub(super) fn revisions_from_content(
+    stream: &mut Stream<'_, '_, '_, '_>,
+    root: &Path,
+    input: &NativeMigrationInput<'_, '_, '_>,
+    content: &mut super::super::content_readback::PreparedContent,
+) -> Result<(), String> {
+    let source = stream.source;
+    let mut revisions = source.inventory_revisions();
+    content.visit(source, input.context.deadline(), |object| {
+        source.charge(Work::Compare(512))?;
+        let revision = revisions.next().ok_or_else(changed)?;
+        let id = digest(&revision.revision_id)?;
+        let sha = digest(&revision.content_digest)?;
+        let source_id = digest(&revision.source_id)?;
+        if object.legacy_revision_id.as_bytes() != &id
+            || object.content_sha256.as_bytes() != &sha
+            || object.legacy_source_id.as_bytes() != &source_id
+            || object.byte_length != revision.byte_length
+        {
+            return Err(changed());
+        }
+        stream.item(Family::Revisions, Status::Present, 9,
+            [id, sha, source_id], [revision.byte_length, 0, 0])
+    })?;
+    if revisions.next().is_some() { return Err(changed()); }
+    revision_tree(stream, root, Family::Revisions, false)?;
+    if stream.statuses.iter().all(|count| *count == 0) {
+        stream.item(Family::Revisions, Status::AbsentProven, 9, [ZERO; 3], [0; 3])?;
+    }
+    Ok(())
+}
+
 fn revision_tree(
     stream: &mut Stream<'_, '_, '_, '_>,
     root: &Path,

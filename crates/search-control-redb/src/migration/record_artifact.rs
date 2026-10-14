@@ -13,7 +13,7 @@ use crate::{ControlError, MigrationBootstrapWork as Work};
 use core::fmt;
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 
@@ -986,6 +986,60 @@ where
             .ok_or(SourceImportRecordArtifactError::Closed)
     }
 
+    /// Borrows the retained original object for one bounded canonical row pass.
+    /// No locator is reopened and no source producer is invoked. The exclusive
+    /// borrow prevents concurrent cursors from sharing the cloned file offset.
+    /// Consume through verified EOF; dropping early supplies no completed proof.
+    /// # Errors
+    /// Unknown effects, identity drift and context refusal fail closed.
+    pub fn begin_rows_with_context(
+        &mut self,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<SourceImportRecordRows<'_, P>, SourceImportRecordArtifactError<P::Error>> {
+        if self.disposition == SourceImportRecordArtifactPublicationDisposition::RetainedUnknown {
+            return Err(SourceImportRecordArtifactError::Closed);
+        }
+        reserve::<P::Error>(deadline, work,
+            Work::Allocate(BUFFER_BYTES + MAX_SOURCE_IMPORT_ROW_BYTES + 1))?;
+        let owned = self.frozen.owned.as_ref()
+            .ok_or(SourceImportRecordArtifactError::Closed)?;
+        let mut file = call(deadline, work, Work::Open, || {
+            owned.original_file.try_clone()
+                .map_err(|_| SourceImportRecordArtifactError::ReadFailed)
+        })?;
+        owned.platform.record_locator_with_context(&file, &owned.path, deadline, work)?;
+        if self.disposition == SourceImportRecordArtifactPublicationDisposition::VerifiedCleanupDeferred {
+            owned.platform.record_locator_with_context(&file, &self.final_path, deadline, work)?;
+        }
+        if owned.platform.record_identity_with_context(&file, deadline, work)? != owned.identity {
+            return Err(SourceImportRecordArtifactError::IdentityChanged);
+        }
+        let metadata = call(deadline, work, Work::Read(0), || {
+            file.metadata().map_err(|_| SourceImportRecordArtifactError::ReadFailed)
+        })?;
+        if !regular(&metadata) || metadata.len() != self.frozen.encoded_bytes {
+            return Err(SourceImportRecordArtifactError::ObjectInvalid);
+        }
+        call(deadline, work, Work::Read(0), || {
+            file.seek(SeekFrom::Start(0))
+                .map(|_| ())
+                .map_err(|_| SourceImportRecordArtifactError::ReadFailed)
+        })?;
+        let mut row = Vec::new();
+        row.try_reserve_exact(MAX_SOURCE_IMPORT_ROW_BYTES + 1)
+            .map_err(|_| SourceImportRecordArtifactError::ReadFailed)?;
+        Ok(SourceImportRecordRows {
+            publication: self,
+            reader: BufReader::with_capacity(BUFFER_BYTES, file),
+            before_modified: metadata.modified().ok(),
+            observed: SourceImportRecordChain::new(),
+            row,
+            complete: false,
+            failed: false,
+        })
+    }
+
     /// Dispatches at most one link. Failures after dispatch retain original proof.
     /// # Errors
     /// Pre-dispatch failures stay typed; possible effects remain unknown.
@@ -1200,6 +1254,88 @@ where
         )?;
         self.verify_records(&final_artifact)?;
         self.verify_original_with_context(deadline, work)
+    }
+}
+
+/// Exclusive bounded row cursor over a verified publication's original handle.
+///
+/// A completed cursor proves exact framing, chain, cardinality and live identity;
+/// it does not create a source observation, publication or restart authority.
+pub struct SourceImportRecordRows<'a, P: SourceImportRecordArtifactPlatform> {
+    publication: &'a mut SourceImportRecordArtifactPublication<P>,
+    reader: BufReader<File>,
+    before_modified: Option<SystemTime>,
+    observed: SourceImportRecordChain,
+    row: Vec<u8>,
+    complete: bool,
+    failed: bool,
+}
+
+impl<P: SourceImportRecordArtifactPlatform> SourceImportRecordRows<'_, P> {
+    /// Reads one bounded canonical row. `None` is returned only after complete
+    /// exact-chain/EOF/identity verification under the original context.
+    /// # Errors
+    /// Changed, truncated, surplus or replaced bytes and any refusal poison the
+    /// cursor: a later permissive callback cannot convert that pass to success.
+    pub fn next_with_context(
+        &mut self,
+        deadline: Instant,
+        work: &dyn Fn(Work) -> Result<(), ControlError>,
+    ) -> Result<Option<&[u8]>, SourceImportRecordArtifactError<P::Error>> {
+        if self.failed || self.complete {
+            return Err(SourceImportRecordArtifactError::Closed);
+        }
+        self.failed = true;
+        read_row(&mut self.reader, &mut self.row, deadline, work)?;
+        if !self.row.is_empty() {
+            reserve::<P::Error>(deadline, work, Work::Process(self.row.len()))?;
+            self.observed.push(&self.row)?;
+            if self.observed.rows() > self.publication.frozen.rows
+                || self.observed.encoded_bytes() > self.publication.frozen.encoded_bytes
+            {
+                return Err(SourceImportRecordArtifactError::ReadbackMismatch);
+            }
+            self.failed = false;
+            return Ok(Some(&self.row));
+        }
+        let owned = self.publication.frozen.owned.as_ref()
+            .ok_or(SourceImportRecordArtifactError::Closed)?;
+        let metadata = call(deadline, work, Work::Read(0), || {
+            self.reader.get_ref().metadata()
+                .map_err(|_| SourceImportRecordArtifactError::ReadFailed)
+        })?;
+        if !regular(&metadata)
+            || metadata.len() != self.publication.frozen.encoded_bytes
+            || metadata.modified().ok() != self.before_modified
+            || self.observed.rows() != self.publication.frozen.rows
+            || self.observed.encoded_bytes() != self.publication.frozen.encoded_bytes
+            || core::mem::take(&mut self.observed).finish()
+                != self.publication.frozen.chain
+        {
+            return Err(SourceImportRecordArtifactError::ReadbackMismatch);
+        }
+        owned.platform.record_locator_with_context(
+            self.reader.get_ref(), &owned.path, deadline, work)?;
+        if self.publication.disposition == SourceImportRecordArtifactPublicationDisposition::VerifiedCleanupDeferred {
+            owned.platform.record_locator_with_context(
+                self.reader.get_ref(), &self.publication.final_path, deadline, work)?;
+        }
+        if owned.platform.record_identity_with_context(
+            self.reader.get_ref(), deadline, work)? != owned.identity
+        {
+            return Err(SourceImportRecordArtifactError::IdentityChanged);
+        }
+        let after = call(deadline, work, Work::Read(0), || {
+            self.reader.get_ref().metadata()
+                .map_err(|_| SourceImportRecordArtifactError::ReadFailed)
+        })?;
+        if after.len() != metadata.len() || after.modified().ok() != self.before_modified {
+            return Err(SourceImportRecordArtifactError::ReadbackMismatch);
+        }
+        reserve::<P::Error>(deadline, work, Work::Checkpoint)?;
+        self.complete = true;
+        self.failed = false;
+        Ok(None)
     }
 }
 

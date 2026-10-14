@@ -7,6 +7,7 @@ use search_control_redb::migration::{
     LegacyInventoryBinding, LegacyInventoryEncoder, LegacyInventoryFamily as Family,
     LegacyInventoryLimits, LegacyInventoryProfile, LegacyInventoryStatus as Status, LegacyInventorySummary,
     MAX_SOURCE_IMPORT_ROW_BYTES, SourceImportRecordArtifact, SourceImportRecordArtifactError,
+    SourceImportRecordArtifactPublication,
 };
 use search_revision_store::LegacyRevisionObjectWork as Work;
 use std::path::Path;
@@ -48,6 +49,11 @@ mod preparation_links;
 type BootstrapDispatch<'a> = (&'a mut search_control_redb::MigrationBootstrap,
     &'a dyn Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), String>);
 
+pub(super) struct StagedInventory {
+    pub(super) receipt: search_control_redb::MigrationBootstrapReceipt,
+    pub(super) publication: SourceImportRecordArtifactPublication<DaemonImportOutputPlatform>,
+}
+
 pub(super) fn stage(
     source: &MigrationSource<'_, '_, '_>,
     root: &Path,
@@ -55,15 +61,25 @@ pub(super) fn stage(
     directory: &Path,
     input: &NativeMigrationInput<'_, '_, '_>,
 ) -> Result<(), String> {
-    stage_inner(source, root, target, directory, input, None).map(|_| ())
+    stage_inner(source, root, target, directory, input, None, None).map(|_| ())
 }
 
 pub(super) fn stage_owned<F: Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), String>>(
     source: &MigrationSource<'_, '_, '_>, root: &Path, target: SourceNamespaceId,
     directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
     journal: &mut search_control_redb::MigrationBootstrap, checkpoint: F,
-) -> Result<search_control_redb::MigrationBootstrapReceipt, String> {
-    stage_inner(source, root, target, directory, input, Some((journal, &checkpoint)))?
+) -> Result<StagedInventory, String> {
+    stage_inner(source, root, target, directory, input, Some((journal, &checkpoint)), None)?
+        .ok_or_else(|| "DIRECT_MIGRATION_BOOTSTRAP_INVALID".to_owned())
+}
+
+pub(super) fn stage_owned_with_content(
+    source: &MigrationSource<'_, '_, '_>, root: &Path, target: SourceNamespaceId,
+    directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
+    bootstrap: BootstrapDispatch<'_>,
+    content: &mut super::content_readback::PreparedContent,
+) -> Result<StagedInventory, String> {
+    stage_inner(source, root, target, directory, input, Some(bootstrap), Some(content))?
         .ok_or_else(|| "DIRECT_MIGRATION_BOOTSTRAP_INVALID".to_owned())
 }
 
@@ -71,7 +87,8 @@ fn stage_inner(
     source: &MigrationSource<'_, '_, '_>, root: &Path, target: SourceNamespaceId,
     directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
     bootstrap: Option<BootstrapDispatch<'_>>,
-) -> Result<Option<search_control_redb::MigrationBootstrapReceipt>, String> {
+    mut content: Option<&mut super::content_readback::PreparedContent>,
+) -> Result<Option<StagedInventory>, String> {
     input.context.inventory_reobserve(input)?;
     let artifact_context = ArtifactContext::new(source);
     let work = |unit| artifact_context.reserve(unit);
@@ -85,12 +102,12 @@ fn stage_inner(
         &work,
     )
     .map_err(|error| artifact_context.reason(error))?;
-    let first = compile(source, root, target, input, &mut |row| {
+    let first = compile_with_content(source, root, target, input, &mut |row| {
         artifact
             .push_with_context(row, input.context.deadline(), &work)
             .map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
-    })?;
+    }, content.as_deref_mut())?;
     input.context.inventory_reobserve(input)?;
     let frozen = artifact
         .freeze_with_context(input.context.deadline(), &work)
@@ -100,12 +117,12 @@ fn stage_inner(
     let mut compare = frozen
         .begin_readback_with_context(input.context.deadline(), &work)
         .map_err(|error| artifact_context.reason(error))?;
-    let second = compile(source, root, target, input, &mut |row| {
+    let second = compile_with_content(source, root, target, input, &mut |row| {
         compare
             .compare_with_context(row, input.context.deadline(), &work)
             .map_err(|error| artifact_context.reason(error))?;
         source.checkpoint()
-    })?;
+    }, content)?;
     if first != second {
         return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
     }
@@ -123,7 +140,7 @@ fn stage_inner(
             input.context.deadline(), checkpoint).map_err(super::bootstrap::reason)?;
         input.context.inventory_reobserve(input)
             .map_err(|_| "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned())?;
-        return Ok(Some(receipt));
+        return Ok(Some(StagedInventory { receipt, publication: original }));
     }
     let published = verified
         .publish_with_context(&name, input.context.deadline(), &work)
@@ -158,12 +175,13 @@ fn artifact_reason(error: SourceImportRecordArtifactError<String>) -> String {
     }
 }
 
-pub(super) fn compile(
+fn compile_with_content(
     source: &MigrationSource<'_, '_, '_>,
     root: &Path,
     target: SourceNamespaceId,
     input: &NativeMigrationInput<'_, '_, '_>,
     sink: &mut dyn FnMut(&[u8]) -> Result<(), String>,
+    mut content: Option<&mut super::content_readback::PreparedContent>,
 ) -> Result<LegacyInventorySummary, String> {
     let header = source.source_mapping_header(target)?;
     let registration = input.registration.map(|bytes| {
@@ -197,7 +215,11 @@ pub(super) fn compile(
     for family in Family::ALL {
         stream.statuses = [0; 7];
         stream.complete = true;
-        scan::family(&mut stream, family, root, target, input)?;
+        if family == Family::Revisions && let Some(content) = content.as_deref_mut() {
+            scan::revisions_from_content(&mut stream, root, input, content)?;
+        } else {
+            scan::family(&mut stream, family, root, target, input)?;
+        }
         let terminal = stream.terminal();
         stream.reserve_row()?;
         let row = stream

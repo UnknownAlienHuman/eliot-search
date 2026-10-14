@@ -85,6 +85,7 @@ pub use record_artifact::{
     SourceImportFrozenRecordArtifact, SourceImportPublishedRecordArtifact,
     SourceImportRecordArtifact, SourceImportRecordArtifactError,
     SourceImportRecordArtifactObservation, SourceImportRecordReadback,
+    SourceImportRecordRows,
     SourceImportVerifiedRecordArtifact, inspect_source_import_record_artifact,
     SourceImportRecordArtifactPlatform, SourceImportRecordArtifactPublication,
     SourceImportRecordArtifactPublicationDisposition, SourceImportRecordArtifactCleanupDisposition,

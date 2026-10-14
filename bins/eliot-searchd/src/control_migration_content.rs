@@ -16,6 +16,7 @@ use search_control_redb::migration::{
     SourceContentManifestHeader, SourceContentManifestSummary,
     SourceContentObjectReadback, SourceImportRecordArtifact,
     SourceImportRecordArtifactError, SourceImportRecordArtifactPublication, source_content_profile_digest,
+    SourceContentManifestDecoder, SourceContentManifestDecodedRow, MAX_SOURCE_IMPORT_ROW_BYTES,
 };
 use zeroize::Zeroizing;
 
@@ -36,6 +37,42 @@ pub(super) struct ContentArtifact {
     pub(super) source_bytes: u64,
     pub(super) encoded_bytes: u64,
     pub(super) profile: [u8; 32],
+}
+
+// Only the two independent source-backed passes below construct this capability.
+pub(super) struct PreparedContent {
+    pub(super) publication: SourceImportRecordArtifactPublication<super::redb_import::DaemonImportOutputPlatform>,
+    header: SourceContentManifestHeader,
+    summary: SourceContentManifestSummary,
+}
+
+impl PreparedContent {
+    pub(super) fn visit(
+        &mut self,
+        source: &MigrationSource<'_, '_, '_>,
+        deadline: Instant,
+        mut consume: impl FnMut(SourceContentObjectReadback) -> Result<(), String>,
+    ) -> Result<(), String> {
+        source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES * 2
+            + std::mem::size_of::<SourceContentManifestDecoder>()))?;
+        let mut decoder = SourceContentManifestDecoder::new(self.header).map_err(encoding_reason)?;
+        let context = super::inventory::ArtifactContext::new(source);
+        let work = |unit| context.reserve(unit);
+        let mut rows = self.publication.begin_rows_with_context(deadline, &work)
+            .map_err(|error| owned_artifact_reason(&context, error))?;
+        while let Some(row) = rows.next_with_context(deadline, &work)
+            .map_err(|error| owned_artifact_reason(&context, error))? {
+            source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+            source.charge(Work::Compare(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+            if let SourceContentManifestDecodedRow::Object(object) = decoder.push(row).map_err(encoding_reason)? {
+                consume(object)?;
+            }
+        }
+        if decoder.finish().map_err(encoding_reason)? != self.summary {
+            return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned());
+        }
+        Ok(())
+    }
 }
 
 /// Publication is inert until the complete importer consumes its exact bindings.
@@ -236,10 +273,7 @@ pub(super) fn prepare_owned(
     source_plan: [u8; 32],
     directory: &Path,
     input: &NativeMigrationInput<'_, '_, '_>,
-) -> Result<(
-    SourceImportRecordArtifactPublication<super::redb_import::DaemonImportOutputPlatform>,
-    SourceContentManifestSummary,
-), String> {
+) -> Result<PreparedContent, String> {
     input.context.inventory_reobserve(input)?;
     let artifact_context = super::inventory::ArtifactContext::new(source);
     let work = |unit| artifact_context.reserve(unit);
@@ -274,7 +308,18 @@ pub(super) fn prepare_owned(
     let publication = verified.prepare_publication_with_context(
         &name, input.context.deadline(), &work,
     ).map_err(|error| owned_artifact_reason(&artifact_context, error))?;
-    Ok((publication, first))
+    let header = source.source_mapping_header(target)?;
+    Ok(PreparedContent {
+        publication,
+        header: SourceContentManifestHeader {
+            target_namespace: target,
+            legacy_namespace: Sha256Digest32::from_bytes(header.legacy_namespace),
+            catalog_snapshot: Sha256Digest32::from_bytes(header.catalog_snapshot),
+            source_plan: Sha256Digest32::from_bytes(source_plan),
+            expected_objects: source.retained_revisions().len() as u64,
+        },
+        summary: first,
+    })
 }
 
 fn legacy_digest(value: &str) -> Result<Sha256Digest32, String> {

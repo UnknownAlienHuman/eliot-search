@@ -550,6 +550,68 @@ fn prepared(
         .expect("prepare")
 }
 
+#[test]
+fn verified_rows_replay_original_handle_twice_and_refuse_unknown() {
+    let fixture = Fixture::new();
+    let mut publication = prepared(&fixture, TestPlatform::new());
+    {
+        let mut rows = publication.begin_rows_with_context(deadline(), &INERT).expect("verified prepared cursor");
+        assert!(rows.next_with_context(deadline(), &INERT).expect("row").is_some());
+        assert!(rows.next_with_context(deadline(), &INERT).expect("EOF").is_none());
+    }
+    publication.publish_once(deadline()).expect("publish");
+    for _ in 0..2 {
+        let mut rows = publication.begin_rows_with_context(deadline(), &INERT).expect("cursor");
+        assert_eq!(rows.next_with_context(deadline(), &INERT).expect("row"), Some(b"alpha\n".as_slice()));
+        assert_eq!(rows.next_with_context(deadline(), &INERT).expect("verified EOF"), None);
+        assert!(matches!(rows.next_with_context(deadline(), &INERT), Err(SourceImportRecordArtifactError::Closed)));
+    }
+    publication.disposition = SourceImportRecordArtifactPublicationDisposition::RetainedUnknown;
+    assert!(matches!(publication.begin_rows_with_context(deadline(), &INERT), Err(SourceImportRecordArtifactError::Closed)));
+}
+
+#[test]
+fn verified_rows_context_refusal_is_sticky_with_same_permissive_callback() {
+    let fixture = Fixture::new();
+    let mut publication = prepared(&fixture, TestPlatform::new());
+    publication.publish_once(deadline()).expect("publish");
+    let mut rows = publication.begin_rows_with_context(deadline(), &INERT).expect("cursor");
+    assert!(matches!(
+        rows.next_with_context(deadline(), &|_| Err(ControlError::ReadCancelled)),
+        Err(SourceImportRecordArtifactError::Context(ControlError::ReadCancelled))
+    ));
+    assert!(matches!(rows.next_with_context(deadline(), &INERT), Err(SourceImportRecordArtifactError::Closed)));
+}
+
+#[test]
+fn verified_rows_mutation_truncation_surplus_and_identity_drift_never_complete() {
+    for changed in [b"bravo\n".as_slice(), b"alph".as_slice(), b"alpha\nbeta\n".as_slice()] {
+        let fixture = Fixture::new();
+        let mut publication = prepared(&fixture, TestPlatform::new());
+        publication.publish_once(deadline()).expect("publish");
+        let mut rows = publication.begin_rows_with_context(deadline(), &INERT).expect("cursor");
+        fs::write(fixture.0.join(".source-map.retained.tmp"), changed).expect("mutate original");
+        let mut refused = false;
+        for _ in 0..3 {
+            match rows.next_with_context(deadline(), &INERT) {
+                Ok(Some(_)) => {}
+                Ok(None) => panic!("changed original completed"),
+                Err(_) => { refused = true; break; }
+            }
+        }
+        assert!(refused);
+        assert!(matches!(rows.next_with_context(deadline(), &INERT), Err(SourceImportRecordArtifactError::Closed)));
+    }
+    let fixture = Fixture::new();
+    let platform = TestPlatform::new();
+    let mut publication = prepared(&fixture, platform.clone());
+    publication.publish_once(deadline()).expect("publish");
+    let mut rows = publication.begin_rows_with_context(deadline(), &INERT).expect("cursor");
+    assert!(rows.next_with_context(deadline(), &INERT).expect("row").is_some());
+    platform.replace_identity();
+    assert!(matches!(rows.next_with_context(deadline(), &INERT), Err(SourceImportRecordArtifactError::IdentityChanged)));
+}
+
 fn assert_unknown(
     result: Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<io::Error>>,
 ) {

@@ -13,11 +13,15 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     target: SourceNamespaceId, directory: &Path, input: &NativeMigrationInput<'_, '_, '_>)
     -> Result<String, String> {
     let (mut journal, output) = bootstrap::initialize(source, target, directory, input)?;
-    inventory::stage_owned(source, root, target, directory, input, &mut journal,
-        |work| { bootstrap::reserve(source, work)?; bootstrap::verify_output(&output, source) })?;
     let header = source.source_mapping_header(target)?;
     let (mut publication, expected) = prepare_source_map(source, target, directory, input)?;
     let binding = header.import_binding(*publication.chain());
+    let mut content_artifact = super::content_readback::prepare_owned(
+        source, root, target, *binding.plan_chain.as_bytes(), directory, input,
+    )?;
+    let mut inventory_artifact = inventory::stage_owned_with_content(source, root, target, directory, input,
+        (&mut journal, &|work| { bootstrap::reserve(source, work)?; bootstrap::verify_output(&output, source) }),
+        &mut content_artifact)?;
     let reserve = |work| {
         bootstrap::reserve(source, work)?;
         if matches!(work, MigrationBootstrapWork::Open | MigrationBootstrapWork::Write(0)) {
@@ -55,41 +59,33 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     let mut inventory_owner = receipt.into_inventory_stage(input.context.deadline(), reserve)
         .map_err(|error| reason(&error))?;
-    let first = inventory::compile(source, root, target, input, &mut |row| {
+    transfer_rows(source, &mut inventory_artifact.publication, input, |row| {
         inventory_owner.push(row, input.context.deadline(), reserve).map_err(|error| reason(&error))
     })?;
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     let mut inventory_reader = inventory_owner.begin_readback(input.context.deadline(), reserve)
         .map_err(|error| reason(&error))?;
-    let second = inventory::compile(source, root, target, input, &mut |row| {
+    transfer_rows(source, &mut inventory_artifact.publication, input, |row| {
         inventory_reader.compare(row, input.context.deadline(), reserve).map_err(|error| reason(&error))
     })?;
-    if first != second { return Err(unknown()); }
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     let receipt = inventory_reader.finish(input.context.deadline(), reserve).map_err(|error| reason(&error))?;
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     let mut content_owner = receipt.into_content_stage(
         source.retained_revisions().len() as u64, input.context.deadline(), reserve,
     ).map_err(|error| content_reason(&error, "ADMISSION"))?;
-    let (mut content_publication, expected_content) = super::content_readback::prepare_owned(
-        source, root, target, *binding.plan_chain.as_bytes(), directory, input,
-    )?;
     input.context.inventory_reobserve(input)?;
-    content_owner.publish_content(&mut content_publication, &DaemonImportOutputPlatform,
+    content_owner.publish_content(&mut content_artifact.publication, &DaemonImportOutputPlatform,
         input.context.deadline(), reserve).map_err(|error| content_reason(&error, "PUBLISH"))?;
-    let first_content = super::content_readback::compile(
-        source, root, target, *binding.plan_chain.as_bytes(), input.context.deadline(),
-        |row| content_owner.push(row, input.context.deadline(), reserve).map_err(|error| content_reason(&error, "IMPORT")),
-    )?;
-    if first_content != expected_content { return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned()); }
+    transfer_rows(source, &mut content_artifact.publication, input, |row| {
+        content_owner.push(row, input.context.deadline(), reserve).map_err(|error| content_reason(&error, "IMPORT"))
+    })?;
     input.context.inventory_reobserve(input)?;
     let mut content_reader = content_owner.begin_readback(input.context.deadline(), reserve)
         .map_err(|error| content_reason(&error, "READBACK"))?;
-    let second_content = super::content_readback::compile(
-        source, root, target, *binding.plan_chain.as_bytes(), input.context.deadline(),
-        |row| content_reader.compare(row, input.context.deadline(), reserve).map_err(|error| content_reason(&error, "READBACK")),
-    )?;
-    if second_content != expected_content { return Err("DIRECT_MIGRATION_CONTENT_READBACK_MISMATCH".to_owned()); }
+    transfer_rows(source, &mut content_artifact.publication, input, |row| {
+        content_reader.compare(row, input.context.deadline(), reserve).map_err(|error| content_reason(&error, "READBACK"))
+    })?;
     input.context.inventory_reobserve(input)?;
     let receipt = content_reader.finish(input.context.deadline(), reserve).map_err(|error| content_reason(&error, "READBACK"))?;
     input.context.inventory_reobserve(input)?;
@@ -97,6 +93,23 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     source.charge(Work::Allocate(16 * 1024)).map_err(|_| unknown())?;
     source.charge(Work::Compare(16 * 1024)).map_err(|_| unknown())?;
     Ok(receipt.render_json())
+}
+
+fn transfer_rows(
+    source: &MigrationSource<'_, '_, '_>,
+    publication: &mut SourceImportRecordArtifactPublication<DaemonImportOutputPlatform>,
+    input: &NativeMigrationInput<'_, '_, '_>,
+    mut consume: impl FnMut(&[u8]) -> Result<(), String>,
+) -> Result<(), String> {
+    let context = inventory::ArtifactContext::new(source);
+    let work = |unit| context.reserve(unit);
+    let mut rows = publication.begin_rows_with_context(input.context.deadline(), &work)
+        .map_err(|error| context.reason(error))?;
+    while let Some(row) = rows.next_with_context(input.context.deadline(), &work)
+        .map_err(|error| context.reason(error))? {
+        consume(row)?;
+    }
+    Ok(())
 }
 
 fn prepare_source_map(source: &MigrationSource<'_, '_, '_>, target: SourceNamespaceId,
