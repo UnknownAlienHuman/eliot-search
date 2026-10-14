@@ -13,6 +13,23 @@ after ordinary work refuses. The protector admits its final validated plaintext
 capacity and copy/zeroization work; revision callers do not reserve that same
 capacity again. The revision and preparation consumers share this guarantee.
 
+Inventory directories use one pinned locator snapshot, capped at 2,048 names,
+with canonically ordered 32-name output windows. Geometric buffer growth,
+index scratch, comparison bytes and linear permutation work are admitted before
+use. Explicit merge ordering has at most `n * ceil(log2(n))` key comparisons.
+The directory is reobserved after the visitors, not only after enumeration.
+
+One pass-local preparation link view is shared by Preparation and Residue;
+the second complete stream independently rebuilds it. Construction reads each
+retained reference and its target at most once; physical lookups do not reopen
+them. Unknown preparation-root files remain Unsupported, directories remain Gap,
+and bodies of unknown entries are never opened or recursively traversed.
+
+The original whole-command hard ceilings remain 1 GiB logical byte work,
+16,384 native calls, 256 opens and the original 120-second deadline. Per-directory
+and link-cache caps are additional refusal boundaries, not a guarantee that every
+shape below those caps fits the whole command. Native/scale qualification is #215.
+
 The explicit offline bootstrap command composes the `search-control-redb`
 original-operation bootstrap and inventory producer under one retained native
 read child. The output pins and target are external/inactive; source custody is
