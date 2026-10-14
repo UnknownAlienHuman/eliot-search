@@ -228,3 +228,20 @@ and retains evidence. Reuse/restart/candidate/cleanup authority is unavailable.
 The package-owned receipt explicitly reports `complete_candidate_not_performed`.
 The legacy import table/META profiles remain unchanged. A separately reviewed
 versioned migration must continue complete mapping in this same inactive target.
+
+## Live owned source stage
+
+`MigrationBootstrap::into_source_stage` requires the retained successful inventory
+outcome and exact original target/source snapshot plus the accepted mapping profile.
+`OwnerBoundSourceStage::{publish_source_map,initialize_mapping,push,begin_readback}`
+records the original immutable map attempt before once-only publication and creates
+mapping tables in the existing database. Its combined seven-table inactive profile
+requires the exact finite `owner_source_stage.v1` marker on writes and readback.
+Legacy control/import profiles and normal serving admission remain unchanged.
+
+`OwnerSourceMappingReadback::{compare,finish}` verifies the complete row denominator,
+all indices and five accounting dimensions under the borrowed original context.
+Any comparison error latches; retry or finish cannot produce a receipt. The receipt
+retains the original database owner and reports
+`complete_inventory_candidate_not_performed`. It grants no full inventory adoption,
+cutover, serving, restart reconciliation or cleanup authority.

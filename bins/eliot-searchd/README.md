@@ -52,3 +52,11 @@ This command does not also create a legacy v2 import. Full mapping continues in
 this target under the next accepted profile. The old plan command and formats are
 unchanged and remain unable to authorize a complete candidate or authority cutover.
 
+`--stage-source-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY`
+continues the original bootstrap through source-map publication, bounded row import
+and full readback in the same inactive target. It retains one native request,
+deadline, allowance, source/registration custody, protector and output pins through
+final reobservation. The metadata receipt uses `eliot.owner-source-stage.v1` and
+reports `complete_inventory_candidate_not_performed`. Full twelve-family adoption,
+candidate acceptance, cutover and installed qualification remain separate work.
+

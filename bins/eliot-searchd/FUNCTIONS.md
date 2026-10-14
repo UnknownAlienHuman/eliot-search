@@ -1,5 +1,12 @@
 # Function contract — `eliot-searchd`
 
+The offline `--stage-source-control-migration ROOT TARGET_UUID OUTPUT_DIRECTORY`
+route keeps the original native read operation, registration/protector custody,
+deadline, allowance and output pins. It composes completed bootstrap inventory,
+two-pass source-map publication, same-database mapping import and full readback.
+The owning partial receipt reports `complete_inventory_candidate_not_performed`;
+this route grants no serving, candidate, cutover, restart or cleanup authority.
+
 The explicit offline bootstrap command composes the `search-control-redb`
 original-operation bootstrap and inventory producer under one retained native
 read child. The output pins and target are external/inactive; source custody is

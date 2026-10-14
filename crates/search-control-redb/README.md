@@ -243,3 +243,12 @@ native callback reserves finite logical work under the original absolute deadlin
 The result is first-phase metadata, not a verified candidate. A failed/unknown
 phase cannot dispatch; a possible publication followed by refusal retains evidence
 and cannot retry. Old source-map/content/import/plan bytes remain unchanged.
+
+`MigrationBootstrap::into_source_stage` consumes the completed live inventory
+owner. The new inactive `eliot.owner-source-stage.v1` profile adds four mapping
+tables to that same database, retaining the three original control tables and an
+exact owner marker. Generic control and legacy import readers reject this profile.
+The shared mapping engine imports bounded batches and compares every source row,
+its indices and all five counts before returning a partial source-mapping receipt.
+A first readback mismatch is permanent for that handle. No second database, normal
+journal handle, serving snapshot, complete candidate or restart capability escapes.

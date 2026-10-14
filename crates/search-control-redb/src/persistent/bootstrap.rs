@@ -16,6 +16,9 @@ use super::operation::{Check, Point};
 use super::{Boundary, PersistentControlJournal};
 
 mod codec;
+#[path = "source_stage.rs"]
+mod source_stage;
+pub use source_stage::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 
 const LIMITS: JournalLimits = JournalLimits {
     max_key_bytes: 128, max_value_bytes: 4096, max_records: 8,
@@ -117,6 +120,17 @@ pub struct MigrationBootstrap {
     digest: fn(&[u8]) -> Blake3Digest32,
     target_name: String,
     blocked: bool,
+    binding: MigrationBootstrapBinding,
+    completed_inventory: Option<CompletedInventory>,
+}
+
+// Minted only after the original artifact outcome's exact durable readback.
+struct CompletedInventory {
+    original: Blake3Digest32,
+    attempt: Vec<u8>,
+    chain: [u8; 32],
+    rows: u64,
+    bytes: u64,
 }
 
 impl MigrationBootstrap {
@@ -150,7 +164,8 @@ impl MigrationBootstrap {
             };
             let journal = PersistentControlJournal::create_checked(file, identity, LIMITS, &check)?;
             let mut owner = Self { journal, original, digest,
-                target_name: Self::target_name(&binding.owner), blocked: true };
+                target_name: Self::target_name(&binding.owner), blocked: true,
+                binding, completed_inventory: None };
             owner.write(OPERATION_KEY, owner.original.clone(), None, &[], &check)?;
             check.check(Point::LifecycleComplete)?;
             owner.blocked = false;
@@ -194,8 +209,12 @@ impl MigrationBootstrap {
             // chain and EOF. A reused/foreign object cannot mint this outcome.
             if published.reused() { return Err(ControlError::CommitOutcomeUnknown); }
             let completed = codec::attempt(original_blake3, publication, identity, 1)?;
-            self.write(ATTEMPT_KEY, completed, Some(attempt), OPERATION_KEY, &check)?;
+            self.write(ATTEMPT_KEY, completed.clone(), Some(attempt), OPERATION_KEY, &check)?;
             check.check(Point::LifecycleComplete)?;
+            self.completed_inventory = Some(CompletedInventory {
+                original: original_blake3, attempt: completed,
+                chain: *publication.chain(), rows: publication.rows(), bytes: publication.encoded_bytes(),
+            });
             Ok(MigrationBootstrapReceipt {
                 original_blake3: *original_blake3.as_bytes(),
                 target_name: self.target_name.clone(),
@@ -209,6 +228,13 @@ impl MigrationBootstrap {
     fn write(&mut self, key_bytes: &[u8], bytes: Vec<u8>, previous: Option<Vec<u8>>,
         required_original: &[u8], check: &dyn Check,
     ) -> Result<(), ControlError> {
+        let expected = self.original.clone();
+        self.write_guarded(key_bytes, bytes, previous, required_original, expected, check)
+    }
+
+    fn write_guarded(&mut self, key_bytes: &[u8], bytes: Vec<u8>, previous: Option<Vec<u8>>,
+        required_key: &[u8], required_value: Vec<u8>, check: &dyn Check,
+    ) -> Result<(), ControlError> {
         check.check(Point::Start)?;
         let key = ControlKey::new(key_bytes.to_vec(), LIMITS)?;
         let value = ControlValue::new(ControlRecordClass::Migration, bytes, LIMITS)?;
@@ -217,10 +243,10 @@ impl MigrationBootstrap {
                 ControlValue::new(ControlRecordClass::Migration, bytes, LIMITS)?),
             None => ControlRecordCondition::absent(key.clone()),
         }];
-        if !required_original.is_empty() {
+        if !required_key.is_empty() {
             conditions.push(ControlRecordCondition::exact(
-                ControlKey::new(required_original.to_vec(), LIMITS)?,
-                ControlValue::new(ControlRecordClass::Migration, self.original.clone(), LIMITS)?,
+                ControlKey::new(required_key.to_vec(), LIMITS)?,
+                ControlValue::new(ControlRecordClass::Migration, required_value, LIMITS)?,
             ));
         }
         let snapshot = self.journal.read_snapshot_checked(check)?;

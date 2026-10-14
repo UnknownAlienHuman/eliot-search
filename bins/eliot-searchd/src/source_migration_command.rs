@@ -79,6 +79,7 @@ impl MigrationRoute {
 
     #[cfg(test)]
     const fn is_bootstrap(self) -> bool { matches!(self, Self::Bootstrap) }
+    #[cfg(test)]
     const fn is_source_stage(self) -> bool { matches!(self, Self::SourceStage) }
 }
 
@@ -185,10 +186,8 @@ fn stage(
     Ok(receipt)
 }
 
-/// A refusal after a published stage never reports as a clean denial. Bootstrap
-/// and source stage both publish before readback, so each collapses its own
-/// later refusals to its own unknown outcome; the plan publishes nothing and
-/// keeps its ordinary reasons.
+/// Bootstrap and source-stage late refusals preserve their unknown outcome.
+/// The legacy plan command retains its existing reason mapping.
 fn post_effect_unknown(route: MigrationRoute, reason: String) -> String {
     match route {
         MigrationRoute::Plan => reason,
