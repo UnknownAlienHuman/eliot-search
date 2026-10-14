@@ -290,8 +290,6 @@ fn read_revision_objects_at_with_context(
     let mut protected_bytes = if let Some(encoded) = encoded.as_ref() {
         revision_checkpoint(deadline, context)?;
         let protector = protector.ok_or_else(|| "DIRECT_REVISION_KEY_UNAVAILABLE".to_owned())?;
-        revision_charge(context, Work::Allocate(usize::try_from(metadata.byte_length)
-            .map_err(|_| "DIRECT_REVISION_LENGTH_MISMATCH".to_owned())?))?;
         let decoded = context.map_or_else(
             || {
                 let decoded = protector.unprotect(
