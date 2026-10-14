@@ -18,6 +18,9 @@ mod scan;
 #[path = "control_migration_inventory/preparation_links.rs"]
 mod preparation_links;
 
+type BootstrapDispatch<'a> = (&'a mut search_control_redb::MigrationBootstrap,
+    &'a dyn Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), String>);
+
 pub(super) fn stage(
     source: &MigrationSource<'_, '_, '_>,
     root: &Path,
@@ -25,6 +28,23 @@ pub(super) fn stage(
     directory: &Path,
     input: &NativeMigrationInput<'_, '_, '_>,
 ) -> Result<(), String> {
+    stage_inner(source, root, target, directory, input, None).map(|_| ())
+}
+
+pub(super) fn stage_owned<F: Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), String>>(
+    source: &MigrationSource<'_, '_, '_>, root: &Path, target: SourceNamespaceId,
+    directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
+    journal: &mut search_control_redb::MigrationBootstrap, checkpoint: F,
+) -> Result<search_control_redb::MigrationBootstrapReceipt, String> {
+    stage_inner(source, root, target, directory, input, Some((journal, &checkpoint)))?
+        .ok_or_else(|| "DIRECT_MIGRATION_BOOTSTRAP_INVALID".to_owned())
+}
+
+fn stage_inner(
+    source: &MigrationSource<'_, '_, '_>, root: &Path, target: SourceNamespaceId,
+    directory: &Path, input: &NativeMigrationInput<'_, '_, '_>,
+    bootstrap: Option<BootstrapDispatch<'_>>,
+) -> Result<Option<search_control_redb::MigrationBootstrapReceipt>, String> {
     input.context.inventory_reobserve(input)?;
     source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES))?;
     let temporary = temporary_staging_name()?;
@@ -72,6 +92,16 @@ pub(super) fn stage(
     source.charge(Work::Allocate(128))?;
     let name = format!("{}.legacy-inventory.v1", sha256::hex(&chain));
     source.charge(Work::Observe)?;
+    if let Some((journal, checkpoint)) = bootstrap {
+        let mut original = verified.prepare_publication(&name, input.context.deadline())
+            .map_err(artifact_reason)?;
+        input.context.inventory_reobserve(input)?;
+        let receipt = journal.publish_inventory(&mut original, &DaemonImportOutputPlatform,
+            input.context.deadline(), checkpoint).map_err(super::bootstrap::reason)?;
+        input.context.inventory_reobserve(input)
+            .map_err(|_| "DIRECT_MIGRATION_BOOTSTRAP_OUTCOME_UNKNOWN".to_owned())?;
+        return Ok(Some(receipt));
+    }
     let published = verified
         .publish(&name, input.context.deadline())
         .map_err(artifact_reason)?;
@@ -85,6 +115,7 @@ pub(super) fn stage(
     input
         .context
         .inventory_reobserve(input)
+        .map(|()| None)
         .map_err(|_| "DIRECT_MIGRATION_INVENTORY_PUBLISH_OUTCOME_UNKNOWN".to_owned())
 }
 

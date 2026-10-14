@@ -209,3 +209,22 @@ observations, never codec-issued authority. Existing `SourceImportRecordArtifact
 owns staging, complete second-stream comparison and once-only publication.
 No footer authorizes #268-C acceptance, #269 cutover, #348 restart reconciliation
 or #347 cleanup. Native/fault/installed qualification remains #215.
+
+## Original migration bootstrap
+
+`MigrationBootstrap::create` initializes the caller-created single future inactive
+target and writes the bounded `eliot.migration-bootstrap.v1` original operation
+through the existing immediate conditional transaction/readback engine. It retains
+the actual RELEASED source read-custody observation, all admitted limits, original
+registration/source snapshot and explicit native output identity profile. No normal
+journal handle or candidate escapes. Native BLAKE3 and a borrowed checkpoint/work
+callback remain composition supplied; the callback cannot renew the deadline.
+
+`publish_inventory` takes the retained original publication object, writes its
+exact kind/profile/stage/final/native identity/chain/rows/bytes and dispatch phase
+before at most one link, then records the owning same-process durable outcome.
+Any uncertain journal phase forbids dispatch; any post-effect refusal stays unknown
+and retains evidence. Reuse/restart/candidate/cleanup authority is unavailable.
+The package-owned receipt explicitly reports `complete_candidate_not_performed`.
+The legacy import table/META profiles remain unchanged. A separately reviewed
+versioned migration must continue complete mapping in this same inactive target.

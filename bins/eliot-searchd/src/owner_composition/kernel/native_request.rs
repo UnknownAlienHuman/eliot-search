@@ -222,6 +222,46 @@ impl NativeRootRequest {
         cancellation: Arc<AtomicBool>,
         limits: NativeRootLimits,
     ) -> Result<(Self, Vec<OsString>), OwnerError> {
+        Self::control_migration(
+            "--plan-control-migration",
+            arguments,
+            deadline,
+            cancellation,
+            limits,
+        )
+    }
+
+    /// The bootstrap sibling of the offline mapping plan. It admits exactly
+    /// `--bootstrap-control-migration`, keeps the same existing read-only
+    /// profile and closed selection, and retains the raw argv as supplied: the
+    /// demanded flag is compared, never rewritten, so the raw-args digest,
+    /// request and custody stay bound to the original invocation.
+    pub(crate) fn for_control_migration_bootstrap(
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<(Self, Vec<OsString>), OwnerError> {
+        Self::control_migration(
+            "--bootstrap-control-migration",
+            arguments,
+            deadline,
+            cancellation,
+            limits,
+        )
+    }
+
+    /// Shared private construction for the two offline migration commands.
+    /// Only the demanded flag literal differs; the caller's raw argv, absolute
+    /// deadline, cancellation handle and limits decide admission and custody
+    /// identically for both.
+    fn control_migration(
+        command: &str,
+        arguments: &[OsString],
+        deadline: Instant,
+        cancellation: Arc<AtomicBool>,
+        limits: NativeRootLimits,
+    ) -> Result<(Self, Vec<OsString>), OwnerError> {
         let mut request = Self::new(
             DataRootOpenMode::InspectExistingReadOnly,
             arguments,
@@ -231,10 +271,10 @@ impl NativeRootRequest {
         )?;
         let (selected, _) = crate::config_composition::strip_config_args_os(arguments)
             .map_err(|_| OwnerError::OwnerOperationConflict)?;
-        let [command, root, target, output] = selected.as_slice() else {
+        let [selected_command, root, target, output] = selected.as_slice() else {
             return Err(OwnerError::OwnerOperationConflict);
         };
-        if command != "--plan-control-migration" || root.is_empty() || output.is_empty() {
+        if selected_command != command || root.is_empty() || output.is_empty() {
             return Err(OwnerError::OwnerOperationConflict);
         }
         target
@@ -833,5 +873,78 @@ mod migration_selector_tests {
         assert!(NativeRootRequest::for_control_migration_plan(
             &valid, Instant::now(), Arc::new(AtomicBool::new(false)), limits(),
         ).is_err());
+    }
+
+    fn bootstrap_invocation() -> Vec<OsString> {
+        ["--bootstrap-control-migration", "unopened-root", "10000000-0000-0000-0000-000000000002",
+            "unopened-output"].map(OsString::from).to_vec()
+    }
+
+    #[test]
+    fn bootstrap_route_retains_raw_config_argv_and_original_context_without_rewriting_the_flag() {
+        let selected = bootstrap_invocation();
+        let mut arguments = vec![OsString::from("--config-file"), OsString::from("unread-config.toml")];
+        arguments.extend(selected.iter().cloned());
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let cancellation = Arc::new(AtomicBool::new(false));
+        let (request, actual) = NativeRootRequest::for_control_migration_bootstrap(
+            &arguments, deadline, Arc::clone(&cancellation), limits(),
+        ).unwrap();
+        // The selected flag stays the demanded literal; no synthetic argv replaces it.
+        assert_eq!(actual, selected);
+        assert_eq!(actual[0], OsString::from("--bootstrap-control-migration"));
+        assert_eq!(request.root, PathBuf::from("unopened-root"));
+        assert_eq!(request.mode, DataRootOpenMode::InspectExistingReadOnly);
+        // The raw-args binding is computed from the caller's own argv bytes.
+        let expected = arguments.iter()
+            .map(|value| native_argument(value, 256 * 1024).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(request.arguments(), expected);
+        assert_eq!(request.deadline, deadline);
+        assert!(Arc::ptr_eq(&request.cancellation, &cancellation));
+        cancellation.store(true, Ordering::Release);
+        assert!(request.check().is_err());
+    }
+
+    #[test]
+    fn bootstrap_route_refuses_malformed_flag_extra_missing_empty_and_invalid_target() {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let refused = |arguments: &[OsString]| assert!(NativeRootRequest::for_control_migration_bootstrap(
+            arguments, deadline, Arc::new(AtomicBool::new(false)), limits(),
+        ).is_err());
+        // A plan flag never satisfies the bootstrap constructor.
+        refused(&invocation()[..4]);
+        for (index, value) in [(0, "--plan-control-migration"), (0, "--bootstrap-control-migratn"),
+            (0, "--bootstrap-control-migrationx"), (1, ""), (2, "invalid"),
+            (2, "00000000-0000-0000-0000-000000000000"), (3, "")] {
+            let mut arguments = bootstrap_invocation();
+            arguments[index] = OsString::from(value);
+            refused(&arguments);
+        }
+        let mut extra = bootstrap_invocation();
+        extra.push(OsString::from("extra"));
+        refused(&extra);
+        refused(&bootstrap_invocation()[..3]);
+        assert!(NativeRootRequest::for_control_migration_bootstrap(
+            &bootstrap_invocation(), Instant::now(), Arc::new(AtomicBool::new(false)), limits(),
+        ).is_err());
+    }
+
+    #[test]
+    fn each_migration_constructor_keeps_its_own_flag_and_profile_bytes_distinct() {
+        let plan = invocation();
+        let bootstrap = bootstrap_invocation();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let (plan_request, _) = NativeRootRequest::for_control_migration_plan(
+            &plan, deadline, Arc::new(AtomicBool::new(false)), limits(),
+        ).unwrap();
+        let (bootstrap_request, _) = NativeRootRequest::for_control_migration_bootstrap(
+            &bootstrap, deadline, Arc::new(AtomicBool::new(false)), limits(),
+        ).unwrap();
+        assert_eq!(plan_request.arguments()[0], native_argument(&plan[0], 256 * 1024).unwrap());
+        assert_eq!(bootstrap_request.arguments()[0], native_argument(&bootstrap[0], 256 * 1024).unwrap());
+        assert_ne!(plan_request.arguments()[0], bootstrap_request.arguments()[0]);
+        assert_eq!(bootstrap_request.mode, plan_request.mode);
+        assert_ne!(plan_request.digest, bootstrap_request.digest);
     }
 }

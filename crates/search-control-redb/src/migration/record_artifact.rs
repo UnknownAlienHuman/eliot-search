@@ -692,6 +692,15 @@ where
         &self.final_name
     }
 
+    /// The native identity captured from the file opened at creation, retained
+    /// through both complete streams. This does not observe a current locator.
+    /// # Errors
+    /// Returns `Closed` if the original owned object is unavailable.
+    pub fn original_identity(&self) -> Result<&P::Identity, SourceImportRecordArtifactError<P::Error>> {
+        self.frozen.owned.as_ref().map(|owned| &owned.identity)
+            .ok_or(SourceImportRecordArtifactError::Closed)
+    }
+
     /// Dispatches at most one link. Failures after dispatch retain original proof.
     /// # Errors
     /// Pre-dispatch failures stay typed; possible effects remain unknown.
