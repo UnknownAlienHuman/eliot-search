@@ -13,6 +13,14 @@ use super::{NativeBindingView, NativeRootCapability, NativeRootRequest, NativeWo
 // None borrows the startup request/meter; Some owns a distinct admitted command.
 type ReadContext = Option<(NativeRootRequest, NativeWork)>;
 
+#[derive(Clone, Copy)]
+enum RegistrationCheck {
+    Both,
+    Before,
+    After,
+    None,
+}
+
 /// No constructor, clone, lifecycle transition or unbound path admission.
 pub struct NativeReadOperation<'owner> {
     owner: &'owner mut NativeRootCapability,
@@ -24,6 +32,19 @@ pub struct NativeReadOperation<'owner> {
 impl NativeReadOperation<'_> {
     fn with_binding<T>(
         &mut self,
+        operation: impl FnOnce(
+            NativeBindingView<'_>,
+            &NativeRootRequest,
+            &mut NativeWork,
+            &mut bool,
+        ) -> Result<T, OwnerError>,
+    ) -> Result<T, OwnerError> {
+        self.with_registration_check(RegistrationCheck::Both, operation)
+    }
+
+    fn with_registration_check<T>(
+        &mut self,
+        check_registration: RegistrationCheck,
         operation: impl FnOnce(
             NativeBindingView<'_>,
             &NativeRootRequest,
@@ -53,9 +74,11 @@ impl NativeReadOperation<'_> {
             None => (&*request, work),
             Some((request, work)) => (&*request, work),
         };
-        let registration = &self.registration;
+        let registration = self.registration.as_ref();
         let result = request.check().and_then(|()| {
-            if let Some(pin) = registration {
+            if let Some(pin) = registration.filter(|_| {
+                matches!(check_registration, RegistrationCheck::Both | RegistrationCheck::Before)
+            }) {
                 pin.check(request, work)?;
             }
             let result = operation(
@@ -73,7 +96,9 @@ impl NativeReadOperation<'_> {
                 &mut self.output_attempted,
             );
             result.and_then(|value| {
-                if let Some(pin) = registration {
+                if let Some(pin) = registration.filter(|_| {
+                    matches!(check_registration, RegistrationCheck::Both | RegistrationCheck::After)
+                }) {
                     pin.check(request, work)?;
                 }
                 Ok(value)
@@ -137,7 +162,11 @@ impl NativeReadOperation<'_> {
     // Per-row polling keeps the retained registration checks and original
     // request. Full native locator verification brackets the migration child.
     pub(crate) fn migration_checkpoint(&mut self) -> Result<(), OwnerError> {
-        self.with_binding(|_, request, work, _| work.arrive(request, "migration-checkpoint"))
+        // The arrive body only polls/accounts. This single post-check still
+        // observes registration/pending state after the preceding external I/O.
+        self.with_registration_check(RegistrationCheck::After, |_, request, work, _| {
+            work.arrive(request, "migration-checkpoint")
+        })
     }
 
     /// Reserve one migration seam against the original invocation's allowance.
@@ -147,7 +176,17 @@ impl NativeReadOperation<'_> {
         attempt: search_revision_store::LegacyRevisionObjectWork,
     ) -> Result<(), OwnerError> {
         use search_revision_store::LegacyRevisionObjectWork as Work;
-        self.with_binding(|_, request, work, _| match attempt {
+        // Pure accounting cannot observe or mutate an external object. Keep
+        // every original-context/poison/output guard, and leave registration
+        // observation at checkpoints and actual I/O seams. An I/O reservation
+        // returns before dispatch; its pre-check is paired with the owner's
+        // post-call checkpoint, not a second check around the reservation NOOP.
+        let check_registration = match attempt {
+            Work::Allocate(_) | Work::Compare(_) | Work::AllocateLocator(_) => RegistrationCheck::None,
+            Work::Observe | Work::Open | Work::Read(_) | Work::Write(_) => RegistrationCheck::Before,
+            Work::Effect => RegistrationCheck::Both,
+        };
+        self.with_registration_check(check_registration, |_, request, work, _| match attempt {
             Work::Observe => work.call(request, || Ok(())),
             Work::Open => {
                 work.open(request)?;

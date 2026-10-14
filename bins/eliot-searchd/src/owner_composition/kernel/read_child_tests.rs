@@ -713,6 +713,56 @@ fn registration_catalog_refuses_corrupt_and_pending_bytes_without_recovery_or_wr
             std::fs::remove_file(catalog.with_extension(extension)).unwrap();
         }
     }
+    // A migration reservation precedes external I/O; its post-call checkpoint
+    // must still refuse pending registration or the same original cancellation.
+    // Reuse this real initialized root instead of adding another initializer.
+    for cancel in [false, true] {
+        use search_revision_store::LegacyRevisionObjectWork as Work;
+        std::fs::write(&catalog, b"# ELIOT Search source roots v1\n").unwrap();
+        let flag = Arc::new(AtomicBool::new(false));
+        let req = invocation(&root, Arc::clone(&flag));
+        let original_deadline = req.credential_context().0;
+        let NativeRootAdmission::Inspection(owner) = admit_existing(req).unwrap() else {
+            panic!("inspection");
+        };
+        let mut output = Vec::new();
+        let expected = if cancel {
+            OwnerError::OwnerCancelledBeforeMutation
+        } else {
+            OwnerError::OwnerRecoveryQuarantined
+        };
+        let result = owner.run_registration_one_shot(|operation| {
+            operation.registration_bytes()?;
+            operation.migration_charge(Work::Read(1)).map_err(|error| error.code().to_owned())?;
+            if cancel {
+                flag.store(true, Ordering::Release);
+            } else {
+                std::fs::write(catalog.with_extension("tmp"), b"adversarial-pending").unwrap();
+            }
+            assert_eq!(operation.migration_checkpoint(), Err(expected));
+            // Disappearance of the external cause must not renew this request.
+            if cancel {
+                flag.store(false, Ordering::Release);
+            } else {
+                std::fs::remove_file(catalog.with_extension("tmp")).unwrap();
+            }
+            assert_eq!(operation.migration_charge(Work::Allocate(1)), Err(expected));
+            assert_eq!(operation.migration_checkpoint(), Err(expected));
+            assert_eq!(operation.migration_deadline(), original_deadline);
+            assert_eq!(operation.emit_registration(&mut output, b"must not escape\n"),
+                Err(expected.code().to_owned()));
+            assert!(!operation.output_attempted());
+            // Swallowing the child error cannot make final custody checks succeed.
+            Ok(())
+        });
+        assert_eq!(result, Err(expected.code().to_owned()));
+        assert!(output.is_empty());
+        assert_eq!(std::fs::read(&catalog).unwrap(), b"# ELIOT Search source roots v1\n");
+        for (name, before) in [".eliot-search-owner-state-a.v1", ".eliot-search-owner-state-b.v1"]
+            .into_iter().zip(&slots) {
+            assert_eq!(&std::fs::read(root.join(name)).unwrap(), before);
+        }
+    }
     // Retain native root/credential evidence; qualification owns cleanup.
 }
 

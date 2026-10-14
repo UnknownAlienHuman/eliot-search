@@ -3,6 +3,7 @@
 use std::fs::{self, File, Metadata};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+#[cfg(not(windows))]
 use std::time::SystemTime;
 
 use search_runtime_owner::OwnerError;
@@ -16,7 +17,11 @@ pub(in super::super) struct RegistrationPin {
     path: PathBuf,
     file: Option<File>,
     identity: Vec<u8>,
+    #[cfg(windows)]
+    observation: Option<eliot_searchd::native_file::Observation>,
+    #[cfg(not(windows))]
     length: u64,
+    #[cfg(not(windows))]
     modified: Option<SystemTime>,
 }
 
@@ -49,7 +54,11 @@ impl RegistrationPin {
             path,
             file: None,
             identity: Vec::new(),
+            #[cfg(windows)]
+            observation: None,
+            #[cfg(not(windows))]
             length: 0,
+            #[cfg(not(windows))]
             modified: None,
         };
         let bytes = if let Some(found) = metadata(request, work, &pin.path)? {
@@ -63,12 +72,24 @@ impl RegistrationPin {
                 &mut file,
                 crate::source_roots::MAX_SOURCE_ROOT_FILE_BYTES,
             )?;
-            let held = work.call(request, || {
-                file.metadata().map_err(|_| OwnerError::OwnerGuardMismatch)
-            })?;
-            pin.identity = work.call(request, || native_identity(&file))?;
-            pin.length = held.len();
-            pin.modified = held.modified().ok();
+            #[cfg(windows)]
+            {
+                let observed = work.call(request, || eliot_searchd::native_file::observe(&file)
+                    .map_err(|_| OwnerError::OwnerGuardMismatch))?;
+                pin.identity.extend_from_slice(&observed.volume_serial.to_be_bytes());
+                pin.identity.extend_from_slice(&observed.file_index.to_be_bytes());
+                pin.identity.extend_from_slice(&observed.creation_time.to_be_bytes());
+                pin.observation = Some(observed);
+            }
+            #[cfg(not(windows))]
+            {
+                let held = work.call(request, || {
+                    file.metadata().map_err(|_| OwnerError::OwnerGuardMismatch)
+                })?;
+                pin.identity = work.call(request, || native_identity(&file))?;
+                pin.length = held.len();
+                pin.modified = held.modified().ok();
+            }
             pin.file = Some(file);
             Some(bytes)
         } else {
@@ -95,14 +116,23 @@ impl RegistrationPin {
                 Err(OwnerError::OwnerGuardMismatch)
             };
         };
-        if work.call(request, || native_identity(file))? != self.identity {
-            return Err(OwnerError::OwnerGuardMismatch);
+        #[cfg(windows)]
+        {
+            let observed = work.call(request, || eliot_searchd::native_file::observe(file)
+                .map_err(|_| OwnerError::OwnerGuardMismatch))?;
+            if Some(observed) != self.observation { return Err(OwnerError::OwnerGuardMismatch); }
         }
-        let held = work.call(request, || {
-            file.metadata().map_err(|_| OwnerError::OwnerGuardMismatch)
-        })?;
-        if held.len() != self.length || held.modified().ok() != self.modified {
-            return Err(OwnerError::OwnerGuardMismatch);
+        #[cfg(not(windows))]
+        {
+            if work.call(request, || native_identity(file))? != self.identity {
+                return Err(OwnerError::OwnerGuardMismatch);
+            }
+            let held = work.call(request, || {
+                file.metadata().map_err(|_| OwnerError::OwnerGuardMismatch)
+            })?;
+            if held.len() != self.length || held.modified().ok() != self.modified {
+                return Err(OwnerError::OwnerGuardMismatch);
+            }
         }
         request.check()
     }
