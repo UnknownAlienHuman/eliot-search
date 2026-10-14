@@ -20,9 +20,11 @@ mod mapping;
 
 use super::{
     CONTROL_DIRECTORY, DirectStore, MAX_SOURCE_EVENTS, NAMESPACE_FILE,
-    SOURCE_LOG_FILE, SourceRecord, SourceState, ZERO_DIGEST, read_namespace,
+    SOURCE_LOG_FILE, SourceRecord, SourceState, read_namespace,
     replay_registry, sha256,
 };
+#[cfg(test)]
+use super::ZERO_DIGEST;
 
 const PAGE_EVENTS: usize = 32;
 #[cfg(test)]
@@ -244,6 +246,7 @@ fn validate_legacy_event(
     Ok(())
 }
 
+#[cfg(test)]
 fn event_json(record: &SourceRecord, previous: Option<&SourceRecord>, ordinal: u64) -> String {
     format!(
         concat!(

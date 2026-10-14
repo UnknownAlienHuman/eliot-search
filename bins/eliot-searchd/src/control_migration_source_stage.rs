@@ -5,23 +5,55 @@ use super::{bootstrap, inventory, redb_import::DaemonImportOutputPlatform,
 use search_contracts::SourceNamespaceId;
 use search_control_redb::{ControlError, MigrationBootstrapFailure, MigrationBootstrapWork};
 use search_control_redb::migration::{SourceImportRecordArtifact,
-    SourceImportRecordArtifactPublication, SourceImportRecordChain, SourceMappingSummary};
+    SourceImportRecordArtifactPublication, SourceMappingSummary, SourceMappingHeader,
+    SourceMappingManifestDecoder, SourceMappingDecodedRow, SourceImportRow,
+    MAX_SOURCE_IMPORT_ROW_BYTES};
 use search_revision_store::LegacyRevisionObjectWork as Work;
 use std::path::Path;
+
+pub(super) struct PreparedSourceMap {
+    pub(super) publication: SourceImportRecordArtifactPublication<DaemonImportOutputPlatform>,
+    header: SourceMappingHeader,
+    summary: SourceMappingSummary,
+}
+
+impl PreparedSourceMap {
+    pub(super) fn visit(
+        &mut self, source: &MigrationSource<'_, '_, '_>, input: &NativeMigrationInput<'_, '_, '_>,
+        mut consume: impl FnMut(SourceImportRow) -> Result<(), String>,
+    ) -> Result<(), String> {
+        source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES
+            + std::mem::size_of::<SourceMappingManifestDecoder>()))?;
+        let limit = usize::try_from(self.header.expected_events).map_err(|_| invalid())?;
+        let mut decoder = SourceMappingManifestDecoder::new(self.header, limit)
+            .map_err(|error| error.code().to_owned())?;
+        transfer_rows(source, &mut self.publication, input, |row| {
+            source.charge(Work::Allocate(MAX_SOURCE_IMPORT_ROW_BYTES + 2048))?;
+            source.charge(Work::Compare(MAX_SOURCE_IMPORT_ROW_BYTES))?;
+            if let SourceMappingDecodedRow::Event(event) = decoder.push(row).map_err(|error| error.code().to_owned())? {
+                consume(event)?;
+            }
+            Ok(())
+        })?;
+        if decoder.finish().map_err(|error| error.code().to_owned())? != self.summary { return Err(unknown()); }
+        Ok(())
+    }
+}
 
 pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     target: SourceNamespaceId, directory: &Path, input: &NativeMigrationInput<'_, '_, '_>)
     -> Result<String, String> {
     let (mut journal, output) = bootstrap::initialize(source, target, directory, input)?;
     let header = source.source_mapping_header(target)?;
-    let (mut publication, expected) = prepare_source_map(source, target, directory, input)?;
-    let binding = header.import_binding(*publication.chain());
+    let mut mapping_artifact = prepare_source_map(source, target, directory, input)?;
+    let expected = mapping_artifact.summary;
+    let binding = header.import_binding(*mapping_artifact.publication.chain());
     let mut content_artifact = super::content_readback::prepare_owned(
         source, root, target, *binding.plan_chain.as_bytes(), directory, input,
     )?;
-    let mut inventory_artifact = inventory::stage_owned_with_content(source, root, target, directory, input,
+    let mut inventory_artifact = inventory::stage_owned_with_artifacts(source, root, target, directory, input,
         (&mut journal, &|work| { bootstrap::reserve(source, work)?; bootstrap::verify_output(&output, source) }),
-        &mut content_artifact)?;
+        inventory::PreparedInventoryInputs { content: &mut content_artifact, mapping: &mut mapping_artifact })?;
     let reserve = |work| {
         bootstrap::reserve(source, work)?;
         if matches!(work, MigrationBootstrapWork::Open | MigrationBootstrapWork::Write(0)) {
@@ -31,30 +63,16 @@ pub(super) fn stage(source: &MigrationSource<'_, '_, '_>, root: &Path,
     };
     let mut target_owner = journal.into_source_stage(binding, input.context.deadline(), reserve).map_err(|error| reason(&error))?;
     input.context.inventory_reobserve(input)?;
-    target_owner.publish_source_map(&mut publication, &DaemonImportOutputPlatform,
+    target_owner.publish_source_map(&mut mapping_artifact.publication, &DaemonImportOutputPlatform,
         input.context.deadline(), reserve).map_err(|error| reason(&error))?;
     target_owner.initialize_mapping(input.context.deadline(), reserve).map_err(|error| reason(&error))?;
-    let mut chain = SourceImportRecordChain::new();
-    let imported = source.compile_source_mapping_with_rows(target, input.context.deadline(), |row| {
-        source.charge(Work::Compare(row.len()))?;
-        chain.push(row).map_err(|_| invalid())?;
-        source.checkpoint()
-    }, |row| target_owner.push(row, input.context.deadline(), reserve).map_err(|error| reason(&error)))?;
-    if imported != expected || chain.finish() != *binding.plan_chain.as_bytes() {
-        return Err(unknown());
-    }
+    mapping_artifact.visit(source, input, |row| target_owner.push(row,
+        input.context.deadline(), reserve).map_err(|error| reason(&error)))?;
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     let mut reader = target_owner.begin_readback(expected.import_counts(),
         input.context.deadline(), reserve).map_err(|error| reason(&error))?;
-    let mut replay_chain = SourceImportRecordChain::new();
-    let replayed = source.compile_source_mapping_with_rows(target, input.context.deadline(), |row| {
-        source.charge(Work::Compare(row.len()))?;
-        replay_chain.push(row).map_err(|_| invalid())?;
-        source.checkpoint()
-    }, |row| reader.compare(&row, input.context.deadline(), reserve).map_err(|error| reason(&error)))?;
-    if replayed != expected || replay_chain.finish() != *binding.plan_chain.as_bytes() {
-        return Err(unknown());
-    }
+    mapping_artifact.visit(source, input, |row| reader.compare(&row,
+        input.context.deadline(), reserve).map_err(|error| reason(&error)))?;
     let receipt = reader.finish(input.context.deadline(), reserve).map_err(|error| reason(&error))?;
     input.context.inventory_reobserve(input).map_err(|_| unknown())?;
     let mut inventory_owner = receipt.into_inventory_stage(input.context.deadline(), reserve)
@@ -114,7 +132,7 @@ fn transfer_rows(
 
 fn prepare_source_map(source: &MigrationSource<'_, '_, '_>, target: SourceNamespaceId,
     directory: &Path, input: &NativeMigrationInput<'_, '_, '_>)
-    -> Result<(SourceImportRecordArtifactPublication<DaemonImportOutputPlatform>, SourceMappingSummary), String> {
+    -> Result<PreparedSourceMap, String> {
     // Borrow the admitted operation only; no renewed deadline or meter.
     let artifact_context = super::inventory::ArtifactContext::new(source);
     let work = |unit| artifact_context.reserve(unit);
@@ -140,7 +158,7 @@ fn prepare_source_map(source: &MigrationSource<'_, '_, '_>, target: SourceNamesp
     source.charge(Work::Allocate(128))?;
     let name = format!("{}.source-map.v1", sha256::hex(&chain));
     let publication = verified.prepare_publication_with_context(&name, input.context.deadline(), &work).map_err(|error| artifact_context.reason(error))?;
-    Ok((publication, first))
+    Ok(PreparedSourceMap { publication, header: source.source_mapping_header(target)?, summary: first })
 }
 
 fn content_reason(error: &MigrationBootstrapFailure<String>, phase: &str) -> String {

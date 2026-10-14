@@ -118,30 +118,39 @@ fn sources(stream: &mut Stream<'_, '_, '_, '_>, target: SourceNamespaceId) -> Re
         target,
         source.native().ok_or_else(changed)?.context.deadline(),
         |_| source.checkpoint(),
-        |row| {
-            stream.reserve_row()?;
-            let encoded = stream
-                .encoder
-                .source_event(&row)
-                .map_err(super::codec_reason)?;
-            stream.statuses[Status::Present as usize] += 1;
-            stream.send(&encoded)?;
-            if row.lifecycle.opens_revision() {
-                stream.item(
-                    Family::Sources,
-                    Status::Present,
-                    3,
-                    [
-                        *row.legacy_source.as_bytes(),
-                        *row.legacy_revision.as_bytes(),
-                        *row.event.as_bytes(),
-                    ],
-                    [row.occurrence, row.sequence, row.source_bytes],
-                )?;
-            }
-            Ok(())
-        },
+        |row| source_event(stream, &row),
     )?;
+    source_heads(stream)
+}
+
+fn source_event(stream: &mut Stream<'_, '_, '_, '_>, row: &search_control_redb::migration::SourceImportRow) -> Result<(), String> {
+    stream.reserve_row()?;
+    let encoded = stream.encoder.source_event(row).map_err(super::codec_reason)?;
+    stream.statuses[Status::Present as usize] += 1;
+    stream.send(&encoded)?;
+    if row.lifecycle.opens_revision() {
+        stream.item(Family::Sources, Status::Present, 3,
+            [*row.legacy_source.as_bytes(), *row.legacy_revision.as_bytes(), *row.event.as_bytes()],
+            [row.occurrence, row.sequence, row.source_bytes])?;
+    }
+    Ok(())
+}
+
+pub(super) fn sources_from_mapping(
+    stream: &mut Stream<'_, '_, '_, '_>, target: SourceNamespaceId,
+    input: &NativeMigrationInput<'_, '_, '_>, mapping: &mut super::super::source_stage::PreparedSourceMap,
+) -> Result<(), String> {
+    let source = stream.source;
+    let header = source.source_mapping_header(target)?;
+    stream.item(Family::Sources, Status::Present, 2,
+        [header.legacy_namespace, header.catalog_snapshot, ZERO],
+        [header.expected_events, header.expected_sources, 0])?;
+    mapping.visit(source, input, |row| source_event(stream, &row))?;
+    source_heads(stream)
+}
+
+fn source_heads(stream: &mut Stream<'_, '_, '_, '_>) -> Result<(), String> {
+    let source = stream.source;
     for head in source.inventory_heads() {
         source.charge(Work::Compare(192))?;
         stream.item(

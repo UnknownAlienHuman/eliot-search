@@ -12,9 +12,11 @@ mod migration;
 use super::{
     CONTROL_DIRECTORY, DirectDigest, DirectStore, File, MAX_LOG_BYTES, MAX_LOG_LINE_BYTES,
     MAX_SCAN_INPUT_BYTES, MAX_SOURCE_EVENTS, NAMESPACE_FILE, Path, RegistryState, SOURCE_LOG_FILE,
-    SOURCE_LOG_HEADER, SourceRecord, SourceState, ZERO_DIGEST, ensure_regular_file, is_reparse,
+    SOURCE_LOG_HEADER, SourceRecord, SourceState, ensure_regular_file, is_reparse,
     sha256,
 };
+#[cfg(test)]
+use super::ZERO_DIGEST;
 
 /// Exact immutable object binding. Global event sequence is not a source revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
