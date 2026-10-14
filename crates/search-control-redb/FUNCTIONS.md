@@ -219,6 +219,9 @@ rows and their technical identity index require independent readback, and every
 canonical occurrence is joined against exact legacy source/revision, SHA and length
 fields. Header/footer bytes remain owned by the frozen encoder and strict decoder.
 The extended content table profile is unavailable to old or normal journal opens.
+The final original-context checkpoint must succeed before a content owner becomes
+writable. A terminal refusal retains the target/publication evidence and blocks
+later publication, row adoption and readback even if the same callback later permits work.
 The receipt remains partial: semantic candidate, serving, restart, residency and
 cleanup authority are not issued; #268/#269/#347/#348/#215 remain separate owners.
 
