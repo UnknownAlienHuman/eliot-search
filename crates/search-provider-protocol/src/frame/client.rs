@@ -17,6 +17,7 @@
 //! intersection and source authority must still be checked by their live owners.
 
 mod grant;
+pub mod evidence_schema;
 mod primitives;
 mod recipe;
 mod response;
