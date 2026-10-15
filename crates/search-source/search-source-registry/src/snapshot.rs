@@ -49,12 +49,41 @@ pub struct RegistrySnapshot {
 pub type NonZeroRevisionAlias = search_contracts::NonZeroRevision;
 
 /// Validated immutable registry snapshot.
+///
+/// Coherent view metadata is not a full-state restoration or durability proof.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValidatedRegistrySnapshot {
     inner: RegistrySnapshot,
+    original_admission_availability: OriginalAdmissionAvailability,
+}
+
+/// Availability of original source-admission inputs within a coherent snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OriginalAdmissionAvailability {
+    /// Every source retains its matching owner-produced original-input envelope.
+    RetainedOriginalInputs,
+    /// At least one legacy source lacks inputs; receipt/digest metadata cannot restore them.
+    LegacyInputsUnavailable,
 }
 
 impl ValidatedRegistrySnapshot {
+    /// Explicit admission-input availability, independent of snapshot digest equality.
+    ///
+    /// Retained inputs do not prove namespace full-state durability, live policy,
+    /// native root custody or current grants.
+    pub const fn original_admission_availability(&self) -> OriginalAdmissionAvailability {
+        self.original_admission_availability
+    }
+
+    /// Refuses use of a coherent legacy snapshot as admission-restoration evidence.
+    pub fn require_original_admission_inputs(&self) -> Result<(), RegistryError> {
+        match self.original_admission_availability {
+            OriginalAdmissionAvailability::RetainedOriginalInputs => Ok(()),
+            OriginalAdmissionAvailability::LegacyInputsUnavailable => {
+                Err(RegistryError::AdmissionRestorationUnavailable)
+            }
+        }
+    }
     /// Exact validated snapshot.
     #[must_use]
     pub const fn snapshot(&self) -> &RegistrySnapshot {
@@ -87,12 +116,25 @@ pub fn validate_registry_snapshot(
     {
         return Err(RegistryError::CapacityExceeded);
     }
+    let mut root_identities = BTreeSet::new();
     for (id, root) in &snapshot.roots {
+        crate::root::validate_metadata(root)?;
+        if root.registry_revision > snapshot.revision
+            || !root_identities.insert(root.canonical_root_digest)
+        {
+            return Err(RegistryError::SnapshotInvalid);
+        }
         if &root.root_binding_id != id {
             return Err(RegistryError::SnapshotInvalid);
         }
     }
     for (identity, source) in &snapshot.sources {
+        if source
+            .original_admission()
+            .is_some_and(|original| original.receipt() != source.admission())
+        {
+            return Err(RegistryError::SnapshotInvalid);
+        }
         if source.identity() != identity {
             return Err(RegistryError::SnapshotInvalid);
         }
@@ -161,6 +203,15 @@ pub fn validate_registry_snapshot(
     }
     Ok(ValidatedRegistrySnapshot {
         inner: snapshot.clone(),
+        original_admission_availability: if snapshot
+            .sources
+            .values()
+            .any(|source| source.original_admission().is_none())
+        {
+            OriginalAdmissionAvailability::LegacyInputsUnavailable
+        } else {
+            OriginalAdmissionAvailability::RetainedOriginalInputs
+        },
     })
 }
 

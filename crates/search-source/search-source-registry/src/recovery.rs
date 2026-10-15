@@ -10,14 +10,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use search_contracts::{
     Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef, ReferencePortfolioId, SourceIdentity,
 };
-use search_ports::{CancellationProbe, OperationContext};
+use search_ports::{CancellationProbe, OperationContext, PortErrorKind, PortFailure};
 use search_source_admission::AdmissionReceipt;
 use search_source_identity::SourceBinding;
 
 use crate::cutover::NamespaceCutoverState;
 use crate::error::{
-    JournalEntryKind, RegistryControlPort, RegistryError, RegistryJournalEntry, RegistryLimits,
-    cancelled_before_commit, registry_mutation,
+    RegistryControlPort, RegistryError, RegistryLimits, cancelled_before_commit, registry_mutation,
 };
 use crate::membership::{
     MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership, derive_membership_id,
@@ -25,8 +24,23 @@ use crate::membership::{
 use crate::portfolio::{PortfolioItem, ReferencePortfolioRecord};
 use crate::portfolio_history::PortfolioHistory;
 use crate::root::RootRecord;
-use crate::snapshot::ValidatedRegistrySnapshot;
 use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
+
+#[path = "batch.rs"]
+mod batch;
+pub use batch::{
+    DecodedBatch, PreparedBatch, PreparedStateDelta, RegistryBatchLookup, RegistryBatchReadback,
+    RegistryStateDelta, RegistryStateFamily, RegistryStateKey, RegistryStateRecord,
+    decode_batch_record, decode_registry_state, decode_registry_state_entry,
+    decode_registry_state_key,
+};
+
+#[path = "registry_restore.rs"]
+mod restore;
+pub use restore::{
+    MAX_REGISTRY_RESTORE_BYTES, ObservedRegistryRestore, RegistryRestoreOperation,
+    RegistryRestoreState, preflight_registry_restore_inputs, restore_registry_state,
+};
 
 /// Full-payload immutable registry operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -81,10 +95,42 @@ pub struct NamespaceCutover {
 /// One source-registry change inside an atomic batch.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RegistryChange {
+    /// Register a complete root record, with no implicit source admission.
+    RegisterRoot {
+        /// Original root registration request, including owner/policy receipt references.
+        request: crate::root::RegisterRootRequest,
+        /// Original root mutation receipt.
+        receipt: ReceiptRef,
+    },
+    /// Replace a root policy fence under its exact record revision.
+    UpdateRootPolicy {
+        /// Exact stable root identity.
+        root_binding_id: search_contracts::RootBindingId,
+        /// Expected root record revision.
+        expected_record_revision: NonZeroRevision,
+        /// Replacement policy fingerprint.
+        policy_fingerprint: Blake3Digest32,
+        /// Replacement policy revision.
+        policy_revision: NonZeroRevision,
+        /// Original mutation receipt.
+        receipt: ReceiptRef,
+    },
+    /// Retain a complete unbound root under its exact record revision.
+    UnbindRoot {
+        /// Exact stable root identity.
+        root_binding_id: search_contracts::RootBindingId,
+        /// Expected root record revision.
+        expected_record_revision: NonZeroRevision,
+        /// Original mutation receipt.
+        receipt: ReceiptRef,
+    },
     /// Register a newly assigned admitted source.
     RegisterSource {
         /// Verified admission receipt with `ALLOW` outcome.
         admission: AdmissionReceipt,
+        /// Original owner-produced input envelope; absent legacy provenance is unavailable.
+        original_admission:
+            Option<search_source_admission::original_envelope::OriginalAdmissionEnvelope>,
         /// First current source binding.
         binding: SourceBinding,
         /// Observation-to-stable-identity assignment proof.
@@ -128,15 +174,25 @@ pub enum RegistryChange {
 }
 
 impl RegistryChange {
+    fn root_target(&self) -> Option<search_contracts::RootBindingId> {
+        match self {
+            Self::RegisterRoot { request, .. } => Some(request.root_binding_id),
+            Self::UpdateRootPolicy {
+                root_binding_id, ..
+            }
+            | Self::UnbindRoot {
+                root_binding_id, ..
+            } => Some(*root_binding_id),
+            _ => None,
+        }
+    }
     fn source_target(&self) -> Option<&SourceIdentity> {
         match self {
             Self::RegisterSource { binding, .. } => Some(binding.identity()),
             Self::UpdateSourceBinding { identity, .. } | Self::RetireSource { identity, .. } => {
                 Some(identity)
             }
-            Self::AddMembership(_) | Self::RetireMembership { .. } | Self::CutoverNamespace(_) => {
-                None
-            }
+            _ => None,
         }
     }
 
@@ -144,10 +200,7 @@ impl RegistryChange {
         match self {
             Self::AddMembership(membership) => Some(&membership.key),
             Self::RetireMembership { key, .. } => Some(key),
-            Self::RegisterSource { .. }
-            | Self::UpdateSourceBinding { .. }
-            | Self::RetireSource { .. }
-            | Self::CutoverNamespace(_) => None,
+            _ => None,
         }
     }
 
@@ -178,9 +231,28 @@ impl RegistryBatch {
             return Err(RegistryError::BatchSizeInvalid);
         }
         let mut sources = BTreeSet::new();
+        let mut roots = BTreeSet::new();
+        let mut original_bytes = 0_usize;
         let mut memberships = BTreeSet::new();
         let mut cutovers = BTreeSet::new();
         for change in &self.changes {
+            if let Some(root) = change.root_target()
+                && !roots.insert(root)
+            {
+                return Err(RegistryError::DuplicateBatchTarget);
+            }
+            if let RegistryChange::RegisterSource {
+                original_admission: Some(original),
+                ..
+            } = change
+            {
+                original_bytes = original_bytes
+                    .checked_add(original.encoded().len())
+                    .ok_or(RegistryError::CapacityExceeded)?;
+                if original_bytes > search_contracts::MAX_CANONICAL_BYTES {
+                    return Err(RegistryError::CapacityExceeded);
+                }
+            }
             if let Some(source) = change.source_target()
                 && !sources.insert(source.clone())
             {
@@ -292,7 +364,38 @@ pub struct SourceRegistry {
     portfolio_history: PortfolioHistory,
     namespaces: BTreeMap<search_contracts::SourceNamespaceId, NamespaceCutoverState>,
     active_generations: BTreeMap<OpaqueId, NonZeroRevision>,
-    operations: Vec<(OpaqueId, Blake3Digest32, RegistryReceipt)>,
+    operations: Vec<RetainedRegistryOperation>,
+    pending_batch: Option<(OpaqueId, Blake3Digest32)>,
+}
+
+#[derive(Clone, Debug)]
+enum RetainedRegistryOperation {
+    ProcessLocal(RegistryReceipt),
+    Committed(DecodedBatch),
+}
+impl RetainedRegistryOperation {
+    fn id(&self) -> &OpaqueId {
+        match self {
+            Self::ProcessLocal(receipt) => receipt.operation.operation_id(),
+            Self::Committed(record) => &record.entry().operation_id,
+        }
+    }
+    fn digest(&self) -> Blake3Digest32 {
+        match self {
+            Self::ProcessLocal(receipt) => receipt.mutation_digest,
+            Self::Committed(record) => record.entry().mutation_digest,
+        }
+    }
+    fn receipt(&self, replayed: bool) -> RegistryReceipt {
+        match self {
+            Self::ProcessLocal(receipt) => {
+                let mut receipt = receipt.clone();
+                receipt.replayed = replayed;
+                receipt
+            }
+            Self::Committed(record) => record.registry_receipt(replayed),
+        }
+    }
 }
 
 impl SourceRegistry {
@@ -310,6 +413,7 @@ impl SourceRegistry {
             namespaces: BTreeMap::new(),
             active_generations: BTreeMap::new(),
             operations: Vec::new(),
+            pending_batch: None,
         })
     }
 
@@ -321,6 +425,22 @@ impl SourceRegistry {
     /// Finite limits.
     pub const fn limits(&self) -> RegistryLimits {
         self.limits
+    }
+
+    /// Complete retained committed operation, including original receipt and historical targets.
+    ///
+    /// This observed cache provides no independent durable or live-authority proof.
+    pub fn committed_operation(&self, id: &OpaqueId) -> Option<&DecodedBatch> {
+        self.operations
+            .iter()
+            .find_map(|operation| match operation {
+                RetainedRegistryOperation::Committed(record)
+                    if &record.entry().operation_id == id =>
+                {
+                    Some(record)
+                }
+                _ => None,
+            })
     }
 
     /// Returns one exact source record.
@@ -357,38 +477,16 @@ impl SourceRegistry {
             .ok_or(RegistryError::RootNotRegistered)
     }
 
-    /// Mutable roots for normative root operations.
-    pub fn roots_mut(&mut self) -> &mut BTreeMap<search_contracts::RootBindingId, RootRecord> {
-        &mut self.roots
-    }
-
-    /// Mutable sources for normative source operations.
-    pub fn sources_mut(&mut self) -> &mut BTreeMap<SourceIdentity, RegisteredSource> {
-        &mut self.sources
-    }
-
     /// Mutable memberships for normative membership operations.
-    pub fn memberships_mut(&mut self) -> &mut BTreeMap<MembershipKey, MembershipRecord> {
+    pub(crate) fn memberships_mut(&mut self) -> &mut BTreeMap<MembershipKey, MembershipRecord> {
         &mut self.memberships
     }
 
-    /// Mutable reverse membership index.
-    pub fn reverse_memberships_mut(
-        &mut self,
-    ) -> &mut BTreeMap<search_contracts::SourceMembershipId, MembershipKey> {
-        &mut self.reverse_memberships
-    }
-
     /// Mutable namespace cutover states.
-    pub fn namespaces_mut(
+    pub(crate) fn namespaces_mut(
         &mut self,
     ) -> &mut BTreeMap<search_contracts::SourceNamespaceId, NamespaceCutoverState> {
         &mut self.namespaces
-    }
-
-    /// Mutable active generations.
-    pub fn active_generations_mut(&mut self) -> &mut BTreeMap<OpaqueId, NonZeroRevision> {
-        &mut self.active_generations
     }
 
     /// Immutable roots.
@@ -447,12 +545,12 @@ impl SourceRegistry {
     }
 
     /// Sets the registry revision after one durable normative mutation.
-    pub fn set_revision(&mut self, revision: u64) {
+    pub(crate) fn set_revision(&mut self, revision: u64) {
         self.revision = revision;
     }
 
     /// Split mutable access to roots and sources for admission.
-    pub fn roots_and_sources_mut(
+    pub(crate) fn roots_and_sources_mut(
         &mut self,
     ) -> (
         &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
@@ -463,7 +561,7 @@ impl SourceRegistry {
 
     /// Split mutable access for membership binding.
     #[allow(clippy::type_complexity)]
-    pub fn membership_parts_mut(
+    pub(crate) fn membership_parts_mut(
         &mut self,
     ) -> (
         &BTreeMap<SourceIdentity, RegisteredSource>,
@@ -499,35 +597,34 @@ impl SourceRegistry {
         )
     }
 
-    /// Advances the registry revision after one durable normative mutation.
-    pub fn advance_revision(&mut self) -> Result<(u64, u64), RegistryError> {
-        let before = self.revision;
-        let after = before
-            .checked_add(1)
-            .ok_or(RegistryError::RegistryRevisionOverflow)?;
-        self.revision = after;
-        Ok((before, after))
-    }
-
     /// Current active generation for a corpus.
     pub fn active_generation(&self, corpus_id: &OpaqueId) -> Option<NonZeroRevision> {
         self.active_generations.get(corpus_id).copied()
     }
 
-    /// Applies one finite atomic batch or returns the exact prior replay receipt.
+    /// Applies a pure process-local batch or returns its process-local replay receipt.
+    ///
+    /// This compatibility path provides no persistence evidence. Product batches
+    /// use [`crate::api::apply_admission_batch`] and its atomic state transaction.
     pub fn apply(&mut self, batch: RegistryBatch) -> Result<RegistryReceipt, RegistryError> {
+        if self.pending_batch.is_some() {
+            return Err(RegistryError::MutationOutcomeUnknown);
+        }
         batch.validate(self.limits)?;
-        if let Some((_, digest, receipt)) = self
+        if let Some(operation) = self
             .operations
             .iter()
-            .find(|(operation_id, _, _)| operation_id == batch.operation.operation_id())
+            .find(|operation| operation.id() == batch.operation.operation_id())
         {
-            if *digest != batch.operation.mutation_digest() {
+            if operation.digest() != batch.operation.mutation_digest() {
                 return Err(RegistryError::OperationConflict);
             }
-            let mut replay = receipt.clone();
-            replay.replayed = true;
-            return Ok(replay);
+            if let RetainedRegistryOperation::Committed(record) = operation
+                && record.request_fingerprint() != batch::request_fingerprint(&batch)?
+            {
+                return Err(RegistryError::OperationConflict);
+            }
+            return Ok(operation.receipt(true));
         }
         if self.operations.len() >= self.limits.max_operations {
             return Err(RegistryError::OperationCapacityExceeded);
@@ -541,6 +638,7 @@ impl SourceRegistry {
             .ok_or(RegistryError::RegistryRevisionOverflow)?;
 
         let mut staged_sources = self.sources.clone();
+        let mut staged_roots = self.roots.clone();
         let mut staged_memberships = self.memberships.clone();
         let mut staged_generations = self.active_generations.clone();
         for change in &batch.changes {
@@ -548,6 +646,7 @@ impl SourceRegistry {
                 change,
                 after_revision,
                 self.limits,
+                &mut staged_roots,
                 &mut staged_sources,
                 &mut staged_memberships,
                 &mut staged_generations,
@@ -568,15 +667,13 @@ impl SourceRegistry {
             replayed: false,
         };
         self.sources = staged_sources;
+        self.roots = staged_roots;
         self.memberships = staged_memberships;
         self.active_generations = staged_generations;
         self.rebuild_reverse_index();
         self.revision = after_revision;
-        self.operations.push((
-            batch.operation.operation_id().clone(),
-            batch.operation.mutation_digest(),
-            receipt.clone(),
-        ));
+        self.operations
+            .push(RetainedRegistryOperation::ProcessLocal(receipt.clone()));
         Ok(receipt)
     }
 
@@ -607,8 +704,11 @@ impl SourceRegistry {
     }
 }
 
-/// Resolves an unknown commit outcome by exact idempotency/entity/generation
-/// readback.
+/// Classifies a batch commit outcome by atomic operation and target readback.
+///
+/// This read-only classification installs no state. The public batch producer
+/// performs guarded recovery installation; legacy receipt-only entries cannot
+/// establish a committed batch.
 pub fn recover_registry_mutation<C, P>(
     registry: &SourceRegistry,
     operation_id: &OpaqueId,
@@ -621,29 +721,51 @@ where
     P: RegistryControlPort<Cancellation = C>,
 {
     cancelled_before_commit(context)?;
-    if let Some((_, digest, receipt)) = registry
-        .operations
-        .iter()
-        .find(|(id, _, _)| id == operation_id)
-    {
-        if *digest != expected_digest {
-            return Ok(RegistryMutationRecovery::Conflict);
-        }
-        return Ok(RegistryMutationRecovery::Recovered(receipt.clone()));
-    }
-    let journal = control_port
-        .load_entry(operation_id, context)
-        .map_err(|_| RegistryError::DurabilityRejected)?;
-    match journal {
-        None => Ok(RegistryMutationRecovery::RetrySameOperation),
-        Some(entry) => {
-            if entry.mutation_digest != expected_digest {
-                Ok(RegistryMutationRecovery::Conflict)
-            } else if entry.after_revision != registry.revision.saturating_add(1) {
+    let lookup = control_port
+        .load_batch(operation_id, context)
+        .map_err(|_| RegistryError::MutationOutcomeUnknown)?;
+    match lookup {
+        RegistryBatchLookup::Absent { revision } => {
+            if revision != registry.revision
+                || registry
+                    .operations
+                    .iter()
+                    .any(|operation| operation.id() == operation_id)
+            {
                 Ok(RegistryMutationRecovery::Quarantined)
             } else {
                 Ok(RegistryMutationRecovery::RetrySameOperation)
             }
+        }
+        RegistryBatchLookup::Committed(readback) => {
+            let record = readback.record();
+            if record.entry().operation_id != *operation_id
+                || record.entry().mutation_digest != expected_digest
+            {
+                return Ok(RegistryMutationRecovery::Conflict);
+            }
+            if let Some((id, fingerprint)) = &registry.pending_batch
+                && (id != operation_id || *fingerprint != record.request_fingerprint())
+            {
+                return Ok(RegistryMutationRecovery::Conflict);
+            }
+            if readback.verify_operation().is_err() {
+                return Ok(RegistryMutationRecovery::Quarantined);
+            }
+            // Acknowledged historical operations remain immutable even when
+            // later transactions legitimately replace their target states.
+            let historical = registry.pending_batch.is_none()
+                && registry.revision == readback.revision()
+                && registry.revision >= record.entry().after_revision;
+            if !historical
+                && (readback.verify().is_err()
+                    || batch::validate_install(registry, record).is_err())
+            {
+                return Ok(RegistryMutationRecovery::Quarantined);
+            }
+            Ok(RegistryMutationRecovery::Recovered(
+                record.registry_receipt(true),
+            ))
         }
     }
 }
@@ -656,7 +778,6 @@ where
 pub fn apply_admission_batch<C, P>(
     registry: &mut SourceRegistry,
     batch: RegistryBatch,
-    expected_snapshot: &ValidatedRegistrySnapshot,
     receipt: &ReceiptRef,
     control_port: &mut P,
     context: &OperationContext<C>,
@@ -666,112 +787,163 @@ where
     P: RegistryControlPort<Cancellation = C>,
 {
     cancelled_before_commit(context)?;
-    if expected_snapshot.snapshot().revision != registry.revision {
-        return Err(RegistryError::SourceViewStale);
-    }
-    if let Some((_, digest, _)) = registry
-        .operations
-        .iter()
-        .find(|(id, _, _)| id == batch.operation.operation_id())
+    batch.validate(registry.limits)?;
+    let fingerprint = batch::request_fingerprint(&batch)?;
+    let operation_id = batch.operation.operation_id();
+    if let Some((pending_id, pending_fingerprint)) = &registry.pending_batch
+        && (pending_id != operation_id || *pending_fingerprint != fingerprint)
     {
-        if *digest != batch.operation.mutation_digest() {
-            return Err(RegistryError::OperationConflict);
-        }
-        let items = batch
-            .changes
-            .iter()
-            .enumerate()
-            .map(|(input_index, _)| BatchItemOutcome {
-                input_index,
-                status: BatchItemStatus::Committed,
-                reason: None,
-            })
-            .collect();
-        return Ok(RegistryBatchReceipt {
-            operation: batch.operation.clone(),
-            before_revision: registry.revision,
-            after_revision: registry.revision,
-            items,
-            receipt: receipt.clone(),
-            replayed: true,
-        });
+        return Err(RegistryError::MutationOutcomeUnknown);
     }
-    let before = registry.revision;
-    match registry.apply(batch.clone()) {
-        Ok(applied) => {
-            let mutation = registry_mutation(batch.operation.operation_id());
-            let entry = RegistryJournalEntry::new(
-                batch.operation.operation_id().clone(),
-                batch.operation.mutation_digest(),
-                applied.before_revision,
-                applied.after_revision,
-                JournalEntryKind::BatchApply,
-                receipt.clone(),
-            );
-            control_port
-                .persist_entry(&entry, context, &mutation)
-                .map_err(|_| RegistryError::DurabilityRejected)?;
-            let items = batch
-                .changes
-                .iter()
-                .enumerate()
-                .map(|(input_index, _)| BatchItemOutcome {
-                    input_index,
-                    status: BatchItemStatus::Committed,
-                    reason: None,
-                })
-                .collect();
-            Ok(RegistryBatchReceipt {
-                operation: applied.operation,
-                before_revision: applied.before_revision,
-                after_revision: applied.after_revision,
-                items,
-                receipt: receipt.clone(),
-                replayed: false,
-            })
+    match control_port
+        .load_batch(operation_id, context)
+        .map_err(|_| RegistryError::MutationOutcomeUnknown)?
+    {
+        RegistryBatchLookup::Committed(readback) => {
+            let record = readback.record();
+            if record.entry().operation_id != *operation_id
+                || record.entry().mutation_digest != batch.operation.mutation_digest()
+                || record.request_fingerprint() != fingerprint
+            {
+                return Err(RegistryError::OperationConflict);
+            }
+            readback.verify_operation()?;
+            if registry.pending_batch.is_none()
+                && registry.revision == readback.revision()
+                && registry.revision >= record.entry().after_revision
+            {
+                // Historical replay acknowledges the original transaction;
+                // it never restores obsolete targets or advances memory.
+                return Ok(record.receipt(true));
+            }
+            readback.verify()?;
+            if registry.revision == record.entry().before_revision {
+                let expected = batch::prepare(registry, &batch, &record.entry().receipt)?;
+                if expected.record() != record {
+                    return Err(RegistryError::MutationOutcomeUnknown);
+                }
+            }
+            batch::install(registry, record)?;
+            return Ok(record.receipt(true));
         }
-        Err(error) => {
-            let _ = before;
-            let RegistryBatch {
-                operation, changes, ..
-            } = batch;
-            let items = changes
+        RegistryBatchLookup::Absent { revision } => {
+            if revision != registry.revision {
+                return Err(RegistryError::RegistryRevisionConflict);
+            }
+            if registry
+                .operations
                 .iter()
-                .enumerate()
-                .map(|(input_index, _)| BatchItemOutcome {
-                    input_index,
-                    status: BatchItemStatus::Rejected,
-                    reason: Some(error),
-                })
-                .collect();
-            Ok(RegistryBatchReceipt {
-                operation,
+                .any(|operation| operation.id() == operation_id)
+            {
+                // A process-local receipt is not atomic-state evidence.
+                return Err(RegistryError::MutationOutcomeUnknown);
+            }
+            registry.pending_batch = None;
+        }
+    }
+    let prepared = match batch::prepare(registry, &batch, receipt) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            return Ok(RegistryBatchReceipt {
+                operation: batch.operation,
                 before_revision: registry.revision,
                 after_revision: registry.revision,
-                items,
+                items: (0..batch.changes.len())
+                    .map(|input_index| BatchItemOutcome {
+                        input_index,
+                        status: BatchItemStatus::Rejected,
+                        reason: Some(error),
+                    })
+                    .collect(),
                 receipt: receipt.clone(),
                 replayed: false,
-            })
+            });
         }
+    };
+    // All semantic checks and encoding precede the single external mutation.
+    batch::validate_install(registry, prepared.record())?;
+    let mutation = registry_mutation(operation_id);
+    let readback = match control_port.commit_batch(&prepared, context, &mutation) {
+        Ok(readback) => readback,
+        Err(error) => {
+            let refusal = match error.kind() {
+                PortErrorKind::CancelledBeforeSideEffect => {
+                    Some(RegistryError::CancelledBeforeCommit)
+                }
+                PortErrorKind::CompareAndSwapRejected | PortErrorKind::StaleGeneration => {
+                    Some(RegistryError::RegistryRevisionConflict)
+                }
+                PortErrorKind::Conflict => Some(RegistryError::OperationConflict),
+                PortErrorKind::ResourceExhausted => Some(RegistryError::DurabilityExhausted),
+                PortErrorKind::InvalidContext
+                | PortErrorKind::DeadlineBeforeStart
+                | PortErrorKind::InvalidInput
+                | PortErrorKind::Unauthorized => Some(RegistryError::DurabilityRejected),
+                _ => None,
+            };
+            if let Some(refusal) = refusal {
+                return Err(refusal);
+            }
+            registry.pending_batch = Some((operation_id.clone(), fingerprint));
+            return Err(RegistryError::MutationOutcomeUnknown);
+        }
+    };
+    if readback.record() != prepared.record() || readback.verify().is_err() {
+        registry.pending_batch = Some((operation_id.clone(), fingerprint));
+        return Err(RegistryError::MutationOutcomeUnknown);
     }
+    batch::install_prepared(registry, &prepared);
+    Ok(readback.record().receipt(false))
 }
 
 fn apply_change(
     change: &RegistryChange,
     registry_revision: u64,
     limits: RegistryLimits,
+    roots: &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
     sources: &mut BTreeMap<SourceIdentity, RegisteredSource>,
     memberships: &mut BTreeMap<MembershipKey, MembershipRecord>,
     active_generations: &mut BTreeMap<OpaqueId, NonZeroRevision>,
 ) -> Result<(), RegistryError> {
     match change {
+        RegistryChange::RegisterRoot { request, receipt } => {
+            crate::root::stage_registration(roots, request, registry_revision, receipt, limits)
+        }
+        RegistryChange::UpdateRootPolicy {
+            root_binding_id,
+            expected_record_revision,
+            policy_fingerprint,
+            policy_revision,
+            receipt,
+        } => crate::root::stage_policy(
+            roots,
+            *root_binding_id,
+            *expected_record_revision,
+            *policy_fingerprint,
+            *policy_revision,
+            registry_revision,
+            receipt,
+        ),
+        RegistryChange::UnbindRoot {
+            root_binding_id,
+            expected_record_revision,
+            receipt,
+        } => crate::root::stage_unbind(
+            roots,
+            *root_binding_id,
+            *expected_record_revision,
+            registry_revision,
+            receipt,
+        ),
         RegistryChange::RegisterSource {
             admission,
+            original_admission,
             binding,
             assignment,
             receipt,
         } => register_source(
             admission,
+            original_admission.as_ref(),
             binding,
             assignment,
             receipt,
@@ -834,6 +1006,7 @@ fn apply_change(
 
 fn register_source(
     admission: &AdmissionReceipt,
+    original: Option<&search_source_admission::original_envelope::OriginalAdmissionEnvelope>,
     binding: &SourceBinding,
     assignment: &AdmissionBindingProof,
     receipt: &ReceiptRef,
@@ -866,7 +1039,8 @@ fn register_source(
             source_revision,
             registry_revision,
             receipt.clone(),
-        ),
+        )
+        .retaining_original(original.cloned())?,
     );
     Ok(())
 }
@@ -903,7 +1077,8 @@ fn update_source_binding(
         next_revision,
         registry_revision,
         receipt.clone(),
-    );
+    )
+    .retaining_original(source.original_admission().cloned())?;
     sources.insert(identity.clone(), updated);
     Ok(())
 }
@@ -934,7 +1109,8 @@ fn retire_source(
         next_revision,
         registry_revision,
         receipt.clone(),
-    );
+    )
+    .retaining_original(source.original_admission().cloned())?;
     sources.insert(identity.clone(), retired);
     let to_retire: Vec<MembershipKey> = memberships
         .iter()

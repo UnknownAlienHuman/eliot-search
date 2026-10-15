@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef, SourceIdentity};
 use search_ports::{CancellationProbe, MutationIdentity, OperationContext};
+use search_source_admission::original_envelope::OriginalAdmissionEnvelope;
 use search_source_admission::{AdmissionOutcome, AdmissionReceipt};
 use search_source_identity::SourceBinding;
 
@@ -49,6 +50,7 @@ pub struct AdmissionBindingProof {
 pub struct RegisteredSource {
     binding: SourceBinding,
     admission: AdmissionReceipt,
+    original_admission: Option<OriginalAdmissionEnvelope>,
     assignment: AdmissionBindingProof,
     lifecycle: SourceLifecycle,
     source_revision: NonZeroRevision,
@@ -71,6 +73,7 @@ impl RegisteredSource {
         Self {
             binding,
             admission,
+            original_admission: None,
             assignment,
             lifecycle,
             source_revision,
@@ -92,6 +95,25 @@ impl RegisteredSource {
     /// Verified admission receipt bound to this registration.
     pub const fn admission(&self) -> &AdmissionReceipt {
         &self.admission
+    }
+
+    /// Retained original inputs; None explicitly means historical restoration is unavailable.
+    pub const fn original_admission(&self) -> Option<&OriginalAdmissionEnvelope> {
+        self.original_admission.as_ref()
+    }
+
+    pub(crate) fn retaining_original(
+        mut self,
+        original: Option<OriginalAdmissionEnvelope>,
+    ) -> Result<Self, RegistryError> {
+        if original
+            .as_ref()
+            .is_some_and(|envelope| envelope.receipt() != &self.admission)
+        {
+            return Err(RegistryError::AdmissionBindingMismatch);
+        }
+        self.original_admission = original;
+        Ok(self)
     }
 
     /// Exact observation-to-source assignment proof.
@@ -273,6 +295,7 @@ where
         RegisteredSource {
             binding: binding.clone(),
             admission: receipt_input.clone(),
+            original_admission: None,
             assignment: assignment.clone(),
             lifecycle: SourceLifecycle::Active,
             source_revision,
@@ -321,6 +344,26 @@ where
             .ok_or(RegistryError::RegistryRevisionOverflow)?
     {
         return Err(RegistryError::RegistryRevisionConflict);
+    }
+    // This API has no fresh retained-input envelope. Receipt replacement must
+    // therefore refuse before any durable dispatch or source mutation, including
+    // the replay path. A legacy source stays explicitly unavailable for restore.
+    let retained = sources
+        .get(identity)
+        .ok_or(RegistryError::SourceNotAdmitted)?;
+    if &retained.admission != current_receipt {
+        return Err(if retained.original_admission.is_none() {
+            RegistryError::AdmissionRestorationUnavailable
+        } else {
+            RegistryError::AdmissionReceiptMismatch
+        });
+    }
+    if retained
+        .original_admission
+        .as_ref()
+        .is_some_and(|original| original.receipt() != current_receipt)
+    {
+        return Err(RegistryError::AdmissionReceiptMismatch);
     }
     let mutation = registry_mutation(operation_id);
     let entry = RegistryJournalEntry::new(
@@ -371,11 +414,12 @@ where
         .get(&root_id)
         .ok_or(RegistryError::RootNotRegistered)?;
     check_allow_under_root(current_receipt, root)?;
-    persist(control_port, &entry, context, &mutation)?;
-    record.source_revision = record
+    let next_source_revision = record
         .source_revision
         .checked_next()
         .map_err(|_| RegistryError::ContractExhausted)?;
+    persist(control_port, &entry, context, &mutation)?;
+    record.source_revision = next_source_revision;
     record.admission.clone_from(current_receipt);
     record.registry_revision = next_registry_revision;
     record.last_receipt.clone_from(receipt);

@@ -1,5 +1,8 @@
 //! Normative qualification evidence for `search-source-registry`.
 
+#[path = "batch_tests.rs"]
+mod batch_tests;
+
 #[test]
 fn portfolio_replay_returns_original_operation_before_o2_commits_another_revision() {
     use crate::portfolio_history::PortfolioRevisionKey;
@@ -593,6 +596,11 @@ fn operation(name: &str, byte: u8) -> RegistryOperation {
 }
 
 fn allow_receipt(policy_revision: u64) -> AdmissionReceipt {
+    original_admission(policy_revision).receipt().clone()
+}
+
+fn original_admission(policy_revision: u64)
+    -> search_source_admission::original_envelope::OriginalAdmissionEnvelope {
     let policy = baseline_policy(policy_revision, 1_024);
     let input = UnvalidatedObservationInput {
         locator_class: "normalized-file".to_owned(),
@@ -623,7 +631,10 @@ fn allow_receipt(policy_revision: u64) -> AdmissionReceipt {
         decision.outcome(),
         search_source_admission::AdmissionOutcome::Allow
     );
-    issue_receipt(&policy, &observation, &decision).expect("receipt")
+    let issued = issue_receipt(&policy, &observation, &decision).expect("receipt");
+    search_source_admission::original_envelope::retain_original_admission(
+        &policy, &observation, &issued, AdmissionBudget::default_budget(), CancelFlag::live())
+        .expect("retain original owner inputs")
 }
 
 fn root_policy_fingerprint() -> Blake3Digest32 {
@@ -683,6 +694,7 @@ fn register_change(name: &str) -> RegistryChange {
     let proof = assignment(name, &admission);
     RegistryChange::RegisterSource {
         admission,
+        original_admission: Some(original_admission(1)),
         binding: source_binding(name),
         assignment: proof,
         receipt: receipt(format!("receipt:register:{name}").as_str()),
@@ -795,6 +807,7 @@ fn candidate_assignment_mismatch_is_atomic_failure() {
             operation: operation("register", 1),
             changes: vec![RegistryChange::RegisterSource {
                 admission,
+                original_admission: None,
                 binding: source_binding("one"),
                 assignment: proof,
                 receipt: receipt("receipt:register"),
@@ -917,6 +930,7 @@ fn failed_multi_change_batch_does_not_partially_register() {
                 register_change("one"),
                 RegistryChange::RegisterSource {
                     admission,
+                    original_admission: None,
                     binding: source_binding("two"),
                     assignment: invalid,
                     receipt: receipt("receipt:two"),
@@ -1904,7 +1918,7 @@ fn activate_without_fence_is_cutover_required() {
 #[test]
 fn crash_unknown_outcome_at_every_transaction() {
     let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
-    let port = journal();
+    let mut port = journal();
     let ctx = context(cancel());
     let unknown = api::recover_registry_mutation(
         &registry,
@@ -1918,12 +1932,17 @@ fn crash_unknown_outcome_at_every_transaction() {
         unknown,
         crate::recovery::RegistryMutationRecovery::RetrySameOperation
     );
-    registry
-        .apply(RegistryBatch {
+    api::apply_admission_batch(
+        &mut registry,
+        RegistryBatch {
             expected_registry_revision: 0,
             operation: operation("register", 1),
             changes: vec![register_change("one")],
-        })
+        },
+        &receipt("receipt:atomic-register"),
+        &mut port,
+        &ctx,
+    )
         .expect("apply");
     let recovered = api::recover_registry_mutation(
         &registry,

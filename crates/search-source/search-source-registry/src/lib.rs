@@ -65,11 +65,14 @@ pub use legacy_root_catalog::{
 };
 pub use membership::{MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership};
 pub use portfolio::PortfolioItem;
-pub use portfolio_history::{ImmutablePortfolioRevision, PortfolioCurrentPointer,
-    PortfolioHistory, PortfolioRevisionKey, PortfolioRevisionRecord};
+pub use portfolio_history::{
+    ImmutablePortfolioRevision, PortfolioCurrentPointer, PortfolioHistory, PortfolioRevisionKey,
+    PortfolioRevisionRecord,
+};
 pub use recovery::{
-    NamespaceCutover, RegistryBatch, RegistryChange, RegistryOperation, RegistryReceipt,
-    SourceRegistry,
+    MAX_REGISTRY_RESTORE_BYTES, NamespaceCutover, ObservedRegistryRestore, RegistryBatch,
+    RegistryChange, RegistryOperation, RegistryReceipt, RegistryRestoreOperation,
+    RegistryRestoreState, SourceRegistry, preflight_registry_restore_inputs, restore_registry_state,
 };
 pub use revision::{
     SourceRevisionControlPort, SourceRevisionCurrentness, SourceRevisionHead, SourceRevisionIdPort,
