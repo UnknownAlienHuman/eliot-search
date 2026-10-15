@@ -133,8 +133,14 @@ impl<C: CancellationProbe> RegistryControlPort for RegistryJournal<'_, C> {
             .preflight()
             .map_err(|_| owner_failure(RegistryError::CancelledBeforeCommit))?;
         let id = &batch.record().entry().operation_id;
-        if mutation != &registry_mutation(id) || self.pending.is_some() {
+        if mutation != &registry_mutation(id) {
             return Err(owner_failure(RegistryError::MutationOutcomeUnknown));
+        }
+        if self.requires_recovery() {
+            return Err(registry_port_error(
+                PortErrorKind::OutcomeUnknown, PortRetryability::AfterReadback,
+                RegistryError::MutationOutcomeUnknown, Some(id.clone()),
+            ));
         }
         let lookup = self.lookup(id, context)?;
         let generation = match lookup {
@@ -219,6 +225,12 @@ impl<C: CancellationProbe> RegistryControlPort for RegistryJournal<'_, C> {
         id: &OpaqueId,
         context: &OperationContext<C>,
     ) -> Result<RegistryBatchLookup, RegistryPortError> {
+        if self.original_uncertain {
+            return Err(registry_port_error(
+                PortErrorKind::OutcomeUnknown, PortRetryability::AfterReadback,
+                RegistryError::MutationOutcomeUnknown, Some(id.clone()),
+            ));
+        }
         context
             .preflight()
             .map_err(|_| owner_failure(RegistryError::CancelledBeforeCommit))?;

@@ -394,6 +394,7 @@ where
                 delta.before(),
                 delta.after(),
                 operation.registry_revision_after(),
+                operation.encoding_profile(),
             )?;
             if delta.before().is_none() {
                 replay_counts[family_index(delta.key())] += 1;
@@ -631,6 +632,7 @@ fn check_transition(
     before: Option<&RegistryStateRecord>,
     after: &RegistryStateRecord,
     revision: u64,
+    encoding_profile: &str,
 ) -> Result<(), RegistryError> {
     if before == Some(after) {
         return Ok(());
@@ -675,7 +677,7 @@ fn check_transition(
                 && old.lifecycle() == SourceLifecycle::Active
                 && old.source_revision().checked_next().ok() == Some(new.source_revision())
                 && new.registry_revision() == revision
-                && old.provenance() == new.provenance()
+                && source_provenance_transition(old, new, encoding_profile)
                 && new.binding().binding_revision() >= old.binding().binding_revision()
                 && new.binding().observation_revision() >= old.binding().observation_revision()
         }
@@ -703,4 +705,23 @@ fn check_transition(
         return Err(RegistryError::SnapshotInvalid);
     }
     Ok(())
+}
+
+fn source_provenance_transition(
+    old: &search_source_records::source::RegisteredSource,
+    new: &search_source_records::source::RegisteredSource,
+    encoding_profile: &str,
+) -> bool {
+    if old.provenance() == new.provenance() {
+        return true;
+    }
+    let (Some(old), Some(next)) = (old.permanent_admission(), new.permanent_admission()) else {
+        return false;
+    };
+    encoding_profile == BATCH_PROFILE_V4
+        && new.lifecycle() == SourceLifecycle::Active
+        && old.policy_reference() == next.policy_reference()
+        && old.root_record_revision() == next.root_record_revision()
+        && old.namespace_record_revision() == next.namespace_record_revision()
+        && old.owner_generation() == next.owner_generation()
 }

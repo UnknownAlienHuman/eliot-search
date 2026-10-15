@@ -4,6 +4,9 @@
 //! synthetic here. The cases qualify the real redb adapter and real v2 owners;
 //! they do not claim Native custody or entropy qualification.
 
+#[path = "source_v2_rebind.rs"]
+mod rebind;
+
 use super::*;
 use search_contracts::{
     Blake3Digest32, CatalogRevision, NonZeroRevision, OpaqueId, OpaqueRef, OwnerEpoch, ReceiptRef,
