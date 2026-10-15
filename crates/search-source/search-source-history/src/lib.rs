@@ -27,3 +27,7 @@ pub mod revision;
 
 #[cfg(test)]
 mod revision_tests;
+
+#[cfg(test)]
+#[path = "registry_restore_tests.rs"]
+mod registry_restore_tests;

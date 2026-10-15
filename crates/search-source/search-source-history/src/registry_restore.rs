@@ -5,16 +5,22 @@
 //! The I/O owner must establish read coherence/completeness and revalidate live
 //! root custody, owner/security fences, policy and grants before service use.
 
-use search_contracts::OpaqueId;
+use search_contracts::{CanonicalKey, CanonicalValue, OpaqueId};
+use search_source_admission::policy_v2::CheckpointFailureV2;
 use search_source_records::batch::{
-    DecodedBatch, RegistryStateKey, RegistryStateRecord, decode_batch_record,
-    decode_registry_state_entry_profiled,
+    BatchCodecV4Error, DecodedBatch, OriginalInputResolver, RegistryStateKey, RegistryStateRecord,
+    decode_batch_record, decode_batch_record_v4, decode_registry_state_entry_profiled,
+    decode_registry_state_key_v4, decode_registry_state_v4,
 };
 use search_source_records::error::{RegistryError, RegistryLimits};
 use search_source_records::membership::MembershipLifecycle;
+use search_source_records::namespace::NamespaceCutoverState;
 use search_source_records::root::RootStatus;
 use search_source_records::source::SourceLifecycle;
 use std::collections::BTreeMap;
+
+const STATE_PROFILE_V4: &str = "eliot.registry-state.v4";
+const BATCH_PROFILE_V4: &str = "eliot.registry-batch.v4";
 
 /// Absolute combined encoded-input ceiling for one bounded restore observation.
 pub const MAX_REGISTRY_RESTORE_BYTES: usize = 64 * 1024 * 1024;
@@ -65,6 +71,8 @@ pub struct RegistryHistoryParts {
     >,
     /// Active corpus generations.
     pub active_generations: BTreeMap<OpaqueId, search_contracts::NonZeroRevision>,
+    /// Observed namespace-owner records on the same semantic registry owner.
+    pub namespaces: BTreeMap<search_contracts::SourceNamespaceId, NamespaceCutoverState>,
     /// Decoded immutable batch history in revision order.
     pub operations: Vec<DecodedBatch>,
     /// Closed state encoding profile for each observed state key.
@@ -104,6 +112,24 @@ pub fn preflight_registry_restore_inputs(
     total_encoded_bytes: usize,
     max_total_bytes: usize,
 ) -> Result<(), RegistryError> {
+    preflight_registry_restore_inputs_with_namespaces(
+        limits,
+        state_count,
+        operation_count,
+        total_encoded_bytes,
+        max_total_bytes,
+        false,
+    )
+}
+
+fn preflight_registry_restore_inputs_with_namespaces(
+    limits: RegistryLimits,
+    state_count: usize,
+    operation_count: usize,
+    total_encoded_bytes: usize,
+    max_total_bytes: usize,
+    namespaces_allowed: bool,
+) -> Result<(), RegistryError> {
     let limits = limits.validate()?;
     if max_total_bytes == 0 || max_total_bytes > MAX_REGISTRY_RESTORE_BYTES {
         return Err(RegistryError::InvalidLimits);
@@ -113,6 +139,13 @@ pub fn preflight_registry_restore_inputs(
         .checked_add(limits.max_sources)
         .and_then(|count| count.checked_add(limits.max_memberships))
         .and_then(|count| count.checked_add(limits.max_memberships))
+        .and_then(|count| {
+            if namespaces_allowed {
+                count.checked_add(limits.max_namespaces)
+            } else {
+                Some(count)
+            }
+        })
         .ok_or(RegistryError::CapacityExceeded)?;
     if state_count > max_states
         || operation_count > limits.max_operations
@@ -122,6 +155,115 @@ pub fn preflight_registry_restore_inputs(
     }
     let mut bytes = 0;
     charge(&mut bytes, total_encoded_bytes, max_total_bytes)
+}
+
+trait RestoreDecoder {
+    type Error: From<RegistryError>;
+
+    fn decode_state(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(RegistryStateRecord, &'static str), Self::Error>;
+
+    fn decode_operation(
+        &mut self,
+        value: &[u8],
+        limits: RegistryLimits,
+    ) -> Result<DecodedBatch, Self::Error>;
+
+    fn namespaces_allowed(&self) -> bool;
+}
+
+struct LegacyRestoreDecoder;
+
+impl RestoreDecoder for LegacyRestoreDecoder {
+    type Error = RegistryError;
+
+    fn decode_state(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(RegistryStateRecord, &'static str), Self::Error> {
+        decode_registry_state_entry_profiled(key, value)
+    }
+
+    fn decode_operation(
+        &mut self,
+        value: &[u8],
+        limits: RegistryLimits,
+    ) -> Result<DecodedBatch, Self::Error> {
+        decode_batch_record(value, limits)
+    }
+
+    fn namespaces_allowed(&self) -> bool {
+        false
+    }
+}
+
+struct V4RestoreDecoder<'a, R: ?Sized, P> {
+    resolver: &'a mut R,
+    probe: &'a mut P,
+}
+
+impl<R, P> RestoreDecoder for V4RestoreDecoder<'_, R, P>
+where
+    R: OriginalInputResolver + ?Sized,
+    P: FnMut() -> Result<(), CheckpointFailureV2>,
+{
+    type Error = BatchCodecV4Error;
+
+    fn decode_state(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> Result<(RegistryStateRecord, &'static str), Self::Error> {
+        if encoded_profile(value)?.as_deref() == Some(STATE_PROFILE_V4) {
+            let key = decode_registry_state_key_v4(key).map_err(BatchCodecV4Error::Registry)?;
+            let state = decode_registry_state_v4(value, self.resolver, self.probe)?;
+            if state.key() != key {
+                return Err(BatchCodecV4Error::Registry(RegistryError::SnapshotInvalid));
+            }
+            Ok((state, STATE_PROFILE_V4))
+        } else {
+            let mut legacy = LegacyRestoreDecoder;
+            legacy
+                .decode_state(key, value)
+                .map_err(BatchCodecV4Error::Registry)
+        }
+    }
+
+    fn decode_operation(
+        &mut self,
+        value: &[u8],
+        limits: RegistryLimits,
+    ) -> Result<DecodedBatch, Self::Error> {
+        if encoded_profile(value)?.as_deref() == Some(BATCH_PROFILE_V4) {
+            decode_batch_record_v4(value, limits, self.resolver, self.probe)
+        } else {
+            let mut legacy = LegacyRestoreDecoder;
+            legacy
+                .decode_operation(value, limits)
+                .map_err(BatchCodecV4Error::Registry)
+        }
+    }
+
+    fn namespaces_allowed(&self) -> bool {
+        true
+    }
+}
+
+fn encoded_profile(bytes: &[u8]) -> Result<Option<String>, RegistryError> {
+    let value = search_contracts::parse_canonical_cbor(bytes)
+        .map_err(|_| RegistryError::SnapshotInvalid)?;
+    let CanonicalValue::Object(fields) = value else {
+        return Err(RegistryError::SnapshotInvalid);
+    };
+    let profile_key = CanonicalKey::new("profile").map_err(|_| RegistryError::SnapshotInvalid)?;
+    match fields.get(&profile_key) {
+        Some(CanonicalValue::Text(profile)) => Ok(Some(profile.as_str().to_owned())),
+        _ => Err(RegistryError::SnapshotInvalid),
+    }
 }
 
 /// Restore the complete four-family state and its committed batch history.
@@ -138,7 +280,72 @@ pub fn restore_registry_state(
     limits: RegistryLimits,
     max_total_bytes: usize,
 ) -> Result<ObservedRegistryHistory, RegistryError> {
-    preflight_registry_restore_inputs(limits, states.len(), operations.len(), 0, max_total_bytes)?;
+    let mut decoder = LegacyRestoreDecoder;
+    restore_registry_state_with(
+        registry_revision,
+        states,
+        operations,
+        limits,
+        max_total_bytes,
+        &mut decoder,
+    )
+}
+
+/// Restore complete state/history through the permanent-v2 decoder and the
+/// actual original-input owner.
+///
+/// The resolver reads only from the caller's already coherent metadata view;
+/// this function performs no storage, native access, current-policy or grant
+/// work. The exact caller probe is forwarded through every v4 decode and
+/// evaluation step. Old state and operation profiles remain byte-preserving
+/// members of a mixed history, while the legacy public factory still refuses
+/// v4 rows because it has no resolver or probe.
+pub fn restore_registry_state_v4<R, P>(
+    registry_revision: u64,
+    states: &[RegistryRestoreState<'_>],
+    operations: &[RegistryRestoreOperation<'_>],
+    limits: RegistryLimits,
+    max_total_bytes: usize,
+    resolver: &mut R,
+    original_probe: &mut P,
+) -> Result<ObservedRegistryHistory, BatchCodecV4Error>
+where
+    R: OriginalInputResolver + ?Sized,
+    P: FnMut() -> Result<(), CheckpointFailureV2>,
+{
+    let mut decoder = V4RestoreDecoder {
+        resolver,
+        probe: original_probe,
+    };
+    restore_registry_state_with(
+        registry_revision,
+        states,
+        operations,
+        limits,
+        max_total_bytes,
+        &mut decoder,
+    )
+}
+
+fn restore_registry_state_with<D>(
+    registry_revision: u64,
+    states: &[RegistryRestoreState<'_>],
+    operations: &[RegistryRestoreOperation<'_>],
+    limits: RegistryLimits,
+    max_total_bytes: usize,
+    decoder: &mut D,
+) -> Result<ObservedRegistryHistory, D::Error>
+where
+    D: RestoreDecoder,
+{
+    preflight_registry_restore_inputs_with_namespaces(
+        limits,
+        states.len(),
+        operations.len(),
+        0,
+        max_total_bytes,
+        decoder.namespaces_allowed(),
+    )?;
     // Incremental charging keeps early overflow/byte refusal while sharing the
     // public preflight's byte-bound implementation before any semantic decode.
     let mut bytes = 0_usize;
@@ -153,26 +360,26 @@ pub fn restore_registry_state(
     let mut current = BTreeMap::new();
     let mut state_encoding_profiles = BTreeMap::new();
     for row in states {
-        let (state, profile) = decode_registry_state_entry_profiled(row.key, row.value)?;
+        let (state, profile) = decoder.decode_state(row.key, row.value)?;
         state_encoding_profiles.insert(state.key(), profile);
         check_counter(&state, registry_revision)?;
         if current.insert(state.key(), state).is_some() {
-            return Err(RegistryError::SnapshotInvalid);
+            return Err(RegistryError::SnapshotInvalid.into());
         }
     }
     check_counts(&current, limits)?;
     let mut history = BTreeMap::new();
     let mut identities = std::collections::BTreeSet::new();
     for row in operations {
-        let operation = decode_batch_record(row.value, limits)?;
+        let operation = decoder.decode_operation(row.value, limits)?;
         if &operation.entry().operation_id != row.operation_id
             || !identities.insert(row.operation_id.clone())
         {
-            return Err(RegistryError::OperationConflict);
+            return Err(RegistryError::OperationConflict.into());
         }
         let after = operation.registry_revision_after();
         if after > registry_revision || history.insert(after, operation).is_some() {
-            return Err(RegistryError::SnapshotInvalid);
+            return Err(RegistryError::SnapshotInvalid.into());
         }
     }
     let mut replayed = BTreeMap::new();
@@ -181,11 +388,11 @@ pub fn restore_registry_state(
     let mut revision = 0_u64;
     for operation in history.values() {
         if operation.expected_registry_revision() != revision {
-            return Err(RegistryError::MutationOutcomeUnknown);
+            return Err(RegistryError::MutationOutcomeUnknown.into());
         }
         for delta in operation.deltas() {
             if replayed.get(delta.key()) != delta.before() {
-                return Err(RegistryError::SnapshotInvalid);
+                return Err(RegistryError::SnapshotInvalid.into());
             }
             check_counter(delta.after(), operation.registry_revision_after())?;
             check_transition(
@@ -205,14 +412,15 @@ pub fn restore_registry_state(
         revision = operation.registry_revision_after();
     }
     if revision != registry_revision {
-        return Err(RegistryError::MutationOutcomeUnknown);
+        return Err(RegistryError::MutationOutcomeUnknown.into());
     }
     if replayed != current || replayed_profiles != state_encoding_profiles {
-        return Err(RegistryError::SnapshotInvalid);
+        return Err(RegistryError::SnapshotInvalid.into());
     }
     let mut roots = BTreeMap::new();
     let mut sources = BTreeMap::new();
     let mut memberships = BTreeMap::new();
+    let mut namespaces = BTreeMap::new();
     let mut generations = BTreeMap::new();
     let mut reverse = BTreeMap::new();
     for state in current.into_values() {
@@ -228,31 +436,34 @@ pub fn restore_registry_state(
                     .insert(member.membership_id(), member.key().clone())
                     .is_some()
                 {
-                    return Err(RegistryError::MembershipCollision);
+                    return Err(RegistryError::MembershipCollision.into());
                 }
                 memberships.insert(member.key().clone(), member);
             }
             RegistryStateRecord::Generation { corpus, generation } => {
                 generations.insert(corpus, generation);
             }
-            RegistryStateRecord::Namespace(_) => {
-                // This legacy entry point has no original-input resolver or probe.
-                return Err(RegistryError::AdmissionRestorationUnavailable);
+            RegistryStateRecord::Namespace(namespace) => {
+                if !decoder.namespaces_allowed() {
+                    // This legacy entry point has no original-input resolver or probe.
+                    return Err(RegistryError::AdmissionRestorationUnavailable.into());
+                }
+                namespaces.insert(namespace.ownership.source_namespace_id, namespace);
             }
         }
     }
     let mut root_identities = std::collections::BTreeSet::new();
     for root in roots.values() {
         if !root_identities.insert(root.canonical_root_digest) {
-            return Err(RegistryError::RootIdentityConflict);
+            return Err(RegistryError::RootIdentityConflict.into());
         }
     }
     for source in sources.values() {
         if !roots.contains_key(&source.binding().root_binding_id()) {
-            return Err(RegistryError::RootNotRegistered);
+            return Err(RegistryError::RootNotRegistered.into());
         }
         if !source.has_original_admission() {
-            return Err(RegistryError::AdmissionRestorationUnavailable);
+            return Err(RegistryError::AdmissionRestorationUnavailable.into());
         }
     }
     let mut member_corpora = std::collections::BTreeSet::new();
@@ -269,17 +480,15 @@ pub fn restore_registry_state(
                 && (member.generation() != *generation
                     || source.lifecycle() != SourceLifecycle::Active))
         {
-            return Err(RegistryError::SnapshotInvalid);
+            return Err(RegistryError::SnapshotInvalid.into());
         }
     }
     for corpus in generations.keys() {
         if !member_corpora.contains(corpus) {
-            return Err(RegistryError::MembershipNotFound);
+            return Err(RegistryError::MembershipNotFound.into());
         }
     }
-    // Supported operation bytes contain only these four state families. No
-    // portfolio/namespace state can be silently reconstructed from receipts.
-    // Any omitted receipt-only mutation creates a history/revision gap above.
+    validate_namespace_relationships(&roots, &sources, &namespaces, registry_revision)?;
     Ok(ObservedRegistryHistory {
         parts: RegistryHistoryParts {
             limits,
@@ -289,6 +498,7 @@ pub fn restore_registry_state(
             memberships,
             reverse_memberships: reverse,
             active_generations: generations,
+            namespaces,
             operations: history.into_values().collect(),
             state_encoding_profiles,
         },
@@ -367,6 +577,61 @@ fn check_counter(state: &RegistryStateRecord, maximum: u64) -> Result<(), Regist
     }
     Ok(())
 }
+
+fn validate_namespace_relationships(
+    roots: &BTreeMap<search_contracts::RootBindingId, search_source_records::root::RootRecord>,
+    sources: &BTreeMap<
+        search_contracts::SourceIdentity,
+        search_source_records::source::RegisteredSource,
+    >,
+    namespaces: &BTreeMap<search_contracts::SourceNamespaceId, NamespaceCutoverState>,
+    registry_revision: u64,
+) -> Result<(), RegistryError> {
+    for (namespace_id, state) in namespaces {
+        if state.ownership.source_namespace_id != *namespace_id {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+        let metadata = state
+            .permanent_metadata()
+            .ok_or(RegistryError::SnapshotInvalid)?;
+        if metadata.registry_revision() > registry_revision
+            || state.ownership.ownership_record_revision.get() > metadata.registry_revision()
+            || state.ownership.source_admission_policy_revision.get()
+                != metadata.policy().compiled().revision().get()
+        {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+        if !roots.contains_key(&metadata.root_binding_id()) {
+            return Err(RegistryError::RootNotRegistered);
+        }
+    }
+
+    for source in sources.values() {
+        let Some(permanent) = source.permanent_admission() else {
+            continue;
+        };
+        let namespace = namespaces
+            .get(&source.identity().source_namespace_id)
+            .ok_or(RegistryError::NamespaceMismatch)?;
+        let metadata = namespace
+            .permanent_metadata()
+            .ok_or(RegistryError::NamespaceMismatch)?;
+        let root = roots
+            .get(&source.binding().root_binding_id())
+            .ok_or(RegistryError::RootNotRegistered)?;
+        if metadata.root_binding_id() != root.root_binding_id
+            || permanent.policy_reference() != metadata.policy_reference()
+            || permanent.root_record_revision().get() > root.record_revision.get()
+            || permanent.namespace_record_revision().get()
+                > namespace.ownership.ownership_record_revision.get()
+            || permanent.owner_generation() != namespace.ownership.source_owner_generation
+        {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+    }
+    Ok(())
+}
+
 fn check_transition(
     before: Option<&RegistryStateRecord>,
     after: &RegistryStateRecord,
@@ -392,6 +657,16 @@ fn check_transition(
                 && member.lifecycle() == MembershipLifecycle::Active
         }
         (None, RegistryStateRecord::Generation { .. }) => true,
+        (None, RegistryStateRecord::Namespace(namespace)) => {
+            namespace.ownership.status == search_contracts::NamespaceOwnershipStatus::Active
+                && namespace.permanent_metadata().is_some()
+                && namespace.preparation.is_none()
+                && !namespace.fenced
+                && namespace.activation.is_none()
+                && namespace
+                    .permanent_metadata()
+                    .is_some_and(|metadata| metadata.registry_revision() == revision)
+        }
         (Some(RegistryStateRecord::Root(old)), RegistryStateRecord::Root(new)) => {
             old.root_binding_id == new.root_binding_id
                 && old.canonical_root_digest == new.canonical_root_digest

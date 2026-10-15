@@ -11,10 +11,14 @@ readme = "README.md"
 path = "src/lib.rs"
 
 [dependencies]
+search-source-admission.workspace = true
 search-contracts.workspace = true
 search-ports.workspace = true
 search-source-records.workspace = true
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
+
+[dev-dependencies]
+search-source-provenance.workspace = true
 
 [lints]
 workspace = true

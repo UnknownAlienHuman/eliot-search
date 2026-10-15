@@ -40,6 +40,7 @@ mod restore;
 pub use restore::{
     MAX_REGISTRY_RESTORE_BYTES, ObservedRegistryRestore, RegistryRestoreOperation,
     RegistryRestoreState, preflight_registry_restore_inputs, restore_registry_state,
+    restore_registry_state_v4,
 };
 
 pub use search_source_records::operation::{
@@ -48,8 +49,8 @@ pub use search_source_records::operation::{
 };
 
 pub use search_source_records::batch::{
-    BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4, decode_registry_state_v4,
-    decode_registry_state_key_v4,
+    BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4, decode_registry_state_key_v4,
+    decode_registry_state_v4,
 };
 
 /// Finite atomic source registry.
