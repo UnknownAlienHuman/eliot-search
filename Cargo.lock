@@ -1563,6 +1563,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "search-source-provenance"
+version = "0.0.0"
+dependencies = [
+ "search-contracts",
+ "search-source-admission",
+ "search-source-admission-receipt",
+]
+
+[[package]]
 name = "search-source-reconcile"
 version = "0.0.0"
 dependencies = [
