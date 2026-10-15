@@ -8,6 +8,13 @@ The 64 MiB image bound, two opens, original context and owner-executable v1 BLAK
 transcript remain; the legacy reader is unchanged. This reduces owner I/O seam
 reservations without caching the image or changing a resource ceiling.
 
+Pinned revision readers obtain full native observation and live link count from
+one file-information result, with original pre/post callbacks for every ABI.
+Each before/after read boundary queries the retained FD afresh and still checks
+single-link admission, metadata, current path access and final locator identity.
+The legacy observation and hardlink APIs remain compatible. This removes a
+duplicate probe; it does not cache source bytes, permissions or currentness.
+
 The offline `--stage-source-control-migration ROOT TARGET_UUID OUTPUT_DIRECTORY`
 route keeps the original native read operation, registration/protector custody,
 deadline, allowance and output pins. It composes completed bootstrap inventory,
