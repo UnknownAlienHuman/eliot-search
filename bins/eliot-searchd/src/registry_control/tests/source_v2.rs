@@ -547,6 +547,9 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
             "foreign-owner-source",
         );
         foreign_owner.owner.system_id = OpaqueId::new("foreign-owner").unwrap();
+        let mut foreign_epoch = foreign_owner.clone();
+        foreign_epoch.owner.system_id = namespace.ownership.owner_system_id.clone();
+        foreign_epoch.owner.epoch = OwnerEpoch::new(2).unwrap();
         let foreign_policy_request = request(
             foreign_original,
             root,
@@ -558,6 +561,8 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
             "foreign-policy-source",
         );
         let allocations_before_foreign = ids.allocations;
+        assert!(matches!(prepare(&mut registry, &foreign_epoch, &mut ids, &mut port, &context),
+            Err(SourceAdmissionV2Error::Registry(search_source_registry::error::RegistryError::NamespaceOwnershipConflict))));
         for invalid in [&foreign_owner, &foreign_policy_request] {
             assert!(prepare(&mut registry, invalid, &mut ids, &mut port, &context,).is_err());
         }
@@ -651,7 +656,7 @@ fn source_v2_normal_port_retains_restarts_and_replays_with_qualified_entropy() {
     let original = original(&policy, "src/qualified.rs", 113);
     let work = |_unit: MigrationBootstrapWork| Ok::<_, OwnerError>(());
     let root = RootBindingId::from_bytes([13; 16]);
-    let request = request(
+    let mut request = request(
         original.clone(),
         root,
         profile,
@@ -661,6 +666,7 @@ fn source_v2_normal_port_retains_restarts_and_replays_with_qualified_entropy() {
         113,
         "qualified-source-replay",
     );
+    request.owner.epoch = OwnerEpoch::new(2).unwrap();
     let mut journal = super::journal(&scratch, &context);
     let mut publisher = search_control_redb::ControlSnapshotPublisher::new();
     let mut registry =
@@ -674,6 +680,7 @@ fn source_v2_normal_port_retains_restarts_and_replays_with_qualified_entropy() {
             capabilities.clone(),
         );
         register_source_root(&mut registry, &mut port, &context, &original);
+        assert_eq!(registry.roots()[&root].owner_epoch.get(), 1);
         let mut probe = || Ok::<_, CheckpointFailureV2>(());
         let prepared = match prepare_source_admission_v2(
             &mut registry,
@@ -713,6 +720,8 @@ fn source_v2_normal_port_retains_restarts_and_replays_with_qualified_entropy() {
     let mut replay_registry = restored.into_registry();
     assert_eq!(replay_registry.revision(), 2);
     assert_eq!(replay_registry.sources().len(), 1);
+    assert_eq!(replay_registry.roots()[&root].owner_epoch.get(), 1);
+    assert_eq!(replay_registry.namespaces().values().next().unwrap().ownership.owner_epoch.get(), 2);
     let mut probe = || Ok::<_, CheckpointFailureV2>(());
     let replay = prepare_source_admission_v2(
         &mut replay_registry,

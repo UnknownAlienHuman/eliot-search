@@ -147,7 +147,6 @@ where
         .ok_or(RegistryError::RootNotRegistered)?;
     if root.status != crate::root::RootStatus::Active
         || root.record_revision != request.expected_root_revision
-        || root.owner_epoch != request.owner.epoch
     {
         return Err(RegistryError::RootPolicyGenerationMismatch.into());
     }

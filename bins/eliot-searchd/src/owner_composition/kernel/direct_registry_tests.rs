@@ -76,7 +76,7 @@ fn direct_v2_noncanonical_and_unknown_policy_refuse_before_owner_acquisition() {
     let policy = retained_v2(7);
     let V::Object(mut fields) = parse_canonical_cbor(policy.encoded_inputs()).unwrap() else { panic!("archive map"); };
     fields.insert(CanonicalKey::new("unexpected").unwrap(), V::U64(1)).unwrap();
-    let unknown = to_canonical_cbor(&V::Object(fields)).unwrap();
+    let unknown = to_canonical_cbor(&V::Object(fields)).unwrap().as_slice().to_vec();
     let archive = s.base.join("invalid.cbor");
     for bytes in [vec![0xff], unknown] {
         fs::write(&archive, bytes).unwrap();
