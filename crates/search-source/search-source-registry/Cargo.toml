@@ -18,6 +18,7 @@ search-ports.workspace = true
 search-source-identity.workspace = true
 search-source-admission.workspace = true
 search-source-records.workspace = true
+search-source-history.workspace = true
 
 [lints]
 workspace = true

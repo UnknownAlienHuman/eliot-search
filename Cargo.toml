@@ -12,6 +12,7 @@ members = [
     "crates/search-source/search-source-admission-receipt",
     "crates/search-source/search-source-provenance",
     "crates/search-source/search-source-records",
+    "crates/search-source/search-source-history",
     "crates/search-source/search-source-registry",
     "crates/search-source/search-source-identity",
     "crates/search-source/search-source-reconcile",
@@ -73,6 +74,7 @@ search-source-admission = { path = "crates/search-source/search-source-admission
 search-source-admission-receipt = { path = "crates/search-source/search-source-admission-receipt" }
 search-source-provenance = { path = "crates/search-source/search-source-provenance" }
 search-source-records = { path = "crates/search-source/search-source-records" }
+search-source-history = { path = "crates/search-source/search-source-history" }
 search-source-registry = { path = "crates/search-source/search-source-registry" }
 search-source-identity = { path = "crates/search-source/search-source-identity" }
 search-source-reconcile = { path = "crates/search-source/search-source-reconcile" }

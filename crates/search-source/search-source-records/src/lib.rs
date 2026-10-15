@@ -21,6 +21,7 @@
     clippy::trivially_copy_pass_by_ref
 )]
 
+pub mod error;
 pub mod legacy_direct;
 pub mod legacy_root_catalog;
 pub mod root_currentness;

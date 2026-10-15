@@ -1556,6 +1556,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "search-source-history"
+version = "0.0.0"
+dependencies = [
+ "blake3",
+ "search-contracts",
+ "search-ports",
+ "search-source-records",
+]
+
+[[package]]
 name = "search-source-identity"
 version = "0.0.0"
 dependencies = [
@@ -1589,6 +1599,10 @@ dependencies = [
 [[package]]
 name = "search-source-records"
 version = "0.0.0"
+dependencies = [
+ "search-contracts",
+ "search-ports",
+]
 
 [[package]]
 name = "search-source-registry"
@@ -1599,6 +1613,7 @@ dependencies = [
  "search-domain",
  "search-ports",
  "search-source-admission",
+ "search-source-history",
  "search-source-identity",
  "search-source-records",
 ]

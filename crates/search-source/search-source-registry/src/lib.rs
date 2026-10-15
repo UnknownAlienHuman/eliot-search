@@ -37,15 +37,13 @@ pub mod membership;
 pub mod portfolio;
 pub mod portfolio_history;
 pub mod recovery;
-pub mod revision;
+pub use search_source_history::revision;
 pub mod root;
 pub use search_source_records::root_currentness;
 pub mod snapshot;
 pub mod source;
 pub mod view;
 
-#[cfg(test)]
-mod revision_tests;
 
 #[cfg(test)]
 #[path = "portfolio_history_tests.rs"]
