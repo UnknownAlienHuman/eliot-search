@@ -90,6 +90,13 @@ pub const fn boolean(value: bool) -> CanonicalValue {
     CanonicalValue::Bool(value)
 }
 
+/// One bounded canonical byte-string field.
+pub fn bytes(value: &[u8]) -> Result<CanonicalValue, CodecError> {
+    search_contracts::BoundedBytes::new(value.to_vec())
+        .map(CanonicalValue::Bytes)
+        .map_err(|_| CodecError::NonCanonical)
+}
+
 /// One canonical array of canonical values.
 pub fn array<I>(values: I) -> Result<CanonicalValue, CodecError>
 where

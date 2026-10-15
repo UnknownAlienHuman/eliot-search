@@ -45,3 +45,28 @@ complete state/operation envelopes against its 64 KiB control-value limit.
 Policy-size measurement, durable placement and the actual Source v2 registry
 consumer remain separate unfinished #569 work; these pure fixtures do not
 qualify Native, real-redb restart, scale or an installed product.
+
+## Bounded physical layout
+
+An actually accepted 128-rule policy with 256-byte rule IDs and 32,768 aggregate
+pattern bytes retains as 82,255 bytes. `storage_proof.rs` reproduces that case;
+it exceeds one control value without exceeding the admission owner's limits.
+This is a measured accepted case, not a global maximum-size claim.
+
+`OriginalInputsLayoutV2` splits an owner-built archive into 16,384-byte bodies.
+Its canonical reference is `[2, "eliot.original-input-fragments@2", kind,
+archive_digest, complete_length, part_count]`, where kind is `policy` or
+`admission`. The whole exact archive uses shared raw BLAKE3 with domain
+`eliot/raw/original-policy-archive/v2` or
+`eliot/raw/original-admission-archive/v2`, respectively.
+The canonical technical key is `[layout_profile, kind, archive_digest, index]`;
+the value is `[reference, index, body]`. These keys never identify a source.
+
+Reconstitution checks the complete bounded part set, exact keys/references,
+unique indices, exact lengths, whole-archive digest and canonical forms, then
+calls the actual policy or original-admission restorer. A digest or layout
+reference alone cannot construct a trusted receipt or currentness grant.
+The I/O owner must supply the parts from one coherent journal observation,
+enforce immutable conditional writes and preserve unknown outcomes.
+This layout does not add a store, mutation ledger, publication phase or native
+authority. Actual same-journal write/readback integration remains unfinished.

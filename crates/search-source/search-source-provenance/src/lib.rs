@@ -15,10 +15,15 @@
 
 mod admission;
 mod codec;
+mod fragments;
 mod policy;
 
 pub use admission::{
     MAX_RETAINED_ADMISSION_BYTES, ORIGINAL_ADMISSION_PROFILE_V2, OriginalAdmissionV2,
+};
+pub use fragments::{
+    ORIGINAL_INPUT_FRAGMENT_BYTES_V2, ObservedOriginalInputPart, OriginalInputPartV2,
+    OriginalInputsLayoutV2,
 };
 pub use policy::{MAX_RETAINED_POLICY_BYTES, RETAINED_POLICY_PROFILE_V2, RetainedPolicyV2};
 

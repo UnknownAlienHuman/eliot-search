@@ -471,9 +471,9 @@ fn read_rule(value: &CanonicalValue) -> Result<RuleInputV2, AdmissionError> {
         id: field_text(fields, "id")?.to_owned(),
         precedence: u32::try_from(field_unsigned(fields, "precedence")?)
             .map_err(|_| AdmissionError::PolicyConflict)?,
-        source_class: source_class(field_text(fields, "source_class")?)?,
+        source_class: SourceClass::parse(field_text(fields, "source_class")?)?,
         predicate: read_predicate(predicate_fields)?,
-        effect: effect(field_text(fields, "effect")?)?,
+        effect: RuleEffect::parse(field_text(fields, "effect")?)?,
         unknown_fields: Vec::new(),
     })
 }
@@ -485,15 +485,15 @@ fn read_predicate(
     match field_text(fields, "operator")? {
         "always" => Ok(PredicateV2::Always),
         "source-class-is" => Ok(PredicateV2::SourceClassIs),
-        "sensitivity-at-least" => Ok(PredicateV2::SensitivityAtLeast(sensitivity(field_text(
-            fields, "level",
-        )?)?)),
+        "sensitivity-at-least" => Ok(PredicateV2::SensitivityAtLeast(SensitivityLevel::parse(
+            field_text(fields, "level")?,
+        )?)),
         "size-greater-than" => Ok(PredicateV2::SizeGreaterThan(field_unsigned(
             fields, "bytes",
         )?)),
-        "locator-class-is" => Ok(PredicateV2::LocatorClassIs(locator_class(field_text(
-            fields, "class",
-        )?)?)),
+        "locator-class-is" => Ok(PredicateV2::LocatorClassIs(LocatorClass::parse(
+            field_text(fields, "class")?,
+        )?)),
         "relative-path-glob-matches" => {
             let pattern = field_text(fields, "pattern")?;
             if pattern.len() > search_source_admission::policy_v2::MAX_PATTERN_BYTES {
@@ -501,51 +501,6 @@ fn read_predicate(
             }
             Ok(PredicateV2::RelativePathGlobMatches(pattern.to_owned()))
         }
-        _ => Err(AdmissionError::PolicyUnknownField),
-    }
-}
-
-/// Parses one closed source class tag.
-fn source_class(value: &str) -> Result<SourceClass, AdmissionError> {
-    match value {
-        "regular" => Ok(SourceClass::Regular),
-        "test" => Ok(SourceClass::Test),
-        "documentation" => Ok(SourceClass::Documentation),
-        "generated" => Ok(SourceClass::Generated),
-        "vendor" => Ok(SourceClass::Vendor),
-        _ => Err(AdmissionError::PolicyUnknownField),
-    }
-}
-
-/// Parses one closed sensitivity tag.
-fn sensitivity(value: &str) -> Result<SensitivityLevel, AdmissionError> {
-    match value {
-        "public" => Ok(SensitivityLevel::Public),
-        "internal" => Ok(SensitivityLevel::Internal),
-        "confidential" => Ok(SensitivityLevel::Confidential),
-        "secret-candidate" => Ok(SensitivityLevel::SecretCandidate),
-        "credential" => Ok(SensitivityLevel::Credential),
-        _ => Err(AdmissionError::PolicyUnknownField),
-    }
-}
-
-/// Parses one closed locator class tag.
-fn locator_class(value: &str) -> Result<LocatorClass, AdmissionError> {
-    match value {
-        "normalized-file" => Ok(LocatorClass::NormalizedFile),
-        "normalized-directory" => Ok(LocatorClass::NormalizedDirectory),
-        "content-address" => Ok(LocatorClass::ContentAddress),
-        _ => Err(AdmissionError::PolicyUnknownField),
-    }
-}
-
-/// Parses one closed rule effect tag.
-fn effect(value: &str) -> Result<RuleEffect, AdmissionError> {
-    match value {
-        "allow" => Ok(RuleEffect::Allow),
-        "deny" => Ok(RuleEffect::Deny),
-        "review" => Ok(RuleEffect::Review),
-        "unsupported" => Ok(RuleEffect::Unsupported),
         _ => Err(AdmissionError::PolicyUnknownField),
     }
 }
