@@ -480,6 +480,8 @@ pub fn safe_read<B: SafeReadBackend>(
 /// before the byte read and after the byte read. A single observed
 /// cancellation closes the already-open handle (by dropping it with the
 /// backend) and returns [`SafeReadError::Cancelled`] with no byte product.
+/// The original callback is also checked after final metadata validation,
+/// immediately before a successful byte product can escape.
 pub fn safe_read_with_cancel<B: SafeReadBackend>(
     backend: &mut B,
     request: &SafeReadRequest,
@@ -530,6 +532,10 @@ pub fn safe_read_with_cancel<B: SafeReadBackend>(
     let after_metadata_receipt = after
         .metadata_receipt
         .ok_or(SafeReadError::ReceiptMissing)?;
+
+    if should_cancel() {
+        return Err(SafeReadError::Cancelled);
+    }
 
     Ok(SafeReadResult {
         range: request.range,
@@ -646,6 +652,7 @@ mod tests {
         after: FinalHandleMetadata,
         inspect_count: usize,
         fail: Option<FakeError>,
+        cancel_after_final_inspection: Option<std::rc::Rc<core::cell::Cell<bool>>>,
     }
 
     impl SafeReadBackend for FakeBackend {
@@ -676,6 +683,11 @@ mod tests {
                 self.after.clone()
             };
             self.inspect_count += 1;
+            if self.inspect_count == 2 {
+                if let Some(flag) = &self.cancel_after_final_inspection {
+                    flag.set(true);
+                }
+            }
             Ok(metadata)
         }
 
@@ -745,6 +757,7 @@ mod tests {
             after: metadata(),
             inspect_count: 0,
             fail: None,
+            cancel_after_final_inspection: None,
         }
     }
 
@@ -918,6 +931,41 @@ mod tests {
             ),
             Err(SafeReadError::Cancelled)
         );
+    }
+
+    #[test]
+    fn cancellation_during_final_inspection_refuses_byte_release() {
+        use core::cell::Cell;
+        use std::rc::Rc;
+        let flag = Rc::new(Cell::new(false));
+        let mut interrupted = backend();
+        interrupted.cancel_after_final_inspection = Some(Rc::clone(&flag));
+        assert_eq!(safe_read_with_cancel(&mut interrupted, &request(), DEFAULT_SAFE_READ_LIMITS,
+            &mut || flag.get()), Err(SafeReadError::Cancelled));
+        assert_eq!(interrupted.inspect_count, 2);
+        // An identical stable observation without cancellation still emits bytes.
+        let mut control = backend();
+        let result = safe_read_with_cancel(&mut control, &request(), DEFAULT_SAFE_READ_LIMITS,
+            &mut || false).expect("uncancelled read");
+        assert_eq!(result.bytes(), b"bcd");
+        assert_eq!(control.inspect_count, 2);
+    }
+
+    #[test]
+    fn cancellation_during_final_inspection_never_retries() {
+        use core::cell::Cell;
+        use std::rc::Rc;
+        let flag = Rc::new(Cell::new(false));
+        let attempts = Cell::new(0);
+        let mut make_backend = || {
+            attempts.set(attempts.get() + 1);
+            let mut value = backend();
+            value.cancel_after_final_inspection = Some(Rc::clone(&flag));
+            Ok(value)
+        };
+        assert_eq!(safe_read_with_retries(&mut make_backend, &request(), DEFAULT_SAFE_READ_LIMITS,
+            SafeRetryPolicy::new(3).expect("policy"), &mut || flag.get()), Err(SafeReadError::Cancelled));
+        assert_eq!(attempts.get(), 1);
     }
 
     #[test]
