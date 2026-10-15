@@ -42,6 +42,7 @@ pub mod root;
 pub use search_source_records::root_currentness;
 pub use search_source_records::snapshot;
 pub mod source;
+pub mod source_ids;
 pub mod view;
 
 use search_source_records::legacy_direct as source_legacy_direct;

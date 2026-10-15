@@ -406,7 +406,7 @@ fn source_owner_original_admission_and_binding_survive_real_disk_restore() {
         .sources()
         .get(&id)
         .expect("restored exact source");
-    assert_eq!(record.admission(), &admission);
+    assert_eq!(record.legacy_admission(), Some(&admission));
     assert!(
         record
             .original_admission()

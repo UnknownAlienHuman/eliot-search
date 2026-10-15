@@ -324,8 +324,20 @@ pub(super) fn state_value(v: &RegistryStateRecord) -> Result<V, RegistryError> {
                 )?,
             ),
             ("binding", binding(v.binding())?),
-            ("admission", admission(v.admission())?),
-            ("assignment", assignment(v.assignment())?),
+            (
+                "admission",
+                admission(
+                    v.legacy_admission()
+                        .ok_or(RegistryError::AdmissionRestorationUnavailable)?,
+                )?,
+            ),
+            (
+                "assignment",
+                assignment(
+                    v.legacy_assignment()
+                        .ok_or(RegistryError::AdmissionRestorationUnavailable)?,
+                )?,
+            ),
             (
                 "lifecycle",
                 text(if v.lifecycle() == SourceLifecycle::Active {

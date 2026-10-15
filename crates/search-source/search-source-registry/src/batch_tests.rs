@@ -941,7 +941,7 @@ fn batch_original_envelope_restores_from_bytes_and_is_bound_by_snapshot_digest()
     let original = restored
         .original_admission()
         .expect("retained original inputs");
-    assert_eq!(original.receipt(), restored.admission());
+    assert_eq!(original.receipt(), restored.legacy_admission().expect("legacy receipt"));
     assert_eq!(
         original.verify_current_policy(
             &search_source_admission::baseline_policy(2, 1024),
@@ -1401,7 +1401,7 @@ fn source_revalidation_refuses_receipt_change_before_dispatch_and_later_batch_ke
     );
     assert_eq!(
         source.original_admission().expect("original").receipt(),
-        source.admission()
+        source.legacy_admission().expect("legacy receipt")
     );
     assert_eq!(source.lifecycle(), SourceLifecycle::Retired);
     api::validate_live_snapshot(&registry)

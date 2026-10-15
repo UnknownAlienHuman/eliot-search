@@ -29,6 +29,7 @@ pub mod membership;
 pub mod operation;
 pub mod portfolio;
 pub mod portfolio_history;
+pub mod provenance;
 pub mod root;
 pub mod root_currentness;
 pub mod snapshot;

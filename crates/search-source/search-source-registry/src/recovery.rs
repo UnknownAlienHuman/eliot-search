@@ -771,8 +771,14 @@ fn update_source_binding(
         .map_err(|_| RegistryError::ContractExhausted)?;
     let updated = RegisteredSource::new(
         binding.clone(),
-        source.admission().clone(),
-        source.assignment().clone(),
+        source
+            .legacy_admission()
+            .ok_or(RegistryError::AdmissionReceiptMismatch)?
+            .clone(),
+        source
+            .legacy_assignment()
+            .ok_or(RegistryError::AdmissionReceiptMismatch)?
+            .clone(),
         SourceLifecycle::Active,
         next_revision,
         registry_revision,
@@ -801,16 +807,9 @@ fn retire_source(
         .source_revision()
         .checked_next()
         .map_err(|_| RegistryError::ContractExhausted)?;
-    let retired = RegisteredSource::new(
-        source.binding().clone(),
-        source.admission().clone(),
-        source.assignment().clone(),
-        SourceLifecycle::Retired,
-        next_revision,
-        registry_revision,
-        receipt.clone(),
-    )
-    .retaining_original(source.original_admission().cloned())?;
+    let retired = source
+        .clone()
+        .into_retired(next_revision, registry_revision, receipt.clone());
     sources.insert(identity.clone(), retired);
     let to_retire: Vec<MembershipKey> = memberships
         .iter()

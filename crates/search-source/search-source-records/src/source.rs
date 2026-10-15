@@ -6,11 +6,12 @@
 //! retains all semantic mutation functions.
 
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef, SourceIdentity};
-use search_source_admission::AdmissionReceipt;
 use search_source_admission::original_envelope::OriginalAdmissionEnvelope;
+use search_source_admission::{AdmissionOutcome, AdmissionReceipt};
 use search_source_identity::SourceBinding;
 
 use crate::error::RegistryError;
+use crate::provenance::{PermanentSourceAdmissionV2, SourceProvenance};
 
 /// Source lifecycle visible to portfolios.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -41,9 +42,7 @@ pub struct AdmissionBindingProof {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RegisteredSource {
     binding: SourceBinding,
-    admission: AdmissionReceipt,
-    original_admission: Option<OriginalAdmissionEnvelope>,
-    assignment: AdmissionBindingProof,
+    provenance: SourceProvenance,
     lifecycle: SourceLifecycle,
     source_revision: NonZeroRevision,
     registry_revision: u64,
@@ -64,14 +63,42 @@ impl RegisteredSource {
     ) -> Self {
         Self {
             binding,
-            admission,
-            original_admission: None,
-            assignment,
+            provenance: SourceProvenance::HistoricalV1 {
+                admission,
+                original_admission: None,
+                assignment,
+            },
             lifecycle,
             source_revision,
             registry_revision,
             last_receipt,
         }
+    }
+
+    /// Constructs permanent metadata with complete real originals and exact binding.
+    /// This does not validate current Root/namespace state or grant native access.
+    pub fn new_permanent(
+        binding: SourceBinding,
+        provenance: PermanentSourceAdmissionV2,
+        lifecycle: SourceLifecycle,
+        source_revision: NonZeroRevision,
+        registry_revision: u64,
+        last_receipt: ReceiptRef,
+    ) -> Result<Self, RegistryError> {
+        provenance.validate_binding(&binding)?;
+        Ok(Self {
+            binding,
+            provenance: SourceProvenance::PermanentV2(provenance),
+            lifecycle,
+            source_revision,
+            registry_revision,
+            last_receipt,
+        })
+    }
+
+    /// Exact closed provenance alternative; a version is not current authority.
+    pub const fn provenance(&self) -> &SourceProvenance {
+        &self.provenance
     }
 
     /// Stable source identity.
@@ -84,14 +111,90 @@ impl RegisteredSource {
         &self.binding
     }
 
-    /// Verified admission receipt bound to this registration.
-    pub const fn admission(&self) -> &AdmissionReceipt {
-        &self.admission
+    /// Historical v1 receipt only. Permanent evidence has no v1 representation.
+    pub const fn legacy_admission(&self) -> Option<&AdmissionReceipt> {
+        match &self.provenance {
+            SourceProvenance::HistoricalV1 { admission, .. } => Some(admission),
+            SourceProvenance::PermanentV2(_) => None,
+        }
+    }
+
+    /// Complete permanent evidence, without a currentness assertion.
+    pub const fn permanent_admission(&self) -> Option<&PermanentSourceAdmissionV2> {
+        match &self.provenance {
+            SourceProvenance::PermanentV2(original) => Some(original),
+            SourceProvenance::HistoricalV1 { .. } => None,
+        }
+    }
+
+    /// Actual outcome from the corresponding sole receipt owner.
+    pub fn admission_outcome(&self) -> AdmissionOutcome {
+        match &self.provenance {
+            SourceProvenance::HistoricalV1 { admission, .. } => admission.outcome(),
+            SourceProvenance::PermanentV2(original) => {
+                original.original().receipt().decision().outcome()
+            }
+        }
+    }
+
+    /// Exact admitted policy revision, independent of current policy.
+    pub fn admission_policy_revision(&self) -> NonZeroRevision {
+        match &self.provenance {
+            SourceProvenance::HistoricalV1 { admission, .. } => admission.policy_revision(),
+            SourceProvenance::PermanentV2(original) => {
+                original.original().receipt().decision().policy_revision()
+            }
+        }
+    }
+
+    /// Profile-bound fingerprint bytes. Comparing these never replaces profile checks.
+    pub fn admission_policy_fingerprint(&self) -> [u8; 32] {
+        match &self.provenance {
+            SourceProvenance::HistoricalV1 { admission, .. } => {
+                *admission.policy_fingerprint().as_bytes()
+            }
+            SourceProvenance::PermanentV2(original) => *original
+                .original()
+                .receipt()
+                .decision()
+                .policy_fingerprint()
+                .as_bytes(),
+        }
+    }
+
+    /// Profile-bound observation bytes, without relabelling a legacy digest.
+    pub fn admission_observation_fingerprint(&self) -> [u8; 32] {
+        match &self.provenance {
+            SourceProvenance::HistoricalV1 { admission, .. } => {
+                *admission.observation_digest().as_bytes()
+            }
+            SourceProvenance::PermanentV2(original) => *original
+                .original()
+                .receipt()
+                .decision()
+                .observation_fingerprint()
+                .as_bytes(),
+        }
     }
 
     /// Retained original inputs; None explicitly means historical restoration is unavailable.
     pub const fn original_admission(&self) -> Option<&OriginalAdmissionEnvelope> {
-        self.original_admission.as_ref()
+        match &self.provenance {
+            SourceProvenance::HistoricalV1 {
+                original_admission, ..
+            } => original_admission.as_ref(),
+            SourceProvenance::PermanentV2(_) => None,
+        }
+    }
+
+    /// Original-input availability across the explicit provenance alternatives.
+    pub const fn has_original_admission(&self) -> bool {
+        match &self.provenance {
+            SourceProvenance::HistoricalV1 {
+                original_admission, ..
+            } => original_admission.is_some(),
+            SourceProvenance::PermanentV2(_) => true,
+        }
     }
 
     /// Retains original admission metadata for legacy operation across the crate boundary.
@@ -103,19 +206,46 @@ impl RegisteredSource {
         mut self,
         original: Option<OriginalAdmissionEnvelope>,
     ) -> Result<Self, RegistryError> {
+        let SourceProvenance::HistoricalV1 {
+            admission,
+            original_admission,
+            ..
+        } = &mut self.provenance
+        else {
+            return Err(RegistryError::AdmissionReceiptMismatch);
+        };
         if original
             .as_ref()
-            .is_some_and(|envelope| envelope.receipt() != &self.admission)
+            .is_some_and(|envelope| envelope.receipt() != admission)
         {
             return Err(RegistryError::AdmissionBindingMismatch);
         }
-        self.original_admission = original;
+        *original_admission = original;
         Ok(self)
     }
 
-    /// Exact observation-to-source assignment proof.
-    pub const fn assignment(&self) -> &AdmissionBindingProof {
-        &self.assignment
+    /// Frozen historical assignment metadata; permanent admission accepts no verified flag.
+    pub const fn legacy_assignment(&self) -> Option<&AdmissionBindingProof> {
+        match &self.provenance {
+            SourceProvenance::HistoricalV1 { assignment, .. } => Some(assignment),
+            SourceProvenance::PermanentV2(_) => None,
+        }
+    }
+
+    /// Retains exact provenance while producing restrictive retired metadata.
+    /// The semantic owner checks the operation and monotone revisions before use.
+    #[must_use]
+    pub fn into_retired(
+        mut self,
+        source_revision: NonZeroRevision,
+        registry_revision: u64,
+        last_receipt: ReceiptRef,
+    ) -> Self {
+        self.lifecycle = SourceLifecycle::Retired;
+        self.source_revision = source_revision;
+        self.registry_revision = registry_revision;
+        self.last_receipt = last_receipt;
+        self
     }
 
     /// Current lifecycle.

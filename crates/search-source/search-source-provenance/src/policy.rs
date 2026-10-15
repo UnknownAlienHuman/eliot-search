@@ -54,6 +54,7 @@ impl From<CodecError> for AdmissionError {
 pub struct RetainedPolicyV2 {
     compiled: Arc<CompiledAdmissionPolicyV2>,
     encoded: Arc<[u8]>,
+    storage_reference: Arc<[u8]>,
 }
 
 impl core::fmt::Debug for RetainedPolicyV2 {
@@ -105,6 +106,10 @@ impl RetainedPolicyV2 {
     pub fn compiled(&self) -> &CompiledAdmissionPolicyV2 {
         &self.compiled
     }
+
+    pub(crate) fn storage_reference(&self) -> &[u8] {
+        &self.storage_reference
+    }
 }
 
 impl RetainedPolicyV2 {
@@ -141,6 +146,7 @@ impl RetainedPolicyV2 {
         let result = Self {
             compiled: Arc::new(restored),
             encoded: Arc::from(bytes),
+            storage_reference: crate::fragments::policy_reference_from_bytes(bytes, probe)?.into(),
         };
         checkpoint(probe)?;
         Ok(result)

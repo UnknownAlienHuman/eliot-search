@@ -60,8 +60,12 @@ fn identity(value: &SourceIdentity) -> Result<V, ContractError> {
 }
 fn source(value: &RegisteredSource) -> Result<V, ContractError> {
     let binding = value.binding();
-    let admission = value.admission();
-    let assignment = value.assignment();
+    let admission = value
+        .legacy_admission()
+        .ok_or_else(|| ContractError::unsupported_version("source_provenance"))?;
+    let assignment = value
+        .legacy_assignment()
+        .ok_or_else(|| ContractError::unsupported_version("source_provenance"))?;
     object(vec![
         ("identity", identity(value.identity())?),
         (

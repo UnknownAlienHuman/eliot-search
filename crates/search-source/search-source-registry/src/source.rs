@@ -185,7 +185,7 @@ where
     let retained = sources
         .get(identity)
         .ok_or(RegistryError::SourceNotAdmitted)?;
-    if retained.admission() != current_receipt {
+    if retained.legacy_admission() != Some(current_receipt) {
         return Err(if retained.original_admission().is_none() {
             RegistryError::AdmissionRestorationUnavailable
         } else {
@@ -239,7 +239,11 @@ where
         return Err(RegistryError::SourceRevisionConflict);
     }
     if current_receipt.observation_digest().as_bytes()
-        != record.assignment().observation_digest.as_bytes()
+        != record
+            .legacy_assignment()
+            .ok_or(RegistryError::AdmissionReceiptMismatch)?
+            .observation_digest
+            .as_bytes()
     {
         return Err(RegistryError::AdmissionReceiptMismatch);
     }
@@ -255,7 +259,10 @@ where
     let replacement = RegisteredSource::new(
         record.binding().clone(),
         current_receipt.clone(),
-        record.assignment().clone(),
+        record
+            .legacy_assignment()
+            .ok_or(RegistryError::AdmissionReceiptMismatch)?
+            .clone(),
         record.lifecycle(),
         next_source_revision,
         next_registry_revision,

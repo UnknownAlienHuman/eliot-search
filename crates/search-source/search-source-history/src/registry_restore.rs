@@ -247,7 +247,7 @@ pub fn restore_registry_state(
         if !roots.contains_key(&source.binding().root_binding_id()) {
             return Err(RegistryError::RootNotRegistered);
         }
-        if source.original_admission().is_none() {
+        if !source.has_original_admission() {
             return Err(RegistryError::AdmissionRestorationUnavailable);
         }
     }
@@ -391,9 +391,7 @@ fn check_transition(
                 && old.lifecycle() == SourceLifecycle::Active
                 && old.source_revision().checked_next().ok() == Some(new.source_revision())
                 && new.registry_revision() == revision
-                && old.admission() == new.admission()
-                && old.original_admission() == new.original_admission()
-                && old.assignment() == new.assignment()
+                && old.provenance() == new.provenance()
                 && new.binding().binding_revision() >= old.binding().binding_revision()
                 && new.binding().observation_revision() >= old.binding().observation_revision()
         }

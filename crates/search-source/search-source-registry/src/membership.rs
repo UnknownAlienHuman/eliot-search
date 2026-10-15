@@ -92,17 +92,20 @@ where
     if source.lifecycle() != SourceLifecycle::Active {
         return Err(RegistryError::SourceRetired);
     }
+    let legacy_admission = source
+        .legacy_admission()
+        .ok_or(RegistryError::AdmissionReceiptMismatch)?;
     if admission_receipt.outcome() != AdmissionOutcome::Allow {
         return Err(RegistryError::AdmissionReceiptMismatch);
     }
-    if admission_receipt.policy_revision() != source.admission().policy_revision()
+    if admission_receipt.policy_revision() != legacy_admission.policy_revision()
         || admission_receipt.policy_fingerprint().as_bytes()
-            != source.admission().policy_fingerprint().as_bytes()
+            != legacy_admission.policy_fingerprint().as_bytes()
     {
         return Err(RegistryError::AdmissionReceiptStale);
     }
     if admission_receipt.observation_digest().as_bytes()
-        != source.admission().observation_digest().as_bytes()
+        != legacy_admission.observation_digest().as_bytes()
     {
         return Err(RegistryError::AdmissionReceiptMismatch);
     }

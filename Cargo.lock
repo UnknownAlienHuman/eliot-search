@@ -1604,6 +1604,7 @@ dependencies = [
  "search-ports",
  "search-source-admission",
  "search-source-identity",
+ "search-source-provenance",
 ]
 
 [[package]]

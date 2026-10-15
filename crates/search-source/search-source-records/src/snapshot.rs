@@ -131,9 +131,12 @@ pub fn validate_registry_snapshot(
     for (identity, source) in &snapshot.sources {
         if source
             .original_admission()
-            .is_some_and(|original| original.receipt() != source.admission())
+            .is_some_and(|original| Some(original.receipt()) != source.legacy_admission())
         {
             return Err(RegistryError::SnapshotInvalid);
+        }
+        if let Some(permanent) = source.permanent_admission() {
+            permanent.validate_binding(source.binding())?;
         }
         if source.identity() != identity {
             return Err(RegistryError::SnapshotInvalid);
@@ -206,7 +209,7 @@ pub fn validate_registry_snapshot(
         original_admission_availability: if snapshot
             .sources
             .values()
-            .any(|source| source.original_admission().is_none())
+            .any(|source| !source.has_original_admission())
         {
             OriginalAdmissionAvailability::LegacyInputsUnavailable
         } else {

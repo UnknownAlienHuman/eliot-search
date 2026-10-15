@@ -74,6 +74,33 @@ impl OriginalInputsLayoutV2 {
     ) -> Result<Self, AdmissionError> {
         prepare("admission", original.encoded_source_evidence(), probe)
     }
+    /// Exact policy reference without copying archive parts or rehashing the shared policy.
+    ///
+    /// # Errors
+    /// Preserves caller checkpoint refusal without returning a reference.
+    pub fn policy_reference(
+        policy: &RetainedPolicyV2,
+        probe: Probe<'_>,
+    ) -> Result<Vec<u8>, AdmissionError> {
+        check(probe)?;
+        let result = policy.storage_reference().to_vec();
+        check(probe)?;
+        Ok(result)
+    }
+    /// Exact original-admission reference without copying physical metadata parts.
+    ///
+    /// # Errors
+    /// Refuses malformed/oversized metadata or the original checkpoint failure.
+    pub fn admission_reference(
+        original: &OriginalAdmissionV2,
+        probe: Probe<'_>,
+    ) -> Result<Vec<u8>, AdmissionError> {
+        let (reference, _) =
+            reference_value("admission", original.encoded_source_evidence(), probe)?;
+        let result = encode(&reference)?;
+        check(probe)?;
+        Ok(result)
+    }
     /// Exact canonical layout reference for a semantic state/history record.
     #[must_use]
     pub fn reference(&self) -> &[u8] {
@@ -158,11 +185,21 @@ impl OriginalInputsLayoutV2 {
     }
 }
 
-fn prepare(
+/// Builds the immutable policy reference for the private retained-policy owner.
+pub fn policy_reference_from_bytes(
+    bytes: &[u8],
+    probe: Probe<'_>,
+) -> Result<Vec<u8>, AdmissionError> {
+    let (reference, _) = reference_value("policy", bytes, probe)?;
+    let result = encode(&reference)?;
+    check(probe)?;
+    Ok(result)
+}
+fn reference_value(
     kind: &str,
     bytes: &[u8],
     probe: Probe<'_>,
-) -> Result<OriginalInputsLayoutV2, AdmissionError> {
+) -> Result<(V, [u8; 32]), AdmissionError> {
     check(probe)?;
     if bytes.is_empty() || bytes.len() > MAX_ARCHIVE {
         return Err(bad());
@@ -177,6 +214,15 @@ fn prepare(
         V::U64(bytes.len() as u64),
         V::U64(bytes.len().div_ceil(ORIGINAL_INPUT_FRAGMENT_BYTES_V2) as u64),
     ])?;
+    Ok((reference, fingerprint))
+}
+
+fn prepare(
+    kind: &str,
+    bytes: &[u8],
+    probe: Probe<'_>,
+) -> Result<OriginalInputsLayoutV2, AdmissionError> {
+    let (reference, fingerprint) = reference_value(kind, bytes, probe)?;
     let mut parts = Vec::new();
     for (index, body) in bytes.chunks(ORIGINAL_INPUT_FRAGMENT_BYTES_V2).enumerate() {
         check(probe)?;
