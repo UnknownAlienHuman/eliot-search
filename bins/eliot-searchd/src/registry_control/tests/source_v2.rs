@@ -13,7 +13,10 @@ use search_contracts::{
     RequestId, RootBindingId,
 };
 use search_control_redb::MigrationBootstrapWork;
-use search_ports::{DisclosureClass, Port, PortErrorKind, PortFailure, PortRetryability};
+use search_ports::{
+    DisclosureClass, MutationIdentity, Port, PortErrorKind, PortFailure, PortReceipt,
+    PortRetryability,
+};
 use search_runtime_owner::OwnerError;
 use search_source_admission::policy_v2::{
     CheckpointFailureV2, DEFAULT_COMPILE_LIMITS, POLICY_SCHEMA_VERSION, PolicyInputV2, PredicateV2,
@@ -36,6 +39,8 @@ use search_source_registry::api::{
     SourceNamespaceSelectionV2, SourceOwnerScopeV2, SourceRegistry, commit_source_admission_v2,
     prepare_source_admission_v2, recover_source_admission_v2,
 };
+use search_source_registry::error::{RegistryControlPort, RegistryPortError};
+use search_source_registry::recovery::{RegistryBatchLookup, RegistryBatchReadback};
 use search_source_registry::source_ids::SourceIdentityIdPortV2;
 use std::{
     cell::Cell,
@@ -109,6 +114,83 @@ impl SourceIdentityIdPortV2 for CounterIds {
         Ok(search_contracts::SourceNamespaceId::from_bytes(
             self.fresh(),
         ))
+    }
+}
+
+struct SourcePreparationPort<'a, 'journal> {
+    control: &'a mut super::super::RegistryJournal<'journal, FakeCancellation>,
+    ids: &'a mut CounterIds,
+}
+
+impl Port for SourcePreparationPort<'_, '_> {
+    type Error = RegistryPortError;
+    type Cancellation = FakeCancellation;
+}
+
+impl RegistryControlPort for SourcePreparationPort<'_, '_> {
+    fn commit_batch(
+        &mut self,
+        batch: &search_source_registry::recovery::PreparedBatch,
+        context: &OperationContext<FakeCancellation>,
+        mutation: &MutationIdentity,
+    ) -> Result<RegistryBatchReadback, RegistryPortError> {
+        self.control.commit_batch(batch, context, mutation)
+    }
+
+    fn load_batch(
+        &self,
+        operation_id: &OpaqueId,
+        context: &OperationContext<FakeCancellation>,
+    ) -> Result<RegistryBatchLookup, RegistryPortError> {
+        self.control.load_batch(operation_id, context)
+    }
+
+    fn persist_entry(
+        &mut self,
+        entry: &search_source_registry::error::RegistryJournalEntry,
+        context: &OperationContext<FakeCancellation>,
+        mutation: &MutationIdentity,
+    ) -> Result<PortReceipt, RegistryPortError> {
+        self.control.persist_entry(entry, context, mutation)
+    }
+
+    fn load_entry(
+        &self,
+        operation_id: &OpaqueId,
+        context: &OperationContext<FakeCancellation>,
+    ) -> Result<Option<search_source_registry::error::RegistryJournalEntry>, RegistryPortError>
+    {
+        self.control.load_entry(operation_id, context)
+    }
+}
+
+impl SourceIdentityIdPortV2 for SourcePreparationPort<'_, '_> {
+    fn fresh_source_id(
+        &mut self,
+        context: &OperationContext<FakeCancellation>,
+    ) -> Result<search_contracts::SourceId, RegistryPortError> {
+        self.ids.fresh_source_id(context).map_err(|_| {
+            search_source_registry::error::registry_port_error(
+                PortErrorKind::DependencyUnavailable,
+                PortRetryability::Never,
+                search_source_registry::error::RegistryError::DurabilityRejected,
+                None,
+            )
+        })
+    }
+
+    fn fresh_source_namespace_id(
+        &mut self,
+        context: &OperationContext<FakeCancellation>,
+    ) -> Result<search_contracts::SourceNamespaceId, RegistryPortError> {
+        self.ids.fresh_source_namespace_id(context).map_err(|_| {
+            search_source_registry::error::registry_port_error(
+                PortErrorKind::DependencyUnavailable,
+                PortRetryability::Never,
+                search_source_registry::error::RegistryError::DurabilityRejected,
+                None,
+            )
+        })
     }
 }
 
@@ -316,29 +398,6 @@ fn bind_v4<'a>(
     .expect("normal v4 journal binding")
 }
 
-fn persist_original(
-    port: &mut super::RegistryJournal<'_, FakeCancellation>,
-    context: &OperationContext<FakeCancellation>,
-    policy: Option<&RetainedPolicyV2>,
-    original: &OriginalAdmissionV2,
-) {
-    let mut layouts = Vec::new();
-    if let Some(policy) = policy {
-        layouts
-            .push(OriginalInputsLayoutV2::policy(policy, &mut || Ok(())).expect("policy layout"));
-    }
-    layouts.push(
-        OriginalInputsLayoutV2::admission(original, &mut || Ok(())).expect("admission layout"),
-    );
-    for layout in layouts {
-        let prepared = port
-            .prepare_original_inputs(&layout, context)
-            .expect("prepare original inputs");
-        port.commit_original_inputs(&prepared, context)
-            .expect("commit original inputs");
-    }
-}
-
 fn register_source_root(
     registry: &mut SourceRegistry,
     port: &mut super::RegistryJournal<'_, FakeCancellation>,
@@ -366,17 +425,26 @@ fn register_source_root(
     .expect("root commit");
 }
 
+fn prepare(
+    registry: &mut SourceRegistry,
+    request: &SourceAdmissionRequestV2,
+    ids: &mut CounterIds,
+    port: &mut super::RegistryJournal<'_, FakeCancellation>,
+    context: &OperationContext<FakeCancellation>,
+) -> Result<SourceAdmissionPreparationV2, SourceAdmissionV2Error<RegistryPortError>> {
+    let mut combined = SourcePreparationPort { control: port, ids };
+    let mut probe = || Ok::<_, CheckpointFailureV2>(());
+    prepare_source_admission_v2(registry, request, &mut combined, context, &mut probe)
+}
+
 fn prepared(
     registry: &mut SourceRegistry,
     request: &SourceAdmissionRequestV2,
     ids: &mut CounterIds,
-    port: &super::RegistryJournal<'_, FakeCancellation>,
+    port: &mut super::RegistryJournal<'_, FakeCancellation>,
     context: &OperationContext<FakeCancellation>,
 ) -> search_source_registry::api::PreparedSourceAdmissionV2 {
-    let mut probe = || Ok::<_, CheckpointFailureV2>(());
-    match prepare_source_admission_v2(registry, request, ids, port, context, &mut probe)
-        .expect("source preparation")
-    {
+    match prepare(registry, request, ids, port, context).expect("source preparation") {
         SourceAdmissionPreparationV2::Prepared(value) => value,
         SourceAdmissionPreparationV2::Replayed(_) => panic!("unexpected replay"),
     }
@@ -415,16 +483,10 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
             platform.clone(),
             capabilities.clone(),
         );
-        persist_original(&mut port, &context, Some(&policy), &original_one);
         let policy_reference =
             OriginalInputsLayoutV2::policy_reference(&policy, &mut || Ok(())).unwrap();
         let admission_reference =
             OriginalInputsLayoutV2::admission_reference(&original_one, &mut || Ok(())).unwrap();
-        port.original_inputs_snapshot(
-            &[policy_reference.as_slice(), admission_reference.as_slice()],
-            &context,
-        )
-        .expect("archived originals visible before source dispatch");
         register_source_root(&mut registry, &mut port, &context, &original_one);
         let first_request = request(
             original_one.clone(),
@@ -436,7 +498,7 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
             71,
             "semantic-source-one",
         );
-        let first = prepared(&mut registry, &first_request, &mut ids, &port, &context);
+        let first = prepared(&mut registry, &first_request, &mut ids, &mut port, &context);
         let refs = search_source_registry::recovery::required_original_refs_from_batch_v4(
             first.batch().encoded(),
             &mut || Ok(()),
@@ -449,6 +511,11 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
         let mut probe = || Ok::<_, CheckpointFailureV2>(());
         commit_source_admission_v2(&mut registry, &first, &mut port, &context, &mut probe)
             .expect("first source commit");
+        port.original_inputs_snapshot(
+            &[policy_reference.as_slice(), admission_reference.as_slice()],
+            &context,
+        )
+        .expect("normal Source port retained originals before dispatch acknowledgement");
         let namespace = registry
             .namespaces()
             .values()
@@ -460,12 +527,6 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
             revision: namespace.ownership.ownership_record_revision,
             generation: namespace.ownership.source_owner_generation,
         };
-        persist_original(
-            &mut port,
-            &context,
-            Some(&foreign_policy),
-            &foreign_original,
-        );
         drop(port);
         let writes_before_foreign = journal.committed_writes();
         let mut port = bind_v4(
@@ -498,18 +559,7 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
         );
         let allocations_before_foreign = ids.allocations;
         for invalid in [&foreign_owner, &foreign_policy_request] {
-            let mut probe = || Ok::<_, CheckpointFailureV2>(());
-            assert!(
-                prepare_source_admission_v2(
-                    &mut registry,
-                    invalid,
-                    &mut ids,
-                    &port,
-                    &context,
-                    &mut probe,
-                )
-                .is_err()
-            );
+            assert!(prepare(&mut registry, invalid, &mut ids, &mut port, &context,).is_err());
         }
         assert_eq!(ids.allocations, allocations_before_foreign);
         drop(port);
@@ -521,7 +571,6 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
             platform.clone(),
             capabilities.clone(),
         );
-        persist_original(&mut port, &context, None, &original_two);
         let second_request = request(
             original_two.clone(),
             root,
@@ -532,7 +581,13 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
             81,
             "semantic-source-two",
         );
-        let second = prepared(&mut registry, &second_request, &mut ids, &port, &context);
+        let second = prepared(
+            &mut registry,
+            &second_request,
+            &mut ids,
+            &mut port,
+            &context,
+        );
         let mut probe = || Ok::<_, CheckpointFailureV2>(());
         commit_source_admission_v2(&mut registry, &second, &mut port, &context, &mut probe)
             .expect("second source commit");
@@ -587,6 +642,96 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
 }
 
 #[test]
+fn source_v2_normal_port_retains_restarts_and_replays_with_qualified_entropy() {
+    let scratch = Scratch::new();
+    let context = context();
+    let (platform, capabilities) = platform();
+    let profile = profile();
+    let policy = policy(RuleEffect::Allow, 7);
+    let original = original(&policy, "src/qualified.rs", 113);
+    let work = |_unit: MigrationBootstrapWork| Ok::<_, OwnerError>(());
+    let root = RootBindingId::from_bytes([13; 16]);
+    let request = request(
+        original.clone(),
+        root,
+        profile,
+        1,
+        SourceNamespaceSelectionV2::CreateNew,
+        "src/qualified.rs",
+        113,
+        "qualified-source-replay",
+    );
+    let mut journal = super::journal(&scratch, &context);
+    let mut publisher = search_control_redb::ControlSnapshotPublisher::new();
+    let mut registry =
+        SourceRegistry::new(search_source_registry::api::DEFAULT_REGISTRY_LIMITS).unwrap();
+    {
+        let mut port = bind_v4(
+            &mut journal,
+            &mut publisher,
+            &work,
+            platform.clone(),
+            capabilities.clone(),
+        );
+        register_source_root(&mut registry, &mut port, &context, &original);
+        let mut probe = || Ok::<_, CheckpointFailureV2>(());
+        let prepared = match prepare_source_admission_v2(
+            &mut registry,
+            &request,
+            &mut port,
+            &context,
+            &mut probe,
+        )
+        .expect("qualified source preparation")
+        {
+            SourceAdmissionPreparationV2::Prepared(value) => value,
+            SourceAdmissionPreparationV2::Replayed(_) => {
+                panic!("fresh qualified operation replayed")
+            }
+        };
+        let mut probe = || Ok::<_, CheckpointFailureV2>(());
+        commit_source_admission_v2(&mut registry, &prepared, &mut port, &context, &mut probe)
+            .expect("qualified source commit retains originals");
+    }
+    drop(journal);
+
+    let mut reopened = search_control_redb::PersistentControlJournal::open(
+        scratch.file(false),
+        super::identity(),
+        search_control_redb::JournalLimits::BASELINE,
+    )
+    .expect("reopen redb");
+    let mut reopened_publisher = search_control_redb::ControlSnapshotPublisher::new();
+    let mut port = bind_v4(
+        &mut reopened,
+        &mut reopened_publisher,
+        &work,
+        platform,
+        capabilities,
+    );
+    let restored = port.restore(&context).expect("retained originals restore");
+    let mut replay_registry = restored.into_registry();
+    assert_eq!(replay_registry.revision(), 2);
+    assert_eq!(replay_registry.sources().len(), 1);
+    let mut probe = || Ok::<_, CheckpointFailureV2>(());
+    let replay = prepare_source_admission_v2(
+        &mut replay_registry,
+        &request,
+        &mut port,
+        &context,
+        &mut probe,
+    )
+    .expect("exact operation replay after restart");
+    assert!(matches!(
+        replay,
+        SourceAdmissionPreparationV2::Replayed(receipt)
+            if receipt.operation_id == request.operation_id
+                && receipt.receipt == request.receipt
+    ));
+    assert_eq!(replay_registry.revision(), 2);
+}
+
+#[test]
 fn source_v2_replay_after_later_operation_returns_original_before_ids_or_write() {
     let scratch = Scratch::new();
     let context = context();
@@ -629,14 +774,18 @@ fn source_v2_replay_after_later_operation_returns_original_before_ids_or_write()
             platform.clone(),
             capabilities.clone(),
         );
-        persist_original(&mut port, &context, Some(&policy), &original_one);
-        persist_original(&mut port, &context, None, &original_two);
         register_source_root(&mut registry, &mut port, &context, &original_one);
         let mut ids = CounterIds::new(11);
-        let first = prepared(&mut registry, &first_request, &mut ids, &port, &context);
+        let first = prepared(&mut registry, &first_request, &mut ids, &mut port, &context);
         let mut probe = || Ok::<_, CheckpointFailureV2>(());
         commit_source_admission_v2(&mut registry, &first, &mut port, &context, &mut probe).unwrap();
-        let second = prepared(&mut registry, &second_request, &mut ids, &port, &context);
+        let second = prepared(
+            &mut registry,
+            &second_request,
+            &mut ids,
+            &mut port,
+            &context,
+        );
         let mut probe = || Ok::<_, CheckpointFailureV2>(());
         commit_source_admission_v2(&mut registry, &second, &mut port, &context, &mut probe)
             .unwrap();
@@ -644,15 +793,13 @@ fn source_v2_replay_after_later_operation_returns_original_before_ids_or_write()
     let writes_after_o2 = journal.committed_writes();
     let mut replay_ids = CounterIds::new(201);
     {
-        let port = bind_v4(&mut journal, &mut publisher, &work, platform, capabilities);
-        let mut probe = || Ok::<_, CheckpointFailureV2>(());
-        let replay = prepare_source_admission_v2(
+        let mut port = bind_v4(&mut journal, &mut publisher, &work, platform, capabilities);
+        let replay = prepare(
             &mut registry,
             &first_request,
             &mut replay_ids,
-            &port,
+            &mut port,
             &context,
-            &mut probe,
         )
         .expect("same O1 replay");
         let SourceAdmissionPreparationV2::Replayed(receipt) = replay else {
@@ -687,11 +834,10 @@ fn assert_decision_refusal(effect: RuleEffect, expected: AdmissionOutcome) {
             platform.clone(),
             capabilities.clone(),
         );
-        persist_original(&mut port, &context, Some(&policy), &original);
         register_source_root(&mut registry, &mut port, &context, &original);
     }
     let before = journal.committed_writes();
-    let port = bind_v4(&mut journal, &mut publisher, &work, platform, capabilities);
+    let mut port = bind_v4(&mut journal, &mut publisher, &work, platform, capabilities);
     let mut ids = CounterIds::new(31);
     let request = request(
         original,
@@ -703,15 +849,7 @@ fn assert_decision_refusal(effect: RuleEffect, expected: AdmissionOutcome) {
         111,
         "refused-source",
     );
-    let mut probe = || Ok::<_, CheckpointFailureV2>(());
-    let result = prepare_source_admission_v2(
-        &mut registry,
-        &request,
-        &mut ids,
-        &port,
-        &context,
-        &mut probe,
-    );
+    let result = prepare(&mut registry, &request, &mut ids, &mut port, &context);
     assert!(matches!(
         result,
         Err(SourceAdmissionV2Error::Decision(outcome)) if outcome == expected
@@ -750,11 +888,10 @@ fn source_v2_stale_root_namespace_bytes_and_c04_observation_refuse_before_ids() 
             platform.clone(),
             capabilities.clone(),
         );
-        persist_original(&mut port, &context, Some(&policy), &original);
         register_source_root(&mut registry, &mut port, &context, &original);
     }
     let before = journal.committed_writes();
-    let port = bind_v4(&mut journal, &mut publisher, &work, platform, capabilities);
+    let mut port = bind_v4(&mut journal, &mut publisher, &work, platform, capabilities);
     let valid = request(
         original.clone(),
         RootBindingId::from_bytes([13; 16]),
@@ -797,17 +934,8 @@ fn source_v2_stale_root_namespace_bytes_and_c04_observation_refuse_before_ids() 
         }),
     ] {
         let mut ids = CounterIds::new(141);
-        let mut probe = || Ok::<_, CheckpointFailureV2>(());
         assert!(
-            prepare_source_admission_v2(
-                &mut registry,
-                &invalid,
-                &mut ids,
-                &port,
-                &context,
-                &mut probe,
-            )
-            .is_err(),
+            prepare(&mut registry, &invalid, &mut ids, &mut port, &context,).is_err(),
             "{name}"
         );
         assert_eq!(ids.allocations, 0, "{name} allocated an ID");
@@ -821,7 +949,7 @@ fn source_v2_stale_root_namespace_bytes_and_c04_observation_refuse_before_ids() 
         OpaqueRef::new("semantic-source-v2-cancelled").unwrap(),
     )
     .unwrap();
-    let port = bind_v4(
+    let mut port = bind_v4(
         &mut journal,
         &mut publisher,
         &work,
@@ -834,15 +962,13 @@ fn source_v2_stale_root_namespace_bytes_and_c04_observation_refuse_before_ids() 
         },
     );
     let mut ids = CounterIds::new(199);
-    let mut probe = || Ok::<_, CheckpointFailureV2>(());
     assert!(
-        prepare_source_admission_v2(
+        prepare(
             &mut registry,
             &valid,
             &mut ids,
-            &port,
+            &mut port,
             &cancelled_context,
-            &mut probe,
         )
         .is_err()
     );
@@ -872,7 +998,6 @@ fn source_v2_unknown_blocks_other_prepared_dispatch_and_exact_recovery_reuses_id
     let mut registry =
         SourceRegistry::new(search_source_registry::api::DEFAULT_REGISTRY_LIMITS).unwrap();
     let mut port = bind_v4(&mut journal, &mut publisher, &work, platform, capabilities);
-    persist_original(&mut port, &context, Some(&policy), &original);
     register_source_root(&mut registry, &mut port, &context, &original);
     let first_request = request(
         original.clone(),
@@ -885,7 +1010,7 @@ fn source_v2_unknown_blocks_other_prepared_dispatch_and_exact_recovery_reuses_id
         "unknown-source",
     );
     let mut ids = CounterIds::new(151);
-    let prepared = prepared(&mut registry, &first_request, &mut ids, &port, &context);
+    let prepared = prepared(&mut registry, &first_request, &mut ids, &mut port, &context);
     let allocated = ids.allocations;
     let mut probe = || Ok::<_, CheckpointFailureV2>(());
     fail.set(true);
@@ -904,18 +1029,7 @@ fn source_v2_unknown_blocks_other_prepared_dispatch_and_exact_recovery_reuses_id
         "other-unknown-source",
     );
     let before_other_ids = ids.allocations;
-    let mut other_probe = || Ok::<_, CheckpointFailureV2>(());
-    assert!(
-        prepare_source_admission_v2(
-            &mut registry,
-            &other,
-            &mut ids,
-            &port,
-            &context,
-            &mut other_probe
-        )
-        .is_err()
-    );
+    assert!(prepare(&mut registry, &other, &mut ids, &mut port, &context,).is_err());
     assert_eq!(ids.allocations, before_other_ids);
     fail.set(false);
     let decision = port

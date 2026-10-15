@@ -70,18 +70,16 @@ use search_source_records::source_request_v2::source_admission_checkpoint as che
 
 /// Prepares a Source under actual current Root/policy/namespace/predecessor fences.
 /// No ID is drawn until every refusal that can be checked without an ID passes.
-pub fn prepare_source_admission_v2<C, I, P>(
+pub fn prepare_source_admission_v2<C, P>(
     registry: &mut SourceRegistry,
     request: &SourceAdmissionRequestV2,
-    ids: &mut I,
-    control: &P,
+    port: &mut P,
     context: &OperationContext<C>,
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
-) -> Result<SourceAdmissionPreparationV2, SourceAdmissionV2Error<I::Error>>
+) -> Result<SourceAdmissionPreparationV2, SourceAdmissionV2Error<P::Error>>
 where
     C: CancellationProbe,
-    I: SourceIdentityIdPortV2<Cancellation = C>,
-    P: RegistryControlPort<Cancellation = C>,
+    P: RegistryControlPort<Cancellation = C> + SourceIdentityIdPortV2<Cancellation = C>,
 {
     context
         .preflight()
@@ -103,7 +101,7 @@ where
         return Err(IdentityError::SourceIdentityInsufficientEvidence.into());
     };
     let fingerprint = request.fingerprint(&draft.stable_identity_components, probe)?;
-    match control
+    match port
         .load_batch(&request.operation_id, context)
         .map_err(|_| RegistryError::MutationOutcomeUnknown)?
     {
@@ -134,7 +132,13 @@ where
     if request.expected_registry_revision != registry.revision {
         return Err(RegistryError::RegistryRevisionConflict.into());
     }
-    if request.owner.installation_incarnation.as_bytes().iter().all(|value| *value == 0) {
+    if request
+        .owner
+        .installation_incarnation
+        .as_bytes()
+        .iter()
+        .all(|value| *value == 0)
+    {
         return Err(RegistryError::NamespaceOwnershipConflict.into());
     }
     let root = registry
@@ -243,7 +247,7 @@ where
     prepare_identity(
         registry,
         request,
-        ids,
+        port,
         context,
         probe,
         *draft,
@@ -254,10 +258,10 @@ where
     )
 }
 
-fn prepare_identity<C, I>(
+fn prepare_identity<C, P>(
     registry: &SourceRegistry,
     request: &SourceAdmissionRequestV2,
-    ids: &mut I,
+    port: &mut P,
     context: &OperationContext<C>,
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
     draft: IdentityDraft,
@@ -265,10 +269,10 @@ fn prepare_identity<C, I>(
     after: u64,
     namespace_id: Option<SourceNamespaceId>,
     namespace: Option<NamespaceCutoverState>,
-) -> Result<SourceAdmissionPreparationV2, SourceAdmissionV2Error<I::Error>>
+) -> Result<SourceAdmissionPreparationV2, SourceAdmissionV2Error<P::Error>>
 where
     C: CancellationProbe,
-    I: SourceIdentityIdPortV2<Cancellation = C>,
+    P: RegistryControlPort<Cancellation = C> + SourceIdentityIdPortV2<Cancellation = C>,
 {
     let cache = registry
         .identity_cache_v2
@@ -371,7 +375,7 @@ where
     let namespace_id = if let Some(id) = namespace_id {
         id
     } else {
-        let id = ids
+        let id = port
             .fresh_source_namespace_id(context)
             .map_err(SourceAdmissionV2Error::Allocation)?;
         if !fresh_uuid(id.as_bytes()) || cache.namespaces.contains(&id) {
@@ -388,7 +392,7 @@ where
             id.clone()
         }
         IdentityResolution::CreateNew(draft) => {
-            let id = ids
+            let id = port
                 .fresh_source_id(context)
                 .map_err(SourceAdmissionV2Error::Allocation)?;
             if !fresh_uuid(id.as_bytes()) || cache.lookup.lookup_id(namespace_id, id).is_some() {

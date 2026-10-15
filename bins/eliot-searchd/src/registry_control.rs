@@ -9,10 +9,9 @@
 mod tests;
 
 mod original_inputs;
-mod v4_restore;
-mod v4_readback;
 mod source_ids;
-
+mod v4_readback;
+mod v4_restore;
 
 use search_contracts::OpaqueId;
 use search_control_redb::{
@@ -26,11 +25,11 @@ use search_ports::{
     CancellationProbe, ControlJournalPort, MutationIdentity, OperationContext, Port, PortErrorKind,
     PortFailure, PortReceipt, PortRetryability,
 };
+use search_source_admission::{AcceptedCapabilities, SectionPlatform};
 use search_source_registry::error::{
     RegistryControlPort, RegistryError, RegistryJournalEntry, RegistryLimits, RegistryPortError,
     registry_mutation, registry_port_error,
 };
-use search_source_admission::{AcceptedCapabilities, SectionPlatform};
 use search_source_registry::recovery::{
     DecodedBatch, MAX_REGISTRY_RESTORE_BYTES, ObservedRegistryRestore, PreparedBatch,
     RegistryBatchLookup, RegistryBatchReadback, RegistryRestoreOperation, RegistryRestoreState,
@@ -40,7 +39,9 @@ use search_source_registry::recovery::{
 };
 
 /// One exclusive borrowed adapter; no journal, operation ledger or snapshot copy.
-type OriginalNativeWork<'a> = &'a dyn Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), search_runtime_owner::OwnerError>;
+type OriginalNativeWork<'a> = &'a dyn Fn(
+    search_control_redb::MigrationBootstrapWork,
+) -> Result<(), search_runtime_owner::OwnerError>;
 pub struct RegistryJournal<'journal, C: CancellationProbe> {
     original: Option<(std::time::Instant, OriginalNativeWork<'journal>)>,
     original_v4: Option<v4_readback::OriginalV4Context<'journal>>,
@@ -48,12 +49,20 @@ pub struct RegistryJournal<'journal, C: CancellationProbe> {
     identity: JournalIdentity,
     registry_limits: RegistryLimits,
     pending: Option<RegistryMutationRequest>,
+    original_pending: Option<original_inputs::PreparedOriginalInputs>,
     original_uncertain: bool,
     cancellation: core::marker::PhantomData<fn() -> C>,
 }
 
+enum PreparedRegistryBatch {
+    Replay(RegistryBatchReadback),
+    New(RegistryMutationRequest),
+}
+
 impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
-    pub(crate) const fn requires_recovery(&self) -> bool { self.pending.is_some() || self.original_uncertain }
+    pub(crate) const fn requires_recovery(&self) -> bool {
+        self.pending.is_some() || self.original_uncertain
+    }
     /// The enclosing native owner keeps its verified journal/root alive.
     pub(crate) fn bind(
         journal: &'journal mut PersistentControlJournal,
@@ -75,15 +84,22 @@ impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
             identity: expected,
             registry_limits,
             pending: None,
+            original_pending: None,
             original_uncertain: false,
             cancellation: core::marker::PhantomData,
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn bind_original(
-        journal: &'journal mut PersistentControlJournal, publisher: &'journal mut ControlSnapshotPublisher,
-        expected: JournalIdentity, limits: RegistryLimits, deadline: std::time::Instant,
-        work: &'journal dyn Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), search_runtime_owner::OwnerError>,
+        journal: &'journal mut PersistentControlJournal,
+        publisher: &'journal mut ControlSnapshotPublisher,
+        expected: JournalIdentity,
+        limits: RegistryLimits,
+        deadline: std::time::Instant,
+        work: &'journal dyn Fn(
+            search_control_redb::MigrationBootstrapWork,
+        ) -> Result<(), search_runtime_owner::OwnerError>,
     ) -> Result<Self, RegistryPortError> {
         let mut result = Self::bind(journal, publisher, expected, limits)?;
         result.original = Some((deadline, work));
@@ -138,40 +154,17 @@ impl<C: CancellationProbe> RegistryControlPort for RegistryJournal<'_, C> {
         }
         if self.requires_recovery() {
             return Err(registry_port_error(
-                PortErrorKind::OutcomeUnknown, PortRetryability::AfterReadback,
-                RegistryError::MutationOutcomeUnknown, Some(id.clone()),
+                PortErrorKind::OutcomeUnknown,
+                PortRetryability::AfterReadback,
+                RegistryError::MutationOutcomeUnknown,
+                Some(id.clone()),
             ));
         }
-        let lookup = self.lookup(id, context)?;
-        let generation = match lookup {
-            search_control_redb::RegistryOperationLookup::Absent {
-                identity,
-                journal_generation,
-                registry_revision,
-            } => {
-                if identity != self.identity
-                    || registry_revision != batch.expected_registry_revision()
-                {
-                    return Err(owner_failure(RegistryError::RegistryRevisionConflict));
-                }
-                journal_generation
-            }
-            search_control_redb::RegistryOperationLookup::Committed(observed) => {
-                if observed.identity() != self.identity
-                    || observed.envelope().owner_bytes() != batch.encoded()
-                {
-                    return Err(owner_failure(RegistryError::OperationConflict));
-                }
-                // The existing operation owns its original backend generation.
-                observed.envelope().journal_generation_before()
-            }
+        let prepared = self.prepare_registry_batch(batch, id, context)?;
+        let request = match prepared {
+            PreparedRegistryBatch::Replay(result) => return Ok(result),
+            PreparedRegistryBatch::New(request) => request,
         };
-        let request = prepare(
-            batch,
-            generation,
-            self.journal.limits(),
-            self.registry_limits,
-        )?;
         context
             .preflight()
             .map_err(|_| owner_failure(RegistryError::CancelledBeforeCommit))?;
@@ -179,13 +172,25 @@ impl<C: CancellationProbe> RegistryControlPort for RegistryJournal<'_, C> {
         let control_identity = control_mutation_identity(request.control_operation_id())
             .map_err(|error| storage_failure(error, Some(id)))?;
         let dispatched = if let Some((deadline, callback)) = self.original {
-            self.journal.commit_registry_batch_with_original_context(&request, &control_identity, deadline, &callback)
-                .map(|_| ()).map_err(|error| storage_failure(error.control, Some(id)))
-        } else { self.journal.transact(
-            &ControlPortCommand::Registry(request.clone()),
-            context,
-            &control_identity,
-        ).map(|_| ()).map_err(|error| call_failure(&error, Some(id))) };
+            self.journal
+                .commit_registry_batch_with_original_context(
+                    &request,
+                    &control_identity,
+                    deadline,
+                    &callback,
+                )
+                .map(|_| ())
+                .map_err(|error| storage_failure(error.control, Some(id)))
+        } else {
+            self.journal
+                .transact(
+                    &ControlPortCommand::Registry(request.clone()),
+                    context,
+                    &control_identity,
+                )
+                .map(|_| ())
+                .map_err(|error| call_failure(&error, Some(id)))
+        };
         match dispatched {
             Ok(()) => {}
             Err(error) => {
@@ -200,7 +205,9 @@ impl<C: CancellationProbe> RegistryControlPort for RegistryJournal<'_, C> {
             .iter()
             .map(|change| change.key().clone())
             .collect::<Vec<_>>();
-        let observed = self.targets(request.envelope(), &keys, context).map_err(|_| {
+        let observed = self
+            .targets(request.envelope(), &keys, context)
+            .map_err(|_| {
                 registry_port_error(
                     PortErrorKind::OutcomeUnknown,
                     PortRetryability::AfterReadback,
@@ -227,8 +234,10 @@ impl<C: CancellationProbe> RegistryControlPort for RegistryJournal<'_, C> {
     ) -> Result<RegistryBatchLookup, RegistryPortError> {
         if self.original_uncertain {
             return Err(registry_port_error(
-                PortErrorKind::OutcomeUnknown, PortRetryability::AfterReadback,
-                RegistryError::MutationOutcomeUnknown, Some(id.clone()),
+                PortErrorKind::OutcomeUnknown,
+                PortRetryability::AfterReadback,
+                RegistryError::MutationOutcomeUnknown,
+                Some(id.clone()),
             ));
         }
         context
@@ -296,17 +305,125 @@ impl<C: CancellationProbe> RegistryControlPort for RegistryJournal<'_, C> {
 }
 
 impl<C: CancellationProbe> RegistryJournal<'_, C> {
-    fn lookup(&self, id: &OpaqueId, context: &OperationContext<C>) -> Result<search_control_redb::RegistryOperationLookup, RegistryPortError> {
-        if let Some((deadline, callback)) = self.original {
-            self.journal.lookup_registry_operation_with_original_context(id, deadline, &callback)
-                .map_err(|e| storage_failure(e.control, Some(id)))
-        } else { self.journal.lookup_registry_operation(id, context).map_err(|e| call_failure(&e, Some(id))) }
+    fn prepare_registry_batch(
+        &mut self,
+        batch: &PreparedBatch,
+        id: &OpaqueId,
+        context: &OperationContext<C>,
+    ) -> Result<PreparedRegistryBatch, RegistryPortError> {
+        let lookup = self.lookup(id, context)?;
+        match lookup {
+            search_control_redb::RegistryOperationLookup::Committed(observed) => {
+                if observed.identity() != self.identity
+                    || observed.envelope().owner_bytes() != batch.encoded()
+                {
+                    return Err(owner_failure(RegistryError::OperationConflict));
+                }
+                return Ok(PreparedRegistryBatch::Replay(
+                    self.readback_committed_batch(&observed, context)?,
+                ));
+            }
+            search_control_redb::RegistryOperationLookup::Absent {
+                identity,
+                registry_revision,
+                ..
+            } => {
+                if identity != self.identity
+                    || registry_revision != batch.expected_registry_revision()
+                {
+                    return Err(owner_failure(RegistryError::RegistryRevisionConflict));
+                }
+            }
+        }
+        self.retain_source_batch_originals(batch, context)
+            .map_err(|error| original_inputs_failure(error, Some(id)))?;
+        let lookup = self.lookup(id, context)?;
+        let generation = match lookup {
+            search_control_redb::RegistryOperationLookup::Absent {
+                identity,
+                journal_generation,
+                registry_revision,
+            } => {
+                if identity != self.identity
+                    || registry_revision != batch.expected_registry_revision()
+                {
+                    return Err(owner_failure(RegistryError::RegistryRevisionConflict));
+                }
+                journal_generation
+            }
+            search_control_redb::RegistryOperationLookup::Committed(observed) => {
+                if observed.identity() != self.identity
+                    || observed.envelope().owner_bytes() != batch.encoded()
+                {
+                    return Err(owner_failure(RegistryError::OperationConflict));
+                }
+                return Ok(PreparedRegistryBatch::Replay(
+                    self.readback_committed_batch(&observed, context)?,
+                ));
+            }
+        };
+        Ok(PreparedRegistryBatch::New(prepare(
+            batch,
+            generation,
+            self.journal.limits(),
+            self.registry_limits,
+        )?))
     }
-    fn targets(&self, envelope: &RegistryOperationEnvelope, keys: &[StoredKey], context: &OperationContext<C>) -> Result<RegistryTransactionReadback, RegistryPortError> {
+
+    fn readback_committed_batch(
+        &self,
+        observed: &search_control_redb::RegistryOperationObservation,
+        context: &OperationContext<C>,
+    ) -> Result<RegistryBatchReadback, RegistryPortError> {
+        let decoded = self.decode_operation_for_load(
+            observed.envelope(),
+            observed.journal_generation(),
+            context,
+        )?;
+        let keys = decoded
+            .deltas()
+            .iter()
+            .map(|delta| {
+                let encoded = delta.key().encode().map_err(owner_failure)?;
+                state_key(delta.key(), &encoded, self.journal.limits())
+            })
+            .collect::<Result<Vec<_>, RegistryPortError>>()?;
+        let targets = self.targets(observed.envelope(), &keys, context)?;
+        self.readback(&targets, context)
+    }
+
+    fn lookup(
+        &self,
+        id: &OpaqueId,
+        context: &OperationContext<C>,
+    ) -> Result<search_control_redb::RegistryOperationLookup, RegistryPortError> {
         if let Some((deadline, callback)) = self.original {
-            self.journal.read_registry_operation_targets_with_original_context(envelope, keys, deadline, &callback)
+            self.journal
+                .lookup_registry_operation_with_original_context(id, deadline, &callback)
+                .map_err(|e| storage_failure(e.control, Some(id)))
+        } else {
+            self.journal
+                .lookup_registry_operation(id, context)
+                .map_err(|e| call_failure(&e, Some(id)))
+        }
+    }
+    fn targets(
+        &self,
+        envelope: &RegistryOperationEnvelope,
+        keys: &[StoredKey],
+        context: &OperationContext<C>,
+    ) -> Result<RegistryTransactionReadback, RegistryPortError> {
+        if let Some((deadline, callback)) = self.original {
+            self.journal
+                .read_registry_operation_targets_with_original_context(
+                    envelope, keys, deadline, &callback,
+                )
                 .map_err(|e| storage_failure(e.control, Some(envelope.operation_id())))
-        } else { self.journal.read_registry_operation_targets(envelope, keys, context).map_err(|e| call_failure(&e, Some(envelope.operation_id()))) }
+        } else {
+            self.journal
+                .read_registry_operation_targets(envelope, keys, context)
+                .map_err(|e| call_failure(&e, Some(envelope.operation_id())))
+        }
     }
 
     fn decode_operation_for_load(
@@ -320,12 +437,19 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         };
         let shape = v4_readback::collect_transaction_refs(envelope, &[], original_v4)
             .map_err(|error| v4_failure(error, Some(envelope.operation_id())))?;
-        let references = shape.references().iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let references = shape
+            .references()
+            .iter()
+            .map(Vec::as_slice)
+            .collect::<Vec<_>>();
         let originals = if references.is_empty() {
             None
         } else {
-            let readback = self.original_inputs_snapshot(&references, context).map_err(original_inputs_failure)?;
-            if readback.identity() != self.identity || readback.generation() != observed_generation {
+            let readback = self
+                .original_inputs_snapshot(&references, context)
+                .map_err(|error| original_inputs_failure(error, Some(envelope.operation_id())))?;
+            if readback.identity() != self.identity || readback.generation() != observed_generation
+            {
                 return Err(owner_failure(RegistryError::SnapshotInvalid));
             }
             Some(readback)
@@ -359,8 +483,14 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         let originals = if references.is_empty() {
             None
         } else {
-            let readback = self.original_inputs_snapshot(&references, context).map_err(original_inputs_failure)?;
-            if readback.identity() != self.identity || readback.generation() != observed.journal_generation() {
+            let readback = self
+                .original_inputs_snapshot(&references, context)
+                .map_err(|error| {
+                    original_inputs_failure(error, Some(observed.operation().operation_id()))
+                })?;
+            if readback.identity() != self.identity
+                || readback.generation() != observed.journal_generation()
+            {
                 return Err(owner_failure(RegistryError::SnapshotInvalid));
             }
             Some(readback)
@@ -388,8 +518,13 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         {
             return Err(owner_failure(RegistryError::SnapshotInvalid));
         }
-        RegistryBatchReadback::new(decoded, observed.registry_revision(), states, self.registry_limits)
-            .map_err(owner_failure)
+        RegistryBatchReadback::new(
+            decoded,
+            observed.registry_revision(),
+            states,
+            self.registry_limits,
+        )
+        .map_err(owner_failure)
     }
     /// Explicitly rebuild the current technical snapshot after owner installation.
     /// This publishes verified disk metadata only; native/current-policy/grant
@@ -418,14 +553,23 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
     }
 
     /// Select a historical original only from the same fully validated startup read.
-    pub(crate) fn restore_for_root(&self, root: Option<search_contracts::RootBindingId>, context: &OperationContext<C>)
-        -> Result<(ObservedRegistryRestore, Option<OpaqueId>), RegistryPortError> {
+    pub(crate) fn restore_for_root(
+        &self,
+        root: Option<search_contracts::RootBindingId>,
+        context: &OperationContext<C>,
+    ) -> Result<(ObservedRegistryRestore, Option<OpaqueId>), RegistryPortError> {
         context
             .preflight()
             .map_err(|_| owner_failure(RegistryError::CancelledBeforeCommit))?;
         let snapshot = if let Some((deadline, callback)) = self.original {
-            self.journal.read_registry_snapshot_with_original_context(deadline, &callback).map_err(|e| storage_failure(e.control, None))?
-        } else { self.journal.read_registry_snapshot(context).map_err(|error| call_failure(&error, None))? };
+            self.journal
+                .read_registry_snapshot_with_original_context(deadline, &callback)
+                .map_err(|e| storage_failure(e.control, None))?
+        } else {
+            self.journal
+                .read_registry_snapshot(context)
+                .map_err(|error| call_failure(&error, None))?
+        };
         if snapshot.identity() != self.identity {
             return Err(owner_failure(RegistryError::SnapshotInvalid));
         }
@@ -433,34 +577,34 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         let restored = if let Some(original_v4) = self.original_v4.as_ref() {
             let shape = v4_restore::collect_snapshot_refs(&snapshot, original_v4)
                 .map_err(|error| v4_failure(error, None))?;
-                let references = shape
-                    .references()
-                    .iter()
-                    .map(Vec::as_slice)
-                    .collect::<Vec<_>>();
-                if !references.is_empty() {
-                    let readback = self
-                        .original_inputs_snapshot(&references, context)
-                        .map_err(original_inputs_failure)?;
-                    if readback.identity() != self.identity
-                        || readback.generation() != snapshot.journal_generation()
-                    {
-                        return Err(owner_failure(RegistryError::SnapshotInvalid));
-                    }
-                    originals = Some(readback);
+            let references = shape
+                .references()
+                .iter()
+                .map(Vec::as_slice)
+                .collect::<Vec<_>>();
+            if !references.is_empty() {
+                let readback = self
+                    .original_inputs_snapshot(&references, context)
+                    .map_err(|error| original_inputs_failure(error, None))?;
+                if readback.identity() != self.identity
+                    || readback.generation() != snapshot.journal_generation()
+                {
+                    return Err(owner_failure(RegistryError::SnapshotInvalid));
                 }
-                let max_restore_bytes = self
-                    .journal
-                    .limits()
-                    .max_total_value_bytes
-                    .min(MAX_REGISTRY_RESTORE_BYTES);
-                v4_restore::restore_snapshot_v4(
-                    &snapshot,
-                    originals.as_ref(),
-                    original_v4,
-                    max_restore_bytes,
-                )
-                .map_err(|error| v4_failure(error, None))?
+                originals = Some(readback);
+            }
+            let max_restore_bytes = self
+                .journal
+                .limits()
+                .max_total_value_bytes
+                .min(MAX_REGISTRY_RESTORE_BYTES);
+            v4_restore::restore_snapshot_v4(
+                &snapshot,
+                originals.as_ref(),
+                original_v4,
+                max_restore_bytes,
+            )
+            .map_err(|error| v4_failure(error, None))?
         } else {
             restore_observed_snapshot(
                 &snapshot,
@@ -474,11 +618,7 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         if let Some(root) = root {
             for envelope in snapshot.operations() {
                 let record = if let Some(original_v4) = self.original_v4.as_ref() {
-                        v4_restore::decode_operation_for_root(
-                            envelope,
-                            originals.as_ref(),
-                            original_v4,
-                        )
+                    v4_restore::decode_operation_for_root(envelope, originals.as_ref(), original_v4)
                         .map_err(|error| v4_failure(error, Some(envelope.operation_id())))?
                 } else {
                     decode_operation(envelope, self.registry_limits)?
@@ -493,7 +633,9 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
                     && original.replace(envelope.operation_id().clone()).is_some() {
                     return Err(owner_failure(RegistryError::OperationConflict));
                 }
-                context.preflight().map_err(|_| owner_failure(RegistryError::CancelledBeforeCommit))?;
+                context
+                    .preflight()
+                    .map_err(|_| owner_failure(RegistryError::CancelledBeforeCommit))?;
             }
         }
         Ok((restored, original))
@@ -505,6 +647,16 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         &mut self,
         context: &OperationContext<C>,
     ) -> Result<search_control_redb::CommitRecoveryDecision, RegistryPortError> {
+        if self.original_uncertain {
+            let prepared = self
+                .original_pending
+                .clone()
+                .ok_or_else(|| owner_failure(RegistryError::MutationOutcomeUnknown))?;
+            let decision = self
+                .recover_original_inputs(&prepared, context)
+                .map_err(|error| original_inputs_failure(error, None))?;
+            return Ok(decision);
+        }
         let request = self
             .pending
             .as_ref()
@@ -512,14 +664,23 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         let control_identity = control_mutation_identity(request.control_operation_id())
             .map_err(|error| storage_failure(error, Some(request.envelope().operation_id())))?;
         let decision = if let Some((deadline, callback)) = self.original {
-            self.journal.recover_registry_batch_with_original_context(request, &control_identity, deadline, &callback)
+            self.journal
+                .recover_registry_batch_with_original_context(
+                    request,
+                    &control_identity,
+                    deadline,
+                    &callback,
+                )
                 .map_err(|e| storage_failure(e.control, Some(request.envelope().operation_id())))?
-        } else { self.journal.recover_command(
-                &ControlPortCommand::Registry(request.clone()),
-                context,
-                &control_identity,
-            )
-            .map_err(|error| call_failure(&error, Some(request.envelope().operation_id())))? };
+        } else {
+            self.journal
+                .recover_command(
+                    &ControlPortCommand::Registry(request.clone()),
+                    context,
+                    &control_identity,
+                )
+                .map_err(|error| call_failure(&error, Some(request.envelope().operation_id())))?
+        };
         if matches!(
             decision,
             search_control_redb::CommitRecoveryDecision::Committed(_)
@@ -693,11 +854,60 @@ fn call_failure(error: &ControlPortError, operation: Option<&OpaqueId>) -> Regis
     )
 }
 
-fn original_inputs_failure(error: original_inputs::OriginalInputsError) -> RegistryPortError {
+fn original_inputs_failure(
+    error: original_inputs::OriginalInputsError,
+    operation: Option<&OpaqueId>,
+) -> RegistryPortError {
     match error {
-        original_inputs::OriginalInputsError::Control(error) => storage_failure(error, None),
+        original_inputs::OriginalInputsError::Control(error) => storage_failure(error, operation),
         original_inputs::OriginalInputsError::OriginalControl(error) => {
-            storage_failure(error.control, None)
+            let search_control_redb::MigrationBootstrapFailure {
+                control,
+                first_context,
+            } = error;
+            match first_context {
+                Some(search_runtime_owner::OwnerError::OwnerCancelledBeforeMutation)
+                    if control == ControlError::ReadCancelled =>
+                {
+                    registry_port_error(
+                        PortErrorKind::CancelledBeforeSideEffect,
+                        PortRetryability::SameIdentity,
+                        RegistryError::CancelledBeforeCommit,
+                        operation.cloned(),
+                    )
+                }
+                Some(search_runtime_owner::OwnerError::OwnerOperationCapacityExceeded)
+                    if control == ControlError::BudgetExceeded =>
+                {
+                    registry_port_error(
+                        PortErrorKind::ResourceExhausted,
+                        PortRetryability::Never,
+                        RegistryError::DurabilityExhausted,
+                        operation.cloned(),
+                    )
+                }
+                Some(search_runtime_owner::OwnerError::OwnerOperationConflict)
+                    if control == ControlError::OperationConflict =>
+                {
+                    registry_port_error(
+                        PortErrorKind::Conflict,
+                        PortRetryability::Never,
+                        RegistryError::OperationConflict,
+                        operation.cloned(),
+                    )
+                }
+                Some(
+                    search_runtime_owner::OwnerError::OwnerRecoveryQuarantined
+                    | search_runtime_owner::OwnerError::OwnerIdentityAmbiguous
+                    | search_runtime_owner::OwnerError::OwnerGuardMismatch,
+                ) => registry_port_error(
+                    PortErrorKind::Quarantined,
+                    PortRetryability::AfterReadback,
+                    RegistryError::SnapshotInvalid,
+                    operation.cloned(),
+                ),
+                Some(_) | None => storage_failure(control, operation),
+            }
         }
         original_inputs::OriginalInputsError::Context(_)
         | original_inputs::OriginalInputsError::Owner(_)
