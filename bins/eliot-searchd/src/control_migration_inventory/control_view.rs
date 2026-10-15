@@ -142,7 +142,7 @@ impl ControlView {
                 emit(value)?;
             }
         }
-        source.poll()
+        source.charge(Work::Compare(0))
     }
 
     fn entry(
