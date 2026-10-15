@@ -143,6 +143,10 @@ All open/read/object operations have finite deadlines and cancellation. Cancella
 verification produces no successful product. A process crash loses transient bytes/handles; no durable
 recovery is owned here. Callers retry by reopening the exact request and must revalidate current root,
 binding, admission and owner fences.
+The cancelable final-handle kernel polls the same original cancellation/deadline
+callback after final metadata and receipt validation, immediately before returning
+bytes. Cancellation raised during post-read inspection yields no successful byte
+product and is never retried by the bounded retry wrapper.
 
 ## Typed failures
 
