@@ -41,7 +41,8 @@ pub use bootstrap::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSour
 pub use bootstrap::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
 pub use bootstrap::{OwnerContentStage, OwnerContentReadback, OwnerContentMappedReceipt};
 
-pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
+pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError,
+    ScopedControlRecordsReadback, control_mutation_identity};
 pub use registry::{registry_operation_value_len, RegistryStateFamily, RegistryStateKey, RegistryStateChange,
     RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
     RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,

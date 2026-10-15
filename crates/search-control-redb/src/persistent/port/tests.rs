@@ -29,6 +29,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 #[path = "tests/original_records.rs"]
 mod original_records;
+#[path = "tests/original_records_targeted.rs"]
+mod original_records_targeted;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Default)]
