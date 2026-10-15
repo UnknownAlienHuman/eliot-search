@@ -165,6 +165,47 @@ fn deadline() -> Instant {
 }
 
 #[test]
+fn buffered_copy_polls_context_and_actual_flush_keeps_post_write_refusal() {
+    let fixture = Fixture::new();
+    let path = fixture.0.join(".source-map.buffered-copy.tmp");
+    let mut artifact = SourceImportRecordArtifact::create(
+        &fixture.0, ".source-map.buffered-copy.tmp", TestPlatform::new(), deadline(),
+    ).unwrap();
+    let polls = std::cell::Cell::new(0);
+    let writes = std::cell::Cell::new(0);
+    let work = |work| match work {
+        Work::Process(0) => { polls.set(polls.get() + 1); Ok(()) }
+        Work::Write(_) => { writes.set(writes.get() + 1); Ok(()) }
+        Work::Checkpoint => Err(ControlError::ReadCancelled),
+        _ => Ok(()),
+    };
+    artifact.push_with_context(b"alpha\n", deadline(), &work).unwrap();
+    assert_eq!(polls.get(), 1);
+    assert_eq!(writes.get(), 0);
+    assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+
+    // A real flush still refuses after its actual write; it cannot report
+    // success or retry the buffered row through Drop after that refusal.
+    let failure = artifact.writer.as_mut().unwrap().flush::<io::Error>(deadline(), &work);
+    assert!(matches!(failure,
+        Err(SourceImportRecordArtifactError::Context(ControlError::ReadCancelled))));
+    assert!(writes.get() > 0);
+    drop(artifact);
+    assert_eq!(fs::read(&path).unwrap(), b"alpha\n");
+
+    let mut refused = SourceImportRecordArtifact::create(
+        &fixture.0, ".source-map.refused-copy.tmp", TestPlatform::new(), deadline(),
+    ).unwrap();
+    let refusal = refused.push_with_context(b"beta\n", deadline(), &|work| {
+        if matches!(work, Work::Process(0)) { Err(ControlError::ReadCancelled) } else { Ok(()) }
+    });
+    assert!(matches!(refusal,
+        Err(SourceImportRecordArtifactError::Context(ControlError::ReadCancelled))));
+    drop(refused);
+    assert_eq!(fs::metadata(fixture.0.join(".source-map.refused-copy.tmp")).unwrap().len(), 0);
+}
+
+#[test]
 fn contextual_artifact_refused_flush_never_runs_in_drop() {
     let fixture = Fixture::new();
     let mut writer = SourceImportRecordArtifact::create_with_context(
