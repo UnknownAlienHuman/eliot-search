@@ -53,6 +53,9 @@ pub mod batch_v2;
 /// Immutable compiled v2 policy and bounded byte-path rule selection.
 pub mod policy_v2;
 
+/// Versioned original-input retention and exact historical admission restoration.
+pub mod original_envelope;
+
 // ---------------------------------------------------------------------------
 // Closed constants
 // ---------------------------------------------------------------------------

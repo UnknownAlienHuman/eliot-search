@@ -8,6 +8,19 @@ vendor-neutral control port and never reimplements those semantics.
 
 ## Global rules
 
+The atomic Root protocol retains canonical `eliot.registry-state.v3` values and
+`eliot.registry-batch.v3` immutable operations together. Same operation/request
+replay returns the original outcome without rolling later state backwards.
+Unknown commit remains pending until exact operation/state readback; a receipt
+alone cannot install state. Snapshot v4 is distinct from the old v3 digest.
+
+`restore_registry_state` validates a bounded complete four-family denominator
+and contiguous history from genesis, then compares replayed before/after values
+with all current rows. Duplicate, surplus, missing, foreign or contradictory
+inputs refuse without partial state. Shared preflight checks combined counts
+and encoded bytes before caller decoding/allocation; it grants no authority.
+Restored state still requires live Root, security and current-policy validation.
+
 - one admitted source namespace has at most one active mutable owner generation;
 - old owner is durably fenced before new owner activation;
 - root/source/membership/view/portfolio/cutover mutations use stable operation identity and expected

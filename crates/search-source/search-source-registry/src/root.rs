@@ -2,19 +2,16 @@
 //!
 //! Roots are explicit records with no implicit recursive source admission.
 //! Every mutation uses a stable operation identity, an expected registry
-//! revision guard and durable receipt persistence through the vendor-neutral
+//! revision guard and atomic state-plus-receipt persistence through the vendor-neutral
 //! [`crate::error::RegistryControlPort`]. No filesystem, redb or concrete
 //! store handle is touched here.
 
 use std::collections::BTreeMap;
 
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef};
-use search_ports::{CancellationProbe, MutationIdentity, OperationContext, PortErrorKind};
+use search_ports::{CancellationProbe, OperationContext, PortErrorKind};
 
-use crate::error::{
-    JournalEntryKind, RegistryControlPort, RegistryError, RegistryJournalEntry, RegistryLimits,
-    cancelled_before_commit, registry_mutation,
-};
+use crate::error::{RegistryControlPort, RegistryError, RegistryLimits, cancelled_before_commit};
 
 /// Lifecycle of one admitted root record.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -138,20 +135,13 @@ pub struct RootUnbindReceipt {
     pub replayed: bool,
 }
 
-/// Registers one explicit root with no implicit recursive source admission.
-///
-/// Same operation plus same request is idempotent. A conflicting canonical
-/// root or a reused operation identity with another payload is rejected.
-#[allow(clippy::too_many_arguments)]
+/// Registers a complete root and its original operation receipt atomically.
 pub fn register_root<C, P>(
-    roots: &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
-    expected_registry_revision: u64,
-    next_registry_revision: u64,
+    registry: &mut crate::recovery::SourceRegistry,
     request: &RegisterRootRequest,
     operation_id: &OpaqueId,
     mutation_digest: Blake3Digest32,
     receipt: &ReceiptRef,
-    limits: RegistryLimits,
     control_port: &mut P,
     context: &OperationContext<C>,
 ) -> Result<RootRegistrationReceipt, RegistryError>
@@ -159,85 +149,34 @@ where
     C: CancellationProbe,
     P: RegistryControlPort<Cancellation = C>,
 {
-    cancelled_before_commit(context)?;
-    limits.validate()?;
-    if next_registry_revision
-        != expected_registry_revision
-            .checked_add(1)
-            .ok_or(RegistryError::RegistryRevisionOverflow)?
-    {
-        return Err(RegistryError::RegistryRevisionConflict);
-    }
-    let mutation = registry_mutation(operation_id);
-    let entry = RegistryJournalEntry::new(
-        operation_id.clone(),
-        mutation_digest,
-        expected_registry_revision,
-        next_registry_revision,
-        JournalEntryKind::RootRegistration,
-        receipt.clone(),
-    );
-    if let Some(existing) = load_existing(control_port, operation_id, context)? {
-        if existing.mutation_digest != mutation_digest {
-            return Err(RegistryError::OperationConflict);
-        }
-        let record = roots
-            .get(&request.root_binding_id)
-            .ok_or(RegistryError::MutationOutcomeUnknown)?;
-        return Ok(RootRegistrationReceipt {
-            root_binding_id: request.root_binding_id,
-            record_revision: record.record_revision,
-            registry_revision: record.registry_revision,
-            operation_id: operation_id.clone(),
-            receipt: record.last_receipt.clone(),
-            replayed: true,
-        });
-    }
-    if roots.contains_key(&request.root_binding_id) {
-        return Err(RegistryError::RootAlreadyRegistered);
-    }
-    for record in roots.values() {
-        if record.canonical_root_digest == request.canonical_root_digest {
-            return Err(RegistryError::RootIdentityConflict);
-        }
-    }
-    if roots.len() >= limits.max_roots {
-        return Err(RegistryError::CapacityExceeded);
-    }
-    persist(control_port, &entry, context, &mutation)?;
-    let record_revision = NonZeroRevision::new(1).map_err(|_| RegistryError::ContractExhausted)?;
-    roots.insert(
+    let committed = transact_root(
+        registry,
         request.root_binding_id,
-        RootRecord {
-            root_binding_id: request.root_binding_id,
-            canonical_root_digest: request.canonical_root_digest,
-            policy_fingerprint: request.policy_fingerprint,
-            policy_revision: request.policy_revision,
-            owner_epoch: request.owner_epoch,
-            record_revision,
-            registry_revision: next_registry_revision,
-            status: RootStatus::Active,
-            last_receipt: receipt.clone(),
+        crate::recovery::RegistryChange::RegisterRoot {
+            request: request.clone(),
+            receipt: receipt.clone(),
         },
-    );
+        operation_id,
+        mutation_digest,
+        receipt,
+        control_port,
+        context,
+    )?;
     Ok(RootRegistrationReceipt {
-        root_binding_id: request.root_binding_id,
-        record_revision,
-        registry_revision: next_registry_revision,
+        root_binding_id: committed.after.root_binding_id,
+        record_revision: committed.after.record_revision,
+        registry_revision: committed.after.registry_revision,
         operation_id: operation_id.clone(),
-        receipt: receipt.clone(),
-        replayed: false,
+        receipt: committed.receipt,
+        replayed: committed.replayed,
     })
 }
 
-/// Commits a new policy fence without reevaluating files or silently
-/// altering membership.
+/// Replaces a complete root policy fence through the same atomic state transaction.
 pub fn update_root_policy<C, P>(
-    roots: &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
+    registry: &mut crate::recovery::SourceRegistry,
     root_binding_id: search_contracts::RootBindingId,
     expected_record_revision: NonZeroRevision,
-    expected_registry_revision: u64,
-    next_registry_revision: u64,
     new_policy_fingerprint: Blake3Digest32,
     new_policy_revision: NonZeroRevision,
     operation_id: &OpaqueId,
@@ -250,80 +189,41 @@ where
     C: CancellationProbe,
     P: RegistryControlPort<Cancellation = C>,
 {
-    cancelled_before_commit(context)?;
-    if next_registry_revision
-        != expected_registry_revision
-            .checked_add(1)
-            .ok_or(RegistryError::RegistryRevisionOverflow)?
-    {
-        return Err(RegistryError::RegistryRevisionConflict);
-    }
-    let mutation = registry_mutation(operation_id);
-    let entry = RegistryJournalEntry::new(
-        operation_id.clone(),
-        mutation_digest,
-        expected_registry_revision,
-        next_registry_revision,
-        JournalEntryKind::RootPolicyChange,
-        receipt.clone(),
-    );
-    if let Some(existing) = load_existing(control_port, operation_id, context)? {
-        if existing.mutation_digest != mutation_digest {
-            return Err(RegistryError::OperationConflict);
-        }
-        let record = roots
-            .get(&root_binding_id)
-            .ok_or(RegistryError::MutationOutcomeUnknown)?;
-        return Ok(RootPolicyChangeReceipt {
+    let committed = transact_root(
+        registry,
+        root_binding_id,
+        crate::recovery::RegistryChange::UpdateRootPolicy {
             root_binding_id,
-            record_revision: record.record_revision,
-            registry_revision: record.registry_revision,
-            operation_id: operation_id.clone(),
-            obligations: obligations_for(record.policy_revision, new_policy_revision),
-            receipt: record.last_receipt.clone(),
-            replayed: true,
-        });
-    }
-    let record = roots
-        .get_mut(&root_binding_id)
-        .ok_or(RegistryError::RootNotRegistered)?;
-    if record.status != RootStatus::Active {
-        return Err(RegistryError::RootPolicyGenerationMismatch);
-    }
-    if record.record_revision != expected_record_revision {
-        return Err(RegistryError::RootPolicyGenerationMismatch);
-    }
-    persist(control_port, &entry, context, &mutation)?;
-    let obligations = obligations_for(record.policy_revision, new_policy_revision);
-    record.record_revision = record
-        .record_revision
-        .checked_next()
-        .map_err(|_| RegistryError::ContractExhausted)?;
-    record.policy_fingerprint = new_policy_fingerprint;
-    record.policy_revision = new_policy_revision;
-    record.registry_revision = next_registry_revision;
-    record.last_receipt = receipt.clone();
+            expected_record_revision,
+            policy_fingerprint: new_policy_fingerprint,
+            policy_revision: new_policy_revision,
+            receipt: receipt.clone(),
+        },
+        operation_id,
+        mutation_digest,
+        receipt,
+        control_port,
+        context,
+    )?;
+    let old = committed
+        .before
+        .ok_or(RegistryError::MutationOutcomeUnknown)?;
     Ok(RootPolicyChangeReceipt {
         root_binding_id,
-        record_revision: record.record_revision,
-        registry_revision: next_registry_revision,
+        record_revision: committed.after.record_revision,
+        registry_revision: committed.after.registry_revision,
         operation_id: operation_id.clone(),
-        obligations,
-        receipt: receipt.clone(),
-        replayed: false,
+        obligations: obligations_for(old.policy_revision, committed.after.policy_revision),
+        receipt: committed.receipt,
+        replayed: committed.replayed,
     })
 }
 
-/// Fences new admission/ownership under the root and creates explicit
-/// source/membership/view invalidation work. It never deletes revisions or
-/// claims purge.
-#[allow(clippy::too_many_arguments)]
+/// Retains a complete unbound root and original invalidation receipt atomically.
 pub fn unbind_root<C, P>(
-    roots: &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
+    registry: &mut crate::recovery::SourceRegistry,
     root_binding_id: search_contracts::RootBindingId,
     expected_record_revision: NonZeroRevision,
-    expected_registry_revision: u64,
-    next_registry_revision: u64,
     operation_id: &OpaqueId,
     mutation_digest: Blake3Digest32,
     receipt: &ReceiptRef,
@@ -334,74 +234,236 @@ where
     C: CancellationProbe,
     P: RegistryControlPort<Cancellation = C>,
 {
-    cancelled_before_commit(context)?;
-    if next_registry_revision
-        != expected_registry_revision
-            .checked_add(1)
-            .ok_or(RegistryError::RegistryRevisionOverflow)?
-    {
-        return Err(RegistryError::RegistryRevisionConflict);
-    }
-    let mutation = registry_mutation(operation_id);
-    let entry = RegistryJournalEntry::new(
-        operation_id.clone(),
-        mutation_digest,
-        expected_registry_revision,
-        next_registry_revision,
-        JournalEntryKind::RootUnbind,
-        receipt.clone(),
-    );
-    if let Some(existing) = load_existing(control_port, operation_id, context)? {
-        if existing.mutation_digest != mutation_digest {
-            return Err(RegistryError::OperationConflict);
-        }
-        let record = roots
-            .get(&root_binding_id)
-            .ok_or(RegistryError::MutationOutcomeUnknown)?;
-        return Ok(RootUnbindReceipt {
+    let committed = transact_root(
+        registry,
+        root_binding_id,
+        crate::recovery::RegistryChange::UnbindRoot {
             root_binding_id,
-            record_revision: record.record_revision,
-            registry_revision: record.registry_revision,
-            operation_id: operation_id.clone(),
-            obligations: vec![
-                RootPolicyObligation::InvalidateSources,
-                RootPolicyObligation::InvalidateMemberships,
-                RootPolicyObligation::InvalidateViews,
-            ],
-            receipt: record.last_receipt.clone(),
-            replayed: true,
-        });
-    }
-    let record = roots
-        .get_mut(&root_binding_id)
-        .ok_or(RegistryError::RootNotRegistered)?;
-    if record.record_revision != expected_record_revision {
-        return Err(RegistryError::RootPolicyGenerationMismatch);
-    }
-    if record.status != RootStatus::Active {
-        return Err(RegistryError::RootPolicyGenerationMismatch);
-    }
-    persist(control_port, &entry, context, &mutation)?;
-    record.record_revision = record
-        .record_revision
-        .checked_next()
-        .map_err(|_| RegistryError::ContractExhausted)?;
-    record.status = RootStatus::Unbound;
-    record.registry_revision = next_registry_revision;
-    record.last_receipt = receipt.clone();
+            expected_record_revision,
+            receipt: receipt.clone(),
+        },
+        operation_id,
+        mutation_digest,
+        receipt,
+        control_port,
+        context,
+    )?;
     Ok(RootUnbindReceipt {
         root_binding_id,
-        record_revision: record.record_revision,
-        registry_revision: next_registry_revision,
+        record_revision: committed.after.record_revision,
+        registry_revision: committed.after.registry_revision,
         operation_id: operation_id.clone(),
         obligations: vec![
             RootPolicyObligation::InvalidateSources,
             RootPolicyObligation::InvalidateMemberships,
             RootPolicyObligation::InvalidateViews,
         ],
-        receipt: receipt.clone(),
-        replayed: false,
+        receipt: committed.receipt,
+        replayed: committed.replayed,
     })
+}
+
+struct CommittedRoot {
+    before: Option<RootRecord>,
+    after: RootRecord,
+    receipt: ReceiptRef,
+    replayed: bool,
+}
+fn transact_root<C, P>(
+    registry: &mut crate::recovery::SourceRegistry,
+    root_id: search_contracts::RootBindingId,
+    mut change: crate::recovery::RegistryChange,
+    operation_id: &OpaqueId,
+    digest: Blake3Digest32,
+    receipt: &ReceiptRef,
+    control: &mut P,
+    context: &OperationContext<C>,
+) -> Result<CommittedRoot, RegistryError>
+where
+    C: CancellationProbe,
+    P: RegistryControlPort<Cancellation = C>,
+{
+    use crate::recovery::{
+        RegistryBatch, RegistryBatchLookup, RegistryOperation, RegistryStateKey,
+        RegistryStateRecord,
+    };
+    cancelled_before_commit(context)?;
+    // The immutable operation retains its original global revision for exact
+    // replay. Verified absence carries a coherent current owner revision.
+    let (expected, original_receipt) = match control
+        .load_batch(operation_id, context)
+        .map_err(|_| RegistryError::MutationOutcomeUnknown)?
+    {
+        RegistryBatchLookup::Committed(readback) => {
+            let deltas = readback.record().deltas();
+            if deltas.len() != 1 || deltas[0].key() != &RegistryStateKey::Root(root_id) {
+                return Err(RegistryError::OperationConflict);
+            }
+            let RegistryStateRecord::Root(root) = deltas[0].after() else {
+                return Err(RegistryError::OperationConflict);
+            };
+            (
+                readback.record().expected_registry_revision(),
+                root.last_receipt.clone(),
+            )
+        }
+        RegistryBatchLookup::Absent { revision } if revision == registry.revision() => {
+            (revision, receipt.clone())
+        }
+        RegistryBatchLookup::Absent { .. } => return Err(RegistryError::RegistryRevisionConflict),
+    };
+    match &mut change {
+        crate::recovery::RegistryChange::RegisterRoot { receipt, .. }
+        | crate::recovery::RegistryChange::UpdateRootPolicy { receipt, .. }
+        | crate::recovery::RegistryChange::UnbindRoot { receipt, .. } => {
+            *receipt = original_receipt;
+        }
+        _ => return Err(RegistryError::OperationConflict),
+    }
+    let result = crate::recovery::apply_admission_batch(
+        registry,
+        RegistryBatch {
+            expected_registry_revision: expected,
+            operation: RegistryOperation::new(operation_id.clone(), digest),
+            changes: vec![change],
+        },
+        receipt,
+        control,
+        context,
+    )?;
+    if let Some(reason) = result.items.iter().find_map(|item| item.reason) {
+        return Err(reason);
+    }
+    let RegistryBatchLookup::Committed(readback) = control
+        .load_batch(operation_id, context)
+        .map_err(|_| RegistryError::MutationOutcomeUnknown)?
+    else {
+        return Err(RegistryError::MutationOutcomeUnknown);
+    };
+    let record = readback.record();
+    if record.entry().operation_id != *operation_id
+        || record.entry().mutation_digest != digest
+        || record.entry().before_revision != result.before_revision
+        || record.entry().after_revision != result.after_revision
+        || record.entry().receipt != result.receipt
+        || record.deltas().len() != 1
+    {
+        return Err(RegistryError::MutationOutcomeUnknown);
+    }
+    let delta = &record.deltas()[0];
+    if delta.key() != &RegistryStateKey::Root(root_id) {
+        return Err(RegistryError::MutationOutcomeUnknown);
+    }
+    let RegistryStateRecord::Root(after) = delta.after() else {
+        return Err(RegistryError::MutationOutcomeUnknown);
+    };
+    if after.registry_revision != result.after_revision {
+        return Err(RegistryError::MutationOutcomeUnknown);
+    }
+    let before = match delta.before() {
+        None => None,
+        Some(RegistryStateRecord::Root(root)) => Some(root.clone()),
+        Some(_) => return Err(RegistryError::MutationOutcomeUnknown),
+    };
+    Ok(CommittedRoot {
+        before,
+        after: after.clone(),
+        receipt: result.receipt,
+        replayed: result.replayed,
+    })
+}
+
+/// Validates complete root metadata without granting physical custody or current access.
+pub(crate) fn validate_metadata(root: &RootRecord) -> Result<(), RegistryError> {
+    if root.registry_revision == 0 || root.record_revision.get() > root.registry_revision {
+        return Err(RegistryError::SnapshotInvalid);
+    }
+    Ok(())
+}
+pub(crate) fn stage_registration(
+    roots: &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
+    request: &RegisterRootRequest,
+    revision: u64,
+    receipt: &ReceiptRef,
+    limits: RegistryLimits,
+) -> Result<(), RegistryError> {
+    if roots.contains_key(&request.root_binding_id) {
+        return Err(RegistryError::RootAlreadyRegistered);
+    }
+    if roots
+        .values()
+        .any(|root| root.canonical_root_digest == request.canonical_root_digest)
+    {
+        return Err(RegistryError::RootIdentityConflict);
+    }
+    if roots.len() >= limits.max_roots {
+        return Err(RegistryError::CapacityExceeded);
+    }
+    let root = RootRecord {
+        root_binding_id: request.root_binding_id,
+        canonical_root_digest: request.canonical_root_digest,
+        policy_fingerprint: request.policy_fingerprint,
+        policy_revision: request.policy_revision,
+        owner_epoch: request.owner_epoch,
+        record_revision: NonZeroRevision::new(1).map_err(|_| RegistryError::ContractExhausted)?,
+        registry_revision: revision,
+        status: RootStatus::Active,
+        last_receipt: receipt.clone(),
+    };
+    validate_metadata(&root)?;
+    roots.insert(root.root_binding_id, root);
+    Ok(())
+}
+pub(crate) fn stage_policy(
+    roots: &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
+    id: search_contracts::RootBindingId,
+    expected: NonZeroRevision,
+    fingerprint: Blake3Digest32,
+    policy_revision: NonZeroRevision,
+    revision: u64,
+    receipt: &ReceiptRef,
+) -> Result<(), RegistryError> {
+    let root = roots.get_mut(&id).ok_or(RegistryError::RootNotRegistered)?;
+    if root.status != RootStatus::Active || root.record_revision != expected {
+        return Err(RegistryError::RootPolicyGenerationMismatch);
+    }
+    let next = root
+        .record_revision
+        .checked_next()
+        .map_err(|_| RegistryError::ContractExhausted)?;
+    if revision <= root.registry_revision {
+        return Err(RegistryError::RegistryRevisionConflict);
+    }
+    root.record_revision = next;
+    root.policy_fingerprint = fingerprint;
+    root.policy_revision = policy_revision;
+    root.registry_revision = revision;
+    root.last_receipt = receipt.clone();
+    validate_metadata(root)
+}
+pub(crate) fn stage_unbind(
+    roots: &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
+    id: search_contracts::RootBindingId,
+    expected: NonZeroRevision,
+    revision: u64,
+    receipt: &ReceiptRef,
+) -> Result<(), RegistryError> {
+    let root = roots.get_mut(&id).ok_or(RegistryError::RootNotRegistered)?;
+    if root.status != RootStatus::Active || root.record_revision != expected {
+        return Err(RegistryError::RootPolicyGenerationMismatch);
+    }
+    let next = root
+        .record_revision
+        .checked_next()
+        .map_err(|_| RegistryError::ContractExhausted)?;
+    if revision <= root.registry_revision {
+        return Err(RegistryError::RegistryRevisionConflict);
+    }
+    root.record_revision = next;
+    root.registry_revision = revision;
+    root.status = RootStatus::Unbound;
+    root.last_receipt = receipt.clone();
+    validate_metadata(root)
 }
 
 fn obligations_for(
@@ -419,42 +481,6 @@ fn obligations_for(
         obligations.push(RootPolicyObligation::ReconcilePermissive);
     }
     obligations
-}
-
-fn load_existing<C, P>(
-    control_port: &P,
-    operation_id: &OpaqueId,
-    context: &OperationContext<C>,
-) -> Result<Option<RegistryJournalEntry>, RegistryError>
-where
-    C: CancellationProbe,
-    P: RegistryControlPort<Cancellation = C>,
-{
-    control_port
-        .load_entry(operation_id, context)
-        .map_err(|error| {
-            let _ = error;
-            RegistryError::DurabilityRejected
-        })
-}
-
-fn persist<C, P>(
-    control_port: &mut P,
-    entry: &RegistryJournalEntry,
-    context: &OperationContext<C>,
-    mutation: &MutationIdentity,
-) -> Result<(), RegistryError>
-where
-    C: CancellationProbe,
-    P: RegistryControlPort<Cancellation = C>,
-{
-    control_port
-        .persist_entry(entry, context, mutation)
-        .map_err(|error| {
-            let _ = error;
-            RegistryError::DurabilityRejected
-        })?;
-    Ok(())
 }
 
 /// Returns whether a port failure kind signals operation conflict.

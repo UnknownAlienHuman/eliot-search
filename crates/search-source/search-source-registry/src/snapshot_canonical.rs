@@ -149,6 +149,14 @@ fn source(value: &RegisteredSource) -> Result<V, ContractError> {
             })?,
         ),
         ("source_revision", V::U64(value.source_revision().get())),
+        (
+            "original_admission",
+            value
+                .original_admission()
+                .map(|envelope| bytes(envelope.encoded()))
+                .transpose()?
+                .unwrap_or(V::Null),
+        ),
         ("registry_revision", V::U64(value.registry_revision())),
         ("receipt", text(value.last_receipt().as_str())?),
     ])
@@ -264,7 +272,7 @@ pub(super) fn digest(snapshot: &RegistrySnapshot) -> Result<RegistrySnapshotDige
     let header = object(vec![
         (
             "kind",
-            text("registry-snapshot-v3").map_err(|_| RegistryError::SnapshotInvalid)?,
+            text("registry-snapshot-v4").map_err(|_| RegistryError::SnapshotInvalid)?,
         ),
         ("revision", V::U64(snapshot.revision)),
         (
@@ -366,7 +374,7 @@ pub(super) fn digest(snapshot: &RegistrySnapshot) -> Result<RegistrySnapshotDige
         .chain(pointers)
         .chain(generations)
         .chain(ownerships);
-    let domain = CanonicalDigestDomain::parse("eliot/cbor/registry-snapshot/v3")
+    let domain = CanonicalDigestDomain::parse("eliot/cbor/registry-snapshot/v4")
         .map_err(|_| RegistryError::SnapshotInvalid)?;
     let value: Blake3Digest32 = blake3_canonical_array(
         &domain,

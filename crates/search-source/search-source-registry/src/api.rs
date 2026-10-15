@@ -43,8 +43,8 @@ pub use crate::root::{
     RootRegistrationReceipt, RootStatus, RootUnbindReceipt,
 };
 pub use crate::snapshot::{
-    RegistrySnapshot, RegistrySnapshotDigest, ValidatedRegistrySnapshot, snapshot_digest,
-    validate_registry_snapshot,
+    OriginalAdmissionAvailability, RegistrySnapshot, RegistrySnapshotDigest,
+    ValidatedRegistrySnapshot, snapshot_digest, validate_registry_snapshot,
 };
 pub use crate::source::{
     AdmissionBindingProof, AdmittedSourceReceipt, RegisteredSource, SourceAdmissionUpdateReceipt,
@@ -125,28 +125,15 @@ where
     C: CancellationProbe,
     P: RegistryControlPort<Cancellation = C>,
 {
-    cancelled_before_commit(context)?;
-    let expected = registry.revision();
-    let next = expected
-        .checked_add(1)
-        .ok_or(RegistryError::RegistryRevisionOverflow)?;
-    let limits = registry.limits();
-    let receipt_out = crate::root::register_root(
-        registry.roots_mut(),
-        expected,
-        next,
+    crate::root::register_root(
+        registry,
         request,
         operation_id,
         mutation_digest,
         receipt,
-        limits,
         control_port,
         context,
-    )?;
-    if !receipt_out.replayed {
-        registry.set_revision(next);
-    }
-    Ok(receipt_out)
+    )
 }
 
 /// Commits a root policy fence durably through the control port.
@@ -167,17 +154,10 @@ where
     C: CancellationProbe,
     P: RegistryControlPort<Cancellation = C>,
 {
-    cancelled_before_commit(context)?;
-    let expected = registry.revision();
-    let next = expected
-        .checked_add(1)
-        .ok_or(RegistryError::RegistryRevisionOverflow)?;
-    let out = crate::root::update_root_policy(
-        registry.roots_mut(),
+    crate::root::update_root_policy(
+        registry,
         root_binding_id,
         expected_record_revision,
-        expected,
-        next,
         new_policy_fingerprint,
         new_policy_revision,
         operation_id,
@@ -185,11 +165,7 @@ where
         receipt,
         control_port,
         context,
-    )?;
-    if !out.replayed {
-        registry.set_revision(next);
-    }
-    Ok(out)
+    )
 }
 
 /// Fences a root durably through the control port.
@@ -207,27 +183,16 @@ where
     C: CancellationProbe,
     P: RegistryControlPort<Cancellation = C>,
 {
-    cancelled_before_commit(context)?;
-    let expected = registry.revision();
-    let next = expected
-        .checked_add(1)
-        .ok_or(RegistryError::RegistryRevisionOverflow)?;
-    let out = crate::root::unbind_root(
-        registry.roots_mut(),
+    crate::root::unbind_root(
+        registry,
         root_binding_id,
         expected_record_revision,
-        expected,
-        next,
         operation_id,
         mutation_digest,
         receipt,
         control_port,
         context,
-    )?;
-    if !out.replayed {
-        registry.set_revision(next);
-    }
-    Ok(out)
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -760,7 +725,5 @@ where
     C: CancellationProbe,
     P: RegistryControlPort<Cancellation = C>,
 {
-    let snapshot = registry_snapshot(registry);
-    let validated = validate_registry_snapshot(&snapshot, registry.limits())?;
-    recovery_apply_batch(registry, batch, &validated, receipt, control_port, context)
+    recovery_apply_batch(registry, batch, receipt, control_port, context)
 }

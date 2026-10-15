@@ -8,6 +8,11 @@ observations gathered by the owning platform/source boundary.
 
 ## Global rules
 
+`original_envelope` retains bounded original v1 policy/observation/receipt input
+for exact historical restoration through its owning evaluator and codec.
+Restoration proves that original input, not current policy, native read access
+or serving. It is not a fallback from the permanent v2 admission surface.
+
 The permanent v2 surface is `evaluation_v2::evaluate_v2(policy, observation, scratch, limits, probe)`
 returning immutable `AdmissionDecisionV2`. See [EVALUATION_V2.md](EVALUATION_V2.md) for exact finite
 ceilings, deny/unsupported/review/explicit-Allow resolution, whole-call locator refusal, error cleanup
