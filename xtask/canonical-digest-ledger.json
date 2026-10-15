@@ -59087,7 +59087,7 @@
       "count": 1,
       "path": "crates/search-source/search-revision-store/src/immutable_object/context/tests.rs",
       "signal": "unresolved-prefix-review",
-      "source_sha256": "9b6fad65faeef6e1f5f6b455f463600176f7421e49590b028067272d581b5f40",
+      "source_sha256": "2860e1bfffaabe3d8218161983ef1fcfa162d77e1852b7c44a10eecce8d0ce6d",
       "symbol": "impl[ShortRead]::read",
       "test": false,
       "classification": "non-digest-surface",
@@ -65041,7 +65041,7 @@
       "signal": "digest-prefix-review",
       "count": 1,
       "test": false,
-      "source_sha256": "cd9b6ac890626f12cecca98741bdcef4acc2557344bcb9f770b84dd3676383f3",
+      "source_sha256": "2e67e0b6dcb263897f977b7a207396de195165a9d943e2544033fa342a36d564",
       "classification": "opaque-value-use",
       "owner_issue": 321,
       "phase": "accepted",
@@ -65053,7 +65053,7 @@
       "signal": "named-compute-review",
       "count": 1,
       "test": false,
-      "source_sha256": "cd9b6ac890626f12cecca98741bdcef4acc2557344bcb9f770b84dd3676383f3",
+      "source_sha256": "2e67e0b6dcb263897f977b7a207396de195165a9d943e2544033fa342a36d564",
       "classification": "opaque-value-use",
       "owner_issue": 321,
       "phase": "accepted",
@@ -65065,7 +65065,7 @@
       "signal": "digest-import-review",
       "count": 1,
       "test": false,
-      "source_sha256": "cd9b6ac890626f12cecca98741bdcef4acc2557344bcb9f770b84dd3676383f3",
+      "source_sha256": "2e67e0b6dcb263897f977b7a207396de195165a9d943e2544033fa342a36d564",
       "classification": "opaque-value-use",
       "owner_issue": 321,
       "phase": "accepted",
@@ -67278,6 +67278,30 @@
       "owner_issue": 555,
       "phase": "owner-migration-preserve-bytes",
       "reason": "Owned real-file fixtures compare the complete v1 transcript across read chunking, short reads and exact original-request budget, and reject size drift, invalid scratch or first refusal; no production format/profile change."
+    },
+    {
+      "path": "bins/eliot-searchd/src/control_migration_context.rs",
+      "symbol": "object_progress_tests::object_progress_native_original_cancel_between_abis_is_sticky",
+      "signal": "named-compute-review",
+      "count": 1,
+      "test": true,
+      "source_sha256": "3b0679ca39271e146e1684f7fc4c1faebc3f9aca50b946e48f6481f67fbef418",
+      "classification": "test-vector",
+      "owner_issue": 268,
+      "phase": "accepted",
+      "reason": "Issue561 actual Native context fixture uses the existing owner canonical digest for request setup only; it verifies cancellation/pending first refusal, not a production digest algorithm or product qualification."
+    },
+    {
+      "path": "bins/eliot-searchd/src/control_migration_context.rs",
+      "symbol": "object_progress_tests::object_progress_native_pending_after_abi_returns_no_body_and_stays_terminal",
+      "signal": "named-compute-review",
+      "count": 1,
+      "test": true,
+      "source_sha256": "3b0679ca39271e146e1684f7fc4c1faebc3f9aca50b946e48f6481f67fbef418",
+      "classification": "test-vector",
+      "owner_issue": 268,
+      "phase": "accepted",
+      "reason": "Issue561 actual Native context fixture uses the existing owner canonical digest for request setup only; it verifies cancellation/pending first refusal, not a production digest algorithm or product qualification."
     }
   ]
 }

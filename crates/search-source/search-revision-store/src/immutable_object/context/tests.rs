@@ -65,6 +65,91 @@ impl LegacyRevisionObjectContext for Context {
 struct TestPlatform {
     fail_sync: bool,
 }
+
+#[test]
+fn cpu_progress_defaults_to_full_checks_and_never_replaces_io_guards() {
+    let platform = TestPlatform { fail_sync: false };
+    let mut default = Context::new();
+    {
+        let mut kernel = Kernel::new(&platform, &mut default, true);
+        assert!(
+            kernel
+                .compare(b"same", b"same")
+                .unwrap_or_else(|_| panic!("compare"))
+        );
+    }
+    assert_eq!(
+        default.polls, 3,
+        "default keeps all original CPU checkpoints"
+    );
+    assert_eq!(default.works, [LegacyRevisionObjectWork::Compare(4)]);
+
+    struct Progress {
+        original: Context,
+        full: usize,
+        pure: usize,
+    }
+    impl LegacyRevisionObjectContext for Progress {
+        type Error = &'static str;
+        fn checkpoint(&mut self) -> Result<(), Self::Error> {
+            self.full += 1;
+            self.original.checkpoint()
+        }
+        fn progress(&mut self) -> Result<(), Self::Error> {
+            self.pure += 1;
+            self.original.checkpoint()
+        }
+        fn charge(&mut self, work: LegacyRevisionObjectWork) -> Result<(), Self::Error> {
+            self.original.charge(work)
+        }
+        fn effect_attempted(&mut self) {
+            self.original.effect_attempted();
+        }
+    }
+    let mut context = Progress {
+        original: Context::new(),
+        full: 0,
+        pure: 0,
+    };
+    {
+        let mut kernel = Kernel::new(&platform, &mut context, true);
+        assert!(
+            kernel
+                .compare(b"same", b"same")
+                .unwrap_or_else(|_| panic!("compare"))
+        );
+        let result = kernel.read_data(&mut io::Cursor::new(b"data"), 4);
+        let bytes = kernel
+            .finish(result)
+            .expect("read plus full terminal fence");
+        assert_eq!(&*bytes, b"data");
+    }
+    assert_eq!((context.pure, context.full), (9, 7));
+    assert_eq!(
+        context.original.works,
+        [
+            LegacyRevisionObjectWork::Compare(4),
+            LegacyRevisionObjectWork::Compare(5),
+            LegacyRevisionObjectWork::Allocate(5),
+            LegacyRevisionObjectWork::Read(5),
+            LegacyRevisionObjectWork::Read(1)
+        ]
+    );
+    assert_eq!(context.original.bytes, 1024 * 1024 - 20);
+    assert!(!context.original.effect);
+    context.original.cancelled.store(true, Ordering::Release);
+    let mut kernel = Kernel::new(&platform, &mut context, true);
+    assert!(matches!(
+        kernel.compare(b"same", b"same"),
+        Err(Failure::Context("PRIVATE_CONTEXT_CANARY"))
+    ));
+    drop(kernel);
+    assert_eq!(
+        context.original.works.len(),
+        5,
+        "refusal precedes CPU work admission"
+    );
+}
 impl Platform for TestPlatform {
     type Identity = u64;
     type Error = io::Error;
@@ -95,8 +180,8 @@ impl Platform for TestPlatform {
         }
     }
 }
-fn platform_attempt<T>(
-    ctx: &mut Context,
+fn platform_attempt<C: LegacyRevisionObjectContext<Error = &'static str>, T>(
+    ctx: &mut C,
     work: LegacyRevisionObjectWork,
     call: impl FnOnce() -> io::Result<T>,
 ) -> Result<T, LegacyRevisionObjectPlatformFailure<io::Error, &'static str>> {
@@ -114,10 +199,12 @@ fn platform_attempt<T>(
         (Ok(value), Ok(())) => Ok(value),
     }
 }
-impl ContextualLegacyRevisionObjectPlatform<Context> for TestPlatform {
+impl<C: LegacyRevisionObjectContext<Error = &'static str>> ContextualLegacyRevisionObjectPlatform<C>
+    for TestPlatform
+{
     fn validate_directory_contextual(
         &self,
-        ctx: &mut Context,
+        ctx: &mut C,
         path: &Path,
     ) -> Result<(), LegacyRevisionObjectPlatformFailure<io::Error, &'static str>> {
         platform_attempt(ctx, LegacyRevisionObjectWork::Observe, || {
@@ -126,7 +213,7 @@ impl ContextualLegacyRevisionObjectPlatform<Context> for TestPlatform {
     }
     fn verify_locator_contextual(
         &self,
-        ctx: &mut Context,
+        ctx: &mut C,
         file: &File,
         path: &Path,
     ) -> Result<(), LegacyRevisionObjectPlatformFailure<io::Error, &'static str>> {
@@ -136,7 +223,7 @@ impl ContextualLegacyRevisionObjectPlatform<Context> for TestPlatform {
     }
     fn identity_contextual(
         &self,
-        ctx: &mut Context,
+        ctx: &mut C,
         file: &File,
     ) -> Result<u64, LegacyRevisionObjectPlatformFailure<io::Error, &'static str>> {
         platform_attempt(ctx, LegacyRevisionObjectWork::Observe, || {
@@ -145,7 +232,7 @@ impl ContextualLegacyRevisionObjectPlatform<Context> for TestPlatform {
     }
     fn sync_directory_contextual(
         &self,
-        ctx: &mut Context,
+        ctx: &mut C,
         path: &Path,
     ) -> Result<(), LegacyRevisionObjectPlatformFailure<io::Error, &'static str>> {
         platform_attempt(ctx, LegacyRevisionObjectWork::Effect, || {
@@ -270,7 +357,7 @@ fn refusal_after_real_creation_or_publication_preserves_artifacts() {
     let platform = TestPlatform { fail_sync: false };
     let baseline_shard = fixture.0.join("baseline");
     let mut baseline = Context::new();
-    publish_legacy_revision_object_with_context(
+    let receipt = publish_legacy_revision_object_with_context(
         &platform,
         &mut baseline,
         &baseline_shard,
@@ -280,6 +367,7 @@ fn refusal_after_real_creation_or_publication_preserves_artifacts() {
         8,
     )
     .expect("baseline");
+    assert!(receipt.staging_cleanup_deferred());
     let mut witnessed_stage = false;
     let mut witnessed_final = false;
     for poll in 1..=baseline.polls {
@@ -389,7 +477,10 @@ impl Write for ShortWrite {
 #[test]
 fn short_io_consumes_requested_bytes_across_the_same_allowance() {
     let platform = TestPlatform { fail_sync: false };
-    for ceiling in [39, 38] {
+    // Both the guarded buffer and its mandatory wipe are admitted before reads.
+    let exact = (4 + 4 + 3 + 2 + 1) + 2 * 5 + (5 + 5 + 4 + 3 + 2 + 1);
+    assert_eq!(exact, 44);
+    for ceiling in [exact, exact - 1] {
         let mut context = Context::new();
         context.bytes = ceiling;
         let mut writer = ShortWrite {
@@ -421,8 +512,8 @@ fn short_io_consumes_requested_bytes_across_the_same_allowance() {
             })
             .collect::<Vec<_>>();
         assert_eq!(writes, [4, 4, 3, 2, 1]);
-        if ceiling == 39 {
-            assert_eq!(result.expect("exact allowance"), b"1234");
+        if ceiling == exact {
+            assert_eq!(&*result.expect("exact allowance"), b"1234");
             assert_eq!(context.bytes, 0);
             assert_eq!(reader.calls, 6);
         } else {

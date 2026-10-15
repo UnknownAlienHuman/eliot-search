@@ -353,20 +353,21 @@ impl<C: LegacyRevisionObjectContext> ContextualLegacyRevisionObjectPlatform<C>
     fn identity_contextual(
         &self, context: &mut C, file: &File,
     ) -> Result<Self::Identity, PlatformFailure<String, C::Error>> {
-        let metadata = platform_step(context, Work::Observe, || file.metadata()
-            .map_err(|_| "DIRECT_REVISION_OBJECT_CHANGED".to_owned()))?;
-        // native_file::observe performs three fixed same-handle Win32 calls.
-        // Reserve all three before entering that bounded, non-preemptible helper.
         #[cfg(windows)]
-        for _ in 0..3 { context.charge(Work::Observe).map_err(PlatformFailure::Context)?; }
-        context.checkpoint().map_err(PlatformFailure::Context)?;
-        let result = native_identity_from_metadata(file, &metadata);
-        let checkpoint = context.checkpoint();
-        match (result, checkpoint) {
-            (Ok(value), Ok(())) => Ok(value),
-            (Err(platform), Ok(())) => Err(PlatformFailure::Platform(platform)),
-            (Ok(_), Err(context)) => Err(PlatformFailure::Context(context)),
-            (Err(platform), Err(context)) => Err(PlatformFailure::AfterPlatform { platform, context }),
+        { held_native_identity(context, file) }
+        #[cfg(not(windows))]
+        {
+            let metadata = platform_step(context, Work::Observe, || file.metadata()
+                .map_err(|_| "DIRECT_REVISION_OBJECT_CHANGED".to_owned()))?;
+            context.checkpoint().map_err(PlatformFailure::Context)?;
+            let result = native_identity_from_metadata(file, &metadata);
+            let checkpoint = context.checkpoint();
+            match (result, checkpoint) {
+                (Ok(value), Ok(())) => Ok(value),
+                (Err(platform), Ok(())) => Err(PlatformFailure::Platform(platform)),
+                (Ok(_), Err(context)) => Err(PlatformFailure::Context(context)),
+                (Err(platform), Err(context)) => Err(PlatformFailure::AfterPlatform { platform, context }),
+            }
         }
     }
 
@@ -376,6 +377,103 @@ impl<C: LegacyRevisionObjectContext> ContextualLegacyRevisionObjectPlatform<C>
         context.checkpoint().map_err(PlatformFailure::Context)?;
         // This adapter is a read consumer. Durability is never dispatched.
         Err(PlatformFailure::Platform("DIRECT_MIGRATION_SOURCE_WRITE_FORBIDDEN".to_owned()))
+    }
+}
+
+#[cfg(windows)]
+fn held_native_identity<C: LegacyRevisionObjectContext>(
+    context: &mut C, file: &File,
+) -> Result<(u64, u64), PlatformFailure<String, C::Error>> {
+    use std::cell::{Cell, RefCell};
+    use eliot_searchd::native_file::{ObservationError, observe_with_check};
+
+    context.checkpoint().map_err(PlatformFailure::Context)?;
+    let original = RefCell::new(context);
+    let first = RefCell::new(None);
+    let refused_dispatch = Cell::new(false);
+    let observed = observe_with_check(file, &|before| {
+        if before && first.borrow().is_some() {
+            refused_dispatch.set(true);
+            return Err(ObservationError::ObservationFailed);
+        }
+        let mut context = original.borrow_mut();
+        let result = if before { context.held_observer_dispatch() } else { context.progress() };
+        if let Err(error) = result {
+            first.borrow_mut().get_or_insert(error);
+            if before {
+                refused_dispatch.set(true);
+                return Err(ObservationError::ObservationFailed);
+            }
+            // Let the completed ABI's result be classified, but admit no next
+            // ABI. This preserves a platform failure paired with its post-poll
+            // refusal; the wrapper below never releases a snapshot on refusal.
+        }
+        Ok(())
+    });
+    let checkpoint = original.borrow_mut().checkpoint();
+    if let Some(context) = first.into_inner() {
+        return Err(if observed.is_err() && !refused_dispatch.get() {
+            PlatformFailure::AfterPlatform { platform: "DIRECT_REVISION_OBJECT_CHANGED".to_owned(), context }
+        } else { PlatformFailure::Context(context) });
+    }
+    // The same native snapshot proves disk/NTFS, no reparse and non-directory,
+    // exactly the regular-file eligibility previously checked by file.metadata.
+    let result = observed.ok().filter(|value| value.attributes & 0x10 == 0)
+        .map(|value| (u64::from(value.volume_serial), value.file_index))
+        .ok_or_else(|| "DIRECT_REVISION_OBJECT_CHANGED".to_owned());
+    match (result, checkpoint) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(platform), Ok(())) => Err(PlatformFailure::Platform(platform)),
+        (Ok(_), Err(context)) => Err(PlatformFailure::Context(context)),
+        (Err(platform), Err(context)) => Err(PlatformFailure::AfterPlatform { platform, context }),
+    }
+}
+
+#[cfg(all(test, windows))]
+mod held_identity_tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct DefaultContext { checkpoints: usize, observations: usize, refuse_at: Option<usize> }
+    impl LegacyRevisionObjectContext for DefaultContext {
+        type Error = &'static str;
+        fn checkpoint(&mut self) -> Result<(), Self::Error> {
+            self.checkpoints += 1;
+            if self.refuse_at.is_some_and(|at| self.checkpoints >= at) {
+                Err("original-post-observer-refusal")
+            } else { Ok(()) }
+        }
+        fn charge(&mut self, work: Work) -> Result<(), Self::Error> {
+            assert_eq!(work, Work::Observe);
+            self.observations += 1;
+            Ok(())
+        }
+        fn effect_attempted(&mut self) { panic!("read-only observer"); }
+    }
+
+    #[test]
+    fn held_identity_default_retains_guards_and_exact_regular_file_identity() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let file = File::open(std::env::current_exe().unwrap()).unwrap();
+        let mut context = DefaultContext::default();
+        let actual = held_native_identity(&mut context, &file).unwrap_or_else(|_| panic!("NTFS file"));
+        assert_eq!(actual, native_identity(&file).unwrap());
+        assert_eq!((context.observations, context.checkpoints), (3, 8));
+        let directory = fs::OpenOptions::new().read(true).custom_flags(0x0220_0000)
+            .open(std::env::temp_dir()).unwrap();
+        let mut context = DefaultContext::default();
+        assert!(matches!(held_native_identity(&mut context, &directory), Err(PlatformFailure::Platform(_))));
+        assert_eq!(context.observations, 3, "native attributes refuse a directory without metadata duplication");
+    }
+
+    #[test]
+    fn held_identity_preserves_platform_failure_paired_with_original_post_refusal() {
+        let file = File::open("NUL").unwrap();
+        let mut context = DefaultContext { refuse_at: Some(3), ..DefaultContext::default() };
+        assert!(matches!(held_native_identity(&mut context, &file),
+            Err(PlatformFailure::AfterPlatform { platform, context })
+                if platform == "DIRECT_REVISION_OBJECT_CHANGED" && context == "original-post-observer-refusal"));
+        assert_eq!(context.observations, 1, "no later ABI after the first post-poll refusal");
     }
 }
 
