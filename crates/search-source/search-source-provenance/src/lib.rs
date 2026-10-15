@@ -24,3 +24,5 @@ pub use policy::{MAX_RETAINED_POLICY_BYTES, RETAINED_POLICY_PROFILE_V2, Retained
 
 #[cfg(test)]
 mod admission_tests;
+#[cfg(test)]
+mod storage_proof;
