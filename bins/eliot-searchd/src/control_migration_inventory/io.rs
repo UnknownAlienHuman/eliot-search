@@ -701,6 +701,37 @@ pub(super) fn read(
     path: &Path,
     maximum: usize,
 ) -> Result<Result<Zeroizing<Vec<u8>>, Status>, String> {
+    read_with(source, path, maximum, |bytes, _| Ok(bytes))
+}
+
+/// Pass-local correlation of two qualified reads, never cached access authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct ReadProof {
+    pub(super) native: eliot_searchd::native_file::Observation,
+    pub(super) raw_digest: [u8; 32],
+    pub(super) bytes: u64,
+}
+
+pub(super) struct DetailedRead {
+    pub(super) bytes: Zeroizing<Vec<u8>>,
+    pub(super) proof: ReadProof,
+}
+
+pub(super) fn read_detailed(
+    source: &MigrationSource<'_, '_, '_>, path: &Path, maximum: usize,
+) -> Result<Result<DetailedRead, Status>, String> {
+    read_with(source, path, maximum, |bytes, native| {
+        let proof = ReadProof {
+            native, raw_digest: fingerprint(source, &bytes)?, bytes: bytes.len() as u64,
+        };
+        Ok(DetailedRead { bytes, proof })
+    })
+}
+
+fn read_with<T>(
+    source: &MigrationSource<'_, '_, '_>, path: &Path, maximum: usize,
+    finish: impl FnOnce(Zeroizing<Vec<u8>>, eliot_searchd::native_file::Observation) -> Result<T, String>,
+) -> Result<Result<T, Status>, String> {
     let _pins = match pin_parents(source, path, false)? {
         Ok(pins) => pins,
         Err(status) => return Ok(Err(status)),
@@ -794,7 +825,7 @@ pub(super) fn read(
     if !matches!(current, Ok(value) if value == identity) {
         return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
     }
-    Ok(Ok(bytes))
+    Ok(Ok(finish(bytes, identity)?))
 }
 
 fn identity(file: &File) -> std::io::Result<eliot_searchd::native_file::Observation> {

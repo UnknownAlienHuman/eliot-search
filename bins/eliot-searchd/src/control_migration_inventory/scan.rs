@@ -6,12 +6,10 @@ use search_control_redb::migration::{LegacyInventoryLimits, LegacyInventoryProfi
 use search_materializer::api::{
     LEGACY_PREPARATION_BINDING_BYTES, LEGACY_PREPARATION_DIRECTORY,
     LEGACY_PREPARATION_MAX_OBJECT_BYTES, LEGACY_PREPARATION_REFERENCE_BYTES,
-    LegacyDirectPreparationBinding, LegacyDirectRepresentationDigest,
+    LegacyPreparationReference, LegacyDirectRepresentationDigest,
     LegacyPreparationInventoryTree as PrepTree, LegacyPreparationProtection,
     LegacyPreparationStoreDigest, classify_legacy_preparation_inventory_name,
-    decode_legacy_preparation_reference, derive_legacy_preparation_lookup_key,
-    derive_legacy_preparation_object_id, encode_legacy_preparation_binding,
-    legacy_preparation_object_relative_locator, legacy_preparation_reference_relative_locator,
+    decode_legacy_preparation_reference,
     verify_legacy_preparation_manifest, verify_legacy_preparation_payload,
 };
 use search_revision_store::{
@@ -574,148 +572,201 @@ fn preparation(
     family: Family,
     residue_only: bool,
 ) -> Result<(), String> {
+    if residue_only {
+        let view = stream.preparation_links.as_ref().ok_or_else(changed)?;
+        let view = std::sync::Arc::clone(view);
+        for row in view.residue()? { preparation_emit(stream, Family::Residue, *row)?; }
+        return Ok(());
+    }
+    if family != Family::Preparation || stream.preparation_links.is_some() { return Err(changed()); }
+    let source = stream.source;
+    let input = source.native().ok_or_else(changed)?;
+    preparation_pass(stream, root, input.protector.backend_name(),
+        &mut |binding, key, object, reference, encoded|
+            preparation_semantic(source, input, binding, key, object, reference, encoded),
+        #[cfg(test)]
+        &mut || Ok(()))
+}
+
+fn preparation_pass(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, backend: &str,
+    semantic_read: super::preparation_links::SemanticRead<'_>,
+    #[cfg(test)] before_physical: &mut dyn FnMut() -> Result<(), String>,
+) -> Result<(), String> {
+    if stream.preparation_links.is_some() { return Err(changed()); }
+    let source = stream.source;
+    source.charge(Work::Allocate(std::mem::size_of::<super::preparation_links::View>()
+        + 2 * std::mem::size_of::<usize>()))?;
+    let mut view = super::preparation_links::observe_links(source, root, backend, semantic_read)?;
+    #[cfg(test)]
+    before_physical()?;
+    source.checkpoint()?;
+    preparation_physical(stream, root, &mut view)?;
+    view.finish_physical(source)?;
+    for row in view.semantic()? { preparation_emit(stream, Family::Preparation, *row)?; }
+    stream.item(Family::Preparation, Status::Present, 21,
+        [crate::direct_preparation::profile_digest(), ZERO, ZERO], [1, 1, 0])?;
+    stream.preparation_links = Some(std::sync::Arc::new(view));
+    Ok(())
+}
+
+fn preparation_item(stream: &mut Stream<'_, '_, '_, '_>,
+    view: &mut super::preparation_links::View, row: super::preparation_links::Row, residue: bool,
+) -> Result<(), String> {
+    if residue { view.retain_residue(stream.source, row)?; }
+    preparation_emit(stream, Family::Preparation, row)
+}
+
+fn preparation_emit(stream: &mut Stream<'_, '_, '_, '_>, family: Family,
+    row: super::preparation_links::Row,
+) -> Result<(), String> {
+    stream.item(family, row.status, row.kind, row.refs, row.counts)
+}
+
+fn preparation_semantic(source: &super::MigrationSource<'_, '_, '_>,
+    input: &NativeMigrationInput<'_, '_, '_>, binding: &[u8; LEGACY_PREPARATION_BINDING_BYTES],
+    key: [u8; 32], object: [u8; 32], reference: LegacyPreparationReference, encoded: io::DetailedRead,
+) -> Result<super::preparation_links::Row, String> {
+    use super::preparation_links::Row;
+    let refs = [key, object, *reference.manifest_digest()];
+    let decoded = match reference.protection() {
+        LegacyPreparationProtection::Plaintext => encoded.bytes,
+        LegacyPreparationProtection::Protected => {
+            #[cfg(windows)]
+            let decoded = input.protector.unprotect_with_context(input.context, &encoded.bytes,
+                &sha256::hex(&object), &sha256::hex(reference.manifest_digest()), reference.manifest_bytes());
+            #[cfg(not(windows))]
+            let decoded: Result<zeroize::Zeroizing<Vec<u8>>, String> = Err(changed());
+            source.checkpoint()?;
+            let Ok(decoded) = decoded else {
+                return Ok(Row { status: Status::Unreadable, kind: 29,
+                    refs, counts: [reference.manifest_bytes(), 1, 0] });
+            };
+            decoded
+        }
+    };
+    preparation_decoded(source, binding, key, object, reference, &decoded)
+}
+
+fn preparation_decoded(source: &super::MigrationSource<'_, '_, '_>,
+    binding: &[u8; LEGACY_PREPARATION_BINDING_BYTES], key: [u8; 32], object: [u8; 32],
+    reference: LegacyPreparationReference, decoded: &[u8],
+) -> Result<super::preparation_links::Row, String> {
+    use super::preparation_links::Row;
+    let refs = [key, object, *reference.manifest_digest()];
+    source.charge(Work::Compare(decoded.len().saturating_mul(2)))?;
+    let valid = verify_legacy_preparation_payload::<PreparationRepresentationDigest>(
+        decoded, reference.manifest_digest(), reference.manifest_bytes()).is_ok()
+        && verify_legacy_preparation_manifest::<PreparationRepresentationDigest>(decoded, binding,
+            crate::direct_preparation::CANONICAL_MATERIALIZER_REVISION,
+            crate::direct_preparation::CANONICAL_UNITIZER_REVISION).is_ok();
+    source.checkpoint()?;
+    Ok(Row { status: if valid { Status::Present } else { Status::Corrupt }, kind: 29,
+        refs, counts: [reference.manifest_bytes(), u64::from(reference.protection().tag()), 0] })
+}
+
+/// Component entry over the production pass and materializer verifier. Backend
+/// must be the real persisted profile; protected bytes cannot acquire a fake
+/// DPAPI success here. The hook runs exactly after preliminary qualified reads.
+#[cfg(test)]
+fn preparation_plaintext(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, backend: &str,
+    before_physical: &mut dyn FnMut() -> Result<(), String>,
+) -> Result<(), String> {
+    let source = stream.source;
+    preparation_pass(stream, root, backend, &mut |binding, key, object, reference, encoded| {
+        if reference.protection() != LegacyPreparationProtection::Plaintext { return Err(changed()); }
+        preparation_decoded(source, binding, key, object, reference, &encoded.bytes)
+    }, before_physical)
+}
+
+fn preparation_directory(stream: &mut Stream<'_, '_, '_, '_>,
+    view: &mut super::preparation_links::View, path: &Path, outcome: Option<Status>,
+) -> Result<(), String> {
+    preparation_item(stream, view, super::preparation_links::Row {
+        status: outcome.unwrap_or(Status::Present), kind: if outcome.is_some() { 16 } else { 36 },
+        refs: [io::locator(stream.source, path)?, ZERO, ZERO], counts: [0; 3],
+    }, true)
+}
+
+/// One complete physical denominator supplies both ordered families. Only
+/// bounded encoder arguments survive to Residue; every read remains qualified.
+fn preparation_physical(stream: &mut Stream<'_, '_, '_, '_>, root: &Path,
+    view: &mut super::preparation_links::View,
+) -> Result<(), String> {
+    use super::preparation_links::Row;
     let source = stream.source;
     let base = root.join(LEGACY_PREPARATION_DIRECTORY);
-    // Both families share one pass-local metadata view. A second complete
-    // stream has its own Stream and independently rebuilds the view.
-    let linkage = if let Some(view) = &stream.preparation_links {
-        std::sync::Arc::clone(view)
-    } else {
-            source.charge(Work::Allocate(std::mem::size_of::<super::preparation_links::View>()
-                + 2 * std::mem::size_of::<usize>()))?;
-            let view = std::sync::Arc::new(super::preparation_links::view(source, root)?);
-            stream.preparation_links = Some(std::sync::Arc::clone(&view));
-            view
-    };
     for tree in [PrepTree::References, PrepTree::Objects] {
         let directory = base.join(tree.directory_name());
         let outcome = io::visit(source, &directory, |shard| {
             let path = directory.join(&shard.value);
-            if !shard
-                .value
-                .to_str()
-                .is_some_and(is_legacy_revision_inventory_shard)
-            {
-                return stream.item(
-                    family,
-                    Status::Unsupported,
-                    12,
-                    [io::locator(source, &path)?, ZERO, ZERO],
-                    [0; 3],
-                );
+            if !shard.value.to_str().is_some_and(is_legacy_revision_inventory_shard) {
+                return preparation_item(stream, view, Row { status: Status::Unsupported, kind: 12,
+                    refs: [io::locator(source, &path)?, ZERO, ZERO], counts: [0; 3] }, true);
             }
             let outcome = io::visit(source, &path, |name| {
                 let subject = io::child_locator(source, &path, &name.value)?;
-                let classified = name
-                    .value
-                    .to_str()
+                let classified = name.value.to_str()
                     .and_then(|name| classify_legacy_preparation_inventory_name(tree, name));
                 let status = match classified {
                     None => Status::Unsupported,
                     Some(value) if value.kind().tag() == "uncommitted_temporary_object" => Status::Orphan,
-                    Some(value) if super::preparation_links::is_linked(source, &linkage, tree, &digest(value.id())?, &name.value)? => Status::Present,
+                    Some(value) if super::preparation_links::is_linked(source, view, tree,
+                        &digest(value.id())?, &name.value)? => Status::Present,
                     Some(_) => Status::Gap,
                 };
                 if let Some(value) = classified
-                    && !shard
-                        .value
-                        .to_str()
-                        .is_some_and(|shard| value.id().starts_with(shard))
+                    && !shard.value.to_str().is_some_and(|shard| value.id().starts_with(shard))
                 {
-                    return stream.item(
-                        family,
-                        Status::Corrupt,
-                        12,
-                        [subject, ZERO, digest(value.id())?],
-                        [0; 3],
-                    );
+                    view.entry(false)?;
+                    return preparation_item(stream, view, Row { status: Status::Corrupt, kind: 12,
+                        refs: [subject, ZERO, digest(value.id())?], counts: [0; 3] }, true);
                 }
-                match io::read(
-                    source,
-                    &path.join(&name.value),
-                    LEGACY_REVISION_MAX_OBJECT_BYTES,
-                )? {
-                    Ok(bytes) => {
-                        if residue_only && status == Status::Present { return Ok(()); }
-                        let evidence = io::fingerprint(source, &bytes)?;
+                let read = io::read_detailed(source, &path.join(&name.value), LEGACY_REVISION_MAX_OBJECT_BYTES)?;
+                view.observe(source, tree, subject,
+                    read.as_ref().map(|read| read.proof).map_err(|status| *status))?;
+                let positive = status == Status::Present && read.is_ok();
+                view.entry(positive)?;
+                let rows = match read {
+                    Ok(read) => {
+                        let evidence = read.proof.raw_digest;
+                        let bytes = &read.bytes;
                         if tree == PrepTree::References && matches!(status, Status::Present | Status::Gap) {
-                            let key = classified
-                                .map(|value| digest(value.id()))
-                                .transpose()?
-                                .ok_or_else(changed)?;
-                            match decode_legacy_preparation_reference(&bytes, &key) {
-                                Ok(reference) => {
-                                    // Keep the semantic key and its exact physical
-                                    // observation paired without changing key authority.
-                                    stream.item(family, status, 37,
-                                        [subject, key, evidence], [bytes.len() as u64, 0, 0])?;
-                                    stream.item(
-                                    family,
-                                    status,
-                                    12,
-                                    [key, *reference.manifest_digest(), evidence],
-                                    [
-                                        reference.manifest_bytes(),
-                                        u64::from(reference.protection().tag()),
-                                        LEGACY_PREPARATION_REFERENCE_BYTES as u64,
-                                    ],
-                                    )
-                                },
-                                Err(_) => stream.item(
-                                    family,
-                                    Status::Corrupt,
-                                    12,
-                                    [subject, evidence, ZERO],
-                                    [bytes.len() as u64, 0, 0],
-                                ),
+                            let key = classified.map(|value| digest(value.id())).transpose()?.ok_or_else(changed)?;
+                            match decode_legacy_preparation_reference(bytes, &key) {
+                                Ok(reference) => [Some(Row { status, kind: 37,
+                                    refs: [subject, key, evidence], counts: [read.proof.bytes, 0, 0] }),
+                                    Some(Row { status, kind: 12,
+                                        refs: [key, *reference.manifest_digest(), evidence],
+                                        counts: [reference.manifest_bytes(), u64::from(reference.protection().tag()),
+                                            LEGACY_PREPARATION_REFERENCE_BYTES as u64] })],
+                                Err(_) => [Some(Row { status: Status::Corrupt, kind: 12,
+                                    refs: [subject, evidence, ZERO], counts: [read.proof.bytes, 0, 0] }), None],
                             }
-                        } else if status == Status::Present
-                            && name.value.to_str().is_some_and(|value| {
-                                Path::new(value).extension().is_some_and(|extension| {
-                                    extension == LegacyPreparationProtection::Plaintext.extension()
-                                })
-                            })
+                        } else if status == Status::Present && name.value.to_str().is_some_and(|value|
+                            Path::new(value).extension().is_some_and(|extension|
+                                extension == LegacyPreparationProtection::Plaintext.extension()))
                         {
-                            preparation_manifest(stream, family, subject, evidence, &bytes)
+                            preparation_manifest(source, subject, evidence, bytes)?
                         } else {
-                            stream.item(
-                                family,
-                                status,
-                                13,
-                                [subject, evidence, ZERO],
-                                [bytes.len() as u64, 0, 0],
-                            )
+                            [Some(Row { status, kind: 13, refs: [subject, evidence, ZERO],
+                                counts: [read.proof.bytes, 0, 0] }), None]
                         }
                     }
-                    Err(status) => stream.item(
-                        family,
-                        if status == Status::AbsentProven {
-                            Status::Gap
-                        } else {
-                            status
-                        },
-                        12,
-                        [subject, ZERO, ZERO],
-                        [0; 3],
-                    ),
+                    Err(status) => [Some(Row {
+                        status: if status == Status::AbsentProven { Status::Gap } else { status },
+                        kind: 12, refs: [subject, ZERO, ZERO], counts: [0; 3],
+                    }), None],
+                };
+                for row in rows.into_iter().flatten() {
+                    preparation_item(stream, view, row, !positive)?;
                 }
+                Ok(())
             })?;
-            directory_outcome(stream, family, &path, outcome)
+            preparation_directory(stream, view, &path, outcome)
         })?;
-        directory_outcome(stream, family, &directory, outcome)?;
+        preparation_directory(stream, view, &directory, outcome)?;
     }
-    if residue_only {
-        Ok(())
-    } else {
-        preparation_links(stream, root)?;
-        stream.item(
-            family,
-            Status::Present,
-            21,
-            [crate::direct_preparation::profile_digest(), ZERO, ZERO],
-            [1, 1, 0],
-        )
-    }
+    Ok(())
 }
 
 // The materializer owns the complete persisted frame and BLAKE3 representation
@@ -740,219 +791,38 @@ impl LegacyDirectRepresentationDigest for PreparationRepresentationDigest {
     }
 }
 
-fn preparation_links(stream: &mut Stream<'_, '_, '_, '_>, root: &Path) -> Result<(), String> {
-    let source = stream.source;
-    let input = source.native().ok_or_else(changed)?;
-    source.charge(Work::Allocate(512))?;
-    let materializer =
-        crate::direct_preparation::canonical_materializer_digest().map_err(str::to_owned)?;
-    let unitizer = crate::direct_preparation::canonical_unitizer_digest().map_err(str::to_owned)?;
-    for revision in source.inventory_revisions() {
-        source.charge(Work::Compare(512))?;
-        let binding = encode_legacy_preparation_binding(&LegacyDirectPreparationBinding {
-            namespace: source.inventory_namespace(),
-            source_id: digest(&revision.source_id)?,
-            revision_id: digest(&revision.revision_id)?,
-            content_digest: digest(&revision.content_digest)?,
-            byte_length: revision.byte_length,
-            materializer_digest: materializer,
-            unitizer_digest: unitizer,
-        });
-        let key = derive_legacy_preparation_lookup_key::<PreparationRepresentationDigest>(
-            &binding,
-            input.protector.backend_name(),
-        );
-        source.charge(Work::AllocateLocator(2048))?;
-        let reference_path = root
-            .join(LEGACY_PREPARATION_DIRECTORY)
-            .join(legacy_preparation_reference_relative_locator(&key));
-        let bytes = match io::read(source, &reference_path, LEGACY_PREPARATION_MAX_OBJECT_BYTES)? {
-            Ok(bytes) => bytes,
-            Err(status) => {
-                stream.item(
-                    Family::Preparation,
-                    if status == Status::AbsentProven {
-                        Status::Gap
-                    } else {
-                        status
-                    },
-                    28,
-                    [key, digest(&revision.revision_id)?, ZERO],
-                    [0; 3],
-                )?;
-                continue;
-            }
-        };
-        let Ok(reference) = decode_legacy_preparation_reference(&bytes, &key) else {
-            stream.item(
-                Family::Preparation,
-                Status::Corrupt,
-                28,
-                [key, io::fingerprint(source, &bytes)?, ZERO],
-                [bytes.len() as u64, 0, 0],
-            )?;
-            continue;
-        };
-        let object = derive_legacy_preparation_object_id::<PreparationRepresentationDigest>(
-            &binding,
-            input.protector.backend_name(),
-            reference.manifest_digest(),
-        );
-        source.charge(Work::AllocateLocator(2048))?;
-        let object_path = root.join(LEGACY_PREPARATION_DIRECTORY).join(
-            legacy_preparation_object_relative_locator(&object, reference.protection()),
-        );
-        let encoded = match io::read(source, &object_path, LEGACY_PREPARATION_MAX_OBJECT_BYTES)? {
-            Ok(bytes) => bytes,
-            Err(status) => {
-                stream.item(
-                    Family::Preparation,
-                    if status == Status::AbsentProven {
-                        Status::Gap
-                    } else {
-                        status
-                    },
-                    29,
-                    [key, object, *reference.manifest_digest()],
-                    [reference.manifest_bytes(), 0, 0],
-                )?;
-                continue;
-            }
-        };
-        let decoded = match reference.protection() {
-            LegacyPreparationProtection::Plaintext => encoded,
-            LegacyPreparationProtection::Protected => {
-                #[cfg(windows)]
-                let decoded = input.protector.unprotect_with_context(
-                    input.context,
-                    &encoded,
-                    &sha256::hex(&object),
-                    &sha256::hex(reference.manifest_digest()),
-                    reference.manifest_bytes(),
-                );
-                #[cfg(not(windows))]
-                let decoded: Result<zeroize::Zeroizing<Vec<u8>>, String> = Err(changed());
-                source.checkpoint()?;
-                let Ok(bytes) = decoded else {
-                    stream.item(
-                        Family::Preparation,
-                        Status::Unreadable,
-                        29,
-                        [key, object, *reference.manifest_digest()],
-                        [reference.manifest_bytes(), 1, 0],
-                    )?;
-                    continue;
-                };
-                bytes
-            }
-        };
-        source.charge(Work::Compare(decoded.len().saturating_mul(2)))?;
-        let valid = verify_legacy_preparation_payload::<PreparationRepresentationDigest>(
-            &decoded,
-            reference.manifest_digest(),
-            reference.manifest_bytes(),
-        )
-        .is_ok()
-            && verify_legacy_preparation_manifest::<PreparationRepresentationDigest>(
-                &decoded,
-                &binding,
-                crate::direct_preparation::CANONICAL_MATERIALIZER_REVISION,
-                crate::direct_preparation::CANONICAL_UNITIZER_REVISION,
-            )
-            .is_ok();
-        source.checkpoint()?;
-        stream.item(
-            Family::Preparation,
-            if valid {
-                Status::Present
-            } else {
-                Status::Corrupt
-            },
-            29,
-            [key, object, *reference.manifest_digest()],
-            [
-                reference.manifest_bytes(),
-                u64::from(reference.protection().tag()),
-                0,
-            ],
-        )?;
-    }
-    Ok(())
-}
 
 fn preparation_manifest(
-    stream: &mut Stream<'_, '_, '_, '_>,
-    family: Family,
-    subject: [u8; 32],
-    evidence: [u8; 32],
-    bytes: &[u8],
-) -> Result<(), String> {
-    let source = stream.source;
-    let Some(binding) = bytes
-        .get(..LEGACY_PREPARATION_BINDING_BYTES)
+    source: &super::MigrationSource<'_, '_, '_>,
+    subject: [u8; 32], evidence: [u8; 32], bytes: &[u8],
+) -> Result<[Option<super::preparation_links::Row>; 2], String> {
+    use super::preparation_links::Row;
+    let failure = |status, kind| [Some(Row { status, kind,
+        refs: [subject, evidence, ZERO], counts: [bytes.len() as u64, 0, 0] }), None];
+    let Some(binding) = bytes.get(..LEGACY_PREPARATION_BINDING_BYTES)
         .and_then(|bytes| bytes.try_into().ok())
-    else {
-        return stream.item(
-            family,
-            Status::Corrupt,
-            13,
-            [subject, evidence, ZERO],
-            [bytes.len() as u64, 0, 0],
-        );
-    };
+    else { return Ok(failure(Status::Corrupt, 13)); };
     source.charge(Work::Compare(bytes.len()))?;
     let decoded = verify_legacy_preparation_manifest::<PreparationRepresentationDigest>(
-        bytes,
-        binding,
-        crate::direct_preparation::CANONICAL_MATERIALIZER_REVISION,
-        crate::direct_preparation::CANONICAL_UNITIZER_REVISION,
-    );
+        bytes, binding, crate::direct_preparation::CANONICAL_MATERIALIZER_REVISION,
+        crate::direct_preparation::CANONICAL_UNITIZER_REVISION);
     source.checkpoint()?;
-    match decoded {
+    Ok(match decoded {
         Ok(manifest) => {
             let binding_digest = io::fingerprint(source, binding)?;
-            stream.item(
-                family,
-                Status::Present,
-                25,
-                [subject, evidence, binding_digest],
-                [
-                    bytes.len() as u64,
-                    manifest.materializer_revision(),
-                    manifest.unitizer_revision(),
-                ],
-            )?;
             let binding = manifest.binding();
-            stream.item(
-                family,
-                Status::Present,
-                26,
-                [
-                    binding.source_id,
-                    binding.revision_id,
-                    binding.content_digest,
-                ],
-                [binding.byte_length, manifest.body().len() as u64, 0],
-            )
+            [Some(Row { status: Status::Present, kind: 25,
+                refs: [subject, evidence, binding_digest],
+                counts: [bytes.len() as u64, manifest.materializer_revision(), manifest.unitizer_revision()] }),
+                Some(Row { status: Status::Present, kind: 26,
+                    refs: [binding.source_id, binding.revision_id, binding.content_digest],
+                    counts: [binding.byte_length, manifest.body().len() as u64, 0] })]
         }
-        Err(
-            search_materializer::api::LegacyPreparationStoreError::ProfileMismatch
-            | search_materializer::api::LegacyPreparationStoreError::DigestAlgorithmMismatch,
-        ) => stream.item(
-            family,
-            Status::Unsupported,
-            25,
-            [subject, evidence, ZERO],
-            [bytes.len() as u64, 0, 0],
-        ),
-        Err(_) => stream.item(
-            family,
-            Status::Corrupt,
-            25,
-            [subject, evidence, ZERO],
-            [bytes.len() as u64, 0, 0],
-        ),
-    }
+        Err(search_materializer::api::LegacyPreparationStoreError::ProfileMismatch
+            | search_materializer::api::LegacyPreparationStoreError::DigestAlgorithmMismatch)
+            => failure(Status::Unsupported, 25),
+        Err(_) => failure(Status::Corrupt, 25),
+    })
 }
 
 
@@ -1285,6 +1155,131 @@ mod co_production_tests {
             registration: None,
         }
     }
+
+    fn preparation_encoder() -> LegacyInventoryEncoder {
+        let mut encoder = LegacyInventoryEncoder::with_profile(
+            LegacyInventoryLimits::BASELINE, LegacyInventoryProfile::LocationV2).unwrap();
+        encoder.header(sample_binding()).unwrap();
+        for family in Family::ALL {
+            if family == Family::Preparation { break; }
+            encoder.end_family(family, Status::AbsentProven, true).unwrap();
+        }
+        encoder
+    }
+
+    #[test]
+    fn preparation_observation_preserves_ordered_bytes_and_replays_residue_without_reopening() {
+        use super::super::preparation_links::{Row, View};
+        use search_materializer::api::{encode_legacy_preparation_reference,
+            legacy_preparation_object_relative_locator, legacy_preparation_reference_relative_locator};
+        use std::os::windows::fs::OpenOptionsExt;
+        let scratch = Scratch::new();
+        let base = scratch.root.join("preparation");
+        let key = [0xaa; 32];
+        let object = [0xbb; 32];
+        let reference_path = base.join(legacy_preparation_reference_relative_locator(&key));
+        let object_path = base.join(legacy_preparation_object_relative_locator(&object, LegacyPreparationProtection::Protected));
+        fs::create_dir_all(reference_path.parent().unwrap()).unwrap();
+        fs::create_dir_all(object_path.parent().unwrap()).unwrap();
+        let reference = encode_legacy_preparation_reference(&key, &[0x24; 32], 300,
+            LegacyPreparationProtection::Protected).unwrap();
+        fs::write(&reference_path, reference).unwrap();
+        fs::write(&object_path, b"encoded").unwrap();
+        let gap_path = base.join("objects/bb").join(format!("{}.bin", "bb".repeat(32)));
+        fs::write(&gap_path, b"gap").unwrap();
+        let temporary = base.join("objects/bb").join(format!(".{}.1.2.dpapi.tmp", "bb".repeat(32)));
+        fs::write(&temporary, b"temporary").unwrap();
+        let unsupported = base.join("objects/bb/unknown.bin");
+        fs::write(&unsupported, b"unknown").unwrap();
+        let corrupt = base.join("objects/bb").join(format!("{}.bin", "cc".repeat(32)));
+        fs::write(&corrupt, b"misplaced").unwrap();
+        let store = crate::plaintext_direct_store::DirectStore::open(&scratch.root).unwrap();
+        let source = super::super::MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        let root = source.inventory_root();
+        let rebase = |path: &Path| root.join(path.strip_prefix(&scratch.root).unwrap());
+        let reference_path = rebase(&reference_path);
+        let object_path = rebase(&object_path);
+        let gap_path = rebase(&gap_path);
+        let temporary = rebase(&temporary);
+        let unsupported = rebase(&unsupported);
+        let corrupt = rebase(&corrupt);
+        let base = root.join("preparation");
+        let mut view = View::fixture_reads(&source, &[
+            (PrepTree::References, key, reference_path.clone()),
+            (PrepTree::Objects, object, object_path.clone()),
+        ]).unwrap();
+        let subject = |path: &Path| io::locator(&source, path).unwrap();
+        let row = |status, kind, refs, counts| Row { status, kind, refs, counts };
+        let directory = |path: &Path| row(Status::Present, 36, [subject(path), ZERO, ZERO], [0; 3]);
+        let raw = |path: &Path| sha256::digest(&fs::read(path).unwrap());
+        let prep = vec![
+            row(Status::Present, 37, [subject(&reference_path), key, raw(&reference_path)], [reference.len() as u64, 0, 0]),
+            row(Status::Present, 12, [key, [0x24; 32], raw(&reference_path)],
+                [300, u64::from(LegacyPreparationProtection::Protected.tag()), LEGACY_PREPARATION_REFERENCE_BYTES as u64]),
+            directory(&base.join("refs/aa")), directory(&base.join("refs")),
+            row(Status::Orphan, 13, [subject(&temporary), raw(&temporary), ZERO], [9, 0, 0]),
+            row(Status::Gap, 13, [subject(&gap_path), raw(&gap_path), ZERO], [3, 0, 0]),
+            row(Status::Present, 13, [subject(&object_path), raw(&object_path), ZERO], [7, 0, 0]),
+            row(Status::Corrupt, 12, [subject(&corrupt), ZERO, [0xcc; 32]], [0; 3]),
+            row(Status::Unsupported, 13, [subject(&unsupported), raw(&unsupported), ZERO], [7, 0, 0]),
+            directory(&base.join("objects/bb")), directory(&base.join("objects")),
+        ];
+        let residue = prep.iter().copied().enumerate()
+            .filter_map(|(index, row)| (!matches!(index, 0 | 1 | 6)).then_some(row)).collect::<Vec<_>>();
+        let mut actual = Vec::new();
+        let mut sink = |bytes: &[u8]| { actual.extend_from_slice(bytes); Ok(()) };
+        let mut stream = Stream { source: &source, sink: &mut sink, encoder: preparation_encoder(),
+            statuses: [0; 7], complete: true, preparation_links: None };
+        preparation_physical(&mut stream, root, &mut view).unwrap();
+        view.finish_physical(&source).unwrap();
+        let terminal = stream.terminal();
+        let row = stream.encoder.end_family(Family::Preparation, terminal, stream.complete).unwrap();
+        stream.send(&row).unwrap();
+        stream.statuses = [0; 7];
+        stream.complete = true;
+        stream.preparation_links = Some(std::sync::Arc::new(view));
+        // A second body read would fail on these real sharing exclusions. This
+        // tests row transport only; actual native final fences remain required.
+        let _exclusions = [reference_path, object_path, gap_path, temporary, unsupported, corrupt]
+            .iter().map(|path| fs::OpenOptions::new().read(true).share_mode(0).open(path).unwrap())
+            .collect::<Vec<_>>();
+        preparation(&mut stream, root, Family::Residue, true).unwrap();
+        let terminal = stream.terminal();
+        let row = stream.encoder.end_family(Family::Residue, terminal, stream.complete).unwrap();
+        stream.send(&row).unwrap();
+        drop(stream);
+        let mut expected = Vec::new();
+        let mut encoder = preparation_encoder();
+        for (family, rows) in [(Family::Preparation, prep), (Family::Residue, residue)] {
+            for row in rows {
+                expected.extend(encoder.item(family, row.status, row.kind,
+                    row.refs.map(Sha256Digest32::from_bytes), row.counts).unwrap());
+            }
+            expected.extend(encoder.end_family(family, Status::Gap, false).unwrap());
+        }
+        assert_eq!(actual, expected, "complete physical and separate residue rows retain v2 bytes/order");
+    }
+
+    #[test]
+    fn preparation_observation_refuses_equal_bytes_on_replaced_native_object_and_unexhausted_join() {
+        use super::super::preparation_links::View;
+        let scratch = Scratch::new();
+        let path = scratch.root.join("preparation/objects/aa").join(format!("{ID}.bin"));
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, b"same bytes").unwrap();
+        let store = crate::plaintext_direct_store::DirectStore::open(&scratch.root).unwrap();
+        let source = super::super::MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        let path = source.inventory_root().join(path.strip_prefix(&scratch.root).unwrap());
+        let mut view = View::fixture_reads(&source, &[(PrepTree::Objects, [0xaa; 32], path.clone())]).unwrap();
+        assert_eq!(view.finish_physical(&source), Err(changed()), "unconsumed positive cannot close");
+        assert!(view.residue().is_err(), "partial physical denominator cannot escape");
+        fs::rename(&path, scratch.root.join("original-held-by-name.bin")).unwrap();
+        fs::write(&path, b"same bytes").unwrap();
+        let observed = io::read_detailed(&source, &path, 64).unwrap().unwrap();
+        assert_eq!(observed.proof.raw_digest, sha256::digest(b"same bytes"));
+        assert_eq!(view.observe(&source, PrepTree::Objects, io::locator(&source, &path).unwrap(),
+            Ok(observed.proof)), Err(changed()), "equal SHA/length cannot replace native identity");
+    }
 }
 
 // These fixtures exercise local NTFS pin/refusal behavior only. They do not
@@ -1397,3 +1392,7 @@ mod revision_pin_tests {
         assert!(OpenOptions::new().write(true).open(plain).is_ok(), "refusal must release the first leaf pin");
     }
 }
+
+#[cfg(all(test, windows))]
+#[path = "preparation_dedup_tests.rs"]
+mod preparation_dedup_tests;
