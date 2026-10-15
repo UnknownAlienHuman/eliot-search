@@ -4,6 +4,8 @@
 use super::*;
 #[path = "tests/original_inputs.rs"]
 mod original_inputs;
+#[path = "tests/source_v2.rs"]
+mod source_v2;
 use search_contracts::{
     Blake3Digest32, DataRootId, InstallationIncarnationId, NonZeroRevision, OpaqueCanonicalBytes,
     OpaqueRef, OwnerEpoch, PublicationGuards, ReceiptRef, RequestId, RootBindingId, SourceId,
