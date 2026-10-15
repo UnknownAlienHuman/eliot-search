@@ -18,6 +18,9 @@ use search_source_admission::{
 use search_source_identity::{CanonicalRelativePath, DEFAULT_IDENTITY_LIMITS, SourceBinding, SourceObservation};
 use search_source_provenance::{OriginalAdmissionV2, OriginalInputsLayoutV2, RetainedPolicyV2};
 use std::sync::Arc;
+
+#[path = "batch_codec_v4_tests.rs"]
+mod batch_codec_v4_tests;
 fn rev(value: u64) -> NonZeroRevision {
     NonZeroRevision::new(value).expect("revision")
 }
