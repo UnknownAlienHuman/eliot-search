@@ -15,6 +15,7 @@ use search_ports::{
     PortErrorKind, PortFailure, PortRetryability,
 };
 use search_runtime_owner::OwnerError;
+use search_source_registry::error::{RegistryError, RegistryPortError, registry_port_error};
 use search_source_registry::source_ids::SourceIdentityIdPortV2;
 
 /// Closed failure surface for fresh identity allocation.
@@ -124,6 +125,65 @@ impl<C: CancellationProbe> SourceIdentityIdPortV2 for SourceIdentityIdsV2<'_, C>
     }
 }
 
+impl<C: CancellationProbe> SourceIdentityIdPortV2 for super::RegistryJournal<'_, C> {
+    fn fresh_source_id(&mut self, context: &OperationContext<C>) -> Result<SourceId, Self::Error> {
+        if self.requires_recovery() {
+            return Err(recovery_fence());
+        }
+        let Some(original_v4) = self.original_v4.as_ref() else {
+            return Err(original_v4_unavailable());
+        };
+        SourceIdentityIdsV2::<C>::bind(original_v4.deadline, original_v4.work)
+            .fresh_source_id(context)
+            .map_err(map_source_identity_error)
+    }
+
+    fn fresh_source_namespace_id(
+        &mut self,
+        context: &OperationContext<C>,
+    ) -> Result<SourceNamespaceId, Self::Error> {
+        if self.requires_recovery() {
+            return Err(recovery_fence());
+        }
+        let Some(original_v4) = self.original_v4.as_ref() else {
+            return Err(original_v4_unavailable());
+        };
+        SourceIdentityIdsV2::<C>::bind(original_v4.deadline, original_v4.work)
+            .fresh_source_namespace_id(context)
+            .map_err(map_source_identity_error)
+    }
+}
+
+fn map_source_identity_error(error: SourceIdentityIdError) -> RegistryPortError {
+    let kind = error.kind();
+    let retryability = error.retryability();
+    let reason = match kind {
+        PortErrorKind::CancelledBeforeSideEffect => RegistryError::CancelledBeforeCommit,
+        PortErrorKind::OutcomeUnknown => RegistryError::MutationOutcomeUnknown,
+        PortErrorKind::ResourceExhausted => RegistryError::DurabilityExhausted,
+        _ => RegistryError::DurabilityRejected,
+    };
+    registry_port_error(kind, retryability, reason, error.operation_id().cloned())
+}
+
+fn original_v4_unavailable() -> RegistryPortError {
+    registry_port_error(
+        PortErrorKind::DependencyUnavailable,
+        PortRetryability::Never,
+        RegistryError::AdmissionRestorationUnavailable,
+        None,
+    )
+}
+
+fn recovery_fence() -> RegistryPortError {
+    registry_port_error(
+        PortErrorKind::OutcomeUnknown,
+        PortRetryability::AfterReadback,
+        RegistryError::MutationOutcomeUnknown,
+        None,
+    )
+}
+
 /// Mints 16 bytes of qualified OS entropy as an RFC 4122 version-4 UUID.
 fn mint_fresh_id<C: CancellationProbe>(
     deadline: Instant,
@@ -157,9 +217,20 @@ fn mint_fresh_id<C: CancellationProbe>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use search_contracts::{OpaqueRef, RequestId};
-    use search_ports::FakeCancellation;
-    use std::time::Duration;
+    use search_contracts::{
+        Blake3Digest32, DataRootId, InstallationIncarnationId, OpaqueRef, OwnerEpoch, RequestId,
+    };
+    use search_control_redb::{
+        ControlSnapshotPublisher, JournalIdentity, JournalLimits, JournalProfileInitialization,
+        MigrationBootstrapWork, MutationId, PersistentControlJournal,
+    };
+    use search_ports::{FakeCancellation, PortFailure};
+    use search_runtime_owner::OwnerError;
+    use search_source_admission::{AcceptedCapabilities, BASELINE_PROFILE, SectionPlatform};
+    use std::fs::{self, File, OpenOptions};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Duration, Instant};
 
     fn context(cancelled: bool) -> OperationContext<FakeCancellation> {
         OperationContext::new(
@@ -228,5 +299,237 @@ mod tests {
         assert_eq!(ns_bytes[6] & 0xf0, 0x40, "version 4");
         assert_eq!(ns_bytes[8] & 0xc0, 0x80, "RFC 4122 variant");
         assert_ne!(bytes, ns_bytes, "distinct allocations");
+    }
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "search-registry-source-ids-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir(&path).expect("fresh scratch");
+            Self(path)
+        }
+
+        fn file(&self, create: bool) -> File {
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(create)
+                .open(self.0.join("control.redb"))
+                .expect("scratch journal")
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).expect("closed scratch");
+        }
+    }
+
+    fn journal_identity() -> JournalIdentity {
+        JournalIdentity {
+            installation_incarnation_id: InstallationIncarnationId::from_bytes([2; 16]),
+            data_root_id: DataRootId::from_bytes([3; 16]),
+            owner_epoch: OwnerEpoch::new(1).expect("epoch"),
+            path_identity_digest: Blake3Digest32::from_bytes([4; 32]),
+            schema_family_digest: Blake3Digest32::from_bytes([5; 32]),
+            schema_version: search_control_redb::CURRENT_JOURNAL_SCHEMA_VERSION,
+        }
+    }
+
+    fn initialized_journal(
+        scratch: &Scratch,
+        context: &OperationContext<FakeCancellation>,
+    ) -> PersistentControlJournal {
+        let mut journal = PersistentControlJournal::create(
+            scratch.file(true),
+            journal_identity(),
+            JournalLimits::BASELINE,
+        )
+        .expect("actual redb initialization");
+        journal
+            .initialize_operating_profile(
+                JournalProfileInitialization::Direct,
+                MutationId([9; 32]),
+                Blake3Digest32::from_bytes([10; 32]),
+                context,
+            )
+            .expect("direct profile");
+        journal
+    }
+
+    fn bind_v4<'a>(
+        journal: &'a mut PersistentControlJournal,
+        publisher: &'a mut ControlSnapshotPublisher,
+        deadline: Instant,
+        work: &'a dyn Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
+    ) -> super::super::RegistryJournal<'a, FakeCancellation> {
+        super::super::RegistryJournal::bind_original_v4(
+            journal,
+            publisher,
+            journal_identity(),
+            search_source_registry::api::DEFAULT_REGISTRY_LIMITS,
+            deadline,
+            work,
+            SectionPlatform {
+                os: "windows".into(),
+                arch: "x64".into(),
+            },
+            AcceptedCapabilities {
+                profiles: vec![BASELINE_PROFILE.into()],
+            },
+        )
+        .expect("normal v4 journal binding")
+    }
+
+    fn bind_legacy<'a>(
+        journal: &'a mut PersistentControlJournal,
+        publisher: &'a mut ControlSnapshotPublisher,
+        work: &'a dyn Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
+    ) -> super::super::RegistryJournal<'a, FakeCancellation> {
+        super::super::RegistryJournal::bind_original(
+            journal,
+            publisher,
+            journal_identity(),
+            search_source_registry::api::DEFAULT_REGISTRY_LIMITS,
+            Instant::now() + Duration::from_secs(30),
+            work,
+        )
+        .expect("legacy journal binding")
+    }
+
+    #[test]
+    fn registry_journal_delegates_actual_entropy_to_original_v4() {
+        let scratch = Scratch::new();
+        let setup_context = context(false);
+        let mut journal = initialized_journal(&scratch, &setup_context);
+        let mut publisher = ControlSnapshotPublisher::new();
+        let calls = std::cell::Cell::new(0_usize);
+        let work = |_unit: MigrationBootstrapWork| {
+            calls.set(calls.get() + 1);
+            Ok::<_, OwnerError>(())
+        };
+        let mut port = bind_v4(
+            &mut journal,
+            &mut publisher,
+            Instant::now() + Duration::from_secs(30),
+            &work,
+        );
+        let source = port.fresh_source_id(&setup_context).expect("source id");
+        let namespace = port
+            .fresh_source_namespace_id(&setup_context)
+            .expect("namespace id");
+        assert_eq!(source.as_bytes()[6] & 0xf0, 0x40, "source version 4");
+        assert_eq!(source.as_bytes()[8] & 0xc0, 0x80, "source variant");
+        assert_eq!(namespace.as_bytes()[6] & 0xf0, 0x40, "namespace version 4");
+        assert_eq!(namespace.as_bytes()[8] & 0xc0, 0x80, "namespace variant");
+        assert_ne!(source.as_bytes(), namespace.as_bytes());
+        assert!(calls.get() >= 8, "both allocations use the native budget");
+    }
+
+    #[test]
+    fn registry_journal_cancelled_context_consumes_no_native_budget() {
+        let scratch = Scratch::new();
+        let live = context(false);
+        let cancelled = context(true);
+        let mut journal = initialized_journal(&scratch, &live);
+        let mut publisher = ControlSnapshotPublisher::new();
+        let calls = std::cell::Cell::new(0_usize);
+        let work = |_unit: MigrationBootstrapWork| {
+            calls.set(calls.get() + 1);
+            Ok::<_, OwnerError>(())
+        };
+        let mut port = bind_v4(
+            &mut journal,
+            &mut publisher,
+            Instant::now() + Duration::from_secs(30),
+            &work,
+        );
+        let error = port
+            .fresh_source_id(&cancelled)
+            .expect_err("cancelled context");
+        assert_eq!(error.kind(), PortErrorKind::CancelledBeforeSideEffect);
+        assert_eq!(error.retryability(), PortRetryability::SameRequest);
+        assert_eq!(*error.reason(), RegistryError::CancelledBeforeCommit);
+        assert_eq!(
+            calls.get(),
+            0,
+            "cancellation precedes native work and entropy"
+        );
+    }
+
+    #[test]
+    fn registry_journal_expired_original_deadline_consumes_no_native_budget() {
+        let scratch = Scratch::new();
+        let live = context(false);
+        let mut journal = initialized_journal(&scratch, &live);
+        let mut publisher = ControlSnapshotPublisher::new();
+        let calls = std::cell::Cell::new(0_usize);
+        let work = |_unit: MigrationBootstrapWork| {
+            calls.set(calls.get() + 1);
+            Ok::<_, OwnerError>(())
+        };
+        let mut port = bind_v4(&mut journal, &mut publisher, Instant::now(), &work);
+        let error = port
+            .fresh_source_namespace_id(&live)
+            .expect_err("expired original deadline");
+        assert_eq!(error.kind(), PortErrorKind::DeadlineDuringOperation);
+        assert_eq!(error.retryability(), PortRetryability::Never);
+        assert_eq!(*error.reason(), RegistryError::DurabilityRejected);
+        assert_eq!(calls.get(), 0, "expiry precedes native work and entropy");
+    }
+
+    #[test]
+    fn registry_journal_requires_actual_v4_context_and_healthy_recovery() {
+        let scratch = Scratch::new();
+        let live = context(false);
+        let mut journal = initialized_journal(&scratch, &live);
+        let mut publisher = ControlSnapshotPublisher::new();
+        let calls = std::cell::Cell::new(0_usize);
+        let work = |_unit: MigrationBootstrapWork| {
+            calls.set(calls.get() + 1);
+            Ok::<_, OwnerError>(())
+        };
+        let mut legacy = bind_legacy(&mut journal, &mut publisher, &work);
+        let error = legacy
+            .fresh_source_id(&live)
+            .expect_err("legacy binding cannot allocate v2 IDs");
+        assert_eq!(error.kind(), PortErrorKind::DependencyUnavailable);
+        assert_eq!(
+            *error.reason(),
+            RegistryError::AdmissionRestorationUnavailable
+        );
+        assert_eq!(
+            calls.get(),
+            0,
+            "missing v4 context consumes no native budget"
+        );
+
+        let scratch = Scratch::new();
+        let mut journal = initialized_journal(&scratch, &live);
+        let mut publisher = ControlSnapshotPublisher::new();
+        let mut port = bind_v4(
+            &mut journal,
+            &mut publisher,
+            Instant::now() + Duration::from_secs(30),
+            &work,
+        );
+        port.original_uncertain = true;
+        let error = port
+            .fresh_source_namespace_id(&live)
+            .expect_err("recovery fence");
+        assert_eq!(error.kind(), PortErrorKind::OutcomeUnknown);
+        assert_eq!(error.retryability(), PortRetryability::AfterReadback);
+        assert_eq!(*error.reason(), RegistryError::MutationOutcomeUnknown);
+        assert_eq!(
+            calls.get(),
+            0,
+            "recovery fence precedes native work and entropy"
+        );
     }
 }
