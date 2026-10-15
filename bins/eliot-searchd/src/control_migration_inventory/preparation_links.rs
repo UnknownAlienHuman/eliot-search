@@ -110,7 +110,7 @@ impl View {
         }
         Ok(())
     }
-    pub(super) fn take_read_scope(&mut self) -> io::ParentReadScope {
+    pub(super) const fn take_read_scope(&mut self) -> io::ParentReadScope {
         std::mem::replace(&mut self.read_scope, io::ParentReadScope::new())
     }
     pub(super) fn restore_read_scope(&mut self, scope: io::ParentReadScope) {

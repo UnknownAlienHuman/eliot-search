@@ -506,9 +506,8 @@ fn revision_pin_observation(
     Ok(observed.map_err(|error| match error {
         ObservationError::UnsupportedPlatform | ObservationError::UnsupportedHandle
         | ObservationError::UnsupportedFileSystem => Status::Unsupported,
-        ObservationError::ReparsePointDenied => Status::Gap,
         ObservationError::ObservationFailed => Status::Unreadable,
-        ObservationError::NotDirectChild | ObservationError::InvalidDirectoryInformation
+        ObservationError::ReparsePointDenied | ObservationError::NotDirectChild | ObservationError::InvalidDirectoryInformation
             | ObservationError::DirectoryEntryLimit => Status::Gap,
     }))
 }
@@ -664,7 +663,7 @@ pub(super) fn visit(
 }
 
 /// Reuse the actual endpoint and full held chain; LIST/traverse still executes
-/// through a fresh absolute read_dir in enumerate_pinned. Arc clones no OS FD.
+/// through a fresh absolute `read_dir` in `enumerate_pinned`. `Arc` clones no OS FD.
 pub(super) fn visit_scoped(
     source: &MigrationSource<'_, '_, '_>, scope: &mut ParentReadScope, directory: &Path,
     mut visitor: impl FnMut(&Name, &mut ParentReadScope) -> Result<(), String>,
