@@ -229,7 +229,7 @@ fn state_descriptor_v4(
         "source" => source_descriptor_v4(value, probe),
         "namespace" => namespace_descriptor_v4(value, probe),
         "root" | "membership" | "generation" => {
-            let state = super::read_state(value, true)?;
+            let state = super::read_state_with_original_probe(value, true, probe)?;
             Ok((state.key(), Vec::new()))
         }
         _ => Err(bad().into()),
@@ -238,7 +238,7 @@ fn state_descriptor_v4(
 
 fn source_descriptor_v4(
     value: V,
-    _probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<(RegistryStateKey, Vec<Vec<u8>>), BatchCodecV4Error> {
     let mut fields = open(value)?;
     if string(take(&mut fields, "family")?)? != "source" {
@@ -248,7 +248,7 @@ fn source_descriptor_v4(
         "historical-v1" => {
             let body = take(&mut fields, "legacy_body")?;
             finish(fields)?;
-            let state = super::read_state(body, true)?;
+            let state = super::read_state_with_original_probe(body, true, probe)?;
             let RegistryStateRecord::Source(source) = state else {
                 return Err(bad().into());
             };
@@ -285,8 +285,9 @@ fn source_descriptor_v4(
 
 fn namespace_descriptor_v4(
     value: V,
-    _probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<(RegistryStateKey, Vec<Vec<u8>>), BatchCodecV4Error> {
+    checkpoint(probe)?;
     let mut fields = open(value)?;
     if string(take(&mut fields, "family")?)? != "namespace" {
         return Err(bad().into());
@@ -514,7 +515,7 @@ fn read_state_v4<R: OriginalInputResolver + ?Sized>(
         "source" => read_source_v4(value, resolver, probe),
         "namespace" => read_namespace_v4(value, resolver, probe),
         "root" | "membership" | "generation" => {
-            super::read_state(value, true).map_err(BatchCodecV4Error::Registry)
+            super::read_state_with_original_probe(value, true, probe)
         }
         _ => Err(bad().into()),
     }
@@ -585,7 +586,7 @@ fn read_source_v4<R: OriginalInputResolver + ?Sized>(
         "historical-v1" => {
             let body = take(&mut fields, "legacy_body")?;
             finish(fields)?;
-            let state = super::read_state(body, true)?;
+            let state = super::read_state_with_original_probe(body, true, probe)?;
             if !matches!(state, RegistryStateRecord::Source(_)) {
                 return Err(bad().into());
             }
