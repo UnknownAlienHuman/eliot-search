@@ -10,6 +10,9 @@ use std::time::{Duration, Instant};
 use super::*;
 use crate::migration::{SourceImportOutputArtifactPlatform, SourceImportOutputLockPlatform};
 
+#[path = "cursor_tests.rs"]
+mod cursor_tests;
+
 #[derive(Clone, Debug)]
 struct TestPlatform {
     identity: Arc<AtomicU64>,

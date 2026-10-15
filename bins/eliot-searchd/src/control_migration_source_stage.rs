@@ -123,7 +123,7 @@ fn transfer_rows(
 ) -> Result<(), String> {
     let context = inventory::ArtifactContext::new(source);
     let work = |unit| context.reserve(unit);
-    let mut rows = publication.begin_rows_with_context(input.context.deadline(), &work)
+    let mut rows = publication.begin_borrowed_rows_with_context(input.context.deadline(), &work)
         .map_err(|error| context.reason(error))?;
     while let Some(row) = rows.next_with_context(input.context.deadline(), &work)
         .map_err(|error| context.reason(error))? {

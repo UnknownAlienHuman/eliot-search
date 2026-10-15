@@ -305,6 +305,17 @@ context or renewed allowance is retained in an artifact.
 admitted before the corresponding inner operation. Reader processing is charged
 per actual refill, row copying and hashing separately; interrupted I/O attempts
 require fresh admission. The private writer flushes explicitly and never on Drop.
+
+`SourceImportRecordArtifactPublication::begin_borrowed_rows_with_context` is an
+opt-in sequential cursor over the retained original file. Its exclusive mutable
+publication borrow prevents another owner cursor or publication from sharing the
+offset; each pass seeks to zero. It creates no OS handle and charges no cursor
+`Open`. The default `begin_rows_with_context` still clones/charges its handle.
+Both use the same bounded row/chain/count/byte/EOF, metadata, native identity and
+fresh staging/final locator guards with the original deadline/work callback.
+Rows precede final proof: a short/dropped/refused cursor grants no completed pass.
+Drop only releases the borrow/reader; it never writes or removes retained evidence.
+
 Pre-effect refusal prevents link dispatch; post-effect refusal is unknown and
 preserves original identity, locators and the actual reused outcome. Native
 composition retains the first original refusal cause. Exact inspections and
