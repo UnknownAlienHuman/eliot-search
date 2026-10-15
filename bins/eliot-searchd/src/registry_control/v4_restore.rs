@@ -1,0 +1,158 @@
+//! One-coherent-snapshot permanent-v2 registry restoration.
+
+use super::original_inputs::OriginalInputsReadback;
+use super::v4_readback::{OriginalV4Context, V4ReadbackError};
+use search_control_redb::RegistryReadSnapshot;
+use search_source_admission::policy_v2::CheckpointFailureV2;
+use search_source_registry::error::RegistryError;
+use search_source_registry::recovery::{
+    BatchCodecV4Error, ObservedRegistryRestore, RegistryRestoreOperation, RegistryRestoreState,
+    decode_batch_record, decode_registry_state_entry, required_original_refs_from_batch_v4,
+    required_original_refs_from_state_v4, restore_registry_state_v4,
+    OriginalInputResolver as OriginalInputResolverTrait,
+};
+use search_runtime_owner::OwnerError;
+use std::{cell::RefCell, collections::BTreeSet};
+
+/// Raw v4/legacy profile shape discovered from one coherent registry snapshot.
+pub(crate) struct SnapshotShape {
+    has_v4: bool,
+    references: Vec<Vec<u8>>,
+}
+
+impl SnapshotShape {
+    pub(crate) fn has_v4(&self) -> bool {
+        self.has_v4
+    }
+
+    pub(crate) fn references(&self) -> &[Vec<u8>] {
+        &self.references
+    }
+}
+
+/// Extracts all original references from the raw operation/state rows.
+pub(crate) fn collect_snapshot_refs(
+    snapshot: &RegistryReadSnapshot,
+    context: &OriginalV4Context<'_>,
+) -> Result<SnapshotShape, V4ReadbackError> {
+    let owner = RefCell::new(None);
+    let mut probe = make_probe(context, &owner);
+    let result = (|| {
+        let mut has_v4 = false;
+        let mut references = BTreeSet::new();
+        for operation in snapshot.operations() {
+            if decode_batch_record(operation.owner_bytes(), context.registry_limits).is_err() {
+                has_v4 = true;
+                for reference in required_original_refs_from_batch_v4(operation.owner_bytes(), &mut probe)? {
+                    references.insert(reference);
+                }
+            }
+        }
+        for state in snapshot.states() {
+            if decode_registry_state_entry(
+                state.key().canonical_bytes(),
+                state.canonical_bytes(),
+            )
+            .is_err()
+            {
+                has_v4 = true;
+                for reference in required_original_refs_from_state_v4(state.canonical_bytes(), &mut probe)? {
+                    references.insert(reference);
+                }
+            }
+        }
+        Ok(SnapshotShape {
+            has_v4,
+            references: references.into_iter().collect(),
+        })
+    })();
+    drop(probe);
+    if let Some(error) = owner.into_inner() {
+        return Err(V4ReadbackError::Owner(error));
+    }
+    result.map_err(V4ReadbackError::Batch)
+}
+
+/// Restore the complete bounded state/history through the existing v4 owner.
+pub(crate) fn restore_snapshot_v4(
+    snapshot: &RegistryReadSnapshot,
+    originals: Option<&OriginalInputsReadback>,
+    context: &OriginalV4Context<'_>,
+    max_total_bytes: usize,
+) -> Result<ObservedRegistryRestore, V4ReadbackError> {
+    let states = snapshot
+        .states()
+        .iter()
+        .map(|state| RegistryRestoreState {
+            key: state.key().canonical_bytes(),
+            value: state.canonical_bytes(),
+        })
+        .collect::<Vec<_>>();
+    let operations = snapshot
+        .operations()
+        .iter()
+        .map(|operation| RegistryRestoreOperation {
+            operation_id: operation.operation_id(),
+            value: operation.owner_bytes(),
+        })
+        .collect::<Vec<_>>();
+    let mut resolver: Box<dyn OriginalInputResolverTrait> = match originals {
+        Some(readback) => Box::new(readback.v4_resolver(&context.platform, &context.capabilities)),
+        None => Box::new(EmptyOriginalResolver),
+    };
+    let owner = RefCell::new(None);
+    let mut probe = make_probe(context, &owner);
+    let result = restore_registry_state_v4(
+        snapshot.registry_revision(),
+        &states,
+        &operations,
+        context.registry_limits,
+        max_total_bytes,
+        resolver.as_mut(),
+        &mut probe,
+    );
+    drop(probe);
+    if let Some(error) = owner.into_inner() {
+        return Err(V4ReadbackError::Owner(error));
+    }
+    result.map_err(V4ReadbackError::Batch)
+}
+
+struct EmptyOriginalResolver;
+
+impl OriginalInputResolverTrait for EmptyOriginalResolver {
+    fn resolve_policy(
+        &mut self,
+        _reference: &[u8],
+        _probe: &mut dyn FnMut() -> Result<(), CheckpointFailureV2>,
+    ) -> Result<std::sync::Arc<search_source_provenance::RetainedPolicyV2>, BatchCodecV4Error> {
+        Err(BatchCodecV4Error::Registry(
+            RegistryError::AdmissionRestorationUnavailable,
+        ))
+    }
+
+    fn resolve_admission(
+        &mut self,
+        _reference: &[u8],
+        _policy: std::sync::Arc<search_source_provenance::RetainedPolicyV2>,
+        _probe: &mut dyn FnMut() -> Result<(), CheckpointFailureV2>,
+    ) -> Result<search_source_provenance::OriginalAdmissionV2, BatchCodecV4Error> {
+        Err(BatchCodecV4Error::Registry(
+            RegistryError::AdmissionRestorationUnavailable,
+        ))
+    }
+}
+
+fn make_probe<'context, 'work>(
+    context: &'context OriginalV4Context<'work>,
+    owner: &'context RefCell<Option<OwnerError>>,
+) -> impl FnMut() -> Result<(), CheckpointFailureV2> + 'context {
+    move || match (context.work)(search_control_redb::MigrationBootstrapWork::Checkpoint) {
+        Ok(()) if std::time::Instant::now() < context.deadline => Ok(()),
+        Ok(()) => Err(CheckpointFailureV2::DeadlineExceeded),
+        Err(error) => {
+            owner.borrow_mut().replace(error);
+            Err(CheckpointFailureV2::Cancelled)
+        }
+    }
+}

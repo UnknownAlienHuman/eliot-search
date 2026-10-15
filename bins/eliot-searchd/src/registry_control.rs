@@ -9,6 +9,7 @@
 mod tests;
 
 mod original_inputs;
+mod v4_restore;
 mod v4_readback;
 mod source_ids;
 
@@ -432,13 +433,58 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         let snapshot = if let Some((deadline, callback)) = self.original {
             self.journal.read_registry_snapshot_with_original_context(deadline, &callback).map_err(|e| storage_failure(e.control, None))?
         } else { self.journal.read_registry_snapshot(context).map_err(|error| call_failure(&error, None))? };
-        let restored = restore_observed_snapshot(
-            &snapshot,
-            self.identity,
-            self.journal.limits(),
-            self.registry_limits,
-            context,
-        )?;
+        let restored = if let Some(original_v4) = self.original_v4.as_ref() {
+            let shape = v4_restore::collect_snapshot_refs(&snapshot, original_v4)
+                .map_err(|error| v4_failure(error, None))?;
+            if !shape.has_v4() {
+                restore_observed_snapshot(
+                    &snapshot,
+                    self.identity,
+                    self.journal.limits(),
+                    self.registry_limits,
+                    context,
+                )?
+            } else {
+                let references = shape
+                    .references()
+                    .iter()
+                    .map(Vec::as_slice)
+                    .collect::<Vec<_>>();
+                let originals = if references.is_empty() {
+                    None
+                } else {
+                    let originals = self
+                        .original_inputs_snapshot(&references, context)
+                        .map_err(original_inputs_failure)?;
+                    if originals.identity() != self.identity
+                        || originals.generation() != snapshot.journal_generation()
+                    {
+                        return Err(owner_failure(RegistryError::SnapshotInvalid));
+                    }
+                    Some(originals)
+                };
+                let max_restore_bytes = self
+                    .journal
+                    .limits()
+                    .max_total_value_bytes
+                    .min(MAX_REGISTRY_RESTORE_BYTES);
+                v4_restore::restore_snapshot_v4(
+                    &snapshot,
+                    originals.as_ref(),
+                    original_v4,
+                    max_restore_bytes,
+                )
+                .map_err(|error| v4_failure(error, None))?
+            }
+        } else {
+            restore_observed_snapshot(
+                &snapshot,
+                self.identity,
+                self.journal.limits(),
+                self.registry_limits,
+                context,
+            )?
+        };
         let mut original = None;
         if let Some(root) = root {
             for envelope in snapshot.operations() {
