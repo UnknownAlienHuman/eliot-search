@@ -286,6 +286,13 @@ short/Interrupted retries and EOF), fallible object/locator capacity, comparison
 and other filesystem/platform attempts, with post-call and terminal polls.
 Logical work counters are not RSS or proof that synchronous calls are preemptible.
 
+`LegacyRevisionObjectContext::progress` defaults to the original full checkpoint;
+the kernel uses it only around charged CPU-only allocation/locator/comparison work.
+`held_observer_dispatch` defaults to Observe admission plus a full pre-ABI checkpoint. A qualified platform
+may use it per ABI inside a borrowed-FD-only observer with full outer checkpoints
+and progress polls after each ABI. Overrides retain the original refusal and meter;
+path opens, body I/O, effects and terminal checkpoints keep their full guards.
+
 Contextual failures retain component-local directory/staging/publication attempt
 phase, original caller refusal and any preceding object/platform failure.
 `object_code` gives a stable redacted classification; `context_cause` explicitly

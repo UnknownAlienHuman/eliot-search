@@ -399,12 +399,219 @@ impl LegacyRevisionObjectContext for &MigrationContext<'_, '_> {
         MigrationContext::checkpoint(self)
     }
 
+    fn progress(&mut self) -> Result<(), Self::Error> {
+        MigrationContext::charge(self, LegacyRevisionObjectWork::Compare(0))
+    }
+
     fn charge(&mut self, work: LegacyRevisionObjectWork) -> Result<(), Self::Error> {
         MigrationContext::charge(self, work)
     }
 
+    fn held_observer_dispatch(&mut self) -> Result<(), Self::Error> {
+        self.progress()?;
+        self.operation.try_borrow_mut()
+            .map_err(|_| OwnerError::OwnerOperationConflict.code().to_owned())?
+            .migration_held_observer_dispatch()
+            .map_err(|error| error.code().to_owned())
+    }
+
     fn effect_attempted(&mut self) {
         self.unexpected_source_effect.set(true);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod object_progress_tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::fs;
+
+    #[test]
+    fn object_progress_native_pending_after_abi_returns_no_body_and_stays_terminal() {
+        use crate::owner_composition::{NativeRootAdmission, NativeRootLimits, NativeRootRequest,
+            admit_existing, initialize_new};
+        use search_runtime_owner::DataRootOpenMode;
+        use std::ffi::OsString;
+        use std::io::Write;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+        let temp = fs::canonicalize(std::env::temp_dir()).unwrap();
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let base = temp.join(format!("search-object-progress-pending-{}-{stamp}", std::process::id()));
+        fs::create_dir(&base).unwrap();
+        let root = base.join("data");
+        let output = base.join("output");
+        let sources = base.join("sources");
+        for path in [&root, &output, &sources] { fs::create_dir(path).unwrap(); }
+        let limits = || NativeRootLimits::new([256, 256 * 1024, 512 * 1024,
+            1024 * 1024 * 1024, 16384, 256]).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(120);
+        initialize_new(NativeRootRequest::new(DataRootOpenMode::InitializeNew,
+            &[OsString::from("--initialize-data-root"), root.as_os_str().to_owned(),
+                OsString::from("02690269026902690269026902690269")],
+            deadline, Arc::new(AtomicBool::new(false)), limits()).unwrap())
+            .unwrap().emit(&mut Vec::new()).unwrap();
+        let namespace = crate::sha256::decode_digest(
+            fs::read_to_string(root.join("control/namespace.id")).unwrap().trim()).unwrap();
+        let registration = search_source_registry::encode_legacy_source_root_catalog(
+            [sources.to_str().unwrap()]).unwrap();
+        {
+            let mut catalog = fs::OpenOptions::new().write(true).create_new(true)
+                .open(root.join("control/source-roots.v1")).unwrap();
+            catalog.write_all(&registration).unwrap();
+            catalog.sync_all().unwrap();
+        }
+        let evidence = || {
+            [
+                ".eliot-search-installation.v1",
+                ".eliot-search-initialization-journal.v2",
+                ".eliot-search-owner-state-a.v1",
+                ".eliot-search-owner-state-b.v1",
+                ".eliot-search-owner.lock",
+                ".eliot-search-sealed-owner.lock",
+                "control/namespace.id",
+                "control/source-events.log",
+                "control/source-roots.v1",
+            ].map(|relative| fs::read(root.join(relative)).unwrap())
+        };
+        let before = evidence();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let (request, _) = NativeRootRequest::for_source_control_migration(
+            &[OsString::from("--stage-source-control-migration"),
+                root.as_os_str().to_owned(), OsString::from("10000000-0000-0000-0000-000000000269"),
+                output.as_os_str().to_owned()], deadline, Arc::clone(&cancelled), limits()).unwrap();
+        let NativeRootAdmission::Inspection(owner) = admit_existing(request).unwrap() else { panic!("native custody"); };
+        let armed = Rc::new(Cell::new(false));
+        let dispatches = Rc::new(Cell::new(0));
+        let phases = Rc::new(RefCell::new(Vec::new()));
+        let pending = Rc::new(RefCell::new(None::<std::path::PathBuf>));
+        let hook_armed = Rc::clone(&armed);
+        let hook_dispatches = Rc::clone(&dispatches);
+        let hook_phases = Rc::clone(&phases);
+        let hook_pending = Rc::clone(&pending);
+        let outcome = owner.run_registration_one_shot(|operation| {
+            assert_eq!(operation.migration_deadline(), deadline);
+            let retained_registration = operation.registration_bytes()?;
+            assert_eq!(retained_registration.as_deref(), Some(registration.as_slice()));
+            operation.chain_migration_phase_hook_for_test(Box::new(move |phase| {
+                if !hook_armed.get() { return; }
+                hook_phases.borrow_mut().push(phase);
+                if phase == "migration-held-observer-dispatch" {
+                    let count = hook_dispatches.get() + 1;
+                    hook_dispatches.set(count);
+                    if count == 2 {
+                        fs::write(hook_pending.borrow().as_ref().unwrap(), b"external pending adversary").unwrap();
+                    }
+                }
+            }));
+            {
+                let context = MigrationContext::new(operation);
+                let mut original = &context;
+                armed.set(true);
+                for _ in 0..3 { original.progress()?; }
+                assert!(phases.borrow().is_empty(), "CPU progress dispatches no registration I/O");
+                let path = root.join("control/source-roots.tmp");
+                assert!(!path.exists());
+                *pending.borrow_mut() = Some(path.clone());
+                let result = super::super::storage_io::read_revision_object_detailed_with_context(
+                    &root.join("control/namespace.id"), 256, &context);
+                armed.set(false);
+                fs::remove_file(&path).unwrap();
+                let expected = OwnerError::OwnerRecoveryQuarantined.code().to_owned();
+                assert!(matches!(result, Err(ref error) if error == &expected));
+                assert_eq!(dispatches.get(), 3, "all three ABIs are inside the final pending fence");
+                assert_eq!(original.progress(), Err(expected.clone()));
+                assert_eq!(original.held_observer_dispatch(), Err(expected));
+                assert_eq!(dispatches.get(), 3, "removing pending cannot renew the original context");
+            }
+            assert!(!operation.output_attempted());
+            Ok(())
+        });
+        assert_eq!(outcome, Err(OwnerError::OwnerRecoveryQuarantined.code().to_owned()));
+        assert_eq!(evidence(), before);
+        assert_eq!(fs::read_dir(&output).unwrap().count(), 0);
+        assert!(!root.join("control/source-roots.tmp").exists());
+        assert!(!cancelled.load(Ordering::Acquire));
+        search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&namespace).unwrap();
+        let current = fs::canonicalize(&base).unwrap();
+        assert_eq!(current, base);
+        assert_eq!(current.parent(), Some(temp.as_path()));
+        assert!(current.file_name().unwrap().to_str().unwrap().starts_with("search-object-progress-pending-"));
+        fs::remove_dir_all(current).unwrap();
+    }
+
+    #[test]
+    fn object_progress_native_original_cancel_between_abis_is_sticky() {
+        use crate::owner_composition::{NativeRootAdmission, NativeRootLimits, NativeRootRequest,
+            admit_existing, initialize_new};
+        use search_runtime_owner::DataRootOpenMode;
+        use std::ffi::OsString;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+        let temp = fs::canonicalize(std::env::temp_dir()).unwrap();
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let base = temp.join(format!("search-object-progress-{}-{stamp}", std::process::id()));
+        fs::create_dir(&base).unwrap();
+        let root = base.join("data");
+        let output = base.join("output");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&output).unwrap();
+        let limits = || NativeRootLimits::new([256, 256 * 1024, 512 * 1024,
+            1024 * 1024 * 1024, 16384, 256]).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(120);
+        initialize_new(NativeRootRequest::new(DataRootOpenMode::InitializeNew,
+            &[OsString::from("--initialize-data-root"), root.as_os_str().to_owned(),
+                OsString::from("02690269026902690269026902690269")],
+            deadline, Arc::new(AtomicBool::new(false)), limits()).unwrap())
+            .unwrap().emit(&mut Vec::new()).unwrap();
+        let before = fs::read(root.join("control/namespace.id")).unwrap();
+        let namespace = crate::sha256::decode_digest(std::str::from_utf8(&before).unwrap().trim()).unwrap();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let (request, _) = NativeRootRequest::for_source_control_migration(
+            &[OsString::from("--stage-source-control-migration"),
+                root.as_os_str().to_owned(), OsString::from("10000000-0000-0000-0000-000000000269"),
+                output.as_os_str().to_owned()], deadline, Arc::clone(&cancelled), limits()).unwrap();
+        let NativeRootAdmission::Inspection(owner) = admit_existing(request).unwrap() else { panic!("native custody"); };
+        let dispatches = Rc::new(Cell::new(0));
+        let hook_dispatches = Rc::clone(&dispatches);
+        let hook_cancelled = Arc::clone(&cancelled);
+        let outcome = owner.run_registration_one_shot(|operation| {
+            operation.chain_migration_phase_hook_for_test(Box::new(move |phase| {
+                if phase == "migration-held-observer-dispatch" {
+                    let count = hook_dispatches.get() + 1;
+                    hook_dispatches.set(count);
+                    if count == 2 { hook_cancelled.store(true, Ordering::Release); }
+                }
+            }));
+            {
+                let context = MigrationContext::new(operation);
+                let result = super::super::storage_io::read_revision_object_detailed_with_context(
+                    &root.join("control/namespace.id"), 256, &context);
+                let expected = OwnerError::OwnerCancelledBeforeMutation.code().to_owned();
+                assert!(matches!(result, Err(ref error) if error == &expected));
+                assert_eq!(dispatches.get(), 2, "second admission refuses before its ABI");
+                cancelled.store(false, Ordering::Release);
+                let mut original = &context;
+                assert_eq!(original.progress(), Err(expected.clone()));
+                assert_eq!(original.held_observer_dispatch(), Err(expected));
+                assert_eq!(dispatches.get(), 2);
+            }
+            assert!(!operation.output_attempted());
+            Ok(())
+        });
+        assert_eq!(outcome, Err(OwnerError::OwnerCancelledBeforeMutation.code().to_owned()));
+        assert_eq!(fs::read(root.join("control/namespace.id")).unwrap(), before);
+        assert_eq!(fs::read_dir(&output).unwrap().count(), 0);
+        search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&namespace).unwrap();
+        let current = fs::canonicalize(&base).unwrap();
+        assert_eq!(current, base);
+        assert_eq!(current.parent(), Some(temp.as_path()));
+        assert!(current.file_name().unwrap().to_str().unwrap().starts_with("search-object-progress-"));
+        fs::remove_dir_all(current).unwrap();
     }
 }
 

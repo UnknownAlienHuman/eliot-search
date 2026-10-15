@@ -44,8 +44,21 @@ pub trait LegacyRevisionObjectContext {
     type Error;
     /// Poll the original context without replacing its identity or allowance.
     fn checkpoint(&mut self) -> Result<(), Self::Error>;
+    /// Poll CPU-only work. The default retains the complete original checkpoint.
+    /// Overrides must preserve cancellation, deadline, poison and the same meter.
+    fn progress(&mut self) -> Result<(), Self::Error> {
+        self.checkpoint()
+    }
     /// Consume this attempt's allowance before allocation or dispatch.
     fn charge(&mut self, work: LegacyRevisionObjectWork) -> Result<(), Self::Error>;
+    /// Admit one ABI attempt inside a closed borrowed-FD observer. The caller
+    /// must retain full checkpoints around the observer; no path/body/effect I/O
+    /// belongs inside it. The default retains ordinary observation admission
+    /// followed by a full checkpoint before the ABI can execute.
+    fn held_observer_dispatch(&mut self) -> Result<(), Self::Error> {
+        self.charge(LegacyRevisionObjectWork::Observe)?;
+        self.checkpoint()
+    }
     /// Latch possible effects in the original parent before the first dispatch.
     /// This notification neither certifies completion nor authorizes replay.
     fn effect_attempted(&mut self);
@@ -471,21 +484,39 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
         effect: ContextualRevisionObjectEffect,
         action: impl FnOnce() -> Result<T, ObjectError<P::Error>>,
     ) -> ResultFor<P, C, T> {
-        self.context.checkpoint().map_err(Failure::Context)?;
+        self.poll_work(work, effect).map_err(Failure::Context)?;
         self.context.charge(work).map_err(Failure::Context)?;
-        self.context.checkpoint().map_err(Failure::Context)?;
+        self.poll_work(work, effect).map_err(Failure::Context)?;
         if effect != ContextualRevisionObjectEffect::NotAttempted {
             self.context.effect_attempted();
             self.effect = self.effect.max(effect);
         }
         let result = action().map_err(Failure::Object);
-        let checkpoint = self.context.checkpoint().map_err(Failure::Context);
+        let checkpoint = self.poll_work(work, effect).map_err(Failure::Context);
         match (result, checkpoint) {
             (Err(Failure::Object(object)), Err(Failure::Context(context))) => {
                 Err(Failure::AfterObject { object, context })
             }
             (Err(error), _) | (_, Err(error)) => Err(error),
             (Ok(value), Ok(())) => Ok(value),
+        }
+    }
+    fn poll_work(
+        &mut self,
+        work: LegacyRevisionObjectWork,
+        effect: ContextualRevisionObjectEffect,
+    ) -> Result<(), C::Error> {
+        if effect == ContextualRevisionObjectEffect::NotAttempted
+            && matches!(
+                work,
+                LegacyRevisionObjectWork::Allocate(_)
+                    | LegacyRevisionObjectWork::AllocateLocator(_)
+                    | LegacyRevisionObjectWork::Compare(_)
+            )
+        {
+            self.context.progress()
+        } else {
+            self.context.checkpoint()
         }
     }
     fn platform_call<T>(
@@ -647,7 +678,11 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
         self.context.checkpoint().map_err(Failure::Context)?;
         Ok(ObjectRead { bytes, identity })
     }
-    fn read_data(&mut self, reader: &mut impl Read, size: usize) -> ResultFor<P, C, Zeroizing<Vec<u8>>> {
+    fn read_data(
+        &mut self,
+        reader: &mut impl Read,
+        size: usize,
+    ) -> ResultFor<P, C, Zeroizing<Vec<u8>>> {
         let capacity = size
             .checked_add(1)
             .ok_or(Failure::Object(ObjectError::SizeInvalid))?;
@@ -963,4 +998,5 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
 }
 
 #[cfg(test)]
+#[path = "context/tests.rs"]
 mod tests;
