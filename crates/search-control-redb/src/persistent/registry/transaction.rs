@@ -1,6 +1,6 @@
 use super::super::operation::{Budget, Check, Point};
 use super::super::{
-    Boundary, ControlCallError, PersistentControlJournal, ReadTransaction, operation_from,
+    Boundary, ControlCallError, PersistentControlJournal, ReadTransaction, operation_from_checked,
     transaction,
 };
 use super::{
@@ -15,6 +15,29 @@ use search_ports::{CancellationProbe, OperationContext};
 use std::collections::BTreeSet;
 
 impl RegistryMutationRequest {
+    pub(in crate::persistent) fn command_checked(&self, limits: JournalLimits, check: &dyn Check)
+        -> Result<ConditionalControlMutation, ControlError> {
+        use super::super::MigrationBootstrapWork as Work;
+        check.check(Point::Start)?;
+        if self.changes.len().checked_mul(2).and_then(|n| n.checked_add(4))
+            .is_none_or(|n| n > limits.max_mutation_items) { return Err(ControlError::BudgetExceeded); }
+        let mut bytes = codec::operation_size(&self.envelope)?;
+        for change in &self.changes {
+            check.check(Point::PlanRecord)?;
+            bytes = bytes.checked_add(codec::key_size(&change.key)?.checked_mul(3).ok_or(ControlError::BudgetExceeded)?)
+                .and_then(|n| n.checked_add(change.after.len() + 12))
+                .and_then(|n| n.checked_add(change.before.as_ref().map_or(0, |old| old.len() + 12)))
+                .ok_or(ControlError::BudgetExceeded)?;
+        }
+        let items = self.changes.len().checked_add(2).ok_or(ControlError::BudgetExceeded)?;
+        let capacity = items.checked_mul(std::mem::size_of::<ControlWrite>() + std::mem::size_of::<ControlRecordCondition>())
+            .and_then(|n| n.checked_mul(2)).and_then(|n| bytes.checked_mul(2).and_then(|b| n.checked_add(b)))
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(capacity))?;
+        check.reserve(Work::Process(bytes))?;
+        self.command(limits)
+    }
+
     pub(in crate::persistent) fn command(
         &self,
         limits: JournalLimits,
@@ -122,16 +145,7 @@ impl PersistentControlJournal {
         context: &OperationContext<C>,
     ) -> Result<CommitRecoveryDecision, ControlCallError> {
         let budget = Budget::new(context);
-        let result = (|| {
-            budget.check(Point::Start)?;
-            self.require_registry_schema(&budget)?;
-            let command = request.command(self.limits)?;
-            self.recover_transaction_with_conditions_checked(
-                command.mutation(),
-                command.conditions(),
-                &budget,
-            )
-        })();
+        let result = self.recover_registry_checked(request, &budget);
         result.map_err(|error| {
             budget
                 .failure(
@@ -174,11 +188,11 @@ impl PersistentControlJournal {
             .database
             .begin_read()
             .map_err(|_| ControlError::StoreUnavailable)?;
-        self.header_from(&read)?;
+        self.header_from_checked(&read, check)?;
         check.check(Point::ReadRecord)?;
         super::super::publication::require_registry_base(self, &read, self.limits)?;
         drop(read);
-        let command = request.command(self.limits)?;
+        let command = request.command_checked(self.limits, check)?;
         let result = transaction::execute_registry(
             self,
             command.mutation(),
@@ -216,10 +230,12 @@ impl PersistentControlJournal {
             .database
             .begin_read()
             .map_err(|_| ControlError::StoreUnavailable)?;
-        let header = self.header_from(&read)?;
+        let header = self.header_from_checked(&read, check)?;
         let table = read
             .open_table(super::super::RECORDS)
             .map_err(super::super::map_table_error)?;
+        check.reserve(super::super::MigrationBootstrapWork::Allocate(self.limits.max_key_bytes * 2))?;
+        check.reserve(super::super::MigrationBootstrapWork::Process(request.envelope.operation_id.as_str().len()))?;
         let revision_key = ControlKey::new(REVISION.to_vec(), self.limits)?;
         let operation_key = codec::operation_key(&request.envelope.operation_id, self.limits)?;
         let get = |key: &ControlKey| {
@@ -228,8 +244,8 @@ impl PersistentControlJournal {
                 .get(key.as_bytes())
                 .map_err(|e| super::super::map_storage_error(&e))?
                 .ok_or(ControlError::StoreCorrupt)?;
-            let value = super::super::decode_value(raw.value(), self.limits)?;
-            codec::decode_record(key, &value, self.limits)
+            let value = super::super::decode_value_checked(raw.value(), self.limits, check)?;
+            codec::decode_record_checked(key, &value, self.limits, check)
         };
         let codec::Record::Revision(registry_revision) = get(&revision_key)? else {
             return Err(ControlError::StoreCorrupt);
@@ -238,7 +254,7 @@ impl PersistentControlJournal {
             return Err(ControlError::StoreCorrupt);
         };
         check.check(Point::ReadOperation)?;
-        let stored = operation_from(&read, receipt.operation_id, &header, self.limits)?
+        let stored = operation_from_checked(&read, receipt.operation_id, &header, self.limits, check)?
             .ok_or(ControlError::StoreCorrupt)?;
         let mut original_receipt = stored.receipt;
         original_receipt.replayed = receipt.replayed;
@@ -249,8 +265,11 @@ impl PersistentControlJournal {
         {
             return Err(ControlError::StoreCorrupt);
         }
+        check.reserve(super::super::MigrationBootstrapWork::Allocate(request.changes.len()
+            .checked_mul(std::mem::size_of::<super::RegistryStoredState>()).ok_or(ControlError::BudgetExceeded)?))?;
         let mut states = Vec::with_capacity(request.changes.len());
         for change in &request.changes {
+            check.reserve(super::super::MigrationBootstrapWork::Allocate(codec::key_size(&change.key)?.checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
             let key = codec::state_key(&change.key, self.limits)?;
             let codec::Record::State(state) = get(&key)? else {
                 return Err(ControlError::StoreCorrupt);
@@ -270,7 +289,7 @@ impl PersistentControlJournal {
         })
     }
 
-    fn registry_snapshot_checked(
+    pub(in crate::persistent) fn registry_snapshot_checked(
         &self,
         check: &dyn Check,
     ) -> Result<RegistryReadSnapshot, ControlError> {
@@ -285,9 +304,21 @@ impl PersistentControlJournal {
         extract(&snapshot, self.limits, check)
     }
 
+    pub(in crate::persistent) fn recover_registry_checked(&mut self, request: &RegistryMutationRequest,
+        check: &dyn Check,
+    ) -> Result<CommitRecoveryDecision, ControlError> {
+        check.check(Point::Start)?;
+        self.require_registry_schema(check)?;
+        let command = request.command_checked(self.limits, check)?;
+        self.recover_transaction_with_conditions_checked(command.mutation(), command.conditions(), check)
+    }
+
     fn require_registry_schema(&self, check: &dyn Check) -> Result<(), ControlError> {
         if self.identity.schema_version == REGISTRY_JOURNAL_SCHEMA_VERSION {
-            self.require_normal_profile(check)
+            check.check(Point::Start)?;
+            let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
+            self.header_from_checked(&read, check)?;
+            super::super::operating_profile::normal(super::super::registry_mode_checked(&read, self.identity, self.limits, check)?)
         } else {
             Err(ControlError::SchemaUnsupported)
         }
@@ -312,7 +343,8 @@ fn extract(
             continue;
         }
         check.check(Point::ReadRecord)?;
-        match codec::decode_record(key, record, limits)? {
+        check.reserve(super::super::MigrationBootstrapWork::Allocate(std::mem::size_of::<super::RegistryStoredState>() * 2 + 64))?;
+        match codec::decode_record_checked(key, record, limits, check)? {
             codec::Record::Revision(n) => revision = Some(n),
             codec::Record::State(state) => value.states.push(state),
             codec::Record::Operation(operation) => value.operations.push(operation),
@@ -357,14 +389,18 @@ pub(in crate::persistent) fn validate_snapshot(
         .get("header")
         .map_err(|e| super::super::map_storage_error(&e))?
         .ok_or(ControlError::StoreCorrupt)?;
+    check.reserve(super::super::MigrationBootstrapWork::Read(header.value().len()))?;
     let header = super::super::Header::decode(header.value(), snapshot.identity, limits)?;
     for envelope in &registry.operations {
         check.check(Point::ReadOperation)?;
-        let operation = operation_from(
+        check.reserve(super::super::MigrationBootstrapWork::Allocate(limits.max_key_bytes * 2))?;
+        check.reserve(super::super::MigrationBootstrapWork::Process(envelope.operation_id.as_str().len()))?;
+        let operation = operation_from_checked(
             read,
             codec::mutation_id(&envelope.operation_id),
             &header,
             limits,
+            check,
         )?
         .ok_or(ControlError::StoreCorrupt)?;
         if operation.receipt.before_generation != envelope.journal_generation

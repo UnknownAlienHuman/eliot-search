@@ -17,6 +17,7 @@ mod authenticated_proxy;
 mod catalog_presence;
 mod catalog_quarantine;
 mod config_composition;
+mod control_identity;
 mod continuation;
 mod development;
 mod direct_preparation;
@@ -42,6 +43,7 @@ mod public_runtime_service;
 #[allow(dead_code)]
 mod publication_composition;
 mod qualified_entropy;
+mod registry_control;
 #[cfg(feature = "wave4-query")]
 #[allow(dead_code)]
 mod query_composition;
@@ -102,6 +104,7 @@ const fn maybe_run_legacy_loopback() -> Option<ExitCode> {
 
 fn main() -> ExitCode {
     let result = secure_commands::maybe_refuse_legacy_effects()
+        .or_else(owner_composition::maybe_run_direct_registry)
         .or_else(native_root_command::maybe_run)
         .or_else(source_migration_command::maybe_run)
         .or_else(preparation_composition::maybe_run)

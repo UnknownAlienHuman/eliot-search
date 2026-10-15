@@ -13,7 +13,9 @@ pub use kernel::ShutdownReceipt;
 pub use kernel::{LiveOwner, establish};
 
 pub use kernel::InitializingDataRoot;
+#[cfg(test)]
 pub use kernel::initialize_new;
+pub use kernel::{initialize_direct, maybe_run_direct_registry};
 pub use kernel::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 pub use kernel::{NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing};
 pub use kernel::{NativeSyncPreflightOperation, run_source_sync_preflight};

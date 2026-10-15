@@ -4,6 +4,7 @@ mod lookup;
 #[cfg(test)]
 mod tests;
 mod transaction;
+mod original_context;
 
 use crate::{
     ControlCommitReceipt, ControlError, ControlKey, ControlRecordClass, ControlValue,
@@ -14,6 +15,18 @@ use std::fmt;
 
 pub(super) const PREFIX: &[u8] = b"eliot.control.registry.v1/";
 pub(super) const REVISION: &[u8] = b"eliot.control.registry.v1/revision";
+
+/// Encoded operation value size before bounded owner metadata copies.
+/// This uses the same checked size producer as the existing operation encoder.
+///
+/// # Errors
+/// Returns an error for an empty owner payload or unsupported encoded length.
+pub fn registry_operation_value_len(
+    operation_id: &OpaqueId,
+    owner_bytes_len: usize,
+) -> Result<usize, ControlError> {
+    codec::operation_value_len(operation_id, owner_bytes_len)
+}
 
 /// Finite storage families, not source admission or policy authority.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]

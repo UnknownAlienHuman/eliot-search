@@ -36,6 +36,12 @@ pub(super) fn open(
     platform::open(parent, name, mode)
 }
 
+/// Sole fixed DIRECT DB entry, relative to the retained qualified control FD.
+/// No DELETE access, replacement, arbitrary relative path or create-or-open.
+pub(super) fn open_direct_control(parent: &File, create: bool) -> Result<File, OwnerError> {
+    platform::open_direct_control(parent, create)
+}
+
 pub(super) fn rename(file: &File, parent: &File, name: CatalogName) -> Result<(), OwnerError> {
     platform::rename(file, parent, name)
 }
@@ -47,6 +53,10 @@ pub(super) fn mark_delete(file: &File) -> Result<(), OwnerError> {
 #[cfg(not(windows))]
 mod platform {
     use super::{CatalogName, CatalogOpen, File, OwnerError};
+
+    pub(super) fn open_direct_control(_parent: &File, _create: bool) -> Result<File, OwnerError> {
+        Err(OwnerError::OwnerRecoveryQuarantined)
+    }
 
     pub(super) fn open(
         _parent: &File,
@@ -169,11 +179,17 @@ mod platform {
         ) -> i32;
     }
 
-    fn encoded_name(name: CatalogName) -> ([u16; 17], u16) {
+    #[derive(Clone, Copy)]
+    enum NativeName { Catalog(CatalogName), DirectControl }
+    #[derive(Clone, Copy)]
+    enum NativeOpen { Catalog(CatalogOpen), DirectExisting, DirectCreate }
+
+    fn encoded_name(name: NativeName) -> ([u16; 17], u16) {
         let mut units = [0; 17];
         let mut count = 0_u16;
         // The closed ASCII names above fit 16 UTF-16 units; no caller path enters.
-        for (index, byte) in name.text().bytes().enumerate() {
+        let text = match name { NativeName::Catalog(name) => name.text(), NativeName::DirectControl => "control.redb" };
+        for (index, byte) in text.bytes().enumerate() {
             units[index] = u16::from(byte);
             count += 2;
         }
@@ -185,6 +201,15 @@ mod platform {
         name: CatalogName,
         mode: CatalogOpen,
     ) -> Result<Option<File>, OwnerError> {
+        open_fixed(parent, NativeName::Catalog(name), NativeOpen::Catalog(mode))
+    }
+
+    pub(super) fn open_direct_control(parent: &File, create: bool) -> Result<File, OwnerError> {
+        open_fixed(parent, NativeName::DirectControl, if create { NativeOpen::DirectCreate } else { NativeOpen::DirectExisting })?
+            .ok_or(OwnerError::OwnerRecoveryEvidenceMissing)
+    }
+
+    fn open_fixed(parent: &File, name: NativeName, mode: NativeOpen) -> Result<Option<File>, OwnerError> {
         let (mut units, length) = encoded_name(name);
         let mut unicode = UnicodeString {
             length,
@@ -208,19 +233,21 @@ mod platform {
         };
         let mut raw = core::ptr::null_mut();
         let (access, sharing, disposition, expected) = match mode {
-            CatalogOpen::ExistingMutation => (
+            NativeOpen::Catalog(CatalogOpen::ExistingMutation) => (
                 FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE,
                 1,
                 FILE_OPEN,
                 FILE_OPENED,
             ),
-            CatalogOpen::ExistingRead => (FILE_GENERIC_READ, 7, FILE_OPEN, FILE_OPENED),
-            CatalogOpen::CreateNew => (
+            NativeOpen::Catalog(CatalogOpen::ExistingRead) => (FILE_GENERIC_READ, 7, FILE_OPEN, FILE_OPENED),
+            NativeOpen::Catalog(CatalogOpen::CreateNew) => (
                 FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE,
                 1,
                 FILE_CREATE,
                 FILE_CREATED,
             ),
+            NativeOpen::DirectExisting => (FILE_GENERIC_READ | FILE_GENERIC_WRITE, 3, FILE_OPEN, FILE_OPENED),
+            NativeOpen::DirectCreate => (FILE_GENERIC_READ | FILE_GENERIC_WRITE, 3, FILE_CREATE, FILE_CREATED),
         };
         // SAFETY: all counted strings, ABI-asserted structures and outputs remain
         // live and uniquely borrowed for this synchronous call. The retained parent
@@ -242,7 +269,7 @@ mod platform {
         };
         if matches!(
             mode,
-            CatalogOpen::ExistingMutation | CatalogOpen::ExistingRead
+            NativeOpen::Catalog(CatalogOpen::ExistingMutation | CatalogOpen::ExistingRead) | NativeOpen::DirectExisting
         ) && result == STATUS_OBJECT_NAME_NOT_FOUND
         {
             return Ok(None);
@@ -264,7 +291,7 @@ mod platform {
     }
 
     pub(super) fn rename(file: &File, parent: &File, name: CatalogName) -> Result<(), OwnerError> {
-        let (units, length) = encoded_name(name);
+        let (units, length) = encoded_name(NativeName::Catalog(name));
         let mut info = RenameInfo {
             flags: 0,
             root: parent.as_raw_handle(),

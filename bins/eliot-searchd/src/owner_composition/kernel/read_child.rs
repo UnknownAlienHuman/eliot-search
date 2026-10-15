@@ -13,6 +13,16 @@ use super::{NativeBindingView, NativeRootCapability, NativeRootRequest, NativeWo
 // None borrows the startup request/meter; Some owns a distinct admitted command.
 type ReadContext = Option<(NativeRootRequest, NativeWork)>;
 
+#[path = "fresh_root.rs"]
+mod fresh_root;
+
+pub(super) const fn direct_operation(owner: &mut NativeRootCapability) -> Result<NativeReadOperation<'_>, OwnerError> {
+    if owner.pins.direct.is_none() { return Err(OwnerError::OwnerInvalidTransition); }
+    // Closed caller immediately consumes this into fresh_root_context's FULL gate.
+    // No source read, output or capability accessor occurs in between.
+    Ok(NativeReadOperation { owner, context: None, output_attempted: false, registration: None })
+}
+
 #[derive(Clone, Copy)]
 enum RegistrationCheck {
     Both,
@@ -52,7 +62,10 @@ impl NativeReadOperation<'_> {
             &mut bool,
         ) -> Result<T, OwnerError>,
     ) -> Result<T, OwnerError> {
-        if self.owner.mutation || self.owner.record.lifecycle != LifecycleState::Released {
+        let direct = self.owner.pins.direct.is_some()
+            && self.context.is_none() && self.registration.is_none()
+            && self.owner.mutation && self.owner.record.lifecycle == LifecycleState::Active;
+        if !direct && (self.owner.mutation || self.owner.record.lifecycle != LifecycleState::Released) {
             return Err(OwnerError::OwnerInvalidTransition);
         }
         if let Some(error) = self.owner.poisoned {
@@ -134,12 +147,14 @@ impl NativeReadOperation<'_> {
     }
 
     pub(crate) fn namespace_bytes(&mut self) -> Result<Vec<u8>, OwnerError> {
+        if self.owner.pins.direct.is_some() { return Err(OwnerError::OwnerInvalidTransition); }
         self.with_binding(|binding, request, work, _| {
             read_bytes(request, work, &mut binding.pins.files[8], 256)
         })
     }
 
     pub(crate) fn catalog_bytes(&mut self) -> Result<Vec<u8>, OwnerError> {
+        if self.owner.pins.direct.is_some() { return Err(OwnerError::OwnerInvalidTransition); }
         self.with_binding(|binding, request, work, _| {
             read_bytes(request, work, &mut binding.pins.files[9], 512 * 1024 * 1024)
         })

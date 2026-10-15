@@ -146,6 +146,9 @@ pub(super) enum Point {
 
 pub(super) trait Check {
     fn check(&self, point: Point) -> Result<(), ControlError>;
+    // Existing OperationContext paths retain their checkpoint semantics. The
+    // original-native registry path reserves concrete bounded work at its sites.
+    fn reserve(&self, _work: super::MigrationBootstrapWork) -> Result<(), ControlError> { Ok(()) }
 }
 
 /// Only the pre-existing low-level entrypoints use this compatibility policy.

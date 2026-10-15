@@ -36,6 +36,7 @@ enum PreparationPhase {
 }
 
 pub struct InitializingDataRoot {
+    direct: Option<super::native_admission::direct_registry::DirectJournal>,
     files: [Option<File>; 11],
     identities: [Option<[u8; 20]>; 11],
     request: NativeRootRequest,
@@ -63,13 +64,24 @@ impl core::fmt::Debug for InitializationResult {
     }
 }
 
+#[cfg(test)]
 pub fn initialize_new(request: NativeRootRequest) -> Result<InitializationResult, OwnerError> {
     initialize_with_work(request, NativeWork::new())
 }
 
+pub fn initialize_direct(request: NativeRootRequest) -> Result<InitializationResult, OwnerError> {
+    initialize_target(request, NativeWork::new(), true)
+}
+
+#[cfg(test)]
 fn initialize_with_work(
     request: NativeRootRequest,
-    mut work: NativeWork,
+    work: NativeWork,
+) -> Result<InitializationResult, OwnerError> {
+    initialize_target(request, work, false)
+}
+fn initialize_target(
+    request: NativeRootRequest, mut work: NativeWork, direct: bool,
 ) -> Result<InitializationResult, OwnerError> {
     request.check()?;
     if !cfg!(windows) || request.mode != DataRootOpenMode::InitializeNew {
@@ -83,7 +95,9 @@ fn initialize_with_work(
         return Err(OwnerError::DataRootInvalid);
     }
     let bound_root = open_initialization(&request, &mut work, &root, true)?;
-    if barriers(&request, &mut work, &root)?.is_some() {
+    let barrier = if direct { super::native_snapshot::barriers_before_direct(&request, &mut work, &root)? }
+        else { barriers(&request, &mut work, &root)? };
+    if barrier.is_some() {
         return Err(OwnerError::OwnerRecoveryQuarantined);
     }
     work.open(&request)?;
@@ -100,7 +114,7 @@ fn initialize_with_work(
         .is_none();
     drop(directory);
     if !empty {
-        return replay_existing(request, work, root, bound_root, initialization);
+        return replay_existing(request, work, root, bound_root, initialization, direct);
     }
     let physical_root: [u8; 20] = work
         .call(&request, || native_identity(&bound_root))?
@@ -144,6 +158,7 @@ fn initialize_with_work(
     let mut identities = [None; 11];
     identities[0] = Some(physical_root);
     let mut cap = InitializingDataRoot {
+        direct: None,
         files,
         identities,
         request,
@@ -158,7 +173,7 @@ fn initialize_with_work(
         anchor_root: None,
         exclusions: Vec::new(),
     };
-    cap.provision().map_err(|error| cap.failure(error))?;
+    cap.provision_target(direct).map_err(|error| cap.failure(error))?;
     cap.verify_completed().map_err(|error| cap.failure(error))?;
     Ok(InitializationResult {
         root: cap,
@@ -195,9 +210,10 @@ fn replay_existing(
     root: PathBuf,
     bound_root: File,
     initialization: [u8; 16],
+    direct: bool,
 ) -> Result<InitializationResult, OwnerError> {
     let mut exclusions = Vec::new();
-    let mut pins = NativePins { files: Vec::new() };
+    let mut pins = NativePins { files: Vec::new(), direct: None };
     let readback = (|| {
         exclusions = acquire_exclusions(&request, &mut work, &root)?;
         pins = NativePins::acquire_initialization(&request, &mut work, &root)?;
@@ -235,6 +251,7 @@ fn replay_existing(
     }
     let identities = completion.native_objects.map(Some);
     let mut cap = InitializingDataRoot {
+        direct: None,
         files,
         identities,
         request,
@@ -249,6 +266,12 @@ fn replay_existing(
         anchor_root: Some(bound_root),
         exclusions,
     };
+    if direct {
+        let record = DurableOwnerRecord::decode(&cap.layout_bytes(6, MAX_STATE_BYTES)?)?;
+        cap.direct = Some(super::native_admission::direct_registry::DirectJournal::open(
+            &cap.request, &mut cap.work, &cap.root, cap.files[3].as_ref().ok_or(OwnerError::OwnerGuardMismatch)?,
+            super::native_admission::direct_registry::journal_owner(cap.subject.incarnation, cap.subject.root_id, record.epoch)?, false)?);
+    }
     cap.checkpoint("completed-replay")?;
     if crate::direct_store::existing_key_binding(&mut cap)? != completion.selected_key_binding {
         return Err(cap.failure(OwnerError::OwnerGuardMismatch));
@@ -262,6 +285,7 @@ fn replay_existing(
 
 impl InitializingDataRoot {
     fn release_native_resources(&mut self) {
+        drop(self.direct.take());
         if self.files.iter().all(Option::is_none)
             && self.anchor_root.is_none()
             && self.exclusions.is_empty()
@@ -664,6 +688,11 @@ impl InitializingDataRoot {
                 break;
             };
             let name = self.work.call(&self.request, || Ok(entry.file_name()))?;
+            if index == 3 && name == "control.redb" && self.direct.is_some() {
+                self.direct.as_ref().ok_or(OwnerError::OwnerGuardMismatch)?
+                    .verify(&self.request, &mut self.work, &self.root)?;
+                continue;
+            }
             let child = children
                 .iter()
                 .copied()
@@ -715,7 +744,7 @@ impl InitializingDataRoot {
         Ok(())
     }
 
-    fn provision(&mut self) -> Result<(), OwnerError> {
+    fn provision_target(&mut self, direct: bool) -> Result<(), OwnerError> {
         self.publish_subject()?;
         self.create_file(1, true)?;
         self.create_file(2, true)?;
@@ -732,6 +761,12 @@ impl InitializingDataRoot {
         self.write_file(5, &installation, false)?;
         if self.layout_bytes(5, 1024)? != installation {
             return Err(OwnerError::OwnerGuardMismatch);
+        }
+        if direct {
+            self.effect_observed = true;
+            self.direct = Some(super::native_admission::direct_registry::DirectJournal::open(
+                &self.request, &mut self.work, &self.root, self.files[3].as_ref().ok_or(OwnerError::OwnerGuardMismatch)?,
+                super::native_admission::direct_registry::journal_owner(self.subject.incarnation, self.subject.root_id, 1)?, true)?);
         }
         let mut record = DurableOwnerRecord {
             installation_id: self.subject.installation,
@@ -830,6 +865,7 @@ impl InitializingDataRoot {
     }
 
     fn verify_completed(&mut self) -> Result<(), OwnerError> {
+        if let Some(direct) = &self.direct { direct.verify(&self.request, &mut self.work, &self.root)?; }
         self.checkpoint("verify-completed")?;
         if self.files.iter().any(Option::is_none) {
             return Err(OwnerError::OwnerGuardMismatch);
@@ -839,7 +875,7 @@ impl InitializingDataRoot {
             .iter_mut()
             .map(|file| file.take().ok_or(OwnerError::OwnerGuardMismatch))
             .collect::<Result<Vec<_>, _>>()?;
-        let mut pins = NativePins { files };
+        let mut pins = NativePins { files, direct: None };
         let result = (|| {
             pins.verify_locators(&self.request, &mut self.work, &self.root)?;
             let snapshot = read_snapshot(&self.request, &mut self.work, &self.root, &mut pins)?;

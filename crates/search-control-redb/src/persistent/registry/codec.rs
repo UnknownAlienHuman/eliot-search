@@ -15,6 +15,42 @@ const STATE_MAGIC: &[u8; 8] = b"ELRGST01";
 const OPERATION_MAGIC: &[u8; 8] = b"ELRGOP01";
 const REVISION_MAGIC: &[u8; 8] = b"ELRGREV1";
 
+pub(super) fn operation_size(envelope: &RegistryOperationEnvelope) -> Result<usize, ControlError> {
+    operation_value_len(&envelope.operation_id, envelope.owner_bytes.len())
+}
+
+pub(super) fn operation_value_len(
+    operation_id: &OpaqueId,
+    owner_bytes_len: usize,
+) -> Result<usize, ControlError> {
+    let id_len = operation_id.as_str().len();
+    if id_len == 0 || owner_bytes_len == 0 {
+        return Err(ControlError::InvalidValue);
+    }
+    u32::try_from(id_len).map_err(|_| ControlError::BudgetExceeded)?;
+    u32::try_from(owner_bytes_len).map_err(|_| ControlError::BudgetExceeded)?;
+    64_usize
+        .checked_add(id_len)
+        .and_then(|n| n.checked_add(owner_bytes_len))
+        .ok_or(ControlError::BudgetExceeded)
+}
+
+pub(super) fn key_size(key: &RegistryStateKey) -> Result<usize, ControlError> {
+    key.bytes.len().checked_add(STATE.len() + 5).ok_or(ControlError::BudgetExceeded)
+}
+
+pub(super) fn decode_record_checked(key: &ControlKey, value: &ControlValue, limits: JournalLimits,
+    check: &dyn super::super::Check,
+) -> Result<Record, ControlError> {
+    use super::super::MigrationBootstrapWork as Work;
+    let bytes = value.len().checked_mul(2).and_then(|n| n.checked_add(key.as_bytes().len()))
+        .ok_or(ControlError::BudgetExceeded)?;
+    // Covers owned decoded fields and the existing codec's canonical re-encode.
+    check.reserve(Work::Allocate(bytes))?;
+    check.reserve(Work::Process(bytes))?;
+    decode_record(key, value, limits)
+}
+
 pub(super) enum Record {
     Revision(u64),
     State(RegistryStoredState),

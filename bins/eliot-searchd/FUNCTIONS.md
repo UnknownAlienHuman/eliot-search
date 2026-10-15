@@ -1,5 +1,24 @@
 # Function contract — `eliot-searchd`
 
+Fresh DIRECT initialization creates one fixed schema-5 `control/control.redb`
+under retained Native root/parent/database custody. Normal Root registration and
+listing use this same journal, publisher and atomic semantic registry protocol.
+Actual native identity binds the expected journal; stored headers, locator hints
+or marker presence cannot grant admission. Known prior/current owner epochs are
+verified before consuming succession; missing, corrupt, foreign or Inert state
+never creates a replacement or falls back to a legacy authority.
+
+The optional file-only `source_root_locators.entries` maps RootBindingId to a
+lossless UTF-8 locator hint. Actual FD identity/current permissions and database
+state remain authoritative. Historical operation replay does not reactivate an
+Unbound Root. The explicit bootstrap-v1 policy selection is Root metadata only;
+it is not current permanent-v2 Source admission. Metadata output keeps
+`ready:false`, source/service/query consumers unavailable and no fabricated live
+read-security fence. Original request/work/unknown outcome and ordered teardown
+remain load-bearing. Native and installed product qualification remain separate.
+The shared Native journal identity recipe is compiled in the default DIRECT
+profile; it does not require the optional query/provider feature or Qdrant.
+
 Native executable verification hashes fresh bytes at every full fence. The
 native caller uses admitted heap scratch up to 1 MiB and the actual opened length,
 charges each requested read/short-read attempt, and verifies one-byte EOF before

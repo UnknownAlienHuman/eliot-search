@@ -1,5 +1,11 @@
 # Function contract — `search-source-identity`
 
+The explicit `ntfs-directory/v1` codec retains full volume/index/creation values
+without a path, Root UUID or policy in the physical tuple. It encodes supplied
+observations only; actual FD custody and current permission checks remain Native
+producer obligations. Shared bounded tuple/binary helpers are value construction,
+not an additional canonical encoder or native identity/grant issuer.
+
 **Status:** W2/P03 logical contract; no Windows filesystem/repository identity evidence exists.
 
 This package owns pure source/path/repository/workspace identity decisions over bounded observations. It

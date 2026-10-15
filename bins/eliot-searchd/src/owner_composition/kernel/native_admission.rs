@@ -132,6 +132,21 @@ fn acquire_existing(
     request: &NativeRootRequest,
     work: &mut NativeWork,
 ) -> Result<Result<AcquiredNativeRoot, RootOpenState>, OwnerError> {
+    acquire_existing_target(request, work, AdmissionTarget::Legacy).map(|result| result.map(|(root, _)| root))
+}
+
+#[derive(Clone, Copy)]
+enum AdmissionTarget { Legacy, Direct }
+fn acquire_existing_direct(request: &NativeRootRequest, work: &mut NativeWork)
+    -> Result<(AcquiredNativeRoot, direct_registry::DirectJournal), OwnerError> {
+    match acquire_existing_target(request, work, AdmissionTarget::Direct)? {
+        Ok((root, Some(journal))) => Ok((root, journal)),
+        _ => Err(OwnerError::OwnerRecoveryQuarantined),
+    }
+}
+fn acquire_existing_target(
+    request: &NativeRootRequest, work: &mut NativeWork, target: AdmissionTarget,
+) -> Result<Result<(AcquiredNativeRoot, Option<direct_registry::DirectJournal>), RootOpenState>, OwnerError> {
     request.check()?;
     if !cfg!(windows)
         || matches!(
@@ -158,7 +173,11 @@ fn acquire_existing(
     }
     // Retain the physical root before opening either exclusion locator.
     let bound_root = open_existing(request, work, &root, true, false)?;
-    if let Some(state) = barriers(request, work, &root)? {
+    let barrier = match target {
+        AdmissionTarget::Legacy => barriers(request, work, &root)?,
+        AdmissionTarget::Direct => super::native_snapshot::barriers_before_direct(request, work, &root)?,
+    };
+    if let Some(state) = barrier {
         return Ok(Err(state));
     }
     // Both absent locks plus no installation/layout evidence can be inspected
@@ -188,6 +207,13 @@ fn acquire_existing(
     if snapshot.record.lifecycle != LifecycleState::Released {
         return Ok(Err(RootOpenState::OutcomeUnknown));
     }
+    let control = match target {
+        AdmissionTarget::Legacy => None,
+        AdmissionTarget::Direct => {
+            if !snapshot.installation.journal_profile { return Ok(Err(RootOpenState::Unsupported)); }
+            Some(open_direct_control(request, work, &root, &snapshot, &mut pins)?)
+        }
+    };
     let decision = classify_root_open(request.mode, RootOpenState::Initialized);
     if !matches!(
         (mutation, decision),
@@ -207,7 +233,7 @@ fn acquire_existing(
     } else {
         None
     };
-    Ok(Ok(AcquiredNativeRoot {
+    Ok(Ok((AcquiredNativeRoot {
         pins,
         root,
         installation: snapshot.installation,
@@ -218,7 +244,20 @@ fn acquire_existing(
         successor,
         bound_root,
         exclusions,
-    }))
+    }, control)))
+}
+
+fn open_direct_control(request: &NativeRootRequest, work: &mut NativeWork, root: &Path,
+    snapshot: &super::native_snapshot::NativeSnapshot, pins: &mut NativePins,
+) -> Result<direct_registry::DirectJournal, OwnerError> {
+    let binding = direct_registry::journal_owner(snapshot.installation.installation_incarnation_id,
+        snapshot.record.data_root_id, snapshot.record.epoch)?;
+    let mut control = direct_registry::DirectJournal::open(request, work, root, &pins.files[3], binding, false)?;
+    pins.direct = control.pin.take();
+    if super::native_snapshot::barriers_with_direct(request, work, root, pins.direct.as_ref())?.is_some() {
+        return Err(OwnerError::OwnerRecoveryQuarantined);
+    }
+    Ok(control)
 }
 
 pub(super) fn acquire_exclusions(
@@ -562,7 +601,7 @@ impl NativeBindingView<'_> {
                 return Err(OwnerError::OwnerGuardMismatch);
             }
         }
-        if barriers(request, work, self.root)?.is_some() {
+        if super::native_snapshot::barriers_with_direct(request, work, self.root, self.pins.direct.as_ref())?.is_some() {
             return Err(OwnerError::OwnerRecoveryQuarantined);
         }
         let snapshot = read_snapshot(request, work, self.root, self.pins)?;
@@ -579,6 +618,8 @@ impl NativeBindingView<'_> {
 
 #[path = "read_child.rs"]
 mod read_child;
+#[path = "direct_registry.rs"]
+pub(in super::super) mod direct_registry;
 pub use read_child::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 
 #[path = "source_sync.rs"]

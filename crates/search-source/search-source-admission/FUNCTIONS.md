@@ -1,5 +1,10 @@
 # Function contract — `search-source-admission`
 
+`bootstrap_v1` validates all five explicit compiled defaults and encodes fresh
+Root metadata evidence through the original owner policy-value codec. Revision
+one is internal genesis; partial W1 config is not current policy. This helper
+grants no Source admission and cannot replace permanent v2 evaluation/receipts.
+
 **Status:** W2/P03 logical contract; no policy runtime or source-admission evidence is accepted.
 
 This package owns deterministic deny-by-default admission meaning. It performs no filesystem/Git I/O,

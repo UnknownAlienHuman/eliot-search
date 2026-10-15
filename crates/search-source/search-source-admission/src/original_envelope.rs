@@ -258,7 +258,7 @@ fn rule_value(rule: &CanonicalRule) -> Result<V, AdmissionError> {
         ("pattern", optional_text(rule.pattern.as_deref())?),
     ])
 }
-fn policy_value(policy: &CanonicalAdmissionPolicy) -> Result<V, AdmissionError> {
+pub(super) fn policy_value(policy: &CanonicalAdmissionPolicy) -> Result<V, AdmissionError> {
     object(vec![
         ("schema", V::U64(u64::from(POLICY_SCHEMA_VERSION))),
         ("revision", V::U64(policy.revision.get())),

@@ -20,6 +20,7 @@ use crate::{CommitRecoveryDecision, ControlCommitReceipt, ControlError, ControlK
 mod codec;
 mod transaction;
 mod calls;
+mod direct_context;
 mod operation;
 mod lifecycle;
 mod snapshot;
@@ -41,7 +42,7 @@ pub use bootstrap::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryM
 pub use bootstrap::{OwnerContentStage, OwnerContentReadback, OwnerContentMappedReceipt};
 
 pub use port::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
-pub use registry::{RegistryStateFamily, RegistryStateKey, RegistryStateChange,
+pub use registry::{registry_operation_value_len, RegistryStateFamily, RegistryStateKey, RegistryStateChange,
     RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
     RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,
     RegistryOperationLookup, RegistryOperationObservation};
@@ -55,6 +56,7 @@ pub use diagnostics::{ControlStoreHealth, JournalHealthState, JournalWriteCounte
 use operation::{Check, Point, Unscoped};
 use codec::{Header, StoredOperation, as_u64, decode_value, encode_value,
     request_fingerprint, validate_mutation};
+use codec::decode_value_checked;
 
 const META: TableDefinition<&str, &[u8]> = TableDefinition::new("eliot.control.meta.v1");
 const RECORDS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("eliot.control.records.v1");
@@ -277,11 +279,18 @@ impl PersistentControlJournal {
     }
 
     fn header_from(&self, read: &ReadTransaction) -> Result<Header, ControlError> {
+        self.header_from_checked(read, &Unscoped)
+    }
+
+    fn header_from_checked(&self, read: &ReadTransaction, check: &dyn Check) -> Result<Header, ControlError> {
+        check.reserve(MigrationBootstrapWork::Allocate(14 * 128))?;
         verify_tables(read, &self.table_profile)?;
         let meta = read.open_table(META).map_err(map_table_error)?;
         quarantine::require_unquarantined(&meta)?;
         if meta.len().map_err(|error| map_storage_error(&error))? != 1 { return Err(ControlError::StoreCorrupt); }
         let bytes = meta.get("header").map_err(|error| map_storage_error(&error))?.ok_or(ControlError::StoreCorrupt)?;
+        check.reserve(MigrationBootstrapWork::Read(bytes.value().len()))?;
+        check.reserve(MigrationBootstrapWork::Process(bytes.value().len()))?;
         let header = Header::decode(bytes.value(), self.identity, self.limits)?;
         let records = read.open_table(RECORDS).map_err(map_table_error)?;
         let operations = read.open_table(OPERATIONS).map_err(map_table_error)?;
@@ -295,7 +304,7 @@ impl PersistentControlJournal {
         #[cfg(test)]
         self.work.snapshot_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         check.check(Point::ReadHeader)?;
-        let header = self.header_from(read)?;
+        let header = self.header_from_checked(read, check)?;
         check.check(Point::ReadHeader)?;
         let table = read.open_table(RECORDS).map_err(map_table_error)?;
         let mut records = Vec::new();
@@ -306,8 +315,12 @@ impl PersistentControlJournal {
             if records.len() >= self.limits.max_records || key.value().len() > self.limits.max_key_bytes {
                 return Err(ControlError::StoreCorrupt);
             }
+            check.reserve(MigrationBootstrapWork::Allocate(key.value().len() * 2 + std::mem::size_of::<(ControlKey, crate::ControlValue)>() * 2))?;
+            check.reserve(MigrationBootstrapWork::Read(key.value().len()))?;
             let key = ControlKey::new(key.value().to_vec(), self.limits).map_err(|_| ControlError::StoreCorrupt)?;
-            let value = decode_value(value.value(), self.limits)?;
+            let value = decode_value_checked(value.value(), self.limits, check)?;
+            check.reserve(MigrationBootstrapWork::Allocate(value.len().checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
+            check.reserve(MigrationBootstrapWork::Process(value.len()))?;
             registry::validate_record(self.identity.schema_version, &key, &value, self.limits)?;
             if crate::has_intent_schema(self.identity.schema_version) {
                 publication::validate_record(&key, &value)?;
@@ -333,7 +346,7 @@ impl PersistentControlJournal {
 
     fn verify_from_checked(&self, read: &ReadTransaction, check: &dyn Check) -> Result<JournalReadSnapshot, ControlError> {
         let snapshot = self.snapshot_from_checked(read, check)?;
-        let header = self.header_from(read)?;
+        let header = self.header_from_checked(read, check)?;
         check.check(Point::ReadHeader)?;
         let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
         let mut generations = BTreeSet::new();
@@ -343,7 +356,8 @@ impl PersistentControlJournal {
             let (id, bytes) = row.map_err(|error| map_storage_error(&error))?;
             if generations.len() >= self.limits.max_operation_records { return Err(ControlError::StoreCorrupt); }
             let id = MutationId(id.value().try_into().map_err(|_| ControlError::StoreCorrupt)?);
-            let operation = StoredOperation::decode(bytes.value(), id, header.generation, self.limits)?;
+            let operation = StoredOperation::decode_checked(bytes.value(), id, header.generation, self.limits, check)?;
+            check.reserve(MigrationBootstrapWork::Allocate(64))?;
             if !generations.insert(operation.receipt.after_generation) { return Err(ControlError::StoreCorrupt); }
             total = total.checked_add(as_u64(bytes.value().len())?).ok_or(ControlError::StoreCorrupt)?;
             if total > as_u64(self.limits.max_total_value_bytes)? { return Err(ControlError::StoreCorrupt); }
@@ -435,9 +449,26 @@ fn verify_tables(read: &ReadTransaction, profile: &TableProfile) -> Result<(), C
 }
 
 fn operation_from(read: &ReadTransaction, id: MutationId, header: &Header, limits: JournalLimits) -> Result<Option<StoredOperation>, ControlError> {
+    operation_from_checked(read, id, header, limits, &Unscoped)
+}
+
+fn operation_from_checked(read: &ReadTransaction, id: MutationId, header: &Header, limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<Option<StoredOperation>, ControlError> {
     let table = read.open_table(OPERATIONS).map_err(map_table_error)?;
     table.get(id.0.as_slice()).map_err(|error| map_storage_error(&error))?
-        .map(|bytes| StoredOperation::decode(bytes.value(), id, header.generation, limits)).transpose()
+        .map(|bytes| StoredOperation::decode_checked(bytes.value(), id, header.generation, limits, check)).transpose()
+}
+
+fn registry_mode_checked(read: &ReadTransaction, identity: JournalIdentity, limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<JournalOperatingProfile, ControlError> {
+    let table = read.open_table(RECORDS).map_err(map_table_error)?;
+    let raw = table.get(operating_profile::KEY).map_err(|e| map_storage_error(&e))?.ok_or(ControlError::SchemaMismatch)?;
+    check.reserve(MigrationBootstrapWork::Read(raw.value().len().checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
+    check.reserve(MigrationBootstrapWork::Allocate(raw.value().len().checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
+    check.reserve(MigrationBootstrapWork::Process(raw.value().len()))?;
+    operating_profile::read_mode(read, identity, limits)
 }
 
 const fn is_corruption(error: ControlError) -> bool {

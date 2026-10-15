@@ -11,6 +11,8 @@ mod readiness;
 mod registry;
 mod snapshot;
 mod spec;
+mod root_locators;
+pub use root_locators::RootLocatorHints;
 
 pub use activation::*;
 pub use capture::*;

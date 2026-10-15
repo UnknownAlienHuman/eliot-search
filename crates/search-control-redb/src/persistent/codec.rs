@@ -110,6 +110,15 @@ pub(super) fn decode_value(bytes: &[u8], limits: JournalLimits) -> Result<Contro
     ControlValue::new(class, value.to_vec(), limits)
 }
 
+pub(super) fn decode_value_checked(bytes: &[u8], limits: JournalLimits, check: &dyn super::Check)
+    -> Result<ControlValue, ControlError> {
+    use super::MigrationBootstrapWork as Work;
+    check.reserve(Work::Read(bytes.len()))?;
+    check.reserve(Work::Allocate(bytes.len()))?;
+    check.reserve(Work::Process(bytes.len()))?;
+    decode_value(bytes, limits)
+}
+
 pub(super) fn validate_mutation(mutation: &ControlMutation, limits: JournalLimits) -> Result<Vec<ControlKey>, ControlError> {
     let count = mutation.writes().len().checked_add(mutation.deletes().len()).ok_or(ControlError::BudgetExceeded)?;
     if count == 0 || count > limits.max_mutation_items { return Err(ControlError::BudgetExceeded); }
@@ -171,13 +180,40 @@ pub(super) struct StoredOperation {
 }
 
 impl StoredOperation {
-    pub fn encode(&self, limits: JournalLimits) -> Result<Vec<u8>, ControlError> {
+    pub(super) fn decode_checked(bytes: &[u8], id: MutationId, generation: u64, limits: JournalLimits,
+        check: &dyn super::Check,
+    ) -> Result<Self, ControlError> {
+        use super::MigrationBootstrapWork as Work;
+        check.reserve(Work::Read(bytes.len()))?;
+        // Receipt keys include a length prefix: this bounds their owned key
+        // inventory and payload capacity before any decoder allocation.
+        let capacity = bytes.len().checked_mul(1 + std::mem::size_of::<ControlKey>() / 8)
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(capacity))?;
+        check.reserve(Work::Process(bytes.len()))?;
+        Self::decode(bytes, id, generation, limits)
+    }
+
+    pub(super) fn encode_checked(&self, limits: JournalLimits, check: &dyn super::Check)
+        -> Result<Vec<u8>, ControlError> {
+        use super::MigrationBootstrapWork as Work;
+        let size = self.encoded_len(limits)?;
+        check.reserve(Work::Allocate(size))?;
+        check.reserve(Work::Process(size))?;
+        self.encode(limits)
+    }
+
+    fn encoded_len(&self, limits: JournalLimits) -> Result<usize, ControlError> {
         let mut size = 8_usize + 32 + 32 + 32 + 8 + 8 + 8;
         for key in &self.receipt.changed_keys {
             size = size.checked_add(8).and_then(|n| n.checked_add(key.as_bytes().len())).ok_or(ControlError::BudgetExceeded)?;
         }
-        // Receipt entries and their total ledger each have finite byte ceilings.
         if size > limits.max_value_bytes { return Err(ControlError::BudgetExceeded); }
+        Ok(size)
+    }
+
+    pub fn encode(&self, limits: JournalLimits) -> Result<Vec<u8>, ControlError> {
+        let size = self.encoded_len(limits)?;
         let mut out = Vec::with_capacity(size);
         out.extend_from_slice(RECEIPT_MAGIC);
         out.extend_from_slice(&self.request_sha256);
