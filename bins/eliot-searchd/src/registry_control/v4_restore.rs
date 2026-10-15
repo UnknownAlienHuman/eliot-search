@@ -8,24 +8,19 @@ use search_runtime_owner::OwnerError;
 use search_source_admission::policy_v2::CheckpointFailureV2;
 use search_source_registry::error::RegistryError;
 use search_source_registry::recovery::{
-    decode_batch_record_v4, decode_registry_state_v4, required_original_refs_from_batch_v4,
+    decode_batch_record_v4, decode_batch_record_with_original_probe, decode_registry_state_v4, required_original_refs_from_batch_v4,
     required_original_refs_from_state_v4, restore_registry_state_v4, BatchCodecV4Error,
     DecodedBatch, ObservedRegistryRestore, OriginalInputResolver as OriginalInputResolverTrait,
-    RegistryRestoreOperation, RegistryRestoreState, RegistryStateKey, RegistryStateRecord,
+    RegistryRestoreOperation, RegistryRestoreState,
 };
 use std::{cell::RefCell, collections::BTreeSet};
 
 /// Raw v4/legacy profile shape discovered from one coherent registry snapshot.
 pub(crate) struct SnapshotShape {
-    has_v4: bool,
     references: Vec<Vec<u8>>,
 }
 
 impl SnapshotShape {
-    pub(crate) fn has_v4(&self) -> bool {
-        self.has_v4
-    }
-
     pub(crate) fn references(&self) -> &[Vec<u8>] {
         &self.references
     }
@@ -84,10 +79,9 @@ pub(crate) fn collect_snapshot_refs(
             }
         }
         if has_v4 && references.is_empty() {
-            ensure_v4_root_metadata(snapshot, context.registry_limits, &mut probe)?;
+            validate_without_external_originals(snapshot, context.registry_limits, &mut probe)?;
         }
         Ok(SnapshotShape {
-            has_v4,
             references: references.into_iter().collect(),
         })
     })();
@@ -98,10 +92,10 @@ pub(crate) fn collect_snapshot_refs(
     result.map_err(V4ReadbackError::Batch)
 }
 
-/// Decodes one explicit v4 operation for historical-root selection. The
+/// Decodes one retained operation with the exact original caller context. The
 /// caller has already read every required original reference for the whole
 /// coherent snapshot, so this path performs no storage access of its own.
-pub(crate) fn decode_v4_operation_for_root(
+pub(crate) fn decode_operation_for_root(
     envelope: &RegistryOperationEnvelope,
     originals: Option<&OriginalInputsReadback>,
     context: &OriginalV4Context<'_>,
@@ -112,29 +106,22 @@ pub(crate) fn decode_v4_operation_for_root(
     };
     let owner = RefCell::new(None);
     let mut probe = make_probe(context, &owner);
-    let result = decode_batch_record_v4(
-        envelope.owner_bytes(),
-        context.registry_limits,
-        resolver.as_mut(),
-        &mut probe,
-    );
+    let result = if is_v4_batch(envelope.owner_bytes()) {
+        decode_batch_record_v4(envelope.owner_bytes(), context.registry_limits, resolver.as_mut(), &mut probe)
+    } else {
+        decode_batch_record_with_original_probe(envelope.owner_bytes(), context.registry_limits, &mut probe)
+    };
     drop(probe);
     if let Some(error) = owner.into_inner() {
         return Err(V4ReadbackError::Owner(error));
     }
     let decoded = result.map_err(V4ReadbackError::Batch)?;
-    if &decoded.entry().operation_id != envelope.operation_id()
-        || decoded.entry().before_revision != envelope.registry_revision_before()
-        || decoded.request_fingerprint() != envelope.command_digest()
-    {
-        return Err(V4ReadbackError::Batch(BatchCodecV4Error::Registry(
-            RegistryError::SnapshotInvalid,
-        )));
-    }
+    super::verify_operation_envelope(envelope, &decoded)
+        .map_err(|error| V4ReadbackError::Batch(BatchCodecV4Error::Registry(error)))?;
     Ok(decoded)
 }
 
-fn ensure_v4_root_metadata(
+fn validate_without_external_originals(
     snapshot: &RegistryReadSnapshot,
     registry_limits: search_source_registry::error::RegistryLimits,
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
@@ -144,32 +131,18 @@ fn ensure_v4_root_metadata(
         if !is_v4_state(state.canonical_bytes()) {
             continue;
         }
-        let decoded = decode_registry_state_v4(state.canonical_bytes(), &mut resolver, probe)?;
-        if !matches!(decoded, RegistryStateRecord::Root(_)) {
-            return Err(BatchCodecV4Error::Registry(
-                RegistryError::AdmissionRestorationUnavailable,
-            ));
-        }
+        decode_registry_state_v4(state.canonical_bytes(), &mut resolver, probe)?;
     }
     for operation in snapshot.operations() {
         if !is_v4_batch(operation.owner_bytes()) {
             continue;
         }
-        let decoded = decode_batch_record_v4(
+        decode_batch_record_v4(
             operation.owner_bytes(),
             registry_limits,
             &mut resolver,
             probe,
         )?;
-        if decoded
-            .deltas()
-            .iter()
-            .any(|delta| !matches!(delta.key(), RegistryStateKey::Root(_)))
-        {
-            return Err(BatchCodecV4Error::Registry(
-                RegistryError::AdmissionRestorationUnavailable,
-            ));
-        }
     }
     Ok(())
 }
@@ -181,6 +154,9 @@ pub(crate) fn restore_snapshot_v4(
     context: &OriginalV4Context<'_>,
     max_total_bytes: usize,
 ) -> Result<ObservedRegistryRestore, V4ReadbackError> {
+    for operation in snapshot.operations() {
+        decode_operation_for_root(operation, originals, context)?;
+    }
     let states = snapshot
         .states()
         .iter()
@@ -219,7 +195,7 @@ pub(crate) fn restore_snapshot_v4(
     result.map_err(V4ReadbackError::Batch)
 }
 
-struct EmptyOriginalResolver;
+pub(super) struct EmptyOriginalResolver;
 
 impl OriginalInputResolverTrait for EmptyOriginalResolver {
     fn resolve_policy(

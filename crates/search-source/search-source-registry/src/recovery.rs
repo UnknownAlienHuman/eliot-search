@@ -53,6 +53,7 @@ pub use search_source_records::operation::{
 pub use search_source_records::batch::{
     BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4, decode_registry_state_key_v4,
     decode_registry_state_v4, required_original_refs_from_state_v4, required_original_refs_from_batch_v4,
+    decode_batch_record_with_original_probe, decode_registry_state_entry_profiled_with_original_probe,
 };
 
 /// Finite atomic source registry.

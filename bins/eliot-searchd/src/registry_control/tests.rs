@@ -23,6 +23,114 @@ use std::fs::{self, File, OpenOptions};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+#[test]
+fn normal_v4_restore_cancels_legacy_decode_after_control_read_finishes() {
+    use search_control_redb::MigrationBootstrapWork;
+    use search_runtime_owner::OwnerError;
+    use std::cell::Cell;
+    use std::time::{Duration, Instant};
+    let scratch = Scratch::new();
+    let context = context();
+    let mut journal = journal(&scratch, &context);
+    let mut publisher = ControlSnapshotPublisher::new();
+    {
+        let mut port = RegistryJournal::bind(&mut journal, &mut publisher, identity(), DEFAULT_REGISTRY_LIMITS).expect("legacy adapter");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).expect("registry");
+        register_root(
+            &mut registry, &root(13), &OpaqueId::new("legacy-probe-root").expect("operation"),
+            Blake3Digest32::from_bytes([16; 32]), &ReceiptRef::new("legacy-probe-receipt").expect("receipt"),
+            &mut port, &context,
+        ).expect("legacy root");
+    }
+    let calls = Cell::new(0_usize);
+    let reject_after = Cell::new(None::<usize>);
+    let work = |_work: MigrationBootstrapWork| {
+        let next = calls.get() + 1;
+        calls.set(next);
+        if reject_after.get().is_some_and(|allowed| next > allowed) {
+            Err(OwnerError::OwnerCancelledBeforeMutation)
+        } else { Ok(()) }
+    };
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let port = RegistryJournal::bind_original_v4(
+        &mut journal, &mut publisher, identity(), DEFAULT_REGISTRY_LIMITS, deadline, &work,
+        SectionPlatform { os: "windows".into(), arch: "x64".into() },
+        AcceptedCapabilities { profiles: vec![search_source_admission::BASELINE_PROFILE.into()] },
+    ).expect("normal adapter");
+    calls.set(0);
+    port.journal.read_registry_snapshot_with_original_context(deadline, &work).expect("control read");
+    let control_calls = calls.replace(0);
+    assert!(control_calls > 0);
+    reject_after.set(Some(control_calls));
+    assert!(port.restore(&context).is_err(), "legacy decoding must keep the original refusal after the coherent control read");
+    assert!(calls.get() > control_calls);
+}
+
+#[test]
+fn normal_v4_readback_checks_envelope_and_each_physical_state_key() {
+    use search_control_redb::MigrationBootstrapWork;
+    use search_runtime_owner::OwnerError;
+    use search_source_registry::recovery::{DecodedBatch, RegistryStateDelta};
+    use std::time::{Duration, Instant};
+    for (foreign_digest, swapped_states) in [(false, false), (true, false), (false, true)] {
+        let scratch = Scratch::new();
+        let context = context();
+        let mut journal = journal(&scratch, &context);
+        let mut publisher = ControlSnapshotPublisher::new();
+        let work = |_work: MigrationBootstrapWork| Ok::<_, OwnerError>(());
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let mut port = RegistryJournal::bind_original_v4(
+            &mut journal, &mut publisher, identity(), DEFAULT_REGISTRY_LIMITS, deadline, &work,
+            SectionPlatform { os: "windows".into(), arch: "x64".into() },
+            AcceptedCapabilities { profiles: vec![search_source_admission::BASELINE_PROFILE.into()] },
+        ).expect("normal adapter");
+        let states = [21, 22].map(|id| {
+            let request = root(id);
+            RegistryStateRecord::Root(search_source_registry::root::RootRecord {
+                root_binding_id: request.root_binding_id,
+                canonical_root_digest: request.canonical_root_digest,
+                policy_fingerprint: request.policy_fingerprint,
+                policy_revision: request.policy_revision,
+                owner_epoch: request.owner_epoch,
+                record_revision: NonZeroRevision::new(1).expect("revision"),
+                registry_revision: 1,
+                status: search_source_registry::root::RootStatus::Active,
+                last_receipt: ReceiptRef::new("raw-v4-root").expect("receipt"),
+            })
+        });
+        let id = OpaqueId::new("raw-v4-root-operation").expect("operation");
+        let digest = Blake3Digest32::from_bytes([44; 32]);
+        let batch = DecodedBatch::from_observed_parts_v4(
+            search_source_registry::error::RegistryJournalEntry::new(
+                id.clone(), digest, 0, 1, search_source_registry::error::JournalEntryKind::BatchApply,
+                ReceiptRef::new("raw-v4-root-operation").expect("receipt"),
+            ), digest, 2,
+            states.iter().map(|state| RegistryStateDelta::new(state.key(), None, state.clone()).expect("delta")).collect(),
+            DEFAULT_REGISTRY_LIMITS, &mut v4_restore::EmptyOriginalResolver, &mut || Ok(()),
+        ).expect("metadata operation");
+        let generation = match port.lookup(&id, &context).expect("lookup") {
+            search_control_redb::RegistryOperationLookup::Absent { journal_generation, .. } => journal_generation,
+            _ => panic!("fresh operation"),
+        };
+        let changes = states.iter().enumerate().map(|(index, state)| {
+            let after = if swapped_states { &states[1 - index] } else { state };
+            RegistryStateChange::new(
+                StoredKey::new(StoredFamily::Root, state.key().encode().expect("key"), JournalLimits::BASELINE).expect("stored key"),
+                None, after.encode_with_profile("eliot.registry-state.v4").expect("state bytes"), JournalLimits::BASELINE,
+            ).expect("bounded control change")
+        }).collect();
+        let command = RegistryMutationRequest::new(
+            id.clone(), generation, 0,
+            if foreign_digest { Blake3Digest32::from_bytes([45; 32]) } else { digest },
+            batch.encode().expect("owner bytes"), changes, JournalLimits::BASELINE,
+        ).expect("opaque control operation");
+        let mutation = control_mutation_identity(command.control_operation_id()).expect("control identity");
+        port.journal.commit_registry_batch_with_original_context(&command, &mutation, deadline, &work)
+            .expect("real control transaction stores opaque owner metadata");
+        assert_eq!(port.load_batch(&id, &context).is_ok(), !foreign_digest && !swapped_states);
+    }
+}
+
 struct Scratch(PathBuf);
 impl Scratch {
     fn new() -> Self {
@@ -395,11 +503,16 @@ fn source_owner_original_admission_and_binding_survive_real_disk_restore() {
         PersistentControlJournal::open(scratch.file(false), identity(), JournalLimits::BASELINE)
             .expect("actual reopen");
     let mut reopened_publisher = ControlSnapshotPublisher::new();
-    let port = RegistryJournal::bind(
+    let work = |_work: search_control_redb::MigrationBootstrapWork| Ok::<_, search_runtime_owner::OwnerError>(());
+    let port = RegistryJournal::bind_original_v4(
         &mut reopened,
         &mut reopened_publisher,
         identity(),
         DEFAULT_REGISTRY_LIMITS,
+        std::time::Instant::now() + std::time::Duration::from_secs(60),
+        &work,
+        SectionPlatform { os: "windows".into(), arch: "x64".into() },
+        AcceptedCapabilities { profiles: vec![search_source_admission::BASELINE_PROFILE.into()] },
     )
     .expect("bind");
     let observed = port.restore(&context).expect("actual owner restore");

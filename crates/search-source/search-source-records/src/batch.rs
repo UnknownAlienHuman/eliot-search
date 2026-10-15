@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 #[path = "batch_codec.rs"]
 mod codec;
-pub use codec::decode_batch_record;
+pub use codec::{decode_batch_record, decode_batch_record_with_original_probe};
 pub use codec::{
     BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4,
 };
@@ -195,6 +195,21 @@ pub fn decode_registry_state_entry_profiled(
     let (record, profile) = codec::decode_state_profiled(record_bytes)?;
     if key != record.key() {
         return Err(RegistryError::SnapshotInvalid);
+    }
+    Ok((record, profile))
+}
+
+/// Decode retained v2/v3 key/value bytes with the exact original caller probe.
+/// Original admission reconstruction uses its existing owner; no profile is relabelled.
+pub fn decode_registry_state_entry_profiled_with_original_probe(
+    key_bytes: &[u8],
+    record_bytes: &[u8],
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<(RegistryStateRecord, &'static str), BatchCodecV4Error> {
+    let key = decode_registry_state_key(key_bytes)?;
+    let (record, profile) = codec::decode_state_profiled_with_original_probe(record_bytes, probe)?;
+    if key != record.key() {
+        return Err(RegistryError::SnapshotInvalid.into());
     }
     Ok((record, profile))
 }

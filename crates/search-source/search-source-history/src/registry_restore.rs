@@ -10,6 +10,7 @@ use search_source_admission::policy_v2::CheckpointFailureV2;
 use search_source_records::batch::{
     BatchCodecV4Error, DecodedBatch, OriginalInputResolver, RegistryStateKey, RegistryStateRecord,
     decode_batch_record, decode_batch_record_v4, decode_registry_state_entry_profiled,
+    decode_batch_record_with_original_probe, decode_registry_state_entry_profiled_with_original_probe,
     decode_registry_state_key_v4, decode_registry_state_v4,
 };
 use search_source_records::error::{RegistryError, RegistryLimits};
@@ -226,10 +227,7 @@ where
             }
             Ok((state, STATE_PROFILE_V4))
         } else {
-            let mut legacy = LegacyRestoreDecoder;
-            legacy
-                .decode_state(key, value)
-                .map_err(BatchCodecV4Error::Registry)
+            decode_registry_state_entry_profiled_with_original_probe(key, value, self.probe)
         }
     }
 
@@ -241,10 +239,7 @@ where
         if encoded_profile(value)?.as_deref() == Some(BATCH_PROFILE_V4) {
             decode_batch_record_v4(value, limits, self.resolver, self.probe)
         } else {
-            let mut legacy = LegacyRestoreDecoder;
-            legacy
-                .decode_operation(value, limits)
-                .map_err(BatchCodecV4Error::Registry)
+            decode_batch_record_with_original_probe(value, limits, self.probe)
         }
     }
 
@@ -296,8 +291,8 @@ pub fn restore_registry_state(
 ///
 /// The resolver reads only from the caller's already coherent metadata view;
 /// this function performs no storage, native access, current-policy or grant
-/// work. The exact caller probe is forwarded through every v4 decode and
-/// evaluation step. Old state and operation profiles remain byte-preserving
+/// work. The exact caller probe is forwarded through every decode and evaluation
+/// step, including legacy members. Old state and operation profiles remain byte-preserving
 /// members of a mixed history, while the legacy public factory still refuses
 /// v4 rows because it has no resolver or probe.
 pub fn restore_registry_state_v4<R, P>(

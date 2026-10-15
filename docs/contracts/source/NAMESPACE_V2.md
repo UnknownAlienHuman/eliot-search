@@ -45,7 +45,11 @@ Root/policy/owner/security fences and persist the exact ownership in the same
 versioned registry state/history. The daemon must retain the original operation
 checkpoints before and after this bounded pure computation. A computed digest
 alone never proves namespace allocation, current ownership or durable readback.
-That initializer and normal restoration remain unfinished under #569.
+The semantic initializer now creates Source/namespace metadata atomically through
+the existing registry control port. Normal daemon metadata restoration consumes
+the explicit v4 profiles and original inputs with the caller's checkpoints,
+including retained legacy members. Native ingestion/caller qualification remains
+with #267/#270; full acceptance of this slice is still tracked by #569.
 
 The v2 domain is explicit. Retained v1 profiles, arbitrary historical generation
 values and old operation bytes are not rewritten, relabelled or implicitly
