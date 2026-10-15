@@ -14,6 +14,7 @@ use search_source_admission::{
 };
 use search_source_provenance::OriginalAdmissionV2;
 use search_source_provenance::{OriginalInputsLayoutV2, RetainedPolicyV2};
+use search_source_registry::recovery::OriginalInputResolver as OriginalInputResolverTrait;
 use std::{
     cell::Cell,
     time::{Duration, Instant},
@@ -60,6 +61,9 @@ fn original_inputs_cancelled_context_preserves_reason_without_work_or_write() {
     let live = context();
     let mut journal = journal(&scratch, &live);
     let mut publisher = ControlSnapshotPublisher::new();
+    let (retained, _, _) = policy();
+    let layout = OriginalInputsLayoutV2::policy(&retained, &mut || Ok(())).unwrap();
+    let references = [layout.reference()];
     let calls = Cell::new(0_usize);
     let work = |_| {
         calls.set(calls.get() + 1);
@@ -74,7 +78,10 @@ fn original_inputs_cancelled_context_preserves_reason_without_work_or_write() {
         &work,
     )
     .unwrap();
-    let generation = port.original_inputs_snapshot(&live).unwrap().generation();
+    let generation = port
+        .original_inputs_snapshot(&references, &live)
+        .unwrap()
+        .generation();
     let calls_before = calls.get();
     let cancelled = OperationContext::new(
         RequestId::from_bytes([11; 16]),
@@ -84,7 +91,7 @@ fn original_inputs_cancelled_context_preserves_reason_without_work_or_write() {
     )
     .unwrap();
     let error = port
-        .original_inputs_snapshot(&cancelled)
+        .original_inputs_snapshot(&references, &cancelled)
         .err()
         .expect("cancelled read");
     match error {
@@ -98,7 +105,10 @@ fn original_inputs_cancelled_context_preserves_reason_without_work_or_write() {
     assert_eq!(calls.get(), calls_before, "no callback after cancellation");
     assert!(!port.requires_recovery());
     assert_eq!(
-        port.original_inputs_snapshot(&live).unwrap().generation(),
+        port
+            .original_inputs_snapshot(&references, &live)
+            .unwrap()
+            .generation(),
         generation
     );
 }
@@ -148,7 +158,9 @@ fn original_inputs_normal_adapter_roundtrips_82255_byte_policy_after_real_restar
         let prepared = port.prepare_original_inputs(&layout, &ctx).unwrap();
         port.commit_original_inputs(&prepared, &ctx).unwrap();
         assert!(!port.requires_recovery());
-        let observed = port.original_inputs_snapshot(&ctx).unwrap();
+        let observed = port
+            .original_inputs_snapshot(&[layout.reference()], &ctx)
+            .unwrap();
         assert_eq!(observed.identity(), identity());
         let restored = observed
             .policy(layout.reference(), &platform, &capabilities, &mut probe)
@@ -159,7 +171,10 @@ fn original_inputs_normal_adapter_roundtrips_82255_byte_policy_after_real_restar
         let replay = port.prepare_original_inputs(&layout, &ctx).unwrap();
         port.commit_original_inputs(&replay, &ctx).unwrap();
         assert_eq!(
-            port.original_inputs_snapshot(&ctx).unwrap().generation(),
+            port
+                .original_inputs_snapshot(&[layout.reference()], &ctx)
+                .unwrap()
+                .generation(),
             generation,
             "retained original is stored once"
         );
@@ -235,13 +250,44 @@ fn original_inputs_normal_adapter_roundtrips_82255_byte_policy_after_real_restar
             .prepare_original_inputs(&original_layout, &ctx)
             .unwrap();
         port.commit_original_inputs(&prepared, &ctx).unwrap();
-        let readback = port.original_inputs_snapshot(&ctx).unwrap();
+        let readback = port
+            .original_inputs_snapshot(&[original_layout.reference()], &ctx)
+            .unwrap();
         let restored = readback
             .admission(original_layout.reference(), source_policy, &mut probe)
             .unwrap();
         assert_eq!(restored.receipt(), original.receipt());
         assert_eq!(restored.observation(), original.observation());
         assert_eq!(port.restore(&ctx).unwrap().registry().revision(), 0);
+        let combined = port
+            .original_inputs_snapshot(
+                &[source_policy_layout.reference(), original_layout.reference()],
+                &ctx,
+            )
+            .unwrap();
+        let mut resolver = combined.v4_resolver(&platform, &capabilities);
+        let cached = OriginalInputResolverTrait::resolve_policy(
+            &mut resolver,
+            source_policy_layout.reference(),
+            &mut probe,
+        )
+        .unwrap();
+        let cached_again = OriginalInputResolverTrait::resolve_policy(
+            &mut resolver,
+            source_policy_layout.reference(),
+            &mut probe,
+        )
+        .unwrap();
+        assert!(std::sync::Arc::ptr_eq(&cached, &cached_again));
+        let restored_v4 = OriginalInputResolverTrait::resolve_admission(
+            &mut resolver,
+            original_layout.reference(),
+            cached,
+            &mut probe,
+        )
+        .unwrap();
+        assert_eq!(restored_v4.receipt(), original.receipt());
+        assert_eq!(restored_v4.observation(), original.observation());
         saved_policy_reference = source_policy_layout.reference().to_vec();
         saved_admission_reference = original_layout.reference().to_vec();
         saved_original = original;
@@ -262,13 +308,18 @@ fn original_inputs_normal_adapter_roundtrips_82255_byte_policy_after_real_restar
             &work,
         )
         .unwrap();
-        let observed = port.original_inputs_snapshot(&ctx).unwrap();
+        let observed = port
+            .original_inputs_snapshot(&[layout.reference()], &ctx)
+            .unwrap();
         let restored = observed
             .policy(layout.reference(), &platform, &capabilities, &mut probe)
             .unwrap();
         assert_eq!(restored.encoded_inputs(), policy.encoded_inputs());
         assert_eq!(restored.fingerprint(), policy.fingerprint());
-        let source_policy = observed
+        let source_observed = port
+            .original_inputs_snapshot(&[saved_policy_reference.as_slice()], &ctx)
+            .unwrap();
+        let source_policy = source_observed
             .policy(
                 &saved_policy_reference,
                 &platform,
@@ -276,7 +327,10 @@ fn original_inputs_normal_adapter_roundtrips_82255_byte_policy_after_real_restar
                 &mut probe,
             )
             .unwrap();
-        let restored_original = observed
+        let admission_observed = port
+            .original_inputs_snapshot(&[saved_admission_reference.as_slice()], &ctx)
+            .unwrap();
+        let restored_original = admission_observed
             .admission(
                 &saved_admission_reference,
                 std::sync::Arc::new(source_policy),
@@ -344,6 +398,10 @@ fn original_inputs_normal_adapter_retains_exact_pending_command_and_owner_cause(
         );
         assert!(!port.requires_recovery());
         port.commit_original_inputs(&prepared, &ctx).unwrap();
-        assert!(port.original_inputs_snapshot(&ctx).is_ok());
+        assert!(
+            port
+                .original_inputs_snapshot(&[layout.reference()], &ctx)
+                .is_ok()
+        );
     }
 }
