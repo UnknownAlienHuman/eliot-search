@@ -283,6 +283,16 @@ owns staging, complete second-stream comparison and once-only publication.
 No footer authorizes #268-C acceptance, #269 cutover, #348 restart reconciliation
 or #347 cleanup. Native/fault/installed qualification remains #215.
 
+`LegacyInventoryEncoder::item_encoded_len(family, status, kind, counts)` sizes
+one item without allocation through the actual encoding formatter; digest fields
+have fixed widths. `preflight_remaining(pending_records, pending_encoded_bytes)`
+returns `LegacyInventoryCapacity` after the live emitted prefix, pending items,
+and conservative remaining terminal/footer bounds. Include all pending fanout,
+synthetic Gap24/348 and other future items; do not add terminals/footer twice.
+The query is allocation-free and non-mutating, and does not reserve capacity or
+issue authority. Unknown items need valid upper bounds. Tail overestimation can
+refuse an exact-fit stream; the actual encoder retains its unchanged hard limits.
+
 ## Contextual immutable record lifecycle
 
 `SourceImportRecordArtifact::{create,push,freeze}_with_context` and contextual
