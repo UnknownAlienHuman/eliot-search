@@ -21,20 +21,20 @@ pub const MAX_REGISTRY_RESTORE_BYTES: usize = 64 * 1024 * 1024;
 
 /// Actual canonical state key/value bytes from one coherent owner read.
 #[derive(Clone, Copy, Debug)]
-pub struct RegistryRestoreState<''a> {
+pub struct RegistryRestoreState<'a> {
     /// Complete existing owner key bytes, including its closed family.
-    pub key: &''a [u8],
+    pub key: &'a [u8],
     /// Complete existing owner value bytes.
-    pub value: &''a [u8],
+    pub value: &'a [u8],
 }
 
 /// Actual immutable operation key/value bytes from that same owner read.
 #[derive(Clone, Copy, Debug)]
-pub struct RegistryRestoreOperation<''a> {
+pub struct RegistryRestoreOperation<'a> {
     /// Exact key identity independently read from the operation store.
-    pub operation_id: &''a OpaqueId,
+    pub operation_id: &'a OpaqueId,
     /// Complete existing versioned operation/delta bytes, never a receipt-only row.
-    pub value: &''a [u8],
+    pub value: &'a [u8],
 }
 
 /// Plain public history data produced by bounded restore validation.
@@ -51,22 +51,29 @@ pub struct RegistryHistoryParts {
     /// Observed root records by binding identity.
     pub roots: BTreeMap<search_contracts::RootBindingId, search_source_records::root::RootRecord>,
     /// Observed source records by stable identity.
-    pub sources: BTreeMap<search_contracts::SourceIdentity, search_source_records::source::RegisteredSource>,
+    pub sources:
+        BTreeMap<search_contracts::SourceIdentity, search_source_records::source::RegisteredSource>,
     /// Observed membership records by corpus/source key.
-    pub memberships: BTreeMap<search_source_records::membership::MembershipKey, search_source_records::membership::MembershipRecord>,
+    pub memberships: BTreeMap<
+        search_source_records::membership::MembershipKey,
+        search_source_records::membership::MembershipRecord,
+    >,
     /// Reverse index from membership identity to key.
-    pub reverse_memberships: BTreeMap<search_contracts::SourceMembershipId, search_source_records::membership::MembershipKey>,
+    pub reverse_memberships: BTreeMap<
+        search_contracts::SourceMembershipId,
+        search_source_records::membership::MembershipKey,
+    >,
     /// Active corpus generations.
     pub active_generations: BTreeMap<OpaqueId, search_contracts::NonZeroRevision>,
     /// Decoded immutable batch history in revision order.
     pub operations: Vec<DecodedBatch>,
     /// Closed state encoding profile for each observed state key.
-    pub state_encoding_profiles: BTreeMap<RegistryStateKey, &''static str>,
+    pub state_encoding_profiles: BTreeMap<RegistryStateKey, &'static str>,
 }
 
 /// Opaque validated history token; no public constructor.
 ///
-/// Obtain via [`restore_registry_state`]. Consume with [`into_parts`] to
+/// Obtain via [`restore_registry_state`]. Consume with [`ObservedRegistryHistory::into_parts`] to
 /// extract the validated data for owner composition. The token grants no
 /// service authority and provides no disk durability proof.
 #[derive(Clone, Debug)]
@@ -83,7 +90,7 @@ impl ObservedRegistryHistory {
 
 /// Preflight restore counts and combined encoded bytes before decoding or allocation.
 ///
-/// `total_encoded_bytes` includes every state key/value and every operation''s
+/// `total_encoded_bytes` includes every state key/value and every operation's
 /// UTF-8 identity/value. Callers must use checked addition when accumulating it.
 /// This validates capacity only, not state, history, provenance or serving authority.
 ///
@@ -126,14 +133,14 @@ pub fn preflight_registry_restore_inputs(
 /// inconsistent relationships and regressing counters refuse without partial state.
 pub fn restore_registry_state(
     registry_revision: u64,
-    states: &[RegistryRestoreState<''_>],
-    operations: &[RegistryRestoreOperation<''_>],
+    states: &[RegistryRestoreState<'_>],
+    operations: &[RegistryRestoreOperation<'_>],
     limits: RegistryLimits,
     max_total_bytes: usize,
 ) -> Result<ObservedRegistryHistory, RegistryError> {
     preflight_registry_restore_inputs(limits, states.len(), operations.len(), 0, max_total_bytes)?;
     // Incremental charging keeps early overflow/byte refusal while sharing the
-    // public preflight''s byte-bound implementation before any semantic decode.
+    // public preflight's byte-bound implementation before any semantic decode.
     let mut bytes = 0_usize;
     for row in states {
         charge(&mut bytes, row.key.len(), max_total_bytes)?;
@@ -146,8 +153,7 @@ pub fn restore_registry_state(
     let mut current = BTreeMap::new();
     let mut state_encoding_profiles = BTreeMap::new();
     for row in states {
-        let (state, profile) =
-            decode_registry_state_entry_profiled(row.key, row.value)?;
+        let (state, profile) = decode_registry_state_entry_profiled(row.key, row.value)?;
         state_encoding_profiles.insert(state.key(), profile);
         check_counter(&state, registry_revision)?;
         if current.insert(state.key(), state).is_some() {

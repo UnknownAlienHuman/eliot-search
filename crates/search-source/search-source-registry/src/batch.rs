@@ -11,9 +11,11 @@ use search_source_records::batch as codec;
 pub use search_source_records::batch::{
     DecodedBatch, RegistryBatchLookup, RegistryBatchReadback, RegistryStateDelta,
     RegistryStateFamily, RegistryStateKey, RegistryStateRecord, decode_batch_record,
-    decode_registry_state, decode_registry_state_entry, decode_registry_state_entry_profiled,
+    decode_registry_state, decode_registry_state_entry,
     decode_registry_state_key,
 };
+#[cfg(test)]
+use search_source_records::batch::decode_registry_state_entry_profiled;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(test)]
