@@ -177,7 +177,7 @@ pub fn restore_registry_state(
     }
     let mut replayed = BTreeMap::new();
     let mut replayed_profiles = BTreeMap::new();
-    let mut replay_counts = [0_usize; 4];
+    let mut replay_counts = [0_usize; 5];
     let mut revision = 0_u64;
     for operation in history.values() {
         if operation.expected_registry_revision() != revision {
@@ -234,6 +234,10 @@ pub fn restore_registry_state(
             }
             RegistryStateRecord::Generation { corpus, generation } => {
                 generations.insert(corpus, generation);
+            }
+            RegistryStateRecord::Namespace(_) => {
+                // This legacy entry point has no original-input resolver or probe.
+                return Err(RegistryError::AdmissionRestorationUnavailable);
             }
         }
     }
@@ -304,7 +308,7 @@ fn check_counts(
     states: &BTreeMap<RegistryStateKey, RegistryStateRecord>,
     limits: RegistryLimits,
 ) -> Result<(), RegistryError> {
-    let mut counts = [0_usize; 4];
+    let mut counts = [0_usize; 5];
     for key in states.keys() {
         counts[family_index(key)] += 1;
     }
@@ -316,13 +320,15 @@ fn family_index(key: &RegistryStateKey) -> usize {
         RegistryStateKey::Source(_) => 1,
         RegistryStateKey::Membership(_) => 2,
         RegistryStateKey::Generation(_) => 3,
+        RegistryStateKey::Namespace(_) => 4,
     }
 }
-fn check_count_limits(counts: [usize; 4], limits: RegistryLimits) -> Result<(), RegistryError> {
+fn check_count_limits(counts: [usize; 5], limits: RegistryLimits) -> Result<(), RegistryError> {
     if counts[0] > limits.max_roots
         || counts[1] > limits.max_sources
         || counts[2] > limits.max_memberships
         || counts[3] > limits.max_memberships
+        || counts[4] > limits.max_namespaces
     {
         return Err(RegistryError::CapacityExceeded);
     }
@@ -347,6 +353,14 @@ fn check_counter(state: &RegistryStateRecord, maximum: u64) -> Result<(), Regist
                     <= member.registry_revision().saturating_mul(2)
         }
         RegistryStateRecord::Generation { .. } => true,
+        RegistryStateRecord::Namespace(namespace) => {
+            namespace.permanent_metadata().is_some_and(|metadata| {
+                metadata.registry_revision() > 0
+                    && metadata.registry_revision() <= maximum
+                    && namespace.ownership.ownership_record_revision.get()
+                        <= metadata.registry_revision()
+            })
+        }
     };
     if !valid {
         return Err(RegistryError::SnapshotInvalid);

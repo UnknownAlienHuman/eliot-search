@@ -8,14 +8,13 @@ use crate::membership::MembershipKey;
 use crate::source::RegisteredSource;
 use search_contracts::{Blake3Digest32, ReceiptRef};
 use search_source_records::batch as codec;
+#[cfg(test)]
+use search_source_records::batch::decode_registry_state_entry_profiled;
 pub use search_source_records::batch::{
     DecodedBatch, RegistryBatchLookup, RegistryBatchReadback, RegistryStateDelta,
     RegistryStateFamily, RegistryStateKey, RegistryStateRecord, decode_batch_record,
-    decode_registry_state, decode_registry_state_entry,
-    decode_registry_state_key,
+    decode_registry_state, decode_registry_state_entry, decode_registry_state_key,
 };
-#[cfg(test)]
-use search_source_records::batch::decode_registry_state_entry_profiled;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg(test)]
@@ -96,6 +95,11 @@ fn state(registry: &SourceRegistry, key: &RegistryStateKey) -> Option<RegistrySt
             .get(k)
             .cloned()
             .map(RegistryStateRecord::Membership),
+        RegistryStateKey::Namespace(namespace) => registry
+            .namespaces
+            .get(namespace)
+            .cloned()
+            .map(RegistryStateRecord::Namespace),
         RegistryStateKey::Generation(k) => {
             registry
                 .active_generations
@@ -277,6 +281,7 @@ fn prepare_profiled(
     }
     let mut memberships = BTreeMap::new();
     let mut generations = BTreeMap::new();
+    let mut namespaces = BTreeMap::new();
     for key in &keys {
         match state(registry, key) {
             Some(RegistryStateRecord::Root(root)) => {
@@ -290,6 +295,9 @@ fn prepare_profiled(
             }
             Some(RegistryStateRecord::Generation { corpus, generation }) => {
                 generations.insert(corpus, generation);
+            }
+            Some(RegistryStateRecord::Namespace(namespace)) => {
+                namespaces.insert(namespace.ownership.source_namespace_id, namespace);
             }
             None => {}
         }
@@ -324,6 +332,10 @@ fn prepare_profiled(
                 .get(k)
                 .cloned()
                 .map(RegistryStateRecord::Membership),
+            RegistryStateKey::Namespace(key) => namespaces
+                .get(key)
+                .cloned()
+                .map(RegistryStateRecord::Namespace),
             RegistryStateKey::Generation(k) => {
                 generations.get(k).map(|v| RegistryStateRecord::Generation {
                     corpus: k.clone(),
@@ -442,10 +454,19 @@ pub(super) fn validate_install(
             matches!(d.key(), RegistryStateKey::Membership(_)) && state(registry, d.key()).is_none()
         })
         .count();
+    let new_namespaces = record
+        .deltas()
+        .iter()
+        .filter(|delta| {
+            matches!(delta.key(), RegistryStateKey::Namespace(_))
+                && state(registry, delta.key()).is_none()
+        })
+        .count();
     if registry.roots.len().saturating_add(new_roots) > registry.limits.max_roots
         || registry.sources.len().saturating_add(new_sources) > registry.limits.max_sources
         || registry.memberships.len().saturating_add(new_memberships)
             > registry.limits.max_memberships
+        || registry.namespaces.len().saturating_add(new_namespaces) > registry.limits.max_namespaces
     {
         return Err(RegistryError::CapacityExceeded);
     }
@@ -504,6 +525,11 @@ fn install_validated(registry: &mut SourceRegistry, record: &DecodedBatch) {
                     registry
                         .active_generations
                         .insert(corpus.clone(), *generation);
+                }
+                RegistryStateRecord::Namespace(namespace) => {
+                    registry
+                        .namespaces
+                        .insert(namespace.ownership.source_namespace_id, namespace.clone());
                 }
             }
         }

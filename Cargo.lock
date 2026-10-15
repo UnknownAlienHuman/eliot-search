@@ -1601,6 +1601,7 @@ name = "search-source-records"
 version = "0.0.0"
 dependencies = [
  "search-contracts",
+ "search-domain",
  "search-ports",
  "search-source-admission",
  "search-source-identity",

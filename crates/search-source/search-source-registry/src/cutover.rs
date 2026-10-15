@@ -26,164 +26,10 @@ use crate::error::{
 };
 use crate::snapshot::ValidatedRegistrySnapshot;
 
-/// Durable cutover preparation record; never activates the new owner.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CutoverPreparation {
-    /// Stable cutover identity.
-    pub cutover_id: search_contracts::CutoverId,
-    /// Source namespace under cutover.
-    pub namespace_id: SourceNamespaceId,
-    /// Current owner generation at preparation time.
-    pub current_generation: SourceOwnerGeneration,
-    /// Proposed new owner system.
-    pub proposed_owner: OpaqueId,
-    /// Proposed new owner incarnation.
-    pub proposed_incarnation: InstallationIncarnationId,
-    /// Affected source identities in canonical order.
-    pub affected_sources: Vec<SourceIdentity>,
-    /// Affected membership identities in canonical order.
-    pub affected_memberships: Vec<SourceMembershipId>,
-    /// Digest of migration/export evidence.
-    pub evidence_digest: Blake3Digest32,
-    /// Registry revision after commit.
-    pub registry_revision: u64,
-    /// Stable operation identity.
-    pub operation_id: OpaqueId,
-    /// Content-free durability receipt.
-    pub receipt: ReceiptRef,
-    /// Whether this record came from exact idempotency replay.
-    pub replayed: bool,
-}
-
-/// Durable old-owner fence receipt.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct OwnerFenceReceipt {
-    /// Stable cutover identity.
-    pub cutover_id: search_contracts::CutoverId,
-    /// Source namespace.
-    pub namespace_id: SourceNamespaceId,
-    /// Fenced owner generation.
-    pub fenced_generation: SourceOwnerGeneration,
-    /// Fence record revision.
-    pub fence_revision: NonZeroRevision,
-    /// Registry revision after commit.
-    pub registry_revision: u64,
-    /// Stable operation identity.
-    pub operation_id: OpaqueId,
-    /// Content-free durability receipt.
-    pub receipt: ReceiptRef,
-    /// Whether this receipt came from exact idempotency replay.
-    pub replayed: bool,
-}
-
-/// Durable new-owner activation receipt.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SourceOwnerActivationReceipt {
-    /// Stable cutover identity.
-    pub cutover_id: search_contracts::CutoverId,
-    /// Source namespace.
-    pub namespace_id: SourceNamespaceId,
-    /// Owner generation after activation.
-    pub new_generation: SourceOwnerGeneration,
-    /// Activation record revision.
-    pub activation_revision: NonZeroRevision,
-    /// Registry revision after commit.
-    pub registry_revision: u64,
-    /// Stable operation identity.
-    pub operation_id: OpaqueId,
-    /// Content-free durability receipt.
-    pub receipt: ReceiptRef,
-    /// Whether this receipt came from exact idempotency replay.
-    pub replayed: bool,
-}
-
-/// Verified cutover receipt proving fence-before-activation.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct VerifiedCutoverReceipt {
-    /// Stable cutover identity.
-    pub cutover_id: search_contracts::CutoverId,
-    /// Source namespace.
-    pub namespace_id: SourceNamespaceId,
-    /// Owner generation before fence.
-    pub old_generation: SourceOwnerGeneration,
-    /// Owner generation after activation.
-    pub new_generation: SourceOwnerGeneration,
-    /// Covered source count.
-    pub covered_sources: usize,
-    /// Covered membership count.
-    pub covered_memberships: usize,
-}
-
-/// Closed cutover recovery decision from durable records.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum CutoverRecoveryDecision {
-    /// Preparation is durable; old owner is not yet fenced.
-    Prepared,
-    /// Old owner is durably fenced; new owner is not yet active.
-    OldOwnerFenced,
-    /// New owner is active.
-    NewOwnerActive,
-    /// Cutover is complete with a verified receipt.
-    Completed,
-    /// Durable records conflict and require operator review.
-    Conflicting,
-    /// Durable records are contradictory and quarantined.
-    Quarantined,
-}
-
-/// Closed namespace ownership command for the shared ownership port.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum NamespaceOwnershipCommand {
-    /// Prepare one exact cutover under the current owner.
-    Prepare {
-        /// Cutover receipt reference to record.
-        cutover_receipt_ref: ReceiptRef,
-    },
-    /// Fence the old owner generation.
-    Fence,
-    /// Retire the fenced old owner.
-    Retire,
-    /// Activate a distinct new owner with the exact cutover receipt.
-    Activate {
-        /// New owner system identity.
-        new_owner: OpaqueId,
-        /// New owner incarnation.
-        new_incarnation: InstallationIncarnationId,
-        /// New owner epoch, strictly greater than the current epoch.
-        new_epoch: search_contracts::OwnerEpoch,
-        /// New owner generation, distinct from the current generation.
-        new_generation: SourceOwnerGeneration,
-        /// Exact accepted cutover receipt.
-        receipt: SourceOwnerCutoverReceipt,
-    },
-}
-
-/// Durable namespace cutover state retained by the registry.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct NamespaceCutoverState {
-    /// Current ownership record.
-    pub ownership: SourceNamespaceOwnership,
-    /// Durable preparation, when one exists.
-    pub preparation: Option<CutoverPreparation>,
-    /// Whether the old owner generation is durably fenced.
-    pub fenced: bool,
-    /// Verified activation receipt, when active.
-    pub activation: Option<SourceOwnerActivationReceipt>,
-}
-
-impl NamespaceCutoverState {
-    /// Creates an initial active ownership state.
-    #[must_use]
-    pub const fn new(ownership: SourceNamespaceOwnership) -> Self {
-        Self {
-            ownership,
-            preparation: None,
-            fenced: false,
-            activation: None,
-        }
-    }
-}
-
+pub use search_source_records::namespace::{
+    CutoverPreparation, CutoverRecoveryDecision, NamespaceCutoverState, NamespaceOwnershipCommand,
+    OwnerFenceReceipt, SourceOwnerActivationReceipt, VerifiedCutoverReceipt,
+};
 /// Applies one closed ownership command purely through `search-domain`.
 pub fn transition_namespace_owner(
     current: &SourceNamespaceOwnership,
@@ -282,6 +128,9 @@ where
     let state = states
         .get(&namespace_id)
         .ok_or(RegistryError::NamespaceOwnershipConflict)?;
+    if state.is_permanent_v2() {
+        return Err(RegistryError::CutoverRequired);
+    }
     if state.preparation.is_some() {
         return Err(RegistryError::NamespaceOwnershipConflict);
     }
@@ -383,6 +232,9 @@ where
     let state = states
         .get(&preparation.namespace_id)
         .ok_or(RegistryError::NamespaceOwnershipConflict)?;
+    if state.is_permanent_v2() {
+        return Err(RegistryError::CutoverRequired);
+    }
     let stored = state
         .preparation
         .as_ref()
@@ -506,6 +358,9 @@ where
     let state = states
         .get(&preparation.namespace_id)
         .ok_or(RegistryError::NamespaceOwnershipConflict)?;
+    if state.is_permanent_v2() {
+        return Err(RegistryError::CutoverRequired);
+    }
     if !state.fenced {
         return Err(RegistryError::CutoverRequired);
     }
