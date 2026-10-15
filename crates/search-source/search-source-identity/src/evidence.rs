@@ -12,6 +12,9 @@ use crate::IdentityError;
 /// Maximum UTF-8 bytes in one qualified root-relative lookup path.
 pub const MAX_IDENTITY_PATH_BYTES: usize = 32_768;
 
+#[path = "recorded.rs"]
+pub mod recorded;
+
 /// Case behavior proven by a qualified filesystem adapter.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum CaseBehavior {
