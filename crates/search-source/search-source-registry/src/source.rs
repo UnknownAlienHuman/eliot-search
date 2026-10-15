@@ -258,10 +258,10 @@ where
             .ok_or(RegistryError::MutationOutcomeUnknown)?;
         return Ok(AdmittedSourceReceipt {
             source_identity: identity.clone(),
-            source_revision: record.source_revision,
-            registry_revision: record.registry_revision,
+            source_revision: record.source_revision(),
+            registry_revision: record.registry_revision(),
             operation_id: operation_id.clone(),
-            receipt: record.last_receipt.clone(),
+            receipt: record.last_receipt().clone(),
             replayed: true,
         });
     }
@@ -292,16 +292,15 @@ where
     let source_revision = NonZeroRevision::new(1).map_err(|_| RegistryError::ContractExhausted)?;
     sources.insert(
         identity.clone(),
-        RegisteredSource {
-            binding: binding.clone(),
-            admission: receipt_input.clone(),
-            original_admission: None,
-            assignment: assignment.clone(),
-            lifecycle: SourceLifecycle::Active,
+        RegisteredSource::new(
+            binding.clone(),
+            receipt_input.clone(),
+            assignment.clone(),
+            SourceLifecycle::Active,
             source_revision,
-            registry_revision: next_registry_revision,
-            last_receipt: receipt.clone(),
-        },
+            next_registry_revision,
+            receipt.clone(),
+        ),
     );
     Ok(AdmittedSourceReceipt {
         source_identity: identity.clone(),
@@ -351,15 +350,15 @@ where
     let retained = sources
         .get(identity)
         .ok_or(RegistryError::SourceNotAdmitted)?;
-    if &retained.admission != current_receipt {
-        return Err(if retained.original_admission.is_none() {
+    if retained.admission() != current_receipt {
+        return Err(if retained.original_admission().is_none() {
             RegistryError::AdmissionRestorationUnavailable
         } else {
             RegistryError::AdmissionReceiptMismatch
         });
     }
     if retained
-        .original_admission
+        .original_admission()
         .as_ref()
         .is_some_and(|original| original.receipt() != current_receipt)
     {
@@ -383,49 +382,56 @@ where
             .ok_or(RegistryError::MutationOutcomeUnknown)?;
         return Ok(SourceAdmissionUpdateReceipt {
             source_identity: identity.clone(),
-            source_revision: record.source_revision,
-            registry_revision: record.registry_revision,
+            source_revision: record.source_revision(),
+            registry_revision: record.registry_revision(),
             operation_id: operation_id.clone(),
             obligations: vec![
                 SourceRevalidationObligation::ReconcileDownstream,
                 SourceRevalidationObligation::InvalidateViews,
                 SourceRevalidationObligation::FenceServing,
             ],
-            receipt: record.last_receipt.clone(),
+            receipt: record.last_receipt().clone(),
             replayed: true,
         });
     }
     let record = sources
         .get_mut(identity)
         .ok_or(RegistryError::SourceNotAdmitted)?;
-    if record.lifecycle != SourceLifecycle::Active {
+    if record.lifecycle() != SourceLifecycle::Active {
         return Err(RegistryError::SourceRetired);
     }
-    if record.source_revision != expected_source_revision {
+    if record.source_revision() != expected_source_revision {
         return Err(RegistryError::SourceRevisionConflict);
     }
     if current_receipt.observation_digest().as_bytes()
-        != record.assignment.observation_digest.as_bytes()
+        != record.assignment().observation_digest.as_bytes()
     {
         return Err(RegistryError::AdmissionReceiptMismatch);
     }
-    let root_id = record.binding.root_binding_id();
+    let root_id = record.binding().root_binding_id();
     let root = roots
         .get(&root_id)
         .ok_or(RegistryError::RootNotRegistered)?;
     check_allow_under_root(current_receipt, root)?;
     let next_source_revision = record
-        .source_revision
+        .source_revision()
         .checked_next()
         .map_err(|_| RegistryError::ContractExhausted)?;
+    let replacement = RegisteredSource::new(
+        record.binding().clone(),
+        current_receipt.clone(),
+        record.assignment().clone(),
+        record.lifecycle(),
+        next_source_revision,
+        next_registry_revision,
+        receipt.clone(),
+    )
+    .retaining_original(record.original_admission().cloned())?;
     persist(control_port, &entry, context, &mutation)?;
-    record.source_revision = next_source_revision;
-    record.admission.clone_from(current_receipt);
-    record.registry_revision = next_registry_revision;
-    record.last_receipt.clone_from(receipt);
+    *record = replacement;
     Ok(SourceAdmissionUpdateReceipt {
         source_identity: identity.clone(),
-        source_revision: record.source_revision,
+        source_revision: record.source_revision(),
         registry_revision: next_registry_revision,
         operation_id: operation_id.clone(),
         obligations: vec![
