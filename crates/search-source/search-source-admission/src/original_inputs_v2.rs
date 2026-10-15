@@ -25,12 +25,55 @@ pub fn reconstitute_observation_v2(
     max_encoded_bytes: usize,
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<AdmissionObservationV2, AdmissionError> {
+    reconstitute_fields(
+        input,
+        relative_locator,
+        policy.rules().len(),
+        policy.section().max_file_bytes(),
+        max_encoded_bytes,
+        probe,
+    )
+}
+
+/// Reconstitute historical metadata independently of a policy's read-size cap.
+///
+/// The size is an observed fact. The structural ceiling is the maximum accepted
+/// metadata range of the sole field validator, not a current policy permission.
+/// Evaluation/receipt verification still apply the actual original/current policy.
+/// No v1 policy is constructed and no observation identity is changed.
+///
+/// # Errors
+/// Invalid fields/locator/encoded limits or caller checkpoint failures return no value.
+pub fn reconstitute_retained_observation_v2(
+    input: &UnvalidatedObservationInput,
+    relative_locator: Option<&[u8]>,
+    max_encoded_bytes: usize,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<AdmissionObservationV2, AdmissionError> {
+    reconstitute_fields(
+        input,
+        relative_locator,
+        0,
+        crate::DEFAULT_MAX_FILE_BYTES,
+        max_encoded_bytes,
+        probe,
+    )
+}
+
+fn reconstitute_fields(
+    input: &UnvalidatedObservationInput,
+    relative_locator: Option<&[u8]>,
+    rule_count: usize,
+    metadata_size_ceiling: u64,
+    max_encoded_bytes: usize,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<AdmissionObservationV2, AdmissionError> {
     checkpoint(probe)?;
     validate_encoded_ceiling(max_encoded_bytes)?;
     let metadata = crate::validate_observation_fields(
         input,
-        policy.rules().len(),
-        policy.section().max_file_bytes(),
+        rule_count,
+        metadata_size_ceiling,
         DEFAULT_ADMISSION_LIMITS,
     )?;
     let locator = relative_locator

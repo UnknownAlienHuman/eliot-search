@@ -11,7 +11,7 @@ use search_source_admission::observation_v2::{
     AdmissionObservationV2, MAX_OBSERVATION_PREIMAGE_BYTES,
 };
 use search_source_admission::original_inputs_v2::{
-    reconstitute_observation_v2, retain_observation_inputs_v2,
+    reconstitute_retained_observation_v2, retain_observation_inputs_v2,
 };
 use search_source_admission::policy_v2::{
     CheckpointFailureV2, CompiledAdmissionPolicyV2, POLICY_PROFILE, POLICY_SCHEMA_VERSION,
@@ -81,10 +81,9 @@ impl OriginalAdmissionV2 {
         let locator = observation
             .relative_locator()
             .map(search_source_admission::observation_v2::AdmissionRelativeLocator::as_bytes);
-        let restored = reconstitute_observation_v2(
+        let restored = reconstitute_retained_observation_v2(
             &raw,
             locator,
-            policy.compiled(),
             MAX_OBSERVATION_PREIMAGE_BYTES,
             probe,
         )?;
@@ -137,10 +136,9 @@ impl OriginalAdmissionV2 {
             _ => return Err(malformed()),
         };
         checkpoint(probe)?;
-        let observation = reconstitute_observation_v2(
+        let observation = reconstitute_retained_observation_v2(
             &raw,
             locator,
-            policy.compiled(),
             MAX_OBSERVATION_PREIMAGE_BYTES,
             probe,
         )?;

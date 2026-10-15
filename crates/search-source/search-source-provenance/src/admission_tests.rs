@@ -17,6 +17,18 @@ use search_source_admission::{
 use std::sync::Arc;
 
 fn policy(effect: RuleEffect, revision: u64) -> Arc<RetainedPolicyV2> {
+    policy_with_size(
+        effect,
+        revision,
+        search_source_admission::DEFAULT_MAX_FILE_BYTES,
+    )
+}
+
+fn policy_with_size(
+    effect: RuleEffect,
+    revision: u64,
+    max_file_bytes: u64,
+) -> Arc<RetainedPolicyV2> {
     let platform = SectionPlatform {
         os: "windows".into(),
         arch: "x64".into(),
@@ -24,11 +36,13 @@ fn policy(effect: RuleEffect, revision: u64) -> Arc<RetainedPolicyV2> {
     let capabilities = AcceptedCapabilities {
         profiles: vec![BASELINE_PROFILE.into()],
     };
+    let mut section = compiled_defaults();
+    section.max_file_bytes = max_file_bytes;
     let compiled = compile_policy_v2(
         &PolicyInputV2 {
             schema_version: POLICY_SCHEMA_VERSION,
             revision,
-            section: validate_section(&compiled_defaults(), &platform, &capabilities).unwrap(),
+            section: validate_section(&section, &platform, &capabilities).unwrap(),
             rules: vec![RuleInputV2 {
                 id: "archive-rule".into(),
                 precedence: 0,
@@ -78,6 +92,51 @@ fn original(effect: RuleEffect) -> OriginalAdmissionV2 {
     )
     .unwrap();
     OriginalAdmissionV2::retain(policy, &observation, &mut || Ok(())).unwrap()
+}
+
+#[test]
+fn archive_preserves_valid_size_facts_when_original_policy_denied_the_size() {
+    let broad = policy(RuleEffect::Allow, 7);
+    let narrow = policy_with_size(RuleEffect::Allow, 7, 8);
+    let mut raw = metadata();
+    raw.byte_size = Some(4_096);
+    let observation = reconstitute_observation_v2(
+        &raw,
+        Some(b"src/size.rs"),
+        broad.compiled(),
+        MAX_OBSERVATION_PREIMAGE_BYTES,
+        &mut || Ok(()),
+    )
+    .unwrap();
+    assert!(
+        reconstitute_observation_v2(
+            &raw,
+            Some(b"src/size.rs"),
+            narrow.compiled(),
+            MAX_OBSERVATION_PREIMAGE_BYTES,
+            &mut || Ok(())
+        )
+        .is_err(),
+        "current-policy helper keeps its existing cap"
+    );
+    let archived =
+        OriginalAdmissionV2::retain(Arc::clone(&narrow), &observation, &mut || Ok(())).unwrap();
+    assert_eq!(
+        archived.receipt().decision().outcome(),
+        AdmissionOutcome::Deny
+    );
+    assert!(
+        archived
+            .receipt()
+            .decision()
+            .reason_codes()
+            .contains(&search_source_admission::AdmissionReasonCode::DenySizeExceeded)
+    );
+    let restored =
+        OriginalAdmissionV2::restore(narrow, archived.encoded_source_evidence(), &mut || Ok(()))
+            .unwrap();
+    assert_eq!(restored.receipt(), archived.receipt());
+    assert_eq!(restored.observation(), &observation);
 }
 
 #[test]
