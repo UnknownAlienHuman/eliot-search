@@ -538,6 +538,9 @@ where
         .preflight()
         .map_err(|_| RegistryError::CancelledBeforeCommit)?;
     checkpoint(probe)?;
+    if registry.pending_batch.is_some() {
+        return Err(RegistryError::MutationOutcomeUnknown.into());
+    }
     if registry.revision != prepared.batch.expected_registry_revision() {
         return Err(RegistryError::RegistryRevisionConflict.into());
     }
