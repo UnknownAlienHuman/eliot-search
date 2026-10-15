@@ -2218,7 +2218,7 @@ pub(crate) fn evaluate_with_probe(
     )
 }
 
-fn evaluate_with_probe_context(
+pub(crate) fn evaluate_with_probe_context(
     policy: &CanonicalAdmissionPolicy,
     observation: &AdmissionObservation,
     budget: AdmissionBudget,

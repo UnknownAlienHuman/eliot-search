@@ -7,7 +7,7 @@ use super::{
     CancelFlag, CanonicalAdmissionPolicy, CanonicalRule, DEFAULT_ADMISSION_LIMITS,
     MAX_POLICY_RULES, POLICY_SCHEMA_VERSION, UnvalidatedObservationInput, UnvalidatedPolicyInput,
     UnvalidatedRuleInput, VerifiedAdmissionReceipt, evaluate, issue_receipt, normalize_policy,
-    validate_observation, validate_policy_schema, verify_receipt,
+    evaluate_with_probe_context, validate_observation, validate_policy_schema, verify_receipt,
 };
 use super::policy_v2::{CheckpointFailureV2, checkpoint};
 use search_contracts::{self as c, CanonicalValue as V, ClosedCanonicalObject as Object};
