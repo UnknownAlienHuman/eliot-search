@@ -9,6 +9,7 @@
 mod tests;
 
 mod original_inputs;
+mod source_ids;
 
 
 use search_contracts::OpaqueId;
@@ -520,6 +521,7 @@ const fn family(value: RegistryStateFamily) -> StoredFamily {
         RegistryStateFamily::Source => StoredFamily::Source,
         RegistryStateFamily::Membership => StoredFamily::Membership,
         RegistryStateFamily::Generation => StoredFamily::Generation,
+        RegistryStateFamily::Namespace => StoredFamily::Namespace,
     }
 }
 

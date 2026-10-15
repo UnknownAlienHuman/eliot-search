@@ -1,7 +1,7 @@
 //! Fresh source and namespace identity allocation through the qualified OS CSPRNG.
 //!
 //! This adapter mints RFC 4122 version-4 UUIDs from the sole daemon entropy owner.
-//! It performs no file reads, holds no native authority, and creates no new budget
+//! It reads no source bytes, holds no native authority, and creates no new budget
 //! or deadline. The original caller deadline and work callback are preserved.
 
 use std::fmt;
@@ -51,6 +51,9 @@ impl PortFailure for SourceIdentityIdError {
                 PortErrorKind::CancelledBeforeSideEffect
             }
             Self::Owner(OwnerError::OwnerDeadlineInvalid) => PortErrorKind::DeadlineDuringOperation,
+            Self::Owner(OwnerError::OwnerOperationCapacityExceeded) => {
+                PortErrorKind::ResourceExhausted
+            }
             Self::Owner(_) => PortErrorKind::DependencyUnavailable,
             Self::Deadline => PortErrorKind::DeadlineDuringOperation,
             Self::EntropyRefused => PortErrorKind::DependencyUnavailable,
@@ -82,7 +85,7 @@ impl PortFailure for SourceIdentityIdError {
 /// Adapter that mints fresh source and namespace IDs from qualified OS entropy.
 ///
 /// The adapter borrows the original deadline and work callback. It performs no
-/// I/O, holds no native authority, and creates no new budget or deadline.
+/// source reads, holds no native authority, and creates no new budget or deadline.
 pub(crate) struct SourceIdentityIdsV2<'a, C: CancellationProbe> {
     deadline: Instant,
     work: &'a dyn Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
@@ -109,10 +112,7 @@ impl<C: CancellationProbe> Port for SourceIdentityIdsV2<'_, C> {
 }
 
 impl<C: CancellationProbe> SourceIdentityIdPortV2 for SourceIdentityIdsV2<'_, C> {
-    fn fresh_source_id(
-        &mut self,
-        context: &OperationContext<C>,
-    ) -> Result<SourceId, Self::Error> {
+    fn fresh_source_id(&mut self, context: &OperationContext<C>) -> Result<SourceId, Self::Error> {
         mint_fresh_id(self.deadline, self.work, context).map(SourceId::from_bytes)
     }
 
@@ -130,7 +130,12 @@ fn mint_fresh_id<C: CancellationProbe>(
     work: &dyn Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
     context: &OperationContext<C>,
 ) -> Result<[u8; 16], SourceIdentityIdError> {
-    context.preflight().map_err(SourceIdentityIdError::Context)?;
+    context
+        .preflight()
+        .map_err(SourceIdentityIdError::Context)?;
+    if Instant::now() >= deadline {
+        return Err(SourceIdentityIdError::Deadline);
+    }
     work(MigrationBootstrapWork::Checkpoint).map_err(SourceIdentityIdError::Owner)?;
     work(MigrationBootstrapWork::Allocate(16)).map_err(SourceIdentityIdError::Owner)?;
     work(MigrationBootstrapWork::Read(16)).map_err(SourceIdentityIdError::Owner)?;
@@ -143,7 +148,9 @@ fn mint_fresh_id<C: CancellationProbe>(
     if Instant::now() >= deadline {
         return Err(SourceIdentityIdError::Deadline);
     }
-    context.preflight().map_err(SourceIdentityIdError::Context)?;
+    context
+        .preflight()
+        .map_err(SourceIdentityIdError::Context)?;
     Ok(bytes)
 }
 
@@ -167,15 +174,15 @@ mod tests {
     #[test]
     fn pre_cancel_calls_no_work_or_entropy() {
         let deadline = Instant::now() + Duration::from_secs(30);
-        let mut called = false;
+        let called = std::cell::Cell::new(false);
         let work = |_w: MigrationBootstrapWork| -> Result<(), OwnerError> {
-            called = true;
+            called.set(true);
             Ok(())
         };
         let mut adapter = SourceIdentityIdsV2::<FakeCancellation>::bind(deadline, &work);
         let result = adapter.fresh_source_id(&context(true));
         assert!(matches!(result, Err(SourceIdentityIdError::Context(_))));
-        assert!(!called);
+        assert!(!called.get());
     }
 
     #[test]
@@ -190,6 +197,21 @@ mod tests {
     }
 
     #[test]
+    fn expired_original_deadline_refuses_before_work_or_entropy() {
+        let called = std::cell::Cell::new(false);
+        let work = |_| {
+            called.set(true);
+            Ok(())
+        };
+        let mut adapter = SourceIdentityIdsV2::<FakeCancellation>::bind(Instant::now(), &work);
+        assert!(matches!(
+            adapter.fresh_source_id(&context(false)),
+            Err(SourceIdentityIdError::Deadline)
+        ));
+        assert!(!called.get());
+    }
+
+    #[test]
     fn actual_entropy_yields_v4_source_and_namespace_ids() {
         let deadline = Instant::now() + Duration::from_secs(30);
         let work = |_w: MigrationBootstrapWork| -> Result<(), OwnerError> { Ok(()) };
@@ -199,7 +221,9 @@ mod tests {
         let bytes = source_id.as_bytes();
         assert_eq!(bytes[6] & 0xf0, 0x40, "version 4");
         assert_eq!(bytes[8] & 0xc0, 0x80, "RFC 4122 variant");
-        let ns_id = adapter.fresh_source_namespace_id(&ctx).expect("namespace id");
+        let ns_id = adapter
+            .fresh_source_namespace_id(&ctx)
+            .expect("namespace id");
         let ns_bytes = ns_id.as_bytes();
         assert_eq!(ns_bytes[6] & 0xf0, 0x40, "version 4");
         assert_eq!(ns_bytes[8] & 0xc0, 0x80, "RFC 4122 variant");

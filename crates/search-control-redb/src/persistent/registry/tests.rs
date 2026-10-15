@@ -100,15 +100,23 @@ impl Scratch {
         let mut journal =
             PersistentControlJournal::create(file, identity(version), LIMITS).unwrap();
         if version == 5 {
-            journal.initialize_operating_profile(
-                crate::JournalProfileInitialization::Indexed(visibility()),
-                MutationId([9; 32]),
-                Blake3Digest32::from_bytes([8; 32]),
-                &context(),
-            ).unwrap();
+            journal
+                .initialize_operating_profile(
+                    crate::JournalProfileInitialization::Indexed(visibility()),
+                    MutationId([9; 32]),
+                    Blake3Digest32::from_bytes([8; 32]),
+                    &context(),
+                )
+                .unwrap();
         } else {
-            journal.initialize_publication_visibility(visibility(), MutationId([9; 32]),
-                Blake3Digest32::from_bytes([8; 32]), &context()).unwrap();
+            journal
+                .initialize_publication_visibility(
+                    visibility(),
+                    MutationId([9; 32]),
+                    Blake3Digest32::from_bytes([8; 32]),
+                    &context(),
+                )
+                .unwrap();
         }
         journal
     }
@@ -502,90 +510,91 @@ fn registry_normal_readback_work_does_not_scan_prior_operation_history() {
 }
 
 #[test]
-fn registry_root_family_roundtrips_disk_snapshot_and_original_operation_recovery() {
-    // Opaque technical fixture payloads; source owner validates actual RootRecord CBOR.
-    let root_key = RegistryStateKey::new(
-        RegistryStateFamily::Root,
-        b"source-owner-root-key-fixture".to_vec(),
-        LIMITS,
-    )
-    .unwrap();
-    let first = RegistryMutationRequest::new(
-        OpaqueId::new("root:original").unwrap(),
-        1,
-        0,
-        Blake3Digest32::from_bytes([23; 32]),
-        b"owner-root-operation-fixture".to_vec(),
-        vec![
-            RegistryStateChange::new(root_key.clone(), None, b"root-revision-1".to_vec(), LIMITS)
+fn registry_root_and_namespace_families_roundtrip_disk_snapshot_and_original_operation_recovery() {
+    for family in [RegistryStateFamily::Root, RegistryStateFamily::Namespace] {
+        // Opaque technical fixture payloads; source owner validates actual RootRecord CBOR.
+        let root_key =
+            RegistryStateKey::new(family, b"source-owner-root-key-fixture".to_vec(), LIMITS)
+                .unwrap();
+        let first = RegistryMutationRequest::new(
+            OpaqueId::new("root:original").unwrap(),
+            1,
+            0,
+            Blake3Digest32::from_bytes([23; 32]),
+            b"owner-root-operation-fixture".to_vec(),
+            vec![
+                RegistryStateChange::new(
+                    root_key.clone(),
+                    None,
+                    b"root-revision-1".to_vec(),
+                    LIMITS,
+                )
                 .unwrap(),
-        ],
-        LIMITS,
-    )
-    .unwrap();
-    let scratch = Scratch::new();
-    let mut journal = scratch.create(5);
-    let result = journal.commit_registry_batch(&first, &context()).unwrap();
-    assert_eq!(
-        result.readback().states()[0].key().family(),
-        RegistryStateFamily::Root
-    );
-    let snapshot = journal.read_snapshot().unwrap();
-    let physical_key = codec::state_key(&root_key, LIMITS).unwrap();
-    assert_eq!(
-        snapshot.get(&physical_key).unwrap().class(),
-        ControlRecordClass::Identity
-    );
-    // Unknown family tags stay closed even when class and value bytes otherwise match.
-    let mut unknown = physical_key.as_bytes().to_vec();
-    unknown[b"eliot.control.registry.v1/state/".len()] = 99;
-    assert!(
-        codec::decode_record(
-            &ControlKey::new(unknown, LIMITS).unwrap(),
-            snapshot.get(&physical_key).unwrap(),
-            LIMITS
+            ],
+            LIMITS,
         )
-        .is_err()
-    );
-    drop(journal);
-    let mut reopened = scratch.reopen();
-    let restored = reopened.read_registry_snapshot(&context()).unwrap();
-    assert_eq!(restored.states()[0].key(), &root_key);
-    assert_eq!(restored.states()[0].canonical_bytes(), b"root-revision-1");
-    assert_eq!(
-        restored.operation(first.envelope().operation_id()).unwrap(),
-        first.envelope()
-    );
-    assert!(matches!(
-        reopened.recover_registry_batch(&first, &context()).unwrap(),
-        CommitRecoveryDecision::Committed(_)
-    ));
-    let next = RegistryMutationRequest::new(
-        OpaqueId::new("root:next").unwrap(),
-        2,
-        1,
-        Blake3Digest32::from_bytes([24; 32]),
-        b"owner-next-root-operation-fixture".to_vec(),
-        vec![
-            RegistryStateChange::new(
-                root_key,
-                Some(b"root-revision-1".to_vec()),
-                b"root-revision-2".to_vec(),
-                LIMITS,
+        .unwrap();
+        let scratch = Scratch::new();
+        let mut journal = scratch.create(5);
+        let result = journal.commit_registry_batch(&first, &context()).unwrap();
+        assert_eq!(result.readback().states()[0].key().family(), family);
+        let snapshot = journal.read_snapshot().unwrap();
+        let physical_key = codec::state_key(&root_key, LIMITS).unwrap();
+        assert_eq!(
+            snapshot.get(&physical_key).unwrap().class(),
+            ControlRecordClass::Identity
+        );
+        // Unknown family tags stay closed even when class and value bytes otherwise match.
+        let mut unknown = physical_key.as_bytes().to_vec();
+        unknown[b"eliot.control.registry.v1/state/".len()] = 99;
+        assert!(
+            codec::decode_record(
+                &ControlKey::new(unknown, LIMITS).unwrap(),
+                snapshot.get(&physical_key).unwrap(),
+                LIMITS
             )
-            .unwrap(),
-        ],
-        LIMITS,
-    )
-    .unwrap();
-    reopened.commit_registry_batch(&next, &context()).unwrap();
-    let replay = reopened.commit_registry_batch(&first, &context()).unwrap();
-    assert!(replay.receipt().replayed);
-    assert_eq!(
-        replay.readback().states()[0].canonical_bytes(),
-        b"root-revision-2"
-    );
-    assert_eq!(replay.readback().operation().journal_generation_before(), 1);
+            .is_err()
+        );
+        drop(journal);
+        let mut reopened = scratch.reopen();
+        let restored = reopened.read_registry_snapshot(&context()).unwrap();
+        assert_eq!(restored.states()[0].key(), &root_key);
+        assert_eq!(restored.states()[0].canonical_bytes(), b"root-revision-1");
+        assert_eq!(
+            restored.operation(first.envelope().operation_id()).unwrap(),
+            first.envelope()
+        );
+        assert!(matches!(
+            reopened.recover_registry_batch(&first, &context()).unwrap(),
+            CommitRecoveryDecision::Committed(_)
+        ));
+        let next = RegistryMutationRequest::new(
+            OpaqueId::new("root:next").unwrap(),
+            2,
+            1,
+            Blake3Digest32::from_bytes([24; 32]),
+            b"owner-next-root-operation-fixture".to_vec(),
+            vec![
+                RegistryStateChange::new(
+                    root_key,
+                    Some(b"root-revision-1".to_vec()),
+                    b"root-revision-2".to_vec(),
+                    LIMITS,
+                )
+                .unwrap(),
+            ],
+            LIMITS,
+        )
+        .unwrap();
+        reopened.commit_registry_batch(&next, &context()).unwrap();
+        let replay = reopened.commit_registry_batch(&first, &context()).unwrap();
+        assert!(replay.receipt().replayed);
+        assert_eq!(
+            replay.readback().states()[0].canonical_bytes(),
+            b"root-revision-2"
+        );
+        assert_eq!(replay.readback().operation().journal_generation_before(), 1);
+    }
 }
 
 #[test]
