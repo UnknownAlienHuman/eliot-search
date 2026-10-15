@@ -85,6 +85,48 @@ impl OriginalInputsLayoutV2 {
         &self.parts
     }
 
+    /// Project bounded lookup keys from an untrusted layout reference.
+    ///
+    /// This validates addressing only; observed values still require complete
+    /// reconstitution through the original semantic owners.
+    ///
+    /// # Errors
+    /// Unknown profiles/kinds, malformed lengths/counts or caller refusal return no keys.
+    pub fn lookup_keys(reference: &[u8], probe: Probe<'_>) -> Result<Vec<Vec<u8>>, AdmissionError> {
+        check(probe)?;
+        if reference.is_empty() || reference.len() > MAX_REFERENCE {
+            return Err(bad());
+        }
+        let value = parse_canonical_cbor(reference).map_err(|_| bad())?;
+        let fields = rows::<6>(&value)?;
+        let V::Text(kind) = &fields[2] else {
+            return Err(bad());
+        };
+        let kind = kind.as_str();
+        let V::Bytes(fingerprint) = &fields[3] else {
+            return Err(bad());
+        };
+        let length = number(&fields[4])?;
+        let count = number(&fields[5])?;
+        if fields[0] != V::U64(2)
+            || fields[1] != c::text(PROFILE)?
+            || !matches!(kind, "policy" | "admission")
+            || fingerprint.as_slice().len() != 32
+            || length == 0
+            || length > MAX_ARCHIVE
+            || count != length.div_ceil(ORIGINAL_INPUT_FRAGMENT_BYTES_V2)
+        {
+            return Err(bad());
+        }
+        let mut keys = Vec::with_capacity(count);
+        for index in 0..count {
+            check(probe)?;
+            keys.push(key(kind, fingerprint.as_slice(), index)?);
+        }
+        check(probe)?;
+        Ok(keys)
+    }
+
     /// Reconstitute observed policy parts through the actual policy owner.
     ///
     /// # Errors

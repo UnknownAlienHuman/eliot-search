@@ -127,6 +127,7 @@ blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pur
 # identity, registry and revision-store owners. These are architecture
 # boundaries, not optional wave acceptance claims.
 search-source-admission.workspace = true
+search-source-provenance.workspace = true
 search-source-registry.workspace = true
 search-source-identity.workspace = true
 search-revision-store.workspace = true

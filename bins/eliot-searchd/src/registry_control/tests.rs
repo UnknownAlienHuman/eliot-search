@@ -2,6 +2,8 @@
 //! Journal/native identity inputs are synthetic; this is not NativeCtx qualification.
 
 use super::*;
+#[path = "tests/original_inputs.rs"]
+mod original_inputs;
 use search_contracts::{
     Blake3Digest32, DataRootId, InstallationIncarnationId, NonZeroRevision, OpaqueCanonicalBytes,
     OpaqueRef, OwnerEpoch, PublicationGuards, ReceiptRef, RequestId, RootBindingId, SourceId,

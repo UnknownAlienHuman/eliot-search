@@ -8,6 +8,8 @@
 #[path = "registry_control/tests.rs"]
 mod tests;
 
+mod original_inputs;
+
 
 use search_contracts::OpaqueId;
 use search_control_redb::{
@@ -40,11 +42,12 @@ pub struct RegistryJournal<'journal, C: CancellationProbe> {
     identity: JournalIdentity,
     registry_limits: RegistryLimits,
     pending: Option<RegistryMutationRequest>,
+    original_uncertain: bool,
     cancellation: core::marker::PhantomData<fn() -> C>,
 }
 
 impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
-    pub(crate) const fn requires_recovery(&self) -> bool { self.pending.is_some() }
+    pub(crate) const fn requires_recovery(&self) -> bool { self.pending.is_some() || self.original_uncertain }
     /// The enclosing native owner keeps its verified journal/root alive.
     pub(crate) fn bind(
         journal: &'journal mut PersistentControlJournal,
@@ -65,6 +68,7 @@ impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
             identity: expected,
             registry_limits,
             pending: None,
+            original_uncertain: false,
             cancellation: core::marker::PhantomData,
         })
     }

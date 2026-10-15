@@ -453,6 +453,7 @@ dependencies = [
  "search-safe-reader",
  "search-source-admission",
  "search-source-identity",
+ "search-source-provenance",
  "search-source-reconcile",
  "search-source-registry",
  "search-subject-resolver",
