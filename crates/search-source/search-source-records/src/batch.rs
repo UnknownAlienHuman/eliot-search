@@ -17,7 +17,25 @@ use std::collections::BTreeMap;
 #[path = "batch_codec.rs"]
 mod codec;
 pub use codec::decode_batch_record;
-pub use codec::{BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4};
+pub use codec::{
+    BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4,
+};
+
+/// Extract required original-input references from an explicit v4 state.
+pub fn required_original_refs_from_state_v4(
+    bytes: &[u8],
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<Vec<Vec<u8>>, BatchCodecV4Error> {
+    BatchCodecV4Error::required_original_refs_from_state_v4(bytes, probe)
+}
+
+/// Extract required original-input references from an explicit v4 batch.
+pub fn required_original_refs_from_batch_v4(
+    bytes: &[u8],
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<Vec<Vec<u8>>, BatchCodecV4Error> {
+    BatchCodecV4Error::required_original_refs_from_batch_v4(bytes, probe)
+}
 
 /// Current closed immutable operation profile, without a currentness assertion.
 pub const CURRENT_BATCH_PROFILE: &str = codec::CURRENT_BATCH_PROFILE;

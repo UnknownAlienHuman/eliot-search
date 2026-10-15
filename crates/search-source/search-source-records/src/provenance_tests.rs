@@ -222,3 +222,6 @@ fn retiring_source_preserves_exact_permanent_v2_provenance() {
         original.policy()
     ));
 }
+
+#[path = "original_ref_manifest_tests.rs"]
+mod original_ref_manifest_tests;

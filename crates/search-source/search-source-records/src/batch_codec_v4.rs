@@ -9,8 +9,10 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use crate::error::DEFAULT_REGISTRY_LIMITS;
 use crate::namespace::{
     CutoverPreparation, NamespaceCutoverState, NamespaceMetadata, NamespaceMetadataError,
     SourceOwnerActivationReceipt,
@@ -65,6 +67,26 @@ impl From<NamespaceMetadataError> for BatchCodecV4Error {
     }
 }
 
+impl BatchCodecV4Error {
+    /// Forward the bounded state reference descriptor through the exported
+    /// closed v4 error type; the records module exposes the free API.
+    pub fn required_original_refs_from_state_v4(
+        bytes: &[u8],
+        probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+    ) -> Result<Vec<Vec<u8>>, Self> {
+        required_original_refs_from_state_v4(bytes, probe)
+    }
+
+    /// Forward the bounded batch reference descriptor through the exported
+    /// closed v4 error type; the records module exposes the free API.
+    pub fn required_original_refs_from_batch_v4(
+        bytes: &[u8],
+        probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+    ) -> Result<Vec<Vec<u8>>, Self> {
+        required_original_refs_from_batch_v4(bytes, probe)
+    }
+}
+
 /// Resolves retained original-input references from one coherent pre-read.
 ///
 /// Implementations belong to the normal control/storage owner. They must use
@@ -116,6 +138,202 @@ pub fn decode_state_v4<R: OriginalInputResolver + ?Sized>(
     }
     checkpoint(probe)?;
     Ok(state)
+}
+
+/// Extracts bounded original-input references from one explicit v4 state.
+///
+/// This is a non-authoritative prefetch descriptor. It validates reference
+/// shape through the original-input layout owner, performs no storage I/O and
+/// never constructs a policy, admission, currentness or native grant.
+pub fn required_original_refs_from_state_v4(
+    bytes: &[u8],
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<Vec<Vec<u8>>, BatchCodecV4Error> {
+    checkpoint(probe)?;
+    let mut outer = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
+    if string(take(&mut outer, "profile")?)? != STATE_PROFILE_V4 {
+        return Err(bad().into());
+    }
+    let (_, refs) = state_descriptor_v4(take(&mut outer, "state")?, probe)?;
+    finish(outer)?;
+    validate_reference_set(refs.into_iter().collect(), probe)
+}
+
+/// Extracts bounded original-input references from all explicit v4 batch deltas.
+///
+/// Both `before` and `after` state values are inspected. The returned bytes are
+/// canonical references only; a later owner read must resolve them and recheck
+/// the resulting identity/generation before model construction.
+pub fn required_original_refs_from_batch_v4(
+    bytes: &[u8],
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<Vec<Vec<u8>>, BatchCodecV4Error> {
+    DEFAULT_REGISTRY_LIMITS.validate()?;
+    checkpoint(probe)?;
+    let mut outer = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
+    if string(take(&mut outer, "profile")?)? != BATCH_PROFILE_V4 {
+        return Err(bad().into());
+    }
+    let _operation = opaque(take(&mut outer, "operation")?)?;
+    let _declared_digest = fixed::<32>(take(&mut outer, "declared_digest")?)?;
+    let _request_fingerprint = fixed::<32>(take(&mut outer, "request_fingerprint")?)?;
+    let before_revision = number(take(&mut outer, "before_revision")?)?;
+    let after_revision = number(take(&mut outer, "after_revision")?)?;
+    if before_revision.checked_add(1) != Some(after_revision) {
+        return Err(bad().into());
+    }
+    let _receipt = receipt(take(&mut outer, "receipt")?)?;
+    let change_count =
+        usize::try_from(number(take(&mut outer, "change_count")?)?).map_err(|_| bad())?;
+    let rows = array(take(&mut outer, "deltas")?)?;
+    if change_count == 0
+        || change_count > DEFAULT_REGISTRY_LIMITS.max_batch_changes
+        || rows.len() != change_count
+    {
+        return Err(RegistryError::CapacityExceeded.into());
+    }
+    let mut refs = BTreeSet::new();
+    let mut previous = None;
+    for row in rows {
+        checkpoint(probe)?;
+        let mut delta = open(row)?;
+        let key = read_key_v4(take(&mut delta, "key")?)?;
+        let before = optional_decode_v4(take(&mut delta, "before")?, |value| {
+            state_descriptor_v4(value, probe)
+        })?;
+        let after = state_descriptor_v4(take(&mut delta, "after")?, probe)?;
+        finish(delta)?;
+        if previous.as_ref().is_some_and(|candidate| candidate >= &key)
+            || after.0 != key
+            || before.as_ref().is_some_and(|value| value.0 != key)
+        {
+            return Err(bad().into());
+        }
+        previous = Some(key);
+        refs.extend(after.1);
+        if let Some(before) = before {
+            refs.extend(before.1);
+        }
+    }
+    finish(outer)?;
+    validate_reference_set(refs, probe)
+}
+
+fn state_descriptor_v4(
+    value: V,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<(RegistryStateKey, Vec<Vec<u8>>), BatchCodecV4Error> {
+    let mut marker = open(value.clone())?;
+    let family = string(take(&mut marker, "family")?)?;
+    match family.as_str() {
+        "source" => source_descriptor_v4(value, probe),
+        "namespace" => namespace_descriptor_v4(value, probe),
+        "root" | "membership" | "generation" => {
+            let state = super::read_state(value, true)?;
+            Ok((state.key(), Vec::new()))
+        }
+        _ => Err(bad().into()),
+    }
+}
+
+fn source_descriptor_v4(
+    value: V,
+    _probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<(RegistryStateKey, Vec<Vec<u8>>), BatchCodecV4Error> {
+    let mut fields = open(value)?;
+    if string(take(&mut fields, "family")?)? != "source" {
+        return Err(bad().into());
+    }
+    match string(take(&mut fields, "provenance")?)?.as_str() {
+        "historical-v1" => {
+            let body = take(&mut fields, "legacy_body")?;
+            finish(fields)?;
+            let state = super::read_state(body, true)?;
+            let RegistryStateRecord::Source(source) = state else {
+                return Err(bad().into());
+            };
+            Ok((
+                RegistryStateKey::Source(source.identity().clone()),
+                Vec::new(),
+            ))
+        }
+        "permanent-v2" => {
+            let binding = read_binding(take(&mut fields, "binding")?)?;
+            let policy_reference = binary(take(&mut fields, "policy_reference")?)?;
+            let admission_reference = binary(take(&mut fields, "admission_reference")?)?;
+            let _root_record_revision = revision(take(&mut fields, "root_record_revision")?)?;
+            let _namespace_record_revision =
+                revision(take(&mut fields, "namespace_record_revision")?)?;
+            let _owner_generation =
+                SourceOwnerGeneration::from_bytes(fixed(take(&mut fields, "owner_generation")?)?);
+            match string(take(&mut fields, "lifecycle")?)?.as_str() {
+                "active" | "retired" => (),
+                _ => return Err(bad().into()),
+            }
+            let _source_revision = revision(take(&mut fields, "source_revision")?)?;
+            let _registry_revision = number(take(&mut fields, "registry_revision")?)?;
+            let _receipt = receipt(take(&mut fields, "receipt")?)?;
+            finish(fields)?;
+            Ok((
+                RegistryStateKey::Source(binding.identity().clone()),
+                vec![policy_reference, admission_reference],
+            ))
+        }
+        _ => Err(bad().into()),
+    }
+}
+
+fn namespace_descriptor_v4(
+    value: V,
+    _probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<(RegistryStateKey, Vec<Vec<u8>>), BatchCodecV4Error> {
+    let mut fields = open(value)?;
+    if string(take(&mut fields, "family")?)? != "namespace" {
+        return Err(bad().into());
+    }
+    let ownership = read_ownership(take(&mut fields, "ownership")?)?;
+    let preparation = optional_decode(take(&mut fields, "preparation")?, read_preparation)?;
+    let fenced = boolean(take(&mut fields, "fenced")?)?;
+    let activation = optional_decode(take(&mut fields, "activation")?, read_activation)?;
+    let mut metadata = open(take(&mut fields, "metadata")?)?;
+    let kind = string(take(&mut metadata, "kind")?)?;
+    let refs = match kind.as_str() {
+        "historical-v1-unbound" => {
+            finish(metadata)?;
+            let _ = (preparation, fenced, activation);
+            Vec::new()
+        }
+        "permanent-v2" => {
+            if preparation.is_some() || fenced || activation.is_some() {
+                return Err(RegistryError::CutoverRequired.into());
+            }
+            let _root_binding_id =
+                RootBindingId::from_bytes(fixed(take(&mut metadata, "root_binding_id")?)?);
+            let _identity_profile =
+                read_identity_profile(take(&mut metadata, "identity_profile")?)?;
+            let policy_reference = binary(take(&mut metadata, "policy_reference")?)?;
+            let _registry_revision = number(take(&mut metadata, "registry_revision")?)?;
+            let _last_receipt = receipt(take(&mut metadata, "last_receipt")?)?;
+            finish(metadata)?;
+            vec![policy_reference]
+        }
+        _ => return Err(bad().into()),
+    };
+    finish(fields)?;
+    Ok((
+        RegistryStateKey::Namespace(ownership.source_namespace_id),
+        refs,
+    ))
+}
+
+fn validate_reference_set(
+    refs: BTreeSet<Vec<u8>>,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<Vec<Vec<u8>>, BatchCodecV4Error> {
+    for reference in &refs {
+        OriginalInputsLayoutV2::lookup_keys(reference, probe)?;
+    }
+    Ok(refs.into_iter().collect())
 }
 
 /// Encodes a family-qualified key, retaining the old key profile for old families.
