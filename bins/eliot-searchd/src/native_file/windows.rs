@@ -210,11 +210,12 @@ pub(super) fn location_with_check(
     };
     let completion = unsafe { io_status.status.status };
     let bytes = io_status.information;
+    let facts = information;
     check(false)?;
     if result != 0 || completion != 0 || bytes != core::mem::size_of::<FileFsDeviceInformation>() {
         return Err(ObservationError::ObservationFailed);
     }
-    Ok(classify_location(information))
+    Ok(classify_location(facts))
 }
 
 const fn classify_location(information: FileFsDeviceInformation) -> NativeLocationClass {
@@ -243,7 +244,6 @@ pub(super) fn normalized_name_with_check(
     check(true)?;
     // SAFETY: the borrowed handle remains live; the fixed bounded UTF-16 buffer is writable.
     let result = unsafe { GetFinalPathNameByHandleW(file.as_raw_handle(), buffer.as_mut_ptr(), capacity, flags) };
-    let _error = if result == 0 { Some(unsafe { GetLastError() }) } else { None };
     check(false)?;
     let length = usize::try_from(result).map_err(|_| ObservationError::ObservationFailed)?;
     if result == 0 || length >= buffer.len() || buffer[length] != 0 { return Err(ObservationError::ObservationFailed); }
@@ -263,7 +263,6 @@ pub(super) fn case_sensitive_directory_with_check(
     check(true)?;
     // SAFETY: the borrowed handle remains live and the fixed output is initialized and uniquely borrowed.
     let result = unsafe { GetFileInformationByHandleEx(file.as_raw_handle(), FILE_CASE_SENSITIVE_INFO_CLASS, (&raw mut information).cast(), length) };
-    let _error = if result == 0 { Some(unsafe { GetLastError() }) } else { None };
     check(false)?;
     if result == 0 || information.flags & !FILE_CS_FLAG_CASE_SENSITIVE_DIR != 0 { return Err(ObservationError::ObservationFailed); }
     Ok(information.flags & FILE_CS_FLAG_CASE_SENSITIVE_DIR != 0)
