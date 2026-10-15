@@ -31,12 +31,14 @@ enum Fault {
     Foreign,
     ReadError,
     AbsentNewer,
+    LegacyV2,
 }
 
 struct BatchPort {
     store: InMemoryRegistryJournal<FakeCancellation>,
     fault: Fault,
     writes: usize,
+    state_bytes: std::collections::BTreeMap<crate::recovery::RegistryStateKey, Vec<u8>>,
 }
 impl BatchPort {
     fn new(fault: Fault) -> Self {
@@ -44,6 +46,7 @@ impl BatchPort {
             store: journal(),
             fault,
             writes: 0,
+            state_bytes: std::collections::BTreeMap::new(),
         }
     }
     fn failure(kind: PortErrorKind, id: &OpaqueId) -> RegistryPortError {
@@ -83,10 +86,8 @@ impl RegistryControlPort for BatchPort {
             );
             assert_eq!(
                 encoded.before_bytes(),
-                typed
-                    .before()
-                    .map(|v| v.encode().expect("before"))
-                    .as_deref()
+                self.state_bytes.get(typed.key()).map(Vec::as_slice),
+                "CAS must compare the bytes actually retained, including their profile"
             );
         }
         self.writes += 1;
@@ -97,6 +98,10 @@ impl RegistryControlPort for BatchPort {
             ));
         }
         let observed = self.store.commit_batch(batch, ctx, mutation)?;
+        for delta in batch.states() {
+            self.state_bytes
+                .insert(delta.key().clone(), delta.after_bytes().to_vec());
+        }
         if matches!(self.fault, Fault::LostAck) {
             return Err(Self::failure(
                 PortErrorKind::OutcomeUnknown,
@@ -120,6 +125,20 @@ impl RegistryControlPort for BatchPort {
         let RegistryBatchLookup::Committed(readback) = observed else {
             return Ok(observed);
         };
+        if matches!(self.fault, Fault::LegacyV2) {
+            let bytes = legacy_v2_bytes(readback.record());
+            let record = decode_batch_record(&bytes, DEFAULT_REGISTRY_LIMITS)
+                .expect("closed legacy operation");
+            return Ok(RegistryBatchLookup::Committed(
+                RegistryBatchReadback::new(
+                    record,
+                    readback.revision(),
+                    readback.states().to_vec(),
+                    DEFAULT_REGISTRY_LIMITS,
+                )
+                .expect("bounded legacy observation"),
+            ));
+        }
         let states = match self.fault {
             Fault::Missing => vec![],
             Fault::Duplicate => vec![readback.states()[0].clone(); readback.states().len()],
@@ -157,6 +176,132 @@ impl RegistryControlPort for BatchPort {
     ) -> Result<Option<RegistryJournalEntry>, RegistryPortError> {
         self.store.load_entry(id, ctx)
     }
+}
+
+fn legacy_v2_bytes(record: &crate::recovery::DecodedBatch) -> Vec<u8> {
+    let mut bytes = record.encode().expect("encode operation");
+    let profile = b"eliot.registry-batch.v3";
+    let offset = bytes
+        .windows(profile.len())
+        .position(|value| value == profile)
+        .expect("current operation profile");
+    bytes[offset + profile.len() - 1] = b'2';
+    bytes
+}
+
+#[test]
+fn batch_mixed_profile_restore_prepares_old_cas_and_current_replacements() {
+    use crate::recovery::{
+        MAX_REGISTRY_RESTORE_BYTES, RegistryRestoreOperation, RegistryRestoreState,
+        restore_registry_state,
+    };
+    let mut registry = empty();
+    let mut port = BatchPort::new(Fault::None);
+    let ctx = context(cancel());
+    let root_id = opaque("mixed:root");
+    api::register_root(
+        &mut registry,
+        &super::root_request(),
+        &root_id,
+        digest(81),
+        &receipt("mixed:root"),
+        &mut port,
+        &ctx,
+    )
+    .expect("real root producer");
+    let mut source_batch = initial();
+    source_batch.expected_registry_revision = 1;
+    api::apply_admission_batch(
+        &mut registry,
+        source_batch.clone(),
+        &receipt("O1"),
+        &mut port,
+        &ctx,
+    )
+    .expect("real source producer");
+    let expected = api::registry_snapshot(&registry);
+    let source_id = source_batch.operation.operation_id().clone();
+    let root_bytes = registry
+        .committed_operation(&root_id)
+        .unwrap()
+        .encode()
+        .unwrap();
+    let legacy_bytes = legacy_v2_bytes(registry.committed_operation(&source_id).unwrap());
+    // The historical source operation and its actual state values use v2;
+    // the independently committed Root keeps its original v3 format.
+    for value in port.state_bytes.values_mut() {
+        let state = decode_registry_state(value).unwrap();
+        if !matches!(state, RegistryStateRecord::Root(_)) {
+            let profile = b"eliot.registry-state.v3";
+            let offset = value
+                .windows(profile.len())
+                .position(|part| part == profile)
+                .unwrap();
+            value[offset + profile.len() - 1] = b'2';
+        }
+    }
+    let keys: Vec<_> = port
+        .state_bytes
+        .keys()
+        .map(|key| key.encode().unwrap())
+        .collect();
+    let states: Vec<_> = keys
+        .iter()
+        .zip(port.state_bytes.values())
+        .map(|(key, value)| RegistryRestoreState { key, value })
+        .collect();
+    let operations = [
+        RegistryRestoreOperation {
+            operation_id: &root_id,
+            value: &root_bytes,
+        },
+        RegistryRestoreOperation {
+            operation_id: &source_id,
+            value: &legacy_bytes,
+        },
+    ];
+    let mut restored = restore_registry_state(
+        2,
+        &states,
+        &operations,
+        DEFAULT_REGISTRY_LIMITS,
+        MAX_REGISTRY_RESTORE_BYTES,
+    )
+    .expect("mixed exact history and states")
+    .into_registry();
+    assert_eq!(api::registry_snapshot(&restored), expected);
+    let next = RegistryBatch {
+        expected_registry_revision: 2,
+        operation: operation("mixed:retire", 82),
+        changes: vec![RegistryChange::RetireSource {
+            identity: source_identity("one"),
+            expected_source_revision: rev(1),
+            receipt: receipt("mixed:retire"),
+        }],
+    };
+    // The fixture store still holds the original v3 bytes. Refuse dispatch
+    // after the independent byte assertions instead of claiming old disk state.
+    port.fault = Fault::Refuse;
+    assert_eq!(
+        api::apply_admission_batch(
+            &mut restored,
+            next,
+            &receipt("mixed:retire"),
+            &mut port,
+            &ctx,
+        ),
+        Err(RegistryError::RegistryRevisionConflict)
+    );
+    assert_eq!(api::registry_snapshot(&restored), expected);
+    assert_eq!(
+        restored
+            .committed_operation(&source_id)
+            .unwrap()
+            .encode()
+            .unwrap(),
+        legacy_bytes
+    );
+    assert_eq!(port.writes, 3);
 }
 fn rev(value: u64) -> NonZeroRevision {
     NonZeroRevision::new(value).expect("revision")
@@ -309,10 +454,20 @@ fn batch_public_restart_readback_restores_complete_targets_and_derived_reverse_i
         .position(|value| value == current_profile)
         .expect("profile");
     previous_profile[offset + current_profile.len() - 1] = b'2';
+    let previous = decode_batch_record(&previous_profile, DEFAULT_REGISTRY_LIMITS)
+        .expect("v2 source-family compatibility");
+    assert_eq!(previous.entry(), observed.record().entry());
     assert_eq!(
-        decode_batch_record(&previous_profile, DEFAULT_REGISTRY_LIMITS)
-            .expect("v2 source-family compatibility"),
-        *observed.record()
+        previous.request_fingerprint(),
+        observed.record().request_fingerprint()
+    );
+    assert_eq!(previous.change_count(), observed.record().change_count());
+    assert_eq!(previous.deltas(), observed.record().deltas());
+    assert_eq!(previous.encoding_profile(), "eliot.registry-batch.v2");
+    assert_eq!(previous.state_encoding_profile(), "eliot.registry-state.v2");
+    assert_eq!(
+        previous.encode().expect("retain exact v2 bytes"),
+        previous_profile
     );
     assert_eq!(
         decode_batch_record(&bytes, DEFAULT_REGISTRY_LIMITS).expect("closed owner decode"),
@@ -358,6 +513,29 @@ fn batch_public_restart_readback_restores_complete_targets_and_derived_reverse_i
     assert!(decode_batch_record(&unknown_version, DEFAULT_REGISTRY_LIMITS).is_err());
     assert!(decode_batch_record(&bytes[..bytes.len() - 1], DEFAULT_REGISTRY_LIMITS).is_err());
     assert_eq!(port.writes, 1);
+
+    // Exercise the actual public replay path, including reproduction before install.
+    port.fault = Fault::LegacyV2;
+    let mut legacy_restart = empty();
+    let recovered = api::apply_admission_batch(
+        &mut legacy_restart,
+        initial(),
+        &receipt("ignored"),
+        &mut port,
+        &ctx,
+    )
+    .expect("restore original v2 operation");
+    assert!(recovered.replayed);
+    assert_eq!(api::registry_snapshot(&legacy_restart), original);
+    let restored_operation = legacy_restart
+        .committed_operation(&opaque("registry-operation:O1"))
+        .expect("retained historical operation");
+    assert_eq!(restored_operation, &previous);
+    assert_eq!(restored_operation.encode().unwrap(), previous_profile);
+    assert_eq!(
+        port.writes, 1,
+        "recovery never redispatches a committed operation"
+    );
 }
 
 #[test]

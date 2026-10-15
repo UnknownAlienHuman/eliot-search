@@ -468,9 +468,16 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
     Ok(state)
 }
 pub(super) fn encode_state(v: &RegistryStateRecord) -> Result<Vec<u8>, RegistryError> {
-    encode_state_profile(v, "eliot.registry-state.v3")
+    encode_state_profile(v, CURRENT_STATE_PROFILE)
 }
-fn encode_state_profile(v: &RegistryStateRecord, profile: &str) -> Result<Vec<u8>, RegistryError> {
+const STATE_PROFILE_V2: &str = "eliot.registry-state.v2";
+const STATE_PROFILE_V3: &str = "eliot.registry-state.v3";
+pub(super) const CURRENT_STATE_PROFILE: &str = STATE_PROFILE_V3;
+
+pub(super) fn encode_state_profile(
+    v: &RegistryStateRecord,
+    profile: &str,
+) -> Result<Vec<u8>, RegistryError> {
     c::to_canonical_cbor(&object(vec![
         ("profile", text(profile)?),
         ("state", state_value(v)?),
@@ -479,19 +486,25 @@ fn encode_state_profile(v: &RegistryStateRecord, profile: &str) -> Result<Vec<u8
     .map_err(|_| bad())
 }
 pub(super) fn decode_state(bytes: &[u8]) -> Result<RegistryStateRecord, RegistryError> {
+    decode_state_profiled(bytes).map(|(state, _)| state)
+}
+pub(super) fn decode_state_profiled(
+    bytes: &[u8],
+) -> Result<(RegistryStateRecord, &'static str), RegistryError> {
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
     let profile = string(take(&mut o, "profile")?)?;
-    match profile.as_str() {
-        "eliot.registry-state.v3" | "eliot.registry-state.v2" => {}
+    let encoding_profile = match profile.as_str() {
+        "eliot.registry-state.v3" => STATE_PROFILE_V3,
+        "eliot.registry-state.v2" => STATE_PROFILE_V2,
         "eliot.registry-state.v1" => return Err(RegistryError::AdmissionRestorationUnavailable),
         _ => return Err(bad()),
-    }
+    };
     let state = read_state(take(&mut o, "state")?, profile == "eliot.registry-state.v3")?;
     finish(o)?;
     if encode_state_profile(&state, &profile)? != bytes {
         return Err(bad());
     }
-    Ok(state)
+    Ok((state, encoding_profile))
 }
 pub(super) fn encode_key(key: &RegistryStateKey) -> Result<Vec<u8>, RegistryError> {
     c::to_canonical_cbor(&object(vec![
@@ -598,9 +611,9 @@ pub fn decode_batch_record(
     limits.validate()?;
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
     let profile = string(take(&mut o, "profile")?)?;
-    let encoding_profile = match profile.as_str() {
-        "eliot.registry-batch.v3" => BATCH_PROFILE_V3,
-        "eliot.registry-batch.v2" => BATCH_PROFILE_V2,
+    let (encoding_profile, state_encoding_profile) = match profile.as_str() {
+        "eliot.registry-batch.v3" => (BATCH_PROFILE_V3, STATE_PROFILE_V3),
+        "eliot.registry-batch.v2" => (BATCH_PROFILE_V2, STATE_PROFILE_V2),
         "eliot.registry-batch.v1" => return Err(RegistryError::AdmissionRestorationUnavailable),
         _ => return Err(bad()),
     };
@@ -647,6 +660,7 @@ pub fn decode_batch_record(
     finish(o)?;
     let result = DecodedBatch {
         encoding_profile,
+        state_encoding_profile,
         entry: RegistryJournalEntry::new(
             operation_id,
             mutation_digest,
@@ -675,6 +689,11 @@ mod wire_profile_tests {
             let corpus = OpaqueId::new("profile-retention-fixture").unwrap();
             let record = DecodedBatch {
                 encoding_profile,
+                state_encoding_profile: if encoding_profile == BATCH_PROFILE_V2 {
+                    STATE_PROFILE_V2
+                } else {
+                    STATE_PROFILE_V3
+                },
                 entry: RegistryJournalEntry::new(
                     OpaqueId::new("profile-retention-operation").unwrap(),
                     Blake3Digest32::from_stored_bytes([1; 32]),
@@ -695,10 +714,75 @@ mod wire_profile_tests {
                 }],
             };
             let bytes = record.encode().unwrap();
-            let restored = decode_batch_record(&bytes, crate::api::DEFAULT_REGISTRY_LIMITS).unwrap();
+            let restored =
+                decode_batch_record(&bytes, crate::api::DEFAULT_REGISTRY_LIMITS).unwrap();
             assert_eq!(restored.encoding_profile(), encoding_profile);
             assert_eq!(restored.encode().unwrap(), bytes);
             assert_eq!(restored, record);
+            let state = &record.deltas[0].after;
+            let key = state.key().encode().unwrap();
+            let value = encode_state_profile(state, record.state_encoding_profile).unwrap();
+            let (_, actual_profile) =
+                super::super::decode_registry_state_entry_profiled(&key, &value).unwrap();
+            assert_eq!(actual_profile, record.state_encoding_profile);
+            let mut installed =
+                super::super::SourceRegistry::new(crate::api::DEFAULT_REGISTRY_LIMITS).unwrap();
+            super::super::install(&mut installed, &restored).unwrap();
+            assert_eq!(
+                super::super::encode_existing_state(&installed, state).unwrap(),
+                value,
+                "expected-before bytes must retain the actual old format"
+            );
+            if encoding_profile == BATCH_PROFILE_V2 {
+                assert_ne!(
+                    value,
+                    state.encode().unwrap(),
+                    "current encoding would relabel v2"
+                );
+            }
+            let operation_id = &record.entry.operation_id;
+            let operations = [crate::recovery::RegistryRestoreOperation {
+                operation_id,
+                value: &bytes,
+            }];
+            let states = [crate::recovery::RegistryRestoreState {
+                key: &key,
+                value: &value,
+            }];
+            assert_eq!(
+                crate::recovery::restore_registry_state(
+                    1,
+                    &states,
+                    &operations,
+                    crate::api::DEFAULT_REGISTRY_LIMITS,
+                    crate::recovery::MAX_REGISTRY_RESTORE_BYTES
+                )
+                .unwrap_err(),
+                RegistryError::MembershipNotFound,
+                "this isolated codec fixture has no corpus members"
+            );
+            let foreign_profile = if encoding_profile == BATCH_PROFILE_V2 {
+                STATE_PROFILE_V3
+            } else {
+                STATE_PROFILE_V2
+            };
+            let relabelled = encode_state_profile(state, foreign_profile).unwrap();
+            let states = [crate::recovery::RegistryRestoreState {
+                key: &key,
+                value: &relabelled,
+            }];
+            assert_eq!(
+                crate::recovery::restore_registry_state(
+                    1,
+                    &states,
+                    &operations,
+                    crate::api::DEFAULT_REGISTRY_LIMITS,
+                    crate::recovery::MAX_REGISTRY_RESTORE_BYTES
+                )
+                .unwrap_err(),
+                RegistryError::SnapshotInvalid,
+                "semantic equality cannot relabel stored state without an operation"
+            );
         }
     }
 }

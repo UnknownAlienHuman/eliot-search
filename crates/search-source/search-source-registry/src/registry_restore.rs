@@ -2,7 +2,7 @@
 
 use super::{
     RegistryStateKey, RegistryStateRecord, RetainedRegistryOperation, SourceRegistry,
-    decode_batch_record, decode_registry_state_entry,
+    decode_batch_record,
 };
 use crate::error::{RegistryError, RegistryLimits};
 use crate::membership::MembershipLifecycle;
@@ -117,8 +117,11 @@ pub fn restore_registry_state(
         charge(&mut bytes, row.value.len(), max_total_bytes)?;
     }
     let mut current = BTreeMap::new();
+    let mut state_encoding_profiles = BTreeMap::new();
     for row in states {
-        let state = decode_registry_state_entry(row.key, row.value)?;
+        let (state, profile) =
+            super::batch::decode_registry_state_entry_profiled(row.key, row.value)?;
+        state_encoding_profiles.insert(state.key(), profile);
         check_counter(&state, registry_revision)?;
         if current.insert(state.key(), state).is_some() {
             return Err(RegistryError::SnapshotInvalid);
@@ -140,6 +143,7 @@ pub fn restore_registry_state(
         }
     }
     let mut replayed = BTreeMap::new();
+    let mut replayed_profiles = BTreeMap::new();
     let mut replay_counts = [0_usize; 4];
     let mut revision = 0_u64;
     for operation in history.values() {
@@ -162,6 +166,7 @@ pub fn restore_registry_state(
         }
         for delta in operation.deltas() {
             replayed.insert(delta.key().clone(), delta.after().clone());
+            replayed_profiles.insert(delta.key().clone(), operation.state_encoding_profile());
         }
         check_count_limits(replay_counts, limits)?;
         revision = operation.registry_revision_after();
@@ -169,7 +174,7 @@ pub fn restore_registry_state(
     if revision != registry_revision {
         return Err(RegistryError::MutationOutcomeUnknown);
     }
-    if replayed != current {
+    if replayed != current || replayed_profiles != state_encoding_profiles {
         return Err(RegistryError::SnapshotInvalid);
     }
     let mut roots = BTreeMap::new();
@@ -254,6 +259,7 @@ pub fn restore_registry_state(
             .map(RetainedRegistryOperation::Committed)
             .collect(),
         pending_batch: None,
+        state_encoding_profiles,
     };
     Ok(ObservedRegistryRestore { registry })
 }

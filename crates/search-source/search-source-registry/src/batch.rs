@@ -106,12 +106,19 @@ pub fn decode_registry_state_entry(
     key_bytes: &[u8],
     record_bytes: &[u8],
 ) -> Result<RegistryStateRecord, RegistryError> {
+    decode_registry_state_entry_profiled(key_bytes, record_bytes).map(|(record, _)| record)
+}
+
+pub(super) fn decode_registry_state_entry_profiled(
+    key_bytes: &[u8],
+    record_bytes: &[u8],
+) -> Result<(RegistryStateRecord, &'static str), RegistryError> {
     let key = decode_registry_state_key(key_bytes)?;
-    let record = decode_registry_state(record_bytes)?;
+    let (record, profile) = codec::decode_state_profiled(record_bytes)?;
     if key != record.key() {
         return Err(RegistryError::SnapshotInvalid);
     }
-    Ok(record)
+    Ok((record, profile))
 }
 
 /// Exact before/after values. Tombstones stay records; no inferred deletions.
@@ -140,6 +147,7 @@ impl RegistryStateDelta {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecodedBatch {
     encoding_profile: &'static str,
+    state_encoding_profile: &'static str,
     entry: RegistryJournalEntry,
     request_fingerprint: Blake3Digest32,
     change_count: usize,
@@ -149,6 +157,11 @@ impl DecodedBatch {
     /// Exact closed wire profile retained by decoding; never a currentness grant.
     pub const fn encoding_profile(&self) -> &'static str {
         self.encoding_profile
+    }
+
+    /// Exact state format written by this immutable operation's closed profile.
+    pub const fn state_encoding_profile(&self) -> &'static str {
+        self.state_encoding_profile
     }
 
     /// Expected source-registry owner revision, independent of journal generation.
@@ -397,6 +410,38 @@ pub(super) fn prepare(
     batch: &RegistryBatch,
     receipt: &ReceiptRef,
 ) -> Result<PreparedBatch, RegistryError> {
+    prepare_profiled(
+        registry,
+        batch,
+        receipt,
+        codec::CURRENT_BATCH_PROFILE,
+        codec::CURRENT_STATE_PROFILE,
+    )
+}
+
+/// Reproduces a decoded historical transaction in its own closed wire formats.
+/// The caller still compares the entire reproduced record before installation.
+pub(super) fn prepare_observed(
+    registry: &SourceRegistry,
+    batch: &RegistryBatch,
+    observed: &DecodedBatch,
+) -> Result<PreparedBatch, RegistryError> {
+    prepare_profiled(
+        registry,
+        batch,
+        &observed.entry.receipt,
+        observed.encoding_profile,
+        observed.state_encoding_profile,
+    )
+}
+
+fn prepare_profiled(
+    registry: &SourceRegistry,
+    batch: &RegistryBatch,
+    receipt: &ReceiptRef,
+    encoding_profile: &'static str,
+    state_encoding_profile: &'static str,
+) -> Result<PreparedBatch, RegistryError> {
     batch.validate(registry.limits)?;
     if registry.revision != batch.expected_registry_revision {
         return Err(RegistryError::RegistryRevisionConflict);
@@ -579,7 +624,8 @@ pub(super) fn prepare(
         });
     }
     let record = DecodedBatch {
-        encoding_profile: codec::CURRENT_BATCH_PROFILE,
+        encoding_profile,
+        state_encoding_profile,
         entry: RegistryJournalEntry::new(
             batch.operation.operation_id().clone(),
             batch.operation.mutation_digest(),
@@ -603,9 +649,12 @@ pub(super) fn prepare(
                 before_bytes: delta
                     .before
                     .as_ref()
-                    .map(RegistryStateRecord::encode)
+                    .map(|before| encode_existing_state(registry, before))
                     .transpose()?,
-                after_bytes: delta.after.encode()?,
+                after_bytes: codec::encode_state_profile(
+                    &delta.after,
+                    record.state_encoding_profile,
+                )?,
             })
         })
         .collect::<Result<Vec<_>, RegistryError>>()?;
@@ -614,6 +663,17 @@ pub(super) fn prepare(
         encoded,
         states,
     })
+}
+
+fn encode_existing_state(
+    registry: &SourceRegistry,
+    state: &RegistryStateRecord,
+) -> Result<Vec<u8>, RegistryError> {
+    let profile = registry
+        .state_encoding_profiles
+        .get(&state.key())
+        .ok_or(RegistryError::AdmissionRestorationUnavailable)?;
+    codec::encode_state_profile(state, profile)
 }
 
 pub(super) fn validate_install(
@@ -709,6 +769,9 @@ pub(super) fn install_prepared(registry: &mut SourceRegistry, prepared: &Prepare
 fn install_validated(registry: &mut SourceRegistry, record: &DecodedBatch) {
     if registry.revision != record.entry.after_revision {
         for delta in &record.deltas {
+            registry
+                .state_encoding_profiles
+                .insert(delta.key.clone(), record.state_encoding_profile);
             match &delta.after {
                 RegistryStateRecord::Root(root) => {
                     registry.roots.insert(root.root_binding_id, root.clone());

@@ -366,6 +366,9 @@ pub struct SourceRegistry {
     active_generations: BTreeMap<OpaqueId, NonZeroRevision>,
     operations: Vec<RetainedRegistryOperation>,
     pending_batch: Option<(OpaqueId, Blake3Digest32)>,
+    // Exact physical value formats established by full owner history/readback.
+    // Missing format provenance never guesses the current writer's version.
+    state_encoding_profiles: BTreeMap<RegistryStateKey, &'static str>,
 }
 
 #[derive(Clone, Debug)]
@@ -414,6 +417,7 @@ impl SourceRegistry {
             active_generations: BTreeMap::new(),
             operations: Vec::new(),
             pending_batch: None,
+            state_encoding_profiles: BTreeMap::new(),
         })
     }
 
@@ -818,7 +822,7 @@ where
             }
             readback.verify()?;
             if registry.revision == record.entry().before_revision {
-                let expected = batch::prepare(registry, &batch, &record.entry().receipt)?;
+                let expected = batch::prepare_observed(registry, &batch, record)?;
                 if expected.record() != record {
                     return Err(RegistryError::MutationOutcomeUnknown);
                 }
