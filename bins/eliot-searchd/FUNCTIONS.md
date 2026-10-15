@@ -14,7 +14,7 @@ revision's final representations stay pinned through readback and physical-row
 emission. Inventory reuses their exact raw SHA/length/native-identity observations;
 plaintext is released before the next revision. Import and independent target
 readback consume fresh verified cursors over the retained immutable artifacts.
-Temporary/orphan residue remains a separate physical-read denominator.
+Temporary/orphan residue stays explicitly accounted against the complete physical denominator.
 The original request supplies all native and record-artifact work; no new deadline,
 directory, source inventory or digest cache is created. A linear traversal of
 canonical revision occurrences joins exact legacy source/revision references to
@@ -52,8 +52,23 @@ retained reference and its target at most once; physical lookups do not reopen
 them. Unknown preparation-root files remain Unsupported, directories remain Gap,
 and bodies of unknown entries are never opened or recursively traversed.
 
+Preparation and revision traversal retain pass-local NTFS parent custody, bounded
+by eight ancestors and 2,048 directory pins. Native direct-child membership uses
+the held directory FD and caller-admitted 64 KiB scratch; incomplete enumeration
+never supplies membership. The opaque directory qualifier retains the same FD.
+Warm identity rechecks freshly observe volume, full index, creation time and
+directory/reparse attributes inside one bounded original-context bracket.
+This does not cache access rights: full-path leaf READ and directory LIST/traverse,
+single-link/EOF/raw-byte joins and final locator observations remain independent.
+
+A completed revision traversal retains only ordered scalar residue tuples and
+parent custody until that source pass ends. Referenced final representations,
+temporary/orphan/unknown/corrupt rows and directory outcomes keep their existing
+family dispositions. No body is retained, partial capture never installs a view,
+and the independent next source pass reconstructs both custody and observations.
+
 The original whole-command hard ceilings remain 1 GiB logical byte work,
-16,384 native calls, 256 opens and the original 120-second deadline. Per-directory
+16,384 admitted native I/O seams, 256 opens and the original 120-second deadline. Per-directory
 and link-cache caps are additional refusal boundaries, not a guarantee that every
 shape below those caps fits the whole command. Native/scale qualification is #215.
 

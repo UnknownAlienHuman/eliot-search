@@ -71,6 +71,31 @@ impl<'view, 'operation, 'owner> MigrationSource<'view, 'operation, 'owner> {
             .map_or_else(|| self.checkpoint(), |native| native.context.charge(work))
     }
 
+    /// CPU-only progress through the same refusal/deadline/meter authority.
+    /// It is not the post-I/O checkpoint and never refreshes external state.
+    pub(crate) fn poll(&self) -> Result<(), String> {
+        self.charge(LegacyRevisionObjectWork::Compare(0))
+    }
+
+    pub(crate) fn held_observer_dispatch(&self) -> Result<(), String> {
+        self.poll()?;
+        let Some(native) = self.native else { return Ok(()); };
+        let mut operation = native.context.operation.try_borrow_mut()
+            .map_err(|_| OwnerError::OwnerOperationConflict.code().to_owned())?;
+        operation.migration_held_observer_dispatch().map_err(|error| error.code().to_owned())
+    }
+
+    pub(crate) fn root_observation(
+        &self,
+    ) -> Result<Option<eliot_searchd::native_file::Observation>, String> {
+        let Some(native) = self.native else { return Ok(None); };
+        native.context.checkpoint()?;
+        let mut operation = native.context.operation.try_borrow_mut()
+            .map_err(|_| OwnerError::OwnerOperationConflict.code().to_owned())?;
+        operation.migration_root_observation().map(Some)
+            .map_err(|error| error.code().to_owned())
+    }
+
     pub(crate) fn source_mapping_header(
         &self,
         target: SourceNamespaceId,

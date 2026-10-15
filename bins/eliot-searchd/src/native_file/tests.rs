@@ -12,18 +12,35 @@ fn legacy_identity_encoding_preserves_both_words_and_byte_order() {
     };
     assert_eq!(
         observation.legacy_identity_bytes(),
-        [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67],
+        [
+            0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67
+        ],
     );
 }
 
 #[test]
 fn closed_errors_do_not_contain_source_or_native_error_text() {
     for (error, expected) in [
-        (ObservationError::UnsupportedPlatform, "NATIVE_FILE_UNSUPPORTED_PLATFORM"),
-        (ObservationError::UnsupportedHandle, "NATIVE_FILE_UNSUPPORTED_HANDLE"),
-        (ObservationError::UnsupportedFileSystem, "NATIVE_FILE_UNSUPPORTED_FILESYSTEM"),
-        (ObservationError::ObservationFailed, "NATIVE_FILE_OBSERVATION_FAILED"),
-        (ObservationError::ReparsePointDenied, "NATIVE_FILE_REPARSE_POINT_DENIED"),
+        (
+            ObservationError::UnsupportedPlatform,
+            "NATIVE_FILE_UNSUPPORTED_PLATFORM",
+        ),
+        (
+            ObservationError::UnsupportedHandle,
+            "NATIVE_FILE_UNSUPPORTED_HANDLE",
+        ),
+        (
+            ObservationError::UnsupportedFileSystem,
+            "NATIVE_FILE_UNSUPPORTED_FILESYSTEM",
+        ),
+        (
+            ObservationError::ObservationFailed,
+            "NATIVE_FILE_OBSERVATION_FAILED",
+        ),
+        (
+            ObservationError::ReparsePointDenied,
+            "NATIVE_FILE_REPARSE_POINT_DENIED",
+        ),
     ] {
         assert_eq!(error.to_string(), expected);
     }
@@ -45,7 +62,10 @@ mod windows {
 
     impl Scratch {
         fn new() -> Self {
-            let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+            let stamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
             let path = std::env::temp_dir().join(format!(
                 "eliot-native-file-{}-{stamp}-{}",
                 std::process::id(),
@@ -102,7 +122,10 @@ mod windows {
         let alias = scratch.0.join("alias");
         fs::rename(scratch.0.join("original"), &renamed).unwrap();
         fs::hard_link(&renamed, &alias).unwrap();
-        assert_eq!(observe(&original).unwrap().legacy_identity_bytes(), identity);
+        assert_eq!(
+            observe(&original).unwrap().legacy_identity_bytes(),
+            identity
+        );
         for path in [&renamed, &alias] {
             let file = File::open(path).unwrap();
             assert_eq!(observe(&file).unwrap().legacy_identity_bytes(), identity);
@@ -116,8 +139,14 @@ mod windows {
         let identity = observe(&retained).unwrap().legacy_identity_bytes();
         fs::rename(scratch.0.join("source"), scratch.0.join("old")).unwrap();
         let replacement = scratch.create("source", b"second");
-        assert_eq!(observe(&retained).unwrap().legacy_identity_bytes(), identity);
-        assert_ne!(observe(&replacement).unwrap().legacy_identity_bytes(), identity);
+        assert_eq!(
+            observe(&retained).unwrap().legacy_identity_bytes(),
+            identity
+        );
+        assert_ne!(
+            observe(&replacement).unwrap().legacy_identity_bytes(),
+            identity
+        );
     }
 
     #[test]
@@ -137,5 +166,150 @@ mod windows {
     fn character_device_cannot_supply_a_synthetic_disk_identity() {
         let device = File::open("NUL").unwrap();
         assert_eq!(observe(&device), Err(ObservationError::UnsupportedHandle));
+    }
+
+    fn qualified_directory(path: &std::path::Path) -> Arc<File> {
+        Arc::new(
+            OpenOptions::new()
+                .access_mode(0x80)
+                .share_mode(7)
+                .custom_flags(0x0220_0000)
+                .open(path)
+                .unwrap(),
+        )
+    }
+
+    #[test]
+    fn qualified_directory_one_abi_keeps_creation_time_and_attributes_live() {
+        use std::cell::RefCell;
+        use std::fs::FileTimes;
+        use std::os::windows::fs::FileTimesExt;
+        use std::time::Duration;
+
+        let scratch = Scratch::new();
+        let file = qualified_directory(&scratch.0);
+        let trace = RefCell::new(Vec::new());
+        let check = |before| {
+            trace.borrow_mut().push(before);
+            Ok(())
+        };
+        let (qualified, initial) =
+            QualifiedDirectory::qualify_with_check(Arc::clone(&file), &check)
+                .unwrap()
+                .expect("actual NTFS directory");
+        assert_eq!(&*trace.borrow(), &[true, false, true, false, true, false]);
+        assert!(Arc::ptr_eq(&file, &qualified.retain_file()));
+        trace.borrow_mut().clear();
+        let fresh = qualified.identity_with_check(&check).unwrap();
+        assert_eq!(&*trace.borrow(), &[true, false]);
+        assert_eq!(
+            (
+                fresh.volume_serial,
+                fresh.file_index,
+                fresh.creation_time,
+                fresh.attributes
+            ),
+            (
+                initial.volume_serial,
+                initial.file_index,
+                initial.creation_time,
+                initial.attributes
+            )
+        );
+
+        let permissions = fs::metadata(&scratch.0).unwrap().permissions();
+        let mut toggled = permissions.clone();
+        toggled.set_readonly(!permissions.readonly());
+        fs::set_permissions(&scratch.0, toggled).unwrap();
+        let changed_attributes = qualified.identity_with_check(&|_| Ok(())).unwrap();
+        fs::set_permissions(&scratch.0, permissions).unwrap();
+        assert_ne!(
+            changed_attributes.attributes & 1,
+            initial.attributes & 1,
+            "attributes must be queried again on the retained FD"
+        );
+
+        let writer = OpenOptions::new()
+            .access_mode(0x100)
+            .share_mode(7)
+            .custom_flags(0x0220_0000)
+            .open(&scratch.0)
+            .unwrap();
+        let original = writer.metadata().unwrap().created().unwrap();
+        writer
+            .set_times(FileTimes::new().set_created(original + Duration::from_secs(2)))
+            .unwrap();
+        let changed = qualified.identity_with_check(&|_| Ok(())).unwrap();
+        writer
+            .set_times(FileTimes::new().set_created(original))
+            .unwrap();
+        assert_eq!(changed.file_index, initial.file_index);
+        assert_ne!(
+            changed.creation_time, initial.creation_time,
+            "creation time must be freshly observed"
+        );
+        assert_eq!(
+            qualified
+                .identity_with_check(&|_| Ok(()))
+                .unwrap()
+                .creation_time,
+            initial.creation_time
+        );
+        assert_eq!(
+            super::super::platform::qualified_directory_identity_with_check(
+                qualified.file(),
+                initial.volume_serial ^ 1,
+                &|_| Ok(())
+            ),
+            Err(ObservationError::ObservationFailed)
+        );
+    }
+
+    #[test]
+    fn qualified_directory_refuses_other_kinds_and_cancelled_recheck() {
+        use std::cell::RefCell;
+        use std::sync::atomic::AtomicBool;
+
+        let scratch = Scratch::new();
+        assert!(
+            QualifiedDirectory::qualify_with_check(
+                Arc::new(scratch.create("file", b"body")),
+                &|_| Ok(())
+            )
+            .unwrap()
+            .is_none()
+        );
+        assert!(matches!(
+            QualifiedDirectory::qualify_with_check(Arc::new(File::open("NUL").unwrap()), &|_| Ok(
+                ()
+            )),
+            Err(ObservationError::UnsupportedHandle)
+        ));
+        let (qualified, _) =
+            QualifiedDirectory::qualify_with_check(qualified_directory(&scratch.0), &|_| Ok(()))
+                .unwrap()
+                .unwrap();
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let trace = RefCell::new(Vec::new());
+        let check = |before| {
+            trace.borrow_mut().push(before);
+            if before {
+                cancelled.store(true, Ordering::Release);
+            }
+            if cancelled.load(Ordering::Acquire) {
+                Err(ObservationError::ObservationFailed)
+            } else {
+                Ok(())
+            }
+        };
+        assert_eq!(
+            qualified.identity_with_check(&check),
+            Err(ObservationError::ObservationFailed)
+        );
+        assert_eq!(
+            &*trace.borrow(),
+            &[true],
+            "refused dispatch must not invoke the ABI or produce a snapshot"
+        );
     }
 }

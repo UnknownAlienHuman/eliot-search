@@ -31,6 +31,7 @@ struct Fact {
 }
 
 pub(super) struct View {
+    read_scope: io::ParentReadScope,
     references: Vec<[u8; 32]>,
     objects: Vec<([u8; 32], OsString)>,
     object_key_bytes: usize,
@@ -49,6 +50,7 @@ pub(super) struct View {
 impl View {
     const fn empty() -> Self {
         Self {
+            read_scope: io::ParentReadScope::new(),
             references: Vec::new(), objects: Vec::new(), object_key_bytes: 32,
             reference_facts: Vec::new(), object_facts: Vec::new(),
             semantic: Vec::new(), residue: Vec::new(),
@@ -65,7 +67,14 @@ impl View {
                 PrepTree::References => &mut view.reference_facts,
                 PrepTree::Objects => &mut view.object_facts,
             };
-            if read_fact(source, path, facts)?.is_err() { return Err(changed()); }
+            // This fixture isolates the native/raw-byte join from the stronger
+            // production parent custody, so replacement can actually occur.
+            reserve_slot(source, facts)?;
+            let subject = io::locator(source, path)?;
+            let read = io::read_detailed(source, path, LEGACY_PREPARATION_MAX_OBJECT_BYTES)?;
+            let observation = read.as_ref().map(|read| read.proof).map_err(|status| *status);
+            push(source, facts, Fact { subject, observation, seen: false })?;
+            if read.is_err() { return Err(changed()); }
             match tree {
                 PrepTree::References => push(source, &mut view.references, *id)?,
                 PrepTree::Objects => push(source, &mut view.objects,
@@ -100,6 +109,12 @@ impl View {
             fact.seen = true;
         }
         Ok(())
+    }
+    pub(super) fn take_read_scope(&mut self) -> io::ParentReadScope {
+        std::mem::replace(&mut self.read_scope, io::ParentReadScope::new())
+    }
+    pub(super) fn restore_read_scope(&mut self, scope: io::ParentReadScope) {
+        self.read_scope = scope;
     }
     pub(super) fn entry(&mut self, positive: bool) -> Result<(), String> {
         self.physical_entries = self.physical_entries.checked_add(1).ok_or_else(limit)?;
@@ -152,13 +167,15 @@ fn push<T>(source: &MigrationSource<'_, '_, '_>, values: &mut Vec<T>, value: T) 
 
 fn limit() -> String { "DIRECT_MIGRATION_INVENTORY_LIMIT".to_owned() }
 
-fn read_fact(source: &MigrationSource<'_, '_, '_>, path: &Path, facts: &mut Vec<Fact>)
+fn read_fact(source: &MigrationSource<'_, '_, '_>, path: &Path, facts: &mut Vec<Fact>,
+    scope: &mut io::ParentReadScope,
+)
     -> Result<Result<io::DetailedRead, Status>, String> {
     // Admit actual storage before any body open/read/hash. No provisional
     // Present or synthetic native observation enters the exact join.
     reserve_slot(source, facts)?;
     let subject = io::locator(source, path)?;
-    let read = io::read_detailed(source, path, LEGACY_PREPARATION_MAX_OBJECT_BYTES)?;
+    let read = io::read_detailed_scoped(source, path, LEGACY_PREPARATION_MAX_OBJECT_BYTES, scope)?;
     let observation = read.as_ref().map(|read| read.proof).map_err(|status| *status);
     push(source, facts, Fact { subject, observation, seen: false })?;
     Ok(read)
@@ -201,7 +218,7 @@ pub(super) fn observe_links(source: &MigrationSource<'_, '_, '_>, root: &Path, b
         source.charge(Work::AllocateLocator(locator_bytes))?;
         let path = root.join(LEGACY_PREPARATION_DIRECTORY)
             .join(legacy_preparation_reference_relative_locator(&key));
-        let row = match read_fact(source, &path, &mut view.reference_facts)? {
+        let row = match read_fact(source, &path, &mut view.reference_facts, &mut view.read_scope)? {
             Err(status) => Row { status: missing_gap(status), kind: 28,
                 refs: [key, digest(&revision.revision_id)?, ZERO], counts: [0; 3] },
             Ok(read) => match decode_legacy_preparation_reference(&read.bytes, &key) {
@@ -214,7 +231,7 @@ pub(super) fn observe_links(source: &MigrationSource<'_, '_, '_>, root: &Path, b
                     let relative = legacy_preparation_object_relative_locator(&object, reference.protection());
                     let target = root.join(LEGACY_PREPARATION_DIRECTORY).join(&relative);
                     let refs = [key, object, *reference.manifest_digest()];
-                    match read_fact(source, &target, &mut view.object_facts)? {
+                    match read_fact(source, &target, &mut view.object_facts, &mut view.read_scope)? {
                         Err(status) => Row { status: missing_gap(status), kind: 29,
                             refs, counts: [reference.manifest_bytes(), 0, 0] },
                         Ok(encoded) => {
