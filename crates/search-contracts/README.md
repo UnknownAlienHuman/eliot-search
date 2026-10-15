@@ -38,6 +38,14 @@ under a raw domain. All use `domain || NUL || payload`. `DigestInputLimit` is a
 nonzero complete-preimage ceiling of at most 8 MiB; failures return no digest.
 Donor algorithm types never appear in the public contract.
 
+`blake3_exact_bytes` computes standard unframed BLAKE3 for source qualification.
+Its separate `Blake3ExactInputLimit` permits at most 16 MiB and rejects oversized
+input before hashing. Empty input has the standard digest; admission and cumulative
+operation work belong to their callers. This API grants no read or serving proof.
+The existing 8 MiB canonical limit and all domain-bound/SHA preimages remain unchanged.
+Known vectors use the pinned donor's
+[published BLAKE3 1.8.2 vectors](https://github.com/BLAKE3-team/BLAKE3/blob/1.8.2/test_vectors/test_vectors.json).
+
 `blake3_canonical_array` hashes a declared finite ordered array one fallible
 owned row at a time through that same encoder. It rejects more than 4096 rows
 before iterator conversion, checks exact length with at most one excess probe,
