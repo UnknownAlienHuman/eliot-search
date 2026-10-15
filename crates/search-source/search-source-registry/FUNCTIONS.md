@@ -8,6 +8,17 @@ vendor-neutral control port and never reimplements those semantics.
 
 ## Global rules
 
+`DecodedBatch::encoding_profile` retains the exact validated wire profile.
+`state_encoding_profile` likewise retains the operation's immutable state format.
+Observed restoration compares each actual state format with complete operation
+history. Subsequent CAS uses those retained bytes; historical replay reproduces
+the original closed formats before comparing the entire operation. No profile
+is a current admission or live-security grant.
+Re-encoding an observed v2 operation must remain v2 when the current writer is
+v3 or later; it cannot silently relabel immutable history. New v2 Source
+provenance/state integration under #569 is still work in progress and is not
+qualified by this format-preservation primitive alone.
+
 The atomic Root protocol retains canonical `eliot.registry-state.v3` values and
 `eliot.registry-batch.v3` immutable operations together. Same operation/request
 replay returns the original outcome without rolling later state backwards.

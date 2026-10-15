@@ -1,10 +1,10 @@
 //! Finite technical registry storage. Source semantics stay with the caller.
 mod codec;
 mod lookup;
+mod original_context;
 #[cfg(test)]
 mod tests;
 mod transaction;
-mod original_context;
 
 use crate::{
     ControlCommitReceipt, ControlError, ControlKey, ControlRecordClass, ControlValue,
@@ -39,6 +39,8 @@ pub enum RegistryStateFamily {
     Generation,
     /// Owner-encoded complete root metadata; no native custody or admission authority.
     Root,
+    /// Owner-encoded namespace metadata; no source-owner or policy grant.
+    Namespace,
 }
 impl RegistryStateFamily {
     pub(super) const fn tag(self) -> u8 {
@@ -47,11 +49,12 @@ impl RegistryStateFamily {
             Self::Membership => 2,
             Self::Generation => 3,
             Self::Root => 4,
+            Self::Namespace => 5,
         }
     }
     pub(super) const fn class(self) -> ControlRecordClass {
         match self {
-            Self::Source | Self::Root => ControlRecordClass::Identity,
+            Self::Source | Self::Root | Self::Namespace => ControlRecordClass::Identity,
             Self::Membership => ControlRecordClass::State,
             Self::Generation => ControlRecordClass::Revision,
         }

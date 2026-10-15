@@ -47,6 +47,7 @@ pub use evidence::{
     ReparseBehavior, StableFieldPolicy, StableIdentityEvidence, StableIdentityKey, UnicodeBehavior,
     ValidatedIdentityObservation, derive_canonical_path_key, validate_identity_observation,
 };
+pub use evidence::recorded::reconstitute_recorded_canonical_path_key;
 pub use git_digest::{
     GIT_STABLE_IDENTITY_DOMAIN, GitIdentityDigest, derive_git_stable_identity_digest,
 };

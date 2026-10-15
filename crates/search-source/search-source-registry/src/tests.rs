@@ -3,6 +3,9 @@
 #[path = "batch_tests.rs"]
 mod batch_tests;
 
+#[path = "membership_value_tests.rs"]
+mod membership_value_tests;
+
 #[test]
 fn portfolio_replay_returns_original_operation_before_o2_commits_another_revision() {
     use crate::portfolio_history::PortfolioRevisionKey;

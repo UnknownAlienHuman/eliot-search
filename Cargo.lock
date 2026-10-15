@@ -453,6 +453,7 @@ dependencies = [
  "search-safe-reader",
  "search-source-admission",
  "search-source-identity",
+ "search-source-provenance",
  "search-source-reconcile",
  "search-source-registry",
  "search-subject-resolver",
@@ -1555,11 +1556,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "search-source-history"
+version = "0.0.0"
+dependencies = [
+ "blake3",
+ "search-contracts",
+ "search-ports",
+ "search-source-admission",
+ "search-source-provenance",
+ "search-source-records",
+]
+
+[[package]]
 name = "search-source-identity"
 version = "0.0.0"
 dependencies = [
  "search-contracts",
  "search-domain",
+]
+
+[[package]]
+name = "search-source-provenance"
+version = "0.0.0"
+dependencies = [
+ "search-contracts",
+ "search-source-admission",
+ "search-source-admission-receipt",
 ]
 
 [[package]]
@@ -1577,6 +1599,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "search-source-records"
+version = "0.0.0"
+dependencies = [
+ "search-contracts",
+ "search-domain",
+ "search-ports",
+ "search-source-admission",
+ "search-source-identity",
+ "search-source-provenance",
+]
+
+[[package]]
 name = "search-source-registry"
 version = "0.0.0"
 dependencies = [
@@ -1585,7 +1619,10 @@ dependencies = [
  "search-domain",
  "search-ports",
  "search-source-admission",
+ "search-source-history",
  "search-source-identity",
+ "search-source-provenance",
+ "search-source-records",
 ]
 
 [[package]]

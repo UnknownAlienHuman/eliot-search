@@ -44,6 +44,22 @@ trimmed of ASCII spaces at both ends before the alias check. Every rejection ret
 
 ## Equality model
 
+`original_inputs_v2::reconstitute_observation_v2` reconstructs normalized metadata with the same field
+validator used by v1, supplying the actual compiled v2 section size and rule
+count without constructing or evaluating a v1 policy. It preserves entry/after-copy/
+after-construction checkpoints and derives the observation fingerprint anew.
+`original_inputs_v2::retain_observation_inputs_v2` exports all normalized flags, detector/profile IDs and
+explicit unavailable markers; the exact locator is retained separately. These
+APIs support the explicit versioned persistence owner under #569, grant no native
+or admission authority and leave existing observation identities unchanged.
+
+`reconstitute_retained_observation_v2` is the separate historical-input path.
+It uses the sole validator's maximum structural metadata range, without a v1
+policy or a current policy-size permission. A previously valid size fact must
+remain reproducible when an original decision denied it under a smaller section
+cap. The actual evaluator/receipt owner still enforces that policy and preserves
+the denial; the current-policy input helper above remains unchanged.
+
 `AdmissionObservationV2::new(metadata, relative_locator)` owns validated inputs and computes
 `ObservationFingerprintV2` through the shared `blake3_canonical_array` under domain
 `eliot/cbor/admission/observation/v2` with schema version 2 and the fixed 16 KiB preimage

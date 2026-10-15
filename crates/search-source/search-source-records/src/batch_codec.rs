@@ -4,16 +4,25 @@ use crate::error::{JournalEntryKind, RegistryError, RegistryJournalEntry, Regist
 use crate::membership::{
     MembershipKey, MembershipLifecycle, MembershipRecord, derive_membership_id,
 };
-use crate::recovery::{RegistryBatch, RegistryChange};
+use crate::operation::{RegistryBatch, RegistryChange};
 use crate::root::{RootRecord, RootStatus};
 use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
 use search_contracts::{self as c, CanonicalValue as V, ClosedCanonicalObject as Obj};
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef, SourceIdentity};
 use search_source_admission::original_envelope::{
-    MAX_ORIGINAL_ADMISSION_BYTES, OriginalAdmissionEnvelope, decode_original_admission,
+    MAX_ORIGINAL_ADMISSION_BYTES, OriginalAdmissionEnvelope, decode_original_admission_with_probe,
 };
-use search_source_admission::{AdmissionBudget, AdmissionOutcome, AdmissionReceipt, CancelFlag};
+use search_source_admission::policy_v2::CheckpointFailureV2;
+use search_source_admission::{AdmissionError, AdmissionOutcome, AdmissionReceipt};
 use search_source_identity::{CanonicalRelativePath, SourceBinding, SourceObservation};
+
+#[path = "batch_codec_v4.rs"]
+mod v4;
+pub use v4::{
+    BATCH_PROFILE_V4, BatchCodecV4Error, OriginalInputResolver, STATE_PROFILE_V4,
+    decode_batch_record_v4, decode_key_v4, decode_state_v4, encode_batch_record_v4, encode_key_v4,
+    encode_state_v4,
+};
 
 fn bad() -> RegistryError {
     RegistryError::SnapshotInvalid
@@ -324,8 +333,20 @@ pub(super) fn state_value(v: &RegistryStateRecord) -> Result<V, RegistryError> {
                 )?,
             ),
             ("binding", binding(v.binding())?),
-            ("admission", admission(v.admission())?),
-            ("assignment", assignment(v.assignment())?),
+            (
+                "admission",
+                admission(
+                    v.legacy_admission()
+                        .ok_or(RegistryError::AdmissionRestorationUnavailable)?,
+                )?,
+            ),
+            (
+                "assignment",
+                assignment(
+                    v.legacy_assignment()
+                        .ok_or(RegistryError::AdmissionRestorationUnavailable)?,
+                )?,
+            ),
             (
                 "lifecycle",
                 text(if v.lifecycle() == SourceLifecycle::Active {
@@ -362,9 +383,33 @@ pub(super) fn state_value(v: &RegistryStateRecord) -> Result<V, RegistryError> {
             ("corpus", text(corpus.as_str())?),
             ("generation", V::U64(generation.get())),
         ]),
+        RegistryStateRecord::Namespace(_) => Err(bad()),
     }
 }
-fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, RegistryError> {
+fn legacy_error(error: BatchCodecV4Error) -> RegistryError {
+    match error {
+        BatchCodecV4Error::Registry(error) => error,
+        BatchCodecV4Error::Admission(_) => RegistryError::AdmissionBindingMismatch,
+    }
+}
+
+fn checkpoint_error(failure: CheckpointFailureV2) -> BatchCodecV4Error {
+    BatchCodecV4Error::Admission(match failure {
+        CheckpointFailureV2::Cancelled => AdmissionError::Cancelled,
+        CheckpointFailureV2::DeadlineExceeded => AdmissionError::BudgetExhausted,
+    })
+}
+
+/// Decodes one legacy state while preserving the original caller's probe.
+///
+/// This parent helper is the handoff seam for the v4 actor; it does not alter
+/// v1/v3 bytes or the existing no-probe wrapper above.
+pub(super) fn read_state_with_original_probe(
+    v: V,
+    roots_allowed: bool,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<RegistryStateRecord, BatchCodecV4Error> {
+    probe().map_err(checkpoint_error)?;
     let mut o = open(v)?;
     let family = string(take(&mut o, "family")?)?;
     let state = match family.as_str() {
@@ -390,7 +435,7 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
                 status: match string(take(&mut o, "status")?)?.as_str() {
                     "active" => RootStatus::Active,
                     "unbound" => RootStatus::Unbound,
-                    _ => return Err(bad()),
+                    _ => return Err(BatchCodecV4Error::Registry(bad())),
                 },
                 last_receipt: receipt(take(&mut o, "last_receipt")?)?,
             };
@@ -399,19 +444,18 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
         }
         "source" => {
             let b = read_binding(take(&mut o, "binding")?)?;
-            let original = decode_original_admission(
+            let original = decode_original_admission_with_probe(
                 &binary(take(&mut o, "original_admission")?)?,
                 MAX_ORIGINAL_ADMISSION_BYTES,
-                AdmissionBudget::default_budget(),
-                CancelFlag::live(),
+                probe,
             )
-            .map_err(|_| RegistryError::AdmissionBindingMismatch)?;
+            .map_err(BatchCodecV4Error::Admission)?;
             let a = read_admission(take(&mut o, "admission")?, &original)?;
             let proof = read_assignment(take(&mut o, "assignment")?)?;
             let lifecycle = match string(take(&mut o, "lifecycle")?)?.as_str() {
                 "active" => SourceLifecycle::Active,
                 "retired" => SourceLifecycle::Retired,
-                _ => return Err(bad()),
+                _ => return Err(BatchCodecV4Error::Registry(bad())),
             };
             let source_revision = revision(take(&mut o, "source_revision")?)?;
             let registry_revision = number(take(&mut o, "registry_revision")?)?;
@@ -421,7 +465,7 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
                 || proof.source_identity != *b.identity()
                 || proof.observation_digest.as_bytes() != a.observation_digest().as_bytes()
             {
-                return Err(bad());
+                return Err(BatchCodecV4Error::Registry(bad()));
             }
             RegistryStateRecord::Source(
                 RegisteredSource::new(
@@ -447,12 +491,12 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
                 "suspended" => MembershipLifecycle::Suspended,
                 "retired" => MembershipLifecycle::Retired,
                 "removed" => MembershipLifecycle::Removed,
-                _ => return Err(bad()),
+                _ => return Err(BatchCodecV4Error::Registry(bad())),
             };
             let reg = number(take(&mut o, "registry_revision")?)?;
             let r = receipt(take(&mut o, "receipt")?)?;
             if id != derive_membership_id(&key) {
-                return Err(bad());
+                return Err(BatchCodecV4Error::Registry(bad()));
             }
             RegistryStateRecord::Membership(MembershipRecord::new(
                 key, id, generation, rev, lifecycle, reg, r,
@@ -462,15 +506,24 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
             corpus: opaque(take(&mut o, "corpus")?)?,
             generation: revision(take(&mut o, "generation")?)?,
         },
-        _ => return Err(bad()),
+        "namespace" => return Err(BatchCodecV4Error::Registry(bad())),
+        _ => return Err(BatchCodecV4Error::Registry(bad())),
     };
     finish(o)?;
+    probe().map_err(checkpoint_error)?;
     Ok(state)
 }
 pub(super) fn encode_state(v: &RegistryStateRecord) -> Result<Vec<u8>, RegistryError> {
-    encode_state_profile(v, "eliot.registry-state.v3")
+    encode_state_profile(v, CURRENT_STATE_PROFILE)
 }
-fn encode_state_profile(v: &RegistryStateRecord, profile: &str) -> Result<Vec<u8>, RegistryError> {
+const STATE_PROFILE_V2: &str = "eliot.registry-state.v2";
+const STATE_PROFILE_V3: &str = "eliot.registry-state.v3";
+pub(super) const CURRENT_STATE_PROFILE: &str = STATE_PROFILE_V3;
+
+pub(super) fn encode_state_profile(
+    v: &RegistryStateRecord,
+    profile: &str,
+) -> Result<Vec<u8>, RegistryError> {
     c::to_canonical_cbor(&object(vec![
         ("profile", text(profile)?),
         ("state", state_value(v)?),
@@ -479,19 +532,33 @@ fn encode_state_profile(v: &RegistryStateRecord, profile: &str) -> Result<Vec<u8
     .map_err(|_| bad())
 }
 pub(super) fn decode_state(bytes: &[u8]) -> Result<RegistryStateRecord, RegistryError> {
+    decode_state_profiled(bytes).map(|(state, _)| state)
+}
+pub(super) fn decode_state_profiled(
+    bytes: &[u8],
+) -> Result<(RegistryStateRecord, &'static str), RegistryError> {
+    decode_state_profiled_with_original_probe(bytes, &mut || Ok(())).map_err(legacy_error)
+}
+pub(super) fn decode_state_profiled_with_original_probe(
+    bytes: &[u8],
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<(RegistryStateRecord, &'static str), BatchCodecV4Error> {
+    probe().map_err(checkpoint_error)?;
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
     let profile = string(take(&mut o, "profile")?)?;
-    match profile.as_str() {
-        "eliot.registry-state.v3" | "eliot.registry-state.v2" => {}
-        "eliot.registry-state.v1" => return Err(RegistryError::AdmissionRestorationUnavailable),
-        _ => return Err(bad()),
-    }
-    let state = read_state(take(&mut o, "state")?, profile == "eliot.registry-state.v3")?;
+    let encoding_profile = match profile.as_str() {
+        "eliot.registry-state.v3" => STATE_PROFILE_V3,
+        "eliot.registry-state.v2" => STATE_PROFILE_V2,
+        "eliot.registry-state.v1" => return Err(RegistryError::AdmissionRestorationUnavailable.into()),
+        _ => return Err(bad().into()),
+    };
+    let state = read_state_with_original_probe(take(&mut o, "state")?, profile == "eliot.registry-state.v3", probe)?;
     finish(o)?;
     if encode_state_profile(&state, &profile)? != bytes {
-        return Err(bad());
+        return Err(bad().into());
     }
-    Ok(state)
+    probe().map_err(checkpoint_error)?;
+    Ok((state, encoding_profile))
 }
 pub(super) fn encode_key(key: &RegistryStateKey) -> Result<Vec<u8>, RegistryError> {
     c::to_canonical_cbor(&object(vec![
@@ -531,6 +598,7 @@ fn key_value(k: &RegistryStateKey) -> Result<V, RegistryError> {
             ("family", text("generation")?),
             ("corpus", text(v.as_str())?),
         ]),
+        RegistryStateKey::Namespace(_) => Err(bad()),
     }
 }
 fn read_key(v: V) -> Result<RegistryStateKey, RegistryError> {
@@ -542,6 +610,7 @@ fn read_key(v: V) -> Result<RegistryStateKey, RegistryError> {
         "source" => RegistryStateKey::Source(read_identity(take(&mut o, "identity")?)?),
         "membership" => RegistryStateKey::Membership(read_member_key(take(&mut o, "key")?)?),
         "generation" => RegistryStateKey::Generation(opaque(take(&mut o, "corpus")?)?),
+        "namespace" => return Err(bad()),
         _ => return Err(bad()),
     };
     finish(o)?;
@@ -575,8 +644,12 @@ fn record_value(v: &DecodedBatch, profile: &str) -> Result<V, RegistryError> {
         ),
     ])
 }
+const BATCH_PROFILE_V2: &str = "eliot.registry-batch.v2";
+const BATCH_PROFILE_V3: &str = "eliot.registry-batch.v3";
+pub(super) const CURRENT_BATCH_PROFILE: &str = BATCH_PROFILE_V3;
+
 pub(super) fn encode(v: &DecodedBatch) -> Result<Vec<u8>, RegistryError> {
-    encode_record_profile(v, "eliot.registry-batch.v3")
+    encode_record_profile(v, v.encoding_profile)
 }
 fn encode_record_profile(v: &DecodedBatch, profile: &str) -> Result<Vec<u8>, RegistryError> {
     c::to_canonical_cbor(&record_value(v, profile)?)
@@ -591,14 +664,25 @@ pub fn decode_batch_record(
     bytes: &[u8],
     limits: RegistryLimits,
 ) -> Result<DecodedBatch, RegistryError> {
+    decode_batch_record_with_original_probe(bytes, limits, &mut || Ok(())).map_err(legacy_error)
+}
+/// Decode retained v2/v3 operation bytes through the caller's original probe.
+/// The legacy public decoder remains byte-compatible and maps owner failures as before.
+pub fn decode_batch_record_with_original_probe(
+    bytes: &[u8],
+    limits: RegistryLimits,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<DecodedBatch, BatchCodecV4Error> {
+    probe().map_err(checkpoint_error)?;
     limits.validate()?;
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
     let profile = string(take(&mut o, "profile")?)?;
-    match profile.as_str() {
-        "eliot.registry-batch.v3" | "eliot.registry-batch.v2" => {}
-        "eliot.registry-batch.v1" => return Err(RegistryError::AdmissionRestorationUnavailable),
-        _ => return Err(bad()),
-    }
+    let (encoding_profile, state_encoding_profile) = match profile.as_str() {
+        "eliot.registry-batch.v3" => (BATCH_PROFILE_V3, STATE_PROFILE_V3),
+        "eliot.registry-batch.v2" => (BATCH_PROFILE_V2, STATE_PROFILE_V2),
+        "eliot.registry-batch.v1" => return Err(RegistryError::AdmissionRestorationUnavailable.into()),
+        _ => return Err(bad().into()),
+    };
     let operation_id = opaque(take(&mut o, "operation")?)?;
     let mutation_digest =
         Blake3Digest32::from_stored_bytes(fixed(take(&mut o, "declared_digest")?)?);
@@ -607,7 +691,7 @@ pub fn decode_batch_record(
     let before_revision = number(take(&mut o, "before_revision")?)?;
     let after_revision = number(take(&mut o, "after_revision")?)?;
     if before_revision.checked_add(1) != Some(after_revision) {
-        return Err(bad());
+        return Err(bad().into());
     }
     let r = receipt(take(&mut o, "receipt")?)?;
     let change_count =
@@ -618,29 +702,32 @@ pub fn decode_batch_record(
         || rows.is_empty()
         || rows.len() > limits.max_batch_changes
     {
-        return Err(RegistryError::CapacityExceeded);
+        return Err(RegistryError::CapacityExceeded.into());
     }
     let mut deltas = Vec::with_capacity(rows.len());
     let mut previous = None;
     for v in rows {
         let mut d = open(v)?;
         let key = read_key(take(&mut d, "key")?)?;
-        let before = optional_decode(take(&mut d, "before")?, |value| {
-            read_state(value, profile == "eliot.registry-batch.v3")
-        })?;
-        let after = read_state(take(&mut d, "after")?, profile == "eliot.registry-batch.v3")?;
+        let before = match take(&mut d, "before")? {
+            V::Null => None,
+            value => Some(read_state_with_original_probe(value, profile == "eliot.registry-batch.v3", probe)?),
+        };
+        let after = read_state_with_original_probe(take(&mut d, "after")?, profile == "eliot.registry-batch.v3", probe)?;
         finish(d)?;
         if previous.as_ref().is_some_and(|p| p >= &key)
             || after.key() != key
             || before.as_ref().is_some_and(|v| v.key() != key)
         {
-            return Err(bad());
+            return Err(bad().into());
         }
         previous = Some(key.clone());
         deltas.push(RegistryStateDelta { key, before, after });
     }
     finish(o)?;
     let result = DecodedBatch {
+        encoding_profile,
+        state_encoding_profile,
         entry: RegistryJournalEntry::new(
             operation_id,
             mutation_digest,
@@ -654,10 +741,12 @@ pub fn decode_batch_record(
         deltas,
     };
     if encode_record_profile(&result, &profile)? != bytes {
-        return Err(bad());
+        return Err(bad().into());
     }
+    probe().map_err(checkpoint_error)?;
     Ok(result)
 }
+
 fn change_value(change: &RegistryChange) -> Result<V, RegistryError> {
     match change {
         RegistryChange::RegisterRoot { request, receipt } => object(vec![
@@ -824,4 +913,24 @@ pub(super) fn request_fingerprint(batch: &RegistryBatch) -> Result<Blake3Digest3
         c::DigestInputLimit::new(c::MAX_CANONICAL_BYTES).map_err(|_| bad())?,
     )
     .map_err(|_| bad())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_state_probe_is_forwarded_before_decode() {
+        let value = object(vec![("family", text("source").unwrap())]).unwrap();
+        let mut calls = 0;
+        let result = read_state_with_original_probe(value, true, &mut || {
+            calls += 1;
+            Err(CheckpointFailureV2::Cancelled)
+        });
+        assert_eq!(
+            result,
+            Err(BatchCodecV4Error::Admission(AdmissionError::Cancelled))
+        );
+        assert_eq!(calls, 1);
+    }
 }

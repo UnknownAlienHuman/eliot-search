@@ -3,10 +3,11 @@
 use search_ports::{CancellationProbe, OperationContext};
 
 use crate::{ControlCallError, ControlError, ControlKey, ControlSnapshotPublisher,
-    ControlValue, PersistentControlJournal};
+    ControlValue, JournalIdentity, PersistentControlJournal};
 use super::super::operation::{Budget, Check, Point};
 use super::super::{
-    OPERATIONS, RECORDS, ReadableTableMetadata, decode_value,
+    MigrationBootstrapWork, OPERATIONS, RECORDS, ReadableTableMetadata,
+    decode_value_checked,
     map_storage_error, map_table_error,
 };
 
@@ -84,44 +85,81 @@ impl PersistentControlJournal {
         let budget = Budget::new(context);
         let read = || {
             budget.check(Point::Start)?;
-            self.ensure_available()?;
-            if N == 0 || N > self.limits.max_mutation_items {
-                return Err(ControlError::BudgetExceeded);
-            }
-            for (index, &key) in keys.iter().enumerate() {
-                budget.check(Point::ReadRecord)?;
-                if key.as_bytes().is_empty() || key.as_bytes().len() > self.limits.max_key_bytes {
-                    return Err(ControlError::InvalidKey);
-                }
-                if keys[..index].contains(&key) {
-                    return Err(ControlError::DuplicateMutationKey);
-                }
-            }
-            let transaction = self.database.begin_read()
-                .map_err(|_| ControlError::StoreUnavailable)?;
-            let header = self.header_from(&transaction)?;
-            budget.check(Point::ReadHeader)?;
-            let records = transaction.open_table(RECORDS).map_err(map_table_error)?;
-            let mut values: [Option<ControlValue>; N] = std::array::from_fn(|_| None);
-            let mut total_bytes = 0_usize;
-            for (slot, key) in values.iter_mut().zip(keys) {
-                budget.check(Point::ReadRecord)?;
-                if let Some(raw) = records.get(key.as_bytes())
-                    .map_err(|error| map_storage_error(&error))?
-                {
-                    let value = decode_value(raw.value(), self.limits)?;
-                    total_bytes = total_bytes.checked_add(value.len())
-                        .ok_or(ControlError::BudgetExceeded)?;
-                    if total_bytes > self.limits.max_total_value_bytes {
-                        return Err(ControlError::BudgetExceeded);
-                    }
-                    *slot = Some(value);
-                }
-            }
+            let (_, generation, values) = self.read_current_records_checked(&keys, &budget)?;
             budget.check(Point::ReadComplete)?;
-            Ok((header.generation, values))
+            let mut result: [Option<ControlValue>; N] = std::array::from_fn(|_| None);
+            for (slot, value) in result.iter_mut().zip(values) {
+                *slot = value;
+            }
+            Ok((generation, result))
         };
         read().map_err(|error| budget.failure(error, None).for_recovery())
+    }
+
+    /// Read exact keys from one checked current-journal transaction.
+    ///
+    /// The caller performs the entry checkpoint. This shared engine validates
+    /// every key before opening redb, verifies the actual header, and performs
+    /// only point reads from the records table. It never scans, writes or
+    /// consults a publisher. Returned options retain the order of `keys`.
+    pub(in crate::persistent) fn read_current_records_checked(
+        &self,
+        keys: &[&ControlKey],
+        check: &dyn Check,
+    ) -> Result<(JournalIdentity, u64, Vec<Option<ControlValue>>), ControlError> {
+        use MigrationBootstrapWork as Work;
+
+        self.ensure_available()?;
+        if keys.is_empty() || keys.len() > self.limits.max_mutation_items {
+            return Err(ControlError::BudgetExceeded);
+        }
+        for (index, key) in keys.iter().enumerate() {
+            check.check(Point::ReadRecord)?;
+            if key.as_bytes().is_empty() || key.as_bytes().len() > self.limits.max_key_bytes {
+                return Err(ControlError::InvalidKey);
+            }
+            if keys[..index].contains(key) {
+                return Err(ControlError::DuplicateMutationKey);
+            }
+        }
+        let slots = keys
+            .len()
+            .checked_mul(std::mem::size_of::<Option<ControlValue>>())
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(slots))?;
+
+        let transaction = self
+            .database
+            .begin_read()
+            .map_err(|_| ControlError::StoreUnavailable)?;
+        let header = self.header_from_checked(&transaction, check)?;
+        check.check(Point::ReadHeader)?;
+        let records = transaction.open_table(RECORDS).map_err(map_table_error)?;
+        let mut values = Vec::with_capacity(keys.len());
+        let mut total_bytes = 0_usize;
+        for key in keys {
+            check.check(Point::ReadRecord)?;
+            check.reserve(Work::Read(key.as_bytes().len()))?;
+            #[cfg(test)]
+            self.work
+                .point_reads
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let value = records
+                .get(key.as_bytes())
+                .map_err(|error| map_storage_error(&error))?
+                .map(|raw| decode_value_checked(raw.value(), self.limits, check))
+                .transpose()?;
+            if let Some(value) = &value {
+                total_bytes = total_bytes
+                    .checked_add(value.len())
+                    .ok_or(ControlError::BudgetExceeded)?;
+                if total_bytes > self.limits.max_total_value_bytes {
+                    return Err(ControlError::BudgetExceeded);
+                }
+            }
+            values.push(value);
+        }
+        Ok((header.identity, header.generation, values))
     }
 
     /// Read one finite fixed-size set of distinct technical records and the exact

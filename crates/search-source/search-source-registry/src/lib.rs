@@ -32,27 +32,20 @@
 pub mod api;
 pub mod cutover;
 pub mod error;
-pub mod legacy_root_catalog;
+pub use search_source_records::legacy_root_catalog;
 pub mod membership;
 pub mod portfolio;
-pub mod portfolio_history;
+pub use search_source_records::portfolio_history;
 pub mod recovery;
-pub mod revision;
+pub use search_source_history::revision;
 pub mod root;
-pub mod root_currentness;
-pub mod snapshot;
+pub use search_source_records::root_currentness;
+pub use search_source_records::snapshot;
 pub mod source;
+pub mod source_ids;
 pub mod view;
 
-#[cfg(test)]
-mod revision_tests;
-
-#[cfg(test)]
-#[path = "portfolio_history_tests.rs"]
-mod portfolio_history_tests;
-
-#[path = "source/legacy_direct.rs"]
-mod source_legacy_direct;
+use search_source_records::legacy_direct as source_legacy_direct;
 
 pub use api::{
     DEFAULT_REGISTRY_LIMITS, InMemoryRegistryJournal, JournalEntryKind, RegistryControlPort,
@@ -72,7 +65,8 @@ pub use portfolio_history::{
 pub use recovery::{
     MAX_REGISTRY_RESTORE_BYTES, NamespaceCutover, ObservedRegistryRestore, RegistryBatch,
     RegistryChange, RegistryOperation, RegistryReceipt, RegistryRestoreOperation,
-    RegistryRestoreState, SourceRegistry, preflight_registry_restore_inputs, restore_registry_state,
+    RegistryRestoreState, SourceRegistry, preflight_registry_restore_inputs,
+    restore_registry_state,
 };
 pub use revision::{
     SourceRevisionControlPort, SourceRevisionCurrentness, SourceRevisionHead, SourceRevisionIdPort,

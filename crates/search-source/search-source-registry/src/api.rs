@@ -5,6 +5,10 @@
 //! revision-guarded durable mutations. Every durable mutation persists its
 //! content-free receipt through the vendor-neutral [`crate::error::RegistryControlPort`].
 
+pub use search_source_records::source_request_v2::{SourceAdmissionRequestV2, SourceNamespaceSelectionV2, SourceOwnerScopeV2};
+pub use crate::recovery::source_v2::{prepare_source_admission_v2, commit_source_admission_v2, recover_source_admission_v2,
+    SourceAdmissionPreparationV2, SourceAdmissionRecoveryV2, PreparedSourceAdmissionV2, SourceAdmissionV2Error};
+
 pub use crate::cutover::{
     CutoverPreparation, CutoverRecoveryDecision, NamespaceCutoverState, NamespaceOwnershipCommand,
     OwnerFenceReceipt, SourceOwnerActivationReceipt, VerifiedCutoverReceipt,
@@ -89,6 +93,7 @@ pub fn registry_snapshot(registry: &SourceRegistry) -> RegistrySnapshot {
         portfolio_history: registry.portfolio_history().clone(),
         active_generations: registry.active_generations_snapshot().clone(),
         ownerships,
+        namespace_states: registry.namespaces().clone(),
     }
 }
 

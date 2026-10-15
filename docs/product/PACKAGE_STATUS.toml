@@ -88,6 +88,27 @@ path = "crates/search-source/search-source-registry"
 execution_chain = ["#270", "#271", "#272"]
 
 [[package]]
+name = "search-source-provenance"
+path = "crates/search-source/search-source-provenance"
+execution_chain = ["#569", "#270"]
+product_path = "partial"
+# Original-input retention/reconstitution only; no live source-read authority.
+
+[[package]]
+name = "search-source-records"
+path = "crates/search-source/search-source-records"
+execution_chain = ["#569", "#270", "#272"]
+product_path = "partial"
+# Pure C03 values/codecs; the semantic registry remains the sole mutable owner.
+
+[[package]]
+name = "search-source-history"
+path = "crates/search-source/search-source-history"
+execution_chain = ["#569", "#270", "#271"]
+product_path = "partial"
+# C03 immutable occurrences and exact replay; no second durable state store.
+
+[[package]]
 name = "search-source-identity"
 path = "crates/search-source/search-source-identity"
 execution_chain = ["#270"]

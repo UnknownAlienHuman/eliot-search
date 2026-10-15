@@ -130,21 +130,28 @@ pub(super) fn run(
 pub(super) fn bootstrap_policy() -> Result<search_source_admission::ValidatedAdmissionConfig, String>
 {
     use search_source_admission as a;
+    let (platform, capabilities) = admission_environment();
     // Explicit closed bootstrap_v1 selection, all five compiled fields validated.
     // The partial W1 source_admission section is deliberately not a policy input.
     let config = a::validate_section(
         &a::compiled_defaults(),
-        &a::SectionPlatform {
-            os: "windows".into(),
-            arch: "x64".into(),
-        },
-        &a::AcceptedCapabilities {
-            profiles: vec![a::BASELINE_PROFILE.into()],
-        },
+        &platform,
+        &capabilities,
     )
     .map_err(|_| "DIRECT_BOOTSTRAP_POLICY_UNAVAILABLE")?;
     a::compile_bootstrap_policy_v1(&config).map_err(|_| "DIRECT_BOOTSTRAP_POLICY_UNAVAILABLE")?;
     Ok(config)
+}
+
+fn admission_environment() -> (
+    search_source_admission::SectionPlatform,
+    search_source_admission::AcceptedCapabilities,
+) {
+    use search_source_admission as a;
+    (
+        a::SectionPlatform { os: "windows".into(), arch: "x64".into() },
+        a::AcceptedCapabilities { profiles: vec![a::BASELINE_PROFILE.into()] },
+    )
 }
 
 impl DirectRegistryOwner {
@@ -315,13 +322,16 @@ fn original_port<'a, C: search_ports::CancellationProbe>(
     work: &'a dyn Fn(W) -> Result<(), OwnerError>,
 ) -> Result<crate::registry_control::RegistryJournal<'a, C>, String> {
     let identity = journal.identity();
-    crate::registry_control::RegistryJournal::bind_original(
+    let (platform, capabilities) = admission_environment();
+    crate::registry_control::RegistryJournal::bind_original_v4(
         journal,
         publisher,
         identity,
         DEFAULT_REGISTRY_LIMITS,
         deadline,
         work,
+        platform,
+        capabilities,
     )
     .map_err(|_| "DIRECT_BIND_REFUSED".into())
 }

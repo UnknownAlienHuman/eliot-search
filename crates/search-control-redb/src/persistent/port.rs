@@ -410,3 +410,6 @@ fn admission_failure(error: ControlError) -> ControlPortError {
 mod tests;
 
 mod original_registry;
+mod original_records;
+mod original_records_targeted;
+pub use original_records_targeted::ScopedControlRecordsReadback;

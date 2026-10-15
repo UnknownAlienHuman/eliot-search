@@ -16,6 +16,7 @@ pub mod eligibility;
 pub mod error;
 pub mod ordering;
 pub mod outcomes;
+pub mod source_ownership_v2;
 pub mod transitions;
 pub mod visibility;
 

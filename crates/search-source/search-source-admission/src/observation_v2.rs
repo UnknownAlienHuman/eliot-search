@@ -265,7 +265,7 @@ impl AdmissionObservationV2 {
     }
 }
 
-fn validate_encoded_ceiling(max_encoded_bytes: usize) -> Result<(), AdmissionError> {
+pub(super) fn validate_encoded_ceiling(max_encoded_bytes: usize) -> Result<(), AdmissionError> {
     if max_encoded_bytes == 0 || max_encoded_bytes > MAX_OBSERVATION_PREIMAGE_BYTES {
         Err(AdmissionError::ObservationInvalid)
     } else {

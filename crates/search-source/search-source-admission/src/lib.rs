@@ -40,9 +40,12 @@ use core::fmt;
 use std::collections::BTreeSet;
 
 use search_contracts::{Blake3Digest32, DigestInputLimit, NonZeroRevision, sha256_exact_bytes};
+use policy_v2::{CheckpointFailureV2, checkpoint};
 
 /// Pure bounded relative-locator and versioned observation equality model.
 pub mod observation_v2;
+/// Checkpointed complete metadata input retention and v2 reconstitution.
+pub mod original_inputs_v2;
 
 /// Bounded effective v2 evaluation and immutable internally bound decisions.
 pub mod evaluation_v2;
@@ -1820,11 +1823,22 @@ pub fn validate_observation(
     policy: &CanonicalAdmissionPolicy,
     limits: AdmissionLimits,
 ) -> Result<AdmissionObservation, AdmissionError> {
+    validate_observation_fields(input, policy.rules.len(), policy.max_file_bytes(), limits)
+}
+
+// Both policy versions use this sole metadata validator. A size/rule ceiling
+// grants no policy outcome, receipt or native access authority.
+fn validate_observation_fields(
+    input: &UnvalidatedObservationInput,
+    rule_count: usize,
+    max_file_bytes: u64,
+    limits: AdmissionLimits,
+) -> Result<AdmissionObservation, AdmissionError> {
     let limits = limits.validate()?;
     if !input.unknown_fields.is_empty() {
         return Err(AdmissionError::PolicyUnknownField);
     }
-    if policy.rules.len() > limits.max_rules {
+    if rule_count > limits.max_rules {
         return Err(AdmissionError::ObservationInvalid);
     }
     let locator_class = LocatorClass::parse(&input.locator_class)?;
@@ -1856,7 +1870,7 @@ pub fn validate_observation(
         check_id(profile, "profile_id")?;
     }
     if let Some(size) = input.byte_size {
-        if size > policy.max_file_bytes().saturating_mul(16).saturating_add(1) {
+        if size > max_file_bytes.saturating_mul(16).saturating_add(1) {
             // Observations absurdly above any policy ceiling are malformed
             // rather than silently reviewable; evaluation still denies.
             return Err(AdmissionError::ObservationInvalid);
@@ -2112,8 +2126,10 @@ fn baseline_reasons(
     matched: &mut BTreeSet<String>,
     budget_remaining: &mut u32,
     cancel: CancelFlag,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<(), AdmissionError> {
     for rule in &policy.rules {
+        checkpoint(probe)?;
         cancel.check()?;
         if *budget_remaining == 0 {
             return Err(AdmissionError::BudgetExhausted);
@@ -2150,6 +2166,7 @@ fn baseline_reasons(
             }
         }
     }
+    checkpoint(probe)?;
     Ok(())
 }
 
@@ -2178,6 +2195,23 @@ pub fn evaluate(
     budget: AdmissionBudget,
     cancel: CancelFlag,
 ) -> Result<AdmissionDecision, AdmissionError> {
+    let mut probe = || Ok(());
+    evaluate_with_probe(policy, observation, budget, cancel, &mut probe)
+}
+
+/// Applies the same v1 evaluator with the original caller's checkpoint.
+///
+/// This is an owner-internal restoration seam: it does not change policy
+/// semantics, defaults, receipt bytes or the public legacy evaluator. A probe
+/// refusal clears the in-flight computation by returning before any decision.
+pub(crate) fn evaluate_with_probe(
+    policy: &CanonicalAdmissionPolicy,
+    observation: &AdmissionObservation,
+    budget: AdmissionBudget,
+    cancel: CancelFlag,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<AdmissionDecision, AdmissionError> {
+    checkpoint(probe)?;
     cancel.check()?;
     let mut budget_remaining = budget.max_rule_evaluations;
     if budget_remaining == 0 {
@@ -2187,6 +2221,7 @@ pub fn evaluate(
     require_effective_v1_policy(policy)?;
     let fingerprint = policy_fingerprint(policy);
     let digest = observation_digest(observation);
+    checkpoint(probe)?;
     let sensitivity = observation
         .sensitivity
         .unwrap_or(SensitivityLevel::Confidential);
@@ -2294,8 +2329,11 @@ pub fn evaluate(
         &mut rule_matched,
         &mut budget_remaining,
         cancel,
+        probe,
     )?;
+    checkpoint(probe)?;
     for reason in &rule_reasons {
+        checkpoint(probe)?;
         match reason {
             AdmissionReasonCode::AllowBaselineSource | AdmissionReasonCode::AllowExplicitRule => {
                 allow.insert(*reason);
@@ -2330,11 +2368,13 @@ pub fn evaluate(
         }
     }
     for id in rule_matched {
+        checkpoint(probe)?;
         if matched.len() >= MAX_MATCHED_RULES {
             return Err(AdmissionError::ObservationInvalid);
         }
         matched.insert(id);
     }
+    checkpoint(probe)?;
 
     // Deterministic resolution: deny wins over unsupported, which wins over
     // review, which wins over allow. Silence is never allow.
@@ -2383,7 +2423,7 @@ pub fn evaluate(
     {
         reasons.clear();
         reasons.insert(AdmissionReasonCode::AllowBaselineSource);
-        return build_decision(
+        let decision = build_decision(
             AdmissionOutcome::Allow,
             reasons,
             matched,
@@ -2391,9 +2431,11 @@ pub fn evaluate(
             policy.revision,
             fingerprint,
             digest,
-        );
+        )?;
+        checkpoint(probe)?;
+        return Ok(decision);
     }
-    build_decision(
+    let decision = build_decision(
         outcome,
         reasons,
         matched,
@@ -2401,7 +2443,9 @@ pub fn evaluate(
         policy.revision,
         fingerprint,
         digest,
-    )
+    )?;
+    checkpoint(probe)?;
+    Ok(decision)
 }
 
 #[allow(clippy::too_many_arguments)]
