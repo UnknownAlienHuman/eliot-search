@@ -35,7 +35,7 @@ pub mod error;
 pub use search_source_records::legacy_root_catalog;
 pub mod membership;
 pub mod portfolio;
-pub mod portfolio_history;
+pub use search_source_records::portfolio_history;
 pub mod recovery;
 pub use search_source_history::revision;
 pub mod root;
@@ -43,11 +43,6 @@ pub use search_source_records::root_currentness;
 pub mod snapshot;
 pub mod source;
 pub mod view;
-
-
-#[cfg(test)]
-#[path = "portfolio_history_tests.rs"]
-mod portfolio_history_tests;
 
 use search_source_records::legacy_direct as source_legacy_direct;
 
@@ -69,7 +64,8 @@ pub use portfolio_history::{
 pub use recovery::{
     MAX_REGISTRY_RESTORE_BYTES, NamespaceCutover, ObservedRegistryRestore, RegistryBatch,
     RegistryChange, RegistryOperation, RegistryReceipt, RegistryRestoreOperation,
-    RegistryRestoreState, SourceRegistry, preflight_registry_restore_inputs, restore_registry_state,
+    RegistryRestoreState, SourceRegistry, preflight_registry_restore_inputs,
+    restore_registry_state,
 };
 pub use revision::{
     SourceRevisionControlPort, SourceRevisionCurrentness, SourceRevisionHead, SourceRevisionIdPort,

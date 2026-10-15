@@ -27,6 +27,12 @@ pub mod legacy_direct;
 pub mod legacy_root_catalog;
 pub mod membership;
 pub mod operation;
+pub mod portfolio;
+pub mod portfolio_history;
 pub mod root;
 pub mod root_currentness;
 pub mod source;
+
+#[cfg(test)]
+#[path = "portfolio_history_tests.rs"]
+mod portfolio_history_tests;

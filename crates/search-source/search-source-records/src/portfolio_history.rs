@@ -408,7 +408,7 @@ impl PortfolioHistory {
     }
 
     /// Prepares bounded record and pointer values before receipt persistence.
-    pub(crate) fn prepare_publication(
+    pub fn prepare_publication(
         &self,
         key: PortfolioRevisionKey,
         revision: ImmutablePortfolioRevision,
@@ -438,7 +438,7 @@ impl PortfolioHistory {
     }
 
     /// Installs values whose complete validation preceded receipt dispatch.
-    pub(crate) fn install(&mut self, prepared: PreparedPortfolioPublication) {
+    pub fn install(&mut self, prepared: PreparedPortfolioPublication) {
         self.current
             .insert(prepared.pointer.target.portfolio_id, prepared.pointer);
         self.revisions.insert(prepared.record.key, prepared.record);
@@ -477,9 +477,19 @@ impl PortfolioHistory {
     }
 }
 
-pub(crate) struct PreparedPortfolioPublication {
-    pub(crate) record: PortfolioRevisionRecord,
+/// Opaque prepared metadata for one revision/pointer update in the same history.
+///
+/// It establishes neither durable publication nor current source/access authority.
+pub struct PreparedPortfolioPublication {
+    record: PortfolioRevisionRecord,
     pointer: PortfolioCurrentPointer,
+}
+
+impl PreparedPortfolioPublication {
+    /// Fully validated immutable record; no persistence or live admission is established.
+    pub const fn record(&self) -> &PortfolioRevisionRecord {
+        &self.record
+    }
 }
 
 impl Default for PortfolioHistory {
