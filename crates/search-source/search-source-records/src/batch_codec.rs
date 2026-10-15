@@ -436,7 +436,7 @@ pub(super) fn read_state_with_original_probe(
                 status: match string(take(&mut o, "status")?)?.as_str() {
                     "active" => RootStatus::Active,
                     "unbound" => RootStatus::Unbound,
-                    _ => return Err(bad()),
+                    _ => return Err(BatchCodecV4Error::Registry(bad())),
                 },
                 last_receipt: receipt(take(&mut o, "last_receipt")?)?,
             };
@@ -456,7 +456,7 @@ pub(super) fn read_state_with_original_probe(
             let lifecycle = match string(take(&mut o, "lifecycle")?)?.as_str() {
                 "active" => SourceLifecycle::Active,
                 "retired" => SourceLifecycle::Retired,
-                _ => return Err(bad()),
+                _ => return Err(BatchCodecV4Error::Registry(bad())),
             };
             let source_revision = revision(take(&mut o, "source_revision")?)?;
             let registry_revision = number(take(&mut o, "registry_revision")?)?;
@@ -466,7 +466,7 @@ pub(super) fn read_state_with_original_probe(
                 || proof.source_identity != *b.identity()
                 || proof.observation_digest.as_bytes() != a.observation_digest().as_bytes()
             {
-                return Err(bad());
+                return Err(BatchCodecV4Error::Registry(bad()));
             }
             RegistryStateRecord::Source(
                 RegisteredSource::new(
@@ -492,12 +492,12 @@ pub(super) fn read_state_with_original_probe(
                 "suspended" => MembershipLifecycle::Suspended,
                 "retired" => MembershipLifecycle::Retired,
                 "removed" => MembershipLifecycle::Removed,
-                _ => return Err(bad()),
+                _ => return Err(BatchCodecV4Error::Registry(bad())),
             };
             let reg = number(take(&mut o, "registry_revision")?)?;
             let r = receipt(take(&mut o, "receipt")?)?;
             if id != derive_membership_id(&key) {
-                return Err(bad());
+                return Err(BatchCodecV4Error::Registry(bad()));
             }
             RegistryStateRecord::Membership(MembershipRecord::new(
                 key, id, generation, rev, lifecycle, reg, r,
@@ -507,8 +507,8 @@ pub(super) fn read_state_with_original_probe(
             corpus: opaque(take(&mut o, "corpus")?)?,
             generation: revision(take(&mut o, "generation")?)?,
         },
-        "namespace" => return Err(bad()),
-        _ => return Err(bad()),
+        "namespace" => return Err(BatchCodecV4Error::Registry(bad())),
+        _ => return Err(BatchCodecV4Error::Registry(bad())),
     };
     finish(o)?;
     probe().map_err(checkpoint_error)?;

@@ -2196,7 +2196,7 @@ pub fn evaluate(
     cancel: CancelFlag,
 ) -> Result<AdmissionDecision, AdmissionError> {
     let mut probe = || Ok(());
-    evaluate_with_probe_context(policy, observation, budget, cancel, &mut probe)
+    evaluate_with_probe(policy, observation, budget, cancel, &mut probe)
 }
 
 /// Applies the same v1 evaluator with the original caller's checkpoint.
@@ -2205,20 +2205,6 @@ pub fn evaluate(
 /// semantics, defaults, receipt bytes or the public legacy evaluator. A probe
 /// refusal clears the in-flight computation by returning before any decision.
 pub(crate) fn evaluate_with_probe(
-    policy: &CanonicalAdmissionPolicy,
-    observation: &AdmissionObservation,
-    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
-) -> Result<AdmissionDecision, AdmissionError> {
-    evaluate_with_probe_context(
-        policy,
-        observation,
-        AdmissionBudget::default_budget(),
-        CancelFlag::live(),
-        probe,
-    )
-}
-
-pub(crate) fn evaluate_with_probe_context(
     policy: &CanonicalAdmissionPolicy,
     observation: &AdmissionObservation,
     budget: AdmissionBudget,
