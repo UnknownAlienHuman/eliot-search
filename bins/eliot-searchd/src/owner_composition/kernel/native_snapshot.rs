@@ -7,9 +7,12 @@ use search_runtime_owner::{OwnerError, RootOpenState};
 
 use super::codec::{parse_digest32, parse_id16};
 use super::installation::InstallationBinding;
-use super::native_objects::{NativePins, metadata, native_identity, open_existing, read_bytes};
+use super::native_objects::{
+    NativePins, metadata, native_identity, open_existing, open_existing_with_metadata, read_bytes,
+};
 use super::native_request::{NativeRootRequest, NativeWork, native_argument};
-use super::observation::{ObservedRoot, hash_executable_file, observe_root_parts};
+use super::observation::{EXECUTABLE_READ_BUFFER_BYTES, ObservedRoot,
+    hash_executable_file_sized, observe_root_parts};
 use super::record::DurableOwnerRecord;
 use super::spec::{INSTALLATION_MAGIC, LifecycleState, MAX_INSTALLATION_BYTES, MAX_STATE_BYTES};
 
@@ -149,14 +152,17 @@ pub(super) fn executable_digest(
         fs::canonicalize(&path).map_err(|_| OwnerError::DataRootInvalid)
     })?;
     let _ = native_argument(canonical.as_os_str(), 256 * 1024)?;
-    let mut file = open_existing(request, work, &canonical, false, false)?;
-    let before = work.call(request, || {
-        file.metadata().map_err(|_| OwnerError::DataRootInvalid)
-    })?;
+    let (mut file, before) = open_existing_with_metadata(request, work, &canonical, false, false)?;
     if before.len() > 64 * 1024 * 1024 {
         return Err(OwnerError::ContractExhausted);
     }
-    let digest = hash_executable_file(&mut file, |file, chunk| {
+    let capacity = usize::try_from(before.len().clamp(1, EXECUTABLE_READ_BUFFER_BYTES as u64))
+        .map_err(|_| OwnerError::ContractExhausted)?;
+    work.read_capacity(request, capacity)?;
+    let mut scratch = Vec::new();
+    scratch.try_reserve_exact(capacity).map_err(|_| OwnerError::ContractExhausted)?;
+    scratch.resize(capacity, 0);
+    let digest = hash_executable_file_sized(&mut file, before.len(), &mut scratch, |file, chunk| {
         use std::io::Read;
         work.read(request, chunk.len())?;
         work.call(request, || {
