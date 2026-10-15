@@ -575,8 +575,12 @@ fn record_value(v: &DecodedBatch, profile: &str) -> Result<V, RegistryError> {
         ),
     ])
 }
+const BATCH_PROFILE_V2: &str = "eliot.registry-batch.v2";
+const BATCH_PROFILE_V3: &str = "eliot.registry-batch.v3";
+pub(super) const CURRENT_BATCH_PROFILE: &str = BATCH_PROFILE_V3;
+
 pub(super) fn encode(v: &DecodedBatch) -> Result<Vec<u8>, RegistryError> {
-    encode_record_profile(v, "eliot.registry-batch.v3")
+    encode_record_profile(v, v.encoding_profile)
 }
 fn encode_record_profile(v: &DecodedBatch, profile: &str) -> Result<Vec<u8>, RegistryError> {
     c::to_canonical_cbor(&record_value(v, profile)?)
@@ -594,11 +598,12 @@ pub fn decode_batch_record(
     limits.validate()?;
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
     let profile = string(take(&mut o, "profile")?)?;
-    match profile.as_str() {
-        "eliot.registry-batch.v3" | "eliot.registry-batch.v2" => {}
+    let encoding_profile = match profile.as_str() {
+        "eliot.registry-batch.v3" => BATCH_PROFILE_V3,
+        "eliot.registry-batch.v2" => BATCH_PROFILE_V2,
         "eliot.registry-batch.v1" => return Err(RegistryError::AdmissionRestorationUnavailable),
         _ => return Err(bad()),
-    }
+    };
     let operation_id = opaque(take(&mut o, "operation")?)?;
     let mutation_digest =
         Blake3Digest32::from_stored_bytes(fixed(take(&mut o, "declared_digest")?)?);
@@ -641,6 +646,7 @@ pub fn decode_batch_record(
     }
     finish(o)?;
     let result = DecodedBatch {
+        encoding_profile,
         entry: RegistryJournalEntry::new(
             operation_id,
             mutation_digest,
@@ -658,6 +664,45 @@ pub fn decode_batch_record(
     }
     Ok(result)
 }
+
+#[cfg(test)]
+mod wire_profile_tests {
+    use super::*;
+
+    #[test]
+    fn decoded_batch_wire_profile_preserves_exact_v2_and_v3_bytes() {
+        for encoding_profile in [BATCH_PROFILE_V2, BATCH_PROFILE_V3] {
+            let corpus = OpaqueId::new("profile-retention-fixture").unwrap();
+            let record = DecodedBatch {
+                encoding_profile,
+                entry: RegistryJournalEntry::new(
+                    OpaqueId::new("profile-retention-operation").unwrap(),
+                    Blake3Digest32::from_stored_bytes([1; 32]),
+                    0,
+                    1,
+                    JournalEntryKind::BatchApply,
+                    ReceiptRef::new("profile-retention-receipt").unwrap(),
+                ),
+                request_fingerprint: Blake3Digest32::from_stored_bytes([2; 32]),
+                change_count: 1,
+                deltas: vec![RegistryStateDelta {
+                    key: RegistryStateKey::Generation(corpus.clone()),
+                    before: None,
+                    after: RegistryStateRecord::Generation {
+                        corpus,
+                        generation: NonZeroRevision::new(1).unwrap(),
+                    },
+                }],
+            };
+            let bytes = record.encode().unwrap();
+            let restored = decode_batch_record(&bytes, crate::api::DEFAULT_REGISTRY_LIMITS).unwrap();
+            assert_eq!(restored.encoding_profile(), encoding_profile);
+            assert_eq!(restored.encode().unwrap(), bytes);
+            assert_eq!(restored, record);
+        }
+    }
+}
+
 fn change_value(change: &RegistryChange) -> Result<V, RegistryError> {
     match change {
         RegistryChange::RegisterRoot { request, receipt } => object(vec![

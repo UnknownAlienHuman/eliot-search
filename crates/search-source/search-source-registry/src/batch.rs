@@ -139,12 +139,18 @@ impl RegistryStateDelta {
 /// Owner-decoded immutable operation/delta record. Alone it authorizes no mutation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DecodedBatch {
+    encoding_profile: &'static str,
     entry: RegistryJournalEntry,
     request_fingerprint: Blake3Digest32,
     change_count: usize,
     deltas: Vec<RegistryStateDelta>,
 }
 impl DecodedBatch {
+    /// Exact closed wire profile retained by decoding; never a currentness grant.
+    pub const fn encoding_profile(&self) -> &'static str {
+        self.encoding_profile
+    }
+
     /// Expected source-registry owner revision, independent of journal generation.
     pub const fn expected_registry_revision(&self) -> u64 {
         self.entry.before_revision
@@ -573,6 +579,7 @@ pub(super) fn prepare(
         });
     }
     let record = DecodedBatch {
+        encoding_profile: codec::CURRENT_BATCH_PROFILE,
         entry: RegistryJournalEntry::new(
             batch.operation.operation_id().clone(),
             batch.operation.mutation_digest(),
