@@ -14,6 +14,10 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use zeroize::Zeroizing;
 
+#[path = "io/read_scope.rs"]
+mod read_scope;
+pub(super) use read_scope::ParentReadScope;
+
 pub(super) const PAGE_NAMES: usize = 32;
 pub(super) const NAME_BYTES: usize = 2048;
 pub(super) const CHUNK: usize = 64 * 1024;
@@ -230,6 +234,7 @@ fn pin_parents(
         };
         source.charge(Work::Observe)?;
         let observation = file.metadata();
+        source.charge(Work::Observe)?;
         let native = identity(&file);
         source.checkpoint()?;
         if !matches!(observation, Ok(ref meta) if meta.is_dir() && !is_reparse(meta))
@@ -296,6 +301,7 @@ pub(super) struct PinnedRevisionRepresentations<'a, 'view, 'operation, 'owner> {
     paths: [PathBuf; 2],
     originals: [Option<PinnedRevisionRepresentation>; 2],
     parents: Vec<File>,
+    scoped_parents: Vec<std::sync::Arc<File>>,
     parent_snapshots: [Option<eliot_searchd::native_file::Observation>; MAX_PARENTS],
 }
 
@@ -304,9 +310,26 @@ impl<'a, 'view, 'operation, 'owner>
 {
     /// Proven missing-both is `AbsentProven`; all other native refusals keep
     /// their inventory status. An invalid ID or observed drift is an error.
+    #[cfg(test)]
     pub(super) fn open(
         source: &'a MigrationSource<'view, 'operation, 'owner>,
         revision_id: &str,
+    ) -> Result<Result<Self, Status>, String> {
+        Self::open_in(source, revision_id, None)
+    }
+
+    pub(super) fn open_scoped(
+        source: &'a MigrationSource<'view, 'operation, 'owner>,
+        revision_id: &str,
+        scope: &mut ParentReadScope,
+    ) -> Result<Result<Self, Status>, String> {
+        Self::open_in(source, revision_id, Some(scope))
+    }
+
+    fn open_in(
+        source: &'a MigrationSource<'view, 'operation, 'owner>,
+        revision_id: &str,
+        scope: Option<&mut ParentReadScope>,
     ) -> Result<Result<Self, Status>, String> {
         source.checkpoint()?;
         if revision_id.len() != 64 { return Err(changed()); }
@@ -322,12 +345,18 @@ impl<'a, 'view, 'operation, 'owner>
             + LEGACY_REVISION_DIRECTORY.len() * 2 + 80 * 2)))?;
         let directory = source.inventory_root().join(LEGACY_REVISION_DIRECTORY);
         let paths = [directory.join(plain), directory.join(protected)];
-        let parents = match pin_parents(source, &paths[0], false)? {
-            Ok(parents) => parents,
-            Err(status) => return Ok(Err(status)),
+        let (parents, scoped_parents) = match scope {
+            Some(scope) => match scope.retain_chain(source, paths[0].parent().ok_or_else(changed)?)? {
+                Ok(chain) => (Vec::new(), chain),
+                Err(status) => return Ok(Err(status)),
+            },
+            None => match pin_parents(source, &paths[0], false)? {
+                Ok(parents) => (parents, Vec::new()),
+                Err(status) => return Ok(Err(status)),
+            },
         };
         let mut parent_snapshots = [None; MAX_PARENTS];
-        for (index, file) in parents.iter().enumerate() {
+        for (index, file) in parents.iter().chain(scoped_parents.iter().map(AsRef::as_ref)).enumerate() {
             parent_snapshots[index] = match revision_pin_observation(source, file)? {
                 Ok(snapshot) => Some(snapshot),
                 Err(status) => return Ok(Err(status)),
@@ -342,7 +371,7 @@ impl<'a, 'view, 'operation, 'owner>
                 Err(status) => return Ok(Err(status)),
             };
         }
-        let held = Self { source, paths, originals, parents, parent_snapshots };
+        let held = Self { source, paths, originals, parents, scoped_parents, parent_snapshots };
         if let Err(status) = held.verify_same_original()? { return Ok(Err(status)); }
         if held.originals.iter().all(Option::is_none) { return Ok(Err(Status::AbsentProven)); }
         Ok(Ok(held))
@@ -404,7 +433,8 @@ impl<'a, 'view, 'operation, 'owner>
                 }
             }
         }
-        for (index, file) in self.parents.iter().enumerate() {
+        for (index, file) in self.parents.iter()
+            .chain(self.scoped_parents.iter().map(AsRef::as_ref)).enumerate() {
             let snapshot = match revision_pin_observation(self.source, file)? {
                 Ok(snapshot) => snapshot,
                 Err(status) => return Ok(Err(status)),
@@ -461,20 +491,24 @@ fn revision_pin_observation(
     source: &MigrationSource<'_, '_, '_>, file: &File,
 ) -> Result<Result<eliot_searchd::native_file::Observation, Status>, String> {
     use eliot_searchd::native_file::ObservationError;
+    source.checkpoint()?;
     let refusal = RefCell::new(None);
     let observed = eliot_searchd::native_file::observe_with_check(file, &|before| {
-        let result = if before { source.charge(Work::Observe) } else { source.checkpoint() };
+        let result = if before { source.held_observer_dispatch() } else { source.poll() };
         result.map_err(|cause| {
             refusal.borrow_mut().get_or_insert(cause);
             ObservationError::ObservationFailed
         })
     });
+    let checkpoint = source.checkpoint();
     if let Some(cause) = refusal.into_inner() { return Err(cause); }
+    checkpoint?;
     Ok(observed.map_err(|error| match error {
         ObservationError::UnsupportedPlatform | ObservationError::UnsupportedHandle
         | ObservationError::UnsupportedFileSystem => Status::Unsupported,
-        ObservationError::ReparsePointDenied => Status::Gap,
         ObservationError::ObservationFailed => Status::Unreadable,
+        ObservationError::ReparsePointDenied | ObservationError::NotDirectChild | ObservationError::InvalidDirectoryInformation
+            | ObservationError::DirectoryEntryLimit => Status::Gap,
     }))
 }
 
@@ -514,8 +548,9 @@ pub(super) fn page(
         Ok(pins) => pins,
         Err(status) => return Ok(Err(status)),
     };
-    let identity = directory_identity(source, &pins)?;
-    let Enumerated { names, .. } = match enumerate_pinned(source, directory, &pins, identity)? {
+    let file = pins.last().ok_or_else(changed)?;
+    let identity = directory_identity(source, file)?;
+    let Enumerated { names, .. } = match enumerate_pinned(source, directory, file, identity)? {
         Ok(enumerated) => enumerated,
         Err(status) => return Ok(Err(status)),
     };
@@ -527,18 +562,18 @@ pub(super) fn page(
         .collect()))
 }
 
-fn directory_identity(source: &MigrationSource<'_, '_, '_>, pins: &[File])
+fn directory_identity(source: &MigrationSource<'_, '_, '_>, file: &File)
     -> Result<eliot_searchd::native_file::Observation, String> {
     source.charge(Work::Observe)?;
-    let observed = pins.last().ok_or_else(changed).and_then(|file| identity(file).map_err(|_| changed()));
+    let observed = identity(file).map_err(|_| changed());
     source.checkpoint()?;
     observed
 }
 
 fn enumerate_pinned(source: &MigrationSource<'_, '_, '_>, directory: &Path,
-    pins: &[File], expected: eliot_searchd::native_file::Observation)
+    file: &File, expected: eliot_searchd::native_file::Observation)
     -> Result<Result<Enumerated, Status>, String> {
-    if directory_identity(source, pins)? != expected { return Err(changed()); }
+    if directory_identity(source, file)? != expected { return Err(changed()); }
     let before = match metadata(source, directory)? {
         Observed::Missing => return Ok(Err(Status::AbsentProven)),
         Observed::Refused(status) => return Ok(Err(status)),
@@ -585,7 +620,7 @@ fn enumerate_pinned(source: &MigrationSource<'_, '_, '_>, directory: &Path,
             if unchanged(&before, &after) => Ok(Ok(Enumerated { names, before })),
         _ => Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned()),
     };
-    if directory_identity(source, pins)? != expected { return Err(changed()); }
+    if directory_identity(source, file)? != expected { return Err(changed()); }
     result
 }
 
@@ -598,11 +633,12 @@ pub(super) fn visit(
         Ok(pins) => pins,
         Err(status) => return Ok(Some(status)),
     };
-    let identity = directory_identity(source, &pins)?;
+    let file = pins.last().ok_or_else(changed)?;
+    let identity = directory_identity(source, file)?;
     // One pinned enumeration of the whole directory. The admitted locator
     // collection is finite and already metered inside enumerate_pinned, so the
     // windows below retain no second window buffer and re-enumerate nothing.
-    let Enumerated { names, before } = match enumerate_pinned(source, directory, &pins, identity)? {
+    let Enumerated { names, before } = match enumerate_pinned(source, directory, file, identity)? {
         Ok(enumerated) => enumerated,
         Err(Status::AbsentProven) => return Ok(Some(Status::AbsentProven)),
         Err(status) => return Ok(Some(status)),
@@ -619,7 +655,34 @@ pub(super) fn visit(
         }
         offset = end;
     }
-    if directory_identity(source, &pins)? != identity { return Err(changed()); }
+    if directory_identity(source, file)? != identity { return Err(changed()); }
+    match metadata(source, directory)? {
+        Observed::Object(after) if unchanged(&before, &after) => Ok(None),
+        _ => Err(changed()),
+    }
+}
+
+/// Reuse the actual endpoint and full held chain; LIST/traverse still executes
+/// through a fresh absolute `read_dir` in `enumerate_pinned`. `Arc` clones no OS FD.
+pub(super) fn visit_scoped(
+    source: &MigrationSource<'_, '_, '_>, scope: &mut ParentReadScope, directory: &Path,
+    mut visitor: impl FnMut(&Name, &mut ParentReadScope) -> Result<(), String>,
+) -> Result<Option<Status>, String> {
+    let (index, file) = match scope.directory(source, directory)? {
+        Ok(endpoint) => endpoint,
+        Err(status) => return Ok(Some(status)),
+    };
+    let identity = directory_identity(source, &file)?;
+    let Enumerated { names, before } = match enumerate_pinned(source, directory, &file, identity)? {
+        Ok(enumerated) => enumerated,
+        Err(status) => return Ok(Some(status)),
+    };
+    for window in names.chunks(PAGE_NAMES) {
+        source.checkpoint()?;
+        for name in window { visitor(name, scope)?; }
+    }
+    scope.validate(source, index)?;
+    if directory_identity(source, &file)? != identity { return Err(changed()); }
     match metadata(source, directory)? {
         Observed::Object(after) if unchanged(&before, &after) => Ok(None),
         _ => Err(changed()),
@@ -633,7 +696,7 @@ fn order_names(source: &MigrationSource<'_, '_, '_>, names: &mut [Name]) -> Resu
     let key_bytes = names.iter().map(|name| name.key.len()).max().unwrap_or(0);
     order_metadata(source, names, key_bytes, |left, right| left.key.cmp(&right.key))?;
     if names.windows(2).any(|pair| pair[0].key == pair[1].key) { return Err(changed()); }
-    source.checkpoint()
+    source.poll()
 }
 
 pub(super) fn order_metadata<T>(source: &MigrationSource<'_, '_, '_>, values: &mut [T],
@@ -655,7 +718,7 @@ pub(super) fn order_metadata<T>(source: &MigrationSource<'_, '_, '_>, values: &m
     scratch.try_reserve_exact(count).map_err(|_| limit())?;
     order.extend(0..count);
     scratch.resize(count, 0);
-    merge_order(values, &compare, &mut order, &mut scratch, || source.checkpoint())?;
+    merge_order(values, &compare, &mut order, &mut scratch, || source.poll())?;
     // Convert sorted-position -> original-position into the inverse permutation.
     for (position, original) in order.into_iter().enumerate() { scratch[original] = position; }
     for position in 0..count {
@@ -665,7 +728,7 @@ pub(super) fn order_metadata<T>(source: &MigrationSource<'_, '_, '_>, values: &m
             scratch.swap(position, target);
         }
     }
-    source.checkpoint()
+    source.poll()
 }
 
 fn merge_order<T>(values: &[T], compare: &impl Fn(&T, &T) -> std::cmp::Ordering,
@@ -701,7 +764,14 @@ pub(super) fn read(
     path: &Path,
     maximum: usize,
 ) -> Result<Result<Zeroizing<Vec<u8>>, Status>, String> {
-    read_with(source, path, maximum, |bytes, _| Ok(bytes))
+    read_with(source, path, maximum, None, |bytes, _| Ok(bytes))
+}
+
+pub(super) fn read_scoped(
+    source: &MigrationSource<'_, '_, '_>, path: &Path, maximum: usize,
+    scope: &mut ParentReadScope,
+) -> Result<Result<Zeroizing<Vec<u8>>, Status>, String> {
+    read_with(source, path, maximum, Some(scope), |bytes, _| Ok(bytes))
 }
 
 /// Pass-local correlation of two qualified reads, never cached access authority.
@@ -717,10 +787,25 @@ pub(super) struct DetailedRead {
     pub(super) proof: ReadProof,
 }
 
+#[cfg(test)]
 pub(super) fn read_detailed(
     source: &MigrationSource<'_, '_, '_>, path: &Path, maximum: usize,
 ) -> Result<Result<DetailedRead, Status>, String> {
-    read_with(source, path, maximum, |bytes, native| {
+    read_detailed_in(source, path, maximum, None)
+}
+
+pub(super) fn read_detailed_scoped(
+    source: &MigrationSource<'_, '_, '_>, path: &Path, maximum: usize,
+    scope: &mut ParentReadScope,
+) -> Result<Result<DetailedRead, Status>, String> {
+    read_detailed_in(source, path, maximum, Some(scope))
+}
+
+fn read_detailed_in(
+    source: &MigrationSource<'_, '_, '_>, path: &Path, maximum: usize,
+    scope: Option<&mut ParentReadScope>,
+) -> Result<Result<DetailedRead, Status>, String> {
+    read_with(source, path, maximum, scope, |bytes, native| {
         let proof = ReadProof {
             native, raw_digest: fingerprint(source, &bytes)?, bytes: bytes.len() as u64,
         };
@@ -730,11 +815,18 @@ pub(super) fn read_detailed(
 
 fn read_with<T>(
     source: &MigrationSource<'_, '_, '_>, path: &Path, maximum: usize,
+    scope: Option<&mut ParentReadScope>,
     finish: impl FnOnce(Zeroizing<Vec<u8>>, eliot_searchd::native_file::Observation) -> Result<T, String>,
 ) -> Result<Result<T, Status>, String> {
-    let _pins = match pin_parents(source, path, false)? {
-        Ok(pins) => pins,
-        Err(status) => return Ok(Err(status)),
+    let mut parents = match scope {
+        Some(scope) => match scope.parent(source, path)? {
+            Ok(index) => ParentBinding::Scoped { scope, index },
+            Err(status) => return Ok(Err(status)),
+        },
+        None => match pin_parents(source, path, false)? {
+            Ok(pins) => ParentBinding::Local { _pins: pins },
+            Err(status) => return Ok(Err(status)),
+        },
     };
     let before = match metadata(source, path)? {
         Observed::Missing => return Ok(Err(Status::AbsentProven)),
@@ -773,6 +865,7 @@ fn read_with<T>(
     let links = eliot_searchd::native_file::hardlink_count(&file);
     source.checkpoint()?;
     if !matches!(links, Ok(1)) { return Ok(Err(Status::Gap)); }
+    parents.before_body(source, &file)?;
     source.charge(Work::Allocate(length))?;
     // Reserve clear-on-drop processing before allocating the private buffer.
     source.charge(Work::Compare(length))?;
@@ -810,6 +903,7 @@ fn read_with<T>(
     {
         return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned());
     }
+    parents.after_body(source)?;
     match metadata(source, path)? {
         Observed::Object(current) if unchanged(&held, &current) => {}
         _ => return Err("DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned()),
@@ -828,6 +922,25 @@ fn read_with<T>(
     Ok(Ok(finish(bytes, identity)?))
 }
 
+enum ParentBinding<'a> {
+    Local { _pins: Vec<File> },
+    Scoped { scope: &'a mut ParentReadScope, index: usize },
+}
+impl ParentBinding<'_> {
+    fn before_body(&mut self, source: &MigrationSource<'_, '_, '_>, file: &File) -> Result<(), String> {
+        match self {
+            Self::Local { .. } => Ok(()),
+            Self::Scoped { scope, index } => scope.leaf(source, *index, file),
+        }
+    }
+    fn after_body(&self, source: &MigrationSource<'_, '_, '_>) -> Result<(), String> {
+        match self {
+            Self::Local { .. } => Ok(()),
+            Self::Scoped { scope, index } => scope.validate(source, *index),
+        }
+    }
+}
+
 fn identity(file: &File) -> std::io::Result<eliot_searchd::native_file::Observation> {
     eliot_searchd::native_file::observe(file).map_err(std::io::Error::other)
 }
@@ -838,7 +951,7 @@ pub(super) fn fingerprint(
 ) -> Result<[u8; 32], String> {
     source.charge(Work::Compare(bytes.len()))?;
     let digest = sha256::digest(bytes);
-    source.checkpoint()?;
+    source.poll()?;
     Ok(digest)
 }
 
@@ -886,3 +999,11 @@ mod locator_tests {
         assert_ne!(bytes, encoded("\u{fffd}a"));
     }
 }
+
+#[cfg(all(test, windows))]
+#[path = "io/read_scope_tests.rs"]
+mod read_scope_tests;
+
+#[cfg(all(test, windows))]
+#[path = "io/native_v2_held_metadata_tests.rs"]
+mod native_v2_held_metadata_tests;

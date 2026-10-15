@@ -169,6 +169,21 @@ impl NativeReadOperation<'_> {
         })
     }
 
+    /// One internal ABI attempt inside a closed borrowed-FD metadata observer.
+    /// Its caller retains full registration checkpoints around the whole
+    /// observer. Path opens, body I/O and effects must use `migration_charge`.
+    pub(crate) fn migration_held_observer_dispatch(&mut self) -> Result<(), OwnerError> {
+        self.with_registration_check(RegistrationCheck::None, |_, request, work, _| {
+            #[cfg(test)]
+            {
+                work.call(request, || Ok(()))?;
+                work.arrive(request, "migration-held-observer-dispatch")
+            }
+            #[cfg(not(test))]
+            work.call(request, || Ok(()))
+        })
+    }
+
     /// Reserve one migration seam against the original invocation's allowance.
     /// Reservations grant no source mutation or new root/locator authority.
     pub(crate) fn migration_charge(
@@ -234,6 +249,19 @@ impl NativeReadOperation<'_> {
             Some((request, _)) => request,
         };
         request.credential_context().0
+    }
+
+    /// Original retained root identity for a private read-scope containment join.
+    /// Observation metadata is not a current-policy or source-serving grant.
+    pub(crate) fn migration_root_observation(
+        &mut self,
+    ) -> Result<eliot_searchd::native_file::Observation, OwnerError> {
+        self.with_binding(|binding, request, work, _| {
+            work.call(request, || {
+                eliot_searchd::native_file::observe(binding.bound_root)
+                    .map_err(|_| OwnerError::OwnerGuardMismatch)
+            })
+        })
     }
 
     /// Observe the actual child request under this retained custody, never a
@@ -656,3 +684,24 @@ mod tests;
 
 #[path = "registration_read.rs"]
 pub(super) mod registration_read;
+
+#[cfg(all(test, windows))]
+impl NativeReadOperation<'_> {
+    /// Retain the original meter and observer when adding a test adversary.
+    pub(crate) fn chain_migration_phase_hook_for_test(
+        &mut self,
+        mut hook: Box<dyn FnMut(&'static str)>,
+    ) {
+        let work = match self.context.as_mut() {
+            None => &mut self.owner.work,
+            Some((_, work)) => work,
+        };
+        let mut original = work.phase_hook.take();
+        work.phase_hook = Some(Box::new(move |phase| {
+            if let Some(observer) = original.as_mut() {
+                observer(phase);
+            }
+            hook(phase);
+        }));
+    }
+}

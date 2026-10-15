@@ -27,6 +27,7 @@ pub(super) fn family(
     root: &Path,
     target: SourceNamespaceId,
     input: &NativeMigrationInput<'_, '_, '_>,
+    revision_residue: &mut Option<super::revision_residue::View>,
 ) -> Result<(), String> {
     match family {
         Family::Owner => stream.item(
@@ -43,9 +44,9 @@ pub(super) fn family(
         Family::Sources => sources(stream, target),
         Family::Roots => roots(stream, root, input),
         Family::DirectoryManifests => manifests(stream, root, target),
-        Family::Revisions => revisions(stream, root, input),
+        Family::Revisions => revisions(stream, root, input, revision_residue),
         Family::Preparation => preparation(stream, root, Family::Preparation, false),
-        Family::Residue => residue(stream, root),
+        Family::Residue => residue(stream, root, revision_residue.as_ref().ok_or_else(changed)?),
         Family::Operations | Family::Publications | Family::Security => control(stream, root, family),
         Family::Credentials => {
             let binding = input
@@ -289,7 +290,9 @@ fn revisions(
     stream: &mut Stream<'_, '_, '_, '_>,
     root: &Path,
     input: &NativeMigrationInput<'_, '_, '_>,
+    residue: &mut Option<super::revision_residue::View>,
 ) -> Result<(), String> {
+    if residue.is_some() { return Err(changed()); }
     let source = stream.source;
     for revision in source.inventory_revisions() {
         source.charge(Work::Allocate(512))?;
@@ -334,7 +337,8 @@ fn revisions(
             [revision.byte_length, 0, 0],
         )?;
     }
-    revision_tree(stream, root, Family::Revisions, false, None)?;
+    let mut capture = super::revision_residue::Capture::new(source)?;
+    let scope = revision_tree(stream, root, Family::Revisions, false, None, Some(&mut capture))?;
     if stream.statuses.iter().all(|count| *count == 0) {
         stream.item(
             Family::Revisions,
@@ -344,6 +348,7 @@ fn revisions(
             [0; 3],
         )?;
     }
+    *residue = Some(capture.finish(scope)?);
     Ok(())
 }
 
@@ -352,7 +357,9 @@ pub(super) fn revisions_with_content(
     root: &Path,
     input: &NativeMigrationInput<'_, '_, '_>,
     content: &mut super::super::content_readback::ContentPass<'_>,
+    residue: &mut Option<super::revision_residue::View>,
 ) -> Result<(), String> {
+    if residue.is_some() { return Err(changed()); }
     let source = stream.source;
     // Keep the accepted inventory ordering: all logical kind-9 rows precede
     // physical rows. They remain inert until every referenced body is verified
@@ -365,13 +372,14 @@ pub(super) fn revisions_with_content(
     }
     let mut revisions = source.retained_revisions();
     let mut current: Option<CurrentRevision<'_, '_, '_, '_>> = None;
-    revision_tree(stream, root, Family::Revisions, false, Some(&mut |stream, id, protection, subject| {
+    let mut capture = super::revision_residue::Capture::new(source)?;
+    let scope = revision_tree(stream, root, Family::Revisions, false, Some(&mut |stream, scope, id, protection, subject| {
         if current.as_ref().is_none_or(|held| held.id != id) {
             if let Some(held) = current.take() { held.finish()?; }
             source.charge(Work::Allocate(512))?;
             let metadata = revisions.next().ok_or_else(changed)?;
             if metadata.revision_id != id { return Err(changed()); }
-            let pins = match io::PinnedRevisionRepresentations::open(source, id)? {
+            let pins = match io::PinnedRevisionRepresentations::open_scoped(source, id, scope)? {
                 Ok(pins) => pins,
                 Err(status) => {
                     stream.item(Family::Revisions,
@@ -407,12 +415,13 @@ pub(super) fn revisions_with_content(
         held.seen[index] = true;
         held.pins.verify_same_original()?.map_err(|_| changed())?;
         Ok(())
-    }))?;
+    }), Some(&mut capture))?;
     if let Some(held) = current.take() { held.finish()?; }
     if revisions.next().is_some() { return Err(changed()); }
     if stream.statuses.iter().all(|count| *count == 0) {
         stream.item(Family::Revisions, Status::AbsentProven, 9, [ZERO; 3], [0; 3])?;
     }
+    *residue = Some(capture.finish(scope)?);
     Ok(())
 }
 
@@ -458,6 +467,7 @@ const fn protection_index(protection: LegacyRevisionProtection) -> usize {
 
 type RevisionCapture<'visitor> = dyn for<'stream, 'view, 'operation, 'owner> FnMut(
     &mut Stream<'stream, 'view, 'operation, 'owner>,
+    &mut io::ParentReadScope,
     &str,
     LegacyRevisionProtection,
     [u8; 32],
@@ -469,25 +479,30 @@ fn revision_tree(
     family: Family,
     residue_only: bool,
     mut captured: Option<&mut RevisionCapture<'_>>,
-) -> Result<(), String> {
+    mut residue: Option<&mut super::revision_residue::Capture>,
+) -> Result<io::ParentReadScope, String> {
     let source = stream.source;
     let directory = root.join(LEGACY_REVISION_DIRECTORY);
-    let outcome = io::visit(source, &directory, |shard| {
+    // This scope is rebuilt independently for every traversal and source pass.
+    // It retains containment custody only; enumerate/read still dispatch fresh
+    // absolute LIST/READ checks at each endpoint.
+    let mut scope = io::ParentReadScope::new();
+    let root_slot = revision_slot(stream, &mut residue, true)?;
+    let outcome = io::visit_scoped(source, &mut scope, &directory, |shard, scope| {
         let path = directory.join(&shard.value);
         if !shard
             .value
             .to_str()
             .is_some_and(is_legacy_revision_inventory_shard)
         {
-            return stream.item(
-                family,
-                Status::Unsupported,
-                10,
-                [io::locator(source, &path)?, ZERO, ZERO],
-                [0; 3],
-            );
+            let slot = revision_slot(stream, &mut residue, true)?;
+            return revision_row(stream, family, &mut residue, slot, super::revision_residue::Row {
+                status: Status::Unsupported, kind: 10,
+                refs: [io::locator(source, &path)?, ZERO, ZERO], counts: [0; 3],
+            });
         }
-        let outcome = io::visit(source, &path, |name| {
+        let directory_slot = revision_slot(stream, &mut residue, true)?;
+        let outcome = io::visit_scoped(source, scope, &path, |name, scope| {
             let subject = io::child_locator(source, &path, &name.value)?;
             let classified = name
                 .value
@@ -500,13 +515,11 @@ fn revision_tree(
                         .to_str()
                         .is_some_and(|shard| value.id().starts_with(shard))
                     {
-                        return stream.item(
-                            family,
-                            Status::Corrupt,
-                            10,
-                            [subject, ZERO, digest(value.id())?],
-                            [0; 3],
-                        );
+                        let slot = revision_slot(stream, &mut residue, true)?;
+                        return revision_row(stream, family, &mut residue, slot, super::revision_residue::Row {
+                            status: Status::Corrupt, kind: 10,
+                            refs: [subject, ZERO, digest(value.id())?], counts: [0; 3],
+                        });
                     }
                     let referenced = source.retained_revision(value.id()).is_some();
                     let temporary = value.physical_kind() == LegacyRevisionPhysicalKind::Temporary;
@@ -517,7 +530,12 @@ fn revision_tree(
                         && let LegacyRevisionPhysicalKind::Final(protection) = value.physical_kind()
                         && let Some(consume) = captured.as_deref_mut()
                     {
-                        return consume(stream, value.id(), protection, subject);
+                        let slot = revision_slot(stream, &mut residue, false)?;
+                        consume(stream, scope, value.id(), protection, subject)?;
+                        if let Some(slot) = slot {
+                            residue.as_deref_mut().ok_or_else(changed)?.complete(slot, None)?;
+                        }
+                        return Ok(());
                     }
                     (
                         if temporary || !referenced {
@@ -531,34 +549,54 @@ fn revision_tree(
                 }
                 None => (Status::Unsupported, 10, ZERO),
             };
-            match io::read(
+            let retain = classified.is_none_or(|value| {
+                value.physical_kind() == LegacyRevisionPhysicalKind::Temporary
+                    || source.retained_revision(value.id()).is_none()
+            });
+            let slot = revision_slot(stream, &mut residue, retain)?;
+            let row = match io::read_scoped(
                 source,
                 &path.join(&name.value),
                 LEGACY_REVISION_MAX_OBJECT_BYTES,
+                scope,
             )? {
-                Ok(bytes) => stream.item(
-                    family,
-                    status,
-                    kind,
-                    [subject, io::fingerprint(source, &bytes)?, reference],
-                    [bytes.len() as u64, 0, 0],
-                ),
-                Err(observed) => stream.item(
-                    family,
-                    if observed == Status::AbsentProven {
-                        Status::Gap
-                    } else {
-                        observed
-                    },
-                    kind,
-                    [subject, ZERO, reference],
-                    [0; 3],
-                ),
-            }
+                Ok(bytes) => super::revision_residue::Row { status, kind,
+                    refs: [subject, io::fingerprint(source, &bytes)?, reference],
+                    counts: [bytes.len() as u64, 0, 0] },
+                Err(observed) => super::revision_residue::Row {
+                    status: if observed == Status::AbsentProven { Status::Gap } else { observed },
+                    kind, refs: [subject, ZERO, reference], counts: [0; 3] },
+            };
+            revision_row(stream, family, &mut residue, slot, row)
         })?;
-        directory_outcome(stream, family, &path, outcome)
+        revision_outcome(stream, family, &mut residue, directory_slot, &path, outcome)
     })?;
-    directory_outcome(stream, family, &directory, outcome)
+    revision_outcome(stream, family, &mut residue, root_slot, &directory, outcome)?;
+    Ok(scope)
+}
+
+fn revision_slot(stream: &Stream<'_, '_, '_, '_>, capture: &mut Option<&mut super::revision_residue::Capture>,
+    retain: bool,
+) -> Result<Option<super::revision_residue::Reservation>, String> {
+    capture.as_deref_mut().map(|capture| capture.reserve(stream.source, &stream.encoder, retain)).transpose()
+}
+
+fn revision_row(stream: &mut Stream<'_, '_, '_, '_>, family: Family,
+    capture: &mut Option<&mut super::revision_residue::Capture>,
+    slot: Option<super::revision_residue::Reservation>, row: super::revision_residue::Row,
+) -> Result<(), String> {
+    if let Some(slot) = slot { capture.as_deref_mut().ok_or_else(changed)?.complete(slot, Some(row))?; }
+    stream.item(family, row.status, row.kind, row.refs, row.counts)
+}
+
+fn revision_outcome(stream: &mut Stream<'_, '_, '_, '_>, family: Family,
+    capture: &mut Option<&mut super::revision_residue::Capture>,
+    slot: Option<super::revision_residue::Reservation>, directory: &Path, outcome: Option<Status>,
+) -> Result<(), String> {
+    let (status, kind) = outcome.map_or((Status::Present, 36), |status| (status, 16));
+    revision_row(stream, family, capture, slot, super::revision_residue::Row {
+        status, kind, refs: [io::locator(stream.source, directory)?, ZERO, ZERO], counts: [0; 3],
+    })
 }
 
 fn preparation(
@@ -654,7 +692,7 @@ fn preparation_decoded(source: &super::MigrationSource<'_, '_, '_>,
         && verify_legacy_preparation_manifest::<PreparationRepresentationDigest>(decoded, binding,
             crate::direct_preparation::CANONICAL_MATERIALIZER_REVISION,
             crate::direct_preparation::CANONICAL_UNITIZER_REVISION).is_ok();
-    source.checkpoint()?;
+    source.poll()?;
     Ok(Row { status: if valid { Status::Present } else { Status::Corrupt }, kind: 29,
         refs, counts: [reference.manifest_bytes(), u64::from(reference.protection().tag()), 0] })
 }
@@ -687,18 +725,27 @@ fn preparation_directory(stream: &mut Stream<'_, '_, '_, '_>,
 fn preparation_physical(stream: &mut Stream<'_, '_, '_, '_>, root: &Path,
     view: &mut super::preparation_links::View,
 ) -> Result<(), String> {
+    let mut scope = view.take_read_scope();
+    let result = preparation_physical_scoped(stream, root, view, &mut scope);
+    view.restore_read_scope(scope);
+    result
+}
+
+fn preparation_physical_scoped(stream: &mut Stream<'_, '_, '_, '_>, root: &Path,
+    view: &mut super::preparation_links::View, scope: &mut io::ParentReadScope,
+) -> Result<(), String> {
     use super::preparation_links::Row;
     let source = stream.source;
     let base = root.join(LEGACY_PREPARATION_DIRECTORY);
     for tree in [PrepTree::References, PrepTree::Objects] {
         let directory = base.join(tree.directory_name());
-        let outcome = io::visit(source, &directory, |shard| {
+        let outcome = io::visit_scoped(source, scope, &directory, |shard, scope| {
             let path = directory.join(&shard.value);
             if !shard.value.to_str().is_some_and(is_legacy_revision_inventory_shard) {
                 return preparation_item(stream, view, Row { status: Status::Unsupported, kind: 12,
                     refs: [io::locator(source, &path)?, ZERO, ZERO], counts: [0; 3] }, true);
             }
-            let outcome = io::visit(source, &path, |name| {
+            let outcome = io::visit_scoped(source, scope, &path, |name, scope| {
                 let subject = io::child_locator(source, &path, &name.value)?;
                 let classified = name.value.to_str()
                     .and_then(|name| classify_legacy_preparation_inventory_name(tree, name));
@@ -716,7 +763,7 @@ fn preparation_physical(stream: &mut Stream<'_, '_, '_, '_>, root: &Path,
                     return preparation_item(stream, view, Row { status: Status::Corrupt, kind: 12,
                         refs: [subject, ZERO, digest(value.id())?], counts: [0; 3] }, true);
                 }
-                let read = io::read_detailed(source, &path.join(&name.value), LEGACY_REVISION_MAX_OBJECT_BYTES)?;
+                let read = io::read_detailed_scoped(source, &path.join(&name.value), LEGACY_REVISION_MAX_OBJECT_BYTES, scope)?;
                 view.observe(source, tree, subject,
                     read.as_ref().map(|read| read.proof).map_err(|status| *status))?;
                 let positive = status == Status::Present && read.is_ok();
@@ -801,7 +848,7 @@ fn preparation_manifest(
     let decoded = verify_legacy_preparation_manifest::<PreparationRepresentationDigest>(
         bytes, binding, crate::direct_preparation::CANONICAL_MATERIALIZER_REVISION,
         crate::direct_preparation::CANONICAL_UNITIZER_REVISION);
-    source.checkpoint()?;
+    source.poll()?;
     Ok(match decoded {
         Ok(manifest) => {
             let binding_digest = io::fingerprint(source, binding)?;
@@ -850,8 +897,11 @@ fn unknown_preparation_children(
     })?;
     directory_outcome(stream, Family::Residue, &directory, outcome)
 }
-fn residue(stream: &mut Stream<'_, '_, '_, '_>, root: &Path) -> Result<(), String> {
-    revision_tree(stream, root, Family::Residue, true, None)?;
+fn residue(stream: &mut Stream<'_, '_, '_, '_>, root: &Path,
+    revisions: &super::revision_residue::View,
+) -> Result<(), String> {
+    revisions.preflight(&stream.encoder)?;
+    revisions.project(stream.source, |row| stream.item(Family::Residue, row.status, row.kind, row.refs, row.counts))?;
     preparation(stream, root, Family::Residue, true)?;
     control(stream, root, Family::Residue)?;
     unknown_preparation_children(stream, root)?;
@@ -940,6 +990,10 @@ pub(super) fn digest(value: &str) -> Result<[u8; 32], String> {
 pub(super) fn changed() -> String {
     "DIRECT_MIGRATION_INVENTORY_CHANGED".to_owned()
 }
+
+#[cfg(all(test, windows))]
+#[path = "revision_residue_tests.rs"]
+mod revision_residue_tests;
 
 #[cfg(all(test, windows))]
 mod co_production_tests {
@@ -1270,6 +1324,31 @@ mod revision_pin_tests {
         assert!(held.verify_readback(LegacyRevisionProtection::Plaintext, None).is_err());
         fs::write(scratch.path(LegacyRevisionProtection::Protected), b"late wire").expect("new counterpart");
         assert!(held.verify_same_original().is_err(), "late presence cannot match prior absence");
+    }
+
+    #[test]
+    fn scoped_revision_retains_parent_custody_after_scope_release_and_rechecks_absence() {
+        let scratch = Scratch::new();
+        let plain = scratch.path(LegacyRevisionProtection::Plaintext);
+        fs::write(&plain, b"plain").expect("plain");
+        let store = scratch.store();
+        let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(30), None);
+        let mut scope = super::io::ParentReadScope::new();
+        let held = PinnedRevisionRepresentations::open_scoped(&source, REVISION, &mut scope)
+            .expect("qualified scope").unwrap_or_else(|_| panic!("pins refused"));
+        drop(scope);
+        let shard = plain.parent().unwrap();
+        let moved = scratch.root.join("revisions/moved");
+        assert!(fs::rename(shard, &moved).is_err(), "retained chain denies parent replacement");
+        assert!(OpenOptions::new().write(true).open(&plain).is_err(), "original body remains pinned");
+        assert_eq!(fs::read(&plain).unwrap(), b"plain", "fresh source read remains allowed");
+        held.verify_same_original().expect("unchanged chain")
+            .unwrap_or_else(|_| panic!("verification refused"));
+        fs::write(scratch.path(LegacyRevisionProtection::Protected), b"late wire").expect("late counterpart");
+        assert!(held.verify_same_original().is_err(), "held parents do not cache absence");
+        drop(held);
+        fs::rename(shard, &moved).expect("last retained chain released");
+        fs::rename(&moved, shard).expect("restore fixture locator");
     }
 
     #[test]

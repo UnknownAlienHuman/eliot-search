@@ -47,6 +47,8 @@ mod scan;
 mod preparation_links;
 #[path = "control_migration_inventory/control_view.rs"]
 mod control_view;
+#[path = "control_migration_inventory/revision_residue.rs"]
+mod revision_residue;
 
 type BootstrapDispatch<'a> = (&'a mut search_control_redb::MigrationBootstrap,
     &'a dyn Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), String>);
@@ -307,15 +309,18 @@ fn compile_inventory(
         })
         .map_err(codec_reason)?;
     stream.send(&row)?;
+    // Each compile owns a fresh physical revision denominator and drops it
+    // before the independent next source pass. Stream constructors are unchanged.
+    let mut revision_residue = None;
     for family in Family::ALL {
         stream.statuses = [0; 7];
         stream.complete = true;
         if let Some(content) = content.as_deref_mut() && family == Family::Revisions {
-            scan::revisions_with_content(&mut stream, root, input, content)?;
+            scan::revisions_with_content(&mut stream, root, input, content, &mut revision_residue)?;
         } else if let Some(mapping) = mapping.as_deref_mut() && family == Family::Sources {
             scan::sources_from_mapping(&mut stream, target, input, mapping)?;
         } else {
-            scan::family(&mut stream, family, root, target, input)?;
+            scan::family(&mut stream, family, root, target, input, &mut revision_residue)?;
         }
         let terminal = stream.terminal();
         stream.reserve_row()?;
