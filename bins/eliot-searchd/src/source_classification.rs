@@ -73,7 +73,15 @@ fn pem_private_key_header(bytes: &[u8]) -> bool {
         .split(|byte| *byte == b'\n' || *byte == b'\r')
         .next()
         .is_some_and(|line| {
-            line.starts_with(b"-----BEGIN ") && line.ends_with(b" PRIVATE KEY-----")
+            matches!(
+                line,
+                b"-----BEGIN PRIVATE KEY-----"
+                    | b"-----BEGIN ENCRYPTED PRIVATE KEY-----"
+                    | b"-----BEGIN RSA PRIVATE KEY-----"
+                    | b"-----BEGIN EC PRIVATE KEY-----"
+                    | b"-----BEGIN DSA PRIVATE KEY-----"
+                    | b"-----BEGIN OPENSSH PRIVATE KEY-----"
+            )
         })
 }
 

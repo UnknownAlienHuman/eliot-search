@@ -286,17 +286,19 @@ pub fn evaluate_pre_read_v2(
         .metadata()
         .unavailable_fields()
         .all(|field| matches!(field.as_str(), "binary-flag" | "sensitivity"));
+    let is_deferred = |name: &str| observation.metadata().unavailable_fields().any(|field| field == name);
     let outcome = match decision.outcome() {
         AdmissionOutcome::Deny => PreReadOutcome::Deny,
         AdmissionOutcome::Unsupported => PreReadOutcome::Unsupported,
         AdmissionOutcome::ReviewRequired
-            if deferred_only
+            if has_unavailable
+                && deferred_only
                 && decision.reason_codes().iter().all(|reason| {
-                    matches!(
-                        reason,
-                        AdmissionReasonCode::ReviewSensitivityUnknown
-                            | AdmissionReasonCode::ReviewMetadataUnavailable
-                    )
+                    match reason {
+                        AdmissionReasonCode::ReviewSensitivityUnknown => is_deferred("sensitivity"),
+                        AdmissionReasonCode::ReviewMetadataUnavailable => is_deferred("binary-flag"),
+                        _ => false,
+                    }
                 }) => PreReadOutcome::Proceed,
         AdmissionOutcome::ReviewRequired => PreReadOutcome::ReviewRequired,
         AdmissionOutcome::Allow if !has_unavailable => PreReadOutcome::Proceed,
