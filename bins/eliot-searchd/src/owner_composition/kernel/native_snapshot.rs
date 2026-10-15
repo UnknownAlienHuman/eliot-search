@@ -7,7 +7,9 @@ use search_runtime_owner::{OwnerError, RootOpenState};
 
 use super::codec::{parse_digest32, parse_id16};
 use super::installation::InstallationBinding;
-use super::native_objects::{NativePins, metadata, native_identity, open_existing, read_bytes};
+use super::native_objects::{
+    NativePins, metadata, native_identity, open_existing, open_existing_with_metadata, read_bytes,
+};
 use super::native_request::{NativeRootRequest, NativeWork, native_argument};
 use super::observation::{ObservedRoot, hash_executable_file, observe_root_parts};
 use super::record::DurableOwnerRecord;
@@ -149,10 +151,7 @@ pub(super) fn executable_digest(
         fs::canonicalize(&path).map_err(|_| OwnerError::DataRootInvalid)
     })?;
     let _ = native_argument(canonical.as_os_str(), 256 * 1024)?;
-    let mut file = open_existing(request, work, &canonical, false, false)?;
-    let before = work.call(request, || {
-        file.metadata().map_err(|_| OwnerError::DataRootInvalid)
-    })?;
+    let (mut file, before) = open_existing_with_metadata(request, work, &canonical, false, false)?;
     if before.len() > 64 * 1024 * 1024 {
         return Err(OwnerError::ContractExhausted);
     }

@@ -115,6 +115,46 @@ impl Drop for Scratch {
 }
 
 #[test]
+fn opened_metadata_uses_original_dispatch_allowance() {
+    use super::super::native_objects::open_existing_with_metadata;
+    use super::super::native_request::NativeRootLimits;
+
+    let scratch = Scratch::empty();
+    let path = scratch.0.join("opened-metadata");
+    let body = b"same opened object";
+    fs::write(&path, body).unwrap();
+    let req = NativeRootRequest::new(
+        DataRootOpenMode::InspectExistingReadOnly,
+        &[
+            OsString::from("native-fixture"),
+            scratch.0.as_os_str().to_owned(),
+        ],
+        Instant::now() + Duration::from_secs(120),
+        Arc::new(AtomicBool::new(false)),
+        // Original entropy + path metadata + open + opened-handle metadata.
+        NativeRootLimits::new([256, 256 * 1024, 512 * 1024, 1024, 4, 1]).unwrap(),
+    )
+    .unwrap();
+    let mut work = NativeWork::new();
+    let (mut file, opened) =
+        open_existing_with_metadata(&req, &mut work, &path, false, false).unwrap();
+    assert!(opened.is_file());
+    assert_eq!(opened.len(), body.len() as u64);
+    let mut readback = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut readback).unwrap();
+    assert_eq!(readback, body);
+    let mut dispatched = false;
+    assert_eq!(
+        work.call(&req, || {
+            dispatched = true;
+            Ok(())
+        }),
+        Err(OwnerError::ContractExhausted)
+    );
+    assert!(!dispatched);
+}
+
+#[test]
 fn original_request_survives_argv_drop_and_terminal_cancellation_is_shared() {
     let flag = Arc::new(AtomicBool::new(false));
     let mut args = vec![

@@ -56,6 +56,17 @@ pub(super) fn open_existing(
     directory: bool,
     writable: bool,
 ) -> Result<File, OwnerError> {
+    open_existing_with_metadata(request, work, path, directory, writable).map(|(file, _)| file)
+}
+
+/// Returns the metadata already observed on this opened handle, without another dispatch.
+pub(super) fn open_existing_with_metadata(
+    request: &NativeRootRequest,
+    work: &mut NativeWork,
+    path: &Path,
+    directory: bool,
+    writable: bool,
+) -> Result<(File, Metadata), OwnerError> {
     open_with_sharing(request, work, path, directory, writable, 3)
 }
 
@@ -66,7 +77,7 @@ pub(super) fn open_initialization(
     path: &Path,
     directory: bool,
 ) -> Result<File, OwnerError> {
-    open_with_sharing(request, work, path, directory, false, 1)
+    open_with_sharing(request, work, path, directory, false, 1).map(|(file, _)| file)
 }
 
 fn open_with_sharing(
@@ -76,7 +87,7 @@ fn open_with_sharing(
     directory: bool,
     writable: bool,
     sharing: u32,
-) -> Result<File, OwnerError> {
+) -> Result<(File, Metadata), OwnerError> {
     let before = metadata(request, work, path)?.ok_or(OwnerError::OwnerRecoveryEvidenceMissing)?;
     require_kind(&before, directory)?;
     work.open(request)?;
@@ -100,7 +111,7 @@ fn open_with_sharing(
         file.metadata().map_err(|_| OwnerError::OwnerGuardMismatch)
     })?;
     require_kind(&opened, directory)?;
-    Ok(file)
+    Ok((file, opened))
 }
 
 /// Fixed ordered native profile. It does not attest file contents or a store.
