@@ -1,5 +1,13 @@
 # Function contract — `eliot-searchd`
 
+Native executable verification hashes fresh bytes at every full fence. The
+native caller uses admitted heap scratch up to 1 MiB and the actual opened length,
+charges each requested read/short-read attempt, and verifies one-byte EOF before
+the unchanged post-read metadata and fresh-locator/native-identity comparison.
+The 64 MiB image bound, two opens, original context and owner-executable v1 BLAKE3
+transcript remain; the legacy reader is unchanged. This reduces owner I/O seam
+reservations without caching the image or changing a resource ceiling.
+
 The offline `--stage-source-control-migration ROOT TARGET_UUID OUTPUT_DIRECTORY`
 route keeps the original native read operation, registration/protector custody,
 deadline, allowance and output pins. It composes completed bootstrap inventory,
