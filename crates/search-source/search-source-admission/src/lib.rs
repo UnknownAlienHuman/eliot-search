@@ -56,6 +56,10 @@ pub mod policy_v2;
 /// Versioned original-input retention and exact historical admission restoration.
 pub mod original_envelope;
 
+/// Explicit complete defaults for fresh Root metadata registration only.
+pub mod bootstrap_v1;
+pub use bootstrap_v1::{bootstrap_policy_evidence_v1, compile_bootstrap_policy_v1};
+
 // ---------------------------------------------------------------------------
 // Closed constants
 // ---------------------------------------------------------------------------

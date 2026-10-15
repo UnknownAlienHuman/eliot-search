@@ -22,6 +22,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 static NEXT: AtomicU64 = AtomicU64::new(0);
+#[path = "tests/original_context.rs"]
+mod original_context;
 #[derive(Clone, Debug)]
 struct Cancel;
 impl PackageOpaque for Cancel {

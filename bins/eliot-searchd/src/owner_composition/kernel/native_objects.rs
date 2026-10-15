@@ -116,7 +116,25 @@ fn open_with_sharing(
 
 /// Fixed ordered native profile. It does not attest file contents or a store.
 pub(super) struct NativePins {
+    pub(super) direct: Option<DirectPin>,
     pub(super) files: Vec<File>,
+}
+
+/// Auxiliary custody constructed only after the real Direct journal has verified.
+pub(super) struct DirectPin { file: File, observed: Vec<u8> }
+impl DirectPin {
+    pub(super) const fn borrow_file(&self) -> &File { &self.file }
+    pub(super) const fn verified(file: File, observed: Vec<u8>) -> Self { Self { file, observed } }
+    pub(super) fn check(&self, request: &NativeRootRequest, work: &mut NativeWork, root: &Path) -> Result<(), OwnerError> {
+        let current = open_existing(request, work, &root.join("control/control.redb"), false, false)?;
+        for file in [&self.file, &current] {
+            if work.call(request, || native_identity(file))? != self.observed
+                || work.call(request, || eliot_searchd::native_file::hardlink_count(file).map_err(|_| OwnerError::OwnerGuardMismatch))? != 1 {
+                return Err(OwnerError::OwnerGuardMismatch);
+            }
+        }
+        request.check()
+    }
 }
 
 impl NativePins {
@@ -154,7 +172,7 @@ impl NativePins {
             &root.join(super::initialization_journal::JOURNAL_FILE),
             false,
         )?);
-        Ok(Self { files })
+        Ok(Self { files, direct: None })
     }
     pub(super) fn acquire_with_journal(
         request: &NativeRootRequest,
@@ -188,7 +206,7 @@ impl NativePins {
                 mutation && matches!(index, 6 | 7),
             )?);
         }
-        Ok(Self { files })
+        Ok(Self { files, direct: None })
     }
 
     pub(super) fn digest(

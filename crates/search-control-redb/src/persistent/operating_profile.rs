@@ -5,7 +5,7 @@ use super::{
     Boundary, ControlCallError, ControlCommitReceipt, ControlError, ControlKey, ControlMutation,
     JournalIdentity, JournalLimits, JournalReadSnapshot, MutationId, PersistentControlJournal,
     PublicationVisibilityState, RECORDS, ReadTransaction, decode_value, map_storage_error,
-    map_table_error, operation_from, request_fingerprint,
+    map_table_error, operation_from_checked, request_fingerprint,
 };
 use crate::conditions::bind_conditions;
 use crate::{
@@ -344,7 +344,7 @@ pub(super) fn validate_snapshot(
     }
     let header = journal.header_from(read)?;
     check.check(Point::ReadOperation)?;
-    let operation = operation_from(read, record.operation, &header, journal.limits)?
+    let operation = operation_from_checked(read, record.operation, &header, journal.limits, check)?
         .ok_or(ControlError::StoreCorrupt)?;
     let original_identity = JournalIdentity {
         owner_epoch: record.epoch,

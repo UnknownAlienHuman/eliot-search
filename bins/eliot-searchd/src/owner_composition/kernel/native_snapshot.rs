@@ -49,6 +49,27 @@ pub(super) fn barriers(
     work: &mut NativeWork,
     root: &Path,
 ) -> Result<Option<RootOpenState>, OwnerError> {
+    barriers_with_direct(request, work, root, None)
+}
+
+pub(super) fn barriers_with_direct(
+    request: &NativeRootRequest, work: &mut NativeWork, root: &Path,
+    direct: Option<&super::native_objects::DirectPin>,
+) -> Result<Option<RootOpenState>, OwnerError> {
+    if let Some(pin) = direct { pin.check(request, work, root)?; }
+    let state = barriers_before_direct(request, work, root)?;
+    if state.is_some() { return Ok(state); }
+    if direct.is_none() && metadata(request, work, &root.join("control/control.redb"))?.is_some() {
+        return Ok(Some(RootOpenState::Unsupported));
+    }
+    Ok(None)
+}
+
+// Acquisition-only observation. It never returns an admitted root capability;
+// the closed DIRECT owner must install a verified pin before final verification.
+pub(super) fn barriers_before_direct(
+    request: &NativeRootRequest, work: &mut NativeWork, root: &Path,
+) -> Result<Option<RootOpenState>, OwnerError> {
     for name in [
         "control/catalog-quarantine.marker",
         "control/catalog-quarantine.tmp",
@@ -59,7 +80,7 @@ pub(super) fn barriers(
         }
     }
     // No writable redb open, sealed secret access or recovery in this profile.
-    for name in ["control/control.redb", "sealed-revisions"] {
+    for name in ["sealed-revisions"] {
         if metadata(request, work, &root.join(name))?.is_some() {
             return Ok(Some(RootOpenState::Unsupported));
         }

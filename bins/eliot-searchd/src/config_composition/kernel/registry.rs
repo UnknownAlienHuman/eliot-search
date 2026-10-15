@@ -78,8 +78,25 @@ pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
             lexical_section()?,
             query_section()?,
             optional_section()?,
+            root_locator_section()?,
         ],
         daemon_limits(),
+    )
+}
+
+fn root_locator_section() -> Result<ConfigSectionDescriptor, ConfigError> {
+    ConfigSectionDescriptor::new(
+        section_name("source_root_locators")?, owner_name("eliot-searchd")?,
+        NonZeroU64::MIN, ReloadClass::SecurityBarrier,
+        section_registry_digest("source_root_locators", "eliot-searchd", 1, &[("entries", "string-list")]),
+        SecretPolicy::ForbidPlaintext,
+        [make_field(FieldSpec {
+            key: "entries", kind: ConfigValueKind::StringList,
+            default: ConfigValue::StringList(Vec::new()), allowed: &[ConfigSourceKind::File],
+            reset_allowed: false, floor: SecurityFloor::None,
+            redaction: RedactionPolicy::PathDigest,
+            actions: &[ReconfigurationAction::SecurityBarrier],
+        })?], daemon_limits(),
     )
 }
 

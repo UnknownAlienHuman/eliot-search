@@ -34,7 +34,7 @@ pub use persistent::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBoo
     MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
     MigrationBootstrapPlatform, MigrationBootstrapReceipt, MigrationBootstrapWork};
 pub use persistent::{BoundControlJournal, ControlPortCommand, ControlPortError, control_mutation_identity};
-pub use persistent::{RegistryStateFamily, RegistryStateKey, RegistryStateChange,
+pub use persistent::{registry_operation_value_len, RegistryStateFamily, RegistryStateKey, RegistryStateChange,
     RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
     RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,
     RegistryOperationLookup, RegistryOperationObservation};

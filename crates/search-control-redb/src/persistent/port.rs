@@ -226,6 +226,19 @@ impl<C: CancellationProbe> ControlSnapshotPort for BoundControlJournal<'_, C> {
 }
 
 impl<C: CancellationProbe> BoundControlJournal<'_, C> {
+    /// Complete bounded registry recovery metadata from this same journal.
+    ///
+    /// # Errors
+    /// Pending, corrupt, foreign or interrupted reads fail closed.
+    pub fn read_registry_snapshot(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<super::RegistryReadSnapshot, ControlPortError> {
+        self.journal
+            .read_registry_snapshot(context)
+            .map_err(|error| failure(error, None))
+    }
+
     /// Actual limits of the executing borrowed journal.
     #[must_use]
     pub const fn limits(&self) -> crate::JournalLimits { self.journal.limits() }
@@ -395,3 +408,5 @@ fn admission_failure(error: ControlError) -> ControlPortError {
 
 #[cfg(test)]
 mod tests;
+
+mod original_registry;

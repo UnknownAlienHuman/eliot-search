@@ -27,7 +27,7 @@ fn direct_file(extra: &str) -> ConfigDocument {
 fn registry_mirrors_declared_owners_and_reload_classes() {
     let registry = daemon_registry().expect("registry");
     assert_eq!(registry.config_schema_version(), 2);
-    assert_eq!(registry.len(), 7);
+    assert_eq!(registry.len(), 8);
     let owner = |section: &str| {
         registry
             .section(

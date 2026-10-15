@@ -285,33 +285,51 @@ impl MigrationBootstrapReceipt {
     }
 }
 
-struct OriginalCheck<'a, F, E> {
+pub(in crate::persistent) struct OriginalCheck<'a, F, E> {
     deadline: Instant,
     callback: &'a F,
     first: RefCell<Option<E>>,
+    registry: bool,
+    stopped: std::cell::Cell<Option<ControlError>>,
 }
 impl<'a, F, E> OriginalCheck<'a, F, E> {
     const fn new(deadline: Instant, callback: &'a F) -> Self {
-        Self { deadline, callback, first: RefCell::new(None) }
+        Self { deadline, callback, first: RefCell::new(None), registry: false,
+            stopped: std::cell::Cell::new(None) }
     }
-    fn failure(self, control: ControlError) -> MigrationBootstrapFailure<E> {
+    pub(in crate::persistent) const fn registry(deadline: Instant, callback: &'a F) -> Self {
+        Self { deadline, callback, first: RefCell::new(None), registry: true,
+            stopped: std::cell::Cell::new(None) }
+    }
+    pub(in crate::persistent) fn failure(self, control: ControlError) -> MigrationBootstrapFailure<E> {
         MigrationBootstrapFailure { control, first_context: self.first.into_inner() }
     }
+    pub(in crate::persistent) const fn interrupted(&self) -> bool { self.stopped.get().is_some() }
 }
 impl<F: Fn(MigrationBootstrapWork) -> Result<(), E>, E> OriginalCheck<'_, F, E> {
     fn reserve(&self, work: MigrationBootstrapWork) -> Result<(), ControlError> {
+        if let Some(error) = self.stopped.get() { return Err(error); }
+        if self.registry && Instant::now() >= self.deadline {
+            self.stopped.set(Some(ControlError::BudgetExceeded));
+            return Err(ControlError::BudgetExceeded);
+        }
         if self.first.borrow().is_some() { return Err(ControlError::ReadCancelled); }
         if let Err(error) = (self.callback)(work) {
             *self.first.borrow_mut() = Some(error);
+            self.stopped.set(Some(ControlError::ReadCancelled));
             return Err(ControlError::ReadCancelled);
         }
-        if Instant::now() >= self.deadline { return Err(ControlError::BudgetExceeded); }
+        if Instant::now() >= self.deadline {
+            self.stopped.set(Some(ControlError::BudgetExceeded));
+            return Err(ControlError::BudgetExceeded);
+        }
         Ok(())
     }
 }
 impl<F: Fn(MigrationBootstrapWork) -> Result<(), E>, E> Check for OriginalCheck<'_, F, E> {
     fn check(&self, point: Point) -> Result<(), ControlError> {
         use MigrationBootstrapWork as Work;
+        if self.registry { return self.reserve(Work::Checkpoint); }
         let work = match point {
             Point::BeforeOpen => {
                 self.reserve(Work::Allocate(super::CACHE_BYTES))?;
@@ -319,10 +337,15 @@ impl<F: Fn(MigrationBootstrapWork) -> Result<(), E>, E> Check for OriginalCheck<
             }
             Point::BeforeWrite | Point::BeforeCommit => Work::Write(0),
             Point::StageRecord => Work::Write(8192),
-            Point::ReadHeader | Point::ReadRecord | Point::ReadOperation | Point::Readback => Work::Read(8192),
+            Point::ReadHeader | Point::ReadRecord | Point::ReadOperation | Point::Readback => {
+                Work::Read(8192)
+            }
             _ => Work::Checkpoint,
         };
         self.reserve(work)
+    }
+    fn reserve(&self, work: MigrationBootstrapWork) -> Result<(), ControlError> {
+        if self.registry { OriginalCheck::reserve(self, work) } else { Ok(()) }
     }
 }
 

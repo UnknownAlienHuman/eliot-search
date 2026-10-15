@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use crate::owner_composition::{
-    NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing, initialize_new,
+    NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing,
 };
 use search_runtime_owner::{DataRootOpenMode, DrainReason, OwnerError, RootOpenState};
 
@@ -43,7 +43,7 @@ pub fn maybe_run() -> Option<ExitCode> {
             NativeRootLimits::new([256, 256 * 1024, 512 * 1024, 1024 * 1024 * 1024, 16384, 256])?,
         )?;
         if mode == DataRootOpenMode::InitializeNew {
-            return initialize_new(request)?.emit(&mut std::io::stdout().lock());
+            return crate::owner_composition::initialize_direct(request)?.emit(&mut std::io::stdout().lock());
         }
         match admit_existing(request)? {
             NativeRootAdmission::Unavailable(state, request) => {

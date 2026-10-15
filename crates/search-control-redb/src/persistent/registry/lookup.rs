@@ -1,8 +1,8 @@
 //! Targeted normal-path reads. No catalog/history replay or semantic callbacks.
 use super::super::operation::{Budget, Check, Point};
 use super::super::{
-    ControlCallError, Header, PersistentControlJournal, RECORDS, ReadTransaction, decode_value,
-    map_storage_error, map_table_error, operation_from,
+    ControlCallError, Header, PersistentControlJournal, RECORDS, ReadTransaction,
+    map_storage_error, map_table_error, operation_from_checked, decode_value_checked,
 };
 use super::{
     PREFIX, REVISION, RegistryOperationEnvelope, RegistryOperationLookup,
@@ -88,9 +88,12 @@ impl PersistentControlJournal {
             return Err(ControlError::BudgetExceeded);
         }
         let mut seen = BTreeSet::new();
+        check.reserve(super::super::MigrationBootstrapWork::Allocate(keys.len()
+            .checked_mul(std::mem::size_of::<ControlKey>() + 64).ok_or(ControlError::BudgetExceeded)?))?;
         let mut physical = Vec::with_capacity(keys.len());
         for key in keys {
             check.check(Point::PlanRecord)?;
+            check.reserve(super::super::MigrationBootstrapWork::Allocate(codec::key_size(key)?.checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
             if !seen.insert(key) {
                 return Err(ControlError::DuplicateMutationKey);
             }
@@ -111,7 +114,9 @@ impl PersistentControlJournal {
             return Err(ControlError::OperationConflict);
         }
         let table = read.open_table(RECORDS).map_err(map_table_error)?;
-        let mut total = codec::operation_value(&operation, self.limits)?.len();
+        let mut total = codec::operation_size(&operation)?;
+        check.reserve(super::super::MigrationBootstrapWork::Allocate(keys.len()
+            .checked_mul(std::mem::size_of::<super::RegistryStoredState>()).ok_or(ControlError::BudgetExceeded)?))?;
         let mut states = Vec::with_capacity(keys.len());
         for key in &physical {
             check.check(Point::ReadRecord)?;
@@ -119,14 +124,14 @@ impl PersistentControlJournal {
                 .get(key.as_bytes())
                 .map_err(|e| map_storage_error(&e))?
                 .ok_or(ControlError::StoreCorrupt)?;
-            let value = decode_value(raw.value(), self.limits)?;
+            let value = decode_value_checked(raw.value(), self.limits, check)?;
             total = total
                 .checked_add(value.len())
                 .ok_or(ControlError::BudgetExceeded)?;
             if total > self.limits.max_total_value_bytes {
                 return Err(ControlError::BudgetExceeded);
             }
-            let codec::Record::State(state) = codec::decode_record(key, &value, self.limits)?
+            let codec::Record::State(state) = codec::decode_record_checked(key, &value, self.limits, check)?
             else {
                 return Err(ControlError::StoreCorrupt);
             };
@@ -158,9 +163,9 @@ impl PersistentControlJournal {
             .database
             .begin_read()
             .map_err(|_| ControlError::StoreUnavailable)?;
-        let header = self.header_from(&read)?;
-        super::super::operating_profile::normal(super::super::operating_profile::read_mode(
-            &read, self.identity, self.limits,
+        let header = self.header_from_checked(&read, check)?;
+        super::super::operating_profile::normal(super::super::registry_mode_checked(
+            &read, self.identity, self.limits, check,
         )?)?;
         check.check(Point::ReadHeader)?;
         Ok((read, header))
@@ -174,10 +179,11 @@ fn current_revision(
 ) -> Result<u64, ControlError> {
     check.check(Point::ReadRecord)?;
     let table = read.open_table(RECORDS).map_err(map_table_error)?;
+    check.reserve(super::super::MigrationBootstrapWork::Allocate(REVISION.len()))?;
     let key = ControlKey::new(REVISION.to_vec(), limits)?;
     if let Some(raw) = table.get(REVISION).map_err(|e| map_storage_error(&e))? {
         let codec::Record::Revision(revision) =
-            codec::decode_record(&key, &decode_value(raw.value(), limits)?, limits)?
+            codec::decode_record_checked(&key, &decode_value_checked(raw.value(), limits, check)?, limits, check)?
         else {
             return Err(ControlError::StoreCorrupt);
         };
@@ -209,20 +215,22 @@ fn read_operation(
     limits: JournalLimits,
     check: &dyn Check,
 ) -> Result<Option<RegistryOperationEnvelope>, ControlError> {
+    check.reserve(super::super::MigrationBootstrapWork::Allocate(limits.max_key_bytes))?;
+    check.reserve(super::super::MigrationBootstrapWork::Process(id.as_str().len()))?;
     let key = codec::operation_key(id, limits)?;
     check.check(Point::ReadOperation)?;
     let table = read.open_table(RECORDS).map_err(map_table_error)?;
     let raw = table
         .get(key.as_bytes())
         .map_err(|e| map_storage_error(&e))?;
-    let receipt = operation_from(read, codec::mutation_id(id), header, limits)?;
+    let receipt = operation_from_checked(read, codec::mutation_id(id), header, limits, check)?;
     let (raw, receipt) = match (raw, receipt) {
         (None, None) => return Ok(None),
         (Some(raw), Some(receipt)) => (raw, receipt),
         _ => return Err(ControlError::StoreCorrupt),
     };
     let codec::Record::Operation(envelope) =
-        codec::decode_record(&key, &decode_value(raw.value(), limits)?, limits)?
+        codec::decode_record_checked(&key, &decode_value_checked(raw.value(), limits, check)?, limits, check)?
     else {
         return Err(ControlError::StoreCorrupt);
     };

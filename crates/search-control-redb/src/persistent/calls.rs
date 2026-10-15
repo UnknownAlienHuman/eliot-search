@@ -9,7 +9,7 @@ use super::operation::{Budget, Check, Point};
 use super::{
     Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitReceipt, ControlError,
     ControlMutation, JournalReadSnapshot, PersistentControlJournal, is_corruption,
-    operation_from, request_fingerprint, transaction, validate_mutation,
+    request_fingerprint, transaction, validate_mutation,
 };
 
 impl PersistentControlJournal {
@@ -178,6 +178,7 @@ impl PersistentControlJournal {
     ) -> Result<CommitRecoveryDecision, ControlError> {
         if self.quarantined { return Ok(CommitRecoveryDecision::PartialOrCorruptQuarantine); }
         check.check(Point::Start)?;
+        transaction::reserve_mutation_work(mutation, conditions, self.limits, check)?;
         let changed_keys = validate_mutation(mutation, self.limits)?;
         validate_conditions(mutation, conditions, self.limits, || check.check(Point::PlanRecord))?;
         let fingerprint = bind_conditions(request_fingerprint(self.identity, mutation)?, conditions,
@@ -189,9 +190,9 @@ impl PersistentControlJournal {
         let result: Result<CommitRecoveryDecision, ControlError> = (|| {
             let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
             self.verify_from_checked(&read, check)?;
-            let header = self.header_from(&read)?;
+            let header = self.header_from_checked(&read, check)?;
             check.check(Point::ReadHeader)?;
-            let result = match operation_from(&read, mutation.id(), &header, self.limits)? {
+            let result = match super::operation_from_checked(&read, mutation.id(), &header, self.limits, check)? {
                 Some(operation) if operation.request_sha256 == fingerprint => {
                     transaction::verify_replay(
                         self, &read, &header, &operation.receipt, mutation, &changed_keys, check,

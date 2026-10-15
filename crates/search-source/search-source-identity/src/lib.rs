@@ -21,6 +21,8 @@ pub mod evidence;
 pub mod git_digest;
 pub mod legacy_digest;
 pub mod lineage;
+pub mod ntfs_directory;
+pub mod observation_codec;
 pub mod redaction;
 pub mod resolution;
 

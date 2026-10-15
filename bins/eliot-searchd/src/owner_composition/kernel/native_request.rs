@@ -76,6 +76,15 @@ impl core::fmt::Debug for NativeRootRequest {
 }
 
 impl NativeRootRequest {
+    pub(crate) fn for_direct_registry(arguments: &[OsString], mode: DataRootOpenMode, deadline: Instant,
+        cancellation: Arc<AtomicBool>, limits: NativeRootLimits,
+    ) -> Result<(Self, Vec<OsString>), OwnerError> {
+        let mut request = Self::new(mode, arguments, deadline, cancellation, limits)?;
+        let (selected, _) = crate::config_composition::strip_config_args_os(arguments).map_err(|_| OwnerError::OwnerOperationConflict)?;
+        if selected.len() < 2 || selected[1].is_empty() { return Err(OwnerError::OwnerOperationConflict); }
+        request.root = PathBuf::from(&selected[1]);
+        Ok((request, selected))
+    }
     /// Retains native/config argv for the effect-free existing-mutation sync caller.
     pub(crate) fn for_source_sync(
         arguments: &[OsString],
@@ -517,6 +526,10 @@ impl NativeRootRequest {
 
     pub(super) const fn binding(&self) -> (RequestId, [u8; 32]) {
         (self.id, self.digest)
+    }
+
+    pub(super) fn original_cancellation(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.cancellation)
     }
 
     pub(super) const fn inventory_limits(&self) -> [u64; 6] {

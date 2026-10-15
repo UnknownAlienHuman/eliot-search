@@ -7,11 +7,13 @@
 
 use crate::conditions::{bind_conditions, validate_conditions};
 use crate::ControlRecordCondition;
+#[cfg(test)]
+use super::operation_from;
 
 use super::{
     Boundary, ControlCommitReceipt, ControlError, ControlKey, ControlMutation, Durability,
     Header, OPERATIONS, META, PersistentControlJournal, RECORDS, ReadTransaction,
-    ReadableTable, StoredOperation, as_u64, decode_value, encode_value, operation_from,
+    ReadableTable, StoredOperation, as_u64, decode_value_checked, encode_value, operation_from_checked,
     request_fingerprint, validate_mutation, map_storage_error, map_table_error,
     Check, Point,
 };
@@ -85,13 +87,14 @@ fn execute_scoped(
     let _ = boundary;
     journal.ensure_available()?;
     check.check(Point::Start)?;
+    reserve_mutation_work(mutation, conditions, journal.limits, check)?;
     let changed_keys = validate_mutation(mutation, journal.limits)?;
     validate_conditions(mutation, conditions, journal.limits, || check.check(Point::PlanRecord))?;
     let fingerprint = bind_conditions(request_fingerprint(journal.identity, mutation)?, conditions,
         || check.check(Point::PlanRecord))?;
     check.check(Point::Validated)?;
     let read = journal.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-    validate_scope(journal, &read, mutation, &changed_keys, scope)?;
+    validate_scope(journal, &read, mutation, &changed_keys, scope, check)?;
     let plan = match plan_commit(journal, &read, mutation, conditions, changed_keys, fingerprint, check)? {
         PlanOutcome::Replay(receipt) => return Ok((receipt, fingerprint)),
         PlanOutcome::Stage(plan) => plan,
@@ -99,15 +102,14 @@ fn execute_scoped(
     let StagePlan { before, after, receipt, operation, operation_bytes, fingerprint } = *plan;
     drop(read);
 
-    check.check(Point::BeforeWrite)?;
-    let mut write = journal.database.begin_write().map_err(|_| ControlError::StoreUnavailable)?;
-    write.set_durability(Durability::Immediate);
+    let write = begin_write(journal, check)?;
     let staging = (|| -> Result<(), ControlError> {
         check.check(Point::BeforeWrite)?;
         let mut meta = write.open_table(META).map_err(map_table_error)?;
         {
             let stored = meta.get("header").map_err(|error| map_storage_error(&error))?
                 .ok_or(ControlError::StoreCorrupt)?;
+            check.reserve(super::MigrationBootstrapWork::Read(stored.value().len()))?;
             if Header::decode(stored.value(), journal.identity, journal.limits)? != before {
                 return Err(ControlError::TransactionConflict);
             }
@@ -130,19 +132,25 @@ fn execute_scoped(
         }
         for change in mutation.writes() {
             check.check(Point::StageRecord)?;
+            reserve_encoded_value(&change.value, check)?;
+            check.reserve(super::MigrationBootstrapWork::Write(change.key.as_bytes().len() + change.value.len() + 1))?;
             let value = encode_value(&change.value);
             records.insert(change.key.as_bytes(), value.as_slice())
                 .map_err(|error| map_storage_error(&error))?;
         }
+        check.reserve(super::MigrationBootstrapWork::Write(operation_bytes.len() + 32))?;
         operations.insert(mutation.id().0.as_slice(), operation_bytes.as_slice())
             .map_err(|error| map_storage_error(&error))?;
+        check.reserve(super::MigrationBootstrapWork::Allocate(256))?;
         let header = after.encode();
+        check.reserve(super::MigrationBootstrapWork::Write(header.len()))?;
         meta.insert("header", header.as_slice()).map_err(|error| map_storage_error(&error))?;
         #[cfg(not(test))]
         Boundary::before_commit();
         #[cfg(test)]
         boundary.before_commit()?;
         check.check(Point::BeforeCommit)?;
+        check.reserve(super::MigrationBootstrapWork::Write(0))?;
         Ok(())
     })();
     if let Err(error) = staging {
@@ -167,9 +175,9 @@ fn execute_scoped(
     check.check(Point::AfterCommit).map_err(|_| ControlError::CommitOutcomeUnknown)?;
 
     let observed = journal.database.begin_read().map_err(|_| ControlError::CommitOutcomeUnknown)?;
-    let observed_header = journal.header_from(&observed)
+    let observed_header = journal.header_from_checked(&observed, check)
         .map_err(|_| ControlError::CommitOutcomeUnknown)?;
-    let observed_operation = operation_from(&observed, mutation.id(), &observed_header, journal.limits)
+    let observed_operation = operation_from_checked(&observed, mutation.id(), &observed_header, journal.limits, check)
         .map_err(|_| ControlError::CommitOutcomeUnknown)?;
     if observed_header != after || observed_operation.as_ref() != Some(&operation) {
         return Err(ControlError::CommitOutcomeUnknown);
@@ -188,8 +196,17 @@ fn execute_scoped(
     Ok((receipt, fingerprint))
 }
 
+fn begin_write(journal: &PersistentControlJournal, check: &dyn Check)
+    -> Result<redb::WriteTransaction, ControlError> {
+    check.check(Point::BeforeWrite)?;
+    check.reserve(super::MigrationBootstrapWork::Write(0))?;
+    let mut write = journal.database.begin_write().map_err(|_| ControlError::StoreUnavailable)?;
+    write.set_durability(Durability::Immediate);
+    Ok(write)
+}
+
 fn validate_scope(journal: &PersistentControlJournal, read: &ReadTransaction, mutation: &ControlMutation,
-    changed_keys: &[ControlKey], scope: Scope,
+    changed_keys: &[ControlKey], scope: Scope, check: &dyn Check,
 ) -> Result<(), ControlError> {
     for key in changed_keys {
         if super::registry::reserved(key.as_bytes()) != (scope == Scope::Registry) {
@@ -206,7 +223,7 @@ fn validate_scope(journal: &PersistentControlJournal, read: &ReadTransaction, mu
     }
     if journal.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION && scope != Scope::Profile {
         use super::operating_profile::JournalOperatingProfile;
-        let mode = super::operating_profile::read_mode(read, journal.identity, journal.limits)?;
+        let mode = super::registry_mode_checked(read, journal.identity, journal.limits, check)?;
         if scope == Scope::Registry { super::operating_profile::normal(mode)?; }
         if mode != JournalOperatingProfile::Indexed
             && changed_keys.iter().any(|key| super::publication::port_reserved_key(key.as_bytes())) {
@@ -220,6 +237,33 @@ fn validate_scope(journal: &PersistentControlJournal, read: &ReadTransaction, mu
     Ok(())
 }
 
+pub(super) fn reserve_mutation_work(mutation: &ControlMutation, conditions: &[ControlRecordCondition],
+    limits: super::JournalLimits, check: &dyn Check,
+) -> Result<(), ControlError> {
+    use super::MigrationBootstrapWork as Work;
+    let items = mutation.writes().len().checked_add(mutation.deletes().len())
+        .and_then(|n| n.checked_add(conditions.len())).ok_or(ControlError::BudgetExceeded)?;
+    if items > limits.max_mutation_items { return Err(ControlError::BudgetExceeded); }
+    let mut bytes = 256_usize;
+    let mut key_bytes = 0_usize;
+    for (key, value) in mutation.writes().iter().map(|w| (&w.key, Some(&w.value)))
+        .chain(mutation.deletes().iter().map(|k| (k, None)))
+        .chain(conditions.iter().map(|c| (c.key(), c.expected()))) {
+        key_bytes = key_bytes.checked_add(key.as_bytes().len()).ok_or(ControlError::BudgetExceeded)?;
+        bytes = bytes.checked_add(key.as_bytes().len()).and_then(|n| n.checked_add(value.map_or(0, crate::ControlValue::len)))
+            .ok_or(ControlError::BudgetExceeded)?;
+    }
+    let capacity = items.checked_mul(4 * std::mem::size_of::<ControlKey>() + 64)
+        .and_then(|n| key_bytes.checked_mul(4).and_then(|k| n.checked_add(k))).ok_or(ControlError::BudgetExceeded)?;
+    check.reserve(Work::Allocate(capacity))?;
+    check.reserve(Work::Process(bytes))
+}
+
+fn reserve_encoded_value(value: &crate::ControlValue, check: &dyn Check) -> Result<(), ControlError> {
+    check.reserve(super::MigrationBootstrapWork::Allocate(value.len() + 1))?;
+    check.reserve(super::MigrationBootstrapWork::Process(value.len() + 1))
+}
+
 fn plan_commit(
     journal: &PersistentControlJournal,
     read: &ReadTransaction,
@@ -229,9 +273,9 @@ fn plan_commit(
     fingerprint: [u8; 32],
     check: &dyn Check,
 ) -> Result<PlanOutcome, ControlError> {
-    let before = journal.header_from(read)?;
+    let before = journal.header_from_checked(read, check)?;
     check.check(Point::ReadHeader)?;
-    if let Some(previous) = operation_from(read, mutation.id(), &before, journal.limits)? {
+    if let Some(previous) = operation_from_checked(read, mutation.id(), &before, journal.limits, check)? {
         if previous.request_sha256 != fingerprint {
             return Err(ControlError::OperationConflict);
         }
@@ -266,7 +310,7 @@ fn plan_commit(
         replayed: false,
     };
     let operation = StoredOperation { request_sha256: fingerprint, receipt: receipt.clone() };
-    let operation_bytes = operation.encode(journal.limits)?;
+    let operation_bytes = operation.encode_checked(journal.limits, check)?;
     after.operation_bytes = before.operation_bytes.checked_add(as_u64(operation_bytes.len())?)
         .ok_or(ControlError::BudgetExceeded)?;
     if after.operation_bytes > as_u64(journal.limits.max_total_value_bytes)? {
@@ -291,7 +335,7 @@ fn verify_conditions(
         let observed = records.get(condition.key().as_bytes()).map_err(|error| map_storage_error(&error))?;
         // Bad stored classes/lengths are corruption, not an ordinary failed CAS.
         // At most one temporary value is decoded per lookup.
-        let value = observed.map(|bytes| decode_value(bytes.value(), journal.limits)).transpose()?;
+        let value = observed.map(|bytes| decode_value_checked(bytes.value(), journal.limits, check)).transpose()?;
         if value.as_ref() != condition.expected() { return Err(ControlError::GenerationMismatch); }
     }
     Ok(())
@@ -325,7 +369,7 @@ fn plan_records(
         if let Some(previous) = table.get(key.as_bytes()).map_err(|error| map_storage_error(&error))? {
             // Validate class and size before using the old length. The one
             // temporary decoded value is released on each iteration.
-            let value = decode_value(previous.value(), journal.limits)?;
+            let value = decode_value_checked(previous.value(), journal.limits, check)?;
             replaced_records = replaced_records.checked_add(1).ok_or(ControlError::StoreCorrupt)?;
             replaced_bytes = replaced_bytes.checked_add(as_u64(value.len())?)
                 .ok_or(ControlError::StoreCorrupt)?;
@@ -397,6 +441,8 @@ fn verify_touched(
         let observed = table.get(change.key.as_bytes()).map_err(|error| map_storage_error(&error))?
             .ok_or(ControlError::StoreCorrupt)?;
         // Compare exact class and bytes, not just length/hash/header presence.
+        check.reserve(super::MigrationBootstrapWork::Read(observed.value().len()))?;
+        reserve_encoded_value(&change.value, check)?;
         let expected = encode_value(&change.value);
         if observed.value() != expected.as_slice() {
             return Err(ControlError::StoreCorrupt);
@@ -426,6 +472,8 @@ fn verify_touched(
         let observed = table.get(change.key.as_bytes()).map_err(|error| map_storage_error(&error))?
             .ok_or(ControlError::StoreCorrupt)?;
         // Compare exact class and bytes, not just length/hash/header presence.
+        check.reserve(super::MigrationBootstrapWork::Read(observed.value().len()))?;
+        reserve_encoded_value(&change.value, check)?;
         let expected = encode_value(&change.value);
         if observed.value() != expected.as_slice() {
             return Err(ControlError::StoreCorrupt);
@@ -461,7 +509,7 @@ pub(super) fn verify_conditional_poststate(
         #[cfg(test)]
         note_lookup(journal);
         let observed = records.get(condition.key().as_bytes()).map_err(|error| map_storage_error(&error))?;
-        let value = observed.map(|bytes| decode_value(bytes.value(), journal.limits)).transpose()?;
+        let value = observed.map(|bytes| decode_value_checked(bytes.value(), journal.limits, check)).transpose()?;
         if value.as_ref() != condition.expected() { return Err(ControlError::StoreCorrupt); }
     }
     check.check(Point::Readback)?;

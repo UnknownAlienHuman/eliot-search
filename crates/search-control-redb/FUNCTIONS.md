@@ -1,5 +1,14 @@
 # Function contract — `search-control-redb`
 
+Normal DIRECT/registry adapters may borrow the original absolute deadline and
+work callback through the checked owner facades. Every admitted read/copy/hash/
+write site retains cumulative accounting and first refusal; unknown commit
+suspends publication until exact operation/state recovery. These facades share
+the existing engines and codecs, not a second journal or state machine.
+The Direct initialization operation binds complete actual JournalIdentity and
+the original request through the shared canonical owner. No Native/root/access
+authority is created by a storage profile or restored metadata.
+
 ## Frozen schema-5 operating profile
 
 - `JournalOperatingProfile`: closed Direct / Indexed / MigrationInert observation.

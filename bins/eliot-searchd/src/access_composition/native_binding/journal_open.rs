@@ -10,18 +10,14 @@ use core::fmt;
 use std::fs::{self, File, Metadata, OpenOptions};
 use std::io;
 
-use search_contracts::{BindingId, Blake3Digest32, OwnerEpoch};
+use search_contracts::{BindingId, OwnerEpoch};
 use search_continuation::{ContinuationCleanup, ContinuationLimits};
-use search_control_redb::{
-    ControlError, JournalIdentity, JournalLimits, JournalOwnerBinding,
-    JournalPathIdentity, JournalSchemaIdentity, MutationId,
-    current_journal_schema_descriptor, derive_journal_identity,
-};
+use search_control_redb::{ControlError, JournalIdentity, JournalLimits, MutationId};
 use search_handles::HandlePolicy;
 use search_ports::{CancellationProbe, OperationContext};
 
 use crate::development::DataRootGuard;
-use eliot_searchd::native_file::{self, Observation, ObservationError};
+use eliot_searchd::native_file::{self, ObservationError};
 
 use super::{
     NativeBindingExpectation, StandaloneProcessError, StandaloneProcessOwner,
@@ -29,10 +25,6 @@ use super::{
 
 const CONTROL_DIRECTORY: &str = "control";
 const CONTROL_DATABASE: &str = "control.redb";
-const CONTROL_RELATIVE_LOCATOR: &[u8] = b"control/control.redb";
-const LOCATOR_DOMAIN: &[u8] = b"ELIOT-CONTROL-JOURNAL-CANONICAL-LOCATOR-v1\0";
-const OBJECT_DOMAIN: &[u8] = b"ELIOT-CONTROL-JOURNAL-NATIVE-OBJECT-v1\0";
-const PATH_IDENTITY_DOMAIN: &[u8] = b"ELIOT-CONTROL-JOURNAL-PATH-IDENTITY-v1\0";
 
 /// Failure before or during root-owned persistent standalone restoration.
 ///
@@ -219,46 +211,7 @@ fn open_verified_journal<E>(
         .and_then(|epoch| OwnerEpoch::new(epoch).ok())
         .ok_or(StandaloneProcessOpenError::InvalidControlObject)?;
 
-    let locator_digest = canonical_locator_digest(data_root_id);
-    let object_digest = native_object_digest(observation);
-    let path_digest = combined_path_digest(locator_digest, object_digest);
-    let path_identity = JournalPathIdentity::new(path_digest)?;
-
-    let schema = current_journal_schema_descriptor();
-    let schema_digest =
-        Blake3Digest32::from_bytes(*blake3::hash(schema.material()).as_bytes());
-    let schema_identity = JournalSchemaIdentity::new(schema_digest, schema.version())?;
-    let owner = JournalOwnerBinding::new(incarnation, data_root_id, stored_owner_epoch);
-    let identity = derive_journal_identity(owner, path_identity, schema_identity)?;
-    Ok((file, identity))
-}
-
-fn canonical_locator_digest(data_root_id: search_contracts::DataRootId) -> Blake3Digest32 {
-    let mut hash = blake3::Hasher::new();
-    hash.update(LOCATOR_DOMAIN);
-    hash.update(data_root_id.as_bytes());
-    hash.update(CONTROL_RELATIVE_LOCATOR);
-    Blake3Digest32::from_bytes(*hash.finalize().as_bytes())
-}
-
-fn native_object_digest(observation: Observation) -> Blake3Digest32 {
-    let mut hash = blake3::Hasher::new();
-    hash.update(OBJECT_DOMAIN);
-    hash.update(&observation.volume_serial.to_be_bytes());
-    hash.update(&observation.file_index.to_be_bytes());
-    hash.update(&observation.creation_time.to_be_bytes());
-    Blake3Digest32::from_bytes(*hash.finalize().as_bytes())
-}
-
-fn combined_path_digest(
-    locator: Blake3Digest32,
-    object: Blake3Digest32,
-) -> Blake3Digest32 {
-    let mut hash = blake3::Hasher::new();
-    hash.update(PATH_IDENTITY_DOMAIN);
-    hash.update(locator.as_bytes());
-    hash.update(object.as_bytes());
-    Blake3Digest32::from_bytes(*hash.finalize().as_bytes())
+    Ok((file, crate::control_identity::journal_identity_from_observation(incarnation, data_root_id, stored_owner_epoch, observation)?))
 }
 
 #[cfg(windows)]

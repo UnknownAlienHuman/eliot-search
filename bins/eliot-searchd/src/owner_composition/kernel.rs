@@ -57,4 +57,7 @@ mod initialization;
 #[path = "kernel/initialization_journal.rs"]
 mod initialization_journal;
 pub use initialization::InitializingDataRoot;
+#[cfg(test)]
 pub use initialization::initialize_new;
+pub use initialization::initialize_direct;
+pub use native_admission::direct_registry::maybe_run as maybe_run_direct_registry;
