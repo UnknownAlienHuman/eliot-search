@@ -38,3 +38,7 @@ pub mod source;
 #[cfg(test)]
 #[path = "portfolio_history_tests.rs"]
 mod portfolio_history_tests;
+
+#[cfg(test)]
+#[path = "provenance_tests.rs"]
+mod provenance_tests;
