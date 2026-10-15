@@ -171,7 +171,7 @@ impl NativeReadOperation<'_> {
 
     /// One internal ABI attempt inside a closed borrowed-FD metadata observer.
     /// Its caller retains full registration checkpoints around the whole
-    /// observer. Path opens, body I/O and effects must use migration_charge.
+    /// observer. Path opens, body I/O and effects must use `migration_charge`.
     pub(crate) fn migration_held_observer_dispatch(&mut self) -> Result<(), OwnerError> {
         self.with_registration_check(RegistrationCheck::None, |_, request, work, _| {
             #[cfg(test)]
