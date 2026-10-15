@@ -14,6 +14,8 @@ use super::spec::{MAX_EXECUTABLE_BYTES, READ_CHUNK_BYTES};
 
 static NEXT_TOKEN: AtomicU64 = AtomicU64::new(0);
 
+pub(super) const EXECUTABLE_READ_BUFFER_BYTES: usize = 1024 * 1024;
+
 /// Fresh native observation of one already-locked canonical root.
 pub(super) struct ObservedRoot {
     pub(super) canonical_path_digest: [u8; 32],
@@ -104,6 +106,37 @@ pub(super) fn hash_executable_file(
     Ok(output)
 }
 
+/// Same v1 transcript with caller-admitted scratch and the actual opened length.
+/// Large requests reduce owner I/O seams; short requests remain fully charged.
+/// The exact-length read and one-byte EOF probe reject shrink/growth rather than
+/// publishing a digest of a prefix. No image evidence survives the call.
+pub(super) fn hash_executable_file_sized(
+    file: &mut fs::File,
+    expected: u64,
+    scratch: &mut [u8],
+    mut read: impl FnMut(&mut fs::File, &mut [u8]) -> Result<usize, OwnerError>,
+) -> Result<[u8; 32], OwnerError> {
+    if expected > MAX_EXECUTABLE_BYTES || scratch.is_empty()
+        || scratch.len() > EXECUTABLE_READ_BUFFER_BYTES {
+        return Err(OwnerError::DataRootInvalid);
+    }
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"eliot-search/owner-executable/v1\0");
+    let mut remaining = expected;
+    while remaining != 0 {
+        let requested = usize::try_from(remaining.min(scratch.len() as u64))
+            .map_err(|_| OwnerError::DataRootInvalid)?;
+        let count = read(file, &mut scratch[..requested])?;
+        if count == 0 { return Err(OwnerError::OwnerGuardMismatch); }
+        if count > requested { return Err(OwnerError::DataRootInvalid); }
+        hasher.update(&scratch[..count]);
+        remaining -= count as u64;
+    }
+    let mut eof = [0_u8; 1];
+    if read(file, &mut eof)? != 0 { return Err(OwnerError::OwnerGuardMismatch); }
+    Ok(*hasher.finalize().as_bytes())
+}
+
 /// Mints the two stable installation identifiers using the original shared
 /// process-local counter and exact digest transcript.
 pub(super) fn mint_installation_ids(
@@ -157,3 +190,7 @@ pub(super) fn mint_owner_token(
         .try_into()
         .map_err(|_| OwnerError::DataRootInvalid)
 }
+
+#[cfg(test)]
+#[path = "observation_sized_tests.rs"]
+mod sized_tests;
