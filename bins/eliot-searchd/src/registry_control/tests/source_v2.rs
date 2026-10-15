@@ -6,8 +6,8 @@
 
 use super::*;
 use search_contracts::{
-    Blake3Digest32, CatalogRevision, NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef,
-    RootBindingId,
+    Blake3Digest32, CatalogRevision, NonZeroRevision, OpaqueId, OpaqueRef, OwnerEpoch, ReceiptRef,
+    RequestId, RootBindingId,
 };
 use search_control_redb::MigrationBootstrapWork;
 use search_ports::{DisclosureClass, Port, PortErrorKind, PortFailure, PortRetryability};
@@ -388,6 +388,8 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
     let policy = policy(RuleEffect::Allow, 7);
     let original_one = original(&policy, "src/one.rs", 71);
     let original_two = original(&policy, "src/two.rs", 81);
+    let foreign_policy = policy(RuleEffect::Allow, 8);
+    let foreign_original = original(&foreign_policy, "src/foreign.rs", 91);
     let fail = Cell::new(false);
     let work = |unit: MigrationBootstrapWork| {
         if fail.get() && matches!(unit, MigrationBootstrapWork::Write(n) if n > 0) {
@@ -448,12 +450,74 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
             .namespaces()
             .values()
             .next()
-            .expect("created namespace");
+            .expect("created namespace")
+            .clone();
         let namespace_selection = SourceNamespaceSelectionV2::Existing {
             id: namespace.ownership.source_namespace_id,
             revision: namespace.ownership.ownership_record_revision,
             generation: namespace.ownership.source_owner_generation,
         };
+        persist_original(
+            &mut port,
+            &context,
+            Some(&foreign_policy),
+            &foreign_original,
+        );
+        drop(port);
+        let writes_before_foreign = journal.committed_writes();
+        let mut port = bind_v4(
+            &mut journal,
+            &mut publisher,
+            &work,
+            platform.clone(),
+            capabilities.clone(),
+        );
+        let mut foreign_owner = request(
+            original_two.clone(),
+            root,
+            profile,
+            2,
+            namespace_selection,
+            "src/two.rs",
+            81,
+            "foreign-owner-source",
+        );
+        foreign_owner.owner.system_id = OpaqueId::new("foreign-owner").unwrap();
+        let foreign_policy_request = request(
+            foreign_original,
+            root,
+            profile,
+            2,
+            namespace_selection,
+            "src/foreign.rs",
+            91,
+            "foreign-policy-source",
+        );
+        let allocations_before_foreign = ids.allocations;
+        for invalid in [&foreign_owner, &foreign_policy_request] {
+            let mut probe = || Ok::<_, CheckpointFailureV2>(());
+            assert!(
+                prepare_source_admission_v2(
+                    &mut registry,
+                    invalid,
+                    &mut ids,
+                    &port,
+                    &context,
+                    &mut probe,
+                )
+                .is_err()
+            );
+        }
+        assert_eq!(ids.allocations, allocations_before_foreign);
+        drop(port);
+        assert_eq!(journal.committed_writes(), writes_before_foreign);
+        let mut port = bind_v4(
+            &mut journal,
+            &mut publisher,
+            &work,
+            platform.clone(),
+            capabilities.clone(),
+        );
         persist_original(&mut port, &context, None, &original_two);
         let second_request = request(
             original_two.clone(),
@@ -747,6 +811,41 @@ fn source_v2_stale_root_namespace_bytes_and_c04_observation_refuse_before_ids() 
     }
     drop(port);
     assert_eq!(journal.committed_writes(), before);
+    let cancelled_context = OperationContext::new(
+        RequestId::from_bytes([177; 16]),
+        60_000,
+        FakeCancellation::new(true),
+        OpaqueRef::new("semantic-source-v2-cancelled").unwrap(),
+    )
+    .unwrap();
+    let port = bind_v4(
+        &mut journal,
+        &mut publisher,
+        &work,
+        SectionPlatform {
+            os: "windows".into(),
+            arch: "x64".into(),
+        },
+        AcceptedCapabilities {
+            profiles: vec![BASELINE_PROFILE.into()],
+        },
+    );
+    let mut ids = CounterIds::new(199);
+    let mut probe = || Ok::<_, CheckpointFailureV2>(());
+    assert!(
+        prepare_source_admission_v2(
+            &mut registry,
+            &valid,
+            &mut ids,
+            &port,
+            &cancelled_context,
+            &mut probe,
+        )
+        .is_err()
+    );
+    assert_eq!(ids.allocations, 0, "pre-cancel drew entropy");
+    drop(port);
+    assert_eq!(journal.committed_writes(), before, "pre-cancel wrote redb");
 }
 
 #[test]
