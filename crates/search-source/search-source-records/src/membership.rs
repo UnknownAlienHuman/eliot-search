@@ -10,8 +10,7 @@
 //! clock, persistence or port I/O occurs here.
 
 use search_contracts::{
-    MembershipRole, NonZeroRevision, OpaqueId, ReceiptRef, SourceIdentity,
-    SourceMembershipId,
+    MembershipRole, NonZeroRevision, OpaqueId, ReceiptRef, SourceIdentity, SourceMembershipId,
 };
 
 /// Stable source/corpus membership key.
