@@ -283,6 +283,7 @@ fn plaintext_pass_keeps_complete_25_26_29_tuples_order_and_residue() {
         statuses: [0; 7],
         complete: true,
         preparation_links: None,
+        control_view: None,
     };
     let mut hooks = 0;
     preparation_plaintext(&mut stream, root, BACKEND, &mut || {
@@ -373,6 +374,7 @@ fn same_size_body_change_after_preliminary_view_refuses_semantic_and_residue_com
         statuses: [0; 7],
         complete: true,
         preparation_links: None,
+        control_view: None,
     };
     let mut hooks = 0;
     let result = preparation_plaintext(&mut stream, root, BACKEND, &mut || {
@@ -458,6 +460,7 @@ fn plaintext_component_refuses_protected_reference_without_fake_unprotect() {
         statuses: [0; 7],
         complete: true,
         preparation_links: None,
+        control_view: None,
     };
     let mut hooks = 0;
     assert_eq!(

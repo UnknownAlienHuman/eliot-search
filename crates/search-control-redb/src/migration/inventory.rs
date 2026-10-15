@@ -244,6 +244,16 @@ pub struct LegacyInventorySummary {
     pub denominators: [bool; LEGACY_INVENTORY_FAMILIES],
 }
 
+/// Remaining item capacity after a non-mutating, conservative output preflight.
+/// This is accounting metadata, not a reservation or migration authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LegacyInventoryCapacity {
+    /// Additional item rows available after the supplied pending rows and tail.
+    pub records: u64,
+    /// Additional encoded bytes available after the supplied pending bytes and tail.
+    pub encoded_bytes: u64,
+}
+
 /// Closed content-free codec/accounting refusal.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LegacyInventoryError {
@@ -316,6 +326,69 @@ impl LegacyInventoryEncoder {
     ) -> Result<Vec<u8>, LegacyInventoryError> {
         self.guarded(|this| this.item_inner(family, status, kind, refs, counts))
     }
+
+    /// Allocation-free exact size of an item, using the encoding formatter.
+    /// Digest values cannot change the size of their three fixed-width fields.
+    /// # Errors
+    /// Returns `Limit` if the encoded row exceeds its existing bound.
+    pub fn item_encoded_len(
+        family: LegacyInventoryFamily,
+        status: LegacyInventoryStatus,
+        kind: u16,
+        counts: [u64; 3],
+    ) -> Result<usize, LegacyInventoryError> {
+        let mut size = EncodedLength::default();
+        write_item(&mut size, family, status, kind,
+            [Sha256Digest32::from_bytes([0; 32]); 3], counts)
+            .map_err(|_| LegacyInventoryError::Limit)?;
+        if size.0 > super::MAX_SOURCE_IMPORT_ROW_BYTES {
+            return Err(LegacyInventoryError::Limit);
+        }
+        Ok(size.0)
+    }
+
+    /// Preflights current emitted bytes/rows plus pending items and the mandatory tail.
+    /// Include every future projection, fanout, synthetic gap and other item in
+    /// `pending_*`; do not include terminals/footer, which this owner reserves.
+    /// Unknown future item sizes need caller-supplied upper bounds from
+    /// `item_encoded_len`. Terminal counters/statuses and footer numbers use
+    /// conservative upper bounds, so refusal need not mean exact output cannot fit.
+    /// No state is changed, poisoned or reserved; actual emission still checks limits.
+    /// Recompute pending inputs against this prefix if other rows have since emitted.
+    /// # Errors
+    /// Returns `Accounting` before a header or after poisoning, and `Limit` on
+    /// overflow or insufficient records/bytes including the remaining tail.
+    pub fn preflight_remaining(
+        &self,
+        pending_records: u64,
+        pending_encoded_bytes: u64,
+    ) -> Result<LegacyInventoryCapacity, LegacyInventoryError> {
+        if !self.started || self.poisoned {
+            return Err(LegacyInventoryError::Accounting);
+        }
+        let families = LEGACY_INVENTORY_FAMILIES.checked_sub(self.family)
+            .ok_or(LegacyInventoryError::Accounting)?;
+        let tail_records = u64::try_from(families).map_err(|_| LegacyInventoryError::Limit)? + 1;
+        let longest_status = STATUS_PRIORITY.into_iter()
+            .max_by_key(|status| status.tag().len()).unwrap_or(LegacyInventoryStatus::AbsentProven);
+        let mut tail = EncodedLength::default();
+        for family in LegacyInventoryFamily::ALL.into_iter().skip(self.family) {
+            write_terminal(&mut tail, family, longest_status, false, [self.limits.records; 7])
+                .map_err(|_| LegacyInventoryError::Limit)?;
+        }
+        write_footer(&mut tail, self.profile, self.limits.records, self.limits.encoded_bytes)
+            .map_err(|_| LegacyInventoryError::Limit)?;
+        let records = self.summary.records.checked_add(pending_records)
+            .and_then(|value| value.checked_add(tail_records))
+            .ok_or(LegacyInventoryError::Limit)?;
+        let bytes = self.summary.encoded_bytes.checked_add(pending_encoded_bytes)
+            .and_then(|value| value.checked_add(u64::try_from(tail.0).ok()?))
+            .ok_or(LegacyInventoryError::Limit)?;
+        Ok(LegacyInventoryCapacity {
+            records: self.limits.records.checked_sub(records).ok_or(LegacyInventoryError::Limit)?,
+            encoded_bytes: self.limits.encoded_bytes.checked_sub(bytes).ok_or(LegacyInventoryError::Limit)?,
+        })
+    }
     /// Reuses the accepted content-free mapping-row encoder for every source event.
     /// # Errors
     /// Returns `Metadata` for a rejected source row, `Accounting` for wrong order
@@ -347,10 +420,10 @@ impl LegacyInventoryEncoder {
             self.poisoned = true;
             return Err(LegacyInventoryError::Accounting);
         }
-        let row = self.row(format!(
-            "F\t{}\t12\t{}\t{}\trecovery=unresolved\tcutover=none\n",
-            self.profile.name(), self.summary.records, self.summary.encoded_bytes
-        ))?;
+        let mut row = String::new();
+        write_footer(&mut row, self.profile, self.summary.records, self.summary.encoded_bytes)
+            .map_err(|_| LegacyInventoryError::Limit)?;
+        let row = self.row(row)?;
         Ok((row, self.summary))
     }
 
@@ -401,17 +474,9 @@ impl LegacyInventoryEncoder {
         counts: [u64; 3],
     ) -> Result<Vec<u8>, LegacyInventoryError> {
         let next_count = self.next_count(family, status)?;
-        let row = format!(
-            "I\t{}\t{}\t{kind}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-            family.tag(),
-            status.tag(),
-            hex(refs[0].as_bytes()),
-            hex(refs[1].as_bytes()),
-            hex(refs[2].as_bytes()),
-            counts[0],
-            counts[1],
-            counts[2]
-        );
+        let mut row = String::new();
+        write_item(&mut row, family, status, kind, refs, counts)
+            .map_err(|_| LegacyInventoryError::Limit)?;
         let bytes = self.row(row)?;
         self.summary.counts[family as usize][status as usize] = next_count;
         Ok(bytes)
@@ -450,19 +515,9 @@ impl LegacyInventoryEncoder {
         if terminal != dominant_status(&counts) || denominator_complete == incomplete {
             return Err(LegacyInventoryError::Accounting);
         }
-        let row = format!(
-            "T\t{}\t{}\t{}\t{},{},{},{},{},{},{}\n",
-            family.tag(),
-            terminal.tag(),
-            u8::from(denominator_complete),
-            counts[0],
-            counts[1],
-            counts[2],
-            counts[3],
-            counts[4],
-            counts[5],
-            counts[6]
-        );
+        let mut row = String::new();
+        write_terminal(&mut row, family, terminal, denominator_complete, counts)
+            .map_err(|_| LegacyInventoryError::Limit)?;
         let bytes = self.row(row)?;
         self.summary.denominators[self.family] = denominator_complete;
         self.family += 1;
@@ -525,8 +580,7 @@ impl LegacyInventoryEncoder {
     }
 }
 
-fn dominant_status(counts: &[u64; 7]) -> LegacyInventoryStatus {
-    [
+const STATUS_PRIORITY: [LegacyInventoryStatus; 7] = [
         LegacyInventoryStatus::Gap,
         LegacyInventoryStatus::Unreadable,
         LegacyInventoryStatus::Unsupported,
@@ -534,10 +588,52 @@ fn dominant_status(counts: &[u64; 7]) -> LegacyInventoryStatus {
         LegacyInventoryStatus::Orphan,
         LegacyInventoryStatus::Present,
         LegacyInventoryStatus::AbsentProven,
-    ]
-    .into_iter()
+];
+
+fn dominant_status(counts: &[u64; 7]) -> LegacyInventoryStatus {
+    STATUS_PRIORITY.into_iter()
     .find(|status| counts[*status as usize] > 0)
     .unwrap_or(LegacyInventoryStatus::AbsentProven)
+}
+
+#[derive(Default)]
+struct EncodedLength(usize);
+
+impl fmt::Write for EncodedLength {
+    fn write_str(&mut self, value: &str) -> fmt::Result {
+        self.0 = self.0.checked_add(value.len()).ok_or(fmt::Error)?;
+        Ok(())
+    }
+}
+
+struct Hex<'a>(&'a [u8]);
+impl fmt::Display for Hex<'_> {
+    fn fmt(&self, output: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for byte in self.0 { write!(output, "{byte:02x}")?; }
+        Ok(())
+    }
+}
+
+fn write_item(output: &mut impl fmt::Write, family: LegacyInventoryFamily,
+    status: LegacyInventoryStatus, kind: u16, refs: [Sha256Digest32; 3], counts: [u64; 3],
+) -> fmt::Result {
+    writeln!(output, "I\t{}\t{}\t{kind}\t{}\t{}\t{}\t{}\t{}\t{}",
+        family.tag(), status.tag(), Hex(refs[0].as_bytes()), Hex(refs[1].as_bytes()),
+        Hex(refs[2].as_bytes()), counts[0], counts[1], counts[2])
+}
+
+fn write_terminal(output: &mut impl fmt::Write, family: LegacyInventoryFamily,
+    terminal: LegacyInventoryStatus, complete: bool, counts: [u64; 7],
+) -> fmt::Result {
+    writeln!(output, "T\t{}\t{}\t{}\t{},{},{},{},{},{},{}",
+        family.tag(), terminal.tag(), u8::from(complete), counts[0], counts[1],
+        counts[2], counts[3], counts[4], counts[5], counts[6])
+}
+
+fn write_footer(output: &mut impl fmt::Write, profile: LegacyInventoryProfile,
+    records: u64, bytes: u64,
+) -> fmt::Result {
+    writeln!(output, "F\t{}\t12\t{records}\t{bytes}\trecovery=unresolved\tcutover=none", profile.name())
 }
 
 /// Exact new profile descriptor digest; existing chain/row domains are untouched.

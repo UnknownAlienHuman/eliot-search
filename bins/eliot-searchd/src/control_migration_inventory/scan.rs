@@ -46,12 +46,7 @@ pub(super) fn family(
         Family::Revisions => revisions(stream, root, input),
         Family::Preparation => preparation(stream, root, Family::Preparation, false),
         Family::Residue => residue(stream, root),
-        Family::Operations => {
-            control(stream, root, family)?;
-            // V1 effect IDs are catalog-derived, not original invocation receipts.
-            stream.item(family, Status::Gap, 348, [ZERO; 3], [348, 0, 0])
-        }
-        Family::Publications | Family::Security => control(stream, root, family),
+        Family::Operations | Family::Publications | Family::Security => control(stream, root, family),
         Family::Credentials => {
             let binding = input
                 .protector
@@ -900,128 +895,29 @@ fn unknown_root_objects(stream: &mut Stream<'_, '_, '_, '_>, root: &Path) -> Res
     directory_outcome(stream, Family::Residue, root, outcome)
 }
 
-fn control(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, family: Family) -> Result<(), String> {
+pub(super) fn control(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, family: Family) -> Result<(), String> {
     let source = stream.source;
-    let directory = root.join("control");
-    let outcome = io::visit(source, &directory, |name| {
-        let text = name.value.to_str().unwrap_or("");
-        let publication = text.contains("publication")
-            || text.contains("manifest")
-            || text.contains("shadow")
-            || text.contains("epoch")
-            || text == "control-cutover.v1";
-        let security =
-            text.contains("purge") || text.contains("quarantine") || text.contains("retention");
-        let operation =
-            text.contains("operation") || text.contains("receipt") || text.contains("intent");
-        let residue = Path::new(text).extension().is_some_and(|extension| {
-            ["tmp", "bak", "pending"]
-                .iter()
-                .any(|suffix| extension.eq_ignore_ascii_case(suffix))
-        });
-        let selected = match family {
-            Family::Publications => publication,
-            Family::Security => security,
-            Family::Operations => operation,
-            Family::Residue => residue,
-            _ => false,
-        };
-        if !selected {
-            if family == Family::Residue && !matches!(text,
-                "namespace.id" | "source-events.log" | "source-roots.v1" | "directory-manifests" | "control-cutover.v1") {
-                // The name does not identify an owning parser. Account for the
-                // whole unknown representation without reading possible secrets.
-                let subject = io::child_locator(source, &directory, &name.value)?;
-                return stream.item(family, Status::Gap, 34, [subject, ZERO, ZERO], [0; 3]);
-            }
-            return Ok(());
-        }
-        let subject = io::child_locator(source, &directory, &name.value)?;
-        let path = directory.join(&name.value);
-        match io::metadata(source, &path)? {
-            io::Observed::Object(meta) if meta.is_dir() => {
-                // Every known metadata container is visited, not mistaken for a file.
-                stream.item(family, Status::Gap, 35, [subject, ZERO, ZERO], [meta.len(), 0, 0])?;
-                control_directory(stream, &path, family, 0)
-            }
-            _ => control_file(stream, &path, family, subject, residue),
-        }
-    })?;
-    directory_outcome(stream, family, &directory, outcome)?;
+    if root != source.inventory_root() { return Err(changed()); }
+    if stream.control_view.is_none() {
+        let captured = super::control_view::ControlView::capture(source, root, &stream.encoder, family)?;
+        source.charge(Work::Allocate(std::mem::size_of::<super::control_view::ControlView>()))?;
+        source.checkpoint()?;
+        stream.control_view = Some(std::sync::Arc::new(captured));
+    }
+    let view = std::sync::Arc::clone(stream.control_view.as_ref().ok_or_else(changed)?);
+    view.preflight(&stream.encoder, family)?;
+    view.project(source, family, |row| stream.item(family, row.status, row.kind, row.refs, row.counts))?;
     if family == Family::Publications || family == Family::Security {
         // A legacy layout has no complete authoritative H5 reference denominator.
         stream.item(family, Status::Gap, 24, [ZERO; 3], [0; 3])?;
     } else if stream.statuses.iter().all(|count| *count == 0) {
         stream.item(family, Status::AbsentProven, 14, [ZERO; 3], [0; 3])?;
     }
+    if family == Family::Operations {
+        // V1 effect IDs are catalog-derived, not original invocation receipts.
+        stream.item(family, Status::Gap, 348, [ZERO; 3], [348, 0, 0])?;
+    }
     Ok(())
-}
-
-fn control_directory(
-    stream: &mut Stream<'_, '_, '_, '_>,
-    directory: &Path,
-    family: Family,
-    depth: usize,
-) -> Result<(), String> {
-    if depth > 3 {
-        return stream.item(
-            family,
-            Status::Unsupported,
-            14,
-            [io::locator(stream.source, directory)?, ZERO, ZERO],
-            [depth as u64, 0, 0],
-        );
-    }
-    let source = stream.source;
-    let outcome = io::visit(source, directory, |name| {
-        let path = directory.join(&name.value);
-        let subject = io::locator(source, &path)?;
-        match io::metadata(source, &path)? {
-            io::Observed::Object(meta) if meta.is_dir() => {
-                stream.item(family, Status::Gap, 35, [subject, ZERO, ZERO], [meta.len(), depth as u64 + 1, 0])?;
-                control_directory(stream, &path, family, depth + 1)
-            }
-            _ => control_file(stream, &path, family, subject, family == Family::Residue),
-        }
-    })?;
-    directory_outcome(stream, family, directory, outcome)
-}
-
-fn control_file(
-    stream: &mut Stream<'_, '_, '_, '_>, path: &Path, family: Family,
-    subject: [u8; 32], orphan: bool,
-) -> Result<(), String> {
-    let source = stream.source;
-    let supported = path.strip_prefix(source.inventory_root()).is_ok_and(|relative| {
-        let mut parts = relative.components();
-        parts.next() == Some(std::path::Component::Normal(std::ffi::OsStr::new("control")))
-            && parts.next() == Some(std::path::Component::Normal(std::ffi::OsStr::new("control-cutover.v1")))
-            && parts.next().is_none()
-    });
-    if !supported {
-        // Only the canonical root-relative locator admits the owning decoder.
-        // Parent visits retain no-follow pins; unknown/nested bodies stay unread.
-        let (status, size) = match io::metadata(source, path)? {
-            io::Observed::Missing => (Status::Gap, 0),
-            io::Observed::Refused(status) => (status, 0),
-            io::Observed::Object(meta) => (Status::Unsupported, meta.len()),
-        };
-        return stream.item(family, status, 14, [subject, ZERO, ZERO], [size, 0, u64::from(orphan)]);
-    }
-    match io::read(source, path, io::CONTROL_BYTES)? {
-        Ok(bytes) => {
-            let fingerprint = io::fingerprint(source, &bytes)?;
-            match search_control_redb::migration::ControlCutoverMarker::decode(&bytes) {
-                Ok(marker) => stream.item(family, Status::Present, 15,
-                    [subject, fingerprint, marker.catalog_snapshot], [marker.epoch, bytes.len() as u64, 0]),
-                Err(_) => stream.item(family, Status::Corrupt, 15,
-                    [subject, fingerprint, ZERO], [bytes.len() as u64, 0, 0]),
-            }
-        }
-        Err(status) => stream.item(family,
-            if status == Status::AbsentProven { Status::Gap } else { status },
-            14, [subject, ZERO, ZERO], [0; 3]),
-    }
 }
 fn directory_outcome(
     stream: &mut Stream<'_, '_, '_, '_>,
@@ -1229,7 +1125,7 @@ mod co_production_tests {
         let mut actual = Vec::new();
         let mut sink = |bytes: &[u8]| { actual.extend_from_slice(bytes); Ok(()) };
         let mut stream = Stream { source: &source, sink: &mut sink, encoder: preparation_encoder(),
-            statuses: [0; 7], complete: true, preparation_links: None };
+            statuses: [0; 7], complete: true, preparation_links: None, control_view: None };
         preparation_physical(&mut stream, root, &mut view).unwrap();
         view.finish_physical(&source).unwrap();
         let terminal = stream.terminal();

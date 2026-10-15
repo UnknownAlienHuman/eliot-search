@@ -34,6 +34,107 @@ fn binding() -> LegacyInventoryBinding {
 }
 
 #[test]
+fn preflight_accounts_for_prefix_fanout_synthetic_items_and_tail() {
+    let limits = LegacyInventoryLimits { records: 40, encoded_bytes: 8192,
+        ..LegacyInventoryLimits::BASELINE };
+    let planned = [
+        (LegacyInventoryFamily::Residue, LegacyInventoryStatus::Unsupported, 14, [u64::MAX, 0, 1]),
+        (LegacyInventoryFamily::Operations, LegacyInventoryStatus::Unsupported, 14, [u64::MAX, 0, 0]),
+        (LegacyInventoryFamily::Publications, LegacyInventoryStatus::Unsupported, 14, [u64::MAX, 0, 0]),
+        (LegacyInventoryFamily::Security, LegacyInventoryStatus::Unsupported, 14, [u64::MAX, 0, 0]),
+        (LegacyInventoryFamily::Operations, LegacyInventoryStatus::Gap, 348, [348, 0, 0]),
+        (LegacyInventoryFamily::Publications, LegacyInventoryStatus::Gap, 24, [0; 3]),
+        (LegacyInventoryFamily::Security, LegacyInventoryStatus::Gap, 24, [0; 3]),
+        (LegacyInventoryFamily::Credentials, LegacyInventoryStatus::Present, 20, [0; 3]),
+        (LegacyInventoryFamily::Limits, LegacyInventoryStatus::Present, 22, [2_000_000, 536_870_912, 32]),
+    ];
+    let pending_bytes = planned.iter().map(|&(family, status, kind, counts)| {
+        u64::try_from(LegacyInventoryEncoder::item_encoded_len(family, status, kind, counts).unwrap()).unwrap()
+    }).sum::<u64>();
+    for profile in [LegacyInventoryProfile::V1, LegacyInventoryProfile::LocationV2] {
+        let mut encoder = LegacyInventoryEncoder::with_profile(limits, profile).unwrap();
+        encoder.header(binding()).unwrap();
+        for family in LegacyInventoryFamily::ALL.into_iter().take(6) {
+            encoder.end_family(family, LegacyInventoryStatus::AbsentProven, true).unwrap();
+        }
+        encoder.item(LegacyInventoryFamily::Residue, LegacyInventoryStatus::Present,
+            7, [digest(1); 3], [0; 3]).unwrap();
+        let prefix = encoder.summary;
+        let available = encoder.preflight_remaining(0, 0).unwrap();
+        assert_eq!(available.records, 25); // Eight emitted rows plus six terminals and footer.
+        let pending = u64::try_from(planned.len()).unwrap();
+        let capacity = encoder.preflight_remaining(pending, pending_bytes).unwrap();
+        assert_eq!(capacity.records, available.records - pending);
+        assert_eq!(capacity.encoded_bytes, available.encoded_bytes - pending_bytes);
+        assert_eq!(encoder.summary, prefix);
+        for (family, terminal, complete) in [
+            (LegacyInventoryFamily::Residue, LegacyInventoryStatus::Unsupported, false),
+            (LegacyInventoryFamily::Operations, LegacyInventoryStatus::Gap, false),
+            (LegacyInventoryFamily::Publications, LegacyInventoryStatus::Gap, false),
+            (LegacyInventoryFamily::Security, LegacyInventoryStatus::Gap, false),
+            (LegacyInventoryFamily::Credentials, LegacyInventoryStatus::Present, true),
+            (LegacyInventoryFamily::Limits, LegacyInventoryStatus::Present, true),
+        ] {
+            for &(selected, status, kind, counts) in &planned {
+                if selected == family {
+                    let row = encoder.item(family, status, kind, [digest(0xa1); 3], counts).unwrap();
+                    assert_eq!(row.len(), LegacyInventoryEncoder::item_encoded_len(family, status, kind, counts).unwrap());
+                }
+            }
+            encoder.end_family(family, terminal, complete).unwrap();
+        }
+        let (_, summary) = encoder.finish().unwrap();
+        assert_eq!(limits.records - summary.records, capacity.records);
+        assert!(limits.encoded_bytes - summary.encoded_bytes >= capacity.encoded_bytes);
+    }
+}
+
+#[test]
+fn preflight_rejects_exhaustion_without_mutating_or_poisoning() {
+    let mut encoder = LegacyInventoryEncoder::new(LegacyInventoryLimits {
+        records: 14, encoded_bytes: 8192, ..LegacyInventoryLimits::BASELINE
+    }).unwrap();
+    assert_eq!(encoder.preflight_remaining(0, 0), Err(LegacyInventoryError::Accounting));
+    encoder.header(binding()).unwrap();
+    let before = encoder.summary;
+    let available = encoder.preflight_remaining(0, 0).unwrap();
+    assert_eq!(available.records, 0);
+    assert_eq!(encoder.preflight_remaining(1, 0), Err(LegacyInventoryError::Limit));
+    assert_eq!(encoder.preflight_remaining(u64::MAX, 0), Err(LegacyInventoryError::Limit));
+    assert_eq!(encoder.preflight_remaining(0, u64::MAX), Err(LegacyInventoryError::Limit));
+    assert_eq!(encoder.preflight_remaining(0, available.encoded_bytes).unwrap().encoded_bytes, 0);
+    assert_eq!(encoder.preflight_remaining(0, available.encoded_bytes + 1), Err(LegacyInventoryError::Limit));
+    assert_eq!(encoder.summary, before);
+    assert!(!encoder.poisoned);
+    for family in LegacyInventoryFamily::ALL {
+        encoder.end_family(family, LegacyInventoryStatus::AbsentProven, true).unwrap();
+    }
+    assert_eq!(encoder.preflight_remaining(0, 0).unwrap().records, 0);
+    assert_eq!(encoder.finish().unwrap().1.records, 14);
+}
+
+#[test]
+fn preflight_tail_is_conservative_while_exact_encoding_remains_accepted() {
+    let mut limits = LegacyInventoryLimits { records: 14, encoded_bytes: 4096,
+        ..LegacyInventoryLimits::BASELINE };
+    let mut sizing = LegacyInventoryEncoder::new(limits).unwrap();
+    sizing.header(binding()).unwrap();
+    for family in LegacyInventoryFamily::ALL {
+        sizing.end_family(family, LegacyInventoryStatus::AbsentProven, true).unwrap();
+    }
+    let exact_bytes = sizing.finish().unwrap().1.encoded_bytes;
+    assert!((1000..10_000).contains(&exact_bytes)); // Header limit keeps its four-digit width.
+    limits.encoded_bytes = exact_bytes;
+    let mut encoder = LegacyInventoryEncoder::new(limits).unwrap();
+    encoder.header(binding()).unwrap();
+    assert_eq!(encoder.preflight_remaining(0, 0), Err(LegacyInventoryError::Limit));
+    for family in LegacyInventoryFamily::ALL {
+        encoder.end_family(family, LegacyInventoryStatus::AbsentProven, true).unwrap();
+    }
+    assert_eq!(encoder.finish().unwrap().1.encoded_bytes, exact_bytes);
+}
+
+#[test]
 fn location_v2_is_explicit_and_old_decoder_keeps_frozen_v1_semantics() {
     let limits = LegacyInventoryLimits::BASELINE;
     let mut old = LegacyInventoryEncoder::new(limits).unwrap();
@@ -175,6 +276,8 @@ fn profile_golden_covers_header_source_event_all_statuses_terminals_and_footer()
     let mut expected_rows = vec![expected_header().into_bytes()];
     for status in statuses {
         actual_rows.push(item(&mut encoder, LegacyInventoryFamily::Owner, status).expect("item"));
+        assert_eq!(LegacyInventoryEncoder::item_encoded_len(
+            LegacyInventoryFamily::Owner, status, 7, [4, 5, 6]).unwrap(), actual_rows.last().unwrap().len());
         expected_rows.push(
             format!(
                 "I\towner\t{}\t7\t{}\t{}\t{}\t4\t5\t6\n",

@@ -62,7 +62,7 @@ pub use model::{
 };
 pub use inventory::{LEGACY_INVENTORY_PROFILE, LEGACY_INVENTORY_FAMILIES,
     LegacyInventoryProfile, LegacyInventoryFamily, LegacyInventoryStatus, LegacyInventoryOwner,
-    LegacyInventoryLimits, LegacyInventoryBinding, LegacyInventorySummary,
+    LegacyInventoryLimits, LegacyInventoryBinding, LegacyInventorySummary, LegacyInventoryCapacity,
     LegacyInventoryError, LegacyInventoryEncoder,
     LegacyInventoryDecodedRow, LegacyInventoryDecoder,
     legacy_inventory_profile_digest};
