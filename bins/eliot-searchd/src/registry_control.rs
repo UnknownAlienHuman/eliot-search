@@ -909,11 +909,65 @@ fn original_inputs_failure(
                 Some(_) | None => storage_failure(control, operation),
             }
         }
-        original_inputs::OriginalInputsError::Context(_)
-        | original_inputs::OriginalInputsError::Owner(_)
-        | original_inputs::OriginalInputsError::ContextUnavailable => {
-            owner_failure(RegistryError::CancelledBeforeCommit)
+        original_inputs::OriginalInputsError::Context(error) => registry_port_error(
+            error.kind(),
+            error.retryability(),
+            match error.reason() {
+                search_ports::ContextReason::Cancelled => RegistryError::CancelledBeforeCommit,
+                search_ports::ContextReason::ZeroDeadline => RegistryError::DurabilityExhausted,
+            },
+            operation.cloned(),
+        ),
+        original_inputs::OriginalInputsError::Owner(error) => {
+            use search_runtime_owner::OwnerError as E;
+            let (kind, retry, reason) = match error {
+                E::OwnerCancelledBeforeMutation => (
+                    PortErrorKind::CancelledBeforeSideEffect,
+                    PortRetryability::SameIdentity,
+                    RegistryError::CancelledBeforeCommit,
+                ),
+                E::OwnerDeadlineInvalid => (
+                    PortErrorKind::DeadlineDuringOperation,
+                    PortRetryability::Never,
+                    RegistryError::DurabilityExhausted,
+                ),
+                E::OwnerOperationCapacityExceeded | E::ContractExhausted => (
+                    PortErrorKind::ResourceExhausted,
+                    PortRetryability::Never,
+                    RegistryError::DurabilityExhausted,
+                ),
+                E::OwnerAcquireOutcomeUnknown | E::OwnerReleaseOutcomeUnknown => (
+                    PortErrorKind::OutcomeUnknown,
+                    PortRetryability::AfterReadback,
+                    RegistryError::MutationOutcomeUnknown,
+                ),
+                E::OwnerOperationConflict => (
+                    PortErrorKind::Conflict,
+                    PortRetryability::Never,
+                    RegistryError::OperationConflict,
+                ),
+                E::OwnerRecoveryQuarantined
+                | E::OwnerIdentityAmbiguous
+                | E::OwnerGuardMismatch
+                | E::OwnerEpochMismatch => (
+                    PortErrorKind::Quarantined,
+                    PortRetryability::AfterReadback,
+                    RegistryError::SnapshotInvalid,
+                ),
+                _ => (
+                    PortErrorKind::DependencyUnavailable,
+                    PortRetryability::Never,
+                    RegistryError::DurabilityRejected,
+                ),
+            };
+            registry_port_error(kind, retry, reason, operation.cloned())
         }
+        original_inputs::OriginalInputsError::ContextUnavailable => registry_port_error(
+            PortErrorKind::InvalidContext,
+            PortRetryability::Never,
+            RegistryError::AdmissionRestorationUnavailable,
+            operation.cloned(),
+        ),
         original_inputs::OriginalInputsError::InvalidMetadata => {
             owner_failure(RegistryError::SnapshotInvalid)
         }
@@ -922,12 +976,13 @@ fn original_inputs_failure(
 
 fn v4_failure(
     error: v4_readback::V4ReadbackError,
-    _operation: Option<&OpaqueId>,
+    operation: Option<&OpaqueId>,
 ) -> RegistryPortError {
     match error {
-        v4_readback::V4ReadbackError::Owner(_) => {
-            owner_failure(RegistryError::CancelledBeforeCommit)
-        }
+        v4_readback::V4ReadbackError::Owner(error) => original_inputs_failure(
+            original_inputs::OriginalInputsError::Owner(error),
+            operation,
+        ),
         v4_readback::V4ReadbackError::Batch(
             search_source_registry::recovery::BatchCodecV4Error::Registry(error),
         ) => owner_failure(error),

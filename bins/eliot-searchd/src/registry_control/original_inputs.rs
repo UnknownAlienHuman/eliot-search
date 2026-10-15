@@ -517,7 +517,7 @@ fn preserve_owner_error<T>(
     match (result, owner_error.borrow_mut().take()) {
         (Err(_), Some(error)) => Err(OriginalInputsError::Owner(error)),
         (result, None) => result,
-        (Ok(value), Some(_)) => Ok(value),
+        (Ok(_), Some(error)) => Err(OriginalInputsError::Owner(error)),
     }
 }
 
