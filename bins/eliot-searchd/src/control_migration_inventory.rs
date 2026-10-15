@@ -45,6 +45,8 @@ mod io;
 mod scan;
 #[path = "control_migration_inventory/preparation_links.rs"]
 mod preparation_links;
+#[path = "control_migration_inventory/control_view.rs"]
+mod control_view;
 
 type BootstrapDispatch<'a> = (&'a mut search_control_redb::MigrationBootstrap,
     &'a dyn Fn(search_control_redb::MigrationBootstrapWork) -> Result<(), String>);
@@ -291,6 +293,7 @@ fn compile_inventory(
         statuses: [0; 7],
         complete: true,
         preparation_links: None,
+        control_view: None,
     };
     stream.reserve_row()?;
     let row = stream
@@ -345,6 +348,7 @@ struct Stream<'a, 'view, 'operation, 'owner> {
     statuses: [u64; 7],
     complete: bool,
     preparation_links: Option<std::sync::Arc<preparation_links::View>>,
+    control_view: Option<std::sync::Arc<control_view::ControlView>>,
 }
 
 impl Stream<'_, '_, '_, '_> {
