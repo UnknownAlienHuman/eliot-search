@@ -67,15 +67,21 @@ unsafe extern "system" {
 }
 
 pub(super) fn observe_with_check(file: &File, check: &dyn Fn(bool) -> Result<(), ObservationError>) -> Result<Observation, ObservationError> {
+    observe_with_links_with_check(file, check).map(|(observation, _)| observation)
+}
+
+pub(super) fn observe_with_links_with_check(file: &File,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<(Observation, u32), ObservationError> {
     let info = file_information_with_check(file, check)?;
-    Ok(Observation {
+    Ok((Observation {
         volume_serial: info.volume_serial,
         file_index: (u64::from(info.index_high) << 32) | u64::from(info.index_low),
         attributes: info.attributes,
         length: (u64::from(info.size_high) << 32) | u64::from(info.size_low),
         creation_time: info.creation.value(),
         last_write_time: info.write.value(),
-    })
+    }, info.links))
 }
 
 pub(super) fn hardlink_count(file: &File) -> Result<u32, ObservationError> {
