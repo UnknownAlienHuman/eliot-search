@@ -1,9 +1,11 @@
 //! Shared Source record failures and finite dimensions, without state or I/O.
 
 use core::fmt;
-use search_contracts::OpaqueId;
-use search_ports::{CancellationProbe, DisclosureClass, MutationIdentity, OperationContext,
-    PortError, PortErrorKind, PortRetryability};
+use search_contracts::{Blake3Digest32, OpaqueId, ReceiptRef};
+use search_ports::{
+    CancellationProbe, DisclosureClass, MutationIdentity, OperationContext, PortError,
+    PortErrorKind, PortRetryability,
+};
 
 /// Finite source-registry limits.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -289,3 +291,76 @@ pub fn registry_port_error(
     )
 }
 
+/// Closed kind of one durable registry journal entry.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum JournalEntryKind {
+    /// Admitted root registration.
+    RootRegistration,
+    /// Root policy fence change.
+    RootPolicyChange,
+    /// Root unbind with invalidation work.
+    RootUnbind,
+    /// Source admission commit.
+    SourceAdmission,
+    /// Admitted source revalidation.
+    SourceRevalidation,
+    /// Source binding update.
+    SourceBindingUpdate,
+    /// Source retirement.
+    SourceRetirement,
+    /// Membership bind.
+    MembershipBind,
+    /// Membership transition.
+    MembershipTransition,
+    /// Membership retirement.
+    MembershipRetirement,
+    /// Reference portfolio publication.
+    PortfolioPublish,
+    /// Namespace cutover preparation.
+    CutoverPrepare,
+    /// Old owner fence.
+    CutoverFence,
+    /// New owner activation.
+    CutoverActivate,
+    /// Atomic batch commit.
+    BatchApply,
+}
+
+/// Content-free durable journal entry persisted through the control port.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegistryJournalEntry {
+    /// Immutable operation identity.
+    pub operation_id: OpaqueId,
+    /// Digest of the complete canonical request payload.
+    pub mutation_digest: Blake3Digest32,
+    /// Registry revision before the mutation.
+    pub before_revision: u64,
+    /// Registry revision after the mutation.
+    pub after_revision: u64,
+    /// Closed entry kind.
+    pub kind: JournalEntryKind,
+    /// Content-free durability receipt reference.
+    pub receipt: ReceiptRef,
+}
+
+impl RegistryJournalEntry {
+    /// Creates a durable journal entry from validated parts.
+    #[must_use]
+    pub const fn new(
+        operation_id: OpaqueId,
+        mutation_digest: Blake3Digest32,
+        before_revision: u64,
+        after_revision: u64,
+        kind: JournalEntryKind,
+        receipt: ReceiptRef,
+    ) -> Self {
+        Self {
+            operation_id,
+            mutation_digest,
+            before_revision,
+            after_revision,
+            kind,
+            receipt,
+        }
+    }
+}
