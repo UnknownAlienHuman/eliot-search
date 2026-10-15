@@ -330,7 +330,9 @@ impl RecordWriter {
         }
         reserve(deadline, work, Work::Process(row.len()))?;
         self.pending.extend_from_slice(row);
-        reserve(deadline, work, Work::Checkpoint)
+        // The buffered copy performs no I/O. Poll the original context without
+        // repeating the external-state checkpoint already owned by each flush.
+        reserve(deadline, work, Work::Process(0))
     }
     fn flush<E>(
         &mut self,
