@@ -99,7 +99,6 @@ impl RegisteredSource {
     /// This is a metadata-only retention path: the envelope receipt must exactly match
     /// the bound admission, otherwise the binding is rejected. No grant or currentness
     /// semantics are introduced here; the current owner retains all admission authority.
-    #[allow(dead_code)]
     pub fn retaining_original(
         mut self,
         original: Option<OriginalAdmissionEnvelope>,

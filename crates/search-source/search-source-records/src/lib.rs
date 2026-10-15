@@ -26,3 +26,4 @@ pub mod legacy_direct;
 pub mod legacy_root_catalog;
 pub mod root;
 pub mod root_currentness;
+pub mod source;
