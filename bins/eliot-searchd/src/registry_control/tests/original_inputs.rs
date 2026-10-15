@@ -54,6 +54,56 @@ fn policy() -> (RetainedPolicyV2, SectionPlatform, AcceptedCapabilities) {
 }
 
 #[test]
+fn original_inputs_cancelled_context_preserves_reason_without_work_or_write() {
+    use search_ports::{ContextReason, PortErrorKind, PortFailure, PortRetryability};
+    let scratch = Scratch::new();
+    let live = context();
+    let mut journal = journal(&scratch, &live);
+    let mut publisher = ControlSnapshotPublisher::new();
+    let calls = Cell::new(0_usize);
+    let work = |_| {
+        calls.set(calls.get() + 1);
+        Ok(())
+    };
+    let port = RegistryJournal::bind_original(
+        &mut journal,
+        &mut publisher,
+        identity(),
+        DEFAULT_REGISTRY_LIMITS,
+        Instant::now() + Duration::from_secs(60),
+        &work,
+    )
+    .unwrap();
+    let generation = port.original_inputs_snapshot(&live).unwrap().generation();
+    let calls_before = calls.get();
+    let cancelled = OperationContext::new(
+        RequestId::from_bytes([11; 16]),
+        60_000,
+        FakeCancellation::new(true),
+        OpaqueRef::new("cancelled-original-input-fixture").unwrap(),
+    )
+    .unwrap();
+    let error = port
+        .original_inputs_snapshot(&cancelled)
+        .err()
+        .expect("cancelled read");
+    match error {
+        super::super::original_inputs::OriginalInputsError::Context(error) => {
+            assert_eq!(error.kind(), PortErrorKind::CancelledBeforeSideEffect);
+            assert_eq!(error.retryability(), PortRetryability::SameRequest);
+            assert_eq!(*error.reason(), ContextReason::Cancelled);
+        }
+        other => panic!("original cancellation was relabelled: {other:?}"),
+    }
+    assert_eq!(calls.get(), calls_before, "no callback after cancellation");
+    assert!(!port.requires_recovery());
+    assert_eq!(
+        port.original_inputs_snapshot(&live).unwrap().generation(),
+        generation
+    );
+}
+
+#[test]
 fn original_inputs_normal_adapter_roundtrips_82255_byte_policy_after_real_restart() {
     let scratch = Scratch::new();
     let ctx = context();

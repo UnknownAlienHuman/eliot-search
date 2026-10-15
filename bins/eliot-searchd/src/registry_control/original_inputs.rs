@@ -19,6 +19,7 @@ use std::{sync::Arc, time::Instant};
 
 #[derive(Debug)]
 pub enum OriginalInputsError {
+    Context(search_ports::PortError<search_ports::ContextReason>),
     ContextUnavailable,
     Owner(OwnerError),
     Control(ControlError),
@@ -246,9 +247,7 @@ impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
         context: &OperationContext<C>,
         unit: Work,
     ) -> Result<(Instant, super::OriginalNativeWork<'journal>), OriginalInputsError> {
-        context
-            .preflight()
-            .map_err(|_| OriginalInputsError::InvalidMetadata)?;
+        context.preflight().map_err(OriginalInputsError::Context)?;
         let (deadline, work) = self
             .original
             .ok_or(OriginalInputsError::ContextUnavailable)?;
