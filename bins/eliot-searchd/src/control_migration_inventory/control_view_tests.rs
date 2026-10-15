@@ -393,3 +393,96 @@ fn control_view_projects_overlap_without_body_reads_and_refuses_partial_install(
         rows
     });
 }
+
+#[test]
+fn control_view_admits_slots_fanout_and_allocation_before_marker_io() {
+    let scratch = Scratch::new();
+    let store = crate::plaintext_direct_store::DirectStore::open(&scratch.0).unwrap();
+    let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(120), None);
+    assert!(
+        source.native().is_none(),
+        "component admission ordering only"
+    );
+    let path = source.inventory_root().join("control/control-cutover.v1");
+    let encoded = marker().encode();
+    fs::write(&path, &encoded).unwrap();
+    assert_eq!(
+        &*io::read(&source, &path, io::CONTROL_BYTES)
+            .unwrap()
+            .unwrap(),
+        &encoded
+    );
+    let subject = io::locator(&source, &path).unwrap();
+    let empty = || ControlView {
+        events: Vec::new(),
+        projected_rows: 0,
+        reserved_slots: 0,
+        entry_io_attempts: 0,
+    };
+
+    let mut exhausted = empty();
+    exhausted.projected_rows = LegacyInventoryLimits::BASELINE.records;
+    assert_eq!(
+        exhausted.entry(&source, &path, subject, PUBLICATIONS, None, false),
+        Err(limit())
+    );
+    assert_eq!(
+        exhausted.entry_io_attempts, 0,
+        "refused slot reaches neither metadata nor marker read"
+    );
+    assert_eq!(exhausted.events.capacity(), 0);
+    assert_eq!(exhausted.reserved_slots, 0);
+
+    let mut fanout = empty();
+    fanout.projected_rows = LegacyInventoryLimits::BASELINE.records - 3;
+    let overlap_path = source.inventory_root().join("control").join(FLAT);
+    fs::write(&overlap_path, b"unsupported overlap body").unwrap();
+    let overlap_subject = io::locator(&source, &overlap_path).unwrap();
+    assert_eq!(
+        fanout.entry(&source, &overlap_path, overlap_subject, ALL, None, true),
+        Err(limit())
+    );
+    assert_eq!(
+        fanout.entry_io_attempts, 0,
+        "all projected families are admitted before I/O"
+    );
+    assert_eq!(
+        fanout.projected_rows,
+        LegacyInventoryLimits::BASELINE.records - 3
+    );
+
+    // Empty capacity must be charged to the same original context before the
+    // actual metadata/marker seam, not after an observation has already escaped.
+    let expired = MigrationSource::new(&store, Instant::now(), None);
+    let mut allocation = empty();
+    assert_eq!(
+        allocation.entry(&expired, &path, subject, PUBLICATIONS, None, false),
+        Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
+    );
+    assert_eq!(allocation.entry_io_attempts, 0);
+    assert_eq!(allocation.events.capacity(), 0);
+    assert_eq!(allocation.reserved_slots, 0);
+    assert_eq!(allocation.projected_rows, 0);
+
+    // Pending post-order directory outcomes consume capacity alongside filled
+    // rows. Filling their reservations must never grow the backing allocation.
+    let mut pending = empty();
+    let slots = (0..9)
+        .map(|_| pending.reserve(&source, ALL).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(pending.reserved_slots, 9);
+    assert_eq!(pending.projected_rows, 36);
+    assert!(pending.events.capacity() >= 9);
+    let capacity = pending.events.capacity();
+    assert_eq!(
+        pending.project(&source, Family::Residue, |_| panic!("unfinished view")),
+        Err(changed())
+    );
+    for slot in slots {
+        pending.fill(slot, row(Status::Present, 36, subject, [0; 3]), false);
+        assert_eq!(pending.events.capacity(), capacity);
+    }
+    assert_eq!(pending.reserved_slots, 0);
+    assert_eq!(pending.events.len(), 9);
+    assert_eq!(fs::read(&path).unwrap(), encoded);
+}
