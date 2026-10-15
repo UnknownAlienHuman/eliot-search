@@ -260,10 +260,11 @@ mod tests {
     #[test]
     fn stable_identity_matches_and_path_bound_never_matches() {
         let candidate = prior("1", "2");
+        let matched_source_id = candidate.source_id.clone();
         assert_eq!(
             resolve_legacy_digest_identity(&"2".repeat(64), "native", &[candidate.clone()]),
             Ok(LegacyDigestIdentityResolution::MatchExisting {
-                source_id: candidate.source_id,
+                source_id: matched_source_id,
             })
         );
         assert_eq!(
