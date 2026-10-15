@@ -6,6 +6,7 @@
 //! an owner supplied resolver. The resolver observes one coherent pre-read
 //! metadata view; this module performs no storage or other I/O.
 
+#[allow(clippy::wildcard_imports)]
 use super::*;
 
 use std::sync::Arc;
@@ -24,11 +25,11 @@ use search_source_admission::{AdmissionError, AdmissionOutcome};
 use search_source_provenance::{OriginalAdmissionV2, OriginalInputsLayoutV2, RetainedPolicyV2};
 
 /// V4 state-value profile. Older state profiles remain owned by the parent.
-pub(crate) const STATE_PROFILE_V4: &str = "eliot.registry-state.v4";
+pub const STATE_PROFILE_V4: &str = "eliot.registry-state.v4";
 /// V4 operation profile. Older operation profiles remain byte-compatible.
-pub(crate) const BATCH_PROFILE_V4: &str = "eliot.registry-batch.v4";
+pub const BATCH_PROFILE_V4: &str = "eliot.registry-batch.v4";
 /// V2 key profile reserved for the new namespace family.
-pub(crate) const STATE_KEY_PROFILE_V2: &str = "eliot.registry-state-key.v2";
+pub const STATE_KEY_PROFILE_V2: &str = "eliot.registry-state-key.v2";
 
 /// Closed v4 codec failure that preserves the original owner error class.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -84,7 +85,7 @@ pub trait OriginalInputResolver {
 }
 
 /// Encodes one complete v4 state value and its explicit state profile.
-pub(crate) fn encode_state_v4(v: &RegistryStateRecord) -> Result<Vec<u8>, RegistryError> {
+pub fn encode_state_v4(v: &RegistryStateRecord) -> Result<Vec<u8>, RegistryError> {
     c::to_canonical_cbor(&object(vec![
         ("profile", text(STATE_PROFILE_V4)?),
         ("state", state_value_v4(v)?),
@@ -94,7 +95,7 @@ pub(crate) fn encode_state_v4(v: &RegistryStateRecord) -> Result<Vec<u8>, Regist
 }
 
 /// Decodes one complete v4 state value through the actual original owners.
-pub(crate) fn decode_state_v4<R: OriginalInputResolver + ?Sized>(
+pub fn decode_state_v4<R: OriginalInputResolver + ?Sized>(
     bytes: &[u8],
     resolver: &mut R,
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
@@ -114,7 +115,7 @@ pub(crate) fn decode_state_v4<R: OriginalInputResolver + ?Sized>(
 }
 
 /// Encodes a family-qualified key, retaining the old key profile for old families.
-pub(crate) fn encode_key_v4(key: &RegistryStateKey) -> Result<Vec<u8>, RegistryError> {
+pub fn encode_key_v4(key: &RegistryStateKey) -> Result<Vec<u8>, RegistryError> {
     if !matches!(key, RegistryStateKey::Namespace(_)) {
         return super::encode_key(key);
     }
@@ -127,7 +128,7 @@ pub(crate) fn encode_key_v4(key: &RegistryStateKey) -> Result<Vec<u8>, RegistryE
 }
 
 /// Decodes an old key or the v2 key reserved for a namespace.
-pub(crate) fn decode_key_v4(bytes: &[u8]) -> Result<RegistryStateKey, RegistryError> {
+pub fn decode_key_v4(bytes: &[u8]) -> Result<RegistryStateKey, RegistryError> {
     let mut outer = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
     let profile = string(take(&mut outer, "profile")?)?;
     let key = match profile.as_str() {
@@ -188,7 +189,7 @@ pub fn decode_batch_record_v4<R: OriginalInputResolver + ?Sized>(
         checkpoint(probe)?;
         let mut delta = open(value)?;
         let key = read_key_v4(take(&mut delta, "key")?)?;
-        let before = optional_decode(take(&mut delta, "before")?, |value| {
+        let before = optional_decode_v4(take(&mut delta, "before")?, |value| {
             read_state_v4(value, resolver, probe)
         })?;
         let after = read_state_v4(take(&mut delta, "after")?, resolver, probe)?;
@@ -257,6 +258,17 @@ fn encode_record_v4(value: &DecodedBatch) -> Result<Vec<u8>, RegistryError> {
     ])?)
     .map(|value| value.as_slice().to_vec())
     .map_err(|_| bad())
+}
+
+/// Encodes one explicitly v4 operation record without reclassifying it as an
+/// older profile.
+pub fn encode_batch_record_v4(value: &DecodedBatch) -> Result<Vec<u8>, RegistryError> {
+    if value.encoding_profile != BATCH_PROFILE_V4
+        || value.state_encoding_profile != STATE_PROFILE_V4
+    {
+        return Err(bad());
+    }
+    encode_record_v4(value)
 }
 
 fn state_value_v4(value: &RegistryStateRecord) -> Result<V, RegistryError> {
@@ -642,7 +654,7 @@ fn read_preparation(value: V) -> Result<CutoverPreparation, RegistryError> {
         .collect::<Result<Vec<_>, _>>()?;
     let affected_memberships = array(take(&mut fields, "affected_memberships")?)?
         .into_iter()
-        .map(|value| search_contracts::SourceMembershipId::from_bytes(fixed(value)?))
+        .map(|value| fixed(value).map(search_contracts::SourceMembershipId::from_bytes))
         .collect::<Result<Vec<_>, _>>()?;
     let evidence_digest =
         Blake3Digest32::from_stored_bytes(fixed(take(&mut fields, "evidence_digest")?)?);
@@ -748,4 +760,15 @@ fn checkpoint(
             CheckpointFailureV2::DeadlineExceeded => AdmissionError::BudgetExhausted,
         })
     })
+}
+
+fn optional_decode_v4<T>(
+    value: V,
+    decode: impl FnOnce(V) -> Result<T, BatchCodecV4Error>,
+) -> Result<Option<T>, BatchCodecV4Error> {
+    if value == V::Null {
+        Ok(None)
+    } else {
+        decode(value).map(Some)
+    }
 }

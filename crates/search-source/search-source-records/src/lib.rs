@@ -26,6 +26,7 @@ pub mod error;
 pub mod legacy_direct;
 pub mod legacy_root_catalog;
 pub mod membership;
+pub mod namespace;
 pub mod operation;
 pub mod portfolio;
 pub mod portfolio_history;

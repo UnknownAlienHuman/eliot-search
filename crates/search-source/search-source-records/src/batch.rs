@@ -11,11 +11,13 @@ use crate::operation::{
 use crate::root::RootRecord;
 use crate::source::RegisteredSource;
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, SourceIdentity};
+use search_source_admission::policy_v2::CheckpointFailureV2;
 use std::collections::BTreeMap;
 
 #[path = "batch_codec.rs"]
 mod codec;
 pub use codec::decode_batch_record;
+pub use codec::{BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4};
 
 /// Current closed immutable operation profile, without a currentness assertion.
 pub const CURRENT_BATCH_PROFILE: &str = codec::CURRENT_BATCH_PROFILE;
@@ -37,6 +39,8 @@ pub enum RegistryStateKey {
     Membership(MembershipKey),
     /// Corpus generation key.
     Generation(OpaqueId),
+    /// Source namespace ownership key.
+    Namespace(search_contracts::SourceNamespaceId),
 }
 
 /// Closed owner state family, independent of adapter storage prefixes.
@@ -50,6 +54,8 @@ pub enum RegistryStateFamily {
     Membership,
     /// Active corpus generation.
     Generation,
+    /// Namespace ownership and retained metadata.
+    Namespace,
 }
 
 /// Complete metadata value of an affected target, never source content.
@@ -68,21 +74,31 @@ pub enum RegistryStateRecord {
         /// Active generation.
         generation: NonZeroRevision,
     },
+    /// Namespace ownership and retained permanent-v2 metadata.
+    Namespace(crate::namespace::NamespaceCutoverState),
 }
 impl RegistryStateRecord {
     /// Stable owner bytes for one complete technical state value.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        codec::encode_state(self)
+        if matches!(self, Self::Namespace(_)) {
+            codec::encode_state_v4(self)
+        } else {
+            codec::encode_state(self)
+        }
     }
     /// Encodes in the explicitly retained closed historical format.
     pub fn encode_with_profile(&self, profile: &str) -> Result<Vec<u8>, RegistryError> {
         if !matches!(
             profile,
-            "eliot.registry-state.v2" | "eliot.registry-state.v3"
+            "eliot.registry-state.v2" | "eliot.registry-state.v3" | codec::STATE_PROFILE_V4
         ) {
             return Err(RegistryError::SnapshotInvalid);
         }
-        codec::encode_state_profile(self, profile)
+        if profile == codec::STATE_PROFILE_V4 {
+            codec::encode_state_v4(self)
+        } else {
+            codec::encode_state_profile(self, profile)
+        }
     }
     /// Exact family-qualified key.
     pub fn key(&self) -> RegistryStateKey {
@@ -91,12 +107,24 @@ impl RegistryStateRecord {
             Self::Source(v) => RegistryStateKey::Source(v.identity().clone()),
             Self::Membership(v) => RegistryStateKey::Membership(v.key().clone()),
             Self::Generation { corpus, .. } => RegistryStateKey::Generation(corpus.clone()),
+            Self::Namespace(state) => {
+                RegistryStateKey::Namespace(state.ownership.source_namespace_id)
+            }
         }
     }
 }
 /// Decode complete target bytes, restoring admission through retained original inputs.
 pub fn decode_registry_state(bytes: &[u8]) -> Result<RegistryStateRecord, RegistryError> {
     codec::decode_state(bytes)
+}
+
+/// Decode one v4 state value through the original-input owner and caller probe.
+pub fn decode_registry_state_v4<R: OriginalInputResolver + ?Sized>(
+    bytes: &[u8],
+    resolver: &mut R,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<RegistryStateRecord, BatchCodecV4Error> {
+    codec::decode_state_v4(bytes, resolver, probe)
 }
 
 impl RegistryStateKey {
@@ -107,17 +135,27 @@ impl RegistryStateKey {
             Self::Source(_) => RegistryStateFamily::Source,
             Self::Membership(_) => RegistryStateFamily::Membership,
             Self::Generation(_) => RegistryStateFamily::Generation,
+            Self::Namespace(_) => RegistryStateFamily::Namespace,
         }
     }
     /// Family-qualified canonical technical key; no string-built locator identity.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        codec::encode_key(self)
+        if matches!(self, Self::Namespace(_)) {
+            codec::encode_key_v4(self)
+        } else {
+            codec::encode_key(self)
+        }
     }
 }
 
 /// Decode the complete canonical owner key, refusing unknown fields or families.
 pub fn decode_registry_state_key(bytes: &[u8]) -> Result<RegistryStateKey, RegistryError> {
     codec::decode_key(bytes)
+}
+
+/// Decode the explicit v4 namespace key profile.
+pub fn decode_registry_state_key_v4(bytes: &[u8]) -> Result<RegistryStateKey, RegistryError> {
+    codec::decode_key_v4(bytes)
 }
 
 /// Decode actual owner key/value bytes and require their exact identities to match.
@@ -200,6 +238,11 @@ impl DecodedBatch {
         deltas: Vec<RegistryStateDelta>,
         limits: RegistryLimits,
     ) -> Result<Self, RegistryError> {
+        if encoding_profile == codec::BATCH_PROFILE_V4
+            || state_encoding_profile == codec::STATE_PROFILE_V4
+        {
+            return Err(RegistryError::SnapshotInvalid);
+        }
         let observed = Self {
             encoding_profile,
             state_encoding_profile,
@@ -211,6 +254,33 @@ impl DecodedBatch {
         let restored = codec::decode_batch_record(&codec::encode(&observed)?, limits)?;
         if restored != observed {
             return Err(RegistryError::SnapshotInvalid);
+        }
+        Ok(restored)
+    }
+
+    /// Constructs and exactly rehydrates one permanent-v2 batch through the
+    /// original-input resolver and caller-owned checkpoint.
+    pub fn from_observed_parts_v4<R: OriginalInputResolver + ?Sized>(
+        entry: RegistryJournalEntry,
+        request_fingerprint: Blake3Digest32,
+        change_count: usize,
+        deltas: Vec<RegistryStateDelta>,
+        limits: RegistryLimits,
+        resolver: &mut R,
+        probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+    ) -> Result<Self, BatchCodecV4Error> {
+        let observed = Self {
+            encoding_profile: codec::BATCH_PROFILE_V4,
+            state_encoding_profile: codec::STATE_PROFILE_V4,
+            entry,
+            request_fingerprint,
+            change_count,
+            deltas,
+        };
+        let encoded = codec::encode_batch_record_v4(&observed)?;
+        let restored = codec::decode_batch_record_v4(&encoded, limits, resolver, probe)?;
+        if restored != observed {
+            return Err(RegistryError::SnapshotInvalid.into());
         }
         Ok(restored)
     }
@@ -250,7 +320,11 @@ impl DecodedBatch {
     }
     /// Stable canonical record for the operation row.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        codec::encode(self)
+        if self.encoding_profile == codec::BATCH_PROFILE_V4 {
+            codec::encode_batch_record_v4(self)
+        } else {
+            codec::encode(self)
+        }
     }
     /// Projects the retained operation receipt; the registry owns replay acceptance.
     pub fn receipt(&self, replayed: bool) -> RegistryBatchReceipt {

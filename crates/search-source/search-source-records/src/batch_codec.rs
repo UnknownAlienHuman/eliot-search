@@ -15,6 +15,14 @@ use search_source_admission::original_envelope::{
 use search_source_admission::{AdmissionBudget, AdmissionOutcome, AdmissionReceipt, CancelFlag};
 use search_source_identity::{CanonicalRelativePath, SourceBinding, SourceObservation};
 
+#[path = "batch_codec_v4.rs"]
+mod v4;
+pub use v4::{
+    BATCH_PROFILE_V4, BatchCodecV4Error, OriginalInputResolver, STATE_PROFILE_V4,
+    decode_batch_record_v4, decode_key_v4, decode_state_v4, encode_batch_record_v4, encode_key_v4,
+    encode_state_v4,
+};
+
 fn bad() -> RegistryError {
     RegistryError::SnapshotInvalid
 }
@@ -374,6 +382,7 @@ pub(super) fn state_value(v: &RegistryStateRecord) -> Result<V, RegistryError> {
             ("corpus", text(corpus.as_str())?),
             ("generation", V::U64(generation.get())),
         ]),
+        RegistryStateRecord::Namespace(_) => Err(bad()),
     }
 }
 fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, RegistryError> {
@@ -474,6 +483,7 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
             corpus: opaque(take(&mut o, "corpus")?)?,
             generation: revision(take(&mut o, "generation")?)?,
         },
+        "namespace" => return Err(bad()),
         _ => return Err(bad()),
     };
     finish(o)?;
@@ -556,6 +566,7 @@ fn key_value(k: &RegistryStateKey) -> Result<V, RegistryError> {
             ("family", text("generation")?),
             ("corpus", text(v.as_str())?),
         ]),
+        RegistryStateKey::Namespace(_) => Err(bad()),
     }
 }
 fn read_key(v: V) -> Result<RegistryStateKey, RegistryError> {
@@ -567,6 +578,7 @@ fn read_key(v: V) -> Result<RegistryStateKey, RegistryError> {
         "source" => RegistryStateKey::Source(read_identity(take(&mut o, "identity")?)?),
         "membership" => RegistryStateKey::Membership(read_member_key(take(&mut o, "key")?)?),
         "generation" => RegistryStateKey::Generation(opaque(take(&mut o, "corpus")?)?),
+        "namespace" => return Err(bad()),
         _ => return Err(bad()),
     };
     finish(o)?;

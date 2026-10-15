@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 search-contracts.workspace = true
+search-domain.workspace = true
 search-ports.workspace = true
 search-source-identity.workspace = true
 search-source-admission.workspace = true
