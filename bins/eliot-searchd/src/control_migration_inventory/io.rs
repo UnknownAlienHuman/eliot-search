@@ -416,14 +416,12 @@ impl<'a, 'view, 'operation, 'owner>
                     self.source.checkpoint()?;
                     let Ok(current) = current else { return Ok(Err(Status::Unreadable)); };
                     if !current.is_file() || !unchanged(&original.metadata, &current) { return Err(changed()); }
-                    let snapshot = match revision_pin_observation(self.source, &original.file)? {
-                        Ok(snapshot) => snapshot,
+                    let (snapshot, links) = match revision_pin_observation_with_links(self.source, &original.file)? {
+                        Ok(observed) => observed,
                         Err(status) => return Ok(Err(status)),
                     };
                     if snapshot != original.snapshot { return Err(changed()); }
-                    if let Err(status) = revision_pin_single_link(self.source, &original.file)? {
-                        return Ok(Err(status));
-                    }
+                    if links != 1 { return Ok(Err(Status::Gap)); }
                     match metadata(self.source, path)? {
                         Observed::Object(current) if current.is_file()
                             && unchanged(&original.metadata, &current) => {}
@@ -472,12 +470,12 @@ fn pin_final_revision(
     source.checkpoint()?;
     let Ok(held) = held else { return Ok(Err(Status::Unreadable)); };
     if !held.is_file() || !unchanged(&before, &held) { return Err(changed()); }
-    let snapshot = match revision_pin_observation(source, &file)? {
-        Ok(snapshot) => snapshot,
+    let (snapshot, links) = match revision_pin_observation_with_links(source, &file)? {
+        Ok(observed) => observed,
         Err(status) => return Ok(Err(status)),
     };
     if snapshot.length != held.len() { return Err(changed()); }
-    if let Err(status) = revision_pin_single_link(source, &file)? { return Ok(Err(status)); }
+    if links != 1 { return Ok(Err(Status::Gap)); }
     Ok(Ok(Some(PinnedRevisionRepresentation {
         file,
         #[cfg(test)]
@@ -490,10 +488,16 @@ fn pin_final_revision(
 fn revision_pin_observation(
     source: &MigrationSource<'_, '_, '_>, file: &File,
 ) -> Result<Result<eliot_searchd::native_file::Observation, Status>, String> {
+    revision_pin_observation_with_links(source, file).map(|result| result.map(|(snapshot, _)| snapshot))
+}
+
+fn revision_pin_observation_with_links(
+    source: &MigrationSource<'_, '_, '_>, file: &File,
+) -> Result<Result<(eliot_searchd::native_file::Observation, u32), Status>, String> {
     use eliot_searchd::native_file::ObservationError;
     source.checkpoint()?;
     let refusal = RefCell::new(None);
-    let observed = eliot_searchd::native_file::observe_with_check(file, &|before| {
+    let observed = eliot_searchd::native_file::observe_with_links_with_check(file, &|before| {
         let result = if before { source.held_observer_dispatch() } else { source.poll() };
         result.map_err(|cause| {
             refusal.borrow_mut().get_or_insert(cause);
@@ -512,20 +516,9 @@ fn revision_pin_observation(
     }))
 }
 
-fn revision_pin_single_link(
-    source: &MigrationSource<'_, '_, '_>, file: &File,
-) -> Result<Result<(), Status>, String> {
-    source.checkpoint()?;
-    // The existing hardlink observer performs these three fixed native calls.
-    #[cfg(windows)]
-    for _ in 0..3 { source.charge(Work::Observe)?; }
-    let links = eliot_searchd::native_file::hardlink_count(file);
-    source.checkpoint()?;
-    Ok(match links {
-        Ok(1) => Ok(()),
-        _ => Err(Status::Gap),
-    })
-}
+#[cfg(all(test, windows))]
+#[path = "io/revision_links_tests.rs"]
+mod revision_links_tests;
 
 /// One pinned, deterministic enumeration of a complete directory.
 ///

@@ -165,6 +165,19 @@ pub fn observe_with_check(file: &File, check: &dyn Fn(bool) -> Result<(), Observ
     platform::observe_with_check(file, check)
 }
 
+/// Returns full observation and live links from one native file-information snapshot.
+///
+/// The original three disk/NTFS/file-information ABIs each retain their pre/post
+/// callback. Repeat this probe at each before/after boundary; no cached path
+/// access, source permission or currentness is implied.
+/// # Errors
+/// Native failure or callback refusal returns no tuple.
+pub fn observe_with_links_with_check(file: &File,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<(Observation, u32), ObservationError> {
+    platform::observe_with_links_with_check(file, check)
+}
+
 /// Returns the exact hardlink count of one already-open object.
 ///
 /// Used by the final-handle adapter to fail closed on multi-link objects
@@ -344,6 +357,13 @@ mod platform {
         Err(ObservationError::UnsupportedPlatform)
     }
 
+    pub(super) fn observe_with_links_with_check(_file: &File,
+        check: &dyn Fn(bool) -> Result<(), ObservationError>,
+    ) -> Result<(Observation, u32), ObservationError> {
+        check(false)?;
+        Err(ObservationError::UnsupportedPlatform)
+    }
+
     pub(super) fn hardlink_count(_file: &File) -> Result<u32, ObservationError> {
         Err(ObservationError::UnsupportedPlatform)
     }
@@ -368,6 +388,10 @@ mod platform;
 #[cfg(test)]
 #[path = "native_file/tests.rs"]
 mod tests;
+
+#[cfg(all(test, windows))]
+#[path = "native_file/observation_links_tests.rs"]
+mod observation_links_tests;
 
 #[cfg(test)]
 #[path = "native_file/child_membership_tests.rs"]
