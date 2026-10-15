@@ -305,6 +305,9 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
                 let Some(original_v4) = self.original_v4.as_ref() else {
                     return Err(legacy_error);
                 };
+                if !v4_restore::is_v4_batch(envelope.owner_bytes()) {
+                    return Err(legacy_error);
+                }
                 let shape = v4_readback::collect_transaction_refs(envelope, &[], original_v4)
                     .map_err(|error| v4_failure(error, Some(envelope.operation_id())))?;
                 if !shape.operation_v4() {
@@ -347,6 +350,27 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         let Some(original_v4) = self.original_v4.as_ref() else {
             return readback(observed, self.identity, self.registry_limits);
         };
+        let operation_v4 = v4_restore::is_v4_batch(observed.operation().owner_bytes());
+        let state_v4 = observed
+            .states()
+            .iter()
+            .any(|state| v4_restore::is_v4_state(state.canonical_bytes()));
+        if !operation_v4 && !state_v4 {
+            return readback(observed, self.identity, self.registry_limits);
+        }
+        if !operation_v4 {
+            decode_batch_record(observed.operation().owner_bytes(), self.registry_limits)
+                .map_err(owner_failure)?;
+        }
+        for state in observed.states() {
+            if !v4_restore::is_v4_state(state.canonical_bytes()) {
+                decode_registry_state_entry(
+                    state.key().canonical_bytes(),
+                    state.canonical_bytes(),
+                )
+                .map_err(owner_failure)?;
+            }
+        }
         let shape = v4_readback::collect_transaction_refs(
             observed.operation(),
             observed.states(),
@@ -433,6 +457,7 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         let snapshot = if let Some((deadline, callback)) = self.original {
             self.journal.read_registry_snapshot_with_original_context(deadline, &callback).map_err(|e| storage_failure(e.control, None))?
         } else { self.journal.read_registry_snapshot(context).map_err(|error| call_failure(&error, None))? };
+        let mut originals: Option<original_inputs::OriginalInputsReadback> = None;
         let restored = if let Some(original_v4) = self.original_v4.as_ref() {
             let shape = v4_restore::collect_snapshot_refs(&snapshot, original_v4)
                 .map_err(|error| v4_failure(error, None))?;
@@ -450,19 +475,17 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
                     .iter()
                     .map(Vec::as_slice)
                     .collect::<Vec<_>>();
-                let originals = if references.is_empty() {
-                    None
-                } else {
-                    let originals = self
+                if !references.is_empty() {
+                    let readback = self
                         .original_inputs_snapshot(&references, context)
                         .map_err(original_inputs_failure)?;
-                    if originals.identity() != self.identity
-                        || originals.generation() != snapshot.journal_generation()
+                    if readback.identity() != self.identity
+                        || readback.generation() != snapshot.journal_generation()
                     {
                         return Err(owner_failure(RegistryError::SnapshotInvalid));
                     }
-                    Some(originals)
-                };
+                    originals = Some(readback);
+                }
                 let max_restore_bytes = self
                     .journal
                     .limits()
@@ -488,7 +511,20 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
         let mut original = None;
         if let Some(root) = root {
             for envelope in snapshot.operations() {
-                let record = decode_operation(envelope, self.registry_limits)?;
+                let record = if let Some(original_v4) = self.original_v4.as_ref() {
+                    if v4_restore::is_v4_batch(envelope.owner_bytes()) {
+                        v4_restore::decode_v4_operation_for_root(
+                            envelope,
+                            originals.as_ref(),
+                            original_v4,
+                        )
+                        .map_err(|error| v4_failure(error, Some(envelope.operation_id())))?
+                    } else {
+                        decode_operation(envelope, self.registry_limits)?
+                    }
+                } else {
+                    decode_operation(envelope, self.registry_limits)?
+                };
                 if record.entry().kind == search_source_registry::error::JournalEntryKind::BatchApply
                     && record.change_count() == 1 && record.deltas().len() == 1
                     && record.deltas().iter().any(|delta| delta.before().is_none()
