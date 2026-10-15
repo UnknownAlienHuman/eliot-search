@@ -58,9 +58,15 @@ pub fn restore_registry_state(
         operations: parts
             .operations
             .into_iter()
-            .map(RetainedRegistryOperation::Committed)
+            .map(|record| {
+                (
+                    record.entry().operation_id.clone(),
+                    RetainedRegistryOperation::Committed(record),
+                )
+            })
             .collect(),
         pending_batch: None,
+        identity_cache_v2: None,
         state_encoding_profiles: parts.state_encoding_profiles,
     };
     Ok(ObservedRegistryRestore { registry })
@@ -105,9 +111,15 @@ where
         operations: parts
             .operations
             .into_iter()
-            .map(RetainedRegistryOperation::Committed)
+            .map(|record| {
+                (
+                    record.entry().operation_id.clone(),
+                    RetainedRegistryOperation::Committed(record),
+                )
+            })
             .collect(),
         pending_batch: None,
+        identity_cache_v2: None,
         state_encoding_profiles: parts.state_encoding_profiles,
     };
     Ok(ObservedRegistryRestore { registry })

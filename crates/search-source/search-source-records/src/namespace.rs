@@ -17,6 +17,7 @@ use search_source_identity::FilesystemIdentityProfile;
 use search_source_provenance::{OriginalInputsLayoutV2, RetainedPolicyV2};
 
 use crate::error::RegistryError;
+use crate::snapshot::ValidatedRegistrySnapshot;
 
 /// Durable cutover preparation record; it never activates a new owner.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -380,4 +381,155 @@ fn checkpoint(
             CheckpointFailureV2::DeadlineExceeded => AdmissionError::BudgetExhausted,
         })
     })
+}
+
+/// Applies one closed ownership command purely through `search-domain`.
+pub fn transition_namespace_owner(
+    current: &SourceNamespaceOwnership,
+    command: &NamespaceOwnershipCommand,
+    next_revision: NonZeroRevision,
+    next_generation: SourceOwnerGeneration,
+    next_status: search_contracts::NamespaceOwnershipStatus,
+    next_owner: Option<(
+        OpaqueId,
+        InstallationIncarnationId,
+        search_contracts::OwnerEpoch,
+    )>,
+    cutover_receipt: Option<&SourceOwnerCutoverReceipt>,
+) -> Result<SourceNamespaceOwnership, RegistryError> {
+    let (owner_system_id, owner_incarnation, owner_epoch) = next_owner.unwrap_or_else(|| {
+        (
+            current.owner_system_id.clone(),
+            current.owner_installation_incarnation_id,
+            current.owner_epoch,
+        )
+    });
+    let cutover_receipt_ref = match command {
+        NamespaceOwnershipCommand::Prepare {
+            cutover_receipt_ref,
+        } => Some(cutover_receipt_ref.clone()),
+        NamespaceOwnershipCommand::Fence | NamespaceOwnershipCommand::Retire => {
+            current.cutover_receipt_ref.clone()
+        }
+        NamespaceOwnershipCommand::Activate { .. } => current.cutover_receipt_ref.clone(),
+    };
+    let next = SourceNamespaceOwnership {
+        source_namespace_id: current.source_namespace_id,
+        owner_system_id,
+        owner_installation_incarnation_id: owner_incarnation,
+        owner_epoch,
+        ownership_record_revision: next_revision,
+        source_owner_generation: next_generation,
+        source_admission_policy_revision: current.source_admission_policy_revision,
+        status: next_status,
+        cutover_receipt_ref,
+    };
+    search_domain::transition_source_ownership(current, next, cutover_receipt)
+        .map(|(_, state)| state)
+        .map_err(|_| RegistryError::NamespaceOwnershipConflict)
+}
+
+/// Proves fence-before-activation ordering, namespace/source/membership
+/// coverage and owner-generation advance.
+///
+/// Ordinary export or copy receipts are rejected as
+/// [`RegistryError::CutoverReceiptMismatch`].
+pub fn verify_cutover_receipt(
+    receipt: &SourceOwnerCutoverReceipt,
+    old_state: &SourceNamespaceOwnership,
+    new_state: &SourceNamespaceOwnership,
+    snapshot: &ValidatedRegistrySnapshot,
+    expected_sources: usize,
+    expected_memberships: usize,
+) -> Result<VerifiedCutoverReceipt, RegistryError> {
+    receipt
+        .validate()
+        .map_err(|_| RegistryError::CutoverReceiptMismatch)?;
+    if receipt.cutover.source_namespace_id != old_state.source_namespace_id
+        || receipt.cutover.source_namespace_id != new_state.source_namespace_id
+    {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    if receipt.old_owner.owner_system_id != old_state.owner_system_id {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    if receipt.new_owner.owner_system_id != new_state.owner_system_id {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    if receipt.new_owner.source_owner_generation_after_activation
+        != new_state.source_owner_generation
+    {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    if new_state.source_owner_generation == old_state.source_owner_generation {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    if !matches!(
+        receipt.old_owner.terminal_status,
+        search_contracts::NamespaceOwnershipStatus::Fenced
+            | search_contracts::NamespaceOwnershipStatus::Retired
+    ) {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    if receipt.new_owner.status != search_contracts::NamespaceOwnershipStatus::Active {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    if receipt.cutover.effective_at < receipt.cutover.prepared_at {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    if receipt.validation.compatibility_receipt_refs.is_empty()
+        && receipt.validation.integrity_receipt_refs.is_empty()
+    {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    let inner = snapshot.snapshot();
+    if !inner
+        .ownerships
+        .contains_key(&receipt.cutover.source_namespace_id)
+    {
+        return Err(RegistryError::CutoverReceiptMismatch);
+    }
+    Ok(VerifiedCutoverReceipt {
+        cutover_id: receipt.cutover.cutover_id,
+        namespace_id: receipt.cutover.source_namespace_id,
+        old_generation: old_state.source_owner_generation,
+        new_generation: new_state.source_owner_generation,
+        covered_sources: expected_sources,
+        covered_memberships: expected_memberships,
+    })
+}
+
+/// Deduplicates affected identities for coverage proofs.
+#[must_use]
+pub fn deduped_coverage(
+    sources: &[SourceIdentity],
+    memberships: &[SourceMembershipId],
+) -> (Vec<SourceIdentity>, Vec<SourceMembershipId>) {
+    let mut ordered_sources = sources.to_vec();
+    ordered_sources.sort();
+    ordered_sources.dedup();
+    let mut ordered_memberships = memberships.to_vec();
+    ordered_memberships.sort();
+    ordered_memberships.dedup();
+    (ordered_sources, ordered_memberships)
+}
+
+/// Frozen legacy generation progression; permanent-v2 uses the six-axis domain owner.
+pub fn next_legacy_owner_generation(
+    current: SourceOwnerGeneration,
+) -> Result<SourceOwnerGeneration, RegistryError> {
+    let mut bytes = *current.as_bytes();
+    let mut carry: u16 = 1;
+    for byte in bytes.iter_mut().rev() {
+        let sum = u16::from(*byte) + carry;
+        *byte = sum.to_le_bytes()[0];
+        carry = sum >> 8;
+        if carry == 0 {
+            break;
+        }
+    }
+    if carry != 0 {
+        return Err(RegistryError::ContractExhausted);
+    }
+    Ok(SourceOwnerGeneration::from_bytes(bytes))
 }

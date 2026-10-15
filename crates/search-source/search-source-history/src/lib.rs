@@ -22,6 +22,7 @@
 )]
 
 pub use search_source_records::error;
+pub mod namespace_adapter;
 pub mod registry_restore;
 pub mod revision;
 

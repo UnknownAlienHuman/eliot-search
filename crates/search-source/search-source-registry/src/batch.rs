@@ -402,14 +402,48 @@ fn encode_existing_state(
     state.encode_with_profile(profile)
 }
 
+// Only semantic producer modules inside this owner may mint a prepared v4 mutation.
+// A DecodedBatch from public metadata APIs is never a mutation permit by itself.
+pub(super) fn prepare_v4_record(
+    registry: &SourceRegistry,
+    record: DecodedBatch,
+) -> Result<PreparedBatch, RegistryError> {
+    if record.encoding_profile() != "eliot.registry-batch.v4"
+        || record.state_encoding_profile() != "eliot.registry-state.v4"
+        || record.expected_registry_revision() != registry.revision
+    {
+        return Err(RegistryError::RegistryRevisionConflict);
+    }
+    validate_install(registry, &record)?;
+    let states = record
+        .deltas()
+        .iter()
+        .map(|delta| {
+            Ok(PreparedStateDelta {
+                key: delta.key().clone(),
+                key_bytes: delta.key().encode()?,
+                before_bytes: delta
+                    .before()
+                    .map(|value| encode_existing_state(registry, value))
+                    .transpose()?,
+                after_bytes: delta
+                    .after()
+                    .encode_with_profile(record.state_encoding_profile())?,
+            })
+        })
+        .collect::<Result<Vec<_>, RegistryError>>()?;
+    Ok(PreparedBatch {
+        encoded: record.encode()?,
+        record,
+        states,
+    })
+}
+
 pub(super) fn validate_install(
     registry: &SourceRegistry,
     record: &DecodedBatch,
 ) -> Result<(), RegistryError> {
-    let existing = registry
-        .operations
-        .iter()
-        .find(|operation| operation.id() == &record.entry().operation_id);
+    let existing = registry.operations.get(&record.entry().operation_id);
     if existing.is_some_and(|operation| operation.digest() != record.entry().mutation_digest) {
         return Err(RegistryError::OperationConflict);
     }
@@ -535,15 +569,11 @@ fn install_validated(registry: &mut SourceRegistry, record: &DecodedBatch) {
         }
         registry.revision = record.entry().after_revision;
     }
-    if !registry
+    registry
         .operations
-        .iter()
-        .any(|operation| operation.id() == &record.entry().operation_id)
-    {
-        registry
-            .operations
-            .push(RetainedRegistryOperation::Committed(record.clone()));
-    }
+        .entry(record.entry().operation_id.clone())
+        .or_insert_with(|| RetainedRegistryOperation::Committed(record.clone()));
+    registry.identity_cache_v2 = None;
     registry.pending_batch = None;
 }
 

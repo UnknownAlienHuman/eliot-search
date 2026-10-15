@@ -23,6 +23,7 @@
 
 pub mod batch;
 pub mod error;
+pub mod identity_lookup_v2;
 pub mod legacy_direct;
 pub mod legacy_root_catalog;
 pub mod membership;
@@ -35,6 +36,7 @@ pub mod root;
 pub mod root_currentness;
 pub mod snapshot;
 pub mod source;
+pub mod source_request_v2;
 
 #[cfg(test)]
 #[path = "portfolio_history_tests.rs"]

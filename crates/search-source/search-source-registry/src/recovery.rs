@@ -28,6 +28,8 @@ use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
 
 #[path = "batch.rs"]
 mod batch;
+#[path = "source_v2.rs"]
+pub mod source_v2;
 pub use batch::{
     DecodedBatch, PreparedBatch, PreparedStateDelta, RegistryBatchLookup, RegistryBatchReadback,
     RegistryStateDelta, RegistryStateFamily, RegistryStateKey, RegistryStateRecord,
@@ -66,7 +68,8 @@ pub struct SourceRegistry {
     portfolio_history: PortfolioHistory,
     namespaces: BTreeMap<search_contracts::SourceNamespaceId, NamespaceCutoverState>,
     active_generations: BTreeMap<OpaqueId, NonZeroRevision>,
-    operations: Vec<RetainedRegistryOperation>,
+    operations: BTreeMap<OpaqueId, RetainedRegistryOperation>,
+    identity_cache_v2: Option<source_v2::IdentityCacheV2>,
     pending_batch: Option<(OpaqueId, Blake3Digest32)>,
     // Exact physical value formats established by full owner history/readback.
     // Missing format provenance never guesses the current writer's version.
@@ -79,12 +82,6 @@ enum RetainedRegistryOperation {
     Committed(DecodedBatch),
 }
 impl RetainedRegistryOperation {
-    fn id(&self) -> &OpaqueId {
-        match self {
-            Self::ProcessLocal(receipt) => receipt.operation.operation_id(),
-            Self::Committed(record) => &record.entry().operation_id,
-        }
-    }
     fn digest(&self) -> Blake3Digest32 {
         match self {
             Self::ProcessLocal(receipt) => receipt.mutation_digest,
@@ -117,7 +114,8 @@ impl SourceRegistry {
             portfolio_history: PortfolioHistory::new(),
             namespaces: BTreeMap::new(),
             active_generations: BTreeMap::new(),
-            operations: Vec::new(),
+            operations: BTreeMap::new(),
+            identity_cache_v2: None,
             pending_batch: None,
             state_encoding_profiles: BTreeMap::new(),
         })
@@ -138,14 +136,10 @@ impl SourceRegistry {
     /// This observed cache provides no independent durable or live-authority proof.
     pub fn committed_operation(&self, id: &OpaqueId) -> Option<&DecodedBatch> {
         self.operations
-            .iter()
-            .find_map(|operation| match operation {
-                RetainedRegistryOperation::Committed(record)
-                    if &record.entry().operation_id == id =>
-                {
-                    Some(record)
-                }
-                _ => None,
+            .get(id)
+            .and_then(|operation| match operation {
+                RetainedRegistryOperation::Committed(record) => Some(record),
+                RetainedRegistryOperation::ProcessLocal(_) => None,
             })
     }
 
@@ -317,11 +311,7 @@ impl SourceRegistry {
             return Err(RegistryError::MutationOutcomeUnknown);
         }
         batch.validate(self.limits)?;
-        if let Some(operation) = self
-            .operations
-            .iter()
-            .find(|operation| operation.id() == batch.operation.operation_id())
-        {
+        if let Some(operation) = self.operations.get(batch.operation.operation_id()) {
             if operation.digest() != batch.operation.mutation_digest() {
                 return Err(RegistryError::OperationConflict);
             }
@@ -378,8 +368,11 @@ impl SourceRegistry {
         self.active_generations = staged_generations;
         self.rebuild_reverse_index();
         self.revision = after_revision;
-        self.operations
-            .push(RetainedRegistryOperation::ProcessLocal(receipt.clone()));
+        self.operations.insert(
+            batch.operation.operation_id().clone(),
+            RetainedRegistryOperation::ProcessLocal(receipt.clone()),
+        );
+        self.identity_cache_v2 = None;
         Ok(receipt)
     }
 
@@ -432,12 +425,7 @@ where
         .map_err(|_| RegistryError::MutationOutcomeUnknown)?;
     match lookup {
         RegistryBatchLookup::Absent { revision } => {
-            if revision != registry.revision
-                || registry
-                    .operations
-                    .iter()
-                    .any(|operation| operation.id() == operation_id)
-            {
+            if revision != registry.revision || registry.operations.contains_key(operation_id) {
                 Ok(RegistryMutationRecovery::Quarantined)
             } else {
                 Ok(RegistryMutationRecovery::RetrySameOperation)
@@ -536,11 +524,7 @@ where
             if revision != registry.revision {
                 return Err(RegistryError::RegistryRevisionConflict);
             }
-            if registry
-                .operations
-                .iter()
-                .any(|operation| operation.id() == operation_id)
-            {
+            if registry.operations.contains_key(operation_id) {
                 // A process-local receipt is not atomic-state evidence.
                 return Err(RegistryError::MutationOutcomeUnknown);
             }

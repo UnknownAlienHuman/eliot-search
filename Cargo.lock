@@ -1621,6 +1621,7 @@ dependencies = [
  "search-source-admission",
  "search-source-history",
  "search-source-identity",
+ "search-source-provenance",
  "search-source-records",
 ]
 

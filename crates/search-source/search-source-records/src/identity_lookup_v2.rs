@@ -137,8 +137,13 @@ fn insert<K: Ord>(map: &mut BTreeMap<K, SourceIdentity>, (key, identity): (K, So
     Ok(())
 }
 fn check_slot<K: Ord>(map: &BTreeMap<K, SourceIdentity>, before: Option<(&K, &SourceIdentity)>, after: Option<(&K, &SourceIdentity)>, collision: IdentityLookupV2Error) -> Result<(), IdentityLookupV2Error> {
-    if let (Some((old_key, old_id)), Some((new_key, new_id))) = (before, after) { if old_key == new_key && old_id != new_id { return Err(collision); } }
-    if let Some((key, identity)) = before { if map.get(key).is_some_and(|old| old != identity) { return Err(collision); } }
-    if let Some((key, identity)) = after { if let Some(old) = map.get(key) { let replaced = before.is_some_and(|(old_key, old_id)| old_key == key && old_id == old); if old != identity && !replaced { return Err(collision); } } }
+    if let (Some((old_key, old_id)), Some((new_key, new_id))) = (before, after)
+        && old_key == new_key && old_id != new_id { return Err(collision); }
+    if let Some((key, identity)) = before
+        && map.get(key).is_some_and(|old| old != identity) { return Err(collision); }
+    if let Some((key, identity)) = after && let Some(old) = map.get(key) {
+        let replaced = before.is_some_and(|(old_key, old_id)| old_key == key && old_id == old);
+        if old != identity && !replaced { return Err(collision); }
+    }
     Ok(())
 }
