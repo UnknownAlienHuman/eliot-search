@@ -177,7 +177,7 @@ impl RegisteredSource {
         }
     }
 
-    /// Retained original inputs; None explicitly means historical restoration is unavailable.
+    /// Historical-v1 original inputs. Permanent-v2 originals are retained in `provenance()`.
     pub const fn original_admission(&self) -> Option<&OriginalAdmissionEnvelope> {
         match &self.provenance {
             SourceProvenance::HistoricalV1 {
