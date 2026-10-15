@@ -242,7 +242,11 @@ impl<C: CancellationProbe> RegistryControlPort for RegistryJournal<'_, C> {
         if observed.identity() != self.identity {
             return Err(owner_failure(RegistryError::SnapshotInvalid));
         }
-        let decoded = self.decode_operation_for_load(observed.envelope(), context)?;
+        let decoded = self.decode_operation_for_load(
+            observed.envelope(),
+            observed.journal_generation(),
+            context,
+        )?;
         let limits = self.journal.limits();
         let keys = decoded
             .deltas()
@@ -297,6 +301,7 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
     fn decode_operation_for_load(
         &self,
         envelope: &RegistryOperationEnvelope,
+        observed_generation: u64,
         context: &OperationContext<C>,
     ) -> Result<DecodedBatch, RegistryPortError> {
         match decode_operation(envelope, self.registry_limits) {
@@ -325,7 +330,7 @@ impl<C: CancellationProbe> RegistryJournal<'_, C> {
                     .original_inputs_snapshot(&references, context)
                     .map_err(original_inputs_failure)?;
                 if originals.identity() != self.identity
-                    || originals.generation() != envelope.journal_generation_before()
+                    || originals.generation() != observed_generation
                 {
                     return Err(owner_failure(RegistryError::SnapshotInvalid));
                 }
@@ -858,7 +863,11 @@ fn prepare(
         let key_matches = bytes.key() == delta.key()
             && if decoded.state_encoding_profile() == "eliot.registry-state.v4" {
                 delta.key().encode().map_err(owner_failure)? == bytes.key_bytes()
-                    && delta.after().encode().map_err(owner_failure)? == bytes.after_bytes()
+                    && delta
+                        .after()
+                        .encode_with_profile(decoded.state_encoding_profile())
+                        .map_err(owner_failure)?
+                        == bytes.after_bytes()
             } else {
                 decode_registry_state_entry(bytes.key_bytes(), bytes.after_bytes())
                     .map_err(owner_failure)?
@@ -871,7 +880,11 @@ fn prepare(
             (None, None) => {}
             (Some(encoded), Some(expected))
                 if decoded.state_encoding_profile() == "eliot.registry-state.v4"
-                    && expected.encode().map_err(owner_failure)? == encoded => {}
+                    && v4_restore::is_v4_state(encoded)
+                    && expected
+                        .encode_with_profile("eliot.registry-state.v4")
+                        .map_err(owner_failure)?
+                        == encoded => {}
             (Some(encoded), Some(expected))
                 if decode_registry_state_entry(bytes.key_bytes(), encoded)
                     .map_err(owner_failure)?
