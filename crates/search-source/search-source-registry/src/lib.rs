@@ -40,7 +40,7 @@ pub mod recovery;
 pub use search_source_history::revision;
 pub mod root;
 pub use search_source_records::root_currentness;
-pub mod snapshot;
+pub use search_source_records::snapshot;
 pub mod source;
 pub mod view;
 

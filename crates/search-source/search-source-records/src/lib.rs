@@ -31,6 +31,7 @@ pub mod portfolio;
 pub mod portfolio_history;
 pub mod root;
 pub mod root_currentness;
+pub mod snapshot;
 pub mod source;
 
 #[cfg(test)]
