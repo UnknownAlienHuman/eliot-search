@@ -64,12 +64,13 @@ impl Drop for Scratch {
 }
 
 fn encoder() -> LegacyInventoryEncoder {
+    encoder_with_limits(LegacyInventoryLimits::BASELINE)
+}
+
+fn encoder_with_limits(limits: LegacyInventoryLimits) -> LegacyInventoryEncoder {
     // Transport metadata only, never an admitted NativeMigrationInput.
-    let mut encoder = LegacyInventoryEncoder::with_profile(
-        LegacyInventoryLimits::BASELINE,
-        LegacyInventoryProfile::LocationV2,
-    )
-    .unwrap();
+    let mut encoder =
+        LegacyInventoryEncoder::with_profile(limits, LegacyInventoryProfile::LocationV2).unwrap();
     encoder
         .header(LegacyInventoryBinding {
             owner: LegacyInventoryOwner {
@@ -413,28 +414,24 @@ fn control_view_admits_slots_fanout_and_allocation_before_marker_io() {
         &encoded
     );
     let subject = io::locator(&source, &path).unwrap();
-    let empty = || ControlView {
-        events: Vec::new(),
-        projected_rows: 0,
-        reserved_slots: 0,
-        entry_io_attempts: 0,
-    };
+    let prefix = encoder();
+    let empty = || Capture::new(&prefix, Family::Residue).unwrap();
 
     let mut exhausted = empty();
-    exhausted.projected_rows = LegacyInventoryLimits::BASELINE.records;
+    exhausted.view.projected_rows = LegacyInventoryLimits::BASELINE.records;
     assert_eq!(
         exhausted.entry(&source, &path, subject, PUBLICATIONS, None, false),
         Err(limit())
     );
     assert_eq!(
-        exhausted.entry_io_attempts, 0,
+        exhausted.view.entry_io_attempts, 0,
         "refused slot reaches neither metadata nor marker read"
     );
-    assert_eq!(exhausted.events.capacity(), 0);
-    assert_eq!(exhausted.reserved_slots, 0);
+    assert_eq!(exhausted.view.events.capacity(), 0);
+    assert_eq!(exhausted.view.reserved_slots, 0);
 
     let mut fanout = empty();
-    fanout.projected_rows = LegacyInventoryLimits::BASELINE.records - 3;
+    fanout.view.projected_rows = LegacyInventoryLimits::BASELINE.records - 3;
     let overlap_path = source.inventory_root().join("control").join(FLAT);
     fs::write(&overlap_path, b"unsupported overlap body").unwrap();
     let overlap_subject = io::locator(&source, &overlap_path).unwrap();
@@ -443,11 +440,11 @@ fn control_view_admits_slots_fanout_and_allocation_before_marker_io() {
         Err(limit())
     );
     assert_eq!(
-        fanout.entry_io_attempts, 0,
+        fanout.view.entry_io_attempts, 0,
         "all projected families are admitted before I/O"
     );
     assert_eq!(
-        fanout.projected_rows,
+        fanout.view.projected_rows,
         LegacyInventoryLimits::BASELINE.records - 3
     );
 
@@ -459,30 +456,208 @@ fn control_view_admits_slots_fanout_and_allocation_before_marker_io() {
         allocation.entry(&expired, &path, subject, PUBLICATIONS, None, false),
         Err("DIRECT_MIGRATION_DEADLINE_EXCEEDED".to_owned())
     );
-    assert_eq!(allocation.entry_io_attempts, 0);
-    assert_eq!(allocation.events.capacity(), 0);
-    assert_eq!(allocation.reserved_slots, 0);
-    assert_eq!(allocation.projected_rows, 0);
+    assert_eq!(allocation.view.entry_io_attempts, 0);
+    assert_eq!(allocation.view.events.capacity(), 0);
+    assert_eq!(allocation.view.reserved_slots, 0);
+    assert_eq!(allocation.view.projected_rows, 0);
 
     // Pending post-order directory outcomes consume capacity alongside filled
     // rows. Filling their reservations must never grow the backing allocation.
     let mut pending = empty();
     let slots = (0..9)
-        .map(|_| pending.reserve(&source, ALL).unwrap())
+        .map(|_| pending.reserve(&source, ALL, Sizing::Outcome).unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(pending.reserved_slots, 9);
-    assert_eq!(pending.projected_rows, 36);
-    assert!(pending.events.capacity() >= 9);
-    let capacity = pending.events.capacity();
+    assert_eq!(pending.view.reserved_slots, 9);
+    assert_eq!(pending.view.projected_rows, 36);
+    assert!(pending.view.events.capacity() >= 9);
+    let capacity = pending.view.events.capacity();
     assert_eq!(
-        pending.project(&source, Family::Residue, |_| panic!("unfinished view")),
+        pending
+            .view
+            .project(&source, Family::Residue, |_| panic!("unfinished view")),
         Err(changed())
     );
     for slot in slots {
         pending.fill(slot, row(Status::Present, 36, subject, [0; 3]), false);
-        assert_eq!(pending.events.capacity(), capacity);
+        assert_eq!(pending.view.events.capacity(), capacity);
     }
-    assert_eq!(pending.reserved_slots, 0);
-    assert_eq!(pending.events.len(), 9);
+    assert_eq!(pending.view.reserved_slots, 0);
+    assert_eq!(pending.view.events.len(), 9);
     assert_eq!(fs::read(&path).unwrap(), encoded);
+}
+
+fn emit_prefix(encoder: &mut LegacyInventoryEncoder, family: Family, count: u64) {
+    for _ in 0..count {
+        encoder
+            .item(
+                family,
+                Status::Present,
+                27,
+                [Sha256Digest32::from_bytes(ZERO); 3],
+                [0; 3],
+            )
+            .unwrap();
+    }
+}
+
+#[test]
+fn owner_remaining_prefix_refuses_control_io_and_rechecks_cached_projections() {
+    let scratch = Scratch::new();
+    let store = crate::plaintext_direct_store::DirectStore::open(&scratch.0).unwrap();
+    let source = MigrationSource::new(&store, Instant::now() + Duration::from_secs(120), None);
+    assert!(
+        source.native().is_none(),
+        "owner accounting plus actual NTFS component only"
+    );
+    let path = source.inventory_root().join("control/control-cutover.v1");
+    let encoded = marker().encode();
+    fs::write(&path, &encoded).unwrap();
+    let subject = io::locator(&source, &path).unwrap();
+    let future = known_future(Family::Residue).unwrap();
+    assert_eq!(
+        future.0, 12,
+        "three gaps, seven fixed items, two later directory outcomes"
+    );
+
+    // Genuine owner-encoded prefix, not a caller-assigned control-view count.
+    let mut record_prefix = encoder_with_limits(LegacyInventoryLimits {
+        records: 32,
+        encoded_bytes: 65_536,
+        ..LegacyInventoryLimits::BASELINE
+    });
+    let available = record_prefix.preflight_remaining(0, 0).unwrap();
+    emit_prefix(
+        &mut record_prefix,
+        Family::Residue,
+        available.records - future.0 - 4,
+    );
+    let before = record_prefix.preflight_remaining(0, 0).unwrap();
+    let mut capture = Capture::new(&record_prefix, Family::Residue).unwrap();
+    let _outcome = capture.reserve(&source, ALL, Sizing::Outcome).unwrap();
+    assert_eq!(
+        capture.entry(&source, &path, subject, PUBLICATIONS, None, false),
+        Err(limit())
+    );
+    assert_eq!(capture.view.entry_io_attempts, 0);
+    assert_eq!(
+        capture.view.reserved_slots, 1,
+        "rejected entry spends no slot"
+    );
+    assert_eq!(record_prefix.preflight_remaining(0, 0).unwrap(), before);
+
+    let mut bytes = Vec::new();
+    let mut sink = |row: &[u8]| {
+        bytes.extend_from_slice(row);
+        Ok(())
+    };
+    let mut stream = Stream {
+        source: &source,
+        sink: &mut sink,
+        encoder: record_prefix,
+        statuses: [0; 7],
+        complete: true,
+        preparation_links: None,
+        control_view: None,
+    };
+    assert_eq!(
+        scan::control(&mut stream, source.inventory_root(), Family::Residue),
+        Err(limit())
+    );
+    assert!(stream.control_view.is_none());
+    drop(stream);
+    assert!(bytes.is_empty());
+
+    // Derive a near-full byte ceiling from owner remaining capacity. Keeping
+    // the same decimal width preserves the owner's header/footer byte lengths.
+    let limits = LegacyInventoryLimits {
+        records: 512,
+        encoded_bytes: 65_536,
+        ..LegacyInventoryLimits::BASELINE
+    };
+    let mut sizing = encoder_with_limits(limits);
+    emit_prefix(&mut sizing, Family::Residue, 100);
+    let remaining = sizing.preflight_remaining(0, 0).unwrap();
+    let sizing_capture = Capture::new(&sizing, Family::Residue).unwrap();
+    let outcome_bytes = sizing_capture.outcome_bytes.iter().sum::<u64>();
+    let entry_bytes = sizing_capture.entry_bytes[2];
+    let ceiling =
+        limits.encoded_bytes - remaining.encoded_bytes + future.1 + outcome_bytes + entry_bytes - 1;
+    assert!((10_000..65_536).contains(&ceiling));
+    let mut byte_prefix = encoder_with_limits(LegacyInventoryLimits {
+        encoded_bytes: ceiling,
+        ..limits
+    });
+    emit_prefix(&mut byte_prefix, Family::Residue, 100);
+    assert_eq!(
+        byte_prefix
+            .preflight_remaining(future.0 + 4, future.1 + outcome_bytes)
+            .unwrap()
+            .encoded_bytes,
+        entry_bytes - 1
+    );
+    let mut capture = Capture::new(&byte_prefix, Family::Residue).unwrap();
+    let _outcome = capture.reserve(&source, ALL, Sizing::Outcome).unwrap();
+    assert_eq!(
+        capture.entry(&source, &path, subject, PUBLICATIONS, None, false),
+        Err(limit())
+    );
+    assert_eq!(capture.view.entry_io_attempts, 0);
+
+    // After Residue has actually encoded, its cached rows and its two future
+    // outcomes must not be charged again. New Operations prefix rows do count.
+    let mut later = encoder_with_limits(LegacyInventoryLimits {
+        records: 64,
+        encoded_bytes: 65_536,
+        ..LegacyInventoryLimits::BASELINE
+    });
+    let view =
+        ControlView::capture(&source, source.inventory_root(), &later, Family::Residue).unwrap();
+    view.project(&source, Family::Residue, |row| {
+        later
+            .item(
+                Family::Residue,
+                row.status,
+                row.kind,
+                row.refs.map(Sha256Digest32::from_bytes),
+                row.counts,
+            )
+            .map(|_| ())
+            .map_err(super::super::codec_reason)
+    })
+    .unwrap();
+    later
+        .end_family(Family::Residue, Status::Present, true)
+        .unwrap();
+    let required =
+        known_future(Family::Operations).unwrap().0 + view.pending_records[1..].iter().sum::<u64>();
+    let available = later.preflight_remaining(0, 0).unwrap().records;
+    emit_prefix(&mut later, Family::Operations, available - required);
+    view.preflight(&later, Family::Operations)
+        .expect("already emitted Residue is excluded");
+    emit_prefix(&mut later, Family::Operations, 1);
+    let view = Arc::new(view);
+    let attempts = view.entry_io_attempts;
+    let mut bytes = Vec::new();
+    let mut sink = |row: &[u8]| {
+        bytes.extend_from_slice(row);
+        Ok(())
+    };
+    let mut stream = Stream {
+        source: &source,
+        sink: &mut sink,
+        encoder: later,
+        statuses: [0; 7],
+        complete: true,
+        preparation_links: None,
+        control_view: Some(Arc::clone(&view)),
+    };
+    assert_eq!(
+        scan::control(&mut stream, source.inventory_root(), Family::Operations),
+        Err(limit())
+    );
+    assert!(Arc::ptr_eq(stream.control_view.as_ref().unwrap(), &view));
+    drop(stream);
+    assert!(bytes.is_empty());
+    assert_eq!(view.entry_io_attempts, attempts);
+    assert_eq!(fs::read(path).unwrap(), encoded);
 }

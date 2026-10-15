@@ -899,12 +899,13 @@ pub(super) fn control(stream: &mut Stream<'_, '_, '_, '_>, root: &Path, family: 
     let source = stream.source;
     if root != source.inventory_root() { return Err(changed()); }
     if stream.control_view.is_none() {
-        let captured = super::control_view::ControlView::capture(source, root)?;
+        let captured = super::control_view::ControlView::capture(source, root, &stream.encoder, family)?;
         source.charge(Work::Allocate(std::mem::size_of::<super::control_view::ControlView>()))?;
         source.checkpoint()?;
         stream.control_view = Some(std::sync::Arc::new(captured));
     }
     let view = std::sync::Arc::clone(stream.control_view.as_ref().ok_or_else(changed)?);
+    view.preflight(&stream.encoder, family)?;
     view.project(source, family, |row| stream.item(family, row.status, row.kind, row.refs, row.counts))?;
     if family == Family::Publications || family == Family::Security {
         // A legacy layout has no complete authoritative H5 reference denominator.

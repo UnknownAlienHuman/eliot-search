@@ -1,7 +1,9 @@
 //! One bounded physical control observation per source pass, never current authority.
 //! Bodies are decoded while borrowed and discarded; only existing inventory tuples remain.
 
-use super::{Family, LegacyInventoryLimits, MigrationSource, Status, Work, io};
+use super::{
+    Family, LegacyInventoryEncoder, LegacyInventoryLimits, MigrationSource, Status, Work, io,
+};
 use std::path::Path;
 
 const ZERO: [u8; 32] = [0; 32];
@@ -10,6 +12,12 @@ const OPERATIONS: u8 = 2;
 const PUBLICATIONS: u8 = 4;
 const SECURITY: u8 = 8;
 const ALL: u8 = RESIDUE | OPERATIONS | PUBLICATIONS | SECURITY;
+const FAMILIES: [(u8, Family); 4] = [
+    (RESIDUE, Family::Residue),
+    (OPERATIONS, Family::Operations),
+    (PUBLICATIONS, Family::Publications),
+    (SECURITY, Family::Security),
+];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Row {
@@ -36,28 +44,42 @@ pub(super) struct ControlView {
     events: Vec<Event>,
     projected_rows: u64,
     reserved_slots: usize,
+    pending_records: [u64; 4],
+    pending_bytes: [u64; 4],
     #[cfg(test)]
     entry_io_attempts: usize,
+}
+
+struct Capture<'encoder> {
+    view: ControlView,
+    encoder: &'encoder LegacyInventoryEncoder,
+    family: Family,
+    entry_bytes: [u64; 4],
+    outcome_bytes: [u64; 4],
+    future: (u64, u64),
+}
+
+#[derive(Clone, Copy)]
+enum Sizing {
+    Entry,
+    Outcome,
+    Exact(Row),
 }
 
 impl ControlView {
     pub(super) fn capture(
         source: &MigrationSource<'_, '_, '_>,
         root: &Path,
+        encoder: &LegacyInventoryEncoder,
+        family: Family,
     ) -> Result<Self, String> {
         if root != source.inventory_root() {
             return Err(changed());
         }
         source.checkpoint()?;
-        let mut view = Self {
-            events: Vec::new(),
-            projected_rows: 0,
-            reserved_slots: 0,
-            #[cfg(test)]
-            entry_io_attempts: 0,
-        };
+        let mut capture = Capture::new(encoder, family)?;
         let directory = root.join("control");
-        let outcome_slot = view.reserve(source, ALL)?;
+        let outcome_slot = capture.reserve(source, ALL, Sizing::Outcome)?;
         let outcome = io::visit(source, &directory, |name| {
             let text = name.value.to_str().unwrap_or("");
             let residue = Path::new(text).extension().is_some_and(|extension| {
@@ -95,7 +117,7 @@ impl ControlView {
             let subject = io::child_locator(source, &directory, &name.value)?;
             if unknown {
                 // Another family's physical observation cannot promote this missing owner/parser.
-                view.push(
+                capture.push(
                     source,
                     RESIDUE,
                     row(Status::Gap, 34, subject, [0; 3]),
@@ -106,14 +128,28 @@ impl ControlView {
                 return Ok(());
             }
             let path = directory.join(&name.value);
-            view.entry(source, &path, subject, mask, None, residue)
+            capture.entry(source, &path, subject, mask, None, residue)
         })?;
-        view.outcome(source, &directory, outcome_slot, outcome)?;
-        if view.reserved_slots != 0 {
+        capture.outcome(source, &directory, outcome_slot, outcome)?;
+        if capture.view.reserved_slots != 0 {
             return Err(changed());
         }
         source.checkpoint()?;
-        Ok(view)
+        Ok(capture.view)
+    }
+
+    pub(super) fn preflight(
+        &self,
+        encoder: &LegacyInventoryEncoder,
+        family: Family,
+    ) -> Result<(), String> {
+        preflight(
+            encoder,
+            family,
+            self.pending_records,
+            self.pending_bytes,
+            known_future(family)?,
+        )
     }
 
     pub(super) fn project(
@@ -144,6 +180,33 @@ impl ControlView {
         }
         source.charge(Work::Compare(0))
     }
+}
+
+impl<'encoder> Capture<'encoder> {
+    fn new(encoder: &'encoder LegacyInventoryEncoder, family: Family) -> Result<Self, String> {
+        let mut entry_bytes = [0; 4];
+        let mut outcome_bytes = [0; 4];
+        for (index, (_, selected)) in FAMILIES.into_iter().enumerate() {
+            entry_bytes[index] = maximum_item_bytes(selected, u16::MAX, [u64::MAX; 3])?;
+            outcome_bytes[index] = maximum_item_bytes(selected, 36, [0; 3])?;
+        }
+        Ok(Self {
+            view: ControlView {
+                events: Vec::new(),
+                projected_rows: 0,
+                reserved_slots: 0,
+                pending_records: [0; 4],
+                pending_bytes: [0; 4],
+                #[cfg(test)]
+                entry_io_attempts: 0,
+            },
+            encoder,
+            family,
+            entry_bytes,
+            outcome_bytes,
+            future: known_future(family)?,
+        })
+    }
 
     fn entry(
         &mut self,
@@ -154,10 +217,10 @@ impl ControlView {
         parent_depth: Option<usize>,
         orphan: bool,
     ) -> Result<(), String> {
-        let slot = self.reserve(source, mask)?;
+        let slot = self.reserve(source, mask, Sizing::Entry)?;
         #[cfg(test)]
         {
-            self.entry_io_attempts += 1;
+            self.view.entry_io_attempts += 1;
         }
         let observed = io::metadata(source, path)?;
         match observed {
@@ -203,7 +266,7 @@ impl ControlView {
                 false,
             );
         }
-        let outcome_slot = self.reserve(source, mask)?;
+        let outcome_slot = self.reserve(source, mask, Sizing::Outcome)?;
         let outcome = io::visit(source, directory, |name| {
             let path = directory.join(&name.value);
             let subject = io::locator(source, &path)?;
@@ -235,7 +298,7 @@ impl ControlView {
         row: Row,
         residue_orphan: bool,
     ) -> Result<(), String> {
-        let slot = self.reserve(source, families)?;
+        let slot = self.reserve(source, families, Sizing::Exact(row))?;
         self.fill(slot, row, residue_orphan);
         Ok(())
     }
@@ -244,18 +307,48 @@ impl ControlView {
         &mut self,
         source: &MigrationSource<'_, '_, '_>,
         families: u8,
+        sizing: Sizing,
     ) -> Result<Reservation, String> {
         let projected = self
+            .view
             .projected_rows
             .checked_add(u64::from(families.count_ones()))
             .ok_or_else(limit)?;
         if projected > LegacyInventoryLimits::BASELINE.records {
             return Err(limit());
         }
-        let slots = self.reserved_slots.checked_add(1).ok_or_else(limit)?;
-        let needed = self.events.len().checked_add(slots).ok_or_else(limit)?;
-        if needed > self.events.capacity() {
-            let capacity = self.events.capacity().saturating_mul(2).max(8).max(needed);
+        let mut records = self.view.pending_records;
+        let mut bytes = self.view.pending_bytes;
+        for (index, (mask, family)) in FAMILIES.into_iter().enumerate() {
+            if families & mask == 0 {
+                continue;
+            }
+            let encoded = match sizing {
+                Sizing::Entry => self.entry_bytes[index],
+                Sizing::Outcome => self.outcome_bytes[index],
+                Sizing::Exact(row) => item_bytes(family, row.status, row.kind, row.counts)?,
+            };
+            records[index] = records[index].checked_add(1).ok_or_else(limit)?;
+            bytes[index] = bytes[index].checked_add(encoded).ok_or_else(limit)?;
+        }
+        // The owner includes its actual emitted prefix and all mandatory tails.
+        // Bounds retained for filled rows stay conservative until their family emits.
+        preflight(self.encoder, self.family, records, bytes, self.future)?;
+        let slots = self.view.reserved_slots.checked_add(1).ok_or_else(limit)?;
+        let needed = self
+            .view
+            .events
+            .len()
+            .checked_add(slots)
+            .ok_or_else(limit)?;
+        if needed > self.view.events.capacity() {
+            let capacity = self
+                .view
+                .events
+                .capacity()
+                .saturating_mul(2)
+                .max(8)
+                .max(needed);
             let bytes = capacity
                 .checked_mul(std::mem::size_of::<Event>())
                 .ok_or_else(limit)?;
@@ -263,27 +356,124 @@ impl ControlView {
                 return Err(limit());
             }
             source.charge(Work::Allocate(bytes))?;
-            self.events
-                .try_reserve_exact(capacity - self.events.len())
+            self.view
+                .events
+                .try_reserve_exact(capacity - self.view.events.len())
                 .map_err(|_| limit())?;
         }
         source.charge(Work::Compare(std::mem::size_of::<Event>()))?;
-        self.projected_rows = projected;
-        self.reserved_slots = slots;
+        self.view.projected_rows = projected;
+        self.view.reserved_slots = slots;
+        self.view.pending_records = records;
+        self.view.pending_bytes = bytes;
         Ok(Reservation { families })
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "Consume the non-Copy reservation exactly once so its slot cannot be filled twice"
+    )]
     fn fill(&mut self, slot: Reservation, row: Row, residue_orphan: bool) {
-        self.events.push(Event {
+        self.view.events.push(Event {
             families: slot.families,
             row,
             residue_orphan,
         });
-        self.reserved_slots -= 1;
+        self.view.reserved_slots -= 1;
     }
 }
 
-fn row(status: Status, kind: u16, subject: [u8; 32], counts: [u64; 3]) -> Row {
+fn item_bytes(family: Family, status: Status, kind: u16, counts: [u64; 3]) -> Result<u64, String> {
+    u64::try_from(
+        LegacyInventoryEncoder::item_encoded_len(family, status, kind, counts)
+            .map_err(super::codec_reason)?,
+    )
+    .map_err(|_| limit())
+}
+
+fn maximum_item_bytes(family: Family, kind: u16, counts: [u64; 3]) -> Result<u64, String> {
+    let mut maximum = 0;
+    for status in [
+        Status::Present,
+        Status::AbsentProven,
+        Status::Orphan,
+        Status::Corrupt,
+        Status::Unreadable,
+        Status::Unsupported,
+        Status::Gap,
+    ] {
+        maximum = maximum.max(item_bytes(family, status, kind, counts)?);
+    }
+    Ok(maximum)
+}
+
+fn known_future(family: Family) -> Result<(u64, u64), String> {
+    let mut records = 0_u64;
+    let mut bytes = 0_u64;
+    let mut add = |size: u64| -> Result<(), String> {
+        records = records.checked_add(1).ok_or_else(limit)?;
+        bytes = bytes.checked_add(size).ok_or_else(limit)?;
+        Ok(())
+    };
+    for (selected, kind, counts) in [
+        (Family::Operations, 348, [348, 0, 0]),
+        (Family::Publications, 24, [0; 3]),
+        (Family::Security, 24, [0; 3]),
+    ] {
+        if selected as usize >= family as usize {
+            add(item_bytes(selected, Status::Gap, kind, counts)?)?;
+        }
+    }
+    if family == Family::Residue {
+        // Unknown preparation children and unknown root objects each end with
+        // one directory outcome after control. Their undiscovered items are not predicted.
+        for _ in 0..2 {
+            add(maximum_item_bytes(Family::Residue, 36, [0; 3])?)?;
+        }
+    }
+    // Two fixed credential items and five fixed limit items follow control.
+    // Their values are not observations here; owner sizing bounds every counter.
+    for (selected, kind) in [
+        (Family::Credentials, 20),
+        (Family::Credentials, 21),
+        (Family::Limits, 22),
+        (Family::Limits, 30),
+        (Family::Limits, 31),
+        (Family::Limits, 32),
+        (Family::Limits, 33),
+    ] {
+        add(item_bytes(selected, Status::Present, kind, [u64::MAX; 3])?)?;
+    }
+    Ok((records, bytes))
+}
+
+fn preflight(
+    encoder: &LegacyInventoryEncoder,
+    family: Family,
+    records: [u64; 4],
+    bytes: [u64; 4],
+    future: (u64, u64),
+) -> Result<(), String> {
+    if !FAMILIES.iter().any(|(_, selected)| *selected == family) {
+        return Err(changed());
+    }
+    let (mut pending_records, mut pending_bytes) = future;
+    for (index, (_, selected)) in FAMILIES.into_iter().enumerate() {
+        if (selected as usize) < family as usize {
+            continue;
+        }
+        pending_records = pending_records
+            .checked_add(records[index])
+            .ok_or_else(limit)?;
+        pending_bytes = pending_bytes.checked_add(bytes[index]).ok_or_else(limit)?;
+    }
+    encoder
+        .preflight_remaining(pending_records, pending_bytes)
+        .map(|_| ())
+        .map_err(super::codec_reason)
+}
+
+const fn row(status: Status, kind: u16, subject: [u8; 32], counts: [u64; 3]) -> Row {
     Row {
         status,
         kind,
