@@ -410,3 +410,4 @@ fn admission_failure(error: ControlError) -> ControlPortError {
 mod tests;
 
 mod original_registry;
+mod original_records;
