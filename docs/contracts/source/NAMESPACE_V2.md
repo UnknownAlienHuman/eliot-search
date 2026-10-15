@@ -2,6 +2,14 @@
 
 This pure profile supplies the identity axis required by Architecture S7.2.1.
 It does not allocate a namespace, admit an owner or verify live custody.
+`SourceOwnerScopeV2.epoch` is the admitted namespace ownership epoch.
+`RootRecord.owner_epoch` retains the historical Native registration fence;
+physical Native/journal custody may advance without rewriting that Root value.
+Source preflight checks active Root/revision/policy and namespace ownership as
+separate domains. For an existing namespace its provider, incarnation, epoch and
+generation must still match exactly. Fresh Native custody is mandatory in the
+normal adapter; no equality of metadata scalars proves it or authorizes ownership
+succession. A physical journal advance alone never changes a namespace owner.
 The existing `search-domain` owner computes it with the sole shared canonical
 encoder and BLAKE3 executor; no new package or dependency is introduced.
 

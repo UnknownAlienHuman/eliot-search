@@ -17,14 +17,15 @@ use search_source_identity::{
 use search_source_provenance::{OriginalAdmissionV2, OriginalInputsLayoutV2};
 use std::sync::Arc;
 
-/// Actual installation-owner observations supplied by the normal bound adapter.
+/// Source-namespace owner scope supplied by the qualified normal adapter.
+/// Current Native custody is proved separately, not by historical Root metadata.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SourceOwnerScopeV2 {
     /// Stable provider system identity.
     pub system_id: OpaqueId,
     /// Actual installation incarnation, never inferred from a root or locator.
     pub installation_incarnation: InstallationIncarnationId,
-    /// Actual admitted owner epoch.
+    /// Admitted namespace ownership epoch, independent of Root registration history.
     pub epoch: OwnerEpoch,
 }
 
