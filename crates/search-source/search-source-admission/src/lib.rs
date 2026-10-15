@@ -43,6 +43,8 @@ use search_contracts::{Blake3Digest32, DigestInputLimit, NonZeroRevision, sha256
 
 /// Pure bounded relative-locator and versioned observation equality model.
 pub mod observation_v2;
+/// Checkpointed complete metadata input retention and v2 reconstitution.
+pub mod original_inputs_v2;
 
 /// Bounded effective v2 evaluation and immutable internally bound decisions.
 pub mod evaluation_v2;
@@ -1820,11 +1822,22 @@ pub fn validate_observation(
     policy: &CanonicalAdmissionPolicy,
     limits: AdmissionLimits,
 ) -> Result<AdmissionObservation, AdmissionError> {
+    validate_observation_fields(input, policy.rules.len(), policy.max_file_bytes(), limits)
+}
+
+// Both policy versions use this sole metadata validator. A size/rule ceiling
+// grants no policy outcome, receipt or native access authority.
+fn validate_observation_fields(
+    input: &UnvalidatedObservationInput,
+    rule_count: usize,
+    max_file_bytes: u64,
+    limits: AdmissionLimits,
+) -> Result<AdmissionObservation, AdmissionError> {
     let limits = limits.validate()?;
     if !input.unknown_fields.is_empty() {
         return Err(AdmissionError::PolicyUnknownField);
     }
-    if policy.rules.len() > limits.max_rules {
+    if rule_count > limits.max_rules {
         return Err(AdmissionError::ObservationInvalid);
     }
     let locator_class = LocatorClass::parse(&input.locator_class)?;
@@ -1856,7 +1869,7 @@ pub fn validate_observation(
         check_id(profile, "profile_id")?;
     }
     if let Some(size) = input.byte_size {
-        if size > policy.max_file_bytes().saturating_mul(16).saturating_add(1) {
+        if size > max_file_bytes.saturating_mul(16).saturating_add(1) {
             // Observations absurdly above any policy ceiling are malformed
             // rather than silently reviewable; evaluation still denies.
             return Err(AdmissionError::ObservationInvalid);

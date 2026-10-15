@@ -1,5 +1,15 @@
 # Function contract — `search-source-admission`
 
+`original_inputs_v2::{retain_observation_inputs_v2,reconstitute_observation_v2}`
+preserves every normalized metadata flag, ID and explicit unavailable marker.
+Reconstitution uses the sole field validator with the actual compiled v2 size
+and rule ceilings, then the existing immutable observation constructor. The
+portable observation module retains no dependency on its policy matcher.
+Original caller checkpoints surround copying/construction; these values grant
+no admission, native access or currentness. Existing v1 validation and all
+observation fingerprints remain unchanged. Source persistence is #569 work in
+progress, not a qualified current-v2 consumer yet.
+
 `bootstrap_v1` validates all five explicit compiled defaults and encodes fresh
 Root metadata evidence through the original owner policy-value codec. Revision
 one is internal genesis; partial W1 config is not current policy. This helper
