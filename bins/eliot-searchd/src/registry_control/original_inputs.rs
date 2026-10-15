@@ -128,7 +128,7 @@ impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
             Ok(()) if Instant::now() < deadline => Ok(()),
             Ok(()) => Err(CheckpointFailureV2::DeadlineExceeded),
             Err(error) => {
-                owner_error.borrow_mut().replace(error);
+                owner_error.borrow_mut().get_or_insert(error);
                 Err(CheckpointFailureV2::Cancelled)
             }
         };

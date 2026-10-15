@@ -80,13 +80,14 @@ impl OriginalInputResolverTrait for OriginalInputResolver<'_> {
             return Ok(Arc::clone(policy));
         }
         let parts = self.parts(policy_reference, probe)?;
+        let mut original_probe = || probe();
         let policy = Arc::new(
             OriginalInputsLayoutV2::restore_policy(
                 policy_reference,
                 &parts,
                 &self.platform,
                 &self.capabilities,
-                probe,
+                &mut original_probe,
             )
             .map_err(BatchCodecV4Error::Admission)?,
         );
@@ -102,7 +103,8 @@ impl OriginalInputResolverTrait for OriginalInputResolver<'_> {
         probe: &mut dyn FnMut() -> Result<(), CheckpointFailureV2>,
     ) -> Result<search_source_provenance::OriginalAdmissionV2, BatchCodecV4Error> {
         let parts = self.parts(admission_reference, probe)?;
-        OriginalInputsLayoutV2::restore_admission(admission_reference, &parts, policy, probe)
+        let mut original_probe = || probe();
+        OriginalInputsLayoutV2::restore_admission(admission_reference, &parts, policy, &mut original_probe)
             .map_err(BatchCodecV4Error::Admission)
     }
 }
