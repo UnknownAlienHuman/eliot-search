@@ -1,5 +1,36 @@
 # Native root owner and explicit initialization
 
+## Explicit permanent-v2 Root policy
+
+`--register-source-root-v2 DATA_ROOT SOURCE_ROOT POLICY_ARCHIVE` accepts exactly
+four selected operands, with the existing optional `--config-file` locator hints.
+`POLICY_ARCHIVE` is an existing canonical `RetainedPolicyV2` archive, bounded by
+its owner's 256 KiB ceiling. It is restored through that owner before mutating
+Root acquisition, under the original deadline, cancellation and cumulative meter.
+Qualified local NTFS parent/file handles exclude writes and deletion through
+capture, owner reconstruction and final locator/identity readback.
+
+Root metadata contains the actual compiled policy revision/fingerprint. There is
+no implicit upgrade, policy update or reactivation of an existing Root. Immutable
+O1 acknowledgement is distinct from current Native qualification; replay under a
+different supplied policy refuses. Invalid archive preflight has no Root/lifecycle
+effect. A later semantic mismatch may follow physical Native owner acquisition.
+Root remains Root-only: first Source admission creates its namespace and retains
+the full original policy. No empty-Root archive pointer or source-read grant exists.
+
+V1 receipt bytes and domains remain unchanged. For v2, O/Q/N retain the existing
+owner, original request and native Root observations. I is the ordered tuple
+`[RootID, nativeRootDigest, FP2, policyRevision, nativeEpoch, operation, predecessor,
+archiveReference]`. C is `[sectionSchema, bootstrapProfile, maxFileBytes,
+allowGenerated, allowVendor, allowBinary]` from the owner-compiled section.
+P is `[2, policyProfile, policyRevision, FP2, archiveReference]`; the reference is
+the existing `OriginalInputsLayoutV2::policy_reference`, never the archive path.
+The mutation hashes `[2,O,Q,N,I]` with
+`eliot/cbor/source-registry/root-owner-fence/v2`; the policy receipt hashes
+`[2,O,Q,N,I,C,P]` with `eliot/cbor/source-registry/root-permanent-policy/v2`.
+Shared canonical/hash owners compute both; no evaluator or digest implementation
+is introduced. Native race, runtime and installed qualification remain #215.
+
 This daemon composition family owns native exclusion, root/installation identity and the durable
 owner lifecycle. The root-open policy is supplied by `search-runtime-owner`. It does not attest a
 source catalog, namespace contents, control store, revision store, security state or product readiness.

@@ -1,5 +1,6 @@
 //! Real normal caller for the sole fresh DIRECT database. No error fallback.
 use super::{DirectRegistryOwner, NativeRootRequest, NativeWork, W};
+use super::super::super::direct_policy_v2::CapturedPolicyV2;
 use crate::config_composition::{self as config, RootLocatorHints};
 use search_runtime_owner::{DataRootOpenMode, OwnerError};
 use search_source_registry::{
@@ -39,6 +40,7 @@ fn is_direct_command(argument: &OsStr) -> bool {
         matches!(
             command,
             "--register-source-root"
+                | "--register-source-root-v2"
                 | "--unregister-source-root"
                 | "--source-roots"
                 | "--health-data-root"
@@ -64,6 +66,7 @@ pub(super) fn run(
         .and_then(|v| v.to_str())
         .ok_or("SOURCE_ROOT_USAGE_ERROR")?;
     let expected = match command {
+        "--register-source-root-v2" => 4,
         "--register-source-root"
         | "--unregister-source-root"
         | "--search-root"
@@ -75,7 +78,7 @@ pub(super) fn run(
     if selected.len() != expected || !cli.overrides.is_empty() {
         return Err("DIRECT_INPUT_UNAVAILABLE".into());
     }
-    let mode = if command == "--register-source-root" {
+    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2") {
         DataRootOpenMode::OpenExistingMutating
     } else {
         DataRootOpenMode::InspectExistingReadOnly
@@ -101,8 +104,16 @@ pub(super) fn run(
     )
     .map_err(|e| e.code().to_owned())?;
     let mut work = NativeWork::new();
-    let preflight = capture_hints(&request, &mut work, cli, command, &selected);
-    let hints = match preflight {
+    let preflight = (|| {
+        let hints = capture_hints(&request, &mut work, cli, command, &selected)?;
+        let policy = if command == "--register-source-root-v2" {
+            Some(super::super::super::direct_policy_v2::capture(
+                &request, &mut work, Path::new(&selected[3]),
+            ).map_err(|e| e.code().to_owned())?)
+        } else { None };
+        Ok::<_, String>((hints, policy))
+    })();
+    let (hints, policy) = match preflight {
         Ok(value) => value,
         Err(error) => {
             let line = format!(
@@ -118,11 +129,12 @@ pub(super) fn run(
     let owner = DirectRegistryOwner::open_for_command(request, work, writer)?;
     owner.execute(
         &hints,
-        if command == "--register-source-root" {
+        if matches!(command, "--register-source-root" | "--register-source-root-v2") {
             Some(Path::new(&selected[2]))
         } else {
             None
         },
+        policy.as_ref(),
         writer,
     )
 }
@@ -143,7 +155,7 @@ pub(super) fn bootstrap_policy() -> Result<search_source_admission::ValidatedAdm
     Ok(config)
 }
 
-fn admission_environment() -> (
+pub(in super::super::super) fn admission_environment() -> (
     search_source_admission::SectionPlatform,
     search_source_admission::AcceptedCapabilities,
 ) {
@@ -159,6 +171,7 @@ impl DirectRegistryOwner {
         &mut self,
         hints: &RootLocatorHints,
         selected: Option<&Path>,
+        policy_v2: Option<&CapturedPolicyV2>,
     ) -> Result<DirectOutput, String> {
         // Owned current Native epoch, distinct from the historical RootRecord epoch.
         let native_owner_epoch = self.owner.record.epoch;
@@ -175,19 +188,18 @@ impl DirectRegistryOwner {
             .ok_or("DIRECT_JOURNAL_UNAVAILABLE")?;
         let mut port = original_port(journal, &mut self.control.publisher, deadline, &callback)?;
         let selected_id = selected.map(|path| hints.selected(path)).transpose()?;
-        let (restored, original) = if selected_id.is_some() {
-            port.restore_for_root(selected_id, native.context())
-                .map_err(|_| "DIRECT_RESTORE_REFUSED")?
-        } else {
-            (
-                port.restore(native.context())
-                    .map_err(|_| "DIRECT_RESTORE_REFUSED")?,
-                None,
-            )
-        };
+        let (restored, original) = selected_id.map_or_else(
+            || port.restore(native.context()).map(|restored| (restored, None)),
+            |id| port.restore_for_root(Some(id), native.context()),
+        )
+            .map_err(|_| "DIRECT_RESTORE_REFUSED")?;
         let mut registry = restored.into_registry();
         let operation = original.unwrap_or(fresh_operation);
-        let policy = bootstrap_policy()?;
+        let policy = policy_v2.is_none().then(bootstrap_policy).transpose()?;
+        let requalify = |path: &Path, id, registry: &search_source_registry::SourceRegistry| policy_v2.map_or_else(
+            || native.requalify_existing(path, id, registry, policy.as_ref().expect("closed v1 selection")).map(|_| ()),
+            |policy| native.requalify_existing_v2(path, id, registry, &policy.retained, &policy.reference).map(|_| ()),
+        );
         let mut registered = false;
         let mut current = true;
         let mut historical_revision = None;
@@ -199,27 +211,24 @@ impl DirectRegistryOwner {
                 .map_err(|_| "DIRECT_LOOKUP_REFUSED")?
             {
                 RegistryBatchLookup::Committed(original) => {
-                    let exact = original.record().deltas().iter().any(|v| matches!(v.after(),
-                        search_source_registry::recovery::RegistryStateRecord::Root(root) if root.root_binding_id == id));
-                    if !exact {
-                        return Err("DIRECT_ORIGINAL_OPERATION_CONFLICT".into());
-                    }
+                    validate_original_root(original.record(), id, policy_v2)?;
                     historical_revision = Some(original.record().registry_revision_after());
                     // Historical commit is separate from current policy/lifecycle.
                     // Requalification never reactivates a fenced RootRecord.
-                    match native.requalify_existing(path, id, &registry, &policy) {
+                    match requalify(path, id, &registry) {
                         Ok(_qualified) => {}
                         Err(_) => current = false,
                     }
                 }
                 RegistryBatchLookup::Absent { .. } if registry.roots().contains_key(&id) => {
-                    let _current = native
-                        .requalify_existing(path, id, &registry, &policy)
+                    requalify(path, id, &registry)
                         .map_err(|e| e.to_string())?;
                 }
                 RegistryBatchLookup::Absent { revision } => {
-                    let prepared = native
-                        .prepare(path, id, operation, revision, &policy)
+                    let prepared = match policy_v2 {
+                        Some(policy) => native.prepare_v2(path, id, operation, revision, &policy.retained, &policy.reference),
+                        None => native.prepare(path, id, operation, revision, policy.as_ref().expect("closed v1 selection")),
+                    }
                         .map_err(|e| e.to_string())?;
                     let qualified = match prepared.register(&mut registry, &mut port) {
                         Ok(value) => value,
@@ -235,7 +244,7 @@ impl DirectRegistryOwner {
                     // Producer has just completed full Native/readback qualification.
                     // Only bounded metadata is rendered; no source body/entropy follows.
                     if qualified.root().root_binding_id != id
-                        || qualified.policy().revision() != qualified.root().policy_revision
+                        || qualified.policy_revision() != qualified.root().policy_revision
                     {
                         return Err("DIRECT_ROOT_READBACK_REFUSED".into());
                     }
@@ -244,7 +253,7 @@ impl DirectRegistryOwner {
             }
         } else {
             native
-                .requalify_roots(&registry, hints, &policy)
+                .requalify_roots(&registry, hints, policy.as_ref().ok_or("DIRECT_POLICY_INPUT_INVALID")?)
                 .map_err(|e| e.to_string())?;
         }
         native
@@ -269,6 +278,29 @@ impl DirectRegistryOwner {
             native_owner_epoch,
         ))
     }
+}
+
+fn validate_original_root(record: &search_source_registry::recovery::DecodedBatch,
+    id: search_contracts::RootBindingId, policy: Option<&CapturedPolicyV2>,
+) -> Result<(), String> {
+    use search_source_registry::recovery::RegistryStateRecord;
+    let conflict = || "DIRECT_ORIGINAL_OPERATION_CONFLICT".to_owned();
+    if !record.deltas().iter().any(|v| matches!(v.after(), RegistryStateRecord::Root(root) if root.root_binding_id == id)) {
+        return Err(conflict());
+    }
+    if let Some(policy) = policy {
+        // O1 must be this policy's creation, never an update/unbind or a
+        // same-ID registration under another profile. No policy upgrade.
+        let [delta] = record.deltas() else { return Err(conflict()); };
+        let RegistryStateRecord::Root(root) = delta.after() else { return Err(conflict()); };
+        if delta.before().is_some() || root.root_binding_id != id
+            || root.status != search_source_registry::root::RootStatus::Active
+            || root.policy_revision != policy.retained.compiled().revision()
+            || root.policy_fingerprint.as_bytes() != policy.retained.fingerprint().as_bytes() {
+            return Err(conflict());
+        }
+    }
+    Ok(())
 }
 
 pub(super) struct DirectOutput {
@@ -400,12 +432,12 @@ fn capture_hints(
     let effective = config::build_effective(file, None, None, "direct", "direct")
         .map_err(|_| "DIRECT_CONFIG_INVALID")?;
     let hints = RootLocatorHints::from_config(&effective)?;
-    if command == "--register-source-root" {
+    if matches!(command, "--register-source-root" | "--register-source-root-v2") {
         hints.selected(Path::new(&selected[2]))?;
     }
     if !matches!(
         command,
-        "--register-source-root" | "--source-roots" | "--health-data-root" | "--verify-root"
+        "--register-source-root" | "--register-source-root-v2" | "--source-roots" | "--health-data-root" | "--verify-root"
     ) {
         return Err("DIRECT_CONSUMER_UNAVAILABLE".into());
     }

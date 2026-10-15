@@ -294,9 +294,10 @@ impl DirectRegistryOwner {
         mut self,
         hints: &crate::config_composition::RootLocatorHints,
         selected: Option<&Path>,
+        policy: Option<&super::super::direct_policy_v2::CapturedPolicyV2>,
         writer: &mut impl Write,
     ) -> Result<(), String> {
-        let result = self.prepare_output(hints, selected);
+        let result = self.prepare_output(hints, selected, policy);
         match result {
             Ok(output) => {
                 self.owner

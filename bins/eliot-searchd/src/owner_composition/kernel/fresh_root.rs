@@ -29,6 +29,10 @@ use std::{
 pub const OWNER_FENCE_DOMAIN: &str = "eliot/cbor/source-registry/root-owner-fence/v1";
 pub const ROOT_POLICY_DOMAIN: &str = "eliot/cbor/source-registry/root-bootstrap-policy/v1";
 
+#[path = "fresh_root_policy_v2.rs"]
+mod policy_v2;
+use policy_v2::RootPolicy;
+
 #[derive(Debug)]
 pub enum FreshRootError {
     Native(OwnerError),
@@ -212,7 +216,7 @@ pub struct PreparedFreshRoot<'view, 'operation, 'owner> {
     native: &'view FreshRootContext<'operation, 'owner>,
     pins: Vec<Pin>,
     request: RegisterRootRequest,
-    policy: admission::CanonicalAdmissionPolicy,
+    policy: RootPolicy,
     operation: c::OpaqueId,
     expected: u64,
     mutation: c::Blake3Digest32,
@@ -227,7 +231,7 @@ pub struct RegisteredFreshRoot<'prepared, 'view, 'operation, 'owner> {
 /// Construction issues no new registration or original-operation receipt.
 pub struct RequalifiedFreshRoot<'view, 'operation, 'owner> {
     native: &'view FreshRootContext<'operation, 'owner>, pins: Vec<Pin>, root: RootRecord,
-    policy: admission::CanonicalAdmissionPolicy,
+    policy: RootPolicy,
 }
 
 impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
@@ -359,13 +363,19 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
     pub fn requalify_existing<'view>(&'view self, path: &Path, id: c::RootBindingId,
         registry: &SourceRegistry, config: &ValidatedAdmissionConfig,
     ) -> Result<RequalifiedFreshRoot<'view, 'operation, 'owner>, FreshRootError> {
-        self.verify_owner()?;
         let policy = admission::compile_bootstrap_policy_v1(config).map_err(FreshRootError::Admission)?;
+        self.requalify_policy(path, id, registry, RootPolicy::V1(policy))
+    }
+
+    fn requalify_policy<'view>(&'view self, path: &Path, id: c::RootBindingId,
+        registry: &SourceRegistry, policy: RootPolicy,
+    ) -> Result<RequalifiedFreshRoot<'view, 'operation, 'owner>, FreshRootError> {
+        self.verify_owner()?;
         let root = registry.roots().get(&id).ok_or_else(invalid)?.clone();
         let (pins, digest) = self.selection(path)?;
         if root.status != search_source_registry::root::RootStatus::Active || root.canonical_root_digest != digest
             || root.policy_revision != policy.revision()
-            || root.policy_fingerprint.as_bytes() != admission::policy_fingerprint(&policy).as_bytes() { return Err(invalid()); }
+            || root.policy_fingerprint != policy.fingerprint() { return Err(invalid()); }
         let result = RequalifiedFreshRoot { native: self, pins, root, policy };
         result.check_current(registry)?;
         Ok(result)
@@ -396,20 +406,31 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
         let (config_value, policy_value) =
             admission::bootstrap_v1::bootstrap_policy_evidence_v1(config)
                 .map_err(FreshRootError::Admission)?;
+        self.prepare_policy(source_root, root_id, operation, expected_registry_revision,
+            RootPolicy::V1(policy), config_value, policy_value)
+    }
+
+    #[expect(clippy::too_many_arguments, reason = "One existing Root preparation; policy evidence stays paired at its two closed callers")]
+    fn prepare_policy<'view>(
+        &'view self, source_root: &Path, root_id: c::RootBindingId, operation: c::OpaqueId,
+        expected_registry_revision: u64, policy: RootPolicy, config_value: V, policy_value: V,
+    ) -> Result<PreparedFreshRoot<'view, 'operation, 'owner>, FreshRootError> {
         let (pins, canonical_root_digest) = self.selection(source_root)?;
         let observed = pins.last().ok_or_else(invalid)?.observed;
-        let fingerprint = c::Blake3Digest32::from_stored_bytes(
-            *admission::policy_fingerprint(&policy).as_bytes(),
-        );
-        let intent = array(vec![
+        let fingerprint = policy.fingerprint();
+        let mut intent_fields = vec![
             bytes(root_id.as_bytes())?,
             bytes(canonical_root_digest.as_bytes())?,
             bytes(fingerprint.as_bytes())?,
-            V::U64(1),
+            V::U64(policy.revision().get()),
             V::U64(self.epoch.get()),
             text(operation.as_str())?,
             V::U64(expected_registry_revision),
-        ])?;
+        ];
+        if let RootPolicy::V2 { reference, .. } = &policy {
+            intent_fields.push(bytes(reference)?);
+        }
+        let intent = array(intent_fields)?;
         let native = array(vec![
             text(ntfs_directory::NTFS_DIRECTORY_PROFILE)?,
             V::U64(u64::from(observed.volume_serial)),
@@ -421,7 +442,7 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
         ])?;
         self.charge(Work::Allocate(32 * 1024))?;
         self.charge(Work::Compare(32 * 1024))?;
-        let (mutation, policy_digest) = receipt_digests(
+        let (mutation, policy_digest) = policy.receipt_digests(
             &self.owner,
             &self.request,
             native,
@@ -646,8 +667,8 @@ impl RegisteredFreshRoot<'_, '_, '_, '_> {
     pub const fn root(&self) -> &RootRecord {
         &self.root
     }
-    pub const fn policy(&self) -> &admission::CanonicalAdmissionPolicy {
-        &self.prepared.policy
+    pub fn policy_revision(&self) -> c::NonZeroRevision {
+        self.prepared.policy.revision()
     }
 }
 
@@ -656,7 +677,7 @@ impl RequalifiedFreshRoot<'_, '_, '_> {
     pub fn check_current(&self, registry: &SourceRegistry) -> Result<(), FreshRootError> {
         self.native.verify_owner()?;
         if registry.roots().get(&self.root.root_binding_id) != Some(&self.root)
-            || admission::policy_fingerprint(&self.policy).as_bytes() != self.root.policy_fingerprint.as_bytes() { return Err(invalid()); }
+            || self.policy.fingerprint() != self.root.policy_fingerprint { return Err(invalid()); }
         for pin in &self.pins {
             let (_, held) = self.native.observe(pin.directory.retain_file())?;
             let (_, current) = self.native.open(&pin.path)?;
