@@ -3,7 +3,7 @@
 //! Domain-bound preimages are exactly `domain || 0 || payload`. CBOR and raw-byte domains
 //! are disjoint. These primitives do not issue operation receipts or authorize
 //! caller data; each semantic owner must freeze its schema and domain together.
-//! The explicitly named exact-byte SHA compatibility primitive adds no framing.
+//! The explicitly named exact-byte primitives add no framing.
 
 use crate::canonical::{
     check_canonical_array_length, stream_canonical_cbor, stream_canonical_cbor_array,
@@ -141,6 +141,39 @@ impl DigestInputLimit {
         Ok(Self(max_bytes))
     }
 
+    #[must_use]
+    pub const fn get(self) -> usize {
+        self.0
+    }
+}
+
+/// Maximum unframed BLAKE3 input for the baseline source qualification profile.
+pub const MAX_BLAKE3_EXACT_BYTES: usize = 16 * 1024 * 1024;
+
+/// Finite exact-byte BLAKE3 ceiling, separate from canonical metadata limits.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Blake3ExactInputLimit(usize);
+
+impl Blake3ExactInputLimit {
+    /// Accept a nonzero ceiling no larger than [`MAX_BLAKE3_EXACT_BYTES`].
+    pub fn new(max_bytes: usize) -> Result<Self, ContractError> {
+        if max_bytes == 0 {
+            return Err(ContractError::new(
+                ContractErrorKind::ZeroNotAllowed,
+                "blake3_exact_limit",
+            ));
+        }
+        if max_bytes > MAX_BLAKE3_EXACT_BYTES {
+            return Err(ContractError::oversize(
+                "blake3_exact_limit",
+                MAX_BLAKE3_EXACT_BYTES,
+                max_bytes,
+            ));
+        }
+        Ok(Self(max_bytes))
+    }
+
+    /// Exact maximum input length; no domain or framing is included.
     #[must_use]
     pub const fn get(self) -> usize {
         self.0
@@ -302,6 +335,30 @@ pub fn sha256_raw(
     ))
 }
 
+/// Standard BLAKE3 of exactly the supplied bytes, with no domain or framing.
+///
+/// Checks the complete input before hashing. Empty bytes have their standard
+/// digest; source admission and original-operation work remain caller-owned.
+/// This computes equality only and provides no read, admission or authority proof.
+///
+/// # Errors
+/// Returns a content-free size error if the input exceeds the explicit ceiling.
+pub fn blake3_exact_bytes(
+    bytes: &[u8],
+    limit: Blake3ExactInputLimit,
+) -> Result<Blake3Digest32, ContractError> {
+    if bytes.len() > limit.get() {
+        return Err(ContractError::oversize(
+            "blake3_exact_payload",
+            limit.get(),
+            bytes.len(),
+        ));
+    }
+    Ok(Blake3Digest32::from_computed_bytes(
+        *blake3::hash(bytes).as_bytes(),
+    ))
+}
+
 /// Standard SHA-256 of the supplied bytes with no added domain or framing.
 ///
 /// Compatibility owners must already specify the exact preimage. This checksum
@@ -345,6 +402,64 @@ fn check_raw(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_blake3_matches_published_unframed_vectors() {
+        // BLAKE3 1.8.2 test_vectors/test_vectors.json: input[i] = i % 251.
+        // These published values cover empty, short, chunk and tree inputs.
+        let limit = Blake3ExactInputLimit::new(102_400).unwrap();
+        for (length, expected) in [
+            (0, "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"),
+            (1, "2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213"),
+            (1024, "42214739f095a406f3fc83deb889744ac00df831c10daa55189b5d121c855af7"),
+            (102_400, "bc3e3d41a1146b069abffad3c0d44860cf664390afce4d9661f7902e7943e085"),
+        ] {
+            let input = (0..length)
+                .map(|index| u8::try_from(index % 251).unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                crate::hex_encode(blake3_exact_bytes(&input, limit).unwrap().as_bytes()),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn exact_blake3_limit_is_inclusive_and_does_not_enlarge_canonical_limit() {
+        assert_eq!(
+            Blake3ExactInputLimit::new(0).unwrap_err().kind(),
+            ContractErrorKind::ZeroNotAllowed
+        );
+        assert_eq!(
+            Blake3ExactInputLimit::new(MAX_BLAKE3_EXACT_BYTES + 1)
+                .unwrap_err().kind(),
+            ContractErrorKind::OversizePayload
+        );
+        let limit = Blake3ExactInputLimit::new(MAX_BLAKE3_EXACT_BYTES).unwrap();
+        assert_eq!(limit.get(), MAX_BLAKE3_EXACT_BYTES);
+        let input = vec![0; MAX_BLAKE3_EXACT_BYTES + 1];
+        assert!(blake3_exact_bytes(&input[..MAX_BLAKE3_EXACT_BYTES], limit).is_ok());
+        let error = blake3_exact_bytes(&input, limit).unwrap_err();
+        assert_eq!(error.kind(), ContractErrorKind::OversizePayload);
+        assert_eq!(error.field(), "blake3_exact_payload");
+        assert!(DigestInputLimit::new(MAX_CANONICAL_BYTES).is_ok());
+        assert!(DigestInputLimit::new(MAX_CANONICAL_BYTES + 1).is_err());
+    }
+
+    #[test]
+    fn exact_blake3_does_not_replace_domain_bound_raw_hashing() {
+        let domain = CanonicalDigestDomain::parse("eliot/raw/exact-byte-comparison/v1").unwrap();
+        let exact = blake3_exact_bytes(&[0], Blake3ExactInputLimit::new(1).unwrap()).unwrap();
+        assert_ne!(
+            exact,
+            blake3_raw(&domain, &[0], DigestInputLimit::new(128).unwrap()).unwrap()
+        );
+        assert_eq!(
+            blake3_exact_bytes(&[0, 1], Blake3ExactInputLimit::new(1).unwrap())
+                .unwrap_err().kind(),
+            ContractErrorKind::OversizePayload
+        );
+    }
 
     #[test]
     fn algorithm_standard_vectors_are_real() {
