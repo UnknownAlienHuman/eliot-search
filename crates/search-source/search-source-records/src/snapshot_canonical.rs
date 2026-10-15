@@ -1,14 +1,25 @@
 //! Canonical digest input for the registry's existing snapshot projection.
-use super::{RegistrySnapshot, RegistrySnapshotDigest};
+use super::{
+    REGISTRY_SNAPSHOT_V5_DOMAIN, REGISTRY_SNAPSHOT_V5_HEADER, REGISTRY_SNAPSHOT_V5_SCHEMA,
+    RegistrySnapshot, RegistrySnapshotDigest, RegistrySnapshotDigestV5,
+};
 use crate::error::RegistryError;
 use crate::membership::{MembershipKey, MembershipLifecycle, MembershipRecord};
+use crate::namespace::{
+    CutoverPreparation, NamespaceCutoverState, NamespaceMetadata, SourceOwnerActivationReceipt,
+};
 use crate::portfolio::ReferencePortfolioRecord;
+use crate::provenance::SourceProvenance;
 use crate::source::{RegisteredSource, SourceLifecycle};
 use search_contracts::{
     Blake3Digest32, BoundedBytes, BoundedList, BoundedMap, CanonicalDigestDomain, CanonicalKey,
     CanonicalText, CanonicalValue as V, ContractError, DigestInputLimit, MAX_CANONICAL_BYTES,
     MAX_COLLECTION_ITEMS, NamespaceOwnershipStatus, SourceIdentity, SourceIdentityKind,
     SourceNamespaceOwnership, blake3_canonical_array, blake3_raw,
+};
+use search_source_identity::{
+    CaseBehavior, FilesystemIdentityProfile, LinkBehavior, ReparseBehavior, StableFieldPolicy,
+    UnicodeBehavior,
 };
 
 fn object(entries: Vec<(&str, V)>) -> Result<V, ContractError> {
@@ -388,4 +399,473 @@ pub(super) fn digest(snapshot: &RegistrySnapshot) -> Result<RegistrySnapshotDige
     )
     .map_err(|_| RegistryError::SnapshotInvalid)?;
     Ok(RegistrySnapshotDigest(value))
+}
+
+fn source_v5(value: &RegisteredSource) -> Result<V, ContractError> {
+    let binding = value.binding();
+    let provenance = match value.provenance() {
+        SourceProvenance::HistoricalV1 {
+            admission,
+            original_admission,
+            assignment,
+        } => object(vec![
+            ("kind", text("historical-v1")?),
+            (
+                "admission",
+                object(vec![
+                    ("schema", V::U64(u64::from(admission.schema_version()))),
+                    ("policy_revision", V::U64(admission.policy_revision().get())),
+                    (
+                        "policy_fingerprint",
+                        bytes(admission.policy_fingerprint().as_bytes())?,
+                    ),
+                    (
+                        "observation_digest",
+                        bytes(admission.observation_digest().as_bytes())?,
+                    ),
+                    ("outcome", text(admission.outcome().as_str())?),
+                    (
+                        "reasons",
+                        list(admission.reason_codes().map(|v| text(v.as_str())))?,
+                    ),
+                    (
+                        "matched_rules",
+                        list(admission.matched_rule_ids().map(|v| text(v.as_str())))?,
+                    ),
+                    ("sensitivity", text(admission.sensitivity().as_str())?),
+                    ("receipt_digest", bytes(admission.receipt_digest())?),
+                ])?,
+            ),
+            (
+                "original_admission",
+                original_admission
+                    .as_ref()
+                    .map(|envelope| bytes(envelope.encoded()))
+                    .transpose()?
+                    .unwrap_or(V::Null),
+            ),
+            (
+                "assignment",
+                object(vec![
+                    ("identity", identity(&assignment.source_identity)?),
+                    (
+                        "observation_digest",
+                        bytes(assignment.observation_digest.as_bytes())?,
+                    ),
+                    (
+                        "assignment_digest",
+                        bytes(assignment.assignment_digest.as_bytes())?,
+                    ),
+                    ("receipt", text(assignment.assignment_receipt.as_str())?),
+                    ("readback_verified", V::Bool(assignment.readback_verified)),
+                ])?,
+            ),
+        ])?,
+        SourceProvenance::PermanentV2(permanent) => object(vec![
+            ("kind", text("permanent-v2")?),
+            ("policy_reference", bytes(permanent.policy_reference())?),
+            (
+                "admission_reference",
+                bytes(permanent.admission_reference())?,
+            ),
+            (
+                "root_record_revision",
+                V::U64(permanent.root_record_revision().get()),
+            ),
+            (
+                "namespace_record_revision",
+                V::U64(permanent.namespace_record_revision().get()),
+            ),
+            (
+                "owner_generation",
+                bytes(permanent.owner_generation().as_bytes())?,
+            ),
+            (
+                "policy_inputs_digest",
+                metadata_digest(
+                    "eliot/raw/registry-retained-policy/v2",
+                    permanent.original().policy().encoded_inputs(),
+                )?,
+            ),
+            (
+                "admission_inputs_digest",
+                metadata_digest(
+                    "eliot/raw/registry-original-admission/v2",
+                    permanent.original().encoded_source_evidence(),
+                )?,
+            ),
+        ])?,
+    };
+    object(vec![
+        ("identity", identity(value.identity())?),
+        (
+            "binding",
+            object(vec![
+                ("root", bytes(binding.root_binding_id().as_bytes())?),
+                (
+                    "relative_path_digest",
+                    metadata_digest(
+                        "eliot/raw/registry-path-binding/v1",
+                        binding.relative_path().as_str().as_bytes(),
+                    )?,
+                ),
+                (
+                    "file_identity",
+                    binding
+                        .stable_file_identity_digest()
+                        .map(|digest| bytes(digest.as_bytes()))
+                        .transpose()?
+                        .unwrap_or(V::Null),
+                ),
+                (
+                    "content_digest",
+                    bytes(binding.content_digest().as_bytes())?,
+                ),
+                ("content_bytes", V::U64(binding.content_bytes())),
+                ("binding_revision", V::U64(binding.binding_revision().get())),
+                (
+                    "observation_revision",
+                    V::U64(binding.observation_revision().get()),
+                ),
+                (
+                    "observation_receipt",
+                    text(binding.observation_receipt().as_str())?,
+                ),
+            ])?,
+        ),
+        ("provenance", provenance),
+        (
+            "lifecycle",
+            text(match value.lifecycle() {
+                SourceLifecycle::Active => "active",
+                SourceLifecycle::Retired => "retired",
+            })?,
+        ),
+        ("source_revision", V::U64(value.source_revision().get())),
+        ("registry_revision", V::U64(value.registry_revision())),
+        ("receipt", text(value.last_receipt().as_str())?),
+    ])
+}
+
+fn profile_v5(value: FilesystemIdentityProfile) -> Result<V, ContractError> {
+    object(vec![
+        ("revision", V::U64(value.revision().get())),
+        ("schema_digest", bytes(value.schema_digest().as_bytes())?),
+        (
+            "case_behavior",
+            text(match value.case_behavior() {
+                CaseBehavior::Sensitive => "sensitive",
+                CaseBehavior::InsensitiveAscii => "insensitive_ascii",
+                CaseBehavior::PreNormalizedInsensitive => "pre_normalized_insensitive",
+                CaseBehavior::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "unicode_behavior",
+            text(match value.unicode_behavior() {
+                UnicodeBehavior::PreserveScalarValues => "preserve_scalar_values",
+                UnicodeBehavior::PreNormalizedNfc => "pre_normalized_nfc",
+                UnicodeBehavior::PreNormalizedNfd => "pre_normalized_nfd",
+                UnicodeBehavior::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "volume_identity",
+            text(match value.volume_identity() {
+                StableFieldPolicy::Required => "required",
+                StableFieldPolicy::OptionalExplicitUnavailable => "optional_explicit_unavailable",
+                StableFieldPolicy::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "file_identity",
+            text(match value.file_identity() {
+                StableFieldPolicy::Required => "required",
+                StableFieldPolicy::OptionalExplicitUnavailable => "optional_explicit_unavailable",
+                StableFieldPolicy::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "link_behavior",
+            text(match value.link_behavior() {
+                LinkBehavior::StablePhysicalIdentity => "stable_physical_identity",
+                LinkBehavior::NoStableLinkIdentity => "no_stable_link_identity",
+                LinkBehavior::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "reparse_behavior",
+            text(match value.reparse_behavior() {
+                ReparseBehavior::FinalTargetIdentity => "final_target_identity",
+                ReparseBehavior::Rejected => "rejected",
+                ReparseBehavior::Unsupported => "unsupported",
+            })?,
+        ),
+    ])
+}
+
+fn preparation_v5(value: &CutoverPreparation) -> Result<V, ContractError> {
+    object(vec![
+        ("cutover_id", bytes(value.cutover_id.as_bytes())?),
+        ("namespace_id", bytes(value.namespace_id.as_bytes())?),
+        (
+            "current_generation",
+            bytes(value.current_generation.as_bytes())?,
+        ),
+        ("proposed_owner", text(value.proposed_owner.as_str())?),
+        (
+            "proposed_incarnation",
+            bytes(value.proposed_incarnation.as_bytes())?,
+        ),
+        (
+            "affected_sources",
+            list(value.affected_sources.iter().map(identity))?,
+        ),
+        (
+            "affected_memberships",
+            list(
+                value
+                    .affected_memberships
+                    .iter()
+                    .map(|membership| bytes(membership.as_bytes())),
+            )?,
+        ),
+        ("evidence_digest", bytes(value.evidence_digest.as_bytes())?),
+        ("registry_revision", V::U64(value.registry_revision)),
+        ("operation_id", text(value.operation_id.as_str())?),
+        ("receipt", text(value.receipt.as_str())?),
+        ("replayed", V::Bool(value.replayed)),
+    ])
+}
+
+fn activation_v5(value: &SourceOwnerActivationReceipt) -> Result<V, ContractError> {
+    object(vec![
+        ("cutover_id", bytes(value.cutover_id.as_bytes())?),
+        ("namespace_id", bytes(value.namespace_id.as_bytes())?),
+        ("new_generation", bytes(value.new_generation.as_bytes())?),
+        (
+            "activation_revision",
+            V::U64(value.activation_revision.get()),
+        ),
+        ("registry_revision", V::U64(value.registry_revision)),
+        ("operation_id", text(value.operation_id.as_str())?),
+        ("receipt", text(value.receipt.as_str())?),
+        ("replayed", V::Bool(value.replayed)),
+    ])
+}
+
+fn namespace_metadata_v5(metadata: &NamespaceMetadata) -> Result<V, ContractError> {
+    match metadata {
+        NamespaceMetadata::HistoricalV1Unbound => {
+            object(vec![("kind", text("historical-v1-unbound")?)])
+        }
+        NamespaceMetadata::PermanentV2(metadata) => object(vec![
+            ("kind", text("permanent-v2")?),
+            (
+                "root_binding_id",
+                bytes(metadata.root_binding_id().as_bytes())?,
+            ),
+            ("identity_profile", profile_v5(metadata.identity_profile())?),
+            ("policy_reference", bytes(metadata.policy_reference())?),
+            (
+                "policy_inputs_digest",
+                metadata_digest(
+                    "eliot/raw/registry-retained-policy/v2",
+                    metadata.policy().encoded_inputs(),
+                )?,
+            ),
+            ("registry_revision", V::U64(metadata.registry_revision())),
+            ("last_receipt", text(metadata.last_receipt().as_str())?),
+        ]),
+    }
+}
+
+fn namespace_v5(value: &NamespaceCutoverState) -> Result<V, ContractError> {
+    object(vec![
+        ("ownership", ownership(&value.ownership)?),
+        (
+            "preparation",
+            value
+                .preparation
+                .as_ref()
+                .map(preparation_v5)
+                .transpose()?
+                .unwrap_or(V::Null),
+        ),
+        ("fenced", V::Bool(value.fenced)),
+        (
+            "activation",
+            value
+                .activation
+                .as_ref()
+                .map(activation_v5)
+                .transpose()?
+                .unwrap_or(V::Null),
+        ),
+        ("metadata", namespace_metadata_v5(value.metadata())?),
+    ])
+}
+
+pub(super) fn digest_v5(
+    snapshot: &RegistrySnapshot,
+) -> Result<RegistrySnapshotDigestV5, RegistryError> {
+    let history = &snapshot.portfolio_history;
+    let counts = [
+        snapshot.roots.len(),
+        snapshot.sources.len(),
+        snapshot.memberships.len(),
+        snapshot.portfolios.len(),
+        history.len(),
+        history.current_pointers().count(),
+        snapshot.active_generations.len(),
+        snapshot.ownerships.len(),
+        snapshot.namespace_states.len(),
+    ];
+    let count = counts
+        .iter()
+        .try_fold(1_usize, |sum, n| sum.checked_add(*n))
+        .ok_or(RegistryError::CapacityExceeded)?;
+    if count > MAX_COLLECTION_ITEMS {
+        return Err(RegistryError::CapacityExceeded);
+    }
+    let header = object(vec![
+        (
+            "header",
+            text(REGISTRY_SNAPSHOT_V5_HEADER).map_err(|_| RegistryError::SnapshotInvalid)?,
+        ),
+        ("schema", V::U64(REGISTRY_SNAPSHOT_V5_SCHEMA)),
+        ("revision", V::U64(snapshot.revision)),
+        (
+            "family_counts",
+            list(counts.into_iter().map(|n| Ok(V::U64(n as u64))))
+                .map_err(|_| RegistryError::SnapshotInvalid)?,
+        ),
+    ]);
+    let roots = snapshot.roots.iter().map(|(key, value)| {
+        row(
+            "root",
+            bytes(key.as_bytes())?,
+            object(vec![
+                ("root_binding", bytes(value.root_binding_id.as_bytes())?),
+                (
+                    "canonical_root",
+                    bytes(value.canonical_root_digest.as_bytes())?,
+                ),
+                (
+                    "policy_fingerprint",
+                    bytes(value.policy_fingerprint.as_bytes())?,
+                ),
+                ("policy_revision", V::U64(value.policy_revision.get())),
+                ("owner_epoch", V::U64(value.owner_epoch.get())),
+                ("record_revision", V::U64(value.record_revision.get())),
+                ("registry_revision", V::U64(value.registry_revision)),
+                (
+                    "status",
+                    text(match value.status {
+                        crate::root::RootStatus::Active => "active",
+                        crate::root::RootStatus::Unbound => "unbound",
+                    })?,
+                ),
+                ("receipt", text(value.last_receipt.as_str())?),
+            ])?,
+        )
+    });
+    let sources = snapshot
+        .sources
+        .iter()
+        .map(|(key, value)| row("source", identity(key)?, source_v5(value)?));
+    let memberships = snapshot
+        .memberships
+        .iter()
+        .map(|(key, value)| row("membership", membership_key(key)?, membership(value)?));
+    let portfolios = snapshot.portfolios.iter().map(|(key, value)| {
+        row(
+            "current-portfolio",
+            bytes(key.as_bytes())?,
+            portfolio(value)?,
+        )
+    });
+    let revisions = history.revisions().map(|value| {
+        row(
+            "portfolio-history",
+            object(vec![
+                ("id", bytes(value.portfolio_id().as_bytes())?),
+                ("revision", V::U64(value.portfolio_revision().get())),
+            ])?,
+            object(vec![
+                (
+                    "precedence",
+                    list(
+                        value
+                            .membership_precedence()
+                            .iter()
+                            .map(|id| bytes(id.as_bytes())),
+                    )?,
+                ),
+                ("registry_revision", V::U64(value.registry_revision())),
+                ("receipt", text(value.last_receipt().as_str())?),
+                (
+                    "publication_operation",
+                    text(value.operation_id().as_str())?,
+                ),
+            ])?,
+        )
+    });
+    let pointers = history.current_pointers().map(|(key, value)| {
+        row(
+            "portfolio-pointer",
+            bytes(key.as_bytes())?,
+            object(vec![
+                ("target_id", bytes(value.target().portfolio_id.as_bytes())?),
+                (
+                    "target_revision",
+                    V::U64(value.target().portfolio_revision.get()),
+                ),
+                ("pointer_revision", V::U64(value.pointer_revision().get())),
+                ("operation_id", text(value.operation_id().as_str())?),
+                ("receipt", text(value.last_receipt().as_str())?),
+            ])?,
+        )
+    });
+    let generations = snapshot.active_generations.iter().map(|(key, value)| {
+        row(
+            "active-generation",
+            text(key.as_str())?,
+            V::U64(value.get()),
+        )
+    });
+    let ownerships = snapshot.ownerships.iter().map(|(key, value)| {
+        row(
+            "namespace-ownership",
+            bytes(key.as_bytes())?,
+            ownership(value)?,
+        )
+    });
+    let namespaces = snapshot.namespace_states.iter().map(|(key, value)| {
+        row(
+            "namespace-state",
+            bytes(key.as_bytes())?,
+            namespace_v5(value)?,
+        )
+    });
+    let rows = std::iter::once(header)
+        .chain(roots)
+        .chain(sources)
+        .chain(memberships)
+        .chain(portfolios)
+        .chain(revisions)
+        .chain(pointers)
+        .chain(generations)
+        .chain(ownerships)
+        .chain(namespaces);
+    let domain = CanonicalDigestDomain::parse(REGISTRY_SNAPSHOT_V5_DOMAIN)
+        .map_err(|_| RegistryError::SnapshotInvalid)?;
+    let value = blake3_canonical_array(
+        &domain,
+        count,
+        rows,
+        limit().map_err(|_| RegistryError::SnapshotInvalid)?,
+    )
+    .map_err(|_| RegistryError::SnapshotInvalid)?;
+    Ok(RegistrySnapshotDigestV5(value))
 }

@@ -225,3 +225,6 @@ fn retiring_source_preserves_exact_permanent_v2_provenance() {
 
 #[path = "original_ref_manifest_tests.rs"]
 mod original_ref_manifest_tests;
+
+#[path = "snapshot_v5_tests.rs"]
+mod snapshot_v5_tests;

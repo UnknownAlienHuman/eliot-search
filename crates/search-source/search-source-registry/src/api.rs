@@ -93,6 +93,7 @@ pub fn registry_snapshot(registry: &SourceRegistry) -> RegistrySnapshot {
         portfolio_history: registry.portfolio_history().clone(),
         active_generations: registry.active_generations_snapshot().clone(),
         ownerships,
+        namespace_states: registry.namespaces().clone(),
     }
 }
 

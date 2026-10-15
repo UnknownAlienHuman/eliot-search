@@ -13,12 +13,20 @@ use search_contracts::{
 
 use crate::error::{RegistryError, RegistryLimits};
 use crate::membership::{MembershipKey, MembershipLifecycle, MembershipRecord};
+use crate::namespace::NamespaceCutoverState;
 use crate::portfolio::ReferencePortfolioRecord;
 use crate::portfolio_history::PortfolioHistory;
 use crate::root::RootRecord;
 use crate::source::{RegisteredSource, SourceLifecycle};
 #[path = "snapshot_canonical.rs"]
 mod canonical;
+
+/// Stable schema header for the full permanent-v2 snapshot digest.
+pub const REGISTRY_SNAPSHOT_V5_HEADER: &str = "registry-snapshot-v5";
+/// Numeric schema version carried by the full permanent-v2 snapshot header.
+pub const REGISTRY_SNAPSHOT_V5_SCHEMA: u64 = 5;
+/// Domain-separated digest domain for the full permanent-v2 snapshot.
+pub const REGISTRY_SNAPSHOT_V5_DOMAIN: &str = "eliot/cbor/registry-snapshot/v5";
 
 /// Immutable registry snapshot.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,6 +50,12 @@ pub struct RegistrySnapshot {
     pub active_generations: BTreeMap<OpaqueId, NonZeroRevisionAlias>,
     /// Namespace ownership records.
     pub ownerships: BTreeMap<SourceNamespaceId, SourceNamespaceOwnership>,
+    /// Read-only full namespace-owner projections from the same registry map.
+    ///
+    /// This is deliberately a snapshot projection rather than a second mutable
+    /// namespace owner. The live registry retains one authoritative namespace
+    /// map and this map is copied from it at snapshot capture time.
+    pub namespace_states: BTreeMap<SourceNamespaceId, NamespaceCutoverState>,
 }
 
 /// Alias preserving the exact [`search_contracts::NonZeroRevision`] shape
@@ -100,6 +114,10 @@ impl ValidatedRegistrySnapshot {
 /// Domain-separated canonical digest over technical registry state.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RegistrySnapshotDigest(pub Blake3Digest32);
+
+/// Domain-separated canonical digest over the full permanent-v2 snapshot.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct RegistrySnapshotDigestV5(pub Blake3Digest32);
 
 /// Validates registry/root/source/membership/portfolio/owner generations,
 /// uniqueness, referential integrity, closed states and bounded counts.
@@ -185,8 +203,18 @@ pub fn validate_registry_snapshot(
         }
     }
     validate_portfolio_history(&snapshot.portfolio_history, limits)?;
+    validate_namespace_projection(snapshot)?;
     for (namespace, ownership) in &snapshot.ownerships {
         if ownership.source_namespace_id != *namespace {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+    }
+    for state in snapshot.namespace_states.values() {
+        if let Some(metadata) = state.permanent_metadata()
+            && (metadata.registry_revision() == 0
+                || metadata.registry_revision() > snapshot.revision
+                || !snapshot.roots.contains_key(&metadata.root_binding_id()))
+        {
             return Err(RegistryError::SnapshotInvalid);
         }
     }
@@ -262,5 +290,58 @@ fn validate_portfolio_history(
 pub fn snapshot_digest(
     snapshot: &RegistrySnapshot,
 ) -> Result<RegistrySnapshotDigest, RegistryError> {
+    if snapshot
+        .sources
+        .values()
+        .any(|source| source.permanent_admission().is_some())
+        || snapshot
+            .namespace_states
+            .values()
+            .any(NamespaceCutoverState::is_permanent_v2)
+    {
+        return Err(RegistryError::SnapshotInvalid);
+    }
     canonical::digest(snapshot)
+}
+
+/// Computes the version-5 canonical digest over complete source provenance and
+/// full namespace metadata.
+///
+/// Historical-v1 values remain historical evidence. Permanent-v2 values bind
+/// the exact retained policy/admission references and admission fences, while
+/// namespace metadata binds the qualified filesystem profile and root/policy
+/// references. No field in the digest grants current access or ownership.
+///
+/// # Errors
+/// Returns `SnapshotInvalid` for a missing or contradictory full namespace
+/// projection, a permanent-v2 model that cannot be represented by the bounded
+/// canonical shape, or a canonical input over the shared limits.
+pub fn snapshot_digest_v5(
+    snapshot: &RegistrySnapshot,
+) -> Result<RegistrySnapshotDigestV5, RegistryError> {
+    validate_namespace_projection(snapshot)?;
+    canonical::digest_v5(snapshot)
+}
+
+fn validate_namespace_projection(snapshot: &RegistrySnapshot) -> Result<(), RegistryError> {
+    if snapshot.namespace_states.len() != snapshot.ownerships.len() {
+        return Err(RegistryError::SnapshotInvalid);
+    }
+    for (namespace, ownership) in &snapshot.ownerships {
+        let state = snapshot
+            .namespace_states
+            .get(namespace)
+            .ok_or(RegistryError::SnapshotInvalid)?;
+        if state.ownership != *ownership || state.ownership.source_namespace_id != *namespace {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+    }
+    for (namespace, state) in &snapshot.namespace_states {
+        if state.ownership.source_namespace_id != *namespace
+            || snapshot.ownerships.get(namespace) != Some(&state.ownership)
+        {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+    }
+    Ok(())
 }
