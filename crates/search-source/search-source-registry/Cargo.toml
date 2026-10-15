@@ -17,6 +17,7 @@ search-domain.workspace = true
 search-ports.workspace = true
 search-source-identity.workspace = true
 search-source-admission.workspace = true
+search-source-records.workspace = true
 
 [lints]
 workspace = true

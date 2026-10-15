@@ -32,14 +32,14 @@
 pub mod api;
 pub mod cutover;
 pub mod error;
-pub mod legacy_root_catalog;
+pub use search_source_records::legacy_root_catalog;
 pub mod membership;
 pub mod portfolio;
 pub mod portfolio_history;
 pub mod recovery;
 pub mod revision;
 pub mod root;
-pub mod root_currentness;
+pub use search_source_records::root_currentness;
 pub mod snapshot;
 pub mod source;
 pub mod view;
@@ -51,8 +51,7 @@ mod revision_tests;
 #[path = "portfolio_history_tests.rs"]
 mod portfolio_history_tests;
 
-#[path = "source/legacy_direct.rs"]
-mod source_legacy_direct;
+use search_source_records::legacy_direct as source_legacy_direct;
 
 pub use api::{
     DEFAULT_REGISTRY_LIMITS, InMemoryRegistryJournal, JournalEntryKind, RegistryControlPort,
