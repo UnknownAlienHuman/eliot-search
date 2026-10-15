@@ -2,6 +2,16 @@
 
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, OwnerEpoch, ReceiptRef};
 
+use crate::error::RegistryError;
+
+/// Validates complete root metadata without granting physical custody or current access.
+pub fn validate_metadata(root: &RootRecord) -> Result<(), RegistryError> {
+    if root.registry_revision == 0 || root.record_revision.get() > root.registry_revision {
+        return Err(RegistryError::SnapshotInvalid);
+    }
+    Ok(())
+}
+
 /// Lifecycle of one admitted root record.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RootStatus {
@@ -123,4 +133,3 @@ pub struct RootUnbindReceipt {
     /// Whether this receipt came from exact idempotency replay.
     pub replayed: bool,
 }
-

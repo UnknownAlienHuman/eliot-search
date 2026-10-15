@@ -13,7 +13,10 @@ use search_ports::{CancellationProbe, OperationContext, PortErrorKind};
 
 use crate::error::{RegistryControlPort, RegistryError, RegistryLimits, cancelled_before_commit};
 
-pub use search_source_records::root::{RootStatus, RootRecord, RegisterRootRequest, RootRegistrationReceipt, RootPolicyObligation, RootPolicyChangeReceipt, RootUnbindReceipt};
+pub use search_source_records::root::{
+    RegisterRootRequest, RootPolicyChangeReceipt, RootPolicyObligation, RootRecord,
+    RootRegistrationReceipt, RootStatus, RootUnbindReceipt,
+};
 
 /// Registers a complete root and its original operation receipt atomically.
 pub fn register_root<C, P>(
@@ -253,13 +256,7 @@ where
     })
 }
 
-/// Validates complete root metadata without granting physical custody or current access.
-pub(crate) fn validate_metadata(root: &RootRecord) -> Result<(), RegistryError> {
-    if root.registry_revision == 0 || root.record_revision.get() > root.registry_revision {
-        return Err(RegistryError::SnapshotInvalid);
-    }
-    Ok(())
-}
+pub(crate) use search_source_records::root::validate_metadata;
 pub(crate) fn stage_registration(
     roots: &mut BTreeMap<search_contracts::RootBindingId, RootRecord>,
     request: &RegisterRootRequest,
