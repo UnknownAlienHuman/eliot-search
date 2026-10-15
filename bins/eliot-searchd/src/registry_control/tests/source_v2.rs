@@ -388,7 +388,7 @@ fn source_v2_commits_new_namespace_and_restarts_through_real_v4_readback() {
     let policy = policy(RuleEffect::Allow, 7);
     let original_one = original(&policy, "src/one.rs", 71);
     let original_two = original(&policy, "src/two.rs", 81);
-    let foreign_policy = policy(RuleEffect::Allow, 8);
+    let foreign_policy = self::policy(RuleEffect::Allow, 8);
     let foreign_original = original(&foreign_policy, "src/foreign.rs", 91);
     let fail = Cell::new(false);
     let work = |unit: MigrationBootstrapWork| {
