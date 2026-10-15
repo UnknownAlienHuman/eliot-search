@@ -22,6 +22,10 @@ use search_contracts::{
 };
 use search_source_admission::policy_v2::CheckpointFailureV2;
 use search_source_admission::{AdmissionError, AdmissionOutcome};
+use search_source_identity::{
+    CaseBehavior, FilesystemIdentityProfile, LinkBehavior, ReparseBehavior, StableFieldPolicy,
+    UnicodeBehavior,
+};
 use search_source_provenance::{OriginalAdmissionV2, OriginalInputsLayoutV2, RetainedPolicyV2};
 
 /// V4 state-value profile. Older state profiles remain owned by the parent.
@@ -460,10 +464,127 @@ fn namespace_metadata_value(metadata: &NamespaceMetadata) -> Result<V, RegistryE
                 "root_binding_id",
                 bytes(metadata.root_binding_id().as_bytes())?,
             ),
+            (
+                "identity_profile",
+                identity_profile_value(metadata.identity_profile())?,
+            ),
             ("policy_reference", bytes(metadata.policy_reference())?),
             ("registry_revision", V::U64(metadata.registry_revision())),
             ("last_receipt", text(metadata.last_receipt().as_str())?),
         ]),
+    }
+}
+
+fn identity_profile_value(profile: FilesystemIdentityProfile) -> Result<V, RegistryError> {
+    object(vec![
+        ("revision", V::U64(profile.revision().get())),
+        ("schema_digest", bytes(profile.schema_digest().as_bytes())?),
+        (
+            "case_behavior",
+            text(match profile.case_behavior() {
+                CaseBehavior::Sensitive => "sensitive",
+                CaseBehavior::InsensitiveAscii => "insensitive_ascii",
+                CaseBehavior::PreNormalizedInsensitive => "pre_normalized_insensitive",
+                CaseBehavior::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "unicode_behavior",
+            text(match profile.unicode_behavior() {
+                UnicodeBehavior::PreserveScalarValues => "preserve_scalar_values",
+                UnicodeBehavior::PreNormalizedNfc => "pre_normalized_nfc",
+                UnicodeBehavior::PreNormalizedNfd => "pre_normalized_nfd",
+                UnicodeBehavior::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "volume_identity",
+            text(match profile.volume_identity() {
+                StableFieldPolicy::Required => "required",
+                StableFieldPolicy::OptionalExplicitUnavailable => "optional_explicit_unavailable",
+                StableFieldPolicy::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "file_identity",
+            text(match profile.file_identity() {
+                StableFieldPolicy::Required => "required",
+                StableFieldPolicy::OptionalExplicitUnavailable => "optional_explicit_unavailable",
+                StableFieldPolicy::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "link_behavior",
+            text(match profile.link_behavior() {
+                LinkBehavior::StablePhysicalIdentity => "stable_physical_identity",
+                LinkBehavior::NoStableLinkIdentity => "no_stable_link_identity",
+                LinkBehavior::Unsupported => "unsupported",
+            })?,
+        ),
+        (
+            "reparse_behavior",
+            text(match profile.reparse_behavior() {
+                ReparseBehavior::FinalTargetIdentity => "final_target_identity",
+                ReparseBehavior::Rejected => "rejected",
+                ReparseBehavior::Unsupported => "unsupported",
+            })?,
+        ),
+    ])
+}
+
+fn read_identity_profile(value: V) -> Result<FilesystemIdentityProfile, RegistryError> {
+    let mut fields = open(value)?;
+    let revision = revision(take(&mut fields, "revision")?)?;
+    let schema_digest =
+        Blake3Digest32::from_stored_bytes(fixed(take(&mut fields, "schema_digest")?)?);
+    let case_behavior = match string(take(&mut fields, "case_behavior")?)?.as_str() {
+        "sensitive" => CaseBehavior::Sensitive,
+        "insensitive_ascii" => CaseBehavior::InsensitiveAscii,
+        "pre_normalized_insensitive" => CaseBehavior::PreNormalizedInsensitive,
+        "unsupported" => CaseBehavior::Unsupported,
+        _ => return Err(bad()),
+    };
+    let unicode_behavior = match string(take(&mut fields, "unicode_behavior")?)?.as_str() {
+        "preserve_scalar_values" => UnicodeBehavior::PreserveScalarValues,
+        "pre_normalized_nfc" => UnicodeBehavior::PreNormalizedNfc,
+        "pre_normalized_nfd" => UnicodeBehavior::PreNormalizedNfd,
+        "unsupported" => UnicodeBehavior::Unsupported,
+        _ => return Err(bad()),
+    };
+    let volume_identity = read_stable_field_policy(take(&mut fields, "volume_identity")?)?;
+    let file_identity = read_stable_field_policy(take(&mut fields, "file_identity")?)?;
+    let link_behavior = match string(take(&mut fields, "link_behavior")?)?.as_str() {
+        "stable_physical_identity" => LinkBehavior::StablePhysicalIdentity,
+        "no_stable_link_identity" => LinkBehavior::NoStableLinkIdentity,
+        "unsupported" => LinkBehavior::Unsupported,
+        _ => return Err(bad()),
+    };
+    let reparse_behavior = match string(take(&mut fields, "reparse_behavior")?)?.as_str() {
+        "final_target_identity" => ReparseBehavior::FinalTargetIdentity,
+        "rejected" => ReparseBehavior::Rejected,
+        "unsupported" => ReparseBehavior::Unsupported,
+        _ => return Err(bad()),
+    };
+    finish(fields)?;
+    FilesystemIdentityProfile::new(
+        revision,
+        schema_digest,
+        case_behavior,
+        unicode_behavior,
+        volume_identity,
+        file_identity,
+        link_behavior,
+        reparse_behavior,
+    )
+    .map_err(|_| bad())
+}
+
+fn read_stable_field_policy(value: V) -> Result<StableFieldPolicy, RegistryError> {
+    match string(value)?.as_str() {
+        "required" => Ok(StableFieldPolicy::Required),
+        "optional_explicit_unavailable" => Ok(StableFieldPolicy::OptionalExplicitUnavailable),
+        "unsupported" => Ok(StableFieldPolicy::Unsupported),
+        _ => Err(bad()),
     }
 }
 
@@ -497,6 +618,7 @@ fn read_namespace_v4<R: OriginalInputResolver + ?Sized>(
             }
             let root_binding_id =
                 RootBindingId::from_bytes(fixed(take(&mut metadata, "root_binding_id")?)?);
+            let identity_profile = read_identity_profile(take(&mut metadata, "identity_profile")?)?;
             let policy_reference = binary(take(&mut metadata, "policy_reference")?)?;
             let registry_revision = number(take(&mut metadata, "registry_revision")?)?;
             let last_receipt = receipt(take(&mut metadata, "last_receipt")?)?;
@@ -506,6 +628,7 @@ fn read_namespace_v4<R: OriginalInputResolver + ?Sized>(
             NamespaceCutoverState::new_v2_metadata(
                 ownership,
                 root_binding_id,
+                identity_profile,
                 policy,
                 policy_reference,
                 registry_revision,

@@ -13,6 +13,7 @@ use search_contracts::{
     SourceNamespaceOwnership, SourceOwnerCutoverReceipt, SourceOwnerGeneration,
 };
 use search_source_admission::{AdmissionError, policy_v2::CheckpointFailureV2};
+use search_source_identity::FilesystemIdentityProfile;
 use search_source_provenance::{OriginalInputsLayoutV2, RetainedPolicyV2};
 
 use crate::error::RegistryError;
@@ -178,6 +179,7 @@ impl From<AdmissionError> for NamespaceMetadataError {
 #[derive(Clone, Debug)]
 pub struct NamespaceMetadataV2 {
     root_binding_id: RootBindingId,
+    identity_profile: FilesystemIdentityProfile,
     policy: Arc<RetainedPolicyV2>,
     policy_reference: Vec<u8>,
     registry_revision: u64,
@@ -187,6 +189,7 @@ pub struct NamespaceMetadataV2 {
 impl PartialEq for NamespaceMetadataV2 {
     fn eq(&self, other: &Self) -> bool {
         self.root_binding_id == other.root_binding_id
+            && self.identity_profile == other.identity_profile
             && self.policy.encoded_inputs() == other.policy.encoded_inputs()
             && self.policy_reference == other.policy_reference
             && self.registry_revision == other.registry_revision
@@ -201,6 +204,12 @@ impl NamespaceMetadataV2 {
     #[must_use]
     pub const fn root_binding_id(&self) -> RootBindingId {
         self.root_binding_id
+    }
+
+    /// Exact qualified C04 filesystem identity profile pinned to this namespace.
+    #[must_use]
+    pub const fn identity_profile(&self) -> FilesystemIdentityProfile {
+        self.identity_profile
     }
 
     /// Shared retained policy model, never a live policy decision authority.
@@ -285,6 +294,7 @@ impl NamespaceCutoverState {
     pub fn new_v2_metadata(
         ownership: SourceNamespaceOwnership,
         root_binding_id: RootBindingId,
+        identity_profile: FilesystemIdentityProfile,
         policy: Arc<RetainedPolicyV2>,
         cached_policy_reference: Vec<u8>,
         registry_revision: u64,
@@ -292,6 +302,17 @@ impl NamespaceCutoverState {
         probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
     ) -> Result<Self, NamespaceMetadataError> {
         checkpoint(probe)?;
+        FilesystemIdentityProfile::new(
+            identity_profile.revision(),
+            identity_profile.schema_digest(),
+            identity_profile.case_behavior(),
+            identity_profile.unicode_behavior(),
+            identity_profile.volume_identity(),
+            identity_profile.file_identity(),
+            identity_profile.link_behavior(),
+            identity_profile.reparse_behavior(),
+        )
+        .map_err(|_| RegistryError::SnapshotInvalid)?;
         if ownership.status != NamespaceOwnershipStatus::Active
             || ownership.source_admission_policy_revision.get()
                 != policy.compiled().revision().get()
@@ -319,6 +340,7 @@ impl NamespaceCutoverState {
             activation: None,
             metadata: NamespaceMetadata::PermanentV2(NamespaceMetadataV2 {
                 root_binding_id,
+                identity_profile,
                 policy,
                 policy_reference: cached_policy_reference,
                 registry_revision,
