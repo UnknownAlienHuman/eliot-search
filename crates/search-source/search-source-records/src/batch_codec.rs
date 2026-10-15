@@ -10,9 +10,10 @@ use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
 use search_contracts::{self as c, CanonicalValue as V, ClosedCanonicalObject as Obj};
 use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef, SourceIdentity};
 use search_source_admission::original_envelope::{
-    MAX_ORIGINAL_ADMISSION_BYTES, OriginalAdmissionEnvelope, decode_original_admission,
+    MAX_ORIGINAL_ADMISSION_BYTES, OriginalAdmissionEnvelope, decode_original_admission_with_probe,
 };
-use search_source_admission::{AdmissionBudget, AdmissionOutcome, AdmissionReceipt, CancelFlag};
+use search_source_admission::policy_v2::CheckpointFailureV2;
+use search_source_admission::{AdmissionError, AdmissionOutcome, AdmissionReceipt};
 use search_source_identity::{CanonicalRelativePath, SourceBinding, SourceObservation};
 
 #[path = "batch_codec_v4.rs"]
@@ -386,6 +387,30 @@ pub(super) fn state_value(v: &RegistryStateRecord) -> Result<V, RegistryError> {
     }
 }
 fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, RegistryError> {
+    let mut probe = || Ok(());
+    read_state_with_original_probe(v, roots_allowed, &mut probe).map_err(|error| match error {
+        BatchCodecV4Error::Registry(error) => error,
+        BatchCodecV4Error::Admission(_) => RegistryError::AdmissionBindingMismatch,
+    })
+}
+
+fn checkpoint_error(failure: CheckpointFailureV2) -> BatchCodecV4Error {
+    BatchCodecV4Error::Admission(match failure {
+        CheckpointFailureV2::Cancelled => AdmissionError::Cancelled,
+        CheckpointFailureV2::DeadlineExceeded => AdmissionError::BudgetExhausted,
+    })
+}
+
+/// Decodes one legacy state while preserving the original caller's probe.
+///
+/// This parent helper is the handoff seam for the v4 actor; it does not alter
+/// v1/v3 bytes or the existing no-probe wrapper above.
+pub(super) fn read_state_with_original_probe(
+    v: V,
+    roots_allowed: bool,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<RegistryStateRecord, BatchCodecV4Error> {
+    probe().map_err(checkpoint_error)?;
     let mut o = open(v)?;
     let family = string(take(&mut o, "family")?)?;
     let state = match family.as_str() {
@@ -420,13 +445,12 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
         }
         "source" => {
             let b = read_binding(take(&mut o, "binding")?)?;
-            let original = decode_original_admission(
+            let original = decode_original_admission_with_probe(
                 &binary(take(&mut o, "original_admission")?)?,
                 MAX_ORIGINAL_ADMISSION_BYTES,
-                AdmissionBudget::default_budget(),
-                CancelFlag::live(),
+                probe,
             )
-            .map_err(|_| RegistryError::AdmissionBindingMismatch)?;
+            .map_err(BatchCodecV4Error::Admission)?;
             let a = read_admission(take(&mut o, "admission")?, &original)?;
             let proof = read_assignment(take(&mut o, "assignment")?)?;
             let lifecycle = match string(take(&mut o, "lifecycle")?)?.as_str() {
@@ -487,6 +511,7 @@ fn read_state(v: V, roots_allowed: bool) -> Result<RegistryStateRecord, Registry
         _ => return Err(bad()),
     };
     finish(o)?;
+    probe().map_err(checkpoint_error)?;
     Ok(state)
 }
 pub(super) fn encode_state(v: &RegistryStateRecord) -> Result<Vec<u8>, RegistryError> {
@@ -869,4 +894,24 @@ pub(super) fn request_fingerprint(batch: &RegistryBatch) -> Result<Blake3Digest3
         c::DigestInputLimit::new(c::MAX_CANONICAL_BYTES).map_err(|_| bad())?,
     )
     .map_err(|_| bad())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_state_probe_is_forwarded_before_decode() {
+        let value = object(vec![("family", text("source").unwrap())]).unwrap();
+        let mut calls = 0;
+        let result = read_state_with_original_probe(value, true, &mut || {
+            calls += 1;
+            Err(CheckpointFailureV2::Cancelled)
+        });
+        assert_eq!(
+            result,
+            Err(BatchCodecV4Error::Admission(AdmissionError::Cancelled))
+        );
+        assert_eq!(calls, 1);
+    }
 }

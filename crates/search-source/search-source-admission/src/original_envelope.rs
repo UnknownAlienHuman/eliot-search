@@ -9,6 +9,7 @@ use super::{
     UnvalidatedRuleInput, VerifiedAdmissionReceipt, evaluate, issue_receipt, normalize_policy,
     validate_observation, validate_policy_schema, verify_receipt,
 };
+use super::policy_v2::{CheckpointFailureV2, checkpoint};
 use search_contracts::{self as c, CanonicalValue as V, ClosedCanonicalObject as Object};
 
 /// New retained-original profile; existing policy/observation/receipt identities stay unchanged.
@@ -112,6 +113,37 @@ pub fn decode_original_admission(
     budget: AdmissionBudget,
     cancel: CancelFlag,
 ) -> Result<OriginalAdmissionEnvelope, AdmissionError> {
+    let mut probe = || Ok(());
+    decode_original_admission_with_context(bytes, max_bytes, budget, cancel, &mut probe)
+}
+
+/// Restore retained v1 admission through the original caller's checkpoint.
+///
+/// The existing validator, normalizer, evaluator and receipt encoder remain
+/// the sole algorithm. Checkpoint refusal before, during or after restoration
+/// returns no envelope and never exposes a partial historical value.
+pub fn decode_original_admission_with_probe(
+    bytes: &[u8],
+    max_bytes: usize,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<OriginalAdmissionEnvelope, AdmissionError> {
+    decode_original_admission_with_context(
+        bytes,
+        max_bytes,
+        AdmissionBudget::default_budget(),
+        CancelFlag::live(),
+        probe,
+    )
+}
+
+fn decode_original_admission_with_context(
+    bytes: &[u8],
+    max_bytes: usize,
+    budget: AdmissionBudget,
+    cancel: CancelFlag,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<OriginalAdmissionEnvelope, AdmissionError> {
+    checkpoint(probe)?;
     cancel.check()?;
     if max_bytes == 0 || max_bytes > MAX_ORIGINAL_ADMISSION_BYTES {
         return Err(AdmissionError::ObservationInvalid);
@@ -130,8 +162,9 @@ pub fn decode_original_admission(
     let retained_decision = take(&mut object, "decision")?;
     let retained_receipt = take(&mut object, "receipt")?;
     finish(object)?;
+    checkpoint(probe)?;
     cancel.check()?;
-    let decision = evaluate(&policy, &observation, budget, cancel)?;
+    let decision = evaluate_with_probe_context(&policy, &observation, budget, cancel, probe)?;
     let receipt = issue_receipt(&policy, &observation, &decision)?;
     // Comparison with complete owner values refuses unknown or missing fields
     // inside the decision/receipt, without constructing either from assertions.
@@ -141,9 +174,11 @@ pub fn decode_original_admission(
         return Err(AdmissionError::ReceiptMismatch);
     }
     let encoded = encode(&policy, &observation, &decision, &receipt)?;
+    checkpoint(probe)?;
     if encoded != bytes {
         return Err(AdmissionError::ReceiptMismatch);
     }
+    checkpoint(probe)?;
     cancel.check()?;
     Ok(OriginalAdmissionEnvelope {
         policy,
@@ -500,6 +535,12 @@ mod tests {
             CancelFlag::live(),
         )
     }
+    fn decode_with_probe(
+        bytes: &[u8],
+        probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+    ) -> Result<OriginalAdmissionEnvelope, AdmissionError> {
+        decode_original_admission_with_probe(bytes, MAX_ORIGINAL_ADMISSION_BYTES, probe)
+    }
     fn edited(bytes: &[u8], key: &str, value: Option<Value>) -> Vec<u8> {
         let Value::Object(fields) = c::parse_canonical_cbor(bytes).expect("canonical input") else {
             panic!("object")
@@ -621,5 +662,58 @@ mod tests {
             ),
             Err(AdmissionError::BudgetExhausted)
         );
+    }
+
+    #[test]
+    fn original_envelope_probe_refuses_before_during_and_after_restore() {
+        let original = build_original("regular");
+        let mut before_calls = 0;
+        assert_eq!(
+            decode_with_probe(&original.encoded(), &mut || {
+                before_calls += 1;
+                Err(CheckpointFailureV2::Cancelled)
+            }),
+            Err(AdmissionError::Cancelled)
+        );
+        assert_eq!(before_calls, 1);
+
+        let mut total_calls = 0;
+        assert_eq!(
+            decode_with_probe(&original.encoded(), &mut || {
+                total_calls += 1;
+                Ok(())
+            }),
+            Ok(original.clone())
+        );
+        assert!(total_calls >= 4);
+
+        let mut during_calls = 0;
+        let during_failure = total_calls / 2;
+        assert_eq!(
+            decode_with_probe(&original.encoded(), &mut || {
+                during_calls += 1;
+                if during_calls == during_failure {
+                    Err(CheckpointFailureV2::Cancelled)
+                } else {
+                    Ok(())
+                }
+            }),
+            Err(AdmissionError::Cancelled)
+        );
+        assert_eq!(during_calls, during_failure);
+
+        let mut after_calls = 0;
+        assert_eq!(
+            decode_with_probe(&original.encoded(), &mut || {
+                after_calls += 1;
+                if after_calls == total_calls {
+                    Err(CheckpointFailureV2::DeadlineExceeded)
+                } else {
+                    Ok(())
+                }
+            }),
+            Err(AdmissionError::BudgetExhausted)
+        );
+        assert_eq!(after_calls, total_calls);
     }
 }

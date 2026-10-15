@@ -40,6 +40,7 @@ use core::fmt;
 use std::collections::BTreeSet;
 
 use search_contracts::{Blake3Digest32, DigestInputLimit, NonZeroRevision, sha256_exact_bytes};
+use policy_v2::{CheckpointFailureV2, checkpoint};
 
 /// Pure bounded relative-locator and versioned observation equality model.
 pub mod observation_v2;
@@ -2125,8 +2126,10 @@ fn baseline_reasons(
     matched: &mut BTreeSet<String>,
     budget_remaining: &mut u32,
     cancel: CancelFlag,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<(), AdmissionError> {
     for rule in &policy.rules {
+        checkpoint(probe)?;
         cancel.check()?;
         if *budget_remaining == 0 {
             return Err(AdmissionError::BudgetExhausted);
@@ -2163,6 +2166,7 @@ fn baseline_reasons(
             }
         }
     }
+    checkpoint(probe)?;
     Ok(())
 }
 
@@ -2191,6 +2195,37 @@ pub fn evaluate(
     budget: AdmissionBudget,
     cancel: CancelFlag,
 ) -> Result<AdmissionDecision, AdmissionError> {
+    let mut probe = || Ok(());
+    evaluate_with_probe_context(policy, observation, budget, cancel, &mut probe)
+}
+
+/// Applies the same v1 evaluator with the original caller's checkpoint.
+///
+/// This is an owner-internal restoration seam: it does not change policy
+/// semantics, defaults, receipt bytes or the public legacy evaluator. A probe
+/// refusal clears the in-flight computation by returning before any decision.
+pub(crate) fn evaluate_with_probe(
+    policy: &CanonicalAdmissionPolicy,
+    observation: &AdmissionObservation,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<AdmissionDecision, AdmissionError> {
+    evaluate_with_probe_context(
+        policy,
+        observation,
+        AdmissionBudget::default_budget(),
+        CancelFlag::live(),
+        probe,
+    )
+}
+
+fn evaluate_with_probe_context(
+    policy: &CanonicalAdmissionPolicy,
+    observation: &AdmissionObservation,
+    budget: AdmissionBudget,
+    cancel: CancelFlag,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<AdmissionDecision, AdmissionError> {
+    checkpoint(probe)?;
     cancel.check()?;
     let mut budget_remaining = budget.max_rule_evaluations;
     if budget_remaining == 0 {
@@ -2200,6 +2235,7 @@ pub fn evaluate(
     require_effective_v1_policy(policy)?;
     let fingerprint = policy_fingerprint(policy);
     let digest = observation_digest(observation);
+    checkpoint(probe)?;
     let sensitivity = observation
         .sensitivity
         .unwrap_or(SensitivityLevel::Confidential);
@@ -2307,8 +2343,11 @@ pub fn evaluate(
         &mut rule_matched,
         &mut budget_remaining,
         cancel,
+        probe,
     )?;
+    checkpoint(probe)?;
     for reason in &rule_reasons {
+        checkpoint(probe)?;
         match reason {
             AdmissionReasonCode::AllowBaselineSource | AdmissionReasonCode::AllowExplicitRule => {
                 allow.insert(*reason);
@@ -2343,11 +2382,13 @@ pub fn evaluate(
         }
     }
     for id in rule_matched {
+        checkpoint(probe)?;
         if matched.len() >= MAX_MATCHED_RULES {
             return Err(AdmissionError::ObservationInvalid);
         }
         matched.insert(id);
     }
+    checkpoint(probe)?;
 
     // Deterministic resolution: deny wins over unsupported, which wins over
     // review, which wins over allow. Silence is never allow.
@@ -2396,7 +2437,7 @@ pub fn evaluate(
     {
         reasons.clear();
         reasons.insert(AdmissionReasonCode::AllowBaselineSource);
-        return build_decision(
+        let decision = build_decision(
             AdmissionOutcome::Allow,
             reasons,
             matched,
@@ -2404,9 +2445,11 @@ pub fn evaluate(
             policy.revision,
             fingerprint,
             digest,
-        );
+        )?;
+        checkpoint(probe)?;
+        return Ok(decision);
     }
-    build_decision(
+    let decision = build_decision(
         outcome,
         reasons,
         matched,
@@ -2414,7 +2457,9 @@ pub fn evaluate(
         policy.revision,
         fingerprint,
         digest,
-    )
+    )?;
+    checkpoint(probe)?;
+    Ok(decision)
 }
 
 #[allow(clippy::too_many_arguments)]
