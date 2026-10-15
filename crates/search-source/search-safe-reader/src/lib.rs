@@ -69,6 +69,8 @@ pub enum SafeReadError {
     EofMismatch,
     /// Final handle does not belong to the expected logical root.
     RootIdentityMismatch,
+    /// Root-purpose fence differs from the admitted acquisition request.
+    RootPurposeMismatch,
     /// Final handle is not an ordinary file.
     UnsupportedFileKind,
     /// Final handle or an authoritative ancestor is a reparse/symlink boundary.
@@ -106,6 +108,7 @@ impl SafeReadError {
             Self::RangeOutsideSource => "SAFE_READ_RANGE_OUTSIDE_SOURCE",
             Self::EofMismatch => "SAFE_READ_EOF_MISMATCH",
             Self::RootIdentityMismatch => "SAFE_READ_ROOT_IDENTITY_MISMATCH",
+            Self::RootPurposeMismatch => "SAFE_READ_ROOT_PURPOSE_MISMATCH",
             Self::UnsupportedFileKind => "SAFE_READ_UNSUPPORTED_FILE_KIND",
             Self::ReparseBoundaryDenied => "SAFE_READ_REPARSE_BOUNDARY_DENIED",
             Self::SecurityDenied => "SAFE_READ_SECURITY_DENIED",
@@ -270,6 +273,32 @@ pub struct FinalHandleMetadata {
     pub metadata_receipt: Option<ReceiptRef>,
 }
 
+/// Content-free metadata for the additive Root-bound acquisition profile.
+///
+/// The opaque purpose digest is supplied by the Native Root owner. This
+/// profile deliberately carries no namespace security-barrier revision.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AcquisitionMetadataV2 {
+    /// Digest of stable logical root identity.
+    pub root_identity_digest: Blake3Digest32,
+    /// Stable final-handle identity digest.
+    pub stable_file_identity_digest: Blake3Digest32,
+    /// Closed handle kind.
+    pub kind: FinalHandleKind,
+    /// Exact source byte size.
+    pub source_bytes: u64,
+    /// Whether final object itself is a reparse/symlink boundary.
+    pub final_object_is_reparse: bool,
+    /// Whether an authoritative ancestor traversal crossed a reparse boundary.
+    pub ancestor_reparse_observed: bool,
+    /// Opaque Root-purpose fence supplied by the Native owner.
+    pub root_purpose_digest: Blake3Digest32,
+    /// Platform change token covering all metadata used by the adapter.
+    pub change_token: OpaqueId,
+    /// Content-free same-handle metadata receipt.
+    pub metadata_receipt: Option<ReceiptRef>,
+}
+
 /// Exact finite range requested from the final handle.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ReadRange {
@@ -310,6 +339,21 @@ pub struct SafeReadRequest {
     pub range: ReadRange,
 }
 
+/// Exact Root-bound acquisition request for the additive v2 profile.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AcquisitionRequestV2 {
+    /// Opaque normalized relative-path token.
+    pub relative_path: RelativePathToken,
+    /// Admitted stable logical-root digest.
+    pub expected_root_identity_digest: Blake3Digest32,
+    /// Admitted stable final-file identity digest.
+    pub expected_stable_file_identity_digest: Blake3Digest32,
+    /// Opaque Root-purpose fence issued by the Native owner.
+    pub expected_root_purpose_digest: Blake3Digest32,
+    /// Exact finite byte range.
+    pub range: ReadRange,
+}
+
 /// Content-free final-handle open request.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FinalHandleOpenRequest {
@@ -338,6 +382,53 @@ pub struct SafeReadResult {
     pub after_metadata_receipt: ReceiptRef,
     /// Content-free exact read receipt supplied by the adapter.
     pub read_receipt: ReceiptRef,
+}
+
+/// Exact bounded result from Root-bound acquisition.
+#[derive(Clone, Eq, PartialEq)]
+pub struct AcquisitionResultV2 {
+    /// Exact requested range.
+    pub range: ReadRange,
+    /// Exact bytes, released only through [`Self::into_bytes`].
+    bytes: Vec<u8>,
+    /// Stable final-file identity digest.
+    pub stable_file_identity_digest: Blake3Digest32,
+    /// Exact source byte size observed before and after the read.
+    pub source_bytes: u64,
+    /// Opaque Root-purpose fence bound to this result.
+    pub root_purpose_digest: Blake3Digest32,
+    /// Pre-read same-handle metadata receipt.
+    pub before_metadata_receipt: ReceiptRef,
+    /// Post-read same-handle metadata receipt.
+    pub after_metadata_receipt: ReceiptRef,
+    /// Content-free exact read receipt.
+    pub read_receipt: ReceiptRef,
+}
+
+impl AcquisitionResultV2 {
+    /// Consumes the guarded result and releases its exact bytes to the caller.
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+}
+
+impl fmt::Debug for AcquisitionResultV2 {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AcquisitionResultV2")
+            .field("range", &self.range)
+            .field("bytes", &format_args!("<{} bytes>", self.bytes.len()))
+            .field(
+                "stable_file_identity_digest",
+                &self.stable_file_identity_digest,
+            )
+            .field("source_bytes", &self.source_bytes)
+            .field("root_purpose_digest", &self.root_purpose_digest)
+            .field("before_metadata_receipt", &self.before_metadata_receipt)
+            .field("after_metadata_receipt", &self.after_metadata_receipt)
+            .field("read_receipt", &self.read_receipt)
+            .finish()
+    }
 }
 
 impl SafeReadResult {
@@ -419,58 +510,229 @@ pub trait SafeReadBackend {
     fn map_backend_error(error: &Self::BackendError) -> SafeReadError;
 }
 
-/// Opens once, validates, reads, and revalidates the same final handle.
-pub fn safe_read<B: SafeReadBackend>(
+/// Platform adapter contract for Root-bound v2 acquisition.
+pub trait AcquisitionBackendV2 {
+    /// Opaque final handle that cannot be reopened by path inside this package.
+    type Handle;
+    /// Platform adapter failure.
+    type BackendError;
+
+    /// Opens the final object once under the expected logical root.
+    fn open_final(
+        &mut self,
+        request: &FinalHandleOpenRequest,
+    ) -> Result<Self::Handle, Self::BackendError>;
+
+    /// Inspects load-bearing metadata from the exact already-open handle.
+    fn inspect(
+        &mut self,
+        handle: &Self::Handle,
+    ) -> Result<AcquisitionMetadataV2, Self::BackendError>;
+
+    /// Reads the exact finite range from the same already-open handle.
+    fn read_exact_at(
+        &mut self,
+        handle: &Self::Handle,
+        offset: u64,
+        length: usize,
+    ) -> Result<AdapterRead, Self::BackendError>;
+
+    /// Maps a platform error to a bounded content-free package failure.
+    fn map_backend_error(error: &Self::BackendError) -> SafeReadError;
+}
+
+trait CoreReadBackend<M> {
+    type Handle;
+    type BackendError;
+
+    fn open_final(
+        &mut self,
+        request: &FinalHandleOpenRequest,
+    ) -> Result<Self::Handle, Self::BackendError>;
+    fn inspect(&mut self, handle: &Self::Handle) -> Result<M, Self::BackendError>;
+    fn read_exact_at(
+        &mut self,
+        handle: &Self::Handle,
+        offset: u64,
+        length: usize,
+    ) -> Result<AdapterRead, Self::BackendError>;
+    fn map_backend_error(error: &Self::BackendError) -> SafeReadError;
+}
+
+macro_rules! impl_core_backend {
+    ($adapter:ident, $metadata:ty) => {
+        impl<B: $adapter> CoreReadBackend<$metadata> for B {
+            type Handle = B::Handle;
+            type BackendError = B::BackendError;
+
+            fn open_final(
+                &mut self,
+                request: &FinalHandleOpenRequest,
+            ) -> Result<Self::Handle, Self::BackendError> {
+                $adapter::open_final(self, request)
+            }
+            fn inspect(&mut self, handle: &Self::Handle) -> Result<$metadata, Self::BackendError> {
+                $adapter::inspect(self, handle)
+            }
+            fn read_exact_at(
+                &mut self,
+                handle: &Self::Handle,
+                offset: u64,
+                length: usize,
+            ) -> Result<AdapterRead, Self::BackendError> {
+                $adapter::read_exact_at(self, handle, offset, length)
+            }
+            fn map_backend_error(error: &Self::BackendError) -> SafeReadError {
+                B::map_backend_error(error)
+            }
+        }
+    };
+}
+
+impl_core_backend!(SafeReadBackend, FinalHandleMetadata);
+impl_core_backend!(AcquisitionBackendV2, AcquisitionMetadataV2);
+
+struct CoreReadOutcome<M> {
+    range: ReadRange,
+    before: M,
+    bytes: Vec<u8>,
+    read_receipt: ReceiptRef,
+    before_metadata_receipt: ReceiptRef,
+    after_metadata_receipt: ReceiptRef,
+}
+
+fn same_handle_read_core<B, M, V, Q>(
     backend: &mut B,
-    request: &SafeReadRequest,
+    open_request: &FinalHandleOpenRequest,
+    range: ReadRange,
     limits: SafeReadLimits,
-) -> Result<SafeReadResult, SafeReadError> {
+    should_cancel: &mut impl FnMut() -> bool,
+    validate: V,
+    receipt: Q,
+) -> Result<CoreReadOutcome<M>, SafeReadError>
+where
+    B: CoreReadBackend<M>,
+    M: Clone + Eq,
+    V: Fn(&M, u64, SafeReadLimits) -> Result<(), SafeReadError>,
+    Q: Fn(&M) -> Result<ReceiptRef, SafeReadError>,
+{
+    if should_cancel() {
+        return Err(SafeReadError::Cancelled);
+    }
     let limits = limits.validate()?;
-    let end = request.range.end(limits)?;
+    let end = range.end(limits)?;
     let handle = backend
-        .open_final(&FinalHandleOpenRequest {
-            relative_path: request.relative_path.clone(),
-            expected_root_identity_digest: request.expected_root_identity_digest,
-        })
+        .open_final(open_request)
         .map_err(|error| B::map_backend_error(&error))?;
     let before = backend
         .inspect(&handle)
         .map_err(|error| B::map_backend_error(&error))?;
-    validate_metadata(&before, request, end, limits)?;
+    validate(&before, end, limits)?;
+    if should_cancel() {
+        return Err(SafeReadError::Cancelled);
+    }
 
     let read = backend
-        .read_exact_at(&handle, request.range.offset, request.range.length)
+        .read_exact_at(&handle, range.offset, range.length)
         .map_err(|error| B::map_backend_error(&error))?;
-    if read.bytes.len() != request.range.length {
+    if should_cancel() {
+        return Err(SafeReadError::Cancelled);
+    }
+    if read.bytes.len() != range.length {
         return Err(SafeReadError::ReadLengthMismatch);
     }
     let read_receipt = read.read_receipt.ok_or(SafeReadError::ReceiptMissing)?;
-
     let after = backend
         .inspect(&handle)
         .map_err(|error| B::map_backend_error(&error))?;
-    validate_metadata(&after, request, end, limits)?;
+    validate(&after, end, limits)?;
     if before != after {
         return Err(SafeReadError::HandleChangedDuringRead);
     }
-    let before_metadata_receipt = before
-        .metadata_receipt
-        .clone()
-        .ok_or(SafeReadError::ReceiptMissing)?;
-    let after_metadata_receipt = after
-        .metadata_receipt
-        .ok_or(SafeReadError::ReceiptMissing)?;
-
-    Ok(SafeReadResult {
-        range: request.range,
+    let before_metadata_receipt = receipt(&before)?;
+    let after_metadata_receipt = receipt(&after)?;
+    if should_cancel() {
+        return Err(SafeReadError::Cancelled);
+    }
+    Ok(CoreReadOutcome {
+        range,
+        before,
         bytes: read.bytes,
+        read_receipt,
+        before_metadata_receipt,
+        after_metadata_receipt,
+    })
+}
+
+fn finish_safe_read(outcome: CoreReadOutcome<FinalHandleMetadata>) -> SafeReadResult {
+    let CoreReadOutcome {
+        range,
+        before,
+        bytes,
+        read_receipt,
+        before_metadata_receipt,
+        after_metadata_receipt,
+        ..
+    } = outcome;
+    SafeReadResult {
+        range,
+        bytes,
         stable_file_identity_digest: before.stable_file_identity_digest,
         source_bytes: before.source_bytes,
         security_barrier_revision: before.security_barrier_revision,
         before_metadata_receipt,
         after_metadata_receipt,
         read_receipt,
-    })
+    }
+}
+
+fn finish_acquisition(outcome: CoreReadOutcome<AcquisitionMetadataV2>) -> AcquisitionResultV2 {
+    let CoreReadOutcome {
+        range,
+        before,
+        bytes,
+        read_receipt,
+        before_metadata_receipt,
+        after_metadata_receipt,
+        ..
+    } = outcome;
+    AcquisitionResultV2 {
+        range,
+        bytes,
+        stable_file_identity_digest: before.stable_file_identity_digest,
+        source_bytes: before.source_bytes,
+        root_purpose_digest: before.root_purpose_digest,
+        before_metadata_receipt,
+        after_metadata_receipt,
+        read_receipt,
+    }
+}
+
+/// Opens once, validates, reads, and revalidates the same final handle.
+pub fn safe_read<B: SafeReadBackend>(
+    backend: &mut B,
+    request: &SafeReadRequest,
+    limits: SafeReadLimits,
+) -> Result<SafeReadResult, SafeReadError> {
+    let open_request = FinalHandleOpenRequest {
+        relative_path: request.relative_path.clone(),
+        expected_root_identity_digest: request.expected_root_identity_digest,
+    };
+    same_handle_read_core(
+        backend,
+        &open_request,
+        request.range,
+        limits,
+        &mut || false,
+        |metadata, end, limits| validate_metadata(metadata, request, end, limits),
+        |metadata| {
+            metadata
+                .metadata_receipt
+                .clone()
+                .ok_or(SafeReadError::ReceiptMissing)
+        },
+    )
+    .map(finish_safe_read)
 }
 
 /// Opens once, validates, reads and revalidates the same final handle with
@@ -488,65 +750,53 @@ pub fn safe_read_with_cancel<B: SafeReadBackend>(
     limits: SafeReadLimits,
     should_cancel: &mut impl FnMut() -> bool,
 ) -> Result<SafeReadResult, SafeReadError> {
-    if should_cancel() {
-        return Err(SafeReadError::Cancelled);
-    }
-    let limits = limits.validate()?;
-    let end = request.range.end(limits)?;
-    let handle = backend
-        .open_final(&FinalHandleOpenRequest {
-            relative_path: request.relative_path.clone(),
-            expected_root_identity_digest: request.expected_root_identity_digest,
-        })
-        .map_err(|error| B::map_backend_error(&error))?;
-    let before = backend
-        .inspect(&handle)
-        .map_err(|error| B::map_backend_error(&error))?;
-    validate_metadata(&before, request, end, limits)?;
-    if should_cancel() {
-        return Err(SafeReadError::Cancelled);
-    }
+    let open_request = FinalHandleOpenRequest {
+        relative_path: request.relative_path.clone(),
+        expected_root_identity_digest: request.expected_root_identity_digest,
+    };
+    same_handle_read_core(
+        backend,
+        &open_request,
+        request.range,
+        limits,
+        should_cancel,
+        |metadata, end, limits| validate_metadata(metadata, request, end, limits),
+        |metadata| {
+            metadata
+                .metadata_receipt
+                .clone()
+                .ok_or(SafeReadError::ReceiptMissing)
+        },
+    )
+    .map(finish_safe_read)
+}
 
-    let read = backend
-        .read_exact_at(&handle, request.range.offset, request.range.length)
-        .map_err(|error| B::map_backend_error(&error))?;
-    if should_cancel() {
-        return Err(SafeReadError::Cancelled);
-    }
-    if read.bytes.len() != request.range.length {
-        return Err(SafeReadError::ReadLengthMismatch);
-    }
-    let read_receipt = read.read_receipt.ok_or(SafeReadError::ReceiptMissing)?;
-
-    let after = backend
-        .inspect(&handle)
-        .map_err(|error| B::map_backend_error(&error))?;
-    validate_metadata(&after, request, end, limits)?;
-    if before != after {
-        return Err(SafeReadError::HandleChangedDuringRead);
-    }
-    let before_metadata_receipt = before
-        .metadata_receipt
-        .clone()
-        .ok_or(SafeReadError::ReceiptMissing)?;
-    let after_metadata_receipt = after
-        .metadata_receipt
-        .ok_or(SafeReadError::ReceiptMissing)?;
-
-    if should_cancel() {
-        return Err(SafeReadError::Cancelled);
-    }
-
-    Ok(SafeReadResult {
-        range: request.range,
-        bytes: read.bytes,
-        stable_file_identity_digest: before.stable_file_identity_digest,
-        source_bytes: before.source_bytes,
-        security_barrier_revision: before.security_barrier_revision,
-        before_metadata_receipt,
-        after_metadata_receipt,
-        read_receipt,
-    })
+/// Performs one bounded Root-bound v2 acquisition with cooperative cancellation.
+pub fn acquire_with_cancel_v2<B: AcquisitionBackendV2>(
+    backend: &mut B,
+    request: &AcquisitionRequestV2,
+    limits: SafeReadLimits,
+    should_cancel: &mut impl FnMut() -> bool,
+) -> Result<AcquisitionResultV2, SafeReadError> {
+    let open_request = FinalHandleOpenRequest {
+        relative_path: request.relative_path.clone(),
+        expected_root_identity_digest: request.expected_root_identity_digest,
+    };
+    same_handle_read_core(
+        backend,
+        &open_request,
+        request.range,
+        limits,
+        should_cancel,
+        |metadata, end, limits| validate_acquisition_metadata(metadata, request, end, limits),
+        |metadata| {
+            metadata
+                .metadata_receipt
+                .clone()
+                .ok_or(SafeReadError::ReceiptMissing)
+        },
+    )
+    .map(finish_acquisition)
 }
 
 /// Runs bounded cancelable attempts with a fresh backend (hence a fresh final
@@ -587,6 +837,42 @@ pub fn safe_read_with_retries<B: SafeReadBackend>(
             }
         }
     }
+}
+
+fn validate_acquisition_metadata(
+    metadata: &AcquisitionMetadataV2,
+    request: &AcquisitionRequestV2,
+    end: u64,
+    limits: SafeReadLimits,
+) -> Result<(), SafeReadError> {
+    if metadata.root_identity_digest != request.expected_root_identity_digest {
+        return Err(SafeReadError::RootIdentityMismatch);
+    }
+    if metadata.root_purpose_digest != request.expected_root_purpose_digest {
+        return Err(SafeReadError::RootPurposeMismatch);
+    }
+    if metadata.kind != FinalHandleKind::RegularFile {
+        return Err(SafeReadError::UnsupportedFileKind);
+    }
+    if metadata.final_object_is_reparse || metadata.ancestor_reparse_observed {
+        return Err(SafeReadError::ReparseBoundaryDenied);
+    }
+    if metadata.stable_file_identity_digest != request.expected_stable_file_identity_digest {
+        return Err(SafeReadError::StableIdentityMismatch);
+    }
+    if metadata.source_bytes == 0 || metadata.source_bytes > limits.max_source_bytes {
+        return Err(SafeReadError::SourceSizeInvalid);
+    }
+    if end > metadata.source_bytes {
+        return Err(SafeReadError::RangeOutsideSource);
+    }
+    if request.range.require_eof && end != metadata.source_bytes {
+        return Err(SafeReadError::EofMismatch);
+    }
+    if metadata.metadata_receipt.is_none() {
+        return Err(SafeReadError::ReceiptMissing);
+    }
+    Ok(())
 }
 
 fn validate_metadata(
@@ -714,6 +1000,48 @@ mod tests {
         }
     }
 
+    impl AcquisitionBackendV2 for FakeBackend {
+        type Handle = u8;
+        type BackendError = FakeError;
+
+        fn open_final(
+            &mut self,
+            request: &FinalHandleOpenRequest,
+        ) -> Result<Self::Handle, Self::BackendError> {
+            SafeReadBackend::open_final(self, request)
+        }
+
+        fn inspect(
+            &mut self,
+            handle: &Self::Handle,
+        ) -> Result<AcquisitionMetadataV2, Self::BackendError> {
+            SafeReadBackend::inspect(self, handle).map(|metadata| AcquisitionMetadataV2 {
+                root_identity_digest: metadata.root_identity_digest,
+                stable_file_identity_digest: metadata.stable_file_identity_digest,
+                kind: metadata.kind,
+                source_bytes: metadata.source_bytes,
+                final_object_is_reparse: metadata.final_object_is_reparse,
+                ancestor_reparse_observed: metadata.ancestor_reparse_observed,
+                root_purpose_digest: Blake3Digest32::from_bytes([4; 32]),
+                change_token: metadata.change_token,
+                metadata_receipt: metadata.metadata_receipt,
+            })
+        }
+
+        fn read_exact_at(
+            &mut self,
+            handle: &Self::Handle,
+            offset: u64,
+            length: usize,
+        ) -> Result<AdapterRead, Self::BackendError> {
+            SafeReadBackend::read_exact_at(self, handle, offset, length)
+        }
+
+        fn map_backend_error(error: &Self::BackendError) -> SafeReadError {
+            <FakeBackend as SafeReadBackend>::map_backend_error(error)
+        }
+    }
+
     fn metadata() -> FinalHandleMetadata {
         FinalHandleMetadata {
             root_identity_digest: Blake3Digest32::from_bytes([1; 32]),
@@ -759,6 +1087,80 @@ mod tests {
             fail: None,
             cancel_after_final_inspection: None,
         }
+    }
+
+    fn acquisition_request() -> AcquisitionRequestV2 {
+        AcquisitionRequestV2 {
+            relative_path: RelativePathToken::new("src/lib.rs", DEFAULT_SAFE_READ_LIMITS)
+                .expect("path"),
+            expected_root_identity_digest: Blake3Digest32::from_bytes([1; 32]),
+            expected_stable_file_identity_digest: Blake3Digest32::from_bytes([2; 32]),
+            expected_root_purpose_digest: Blake3Digest32::from_bytes([4; 32]),
+            range: ReadRange {
+                offset: 1,
+                length: 3,
+                require_eof: false,
+            },
+        }
+    }
+
+    #[test]
+    fn acquisition_v2_mismatch_and_empty_are_before_read() {
+        let mut readable = backend();
+        let result = acquire_with_cancel_v2(
+            &mut readable,
+            &acquisition_request(),
+            DEFAULT_SAFE_READ_LIMITS,
+            &mut || false,
+        )
+        .expect("acquisition");
+        assert_eq!(result.into_bytes(), b"bcd");
+
+        let mut mismatched = backend();
+        mismatched.fail = Some(FakeError::Read);
+        let mut request = acquisition_request();
+        request.expected_root_purpose_digest = Blake3Digest32::from_bytes([9; 32]);
+        assert_eq!(
+            acquire_with_cancel_v2(
+                &mut mismatched,
+                &request,
+                DEFAULT_SAFE_READ_LIMITS,
+                &mut || false,
+            ),
+            Err(SafeReadError::RootPurposeMismatch)
+        );
+
+        let mut empty = backend();
+        empty.before.source_bytes = 0;
+        empty.after.source_bytes = 0;
+        empty.fail = Some(FakeError::Read);
+        assert_eq!(
+            acquire_with_cancel_v2(
+                &mut empty,
+                &acquisition_request(),
+                DEFAULT_SAFE_READ_LIMITS,
+                &mut || false,
+            ),
+            Err(SafeReadError::SourceSizeInvalid)
+        );
+    }
+
+    #[test]
+    fn acquisition_v2_terminal_cancellation_releases_no_bytes() {
+        use core::cell::Cell;
+        use std::rc::Rc;
+        let flag = Rc::new(Cell::new(false));
+        let mut backend = backend();
+        backend.cancel_after_final_inspection = Some(Rc::clone(&flag));
+        assert_eq!(
+            acquire_with_cancel_v2(
+                &mut backend,
+                &acquisition_request(),
+                DEFAULT_SAFE_READ_LIMITS,
+                &mut || flag.get(),
+            ),
+            Err(SafeReadError::Cancelled)
+        );
     }
 
     #[test]
