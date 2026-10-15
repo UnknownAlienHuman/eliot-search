@@ -312,4 +312,63 @@ mod windows {
             "refused dispatch must not invoke the ABI or produce a snapshot"
         );
     }
+
+    #[test]
+    fn sync_leaf_qualifies_location_and_bounded_held_names() {
+        let scratch = Scratch::new();
+        let path = scratch.0.join("source");
+        fs::write(&path, b"source").unwrap();
+        let leaf = SyncReadFile::open_no_follow(&path, &|_| Ok(())).unwrap();
+        let before = observe(leaf.file()).unwrap();
+        assert!(matches!(
+            location_with_check(&leaf, &|_| Ok(())).unwrap(),
+            NativeLocationClass::LocalFixed | NativeLocationClass::LocalRemovable
+        ));
+        let guid = normalized_name_with_check(
+            leaf.file(),
+            NormalizedNameKind::VolumeGuid,
+            &|_| Ok(()),
+        )
+        .unwrap();
+        assert!(guid.starts_with("\\\\?\\Volume{"));
+        let dos = normalized_name_with_check(leaf.file(), NormalizedNameKind::Dos, &|_| Ok(()))
+            .unwrap();
+        assert!(dos.starts_with("\\\\?\\"));
+        assert_eq!(observe(leaf.file()).unwrap(), before);
+    }
+
+    #[test]
+    fn location_refusal_after_native_dispatch_returns_no_classification() {
+        use std::cell::RefCell;
+
+        let scratch = Scratch::new();
+        let path = scratch.0.join("source");
+        fs::write(&path, b"source").unwrap();
+        let leaf = SyncReadFile::open_no_follow(&path, &|_| Ok(())).unwrap();
+        let trace = RefCell::new(Vec::new());
+        let check = |before| {
+            trace.borrow_mut().push(before);
+            if before { Ok(()) } else { Err(ObservationError::ObservationFailed) }
+        };
+        assert_eq!(
+            location_with_check(&leaf, &check),
+            Err(ObservationError::ObservationFailed)
+        );
+        assert_eq!(&*trace.borrow(), &[true, false]);
+    }
+
+    #[test]
+    fn case_sensitive_query_requires_a_qualified_directory_handle() {
+        let scratch = Scratch::new();
+        let directory = qualified_directory(&scratch.0);
+        assert!(matches!(
+            case_sensitive_directory_with_check(&directory, &|_| Ok(())),
+            Ok(true) | Ok(false)
+        ));
+        let file = scratch.create("source", b"source");
+        assert_eq!(
+            case_sensitive_directory_with_check(&file, &|_| Ok(())),
+            Err(ObservationError::UnsupportedHandle)
+        );
+    }
 }
