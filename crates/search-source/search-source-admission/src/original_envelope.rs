@@ -480,14 +480,15 @@ fn encode(
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_ORIGINAL_ADMISSION_BYTES, OriginalAdmissionEnvelope, decode_original_admission, encode,
-        retain_original_admission,
+        MAX_ORIGINAL_ADMISSION_BYTES, OriginalAdmissionEnvelope, decode_original_admission,
+        decode_original_admission_with_probe, encode, retain_original_admission,
     };
     use crate::{
         AdmissionBudget, AdmissionError, AdmissionOutcome, CancelFlag, DEFAULT_ADMISSION_LIMITS,
         UnvalidatedObservationInput, baseline_policy, evaluate, issue_receipt,
         validate_observation,
     };
+    use crate::policy_v2::CheckpointFailureV2;
     use search_contracts::{self as c, CanonicalValue as Value};
 
     fn build_original(source_class: &str) -> OriginalAdmissionEnvelope {
