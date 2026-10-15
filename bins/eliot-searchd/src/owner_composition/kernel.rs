@@ -41,6 +41,8 @@ mod native_admission;
 mod native_objects;
 #[path = "kernel/native_request.rs"]
 mod native_request;
+#[path = "kernel/direct_policy_v2.rs"]
+mod direct_policy_v2;
 #[path = "kernel/native_snapshot.rs"]
 mod native_snapshot;
 pub use std::fs::Metadata as SourceDirectoryMetadata;

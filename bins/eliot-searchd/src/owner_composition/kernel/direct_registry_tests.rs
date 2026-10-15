@@ -19,6 +19,74 @@ struct Scratch {
     other: PathBuf,
     config: PathBuf,
 }
+
+// Owned Windows fixtures; execution remains part of integrated Native qualification.
+fn retained_v2(revision: u64) -> search_source_provenance::RetainedPolicyV2 {
+    use search_source_admission::{self as a, policy_v2::*};
+    let (platform, capabilities) = command::admission_environment();
+    let mut section = a::compiled_defaults();
+    section.max_file_bytes = 1024;
+    let compiled = compile_policy_v2(&PolicyInputV2 {
+        schema_version: POLICY_SCHEMA_VERSION, revision,
+        section: a::validate_section(&section, &platform, &capabilities).unwrap(),
+        rules: vec![RuleInputV2 { id: "direct-v2-fixture".into(), precedence: 0,
+            source_class: a::SourceClass::Regular, predicate: PredicateV2::Always,
+            effect: a::RuleEffect::Allow, unknown_fields: vec![] }],
+        unknown_fields: vec![],
+    }, DEFAULT_COMPILE_LIMITS, &mut || Ok(())).unwrap();
+    search_source_provenance::RetainedPolicyV2::capture(&compiled, &platform, &capabilities, &mut || Ok(())).unwrap()
+}
+
+fn run_v2(s: &Scratch, source: &Path, archive: &Path) -> Result<String, String> {
+    let args = [OsString::from("--register-source-root-v2"), s.root.as_os_str().to_owned(),
+        source.as_os_str().to_owned(), archive.as_os_str().to_owned(),
+        OsString::from("--config-file"), s.config.as_os_str().to_owned()];
+    let mut output = Vec::new();
+    command::run(&args, Instant::now(), &mut output)?;
+    Ok(String::from_utf8(output).unwrap())
+}
+
+#[test]
+fn direct_v2_actual_policy_and_o1_replay_after_o2() {
+    let s = Scratch::new(true);
+    let policy = retained_v2(7);
+    let archive = s.base.join("policy.cbor");
+    fs::write(&archive, policy.encoded_inputs()).unwrap();
+    let first = run_v2(&s, &s.source, &archive).unwrap();
+    assert!(first.contains("\"registered\":true"));
+    assert!(first.contains("\"policy_revision\":7"));
+    assert!(first.contains(&super::super::super::codec::hex(policy.fingerprint().as_bytes())));
+    assert!(run_v2(&s, &s.other, &archive).unwrap().contains("\"registry_revision\":2"));
+    let replay = run_v2(&s, &s.source, &archive).unwrap();
+    for field in ["\"registered\":false", "\"historical_commit\":true",
+        "\"historical_registry_revision\":1", "\"registry_revision\":2",
+        "\"root_count\":2", "\"current_qualification\":true", "\"ready\":false",
+        "\"source_body_serving\":false", "\"safe_read_security_barrier_revision\":null"] {
+        assert!(replay.contains(field), "{field}: {replay}");
+    }
+    // The same pathname cannot substitute a different valid policy for O1.
+    fs::write(&archive, retained_v2(8).encoded_inputs()).unwrap();
+    assert_eq!(run_v2(&s, &s.source, &archive).unwrap_err(), "DIRECT_ORIGINAL_OPERATION_CONFLICT");
+}
+
+#[test]
+fn direct_v2_noncanonical_and_unknown_policy_refuse_before_owner_acquisition() {
+    use search_contracts::{CanonicalKey, CanonicalValue as V, parse_canonical_cbor, to_canonical_cbor};
+    let s = Scratch::new(true);
+    let policy = retained_v2(7);
+    let V::Object(mut fields) = parse_canonical_cbor(policy.encoded_inputs()).unwrap() else { panic!("archive map"); };
+    fields.insert(CanonicalKey::new("unexpected").unwrap(), V::U64(1)).unwrap();
+    let unknown = to_canonical_cbor(&V::Object(fields)).unwrap();
+    let archive = s.base.join("invalid.cbor");
+    for bytes in [vec![0xff], unknown] {
+        fs::write(&archive, bytes).unwrap();
+        let slots = s.slots();
+        let journal = fs::read(s.root.join("control/control.redb")).unwrap();
+        assert!(run_v2(&s, &s.source, &archive).is_err());
+        assert_eq!(s.slots(), slots);
+        assert_eq!(fs::read(s.root.join("control/control.redb")).unwrap(), journal);
+    }
+}
 impl Scratch {
     fn new(direct: bool) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);

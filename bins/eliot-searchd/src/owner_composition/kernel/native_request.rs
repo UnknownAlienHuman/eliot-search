@@ -82,6 +82,11 @@ impl NativeRootRequest {
         let mut request = Self::new(mode, arguments, deadline, cancellation, limits)?;
         let (selected, _) = crate::config_composition::strip_config_args_os(arguments).map_err(|_| OwnerError::OwnerOperationConflict)?;
         if selected.len() < 2 || selected[1].is_empty() { return Err(OwnerError::OwnerOperationConflict); }
+        if selected.first().is_some_and(|v| v == "--register-source-root-v2")
+            && (selected.len() != 4 || selected[1..].iter().any(|v| v.is_empty())
+                || mode != DataRootOpenMode::OpenExistingMutating) {
+            return Err(OwnerError::OwnerOperationConflict);
+        }
         request.root = PathBuf::from(&selected[1]);
         Ok((request, selected))
     }
@@ -859,6 +864,33 @@ mod migration_selector_tests {
 
     fn limits() -> NativeRootLimits {
         NativeRootLimits::new([256, 256 * 1024, 512 * 1024, 1024 * 1024 * 1024, 16384, 256]).unwrap()
+    }
+
+    #[test]
+    fn direct_v2_closed_operands_keep_full_raw_argv_and_original_context() {
+        let selected = ["--register-source-root-v2", "unopened-root", "unopened-source", "unread.cbor"].map(OsString::from).to_vec();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        for before in [true, false] {
+            let config = [OsString::from("--config-file"), OsString::from("unread.toml")];
+            let args = if before { config.iter().chain(&selected).cloned().collect::<Vec<_>>() }
+                else { selected.iter().chain(&config).cloned().collect::<Vec<_>>() };
+            let flag = Arc::new(AtomicBool::new(false));
+            let (request, actual) = NativeRootRequest::for_direct_registry(&args, DataRootOpenMode::OpenExistingMutating,
+                deadline, Arc::clone(&flag), limits()).unwrap();
+            assert_eq!(actual, selected);
+            assert_eq!(request.arguments(), args.iter().map(|v| native_argument(v, 256 * 1024).unwrap()).collect::<Vec<_>>());
+            assert_eq!(request.deadline, deadline);
+            assert!(Arc::ptr_eq(&request.cancellation, &flag));
+            flag.store(true, Ordering::Release);
+            assert_eq!(request.check(), Err(OwnerError::OwnerCancelledBeforeMutation));
+        }
+        let refused = |args: &[OsString]| assert!(NativeRootRequest::for_direct_registry(args,
+            DataRootOpenMode::OpenExistingMutating, deadline, Arc::new(AtomicBool::new(false)), limits()).is_err());
+        for end in 0..4 { refused(&selected[..end]); }
+        let mut extra = selected.clone(); extra.push("extra".into()); refused(&extra);
+        for index in 1..4 { let mut empty = selected.clone(); empty[index] = OsString::new(); refused(&empty); }
+        assert!(NativeRootRequest::for_direct_registry(&selected, DataRootOpenMode::InspectExistingReadOnly,
+            deadline, Arc::new(AtomicBool::new(false)), limits()).is_err());
     }
 
     fn invocation() -> Vec<OsString> {

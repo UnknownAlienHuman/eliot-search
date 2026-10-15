@@ -16,6 +16,13 @@ it is not current permanent-v2 Source admission. Metadata output keeps
 `ready:false`, source/service/query consumers unavailable and no fabricated live
 read-security fence. Original request/work/unknown outcome and ordered teardown
 remain load-bearing. Native and installed product qualification remain separate.
+The separate `--register-source-root-v2 DATA_ROOT SOURCE_ROOT POLICY_ARCHIVE`
+restores the closed canonical `RetainedPolicyV2` archive before mutating owner
+acquisition. The same original request and work meter own qualified read-only
+metadata capture. Root registration uses the actual compiled v2 revision and
+fingerprint; changed policy/profile never upgrades or reactivates an old Root.
+This remains Root metadata only. First Source admission owns namespace creation
+and durable original-policy reference binding; an empty Root has no archive store.
 The shared Native journal identity recipe is compiled in the default DIRECT
 profile; it does not require the optional query/provider feature or Qdrant.
 
