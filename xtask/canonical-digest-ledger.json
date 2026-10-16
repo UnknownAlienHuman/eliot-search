@@ -72585,6 +72585,30 @@
       "owner_issue": 594,
       "phase": "accepted",
       "reason": "Private copied observation equality/getter or exact native snapshot extension. Actual user capture, fresh held-handle ACL observation, root binding and original-context fences remain mandatory; no private hash or durable permission flag is added."
+    },
+    {
+      "count": 2,
+      "path": "bins/eliot-searchd/src/native_file/storage_acl/windows.rs",
+      "signal": "digest-prefix-review",
+      "source_sha256": "1e974fb4968cb72b90acc640602da8c88791e9e7c5c582ea6c9847cc6e5c51db",
+      "symbol": "descriptor_parts",
+      "test": false,
+      "classification": "non-digest-surface",
+      "owner_issue": 594,
+      "phase": "accepted",
+      "reason": "SID-named initialized byte-buffer validation/copying only. Raw SDK scalar fields and exact SID/used-ACE regions are bounds-checked and copied to initialized storage; no hash is computed in this function."
+    },
+    {
+      "count": 1,
+      "path": "bins/eliot-searchd/src/native_file/storage_acl/windows_tests.rs",
+      "signal": "named-compute-review",
+      "source_sha256": "558a15f849f965a81449964149056d0e806fa4ff15baf8cb5cd3f45a1717a109",
+      "symbol": "semantic_copy_never_borrows_uninitialized_descriptor_or_acl_slack",
+      "test": true,
+      "classification": "test-vector",
+      "owner_issue": 594,
+      "phase": "accepted",
+      "reason": "Partially initialized SDK-memory fixture supplies only documented semantic fields and checks copied buffers/slack. Shared SID equality is synthetic metadata, never live owner authority."
     }
   ]
 }
