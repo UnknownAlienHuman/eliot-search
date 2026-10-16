@@ -18,7 +18,7 @@ use search_contracts::indexed::{
 use search_contracts::{Blake3Digest32, BoundedName, Modality, NonZeroRevision};
 use search_lexical::{
     AcceptedCodeIdentifiersProfile, CodeEncodingError, CodeIdentifierLimits, LexicalInput,
-    SparseEncodingKind, SparseLimits, encode_code_document,
+    SparseEncodingKind, SparseError, SparseLimits, encode_code_document_with_checkpoint,
 };
 use search_materializer::api::MaterializationProduct;
 use search_projection_planner::{
@@ -187,12 +187,20 @@ pub(super) fn plan_raw_code_projection(
                 .min(stored_values_limit),
             ..sparse_limits
         };
-        let encoded = encode_code_document(
+        let mut checkpoint = || {
+            if cancelled.load(Ordering::Acquire) {
+                Err(SparseError::Cancelled)
+            } else {
+                Ok(())
+            }
+        };
+        let encoded = encode_code_document_with_checkpoint(
             &input,
             profile,
             lexical_limits,
             sparse_limits,
-            cancelled.load(Ordering::Acquire),
+            deadline,
+            &mut checkpoint,
         )
         .map_err(CodeProjectionError::Encoding)?;
         check(cancelled, deadline)?;
