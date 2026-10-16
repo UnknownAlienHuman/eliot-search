@@ -5,6 +5,7 @@ use search_config::{
     EffectiveConfigSnapshot, ValidatedSection, assemble_effective, merge_layers, project_section,
 };
 use search_contracts::ProfileId;
+use search_os_secrets::ValidatedSecretsConfig;
 
 use super::registry::daemon_registry;
 use super::spec::{DAEMON_DIRECT_PROFILE, daemon_limits, defaults_source, profile_id};
@@ -15,6 +16,7 @@ use super::spec::{DAEMON_DIRECT_PROFILE, daemon_limits, defaults_source, profile
 pub struct EffectiveDaemonConfig {
     snapshot: EffectiveConfigSnapshot,
     registry: ConfigRegistry,
+    secrets_settings: ValidatedSecretsConfig,
 }
 
 impl EffectiveDaemonConfig {
@@ -28,6 +30,19 @@ impl EffectiveDaemonConfig {
     #[must_use]
     pub const fn registry(&self) -> &ConfigRegistry {
         &self.registry
+    }
+
+    /// Owner-checked immutable settings; no runtime application or key authority.
+    #[must_use]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "The Current-key settings consumer remains under #307"
+        )
+    )]
+    pub const fn secrets_settings(&self) -> &ValidatedSecretsConfig {
+        &self.secrets_settings
     }
 
     /// Exact effective fingerprint for persistence and receipts.
@@ -67,16 +82,22 @@ pub fn build_effective(
         daemon_limits(),
     )?;
     let mut validated = Vec::new();
+    let mut secrets_settings = None;
     for (_, descriptor) in registry.sections() {
         let input = project_section(&merged, descriptor)?;
-        validated.push(ValidatedSection::new(
-            input,
-            selected.clone(),
-            daemon_limits(),
-        )?);
+        let section = ValidatedSection::new(input, selected.clone(), daemon_limits())?;
+        if section.section_name().as_str() == "secrets" {
+            secrets_settings = Some(search_os_secrets::validate_secrets_section(&section)?);
+        }
+        validated.push(section);
     }
+    let secrets_settings = secrets_settings.ok_or(ConfigError::MissingSection)?;
     let snapshot = assemble_effective(&registry, validated, selected, daemon_limits())?;
-    Ok(EffectiveDaemonConfig { snapshot, registry })
+    Ok(EffectiveDaemonConfig {
+        snapshot,
+        registry,
+        secrets_settings,
+    })
 }
 
 /// Defaults-only effective snapshot for the W1 shell profile.
@@ -89,3 +110,7 @@ pub fn build_effective_defaults() -> Result<EffectiveDaemonConfig, ConfigError> 
         DAEMON_DIRECT_PROFILE,
     )
 }
+
+#[cfg(test)]
+#[path = "configtests.rs"]
+mod configtests;

@@ -19,21 +19,46 @@ platform I/O and source access remain outside this package.
 
 ## Configuration operations
 
-### `section_descriptor() -> ConfigSectionDescriptor`
+### `section_descriptor() -> Result<ConfigSectionDescriptor, ConfigError>`
 
-### `compiled_defaults() -> ConfigSectionInput`
+Revision 2 owns exactly backend, lease TTL, rotation grace and the optional Qdrant opaque reference.
+Defaults are `windows_user_bound`, 30000 ms, 60000 ms and Absent. TTL is inclusive 1000..300000;
+grace is inclusive 0..600000. Backend/TTL/grace allow File only and no explicit reset; the reference
+allows File/whitelisted Environment and explicit reset. CLI overrides are refused. Text/reference
+and list bounds preserve the daemon profile: 4096 bytes, 64 items, 512 bytes per item.
 
-### `validate_section(input, platform, accepted_capabilities) -> Result<ValidatedSecretsConfig, SecretError>`
+The complete field-registry fingerprint uses shared canonical CBOR/BLAKE3 under
+`eliot/cbor/secrets-section-descriptor/v2`: section, owner, revision, section reload floor,
+secret policy, then fields in key order. Each field includes key, kind, typed default, all five
+bounds, allowed sources, reset policy, security floor, redaction and independent actions. The
+profile domain also fixes directional reload semantics. No private hash or generic builder is added.
 
-Implements `config/sections/secrets.md`. Accepts only the qualified OS-bound backend and opaque refs.
-Plaintext, encoded key bytes, DPAPI blobs in config and command-line secrets are rejected.
+### `validate_secrets_section(&ValidatedSection) -> Result<ValidatedSecretsConfig, ConfigError>`
 
-### `section_digest(validated) -> Blake3Digest32`
+Checks section/owner/revision/registry digest, exact four-field inventory, scalar bounds, fixed backend
+and source/reset provenance. Defaults must equal the owner defaults; reset values must equal their
+default. Captured revision-1 descriptors fail StaleDescriptor. Explicit opaque refs remain valid in
+DIRECT. Reference grammar stays owned by `search-config::SecretReference`; no reference is resolved.
+The environment whitelist and captured-source acquisition remain in their existing owners.
 
-### `plan_section_change(old, new) -> Result<SectionReloadDecision, SecretError>`
+`ValidatedSecretsConfig` has private fields and getters `backend() -> &str`, `lease_ttl_ms() -> u64`,
+`rotation_grace_ms() -> u64`, and `qdrant_api_secret_ref() -> Option<&SecretReference>`.
+Debug is redacted. Construction is possible only through owner validation, without an unchecked
+compiled-default factory. Descriptor defaults flow through the existing generic configuration builder.
 
-Preserves restart/gate obligations for backend/reference changes and restrictive live behavior for shorter
-leases. It never resolves a secret while planning configuration.
+### `section_digest(&ValidatedSecretsConfig) -> Blake3Digest32`
+
+Retains the existing config-owned section digest over exact typed values and provenance, after owner
+checks. It proves equality only, not runtime application, active configuration revision, backend
+qualification, clock, lease availability or Current-key authority.
+
+### `plan_section_change(&ValidatedSecretsConfig, &ValidatedSecretsConfig) -> Result<SectionDelta, ConfigError>`
+
+TTL decrease contributes ApplyLive and is restrictive; increase contributes RestartDependency.
+Grace changes contribute ApplyLive; reference changes contribute RestartDependency. Every value
+change also retains the section RestartDependency floor, preserving independent actions. Equal values,
+including provenance-only digest changes, require no action. Plans contain no application receipt and
+never execute a live/restart operation. Runtime application and qualified key selection remain separate.
 
 ## Reference and binding operations
 
