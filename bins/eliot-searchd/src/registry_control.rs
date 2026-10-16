@@ -10,6 +10,7 @@ mod tests;
 
 mod original_inputs;
 mod source_ids;
+pub(crate) use source_ids::{SourceIdentityIdError, SourceIdentityIdsV2};
 mod v4_readback;
 mod v4_restore;
 

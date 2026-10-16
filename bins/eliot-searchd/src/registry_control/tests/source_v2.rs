@@ -699,6 +699,32 @@ fn source_v2_normal_port_retains_restarts_and_replays_with_qualified_entropy() {
         let mut probe = || Ok::<_, CheckpointFailureV2>(());
         commit_source_admission_v2(&mut registry, &prepared, &mut port, &context, &mut probe)
             .expect("qualified source commit retains originals");
+        // Cross the real producer/storage boundary: consuming retention guards
+        // must compare exactly the bytes the v4 producer actually committed.
+        // This is not Native or retention-consumer qualification.
+        assert_eq!(prepared.batch().record().state_encoding_profile(), "eliot.registry-state.v4");
+        let mut conditions = Vec::new();
+        for delta in prepared.batch().states() {
+            let family = match delta.key() {
+                search_source_registry::recovery::RegistryStateKey::Source(_) => search_control_redb::RegistryStateFamily::Source,
+                search_source_registry::recovery::RegistryStateKey::Namespace(_) => search_control_redb::RegistryStateFamily::Namespace,
+                _ => panic!("unexpected fresh source delta"),
+            };
+            let key = search_control_redb::RegistryStateKey::new(family, delta.key_bytes().to_vec(),
+                search_control_redb::JournalLimits::BASELINE).unwrap();
+            conditions.push(key.current_condition(delta.after_bytes(), search_control_redb::JournalLimits::BASELINE).unwrap());
+        }
+        let root_state = search_source_registry::recovery::RegistryStateRecord::Root(registry.roots()[&root].clone());
+        let root_key = search_control_redb::RegistryStateKey::new(search_control_redb::RegistryStateFamily::Root,
+            root_state.key().encode().unwrap(), search_control_redb::JournalLimits::BASELINE).unwrap();
+        conditions.push(root_key.current_condition(&root_state.encode().unwrap(), search_control_redb::JournalLimits::BASELINE).unwrap());
+        let keys = conditions.iter().map(|condition| condition.key().clone()).collect::<Vec<_>>();
+        let observed = port.journal.read_control_keys_with_original_context(&keys,
+            Instant::now() + Duration::from_secs(60), &work).expect("real source/namespace/root point read");
+        assert_eq!(conditions.len(), 3);
+        for condition in &conditions {
+            assert_eq!(observed.get(condition.key()), condition.expected(), "exact wrapped owner bytes");
+        }
     }
     drop(journal);
 

@@ -18,6 +18,7 @@ use search_source_history::{prepare::{SourceRevisionPreparePort, SourceRevisionP
     encode_source_revision_mutation_readback, encode_source_revision_record}};
 use search_source_registry::{api::NamespaceCutoverState, recovery::RegistryStateRecord,
     root::RootRecord, source::{RegisteredSource, SourceLifecycle}};
+use super::super::read_child::fresh_root::RetentionSecurity;
 
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 const PREFIX: &[u8] = b"eliot.control.native-retention.v1/";
@@ -58,6 +59,10 @@ pub(super) struct NativeRetentionControl<'journal, 'work, C: CancellationProbe> 
     port: BoundControlJournal<'journal, C>,
     namespace: c::SourceNamespaceId,
     source: c::SourceId,
+    source_state: SourceRevisionSourceState,
+    content_digest: c::Blake3Digest32,
+    content_bytes: u64,
+    stability_receipt: c::ReceiptRef,
     guards: Vec<Condition>,
     deadline: Instant,
     work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
@@ -80,16 +85,21 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(journal: &'journal mut db::PersistentControlJournal,
         publisher: &'journal mut db::ControlSnapshotPublisher, source: &RegisteredSource,
-        namespace: &NamespaceCutoverState, root: &RootRecord, security: &[Condition],
+        namespace: &NamespaceCutoverState, root: &RootRecord, security: &RetentionSecurity,
         deadline: Instant, work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
     ) -> Result<Self, RetentionControlError> {
-        if source.lifecycle() != SourceLifecycle::Active
-            || source.permanent_admission().is_none()
+        let source_state = match source.lifecycle() {
+            SourceLifecycle::Active => SourceRevisionSourceState::Active,
+            SourceLifecycle::Retired => SourceRevisionSourceState::Retired,
+            _ => return Err(ControlError::OperationConflict.into()),
+        };
+        security.checkpoint().map_err(|_| ControlError::OperationConflict)?;
+        if source.permanent_admission().is_none()
             || source.identity().source_namespace_id != namespace.ownership.source_namespace_id
             || source.binding().root_binding_id() != root.root_binding_id
             || namespace.ownership.status != c::NamespaceOwnershipStatus::Active
             || namespace.fenced || namespace.preparation.is_some() || namespace.activation.is_some()
-            || root.status != search_source_registry::root::RootStatus::Active || security.len() != 2
+            || root.status != search_source_registry::root::RootStatus::Active
         { return Err(ControlError::OperationConflict.into()); }
         // Complete source/namespace owner encodings are finite technical metadata.
         // Pay before cloning or encoding any of them.
@@ -114,11 +124,15 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
                 .map_err(|_| ControlError::InvalidValue)?;
             guards.push(key.current_condition(&encoded, LIMITS)?);
         }
-        guards.extend_from_slice(security);
+        guards.extend_from_slice(security.conditions());
         let namespace = source.identity().source_namespace_id;
+        let content_digest = source.binding().content_digest();
+        let content_bytes = source.binding().content_bytes();
+        let stability_receipt = source.binding().observation_receipt().clone();
         let source = source.identity().source_id;
         let port = journal.bind_control_port(publisher)?;
-        let adapter = Self { port, namespace, source, guards, deadline, work, object: None };
+        let adapter = Self { port, namespace, source, source_state, content_digest,
+            content_bytes, stability_receipt, guards, deadline, work, object: None };
         let keys = adapter.guards.iter().map(|guard| guard.key().clone()).collect::<Vec<_>>();
         let read = adapter.read(&keys)?;
         adapter.require_source(&read)?;
@@ -168,6 +182,13 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         else { Err(ControlError::OperationConflict.into()) }
     }
     fn require_source(&self, read: &ScopedControlRecordsReadback) -> Result<(), RetentionControlError> {
+        let bytes = self.guards.iter().try_fold(0_usize, |sum, guard| sum
+            .checked_add(guard.key().as_bytes().len())
+            .and_then(|value| value.checked_add(guard.expected().map_or(0, ControlValue::len)))
+            .ok_or(ControlError::BudgetExceeded))?;
+        (self.work)(Work::Process(bytes)).map_err(|first| RetentionControlError {
+            control: ControlError::BudgetExceeded, first: Some(first),
+        })?;
         if self.guards.iter().any(|guard| read.get(guard.key()) != guard.expected()) {
             return Err(ControlError::OperationConflict.into());
         }
@@ -289,6 +310,8 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         let profile = decode_source_revision_preseal_profile(preseal_value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
         if profile.operation_id != mutation.operation_id || profile.source_namespace_id != self.namespace
             || profile.source_id != self.source || profile.expected_head != mutation.expected_head
+            || profile.content_digest != self.content_digest || profile.byte_length != self.content_bytes
+            || profile.stability_receipt_ref != self.stability_receipt
             || late_bind_object_residency(&profile, object.physical).map_err(|_| ControlError::StoreCorrupt)? != mutation.revision
             || self.value(&read, &claim, Class::Operation)? != Some(&self.claim_value(&mutation.operation_id)?)
         { return Err(ControlError::OperationConflict.into()); }
@@ -360,14 +383,18 @@ impl<C: CancellationProbe> SourceRevisionPreparePort for NativeRetentionControl<
         self.charge(4 * MAX_METADATA)?;
         self.value(&read, &key, Class::Operation)?.map(|value| {
             let profile = decode_source_revision_preseal_profile(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
-            if &profile.operation_id != operation { return Err(ControlError::OperationConflict.into()); }
+            if &profile.operation_id != operation || profile.source_namespace_id != self.namespace
+                || profile.source_id != self.source { return Err(ControlError::OperationConflict.into()); }
             Ok(profile)
         }).transpose()
     }
     fn retain_source_revision_preseal_profile(&mut self, profile: &SourceRevisionPresealProfile,
         context: &OperationContext<C>) -> Result<(), Self::Error> {
         self.contextual(context)?;
-        if profile.source_namespace_id != self.namespace || profile.source_id != self.source {
+        if profile.source_namespace_id != self.namespace || profile.source_id != self.source
+            || self.source_state != SourceRevisionSourceState::Active
+            || profile.content_digest != self.content_digest || profile.byte_length != self.content_bytes
+            || profile.stability_receipt_ref != self.stability_receipt {
             return Err(ControlError::OperationConflict.into());
         }
         self.charge(4 * MAX_METADATA)?;
@@ -409,7 +436,8 @@ impl<C: CancellationProbe> SourceRevisionControlPort for NativeRetentionControl<
         self.charge(4 * MAX_METADATA)?;
         self.value(&read, &key, Class::Operation)?.map(|value| {
             let result = decode_source_revision_mutation_readback(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
-            if &result.operation_id != operation { return Err(ControlError::OperationConflict.into()); }
+            if &result.operation_id != operation || result.source_namespace_id != self.namespace
+                || result.source_id != self.source { return Err(ControlError::OperationConflict.into()); }
             Ok(result)
         }).transpose()
     }
@@ -425,7 +453,7 @@ impl<C: CancellationProbe> SourceRevisionControlPort for NativeRetentionControl<
             decode_source_revision_record(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)).transpose()?;
         if revision.as_ref().is_some_and(|revision| revision.source_id != *source) { return Err(ControlError::StoreCorrupt.into()); }
         Ok(Some(SourceRevisionHead { source_namespace_id: *namespace, source_id: *source,
-            state: SourceRevisionSourceState::Active, revision }))
+            state: self.source_state, revision }))
     }
     fn load_source_revision(&self, namespace: &c::SourceNamespaceId, source: &c::SourceId,
         revision: &c::SourceRevisionId, context: &OperationContext<C>) -> Result<Option<c::SourceRevision>, Self::Error> {
@@ -444,7 +472,8 @@ impl<C: CancellationProbe> SourceRevisionControlPort for NativeRetentionControl<
         context: &OperationContext<C>, identity: &MutationIdentity) -> Result<(), Self::Error> {
         self.contextual(context)?;
         if identity.operation_id != mutation.operation_id || mutation.source_namespace_id != self.namespace
-            || mutation.source_id != self.source { return Err(ControlError::OperationConflict.into()); }
+            || mutation.source_id != self.source || self.source_state != SourceRevisionSourceState::Active
+        { return Err(ControlError::OperationConflict.into()); }
         self.commit_final(mutation)
     }
 }
