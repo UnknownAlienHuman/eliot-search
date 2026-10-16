@@ -12,8 +12,8 @@ use search_candidate_validator::{
 };
 use search_contracts::indexed::{EligibilityPopulation, PointPayload};
 use search_contracts::{
-    Blake3Digest32, CollectionRouteRevision, NativeAnchor, SearchTaskPlan, SourceRevision,
-    SourceRevisionRef, SourceView, UnitId,
+    Blake3Digest32, Blake3ExactInputLimit, CollectionRouteRevision, NativeAnchor, SearchTaskPlan,
+    SourceRevision, SourceRevisionRef, SourceView, UnitId, blake3_exact_bytes,
 };
 use search_epoch_pins::RouteIdentity;
 use search_projection_planner::{ProjectionManifestEntry, ProjectionPlan};
@@ -64,6 +64,18 @@ pub fn map_indexed_nominations(
     projection: &ProjectionPlan,
 ) -> Result<Vec<CandidateNomination>, NominationSourceError> {
     if nominations.len() > search_retrieval_executor::indexed::MAX_INDEXED_LIMIT {
+        return Err(NominationSourceError::ContextMismatch);
+    }
+    let plan_input = task_plan
+        .canonical_fingerprint_input()
+        .map_err(|_| NominationSourceError::ContextMismatch)?;
+    let limit = Blake3ExactInputLimit::new(plan_input.as_slice().len())
+        .map_err(|_| NominationSourceError::ContextMismatch)?;
+    let fingerprint = blake3_exact_bytes(plan_input.as_slice(), limit)
+        .map_err(|_| NominationSourceError::ContextMismatch)?;
+    if fingerprint.as_bytes() != ticket.plan_digest.as_bytes()
+        || fingerprint.as_bytes() != task_plan.plan_fingerprint.as_bytes()
+    {
         return Err(NominationSourceError::ContextMismatch);
     }
     let member = projection.source_membership_id;
@@ -1022,6 +1034,25 @@ mod tests {
         }
     }
 
+    #[test]
+    fn rejects_mutated_profile_allowlist_with_a_stored_plan_fingerprint() {
+        let mut fixture = fixture();
+        let mut profiles = fixture
+            .task_plan
+            .profile_fence
+            .projection_profile_set_ids
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        profiles.push(ProjectionProfileSetId::new("unaccepted-profile-v1").unwrap());
+        fixture.task_plan.profile_fence.projection_profile_set_ids =
+            BoundedList::new(profiles).unwrap();
+        assert_eq!(
+            fixture.map(&[fixture.nomination]),
+            Err(NominationSourceError::ContextMismatch)
+        );
+    }
+
     fn fixture() -> Fixture {
         fixture_with_validity(Epoch::new(1).unwrap(), None)
     }
@@ -1648,7 +1679,7 @@ mod tests {
                 &fixture.unit_set,
                 &fixture.projection,
             ),
-            Err(NominationSourceError::ProjectionMismatch)
+            Err(NominationSourceError::ContextMismatch)
         );
     }
 
