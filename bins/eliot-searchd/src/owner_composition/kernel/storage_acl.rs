@@ -282,7 +282,7 @@ impl StorageAclSnapshot {
         for file in pins
             .files
             .iter()
-            .chain(pins.direct.iter().map(|direct| direct.borrow_file()))
+            .chain(pins.direct.iter().map(super::native_objects::DirectPin::borrow_file))
         {
             observations.push(observe(&mut context, file, user)?);
         }
@@ -309,7 +309,7 @@ impl StorageAclSnapshot {
         for (file, expected) in pins
             .files
             .iter()
-            .chain(pins.direct.iter().map(|direct| direct.borrow_file()))
+            .chain(pins.direct.iter().map(super::native_objects::DirectPin::borrow_file))
             .zip(&self.observations)
         {
             if observe(&mut context, file, self.user)? != *expected {

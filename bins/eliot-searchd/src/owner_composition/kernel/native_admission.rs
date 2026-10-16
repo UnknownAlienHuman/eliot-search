@@ -212,11 +212,7 @@ fn acquire_existing_target(
     if snapshot.record.lifecycle != LifecycleState::Released {
         return Ok(Err(RootOpenState::OutcomeUnknown));
     }
-    let mut storage_acl = if snapshot.installation.journal_profile {
-        Some(StorageAclSnapshot::capture(request, work, &pins)?)
-    } else {
-        None
-    };
+    let mut storage_acl = snapshot.installation.journal_profile.then(|| StorageAclSnapshot::capture(request, work, &pins)).transpose()?;
     let control = match target {
         AdmissionTarget::Legacy => None,
         AdmissionTarget::Direct => {
@@ -229,9 +225,8 @@ fn acquire_existing_target(
         storage_acl = Some(storage_acl.as_ref().ok_or(OwnerError::OwnerStorageAclUnqualified)?
             .capture_after_direct_pin(request, work, &pins, &control.acl_before_open)?);
     }
-    let decision = classify_root_open(request.mode, RootOpenState::Initialized);
     if !matches!(
-        (mutation, decision),
+        (mutation, classify_root_open(request.mode, RootOpenState::Initialized)),
         (true, RootOpenDecision::RequireLiveOwner) | (false, RootOpenDecision::ReadExisting)
     ) {
         return Err(OwnerError::OwnerInvalidTransition);

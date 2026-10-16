@@ -168,7 +168,7 @@ pub(super) fn observe<C: StorageSecurityContext>(
             &raw mut descriptor,
         )
     };
-    let mut owned = LocalDescriptor(descriptor);
+    let mut allocation = LocalDescriptor(descriptor);
     let result = (|| {
         let after = context.checkpoint();
         if status != 0 {
@@ -206,7 +206,7 @@ pub(super) fn observe<C: StorageSecurityContext>(
             .map_err(Error::Context)?;
         qualify(sid, control, acl, expected)
     })();
-    let released = owned.release();
+    let released = allocation.release();
     let after = context.checkpoint();
     match result {
         Err(first) => Err(first),
@@ -218,11 +218,13 @@ pub(super) fn observe<C: StorageSecurityContext>(
     }
 }
 
+type DescriptorParts<'a> = (&'a [u8], u16, &'a [u8]);
+
 fn descriptor_parts<E>(
     bytes: &[u8],
     owner: *mut c_void,
     dacl: *mut c_void,
-) -> Result<(&[u8], u16, &[u8]), Error<E>> {
+) -> Result<DescriptorParts<'_>, Error<E>> {
     if bytes.len() < size_of::<RelativeDescriptor>() {
         return Err(Error::InvalidDescriptor);
     }

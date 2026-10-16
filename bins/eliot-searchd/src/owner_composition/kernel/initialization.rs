@@ -99,11 +99,7 @@ fn initialize_target(
     }
     let bound_root = open_initialization(&request, &mut work, &root, true)?;
     // The caller supplied an existing root. Qualify its held ACL without changing it.
-    let root_owner_seed = if direct {
-        Some(qualify_existing_root(&request, &mut work, &bound_root)?)
-    } else {
-        None
-    };
+    let root_owner_seed = direct.then(|| qualify_existing_root(&request, &mut work, &bound_root)).transpose()?;
     let barrier = if direct { super::native_snapshot::barriers_before_direct(&request, &mut work, &root)? }
         else { barriers(&request, &mut work, &root)? };
     if barrier.is_some() {
@@ -961,7 +957,7 @@ impl InitializingDataRoot {
         self.work.read(&self.request, std::mem::size_of::<File>() * self.files.len())?;
         let files = self.files.iter_mut().filter_map(Option::take).collect();
         let direct = self.direct.as_mut().and_then(|direct| direct.pin.take());
-        let mut pins = NativePins { files, direct };
+        let mut pins = NativePins { direct, files };
         let result = (|| match &self.storage_acl {
             Some(previous) => previous.capture_after_direct_pin(&self.request, &mut self.work, &pins,
                 &self.direct.as_ref().ok_or(OwnerError::OwnerStorageAclUnqualified)?.acl_before_open),
@@ -988,7 +984,7 @@ impl InitializingDataRoot {
         self.work.read(&self.request, std::mem::size_of::<File>() * self.files.len())?;
         let files = self.files.iter_mut().filter_map(Option::take).collect();
         let direct = self.direct.as_mut().and_then(|direct| direct.pin.take());
-        let mut pins = NativePins { files, direct };
+        let mut pins = NativePins { direct, files };
         let result = storage_acl.verify(&self.request, &mut self.work, &pins);
         if let Some(direct) = &mut self.direct {
             direct.pin = pins.direct.take();

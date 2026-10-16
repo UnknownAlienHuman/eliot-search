@@ -102,12 +102,8 @@ impl OwnerSid {
             return Err(StorageAclError::InvalidDescriptor);
         }
         let mut words = [0; MAX_SID / 4];
-        for (destination, bytes) in words.iter_mut().zip(sid.chunks_exact(4)) {
-            *destination = u32::from_ne_bytes(
-                bytes
-                    .try_into()
-                    .map_err(|_| StorageAclError::InvalidDescriptor)?,
-            );
+        for (destination, bytes) in words.iter_mut().zip(sid.as_chunks::<4>().0) {
+            *destination = u32::from_ne_bytes(*bytes);
         }
         Ok(Self { words })
     }
