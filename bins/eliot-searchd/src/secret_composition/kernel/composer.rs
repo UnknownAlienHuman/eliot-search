@@ -104,7 +104,6 @@ impl PairingSecretComposer {
         let record = SecretRecord::new_active(
             reference.clone(),
             payload,
-            evidence.blob_digest,
             one,
             operation,
         );

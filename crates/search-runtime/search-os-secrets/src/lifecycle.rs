@@ -21,7 +21,7 @@ use core::fmt;
 use std::collections::BTreeMap;
 
 use search_contracts::{
-    Blake3Digest32, InstallationId, InstallationIncarnationId, NonZeroRevision,
+    self as c, Blake3Digest32, InstallationId, InstallationIncarnationId, NonZeroRevision,
     OpaqueId, ReceiptRef,
 };
 use search_ports::{MonotonicInstant, MutationIdentity};
@@ -275,10 +275,10 @@ impl SecretOperation {
 
 /// Owned finite encrypted payload with redacted formatting.
 #[derive(Clone, Eq, PartialEq)]
-pub struct EncryptedPayload(Vec<u8>);
+pub struct EncryptedPayload(Vec<u8>, Blake3Digest32);
 
 impl EncryptedPayload {
-    /// Validates non-empty finite encrypted bytes.
+    /// Validates non-empty finite encrypted bytes and caches their exact raw BLAKE3 digest.
     pub fn new(bytes: Vec<u8>, max_bytes: usize) -> Result<Self, SecretError> {
         if bytes.is_empty() {
             return Err(SecretError::EmptySecret);
@@ -286,7 +286,11 @@ impl EncryptedPayload {
         if bytes.len() > max_bytes {
             return Err(SecretError::SecretTooLarge);
         }
-        Ok(Self(bytes))
+        let budget = c::Blake3ByteBudget::new(max_bytes)
+            .map_err(|_| SecretError::ContractExhausted)?;
+        let digest = c::blake3_bounded_bytes(&bytes, budget)
+            .map_err(|_| SecretError::ContractExhausted)?;
+        Ok(Self(bytes, digest))
     }
 
     /// Exact encrypted bytes for the platform adapter.
@@ -371,15 +375,15 @@ pub struct SecretRecord {
 }
 
 impl SecretRecord {
-    /// Creates an active encrypted record.
+    /// Creates an active encrypted record using its payload's internally computed digest.
     #[must_use]
     pub const fn new_active(
         reference: SecretReference,
         ciphertext: EncryptedPayload,
-        ciphertext_digest: Blake3Digest32,
         record_revision: NonZeroRevision,
         operation: SecretOperation,
     ) -> Self {
+        let ciphertext_digest = ciphertext.1;
         Self {
             reference,
             ciphertext,
@@ -402,7 +406,7 @@ impl SecretRecord {
         &self.ciphertext
     }
 
-    /// Digest of exact encrypted bytes.
+    /// Digest of admitted ciphertext, retained as historical metadata after deletion.
     #[must_use]
     pub const fn ciphertext_digest(&self) -> Blake3Digest32 {
         self.ciphertext_digest
@@ -557,18 +561,18 @@ impl SecretCatalog {
         Ok(())
     }
 
-    /// Prepares an exact one-version rotation.
+    /// Prepares an exact one-version rotation using the replacement payload's computed digest.
     pub fn prepare_rotation(
         &mut self,
         id: &OpaqueId,
         binding: &SecretBinding,
         replacement_version: NonZeroRevision,
         replacement_ciphertext: EncryptedPayload,
-        replacement_ciphertext_digest: Blake3Digest32,
         replacement_record_revision: NonZeroRevision,
         operation: SecretOperation,
     ) -> Result<SecretMutationEffect, SecretError> {
         validate_ciphertext(&replacement_ciphertext, self.limits)?;
+        let replacement_ciphertext_digest = replacement_ciphertext.1;
         let current = self.get(id)?.clone();
         if current.reference.binding() != binding {
             return Err(SecretError::BindingMismatch);
@@ -722,9 +726,13 @@ impl SecretCatalog {
             .durable_receipt
             .clone()
             .ok_or(SecretError::RecoveryEvidenceMissing)?;
+        let empty_digest = c::blake3_bounded_bytes(&[],
+            c::Blake3ByteBudget::new(1).map_err(|_| SecretError::ContractExhausted)?)
+            .map_err(|_| SecretError::ContractExhausted)?;
         let record = self.records.get_mut(id).ok_or(SecretError::NotFound)?;
         record.ciphertext.0.fill(0);
         record.ciphertext.0.clear();
+        record.ciphertext.1 = empty_digest;
         record.last_operation = pending.operation.clone();
         record.state = SecretRecordState::Deleted(pending.operation.clone());
         Ok(SecretTransitionReceipt {
@@ -962,10 +970,145 @@ mod tests {
                 NonZeroRevision::new(1).expect("version"),
             ),
             EncryptedPayload::new(vec![7, 8, 9], 64).expect("ciphertext"),
-            Blake3Digest32::from_bytes([4; 32]),
             NonZeroRevision::new(1).expect("revision"),
             operation("create", 5),
         )
+    }
+
+    // Published BLAKE3 1.8.2 test_vectors/test_vectors.json: input[i] = i % 251.
+    const CHUNK_DIGEST: &str =
+        "42214739f095a406f3fc83deb889744ac00df831c10daa55189b5d121c855af7";
+
+    fn vector_bytes(length: usize) -> Vec<u8> {
+        (0..length).map(|index| u8::try_from(index % 251).unwrap()).collect()
+    }
+
+    fn prepared_rotation_fixture()
+        -> (SecretCatalog, OpaqueId, SecretMutationEffect, SecretWriteReadback)
+    {
+        let mut catalog = SecretCatalog::new().expect("catalog");
+        let record = record();
+        let id = record.reference().id().clone();
+        catalog.create(record).expect("create");
+        let operation = operation("vector-rotation", 17);
+        let two = NonZeroRevision::new(2).expect("revision");
+        let effect = catalog.prepare_rotation(
+            &id, &binding(), two,
+            EncryptedPayload::new(vector_bytes(1024), 1024).expect("payload"),
+            two, operation.clone(),
+        ).expect("prepare");
+        let readback = SecretWriteReadback {
+            reference: SecretReference::new(id.clone(), binding(), two),
+            ciphertext_digest: Blake3Digest32::parse_hex(CHUNK_DIGEST).expect("published digest"),
+            record_revision: two,
+            operation,
+            durable_receipt: Some(ReceiptRef::new("receipt:vector-rotation").expect("receipt")),
+        };
+        (catalog, id, effect, readback)
+    }
+
+    #[test]
+    fn payload_owned_digest_matches_published_vectors_and_preserves_finite_bounds() {
+        for (length, expected) in [
+            (1, "2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213"),
+            (1024, CHUNK_DIGEST),
+            (102_400, "bc3e3d41a1146b069abffad3c0d44860cf664390afce4d9661f7902e7943e085"),
+        ] {
+            for ceiling in [length, usize::MAX] {
+                let old = record();
+                let payload = EncryptedPayload::new(vector_bytes(length), ceiling).expect("payload");
+                let active = SecretRecord::new_active(
+                    old.reference, payload, old.record_revision, old.last_operation,
+                );
+                assert_eq!(active.ciphertext_digest(),
+                    Blake3Digest32::parse_hex(expected).expect("published digest"));
+            }
+        }
+        assert_eq!(EncryptedPayload::new(Vec::new(), 64), Err(SecretError::EmptySecret));
+        assert_eq!(EncryptedPayload::new(vec![1], 0), Err(SecretError::SecretTooLarge));
+        assert_eq!(EncryptedPayload::new(vec![1, 2], 1), Err(SecretError::SecretTooLarge));
+        // A secret-owner ceiling is independent of the source helper's 16 MiB profile.
+        let length = 16 * 1024 * 1024 + 1;
+        let payload = EncryptedPayload::new(vec![0x5a; length], length).expect("custom ceiling");
+        let old = record();
+        let active = SecretRecord::new_active(
+            old.reference, payload, old.record_revision, old.last_operation,
+        );
+        let mut catalog = SecretCatalog::with_limits(SecretLimits {
+            max_ciphertext_bytes: length, ..DEFAULT_SECRET_LIMITS
+        }).expect("custom catalog");
+        let id = active.reference().id().clone();
+        catalog.create(active).expect("custom ciphertext accepted");
+        assert_eq!(catalog.get(&id).unwrap().ciphertext().len(), length);
+    }
+
+    #[test]
+    fn rotation_effect_and_pending_bind_the_replacement_bytes() {
+        let (catalog, id, effect, readback) = prepared_rotation_fixture();
+        let SecretMutationEffect::WriteEncrypted { ciphertext, ciphertext_digest, .. } = effect
+        else { panic!("rotation must prepare a write"); };
+        assert_eq!(ciphertext.as_bytes(), vector_bytes(1024));
+        assert_eq!(ciphertext_digest, readback.ciphertext_digest);
+        let current = catalog.get(&id).unwrap();
+        assert_eq!(current.reference().version().get(), 1);
+        assert_eq!(current.ciphertext().as_bytes(), &[7, 8, 9]);
+        let SecretRecordState::RotationPending(pending) = current.state()
+        else { panic!("rotation must remain pending"); };
+        assert_eq!(pending.replacement_ciphertext_digest, readback.ciphertext_digest);
+    }
+
+    #[test]
+    fn forged_or_stale_rotation_readback_preserves_the_entire_pending_record() {
+        let (mut catalog, id, _, readback) = prepared_rotation_fixture();
+        let before = catalog.get(&id).unwrap().clone();
+        let operations = catalog.operations.clone();
+        for mismatch in 0..6 {
+            let mut altered = readback.clone();
+            match mismatch {
+                0 => altered.ciphertext_digest = before.ciphertext_digest(),
+                1 => altered.ciphertext_digest = Blake3Digest32::from_bytes([0x55; 32]),
+                2 => altered.reference = before.reference().clone(),
+                3 => altered.record_revision = NonZeroRevision::new(3).unwrap(),
+                4 => altered.operation = operation("foreign-rotation", 17),
+                _ => altered.operation = operation("vector-rotation", 18),
+            }
+            assert_eq!(catalog.confirm_rotation(&id, &altered), Err(SecretError::ReadbackMismatch));
+            assert_eq!(catalog.get(&id).unwrap(), &before);
+            assert_eq!(catalog.operations, operations);
+        }
+    }
+
+    #[test]
+    fn unknown_rotation_requires_the_exact_digest_and_a_durable_receipt() {
+        let (mut catalog, id, _, readback) = prepared_rotation_fixture();
+        catalog.mark_outcome_unknown(&id, &readback.operation).unwrap();
+        let before = catalog.get(&id).unwrap().clone();
+        assert_eq!(catalog.confirm_rotation(&id, &readback), Err(SecretError::InvalidTransition));
+        let mut forged = readback.clone();
+        forged.ciphertext_digest = Blake3Digest32::from_bytes([0x55; 32]);
+        assert_eq!(catalog.recover_rotation(&id, &forged), Err(SecretError::ReadbackMismatch));
+        assert_eq!(catalog.get(&id).unwrap(), &before);
+        let mut missing = readback;
+        missing.durable_receipt = None;
+        assert_eq!(catalog.recover_rotation(&id, &missing), Err(SecretError::RecoveryEvidenceMissing));
+        assert_eq!(catalog.get(&id).unwrap(), &before);
+    }
+
+    #[test]
+    fn exact_rotation_recovery_advances_once_and_preserves_the_observed_receipt() {
+        let (mut catalog, id, _, readback) = prepared_rotation_fixture();
+        catalog.mark_outcome_unknown(&id, &readback.operation).unwrap();
+        let receipt = catalog.recover_rotation(&id, &readback).expect("exact recovery");
+        assert_eq!(receipt.durable_receipt, readback.durable_receipt.clone().unwrap());
+        assert_eq!(receipt.operation, readback.operation);
+        let active = catalog.get(&id).unwrap().clone();
+        assert_eq!(active.reference().version().get(), 2);
+        assert_eq!(active.record_revision().get(), 2);
+        assert_eq!(active.ciphertext_digest(), readback.ciphertext_digest);
+        assert_eq!(active.ciphertext().as_bytes(), vector_bytes(1024));
+        assert!(matches!(active.state(), SecretRecordState::Active));
+        assert_eq!(catalog.recover_rotation(&id, &readback), Err(SecretError::InvalidTransition));
+        assert_eq!(catalog.get(&id).unwrap(), &active);
     }
 
     #[test]
@@ -1027,8 +1170,7 @@ mod tests {
                 &id,
                 &binding(),
                 NonZeroRevision::new(2).expect("version"),
-                EncryptedPayload::new(vec![10, 11], 64).expect("ciphertext"),
-                Blake3Digest32::from_bytes([7; 32]),
+                EncryptedPayload::new(vec![0], 64).expect("ciphertext"),
                 NonZeroRevision::new(2).expect("revision"),
                 operation.clone(),
             )
@@ -1042,7 +1184,9 @@ mod tests {
                         binding(),
                         NonZeroRevision::new(2).expect("version"),
                     ),
-                    ciphertext_digest: Blake3Digest32::from_bytes([7; 32]),
+                    ciphertext_digest: Blake3Digest32::parse_hex(
+                        "2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213",
+                    ).expect("published digest"),
                     record_revision: NonZeroRevision::new(2).expect("revision"),
                     operation,
                     durable_receipt: Some(
@@ -1089,7 +1233,7 @@ mod tests {
                 &id,
                 &SecretDeleteReadback {
                     reference_absent: false,
-                    operation,
+                    operation: operation.clone(),
                     durable_receipt: Some(
                         ReceiptRef::new("receipt:delete").expect("receipt"),
                     ),
@@ -1097,6 +1241,21 @@ mod tests {
             ),
             Err(SecretError::OutcomeUnknown)
         );
+        let historical_digest = catalog.get(&id).unwrap().ciphertext_digest();
+        catalog.confirm_delete(&id, &SecretDeleteReadback {
+            reference_absent: true, operation,
+            durable_receipt: Some(ReceiptRef::new("receipt:delete-confirmed").unwrap()),
+        }).expect("exact deletion");
+        let deleted = catalog.get(&id).unwrap();
+        assert!(deleted.ciphertext().is_empty());
+        assert_eq!(deleted.ciphertext_digest(), historical_digest);
+        let recycled = SecretRecord::new_active(deleted.reference().clone(),
+            deleted.ciphertext().clone(), deleted.record_revision(), deleted.last_operation().clone());
+        assert_eq!(recycled.ciphertext_digest(), Blake3Digest32::parse_hex(
+            "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262").unwrap());
+        let mut fresh = SecretCatalog::new().unwrap();
+        assert_eq!(fresh.create(recycled), Err(SecretError::EmptySecret));
+        assert!(fresh.is_empty() && fresh.operations.is_empty());
     }
 
     #[test]
@@ -1113,7 +1272,6 @@ mod tests {
                 NonZeroRevision::new(1).expect("version"),
             ),
             EncryptedPayload::new(vec![1], 64).expect("ciphertext"),
-            Blake3Digest32::from_bytes([1; 32]),
             NonZeroRevision::new(1).expect("revision"),
             SecretOperation::new(mutation.clone(), Blake3Digest32::from_bytes([1; 32])),
         );
@@ -1125,7 +1283,6 @@ mod tests {
                 NonZeroRevision::new(1).expect("version"),
             ),
             EncryptedPayload::new(vec![2], 64).expect("ciphertext"),
-            Blake3Digest32::from_bytes([2; 32]),
             NonZeroRevision::new(1).expect("revision"),
             SecretOperation::new(mutation, Blake3Digest32::from_bytes([2; 32])),
         );

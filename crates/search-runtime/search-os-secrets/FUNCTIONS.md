@@ -53,6 +53,34 @@ Returns backend class, purpose, generation, binding digest and lifecycle state o
 
 ## Secret lifecycle
 
+### `EncryptedPayload::new(bytes, max_bytes) -> Result<EncryptedPayload, SecretError>`
+
+Rejects empty or over-budget ciphertext before hashing, then uses the shared
+`search-contracts::blake3_bounded_bytes` with `Blake3ByteBudget::new(max_bytes)` to cache
+raw BLAKE3 over exactly the owned bytes. Both bytes and digest fields are private; no
+digest setter or unchecked constructor exists. Existing custom finite ciphertext ceilings,
+including ceilings above the separate source helper's 16 MiB profile, remain valid.
+The byte budget grants no allocation, admission, total-work or backend authority.
+
+### `SecretRecord::new_active(reference, ciphertext, record_revision, operation) -> SecretRecord`
+
+This const constructor copies the payload-owned digest into the record. It accepts no caller
+ciphertext digest. `SecretCatalog::create` retains its existing capacity, payload and operation
+checks; constructing a record proves no encryption or durable backend effect.
+Deletion clears both payload bytes and their cached digest to the standard empty-input value;
+the record's admitted ciphertext digest remains historical metadata. A cleared payload cloned
+from a tombstone cannot be re-admitted because catalog admission rejects empty ciphertext.
+
+### `SecretCatalog::prepare_rotation(id, binding, replacement_version, replacement_ciphertext, replacement_record_revision, operation)`
+
+Returns `Result<SecretMutationEffect, SecretError>`. The pending rotation and write effect take
+their expected digest from the validated replacement payload before lifecycle mutation; no
+replacement digest is accepted as input. Existing binding/version/revision/state checks remain.
+`confirm_rotation` and `recover_rotation` still require the exact observed digest, reference,
+record revision and operation plus a durable receipt. Backend readback must observe actual
+stored bytes independently; a derived payload digest supplies equality, not durable selection
+or trusted readback provenance. Those obligations remain separate under #307.
+
 ### `create(binding, purpose, entropy_port, store_port, operation, deadline, cancel)`
 
 Returns `Result<SecretCreateReceipt, SecretError>`.

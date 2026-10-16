@@ -182,7 +182,6 @@ fn rotation_skipping_a_version_is_rejected() {
             &test_binding(),
             NonZeroRevision::new(jumped).expect("revision"),
             EncryptedPayload::new(vec![1; 32], 256).expect("payload"),
-            Blake3Digest32::from_bytes([7; 32]),
             NonZeroRevision::new(2).expect("revision"),
             operation,
         ),
@@ -261,7 +260,6 @@ fn operation_reuse_with_other_bytes_is_rejected() {
             &test_binding(),
             NonZeroRevision::new(2).expect("revision"),
             EncryptedPayload::new(vec![2; 32], 256).expect("payload"),
-            Blake3Digest32::from_bytes([8; 32]),
             NonZeroRevision::new(2).expect("revision"),
             SecretOperation::new(
                 operation.mutation().clone(),
