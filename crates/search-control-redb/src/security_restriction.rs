@@ -22,6 +22,7 @@ use crate::{
 };
 
 mod codec;
+mod original_context;
 
 /// Maximum configured dependent-owner identifiers in one restart command.
 pub const MAX_RESTRICTION_DEPENDENTS: usize = 64;

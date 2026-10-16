@@ -30,6 +30,7 @@ mod publication;
 mod port;
 mod registry;
 mod bootstrap;
+pub mod original_seam;
 mod operating_profile;
 
 pub use operating_profile::{JournalOperatingProfile, JournalProfileInitialization};

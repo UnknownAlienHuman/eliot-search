@@ -18,6 +18,8 @@ use crate::{
 
 const KEY_PREFIX: &[u8] = b"eliot.control.access-policy.v1\0";
 
+mod original_context;
+
 /// Exact immutable transaction descriptor, retained unchanged for recovery.
 ///
 /// A `None` expected record means explicit initialization, not upsert. Policy
