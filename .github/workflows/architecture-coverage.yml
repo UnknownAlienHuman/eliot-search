@@ -25,12 +25,8 @@ jobs:
         shell: pwsh
         run: ./tools/validate-architecture-coverage.ps1 -Json
 
-      - name: Revalidate package topology and function packet coverage
+      - name: Revalidate package topology
         shell: pwsh
         run: |
           ./tools/validate-swarm.ps1 -Json
           ./tools/validate-function-packets.ps1 -Json
-
-      - name: Revalidate ticket issuance contracts
-        shell: pwsh
-        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json

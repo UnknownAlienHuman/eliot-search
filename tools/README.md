@@ -67,8 +67,6 @@ pwsh -NoProfile -File tools/validate-p00-foundation-acceptance.ps1 -Json
 pwsh -NoProfile -File tools/validate-architecture-coverage.ps1 -Json
 pwsh -NoProfile -File tools/validate-coverage-graph-v2.ps1 -Json
 pwsh -NoProfile -File tools/validate-package-maps-v2.ps1 -Json
-pwsh -NoProfile -File tools/validate-context-artifact-candidate.ps1 -Json
-pwsh -NoProfile -File tools/validate-ticket-issuance-plan.ps1 -Json
 pwsh -NoProfile -File tools/validate-rust-only-entrypoints.ps1
 ```
 
@@ -92,19 +90,6 @@ restore a Python/Node validator.
   `validate-package-maps-v2.ps1` execute the Rust-owned architecture and package
   closure gates.
 
-### Draft, context and ticket control
-
-- `validate-p00-ticket-drafts.ps1` verifies bounded non-claimable ticket/context
-  drafts and zero issued-record state.
-- `validate-ticket-issuance-contracts.ps1` checks closed schemas, signatures,
-  reason registries and orchestration parity.
-- `build-context-artifact-candidate.ps1`,
-  `plan-context-materialization.ps1` and `plan-ticket-issuance.ps1` produce only
-  bounded advisory artifacts in their declared output roots.
-- `validate-context-artifact-candidate.ps1`,
-  `validate-context-materialization-plan.ps1` and
-  `validate-ticket-issuance-plan.ps1` validate those artifacts without issuing
-  tickets, leases or handoffs.
 - `validate-p00-foundation-acceptance.ps1` executes the Rust-owned P00 acceptance
   boundary. Its JSON result keeps package, G0, W0 and W1 authority claims false.
 
