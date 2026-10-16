@@ -17,8 +17,9 @@ use search_contracts::indexed::{
 };
 use search_contracts::{Blake3Digest32, BoundedName, Modality, NonZeroRevision};
 use search_lexical::{
-    AcceptedCodeIdentifiersProfile, CodeEncodingError, CodeIdentifierLimits, LexicalInput,
-    SparseEncodingKind, SparseError, SparseLimits, encode_code_document_with_checkpoint,
+    AcceptedCodeIdentifiersProfile, CodeEncodingError, CodeIdentifierEncoding,
+    CodeIdentifierLimits, LexicalInput, SparseEncodingKind, SparseError, SparseLimits,
+    SparseVector, encode_code_document_with_checkpoint,
 };
 use search_materializer::api::MaterializationProduct;
 use search_projection_planner::{
@@ -96,6 +97,64 @@ fn lexical_unit_input(
     ))
 }
 
+fn verified_vector<'encoding>(
+    encoded: &'encoding CodeIdentifierEncoding,
+    profile: &AcceptedCodeIdentifiersProfile,
+    profile_set: &RawCodeProjectionProfileSetDescriptor,
+) -> Result<&'encoding SparseVector, CodeProjectionError> {
+    let encoding = encoded.encoding();
+    let receipt = &encoding.receipt;
+    let vector = &encoding.vector;
+    if receipt.kind != SparseEncodingKind::Document
+        || !profile_set.matches_encoding_profile(
+            &receipt.profile_id,
+            receipt.profile_revision,
+            receipt.profile_fingerprint,
+            receipt.analyzer_fingerprint,
+        )
+        || receipt.qualification_receipt != profile.qualification().qualification_receipt
+        || receipt.vector_fingerprint != vector.fingerprint()
+        || receipt.vector_values != vector.indices.len()
+    {
+        return Err(CodeProjectionError::ContextMismatch);
+    }
+    Ok(vector)
+}
+
+fn projection_profile_set(
+    product: &MaterializationProduct,
+    units: &VerifiedUnitSet,
+    scope: &PlanningScope,
+    schema: &CollectionSchema,
+    profile: &AcceptedCodeIdentifiersProfile,
+) -> Result<RawCodeProjectionProfileSetDescriptor, CodeProjectionError> {
+    let requirement = schema
+        .vectors()
+        .first()
+        .ok_or(CodeProjectionError::ContextMismatch)?;
+    let code_profile = profile.profile();
+    let profile_set = RawCodeProjectionProfileSetDescriptor::new(
+        code_profile.id().clone(),
+        code_profile.revision(),
+        code_profile.fingerprint(),
+        code_profile.artifact_set_identity(),
+        code_profile.compatibility_fixture_identity(),
+        code_profile.collision_fixture_identity(),
+        requirement.clone(),
+        Blake3Digest32::from_bytes(*product.profile_id().as_bytes()),
+        units.manifest().profile_id().clone(),
+    )
+    .map_err(CodeProjectionError::Projection)?;
+    if profile_set.profile_set_id() != &scope.membership.projection_profile_set_id
+        || profile_set.profile_set_id() != schema.projection_profile_set_id()
+    {
+        return Err(CodeProjectionError::Projection(
+            ProjectionError::ProfileSetMismatch,
+        ));
+    }
+    Ok(profile_set)
+}
+
 /// Encode every owner-verified raw code unit and build one exact point plan.
 ///
 /// The caller supplies the generation's exact schema and C11 profile object.
@@ -123,7 +182,6 @@ pub(super) fn plan_raw_code_projection(
     validate_scope_binding(units, scope, projection_budget)
         .map_err(CodeProjectionError::Projection)?;
     verify_product_binding(product, units, schema)?;
-    let provenance = units.manifest().provenance();
     if max_input_bytes == 0
         || max_total_vector_values == 0
         || product.canonical_text().len() > max_input_bytes
@@ -140,32 +198,12 @@ pub(super) fn plan_raw_code_projection(
     ) {
         return Err(CodeProjectionError::ContextMismatch);
     }
-    let code_profile = profile.profile();
-    let profile_set = RawCodeProjectionProfileSetDescriptor::new(
-        code_profile.id().clone(),
-        code_profile.revision(),
-        code_profile.fingerprint(),
-        code_profile.artifact_set_identity(),
-        code_profile.compatibility_fixture_identity(),
-        code_profile.collision_fixture_identity(),
-        requirement.clone(),
-        Blake3Digest32::from_bytes(*product.profile_id().as_bytes()),
-        units.manifest().profile_id().clone(),
-    )
-    .map_err(CodeProjectionError::Projection)?;
-    if profile_set.profile_set_id() != &scope.membership.projection_profile_set_id
-        || profile_set.profile_set_id() != schema.projection_profile_set_id()
-    {
-        return Err(CodeProjectionError::Projection(
-            ProjectionError::ProfileSetMismatch,
-        ));
-    }
+    let profile_set = projection_profile_set(product, units, scope, schema, profile)?;
     let requirements = BTreeMap::from([(
         requirement.name().as_str().to_owned(),
         requirement.requirement(),
     )]);
-    let revision = NonZeroRevision::new(provenance.legacy_revision_sequence())
-        .map_err(|_| CodeProjectionError::ContextMismatch)?;
+    let revision = product.revision();
     let mut prepared = Vec::new();
     prepared
         .try_reserve_exact(units.units().len())
@@ -204,22 +242,7 @@ pub(super) fn plan_raw_code_projection(
         )
         .map_err(CodeProjectionError::Encoding)?;
         check(cancelled, deadline)?;
-        let encoding = encoded.encoding();
-        let receipt = &encoding.receipt;
-        let vector = &encoding.vector;
-        if receipt.kind != SparseEncodingKind::Document
-            || !profile_set.matches_encoding_profile(
-                &receipt.profile_id,
-                receipt.profile_revision,
-                receipt.profile_fingerprint,
-                receipt.analyzer_fingerprint,
-            )
-            || receipt.qualification_receipt != profile.qualification().qualification_receipt
-            || receipt.vector_fingerprint != vector.fingerprint()
-            || receipt.vector_values != vector.indices.len()
-        {
-            return Err(CodeProjectionError::ContextMismatch);
-        }
+        let vector = verified_vector(&encoded, profile, &profile_set)?;
         total_values = total_values
             .checked_add(vector.indices.len())
             .filter(|total| *total <= max_total_vector_values)
