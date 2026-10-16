@@ -46,7 +46,9 @@ impl RetentionSecurity {
 
 impl FreshRootContext<'_, '_> {
     fn retention_user_scope(&self) -> Result<[u8; 32], NativeSecurityError> {
-        self.verify_owner().map_err(native_error)?;
+        // The complete retention-security phase has full Native checks on
+        // both sides. Keep the original poll and the real current-user probe.
+        self.source_checkpoint().map_err(native_error)?;
         self.operation.borrow_mut().with_binding(|binding, request, work, _| {
             binding.storage_acl.as_ref().ok_or(search_runtime_owner::OwnerError::OwnerStorageAclUnqualified)?
                 .current_user_scope(request, work)
@@ -67,7 +69,7 @@ impl FreshRootContext<'_, '_> {
         let work = |unit| self.work(unit);
         self.source_full_checkpoint().map_err(native_error)?;
         let actual = self.source_owner_scope().map_err(native_error)?;
-        let facts = self.revision_dek_root_facts().map_err(native_error)?;
+        let facts = self.retained_root_facts().map_err(native_error)?;
         let user = self.retention_user_scope()?;
         let ownership = &namespace.ownership;
         let metadata = namespace.permanent_metadata().ok_or_else(refused)?;

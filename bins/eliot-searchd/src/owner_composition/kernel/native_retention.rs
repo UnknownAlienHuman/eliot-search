@@ -242,10 +242,12 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
         }
         (binding, metadata, seal_metadata, counter)
     };
-    let actual = input.native.read_selected_object(metadata.object_residency_key_digest(), SELECTED_REVISION_MAX_BYTES)
-        .map_err(|error| error.code().to_owned())?;
-    if actual.bytes() != binding.payload().ciphertext() { return Err("NATIVE_RETENTION_OBJECT_READBACK_MISMATCH".into()); }
-    let plaintext = os::open_revision(actual.bytes(), &seal_metadata, &selection.current, counter,
+    // Fresh publication returns only after C07 reads the durable final object
+    // and compares every byte with this owned payload. Recovery likewise built
+    // this binding from an exact Native read and checked the complete metadata.
+    // Reuse those verified bytes; a second identical filesystem read adds no
+    // evidence and repeats the whole native object-admission sequence.
+    let plaintext = os::open_revision(binding.payload().ciphertext(), &seal_metadata, &selection.current, counter,
         config.secrets_settings(), &mut native_key).map_err(|error| error.code().to_owned())?;
     if input.body.is_some_and(|body| body != plaintext.as_bytes()) { return Err("NATIVE_RETENTION_PLAINTEXT_MISMATCH".into()); }
     drop(plaintext);

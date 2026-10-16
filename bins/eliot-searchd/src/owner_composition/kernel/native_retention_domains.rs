@@ -18,7 +18,7 @@ impl FreshRootContext<'_, '_> {
     ) -> Result<[DomainBinding; 6], FreshRootError> {
         self.source_full_checkpoint()?;
         security.checkpoint().map_err(|_| mismatch())?;
-        let facts = self.revision_dek_root_facts()?;
+        let facts = self.retained_root_facts()?;
         let actual = self.source_owner_scope()?;
         let owner = &namespace.ownership;
         if namespace.fenced || namespace.preparation.is_some() || namespace.activation.is_some()

@@ -134,17 +134,38 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
             name.map_err(|_| search_runtime_owner::OwnerError::OwnerGuardMismatch)
         }).map_err(FreshRootError::Native)
     }
-    #[expect(clippy::too_many_lines, reason = "Single Root-to-Source acquisition keeps its retained FD and original context across pre/read/post phases")]
     pub(in super::super::super::super) fn acquire_source_v2<'view>(&'view self, root_path: &Path, id: c::RootBindingId,
         registry: &SourceRegistry, policy: &super::super::super::super::direct_policy_v2::CapturedPolicyV2,
         relative: &[u8], profile: FilesystemIdentityProfile,
     ) -> Result<AcquiredNativeSource<'view, 'operation, 'owner>, FreshRootError> {
         let (policy, policy_reference) = (&policy.retained, &policy.reference);
         let qualified = self.requalify_existing_v2(root_path, id, registry, policy, policy_reference)?;
+        self.acquire_qualified_source_v2(qualified, registry, relative, profile)
+    }
+
+    // Retention already holds the qualified Root used to create its namespace.
+    // Consume that same custody, rather than dropping it and selecting the
+    // entire locator hierarchy a second time before the sole body acquisition.
+    #[expect(clippy::too_many_lines, reason = "Single Root-to-Source acquisition keeps its retained FD and original context across pre/read/post phases")]
+    pub(in super::super::super::super) fn acquire_qualified_source_v2<'view>(&'view self,
+        qualified: RequalifiedFreshRoot<'view, 'operation, 'owner>, registry: &SourceRegistry,
+        relative: &[u8], profile: FilesystemIdentityProfile,
+    ) -> Result<AcquiredNativeSource<'view, 'operation, 'owner>, FreshRootError> {
+        if !std::ptr::eq(qualified.native, self) { return Err(invalid()); }
+        qualified.check_current(registry)?;
+        let super::RootPolicy::V2 { retained, .. } = &qualified.policy else { return Err(invalid()); };
+        let policy = Arc::clone(retained);
+        let id = qualified.root().root_binding_id;
+        let root_pin = qualified.pins.last().ok_or_else(invalid)?;
+        self.charge(Work::AllocateLocator(root_pin.path.as_os_str().len().checked_mul(8).ok_or_else(invalid)?))?;
+        let mut path = root_pin.path.clone();
         let relative = std::str::from_utf8(relative).map_err(|_| invalid())?;
-        let mut path = root_path.to_owned();
         self.charge(Work::AllocateLocator(relative.len().saturating_mul(128).saturating_add(8192)))?;
-        let mut pins = vec![self.source_directory(&path)?];
+        let (directory, observed) = self.observe(root_pin.directory.retain_file())?;
+        if self.source_io(|check| nf::case_sensitive_directory_with_check(directory.file(), check))? {
+            return Err(refused("NATIVE_SOURCE_CASE_PROFILE_UNSUPPORTED"));
+        }
+        let mut pins = vec![Pin { path: path.clone(), directory, observed }];
         let root_observed = pins[0].observed;
         if search_source_identity::ntfs_directory::ntfs_directory_digest(root_observed.volume_serial,
             root_observed.file_index, root_observed.creation_time).map_err(|_| invalid())?
@@ -218,7 +239,7 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
         raw = metadata_input(crate::source_classification::narrow_with_bytes(class, &body), location_text, observed.length, false);
         let post = admission::original_inputs_v2::reconstitute_observation_v2(&raw, Some(canonical.as_bytes()),
             policy.compiled(), MAX_OBSERVATION_PREIMAGE_BYTES, &mut probe).map_err(FreshRootError::Admission)?;
-        let original = OriginalAdmissionV2::retain(Arc::clone(policy), &post, &mut probe).map_err(FreshRootError::Admission)?;
+        let original = OriginalAdmissionV2::retain(Arc::clone(&policy), &post, &mut probe).map_err(FreshRootError::Admission)?;
         if original.receipt().decision().outcome() != admission::AdmissionOutcome::Allow {
             return Err(refused("NATIVE_SOURCE_POST_READ_REFUSED"));
         }

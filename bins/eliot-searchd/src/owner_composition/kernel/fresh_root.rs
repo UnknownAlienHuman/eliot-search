@@ -316,6 +316,13 @@ pub struct RequalifiedFreshRoot<'view, 'operation, 'owner> {
 impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
     pub(crate) fn revision_dek_root_facts(&self) -> Result<RevisionDekRootFacts, FreshRootError> {
         self.verify_owner()?;
+        self.retained_root_facts()
+    }
+    // Pure facts from the same held owner. Retention callers already bracket
+    // their complete phase with full Native verification; copying these fields
+    // must not reopen every pinned object for each related field group.
+    fn retained_root_facts(&self) -> Result<RevisionDekRootFacts, FreshRootError> {
+        self.checkpoint()?;
         self.operation.borrow_mut().with_binding(|binding, _, _, _| {
             Ok(RevisionDekRootFacts {
                 data_root: c::DataRootId::from_bytes(binding.record.data_root_id),

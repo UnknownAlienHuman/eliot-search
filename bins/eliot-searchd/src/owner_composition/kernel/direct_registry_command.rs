@@ -440,7 +440,11 @@ fn capture_configuration(
                     .map_err(|_| OwnerError::OwnerOperationConflict)
             })
             .map_err(|e| e.code().to_owned())?;
-        let document = config::capture_file_document(&bytes, "direct-root-locators")
+        // The secrets section's equality digest includes source provenance.
+        // Retention must use the same canonical file source as Current selection.
+        // Existing root-only commands keep their frozen capture profile.
+        let source_label = if command == "--retain-source-v2" { "config-file" } else { "direct-root-locators" };
+        let document = config::capture_file_document(&bytes, source_label)
             .map_err(|_| "DIRECT_CONFIG_INVALID")?;
         if document
             .declared_sections()

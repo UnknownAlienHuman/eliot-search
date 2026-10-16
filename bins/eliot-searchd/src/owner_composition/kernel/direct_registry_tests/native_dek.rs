@@ -154,3 +154,67 @@ fn native_dek_first_current_reopens_replays_without_config_and_cleans_exact_targ
     assert!(owned.cleanup(), "exact candidate cleanup");
     assert!(os::read_revision_dek(&binding, &mut CleanupContext::new()).unwrap().is_none());
 }
+
+#[test]
+fn native_retained_source_commits_exact_object_and_replays_without_source_or_key_use() {
+    let s = Scratch::new(true);
+    // Capture the exact target before any candidate write; cleanup precedes
+    // Scratch teardown on success and every panic/error path.
+    let owned = OwnedCandidates::new();
+    let policy = retained_v2(7);
+    let archive = s.base.join("retention-policy.cbor");
+    fs::write(&archive, policy.encoded_inputs()).unwrap();
+    let source = s.source.join("retained.rs");
+    fs::write(&source, b"fn retained_native_fixture() {}\n").unwrap();
+    run_v2(&s, &s.source, &archive).unwrap();
+
+    let (result, candidate) = run(&s, &owned, "71717171717171717171717171717171");
+    assert!(result.is_ok(), "{candidate}: {result:?}");
+    assert_eq!(owned.targets.borrow().len(), 1);
+    let binding = owned.targets.borrow()[0].clone();
+    let original_config = fs::read_to_string(&s.config).unwrap();
+    let config_bytes = format!("{original_config}[secrets]\nbackend=\"windows_user_bound\"\nlease_ttl_ms=20000\nrotation_grace_ms=0\n");
+    fs::write(&s.config, &config_bytes).unwrap();
+    let document = crate::config_composition::capture_file_document(config_bytes.as_bytes(), "config-file").unwrap();
+    let config = crate::config_composition::build_effective(Some(document), None, None, "direct", "direct").unwrap();
+    let (result, selected) = select(&s, "72727272727272727272727272727272", config.fingerprint().as_bytes(), &s.config);
+    assert!(result.is_ok(), "{selected}: {result:?}");
+
+    let arguments = [OsString::from("--retain-source-v2"), s.root.as_os_str().to_owned(),
+        s.source.as_os_str().to_owned(), OsString::from("retained.rs"), archive.as_os_str().to_owned(),
+        OsString::from("73737373737373737373737373737373"), OsString::from("new"), OsString::from("new"),
+        OsString::from("--config-file"), s.config.as_os_str().to_owned()];
+    let mut output = Vec::new();
+    let result = command::run(&arguments, Instant::now(), &mut output);
+    let first = String::from_utf8(output).unwrap();
+    assert!(result.is_ok(), "{first}: {result:?}");
+    for field in ["\"event\":\"native_source_retained\"", "\"historical_commit\":false",
+        "\"retained_revision\":true", "\"object_readback_verified\":true",
+        "\"source_body_serving\":false", "\"workspace_current\":false", "\"ready\":false"] {
+        assert!(first.contains(field), "{first}");
+    }
+    let identity = |text: &str, field: &str| text.split(&format!("\"{field}\":\""))
+        .nth(1).unwrap().split('"').next().unwrap().to_owned();
+    for field in ["namespace", "source", "revision"] {
+        let id = identity(&first, field);
+        assert_eq!(id.len(), 32);
+        assert_eq!(&id[12..13], "4", "genuine v4 {field}");
+        assert!(matches!(&id[16..17], "8" | "9" | "a" | "b"));
+    }
+
+    fs::remove_file(&source).unwrap();
+    assert!(owned.cleanup(), "exact owned candidate cleanup");
+    assert!(os::read_revision_dek(&binding, &mut CleanupContext::new()).unwrap().is_none());
+    fs::write(&s.config, config_bytes.replace("lease_ttl_ms=20000", "lease_ttl_ms=20001")).unwrap();
+    let mut output = Vec::new();
+    let result = command::run(&arguments, Instant::now(), &mut output);
+    let replay = String::from_utf8(output).unwrap();
+    assert!(result.is_ok(), "{replay}: {result:?}");
+    assert!(replay.contains("\"historical_commit\":true"), "{replay}");
+    assert!(replay.contains("\"object_readback_verified\":false"), "{replay}");
+    assert!(replay.contains("\"source_body_serving\":false"), "{replay}");
+    for field in ["namespace", "source", "revision"] {
+        assert_eq!(identity(&first, field), identity(&replay, field));
+    }
+    assert_eq!(owned.targets.borrow().len(), 1, "replay must not publish a key");
+}

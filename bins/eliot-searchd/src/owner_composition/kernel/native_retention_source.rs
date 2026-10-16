@@ -64,7 +64,6 @@ impl DirectRegistryOwner {
         let qualified = native.requalify_existing_v2(path, root_id, &registry, &policy.retained,
             &policy.reference).map_err(|error| error.to_string())?;
         let root = qualified.root().clone();
-        drop(qualified);
         let (mut namespace, owner) = select_namespace(&registry, root_id, profile,
             native.source_owner_scope().map_err(|error| error.to_string())?, &policy.retained)?;
         let refusal = RefCell::new(None);
@@ -113,7 +112,7 @@ impl DirectRegistryOwner {
         // The same C06 allocation and its held descriptor remain live through
         // encryption, C07 publication, exact readback and the final transaction.
         security.checkpoint().map_err(|error| error.to_string())?;
-        let acquired = native.acquire_source_v2(path, root_id, &registry, policy, command.relative.as_bytes(), profile)
+        let acquired = native.acquire_qualified_source_v2(qualified, &registry, command.relative.as_bytes(), profile)
             .map_err(|error| error.source_refusal_code().to_owned())?;
         let receipt: AdmittedSourceReceipt = if let Some(receipt) = historical {
             let source = registry.sources().get(&receipt.source_identity).ok_or("NATIVE_RETENTION_SOURCE_MISSING")?;
