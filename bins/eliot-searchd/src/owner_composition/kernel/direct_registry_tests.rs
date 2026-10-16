@@ -605,10 +605,11 @@ fn direct_owner_historical_root_commit_cannot_reactivate_unbound_root() {
 
 #[test]
 fn direct_owner_parent_bound_creation_refuses_foreign_locator_before_effect() {
-    let a = Scratch::new(false);
+    let a = Scratch::new(true);
     let b = Scratch::new(false);
     let before_a = a.slots();
     let before_b = b.slots();
+    let before_db = fs::read(a.root.join("control/control.redb")).unwrap();
     let admitted = super::super::admit_existing(
         a.request("--source-roots", DataRootOpenMode::InspectExistingReadOnly),
     )
@@ -629,9 +630,10 @@ fn direct_owner_parent_bound_creation_refuses_foreign_locator_before_effect() {
         &owner.pins.files[3],
         binding,
         true,
+        owner.storage_acl.as_ref().expect("actual DIRECT ACL snapshot"),
     );
     assert!(result.is_err());
-    assert!(!a.root.join("control/control.redb").exists());
+    assert_eq!(before_db, fs::read(a.root.join("control/control.redb")).unwrap());
     assert!(!b.root.join("control/control.redb").exists());
     drop(owner);
     assert_eq!(before_a, a.slots());
