@@ -14,9 +14,9 @@
 - [`../../xtask/src/context_artifact_builder/`](../../xtask/src/context_artifact_builder/) — immutable-tree preflight, extraction, assembly and exact local publication.
 - [`../../xtask/src/context_artifact.rs`](../../xtask/src/context_artifact.rs) — canonical candidate/bundle primitives.
 - [`../../xtask/src/context_artifact_io.rs`](../../xtask/src/context_artifact_io.rs) — output-root fencing and idempotent write/readback.
-- [`../../tools/build-context-artifact-candidate.ps1`](../../tools/build-context-artifact-candidate.ps1) — Windows wrapper for the locked Cargo command.
+- [`tools/build-context-artifact-candidate.ps1` at parent commit 7d40d32f](https://github.com/UnknownAlienHuman/eliot-search/blob/7d40d32f4013c299919702664e92cb244be2c22c/tools/build-context-artifact-candidate.ps1) — Windows wrapper for the locked Cargo command. Retired by #214 cleanup; no current entrypoint.
 - [`../../xtask/src/context_artifact_validation.rs`](../../xtask/src/context_artifact_validation.rs) — registry/schema/digest/authority structural validator.
-- [`../../tools/validate-context-artifact-candidate.ps1`](../../tools/validate-context-artifact-candidate.ps1) — locked Cargo validator wrapper.
+- [`tools/validate-context-artifact-candidate.ps1` at parent commit 7d40d32f](https://github.com/UnknownAlienHuman/eliot-search/blob/7d40d32f4013c299919702664e92cb244be2c22c/tools/validate-context-artifact-candidate.ps1) — locked Cargo validator wrapper. Retired by #214 cleanup; no current entrypoint.
 
 ## Qualification
 

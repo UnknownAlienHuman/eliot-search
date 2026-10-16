@@ -29,3 +29,4 @@ jobs:
         shell: pwsh
         run: |
           ./tools/validate-swarm.ps1 -Json
+          ./tools/validate-function-packets.ps1 -Json
