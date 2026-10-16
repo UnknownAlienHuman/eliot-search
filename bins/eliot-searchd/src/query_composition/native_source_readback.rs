@@ -89,6 +89,7 @@ pub(super) fn reopen_retained_raw_v3(
         || profile.attachment_policy != V3AttachmentPolicy::Absent
         || profile.omission_policy != V3OmissionPolicy::Forbidden
         || profile.overlap_policy != V3OverlapPolicy::None
+        || binding.source_namespace_id != expected.source_namespace_id
         || binding.source_id != expected.source_id
         || binding.source_revision_id != expected.revision_id
         || provenance.input_digest() != expected.content_digest
