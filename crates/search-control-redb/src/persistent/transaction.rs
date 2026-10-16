@@ -71,9 +71,8 @@ pub(super) fn execute_profile(journal: &mut PersistentControlJournal, mutation: 
 }
 
 pub(super) fn execute_revision_dek(journal: &mut PersistentControlJournal,
-    command: &crate::RevisionDekCommand, boundary: Boundary, check: &dyn Check,
+    command: &crate::ConditionalControlMutation, boundary: Boundary, check: &dyn Check,
 ) -> Result<ControlCommitReceipt, ControlError> {
-    let command = command.command();
     let result = execute_scoped(journal, command.mutation(), command.conditions(), boundary, check, Scope::RevisionDek)
         .map(|(receipt, _)| receipt);
     if result.as_ref().err().is_some_and(|error| super::is_corruption(*error)) { journal.quarantined = true; }
