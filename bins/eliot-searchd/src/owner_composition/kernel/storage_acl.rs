@@ -164,6 +164,17 @@ pub(super) fn qualify_existing_root(
 }
 
 impl RootOwnerSeed {
+    /// Qualifies a newly opened held DB file before its redb constructor can write.
+    /// Reuses the initializer's actual user observation and original allowance.
+    pub(super) fn qualify_file(
+        &self,
+        request: &NativeRootRequest,
+        work: &mut NativeWork,
+        file: &File,
+    ) -> Result<StorageAclObservation, OwnerError> {
+        observe(&mut OriginalContext::new(request, work), file, self.user)
+    }
+
     /// Freshly qualifies the actual held root, then creates with the leaf's
     /// explicit private descriptor. Never rewrites or adopts an existing child.
     pub(super) fn create_directory(
@@ -212,6 +223,38 @@ impl StorageAclSnapshot {
     ) -> Result<Self, OwnerError> {
         let user = actual_user(&mut OriginalContext::new(request, work))?;
         Self::capture_user(request, work, pins, user)
+    }
+
+    /// Qualifies the actual held DB file before redb acquisition may mutate it.
+    /// This opens no token and does not itself extend the pinned snapshot.
+    pub(super) fn qualify_file(
+        &self,
+        request: &NativeRootRequest,
+        work: &mut NativeWork,
+        file: &File,
+    ) -> Result<StorageAclObservation, OwnerError> {
+        observe(&mut OriginalContext::new(request, work), file, self.user)
+    }
+
+    /// Extends an eleven-pin snapshot only after the DIRECT DB pin is installed.
+    /// Fences both the original pins and the exact pre-constructor DB ACL facts.
+    pub(super) fn capture_after_direct_pin(
+        &self,
+        request: &NativeRootRequest,
+        work: &mut NativeWork,
+        pins: &NativePins,
+        pre_open_direct: &StorageAclObservation,
+    ) -> Result<Self, OwnerError> {
+        if self.direct || pins.direct.is_none() || self.observations.len() != OBJECTS.len() + 1 {
+            return Err(OwnerError::OwnerStorageAclUnqualified);
+        }
+        let extended = Self::capture_user(request, work, pins, self.user)?;
+        if extended.observations[..self.observations.len()] != self.observations[..]
+            || extended.observations.last() != Some(pre_open_direct)
+        {
+            return Err(OwnerError::OwnerStorageAclUnqualified);
+        }
+        Ok(extended)
     }
 
     fn capture_user(
