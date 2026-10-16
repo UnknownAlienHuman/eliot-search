@@ -164,8 +164,8 @@ pub fn project_candidate_set(
     inputs.sort_by(|left, right| {
         right
             .source_backed
-            .raw_score
-            .partial_cmp(&left.source_backed.raw_score)
+            .raw_score()
+            .partial_cmp(&left.source_backed.raw_score())
             .unwrap_or(Ordering::Equal)
             .then_with(|| left.public.candidate_id.cmp(&right.public.candidate_id))
     });
@@ -176,17 +176,29 @@ pub fn project_candidate_set(
     let mut validated_source_bytes = 0_usize;
 
     for input in inputs {
-        if !input.source_backed.raw_score.is_finite() {
+        if input.source_backed.request_id() != envelope.request_id {
+            return Err(ProjectionError::RequestMismatch);
+        }
+        if input.source_backed.plan_digest() != envelope.plan_fingerprint.as_bytes() {
+            return Err(ProjectionError::PlanMismatch);
+        }
+        if !input.source_backed.raw_score().is_finite() {
             return Err(ProjectionError::InvalidRankingScore);
         }
-        if input.source_backed.emission_permit.access_permit.checkpoint
+        if input.source_backed.emission_permit().access_permit.checkpoint
             != AccessCheckpoint::BeforeResultEmission
-            || input.source_backed.emission_permit.source_membership_id
-                != input.source_backed.source.source_membership_id()
+            || input.source_backed.emission_permit().source_membership_id
+                != input.source_backed.source().source_membership_id()
         {
             return Err(ProjectionError::EmissionPermitMissing);
         }
-        if !seen.insert(input.public.candidate_id) {
+        if input.public.candidate_id != input.source_backed.candidate_id()
+            || input.public.candidate_validation_receipt_ref
+                != *input.source_backed.candidate_validation_receipt_ref()
+        {
+            return Err(ProjectionError::InvalidResultContract);
+        }
+        if !seen.insert(input.source_backed.candidate_id()) {
             return Err(ProjectionError::CandidateIdentityDuplicate);
         }
         if input
@@ -198,7 +210,7 @@ pub fn project_candidate_set(
             return Err(ProjectionError::CandidateForbiddenReason);
         }
 
-        let candidate_bytes = input.source_backed.source.bytes().len();
+        let candidate_bytes = input.source_backed.source().bytes().len();
         let would_exceed_bytes = validated_source_bytes
             .checked_add(candidate_bytes)
             .is_none_or(|next| next > budget.max_total_validated_source_bytes);
@@ -222,7 +234,7 @@ pub fn project_candidate_set(
         )
         .map_err(|_| ProjectionError::CandidateBudgetExceeded)?;
         let candidate = ValidatedSearchCandidate {
-            candidate_id: input.public.candidate_id,
+            candidate_id: input.source_backed.candidate_id(),
             source_handle: input.public.source_handle,
             evidence_role: input.public.evidence_role,
             entity_kind: input.public.entity_kind,
@@ -230,9 +242,8 @@ pub fn project_candidate_set(
             freshness: input.public.freshness,
             ranking_trace: input.public.ranking_trace,
             reason_codes,
-            candidate_validation_receipt_ref: input
-                .public
-                .candidate_validation_receipt_ref,
+            candidate_validation_receipt_ref: input.source_backed
+                .candidate_validation_receipt_ref().clone(),
         };
         candidate
             .validate()
@@ -267,9 +278,9 @@ pub fn verify_handle_target_binding(
     expected_source_revision: search_contracts::SourceRevisionId,
     expected_unit: search_contracts::UnitId,
 ) -> Result<(), ProjectionError> {
-    if candidate.source.source_membership_id() != expected_source_membership
-        || candidate.source.source_revision_id() != expected_source_revision
-        || candidate.source.unit_id() != expected_unit
+    if candidate.source().source_membership_id() != expected_source_membership
+        || candidate.source().source_revision_id() != expected_source_revision
+        || candidate.source().unit_id() != expected_unit
     {
         Err(ProjectionError::HandleTargetMismatch)
     } else {

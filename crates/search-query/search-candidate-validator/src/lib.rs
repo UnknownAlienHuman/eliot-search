@@ -618,6 +618,8 @@ pub fn recheck_before_emission(
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValidatedSearchCandidate {
     candidate_id: CandidateId,
+    request_id: RequestId,
+    plan_digest: [u8; 32],
     leg_id: usize,
     raw_score: f32,
     source: VerifiedSourceSlice,
@@ -629,6 +631,16 @@ pub struct ValidatedSearchCandidate {
 }
 
 impl ValidatedSearchCandidate {
+    #[must_use]
+    pub const fn request_id(&self) -> RequestId {
+        self.request_id
+    }
+
+    #[must_use]
+    pub const fn plan_digest(&self) -> &[u8; 32] {
+        &self.plan_digest
+    }
+
     #[must_use]
     pub const fn candidate_id(&self) -> CandidateId {
         self.candidate_id
@@ -811,6 +823,8 @@ pub fn validate_raw_v3_full_unit_v1<P: RevisionReadbackPort>(
             )?;
             Ok(ValidatedSearchCandidate {
                 candidate_id,
+                request_id: nomination.request_id,
+                plan_digest: nomination.plan_digest,
                 leg_id: nomination.leg_id,
                 raw_score: nomination.raw_score,
                 source,
