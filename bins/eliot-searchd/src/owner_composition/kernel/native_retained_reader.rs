@@ -14,8 +14,10 @@ use super::dek_command::NativeContext;
 use super::retention_control::NativeRetentionControl;
 use super::super::read_child::fresh_root::{FreshRootCancellation, FreshRootContext};
 
-/// Called only inside the provider's issuer-verified source-read callback and
-/// the same live authority turn. The native context and control adapter retain
+/// Production composition must enter through the provider's issuer-verified
+/// source-read callback in the same live authority turn. The source-owner
+/// fixture exercises reopen separately; it creates no serving permission.
+/// The native context and control adapter retain
 /// the original request; this function allocates no deadline, source identity,
 /// key, query state or mutable Current selection.
 pub(super) fn open_retained_revision(

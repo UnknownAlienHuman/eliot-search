@@ -134,6 +134,7 @@ where
                             standalone_policy: live.standalone_policy,
                             standalone_grant: Some(issued),
                             standalone_admission: live.standalone_admission,
+                            standalone_sources: live.standalone_sources,
                             domain: live.domain,
                             fence: live.fence,
                             valid_until,

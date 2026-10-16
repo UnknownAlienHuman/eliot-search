@@ -8,7 +8,7 @@
 
 #![allow(dead_code)]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::task::Poll;
 
 use search_access::{
@@ -17,7 +17,7 @@ use search_access::{
     RequestSecurityFence, RequestedMembershipScope,
 };
 use search_contracts::{
-    Blake3Digest32, ProviderBodyV1, RequestBody, RequestedScope, SourceMembershipId,
+    Blake3Digest32, ProviderBodyV1, RequestBody, RequestedScope, SourceIdentity, SourceMembershipId,
 };
 use search_provider_protocol::{AdmittedProviderRequest, BindingContext, MonotonicMillis};
 
@@ -42,6 +42,7 @@ pub(crate) struct CanonicalQueryAuthority<'a> {
     pub domain: &'a NativeSecurityDomain,
     pub access: &'a AuthoritativeAccessSnapshot,
     pub membership_security: &'a StandaloneMembershipSecuritySnapshot,
+    pub sources: &'a BTreeMap<SourceMembershipId, SourceIdentity>,
     pub planned_policy: NamespacePolicyFence,
     pub authoritative_policy: AuthoritativePolicyState,
     pub route: IndexedRouteFence,
@@ -173,6 +174,7 @@ where
                     domain,
                     access,
                     membership_security,
+                    sources,
                     planned_policy,
                     authoritative_policy,
                     route,
@@ -253,6 +255,7 @@ where
                     standalone_policy: Some(policy),
                     standalone_grant: None,
                     standalone_admission: Some(&mut compile_admission),
+                    standalone_sources: Some(sources),
                     domain,
                     fence: &fence,
                     valid_until,

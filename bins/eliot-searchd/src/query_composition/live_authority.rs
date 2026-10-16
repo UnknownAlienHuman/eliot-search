@@ -8,7 +8,7 @@
 
 #![allow(dead_code)]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 
 use search_access::{
@@ -18,6 +18,7 @@ use search_access::{
 };
 use search_contracts::{
     Blake3Digest32, CollectionRouteRevision, ProviderBodyV1, PublicationGuards, RequestBody,
+    SourceIdentity, SourceMembershipId,
 };
 use search_control_redb::PublicationVisibilityState;
 use search_provider_protocol::{AdmittedProviderRequest, BindingContext};
@@ -42,6 +43,7 @@ pub(crate) struct LiveNativeQuerySnapshot {
     domain: NativeSecurityDomain,
     access: AuthoritativeAccessSnapshot,
     membership_security: StandaloneMembershipSecuritySnapshot,
+    sources: BTreeMap<SourceMembershipId, SourceIdentity>,
     planned_policy: NamespacePolicyFence,
     authoritative_policy: AuthoritativePolicyState,
     route: IndexedRouteFence,
@@ -65,6 +67,7 @@ impl LiveNativeQuerySnapshot {
         domain: NativeSecurityDomain,
         access: AuthoritativeAccessSnapshot,
         membership_security: StandaloneMembershipSecuritySnapshot,
+        registry: &search_source_registry::SourceRegistry,
         planned_policy: NamespacePolicyFence,
         authoritative_policy: AuthoritativePolicyState,
         visibility: PublicationVisibilityState,
@@ -73,6 +76,21 @@ impl LiveNativeQuerySnapshot {
         overlap_proof: Option<OverlapFreeRouteProof>,
         max_legs: usize,
     ) -> Result<Self, AccessError> {
+        if registry.revision() != access.source_catalog_generation {
+            return Err(AccessError::SnapshotStale);
+        }
+        let sources = policy.allowed_membership_ids.iter().map(|id| {
+            let (_, identity) = registry.active_source_membership_v2(*id)
+                .map_err(|_| AccessError::ScopeUnauthorized)?;
+            let namespace = registry.namespaces().get(&identity.source_namespace_id)
+                .ok_or(AccessError::NamespaceUnknown)?;
+            if identity.source_namespace_id != authoritative_policy.namespace_id
+                || namespace.ownership.source_owner_generation != authoritative_policy.owner_generation
+            {
+                return Err(AccessError::OwnerMismatch);
+            }
+            Ok((*id, identity.clone()))
+        }).collect::<Result<BTreeMap<_, _>, AccessError>>()?;
         let publication_guards = visibility.guards;
         let route = IndexedRouteFence {
             collection_generation_id: visibility.collection_generation_id,
@@ -85,6 +103,7 @@ impl LiveNativeQuerySnapshot {
             domain,
             access,
             membership_security,
+            sources,
             planned_policy,
             authoritative_policy,
             route,
@@ -133,6 +152,8 @@ impl LiveNativeQuerySnapshot {
         }
         check_policy_fence(&self.planned_policy, &self.authoritative_policy)?;
         if self.membership_security.access_snapshot_digest != self.access.snapshot_digest
+            || self.sources.len() != self.policy.allowed_membership_ids.len()
+            || !self.policy.allowed_membership_ids.iter().all(|id| self.sources.contains_key(id))
             || self.membership_security.memberships.len() != self.access.bindings.len()
             || !self
                 .access
@@ -242,7 +263,8 @@ impl LiveNativeQuerySnapshot {
         }
         if next.access.generation == self.access.generation
             && (next.access != self.access
-                || next.membership_security != self.membership_security)
+                || next.membership_security != self.membership_security
+                || next.sources != self.sources)
         {
             return Err(AccessError::SnapshotStale);
         }
@@ -441,6 +463,7 @@ where
             domain,
             access,
             membership_security,
+            sources,
             planned_policy,
             authoritative_policy,
             route,
@@ -454,6 +477,7 @@ where
             domain,
             access,
             membership_security,
+            sources,
             planned_policy: *planned_policy,
             authoritative_policy: *authoritative_policy,
             route: *route,

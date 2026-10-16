@@ -1,7 +1,7 @@
 //! Explicit native authority and cooperative recipe ownership; no allow-all host.
 
 use search_access::{AccessCheckpoint, AccessError, RequestSecurityFence};
-use search_contracts::{ProviderBodyV1, RecipeIdV1, RequestBody, SourceMembershipId};
+use search_contracts::{ProviderBodyV1, RecipeIdV1, RequestBody, SourceIdentity, SourceMembershipId, SourceRevisionRef};
 use search_provider_protocol::{
     AdmittedProviderRequest, BindingContext, MonotonicMillis, RequestGuard, TerminalKind,
 };
@@ -107,6 +107,11 @@ pub struct CanonicalServingAuthority<'authority, 'grant> {
             &StandaloneGrantTemplate,
         ) -> Result<StandalonePreRetrievalAdmission, AccessError>,
     >,
+    /// Exact active C03 membership-to-source bindings captured with the current
+    /// access snapshot under this same authority lock. Missing bindings deny
+    /// source reads; request claims and object locators cannot supply them.
+    pub(crate) standalone_sources:
+        Option<&'authority std::collections::BTreeMap<SourceMembershipId, SourceIdentity>>,
     /// Restored native domain under the actual serving/mutation lock.
     pub domain: &'authority NativeSecurityDomain,
     /// Complete authoritative influence population, not only displayed hits.
@@ -256,7 +261,8 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         &mut self,
         admission: &StandalonePreRetrievalAdmission,
         membership: SourceMembershipId,
-        read: impl FnOnce() -> Result<T, CanonicalServingError>,
+        expected: &SourceRevisionRef,
+        read: impl FnOnce(&SourceRevisionRef) -> Result<T, CanonicalServingError>,
     ) -> Result<T, CanonicalServingError> {
         if self.failed || self.emitted_terminal.is_some() {
             return Err(CanonicalServingError::InvalidCompletion);
@@ -289,9 +295,10 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         {
             return Err(CanonicalServingError::Access(AccessError::SnapshotStale));
         }
-        let result = self.authority.domain.with_live_checkpoint(
-            &current.request_fence, AccessCheckpoint::BeforeSourceReadback, |_| read(),
-        ).map_err(CanonicalServingError::Access)?;
+        let result = with_bound_source(self.authority.standalone_sources, membership, expected,
+            |expected| self.authority.domain.with_live_checkpoint(
+                &current.request_fence, AccessCheckpoint::BeforeSourceReadback, |_| read(expected),
+            ).map_err(CanonicalServingError::Access))?;
         // Check even after a source error. Preserve that first error, but never
         // return successful bytes if cancellation, expiry or live deny won.
         let after = self.budget.check().and_then(|()| {
@@ -349,3 +356,23 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         Ok(())
     }
 }
+
+// The binding comparison and backend dispatch are one boundary: no source work
+// may run between the full grant/scope checks above and this exact reference.
+fn with_bound_source<T>(
+    sources: Option<&std::collections::BTreeMap<SourceMembershipId, SourceIdentity>>,
+    membership: SourceMembershipId,
+    expected: &SourceRevisionRef,
+    read: impl FnOnce(&SourceRevisionRef) -> Result<T, CanonicalServingError>,
+) -> Result<T, CanonicalServingError> {
+    let source = sources.and_then(|sources| sources.get(&membership))
+        .ok_or(CanonicalServingError::Access(AccessError::ScopeUnauthorized))?;
+    if expected.source_namespace_id != source.source_namespace_id || expected.source_id != source.source_id {
+        return Err(CanonicalServingError::Access(AccessError::ScopeUnauthorized));
+    }
+    read(expected)
+}
+
+#[cfg(test)]
+#[path = "source_binding_tests.rs"]
+mod source_binding_tests;
