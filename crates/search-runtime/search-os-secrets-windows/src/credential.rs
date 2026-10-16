@@ -39,6 +39,8 @@ pub use pairing::{
 
 mod revision_dek;
 pub use revision_dek::*;
+mod seal_open;
+pub use seal_open::*;
 
 #[cfg(test)]
 mod tests;

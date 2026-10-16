@@ -339,6 +339,53 @@ pub fn read_revision_dek<C: RevisionDekContext>(
     Err(RevisionDekError::UnsupportedPlatform)
 }
 
+/// Reads, unwraps and validates the DEK, returning a zeroizing key guard.
+///
+/// This is the key-returning path for the closed seal/open consumer.
+/// It performs the same read and validation as `read_revision_dek` but
+/// returns the validated key guard instead of the protected bytes.
+/// The caller must consume the guard within the finite operation deadline.
+#[cfg(windows)]
+pub(crate) fn read_revision_dek_key<C: RevisionDekContext>(
+    binding: &CoreRevisionDekBinding,
+    context: &mut C,
+) -> Result<Option<ValidatedRevisionDekKey>, RevisionDekError<C::Error>> {
+    let observed = observe_revision_user(context)?;
+    if observed.user_scope_digest() != binding.user_scope_digest() {
+        return Err(RevisionDekError::UserScopeMismatch);
+    }
+    charge_name_budget(context, TARGET_PREFIX.len())?;
+    let target = target_name(binding.reference_digest());
+    let Some(frame) = read_credential(context, &target)? else {
+        return Ok(None);
+    };
+    context.charge(LegacyRevisionDpapiWork::Allocate(crate::MAX_SCOPE_BYTES)).map_err(RevisionDekError::Context)?;
+    context.charge(LegacyRevisionDpapiWork::Process(crate::MAX_SCOPE_BYTES.saturating_mul(2))).map_err(RevisionDekError::Context)?;
+    let mut entropy = binding.protection_entropy();
+    if entropy.is_empty() || entropy.len() > crate::MAX_SCOPE_BYTES {
+        return Err(RevisionDekError::BindingInvalid);
+    }
+    let guard = unwrap_and_validate_revision_dek(context, frame.as_slice(), &entropy);
+    clear_bytes(&mut entropy);
+    let guard = guard?;
+    context
+        .charge(LegacyRevisionDpapiWork::Allocate(frame.as_slice().len()))
+        .map_err(RevisionDekError::Context)?;
+    context
+        .charge(LegacyRevisionDpapiWork::Process(frame.as_slice().len().saturating_mul(2)))
+        .map_err(RevisionDekError::Context)?;
+    Ok(Some(guard))
+}
+
+/// Reads, unwraps and validates the DEK, returning a zeroizing key guard.
+#[cfg(not(windows))]
+pub(crate) fn read_revision_dek_key<C: RevisionDekContext>(
+    _binding: &CoreRevisionDekBinding,
+    _context: &mut C,
+) -> Result<Option<ValidatedRevisionDekKey>, RevisionDekError<C::Error>> {
+    Err(RevisionDekError::UnsupportedPlatform)
+}
+
 #[cfg(feature = "test-credential-cleanup")]
 /// Deletes one exact candidate target and proves its absence for native tests.
 #[cfg(windows)]
@@ -417,7 +464,7 @@ fn decode_frame<E>(
 /// cannot be cloned, preventing accidental key duplication. The guard is
 /// used only inside the existing read-validation path; it grants no key
 /// export, lease or durable authority.
-struct ValidatedRevisionDekKey {
+pub(crate) struct ValidatedRevisionDekKey {
     bytes: [u8; 32],
     #[cfg(test)]
     cleared: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
@@ -437,8 +484,7 @@ impl ValidatedRevisionDekKey {
     ///
     /// This grants no ownership or clone; the guard retains exclusive access.
     /// Used by the closed seal/open consumer once the C02 permit interface lands.
-    #[allow(dead_code)]
-    fn as_bytes(&self) -> &[u8; 32] {
+    pub(crate) fn as_bytes(&self) -> &[u8; 32] {
         &self.bytes
     }
 }
