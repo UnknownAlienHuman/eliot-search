@@ -16,6 +16,11 @@ type ReadContext = Option<(NativeRootRequest, NativeWork)>;
 #[path = "fresh_root.rs"]
 mod fresh_root;
 
+#[cfg(test)]
+pub(super) fn source_body_attempts_for_test() -> usize {
+    fresh_root::FreshRootContext::source_body_attempts_for_test()
+}
+
 pub(super) const fn direct_operation(owner: &mut NativeRootCapability) -> Result<NativeReadOperation<'_>, OwnerError> {
     if owner.pins.direct.is_none() { return Err(OwnerError::OwnerInvalidTransition); }
     // Closed caller immediately consumes this into fresh_root_context's FULL gate.

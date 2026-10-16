@@ -104,7 +104,6 @@ impl DirectRegistryOwner {
                 "{{\"event\":\"native_source\",\"admitted\":false,\"reason\":\"{}\",\"ready\":false,\"source_body_serving\":false}}",
                 eliot_searchd::diagnostics::sanitize_code(&error.to_string())) }),
         };
-        acquired.check_current(&registry).map_err(|e| e.to_string())?;
         let request = SourceAdmissionRequestV2 {
             expected_registry_revision: registry.revision(), root_binding_id: root_id,
             expected_root_revision: acquired.root().record_revision, namespace, owner,
@@ -136,7 +135,8 @@ impl DirectRegistryOwner {
                 }
             }
         };
-        native.source_full_checkpoint().map_err(|e| e.to_string())?;
+        // The enclosing command performs its full Native fence before output.
+        // Only held-source validation and journal readback remain before it.
         acquired.check_current(&registry).map_err(|e| e.to_string())?;
         drop(port);
         let _published = published_metadata(journal, &mut self.control.publisher, deadline, &callback)?;

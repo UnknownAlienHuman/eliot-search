@@ -1,4 +1,7 @@
 //! Real Native initializer + sole fixed DB + actual normal command seam. No FullNative claim.
+#[path = "direct_registry_tests/native_denials.rs"]
+mod native_denials;
+
 use super::*;
 use search_runtime_owner::DataRootOpenMode;
 use std::fs::OpenOptions;
@@ -106,33 +109,75 @@ fn native_source_v2_root_fd_policy_identity_redb_and_original_replay() {
     assert!(first.contains("\"admitted\":true"), "{first}");
     assert!(first.contains("\"registry_revision\":2"), "{first}");
     assert!(first.contains("\"ready\":false"));
+    let field = |text: &str, name: &str| text.split(&format!("\"{name}\":\""))
+        .nth(1).unwrap().split('"').next().unwrap().to_owned();
+    let mut second_args = args.clone();
+    second_args[3] = "two.rs".into();
+    second_args[5] = "42424242424242424242424242424242".into();
+    fs::write(s.source.join("two.rs"), b"pub fn second_native_source() {}\n").unwrap();
+    let mut second = Vec::new();
+    command::run(&second_args, Instant::now(), &mut second).unwrap();
+    let second = String::from_utf8(second).unwrap();
+    assert!(second.contains("\"registry_revision\":3"), "{second}");
+    assert_eq!(field(&first, "namespace"), field(&second, "namespace"));
+    assert_ne!(field(&first, "source"), field(&second, "source"));
     fs::remove_file(s.source.join("one.rs")).unwrap();
+    let body_attempts = super::super::read_child::source_body_attempts_for_test();
     let mut replay = Vec::new();
     command::run(&args, Instant::now(), &mut replay).unwrap();
     let replay = String::from_utf8(replay).unwrap();
     assert!(replay.contains("\"admitted\":true"), "{replay}");
     assert!(replay.contains("\"historical_commit\":true"), "{replay}");
     assert!(replay.contains("\"registry_revision\":2"), "{replay}");
+    assert_eq!(field(&first, "source"), field(&replay, "source"));
+    assert_eq!(super::super::read_child::source_body_attempts_for_test(), body_attempts);
+    let mut conflicting = args.clone();
+    conflicting[3] = "two.rs".into();
+    assert_eq!(command::run(&conflicting, Instant::now(), &mut Vec::new()).unwrap_err(),
+        "NATIVE_SOURCE_OPERATION_CONFLICT");
+    assert_eq!(super::super::read_child::source_body_attempts_for_test(), body_attempts);
+}
+
+fn owned_fixture_namespace(root: &Path) -> Result<[u8; 32], &'static str> {
+    let root = fs::canonicalize(root).map_err(|_| "fixture-root-unavailable")?;
+    let temp = fs::canonicalize(std::env::temp_dir()).map_err(|_| "fixture-temp-unavailable")?;
+    let base = root.parent().ok_or("fixture-base-missing")?;
+    if base.parent() != Some(temp.as_path())
+        || !base.file_name().and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("search-direct-owner-"))
+        || root.file_name() != Some(std::ffi::OsStr::new("data"))
+    {
+        return Err("fixture-path-invalid");
+    }
+    let history = fs::read(root.join(super::super::super::initialization_journal::JOURNAL_FILE))
+        .map_err(|_| "fixture-journal-unavailable")?;
+    let original = super::super::super::initialization_journal::decode_journal(&history, &mut |_| Ok(()))
+        .map_err(|_| "fixture-journal-invalid")?;
+    if original.subject.initialization != [0x36; 16] {
+        return Err("fixture-initialization-mismatch");
+    }
+    Ok(original.subject.namespace)
 }
 
 #[test]
+#[ignore = "requires an explicitly selected retained fixture"]
 fn native_fixture_existing_credential_readback_only() {
     let path = PathBuf::from(std::env::var_os("ELIOT_SEARCH_TEST_RECOVERY_ROOT").expect("explicit retained fixture"));
-    let path = fs::canonicalize(path).unwrap();
-    let base = path.parent().unwrap();
-    assert_eq!(base.parent(), Some(fs::canonicalize(std::env::temp_dir()).unwrap().as_path()));
-    assert!(base.file_name().unwrap().to_str().unwrap().starts_with("search-direct-owner-"));
-    assert_eq!(path.file_name().unwrap(), "data");
-    let history = fs::read(path.join(super::super::super::initialization_journal::JOURNAL_FILE)).unwrap();
-    let original = super::super::super::initialization_journal::decode_journal(&history, &mut |_| Ok(())).unwrap();
+    let namespace = owned_fixture_namespace(&path).expect("exact owned fixture journal");
     let observed = search_os_secrets_windows::load_existing_legacy_revision_root_secret_with_context(
-        &original.subject.namespace, Instant::now() + Duration::from_secs(30), &AtomicBool::new(false));
+        &namespace, Instant::now() + Duration::from_secs(30), &AtomicBool::new(false));
     match observed {
         Ok(Some(secret)) => { drop(secret); eprintln!("native-existing-readback:present"); }
         Ok(None) => eprintln!("native-existing-readback:absent"),
         Err(error) => panic!("native-existing-readback:error:{}", error.code()),
     }
+    if std::env::var_os("ELIOT_SEARCH_TEST_CLEANUP_OWNED_FIXTURE").as_deref() == Some(std::ffi::OsStr::new("1")) {
+        search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&namespace)
+            .expect("exact retained fixture credential cleanup");
+        eprintln!("native-existing-readback:exact-owned-key-cleanup:verified-absent");
+    }
 }
+
 impl Scratch {
     fn new(direct: bool) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -217,26 +262,23 @@ impl Scratch {
 }
 impl Drop for Scratch {
     fn drop(&mut self) {
-        if std::thread::panicking() {
-            eprintln!("native fixture retained after failure: {}", self.base.file_name().unwrap().to_string_lossy());
+        let panicking = std::thread::panicking();
+        let cleanup = owned_fixture_namespace(&self.root).and_then(|namespace| {
+            search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&namespace)
+                .map_err(|error| error.code())
+        });
+        if let Err(reason) = cleanup {
+            use std::io::Write;
+            let _ = writeln!(std::io::stderr().lock(), "native fixture credential cleanup failed: {reason}; disk retained");
+            if !panicking {
+                panic!("exact fixture credential cleanup failed: {reason}");
+            }
             return;
         }
-        assert_eq!(self.base.parent(), Some(std::env::temp_dir().as_path()));
-        assert!(
-            self.base
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .starts_with("search-direct-owner-")
-        );
-        // The fixture created this root and journal; never enumerate/delete
-        // credentials by prefix or infer ownership from a timestamp.
-        let journal = self.root.join(super::super::super::initialization_journal::JOURNAL_FILE);
-        if let Ok(bytes) = fs::read(journal) {
-            let original = super::super::super::initialization_journal::decode_journal(&bytes, &mut |_| Ok(())).unwrap();
-            search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&original.subject.namespace)
-                .expect("exact fixture credential cleanup");
+        if panicking {
+            use std::io::Write;
+            let _ = writeln!(std::io::stderr().lock(), "native fixture retained after failure; exact owned credential absence verified");
+            return;
         }
         fs::remove_dir_all(&self.base).unwrap();
     }

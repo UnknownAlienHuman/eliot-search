@@ -12,6 +12,9 @@ use std::{cell::RefCell, fs::File, io::{Read, Seek, SeekFrom}, path::{Path, Path
 
 const fn refused(code: &'static str) -> FreshRootError { FreshRootError::Source(code) }
 
+#[cfg(test)]
+std::thread_local! { static SOURCE_BODY_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
 pub struct AcquiredNativeSource<'view, 'operation, 'owner> {
     qualified: RequalifiedFreshRoot<'view, 'operation, 'owner>,
     pins: Vec<Pin>, leaf: SyncReadFile, path: PathBuf, observed: Observation,
@@ -32,6 +35,8 @@ impl AcquiredNativeSource<'_, '_, '_> {
 }
 
 impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
+    #[cfg(test)]
+    pub(crate) fn source_body_attempts_for_test() -> usize { SOURCE_BODY_ATTEMPTS.get() }
     pub(crate) fn source_checkpoint(&self) -> Result<(), FreshRootError> { self.checkpoint() }
     pub(crate) fn source_full_checkpoint(&self) -> Result<(), FreshRootError> { self.verify_owner() }
     pub(crate) fn source_owner_scope(&self) -> Result<search_source_registry::api::SourceOwnerScopeV2, FreshRootError> {
@@ -307,13 +312,19 @@ impl search_safe_reader::AcquisitionBackendV2 for SourceBackend<'_, '_, '_, '_> 
         let mut done = 0;
         while done < length {
             self.native.charge(Work::Read(length - done)).map_err(|e| e.to_string())?;
-            let read = self.native.source_io(|check| { check(true)?; let result = file.read(&mut buffer[done..]); check(false)?;
+            let read = self.native.source_io(|check| { check(true)?;
+                #[cfg(test)]
+                SOURCE_BODY_ATTEMPTS.set(SOURCE_BODY_ATTEMPTS.get() + 1);
+                let result = file.read(&mut buffer[done..]); check(false)?;
                 result.map_err(|_| ObservationError::ObservationFailed) }).map_err(|e| e.to_string())?;
             if read == 0 { return Err("NATIVE_SOURCE_SHORT_READ".into()); } done += read;
         }
         self.native.charge(Work::Read(1)).map_err(|e| e.to_string())?;
         let mut extra = [0];
-        let eof = self.native.source_io(|check| { check(true)?; let result = file.read(&mut extra); check(false)?;
+        let eof = self.native.source_io(|check| { check(true)?;
+            #[cfg(test)]
+            SOURCE_BODY_ATTEMPTS.set(SOURCE_BODY_ATTEMPTS.get() + 1);
+            let result = file.read(&mut extra); check(false)?;
             result.map_err(|_| ObservationError::ObservationFailed) }).map_err(|e| e.to_string())?;
         if eof != 0 { return Err("NATIVE_SOURCE_EOF_MISMATCH".into()); }
         Ok(search_safe_reader::AdapterRead { bytes: buffer,

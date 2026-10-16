@@ -741,7 +741,9 @@ impl NativeWork {
     ) -> Result<(), OwnerError> {
         request.check()?;
         #[cfg(test)]
-        if std::env::var_os("ELIOT_SEARCH_TEST_NATIVE_PHASE_TRACE").is_some() { eprintln!("native-phase:{phase}"); }
+        if std::env::var_os("ELIOT_SEARCH_TEST_NATIVE_PHASE_TRACE").is_some() {
+            eprintln!("native-phase:{phase}:opens={}:calls={}", self.opens, self.calls);
+        }
         #[cfg(test)]
         if let Some(hook) = &mut self.phase_hook {
             hook(phase);
