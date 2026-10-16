@@ -2,13 +2,14 @@
 //! It consumes the shared S9.5/S10.3 contracts and S11 point ID directly.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Instant;
 
 use qdrant_client::qdrant::{
     CollectionInfo, CountPoints, CreateCollection, CreateFieldIndexCollection, FieldType, Filter,
     GetPoints, IdfParams, Modifier, PayloadSchemaType, PointId, Query, QueryPoints, ScrollPoints,
     SearchParams, SparseVectorConfig, SparseVectorParams, StrictModeConfig, UpdateCollection,
-    Value, VectorInput, point_id, value, vectors_config,
+    Value, VectorInput, value, vectors_config,
 };
 use search_contracts::indexed::{
     CollectionInvariants, CollectionSchema as IndexedCollectionSchema, EligibilityPopulation,
@@ -19,7 +20,10 @@ use search_contracts::{
     Blake3Digest32, BoundedMap, CanonicalKey, CanonicalText, CanonicalValue, MAX_MAP_ENTRIES,
     MAX_QDRANT_EPOCH, MIN_QDRANT_EPOCH,
 };
-use search_point_identity::s11::PointId128;
+use search_point_identity::s11::{
+    CollisionDecision, ObservedPointIdentity, PointId128, PointIdentity, PointIdentityLimits,
+    ProjectionPointKey, compare_existing_identity, derive_point_identity,
+};
 
 #[cfg(test)]
 use search_contracts::{
@@ -40,7 +44,7 @@ const META_ROUTE: &str = "eliot_search_full_route_v1";
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CanonicalCandidate {
     /// Shared S11 point address; exact identity still requires readback.
-    pub point_id: PointId128,
+    pub address: PointId128,
     /// Qdrant score for ranking only.
     pub score: f32,
 }
@@ -49,7 +53,7 @@ pub struct CanonicalCandidate {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CanonicalPointReadback {
     /// Shared S11 point address, parsed losslessly from the Qdrant UUID.
-    pub point_id: PointId128,
+    pub address: PointId128,
     /// The accepted closed payload type, decoded from Qdrant's private values.
     pub payload: IndexedPointPayload,
 }
@@ -72,10 +76,54 @@ pub struct CanonicalScrollPage {
     pub next_offset: Option<PointId128>,
 }
 
+/// One nonrenewing budget for a complete canonical request, including every
+/// page or mutation/readback phase. Clones share the same absolute deadline.
 #[derive(Clone, Debug)]
-struct CanonicalAdmission {
-    collection_name: String,
-    schema: IndexedCollectionSchema,
+pub struct CanonicalRequestContext {
+    inner: Arc<CanonicalRequestBudget>,
+}
+
+#[derive(Debug)]
+struct CanonicalRequestBudget {
+    deadline: Instant,
+    operation: OpContext,
+}
+
+impl CanonicalRequestContext {
+    /// Starts one canonical request from its original bounded operation context.
+    /// Reuse or clone this value across every page and phase of that request.
+    pub fn new(operation: OpContext) -> Result<Self, BridgeError> {
+        operation.check()?;
+        let deadline = Instant::now()
+            .checked_add(operation.deadline())
+            .ok_or(BridgeError::TransportFailed)?;
+        Ok(Self {
+            inner: Arc::new(CanonicalRequestBudget {
+                deadline,
+                operation,
+            }),
+        })
+    }
+
+    pub(super) fn remaining(&self) -> Result<std::time::Duration, BridgeError> {
+        self.inner.operation.check()?;
+        self.inner
+            .deadline
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or(BridgeError::TransportFailed)
+    }
+
+    pub(super) fn remaining_after_dispatch(&self) -> Result<std::time::Duration, BridgeError> {
+        self.remaining()
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct CanonicalAdmission {
+    pub(super) collection_name: String,
+    pub(super) schema: IndexedCollectionSchema,
 }
 
 /// Admission keyed by the complete route, not its truncated generated name.
@@ -113,40 +161,13 @@ impl CanonicalState {
         Ok(())
     }
 
-    fn resolve(&self, route: &CollectionRoute) -> Result<&CanonicalAdmission, BridgeError> {
+    pub(super) fn resolve(
+        &self,
+        route: &CollectionRoute,
+    ) -> Result<&CanonicalAdmission, BridgeError> {
         self.admitted
             .get(route)
             .ok_or(BridgeError::CollectionNotFound)
-    }
-}
-
-/// One monotonic deadline shared by all create and verify phases.
-#[derive(Clone, Debug)]
-struct IndexedOperationBudget {
-    started: Instant,
-    total: Duration,
-}
-
-impl IndexedOperationBudget {
-    fn begin(context: &OpContext) -> Result<Self, BridgeError> {
-        context.check()?;
-        Ok(Self {
-            started: Instant::now(),
-            total: context.deadline(),
-        })
-    }
-
-    fn remaining(&self, context: &OpContext) -> Result<Duration, BridgeError> {
-        context.check()?;
-        self.total
-            .checked_sub(self.started.elapsed())
-            .filter(|remaining| !remaining.is_zero())
-            .ok_or(BridgeError::TransportFailed)
-    }
-
-    fn remaining_after_dispatch(&self, context: &OpContext) -> Result<Duration, BridgeError> {
-        self.remaining(context)
-            .map_err(|_| BridgeError::MutationOutcomeUnknown)
     }
 }
 
@@ -302,7 +323,9 @@ const fn post_create_error(error: BridgeError) -> BridgeError {
     }
 }
 
-fn encode_payload(payload: &IndexedPointPayload) -> Result<HashMap<String, Value>, BridgeError> {
+pub(super) fn encode_payload(
+    payload: &IndexedPointPayload,
+) -> Result<HashMap<String, Value>, BridgeError> {
     let CanonicalValue::Object(fields) = payload
         .to_canonical_value()
         .map_err(|_| BridgeError::CollectionSchemaMismatch)?
@@ -357,7 +380,9 @@ fn payload_to_canonical_value(
         .map_err(|_| BridgeError::MalformedResponse)
 }
 
-fn decode_payload(payload: &HashMap<String, Value>) -> Result<IndexedPointPayload, BridgeError> {
+pub(super) fn decode_payload(
+    payload: &HashMap<String, Value>,
+) -> Result<IndexedPointPayload, BridgeError> {
     let decoded = IndexedPointPayload::from_canonical_value(payload_to_canonical_value(payload)?)
         .map_err(|_| BridgeError::MalformedResponse)?;
     if encode_payload(&decoded)? != *payload {
@@ -366,7 +391,7 @@ fn decode_payload(payload: &HashMap<String, Value>) -> Result<IndexedPointPayloa
     Ok(decoded)
 }
 
-fn canonical_epoch_bound(epoch: i64) -> Result<f64, BridgeError> {
+pub(super) fn canonical_epoch_bound(epoch: i64) -> Result<f64, BridgeError> {
     if !(MIN_QDRANT_EPOCH..=MAX_QDRANT_EPOCH).contains(&epoch) {
         return Err(BridgeError::InvalidFilter);
     }
@@ -434,18 +459,67 @@ fn retrieval_and_idf_filters(
     Ok((retrieval, idf_corpus))
 }
 
-fn canonical_vendor_point_id(id: PointId128) -> PointId {
-    PointId {
-        point_id_options: Some(point_id::PointIdOptions::Uuid(id.to_string())),
+pub(super) fn canonical_vendor_point_id(id: PointId128) -> PointId {
+    id.to_string().into()
+}
+
+pub(super) fn canonical_bridge_point_id(id: &PointId) -> Result<PointId128, BridgeError> {
+    PointId128::parse(&point_id_codec::uuid(id)?).map_err(|_| BridgeError::MalformedResponse)
+}
+
+// Keep the private SDK oneof module in a scope with no public Eliot `point_id`
+// fields. The Qdrant type itself never crosses a public bridge boundary.
+mod point_id_codec {
+    use qdrant_client::qdrant::{PointId, point_id as vendor_point_id};
+
+    use super::BridgeError;
+
+    pub(super) fn uuid(id: &PointId) -> Result<String, BridgeError> {
+        match id.point_id_options.as_ref() {
+            Some(vendor_point_id::PointIdOptions::Uuid(uuid)) => Ok(uuid.clone()),
+            Some(vendor_point_id::PointIdOptions::Num(_)) | None => {
+                Err(BridgeError::MalformedResponse)
+            }
+        }
     }
 }
 
-fn canonical_bridge_point_id(id: &PointId) -> Result<PointId128, BridgeError> {
-    match id.point_id_options.as_ref() {
-        Some(point_id::PointIdOptions::Uuid(uuid)) => {
-            PointId128::parse(uuid).map_err(|_| BridgeError::MalformedResponse)
+/// Validates the compact address, full digest, and every S11 key coordinate
+/// observable in the accepted payload using the shared S11 comparison owner.
+pub(super) fn verify_observed_identity(
+    expected: &PointIdentity,
+    point_id: PointId128,
+    payload: &IndexedPointPayload,
+) -> Result<(), BridgeError> {
+    let limits = PointIdentityLimits::default();
+    let key = expected.key();
+    if derive_point_identity(key, limits).map_err(|_| BridgeError::PointIdCollision)? != *expected {
+        return Err(BridgeError::PointIdCollision);
+    }
+    let observed = ObservedPointIdentity {
+        key: ProjectionPointKey {
+            schema_version: key.schema_version,
+            installation_incarnation_id: payload.installation_incarnation_id,
+            collection_generation_id: payload.collection_generation_id,
+            projection_membership_id: payload.projection_membership_id,
+            representation_id: payload.representation_id,
+            unit_id: payload.unit_id,
+            projection_profile_set_id: payload.projection_profile_set_id.clone(),
+            // The closed S9.5 payload has no role field; the caller's complete
+            // S11 identity supplies that one coordinate while payload and the
+            // stored digest independently verify every encoded coordinate.
+            point_role: key.point_role,
+        },
+        full_digest: payload.point_identity_digest_256,
+        point_id,
+    };
+    match compare_existing_identity(expected, Some(&observed), limits)
+        .map_err(|_| BridgeError::PointIdCollision)?
+    {
+        CollisionDecision::SameFullIdentity => Ok(()),
+        CollisionDecision::Vacant | CollisionDecision::CollisionBlock => {
+            Err(BridgeError::PointIdCollision)
         }
-        Some(point_id::PointIdOptions::Num(_)) | None => Err(BridgeError::MalformedResponse),
     }
 }
 
@@ -459,7 +533,10 @@ fn decode_point(
     if !population.matches(&payload) {
         return Err(BridgeError::UnexpectedPoint);
     }
-    Ok(CanonicalPointReadback { point_id, payload })
+    Ok(CanonicalPointReadback {
+        address: point_id,
+        payload,
+    })
 }
 
 impl RealDataPlane {
@@ -468,13 +545,12 @@ impl RealDataPlane {
         &mut self,
         route: &CollectionRoute,
         schema: &IndexedCollectionSchema,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<(), BridgeError> {
-        let budget = IndexedOperationBudget::begin(context)?;
         let (name, schema_id) = validate_schema_route(route, schema)?;
         self.authorize_dispatch()?;
         let exists = tokio::time::timeout(
-            budget.remaining(context)?,
+            context.remaining()?,
             self.client.collection_exists(name.clone()),
         )
         .await
@@ -507,22 +583,20 @@ impl RealDataPlane {
             ..Default::default()
         };
         self.authorize_dispatch()?;
-        let created = tokio::time::timeout(
-            budget.remaining(context)?,
-            self.client.create_collection(create),
-        )
-        .await
-        .map_err(|_| BridgeError::MutationOutcomeUnknown)?
-        .map_err(super::map_create_error)?;
+        let created =
+            tokio::time::timeout(context.remaining()?, self.client.create_collection(create))
+                .await
+                .map_err(|_| BridgeError::MutationOutcomeUnknown)?
+                .map_err(super::map_create_error)?;
         if !created.result {
             return Err(BridgeError::MutationOutcomeUnknown);
         }
 
         for field in payload_indexes() {
-            budget.remaining_after_dispatch(context)?;
+            context.remaining_after_dispatch()?;
             self.authorize_dispatch().map_err(post_create_error)?;
             let indexed = tokio::time::timeout(
-                budget.remaining_after_dispatch(context)?,
+                context.remaining_after_dispatch()?,
                 self.client.create_field_index(CreateFieldIndexCollection {
                     collection_name: name.clone(),
                     field_name: field.name.to_owned(),
@@ -545,10 +619,10 @@ impl RealDataPlane {
             }
         }
 
-        budget.remaining_after_dispatch(context)?;
+        context.remaining_after_dispatch()?;
         self.authorize_dispatch().map_err(post_create_error)?;
         let hardened = tokio::time::timeout(
-            budget.remaining_after_dispatch(context)?,
+            context.remaining_after_dispatch()?,
             self.client.update_collection(UpdateCollection {
                 collection_name: name.clone(),
                 strict_mode_config: Some(strict_mode_config(true)),
@@ -563,8 +637,8 @@ impl RealDataPlane {
             return Err(BridgeError::MutationOutcomeUnknown);
         }
 
-        budget.remaining_after_dispatch(context)?;
-        self.verify_indexed_schema_at(route, schema, &name, schema_id, &budget, context)
+        context.remaining_after_dispatch()?;
+        self.verify_indexed_schema_at(route, schema, &name, schema_id, context)
             .await
             .map_err(post_create_error)?;
         self.canonical
@@ -578,13 +652,12 @@ impl RealDataPlane {
         &mut self,
         route: &CollectionRoute,
         schema: &IndexedCollectionSchema,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<(), BridgeError> {
-        let budget = IndexedOperationBudget::begin(context)?;
         let (name, schema_id) = validate_schema_route(route, schema)?;
-        self.verify_indexed_schema_at(route, schema, &name, schema_id, &budget, context)
+        self.verify_indexed_schema_at(route, schema, &name, schema_id, context)
             .await?;
-        budget.remaining(context)?;
+        context.remaining()?;
         self.canonical.admit(route.clone(), name, schema)?;
         Ok(())
     }
@@ -595,20 +668,16 @@ impl RealDataPlane {
         schema: &IndexedCollectionSchema,
         name: &str,
         schema_id: Blake3Digest32,
-        budget: &IndexedOperationBudget,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<(), BridgeError> {
         self.authorize_dispatch()?;
-        let info = tokio::time::timeout(
-            budget.remaining(context)?,
-            self.client.collection_info(name),
-        )
-        .await
-        .map_err(|_| BridgeError::TransportFailed)?
-        .map_err(super::map_read_error)?
-        .result
-        .ok_or(BridgeError::MalformedResponse)?;
-        budget.remaining(context)?;
+        let info = tokio::time::timeout(context.remaining()?, self.client.collection_info(name))
+            .await
+            .map_err(|_| BridgeError::TransportFailed)?
+            .map_err(super::map_read_error)?
+            .result
+            .ok_or(BridgeError::MalformedResponse)?;
+        context.remaining()?;
         indexed_schema_info_matches(&info, route, schema, schema_id)
     }
 
@@ -620,9 +689,8 @@ impl RealDataPlane {
         vector_name: &VectorName,
         query: &VectorValue,
         limit: usize,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<Vec<CanonicalCandidate>, BridgeError> {
-        let budget = IndexedOperationBudget::begin(context)?;
         if limit == 0 || limit > self.limits.max_query_candidates {
             return Err(BridgeError::QueryBudgetExceeded);
         }
@@ -645,7 +713,7 @@ impl RealDataPlane {
         let (filter, corpus) = retrieval_and_idf_filters(population, schema)?;
         self.authorize_dispatch()?;
         let answered = tokio::time::timeout(
-            budget.remaining(context)?,
+            context.remaining()?,
             self.client.query(QueryPoints {
                 collection_name: admission.collection_name.clone(),
                 query: Some(Query::new_nearest(VectorInput::new_sparse(
@@ -675,7 +743,7 @@ impl RealDataPlane {
         let mut candidates = Vec::with_capacity(answered.result.len());
         let mut seen = BTreeSet::new();
         for scored in &answered.result {
-            budget.remaining(context)?;
+            context.remaining()?;
             if !scored.score.is_finite() {
                 return Err(BridgeError::InvalidScore);
             }
@@ -686,11 +754,11 @@ impl RealDataPlane {
                 return Err(BridgeError::MalformedResponse);
             }
             candidates.push(CanonicalCandidate {
-                point_id,
+                address: point_id,
                 score: scored.score,
             });
         }
-        budget.remaining(context)?;
+        context.remaining()?;
         Ok(candidates)
     }
 
@@ -699,14 +767,13 @@ impl RealDataPlane {
         &self,
         route: &CollectionRoute,
         population: &EligibilityPopulation,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<u64, BridgeError> {
-        let budget = IndexedOperationBudget::begin(context)?;
         let admission = self.canonical.resolve(route)?;
         let filter = base_filter(population, &admission.schema)?;
         self.authorize_dispatch()?;
         let counted = tokio::time::timeout(
-            budget.remaining(context)?,
+            context.remaining()?,
             self.client.count(CountPoints {
                 collection_name: admission.collection_name.clone(),
                 filter: Some(filter),
@@ -717,7 +784,7 @@ impl RealDataPlane {
         .await
         .map_err(|_| BridgeError::TransportFailed)?
         .map_err(super::map_read_error)?;
-        budget.remaining(context)?;
+        context.remaining()?;
         counted
             .result
             .map(|result| result.count)
@@ -731,9 +798,8 @@ impl RealDataPlane {
         population: &EligibilityPopulation,
         offset: Option<PointId128>,
         limit: usize,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<CanonicalScrollPage, BridgeError> {
-        let budget = IndexedOperationBudget::begin(context)?;
         if limit == 0 || limit > self.limits.max_query_candidates {
             return Err(BridgeError::QueryBudgetExceeded);
         }
@@ -742,7 +808,7 @@ impl RealDataPlane {
         let filter = base_filter(population, schema)?;
         self.authorize_dispatch()?;
         let scrolled = tokio::time::timeout(
-            budget.remaining(context)?,
+            context.remaining()?,
             self.client.scroll(ScrollPoints {
                 collection_name: admission.collection_name.clone(),
                 filter: Some(filter),
@@ -762,7 +828,7 @@ impl RealDataPlane {
         let mut point_ids = Vec::with_capacity(scrolled.result.len());
         let mut seen = BTreeSet::new();
         for point in &scrolled.result {
-            budget.remaining(context)?;
+            context.remaining()?;
             let point_id = canonical_bridge_point_id(
                 point.id.as_ref().ok_or(BridgeError::MalformedResponse)?,
             )?;
@@ -779,22 +845,21 @@ impl RealDataPlane {
         if next_offset.is_some() && next_offset == offset {
             return Err(BridgeError::MalformedResponse);
         }
-        budget.remaining(context)?;
+        context.remaining()?;
         Ok(CanonicalScrollPage {
             point_ids,
             next_offset,
         })
     }
 
-    /// Reads exact S11 IDs and checks each full identity digest against the manifest.
+    /// Reads exact S11 addresses and checks each full key, address and digest.
     pub async fn readback_indexed_exact(
         &self,
         route: &CollectionRoute,
         population: &EligibilityPopulation,
-        expected: &[(PointId128, Blake3Digest32)],
-        context: &OpContext,
+        expected: &[PointIdentity],
+        context: &CanonicalRequestContext,
     ) -> Result<CanonicalReadback, BridgeError> {
-        let budget = IndexedOperationBudget::begin(context)?;
         if expected.len() > self.limits.max_points_per_mutation {
             return Err(BridgeError::MutationTooLarge);
         }
@@ -802,20 +867,41 @@ impl RealDataPlane {
         population
             .validate_for_schema(&admission.schema)
             .map_err(|_| BridgeError::InvalidFilter)?;
+        let allowed_memberships: BTreeSet<_> = population
+            .allowed_projection_memberships()
+            .into_iter()
+            .collect();
         let mut expected_by_id = BTreeMap::new();
-        for (id, digest) in expected {
-            if expected_by_id.insert(*id, *digest).is_some() {
+        for identity in expected {
+            context.remaining()?;
+            let id = identity.point_id();
+            let key = identity.key();
+            if key.installation_incarnation_id != population.installation_incarnation_id()
+                || key.collection_generation_id != route.generation
+                || key.collection_generation_id != population.collection_generation_id()
+                || key.projection_profile_set_id != *population.projection_profile_set_id()
+                || !allowed_memberships.contains(&key.projection_membership_id)
+            {
+                return Err(BridgeError::InvalidFilter);
+            }
+            if derive_point_identity(identity.key(), PointIdentityLimits::default())
+                .map_err(|_| BridgeError::PointIdCollision)?
+                != *identity
+            {
+                return Err(BridgeError::PointIdCollision);
+            }
+            if expected_by_id.insert(id, identity).is_some() {
                 return Err(BridgeError::DuplicatePointId);
             }
         }
         self.authorize_dispatch()?;
         let readback = tokio::time::timeout(
-            budget.remaining(context)?,
+            context.remaining()?,
             self.client.get_points(GetPoints {
                 collection_name: admission.collection_name.clone(),
                 ids: expected
                     .iter()
-                    .map(|(id, _)| canonical_vendor_point_id(*id))
+                    .map(|identity| canonical_vendor_point_id(identity.point_id()))
                     .collect(),
                 with_payload: Some(true.into()),
                 with_vectors: Some(false.into()),
@@ -831,11 +917,11 @@ impl RealDataPlane {
 
         let mut returned = BTreeMap::new();
         for point in &readback.result {
-            budget.remaining(context)?;
+            context.remaining()?;
             let id = canonical_bridge_point_id(
                 point.id.as_ref().ok_or(BridgeError::MalformedResponse)?,
             )?;
-            let Some(expected_digest) = expected_by_id.get(&id) else {
+            let Some(expected_identity) = expected_by_id.get(&id) else {
                 return Err(BridgeError::UnexpectedPoint);
             };
             if returned.contains_key(&id) {
@@ -846,21 +932,20 @@ impl RealDataPlane {
                 &point.payload,
                 population,
             )?;
-            if decoded.payload.point_identity_digest_256 != *expected_digest {
-                return Err(BridgeError::ExactReadbackMismatch);
-            }
+            verify_observed_identity(expected_identity, decoded.address, &decoded.payload)?;
             returned.insert(id, decoded);
         }
 
         let mut points = Vec::with_capacity(returned.len());
         let mut missing_ids = Vec::new();
-        for (id, _) in expected {
-            match returned.remove(id) {
+        for identity in expected {
+            let id = identity.point_id();
+            match returned.remove(&id) {
                 Some(point) => points.push(point),
-                None => missing_ids.push(*id),
+                None => missing_ids.push(id),
             }
         }
-        budget.remaining(context)?;
+        context.remaining()?;
         Ok(CanonicalReadback {
             points,
             missing_ids,

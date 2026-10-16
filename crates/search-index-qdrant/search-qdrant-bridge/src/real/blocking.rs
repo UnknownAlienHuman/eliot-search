@@ -11,11 +11,11 @@ use std::fmt;
 
 use tokio::runtime::{Builder, Handle, Runtime};
 
-use search_contracts::Blake3Digest32;
+use search_contracts::Epoch;
 use search_contracts::indexed::{
     CollectionSchema as IndexedCollectionSchema, EligibilityPopulation, VectorName, VectorValue,
 };
-use search_point_identity::s11::PointId128;
+use search_point_identity::s11::{PointId128, PointIdentity};
 
 use crate::live::LiveEndpoint;
 use crate::qualified::QualifiedGate;
@@ -26,7 +26,9 @@ use crate::{
 };
 
 use super::{
-    CanonicalCandidate, CanonicalReadback, CanonicalScrollPage, IdfScope, OpContext, RealDataPlane,
+    CanonicalCandidate, CanonicalDeleteReadback, CanonicalMutationReadback, CanonicalPointInput,
+    CanonicalReadback, CanonicalRequestContext, CanonicalScrollPage, IdfScope, OpContext,
+    RealDataPlane,
 };
 
 /// One real Qdrant query plane for synchronous composition.
@@ -89,7 +91,7 @@ impl BlockingRealQueryPlane {
         &mut self,
         route: &CollectionRoute,
         schema: &IndexedCollectionSchema,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<(), BridgeError> {
         ensure_synchronous_context()?;
         let Self { plane, runtime } = self;
@@ -101,7 +103,7 @@ impl BlockingRealQueryPlane {
         &mut self,
         route: &CollectionRoute,
         expected: &IndexedCollectionSchema,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<(), BridgeError> {
         ensure_synchronous_context()?;
         let Self { plane, runtime } = self;
@@ -116,7 +118,7 @@ impl BlockingRealQueryPlane {
         vector_name: &VectorName,
         query: &VectorValue,
         limit: usize,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<Vec<CanonicalCandidate>, BridgeError> {
         ensure_synchronous_context()?;
         self.runtime.block_on(self.plane.query_indexed(
@@ -134,7 +136,7 @@ impl BlockingRealQueryPlane {
         &self,
         route: &CollectionRoute,
         population: &EligibilityPopulation,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<u64, BridgeError> {
         ensure_synchronous_context()?;
         self.runtime
@@ -148,7 +150,7 @@ impl BlockingRealQueryPlane {
         population: &EligibilityPopulation,
         offset: Option<PointId128>,
         limit: usize,
-        context: &OpContext,
+        context: &CanonicalRequestContext,
     ) -> Result<CanonicalScrollPage, BridgeError> {
         ensure_synchronous_context()?;
         self.runtime.block_on(
@@ -157,19 +159,76 @@ impl BlockingRealQueryPlane {
         )
     }
 
-    /// Read exact canonical S11 IDs and validate their manifest identity digests.
+    /// Read exact canonical S11 identities, including full keys and digests.
     pub fn readback_indexed_exact(
         &self,
         route: &CollectionRoute,
         population: &EligibilityPopulation,
-        expected: &[(PointId128, Blake3Digest32)],
-        context: &OpContext,
+        expected: &[PointIdentity],
+        context: &CanonicalRequestContext,
     ) -> Result<CanonicalReadback, BridgeError> {
         ensure_synchronous_context()?;
         self.runtime.block_on(
             self.plane
                 .readback_indexed_exact(route, population, expected, context),
         )
+    }
+
+    /// Full payload/vector readback for exact point expectations, independent
+    /// of the current visible eligibility population.
+    pub fn readback_indexed_points_exact(
+        &self,
+        route: &CollectionRoute,
+        expected: &[CanonicalPointInput],
+        context: &CanonicalRequestContext,
+    ) -> Result<CanonicalMutationReadback, BridgeError> {
+        ensure_synchronous_context()?;
+        self.runtime.block_on(
+            self.plane
+                .readback_indexed_points_exact(route, expected, context),
+        )
+    }
+
+    /// Upsert one exact canonical point batch and return actual full readback.
+    pub fn upsert_indexed_exact(
+        &mut self,
+        route: &CollectionRoute,
+        points: &[CanonicalPointInput],
+        context: &CanonicalRequestContext,
+    ) -> Result<CanonicalMutationReadback, BridgeError> {
+        ensure_synchronous_context()?;
+        let Self { plane, runtime } = self;
+        runtime.block_on(plane.upsert_indexed_exact(route, points, context))
+    }
+
+    /// Close exact canonical point IDs at one immutable epoch.
+    pub fn close_indexed_exact(
+        &mut self,
+        route: &CollectionRoute,
+        expected: &[CanonicalPointInput],
+        valid_until_epoch_exclusive: Epoch,
+        context: &CanonicalRequestContext,
+    ) -> Result<CanonicalMutationReadback, BridgeError> {
+        ensure_synchronous_context()?;
+        let Self { plane, runtime } = self;
+        runtime.block_on(plane.close_indexed_exact(
+            route,
+            expected,
+            valid_until_epoch_exclusive,
+            context,
+        ))
+    }
+
+    /// Delete exact canonical point IDs and return the observed absent IDs.
+    pub fn delete_indexed_exact(
+        &mut self,
+        route: &CollectionRoute,
+        expected: &[CanonicalPointInput],
+        context: &CanonicalRequestContext,
+    ) -> Result<CanonicalDeleteReadback, BridgeError> {
+        ensure_synchronous_context()?;
+        let Self { plane, runtime } = self;
+        runtime.block_on(plane.delete_indexed_exact(route, expected, context))
     }
 
     /// Execute one bounded filtered sparse query. Retrieval and IDF population

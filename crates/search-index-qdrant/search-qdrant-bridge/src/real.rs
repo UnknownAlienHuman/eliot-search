@@ -220,7 +220,13 @@ include!("real/errors_schema.rs");
 
 mod canonical;
 pub use canonical::{
-    CanonicalCandidate, CanonicalPointReadback, CanonicalReadback, CanonicalScrollPage,
+    CanonicalCandidate, CanonicalPointReadback, CanonicalReadback, CanonicalRequestContext,
+    CanonicalScrollPage,
+};
+mod canonical_mutation;
+pub use canonical_mutation::{
+    CanonicalDeleteReadback, CanonicalMutationPointReadback, CanonicalMutationReadback,
+    CanonicalPointInput,
 };
 
 /// Real Qdrant data plane over the pinned client transport.
