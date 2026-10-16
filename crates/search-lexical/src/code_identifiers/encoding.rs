@@ -1,17 +1,21 @@
 //! Additive immutable-profile ingress over the one shared sparse numerical implementation.
 
 use core::fmt;
+use std::time::Instant;
 
 use crate::sparse::{
-    NumericalParameters, fingerprint_bytes, map_terms_parameters, weight_document_parameters,
-    weight_query_parameters,
+    NumericalParameters, fingerprint_bytes_checked, map_terms_parameters_checked,
+    weight_document_parameters_checked, weight_query_parameters_checked,
 };
 use crate::{
     SparseEncoding, SparseEncodingKind, SparseEncodingReceipt, SparseError, SparseLimits,
     SparseQualification,
 };
 
-use super::{CodeIdentifierLimits, CodeIdentifiersProfile, IdentifierError, LexicalInput};
+use super::{
+    CodeEncodingCheckpoint, CodeIdentifierLimits, CodeIdentifiersProfile, IdentifierError,
+    LexicalInput,
+};
 
 /// Closed typed causes for the new route, preserving existing sparse errors.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -121,13 +125,48 @@ pub fn encode_code_document(
     sparse_limits: SparseLimits,
     cancelled: bool,
 ) -> Result<CodeIdentifierEncoding, CodeEncodingError> {
+    let mut observer = || {
+        if cancelled {
+            Err(SparseError::Cancelled)
+        } else {
+            Ok(())
+        }
+    };
     encode(
         SparseEncodingKind::Document,
         input,
         profile,
         lexical_limits,
         sparse_limits,
-        cancelled,
+        None,
+        &mut observer,
+    )
+}
+
+/// Encode a document while observing cancellation and one immutable absolute deadline.
+///
+/// The observer runs synchronously after at most 64 tracked work units and at aggregate
+/// allocation/result boundaries. Deadline expiry returns `SparseError::Cancelled`; an observer
+/// error propagates unchanged. The observer cannot change the absolute deadline.
+///
+/// # Errors
+/// Refuses cancellation, deadline expiry, bounds, empty vectors, collisions or invalid numerical output.
+pub fn encode_code_document_with_checkpoint(
+    input: &LexicalInput,
+    profile: &AcceptedCodeIdentifiersProfile,
+    lexical_limits: CodeIdentifierLimits,
+    sparse_limits: SparseLimits,
+    deadline: Instant,
+    checkpoint: &mut impl FnMut() -> Result<(), SparseError>,
+) -> Result<CodeIdentifierEncoding, CodeEncodingError> {
+    encode(
+        SparseEncodingKind::Document,
+        input,
+        profile,
+        lexical_limits,
+        sparse_limits,
+        Some(deadline),
+        checkpoint,
     )
 }
 
@@ -142,13 +181,21 @@ pub fn encode_code_query(
     sparse_limits: SparseLimits,
     cancelled: bool,
 ) -> Result<CodeIdentifierEncoding, CodeEncodingError> {
+    let mut observer = || {
+        if cancelled {
+            Err(SparseError::Cancelled)
+        } else {
+            Ok(())
+        }
+    };
     encode(
         SparseEncodingKind::Query,
         input,
         profile,
         lexical_limits,
         sparse_limits,
-        cancelled,
+        None,
+        &mut observer,
     )
 }
 
@@ -158,34 +205,47 @@ fn encode(
     accepted: &AcceptedCodeIdentifiersProfile,
     lexical_limits: CodeIdentifierLimits,
     sparse_limits: SparseLimits,
-    cancelled: bool,
+    deadline: Option<Instant>,
+    observer: &mut dyn FnMut() -> Result<(), SparseError>,
 ) -> Result<CodeIdentifierEncoding, CodeEncodingError> {
-    if cancelled {
-        return Err(SparseError::Cancelled.into());
-    }
+    let mut checkpoint = CodeEncodingCheckpoint::new(deadline, observer);
+    checkpoint.poll()?;
     let sparse_limits = sparse_limits.validate_code()?;
     let profile = &accepted.profile;
-    let analyzed = profile.analyze(input, lexical_limits)?;
+    let analyzed = profile.analyze_checked(input, lexical_limits, &mut checkpoint)?;
     // The complete input has passed byte/range/binary/original/NFC admission before hashing.
-    let input_fingerprint = fingerprint_bytes(input.bytes());
+    let input_fingerprint = fingerprint_bytes_checked(input.bytes(), &mut checkpoint)?;
     let parameters = NumericalParameters::CODE_IDENTIFIERS;
-    let features = map_terms_parameters(&analyzed.analysis, &parameters, sparse_limits)?;
+    let features = map_terms_parameters_checked(
+        &analyzed.analysis,
+        &parameters,
+        sparse_limits,
+        &mut checkpoint,
+    )?;
     if features.features.is_empty() {
         return Err(SparseError::EmptyVector.into());
     }
+    checkpoint.poll()?;
     let vector = match kind {
-        SparseEncodingKind::Document => weight_document_parameters(
+        SparseEncodingKind::Document => weight_document_parameters_checked(
             &analyzed.analysis,
             &features,
             &parameters,
             None,
             sparse_limits,
+            &mut checkpoint,
         )?,
-        SparseEncodingKind::Query => {
-            weight_query_parameters(&features, &parameters, None, sparse_limits)?
-        }
+        SparseEncodingKind::Query => weight_query_parameters_checked(
+            &features,
+            &parameters,
+            None,
+            sparse_limits,
+            &mut checkpoint,
+        )?,
     };
-    vector.validate_parameters(&parameters)?;
+    vector.validate_parameters_checked(&parameters, &mut checkpoint)?;
+    let vector_fingerprint = vector.fingerprint_checked(&mut checkpoint)?;
+    checkpoint.poll()?;
     let receipt = SparseEncodingReceipt {
         kind,
         profile_id: profile.id.clone(),
@@ -194,7 +254,7 @@ fn encode(
         analyzer_fingerprint: profile.fingerprint,
         input_fingerprint,
         feature_fingerprint: features.feature_fingerprint,
-        vector_fingerprint: vector.fingerprint(),
+        vector_fingerprint,
         input_bytes: analyzed.analysis.receipt.input_bytes,
         emitted_tokens: analyzed.analysis.receipt.emitted_token_count,
         distinct_terms: features.report.distinct_terms,
@@ -203,6 +263,7 @@ fn encode(
         qualification_receipt: accepted.qualification.qualification_receipt.clone(),
         statistics_digest: None,
     };
+    checkpoint.poll()?;
     Ok(CodeIdentifierEncoding {
         encoding: SparseEncoding {
             analysis: analyzed.analysis,

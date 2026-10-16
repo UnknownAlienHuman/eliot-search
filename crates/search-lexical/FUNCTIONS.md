@@ -19,7 +19,9 @@ inverted index. One collection generation selects one accepted lexical provider 
   existing qualification contract; matching is not external acceptance or execution evidence.
 - `encode_code_document` / `encode_code_query`: same borrowed input and immutable accepted profile,
   one private new route and shared private numerical bodies, Raw document/Binary query/Qdrant IDF.
-  No new local-statistics/BM25 mode. Old legacy numerical options and public APIs remain unchanged.
+  `encode_code_document_with_checkpoint` adds a caller-owned absolute deadline and live observer to
+  that same kernel. No new local-statistics/BM25 mode. Old legacy numerical options and public APIs
+  remain unchanged.
 - `validate_code_identifiers_pair`: compare owner-produced new document/query kinds and profile identity.
   Collection-generation selection/authorization remains with the projection owner.
 
@@ -98,6 +100,10 @@ requires an accepted profile plus new collection generation.
 ## Cancellation, retry and failure
 
 Encoding is pure and retry-safe. Budget or cancellation returns no partial vector advertised as valid.
+The live code-document entry point polls after at most 64 tracked analysis, mapping, weighting,
+validation or fingerprint work units, and at aggregate allocation/result boundaries. Its absolute
+`Instant` deadline is fixed for the call; deadline expiry returns `SPARSE_ENCODING_CANCELLED`, while
+observer errors propagate unchanged.
 Failures include profile mismatch/unqualified provider, unsupported input, collision threshold failure,
 non-finite weight and budget exhaustion.
 

@@ -7,9 +7,10 @@
 )]
 
 use crate::analyzer::LexicalAnalysis;
+use crate::code_identifiers::CodeEncodingCheckpoint;
 
 use super::SparseError;
-use super::fingerprint::{SparseFingerprint, fingerprint_bytes};
+use super::fingerprint::{SparseFingerprint, fingerprint_bytes, fingerprint_bytes_checked};
 use super::mapping::SparseFeatureSet;
 use super::numerical::NumericalParameters;
 use super::profile::{
@@ -32,32 +33,69 @@ impl SparseVector {
         &self,
         profile: &NumericalParameters,
     ) -> Result<(), SparseError> {
+        self.validate_parameters_inner(profile, None)
+    }
+
+    pub(crate) fn validate_parameters_checked(
+        &self,
+        profile: &NumericalParameters,
+        checkpoint: &mut CodeEncodingCheckpoint<'_>,
+    ) -> Result<(), SparseError> {
+        self.validate_parameters_inner(profile, Some(checkpoint))
+    }
+
+    fn validate_parameters_inner(
+        &self,
+        profile: &NumericalParameters,
+        mut checkpoint: Option<&mut CodeEncodingCheckpoint<'_>>,
+    ) -> Result<(), SparseError> {
         if self.indices.is_empty() || self.indices.len() != self.values.len() {
             return Err(SparseError::EmptyVector);
         }
-        if self.indices.windows(2).any(|pair| pair[0] >= pair[1])
-            || self
-                .indices
-                .iter()
-                .any(|index| *index >= profile.index_space)
-            || self
-                .values
-                .iter()
-                .any(|value| !value.is_finite() || *value <= 0.0)
-        {
-            return Err(SparseError::NonFiniteWeight);
+        checkpoint_poll(&mut checkpoint)?;
+        for position in 0..self.indices.len() {
+            checkpoint_worked(&mut checkpoint)?;
+            let index = self.indices[position];
+            let value = self.values[position];
+            if index >= profile.index_space
+                || (position > 0 && self.indices[position - 1] >= index)
+                || !value.is_finite()
+                || value <= 0.0
+            {
+                return Err(SparseError::NonFiniteWeight);
+            }
         }
         Ok(())
     }
 
     #[must_use]
     pub fn fingerprint(&self) -> SparseFingerprint {
+        self.fingerprint_inner(None)
+            .unwrap_or(SparseFingerprint([0; 32]))
+    }
+
+    pub(crate) fn fingerprint_checked(
+        &self,
+        checkpoint: &mut CodeEncodingCheckpoint<'_>,
+    ) -> Result<SparseFingerprint, SparseError> {
+        self.fingerprint_inner(Some(checkpoint))
+    }
+
+    fn fingerprint_inner(
+        &self,
+        mut checkpoint: Option<&mut CodeEncodingCheckpoint<'_>>,
+    ) -> Result<SparseFingerprint, SparseError> {
+        checkpoint_poll(&mut checkpoint)?;
         let mut canonical = Vec::with_capacity(self.indices.len().saturating_mul(8));
         for (index, value) in self.indices.iter().zip(&self.values) {
+            checkpoint_worked(&mut checkpoint)?;
             canonical.extend_from_slice(&index.to_be_bytes());
             canonical.extend_from_slice(&value.to_bits().to_be_bytes());
         }
-        fingerprint_bytes(&canonical)
+        checkpoint.map_or_else(
+            || Ok(fingerprint_bytes(&canonical)),
+            |checkpoint| fingerprint_bytes_checked(&canonical, checkpoint),
+        )
     }
 }
 
@@ -77,22 +115,52 @@ pub(super) fn weight_document(
     )
 }
 
-// Re-exported privately to the sibling code-profile ingress.
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) fn weight_document_parameters(
+fn weight_document_parameters(
     analysis: &LexicalAnalysis,
     features: &SparseFeatureSet,
     profile: &NumericalParameters,
     statistics: Option<&FrozenCorpusStatistics>,
     limits: SparseLimits,
 ) -> Result<SparseVector, SparseError> {
+    weight_document_parameters_inner(analysis, features, profile, statistics, limits, None)
+}
+
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) fn weight_document_parameters_checked(
+    analysis: &LexicalAnalysis,
+    features: &SparseFeatureSet,
+    profile: &NumericalParameters,
+    statistics: Option<&FrozenCorpusStatistics>,
+    limits: SparseLimits,
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<SparseVector, SparseError> {
+    weight_document_parameters_inner(
+        analysis,
+        features,
+        profile,
+        statistics,
+        limits,
+        Some(checkpoint),
+    )
+}
+
+fn weight_document_parameters_inner(
+    analysis: &LexicalAnalysis,
+    features: &SparseFeatureSet,
+    profile: &NumericalParameters,
+    statistics: Option<&FrozenCorpusStatistics>,
+    limits: SparseLimits,
+    mut checkpoint: Option<&mut CodeEncodingCheckpoint<'_>>,
+) -> Result<SparseVector, SparseError> {
     if features.features.len() > limits.max_vector_values {
         return Err(SparseError::FeatureBudgetExceeded);
     }
+    checkpoint_poll(&mut checkpoint)?;
     let document_length = analysis.receipt.emitted_token_count as f64;
     let mut indices = Vec::with_capacity(features.features.len());
     let mut values = Vec::with_capacity(features.features.len());
     for feature in &features.features {
+        checkpoint_worked(&mut checkpoint)?;
         let frequency = feature.frequency as f64;
         let value = match profile.document_tf {
             DocumentTfWeighting::Raw => frequency,
@@ -128,20 +196,41 @@ pub(super) fn weight_query(
     )
 }
 
-// Re-exported privately to the sibling code-profile ingress.
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) fn weight_query_parameters(
+fn weight_query_parameters(
     features: &SparseFeatureSet,
     profile: &NumericalParameters,
     statistics: Option<&FrozenCorpusStatistics>,
     limits: SparseLimits,
 ) -> Result<SparseVector, SparseError> {
+    weight_query_parameters_inner(features, profile, statistics, limits, None)
+}
+
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) fn weight_query_parameters_checked(
+    features: &SparseFeatureSet,
+    profile: &NumericalParameters,
+    statistics: Option<&FrozenCorpusStatistics>,
+    limits: SparseLimits,
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<SparseVector, SparseError> {
+    weight_query_parameters_inner(features, profile, statistics, limits, Some(checkpoint))
+}
+
+fn weight_query_parameters_inner(
+    features: &SparseFeatureSet,
+    profile: &NumericalParameters,
+    statistics: Option<&FrozenCorpusStatistics>,
+    limits: SparseLimits,
+    mut checkpoint: Option<&mut CodeEncodingCheckpoint<'_>>,
+) -> Result<SparseVector, SparseError> {
     if features.features.len() > limits.max_vector_values {
         return Err(SparseError::FeatureBudgetExceeded);
     }
+    checkpoint_poll(&mut checkpoint)?;
     let mut indices = Vec::with_capacity(features.features.len());
     let mut values = Vec::with_capacity(features.features.len());
     for feature in &features.features {
+        checkpoint_worked(&mut checkpoint)?;
         let frequency = feature.frequency as f64;
         let term_frequency = match profile.query_tf {
             QueryTfWeighting::Binary => 1.0,
@@ -169,6 +258,24 @@ pub(crate) fn weight_query_parameters(
         )?;
     }
     Ok(SparseVector { indices, values })
+}
+
+fn checkpoint_poll(
+    checkpoint: &mut Option<&mut CodeEncodingCheckpoint<'_>>,
+) -> Result<(), SparseError> {
+    if let Some(checkpoint) = checkpoint.as_deref_mut() {
+        checkpoint.poll()?;
+    }
+    Ok(())
+}
+
+fn checkpoint_worked(
+    checkpoint: &mut Option<&mut CodeEncodingCheckpoint<'_>>,
+) -> Result<(), SparseError> {
+    if let Some(checkpoint) = checkpoint.as_deref_mut() {
+        checkpoint.worked()?;
+    }
+    Ok(())
 }
 
 fn push_weight(

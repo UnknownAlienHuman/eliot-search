@@ -132,9 +132,11 @@ mod tests {
     use crate::{
         CodeIdentifierLimits, CodeIdentifiersProfile, LexicalInput, SparseError, SparseLimits,
         SparseQualification, accept_code_identifiers_profile, encode_code_document,
-        encode_code_query, validate_code_identifiers_pair,
+        encode_code_document_with_checkpoint, encode_code_query, validate_code_identifiers_pair,
     };
     use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
 
     fn input(value: &str) -> LexicalInput {
         LexicalInput::new(
@@ -386,5 +388,37 @@ mod tests {
             validate_code_identifiers_pair(&document, &document, &profile),
             Err(IdentifierError::ProfileMismatch)
         );
+    }
+
+    #[test]
+    fn document_encoder_observes_cancellation_during_analysis_work() {
+        let profile = CodeIdentifiersProfile::new().expect("profile");
+        let accepted = accept_code_identifiers_profile(profile.clone(), qualification(&profile))
+            .expect("synthetic matching only");
+        let value = "alpha ".repeat(128);
+        let checks = AtomicUsize::new(0);
+        let mut cancellation = || {
+            let current = checks.fetch_add(1, Ordering::Relaxed) + 1;
+            if current >= 16 {
+                Err(SparseError::Cancelled)
+            } else {
+                Ok(())
+            }
+        };
+
+        let result = encode_code_document_with_checkpoint(
+            &input(&value),
+            &accepted,
+            CodeIdentifierLimits::HARD,
+            SparseLimits::BASELINE,
+            Instant::now() + Duration::from_secs(30),
+            &mut cancellation,
+        );
+
+        assert_eq!(
+            result,
+            Err(crate::CodeEncodingError::Sparse(SparseError::Cancelled))
+        );
+        assert_eq!(checks.load(Ordering::Relaxed), 16);
     }
 }

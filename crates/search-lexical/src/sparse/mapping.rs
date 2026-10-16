@@ -6,9 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::analyzer::LexicalAnalysis;
+use crate::code_identifiers::CodeEncodingCheckpoint;
 
 use super::SparseError;
-use super::fingerprint::{SparseFingerprint, fingerprint_bytes};
+use super::fingerprint::{SparseFingerprint, fingerprint_bytes_checked};
 use super::numerical::NumericalParameters;
 use super::profile::{CollisionPolicy, SparseLimits, SparseProfile};
 
@@ -85,21 +86,47 @@ pub fn map_terms(
     )
 }
 
-// Re-exported privately to the sibling code-profile ingress.
-#[allow(clippy::redundant_pub_crate)]
-pub(crate) fn map_terms_parameters(
+fn map_terms_parameters(
     analysis: &LexicalAnalysis,
     profile: &NumericalParameters,
     limits: SparseLimits,
 ) -> Result<SparseFeatureSet, SparseError> {
+    let mut observer = || Ok(());
+    let mut checkpoint = CodeEncodingCheckpoint::new(None, &mut observer);
+    map_terms_parameters_checked(analysis, profile, limits, &mut checkpoint)
+}
+
+/// Shared sparse mapping kernel with live cooperative checks for code encoding.
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) fn map_terms_parameters_checked(
+    analysis: &LexicalAnalysis,
+    profile: &NumericalParameters,
+    limits: SparseLimits,
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<SparseFeatureSet, SparseError> {
+    checkpoint.poll()?;
     let limits = limits.validate()?;
     let mut by_index = BTreeMap::<u32, SparseFeature>::new();
     let mut collision_pairs = 0_usize;
 
     for term in &analysis.terms {
-        let index = term_index(&term.term, profile.hash_seed, profile.index_space);
+        checkpoint.worked()?;
+        let index = term_index_checked(
+            &term.term,
+            profile.hash_seed,
+            profile.index_space,
+            checkpoint,
+        )?;
         if let Some(feature) = by_index.get_mut(&index) {
-            if feature.terms.iter().any(|value| value == &term.term) {
+            let mut duplicate = false;
+            for value in &feature.terms {
+                checkpoint.worked()?;
+                if value == &term.term {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if duplicate {
                 return Err(SparseError::FeatureCollision);
             }
             if profile.collision_policy == CollisionPolicy::Reject {
@@ -141,10 +168,13 @@ pub(crate) fn map_terms_parameters(
 
     let distinct_terms = analysis.terms.len();
     let distinct_indexes = by_index.len();
-    let collided_indexes = by_index
-        .values()
-        .filter(|feature| feature.terms.len() > 1)
-        .count();
+    let mut collided_indexes = 0;
+    for feature in by_index.values() {
+        checkpoint.worked()?;
+        if feature.terms.len() > 1 {
+            collided_indexes += 1;
+        }
+    }
     let collision_rate_ppm = collision_rate(distinct_terms, distinct_indexes)?;
     let accepted = collision_rate_ppm <= profile.maximum_collision_rate_ppm;
     let report = CollisionReport {
@@ -159,8 +189,10 @@ pub(crate) fn map_terms_parameters(
     if !accepted {
         return Err(SparseError::CollisionThresholdExceeded);
     }
+    checkpoint.poll()?;
     let features = by_index.into_values().collect::<Vec<_>>();
-    let feature_fingerprint = fingerprint_features(&features)?;
+    let feature_fingerprint = fingerprint_features(&features, checkpoint)?;
+    checkpoint.poll()?;
     Ok(SparseFeatureSet {
         features,
         report,
@@ -170,16 +202,28 @@ pub(crate) fn map_terms_parameters(
 
 #[must_use]
 pub fn term_index(term: &str, seed: u64, index_space: u32) -> u32 {
+    let mut observer = || Ok(());
+    let mut checkpoint = CodeEncodingCheckpoint::new(None, &mut observer);
+    term_index_checked(term, seed, index_space, &mut checkpoint).unwrap_or(0)
+}
+
+fn term_index_checked(
+    term: &str,
+    seed: u64,
+    index_space: u32,
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<u32, SparseError> {
     if index_space == 0 {
-        return 0;
+        return Ok(0);
     }
     let mut hash = 0xcbf2_9ce4_8422_2325_u64 ^ seed.rotate_left(17);
     for byte in term.as_bytes() {
+        checkpoint.worked()?;
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
         hash ^= seed.rotate_right(u32::from(*byte & 31));
     }
-    u32::try_from(hash % u64::from(index_space)).unwrap_or(0)
+    Ok(u32::try_from(hash % u64::from(index_space)).unwrap_or(0))
 }
 
 pub fn measure_collision_terms(
@@ -237,30 +281,54 @@ fn collision_rate(distinct_terms: usize, distinct_indexes: usize) -> Result<u32,
     u32::try_from(numerator / denominator).map_err(|_| SparseError::FingerprintOverflow)
 }
 
-fn fingerprint_features(features: &[SparseFeature]) -> Result<SparseFingerprint, SparseError> {
+fn fingerprint_features(
+    features: &[SparseFeature],
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<SparseFingerprint, SparseError> {
+    checkpoint.poll()?;
     let mut canonical = Vec::new();
     for feature in features {
-        append(&mut canonical, &feature.index.to_be_bytes())?;
-        append(&mut canonical, &feature.frequency.to_be_bytes())?;
-        append(&mut canonical, &feature.first_position.to_be_bytes())?;
-        append(&mut canonical, &feature.last_position.to_be_bytes())?;
+        checkpoint.worked()?;
+        append(&mut canonical, &feature.index.to_be_bytes(), checkpoint)?;
+        append(&mut canonical, &feature.frequency.to_be_bytes(), checkpoint)?;
+        append(
+            &mut canonical,
+            &feature.first_position.to_be_bytes(),
+            checkpoint,
+        )?;
+        append(
+            &mut canonical,
+            &feature.last_position.to_be_bytes(),
+            checkpoint,
+        )?;
         let term_count =
             u64::try_from(feature.terms.len()).map_err(|_| SparseError::FingerprintOverflow)?;
-        append(&mut canonical, &term_count.to_be_bytes())?;
+        append(&mut canonical, &term_count.to_be_bytes(), checkpoint)?;
         for term in &feature.terms {
+            checkpoint.worked()?;
             let length = u64::try_from(term.len()).map_err(|_| SparseError::FingerprintOverflow)?;
-            append(&mut canonical, &length.to_be_bytes())?;
-            append(&mut canonical, term.as_bytes())?;
+            append(&mut canonical, &length.to_be_bytes(), checkpoint)?;
+            append(&mut canonical, term.as_bytes(), checkpoint)?;
         }
     }
-    Ok(fingerprint_bytes(&canonical))
+    fingerprint_bytes_checked(&canonical, checkpoint)
 }
 
-fn append(output: &mut Vec<u8>, value: &[u8]) -> Result<(), SparseError> {
+fn append(
+    output: &mut Vec<u8>,
+    value: &[u8],
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<(), SparseError> {
     output
         .len()
         .checked_add(value.len())
         .ok_or(SparseError::FingerprintOverflow)?;
-    output.extend_from_slice(value);
+    for chunk in value.chunks(64) {
+        checkpoint.worked_bytes(chunk.len())?;
+        if output.capacity() < output.len() + chunk.len() {
+            checkpoint.poll()?;
+        }
+        output.extend_from_slice(chunk);
+    }
     Ok(())
 }
