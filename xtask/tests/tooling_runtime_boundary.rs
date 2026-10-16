@@ -36,6 +36,9 @@ const MIGRATED: &[MigratedEntrypoint] = &[
         command: "package-maps",
         retired_python: "tools/validate-package-maps-v2.py",
     },
+];
+
+const RETIRED_DRAFT_MILESTONE: &[MigratedEntrypoint] = &[
     MigratedEntrypoint {
         wrapper: "tools/validate-p00-foundation-acceptance.ps1",
         command: "p00-foundation-acceptance",
@@ -46,9 +49,6 @@ const MIGRATED: &[MigratedEntrypoint] = &[
         command: "implementation-program",
         retired_python: "tools/validate-implementation-program.py",
     },
-];
-
-const RETIRED_DRAFT_MILESTONE: &[MigratedEntrypoint] = &[
     MigratedEntrypoint {
         wrapper: "tools/validate-context-artifact-candidate.ps1",
         command: "context-artifact-candidate",
