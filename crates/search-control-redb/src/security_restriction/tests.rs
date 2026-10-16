@@ -12,6 +12,9 @@ use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
 use std::sync::{Arc, atomic::{AtomicBool, AtomicU64, Ordering}};
 
+#[path = "tests/original_context.rs"]
+mod original_context;
+
 #[derive(Clone, Debug, Default)]
 struct Cancel(Arc<AtomicBool>);
 impl PackageOpaque for Cancel {
