@@ -8,7 +8,6 @@
 
 #![deny(unsafe_code)]
 
-#[cfg(feature = "wave4-query")]
 #[allow(dead_code)]
 mod access_composition;
 mod app;

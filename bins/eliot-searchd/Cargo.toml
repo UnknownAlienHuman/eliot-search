@@ -82,11 +82,9 @@ wave3-index = [
 ]
 wave4-query = [
     "wave3-index",
-    "dep:search-access",
     "dep:search-query-planner",
     "dep:search-retrieval-executor",
     "dep:search-candidate-validator",
-    "dep:search-handles",
     "dep:search-result-projector",
     "dep:search-continuation",
     "dep:search-eval",
@@ -148,7 +146,8 @@ search-publication = { workspace = true, optional = true }
 search-epoch-pins = { workspace = true, optional = true }
 search-index-reclaimer = { workspace = true, optional = true }
 
-search-access = { workspace = true, optional = true }
+# Source-body access and dependent invalidation are baseline DIRECT owners.
+search-access.workspace = true
 search-overlay = { workspace = true, optional = true }
 search-exact.workspace = true
 search-subject-resolver = { workspace = true, optional = true }
@@ -156,7 +155,7 @@ search-query-planner = { workspace = true, optional = true }
 search-retrieval-executor = { workspace = true, optional = true }
 search-candidate-validator = { workspace = true, optional = true }
 search-comparator = { workspace = true, optional = true }
-search-handles = { workspace = true, optional = true }
+search-handles.workspace = true
 search-result-projector = { workspace = true, optional = true }
 search-continuation = { workspace = true, optional = true }
 

@@ -8,7 +8,9 @@ use search_access::{AccessError, MAX_SECURITY_DEPENDENTS, SecurityDependentRecei
 use search_contracts::{BoundedList, LiveDenySnapshotRef, OpaqueId, ReceiptRef};
 use search_control_redb::security_restriction::SecurityRestrictionCommit;
 use search_control_redb::MigrationBootstrapWork;
+#[cfg(feature = "wave4-query")]
 use search_continuation::{ContinuationCleanup, ContinuationEffect, ContinuationStore};
+#[cfg(feature = "wave4-query")]
 use search_epoch_pins::ContinuationPins;
 use search_handles::HandleStore;
 use search_ports::{CancellationProbe, OperationContext};
@@ -20,6 +22,7 @@ use super::{
 };
 
 mod handles;
+#[cfg(feature = "wave4-query")]
 mod continuations;
 
 /// Canonical handle owner's configuration identifier. This slot cannot be
@@ -64,6 +67,7 @@ pub trait SecurityDependentInvalidator<C: CancellationProbe> {
 
 enum RegisteredInvalidator<'a, C: CancellationProbe> {
     Handles(&'a mut HandleStore),
+    #[cfg(feature = "wave4-query")]
     Continuations {
         store: &'a mut ContinuationStore,
         cleanup: &'a mut dyn FnMut(
@@ -72,6 +76,7 @@ enum RegisteredInvalidator<'a, C: CancellationProbe> {
             &OperationContext<C>,
         ) -> Result<(), AccessError>,
     },
+    #[cfg(feature = "wave4-query")]
     ContinuationsWithPins {
         store: &'a mut ContinuationStore,
         pins: &'a mut ContinuationPins,
@@ -137,6 +142,7 @@ impl<'a, C: CancellationProbe> SecurityInvalidationRegistry<'a, C> {
     /// outcome uncertainty, and respect the supplied remaining context budget.
     /// No cleanup implementation or success fallback is supplied by the registry.
     /// The callback must not reacquire this already-held domain lock.
+    #[cfg(feature = "wave4-query")]
     pub fn register_continuations<F>(
         &mut self,
         store: &'a mut ContinuationStore,
@@ -162,6 +168,7 @@ impl<'a, C: CancellationProbe> SecurityInvalidationRegistry<'a, C> {
     /// A supplied durable callback must execute exact job/checkpoint deletion.
     /// `None` explicitly disables that resource path: encountering a durable
     /// cleanup returns an error and retains its obligation, never a no-op success.
+    #[cfg(feature = "wave4-query")]
     pub fn register_continuations_with_pins(
         &mut self,
         store: &'a mut ContinuationStore,
@@ -255,6 +262,7 @@ impl<C: CancellationProbe + Clone> SecurityInvalidationRegistry<'_, C> {
         budget: &MutationBudget<'_, C>,
     ) -> Result<BoundedList<SecurityDependentReceipt, MAX_SECURITY_DEPENDENTS>, AccessError> {
         self.require_complete()?;
+        #[cfg(feature = "wave4-query")]
         if budget.original_allowance().is_some()
             && self.owners.values().any(|owner| matches!(owner,
                 RegisteredInvalidator::Continuations { .. }
@@ -284,9 +292,11 @@ impl<C: CancellationProbe + Clone> SecurityInvalidationRegistry<'_, C> {
                 RegisteredInvalidator::Handles(store) => {
                     handles::invalidate(store, committed, mutation_receipt, budget)?
                 }
+                #[cfg(feature = "wave4-query")]
                 RegisteredInvalidator::Continuations { store, cleanup } => {
                     continuations::invalidate(store, &mut **cleanup, committed, mutation_receipt, budget)?
                 }
+                #[cfg(feature = "wave4-query")]
                 RegisteredInvalidator::ContinuationsWithPins { store, pins, durable_cleanup } => {
                     let mut cleanup = |native: &SecurityRestrictionCommit,
                                        work: &ContinuationCleanup,
