@@ -164,15 +164,16 @@ pub(super) fn qualify_existing_root(
 }
 
 impl RootOwnerSeed {
-    /// Qualifies a newly opened held DB file before its redb constructor can write.
-    /// Reuses the initializer's actual user observation and original allowance.
+    /// Freshly qualifies each newly opened held file before its first content write,
+    /// including the initialization journal and the DB before redb construction.
+    /// Reuses the actual user observation; private root ACLs alone prove no inheritance.
     pub(super) fn qualify_file(
         &self,
         request: &NativeRootRequest,
         work: &mut NativeWork,
         file: &File,
-    ) -> Result<StorageAclObservation, OwnerError> {
-        observe(&mut OriginalContext::new(request, work), file, self.user)
+    ) -> Result<(), OwnerError> {
+        observe(&mut OriginalContext::new(request, work), file, self.user).map(|_| ())
     }
 
     /// Freshly qualifies the actual held root, then creates with the leaf's
