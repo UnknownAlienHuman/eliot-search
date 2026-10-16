@@ -13,6 +13,7 @@ pub mod compute_accepted_evidence;
 pub mod coverage_graph;
 pub mod coverage_graph_generation;
 pub mod coverage_graph_validation;
+pub mod git_tree;
 pub mod impl_program;
 pub mod integration_bootstrap;
 pub mod milestone_packets;
