@@ -3,7 +3,8 @@
 use core::fmt;
 
 use search_contracts::{
-    Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef, ScopeDomainId,
+    Blake3ByteBudget, Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef, ScopeDomainId,
+    blake3_bounded_bytes,
 };
 
 use super::binding::{CanonicalIngestBinding, EnvelopeBinding, LegacyMigration};
@@ -55,11 +56,11 @@ pub struct EncryptedRevisionPayload {
     /// Exact plaintext byte count.
     pub plaintext_bytes: u64,
     /// Exact ciphertext digest.
-    pub ciphertext_digest: Blake3Digest32,
+    ciphertext_digest: Blake3Digest32,
     /// Exact authenticated-encryption nonce.
     pub(super) nonce: Vec<u8>,
     /// Exact encrypted object bytes including authentication tag.
-    pub(super) ciphertext: Vec<u8>,
+    ciphertext: Vec<u8>,
     /// Exact encryption-key binding.
     pub encryption: EncryptionBinding,
 }
@@ -69,7 +70,6 @@ impl EncryptedRevisionPayload {
     pub fn new(
         plaintext_digest: Blake3Digest32,
         plaintext_bytes: u64,
-        ciphertext_digest: Blake3Digest32,
         nonce: Vec<u8>,
         ciphertext: Vec<u8>,
         encryption: EncryptionBinding,
@@ -90,6 +90,10 @@ impl EncryptedRevisionPayload {
         if nonce.is_empty() || nonce.len() > limits.max_nonce_bytes {
             return Err(RevisionStoreError::NonceInvalid);
         }
+        let budget = Blake3ByteBudget::new(ciphertext.len())
+            .map_err(|_| RevisionStoreError::ContractExhausted)?;
+        let ciphertext_digest = blake3_bounded_bytes(&ciphertext, budget)
+            .map_err(|_| RevisionStoreError::ContractExhausted)?;
         Ok(Self {
             plaintext_digest,
             plaintext_bytes,
@@ -108,6 +112,13 @@ impl EncryptedRevisionPayload {
     /// Exact encrypted object bytes.
     pub fn ciphertext(&self) -> &[u8] {
         &self.ciphertext
+    }
+
+    /// Exact raw BLAKE3 of the immutable owned ciphertext, derived after input checks.
+    /// This is byte equality metadata, not encryption, admission or backend proof.
+    #[must_use]
+    pub const fn ciphertext_digest(&self) -> Blake3Digest32 {
+        self.ciphertext_digest
     }
 
     /// Exact ciphertext byte length.

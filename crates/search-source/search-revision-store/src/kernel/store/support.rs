@@ -102,7 +102,7 @@ pub(super) fn reuse_conflict(
             RevisionState::Pending(existing) | RevisionState::OutcomeUnknown(existing) => (
                 existing.key.residency,
                 &existing.storage_object_id,
-                existing.payload.ciphertext_digest,
+                existing.payload.ciphertext_digest(),
                 &existing.payload.encryption.key_reference,
                 existing.envelope.source_revision_binding_digest,
                 existing.envelope.residency_binding_digest,
@@ -119,14 +119,14 @@ pub(super) fn reuse_conflict(
         };
         if residency == intent.key.residency {
             if storage_object_id == &intent.storage_object_id
-                && ciphertext_digest != intent.payload.ciphertext_digest
+                && ciphertext_digest != intent.payload.ciphertext_digest()
             {
                 return Some(RevisionStoreError::RevisionConflict);
             }
             continue;
         }
         if storage_object_id == &intent.storage_object_id
-            || ciphertext_digest == intent.payload.ciphertext_digest
+            || ciphertext_digest == intent.payload.ciphertext_digest()
             || key_reference == &intent.payload.encryption.key_reference
             || source_binding_digest == intent.envelope.source_revision_binding_digest
             || residency_binding_digest == intent.envelope.residency_binding_digest
@@ -203,7 +203,7 @@ pub(super) fn exact_record_matches_intent(
         && record.source_binding_revision == intent.source_binding_revision
         && record.content_digest == intent.payload.plaintext_digest
         && record.plaintext_bytes == intent.payload.plaintext_bytes
-        && record.ciphertext_digest == intent.payload.ciphertext_digest
+        && record.ciphertext_digest == intent.payload.ciphertext_digest()
         && record.storage_object_id == intent.storage_object_id
         && record.residency_key == intent.residency_key
         && record.encryption == intent.payload.encryption
@@ -230,7 +230,7 @@ pub(super) fn record_from_readback(
         .map_err(|_| RevisionStoreError::BackendContractViolation)?;
     if readback.key != intent.key
         || readback.storage_object_id != intent.storage_object_id
-        || readback.ciphertext_digest != intent.payload.ciphertext_digest
+        || readback.ciphertext_digest != intent.payload.ciphertext_digest()
         || readback.ciphertext_bytes != expected_ciphertext_bytes
         || readback.plaintext_digest != intent.payload.plaintext_digest
         || readback.plaintext_bytes != intent.payload.plaintext_bytes
@@ -244,7 +244,7 @@ pub(super) fn record_from_readback(
         source_binding_revision: intent.source_binding_revision,
         content_digest: intent.payload.plaintext_digest,
         plaintext_bytes: intent.payload.plaintext_bytes,
-        ciphertext_digest: intent.payload.ciphertext_digest,
+        ciphertext_digest: intent.payload.ciphertext_digest(),
         ciphertext_bytes: expected_ciphertext_bytes,
         storage_object_id: intent.storage_object_id.clone(),
         residency_key: intent.residency_key.clone(),

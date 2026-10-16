@@ -5,10 +5,20 @@ use super::super::*;
 
 #[test]
 fn encrypted_payload_debug_never_dumps_ciphertext() {
-    let mut payload = payload(7, 7);
-    // Deliberately distinct from both public digest byte patterns (7 and 8).
-    payload.nonce = vec![113, 59, 211, 41];
-    payload.ciphertext = vec![229, 17, 193, 83, 251, 47];
+    // Distinct canaries stay within the valid nonce and authentication-tag bounds.
+    let payload = EncryptedRevisionPayload::new(
+        Blake3Digest32::from_bytes([7; 32]),
+        3,
+        vec![113, 59, 211, 41],
+        [229, 17, 193, 83, 251, 47].repeat(3),
+        EncryptionBinding {
+            key_reference: OpaqueId::new("secret:revision-key").expect("key"),
+            key_version: NonZeroRevision::new(1).expect("version"),
+            cipher_suite: CipherSuite::AuthenticatedEncryptionV1,
+        },
+        DEFAULT_REVISION_STORE_LIMITS,
+    )
+    .expect("valid redaction payload");
     let nonce_sentinel = format!("{:?}", payload.nonce());
     let ciphertext_sentinel = format!("{:?}", payload.ciphertext());
     for debug in [format!("{payload:?}"), format!("{payload:#?}")] {
@@ -17,7 +27,7 @@ fn encrypted_payload_debug_never_dumps_ciphertext() {
         assert!(!debug.contains("229,"));
         assert!(!debug.contains("113,"));
         assert!(debug.contains("<4 bytes>"));
-        assert!(debug.contains("<6 encrypted bytes>"));
+        assert!(debug.contains("<18 encrypted bytes>"));
     }
     // Positive controls: the sentinels would detect an accidental raw dump.
     assert!(format!("{:?}", payload.ciphertext()).contains(&ciphertext_sentinel));
@@ -271,7 +281,6 @@ fn truncated_ciphertext_is_rejected() {
     let short = EncryptedRevisionPayload::new(
         Blake3Digest32::from_bytes([9; 32]),
         3,
-        Blake3Digest32::from_bytes([10; 32]),
         vec![9; 12],
         vec![9; 5],
         EncryptionBinding {
@@ -285,7 +294,6 @@ fn truncated_ciphertext_is_rejected() {
     let tagged = EncryptedRevisionPayload::new(
         Blake3Digest32::from_bytes([9; 32]),
         3,
-        Blake3Digest32::from_bytes([10; 32]),
         vec![9; 12],
         vec![9; 16],
         EncryptionBinding {
