@@ -190,7 +190,12 @@ pub(crate) fn map_terms_parameters_checked(
         return Err(SparseError::CollisionThresholdExceeded);
     }
     checkpoint.poll()?;
-    let features = by_index.into_values().collect::<Vec<_>>();
+    let mut features = Vec::with_capacity(by_index.len());
+    for feature in by_index.into_values() {
+        checkpoint.worked()?;
+        features.push(feature);
+    }
+    checkpoint.poll()?;
     let feature_fingerprint = fingerprint_features(&features, checkpoint)?;
     checkpoint.poll()?;
     Ok(SparseFeatureSet {
