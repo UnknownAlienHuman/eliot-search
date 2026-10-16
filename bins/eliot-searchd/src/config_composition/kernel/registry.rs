@@ -72,7 +72,7 @@ pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
         DAEMON_CONFIG_SCHEMA_VERSION,
         [
             instance_section()?,
-            secrets_section()?,
+            search_os_secrets::section_descriptor()?,
             control_section()?,
             admission_section()?,
             lexical_section()?,
@@ -139,33 +139,6 @@ fn instance_section() -> Result<ConfigSectionDescriptor, ConfigError> {
                 actions: &[ReconfigurationAction::DrainAndRestart],
             })?,
         ],
-        daemon_limits(),
-    )
-}
-
-fn secrets_section() -> Result<ConfigSectionDescriptor, ConfigError> {
-    ConfigSectionDescriptor::new(
-        section_name("secrets")?,
-        owner_name("search-os-secrets")?,
-        NonZeroU64::MIN,
-        ReloadClass::RestartDependency,
-        section_registry_digest(
-            "secrets",
-            "search-os-secrets",
-            1,
-            &[("qdrant_api_secret_ref", "secret")],
-        ),
-        SecretPolicy::OpaqueReferencesOnly,
-        [make_field(FieldSpec {
-            key: "qdrant_api_secret_ref",
-            kind: ConfigValueKind::SecretReference,
-            default: ConfigValue::Absent,
-            allowed: &[ConfigSourceKind::File, ConfigSourceKind::Environment],
-            reset_allowed: true,
-            floor: SecurityFloor::None,
-            redaction: RedactionPolicy::Secret,
-            actions: &[ReconfigurationAction::RestartDependency],
-        })?],
         daemon_limits(),
     )
 }
