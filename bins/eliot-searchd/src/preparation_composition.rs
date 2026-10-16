@@ -17,6 +17,10 @@ use std::io::Write;
 use std::path::Path;
 use std::process::ExitCode;
 
+#[allow(dead_code)]
+#[path = "preparation_composition/raw_v2.rs"]
+mod raw_v2;
+
 /// Shared argument validation runs before a service command arms its mutation fence.
 pub fn validate_revision(revision: &str) -> Result<(), String> {
     if sha256::decode_digest(revision).is_none() {
