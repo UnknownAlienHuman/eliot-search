@@ -89,6 +89,15 @@ impl LiveNativeQuerySnapshot {
             {
                 return Err(AccessError::OwnerMismatch);
             }
+            let source = registry.source(identity)
+                .map_err(|_| AccessError::ScopeUnknown)?;
+            let admission = source.permanent_admission()
+                .ok_or(AccessError::ScopeUnauthorized)?;
+            membership_security.memberships.get(id)
+                .ok_or(AccessError::SnapshotStale)?
+                .require_source_sensitivity(
+                    identity.identity_kind,
+                    admission.original().receipt().decision().sensitivity())?;
             Ok((*id, identity.clone()))
         }).collect::<Result<BTreeMap<_, _>, AccessError>>()?;
         let publication_guards = visibility.guards;
@@ -192,10 +201,8 @@ impl LiveNativeQuerySnapshot {
             {
                 return Err(AccessError::SnapshotStale);
             }
-            if !self
-                .policy
-                .allowed_access_partitions
-                .contains(&security.access_partition_id)
+            if !self.policy.allowed_access_partitions.contains(&security.access_partition_id)
+                || security.sensitivity > self.policy.sensitivity_ceiling
             {
                 return Err(AccessError::ScopeUnauthorized);
             }

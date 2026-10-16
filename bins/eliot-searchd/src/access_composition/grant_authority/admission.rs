@@ -24,8 +24,9 @@ use search_access::{
 };
 use search_contracts::{
     AccessPartitionId, Blake3Digest32, GrantFence, Modality, RequestBody, RequestedScope,
-    SourceMembershipId,
+    SensitivityClass, SourceIdentityKind, SourceMembershipId,
 };
+use search_source_admission::SensitivityLevel;
 
 use super::super::grant::StandaloneGrantTemplate;
 
@@ -48,13 +49,48 @@ pub trait StandaloneScopeResolver {
 /// [`search_access::MembershipAccessBinding`].
 ///
 /// The digest must equal the binding's access-partition digest. Keeping the ID,
-/// digest and modality together prevents a stale or foreign metadata map from
-/// authorizing an otherwise matching membership key.
+/// digest, modality and sensitivity together prevents a stale or foreign
+/// metadata map from authorizing an otherwise matching membership key.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StandaloneMembershipSecurity {
     pub access_partition_id: AccessPartitionId,
     pub access_partition_digest: Blake3Digest32,
     pub modality: Modality,
+    /// Effective C03 source classification, including the native retention floor.
+    pub sensitivity: SensitivityClass,
+}
+
+impl StandaloneMembershipSecurity {
+    /// Validate against the permanent C03 decision, never raw observation claims.
+    ///
+    /// C03's Internal means project-internal and maps to Project. Credentials
+    /// and private keys remain unconditional denials. The #598 NTFS selected
+    /// retention profile classifies retained copies at least Confidential,
+    /// even when the original file's decision is Public or Internal.
+    pub(crate) fn require_source_sensitivity(
+        &self,
+        identity_kind: SourceIdentityKind,
+        decision: SensitivityLevel,
+    ) -> Result<(), AccessError> {
+        let sensitivity = match decision {
+            SensitivityLevel::Public => SensitivityClass::Public,
+            SensitivityLevel::Internal => SensitivityClass::Project,
+            SensitivityLevel::Confidential => SensitivityClass::Confidential,
+            SensitivityLevel::SecretCandidate => SensitivityClass::SecretCandidate,
+            SensitivityLevel::Credential | SensitivityLevel::PrivateKey => {
+                return Err(AccessError::ScopeUnauthorized);
+            }
+        };
+        let sensitivity = if identity_kind == SourceIdentityKind::NtfsFile {
+            sensitivity.max(SensitivityClass::Confidential)
+        } else {
+            sensitivity
+        };
+        if self.sensitivity != sensitivity {
+            return Err(AccessError::SnapshotStale);
+        }
+        Ok(())
+    }
 }
 
 /// Source-security metadata captured with one exact authoritative access
@@ -111,10 +147,11 @@ pub fn compile_standalone_pre_retrieval<R: StandaloneScopeResolver>(
     resolver: &mut R,
     request: StandaloneAdmissionRequest<'_>,
 ) -> Result<StandalonePreRetrievalAdmission, AccessError> {
-    let profile_digest = request.overlap_proof.map_or(
-        Blake3Digest32::from_bytes([0_u8; 32]),
-        |proof| proof.profile_digest,
-    );
+    let profile_digest = request
+        .overlap_proof
+        .map_or(Blake3Digest32::from_bytes([0_u8; 32]), |proof| {
+            proof.profile_digest
+        });
     compile_standalone_pre_retrieval_for_profile(resolver, request, profile_digest)
 }
 
@@ -123,7 +160,7 @@ pub fn compile_standalone_pre_retrieval<R: StandaloneScopeResolver>(
 ///
 /// Fixed order: exact template/request correspondence, recipe and budget
 /// ceiling, namespace/owner/policy fence, server scope resolution, explicit
-/// scope equality, grant membership/partition/modality intersection,
+/// scope equality, grant membership/partition/modality/sensitivity intersection,
 /// authoritative access intersection, profile-bound safe-leg compilation and
 /// the mandatory live admission barrier. No source byte or provider call occurs
 /// before all checks succeed.
@@ -221,8 +258,7 @@ fn validate_grant_template(
         return Err(AccessError::GrantBindingMismatch);
     }
     if claims.allowed_membership_ids != template.allowed_membership_ids
-        || claims.allowed_corpus_or_portfolio_ids
-            != template.allowed_corpus_or_portfolio_ids
+        || claims.allowed_corpus_or_portfolio_ids != template.allowed_corpus_or_portfolio_ids
         || claims.reference_portfolio_revision != template.reference_portfolio_revision
         || claims.allowed_access_partitions != template.allowed_access_partitions
         || claims.allowed_modalities != template.allowed_modalities
@@ -297,6 +333,11 @@ fn validate_membership_security(
         }
         if !template.allowed_modalities.contains(&metadata.modality) {
             return Err(AccessError::ModalityDenied);
+        }
+        // Use the same closed enum ordering as standalone grant narrowing.
+        // This must precede safe-leg compilation, scoring, IDF and counts.
+        if metadata.sensitivity > template.sensitivity_ceiling {
+            return Err(AccessError::ScopeUnauthorized);
         }
     }
     Ok(())
