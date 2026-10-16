@@ -147,17 +147,18 @@ Issue `#48` is closed: the normative P00 type registry already contains the exac
 ## Agent authority order
 
 ```text
-root/package AGENTS.md
-→ #97 coordinator
-→ exact current owner issue/PR
-→ PACKAGE_STATUS.toml
-→ current source
-→ package README responsibility notes
-→ historical handoff/issues only for archaeology
+Part I of docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md
+→ accepted ADRs (especially ADR 0005 and ADR 0006)
+→ accepted public contracts, provider schemas and product qualification contracts
+→ nearest package AGENTS.md, FUNCTIONS.md and package-owned documentation
+→ current maintainer request, exact issue/PR and dependency contract
+→ Cargo manifests and compiled source reality
+→ historical material (swarm/**, docs/handoff/**, docs/execution/**, Architecture Part II)
 ```
 
-A stale issue or README never authorizes a second package, parser, catalog, client, protocol, watcher,
-restore journal, search index or release workflow.
+No ticket, lease, coordinator or published SHA can authorize or block current product work.
+A stale issue, README or historical handoff never authorizes a second package, parser, catalog, client,
+protocol, watcher, restore journal, search index or release workflow.
 
 ## Release state
 
