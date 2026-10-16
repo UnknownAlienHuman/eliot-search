@@ -26,6 +26,7 @@ use super::native_snapshot::{barriers, executable_digest, read_snapshot};
 use super::observation::{mint_installation_ids, mint_owner_token, observe_root_parts};
 use super::record::DurableOwnerRecord;
 use super::spec::{DrainReasonText, LifecycleState, MAX_STATE_BYTES};
+use super::storage_acl::{RootOwnerSeed, StorageAclSnapshot, qualify_existing_root};
 
 /// Only this owner constructs the capability, under a retained native root.
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -37,6 +38,8 @@ enum PreparationPhase {
 
 pub struct InitializingDataRoot {
     direct: Option<super::native_admission::direct_registry::DirectJournal>,
+    root_owner_seed: Option<RootOwnerSeed>,
+    storage_acl: Option<StorageAclSnapshot>,
     files: [Option<File>; 11],
     identities: [Option<[u8; 20]>; 11],
     request: NativeRootRequest,
@@ -95,6 +98,8 @@ fn initialize_target(
         return Err(OwnerError::DataRootInvalid);
     }
     let bound_root = open_initialization(&request, &mut work, &root, true)?;
+    // The caller supplied an existing root. Qualify its held ACL without changing it.
+    let root_owner_seed = direct.then(|| qualify_existing_root(&request, &mut work, &bound_root)).transpose()?;
     let barrier = if direct { super::native_snapshot::barriers_before_direct(&request, &mut work, &root)? }
         else { barriers(&request, &mut work, &root)? };
     if barrier.is_some() {
@@ -114,7 +119,7 @@ fn initialize_target(
         .is_none();
     drop(directory);
     if !empty {
-        return replay_existing(request, work, root, bound_root, initialization, direct);
+        return replay_existing(request, work, root, bound_root, initialization, direct, root_owner_seed);
     }
     let physical_root: [u8; 20] = work
         .call(&request, || native_identity(&bound_root))?
@@ -159,6 +164,8 @@ fn initialize_target(
     identities[0] = Some(physical_root);
     let mut cap = InitializingDataRoot {
         direct: None,
+        root_owner_seed,
+        storage_acl: None,
         files,
         identities,
         request,
@@ -211,6 +218,7 @@ fn replay_existing(
     bound_root: File,
     initialization: [u8; 16],
     direct: bool,
+    root_owner_seed: Option<RootOwnerSeed>,
 ) -> Result<InitializationResult, OwnerError> {
     let mut exclusions = Vec::new();
     let mut pins = NativePins { files: Vec::new(), direct: None };
@@ -252,6 +260,8 @@ fn replay_existing(
     let identities = completion.native_objects.map(Some);
     let mut cap = InitializingDataRoot {
         direct: None,
+        root_owner_seed,
+        storage_acl: None,
         files,
         identities,
         request,
@@ -268,9 +278,12 @@ fn replay_existing(
     };
     if direct {
         let record = DurableOwnerRecord::decode(&cap.layout_bytes(6, MAX_STATE_BYTES)?)?;
+        cap.capture_storage_acl()?;
         cap.direct = Some(super::native_admission::direct_registry::DirectJournal::open(
             &cap.request, &mut cap.work, &cap.root, cap.files[3].as_ref().ok_or(OwnerError::OwnerGuardMismatch)?,
-            super::native_admission::direct_registry::journal_owner(cap.subject.incarnation, cap.subject.root_id, record.epoch)?, false)?);
+            super::native_admission::direct_registry::journal_owner(cap.subject.incarnation, cap.subject.root_id, record.epoch)?, false,
+            cap.storage_acl.as_ref().ok_or(OwnerError::OwnerStorageAclUnqualified)?)?);
+        cap.capture_storage_acl()?;
     }
     cap.checkpoint("completed-replay")?;
     if crate::direct_store::existing_key_binding(&mut cap)? != completion.selected_key_binding {
@@ -362,6 +375,7 @@ impl InitializingDataRoot {
             if !self.history.is_empty() && self.layout_bytes(10, MAX_JOURNAL)? != self.history {
                 return Err(OwnerError::OwnerGuardMismatch);
             }
+            self.verify_storage_acl()?;
             self.request.check()
         })();
         result.map_err(|error| self.failure(error))
@@ -377,6 +391,7 @@ impl InitializingDataRoot {
         operation: impl FnOnce([u8; 32], Instant, &AtomicBool) -> Result<T, OwnerError>,
     ) -> Result<T, OwnerError> {
         self.checkpoint("before-credential")?;
+        self.qualify_storage_file(0)?;
         if create {
             if self.preparation != PreparationPhase::Layout {
                 return Err(self.failure(OwnerError::OwnerInvalidTransition));
@@ -462,7 +477,20 @@ impl InitializingDataRoot {
                 .try_into()
                 .map_err(|_| OwnerError::OwnerGuardMismatch)?,
         );
-        self.verify_held(index)
+        self.verify_held(index)?;
+        // Empty files may inherit the token default DACL. No contents enter until qualified.
+        self.qualify_storage_file(index)
+    }
+
+    fn qualify_storage_file(&mut self, index: usize) -> Result<(), OwnerError> {
+        let Some(seed) = &self.root_owner_seed else { return Ok(()); };
+        let root = self.files[0].as_ref().ok_or(OwnerError::OwnerGuardMismatch)?;
+        seed.qualify_file(&self.request, &mut self.work, root)?;
+        if index != 0 {
+            let file = self.files[index].as_ref().ok_or(OwnerError::OwnerGuardMismatch)?;
+            seed.qualify_file(&self.request, &mut self.work, file)?;
+        }
+        Ok(())
     }
 
     fn verify_parent(&mut self, index: usize) -> Result<(), OwnerError> {
@@ -529,12 +557,18 @@ impl InitializingDataRoot {
         }
         let path = self.path(index)?;
         self.verify_parent(index)?;
-        self.work
-            .call(&self.request, || {
+        let created = if let Some(seed) = &self.root_owner_seed {
+            let root = self.files[0].as_ref().ok_or(OwnerError::OwnerGuardMismatch)?;
+            self.effect_observed = true;
+            seed.create_directory(&self.request, &mut self.work, &path, root)
+        } else {
+            // Retained non-DIRECT fixture initialization has no private-storage claim.
+            self.work.call(&self.request, || {
                 self.effect_observed = true;
                 fs::create_dir(&path).map_err(|_| OwnerError::OwnerAcquireOutcomeUnknown)
             })
-            .map_err(|error| self.failure(error))?;
+        };
+        created.map_err(|error| self.failure(error))?;
         let file = open_initialization(&self.request, &mut self.work, &path, true)?;
         self.capture(index, file)?;
         self.verify_locator(index)?;
@@ -559,6 +593,7 @@ impl InitializingDataRoot {
             return Err(OwnerError::ContractExhausted);
         }
         self.verify_locator(index)?;
+        self.qualify_storage_file(index)?;
         let file = self.files[index]
             .as_mut()
             .ok_or(OwnerError::OwnerGuardMismatch)?;
@@ -763,10 +798,13 @@ impl InitializingDataRoot {
             return Err(OwnerError::OwnerGuardMismatch);
         }
         if direct {
+            self.capture_storage_acl()?;
             self.effect_observed = true;
             self.direct = Some(super::native_admission::direct_registry::DirectJournal::open(
                 &self.request, &mut self.work, &self.root, self.files[3].as_ref().ok_or(OwnerError::OwnerGuardMismatch)?,
-                super::native_admission::direct_registry::journal_owner(self.subject.incarnation, self.subject.root_id, 1)?, true)?);
+                super::native_admission::direct_registry::journal_owner(self.subject.incarnation, self.subject.root_id, 1)?, true,
+                self.storage_acl.as_ref().ok_or(OwnerError::OwnerStorageAclUnqualified)?)?);
+            self.capture_storage_acl()?;
         }
         let mut record = DurableOwnerRecord {
             installation_id: self.subject.installation,
@@ -882,13 +920,79 @@ impl InitializingDataRoot {
             if snapshot.record.lifecycle != LifecycleState::Released {
                 return Err(OwnerError::OwnerRecoveryQuarantined);
             }
+            // The journal's existing verification above already checked its locator.
+            // Borrow its held pin for ACL observation without another path open.
+            pins.direct = self.direct.as_mut().and_then(|direct| direct.pin.take());
+            if snapshot.installation.journal_profile {
+                match &self.storage_acl {
+                    Some(storage_acl) => storage_acl.verify(&self.request, &mut self.work, &pins)?,
+                    None => {
+                        self.storage_acl = Some(match &self.root_owner_seed {
+                            Some(seed) => seed.capture_snapshot(&self.request, &mut self.work, &pins)?,
+                            None => StorageAclSnapshot::capture(&self.request, &mut self.work, &pins)?,
+                        });
+                    }
+                }
+            } else if self.storage_acl.is_some() {
+                return Err(OwnerError::OwnerStorageAclUnqualified);
+            }
             Ok(())
         })();
+        if let Some(direct) = &mut self.direct
+            && pins.direct.is_some()
+        {
+            direct.pin = pins.direct.take();
+        }
         for (slot, file) in self.files.iter_mut().zip(pins.files) {
             *slot = Some(file);
         }
         result.map_err(|error| self.failure(error))?;
         self.request.check().map_err(|error| self.failure(error))
+    }
+
+    fn capture_storage_acl(&mut self) -> Result<(), OwnerError> {
+        if self.files.iter().any(Option::is_none) {
+            return Err(OwnerError::OwnerStorageAclUnqualified);
+        }
+        self.work.read(&self.request, std::mem::size_of::<File>() * self.files.len())?;
+        let files = self.files.iter_mut().filter_map(Option::take).collect();
+        let direct = self.direct.as_mut().and_then(|direct| direct.pin.take());
+        let mut pins = NativePins { direct, files };
+        let result = (|| match &self.storage_acl {
+            Some(previous) => previous.capture_after_direct_pin(&self.request, &mut self.work, &pins,
+                &self.direct.as_ref().ok_or(OwnerError::OwnerStorageAclUnqualified)?.acl_before_open),
+            None => match &self.root_owner_seed {
+                Some(seed) => seed.capture_snapshot(&self.request, &mut self.work, &pins),
+                None => StorageAclSnapshot::capture(&self.request, &mut self.work, &pins),
+            },
+        })();
+        if let Some(direct) = &mut self.direct {
+            direct.pin = pins.direct.take();
+        }
+        for (slot, file) in self.files.iter_mut().zip(pins.files) {
+            *slot = Some(file);
+        }
+        self.storage_acl = Some(result?);
+        Ok(())
+    }
+
+    fn verify_storage_acl(&mut self) -> Result<(), OwnerError> {
+        let Some(storage_acl) = &self.storage_acl else { return Ok(()); };
+        if self.files.iter().any(Option::is_none) {
+            return Err(OwnerError::OwnerStorageAclUnqualified);
+        }
+        self.work.read(&self.request, std::mem::size_of::<File>() * self.files.len())?;
+        let files = self.files.iter_mut().filter_map(Option::take).collect();
+        let direct = self.direct.as_mut().and_then(|direct| direct.pin.take());
+        let mut pins = NativePins { direct, files };
+        let result = storage_acl.verify(&self.request, &mut self.work, &pins);
+        if let Some(direct) = &mut self.direct {
+            direct.pin = pins.direct.take();
+        }
+        for (slot, file) in self.files.iter_mut().zip(pins.files) {
+            *slot = Some(file);
+        }
+        result
     }
 }
 

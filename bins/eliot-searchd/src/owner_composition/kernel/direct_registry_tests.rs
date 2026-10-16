@@ -199,6 +199,7 @@ impl Scratch {
         for path in [&value.root, &value.source, &value.other] {
             fs::create_dir(path).unwrap();
         }
+        if direct { prepare_private_fixture_root(&value); }
         let request = value.request("--initialize-data-root", DataRootOpenMode::InitializeNew);
         let initialized = if direct {
             super::super::super::initialization::initialize_direct(request)
@@ -261,6 +262,46 @@ impl Scratch {
             fs::read(self.root.join(super::super::super::spec::OWNER_SLOT_B)).unwrap(),
         )
     }
+}
+
+// Test preparation is deliberately outside the product initializer. This host's
+// Temp inherits foreign trustees; only our exact new empty root is changed.
+#[allow(unsafe_code, reason = "Test-only ACL setup on the exact newly created empty Scratch root")]
+fn prepare_private_fixture_root(scratch: &Scratch) {
+    use core::ffi::c_void;
+    use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+    assert!(scratch.base.is_absolute());
+    assert_eq!(scratch.root.parent(), Some(scratch.base.as_path()));
+    assert!(scratch.base.file_name().unwrap().to_str().unwrap()
+        .starts_with(&format!("search-direct-owner-{}-", std::process::id())));
+    assert!(fs::read_dir(&scratch.root).unwrap().next().is_none());
+    let file = OpenOptions::new().access_mode(0x0006_0080).custom_flags(0x0220_0000)
+        .share_mode(7).open(&scratch.root).unwrap();
+    eliot_searchd::native_file::observe(&file).unwrap();
+    // Owner Rights applies only to the actual object owner; SYSTEM/Admin remain trusted.
+    let sids: [&[u8]; 3] = [
+        &[1,1,0,0,0,0,0,3,4,0,0,0], &[1,1,0,0,0,0,0,5,18,0,0,0],
+        &[1,2,0,0,0,0,0,5,32,0,0,0,32,2,0,0],
+    ];
+    let length = 8 + sids.iter().map(|sid| 8 + sid.len()).sum::<usize>();
+    let mut bytes = vec![2,0];
+    bytes.extend_from_slice(&u16::try_from(length).unwrap().to_le_bytes());
+    bytes.extend_from_slice(&[3,0,0,0]);
+    for sid in sids {
+        bytes.extend_from_slice(&[0,3]);
+        bytes.extend_from_slice(&u16::try_from(8 + sid.len()).unwrap().to_le_bytes());
+        bytes.extend_from_slice(&0x001f_01ff_u32.to_le_bytes());
+        bytes.extend_from_slice(sid);
+    }
+    let mut words: Vec<u32> = bytes.chunks_exact(4)
+        .map(|bytes| u32::from_le_bytes(bytes.try_into().unwrap())).collect();
+    #[link(name = "advapi32")]
+    unsafe extern "system" {
+        fn SetSecurityInfo(handle: *mut c_void, kind: u32, info: u32,
+            owner: *mut c_void, group: *mut c_void, dacl: *mut c_void, sacl: *mut c_void) -> u32;
+    }
+    assert_eq!(unsafe { SetSecurityInfo(file.as_raw_handle(), 1, 4 | 0x8000_0000,
+        std::ptr::null_mut(), std::ptr::null_mut(), words.as_mut_ptr().cast(), std::ptr::null_mut()) }, 0);
 }
 impl Drop for Scratch {
     fn drop(&mut self) {
@@ -564,10 +605,11 @@ fn direct_owner_historical_root_commit_cannot_reactivate_unbound_root() {
 
 #[test]
 fn direct_owner_parent_bound_creation_refuses_foreign_locator_before_effect() {
-    let a = Scratch::new(false);
+    let a = Scratch::new(true);
     let b = Scratch::new(false);
     let before_a = a.slots();
     let before_b = b.slots();
+    let before_db = fs::read(a.root.join("control/control.redb")).unwrap();
     let admitted = super::super::admit_existing(
         a.request("--source-roots", DataRootOpenMode::InspectExistingReadOnly),
     )
@@ -588,9 +630,10 @@ fn direct_owner_parent_bound_creation_refuses_foreign_locator_before_effect() {
         &owner.pins.files[3],
         binding,
         true,
+        owner.storage_acl.as_ref().expect("actual DIRECT ACL snapshot"),
     );
     assert!(result.is_err());
-    assert!(!a.root.join("control/control.redb").exists());
+    assert_eq!(before_db, fs::read(a.root.join("control/control.redb")).unwrap());
     assert!(!b.root.join("control/control.redb").exists());
     drop(owner);
     assert_eq!(before_a, a.slots());

@@ -25,6 +25,8 @@ pub enum OwnerError {
     OwnerExecutableIdentityMismatch,
     /// Ownership evidence is incomplete, contradictory, or ambiguous.
     OwnerIdentityAmbiguous,
+    /// Actual retained storage ACL evidence is absent, changed, or outside the private profile.
+    OwnerStorageAclUnqualified,
     /// Acquisition may have crossed an external mutation boundary.
     OwnerAcquireOutcomeUnknown,
     /// Release may have crossed an external mutation boundary.
@@ -74,6 +76,7 @@ impl OwnerError {
             Self::OwnerProcessIdentityMismatch => "OWNER_PROCESS_IDENTITY_MISMATCH",
             Self::OwnerExecutableIdentityMismatch => "OWNER_EXECUTABLE_IDENTITY_MISMATCH",
             Self::OwnerIdentityAmbiguous => "OWNER_IDENTITY_AMBIGUOUS",
+            Self::OwnerStorageAclUnqualified => "OWNER_STORAGE_ACL_UNQUALIFIED",
             Self::OwnerAcquireOutcomeUnknown => "OWNER_ACQUIRE_OUTCOME_UNKNOWN",
             Self::OwnerReleaseOutcomeUnknown => "OWNER_RELEASE_OUTCOME_UNKNOWN",
             Self::OwnerRecoveryQuarantined => "OWNER_RECOVERY_QUARANTINED",

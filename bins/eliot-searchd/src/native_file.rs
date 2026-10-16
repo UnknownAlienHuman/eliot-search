@@ -9,6 +9,13 @@ use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
 
+/// Held-handle owner/DACL qualification and atomic private directory creation.
+pub mod storage_acl;
+pub use storage_acl::{
+    StorageAclError, StorageAclObservation, StorageSecurityContext, StorageSecurityWork,
+    create_owner_private_directory, observe_owner_private_acl,
+};
+
 /// Closed, content-free native observation failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ObservationError {

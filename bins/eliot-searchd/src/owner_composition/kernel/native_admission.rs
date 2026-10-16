@@ -15,6 +15,7 @@ use super::native_request::{NativeRootRequest, NativeWork, native_argument};
 use super::native_snapshot::{NativeInstallation, barriers, read_snapshot};
 use super::record::DurableOwnerRecord;
 use super::spec::{DrainReasonText, INSTALLATION_FILE, LifecycleState, MAX_STATE_BYTES};
+use super::storage_acl::StorageAclSnapshot;
 use super::succession::plan_successor;
 
 /// An unavailable classification carries no native capability.
@@ -36,6 +37,7 @@ pub struct NativeRootMetadata {
 /// Pin/record resources drop before both existing OS exclusions; Drop never writes.
 pub struct NativeRootCapability {
     pins: NativePins,
+    storage_acl: Option<StorageAclSnapshot>,
     root: PathBuf,
     installation: NativeInstallation,
     record: DurableOwnerRecord,
@@ -78,6 +80,7 @@ fn admit_with_work(
 // context/meter. Semantic preflight may therefore finish before ACTIVE exists.
 struct AcquiredNativeRoot {
     pins: NativePins,
+    storage_acl: Option<StorageAclSnapshot>,
     root: PathBuf,
     installation: NativeInstallation,
     record: DurableOwnerRecord,
@@ -97,6 +100,7 @@ impl AcquiredNativeRoot {
     ) -> (NativeRootCapability, Option<DurableOwnerRecord>) {
         let Self {
             pins,
+            storage_acl,
             root,
             installation,
             record,
@@ -110,6 +114,7 @@ impl AcquiredNativeRoot {
         (
             NativeRootCapability {
                 pins,
+                storage_acl,
                 root,
                 installation,
                 record,
@@ -204,19 +209,22 @@ fn acquire_existing_target(
         NativePins::acquire_profile(request, work, &root, mutation, profile.journal_profile)?;
     let snapshot = read_snapshot(request, work, &root, &mut pins)?;
     work.arrive(request, "native-proof")?;
-    if snapshot.record.lifecycle != LifecycleState::Released {
-        return Ok(Err(RootOpenState::OutcomeUnknown));
-    }
+    if snapshot.record.lifecycle != LifecycleState::Released { return Ok(Err(RootOpenState::OutcomeUnknown)); }
+    let mut storage_acl = snapshot.installation.journal_profile.then(|| StorageAclSnapshot::capture(request, work, &pins)).transpose()?;
     let control = match target {
         AdmissionTarget::Legacy => None,
         AdmissionTarget::Direct => {
             if !snapshot.installation.journal_profile { return Ok(Err(RootOpenState::Unsupported)); }
-            Some(open_direct_control(request, work, &root, &snapshot, &mut pins)?)
+            Some(open_direct_control(request, work, &root, &snapshot, &mut pins,
+                storage_acl.as_ref().ok_or(OwnerError::OwnerStorageAclUnqualified)?)?)
         }
     };
-    let decision = classify_root_open(request.mode, RootOpenState::Initialized);
+    if let Some(control) = &control {
+        storage_acl = Some(storage_acl.as_ref().ok_or(OwnerError::OwnerStorageAclUnqualified)?
+            .capture_after_direct_pin(request, work, &pins, &control.acl_before_open)?);
+    }
     if !matches!(
-        (mutation, decision),
+        (mutation, classify_root_open(request.mode, RootOpenState::Initialized)),
         (true, RootOpenDecision::RequireLiveOwner) | (false, RootOpenDecision::ReadExisting)
     ) {
         return Err(OwnerError::OwnerInvalidTransition);
@@ -235,6 +243,7 @@ fn acquire_existing_target(
     };
     Ok(Ok((AcquiredNativeRoot {
         pins,
+        storage_acl,
         root,
         installation: snapshot.installation,
         record: snapshot.record,
@@ -249,10 +258,11 @@ fn acquire_existing_target(
 
 fn open_direct_control(request: &NativeRootRequest, work: &mut NativeWork, root: &Path,
     snapshot: &super::native_snapshot::NativeSnapshot, pins: &mut NativePins,
+    storage_acl: &StorageAclSnapshot,
 ) -> Result<direct_registry::DirectJournal, OwnerError> {
     let binding = direct_registry::journal_owner(snapshot.installation.installation_incarnation_id,
         snapshot.record.data_root_id, snapshot.record.epoch)?;
-    let mut control = direct_registry::DirectJournal::open(request, work, root, &pins.files[3], binding, false)?;
+    let mut control = direct_registry::DirectJournal::open(request, work, root, &pins.files[3], binding, false, storage_acl)?;
     pins.direct = control.pin.take();
     if super::native_snapshot::barriers_with_direct(request, work, root, pins.direct.as_ref())?.is_some() {
         return Err(OwnerError::OwnerRecoveryQuarantined);
@@ -413,6 +423,7 @@ impl NativeRootCapability {
         self.check_context()?;
         let snapshot = NativeBindingView {
             pins: &mut self.pins,
+            storage_acl: self.storage_acl.as_ref(),
             root: &self.root,
             installation: &self.installation,
             record: &self.record,
@@ -576,6 +587,7 @@ mod native_tests;
 // this verifier; the view cannot be constructed by a product caller.
 struct NativeBindingView<'a> {
     pins: &'a mut NativePins,
+    storage_acl: Option<&'a StorageAclSnapshot>,
     root: &'a Path,
     installation: &'a NativeInstallation,
     record: &'a DurableOwnerRecord,
@@ -591,6 +603,11 @@ impl NativeBindingView<'_> {
         work: &mut NativeWork,
     ) -> Result<super::native_snapshot::NativeSnapshot, OwnerError> {
         request.check()?;
+        match (self.installation.journal_profile, self.storage_acl) {
+            (true, Some(storage_acl)) => storage_acl.verify(request, work, self.pins)?,
+            (false, None) => {}
+            _ => return Err(OwnerError::OwnerStorageAclUnqualified),
+        }
         self.pins.verify_locators(request, work, self.root)?;
         for (held, pinned) in std::iter::once(self.bound_root)
             .chain(self.exclusions.iter())

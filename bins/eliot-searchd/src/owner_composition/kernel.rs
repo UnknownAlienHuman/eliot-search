@@ -39,6 +39,8 @@ mod tests;
 mod native_admission;
 #[path = "kernel/native_objects.rs"]
 mod native_objects;
+#[path = "kernel/storage_acl.rs"]
+mod storage_acl;
 #[path = "kernel/native_request.rs"]
 mod native_request;
 #[path = "kernel/direct_policy_v2.rs"]
