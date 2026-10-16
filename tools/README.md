@@ -25,32 +25,16 @@ The registered command surface is:
 validate accepted-evidence-digest
 compute accepted-evidence-digest <record> [--json-array]
 
-build context-artifact-candidate --package <name> --base-commit <algorithm:oid> ...
-build context-materialization-plan --candidate <path> ...
-build ticket-issuance-plan --package <name> ...
-
 generate coverage-graph [--check] [--json]
 generate package-maps [--check] [--json]
 
-validate p00-ticket-drafts [--json]
-validate w1-agent-drafts [--json]
-validate w2-agent-drafts [--json]
-validate w3-agent-drafts [--json]
-validate w4-agent-drafts [--json]
-validate w1-milestone-packets [--json]
-validate w2-milestone-packets [--json]
-validate w3-milestone-packets [--json]
 validate integration-bootstrap [--root <path>] [--allow-missing-lock] [--json]
 validate architecture-coverage [--json]
 validate architecture-coverage-contracts [--json]
 validate coverage-graph [--json]
 validate package-maps [--json]
-validate context-artifact-candidate [--root <path>] [--json]
-validate context-materialization-plan [--json]
-validate ticket-issuance-plan [--root <path>] [--json]
-validate implementation-program [--json]
-validate p00-foundation-acceptance [--json]
 validate qdrant-boundary [--json]
+validate canonical-digest-guard
 ```
 
 `xtask` prints the canonical usage text and exits `2` for an unregistered
@@ -63,7 +47,6 @@ Compatibility wrappers preserve the existing operator-facing command names and
 forward to the locked Rust owner. Examples:
 
 ```powershell
-pwsh -NoProfile -File tools/validate-p00-foundation-acceptance.ps1 -Json
 pwsh -NoProfile -File tools/validate-architecture-coverage.ps1 -Json
 pwsh -NoProfile -File tools/validate-coverage-graph-v2.ps1 -Json
 pwsh -NoProfile -File tools/validate-package-maps-v2.ps1 -Json
@@ -85,13 +68,11 @@ restore a Python/Node validator.
 - `validate-function-packets.ps1` checks package/function/write-scope parity and
   operation-contract structure.
 - `validate-stage-readsets.ps1` checks W0-W10 composition, later-stage context
-  replacement and accepted-handoff-only consumption.
+  replacement and historical handoff references. These records cannot authorize
+  or block implementation under ADR 0005.
 - `validate-architecture-coverage.ps1`, `validate-coverage-graph-v2.ps1` and
   `validate-package-maps-v2.ps1` execute the Rust-owned architecture and package
   closure gates.
-
-- `validate-p00-foundation-acceptance.ps1` executes the Rust-owned P00 acceptance
-  boundary. Its JSON result keeps package, G0, W0 and W1 authority claims false.
 
 ### Implementation and later waves
 

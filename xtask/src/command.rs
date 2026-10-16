@@ -16,7 +16,6 @@ const USAGE: &str = "usage:\n\
   xtask validate architecture-coverage-contracts [--json]\n\
   xtask validate coverage-graph [--json]\n\
   xtask validate package-maps [--json]\n\
-  xtask validate implementation-program [--json]\n\
   xtask validate qdrant-boundary [--json]\n\
   xtask validate canonical-digest-guard\n";
 
@@ -72,9 +71,6 @@ fn run_validate(args: &[String]) -> ExitCode {
     }
     if is_optional_json(args, "package-maps") {
         return structural::validate_package_map_closure();
-    }
-    if is_optional_json(args, "implementation-program") {
-        return structural::validate_implementation_program();
     }
     if is_optional_json(args, "qdrant-boundary") {
         return structural::validate_qdrant_boundary();
