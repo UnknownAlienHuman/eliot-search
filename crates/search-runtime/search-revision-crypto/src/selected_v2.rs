@@ -496,3 +496,6 @@ fn take<const N: usize>(
     *cursor = end;
     Ok(value)
 }
+
+#[cfg(test)]
+mod tests;
