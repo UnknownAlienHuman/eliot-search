@@ -28,6 +28,7 @@ use crate::development::DataRootGuard;
 use crate::provider_composition::{
     CanonicalProviderConnection, CanonicalTcpConnection, LocalByteStream, monotonic_millis,
 };
+use crate::owner_composition::NativeProcessRootCustody;
 
 use super::{
     BindingConnectionRegistry, BindingConnectionRegistryError, NativeBindingError,
@@ -95,22 +96,49 @@ impl<E> From<ContinuationError> for StandaloneProcessError<E> {
     fn from(error: ContinuationError) -> Self { Self::Continuation(error) }
 }
 
+type LegacyProcessCustody = (ControlSnapshotPublisher, PersistentControlJournal, DataRootGuard);
+
+enum ProcessCustody {
+    Legacy(Box<LegacyProcessCustody>),
+    Native(Box<NativeProcessRootCustody>),
+}
+
+impl ProcessCustody {
+    const fn control(&self) -> Option<(&PersistentControlJournal, &ControlSnapshotPublisher)> {
+        match self {
+            Self::Legacy(custody) => Some((&custody.1, &custody.0)),
+            Self::Native(custody) => custody.control(),
+        }
+    }
+
+    fn journal_identity(&self) -> JournalIdentity {
+        match self {
+            Self::Legacy(custody) => custody.1.identity(),
+            Self::Native(custody) => custody.journal_identity(),
+        }
+    }
+
+    #[allow(clippy::missing_const_for_fn)] // PathBuf deref is not const on this toolchain.
+    fn canonical_root(&self) -> &std::path::Path {
+        match self {
+            Self::Legacy(custody) => custody.2.canonical_root(),
+            Self::Native(custody) => custody.canonical_root(),
+        }
+    }
+}
+
 /// Sole process owner for one bootstrapped standalone binding.
 ///
-/// Field order is intentional: connection/query state and the redb handle drop
-/// before the non-clonable data-root guard releases OS exclusion. Dropping without
-/// explicit clean shutdown is fail-stop owner recovery on the next process, not a
-/// fabricated RELEASED receipt. A listener owner must itself drop every accepted
-/// transport before this object.
+/// Process state drops before custody; native custody drops the existing journal
+/// and pins before its two OS exclusions. The listener drops accepted transports first.
 pub struct StandaloneProcessOwner {
     ready: StandaloneBootstrapReady,
     clock: SystemGrantClock,
     continuations: ContinuationStore,
     handles: HandleStore,
     connections: BindingConnectionRegistry,
-    publisher: ControlSnapshotPublisher,
-    journal: PersistentControlJournal,
-    root: DataRootGuard,
+    // Last so process resources and the journal drop before native exclusions.
+    custody: ProcessCustody,
 }
 
 impl StandaloneProcessOwner {
@@ -201,9 +229,28 @@ impl StandaloneProcessOwner {
             continuations,
             handles,
             connections,
-            publisher,
-            journal,
-            root,
+            custody: ProcessCustody::Legacy(Box::new((publisher, journal, root))),
+        })
+    }
+
+    #[allow(dead_code)] // Native route remains dormant until handlers/bridge qualify.
+    pub(crate) fn from_native_custody(
+        custody: NativeProcessRootCustody,
+        ready: StandaloneBootstrapReady,
+        binding: &BindingContext,
+        connections: BindingConnectionRegistry,
+        handles: HandleStore,
+        continuations: ContinuationStore,
+    ) -> Result<Self, NativeBindingError> {
+        let (journal, _) = custody.control().ok_or(NativeBindingError::Unavailable)?;
+        ready.validate_context(journal, binding)?;
+        Ok(Self {
+            ready,
+            clock: SystemGrantClock::default(),
+            continuations,
+            handles,
+            connections,
+            custody: ProcessCustody::Native(Box::new(custody)),
         })
     }
 
@@ -223,14 +270,18 @@ impl StandaloneProcessOwner {
         boot_id: &OpaqueId,
         context: &OperationContext<C>,
     ) -> Result<(CanonicalTcpConnection, NativeBindingPin), NativeTcpOpenError> {
+        let (journal, publisher) = self
+            .custody
+            .control()
+            .ok_or(NativeTcpOpenError::Binding(NativeBindingError::Unavailable))?;
         CanonicalProviderConnection::open_standalone_tcp(
             stream,
             binding,
             ceremony,
             server_nonce,
             limits,
-            &self.journal,
-            &self.publisher,
+            journal,
+            publisher,
             &mut self.connections,
             &self.ready,
             boot_id,
@@ -260,14 +311,18 @@ impl StandaloneProcessOwner {
         C: CancellationProbe + Clone,
         S: LocalByteStream + 'static,
     {
+        let (journal, publisher) = self
+            .custody
+            .control()
+            .ok_or(NativeTcpOpenError::Binding(NativeBindingError::Unavailable))?;
         CanonicalProviderConnection::open_standalone_local(
             stream,
             binding,
             ceremony,
             server_nonce,
             limits,
-            &self.journal,
-            &self.publisher,
+            journal,
+            publisher,
             &mut self.connections,
             &self.ready,
             boot_id,
@@ -277,12 +332,11 @@ impl StandaloneProcessOwner {
     }
 
     /// Executed startup evidence retained by this process owner.
-    #[must_use]
     pub const fn readiness(&self) -> &StandaloneBootstrapReady { &self.ready }
 
     /// Exact current journal identity after any owner handoff.
     #[must_use]
-    pub const fn journal_identity(&self) -> JournalIdentity { self.journal.identity() }
+    pub fn journal_identity(&self) -> JournalIdentity { self.custody.journal_identity() }
 
     /// Canonical query-lifecycle owners for construction of the production host.
     ///
@@ -298,7 +352,16 @@ impl StandaloneProcessOwner {
 
     /// Canonical root protected for this owner's entire lifetime.
     #[must_use]
-    pub fn canonical_root(&self) -> &std::path::Path { self.root.canonical_root() }
+    pub fn canonical_root(&self) -> &std::path::Path { self.custody.canonical_root() }
+
+    #[cfg(feature = "wave4-query")]
+    #[allow(dead_code)] // Activated by the qualified canonical query composition.
+    pub(crate) fn native_source_custody(&mut self) -> Option<&mut NativeProcessRootCustody> {
+        match &mut self.custody {
+            ProcessCustody::Native(custody) => Some(custody.as_mut()),
+            ProcessCustody::Legacy(_) => None,
+        }
+    }
 }
 
 impl fmt::Debug for StandaloneProcessOwner {

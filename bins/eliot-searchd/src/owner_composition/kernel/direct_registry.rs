@@ -296,6 +296,20 @@ impl DirectRegistryOwner {
         )?;
         Ok(result)
     }
+    /// Transfers this exact DIRECT owner without reopening or advancing it.
+    #[allow(dead_code)] // Dormant until the qualified provider composition calls it.
+    pub(in super::super) fn into_process_custody(
+        mut self,
+    ) -> Result<NativeProcessRootCustody, OwnerError> {
+        self.owner.verify()?;
+        self.control.verify(&self.owner.request, &mut self.owner.work, &self.owner.root)?;
+        let identity = self.control.journal.as_ref()
+            .ok_or(OwnerError::OwnerRecoveryQuarantined)?.identity();
+        if identity.owner_epoch.get() != self.owner.record.epoch {
+            return Err(OwnerError::OwnerGuardMismatch);
+        }
+        Ok(NativeProcessRootCustody { owner: self, journal_identity: identity })
+    }
     pub(crate) fn execute(
         mut self,
         hints: &crate::config_composition::RootLocatorHints,
@@ -384,6 +398,9 @@ mod retained_reader;
 mod dek_command;
 #[path = "native_dek_selection.rs"]
 mod dek_selection;
+#[path = "direct_registry_process_custody.rs"]
+mod process_custody;
+pub(crate) use process_custody::NativeProcessRootCustody;
 pub use command::maybe_run;
 
 #[cfg(all(test, windows))]

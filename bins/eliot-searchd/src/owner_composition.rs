@@ -18,6 +18,8 @@ pub use kernel::initialize_new;
 pub use kernel::{initialize_direct, maybe_run_direct_registry};
 pub use kernel::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 pub use kernel::{NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing};
+#[allow(unused_imports)] // Used by the dormant native process constructor.
+pub(crate) use kernel::NativeProcessRootCustody;
 pub use kernel::{NativeSyncPreflightOperation, run_source_sync_preflight};
 
 #[cfg(all(test, windows))]
