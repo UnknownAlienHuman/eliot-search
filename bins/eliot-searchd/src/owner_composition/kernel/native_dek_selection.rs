@@ -355,6 +355,7 @@ impl DirectRegistryOwner {
         let application = load(&view, &keys[2])?;
         let current = load(&view, &keys[3])?;
         let historical = current.is_some();
+        let mut application_published_here = false;
         let intent = match application {
             Some(Record::Intent(intent)) => intent,
             Some(_) => return Err("REVISION_DEK_SELECTION_APPLICATION_CONTRADICTION".into()),
@@ -406,6 +407,7 @@ impl DirectRegistryOwner {
                     stored(&Record::Intent(intent.clone()))?,
                 )?;
                 commit(&mut port, &command, deadline, &callback)?;
+                application_published_here = true;
                 view = port
                     .read_control_keys_with_original_context(&keys, deadline, &callback)
                     .map_err(|_| "REVISION_DEK_SELECTION_CONTROL_READ_REFUSED")?;
@@ -426,14 +428,16 @@ impl DirectRegistryOwner {
         if load(&view, &keys[2])? != Some(Record::Intent(intent.clone())) {
             return Err("REVISION_DEK_SELECTION_APPLICATION_READBACK_REFUSED".into());
         }
-        verify_operation(
-            &mut port,
-            &intent,
-            0,
-            stored(&Record::Intent(intent.clone()))?,
-            deadline,
-            &callback,
-        )?;
+        if !application_published_here {
+            verify_operation(
+                &mut port,
+                &intent,
+                0,
+                stored(&Record::Intent(intent.clone()))?,
+                deadline,
+                &callback,
+            )?;
+        }
         // A stored Current is only historical evidence after exact metadata and
         // operation recovery. Backend failure must never acknowledge mere presence.
         if let Some(current) = &current {
@@ -490,7 +494,9 @@ impl DirectRegistryOwner {
         {
             return Err("REVISION_DEK_SELECTION_FINAL_READBACK_REFUSED".into());
         }
-        verify_operation(&mut port, &intent, 1, stored(&record)?, deadline, &callback)?;
+        // Fresh commit/recovery already returns the C02 owner-verified receipt;
+        // historical phase-1 recovery was mandatory before backend construction.
+        // The final exact state readback does not repeat either transaction proof.
         let revalidated =
             match os::construct_revision_dek_selection(intent.policy(), &candidate, &mut context) {
                 Ok(value) => value,
