@@ -253,8 +253,9 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         Ok(admission)
     }
 
-    /// Read an admitted membership while the current issuer and native authority
-    /// remain borrowed by this work turn. The callback must reopen the exact
+    /// Read an admitted membership under this turn's issuer and native authority.
+    ///
+    /// The callback must reopen the exact
     /// retained revision through its source owner; neither a handle nor storage
     /// custody substitutes for the issuer's source-read permission.
     pub(crate) fn with_standalone_source_read<T>(
@@ -262,7 +263,10 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         admission: &StandalonePreRetrievalAdmission,
         membership: SourceMembershipId,
         expected: &SourceRevisionRef,
-        read: impl FnOnce(&SourceRevisionRef) -> Result<T, CanonicalServingError>,
+        read: impl FnOnce(
+            &SourceRevisionRef, &AdmittedProviderRequest, CanonicalWorkBudget,
+            &NativeSecurityDomain, &RequestSecurityFence,
+        ) -> Result<T, CanonicalServingError>,
     ) -> Result<T, CanonicalServingError> {
         if self.failed || self.emitted_terminal.is_some() {
             return Err(CanonicalServingError::InvalidCompletion);
@@ -297,7 +301,9 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         }
         let result = with_bound_source(self.authority.standalone_sources, membership, expected,
             |expected| self.authority.domain.with_live_checkpoint(
-                &current.request_fence, AccessCheckpoint::BeforeSourceReadback, |_| read(expected),
+                &current.request_fence, AccessCheckpoint::BeforeSourceReadback, |_| read(
+                    expected, self.request, self.budget, self.authority.domain, &current.request_fence,
+                ),
             ).map_err(CanonicalServingError::Access))?;
         // Check even after a source error. Preserve that first error, but never
         // return successful bytes if cancellation, expiry or live deny won.

@@ -170,11 +170,42 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         namespace: &NamespaceCutoverState, root: &RootRecord, security: &RetentionSecurity,
         deadline: Instant, work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
     ) -> Result<Self, RetentionControlError> {
+        security.checkpoint().map_err(|_| ControlError::OperationConflict)?;
+        Self::bind_conditions(journal, publisher, source, namespace, root, security.conditions(),
+            None, deadline, work)
+    }
+
+    /// Bind an exact active member to the existing serving domain's head.
+    /// The caller retains that domain's grant/lock and obtains these predicates
+    /// from `NativeSecurityDomain::retained_source_read_conditions`.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn bind_for_serving(journal: &'journal mut db::PersistentControlJournal,
+        publisher: &'journal mut db::ControlSnapshotPublisher, source: &RegisteredSource,
+        namespace: &NamespaceCutoverState, root: &RootRecord,
+        member: &search_source_registry::membership::MembershipRecord,
+        conditions: &[Condition; 2], deadline: Instant,
+        work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
+    ) -> Result<Self, RetentionControlError> {
+        if source.lifecycle() != SourceLifecycle::Active
+            || member.lifecycle() != search_source_registry::membership::MembershipLifecycle::Active
+            || member.key().source_identity != *source.identity()
+            || member.permanent_v2().is_none()
+        { return Err(ControlError::OperationConflict.into()); }
+        Self::bind_conditions(journal, publisher, source, namespace, root, conditions,
+            Some(member), deadline, work)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn bind_conditions(journal: &'journal mut db::PersistentControlJournal,
+        publisher: &'journal mut db::ControlSnapshotPublisher, source: &RegisteredSource,
+        namespace: &NamespaceCutoverState, root: &RootRecord, conditions: &[Condition; 2],
+        member: Option<&search_source_registry::membership::MembershipRecord>,
+        deadline: Instant, work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
+    ) -> Result<Self, RetentionControlError> {
         let source_state = match source.lifecycle() {
             SourceLifecycle::Active => SourceRevisionSourceState::Active,
             SourceLifecycle::Retired => SourceRevisionSourceState::Retired,
         };
-        security.checkpoint().map_err(|_| ControlError::OperationConflict)?;
         if source.permanent_admission().is_none()
             || source.identity().source_namespace_id != namespace.ownership.source_namespace_id
             || source.binding().root_binding_id() != root.root_binding_id
@@ -188,24 +219,29 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
             Work::Process(4 * LIMITS.max_value_bytes)] {
             work(unit).map_err(|first| RetentionControlError { control: ControlError::BudgetExceeded, first: Some(first) })?;
         }
-        let records = [RegistryStateRecord::Source(source.clone()),
+        let mut records = vec![RegistryStateRecord::Source(source.clone()),
             RegistryStateRecord::Namespace(namespace.clone()), RegistryStateRecord::Root(root.clone())];
-        let mut guards = Vec::with_capacity(5);
+        if let Some(member) = member { records.push(RegistryStateRecord::Membership(member.clone())); }
+        let mut guards = Vec::with_capacity(records.len() + conditions.len());
         for record in records {
             let family = match &record {
                 RegistryStateRecord::Source(_) => db::RegistryStateFamily::Source,
                 RegistryStateRecord::Namespace(_) => db::RegistryStateFamily::Namespace,
                 RegistryStateRecord::Root(_) => db::RegistryStateFamily::Root,
+                RegistryStateRecord::Membership(_) => db::RegistryStateFamily::Membership,
                 _ => return Err(ControlError::InvalidValue.into()),
             };
             let key = db::RegistryStateKey::new(family,
                 record.key().encode().map_err(|_| ControlError::InvalidValue)?, LIMITS)?;
-            let encoded = if matches!(record, RegistryStateRecord::Root(_)) { record.encode() }
-                else { record.encode_with_profile("eliot.registry-state.v4") }
+            let encoded = match &record {
+                RegistryStateRecord::Root(_) => record.encode(),
+                RegistryStateRecord::Membership(_) => record.encode_with_profile("eliot.registry-state.v5"),
+                _ => record.encode_with_profile("eliot.registry-state.v4"),
+            }
                 .map_err(|_| ControlError::InvalidValue)?;
             guards.push(key.current_condition(&encoded, LIMITS)?);
         }
-        guards.extend_from_slice(security.conditions());
+        guards.extend_from_slice(conditions);
         let source_namespace_id = source.identity().source_namespace_id;
         let content_digest = source.binding().content_digest();
         let byte_length = source.binding().content_bytes();

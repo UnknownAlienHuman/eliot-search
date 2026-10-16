@@ -14,8 +14,129 @@ use super::dek_command::NativeContext;
 use super::retention_control::NativeRetentionControl;
 use super::super::read_child::fresh_root::{FreshRootCancellation, FreshRootContext};
 
+/// The canonical request retains this cumulative native meter between reads.
+#[cfg(feature = "wave4-query")]
+#[derive(Default)]
+pub(crate) struct RetainedRevisionReadState {
+    native: Option<super::super::read_child::NativeRequestReadState>,
+    remaining_source_bytes: u64,
+}
+
+#[cfg(feature = "wave4-query")]
+impl RetainedRevisionReadState {
+    /// Capture the canonical task's admitted whole-request source-read ceiling.
+    pub(crate) const fn new(max_source_read_bytes: u64) -> Self {
+        Self { native: None, remaining_source_bytes: max_source_read_bytes }
+    }
+
+    fn charge_source_bytes(&mut self, bytes: u64)
+        -> Result<(), crate::provider_composition::CanonicalServingError> {
+        if self.remaining_source_bytes == 0 {
+            return Err(crate::provider_composition::CanonicalServingError::Backend("RESOURCE_EXHAUSTED"));
+        }
+        self.remaining_source_bytes = self.remaining_source_bytes.checked_sub(bytes)
+            .ok_or(crate::provider_composition::CanonicalServingError::Backend("RESOURCE_EXHAUSTED"))?;
+        Ok(())
+    }
+}
+
+#[cfg(feature = "wave4-query")]
+impl super::DirectRegistryOwner {
+    /// Reopen through the same issuer-verified live turn and retained root.
+    /// The canonical recipe retains `state` across all source reads and yields.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn with_serving_retained_read<T>(
+        &mut self,
+        state: &mut RetainedRevisionReadState,
+        registry: &search_source_registry::SourceRegistry,
+        output: &mut crate::provider_composition::CanonicalWorkOutput<'_, '_, '_>,
+        admission: &crate::access_composition::StandalonePreRetrievalAdmission,
+        membership: search_contracts::SourceMembershipId,
+        expected: &SourceRevisionRef,
+        config: &EffectiveDaemonConfig,
+        consume: impl FnOnce(&[u8]) -> Result<T, crate::provider_composition::CanonicalServingError>,
+    ) -> Result<T, crate::provider_composition::CanonicalServingError> {
+        use crate::provider_composition::CanonicalServingError as Error;
+        use search_access::AccessError;
+        let unavailable = || Error::Backend("SOURCE_REVISION_UNAVAILABLE");
+        output.with_standalone_source_read(admission, membership, expected,
+            |expected, admitted, budget, domain, fence| {
+                if registry.revision() != admission.scope.source_catalog_generation {
+                    return Err(Error::Access(AccessError::SnapshotStale));
+                }
+                let (_, identity) = registry.active_source_membership_v2(membership)
+                    .map_err(|_| Error::Access(AccessError::ScopeUnauthorized))?;
+                if identity.source_namespace_id != expected.source_namespace_id
+                    || identity.source_id != expected.source_id
+                { return Err(Error::Access(AccessError::ScopeUnauthorized)); }
+                // This encrypted profile reopens the whole revision, even for
+                // one small unit. Charge that actual source work before I/O;
+                // subsequent candidates/turns cannot renew the request budget.
+                state.charge_source_bytes(expected.byte_length)?;
+                let key = registry.membership_key_by_id(membership).map_err(|_| unavailable())?;
+                let member = registry.membership(key).map_err(|_| unavailable())?;
+                let source = registry.sources().get(identity).ok_or_else(unavailable)?;
+                let namespace = registry.namespaces().get(&identity.source_namespace_id)
+                    .ok_or_else(unavailable)?;
+                let root = registry.root(source.binding().root_binding_id()).map_err(|_| unavailable())?;
+                if state.native.is_none() {
+                    state.native = Some(super::super::read_child::NativeRequestReadState::new(
+                        &self.owner, admitted, budget).map_err(|_| unavailable())?);
+                }
+                let native_state = state.native.as_mut().ok_or_else(unavailable)?;
+                let journal = self.control.journal.as_mut().ok_or_else(unavailable)?;
+                let publisher = &mut self.control.publisher;
+                super::super::read_child::with_direct_read_operation(&mut self.owner,
+                    admitted, native_state, budget, |operation| {
+                        let deadline = operation.migration_deadline();
+                        let native = operation.fresh_root_context().map_err(|_| unavailable())?;
+                        native.source_full_checkpoint().map_err(|_| unavailable())?;
+                        // Pay for the bounded current-head predicates before their encoding.
+                        for unit in [Work::Allocate(4 * search_control_redb::JournalLimits::BASELINE.max_value_bytes),
+                            Work::Process(4 * search_control_redb::JournalLimits::BASELINE.max_value_bytes)] {
+                            native.work(unit).map_err(|_| unavailable())?;
+                        }
+                        let conditions = domain.retained_source_read_conditions(identity.source_namespace_id,
+                            namespace.ownership.source_owner_generation, journal, fence)
+                            .map_err(|error| match error {
+                                crate::access_composition::NativeSecurityError::Access(error) => Error::Access(error),
+                                _ => unavailable(),
+                            })?;
+                        let work = |unit| native.work(unit);
+                        let control = NativeRetentionControl::bind_for_serving(journal, publisher,
+                            source, namespace, root, member, &conditions, deadline, &work)
+                            .map_err(|_| unavailable())?;
+                        let plaintext = open_retained_revision(&native, &control, expected, config)
+                            .map_err(|_| unavailable())?;
+                        consume(plaintext.as_bytes())
+                    }).map_err(|_| unavailable())?
+            })
+    }
+}
+
+#[cfg(all(test, feature = "wave4-query"))]
+mod source_budget_tests {
+    use super::RetainedRevisionReadState;
+
+    #[test]
+    fn whole_revision_reads_share_one_source_budget() {
+        let mut state = RetainedRevisionReadState::new(8);
+        state.charge_source_bytes(3).unwrap();
+        assert!(state.charge_source_bytes(6).is_err());
+        state.charge_source_bytes(5).unwrap();
+        assert!(state.charge_source_bytes(1).is_err());
+    }
+
+    #[test]
+    fn missing_source_budget_refuses_even_an_empty_revision() {
+        assert!(RetainedRevisionReadState::default().charge_source_bytes(0).is_err());
+    }
+}
+
 /// Production composition must enter through the provider's issuer-verified
-/// source-read callback in the same live authority turn. The source-owner
+/// source-read callback in the same live authority turn.
+///
+/// The source-owner
 /// fixture exercises reopen separately; it creates no serving permission.
 /// The native context and control adapter retain
 /// the original request; this function allocates no deadline, source identity,
