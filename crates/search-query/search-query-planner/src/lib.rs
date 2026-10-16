@@ -16,12 +16,11 @@
 use core::fmt;
 use std::collections::BTreeSet;
 
-use search_access::{
-    AccessModality, AuthorizedScope, SafeRetrievalLeg, ValidatedGrant,
-};
+use search_access::{AccessModality, AuthorizedScope, SafeRetrievalLeg, ValidatedGrant};
 use search_contracts::{
-    LegKind, QueryExecutionBudget, QuerySnapshotFence, RecipeBodyV1, RecipeIdV1,
-    RequestId, SearchRecipeRequest, SourceMembershipId,
+    Blake3ExactInputLimit, LegKind, QueryExecutionBudget, QuerySnapshotFence, RecipeBodyV1,
+    RecipeIdV1, RequestId, SearchReadGrantClaims, SearchRecipeRequest, SearchTaskPlan,
+    SourceMembershipId, blake3_exact_bytes,
 };
 
 /// Closed query-planning failure.
@@ -39,6 +38,13 @@ pub enum PlanError {
     InvalidDependencyGraph,
     StrictCurrentnessUnavailable,
     IdentityEncoding,
+    CanonicalPlanInvalid,
+    RequestIdentityMismatch,
+    RequestDigestMismatch,
+    GrantFenceMismatch,
+    ScopeFenceMismatch,
+    ScopeMismatch,
+    PlanFingerprintMismatch,
 }
 
 impl PlanError {
@@ -58,6 +64,13 @@ impl PlanError {
             Self::InvalidDependencyGraph => "PLAN_DEPENDENCY_GRAPH_INVALID",
             Self::StrictCurrentnessUnavailable => "PLAN_CURRENTNESS_UNAVAILABLE",
             Self::IdentityEncoding => "PLAN_IDENTITY_ENCODING_FAILED",
+            Self::CanonicalPlanInvalid => "PLAN_CANONICAL_PLAN_INVALID",
+            Self::RequestIdentityMismatch => "PLAN_REQUEST_IDENTITY_MISMATCH",
+            Self::RequestDigestMismatch => "PLAN_REQUEST_DIGEST_MISMATCH",
+            Self::GrantFenceMismatch => "PLAN_GRANT_FENCE_MISMATCH",
+            Self::ScopeFenceMismatch => "PLAN_SCOPE_FENCE_MISMATCH",
+            Self::ScopeMismatch => "PLAN_SCOPE_MISMATCH",
+            Self::PlanFingerprintMismatch => "PLAN_FINGERPRINT_MISMATCH",
         }
     }
 }
@@ -195,7 +208,96 @@ pub fn compile_plan(
     {
         return Err(PlanError::BudgetClassDenied);
     }
-    snapshot.validate().map_err(|_| PlanError::InvalidSnapshot)?;
+    compile_plan_inner(
+        recipe,
+        authorized_scope,
+        snapshot,
+        capabilities,
+        global_budget,
+        safe_index_legs,
+        |modality| grant.permits_modality(modality),
+    )
+}
+
+/// Compiles the executor graph against an already admitted canonical task plan.
+///
+/// The native serving owner must authenticate and check grant lifetime and source authorization
+/// before calling this pure planner. This function verifies the request, recipe/budget grant
+/// fields, exact plan/grant/scope fences, canonical fingerprints, and safe-leg closure. The
+/// contract's `Modality` describes source content classes, so it is deliberately not translated
+/// into the legacy retrieval `AccessModality` values here. The returned legacy graph digest is
+/// retained for existing consumers; callers use `task_plan.plan_fingerprint` as plan identity.
+pub fn compile_canonical_plan(
+    task_plan: &SearchTaskPlan,
+    grant: &SearchReadGrantClaims,
+    recipe: &NormalizedRecipeRequest,
+    authorized_scope: AuthorizedScope,
+    capabilities: CapabilitySet,
+    safe_index_legs: &[SafeRetrievalLeg],
+) -> Result<CompiledSearchPlan, PlanError> {
+    let request = recipe.request();
+    task_plan
+        .validate()
+        .map_err(|_| PlanError::CanonicalPlanInvalid)?;
+    if task_plan.request_id != request.request_id {
+        return Err(PlanError::RequestIdentityMismatch);
+    }
+    if canonical_request_digest(request)? != task_plan.recipe_request_digest {
+        return Err(PlanError::RequestDigestMismatch);
+    }
+    if !grant.permitted_recipe_families.contains(&request.recipe) {
+        return Err(PlanError::RecipeDenied);
+    }
+    if grant.maximum_budget_class != request.requested_budget_class {
+        return Err(PlanError::BudgetClassDenied);
+    }
+    if task_plan.grant_fence.grant_id != grant.grant_id
+        || task_plan.grant_fence.revocation_generation != grant.revocation_generation
+    {
+        return Err(PlanError::GrantFenceMismatch);
+    }
+    if task_plan.client_scope_fence.client_scope_ref != grant.client_scope_ref
+        || task_plan.client_scope_fence.scope_domain_id != grant.scope_domain_id
+    {
+        return Err(PlanError::ScopeFenceMismatch);
+    }
+    validate_canonical_scope(
+        task_plan,
+        grant,
+        request,
+        &authorized_scope,
+        safe_index_legs,
+    )?;
+    verify_canonical_snapshot(&task_plan.query_snapshot_fence)?;
+    verify_canonical_plan(task_plan)?;
+
+    compile_plan_inner(
+        recipe,
+        authorized_scope,
+        task_plan.query_snapshot_fence.clone(),
+        capabilities,
+        task_plan.query_execution_budget,
+        safe_index_legs,
+        |_| true,
+    )
+}
+
+fn compile_plan_inner<F>(
+    recipe: &NormalizedRecipeRequest,
+    authorized_scope: AuthorizedScope,
+    snapshot: QuerySnapshotFence,
+    capabilities: CapabilitySet,
+    global_budget: QueryExecutionBudget,
+    safe_index_legs: &[SafeRetrievalLeg],
+    modality_allowed: F,
+) -> Result<CompiledSearchPlan, PlanError>
+where
+    F: Fn(AccessModality) -> bool,
+{
+    let request = recipe.request();
+    snapshot
+        .validate()
+        .map_err(|_| PlanError::InvalidSnapshot)?;
     validate_global_budget(global_budget)?;
 
     let modalities = recipe_modalities(request.recipe);
@@ -207,7 +309,10 @@ pub fn compile_plan(
         .copied()
         .collect::<BTreeSet<_>>();
 
-    if modalities.retrieval.direct && capabilities.retrieval.direct && grant.permits_modality(AccessModality::Direct) {
+    if modalities.retrieval.direct
+        && capabilities.retrieval.direct
+        && modality_allowed(AccessModality::Direct)
+    {
         drafts.push(LegDraft {
             kind: LegKind::Direct,
             memberships: all_memberships.clone(),
@@ -217,7 +322,7 @@ pub fn compile_plan(
     }
 
     if modalities.retrieval.lexical {
-        if capabilities.retrieval.lexical && grant.permits_modality(AccessModality::Lexical) {
+        if capabilities.retrieval.lexical && modality_allowed(AccessModality::Lexical) {
             if safe_index_legs.is_empty() {
                 omitted.insert(OmittedCapability::Lexical);
             } else {
@@ -236,7 +341,7 @@ pub fn compile_plan(
     }
 
     if modalities.retrieval.exact {
-        if capabilities.retrieval.exact && grant.permits_modality(AccessModality::Exact) {
+        if capabilities.retrieval.exact && modality_allowed(AccessModality::Exact) {
             drafts.push(LegDraft {
                 kind: LegKind::Exact,
                 memberships: all_memberships.clone(),
@@ -249,7 +354,7 @@ pub fn compile_plan(
     }
 
     if modalities.advanced.structural {
-        if capabilities.advanced.structural && grant.permits_modality(AccessModality::Code) {
+        if capabilities.advanced.structural && modality_allowed(AccessModality::Code) {
             drafts.push(LegDraft {
                 kind: LegKind::Structural,
                 memberships: all_memberships.clone(),
@@ -262,7 +367,7 @@ pub fn compile_plan(
     }
 
     if modalities.advanced.semantic {
-        if capabilities.advanced.semantic && grant.permits_modality(AccessModality::Semantic) {
+        if capabilities.advanced.semantic && modality_allowed(AccessModality::Semantic) {
             drafts.push(LegDraft {
                 kind: LegKind::Semantic,
                 memberships: all_memberships.clone(),
@@ -291,8 +396,7 @@ pub fn compile_plan(
         return Err(PlanError::NoExecutableLegs);
     }
     if drafts.len()
-        > usize::try_from(global_budget.max_scoring_legs)
-            .map_err(|_| PlanError::TooManyLegs)?
+        > usize::try_from(global_budget.max_scoring_legs).map_err(|_| PlanError::TooManyLegs)?
     {
         return Err(PlanError::TooManyLegs);
     }
@@ -335,6 +439,179 @@ pub fn compile_plan(
     })
 }
 
+fn canonical_request_digest(
+    request: &SearchRecipeRequest,
+) -> Result<search_contracts::Blake3Digest32, PlanError> {
+    request
+        .canonical_request_digest()
+        .map_err(|_| PlanError::IdentityEncoding)
+}
+
+fn verify_canonical_snapshot(snapshot: &QuerySnapshotFence) -> Result<(), PlanError> {
+    let input = snapshot
+        .canonical_fingerprint_input()
+        .map_err(|_| PlanError::InvalidSnapshot)?;
+    let digest = canonical_preimage_digest(input.as_slice())?;
+    if digest.as_bytes() != snapshot.snapshot_fingerprint.as_bytes() {
+        return Err(PlanError::InvalidSnapshot);
+    }
+    Ok(())
+}
+
+fn verify_canonical_plan(plan: &SearchTaskPlan) -> Result<(), PlanError> {
+    let input = plan
+        .canonical_fingerprint_input()
+        .map_err(|_| PlanError::CanonicalPlanInvalid)?;
+    let digest = canonical_preimage_digest(input.as_slice())?;
+    if digest.as_bytes() != plan.plan_fingerprint.as_bytes() {
+        return Err(PlanError::PlanFingerprintMismatch);
+    }
+    Ok(())
+}
+
+fn canonical_preimage_digest(input: &[u8]) -> Result<search_contracts::Blake3Digest32, PlanError> {
+    let limit = Blake3ExactInputLimit::new(input.len()).map_err(|_| PlanError::IdentityEncoding)?;
+    blake3_exact_bytes(input, limit).map_err(|_| PlanError::IdentityEncoding)
+}
+
+fn validate_canonical_scope(
+    task_plan: &SearchTaskPlan,
+    grant: &SearchReadGrantClaims,
+    request: &SearchRecipeRequest,
+    scope: &AuthorizedScope,
+    safe_legs: &[SafeRetrievalLeg],
+) -> Result<(), PlanError> {
+    let snapshot = &task_plan.query_snapshot_fence;
+    if snapshot.installation_incarnation_id != grant.installation_incarnation_id
+        || snapshot.source_view != request.source_view
+        || snapshot.reference_portfolio_revision != grant.reference_portfolio_revision
+        || scope.source_catalog_generation != snapshot.catalog_revision.get()
+        || scope.membership_generation != snapshot.membership_revision.get()
+    {
+        return Err(PlanError::InvalidSnapshot);
+    }
+    for revision in [
+        requested_portfolio_revision(request),
+        comparison_portfolio_revision(request),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if snapshot.reference_portfolio_revision != Some(revision) {
+            return Err(PlanError::InvalidSnapshot);
+        }
+    }
+
+    let authorized_memberships = scope.memberships.keys().copied().collect::<BTreeSet<_>>();
+    let selected_memberships = task_plan
+        .selected_membership_ids
+        .iter()
+        .copied()
+        .collect::<BTreeSet<_>>();
+    if authorized_memberships.is_empty()
+        || selected_memberships.len() != task_plan.selected_membership_ids.len()
+        || selected_memberships != authorized_memberships
+        || scope
+            .memberships
+            .iter()
+            .any(|(id, binding)| *id != binding.membership_id || !binding.active)
+    {
+        return Err(PlanError::ScopeMismatch);
+    }
+    if let search_contracts::RequestedScope::ExplicitMemberships(requested) =
+        &request.requested_scope
+    {
+        let requested_memberships = requested.iter().copied().collect::<BTreeSet<_>>();
+        if requested_memberships.len() != requested.len()
+            || requested_memberships != authorized_memberships
+        {
+            return Err(PlanError::ScopeMismatch);
+        }
+    }
+
+    let mut common_route = None;
+    let mut common_live_security_generation = None;
+    let mut safe_memberships = BTreeSet::new();
+    for (index, leg) in safe_legs.iter().enumerate() {
+        let expected_leg_id = index;
+        if leg.memberships.is_empty() || !leg.memberships.is_subset(&authorized_memberships) {
+            return Err(PlanError::ScopeMismatch);
+        }
+        if leg.leg_id != expected_leg_id || !safe_memberships.is_disjoint(&leg.memberships) {
+            return Err(PlanError::ScopeMismatch);
+        }
+        safe_memberships.extend(leg.memberships.iter().copied());
+        if snapshot.collection_generation_id != Some(leg.route.collection_generation_id)
+            || snapshot.visible_epoch != Some(leg.route.visible_epoch)
+            || snapshot.collection_route_revision.get() != leg.route.route_generation
+            || common_route.is_some_and(|route| route != leg.route)
+        {
+            return Err(PlanError::InvalidSnapshot);
+        }
+        common_route = Some(leg.route);
+
+        let planned_memberships = leg
+            .eligibility_plans
+            .iter()
+            .map(|plan| plan.membership_id)
+            .collect::<BTreeSet<_>>();
+        let planned_membership_order = leg
+            .eligibility_plans
+            .iter()
+            .map(|plan| plan.membership_id)
+            .collect::<Vec<_>>();
+        let expected_membership_order = leg.memberships.iter().copied().collect::<Vec<_>>();
+        if planned_memberships.len() != leg.eligibility_plans.len()
+            || planned_memberships != leg.memberships
+            || planned_membership_order != expected_membership_order
+        {
+            return Err(PlanError::ScopeMismatch);
+        }
+        for eligibility in &leg.eligibility_plans {
+            let Some(binding) = scope.memberships.get(&eligibility.membership_id) else {
+                return Err(PlanError::ScopeMismatch);
+            };
+            if eligibility.projection_membership_id != binding.projection_membership_id
+                || eligibility.access_partition_digest != binding.access_partition_digest
+                || eligibility.scoring_partition_digest != binding.scoring_partition_digest
+            {
+                return Err(PlanError::ScopeMismatch);
+            }
+            if eligibility.collection_generation_id != leg.route.collection_generation_id
+                || eligibility.visible_epoch != leg.route.visible_epoch
+                || eligibility.shadow_generation != snapshot.shadow_fence_revision.get()
+                || eligibility.purge_generation != snapshot.purge_fence_revision.get()
+                || common_live_security_generation
+                    .is_some_and(|generation| generation != eligibility.live_security_generation)
+            {
+                return Err(PlanError::InvalidSnapshot);
+            }
+            common_live_security_generation = Some(eligibility.live_security_generation);
+        }
+    }
+    Ok(())
+}
+
+const fn requested_portfolio_revision(
+    request: &SearchRecipeRequest,
+) -> Option<search_contracts::PortfolioRevision> {
+    match &request.requested_scope {
+        search_contracts::RequestedScope::ReferencePortfolio(scope) => {
+            Some(scope.portfolio_revision)
+        }
+        _ => None,
+    }
+}
+
+const fn comparison_portfolio_revision(
+    request: &SearchRecipeRequest,
+) -> Option<search_contracts::PortfolioRevision> {
+    match &request.body {
+        RecipeBodyV1::CompareImplementations(recipe) => Some(recipe.references.portfolio_revision),
+        _ => None,
+    }
+}
+
 /// Allocates child ceilings whose sum cannot exceed the admitted global budget.
 pub fn allocate_leg_budgets(
     global: QueryExecutionBudget,
@@ -343,8 +620,7 @@ pub fn allocate_leg_budgets(
     validate_global_budget(global)?;
     if leg_count == 0
         || leg_count
-            > usize::try_from(global.max_scoring_legs)
-                .map_err(|_| PlanError::TooManyLegs)?
+            > usize::try_from(global.max_scoring_legs).map_err(|_| PlanError::TooManyLegs)?
     {
         return Err(PlanError::TooManyLegs);
     }
@@ -623,7 +899,11 @@ const fn validate_global_budget(budget: QueryExecutionBudget) -> Result<(), Plan
 
 fn validate_dag(legs: &[PlannedLeg]) -> Result<(), PlanError> {
     for leg in legs {
-        if leg.depends_on.iter().any(|dependency| *dependency >= leg.leg_id) {
+        if leg
+            .depends_on
+            .iter()
+            .any(|dependency| *dependency >= leg.leg_id)
+        {
             return Err(PlanError::InvalidDependencyGraph);
         }
     }
@@ -651,7 +931,10 @@ fn fingerprint_plan(
     mix(&mut lanes, &budget.deadline_ms.to_be_bytes());
     mix(&mut lanes, &budget.max_source_read_bytes.to_be_bytes());
     for leg in legs {
-        mix(&mut lanes, &u64::try_from(leg.leg_id).unwrap_or(u64::MAX).to_be_bytes());
+        mix(
+            &mut lanes,
+            &u64::try_from(leg.leg_id).unwrap_or(u64::MAX).to_be_bytes(),
+        );
         mix(&mut lanes, &[leg_kind_tag(leg.leg_kind)]);
         for membership in &leg.memberships {
             mix(&mut lanes, membership.as_bytes());
@@ -1048,5 +1331,366 @@ mod direct_spine_tests {
             ..global
         };
         assert!(allocate_leg_budgets(zero, 1).is_err());
+    }
+}
+
+#[cfg(test)]
+mod canonical_plan_tests {
+    use std::collections::BTreeMap;
+
+    use search_access::{
+        AuthorizedScope, BaseEligibilityPlan, IndexedRouteFence, MembershipAccessBinding,
+        SafeRetrievalLeg,
+    };
+    use search_contracts::{
+        AccessPartitionId, AccessPolicyRevision, Blake3Digest32, Blake3ExactInputLimit,
+        BoundedList, BoundedName, BoundedSet, CatalogRevision, ClientScopeFence,
+        CollectionGenerationId, CollectionRouteRevision, DisclosureCeiling, EntityKind, Epoch,
+        ExactnessRequirements, FusionProfileId, GrantFence, GrantId, InstallationId,
+        InstallationIncarnationId, LegKind, MembershipRevision, Modality,
+        ObservationCursorRevision, ObservationFreshness, ObservationFreshnessState, OpaqueId,
+        OpaqueRef, OwnerEpoch, PlanFingerprint, PlanId, PriorityClass, ProfileFence, ProfileId,
+        ProjectionProfileSetId, PurgeFenceRevision, QueryExecutionBudget, QuerySnapshotFence,
+        QuerySnapshotFingerprint, RecipeBodyV1, RecipeIdV1, RequestId, RequestedScope,
+        RequiredDenominator, SearchReadGrantClaims, SearchRecipeRequest, SearchTaskPlan,
+        ShadowFenceRevision, SourceMembershipId, SourceRevisionId, SourceView, UtcTimestamp,
+    };
+
+    use super::{
+        AdvancedCapabilities as PlannerAdvancedCapabilities, CapabilitySet as PlannerCapabilities,
+        PlanError, RetrievalCapabilities as PlannerRetrievalCapabilities, compile_canonical_plan,
+        normalize_recipe,
+    };
+
+    fn profile(value: &str) -> ProfileId {
+        ProfileId::new(value).expect("fixture profile")
+    }
+
+    fn source_view() -> SourceView {
+        SourceView::RetainedRevision(SourceRevisionId::from_bytes([2; 16]))
+    }
+
+    fn request(name: &str) -> SearchRecipeRequest {
+        let membership = SourceMembershipId::from_bytes([6; 16]);
+        SearchRecipeRequest::new(
+            RequestId::from_bytes([4; 16]),
+            RecipeIdV1::Locate,
+            source_view(),
+            RequestedScope::ExplicitMemberships(
+                BoundedList::new(vec![membership]).expect("request membership"),
+            ),
+            profile("interactive"),
+            RecipeBodyV1::Locate(search_contracts::LocateRecipe {
+                subject: search_contracts::SubjectSelector::NormalizedName(
+                    search_contracts::NormalizedNameSelector {
+                        name: BoundedName::new(name).expect("fixture name"),
+                        entity_kinds: BoundedSet::<EntityKind, 4096>::empty(),
+                    },
+                ),
+                evidence_roles: BoundedSet::empty(),
+            }),
+        )
+        .expect("fixture request")
+    }
+
+    fn digest(bytes: &[u8]) -> [u8; 32] {
+        let limit = Blake3ExactInputLimit::new(bytes.len()).expect("bounded fixture bytes");
+        *search_contracts::blake3_exact_bytes(bytes, limit)
+            .expect("fixture BLAKE3")
+            .as_bytes()
+    }
+
+    fn seal_snapshot(snapshot: &mut QuerySnapshotFence) {
+        let input = snapshot
+            .canonical_fingerprint_input()
+            .expect("canonical snapshot");
+        snapshot.snapshot_fingerprint =
+            QuerySnapshotFingerprint::from_bytes(digest(input.as_slice()));
+    }
+
+    fn seal_plan(plan: &mut SearchTaskPlan) {
+        let input = plan
+            .canonical_fingerprint_input()
+            .expect("canonical task plan");
+        plan.plan_fingerprint = PlanFingerprint::from_bytes(digest(input.as_slice()));
+    }
+
+    struct Fixture {
+        task_plan: SearchTaskPlan,
+        grant: SearchReadGrantClaims,
+        recipe: super::NormalizedRecipeRequest,
+        scope: AuthorizedScope,
+        capabilities: PlannerCapabilities,
+        safe_legs: Vec<SafeRetrievalLeg>,
+    }
+
+    fn fixture() -> Fixture {
+        let member = SourceMembershipId::from_bytes([6; 16]);
+        let source_view = source_view();
+        let generation = CollectionGenerationId::from_bytes([12; 16]);
+        let epoch = Epoch::new(3).expect("epoch");
+        let binding = MembershipAccessBinding {
+            membership_id: member,
+            access_partition_digest: Blake3Digest32::from_bytes([7; 32]),
+            scoring_partition_digest: Blake3Digest32::from_bytes([8; 32]),
+            projection_membership_id: OpaqueId::new("projection-member")
+                .expect("projection membership"),
+            active: true,
+        };
+        let scope = AuthorizedScope {
+            memberships: BTreeMap::from([(member, binding.clone())]),
+            access_snapshot_generation: 11,
+            source_catalog_generation: 1,
+            membership_generation: 1,
+            snapshot_digest: Blake3Digest32::from_bytes([9; 32]),
+        };
+        let route = IndexedRouteFence {
+            collection_generation_id: generation,
+            visible_epoch: epoch,
+            route_generation: 1,
+            owner_epoch: OwnerEpoch::new(1).expect("owner epoch"),
+        };
+        let safe_legs = vec![SafeRetrievalLeg {
+            leg_id: 0,
+            memberships: [member].into_iter().collect(),
+            eligibility_plans: vec![BaseEligibilityPlan {
+                membership_id: member,
+                projection_membership_id: binding.projection_membership_id.clone(),
+                access_partition_digest: binding.access_partition_digest,
+                scoring_partition_digest: binding.scoring_partition_digest,
+                collection_generation_id: generation,
+                visible_epoch: epoch,
+                live_security_generation: 12,
+                shadow_generation: 1,
+                purge_generation: 1,
+                predicate_digest: search_access::EligibilityPlanDigest([13; 32]),
+            }],
+            route,
+            overlap_proof_digest: None,
+        }];
+        let mut snapshot = QuerySnapshotFence {
+            installation_incarnation_id: InstallationIncarnationId::from_bytes([1; 16]),
+            collection_generation_id: Some(generation),
+            visible_epoch: Some(epoch),
+            collection_route_revision: CollectionRouteRevision::new(1),
+            catalog_revision: CatalogRevision::new(1),
+            membership_revision: MembershipRevision::new(1),
+            reference_portfolio_revision: None,
+            access_policy_revision: AccessPolicyRevision::new(1),
+            shadow_fence_revision: ShadowFenceRevision::new(1),
+            purge_fence_revision: PurgeFenceRevision::new(1),
+            overlay_revision: search_contracts::OverlayRevision::new(1),
+            observation_cursor_revision: ObservationCursorRevision::new(1),
+            observation_freshness: ObservationFreshness {
+                state: ObservationFreshnessState::CurrentConfirmed,
+                observation_cursor_revision: ObservationCursorRevision::new(1),
+                observed_age_ms: None,
+            },
+            source_view: source_view.clone(),
+            workspace_view_revision_ref: None,
+            lexical_profile_ids: BoundedList::new(vec![profile("lexical-v1")])
+                .expect("lexical profile"),
+            snapshot_fingerprint: QuerySnapshotFingerprint::from_bytes([0; 32]),
+        };
+        seal_snapshot(&mut snapshot);
+
+        let request = request("parse_manifest");
+        let recipe = normalize_recipe(request.clone()).expect("normalized recipe");
+        let client_scope_ref = OpaqueRef::new("scope:fixture").expect("client scope");
+        let scope_domain_id = search_contracts::ScopeDomainId::from_bytes([3; 16]);
+        let grant_id = GrantId::from_bytes([5; 16]);
+        let grant = SearchReadGrantClaims {
+            grant_id,
+            installation_id: InstallationId::from_bytes([14; 16]),
+            installation_incarnation_id: InstallationIncarnationId::from_bytes([1; 16]),
+            binding_id: search_contracts::BindingId::from_bytes([15; 16]),
+            principal_opaque_id: OpaqueId::new("principal").expect("principal"),
+            client_scope_ref: client_scope_ref.clone(),
+            scope_domain_id,
+            allowed_membership_ids: BoundedSet::from_items([member]).expect("grant members"),
+            allowed_corpus_or_portfolio_ids: BoundedSet::empty(),
+            reference_portfolio_revision: None,
+            allowed_access_partitions: BoundedSet::from_items([AccessPartitionId::from_bytes(
+                [7; 16],
+            )])
+            .expect("grant access partition"),
+            allowed_modalities: BoundedSet::from_items([Modality::Text]).expect("grant modality"),
+            permitted_recipe_families: BoundedSet::from_items([RecipeIdV1::Locate])
+                .expect("grant recipe"),
+            maximum_budget_class: profile("interactive"),
+            sensitivity_ceiling: search_contracts::SensitivityClass::Public,
+            disclosure_ceiling: DisclosureCeiling::LocalOnly,
+            source_read_permission: true,
+            exact_scan_permission: false,
+            issued_boot_id: OpaqueId::new("boot").expect("boot id"),
+            issued_at: UtcTimestamp::parse("2026-10-16T00:00:00.000000Z").expect("issued at"),
+            expires_at: UtcTimestamp::parse("2026-10-16T00:05:00.000000Z").expect("expires at"),
+            nonce: OpaqueId::new("nonce").expect("nonce"),
+            revocation_generation: 4,
+        };
+        let budget = QueryExecutionBudget {
+            priority_class: PriorityClass::Interactive,
+            deadline_ms: 1000,
+            max_scoring_legs: 2,
+            max_prefetch_candidates_per_leg: 16,
+            max_validated_candidates: 16,
+            max_source_read_bytes: 10_000,
+            max_exact_scan_items: 0,
+            max_exact_scan_bytes: 0,
+            max_materialized_result_bytes: 10_000,
+            max_cpu_ms: 1000,
+            max_memory_bytes: 100_000,
+        };
+        let request_digest = request
+            .canonical_request_digest()
+            .expect("canonical request digest");
+        let mut task_plan = SearchTaskPlan {
+            plan_id: PlanId::from_bytes([16; 16]),
+            provider_protocol_version: search_contracts::ProtocolVersion { major: 1, minor: 0 },
+            request_id: request.request_id,
+            recipe_request_digest: request_digest,
+            grant_fence: GrantFence {
+                grant_id,
+                revocation_generation: 4,
+            },
+            client_scope_fence: ClientScopeFence {
+                client_scope_ref,
+                scope_domain_id,
+            },
+            query_snapshot_fence: snapshot,
+            source_owner_fences: BoundedList::empty(),
+            selected_membership_ids: BoundedList::new(vec![member]).expect("selected member"),
+            profile_fence: ProfileFence {
+                fusion_profile_id: FusionProfileId::new("fusion-v1").expect("fusion profile"),
+                projection_profile_set_ids: BoundedList::new(vec![
+                    ProjectionProfileSetId::new("lexical-v1").expect("projection profile"),
+                ])
+                .expect("projection profile set"),
+                optional_provider_profile_ids: BoundedList::empty(),
+            },
+            overlay_snapshot_refs: BoundedList::empty(),
+            query_execution_budget: budget,
+            exactness_requirements: ExactnessRequirements {
+                required_denominator: RequiredDenominator::CandidateScope,
+                require_current_observation: true,
+                allow_truthful_partial: true,
+            },
+            additional_state_dependencies: BoundedList::empty(),
+            plan_fingerprint: PlanFingerprint::from_bytes([0; 32]),
+            created_at: UtcTimestamp::parse("2026-10-16T00:00:00.000000Z").expect("created at"),
+            expires_at: UtcTimestamp::parse("2026-10-16T00:01:00.000000Z").expect("expires at"),
+        };
+        seal_plan(&mut task_plan);
+
+        Fixture {
+            task_plan,
+            grant,
+            recipe,
+            scope,
+            capabilities: PlannerCapabilities {
+                retrieval: PlannerRetrievalCapabilities {
+                    direct: true,
+                    lexical: true,
+                    exact: false,
+                },
+                advanced: PlannerAdvancedCapabilities {
+                    structural: false,
+                    semantic: false,
+                    rerank: false,
+                },
+            },
+            safe_legs,
+        }
+    }
+
+    fn compile(fixture: &Fixture) -> Result<super::CompiledSearchPlan, PlanError> {
+        compile_canonical_plan(
+            &fixture.task_plan,
+            &fixture.grant,
+            &fixture.recipe,
+            fixture.scope.clone(),
+            fixture.capabilities,
+            &fixture.safe_legs,
+        )
+    }
+
+    #[test]
+    fn canonical_plan_reuses_graph_builder_and_safe_leg_closure() {
+        let fixture = fixture();
+        let compiled = compile(&fixture).expect("canonical plan compiles");
+        assert_eq!(compiled.request_id, fixture.task_plan.request_id);
+        assert_eq!(compiled.legs.len(), 2);
+        assert_eq!(compiled.legs[0].leg_kind, LegKind::Direct);
+        assert_eq!(compiled.legs[1].leg_kind, LegKind::Lexical);
+        assert_eq!(
+            compiled.global_budget,
+            fixture.task_plan.query_execution_budget
+        );
+    }
+
+    #[test]
+    fn canonical_plan_rejects_recipe_budget_and_grant_fence_drift() {
+        let mut denied_recipe = fixture();
+        denied_recipe.grant.permitted_recipe_families = BoundedSet::empty();
+        assert_eq!(compile(&denied_recipe), Err(PlanError::RecipeDenied));
+
+        let mut denied_budget = fixture();
+        denied_budget.grant.maximum_budget_class = profile("verification");
+        assert_eq!(compile(&denied_budget), Err(PlanError::BudgetClassDenied));
+
+        let mut changed_fence = fixture();
+        changed_fence.task_plan.grant_fence.revocation_generation += 1;
+        assert_eq!(compile(&changed_fence), Err(PlanError::GrantFenceMismatch));
+    }
+
+    #[test]
+    fn canonical_plan_rejects_request_scope_snapshot_and_fingerprint_drift() {
+        let mut changed_request = fixture();
+        changed_request.recipe =
+            normalize_recipe(request("different_symbol")).expect("normalized changed request");
+        assert_eq!(
+            compile(&changed_request),
+            Err(PlanError::RequestDigestMismatch)
+        );
+
+        let mut changed_scope = fixture();
+        changed_scope.task_plan.selected_membership_ids = BoundedList::empty();
+        assert_eq!(compile(&changed_scope), Err(PlanError::ScopeMismatch));
+
+        let mut changed_route = fixture();
+        changed_route.safe_legs[0].route.route_generation += 1;
+        assert_eq!(compile(&changed_route), Err(PlanError::InvalidSnapshot));
+
+        let mut changed_safe_scope = fixture();
+        changed_safe_scope.safe_legs[0]
+            .memberships
+            .insert(SourceMembershipId::from_bytes([99; 16]));
+        assert_eq!(compile(&changed_safe_scope), Err(PlanError::ScopeMismatch));
+
+        let mut changed_snapshot_hash = fixture();
+        changed_snapshot_hash
+            .task_plan
+            .query_snapshot_fence
+            .snapshot_fingerprint = QuerySnapshotFingerprint::from_bytes([99; 32]);
+        assert_eq!(
+            compile(&changed_snapshot_hash),
+            Err(PlanError::InvalidSnapshot)
+        );
+
+        let mut changed_plan = fixture();
+        changed_plan.task_plan.profile_fence.fusion_profile_id =
+            FusionProfileId::new("fusion-v2").expect("changed profile");
+        assert_eq!(
+            compile(&changed_plan),
+            Err(PlanError::PlanFingerprintMismatch)
+        );
+    }
+
+    #[test]
+    fn canonical_plan_rejects_excess_scoring_legs_under_bound_budget() {
+        let mut fixture = fixture();
+        fixture.task_plan.query_execution_budget.max_scoring_legs = 1;
+        seal_plan(&mut fixture.task_plan);
+        assert_eq!(compile(&fixture), Err(PlanError::TooManyLegs));
     }
 }
