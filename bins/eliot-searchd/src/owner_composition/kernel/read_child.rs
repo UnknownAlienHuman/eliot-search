@@ -86,9 +86,11 @@ fn provider_read_deadline_at(
     let deadline = request_deadline
         .ok_or(OwnerError::OwnerDeadlineInvalid)?
         .min(work_deadline);
+    // MonotonicMillis truncates fractional milliseconds; reserve one full tick.
     let remaining = deadline
         .get()
         .checked_sub(observed.get())
+        .and_then(|millis| millis.checked_sub(1))
         .filter(|millis| *millis > 0)
         .ok_or(OwnerError::OwnerDeadlineInvalid)?;
     anchor
@@ -474,17 +476,24 @@ mod provider_read_deadline_tests {
             MonotonicMillis::new(500),
         )
         .unwrap();
-        assert_eq!(actual, anchor + Duration::from_millis(200));
+        assert_eq!(actual, anchor + Duration::from_millis(199));
     }
 
     #[test]
-    fn provider_read_context_deadline_refuses_missing_or_expired_guard() {
+    fn provider_read_context_deadline_refuses_missing_expired_or_one_millisecond_guard() {
         let anchor = Instant::now();
         let budget = MonotonicMillis::new(900);
         let now = MonotonicMillis::new(500);
         assert!(provider_read_deadline_at(None, budget, anchor, now).is_err());
         assert!(provider_read_deadline_at(
             Some(MonotonicMillis::new(500)),
+            budget,
+            anchor,
+            now,
+        )
+        .is_err());
+        assert!(provider_read_deadline_at(
+            Some(MonotonicMillis::new(501)),
             budget,
             anchor,
             now,
