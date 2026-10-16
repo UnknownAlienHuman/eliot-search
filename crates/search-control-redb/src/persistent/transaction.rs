@@ -80,7 +80,16 @@ pub(super) fn execute_revision_dek(journal: &mut PersistentControlJournal,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-enum Scope { General, Registry, Profile, RevisionDek }
+enum Scope { General, Registry, Profile, RevisionDek, RevisionUse }
+
+pub(super) fn execute_revision_use(journal: &mut PersistentControlJournal,
+    command: &crate::ConditionalControlMutation, boundary: Boundary, check: &dyn Check,
+) -> Result<ControlCommitReceipt, ControlError> {
+    let result = execute_scoped(journal, command.mutation(), command.conditions(), boundary, check, Scope::RevisionUse)
+        .map(|(receipt, _)| receipt);
+    if result.as_ref().err().is_some_and(|error| super::is_corruption(*error)) { journal.quarantined = true; }
+    result
+}
 
 fn execute_scoped(
     journal: &mut PersistentControlJournal,
@@ -217,10 +226,14 @@ fn begin_write(journal: &PersistentControlJournal, check: &dyn Check)
 fn validate_scope(journal: &PersistentControlJournal, read: &ReadTransaction, mutation: &ControlMutation,
     changed_keys: &[ControlKey], scope: Scope, check: &dyn Check,
 ) -> Result<(), ControlError> {
-    if scope == Scope::RevisionDek && journal.identity.schema_version != crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+    if matches!(scope, Scope::RevisionDek | Scope::RevisionUse)
+        && journal.identity.schema_version != crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
         return Err(ControlError::SchemaUnsupported);
     }
     for key in changed_keys {
+        if crate::source_retention::reserved(key.as_bytes()) != (scope == Scope::RevisionUse) {
+            return Err(ControlError::InvalidKey);
+        }
         if crate::revision_dek::reserved(key.as_bytes()) != (scope == Scope::RevisionDek) {
             return Err(ControlError::InvalidKey);
         }
@@ -239,7 +252,7 @@ fn validate_scope(journal: &PersistentControlJournal, read: &ReadTransaction, mu
     if journal.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION && scope != Scope::Profile {
         use super::operating_profile::JournalOperatingProfile;
         let mode = super::registry_mode_checked(read, journal.identity, journal.limits, check)?;
-        if matches!(scope, Scope::Registry | Scope::RevisionDek) { super::operating_profile::normal(mode)?; }
+        if matches!(scope, Scope::Registry | Scope::RevisionDek | Scope::RevisionUse) { super::operating_profile::normal(mode)?; }
         if mode != JournalOperatingProfile::Indexed
             && changed_keys.iter().any(|key| super::publication::port_reserved_key(key.as_bytes())) {
             return Err(ControlError::MigrationUnverified);

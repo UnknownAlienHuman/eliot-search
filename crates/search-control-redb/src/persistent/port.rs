@@ -357,6 +357,7 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
             if super::publication::port_reserved_key(key.as_bytes())
                 || crate::provider_authority::port_reserved_key(key.as_bytes())
                 || crate::revision_dek::reserved(key.as_bytes())
+                || crate::source_retention::reserved(key.as_bytes())
             {
                 return Err(ControlError::InvalidKey);
             }
@@ -412,5 +413,6 @@ mod tests;
 
 mod original_registry;
 mod original_records;
+mod original_revision_use;
 mod original_records_targeted;
 pub use original_records_targeted::ScopedControlRecordsReadback;

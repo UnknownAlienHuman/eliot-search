@@ -11,6 +11,7 @@ mod persistent;
 mod snapshot_guard;
 mod conditions;
 pub mod revision_dek;
+pub mod source_retention;
 pub use revision_dek::{RevisionDekCommand, REVISION_DEK_INTENT_KEY, REVISION_DEK_CANDIDATE_KEY, REVISION_DEK_CURRENT_KEY};
 pub use revision_dek::{RevisionDekSelectionCommand, REVISION_DEK_APPLICATION_INTENT_KEY};
 const fn has_visibility_schema(version: u32) -> bool {
