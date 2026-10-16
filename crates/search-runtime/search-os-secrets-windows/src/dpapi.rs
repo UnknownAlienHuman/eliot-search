@@ -4,6 +4,7 @@ use super::{
     DpapiError, LegacyRevisionDpapiError, ProtectedSecret, ProtectionScope,
     SecretBytes,
 };
+use crate::RevisionDekContext;
 
 /// Protects a short secret for the current Windows user and exact authority scope.
 #[cfg(windows)]
@@ -137,10 +138,51 @@ pub fn unprotect_legacy_revision_current_user_with_context<C: LegacyRevisionDpap
     }
 }
 
+/// Protects one fresh revision DEK through the shared contextual DPAPI kernel.
+pub(crate) fn protect_revision_dek_with_context<C: RevisionDekContext>(
+    context: &mut C,
+    key: &[u8; 32],
+    entropy: &[u8],
+) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+    #[cfg(windows)]
+    {
+        windows::revision_dek_with_context(context, key, entropy, true)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (key, entropy);
+        context::stage(context, || {
+            Err(LegacyRevisionDpapiError::UnsupportedPlatform)
+        })
+        .map_err(Into::into)
+    }
+}
+
+/// Unprotects one stored revision DEK through the shared contextual DPAPI kernel.
+pub(crate) fn unprotect_revision_dek_with_context<C: RevisionDekContext>(
+    context: &mut C,
+    protected: &[u8],
+    entropy: &[u8],
+) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+    #[cfg(windows)]
+    {
+        windows::revision_dek_with_context(context, protected, entropy, false)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (protected, entropy);
+        context::stage(context, || {
+            Err(LegacyRevisionDpapiError::UnsupportedPlatform)
+        })
+        .map_err(Into::into)
+    }
+}
+
 #[cfg(windows)]
 mod windows {
     use super::context::{self, CopiedBytes, KernelError, LegacyContext};
     use super::{ContextualLegacyRevisionDpapiResult, LegacyRevisionDpapiContext};
+    use crate::RevisionDekContext;
     use core::ffi::c_void;
     use core::ptr::{null, null_mut};
     use core::slice;
@@ -458,6 +500,26 @@ mod windows {
             entropy,
             MAX_LEGACY_REVISION_DPAPI_BYTES,
             MAX_LEGACY_REVISION_DPAPI_BYTES,
+            protecting,
+            true,
+        )
+        .map_err(|error| error.map_object(|e| map_legacy_error(e, protecting)).into())
+    }
+
+    pub(super) fn revision_dek_with_context<C: RevisionDekContext>(
+        context: &mut C,
+        input: &[u8],
+        entropy: &[u8],
+        protecting: bool,
+    ) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+        run_bytes(
+            context,
+            input,
+            entropy,
+            if protecting { 32 } else { search_os_secrets::REVISION_DEK_MAX_PROTECTED_BYTES },
+            // The existing short-secret ceiling admits bounded cleanup of an
+            // unexpected plaintext shape; the candidate owner still requires 32.
+            if protecting { search_os_secrets::REVISION_DEK_MAX_PROTECTED_BYTES } else { MAX_SECRET_BYTES },
             protecting,
             true,
         )

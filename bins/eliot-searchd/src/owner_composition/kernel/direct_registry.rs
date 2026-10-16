@@ -301,6 +301,9 @@ impl DirectRegistryOwner {
         let result = if let Some(source) = source {
             self.prepare_source_output(hints, selected, policy, source)
         } else { self.prepare_output(hints, selected, policy) };
+        self.complete_output(result, writer)
+    }
+    fn complete_output(mut self, result: Result<command::DirectOutput, String>, writer: &mut impl Write) -> Result<(), String> {
         match result {
             Ok(output) => {
                 self.owner
@@ -361,6 +364,8 @@ impl DirectRegistryOwner {
 mod command;
 #[path = "native_source_command.rs"]
 mod source_command;
+#[path = "native_dek_command.rs"]
+mod dek_command;
 pub use command::maybe_run;
 
 #[cfg(all(test, windows))]

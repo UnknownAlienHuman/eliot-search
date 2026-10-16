@@ -1342,6 +1342,9 @@ dependencies = [
 [[package]]
 name = "search-os-secrets-windows"
 version = "0.0.0"
+dependencies = [
+ "search-os-secrets",
+]
 
 [[package]]
 name = "search-overlay"

@@ -164,6 +164,15 @@ impl CancellationProbe for FreshRootCancellation {
     }
 }
 
+// Current Native creator epoch, distinct from key version and logical source epoch.
+#[derive(Clone, Copy)]
+pub struct RevisionDekRootFacts {
+    pub(crate) data_root: c::DataRootId,
+    pub(crate) installation: c::InstallationId,
+    pub(crate) incarnation: c::InstallationIncarnationId,
+    pub(crate) creator_epoch: c::OwnerEpoch,
+}
+
 /// Borrowed original native custody plus its exact O/Q values. No public constructor.
 pub struct FreshRootContext<'operation, 'owner> {
     operation: RefCell<&'operation mut NativeReadOperation<'owner>>,
@@ -255,6 +264,35 @@ pub struct RequalifiedFreshRoot<'view, 'operation, 'owner> {
 }
 
 impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
+    pub(crate) fn revision_dek_root_facts(&self) -> Result<RevisionDekRootFacts, FreshRootError> {
+        self.verify_owner()?;
+        self.operation.borrow_mut().with_binding(|binding, _, _, _| {
+            Ok(RevisionDekRootFacts {
+                data_root: c::DataRootId::from_bytes(binding.record.data_root_id),
+                installation: c::InstallationId::from_bytes(binding.record.installation_id),
+                incarnation: c::InstallationIncarnationId::from_bytes(binding.record.installation_incarnation_id),
+                creator_epoch: c::OwnerEpoch::new(binding.record.epoch)
+                    .map_err(|_| OwnerError::OwnerGuardMismatch)?,
+            })
+        }).map_err(FreshRootError::Native)
+    }
+    pub(crate) fn revision_dek_native_attempt(&self) -> Result<(), OwnerError> {
+        self.guard()?;
+        self.operation.borrow_mut().migration_held_observer_dispatch()
+    }
+    // Cleanup still accounts after refusal; retain the first cause and overflow evidence.
+    pub(crate) fn revision_dek_account_native_clear(&self, bytes: usize) -> Result<(), (OwnerError, bool)> {
+        self.operation.borrow_mut().migration_account_native_clear(bytes)
+    }
+    #[cfg(test)]
+    pub(crate) fn revision_dek_track_test_target(&self, binding: &search_os_secrets::RevisionDekBinding) -> Result<(), OwnerError> {
+        self.guard()?;
+        self.operation.borrow_mut().with_binding(|_, request, work, _| {
+            work.arrive(request, "revision-dek-before-key-write")?;
+            if let Some(hook) = &mut work.revision_dek_target_hook { hook(binding); }
+            request.check()
+        })
+    }
     // A port can observe original cancellation before the next Native seam.
     // Carry that first refusal into the original owner even if the external
     // flag is subsequently reset; no replacement context or allowance exists.

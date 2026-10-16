@@ -42,6 +42,7 @@ fn is_direct_command(argument: &OsStr) -> bool {
             "--register-source-root"
                 | "--register-source-root-v2"
                 | "--admit-source-v2"
+                | "--prepare-revision-dek-v1"
                 | "--unregister-source-root"
                 | "--source-roots"
                 | "--health-data-root"
@@ -70,6 +71,7 @@ pub(super) fn run(
         "--register-source-root-v2" => 4,
         "--admit-source-v2" => 7,
         "--register-source-root"
+        | "--prepare-revision-dek-v1"
         | "--unregister-source-root"
         | "--search-root"
         | "--search-root-ascii-insensitive" => 3,
@@ -80,7 +82,7 @@ pub(super) fn run(
     if selected.len() != expected || !cli.overrides.is_empty() {
         return Err("DIRECT_INPUT_UNAVAILABLE".into());
     }
-    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2") {
+    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--prepare-revision-dek-v1") {
         DataRootOpenMode::OpenExistingMutating
     } else {
         DataRootOpenMode::InspectExistingReadOnly
@@ -114,9 +116,10 @@ pub(super) fn run(
             ).map_err(|e| e.code().to_owned())?)
         } else { None };
         let source = (command == "--admit-source-v2").then(|| super::source_command::NativeSourceCommand::parse(&selected)).transpose()?;
-        Ok::<_, String>((hints, policy, source))
+        let dek = (command == "--prepare-revision-dek-v1").then(|| super::dek_command::RevisionDekCommand::parse(&selected)).transpose()?;
+        Ok::<_, String>((hints, policy, source, dek))
     })();
-    let (hints, policy, source) = match preflight {
+    let (hints, policy, source, dek) = match preflight {
         Ok(value) => value,
         Err(error) => {
             let line = format!(
@@ -130,6 +133,7 @@ pub(super) fn run(
         }
     };
     let owner = DirectRegistryOwner::open_for_command(request, work, writer)?;
+    if let Some(dek) = dek { return owner.execute_revision_dek(&dek, writer); }
     owner.execute(
         &hints,
         if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2") {
@@ -441,7 +445,7 @@ fn capture_hints(
     }
     if !matches!(
         command,
-        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--source-roots" | "--health-data-root" | "--verify-root"
+        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--prepare-revision-dek-v1" | "--source-roots" | "--health-data-root" | "--verify-root"
     ) {
         return Err("DIRECT_CONSUMER_UNAVAILABLE".into());
     }

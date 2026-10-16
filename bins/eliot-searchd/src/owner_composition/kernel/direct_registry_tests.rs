@@ -1,6 +1,8 @@
 //! Real Native initializer + sole fixed DB + actual normal command seam. No FullNative claim.
 #[path = "direct_registry_tests/native_denials.rs"]
 mod native_denials;
+#[path = "direct_registry_tests/native_dek.rs"]
+mod native_dek;
 
 use super::*;
 use search_runtime_owner::DataRootOpenMode;

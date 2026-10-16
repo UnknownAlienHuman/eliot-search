@@ -138,6 +138,43 @@ removal or platform forensic erasure.
 Resolves unknown create/rotate/delete outcomes by exact backend operation metadata and generation state.
 Ambiguous or corrupt state locks/quarantines the reference rather than exposing/choosing material.
 
+## Revision DEK candidate metadata
+
+`RevisionDekBinding::new(DataRootId, InstallationId, InstallationIncarnationId,
+[u8; 32] user_scope_digest, [u8; 16] logical_operation_id)` creates pure metadata with
+private fields/getters. Zero identifiers/digest/operation refuse. Reference derivation uses
+`eliot/cbor/revision-dek-reference/v1` over the canonical binding array with the reference
+field omitted. The full 11-field array is root, installation, incarnation, user digest,
+logical operation, computed reference, planned key version 1, record revision 1,
+`revision-aes256-gcm-dek`, `windows-user-dpapi-credential.v1`, profile revision 1.
+`binding_digest()` hashes that array under `eliot/cbor/revision-dek-binding/v1`;
+`protection_entropy()` returns its exact canonical CBOR bytes. The three digest getters
+return `[u8; 32]`; entropy is an owned `Vec<u8>`.
+
+`hash_native_revision_user_sid(&[u8]) -> [u8; 32]` hashes a canonical CBOR byte string under
+`eliot/cbor/windows-user-scope/v1`. Its input must be at most 68 bytes; a larger input
+panics before encoding. This helper neither validates SID structure nor observes an OS user.
+
+`RevisionDekIntent::new(binding, OwnerEpoch, protected_blob)` computes raw BLAKE3 and length
+from actual nonempty protected bytes, accepting at most 2516 bytes (2560 minus frame header 44).
+It retains no blob or key. `RevisionDekCandidate::new(&intent, &expected_binding, actual_blob)`
+rechecks exact protected bytes and scope and retains the original historical creator epoch.
+That epoch is separate from present Native authority and the planned version/revision.
+
+`encode_revision_dek_record(&RevisionDekRecord)` and `decode_revision_dek_record(&[u8])`
+own the strict canonical 7-field array: `eliot.revision-dek.record.v1`, codec 1,
+kind 0 Intent or 1 CandidateNonServing, binding array, creator epoch, protected digest,
+protected length. The 1024-byte metadata ceiling, exact field counts/types/byte lengths,
+computed reference, fixed purpose/backend/versions, positive epoch and blob bounds are checked.
+Unknown, trailing, noncanonical and truncated records refuse through content-free errors.
+
+Public construction/decoding proves metadata equality only. Native must validate actual user,
+root custody, wrap/unwrap and protected readback; C02 must conditionally commit/read back the exact
+intent/candidate before acknowledgement. Decoded candidate metadata grants no backend-existence
+proof, Current selection, key-use/lease, rotation, deletion or C07 encryption authority.
+Key, SID and credential coordinates are absent from public Debug/errors; protected bytes never
+enter these control records. Legacy lifecycle and compatibility codecs remain separate.
+
 ## Legacy revision compatibility envelope
 
 These functions preserve the frozen DIRECT protected-object format while platform effects remain in

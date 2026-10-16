@@ -20,6 +20,8 @@
 
 mod legacy_revision_protection;
 mod lifecycle;
+mod revision_candidate;
 
 pub use legacy_revision_protection::*;
 pub use lifecycle::*;
+pub use revision_candidate::*;

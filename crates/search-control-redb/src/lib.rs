@@ -10,6 +10,8 @@ mod identity;
 mod persistent;
 mod snapshot_guard;
 mod conditions;
+pub mod revision_dek;
+pub use revision_dek::{RevisionDekCommand, REVISION_DEK_INTENT_KEY, REVISION_DEK_CANDIDATE_KEY, REVISION_DEK_CURRENT_KEY};
 const fn has_visibility_schema(version: u32) -> bool {
     matches!(version, 4 | identity::REGISTRY_JOURNAL_SCHEMA_VERSION)
 }
