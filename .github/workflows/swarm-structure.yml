@@ -38,6 +38,10 @@ jobs:
         shell: pwsh
         run: ./tools/validate-implementation-packets.ps1 -Json
 
+      - name: Validate W4 registry and current-workspace qualification
+        shell: pwsh
+        run: ./tools/validate-current-packets.ps1 -Json
+
       - name: Validate W5 cross-contract, settings and Rust syntax qualification
         shell: pwsh
         run: ./tools/validate-w5-current.ps1 -Json
