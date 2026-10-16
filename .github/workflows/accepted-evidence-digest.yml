@@ -30,7 +30,3 @@ jobs:
       - name: Validate registry and workflow closure
         shell: pwsh
         run: ./tools/validate-accepted-evidence-digest.ps1 -Json
-
-      - name: Revalidate ticket issuance schemas
-        shell: pwsh
-        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json

@@ -12,9 +12,9 @@
 
 - [`../../xtask/src/ticket_issuance_builder.rs`](../../xtask/src/ticket_issuance_builder.rs) — Rust advisory planner facade.
 - [`../../xtask/src/ticket_issuance_builder/`](../../xtask/src/ticket_issuance_builder/) — immutable-tree selection, drafts, sources/selectors, handoffs, assembly and bounded output modules.
-- [`../../tools/plan-ticket-issuance.ps1`](../../tools/plan-ticket-issuance.ps1) — locked Cargo compatibility entrypoint.
+- [`tools/plan-ticket-issuance.ps1` at parent commit 7d40d32f](https://github.com/UnknownAlienHuman/eliot-search/blob/7d40d32f4013c299919702664e92cb244be2c22c/tools/plan-ticket-issuance.ps1) — locked Cargo compatibility entrypoint. Retired by #214 cleanup; no current entrypoint.
 - [`../../xtask/src/ticket_issuance_validation.rs`](../../xtask/src/ticket_issuance_validation.rs) — registry/schema/digest/current-state structural validator.
-- [`../../tools/validate-ticket-issuance-plan.ps1`](../../tools/validate-ticket-issuance-plan.ps1) — locked Cargo validator wrapper.
+- [`tools/validate-ticket-issuance-plan.ps1` at parent commit 7d40d32f](https://github.com/UnknownAlienHuman/eliot-search/blob/7d40d32f4013c299919702664e92cb244be2c22c/tools/validate-ticket-issuance-plan.ps1) — locked Cargo validator wrapper. Retired by #214 cleanup; no current entrypoint.
 
 ## Qualification
 

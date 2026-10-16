@@ -37,12 +37,11 @@ jobs:
           cargo run --locked --quiet -p xtask -- validate coverage-graph --json
           cargo run --locked --quiet -p xtask -- validate package-maps --json
 
-      - name: Revalidate architecture, swarm and function registries
+      - name: Revalidate architecture coverage
         shell: pwsh
         run: |
           cargo run --locked --quiet -p xtask -- validate architecture-coverage --json
           cargo run --locked --quiet -p xtask -- validate architecture-coverage-contracts --json
-          ./tools/validate-swarm.ps1 -Json
           ./tools/validate-function-packets.ps1 -Json
 
       - name: Verify no generated drift
