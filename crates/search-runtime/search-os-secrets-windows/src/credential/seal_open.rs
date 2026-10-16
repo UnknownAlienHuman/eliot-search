@@ -196,3 +196,7 @@ fn finish<C: RevisionDekContext>(window: &mut KeyWindow<'_, C>, current: &Revisi
     }
     window.checkpoint().map_err(RevisionSealOpenError::Context)
 }
+
+#[cfg(test)]
+#[path = "seal_open/tests.rs"]
+mod tests;
