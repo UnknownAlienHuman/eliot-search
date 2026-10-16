@@ -29,7 +29,7 @@ pub enum LegacyRevisionObjectWork {
     Allocate(usize),
     /// Logical encoded locator storage, before constructing a child path.
     AllocateLocator(usize),
-    /// Bounded exact byte comparison.
+    /// Bounded exact byte comparison/digest processing, including logical prepayment.
     Compare(usize),
     /// One directory creation, temporary creation, link or durability attempt.
     Effect,
@@ -338,6 +338,52 @@ pub fn publish_legacy_revision_object_with_context<
     let mut kernel = Kernel::new(platform, context, true);
     let result = kernel.publish(directory, final_name, temporary_name, bytes, maximum_bytes);
     kernel.finish(result)
+}
+
+// Derived objects enter this same kernel through real residency/kind/shard
+// components. No legacy source-ID encoding or raw object kind is fabricated.
+#[allow(clippy::redundant_pub_crate, clippy::too_many_arguments)] // Crate-private reuse; never a new public legacy API.
+pub(crate) fn publish_cas_object_with_context<P, C>(
+    platform: &P,
+    context: &mut C,
+    root: &Path,
+    components: [&str; 3],
+    final_name: &str,
+    temporary_name: &str,
+    bytes: &[u8],
+    maximum_bytes: usize,
+) -> ContextualRevisionObjectResult<ContextualRevisionObjectReceipt<P::Identity>, P::Error, C::Error>
+where
+    P: ContextualLegacyRevisionObjectPlatform<C>,
+    C: LegacyRevisionObjectContext,
+{
+    let mut kernel = Kernel::new(platform, context, true);
+    let result = (|| {
+        let directory = kernel.cas_directory(root, components, true)?;
+        kernel.publish(&directory, final_name, temporary_name, bytes, maximum_bytes)
+    })();
+    kernel.finish(result)
+}
+#[allow(clippy::redundant_pub_crate)] // Kept out of the public immutable-object facade.
+pub(crate) fn read_cas_object_with_context<P, C>(
+    platform: &P,
+    context: &mut C,
+    root: &Path,
+    components: [&str; 3],
+    final_name: &str,
+    maximum_bytes: usize,
+) -> ContextualRevisionObjectResult<ContextualRevisionObjectRead<P::Identity>, P::Error, C::Error>
+where
+    P: ContextualLegacyRevisionObjectPlatform<C>,
+    C: LegacyRevisionObjectContext,
+{
+    let mut kernel = Kernel::new(platform, context, true);
+    let result = (|| {
+        let directory = kernel.cas_directory(root, components, false)?;
+        let path = kernel.join(&directory, final_name)?;
+        kernel.read(&path, maximum_bytes, None)
+    })();
+    kernel.finish(result).map(|object| ContextualRevisionObjectRead { object })
 }
 
 // Compatibility is private and usable only by the existing legacy entrypoints.
@@ -816,6 +862,37 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
             ObjectError::Platform,
             |platform, context| platform.validate_directory_contextual(context, directory),
         )
+    }
+    fn cas_directory(
+        &mut self,
+        root: &Path,
+        components: [&str; 3],
+        create: bool,
+    ) -> ResultFor<P, C, std::path::PathBuf> {
+        if !root.is_absolute() || components.iter().any(|name| !valid_local_name(name)) {
+            return Err(Failure::Object(ObjectError::LocalNameInvalid));
+        }
+        self.platform_call(
+            ContextualRevisionObjectEffect::NotAttempted,
+            ObjectError::Platform,
+            |platform, context| platform.validate_directory_contextual(context, root),
+        )?;
+        let mut directory = self.join(root, components[0])?;
+        for (index, component) in components.iter().enumerate() {
+            if index != 0 {
+                directory = self.join(&directory, component)?;
+            }
+            if create {
+                self.ensure_directory(&directory)?;
+            } else {
+                self.platform_call(
+                    ContextualRevisionObjectEffect::NotAttempted,
+                    ObjectError::Platform,
+                    |platform, context| platform.validate_directory_contextual(context, &directory),
+                )?;
+            }
+        }
+        Ok(directory)
     }
     fn publish(
         &mut self,

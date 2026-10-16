@@ -6,6 +6,13 @@
 
 Admit, retain and reopen immutable source revisions under complete residency identities.
 
+The additive [derived-artifact v1 core](DERIVED_ARTIFACT_V1.md) owns separate
+derived descriptors, exact encoded-body/stored-envelope identities, full six-domain
+CAS addresses and a four-object graph. Its verification-gated I/O enters the same
+contextual immutable kernel. Raw source profiles and history remain separate.
+Actual C02/Crypto/Windows producers and root publication adapters are required;
+candidate bytes and decoded refs remain UNQUALIFIED without them.
+
 The legacy immutable-object owner also exposes explicit contextual read and
 publication APIs (#466/#356). They borrow one caller context for every attempted
 filesystem/platform boundary, fallible logical capacity and requested short I/O

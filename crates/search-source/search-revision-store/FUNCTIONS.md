@@ -1,6 +1,14 @@
 # Function contract — `search-revision-store`
 
-**Status:** W2/P04 base contract with W7/P13 lifecycle hardening; no CAS implementation exists yet.
+The additive `derived_artifact` module implements the separately versioned
+derived-object/set profile and verification-gated CAS I/O described in
+[DERIVED_ARTIFACT_V1.md](DERIVED_ARTIFACT_V1.md). It reuses the contextual immutable
+kernel, not raw source-history or legacy source-ID encodings. Concrete C02,
+Windows/Crypto producer and same-root publication integration remain external.
+
+**Status:** W2/P04 revision kernel and W7/P13 lifecycle hardening, with additive
+derived v1 CAS identity and verification-gated contextual immutable I/O. General
+raw CAS integration and concrete cross-owner/native qualification remain incomplete.
 
 This package owns immutable, residency-aware Search source revisions, coordinate artifacts, manifests and
 exact readback. It does not decide retention deletion, purge policy or restore admission. Lifecycle
