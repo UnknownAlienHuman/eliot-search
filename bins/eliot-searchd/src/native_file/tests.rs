@@ -320,10 +320,10 @@ mod windows {
         fs::write(&path, b"source").unwrap();
         let leaf = SyncReadFile::open_no_follow(&path, &|_| Ok(())).unwrap();
         let before = observe(leaf.file()).unwrap();
-        assert!(matches!(
+        assert_eq!(
             location_with_check(&leaf, &|_| Ok(())).unwrap(),
-            NativeLocationClass::LocalFixed | NativeLocationClass::LocalRemovable
-        ));
+            NativeLocationClass::LocalFixed
+        );
         let guid = normalized_name_with_check(
             leaf.file(),
             NormalizedNameKind::VolumeGuid,
