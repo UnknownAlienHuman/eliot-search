@@ -229,7 +229,7 @@ impl NativeRootCapability {
             owner: &mut self,
             context: None,
             output_attempted: false,
-            registration: None,
+            registration: None, first_refusal: None,
         };
         operation
             .verify()
