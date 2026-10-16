@@ -100,15 +100,14 @@ pub(super) fn map_indexed_nominations(
 
     let safe_leg = ticket
         .leg
-        .safe_index_leg
-        .as_ref()
+        .safe_index_leg()
         .ok_or(NominationSourceError::ContextMismatch)?;
     if ticket.request_id != task_plan.request_id
         || ticket.request_id != validation.request_id
-        || ticket.plan_digest.0 != validation.plan_digest
-        || safe_leg.leg_id != ticket.leg.leg_id
-        || safe_leg.memberships != ticket.leg.memberships
-        || !ticket.leg.memberships.contains(&member)
+        || *ticket.plan_digest.as_bytes() != validation.plan_digest
+        || safe_leg.leg_id != ticket.leg.leg_id()
+        || &safe_leg.memberships != ticket.leg.memberships()
+        || !ticket.leg.memberships().contains(&member)
         || !validation.request_security.memberships.contains(&member)
         || !validation.allowed_memberships.contains(&member)
         || !task_plan
@@ -276,8 +275,8 @@ pub(super) fn map_indexed_nominations(
         }
         let candidate = CandidateNomination {
             request_id: ticket.request_id,
-            plan_digest: ticket.plan_digest.0,
-            leg_id: ticket.leg.leg_id,
+            plan_digest: *ticket.plan_digest.as_bytes(),
+            leg_id: ticket.leg.leg_id(),
             point_id: hint.point_id,
             source_membership_id: entry.source_membership_id,
             collection_generation_id: generation,
@@ -719,7 +718,7 @@ mod tests {
         let pins = acquire_leg_pins(&ticket, &registry, 1).unwrap();
         let validation = ValidationContext {
             request_id: task_plan.request_id,
-            plan_digest: ticket.plan_digest.0,
+            plan_digest: *ticket.plan_digest.as_bytes(),
             collection_generation_id: generation,
             visible_epoch: epoch,
             allowed_memberships: member_set.clone(),
@@ -768,7 +767,7 @@ mod tests {
         let candidate = &mapped[0];
         let unit = &fixture.unit_set.units()[0];
         assert_eq!(candidate.request_id, fixture.ticket.request_id);
-        assert_eq!(candidate.plan_digest, fixture.ticket.plan_digest.0);
+        assert_eq!(candidate.plan_digest, *fixture.ticket.plan_digest.as_bytes());
         assert_eq!(
             candidate.source_membership_id,
             fixture.membership.source_membership_id

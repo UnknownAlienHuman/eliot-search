@@ -218,7 +218,7 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
         if limit == 0 || limit > MAX_INDEXED_LIMIT {
             return Err(IndexedPortError::Failure);
         }
-        for membership in &ticket.leg.memberships {
+        for membership in ticket.leg.memberships() {
             let name = membership_opaque_id(*membership).map_err(|_| IndexedPortError::Failure)?;
             if !self.allowed.contains_key(&name) {
                 return Err(IndexedPortError::Failure);
@@ -243,7 +243,7 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
         for point in &readback.points {
             let membership = parse_membership(&point.payload.source_membership_id)
                 .map_err(|_| IndexedPortError::Failure)?;
-            if !ticket.leg.memberships.contains(&membership) {
+            if !ticket.leg.memberships().contains(&membership) {
                 return Err(IndexedPortError::Failure);
             }
             by_id.insert(point.point_id, (point, membership));
@@ -336,11 +336,11 @@ fn validate_real_ticket(
     ticket: &LegTicket,
     predicates: &EligibilityPredicates,
 ) -> Result<(), IndexedPortError> {
-    let actual = ticket.leg.safe_index_leg.as_ref().ok_or(IndexedPortError::Failure)?;
+    let actual = ticket.leg.safe_index_leg().ok_or(IndexedPortError::Failure)?;
     let [plan] = expected.eligibility_plans.as_slice() else { return Err(IndexedPortError::Failure); };
-    if actual != expected || ticket.leg.memberships != expected.memberships
-        || ticket.leg.leg_id != expected.leg_id
-        || ticket.leg.leg_kind != search_contracts::LegKind::Lexical
+    if actual != expected || ticket.leg.memberships() != &expected.memberships
+        || ticket.leg.leg_id() != expected.leg_id
+        || ticket.leg.leg_kind() != search_contracts::LegKind::Lexical
         || *predicates != plan.predicates()
         || route.generation != expected.route.collection_generation_id
         || route.generation != plan.collection_generation_id
@@ -359,10 +359,10 @@ impl<'plane> RealIndexedPort<'plane> {
         deadline: Instant,
         cancellation: Arc<dyn CancellationProbe + Send + Sync>,
     ) -> Result<Self, IndexedPortError> {
-        let leg = ticket.leg.safe_index_leg.as_ref().ok_or(IndexedPortError::Failure)?;
+        let leg = ticket.leg.safe_index_leg().ok_or(IndexedPortError::Failure)?;
         let [plan] = leg.eligibility_plans.as_slice() else { return Err(IndexedPortError::Failure); };
         validate_real_ticket(leg, &route, ticket, &plan.predicates())?;
-        let filter = render_eligibility_filter(plan, &ticket.leg.memberships)
+        let filter = render_eligibility_filter(plan, ticket.leg.memberships())
             .map_err(|_| IndexedPortError::Failure)?;
         let port = Self { plane, route, filter, leg: leg.clone(), deadline, cancellation };
         port.context()?;
