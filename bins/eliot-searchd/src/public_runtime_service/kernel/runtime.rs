@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
+use crate::config_composition::EffectiveDaemonConfig;
 use crate::continuation::{ContinuationCatalog, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 use crate::direct_store::DirectRead;
 use crate::directory_manifest::verify_directory_manifests;
@@ -43,6 +44,8 @@ pub(super) fn run_service(arguments: &[OsString], started: Instant) -> Result<()
             .map_err(owner_error)?;
     let request = NativeRootRequest::for_service(arguments, deadline, cancellation, limits)
         .map_err(owner_error)?;
+    let (_, cli) = crate::config_composition::strip_config_args_os(arguments)?;
+    let config = crate::config_composition::effective_from_process(&cli)?;
     let mut startup = match admit_existing(request).map_err(owner_error)? {
         NativeRootAdmission::Inspection(owner) => owner.read_startup().map_err(owner_error)?,
         NativeRootAdmission::Unavailable(RootOpenState::Absent, _) => {
@@ -54,7 +57,7 @@ pub(super) fn run_service(arguments: &[OsString], started: Instant) -> Result<()
     };
     let output = io::stdout();
     let mut writer = output.lock();
-    let (namespace, mut storage) = announce_startup(&mut startup, &mut writer)?;
+    let (namespace, mut storage) = announce_startup(&mut startup, &mut writer, &config)?;
     let mut service = startup.finish().map_err(owner_error)?;
     let mut continuations = ContinuationCatalog::new(&namespace);
     let mut handles = ResultHandleCatalog::new(&namespace);
@@ -86,6 +89,7 @@ pub(super) fn run_service(arguments: &[OsString], started: Instant) -> Result<()
                 &mut handles,
                 &mut storage,
                 &mut NativeOutput::new(&child, output),
+                &config,
             );
             child
                 .native_checkpoint()
@@ -146,6 +150,7 @@ fn owner_error(error: OwnerError) -> String {
 fn announce_startup(
     startup: &mut crate::owner_composition::NativeReadStartup,
     writer: &mut impl io::Write,
+    config: &EffectiveDaemonConfig,
 ) -> Result<(String, StorageSecurityStatus), String> {
     let identity = startup.identity().map_err(owner_error)?;
     let store = startup.read();
@@ -154,7 +159,7 @@ fn announce_startup(
     let namespace = store.namespace_id()?;
     let manifests = verify_directory_manifests(&root, &namespace)?;
     let storage = StorageSecurityStatus::inspect(&root)?;
-    let readiness = current_readiness()?;
+    let readiness = current_readiness(config);
     write_line(
         &mut NativeOutput::new(&store, writer),
         &format!(
