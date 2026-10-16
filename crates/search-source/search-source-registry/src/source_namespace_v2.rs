@@ -11,7 +11,7 @@ use search_ports::{CancellationProbe, OperationContext};
 use search_source_admission::policy_v2::CheckpointFailureV2;
 use search_source_identity::FilesystemIdentityProfile;
 use search_source_provenance::{OriginalInputsLayoutV2, RetainedPolicyV2};
-use search_source_records::{namespace::NamespaceCutoverState, source_request_v2::{MemoryOriginals, SourceOwnerScopeV2, source_admission_checkpoint as checkpoint}};
+use search_source_records::{namespace::NamespaceCutoverState, source_request_v2::{SourceOwnerScopeV2, source_admission_checkpoint as checkpoint}};
 use super::{SourceRegistry, batch, source_v2::SourceAdmissionV2Error};
 use crate::{error::{JournalEntryKind, RegistryControlPort, RegistryError, RegistryJournalEntry}, source_ids::SourceIdentityIdPortV2};
 
@@ -89,7 +89,8 @@ where C: CancellationProbe,
         || request.owner.installation_incarnation.as_bytes() == &[0; 16] {
         return Err(RegistryError::NamespaceOwnershipConflict.into());
     }
-    let fingerprint = fingerprint(request, probe)?;
+    let policy_reference = OriginalInputsLayoutV2::policy_reference(&request.policy, probe)?;
+    let fingerprint = fingerprint(request, &policy_reference)?;
     match port.load_batch(&request.operation_id, context).map_err(|_| RegistryError::MutationOutcomeUnknown)? {
         super::RegistryBatchLookup::Committed(observed) => {
             observed.verify_operation()?;
@@ -137,15 +138,16 @@ where C: CancellationProbe,
     owner.source_owner_generation = search_domain::source_ownership_v2::source_owner_generation_v2(&owner)
         .map_err(|_| RegistryError::NamespaceOwnershipConflict)?;
     let namespace = NamespaceCutoverState::new_v2_metadata(owner, request.root_binding_id,
-        request.identity_profile, Arc::clone(&request.policy), OriginalInputsLayoutV2::policy_reference(&request.policy, probe)?,
+        request.identity_profile, Arc::clone(&request.policy), policy_reference.clone(),
         after, request.receipt.clone(), probe).map_err(|error| match error {
             search_source_records::namespace::NamespaceMetadataError::Registry(error) => SourceAdmissionV2Error::Registry(error),
             search_source_records::namespace::NamespaceMetadataError::Admission(error) => SourceAdmissionV2Error::Admission(error),
         })?;
+    let mut originals = NamespacePolicyInputs { reference: policy_reference, policy: Arc::clone(&request.policy) };
     let record = batch::DecodedBatch::from_observed_parts_v4(RegistryJournalEntry::new(request.operation_id.clone(),
         fingerprint, registry.revision, after, JournalEntryKind::BatchApply, request.receipt.clone()), fingerprint,
         1, vec![batch::RegistryStateDelta::new(batch::RegistryStateKey::Namespace(namespace_id), None,
-            batch::RegistryStateRecord::Namespace(namespace))?], registry.limits, &mut MemoryOriginals::new(vec![]), probe)?;
+            batch::RegistryStateRecord::Namespace(namespace))?], registry.limits, &mut originals, probe)?;
     let prepared = batch::prepare_v4_record(registry, record)?;
     Ok(NativeNamespacePreparationV2::Prepared(PreparedNativeNamespaceV2 { batch: prepared }))
 }
@@ -198,20 +200,38 @@ fn creation(record: &batch::DecodedBatch, replayed: bool) -> Result<CommittedNat
     Ok(CommittedNativeNamespaceV2 { namespace: namespace.clone(), operation_id: record.entry().operation_id.clone(), replayed })
 }
 
-fn fingerprint<E>(request: &NativeNamespaceRequestV2, probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>)
+fn fingerprint<E>(request: &NativeNamespaceRequestV2, policy: &[u8])
     -> Result<c::Blake3Digest32, SourceAdmissionV2Error<E>> {
     let binary = |bytes: &[u8]| c::BoundedBytes::new(bytes.to_vec()).map(V::Bytes).map_err(|_| RegistryError::ContractExhausted);
     let text = |value: &str| c::CanonicalText::new(value).map(V::Text).map_err(|_| RegistryError::ContractExhausted);
-    let policy = OriginalInputsLayoutV2::policy_reference(&request.policy, probe)?;
     let value = V::Array(c::BoundedList::new(vec![V::U64(2), binary(request.root_binding_id.as_bytes())?,
         V::U64(request.expected_root_revision.get()), text(request.owner.system_id.as_str())?,
         binary(request.owner.installation_incarnation.as_bytes())?, V::U64(request.owner.epoch.get()),
         V::U64(request.identity_profile.revision().get()), binary(request.identity_profile.schema_digest().as_bytes())?,
-        binary(&policy)?, text(request.receipt.as_str())?]).map_err(|_| RegistryError::ContractExhausted)?);
+        binary(policy)?, text(request.receipt.as_str())?]).map_err(|_| RegistryError::ContractExhausted)?);
     c::blake3_canonical(&c::CanonicalDigestDomain::parse("eliot/cbor/native-namespace-initialization/v2")
         .map_err(|_| RegistryError::ContractExhausted)?, &value,
         c::DigestInputLimit::new(64 * 1024).map_err(|_| RegistryError::ContractExhausted)?)
         .map_err(|_| RegistryError::ContractExhausted.into())
+}
+
+// A namespace carries a real retained policy reference but no Source Original.
+// Resolve only that exact complete policy, never fabricate admission evidence.
+struct NamespacePolicyInputs { reference: Vec<u8>, policy: Arc<RetainedPolicyV2> }
+impl search_source_records::batch::OriginalInputResolver for NamespacePolicyInputs {
+    fn resolve_policy(&mut self, reference: &[u8], probe: &mut dyn FnMut() -> Result<(), CheckpointFailureV2>)
+        -> Result<Arc<RetainedPolicyV2>, search_source_records::batch::BatchCodecV4Error> {
+        let actual = OriginalInputsLayoutV2::policy_reference(&self.policy, probe)?;
+        if actual != self.reference || reference != actual {
+            return Err(search_source_admission::AdmissionError::ReceiptMismatch.into());
+        }
+        Ok(Arc::clone(&self.policy))
+    }
+    fn resolve_admission(&mut self, _: &[u8], _: Arc<RetainedPolicyV2>,
+        _: &mut dyn FnMut() -> Result<(), CheckpointFailureV2>)
+        -> Result<search_source_provenance::OriginalAdmissionV2, search_source_records::batch::BatchCodecV4Error> {
+        Err(search_source_admission::AdmissionError::ReceiptMismatch.into())
+    }
 }
 
 #[cfg(test)]

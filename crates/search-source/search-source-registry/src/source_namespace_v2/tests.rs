@@ -432,16 +432,15 @@ fn namespace_state(
 /// Builds the namespace-only v4 operation through the real prepared-batch
 /// engine: same delta, fingerprint and record as the production preparation.
 ///
-/// Only the original-input resolver differs, because the production call site
-/// passes an empty resolver that cannot satisfy the namespace delta's own
-/// retained-policy reference.
+/// The refusal matrix uses this fixture to install exact pre-existing metadata;
+/// the positive case below executes the real production preparation.
 fn prepared_namespace(
     registry: &SourceRegistry,
     retained: &Arc<RetainedPolicyV2>,
     request: &NativeNamespaceRequestV2,
 ) -> PreparedNativeNamespaceV2 {
     let mut probe = || Ok::<_, CheckpointFailureV2>(());
-    let fingerprint = super::fingerprint::<RegistryPortError>(request, &mut probe)
+    let fingerprint = super::fingerprint::<RegistryPortError>(request, &policy_reference(retained))
         .expect("owner-computed request fingerprint");
     let after = registry
         .revision()
@@ -498,42 +497,25 @@ fn namespace_only_prepare_commit_replay_after_restore_keeps_uuid_without_source_
     let root_operation = opaque(ROOT_OPERATION);
     let request = namespace_request(&retained, registry.revision(), "namespace-proof-one");
 
-    // DEFECT GUARD. The production preparation refuses its own namespace delta:
-    // the v4 engine is handed `MemoryOriginals::new(vec![])` while the namespace
-    // delta carries the retained policy reference, so the closed codec demands a
-    // policy resolution the empty resolver cannot satisfy. The fresh path can
-    // therefore never return `Prepared`, and the refusal follows the namespace
-    // UUID draw, so a caller retry would redraw that identity. When the
-    // production call site is repaired this guard fails on purpose and the
-    // isolation half below becomes the whole case.
+    // Exercise the real namespace-only producer, including its retained-policy
+    // resolver. It must prepare before any Source original/body exists.
     let mut probe = || Ok::<_, CheckpointFailureV2>(());
-    let refused =
-        prepare_native_namespace_v2(&mut registry, &request, &mut port, &context, &mut probe);
-    assert!(
-        matches!(
-            refused,
-            Err(SourceAdmissionV2Error::Admission(
-                AdmissionError::ReceiptMismatch
-            ))
-        ),
-        "expected the empty-resolver ReceiptMismatch refusal from the production call site"
-    );
+    let NativeNamespacePreparationV2::Prepared(prepared) =
+        prepare_native_namespace_v2(&mut registry, &request, &mut port, &context, &mut probe)
+            .expect("actual namespace-only preparation resolves its retained policy")
+    else { panic!("fresh namespace must prepare"); };
     assert_eq!(
         port.ids.allocations, 1,
-        "the refusal follows the namespace UUID draw instead of preceding it"
+        "exactly one genuine namespace identity was requested"
     );
     assert_eq!(port.writes, 1, "only the root registration was dispatched");
     assert_eq!(registry.revision(), 1);
     assert!(registry.namespaces().is_empty() && registry.sources().is_empty());
     assert!(
         !port.operations.contains_key(&request.operation_id),
-        "the refused preparation must leave no durable namespace operation"
+        "preparation alone must leave no durable namespace operation"
     );
 
-    // Isolation of the cause: the identical namespace-only delta, produced by
-    // the same v4 engine, commits as soon as the retained policy reference is
-    // resolvable. No Source, no body and no Source original input is involved.
-    let prepared = prepared_namespace(&registry, &retained, &request);
     let mut probe = || Ok::<_, CheckpointFailureV2>(());
     let committed =
         commit_native_namespace_v2(&mut registry, &prepared, &mut port, &context, &mut probe)
