@@ -209,9 +209,7 @@ fn acquire_existing_target(
         NativePins::acquire_profile(request, work, &root, mutation, profile.journal_profile)?;
     let snapshot = read_snapshot(request, work, &root, &mut pins)?;
     work.arrive(request, "native-proof")?;
-    if snapshot.record.lifecycle != LifecycleState::Released {
-        return Ok(Err(RootOpenState::OutcomeUnknown));
-    }
+    if snapshot.record.lifecycle != LifecycleState::Released { return Ok(Err(RootOpenState::OutcomeUnknown)); }
     let mut storage_acl = snapshot.installation.journal_profile.then(|| StorageAclSnapshot::capture(request, work, &pins)).transpose()?;
     let control = match target {
         AdmissionTarget::Legacy => None,
