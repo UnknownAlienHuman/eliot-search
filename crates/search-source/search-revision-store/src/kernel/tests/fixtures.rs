@@ -61,7 +61,6 @@ pub(super) fn payload_with_key(
     EncryptedRevisionPayload::new(
         Blake3Digest32::from_bytes([plaintext_seed; 32]),
         3,
-        Blake3Digest32::from_bytes([ciphertext_seed.wrapping_add(1); 32]),
         vec![ciphertext_seed; 12],
         vec![ciphertext_seed; 32],
         EncryptionBinding {
@@ -163,7 +162,7 @@ pub(super) fn readback(
     RevisionObjectReadback {
         key: intent.key.clone(),
         storage_object_id: intent.storage_object_id.clone(),
-        ciphertext_digest: intent.payload.ciphertext_digest,
+        ciphertext_digest: intent.payload.ciphertext_digest(),
         ciphertext_bytes: u64::try_from(intent.payload.ciphertext_len())
             .expect("length"),
         plaintext_digest: intent.payload.plaintext_digest,

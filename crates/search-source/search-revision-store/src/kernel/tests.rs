@@ -3,4 +3,5 @@
 mod append;
 mod fixtures;
 mod lifecycle;
+mod payload_digest;
 mod residency;
