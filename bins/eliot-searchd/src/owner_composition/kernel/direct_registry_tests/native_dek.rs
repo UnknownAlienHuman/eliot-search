@@ -184,7 +184,7 @@ fn reopen_deleted_retained_source(arguments: &[OsString], config: &crate::config
             let mut wrong = expected;
             wrong.content_digest = search_contracts::Blake3Digest32::from_bytes([0x55; 32]);
             assert!(control.load_retained_revision(&wrong, input.native.context()).is_err());
-            let plaintext = super::super::retained_reader::open_retained_revision(input.native,
+            let (plaintext, _) = super::super::retained_reader::open_retained_revision(input.native,
                 &control, &expected, config)?;
             assert_eq!(plaintext.as_bytes(), b"fn retained_native_fixture() {}\n");
             drop(plaintext);

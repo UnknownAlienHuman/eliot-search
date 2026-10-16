@@ -20,6 +20,8 @@ pub use kernel::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 pub use kernel::{NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing};
 #[allow(unused_imports)] // Used by the dormant native process constructor.
 pub(crate) use kernel::NativeProcessRootCustody;
+#[cfg(feature = "wave4-query")]
+pub(crate) use kernel::RetainedRevisionReadState;
 pub use kernel::{NativeSyncPreflightOperation, run_source_sync_preflight};
 
 #[cfg(all(test, windows))]

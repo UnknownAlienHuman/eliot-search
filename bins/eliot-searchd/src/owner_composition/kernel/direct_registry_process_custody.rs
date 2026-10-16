@@ -39,7 +39,7 @@ impl NativeProcessRootCustody {
         membership: search_contracts::SourceMembershipId,
         expected: &search_contracts::SourceRevisionRef,
         config: &crate::config_composition::EffectiveDaemonConfig,
-        consume: impl FnOnce(&[u8]) -> Result<T, crate::provider_composition::CanonicalServingError>,
+        consume: impl FnOnce(&[u8], &search_revision_store::PersistedSelectedObjectMetadata) -> Result<T, crate::provider_composition::CanonicalServingError>,
     ) -> Result<T, crate::provider_composition::CanonicalServingError> {
         self.owner.with_serving_retained_read(
             state, registry, output, admission, membership, expected, config, consume,

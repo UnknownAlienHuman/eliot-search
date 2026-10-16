@@ -401,6 +401,8 @@ mod dek_selection;
 #[path = "direct_registry_process_custody.rs"]
 mod process_custody;
 pub(crate) use process_custody::NativeProcessRootCustody;
+#[cfg(feature = "wave4-query")]
+pub(crate) use retained_reader::RetainedRevisionReadState;
 pub use command::maybe_run;
 
 #[cfg(all(test, windows))]

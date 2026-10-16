@@ -54,7 +54,7 @@ impl super::DirectRegistryOwner {
         membership: search_contracts::SourceMembershipId,
         expected: &SourceRevisionRef,
         config: &EffectiveDaemonConfig,
-        consume: impl FnOnce(&[u8]) -> Result<T, crate::provider_composition::CanonicalServingError>,
+        consume: impl FnOnce(&[u8], &PersistedSelectedObjectMetadata) -> Result<T, crate::provider_composition::CanonicalServingError>,
     ) -> Result<T, crate::provider_composition::CanonicalServingError> {
         use crate::provider_composition::CanonicalServingError as Error;
         use search_access::AccessError;
@@ -106,9 +106,9 @@ impl super::DirectRegistryOwner {
                         let control = NativeRetentionControl::bind_for_serving(journal, publisher,
                             source, namespace, root, member, &conditions, deadline, &work)
                             .map_err(|_| unavailable())?;
-                        let plaintext = open_retained_revision(&native, &control, expected, config)
+                        let (plaintext, metadata) = open_retained_revision(&native, &control, expected, config)
                             .map_err(|_| unavailable())?;
-                        consume(plaintext.as_bytes())
+                        consume(plaintext.as_bytes(), &metadata)
                     }).map_err(|_| unavailable())?
             })
     }
@@ -146,7 +146,7 @@ pub(super) fn open_retained_revision(
     control: &NativeRetentionControl<'_, '_, FreshRootCancellation>,
     expected: &SourceRevisionRef,
     config: &EffectiveDaemonConfig,
-) -> Result<SelectedPlaintextV2, String> {
+) -> Result<(SelectedPlaintextV2, PersistedSelectedObjectMetadata), String> {
     native.source_full_checkpoint().map_err(|error| error.to_string())?;
     let (metadata, seal) = control.load_retained_revision(expected, native.context())
         .map_err(|error| error.to_string())?;
@@ -191,5 +191,5 @@ pub(super) fn open_retained_revision(
     if after != metadata || after_seal.selected_current_canonical() != seal.selected_current_canonical()
         || after_seal.counter() != seal.counter()
     { return Err("NATIVE_RETAINED_READ_STATE_CHANGED".into()); }
-    Ok(plaintext)
+    Ok((plaintext, metadata))
 }
