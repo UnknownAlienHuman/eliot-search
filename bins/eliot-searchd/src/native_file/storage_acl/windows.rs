@@ -188,10 +188,11 @@ pub(super) fn observe<C: StorageSecurityContext>(
         if !(size_of::<RelativeDescriptor>()..=MAX_DESCRIPTOR_BYTES).contains(&length) {
             return Err(Error::InvalidDescriptor);
         }
-        // SAFETY: the complete allocation extent is established above. Parsing
-        // below reads only checked headers/SIDs/ACEs, never unused ACL padding.
-        let bytes = unsafe { core::slice::from_raw_parts(descriptor.cast::<u8>(), length) };
-        let (sid, control, acl) = descriptor_parts(bytes, owner, dacl)?;
+        // SAFETY: successful GetSecurityInfo initializes its documented fields,
+        // SIDs and counted ACE components, but not necessarily allocation/ACL slack.
+        // Copy those components separately; never form a slice over native slack.
+        let (sid, control, acl) =
+            unsafe { descriptor_parts(descriptor, length, owner, dacl, context)? };
         let count = usize::from(u16::from_le_bytes([acl[4], acl[5]]));
         if count > (acl.len() - 8) / 16 {
             return Err(Error::InvalidDescriptor);
@@ -204,7 +205,7 @@ pub(super) fn observe<C: StorageSecurityContext>(
         context
             .charge(Work::Process(allocation + 4 * acl.len()))
             .map_err(Error::Context)?;
-        qualify(sid, control, acl, expected)
+        qualify(&sid, control, &acl, expected)
     })();
     let released = allocation.release();
     let after = context.checkpoint();
@@ -218,52 +219,135 @@ pub(super) fn observe<C: StorageSecurityContext>(
     }
 }
 
-type DescriptorParts<'a> = (&'a [u8], u16, &'a [u8]);
+type DescriptorParts = (Vec<u8>, u16, Vec<u8>);
 
-fn descriptor_parts<E>(
-    bytes: &[u8],
+fn extent<E>(length: usize, offset: usize, count: usize) -> Result<(), Error<E>> {
+    if offset.checked_add(count).is_none_or(|end| end > length) {
+        return Err(Error::InvalidDescriptor);
+    }
+    Ok(())
+}
+
+// SAFETY: caller promises this exact scalar is an initialized SDK field, not
+// padding. All call sites use u8/u16/u32, with no Rust padding or invalid bit pattern.
+unsafe fn scalar<T: Copy, E>(
+    base: *mut c_void,
+    length: usize,
+    offset: usize,
+) -> Result<T, Error<E>> {
+    extent(length, offset, size_of::<T>())?;
+    Ok(unsafe { read_unaligned(base.cast::<u8>().add(offset).cast::<T>()) })
+}
+
+// SAFETY: caller promises the SDK initialized exactly this SID component.
+unsafe fn sid_length<E>(
+    base: *mut c_void,
+    length: usize,
+    offset: usize,
+) -> Result<usize, Error<E>> {
+    let revision = unsafe { scalar::<u8, E>(base, length, offset)? };
+    let count = unsafe { scalar::<u8, E>(base, length, offset + 1)? };
+    let size = 8 + 4 * usize::from(count);
+    if revision != 1 || size > MAX_SID {
+        return Err(Error::InvalidDescriptor);
+    }
+    extent(length, offset, size)?;
+    Ok(size)
+}
+
+// SAFETY: the successful SDK query initialized its meaningful header fields,
+// complete owner SID and each counted ACE's defined fields/SID. Allocation slack,
+// reserved fields and unused ACL capacity may remain uninitialized and are not read.
+unsafe fn descriptor_parts<C: StorageSecurityContext>(
+    base: *mut c_void,
+    length: usize,
     owner: *mut c_void,
     dacl: *mut c_void,
-) -> Result<DescriptorParts<'_>, Error<E>> {
-    if bytes.len() < size_of::<RelativeDescriptor>() {
+    context: &mut C,
+) -> Result<DescriptorParts, Error<C::Error>> {
+    if length < size_of::<RelativeDescriptor>() {
         return Err(Error::InvalidDescriptor);
     }
-    // SAFETY: this complete fixed SDK header is within the borrowed allocation;
-    // no embedded pointer/relative offset has yet been dereferenced.
-    let header = unsafe { read_unaligned(bytes.as_ptr().cast::<RelativeDescriptor>()) };
-    if header.revision != 1 || header.reserved != 0 || header.control & 0x8000 == 0 {
+    let revision = unsafe { scalar::<u8, C::Error>(base, length, 0)? };
+    let control = unsafe { scalar::<u16, C::Error>(base, length, 2)? };
+    let owner_relative = unsafe { scalar::<u32, C::Error>(base, length, 4)? };
+    let acl_relative = unsafe { scalar::<u32, C::Error>(base, length, 16)? };
+    if revision != 1 || control & 0x8000 == 0 {
         return Err(Error::InvalidDescriptor);
     }
-    let base = bytes.as_ptr().cast_mut().cast();
-    let owner_offset = checked_offset(base, bytes.len(), header.owner, owner)?;
-    let acl_offset = checked_offset(base, bytes.len(), header.dacl, dacl)?;
-    let sid_header = bytes
-        .get(owner_offset..owner_offset + 8)
-        .ok_or(Error::InvalidDescriptor)?;
-    let sid_length = 8 + 4 * usize::from(sid_header[1]);
-    if sid_header[0] != 1 || sid_length > MAX_SID {
-        return Err(Error::InvalidDescriptor);
-    }
+    let owner_offset = checked_offset(base, length, owner_relative, owner)?;
+    let acl_offset = checked_offset(base, length, acl_relative, dacl)?;
+    let owner_size = unsafe { sid_length::<C::Error>(base, length, owner_offset)? };
     let owner_end = owner_offset
-        .checked_add(sid_length)
+        .checked_add(owner_size)
         .ok_or(Error::InvalidDescriptor)?;
-    let sid = bytes
-        .get(owner_offset..owner_end)
-        .ok_or(Error::InvalidDescriptor)?;
-    let acl_header = bytes
-        .get(acl_offset..acl_offset + 8)
-        .ok_or(Error::InvalidDescriptor)?;
-    let acl_length = usize::from(u16::from_le_bytes([acl_header[2], acl_header[3]]));
+    extent(length, acl_offset, 8)?;
+    let acl_revision = unsafe { scalar::<u8, C::Error>(base, length, acl_offset)? };
+    let acl_size = unsafe { scalar::<u16, C::Error>(base, length, acl_offset + 2)? };
+    let count = unsafe { scalar::<u16, C::Error>(base, length, acl_offset + 4)? };
+    let acl_length = usize::from(acl_size);
     let acl_end = acl_offset
         .checked_add(acl_length)
         .ok_or(Error::InvalidDescriptor)?;
     if acl_length < 8 || (owner_offset < acl_end && acl_offset < owner_end) {
         return Err(Error::InvalidDescriptor);
     }
-    let acl = bytes
-        .get(acl_offset..acl_end)
+    extent(length, acl_offset, acl_length)?;
+    if !matches!(acl_revision, 2 | 4) || usize::from(count) > (acl_length - 8) / 16 {
+        return Err(Error::InvalidDescriptor);
+    }
+    let copied = owner_size
+        .checked_add(acl_length)
         .ok_or(Error::InvalidDescriptor)?;
-    Ok((sid, header.control, acl))
+    context
+        .charge(Work::Allocate(copied))
+        .map_err(Error::Context)?;
+    context
+        .charge(Work::Process(copied))
+        .map_err(Error::Context)?;
+    let mut sid = vec![0; owner_size];
+    let mut acl = vec![0; acl_length];
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            base.cast::<u8>().add(owner_offset),
+            sid.as_mut_ptr(),
+            owner_size,
+        );
+    };
+    acl[0] = acl_revision;
+    acl[2..4].copy_from_slice(&acl_size.to_le_bytes());
+    acl[4..6].copy_from_slice(&count.to_le_bytes());
+    let mut offset = 8_usize;
+    for _ in 0..count {
+        extent(acl_length, offset, 8)?;
+        let at = acl_offset + offset;
+        let kind = unsafe { scalar::<u8, C::Error>(base, length, at)? };
+        let flags = unsafe { scalar::<u8, C::Error>(base, length, at + 1)? };
+        let size = unsafe { scalar::<u16, C::Error>(base, length, at + 2)? };
+        let size_usize = usize::from(size);
+        if kind != 0 || size_usize < 16 || size_usize % 4 != 0 {
+            return Err(Error::InvalidDescriptor);
+        }
+        extent(acl_length, offset, size_usize)?;
+        let mask = unsafe { scalar::<u32, C::Error>(base, length, at + 4)? };
+        let trustee_size = unsafe { sid_length::<C::Error>(base, length, at + 8)? };
+        if trustee_size != size_usize - 8 {
+            return Err(Error::InvalidDescriptor);
+        }
+        acl[offset] = kind;
+        acl[offset + 1] = flags;
+        acl[offset + 2..offset + 4].copy_from_slice(&size.to_le_bytes());
+        acl[offset + 4..offset + 8].copy_from_slice(&mask.to_le_bytes());
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                base.cast::<u8>().add(at + 8),
+                acl.as_mut_ptr().add(offset + 8),
+                trustee_size,
+            );
+        };
+        offset += size_usize;
+    }
+    Ok((sid, control, acl))
 }
 
 fn checked_offset<E>(
