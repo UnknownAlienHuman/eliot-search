@@ -304,6 +304,23 @@ impl SecurityRestrictionCommit {
     /// Actual native receipt; may be historical until `confirm_current` succeeds.
     #[must_use]
     pub const fn receipt(&self) -> &ControlCommitReceipt { &self.receipt }
+
+    /// Exact policy and full restriction values that must remain current in a
+    /// consuming transaction. This is a condition, not fresh access authority.
+    /// The caller prepays bounded codec work under its original allowance.
+    ///
+    /// # Errors
+    /// Refuses invalid retained metadata or values outside journal limits.
+    pub fn current_conditions(&self) -> Result<[ControlRecordCondition; 2], ControlError> {
+        let namespace = self.mutation.replacement.policy.namespace_id;
+        Ok([
+            ControlRecordCondition::exact(key(POLICY_PREFIX, namespace)?,
+                policy_value(&self.mutation.replacement.policy)?),
+            ControlRecordCondition::exact(key(RESTRICTION_PREFIX, namespace)?,
+                ControlValue::new(ControlRecordClass::Operation, codec::encode(&self.mutation)?,
+                    JournalLimits::BASELINE)?),
+        ])
+    }
 }
 
 impl PersistentControlJournal {

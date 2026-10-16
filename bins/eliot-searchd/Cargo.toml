@@ -102,7 +102,6 @@ wave6-proof = [
 ]
 wave7-lifecycle = [
     "wave6-proof",
-    "dep:search-retention",
 ]
 full-baseline = ["wave7-lifecycle"]
 
@@ -127,6 +126,7 @@ blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pur
 search-source-admission.workspace = true
 search-source-provenance.workspace = true
 search-source-registry.workspace = true
+search-source-history.workspace = true
 search-source-identity.workspace = true
 search-revision-store.workspace = true
 search-source-reconcile = { workspace = true, optional = true }
@@ -159,7 +159,8 @@ search-handles.workspace = true
 search-result-projector = { workspace = true, optional = true }
 search-continuation = { workspace = true, optional = true }
 
-search-retention = { workspace = true, optional = true }
+search-retention.workspace = true
+search-revision-crypto.workspace = true
 search-eval = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]

@@ -217,6 +217,13 @@ pub(super) struct StorageAclSnapshot {
 }
 
 impl StorageAclSnapshot {
+    pub(super) fn current_user_scope(&self, request: &NativeRootRequest,
+        work: &mut NativeWork) -> Result<[u8; 32], OwnerError> {
+        let actual = actual_user(&mut OriginalContext::new(request, work))?;
+        if actual != self.user { return Err(OwnerError::OwnerStorageAclUnqualified); }
+        Ok(actual)
+    }
+
     pub(super) fn capture(
         request: &NativeRootRequest,
         work: &mut NativeWork,

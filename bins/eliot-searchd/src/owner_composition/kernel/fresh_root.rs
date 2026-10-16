@@ -38,6 +38,8 @@ mod native_source;
 mod native_retention_object_io;
 #[path = "native_retention_time.rs"]
 mod native_retention_time;
+#[path = "native_retention_security.rs"]
+mod native_retention_security;
 
 #[derive(Debug)]
 pub enum FreshRootError {
