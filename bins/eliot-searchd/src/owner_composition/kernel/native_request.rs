@@ -11,6 +11,8 @@ use search_contracts::{
     BoundedBytes, CanonicalDigestDomain, CanonicalValue, DigestInputLimit, RequestId,
     blake3_canonical_array_with_usage,
 };
+#[cfg(feature = "wave4-query")]
+use search_provider_protocol::request::RequestCancellation;
 use search_runtime_owner::{DataRootOpenMode, OwnerError};
 
 /// Caller-selected positive limits within this native profile's hard ceilings.
@@ -411,6 +413,38 @@ impl NativeRootRequest {
         Ok(request)
     }
 
+    /// Reuses retained service metadata for one already-admitted provider read.
+    /// The caller supplies the admitted ID and translated hard deadline; the
+    /// matching native meter retains its exact observer without renewal or entropy.
+    #[cfg(feature = "wave4-query")]
+    pub(super) fn provider_source_read(
+        &self,
+        id: RequestId,
+        deadline: Instant,
+    ) -> Result<Self, OwnerError> {
+        check_context(deadline, &self.cancellation)?;
+        let mut arguments = Vec::new();
+        arguments
+            .try_reserve_exact(self.arguments.len())
+            .map_err(|_| OwnerError::ContractExhausted)?;
+        arguments.extend(self.arguments.iter().cloned());
+        let request = Self {
+            mode: DataRootOpenMode::InspectExistingReadOnly,
+            root: self.root.clone(),
+            deadline,
+            cancellation: Arc::clone(&self.cancellation),
+            id,
+            digest: self.digest,
+            digest_bytes: self.digest_bytes,
+            arguments,
+            limits: self.limits,
+            terminal_work: Box::new(RefCell::new(None)),
+            terminal_refusal: Cell::new(None),
+        };
+        request.check()?;
+        Ok(request)
+    }
+
     /// Refusal binds exact transport bytes separately from native argv admission.
     /// Its private caller emits only a closed error; this grants no root authority.
     pub(super) fn service_refusal(
@@ -722,6 +756,8 @@ pub(super) struct NativeWork {
     opens: usize,
     canonical_bytes: usize,
     original_digest_charged: bool,
+    #[cfg(feature = "wave4-query")]
+    provider_cancellation: Option<RequestCancellation>,
     #[cfg(test)]
     pub(super) phase_hook: Option<Box<dyn FnMut(&'static str)>>,
     #[cfg(test)]
@@ -734,13 +770,26 @@ pub(super) struct NativeWork {
 
 impl NativeWork {
     pub(super) const fn new() -> Self {
+        Self::with_initial_calls(1)
+    }
+
+    #[cfg(feature = "wave4-query")]
+    pub(super) fn for_provider_source_read(cancellation: RequestCancellation) -> Self {
+        // Provider admission already supplied its ID; this path makes no native entropy call.
+        let mut work = Self::with_initial_calls(0);
+        work.provider_cancellation = Some(cancellation);
+        work
+    }
+
+    const fn with_initial_calls(calls: usize) -> Self {
         Self {
             reads: 0,
-            // The request already made exactly one qualified entropy call.
-            calls: 1,
+            calls,
             opens: 0,
             canonical_bytes: 0,
             original_digest_charged: false,
+            #[cfg(feature = "wave4-query")]
+            provider_cancellation: None,
             #[cfg(test)]
             phase_hook: None,
             #[cfg(test)]
@@ -750,6 +799,34 @@ impl NativeWork {
             #[cfg(test)]
             revision_dek_target_hook: None,
         }
+    }
+
+    pub(super) fn check(&self, request: &NativeRootRequest) -> Result<(), OwnerError> {
+        #[cfg(feature = "wave4-query")]
+        if self
+            .provider_cancellation
+            .as_ref()
+            .is_some_and(RequestCancellation::is_cancelled)
+        {
+            return Err(OwnerError::OwnerCancelledBeforeMutation);
+        }
+        request.check()
+    }
+
+    pub(super) const fn is_provider_source_read(&self) -> bool {
+        #[cfg(feature = "wave4-query")]
+        {
+            self.provider_cancellation.is_some()
+        }
+        #[cfg(not(feature = "wave4-query"))]
+        {
+            false
+        }
+    }
+
+    #[cfg(feature = "wave4-query")]
+    pub(super) fn provider_cancellation(&self) -> Option<RequestCancellation> {
+        self.provider_cancellation.clone()
     }
 
     // The mutable receiver is required by the private cfg(test) phase hook;
@@ -763,7 +840,7 @@ impl NativeWork {
         request: &NativeRootRequest,
         phase: &'static str,
     ) -> Result<(), OwnerError> {
-        request.check()?;
+        self.check(request)?;
         #[cfg(test)]
         if std::env::var_os("ELIOT_SEARCH_TEST_NATIVE_PHASE_TRACE").is_some() {
             eprintln!("native-phase:{phase}:opens={}:calls={}", self.opens, self.calls);
@@ -776,7 +853,7 @@ impl NativeWork {
         let _ = phase;
         #[cfg(test)]
         self.observe_usage(phase, 0);
-        request.check()
+        self.check(request)
     }
 
     pub(super) fn call<T>(
@@ -784,15 +861,15 @@ impl NativeWork {
         request: &NativeRootRequest,
         operation: impl FnOnce() -> Result<T, OwnerError>,
     ) -> Result<T, OwnerError> {
-        request.check()?;
+        self.check(request)?;
         charge(&mut self.calls, 1, request.limits.native_calls)?;
         let result = operation();
-        request.check()?;
+        self.check(request)?;
         result
     }
 
     pub(super) fn open(&mut self, request: &NativeRootRequest) -> Result<(), OwnerError> {
-        request.check()?;
+        self.check(request)?;
         charge(&mut self.opens, 1, request.limits.opens)
     }
 
@@ -801,7 +878,7 @@ impl NativeWork {
         request: &NativeRootRequest,
         bytes: usize,
     ) -> Result<(), OwnerError> {
-        request.check()?;
+        self.check(request)?;
         charge(&mut self.reads, bytes, request.limits.read_bytes)
     }
 
@@ -825,7 +902,7 @@ impl NativeWork {
         request: &NativeRootRequest,
         bytes: usize,
     ) -> Result<(), OwnerError> {
-        request.check()?;
+        self.check(request)?;
         if self
             .reads
             .checked_add(bytes)
@@ -864,7 +941,7 @@ impl NativeWork {
         request: &NativeRootRequest,
         bytes: usize,
     ) -> Result<(), OwnerError> {
-        request.check()?;
+        self.check(request)?;
         let ceiling = request
             .limits
             .encoded_bytes
@@ -1103,5 +1180,51 @@ mod migration_selector_tests {
         assert_ne!(plan_request.arguments()[0], bootstrap_request.arguments()[0]);
         assert_eq!(bootstrap_request.mode, plan_request.mode);
         assert_ne!(plan_request.digest, bootstrap_request.digest);
+    }
+}
+
+#[cfg(all(test, feature = "wave4-query"))]
+mod provider_source_read_cancellation_tests {
+    use super::*;
+    use search_provider_protocol::{
+        DEFAULT_PROTOCOL_LIMITS, MonotonicMillis, RequestGuard,
+    };
+
+    #[test]
+    fn provider_read_context_cancellation_is_shared_without_resetting_startup_flag() {
+        let id = RequestId::from_bytes([0x51; 16]);
+        let mut guard = RequestGuard::new(
+            id,
+            1,
+            MonotonicMillis::new(1_000),
+            Some(30_000),
+            DEFAULT_PROTOCOL_LIMITS,
+        )
+        .unwrap();
+        let observer = guard.cancellation();
+        let startup_cancellation = Arc::new(AtomicBool::new(false));
+        let request = NativeRootRequest {
+            mode: DataRootOpenMode::InspectExistingReadOnly,
+            root: PathBuf::new(),
+            deadline: Instant::now() + std::time::Duration::from_secs(30),
+            cancellation: Arc::clone(&startup_cancellation),
+            id,
+            digest: [0; 32],
+            digest_bytes: 0,
+            arguments: Vec::new(),
+            limits: NativeRootLimits::new([2, 1, 1, 1, 1, 1]).unwrap(),
+            terminal_work: Box::new(RefCell::new(None)),
+            terminal_refusal: Cell::new(None),
+        };
+        let work = NativeWork::for_provider_source_read(observer.clone());
+
+        assert!(work.check(&request).is_ok());
+        guard.mark_cancelled();
+        assert!(matches!(
+            work.check(&request),
+            Err(OwnerError::OwnerCancelledBeforeMutation)
+        ));
+        assert!(observer.is_cancelled());
+        assert!(!startup_cancellation.load(Ordering::Acquire));
     }
 }

@@ -15,6 +15,8 @@ use search_source_registry::{
     error::{RegistryControlPort, RegistryError},
     root::{RegisterRootRequest, RootRecord},
 };
+#[cfg(feature = "wave4-query")]
+use search_provider_protocol::request::RequestCancellation;
 use std::{
     cell::RefCell,
     fs::File,
@@ -132,16 +134,26 @@ fn receipt_digests(
     ))
 }
 
-/// Same original flag and absolute deadline; constructing a port context renews neither.
+/// Original native flag/deadline plus the exact provider observer; cloning renews neither.
 #[derive(Clone, Debug)]
 pub struct FreshRootCancellation {
     flag: Arc<AtomicBool>,
+    #[cfg(feature = "wave4-query")]
+    provider_cancellation: Option<RequestCancellation>,
     deadline: Instant,
     first_refusal: Arc<AtomicU8>,
 }
 impl FreshRootCancellation {
     fn refusal(&self) -> Option<OwnerError> {
-        let observed = if self.flag.load(Ordering::Acquire) {
+        #[cfg(feature = "wave4-query")]
+        let cancelled = self.flag.load(Ordering::Acquire)
+            || self
+                .provider_cancellation
+                .as_ref()
+                .is_some_and(RequestCancellation::is_cancelled);
+        #[cfg(not(feature = "wave4-query"))]
+        let cancelled = self.flag.load(Ordering::Acquire);
+        let observed = if cancelled {
             1
         } else if Instant::now() >= self.deadline {
             2
@@ -185,6 +197,8 @@ mod cancellation_clone_tests {
         let deadline = Instant::now();
         let original = FreshRootCancellation {
             flag: flag.clone(),
+            #[cfg(feature = "wave4-query")]
+            provider_cancellation: None,
             deadline,
             first_refusal: Arc::new(AtomicU8::new(0)),
         };
@@ -202,6 +216,8 @@ mod cancellation_clone_tests {
         let deadline = Instant::now() + std::time::Duration::from_secs(60);
         let original = FreshRootCancellation {
             flag: flag.clone(),
+            #[cfg(feature = "wave4-query")]
+            provider_cancellation: None,
             deadline,
             first_refusal: Arc::new(AtomicU8::new(0)),
         };
@@ -211,6 +227,37 @@ mod cancellation_clone_tests {
         flag.store(false, Ordering::Release);
         assert!(cloned.is_cancelled());
         assert_eq!(cloned.first_refusal.load(Ordering::Acquire), 1);
+    }
+
+    #[cfg(feature = "wave4-query")]
+    #[test]
+    fn provider_read_context_probe_observes_admitted_cancellation_observer() {
+        use search_provider_protocol::{
+            DEFAULT_PROTOCOL_LIMITS, MonotonicMillis, RequestGuard,
+        };
+
+        let mut guard = RequestGuard::new(
+            c::RequestId::from_bytes([0x52; 16]),
+            1,
+            MonotonicMillis::new(1_000),
+            Some(30_000),
+            DEFAULT_PROTOCOL_LIMITS,
+        )
+        .unwrap();
+        let observer = guard.cancellation();
+        let original = FreshRootCancellation {
+            flag: Arc::new(AtomicBool::new(false)),
+            provider_cancellation: Some(observer.clone()),
+            deadline: Instant::now() + std::time::Duration::from_secs(30),
+            first_refusal: Arc::new(AtomicU8::new(0)),
+        };
+        let cloned = original.clone();
+
+        guard.mark_cancelled();
+        assert!(original.is_cancelled());
+        assert!(cloned.is_cancelled());
+        assert!(observer.is_cancelled());
+        assert_eq!(original.first_refusal.load(Ordering::Acquire), 1);
     }
 }
 
@@ -254,6 +301,8 @@ impl<'owner> NativeReadOperation<'owner> {
                     remaining,
                     FreshRootCancellation {
                         flag: request.original_cancellation(),
+                        #[cfg(feature = "wave4-query")]
+                        provider_cancellation: work.provider_cancellation(),
                         deadline,
                         first_refusal: Arc::new(AtomicU8::new(0)),
                     },

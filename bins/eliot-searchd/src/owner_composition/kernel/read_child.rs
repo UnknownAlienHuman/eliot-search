@@ -4,6 +4,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+#[cfg(feature = "wave4-query")]
+use crate::provider_composition::{CanonicalWorkBudget, monotonic_millis};
+#[cfg(feature = "wave4-query")]
+use search_provider_protocol::{AdmittedProviderRequest, MonotonicMillis};
 use search_runtime_owner::OwnerError;
 
 use super::super::native_objects::read_bytes;
@@ -25,7 +29,71 @@ pub(super) const fn direct_operation(owner: &mut NativeRootCapability) -> Result
     if owner.pins.direct.is_none() { return Err(OwnerError::OwnerInvalidTransition); }
     // Closed caller immediately consumes this into fresh_root_context's FULL gate.
     // No source read, output or capability accessor occurs in between.
-    Ok(NativeReadOperation { owner, context: None, output_attempted: false, registration: None, first_refusal: None })
+    Ok(NativeReadOperation { owner, context: None, output_attempted: false, registration: None,
+        first_refusal: None })
+}
+
+/// Adds native custody for one admitted source-read callback. This carries no
+/// grant: callers must invoke it only inside the canonical standalone-read gate.
+/// Its first native use still must run `fresh_root_context`'s complete owner gate.
+#[cfg(feature = "wave4-query")]
+#[allow(dead_code)] // The parent composition branch owns the callback/facade wiring.
+pub(super) fn direct_read_operation<'turn>(
+    owner: &'turn mut NativeRootCapability,
+    admitted_provider_request: &'turn AdmittedProviderRequest,
+    original_work_budget: CanonicalWorkBudget,
+) -> Result<NativeReadOperation<'turn>, OwnerError> {
+    if owner.pins.direct.is_none()
+        || !owner.mutation
+        || owner.record.lifecycle != LifecycleState::Active
+    {
+        return Err(OwnerError::OwnerInvalidTransition);
+    }
+    if let Some(error) = owner.poisoned {
+        return Err(error);
+    }
+    let provider_cancellation = admitted_provider_request.guard().cancellation();
+    let anchor = Instant::now();
+    let observed = monotonic_millis();
+    let deadline = provider_read_deadline_at(
+        admitted_provider_request.guard().deadline(),
+        original_work_budget.deadline(),
+        anchor,
+        observed,
+    )?;
+    let request = owner.request.provider_source_read(
+        *admitted_provider_request.guard().request_id(),
+        deadline,
+    )?;
+    let work = NativeWork::for_provider_source_read(provider_cancellation);
+    work.check(&request)?;
+    Ok(NativeReadOperation {
+        owner,
+        context: Some((request, work)),
+        output_attempted: false,
+        registration: None,
+        first_refusal: None,
+    })
+}
+
+#[cfg(feature = "wave4-query")]
+fn provider_read_deadline_at(
+    request_deadline: Option<MonotonicMillis>,
+    work_deadline: MonotonicMillis,
+    anchor: Instant,
+    observed: MonotonicMillis,
+) -> Result<Instant, OwnerError> {
+    let deadline = request_deadline
+        .ok_or(OwnerError::OwnerDeadlineInvalid)?
+        .min(work_deadline);
+    let remaining = deadline
+        .get()
+        .checked_sub(observed.get())
+        .filter(|millis| *millis > 0)
+        .ok_or(OwnerError::OwnerDeadlineInvalid)?;
+    anchor
+        .checked_add(std::time::Duration::from_millis(remaining))
+        .ok_or(OwnerError::OwnerDeadlineInvalid)
 }
 
 #[derive(Clone, Copy)]
@@ -70,9 +138,19 @@ impl NativeReadOperation<'_> {
             &mut bool,
         ) -> Result<T, OwnerError>,
     ) -> Result<T, OwnerError> {
+        let provider_source_read = match &self.context {
+            Some((_, work)) => work.is_provider_source_read(),
+            None => false,
+        };
         let direct = self.owner.pins.direct.is_some()
-            && self.context.is_none() && self.registration.is_none()
-            && self.owner.mutation && self.owner.record.lifecycle == LifecycleState::Active;
+            && self.registration.is_none()
+            && self.owner.mutation
+            && self.owner.record.lifecycle == LifecycleState::Active
+            && ((self.context.is_none() && !provider_source_read)
+                || (self.context.is_some() && provider_source_read));
+        if provider_source_read && !direct {
+            return Err(OwnerError::OwnerInvalidTransition);
+        }
         if !direct && (self.owner.mutation || self.owner.record.lifecycle != LifecycleState::Released) {
             return Err(OwnerError::OwnerInvalidTransition);
         }
@@ -97,7 +175,7 @@ impl NativeReadOperation<'_> {
             Some((request, work)) => (&*request, work),
         };
         let registration = self.registration.as_ref();
-        let result = request.check().and_then(|()| {
+        let result = work.check(request).and_then(|()| {
             if let Some(pin) = registration.filter(|_| {
                 matches!(check_registration, RegistrationCheck::Both | RegistrationCheck::Before)
             }) {
@@ -127,7 +205,7 @@ impl NativeReadOperation<'_> {
                 Ok(value)
             })
         });
-        let checkpoint = request.check();
+        let checkpoint = work.check(request);
         let result = result
             .and_then(|value| checkpoint.map(|()| value))
             .map_err(|error| {
@@ -138,7 +216,13 @@ impl NativeReadOperation<'_> {
                     error
                 }
             });
-        if let Err(error) = result.as_ref() {
+        if let Err(error) = result.as_ref()
+            && (!provider_source_read
+                || !matches!(
+                    *error,
+                    OwnerError::OwnerCancelledBeforeMutation | OwnerError::OwnerDeadlineInvalid
+                ))
+        {
             self.owner.poisoned = Some(*error);
         }
         result
@@ -371,6 +455,41 @@ impl NativeReadOperation<'_> {
             }),
             None => Err(OwnerError::OwnerInvalidTransition),
         }
+    }
+}
+
+#[cfg(all(test, feature = "wave4-query"))]
+mod provider_read_deadline_tests {
+    use super::provider_read_deadline_at;
+    use search_provider_protocol::MonotonicMillis;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn provider_read_context_deadline_uses_earliest_guard_or_budget() {
+        let anchor = Instant::now();
+        let actual = provider_read_deadline_at(
+            Some(MonotonicMillis::new(900)),
+            MonotonicMillis::new(700),
+            anchor,
+            MonotonicMillis::new(500),
+        )
+        .unwrap();
+        assert_eq!(actual, anchor + Duration::from_millis(200));
+    }
+
+    #[test]
+    fn provider_read_context_deadline_refuses_missing_or_expired_guard() {
+        let anchor = Instant::now();
+        let budget = MonotonicMillis::new(900);
+        let now = MonotonicMillis::new(500);
+        assert!(provider_read_deadline_at(None, budget, anchor, now).is_err());
+        assert!(provider_read_deadline_at(
+            Some(MonotonicMillis::new(500)),
+            budget,
+            anchor,
+            now,
+        )
+        .is_err());
     }
 }
 
