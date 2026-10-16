@@ -464,20 +464,24 @@ where
     }
     let mut member_corpora = std::collections::BTreeSet::new();
     for member in memberships.values() {
-        member_corpora.insert(member.key().corpus_id.clone());
         let source = sources
             .get(&member.key().source_identity)
             .ok_or(RegistryError::SourceNotFound)?;
-        let generation = generations
-            .get(&member.key().corpus_id)
-            .ok_or(RegistryError::CutoverGenerationConflict)?;
-        if member.generation() > *generation
-            || (member.lifecycle() == MembershipLifecycle::Active
-                && (member.generation() != *generation
-                    || source.lifecycle() != SourceLifecycle::Active))
+        if member.lifecycle() == MembershipLifecycle::Active
+            && source.lifecycle() != SourceLifecycle::Active
         {
             return Err(RegistryError::SnapshotInvalid.into());
         }
+        if member.is_permanent_v2() {
+            continue;
+        }
+        member_corpora.insert(member.key().corpus_id.clone());
+        validate_legacy_membership_generation(
+            &member.key().corpus_id,
+            member.generation(),
+            member.lifecycle(),
+            &generations,
+        )?;
     }
     for corpus in generations.keys() {
         if !member_corpora.contains(corpus) {
@@ -499,6 +503,23 @@ where
             state_encoding_profiles,
         },
     })
+}
+
+pub(super) fn validate_legacy_membership_generation(
+    corpus_id: &OpaqueId,
+    membership_generation: search_contracts::NonZeroRevision,
+    lifecycle: MembershipLifecycle,
+    generations: &BTreeMap<OpaqueId, search_contracts::NonZeroRevision>,
+) -> Result<(), RegistryError> {
+    let generation = generations
+        .get(corpus_id)
+        .ok_or(RegistryError::CutoverGenerationConflict)?;
+    if membership_generation > *generation
+        || (lifecycle == MembershipLifecycle::Active && membership_generation != *generation)
+    {
+        return Err(RegistryError::SnapshotInvalid);
+    }
+    Ok(())
 }
 
 fn charge(total: &mut usize, count: usize, maximum: usize) -> Result<(), RegistryError> {

@@ -1,6 +1,6 @@
 use super::registry_restore::{
     MAX_REGISTRY_RESTORE_BYTES, RegistryRestoreOperation, RegistryRestoreState,
-    restore_registry_state, restore_registry_state_v4,
+    restore_registry_state, restore_registry_state_v4, validate_legacy_membership_generation,
 };
 use search_contracts::{
     Blake3Digest32, InstallationIncarnationId, NamespaceOwnershipStatus, NonZeroRevision, OpaqueId,
@@ -219,6 +219,47 @@ fn v4_restore_preserves_legacy_profiles_and_original_cancellation() {
         &mut NoopResolver, &mut || Err(CheckpointFailureV2::Cancelled),
     );
     assert!(matches!(cancelled, Err(BatchCodecV4Error::Admission(search_source_admission::AdmissionError::Cancelled))));
+}
+
+#[test]
+fn legacy_membership_requires_its_exact_corpus_generation() {
+    use search_source_records::membership::MembershipLifecycle;
+
+    let corpus = OpaqueId::new("restore:legacy:corpus").expect("corpus");
+    let foreign_corpus = OpaqueId::new("restore:foreign:corpus").expect("foreign corpus");
+    let revision = NonZeroRevision::new(1).expect("generation");
+    let empty = std::collections::BTreeMap::new();
+    assert!(matches!(
+        validate_legacy_membership_generation(
+            &corpus,
+            revision,
+            MembershipLifecycle::Active,
+            &empty,
+        ),
+        Err(RegistryError::CutoverGenerationConflict)
+    ));
+
+    let foreign = std::collections::BTreeMap::from([(foreign_corpus, revision)]);
+    assert!(matches!(
+        validate_legacy_membership_generation(
+            &corpus,
+            revision,
+            MembershipLifecycle::Active,
+            &foreign,
+        ),
+        Err(RegistryError::CutoverGenerationConflict)
+    ));
+
+    let exact = std::collections::BTreeMap::from([(corpus.clone(), revision)]);
+    assert_eq!(
+        validate_legacy_membership_generation(
+            &corpus,
+            revision,
+            MembershipLifecycle::Active,
+            &exact,
+        ),
+        Ok(())
+    );
 }
 
 #[test]
