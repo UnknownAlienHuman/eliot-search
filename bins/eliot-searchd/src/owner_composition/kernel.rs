@@ -71,6 +71,6 @@ pub(crate) fn fixture_initialization_namespace(root: &std::path::Path) -> Result
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(_) => return Err("fixture-journal-unavailable"),
     };
-    initialization_journal::decode_journal(&bytes, &mut |_| Ok(()))
-        .map(|journal| Some(journal.subject.namespace)).map_err(|_| "fixture-journal-invalid")
+    initialization_journal::fixture_subject_namespace(&bytes)
+        .map(Some).map_err(|_| "fixture-journal-invalid")
 }

@@ -29,12 +29,34 @@ fn native_fixture_credential_cleanup_survives_unwind_and_corrupt_metadata() {
         fs::write(root.join(JOURNAL_FILE), b"corrupt test journal").unwrap();
         panic!("owned fixture unwind");
     }));
-    assert!(outcome.is_err());
+    let panic = outcome.expect_err("deliberate fixture unwind");
+    assert_eq!(panic.downcast_ref::<&str>().copied(), Some("owned fixture unwind"));
+    assert_eq!(fs::read(root.join("control/namespace.id")).unwrap(), b"corrupt test namespace");
+    assert_eq!(fs::read(root.join(JOURNAL_FILE)).unwrap(), b"corrupt test journal");
     let namespace = namespace.get().expect("original captured before corruption");
     let existing = search_os_secrets_windows::load_existing_legacy_revision_root_secret_with_context(
         &namespace, Instant::now() + Duration::from_secs(30), &AtomicBool::new(false)).unwrap();
     assert!(existing.is_none(), "exact owned credential survived unwind");
     assert!(root.join(JOURNAL_FILE).exists(), "failed disk evidence retained");
+}
+
+#[test]
+fn native_fixture_credential_cleanup_reads_original_before_torn_completion() {
+    let root = scratch();
+    let guard = FixtureCredentialGuard::for_native_data_root(&root);
+    assert_eq!(run(&root, [0x22; 16], 1024 * 1024 * 1024).0, Ok(()));
+    let journal = decode_journal(&fs::read(root.join(JOURNAL_FILE)).unwrap(), &mut |_| Ok(())).unwrap();
+    let namespace = journal.subject.namespace;
+    let mut torn = journal.subject.frame().unwrap();
+    torn.extend_from_slice(&[1, 0, 0]);
+    assert!(decode_journal(&torn, &mut |_| Ok(())).is_err());
+    fs::write(root.join(JOURNAL_FILE), &torn).unwrap();
+    // No capture call: Drop must recover the original before the torn seal.
+    drop(guard);
+    let existing = search_os_secrets_windows::load_existing_legacy_revision_root_secret_with_context(
+        &namespace, Instant::now() + Duration::from_secs(30), &AtomicBool::new(false)).unwrap();
+    assert!(existing.is_none(), "exact owned credential survived torn completion");
+    assert_eq!(fs::read(root.join(JOURNAL_FILE)).unwrap(), torn);
 }
 
 fn scratch() -> PathBuf {
