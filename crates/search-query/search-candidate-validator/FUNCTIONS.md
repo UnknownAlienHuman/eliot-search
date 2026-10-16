@@ -27,18 +27,26 @@ the legacy `validate` and `reopen_and_verify` paths refuse it before source read
 Verifies source/revision IDs, content digest, byte length, residency authorization, coordinate/loss map,
 anchor bounds, unit/extractor/profile identity and requested disclosure ceiling.
 
-### `validate_raw_v3_full_unit_v1(nomination, context, readback_port, final_live_state) -> ValidationOutcome`
+### `validate_raw_v3_full_unit_v1(nomination, context, candidate_id, source_membership, source_revision, source_revision_ref, source_owner_fence, verified_unit_set, max_read_bytes, readback_port, final_live_state) -> ValidationOutcome`
 
-Uses the same nomination precheck, source metadata/range/residency/profile checks and final live-fence
-recheck as `validate`. The caller must bind the request to the current accepted profile and supply
-the complete byte range of one verified raw-v3 unit. The validator checks the v3 profile-ID shape
-and returned bytes, but cannot establish profile acceptance or whole-unit membership from the
-request alone.
-The verifier recomputes the v3 unit-content digest through `search-unitizer` from the returned bytes,
-compares it with `expected_unit_digest`, and computes the separate exact-byte excerpt digest through
-`search-contracts::blake3_exact_bytes`. A supplied excerpt digest is compared as an additional
-expectation; absence derives the digest only after full-unit byte verification. This entrypoint cannot
-prove from its request alone that a caller-selected subrange is a complete unit.
+Requires the caller's typed C09/C03 source and membership records, the actual `CandidateId`, and the
+owner-verified complete raw-v3 unit set. It compares membership/source/revision, namespace binding,
+content digest and length, residency, representation/profile, and exact unit range before invoking
+the readback port. The verifier hashes returned unit bytes, derives the exact-byte excerpt digest,
+rechecks the final live fence, then creates an immutable candidate with a canonical BLAKE3
+`candidate-validation:v1` reference. Receipt computation failure produces a gap; it has no
+empty or caller-supplied fallback.
+
+The lower-level `reopen_and_verify_raw_v3_full_unit_v1` verifies a byte slice against its request but
+does not produce a qualified candidate or validation receipt. The metadata-free `validate` entrypoint
+returns `VALIDATION_OWNER_METADATA_REQUIRED` without reading source bytes.
+
+### `ValidatedSearchCandidate` read-only accessors
+
+Candidate fields are private. Consumers read `candidate_id()`, `leg_id()`, `raw_score()`, `source()`,
+`emission_permit()`, `source_revision_ref()`, `source_owner_fence()`, `source_owner_generation()`,
+`object_residency_key_digest()`, and `candidate_validation_receipt_ref()`. The verified slice exposes
+read-only profile and residency getters in addition to its source/range/hash getters.
 
 ### `recheck_before_emission(verified, plan, live_state) -> Result<EmissionPermit, ValidationError>`
 

@@ -17,15 +17,22 @@ use core::fmt;
 use std::collections::BTreeSet;
 
 use search_access::{
-    AccessCheckpoint, AccessError, AccessPermit, LiveSecurityState,
-    RequestSecurityFence, recheck_live_access,
+    recheck_live_access, AccessCheckpoint, AccessError, AccessPermit, LiveSecurityState,
+    RequestSecurityFence,
 };
 use search_contracts::{
-    Blake3Digest32, Blake3ExactInputLimit, CollectionGenerationId, Epoch, OpaqueId, ProfileId,
-    RepresentationId, RequestId, SourceMembershipId, SourceRevisionId, UnitId,
-    blake3_exact_bytes,
+    blake3_canonical, blake3_exact_bytes, Blake3Digest32, Blake3ExactInputLimit, BoundedBytes,
+    BoundedList, CandidateId, CanonicalDigestDomain, CanonicalValue, CollectionGenerationId,
+    DigestInputLimit, Epoch, ObjectResidencyKeyDigest, ProfileId, ReceiptRef, RepresentationId,
+    RequestId, SourceMembership, SourceMembershipId, SourceOwnerFence, SourceOwnerGeneration,
+    SourceRevision, SourceRevisionId, SourceRevisionRef, UnitId, MAX_CANONICAL_BYTES,
 };
-use search_unitizer::raw_v3_unit_content_digest;
+use search_unitizer::{
+    raw_v3_unit_content_digest, V3AnchorPolicy, V3AttachmentPolicy, V3OmissionPolicy,
+    V3OverlapPolicy, VerifiedUnitSet,
+};
+
+const CANDIDATE_VALIDATION_RECEIPT_DOMAIN: &str = "eliot/cbor/candidate-validation-receipt/v1";
 
 /// Closed candidate-validation failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -55,6 +62,10 @@ pub enum ValidationError {
     AccessRevoked,
     Purged,
     EmissionFenceStale,
+    OwnerMetadataRequired,
+    OwnerBindingMismatch,
+    InvalidScore,
+    ReceiptComputationFailed,
 }
 
 impl ValidationError {
@@ -87,6 +98,10 @@ impl ValidationError {
             Self::AccessRevoked => "VALIDATION_ACCESS_REVOKED",
             Self::Purged => "VALIDATION_PURGED",
             Self::EmissionFenceStale => "VALIDATION_EMISSION_FENCE_STALE",
+            Self::OwnerMetadataRequired => "VALIDATION_OWNER_METADATA_REQUIRED",
+            Self::OwnerBindingMismatch => "VALIDATION_OWNER_BINDING_MISMATCH",
+            Self::InvalidScore => "VALIDATION_INVALID_SCORE",
+            Self::ReceiptComputationFailed => "VALIDATION_RECEIPT_COMPUTATION_FAILED",
         }
     }
 }
@@ -315,6 +330,9 @@ pub struct VerifiedSourceSlice {
     content_digest: Blake3Digest32,
     unit_digest: Blake3Digest32,
     excerpt_digest: Blake3Digest32,
+    profile_id: ProfileId,
+    profile_digest: Blake3Digest32,
+    residency_digest: Blake3Digest32,
     assurance: CandidateAssurance,
     bytes: Vec<u8>,
 }
@@ -360,6 +378,24 @@ impl VerifiedSourceSlice {
         self.excerpt_digest
     }
 
+    /// Exact profile identity checked against the readback request.
+    #[must_use]
+    pub const fn profile_id(&self) -> &ProfileId {
+        &self.profile_id
+    }
+
+    /// Exact profile digest checked against the readback request.
+    #[must_use]
+    pub const fn profile_digest(&self) -> Blake3Digest32 {
+        self.profile_digest
+    }
+
+    /// Residency digest checked against the readback request.
+    #[must_use]
+    pub const fn residency_digest(&self) -> Blake3Digest32 {
+        self.residency_digest
+    }
+
     #[must_use]
     pub const fn assurance(&self) -> CandidateAssurance {
         self.assurance
@@ -401,7 +437,10 @@ pub fn reopen_and_verify_raw_v3_full_unit_v1<P: RevisionReadbackPort>(
     port: &mut P,
 ) -> Result<VerifiedSourceSlice, ValidationError> {
     if request.expected_assurance != CandidateAssurance::Exact
-        || !raw_v3_profile_matches(&request.expected_profile_id, request.expected_profile_digest)
+        || !raw_v3_profile_matches(
+            &request.expected_profile_id,
+            request.expected_profile_digest,
+        )
     {
         return Err(ValidationError::ProfileMismatch);
     }
@@ -482,6 +521,9 @@ fn verify_source_slice(
         content_digest: readback.content_digest,
         unit_digest: readback.unit_digest,
         excerpt_digest: readback.excerpt_digest,
+        profile_id: readback.profile_id,
+        profile_digest: readback.profile_digest,
+        residency_digest: readback.residency_digest,
         assurance: readback.assurance,
         bytes: readback.bytes,
     })
@@ -492,7 +534,10 @@ fn verify_source_slice_raw_v3_full_unit_v1(
     readback: SourceReadback,
 ) -> Result<VerifiedSourceSlice, ValidationError> {
     if request.expected_assurance != CandidateAssurance::Exact
-        || !raw_v3_profile_matches(&request.expected_profile_id, request.expected_profile_digest)
+        || !raw_v3_profile_matches(
+            &request.expected_profile_id,
+            request.expected_profile_digest,
+        )
     {
         return Err(ValidationError::ProfileMismatch);
     }
@@ -525,6 +570,9 @@ fn verify_source_slice_raw_v3_full_unit_v1(
         content_digest: readback.content_digest,
         unit_digest,
         excerpt_digest,
+        profile_id: readback.profile_id,
+        profile_digest: readback.profile_digest,
+        residency_digest: readback.residency_digest,
         assurance: readback.assurance,
         bytes: readback.bytes,
     })
@@ -564,14 +612,72 @@ pub fn recheck_before_emission(
     })
 }
 
-/// Validated evidence candidate with exact score provenance.
+/// Owner-derived validated candidate with a canonical validation receipt.
+///
+/// Fields are private so a caller cannot mutate evidence after validation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValidatedSearchCandidate {
-    pub candidate_id: OpaqueId,
-    pub leg_id: usize,
-    pub raw_score: f32,
-    pub source: VerifiedSourceSlice,
-    pub emission_permit: EmissionPermit,
+    candidate_id: CandidateId,
+    leg_id: usize,
+    raw_score: f32,
+    source: VerifiedSourceSlice,
+    emission_permit: EmissionPermit,
+    source_revision_ref: SourceRevisionRef,
+    source_owner_fence: SourceOwnerFence,
+    object_residency_key_digest: ObjectResidencyKeyDigest,
+    candidate_validation_receipt_ref: ReceiptRef,
+}
+
+impl ValidatedSearchCandidate {
+    #[must_use]
+    pub const fn candidate_id(&self) -> CandidateId {
+        self.candidate_id
+    }
+
+    #[must_use]
+    pub const fn leg_id(&self) -> usize {
+        self.leg_id
+    }
+
+    #[must_use]
+    pub const fn raw_score(&self) -> f32 {
+        self.raw_score
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> &VerifiedSourceSlice {
+        &self.source
+    }
+
+    #[must_use]
+    pub const fn emission_permit(&self) -> EmissionPermit {
+        self.emission_permit
+    }
+
+    #[must_use]
+    pub const fn source_revision_ref(&self) -> SourceRevisionRef {
+        self.source_revision_ref
+    }
+
+    #[must_use]
+    pub const fn source_owner_generation(&self) -> SourceOwnerGeneration {
+        self.source_owner_fence.source_owner_generation
+    }
+
+    #[must_use]
+    pub const fn source_owner_fence(&self) -> SourceOwnerFence {
+        self.source_owner_fence
+    }
+
+    #[must_use]
+    pub const fn object_residency_key_digest(&self) -> ObjectResidencyKeyDigest {
+        self.object_residency_key_digest
+    }
+
+    #[must_use]
+    pub const fn candidate_validation_receipt_ref(&self) -> &ReceiptRef {
+        &self.candidate_validation_receipt_ref
+    }
 }
 
 /// Content-free validation gap.
@@ -596,62 +702,54 @@ pub enum ValidationOutcome {
     ContaminatedLeg(ReplanSignal),
 }
 
-/// Complete legacy validation pipeline over one nomination.
+/// Legacy validation API without source-owner metadata; always fails closed.
 ///
-/// An absent expected excerpt digest is refused before source readback.
+/// Use [`validate_raw_v3_full_unit_v1`] when the caller can provide the
+/// canonical C09/C03 source, membership, owner-generation, and verified-unit
+/// inputs. This API never reads source bytes or creates a validated candidate.
 pub fn validate<P: RevisionReadbackPort>(
     nomination: &CandidateNomination,
     context: &ValidationContext,
-    max_read_bytes: u64,
-    port: &mut P,
-    final_live_security: &LiveSecurityState,
+    _max_read_bytes: u64,
+    _port: &mut P,
+    _final_live_security: &LiveSecurityState,
 ) -> ValidationOutcome {
-    validate_with(
-        nomination,
-        context,
-        max_read_bytes,
-        port,
-        final_live_security,
-        reopen_and_verify::<P>,
-    )
+    match precheck(nomination, context) {
+        ValidationPrecheck::ContaminatedLeg => ValidationOutcome::ContaminatedLeg(ReplanSignal {
+            leg_id: nomination.leg_id,
+        }),
+        ValidationPrecheck::Gap(reason) => ValidationOutcome::Gap(CandidateValidationGap {
+            leg_id: nomination.leg_id,
+            source_membership_id: nomination.source_membership_id,
+            reason,
+        }),
+        ValidationPrecheck::Proceed => ValidationOutcome::Gap(CandidateValidationGap {
+            leg_id: nomination.leg_id,
+            source_membership_id: nomination.source_membership_id,
+            reason: ValidationError::OwnerMetadataRequired,
+        }),
+    }
 }
 
-/// Complete validation pipeline for one whole-unit raw-v3 nomination.
+/// Complete owner-qualified validation for one whole-unit raw-v3 nomination.
 ///
-/// The range must come from one complete verified raw-v3 unit. The same
-/// request precheck and final live-security fence as [`validate`] still run.
+/// The caller supplies the candidate ID and typed C09/C03 owner records. Their
+/// source, membership, revision, profile, residency, and exact unit range are
+/// compared before the readback port is called. A successful value carries a
+/// content-bound receipt computed after the final live permit is issued.
 pub fn validate_raw_v3_full_unit_v1<P: RevisionReadbackPort>(
     nomination: &CandidateNomination,
     context: &ValidationContext,
+    candidate_id: CandidateId,
+    source_membership: &SourceMembership,
+    source_revision: &SourceRevision,
+    source_revision_ref: &SourceRevisionRef,
+    source_owner_fence: SourceOwnerFence,
+    unit_set: &VerifiedUnitSet,
     max_read_bytes: u64,
     port: &mut P,
     final_live_security: &LiveSecurityState,
 ) -> ValidationOutcome {
-    validate_with(
-        nomination,
-        context,
-        max_read_bytes,
-        port,
-        final_live_security,
-        reopen_and_verify_raw_v3_full_unit_v1::<P>,
-    )
-}
-
-fn validate_with<P, V>(
-    nomination: &CandidateNomination,
-    context: &ValidationContext,
-    max_read_bytes: u64,
-    port: &mut P,
-    final_live_security: &LiveSecurityState,
-    reopen: V,
-) -> ValidationOutcome
-where
-    P: RevisionReadbackPort,
-    V: FnOnce(
-        &ExactRevisionReadbackRequest,
-        &mut P,
-    ) -> Result<VerifiedSourceSlice, ValidationError>,
-{
     match precheck(nomination, context) {
         ValidationPrecheck::ContaminatedLeg => {
             return ValidationOutcome::ContaminatedLeg(ReplanSignal {
@@ -667,31 +765,64 @@ where
         }
         ValidationPrecheck::Proceed => {}
     }
-    let result = build_readback_request(nomination, max_read_bytes)
-        .and_then(|request| reopen(&request, port))
-        .and_then(|verified| {
-            let permit = recheck_before_emission(
-                &verified,
-                &context.request_security,
-                final_live_security,
-            )?;
-            Ok((verified, permit))
+    if !raw_v3_owner_binding_matches(
+        nomination,
+        context,
+        source_membership,
+        source_revision,
+        source_revision_ref,
+        source_owner_fence,
+        unit_set,
+    ) {
+        return ValidationOutcome::ContaminatedLeg(ReplanSignal {
+            leg_id: nomination.leg_id,
         });
-    match result {
-        Ok((source, emission_permit)) => {
-            ValidationOutcome::Validated(ValidatedSearchCandidate {
-                candidate_id: OpaqueId::new(format!(
-                    "candidate:{}:{}",
-                    nomination.leg_id,
-                    hex_point(nomination.point_id)
-                ))
-                .unwrap_or_else(|_| nomination.profile_id_to_opaque()),
+    }
+    if !nomination.raw_score.is_finite() {
+        return ValidationOutcome::Gap(CandidateValidationGap {
+            leg_id: nomination.leg_id,
+            source_membership_id: nomination.source_membership_id,
+            reason: ValidationError::InvalidScore,
+        });
+    }
+
+    let result = build_readback_request(nomination, max_read_bytes)
+        .and_then(|request| reopen_and_verify_raw_v3_full_unit_v1(&request, port))
+        .and_then(|source| {
+            if source.profile_id != *unit_set.manifest().profile_id()
+                || source.profile_digest != nomination.profile_digest
+                || source.residency_digest.as_bytes()
+                    != source_revision.object_residency_key_digest.as_bytes()
+            {
+                return Err(ValidationError::OwnerBindingMismatch);
+            }
+            let emission_permit =
+                recheck_before_emission(&source, &context.request_security, final_live_security)?;
+            let receipt = candidate_validation_receipt_ref(
+                candidate_id,
+                nomination,
+                context,
+                source_membership,
+                source_revision,
+                source_revision_ref,
+                source_owner_fence,
+                &source,
+                emission_permit,
+            )?;
+            Ok(ValidatedSearchCandidate {
+                candidate_id,
                 leg_id: nomination.leg_id,
                 raw_score: nomination.raw_score,
                 source,
                 emission_permit,
+                source_revision_ref: *source_revision_ref,
+                source_owner_fence,
+                object_residency_key_digest: source_revision.object_residency_key_digest,
+                candidate_validation_receipt_ref: receipt,
             })
-        }
+        });
+    match result {
+        Ok(candidate) => ValidationOutcome::Validated(candidate),
         Err(reason) => ValidationOutcome::Gap(CandidateValidationGap {
             leg_id: nomination.leg_id,
             source_membership_id: nomination.source_membership_id,
@@ -700,11 +831,183 @@ where
     }
 }
 
-impl CandidateNomination {
-    fn profile_id_to_opaque(&self) -> OpaqueId {
-        OpaqueId::new(format!("candidate-fallback:{}", self.profile_id.as_str()))
-            .expect("bounded profile identifier produces a bounded opaque identifier")
-    }
+fn raw_v3_owner_binding_matches(
+    nomination: &CandidateNomination,
+    context: &ValidationContext,
+    source_membership: &SourceMembership,
+    source_revision: &SourceRevision,
+    source_revision_ref: &SourceRevisionRef,
+    source_owner_fence: SourceOwnerFence,
+    unit_set: &VerifiedUnitSet,
+) -> bool {
+    let manifest = unit_set.manifest();
+    let provenance = manifest.provenance();
+    let binding = provenance.binding();
+    let Some(unit) = unit_set
+        .units()
+        .iter()
+        .find(|unit| unit.unit_id() == nomination.unit_id)
+    else {
+        return false;
+    };
+    let profile = manifest.profile();
+    let profile_id = manifest.profile_id();
+    let profile_digest = profile_id
+        .as_str()
+        .strip_prefix("unitizer-v3-")
+        .and_then(|digest| Blake3Digest32::parse_hex(digest).ok());
+    let expected_revision_id = source_revision_ref.revision_id;
+
+    context
+        .request_security
+        .memberships
+        .contains(&source_membership.source_membership_id)
+        && source_membership.source_membership_id == nomination.source_membership_id
+        && source_owner_fence.source_namespace_id == source_revision_ref.source_namespace_id
+        && source_membership.source_id == source_revision_ref.source_id
+        && source_revision.source_id == source_revision_ref.source_id
+        && source_revision.revision_id == source_revision_ref.revision_id
+        && source_revision.content_digest == source_revision_ref.content_digest
+        && source_revision.byte_length == source_revision_ref.byte_length
+        && nomination.source_revision_id == expected_revision_id
+        && nomination.expected_content_digest == source_revision_ref.content_digest
+        && binding.source_namespace_id == source_revision_ref.source_namespace_id
+        && binding.source_id == source_revision_ref.source_id
+        && binding.source_revision_id == source_revision_ref.revision_id
+        && binding.representation_id == unit_set.representation().representation_id
+        && unit_set.representation().unitizer_profile_id == *profile_id
+        && unit_set.manifest_digest() == unit_set.representation().unit_manifest_digest
+        && provenance.input_digest() == source_revision_ref.content_digest
+        && provenance.canonical_digest() == source_revision_ref.content_digest
+        && provenance.native_bytes() == source_revision_ref.byte_length
+        && provenance.canonical_bytes() == source_revision_ref.byte_length
+        && unit_set.representation().representation_id == nomination.representation_id
+        && unit.unit_id() == nomination.unit_id
+        && unit.source_start() == nomination.unit_byte_start
+        && unit.source_end() == nomination.unit_byte_end
+        && unit.unit_content_digest() == nomination.expected_unit_digest
+        && source_revision.object_residency_key_digest.as_bytes()
+            == nomination.expected_residency_digest.as_bytes()
+        && profile_id == &nomination.profile_id
+        && profile_digest == Some(nomination.profile_digest)
+        && raw_v3_profile_matches(profile_id, nomination.profile_digest)
+        && nomination.expected_assurance == CandidateAssurance::Exact
+        && profile.anchor_policy == V3AnchorPolicy::ExactTextBytes
+        && profile.attachment_policy == V3AttachmentPolicy::Absent
+        && profile.omission_policy == V3OmissionPolicy::Forbidden
+        && profile.overlap_policy == V3OverlapPolicy::None
+        && nomination.unit_byte_start < nomination.unit_byte_end
+        && nomination.unit_byte_end <= source_revision_ref.byte_length
+}
+
+fn candidate_validation_receipt_ref(
+    candidate_id: CandidateId,
+    nomination: &CandidateNomination,
+    context: &ValidationContext,
+    source_membership: &SourceMembership,
+    source_revision: &SourceRevision,
+    source_revision_ref: &SourceRevisionRef,
+    source_owner_fence: SourceOwnerFence,
+    source: &VerifiedSourceSlice,
+    emission_permit: EmissionPermit,
+) -> Result<ReceiptRef, ValidationError> {
+    let leg_id =
+        u64::try_from(nomination.leg_id).map_err(|_| ValidationError::ReceiptComputationFailed)?;
+    let visible_epoch = canonical_signed(context.visible_epoch.get());
+    let permit_checkpoint = canonical_checkpoint(emission_permit.access_permit.checkpoint)?;
+    let assurance: u64 = match source.assurance {
+        CandidateAssurance::Derived => 0,
+        CandidateAssurance::SourceBacked => 1,
+        CandidateAssurance::Exact => 2,
+    };
+    let values = vec![
+        CanonicalValue::U64(1),
+        canonical_bytes(candidate_id.as_bytes())?,
+        canonical_bytes(nomination.request_id.as_bytes())?,
+        canonical_bytes(&nomination.plan_digest)?,
+        CanonicalValue::U64(leg_id),
+        canonical_bytes(&nomination.point_id)?,
+        canonical_bytes(nomination.collection_generation_id.as_bytes())?,
+        visible_epoch,
+        CanonicalValue::U64(context.request_security.planned_generation),
+        canonical_bytes(source_membership.source_membership_id.as_bytes())?,
+        canonical_bytes(source_membership.source_id.as_bytes())?,
+        canonical_bytes(source_membership.workspace_id.as_bytes())?,
+        CanonicalValue::U64(source_membership.membership_revision.get()),
+        canonical_bytes(source_revision_ref.source_namespace_id.as_bytes())?,
+        canonical_bytes(source_owner_fence.source_namespace_id.as_bytes())?,
+        canonical_bytes(source_revision_ref.source_id.as_bytes())?,
+        canonical_bytes(source_owner_fence.source_owner_generation.as_bytes())?,
+        canonical_bytes(source_revision.revision_id.as_bytes())?,
+        CanonicalValue::U64(source_revision.occurrence_sequence),
+        canonical_bytes(source_revision_ref.content_digest.as_bytes())?,
+        CanonicalValue::U64(source_revision_ref.byte_length),
+        canonical_bytes(source_revision.object_residency_key_digest.as_bytes())?,
+        canonical_bytes(source_revision_ref.revision_id.as_bytes())?,
+        canonical_bytes(source.representation_id.as_bytes())?,
+        canonical_bytes(source.unit_id.as_bytes())?,
+        CanonicalValue::U64(source.byte_start),
+        CanonicalValue::U64(source.byte_end),
+        canonical_bytes(source.profile_id.as_str().as_bytes())?,
+        canonical_bytes(source.profile_digest.as_bytes())?,
+        canonical_bytes(source.residency_digest.as_bytes())?,
+        CanonicalValue::U64(assurance),
+        canonical_bytes(source.content_digest.as_bytes())?,
+        canonical_bytes(source.unit_digest.as_bytes())?,
+        canonical_bytes(source.excerpt_digest.as_bytes())?,
+        CanonicalValue::U64(u64::from(nomination.raw_score.to_bits())),
+        CanonicalValue::Array(
+            BoundedList::new(vec![
+                permit_checkpoint,
+                CanonicalValue::U64(emission_permit.access_permit.live_generation),
+                canonical_bytes(
+                    emission_permit
+                        .access_permit
+                        .live_snapshot_digest
+                        .as_bytes(),
+                )?,
+                canonical_bytes(emission_permit.source_membership_id.as_bytes())?,
+                canonical_bytes(emission_permit.source_revision_id.as_bytes())?,
+            ])
+            .map_err(|_| ValidationError::ReceiptComputationFailed)?,
+        ),
+    ];
+    let value = CanonicalValue::Array(
+        BoundedList::new(values).map_err(|_| ValidationError::ReceiptComputationFailed)?,
+    );
+    let domain = CanonicalDigestDomain::parse(CANDIDATE_VALIDATION_RECEIPT_DOMAIN)
+        .map_err(|_| ValidationError::ReceiptComputationFailed)?;
+    let limit = DigestInputLimit::new(MAX_CANONICAL_BYTES)
+        .map_err(|_| ValidationError::ReceiptComputationFailed)?;
+    let digest = blake3_canonical(&domain, &value, limit)
+        .map_err(|_| ValidationError::ReceiptComputationFailed)?;
+    ReceiptRef::new(format!("candidate-validation:v1:{digest}"))
+        .map_err(|_| ValidationError::ReceiptComputationFailed)
+}
+
+fn canonical_bytes(value: &[u8]) -> Result<CanonicalValue, ValidationError> {
+    BoundedBytes::new(value.to_vec())
+        .map(CanonicalValue::Bytes)
+        .map_err(|_| ValidationError::ReceiptComputationFailed)
+}
+
+fn canonical_signed(value: i64) -> CanonicalValue {
+    u64::try_from(value).map_or(CanonicalValue::I64(value), CanonicalValue::U64)
+}
+
+fn canonical_checkpoint(checkpoint: AccessCheckpoint) -> Result<CanonicalValue, ValidationError> {
+    let name = match checkpoint {
+        AccessCheckpoint::RequestAdmission => b"request_admission".as_slice(),
+        AccessCheckpoint::BeforeLegDispatch => b"before_leg_dispatch".as_slice(),
+        AccessCheckpoint::AfterLegCompletion => b"after_leg_completion".as_slice(),
+        AccessCheckpoint::BeforeSourceReadback => b"before_source_readback".as_slice(),
+        AccessCheckpoint::AfterSourceReadback => b"after_source_readback".as_slice(),
+        AccessCheckpoint::BeforeResultEmission => b"before_result_emission".as_slice(),
+        AccessCheckpoint::BeforeExactEmission => b"before_exact_emission".as_slice(),
+        AccessCheckpoint::HandleExpansion => b"handle_expansion".as_slice(),
+        AccessCheckpoint::ContinuationExpansion => b"continuation_expansion".as_slice(),
+    };
+    canonical_bytes(name)
 }
 
 /// Material effect of losing validated candidates.
@@ -737,16 +1040,6 @@ pub const fn material_coverage_change(
     } else {
         CoverageChange::ExplicitIncomplete
     }
-}
-
-fn hex_point(bytes: [u8; 16]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(32);
-    for byte in bytes {
-        output.push(char::from(HEX[usize::from(byte >> 4)]));
-        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    output
 }
 
 #[cfg(test)]
@@ -826,10 +1119,7 @@ mod spine_gate_tests {
         }
     }
 
-    fn raw_readback(
-        nomination: &CandidateNomination,
-        bytes: &[u8],
-    ) -> SourceReadback {
+    fn raw_readback(nomination: &CandidateNomination, bytes: &[u8]) -> SourceReadback {
         let exact_limit = search_contracts::Blake3ExactInputLimit::new(bytes.len()).unwrap();
         SourceReadback {
             source_membership_id: nomination.source_membership_id,
@@ -897,31 +1187,104 @@ mod spine_gate_tests {
     #[test]
     fn gap_reason_codes_are_stable_closed_and_distinct() {
         let cases = [
-            (ValidationError::RequestMismatch, "VALIDATION_REQUEST_MISMATCH"),
+            (
+                ValidationError::RequestMismatch,
+                "VALIDATION_REQUEST_MISMATCH",
+            ),
             (ValidationError::PlanMismatch, "VALIDATION_PLAN_MISMATCH"),
-            (ValidationError::LegContaminated, "VALIDATION_LEG_CONTAMINATED"),
-            (ValidationError::MembershipDenied, "VALIDATION_MEMBERSHIP_DENIED"),
-            (ValidationError::CollectionMismatch, "VALIDATION_COLLECTION_MISMATCH"),
-            (ValidationError::ProfileMismatch, "VALIDATION_PROFILE_MISMATCH"),
+            (
+                ValidationError::LegContaminated,
+                "VALIDATION_LEG_CONTAMINATED",
+            ),
+            (
+                ValidationError::MembershipDenied,
+                "VALIDATION_MEMBERSHIP_DENIED",
+            ),
+            (
+                ValidationError::CollectionMismatch,
+                "VALIDATION_COLLECTION_MISMATCH",
+            ),
+            (
+                ValidationError::ProfileMismatch,
+                "VALIDATION_PROFILE_MISMATCH",
+            ),
             (ValidationError::EpochInvalid, "VALIDATION_EPOCH_INVALID"),
-            (ValidationError::OverlayShadowed, "VALIDATION_OVERLAY_SHADOWED"),
-            (ValidationError::CandidateBudgetExceeded, "VALIDATION_BUDGET_EXCEEDED"),
-            (ValidationError::RevisionUnavailable, "VALIDATION_REVISION_UNAVAILABLE"),
-            (ValidationError::SourceUnreadable, "VALIDATION_SOURCE_UNREADABLE"),
-            (ValidationError::ReadbackTimeout, "VALIDATION_READBACK_TIMEOUT"),
-            (ValidationError::RevisionMismatch, "VALIDATION_REVISION_MISMATCH"),
-            (ValidationError::RepresentationMismatch, "VALIDATION_REPRESENTATION_MISMATCH"),
+            (
+                ValidationError::OverlayShadowed,
+                "VALIDATION_OVERLAY_SHADOWED",
+            ),
+            (
+                ValidationError::CandidateBudgetExceeded,
+                "VALIDATION_BUDGET_EXCEEDED",
+            ),
+            (
+                ValidationError::RevisionUnavailable,
+                "VALIDATION_REVISION_UNAVAILABLE",
+            ),
+            (
+                ValidationError::SourceUnreadable,
+                "VALIDATION_SOURCE_UNREADABLE",
+            ),
+            (
+                ValidationError::ReadbackTimeout,
+                "VALIDATION_READBACK_TIMEOUT",
+            ),
+            (
+                ValidationError::RevisionMismatch,
+                "VALIDATION_REVISION_MISMATCH",
+            ),
+            (
+                ValidationError::RepresentationMismatch,
+                "VALIDATION_REPRESENTATION_MISMATCH",
+            ),
             (ValidationError::UnitMismatch, "VALIDATION_UNIT_MISMATCH"),
-            (ValidationError::ContentDigestMismatch, "VALIDATION_CONTENT_DIGEST_MISMATCH"),
-            (ValidationError::LengthMismatch, "VALIDATION_LENGTH_MISMATCH"),
-            (ValidationError::AnchorOutOfBounds, "VALIDATION_ANCHOR_OUT_OF_BOUNDS"),
-            (ValidationError::ResidencyDenied, "VALIDATION_RESIDENCY_DENIED"),
-            (ValidationError::CoordinateMapMismatch, "VALIDATION_COORDINATE_MAP_MISMATCH"),
-            (ValidationError::AssuranceInsufficient, "VALIDATION_ASSURANCE_INSUFFICIENT"),
-            (ValidationError::DisclosureExceeded, "VALIDATION_DISCLOSURE_EXCEEDED"),
+            (
+                ValidationError::ContentDigestMismatch,
+                "VALIDATION_CONTENT_DIGEST_MISMATCH",
+            ),
+            (
+                ValidationError::LengthMismatch,
+                "VALIDATION_LENGTH_MISMATCH",
+            ),
+            (
+                ValidationError::AnchorOutOfBounds,
+                "VALIDATION_ANCHOR_OUT_OF_BOUNDS",
+            ),
+            (
+                ValidationError::ResidencyDenied,
+                "VALIDATION_RESIDENCY_DENIED",
+            ),
+            (
+                ValidationError::CoordinateMapMismatch,
+                "VALIDATION_COORDINATE_MAP_MISMATCH",
+            ),
+            (
+                ValidationError::AssuranceInsufficient,
+                "VALIDATION_ASSURANCE_INSUFFICIENT",
+            ),
+            (
+                ValidationError::DisclosureExceeded,
+                "VALIDATION_DISCLOSURE_EXCEEDED",
+            ),
             (ValidationError::AccessRevoked, "VALIDATION_ACCESS_REVOKED"),
             (ValidationError::Purged, "VALIDATION_PURGED"),
-            (ValidationError::EmissionFenceStale, "VALIDATION_EMISSION_FENCE_STALE"),
+            (
+                ValidationError::EmissionFenceStale,
+                "VALIDATION_EMISSION_FENCE_STALE",
+            ),
+            (
+                ValidationError::OwnerMetadataRequired,
+                "VALIDATION_OWNER_METADATA_REQUIRED",
+            ),
+            (
+                ValidationError::OwnerBindingMismatch,
+                "VALIDATION_OWNER_BINDING_MISMATCH",
+            ),
+            (ValidationError::InvalidScore, "VALIDATION_INVALID_SCORE"),
+            (
+                ValidationError::ReceiptComputationFailed,
+                "VALIDATION_RECEIPT_COMPUTATION_FAILED",
+            ),
         ];
         let mut seen = BTreeSet::new();
         for (error, code) in cases {
@@ -974,33 +1337,29 @@ mod spine_gate_tests {
     }
 
     #[test]
-    fn raw_v3_pipeline_verifies_actual_full_unit_bytes_and_final_live_fence() {
-        let exact_limit = search_contracts::Blake3ExactInputLimit::new(RAW_UNIT.len()).unwrap();
-        let excerpt_digest = search_contracts::blake3_exact_bytes(RAW_UNIT, exact_limit).unwrap();
-        let nomination = raw_nomination(Some(excerpt_digest));
+    fn metadata_free_validation_refuses_before_source_readback() {
+        let nomination = raw_nomination(Some(Blake3Digest32::from_bytes([0x22; 32])));
         let context = raw_context(&nomination);
         let mut port = FixedReadback {
             value: raw_readback(&nomination, RAW_UNIT),
             reads: 0,
         };
 
-        let outcome = validate_raw_v3_full_unit_v1(
+        let outcome = validate(
             &nomination,
             &context,
             RAW_UNIT.len() as u64,
             &mut port,
             &context.live_security,
         );
-        let ValidationOutcome::Validated(candidate) = outcome else {
-            panic!("expected verified raw-v3 candidate, got {outcome:?}");
-        };
-        assert_eq!(port.reads, 1);
-        assert_eq!(candidate.source.bytes(), RAW_UNIT);
-        assert_eq!(
-            candidate.source.unit_digest(),
-            nomination.expected_unit_digest
-        );
-        assert_eq!(candidate.source.excerpt_digest(), excerpt_digest);
+        assert!(matches!(
+            outcome,
+            ValidationOutcome::Gap(CandidateValidationGap {
+                reason: ValidationError::OwnerMetadataRequired,
+                ..
+            })
+        ));
+        assert_eq!(port.reads, 0);
     }
 
     #[test]
@@ -1068,6 +1427,12 @@ mod spine_gate_tests {
         .unwrap();
         assert_eq!(verified.excerpt_digest(), expected_excerpt);
         assert_ne!(verified.excerpt_digest(), verified.unit_digest());
+        assert_eq!(verified.profile_id(), &nomination.profile_id);
+        assert_eq!(verified.profile_digest(), nomination.profile_digest);
+        assert_eq!(
+            verified.residency_digest(),
+            nomination.expected_residency_digest
+        );
     }
 
     #[test]
@@ -1077,11 +1442,133 @@ mod spine_gate_tests {
         let request = build_readback_request(&nomination, RAW_UNIT.len() as u64).unwrap();
 
         assert_eq!(
-            verify_source_slice_raw_v3_full_unit_v1(
-                &request,
-                raw_readback(&nomination, RAW_UNIT),
-            ),
+            verify_source_slice_raw_v3_full_unit_v1(&request, raw_readback(&nomination, RAW_UNIT),),
             Err(ValidationError::ContentDigestMismatch)
         );
+    }
+
+    #[test]
+    fn validation_receipt_binds_typed_candidate_and_final_permit() {
+        let nomination = raw_nomination(None);
+        let context = raw_context(&nomination);
+        let namespace_id = search_contracts::SourceNamespaceId::from_bytes([0x30; 16]);
+        let source_id = search_contracts::SourceId::from_bytes([0x31; 16]);
+        let source_revision_ref = SourceRevisionRef {
+            source_namespace_id: namespace_id,
+            source_id,
+            revision_id: nomination.source_revision_id,
+            content_digest: nomination.expected_content_digest,
+            byte_length: RAW_UNIT.len() as u64,
+        };
+        let residency = ObjectResidencyKeyDigest::from_bytes([0x19; 32]);
+        let source_revision = SourceRevision {
+            revision_id: nomination.source_revision_id,
+            source_id,
+            occurrence_sequence: 4,
+            content_digest: nomination.expected_content_digest,
+            byte_length: RAW_UNIT.len() as u64,
+            observed_at: search_contracts::UtcTimestamp::parse("2026-10-16T12:00:00.000000Z")
+                .unwrap(),
+            acquisition_kind: search_contracts::AcquisitionKind::Filesystem,
+            stability_receipt_ref: ReceiptRef::new("source-stability:test").unwrap(),
+            object_residency_key_digest: residency,
+        };
+        let membership = SourceMembership {
+            source_membership_id: nomination.source_membership_id,
+            corpus_id: search_contracts::CorpusId::from_bytes([0x32; 16]),
+            source_id,
+            workspace_id: search_contracts::WorkspaceId::from_bytes([0x33; 16]),
+            role: search_contracts::MembershipRole::Source,
+            preparation_profile_id: ProfileId::new("raw-v2-test").unwrap(),
+            access_policy_binding_id: search_contracts::AccessPolicyBindingId::from_bytes(
+                [0x34; 16],
+            ),
+            retention_policy_id: ProfileId::new("retention-test-v1").unwrap(),
+            residency_policy_binding_id: search_contracts::ResidencyPolicyBindingId::from_bytes(
+                [0x35; 16],
+            ),
+            membership_revision: search_contracts::MembershipRevision::new(1),
+        };
+        let excerpt_digest = search_contracts::blake3_exact_bytes(
+            RAW_UNIT,
+            search_contracts::Blake3ExactInputLimit::new(RAW_UNIT.len()).unwrap(),
+        )
+        .unwrap();
+        let source = VerifiedSourceSlice {
+            source_membership_id: nomination.source_membership_id,
+            source_revision_id: nomination.source_revision_id,
+            representation_id: nomination.representation_id,
+            unit_id: nomination.unit_id,
+            byte_start: nomination.unit_byte_start,
+            byte_end: nomination.unit_byte_end,
+            content_digest: nomination.expected_content_digest,
+            unit_digest: nomination.expected_unit_digest,
+            excerpt_digest,
+            profile_id: nomination.profile_id.clone(),
+            profile_digest: nomination.profile_digest,
+            residency_digest: nomination.expected_residency_digest,
+            assurance: CandidateAssurance::Exact,
+            bytes: RAW_UNIT.to_vec(),
+        };
+        let permit = EmissionPermit {
+            access_permit: AccessPermit {
+                checkpoint: AccessCheckpoint::BeforeResultEmission,
+                live_generation: context.live_security.generation,
+                live_snapshot_digest: context.live_security.snapshot_digest,
+            },
+            source_membership_id: nomination.source_membership_id,
+            source_revision_id: nomination.source_revision_id,
+        };
+        let owner_fence = SourceOwnerFence {
+            source_namespace_id: namespace_id,
+            source_owner_generation: SourceOwnerGeneration::from_bytes([0x36; 32]),
+        };
+        let candidate_id = CandidateId::from_bytes([0x37; 16]);
+        let baseline = candidate_validation_receipt_ref(
+            candidate_id,
+            &nomination,
+            &context,
+            &membership,
+            &source_revision,
+            &source_revision_ref,
+            owner_fence,
+            &source,
+            permit,
+        )
+        .unwrap();
+        let changed_candidate = candidate_validation_receipt_ref(
+            CandidateId::from_bytes([0x38; 16]),
+            &nomination,
+            &context,
+            &membership,
+            &source_revision,
+            &source_revision_ref,
+            owner_fence,
+            &source,
+            permit,
+        )
+        .unwrap();
+        let changed_permit = candidate_validation_receipt_ref(
+            candidate_id,
+            &nomination,
+            &context,
+            &membership,
+            &source_revision,
+            &source_revision_ref,
+            owner_fence,
+            &source,
+            EmissionPermit {
+                access_permit: AccessPermit {
+                    live_snapshot_digest: Blake3Digest32::from_bytes([0x39; 32]),
+                    ..permit.access_permit
+                },
+                ..permit
+            },
+        )
+        .unwrap();
+
+        assert!(baseline.as_str().starts_with("candidate-validation:v1:"));
+        assert_ne!(baseline, changed_candidate);
+        assert_ne!(baseline, changed_permit);
     }
 }
