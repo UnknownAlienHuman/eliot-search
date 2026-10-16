@@ -378,6 +378,8 @@ mod retention_control;
 mod retention_source;
 #[path = "native_retention.rs"]
 mod retention;
+#[path = "native_retained_reader.rs"]
+mod retained_reader;
 #[path = "native_dek_command.rs"]
 mod dek_command;
 #[path = "native_dek_selection.rs"]

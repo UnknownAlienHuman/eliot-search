@@ -1,7 +1,7 @@
 //! Explicit native authority and cooperative recipe ownership; no allow-all host.
 
 use search_access::{AccessCheckpoint, AccessError, RequestSecurityFence};
-use search_contracts::{ProviderBodyV1, RecipeIdV1, RequestBody};
+use search_contracts::{ProviderBodyV1, RecipeIdV1, RequestBody, SourceMembershipId};
 use search_provider_protocol::{
     AdmittedProviderRequest, BindingContext, MonotonicMillis, RequestGuard, TerminalKind,
 };
@@ -246,6 +246,68 @@ impl CanonicalWorkOutput<'_, '_, '_> {
             .map_err(CanonicalServingError::Access)?;
         self.budget.check()?;
         Ok(admission)
+    }
+
+    /// Read an admitted membership while the current issuer and native authority
+    /// remain borrowed by this work turn. The callback must reopen the exact
+    /// retained revision through its source owner; neither a handle nor storage
+    /// custody substitutes for the issuer's source-read permission.
+    pub(crate) fn with_standalone_source_read<T>(
+        &mut self,
+        admission: &StandalonePreRetrievalAdmission,
+        membership: SourceMembershipId,
+        read: impl FnOnce() -> Result<T, CanonicalServingError>,
+    ) -> Result<T, CanonicalServingError> {
+        if self.failed || self.emitted_terminal.is_some() {
+            return Err(CanonicalServingError::InvalidCompletion);
+        }
+        self.failed = true;
+        self.budget.check()?;
+        if self.request.guard().is_cancelled() {
+            return Err(CanonicalServingError::GrantRefused(
+                crate::access_composition::GrantUseError::RequestInactive,
+            ));
+        }
+        let issued = self.authority.standalone_grant.as_ref()
+            .ok_or(CanonicalServingError::InvalidConfiguration)?;
+        if !issued.template().source_read_permission {
+            return Err(CanonicalServingError::GrantRefused(
+                crate::access_composition::GrantUseError::RequestDenied,
+            ));
+        }
+        // Recompile under this turn's current owner instead of accepting a
+        // retained admission as a reusable permit after policy/source drift.
+        let current = self.admit_standalone_query()?;
+        if current.grant_fence != admission.grant_fence
+            || current.scope != admission.scope
+            || current.request_fence != admission.request_fence
+            || current.legs != admission.legs
+            || current.predicates != admission.predicates
+            || current.profile_digest != admission.profile_digest
+            || current.request_fence != *self.authority.fence
+            || !current.scope.memberships.contains_key(&membership)
+        {
+            return Err(CanonicalServingError::Access(AccessError::SnapshotStale));
+        }
+        let result = self.authority.domain.with_live_checkpoint(
+            &current.request_fence, AccessCheckpoint::BeforeSourceReadback, |_| read(),
+        ).map_err(CanonicalServingError::Access)?;
+        // Check even after a source error. Preserve that first error, but never
+        // return successful bytes if cancellation, expiry or live deny won.
+        let after = self.budget.check().and_then(|()| {
+            if self.request.guard().is_cancelled() {
+                return Err(CanonicalServingError::GrantRefused(
+                    crate::access_composition::GrantUseError::RequestInactive,
+                ));
+            }
+            self.authority.domain.with_live_checkpoint(
+                &current.request_fence, AccessCheckpoint::BeforeSourceReadback, |_| (),
+            ).map_err(CanonicalServingError::Access)
+        });
+        let value = result?;
+        after?;
+        self.failed = false;
+        Ok(value)
     }
 
     /// Validate actual output and send it through the canonical transport.

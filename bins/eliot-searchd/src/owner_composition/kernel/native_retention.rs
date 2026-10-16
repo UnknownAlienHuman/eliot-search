@@ -100,7 +100,7 @@ fn object_metadata(input: &RetentionSourceInput<'_, '_, '_>, profile: &SourceRev
     Ok((binding, metadata))
 }
 
-fn metadata_from_reservation(reservation: &SealReservationReadback) -> RevisionSealMetadata {
+pub(super) fn metadata_from_reservation(reservation: &SealReservationReadback) -> RevisionSealMetadata {
     RevisionSealMetadata { operation_id: reservation.operation_id().clone(),
         preseal_occurrence_canonical: reservation.preseal_occurrence_canonical().to_vec(),
         residency_canonical: reservation.residency_canonical().to_vec(),

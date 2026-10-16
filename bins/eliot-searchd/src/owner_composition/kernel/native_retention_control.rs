@@ -162,6 +162,8 @@ impl<C: CancellationProbe> Port for NativeRetentionControl<'_, '_, C> {
 }
 
 impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'work, C> {
+    pub(super) const fn deadline(&self) -> Instant { self.deadline }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(journal: &'journal mut db::PersistentControlJournal,
         publisher: &'journal mut db::ControlSnapshotPublisher, source: &RegisteredSource,
@@ -324,6 +326,47 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     pub(super) fn load_committed_object(&self, profile: &SourceRevisionPresealProfile,
         committed: &SourceRevisionMutationReadback, context: &OperationContext<C>,
     ) -> Result<search_revision_store::PersistedSelectedObjectMetadata, RetentionControlError> {
+        self.load_object(profile, committed, context, false).map(|(metadata, _)| metadata)
+    }
+
+    /// Resolve the complete durable join from an exact source reference. This
+    /// observes only technical metadata; the serving owner must already hold
+    /// the matching membership grant and live source-read checkpoint.
+    pub(super) fn load_retained_revision(&self, expected: &c::SourceRevisionRef,
+        context: &OperationContext<C>,
+    ) -> Result<(search_revision_store::PersistedSelectedObjectMetadata,
+        db::source_retention::SealReservationReadback), RetentionControlError> {
+        self.contextual(context)?;
+        if expected.source_namespace_id != self.namespace || expected.source_id != self.source {
+            return Err(ControlError::OperationConflict.into());
+        }
+        let link = self.scoped_key("object-link", Some(expected.revision_id))?;
+        let read = self.read(&self.scope(std::slice::from_ref(&link))?)?;
+        self.require_source(&read)?;
+        self.charge(4 * MAX_METADATA)?;
+        let linked = self.value(&read, &link, Class::State)?.ok_or(ControlError::StoreUnavailable)?;
+        let metadata = search_revision_store::PersistedSelectedObjectMetadata::decode(linked.as_bytes())
+            .map_err(|_| ControlError::StoreCorrupt)?;
+        if metadata.source().namespace_id != expected.source_namespace_id
+            || metadata.source().source_id != expected.source_id
+            || metadata.source().revision_id != expected.revision_id
+            || metadata.content_digest() != expected.content_digest
+            || metadata.content_bytes() != expected.byte_length
+        { return Err(ControlError::OperationConflict.into()); }
+        let operation = metadata.operation_id();
+        let profile = self.load_source_revision_preseal_profile(operation, context)?
+            .ok_or(ControlError::StoreCorrupt)?;
+        let committed = self.load_source_revision_operation(operation, context)?
+            .ok_or(ControlError::StoreCorrupt)?;
+        let (verified, seal) = self.load_object(&profile, &committed, context, true)?;
+        if verified != metadata { return Err(ControlError::StoreCorrupt.into()); }
+        Ok((verified, seal))
+    }
+
+    fn load_object(&self, profile: &SourceRevisionPresealProfile,
+        committed: &SourceRevisionMutationReadback, context: &OperationContext<C>, require_active: bool,
+    ) -> Result<(search_revision_store::PersistedSelectedObjectMetadata,
+        db::source_retention::SealReservationReadback), RetentionControlError> {
         self.contextual(context)?;
         self.charge(32 * MAX_METADATA)?;
         let object_id = search_revision_store::selected_object_storage_id(committed.revision.object_residency_key_digest)
@@ -378,8 +421,9 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
             || cause.namespace_id != self.namespace || cause.source_id != self.source || cause.source_revision_id != profile.revision_id
             || cause.operation.operation_id != profile.operation_id || cause.operation.request_digest != committed.request_digest
             || !matches!(cause.cause, search_retention::source_retention::SourceRetentionCause::UntilExplicitRelease)
+            || (require_active && cause.state != search_retention::source_retention::SourceRetentionState::Active)
         { return Err(ControlError::StoreCorrupt.into()); }
-        Ok(metadata)
+        Ok((metadata, seal))
     }
 
     /// Called only after the Native C07 publication/decrypt/source checks.
