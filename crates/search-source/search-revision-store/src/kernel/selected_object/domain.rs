@@ -293,6 +293,147 @@ pub fn residency_canonical_bytes(
         })?
 }
 
+/// Finite ceiling for the complete canonical residency byte block.
+///
+/// The encoder enforces the same ceiling on emission; this decoder enforces
+/// it on retained readback so both sides agree exactly.
+pub const MAX_RESIDENCY_CANONICAL_BYTES: usize = 8192;
+
+/// Decodes retained canonical residency bytes into the six exact domain
+/// bindings that produced them.
+///
+/// This is a readback path for metadata the root already persisted. It
+/// reconstructs bindings only through the canonical owner (DomainBinding::new),
+/// so an unchanged body under an unchanged UUID resolves to the same retained
+/// kind, UUID and tagged digest across operations and process restarts. It
+/// mints no UUID, issues no authority, and leaves the existing v1 byte layout
+/// untouched.
+///
+/// The input must be at most MAX_RESIDENCY_CANONICAL_BYTES and must be exactly
+/// the canonical CBOR array emitted by residency_canonical_bytes: six rows in
+/// DomainKind::ALL order, each a map carrying exactly the keys kind, uuid, body
+/// and tagged_digest. Unknown, missing or mistyped keys, malformed lengths,
+/// non-v4 UUIDs, cross-row UUID or digest reuse, a declared digest that does
+/// not recompute from its own kind/UUID/body, and bytes that do not re-encode
+/// to themselves are all refused.
+pub fn decode_residency_canonical(
+    bytes: &[u8],
+) -> Result<[DomainBinding; 6], RevisionStoreError> {
+    if bytes.is_empty() || bytes.len() > MAX_RESIDENCY_CANONICAL_BYTES {
+        return Err(RevisionStoreError::AddressInvalid);
+    }
+    let value = parse_canonical_cbor(bytes).map_err(|_| RevisionStoreError::AddressInvalid)?;
+    let CanonicalValue::Array(rows) = value else {
+        return Err(RevisionStoreError::AddressInvalid);
+    };
+    if rows.len() != DomainKind::ALL.len() {
+        return Err(RevisionStoreError::AddressInvalid);
+    }
+    let mut bindings: Vec<DomainBinding> = Vec::with_capacity(DomainKind::ALL.len());
+    for (kind, row) in DomainKind::ALL.iter().copied().zip(rows.iter()) {
+        let binding = decode_domain_binding(row, kind)?;
+        for existing in &bindings {
+            existing.refuse_uuid_collision(&binding)?;
+            existing.refuse_digest_collision(&binding)?;
+        }
+        bindings.push(binding);
+    }
+    let bindings: [DomainBinding; 6] = bindings
+        .try_into()
+        .map_err(|_| RevisionStoreError::AddressInvalid)?;
+    if residency_canonical_bytes(&bindings)? != bytes {
+        return Err(RevisionStoreError::AddressInvalid);
+    }
+    Ok(bindings)
+}
+
+/// Decodes one canonical residency row into a validated domain binding.
+///
+/// The row must be an object carrying exactly the four canonical keys, the
+/// declared kind must be the expected positional kind, and the declared tagged
+/// digest must recompute from the decoded kind, UUID and body.
+fn decode_domain_binding(
+    row: &CanonicalValue,
+    expected_kind: DomainKind,
+) -> Result<DomainBinding, RevisionStoreError> {
+    let CanonicalValue::Object(fields) = row else {
+        return Err(RevisionStoreError::AddressInvalid);
+    };
+    let mut kind: Option<DomainKind> = None;
+    let mut uuid: Option<GenuineUuid> = None;
+    let mut body: Option<Vec<u8>> = None;
+    let mut digest: Option<Blake3Digest32> = None;
+    for (key, field) in fields {
+        match key.as_str() {
+            "kind" => {
+                if kind.is_some() {
+                    return Err(RevisionStoreError::AddressInvalid);
+                }
+                let CanonicalValue::Text(label) = field else {
+                    return Err(RevisionStoreError::AddressInvalid);
+                };
+                kind = Some(decode_domain_kind(label.as_str())?);
+            }
+            "uuid" => {
+                if uuid.is_some() {
+                    return Err(RevisionStoreError::AddressInvalid);
+                }
+                let CanonicalValue::Bytes(raw) = field else {
+                    return Err(RevisionStoreError::AddressInvalid);
+                };
+                uuid = Some(
+                    raw.as_slice()
+                        .try_into()
+                        .map_err(|_| RevisionStoreError::AddressInvalid)?,
+                );
+            }
+            "body" => {
+                if body.is_some() {
+                    return Err(RevisionStoreError::AddressInvalid);
+                }
+                let CanonicalValue::Bytes(raw) = field else {
+                    return Err(RevisionStoreError::AddressInvalid);
+                };
+                body = Some(raw.as_slice().to_vec());
+            }
+            "tagged_digest" => {
+                if digest.is_some() {
+                    return Err(RevisionStoreError::AddressInvalid);
+                }
+                let CanonicalValue::Bytes(raw) = field else {
+                    return Err(RevisionStoreError::AddressInvalid);
+                };
+                let raw: [u8; 32] = raw
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| RevisionStoreError::AddressInvalid)?;
+                digest = Some(Blake3Digest32::from_bytes(raw));
+            }
+            _ => return Err(RevisionStoreError::AddressInvalid),
+        }
+    }
+    let (Some(kind), Some(uuid), Some(body), Some(digest)) = (kind, uuid, body, digest) else {
+        return Err(RevisionStoreError::AddressInvalid);
+    };
+    if kind != expected_kind {
+        return Err(RevisionStoreError::ResidencyMismatch);
+    }
+    let binding = DomainBinding::new(kind, uuid, body)?;
+    if binding.tagged_digest() != digest {
+        return Err(RevisionStoreError::ResidencyMismatch);
+    }
+    Ok(binding)
+}
+
+/// Maps a wire domain label back to its closed domain kind.
+fn decode_domain_kind(label: &str) -> Result<DomainKind, RevisionStoreError> {
+    DomainKind::ALL
+        .iter()
+        .copied()
+        .find(|kind| kind.as_str() == label)
+        .ok_or(RevisionStoreError::AddressInvalid)
+}
+
 /// Validates that bytes are canonical CBOR by round-tripping through the
 /// canonical CBOR parser and encoder.
 fn is_valid_canonical_cbor(bytes: &[u8]) -> bool {

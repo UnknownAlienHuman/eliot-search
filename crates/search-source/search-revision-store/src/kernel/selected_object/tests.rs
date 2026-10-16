@@ -5,7 +5,9 @@ use search_contracts::{
 };
 
 use super::super::error::RevisionStoreError;
-use super::domain::{DomainBinding, DomainKind, residency_canonical_bytes};
+use super::domain::{
+    DomainBinding, DomainKind, decode_residency_canonical, residency_canonical_bytes,
+};
 use super::source::{ObjectMetadataBinding, PreSealDescriptor, TypedSourceIdentity};
 use super::super::model::{EncryptedRevisionPayload, EncryptionBinding};
 use super::super::limits::DEFAULT_REVISION_STORE_LIMITS;
@@ -28,6 +30,45 @@ fn cbor_text(text: &str) -> Vec<u8> {
 fn binding(kind: DomainKind, uuid_byte: u8, body: &[u8]) -> DomainBinding {
     let _ = body; // body content is not used; we use a fixed CBOR text
     DomainBinding::new(kind, v4_uuid(uuid_byte), cbor_text("default")).expect("valid binding")
+}
+
+type ResidencyFields = search_contracts::BoundedMap<
+    search_contracts::CanonicalKey,
+    search_contracts::CanonicalValue,
+    { search_contracts::MAX_MAP_ENTRIES },
+>;
+
+fn residency_key(name: &str) -> search_contracts::CanonicalKey {
+    search_contracts::CanonicalKey::new_non_empty(name).expect("canonical key")
+}
+
+fn residency_bytes_value(value: Vec<u8>) -> search_contracts::CanonicalValue {
+    search_contracts::CanonicalValue::Bytes(
+        search_contracts::BoundedBytes::new(value).expect("bounded bytes"),
+    )
+}
+
+fn residency_rows(bytes: &[u8]) -> Vec<search_contracts::CanonicalValue> {
+    let value = search_contracts::parse_canonical_cbor(bytes).expect("canonical cbor");
+    let search_contracts::CanonicalValue::Array(rows) = value else {
+        panic!("residency canonical must be an array");
+    };
+    rows.as_slice().to_vec()
+}
+
+fn residency_fields(row: &search_contracts::CanonicalValue) -> ResidencyFields {
+    let search_contracts::CanonicalValue::Object(fields) = row else {
+        panic!("residency row must be an object");
+    };
+    fields.clone()
+}
+
+fn residency_row_bytes(rows: Vec<search_contracts::CanonicalValue>) -> Vec<u8> {
+    let list = search_contracts::BoundedList::new(rows).expect("bounded list");
+    search_contracts::to_canonical_cbor(&search_contracts::CanonicalValue::Array(list))
+        .expect("canonical cbor")
+        .as_slice()
+        .to_vec()
 }
 
 fn six_bindings() -> [DomainBinding; 6] {
@@ -180,6 +221,86 @@ fn residency_canonical_bytes_rejects_wrong_domain_order() {
     bindings.swap(0, 1);
     assert_eq!(
         residency_canonical_bytes(&bindings),
+        Err(RevisionStoreError::ResidencyMismatch)
+    );
+}
+
+#[test]
+fn residency_canonical_decode_roundtrip_preserves_retained_ids() {
+    let bindings = six_bindings();
+    let bytes = residency_canonical_bytes(&bindings).expect("canonical");
+    let decoded = decode_residency_canonical(&bytes).expect("decode");
+    for (index, expected) in bindings.iter().enumerate() {
+        assert_eq!(decoded[index].kind(), expected.kind());
+        assert_eq!(decoded[index].uuid(), expected.uuid());
+        assert_eq!(decoded[index].canonical_body(), expected.canonical_body());
+        assert_eq!(decoded[index].tagged_digest(), expected.tagged_digest());
+    }
+    // A later operation or process restart reuses the retained UUIDs exactly.
+    assert_eq!(residency_canonical_bytes(&decoded).expect("re-encode"), bytes);
+}
+
+#[test]
+fn residency_canonical_decode_refuses_forgery() {
+    let bytes = residency_canonical_bytes(&six_bindings()).expect("canonical");
+
+    // Forged tagged digest: it no longer recomputes from its own kind/UUID/body.
+    let mut rows = residency_rows(&bytes);
+    let mut fields = residency_fields(&rows[0]);
+    fields.remove(&residency_key("tagged_digest"));
+    fields
+        .insert(residency_key("tagged_digest"), residency_bytes_value(vec![0x5A; 32]))
+        .expect("replace");
+    rows[0] = search_contracts::CanonicalValue::Object(fields);
+    assert_eq!(
+        decode_residency_canonical(&residency_row_bytes(rows)),
+        Err(RevisionStoreError::ResidencyMismatch)
+    );
+
+    // Reused UUID across kinds: the access row claims the scope row's UUID.
+    let mut rows = residency_rows(&bytes);
+    let scope_uuid = {
+        let fields = residency_fields(&rows[0]);
+        let Some(search_contracts::CanonicalValue::Bytes(raw)) = fields.get(&residency_key("uuid"))
+        else {
+            panic!("scope uuid must be bytes");
+        };
+        raw.as_slice().to_vec()
+    };
+    let mut fields = residency_fields(&rows[1]);
+    fields.remove(&residency_key("uuid"));
+    fields
+        .insert(residency_key("uuid"), residency_bytes_value(scope_uuid))
+        .expect("replace");
+    rows[1] = search_contracts::CanonicalValue::Object(fields);
+    assert_eq!(
+        decode_residency_canonical(&residency_row_bytes(rows)),
+        Err(RevisionStoreError::ResidencyMismatch)
+    );
+
+    // Unknown field: the row map is closed.
+    let mut rows = residency_rows(&bytes);
+    let mut fields = residency_fields(&rows[0]);
+    fields
+        .insert(residency_key("extra"), search_contracts::CanonicalValue::U64(1))
+        .expect("insert");
+    rows[0] = search_contracts::CanonicalValue::Object(fields);
+    assert_eq!(
+        decode_residency_canonical(&residency_row_bytes(rows)),
+        Err(RevisionStoreError::AddressInvalid)
+    );
+
+    // Wrong array length and wrong row order are refused.
+    let mut short = residency_rows(&bytes);
+    short.truncate(5);
+    assert_eq!(
+        decode_residency_canonical(&residency_row_bytes(short)),
+        Err(RevisionStoreError::AddressInvalid)
+    );
+    let mut swapped = residency_rows(&bytes);
+    swapped.swap(0, 1);
+    assert_eq!(
+        decode_residency_canonical(&residency_row_bytes(swapped)),
         Err(RevisionStoreError::ResidencyMismatch)
     );
 }
