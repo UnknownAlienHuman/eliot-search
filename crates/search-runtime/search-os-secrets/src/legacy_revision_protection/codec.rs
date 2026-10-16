@@ -56,10 +56,10 @@ pub fn encode_legacy_revision_inner(
 /// # Errors
 ///
 /// Returns a closed envelope, binding, length, or content mismatch.
-pub fn decode_legacy_revision_inner<'a, D: LegacyRevisionContentDigest>(
-    inner: &'a [u8],
+pub fn decode_legacy_revision_inner<D: LegacyRevisionContentDigest>(
+    inner: &[u8],
     expected: LegacyRevisionBinding,
-) -> Result<&'a [u8], LegacyRevisionEnvelopeError> {
+) -> Result<&[u8], LegacyRevisionEnvelopeError> {
     if inner.len() < LEGACY_REVISION_INNER_HEADER_BYTES
         || inner.len()
             > LEGACY_REVISION_INNER_HEADER_BYTES

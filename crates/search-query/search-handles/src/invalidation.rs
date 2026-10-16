@@ -22,6 +22,7 @@ pub struct HandleInvalidationProgress {
 }
 
 /// Completion of one actual full-store pass, not a durable receipt.
+///
 /// Only a completed scan constructs this value. The caller must keep its domain
 /// barrier closed until all other dependent owners also acknowledge the mutation.
 #[derive(Debug)]
@@ -155,7 +156,7 @@ impl HandleStore {
     /// durable-source handles. The caller supplies the replacement's monotonic
     /// revocation generation and keeps native publication/admission closed until
     /// `finish` and every other dependent acknowledgement succeed.
-    pub fn begin_binding_invalidation(
+    pub const fn begin_binding_invalidation(
         &mut self,
         binding: BindingId,
         generation: u64,
@@ -244,7 +245,7 @@ impl HandleSecurityInvalidation<'_> {
 
     /// Returns completion only after the whole pass. No store removal or external
     /// cleanup occurs here, and an incomplete cursor cannot become a receipt.
-    pub fn finish(self) -> Result<HandleSecurityInvalidationReceipt, HandleError> {
+    pub const fn finish(self) -> Result<HandleSecurityInvalidationReceipt, HandleError> {
         if !self.complete {
             return Err(HandleError::InvalidTransition);
         }
@@ -258,7 +259,7 @@ impl HandleSecurityInvalidation<'_> {
 
 // Shared by exact-scope invalidation and resumable membership-security passes.
 // Terminal records need no new revision and do not consume a mutation slot.
-pub(super) fn prepare_revision(
+pub fn prepare_revision(
     record: &HandleRecord,
     generation: u64,
 ) -> Result<Option<NonZeroRevision>, HandleError> {
@@ -274,7 +275,7 @@ pub(super) fn prepare_revision(
 }
 
 // Exact-scope callers remain in the live-security generation namespace.
-pub(super) fn apply_prepared(
+pub fn apply_prepared(
     store: &mut HandleStore,
     prepared: &[(HandleTokenDigest, NonZeroRevision)],
     generation: u64,
