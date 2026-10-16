@@ -30,4 +30,3 @@ jobs:
       - name: Validate registry and workflow closure
         shell: pwsh
         run: ./tools/validate-accepted-evidence-digest.ps1 -Json
-
