@@ -10,6 +10,11 @@ use crate::{ConditionalControlMutation, ControlError, ControlKey, ControlMutatio
     ControlRecordClass, ControlRecordCondition, ControlValue, ControlWrite,
     JournalIdentity, JournalLimits, MutationId, ScopedControlRecordsReadback};
 
+mod publication;
+pub use publication::{object_publication_intent_key, object_publication_intent_keys,
+    ObjectPublicationIntentReadback, RevisionUseUsageReadback, SealReservationReadback,
+    MAX_OBJECT_METADATA_BYTES};
+
 /// Single-key selected-reference operating profile, never inferred from absence.
 pub const REVISION_USE_STATE_KEY: &[u8] = b"secret/revision-use/v2/state";
 const PREFIX: &[u8] = b"secret/revision-use/v2/";
