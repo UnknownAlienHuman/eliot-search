@@ -1437,6 +1437,7 @@ dependencies = [
  "search-config",
  "search-contracts",
  "search-domain",
+ "search-point-identity",
  "search-ports",
  "sha2",
  "tokio",

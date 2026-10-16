@@ -1,10 +1,12 @@
 impl RealDataPlane {
-    /// Connects to the exact supervisor-bound loopback server admitted by an
-    /// executed qualification gate, using its purpose-bound API-key lease.
+    /// Connects to the supervisor-bound loopback server using its
+    /// purpose-bound API-key lease and the existing transport gate. That
+    /// caller-supplied gate is not execution proof or product qualification.
     /// The provider revalidates current process, owner, endpoint and lease
-    /// identity before each RPC. Admission requires a protected
+    /// identity before each RPC. Transport admission requires a protected
     /// `list_collections` request; a successful health check alone is not
-    /// sufficient.
+    /// sufficient. Exact artifact/profile/process qualification remains an
+    /// explicit external boundary.
     ///
     /// A dead endpoint fails with [`BridgeError::TransportFailed`] (definite:
     /// nothing was sent); a version/build drift fails with
@@ -61,6 +63,7 @@ impl RealDataPlane {
             limits,
             schemas: BTreeMap::new(),
             operations: BTreeMap::new(),
+            canonical: canonical::CanonicalState::default(),
         })
     }
 

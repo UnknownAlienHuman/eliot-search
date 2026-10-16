@@ -1,14 +1,16 @@
 //! Real T24 data-plane adapter over the pinned `qdrant-client` 1.19.0 transport.
 //!
 //! The in-memory [`QdrantBridge`](crate::QdrantBridge) stays as the behavioral
-//! test oracle only. Every production data-plane operation here executes
-//! against a real Qdrant server through the exact qualified client and
-//! returns verified typed results, never model success.
+//! test oracle only. Operations invoked on [`RealDataPlane`] execute against a
+//! Qdrant server through the pinned client; this module does not assert product
+//! qualification or select production composition.
 //!
-//! Admission: [`RealDataPlane::connect`] requires an executed
-//! [`QualifiedGate`](crate::qualified::QualifiedGate) (all T22 mandatory live
-//! probes passed) and rechecks the live server identity on connect. Collection
-//! names, filters and batches are validated before dispatch.
+//! Transport admission: [`RealDataPlane::connect`] accepts the existing
+//! [`QualifiedGate`](crate::qualified::QualifiedGate) and rechecks the live
+//! endpoint/server identity. Its caller-supplied probe receipt is not execution
+//! proof or product qualification. Exact artifact, client/profile and process
+//! admission remain separate and are not established by this bridge slice.
+//! Collection names, filters and batches are validated before dispatch.
 //!
 //! The API key is borrowed only inside the lease-provider callback while the
 //! SDK client is built. Qdrant client 1.19.0 retains a `String` copy in its
@@ -41,6 +43,17 @@
 //! rejected pre-dispatch with
 //! [`BridgeError::CollectionSchemaMismatch`](crate::BridgeError::CollectionSchemaMismatch)
 //! because dense layouts need a distinct accepted scoring profile.
+//!
+//! The unprefixed methods below retain the earlier bridge profile for explicit
+//! compatibility. The canonical S9.5/S10.3 path is exposed separately through
+//! `create_indexed_generation`, `verify_indexed_generation`, `query_indexed`,
+//! `count_indexed`, `scroll_indexed` and `readback_indexed_exact`. It consumes
+//! the shared contracts and performs its own exact collection readback. The
+//! qualified transport gate alone is not a canonical schema or product
+//! qualification receipt; this path is not selected by product composition in
+//! this crate slice. Canonical point mutation is not implemented here yet:
+//! accepted S9.5 payloads must not go through the older compatibility
+//! upsert/close/delete methods.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
@@ -161,7 +174,11 @@ impl OpContext {
 
     /// Fails with [`BridgeError::Cancelled`] when its shared observer reports cancellation.
     pub fn check(&self) -> Result<(), BridgeError> {
-        if self.cancellation.as_ref().is_some_and(CancellationObserver::is_cancelled) {
+        if self
+            .cancellation
+            .as_ref()
+            .is_some_and(CancellationObserver::is_cancelled)
+        {
             return Err(BridgeError::Cancelled);
         }
         Ok(())
@@ -201,6 +218,11 @@ include!("real/codec.rs");
 include!("real/filter.rs");
 include!("real/errors_schema.rs");
 
+mod canonical;
+pub use canonical::{
+    CanonicalCandidate, CanonicalPointReadback, CanonicalReadback, CanonicalScrollPage,
+};
+
 /// Real Qdrant data plane over the pinned client transport.
 ///
 /// Owns the vendor client opaquely (the type never appears in public
@@ -213,6 +235,7 @@ pub struct RealDataPlane {
     limits: BridgeLimits,
     schemas: BTreeMap<String, CollectionSchema>,
     operations: BTreeMap<OpaqueId, MutationReceipt>,
+    canonical: canonical::CanonicalState,
 }
 
 include!("real/connect_schema.rs");

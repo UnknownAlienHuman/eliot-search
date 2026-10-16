@@ -1,8 +1,7 @@
-//! Mandatory live-probe receipt and final qualification token.
+//! Caller-supplied live-probe declarations and compatibility transport gate.
 
 use super::{
-    QUALIFIED_CLIENT_VERSION, QUALIFIED_SERVER_BUILD,
-    QUALIFIED_SERVER_VERSION, QualificationError,
+    QUALIFIED_CLIENT_VERSION, QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualificationError,
 };
 
 /// Bridge-owned mandatory live probes for the qualified profile.
@@ -22,7 +21,7 @@ pub const MANDATORY_LIVE_PROBES: [&str; 13] = [
     "schema_digest_equality",
 ];
 
-/// One executed live probe outcome.
+/// Caller-declared outcome for one live probe; this record does not prove execution.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LiveProbeOutcome {
     /// Stable probe identifier.
@@ -33,7 +32,7 @@ pub struct LiveProbeOutcome {
     pub detail: String,
 }
 
-/// Executed live-probe receipt.
+/// Caller-supplied live-probe declarations, not a trusted execution artifact.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LiveProbeReceipt {
     /// Observed server version.
@@ -48,10 +47,12 @@ pub struct LiveProbeReceipt {
     pub outcomes: Vec<LiveProbeOutcome>,
 }
 
-/// Explicit admission token for the live Qdrant path.
+/// Compatibility transport token for the live Qdrant path.
 ///
-/// There is no default or mock constructor. Admission requires exact qualified
-/// identities and every mandatory probe passed.
+/// This token only validates identity strings and probe outcomes stated in a
+/// caller-supplied [`LiveProbeReceipt`]. It is caller-mintable and is not proof
+/// that probes ran, nor artifact, client/profile, process or product
+/// qualification.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QualifiedGate {
     server_version: String,
@@ -59,7 +60,7 @@ pub struct QualifiedGate {
 }
 
 impl QualifiedGate {
-    /// Admits the live path after rechecking the executed receipt.
+    /// Validates the caller-supplied declarations for the compatibility transport path.
     ///
     /// # Errors
     ///

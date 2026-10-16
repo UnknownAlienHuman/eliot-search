@@ -12,6 +12,8 @@ pub enum BridgeError {
     CollectionAlreadyExists,
     CollectionNotFound,
     CollectionSchemaMismatch,
+    /// The accepted generation declares a vector profile this adapter slice does not implement.
+    UnsupportedVectorProfile,
     PayloadIndexMissing,
     NamedVectorMissing,
     VectorDimensionMismatch,
@@ -52,6 +54,7 @@ impl BridgeError {
             Self::CollectionAlreadyExists => "QDRANT_COLLECTION_ALREADY_EXISTS",
             Self::CollectionNotFound => "QDRANT_COLLECTION_NOT_FOUND",
             Self::CollectionSchemaMismatch => "QDRANT_COLLECTION_SCHEMA_MISMATCH",
+            Self::UnsupportedVectorProfile => "QDRANT_VECTOR_PROFILE_UNSUPPORTED",
             Self::PayloadIndexMissing => "QDRANT_PAYLOAD_INDEX_MISSING",
             Self::NamedVectorMissing => "QDRANT_NAMED_VECTOR_MISSING",
             Self::VectorDimensionMismatch => "QDRANT_VECTOR_DIMENSION_MISMATCH",

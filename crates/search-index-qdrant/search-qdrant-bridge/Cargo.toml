@@ -15,6 +15,7 @@ search-contracts.workspace = true
 search-domain.workspace = true
 search-ports.workspace = true
 search-config.workspace = true
+search-point-identity.workspace = true
 # Private vendor transport. The exact pin and default-feature policy live in
 # the workspace so an upgrade has one dependency edit and cannot drift between
 # packages. The boundary validator forbids any other package from inheriting it.
