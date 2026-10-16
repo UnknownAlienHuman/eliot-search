@@ -34,7 +34,7 @@ impl RevisionStore {
             let bound = *digest == intent.operation.request_digest()
                 && receipt.key == intent.key
                 && receipt.content_digest == intent.payload.plaintext_digest
-                && receipt.ciphertext_digest == intent.payload.ciphertext_digest;
+                && receipt.ciphertext_digest == intent.payload.ciphertext_digest();
             if !bound {
                 return Err(RevisionStoreError::OperationConflict);
             }
