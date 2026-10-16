@@ -72590,7 +72590,7 @@
       "count": 2,
       "path": "bins/eliot-searchd/src/native_file/storage_acl/windows.rs",
       "signal": "digest-prefix-review",
-      "source_sha256": "1e974fb4968cb72b90acc640602da8c88791e9e7c5c582ea6c9847cc6e5c51db",
+      "source_sha256": "260d9953be1dbf52cb099a7861fc4e069d2f54628ccb652abc887fd8367565e3",
       "symbol": "descriptor_parts",
       "test": false,
       "classification": "non-digest-surface",
@@ -72602,13 +72602,25 @@
       "count": 1,
       "path": "bins/eliot-searchd/src/native_file/storage_acl/windows_tests.rs",
       "signal": "named-compute-review",
-      "source_sha256": "558a15f849f965a81449964149056d0e806fa4ff15baf8cb5cd3f45a1717a109",
+      "source_sha256": "a1a0ece0fca2d982648e6b5367aa36cae82ce700d083ab48a1126cd7bb9f6f3e",
       "symbol": "semantic_copy_never_borrows_uninitialized_descriptor_or_acl_slack",
       "test": true,
       "classification": "test-vector",
       "owner_issue": 594,
       "phase": "accepted",
       "reason": "Partially initialized SDK-memory fixture supplies only documented semantic fields and checks copied buffers/slack. Shared SID equality is synthetic metadata, never live owner authority."
+    },
+    {
+      "count": 1,
+      "path": "bins/eliot-searchd/src/native_file/storage_acl/windows_tests.rs",
+      "signal": "digest-prefix-review",
+      "source_sha256": "a1a0ece0fca2d982648e6b5367aa36cae82ce700d083ab48a1126cd7bb9f6f3e",
+      "symbol": "unsupported_descriptor_prefix_refuses_before_relative_fields_or_padding",
+      "test": true,
+      "classification": "test-vector",
+      "owner_issue": 594,
+      "phase": "accepted",
+      "reason": "Partially initialized descriptor-prefix fixture proves unsupported representation is refused before dependent offsets or padding are inspected. This test reads no native object and grants no authority."
     }
   ]
 }
