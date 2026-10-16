@@ -213,3 +213,7 @@ fn fingerprint<E>(request: &NativeNamespaceRequestV2, probe: &mut impl FnMut() -
         c::DigestInputLimit::new(64 * 1024).map_err(|_| RegistryError::ContractExhausted)?)
         .map_err(|_| RegistryError::ContractExhausted.into())
 }
+
+#[cfg(test)]
+#[path = "source_namespace_v2/tests.rs"]
+mod tests;
