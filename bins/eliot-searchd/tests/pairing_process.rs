@@ -893,7 +893,7 @@ mod native {
             false
         }
 
-        /// Deletes every entry this vault created, verifying absence.
+        /// Deletes every exact target this vault may have written, verifying absence.
         /// Best-effort and never panics; reports unverified targets.
         pub fn cleanup(&mut self) {
             let targets = core::mem::take(&mut self.created);
@@ -952,6 +952,9 @@ mod native {
             key: &[u8; 32],
         ) -> Result<VaultWriteEvidence, SecretCompositionError> {
             let target = self.target_for(id);
+            // Register the exact per-run test target before any write attempt:
+            // Drop must also cover failed writes and failed/mismatched readback.
+            self.track(&target);
             // Bounded write+verify: a content mismatch fails closed
             // immediately and is never papered over by another attempt.
             let mut last = SecretCompositionError::VaultWriteFailed;
@@ -968,7 +971,6 @@ mod native {
                             if mismatch != 0 {
                                 return Err(SecretCompositionError::ReadbackMismatch);
                             }
-                            self.track(&target);
                             let digest = Blake3Digest32::from_bytes(*blake3::hash(key).as_bytes());
                             return Ok(VaultWriteEvidence {
                                 blob_digest: digest,

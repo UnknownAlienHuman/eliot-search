@@ -309,7 +309,7 @@ mod held_chain_tests {
         use crate::direct_store::migration_context::{MigrationContext, NativeMigrationInput};
         use crate::owner_composition::{NativeRootAdmission, NativeRootLimits, NativeRootRequest,
             admit_existing, initialize_new};
-        use crate::revision_protection::RevisionProtector;
+        use crate::revision_protection::{RevisionProtector, TestCredentialGuard};
         use search_runtime_owner::{DataRootOpenMode, OwnerError};
         use std::ffi::OsString;
         use std::sync::atomic::{AtomicBool, Ordering};
@@ -331,13 +331,16 @@ mod held_chain_tests {
         let limits = || NativeRootLimits::new([256, 256 * 1024, 512 * 1024,
             1024 * 1024 * 1024, 16384, 256]).unwrap();
         let deadline = Instant::now() + Duration::from_secs(120);
-        initialize_new(NativeRootRequest::new(DataRootOpenMode::InitializeNew,
+        let credentials = TestCredentialGuard::for_native_data_root(&root);
+        let initialized = initialize_new(NativeRootRequest::new(DataRootOpenMode::InitializeNew,
             &[OsString::from("--initialize-data-root"), root.as_os_str().to_owned(),
                 OsString::from("02690269026902690269026902690269")],
             deadline, Arc::new(AtomicBool::new(false)), limits()).unwrap())
-            .unwrap().emit(&mut Vec::new()).unwrap();
+            .unwrap();
         let namespace = fs::read(root.join("control/namespace.id")).unwrap();
         let namespace_id = crate::sha256::decode_digest(std::str::from_utf8(&namespace).unwrap().trim()).unwrap();
+        assert_eq!(credentials.capture_native_namespace().unwrap(), Some(namespace_id));
+        initialized.emit(&mut Vec::new()).unwrap();
         let registration = search_source_registry::encode_legacy_source_root_catalog(
             [sources.to_str().unwrap()]).unwrap();
         let mut catalog = OpenOptions::new().write(true).create_new(true)
@@ -409,8 +412,7 @@ mod held_chain_tests {
         assert_eq!(fs::read_dir(root.join("revisions")).unwrap().count(), 0);
         assert!(!root.join("control/source-roots.tmp").exists());
         assert!(!cancelled.load(Ordering::Acquire));
-        search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&namespace_id)
-            .expect("delete only this fixture's original credential");
+        assert!(credentials.cleanup_captured(), "exact fixture credential cleanup failed; artifacts retained");
         let current = fs::canonicalize(&base).unwrap();
         assert_eq!(current, base);
         assert_eq!(current.parent(), Some(temp.as_path()));
