@@ -13,6 +13,32 @@ impl StorageSecurityContext for CopyContext {
 }
 
 #[test]
+fn unsupported_descriptor_prefix_refuses_before_relative_fields_or_padding() {
+    use core::mem::MaybeUninit;
+    for (revision, control) in [(0_u8, None), (1, Some(4_u16))] {
+        let mut allocation = [MaybeUninit::<u8>::uninit(); 128];
+        allocation[0].write(revision);
+        if let Some(control) = control {
+            for (slot, value) in allocation[2..4].iter_mut().zip(control.to_le_bytes()) {
+                slot.write(value);
+            }
+        }
+        // SAFETY: only the supported common prefix may be inspected. Relative
+        // offsets and absolute-layout padding deliberately remain uninitialized.
+        let result = unsafe {
+            descriptor_parts(
+                allocation.as_mut_ptr().cast(),
+                allocation.len(),
+                null_mut(),
+                null_mut(),
+                &mut CopyContext,
+            )
+        };
+        assert!(matches!(result, Err(Error::InvalidDescriptor)));
+    }
+}
+
+#[test]
 fn semantic_copy_never_borrows_uninitialized_descriptor_or_acl_slack() {
     use core::mem::MaybeUninit;
     let mut allocation = [MaybeUninit::<u8>::uninit(); 128];

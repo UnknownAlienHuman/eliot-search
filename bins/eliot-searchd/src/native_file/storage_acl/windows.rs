@@ -246,9 +246,12 @@ unsafe fn sid_length<E>(
     offset: usize,
 ) -> Result<usize, Error<E>> {
     let revision = unsafe { scalar::<u8, E>(base, length, offset)? };
+    if revision != 1 {
+        return Err(Error::InvalidDescriptor);
+    }
     let count = unsafe { scalar::<u8, E>(base, length, offset + 1)? };
     let size = 8 + 4 * usize::from(count);
-    if revision != 1 || size > MAX_SID {
+    if size > MAX_SID {
         return Err(Error::InvalidDescriptor);
     }
     extent(length, offset, size)?;
@@ -269,12 +272,15 @@ unsafe fn descriptor_parts<C: StorageSecurityContext>(
         return Err(Error::InvalidDescriptor);
     }
     let revision = unsafe { scalar::<u8, C::Error>(base, length, 0)? };
-    let control = unsafe { scalar::<u16, C::Error>(base, length, 2)? };
-    let owner_relative = unsafe { scalar::<u32, C::Error>(base, length, 4)? };
-    let acl_relative = unsafe { scalar::<u32, C::Error>(base, length, 16)? };
-    if revision != 1 || control & 0x8000 == 0 {
+    if revision != 1 {
         return Err(Error::InvalidDescriptor);
     }
+    let control = unsafe { scalar::<u16, C::Error>(base, length, 2)? };
+    if control & 0x8000 == 0 {
+        return Err(Error::InvalidDescriptor);
+    }
+    let owner_relative = unsafe { scalar::<u32, C::Error>(base, length, 4)? };
+    let acl_relative = unsafe { scalar::<u32, C::Error>(base, length, 16)? };
     let owner_offset = checked_offset(base, length, owner_relative, owner)?;
     let acl_offset = checked_offset(base, length, acl_relative, dacl)?;
     let owner_size = unsafe { sid_length::<C::Error>(base, length, owner_offset)? };
@@ -283,6 +289,9 @@ unsafe fn descriptor_parts<C: StorageSecurityContext>(
         .ok_or(Error::InvalidDescriptor)?;
     extent(length, acl_offset, 8)?;
     let acl_revision = unsafe { scalar::<u8, C::Error>(base, length, acl_offset)? };
+    if !matches!(acl_revision, 2 | 4) {
+        return Err(Error::InvalidDescriptor);
+    }
     let acl_size = unsafe { scalar::<u16, C::Error>(base, length, acl_offset + 2)? };
     let count = unsafe { scalar::<u16, C::Error>(base, length, acl_offset + 4)? };
     let acl_length = usize::from(acl_size);
@@ -293,7 +302,7 @@ unsafe fn descriptor_parts<C: StorageSecurityContext>(
         return Err(Error::InvalidDescriptor);
     }
     extent(length, acl_offset, acl_length)?;
-    if !matches!(acl_revision, 2 | 4) || usize::from(count) > (acl_length - 8) / 16 {
+    if usize::from(count) > (acl_length - 8) / 16 {
         return Err(Error::InvalidDescriptor);
     }
     let copied = owner_size
