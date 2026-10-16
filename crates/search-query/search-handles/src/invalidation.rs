@@ -4,11 +4,11 @@ use core::fmt;
 use std::ops::Bound::{Excluded, Unbounded};
 
 use search_contracts::{
-    BindingId, BoundedSet, HandleTokenDigest, MAX_LIST_ITEMS, MAX_SET_ITEMS,
-    NonZeroRevision, SourceMembershipId,
+    BindingId, BoundedSet, HandleTokenDigest, MAX_LIST_ITEMS, MAX_SET_ITEMS, NonZeroRevision,
+    SourceMembershipId,
 };
 
-use crate::{HandleError, HandleRecord, HandleRecordState, HandleStore};
+use crate::{HandleError, HandleStore, LifecycleRecordStatus, StoredHandle};
 
 /// Work completed by one bounded step, not acknowledgement of the whole scope.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,34 +61,39 @@ enum HandleInvalidationSelector<'a> {
 }
 
 impl HandleInvalidationSelector<'_> {
-    fn matches(&self, record: &HandleRecord) -> bool {
+    fn matches(&self, record: &StoredHandle) -> bool {
         match self {
             Self::Memberships { denied, purged } => {
-                let membership = record.target.source_membership_id();
+                let membership = record.source_membership_id();
                 denied.contains(&membership) || purged.contains(&membership)
             }
-            Self::Binding(binding) => record.binding.binding_id == *binding,
+            Self::Binding(binding) => super::record_binding_id(record) == *binding,
         }
     }
 
     fn prepare(
         &self,
-        record: &HandleRecord,
+        record: &StoredHandle,
         generation: u64,
     ) -> Result<Option<(NonZeroRevision, u64)>, HandleError> {
         match self {
             Self::Memberships { .. } => prepare_revision(record, generation)
                 .map(|prepared| prepared.map(|revision| (revision, generation))),
             Self::Binding(_) => {
-                if record.state != HandleRecordState::Active {
+                if record.status() != LifecycleRecordStatus::Active {
                     return Ok(None);
                 }
-                let revision = record.handle_revision.checked_next()
+                let revision = record
+                    .handle_revision()
+                    .checked_next()
                     .map_err(|_| HandleError::InvalidTransition)?;
                 // Binding-revocation and live-security generations are distinct
                 // namespaces. Never compare or overwrite the latter with a lower
                 // binding revision. The record becomes terminal either way.
-                Ok(Some((revision, record.invalidation_generation.max(generation))))
+                Ok(Some((
+                    revision,
+                    record.invalidation_generation.max(generation),
+                )))
             }
         }
     }
@@ -180,20 +185,36 @@ impl HandleSecurityInvalidation<'_> {
     /// caller debits its original allowance before `advance`; unused capacity
     /// is not refunded. It is not an allocator/RSS measurement.
     pub fn next_step_work_bound(&self) -> Result<(usize, usize), HandleError> {
-        if self.complete { return Ok((0, 0)); }
+        if self.complete {
+            return Ok((0, 0));
+        }
         let limit = self.store.policy.max_invalidate_batch.min(MAX_LIST_ITEMS);
-        if limit == 0 { return Err(HandleError::InvalidPolicy); }
-        let records = self.store.records.len().min(limit).checked_add(1)
+        if limit == 0 {
+            return Err(HandleError::InvalidPolicy);
+        }
+        let records = self
+            .store
+            .records
+            .len()
+            .min(limit)
+            .checked_add(1)
             .ok_or(HandleError::InvalidTransition)?;
         let selectors = match &self.selector {
-            HandleInvalidationSelector::Memberships { denied, purged } => denied.len().checked_add(purged.len()),
+            HandleInvalidationSelector::Memberships { denied, purged } => {
+                denied.len().checked_add(purged.len())
+            }
             HandleInvalidationSelector::Binding(_) => Some(1),
-        }.ok_or(HandleError::InvalidTransition)?;
-        let allocation = limit.checked_mul(std::mem::size_of::<(HandleTokenDigest, NonZeroRevision, u64)>())
-            .and_then(|n| n.checked_mul(4)).ok_or(HandleError::InvalidTransition)?;
-        let processing = selectors.checked_mul(std::mem::size_of::<SourceMembershipId>())
-            .and_then(|n| n.checked_add(std::mem::size_of::<HandleRecord>()))
-            .and_then(|n| n.checked_mul(records)).and_then(|n| n.checked_add(allocation))
+        }
+        .ok_or(HandleError::InvalidTransition)?;
+        let allocation = limit
+            .checked_mul(std::mem::size_of::<(HandleTokenDigest, NonZeroRevision, u64)>())
+            .and_then(|n| n.checked_mul(4))
+            .ok_or(HandleError::InvalidTransition)?;
+        let processing = selectors
+            .checked_mul(std::mem::size_of::<SourceMembershipId>())
+            .and_then(|n| n.checked_add(std::mem::size_of::<StoredHandle>()))
+            .and_then(|n| n.checked_mul(records))
+            .and_then(|n| n.checked_add(allocation))
             .ok_or(HandleError::InvalidTransition)?;
         Ok((allocation, processing))
     }
@@ -231,16 +252,24 @@ impl HandleSecurityInvalidation<'_> {
         }
         let complete = records.next().is_none();
         let invalidated = prepared.len();
-        let total_inspected = self.inspected.checked_add(inspected)
+        let total_inspected = self
+            .inspected
+            .checked_add(inspected)
             .ok_or(HandleError::InvalidationBudgetExceeded)?;
-        let total_invalidated = self.invalidated.checked_add(invalidated)
+        let total_invalidated = self
+            .invalidated
+            .checked_add(invalidated)
             .ok_or(HandleError::InvalidationBudgetExceeded)?;
         apply_cursor_prepared(self.store, &prepared);
         self.cursor = last;
         self.complete = complete;
         self.inspected = total_inspected;
         self.invalidated = total_invalidated;
-        Ok(HandleInvalidationProgress { inspected, invalidated, complete })
+        Ok(HandleInvalidationProgress {
+            inspected,
+            invalidated,
+            complete,
+        })
     }
 
     /// Returns completion only after the whole pass. No store removal or external
@@ -260,16 +289,18 @@ impl HandleSecurityInvalidation<'_> {
 // Shared by exact-scope invalidation and resumable membership-security passes.
 // Terminal records need no new revision and do not consume a mutation slot.
 pub fn prepare_revision(
-    record: &HandleRecord,
+    record: &StoredHandle,
     generation: u64,
 ) -> Result<Option<NonZeroRevision>, HandleError> {
-    if record.state != HandleRecordState::Active {
+    if record.status() != LifecycleRecordStatus::Active {
         return Ok(None);
     }
     if generation < record.invalidation_generation {
         return Err(HandleError::InvalidTransition);
     }
-    record.handle_revision.checked_next()
+    record
+        .handle_revision()
+        .checked_next()
         .map(Some)
         .map_err(|_| HandleError::InvalidTransition)
 }
@@ -281,10 +312,11 @@ pub fn apply_prepared(
     generation: u64,
 ) {
     for (digest, revision) in prepared {
-        let record = store.records.get_mut(digest).expect("prepared handle record");
-        record.handle_revision = *revision;
-        record.invalidation_generation = generation;
-        record.state = HandleRecordState::Invalidated;
+        let record = store
+            .records
+            .get_mut(digest)
+            .expect("prepared handle record");
+        record.set_revision_status(*revision, LifecycleRecordStatus::Revoked, generation);
     }
 }
 
@@ -294,9 +326,14 @@ fn apply_cursor_prepared(
     prepared: &[(HandleTokenDigest, NonZeroRevision, u64)],
 ) {
     for (digest, revision, stored_generation) in prepared {
-        let record = store.records.get_mut(digest).expect("prepared handle record");
-        record.handle_revision = *revision;
-        record.invalidation_generation = *stored_generation;
-        record.state = HandleRecordState::Invalidated;
+        let record = store
+            .records
+            .get_mut(digest)
+            .expect("prepared handle record");
+        record.set_revision_status(
+            *revision,
+            LifecycleRecordStatus::Revoked,
+            *stored_generation,
+        );
     }
 }

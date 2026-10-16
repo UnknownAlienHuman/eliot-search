@@ -20,13 +20,22 @@ pub use invalidation::{
 };
 
 use core::fmt;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
+use search_contracts::lifecycle::{
+    EphemeralSourceHandleRecord, LifecycleRecordStatus, SearchSourceHandleRecord,
+};
 use search_contracts::{
-    BindingId, Blake3Digest32, BufferSnapshotId, DisclosureCeiling, GrantId,
-    HandleClass, HandleId, HandleTokenDigest, NonZeroRevision, OpaqueHandleToken,
-    OpaqueId, OwnerEpoch, RepresentationId, SearchSourceHandle, SourceMembershipId,
-    SourceRevisionId, UnitId, UtcTimestamp, WorkspaceViewRevisionId,
+    BindingId, Blake3Digest32, Blake3ExactInputLimit, BoundedList, BufferSnapshotId,
+    DisclosureCeiling, GrantId, HandleClass, HandleId, HandleTokenDigest, MAX_BLAKE3_EXACT_BYTES,
+    NativeAnchor, NonZeroRevision, ObjectResidencyKeyDigest, OpaqueHandleToken, OpaqueRef,
+    OwnerEpoch, RepresentationId, SearchSourceHandle, SourceMembershipId, SourceView, UnitId,
+    UtcTimestamp, WorkspaceViewRevisionId, blake3_exact_bytes,
+};
+use search_ports::PackageOpaque;
+
+pub use search_contracts::lifecycle::{
+    EphemeralHandleTarget, RetainedSourceTarget, UnsavedBufferTarget,
 };
 
 /// Closed handle failure.
@@ -59,6 +68,9 @@ pub enum HandleError {
     ExpansionCancelled,
     InvalidationBudgetExceeded,
     InvalidTransition,
+    SourceProtectionUnavailable,
+    SourceProtectionMismatch,
+    AuthorizationDenied,
 }
 
 impl HandleError {
@@ -93,6 +105,9 @@ impl HandleError {
             Self::ExpansionCancelled => "HANDLE_EXPANSION_CANCELLED",
             Self::InvalidationBudgetExceeded => "HANDLE_INVALIDATION_BUDGET_EXCEEDED",
             Self::InvalidTransition => "HANDLE_TRANSITION_INVALID",
+            Self::SourceProtectionUnavailable => "HANDLE_SOURCE_PROTECTION_UNAVAILABLE",
+            Self::SourceProtectionMismatch => "HANDLE_SOURCE_PROTECTION_MISMATCH",
+            Self::AuthorizationDenied => "HANDLE_AUTHORIZATION_DENIED",
         }
     }
 }
@@ -138,102 +153,149 @@ impl HandlePolicy {
     }
 }
 
-/// Exact retained immutable source target.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RetainedSourceTarget {
-    pub source_membership_id: SourceMembershipId,
-    pub source_owner_generation: Blake3Digest32,
-    pub source_revision_id: SourceRevisionId,
-    pub representation_id: RepresentationId,
-    pub unit_id: UnitId,
-    pub byte_start: u64,
-    pub byte_end: u64,
-    pub excerpt_digest: Blake3Digest32,
-    pub content_digest: Blake3Digest32,
-    pub profile_digest: Blake3Digest32,
-    pub residency_digest: Blake3Digest32,
-    pub retention_lease_ref: OpaqueId,
-    pub retention_expires_at: Option<UtcTimestamp>,
+/// Source membership and projection coordinates omitted from the shared C00
+/// lifecycle target. These remain private store metadata, never a second target
+/// contract or an authority source.
+struct HandleSourceBinding {
+    membership: SourceMembershipId,
+    representation: Option<RepresentationId>,
+    unit: Option<UnitId>,
 }
 
-/// Exact authenticated unsaved-buffer target.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct UnsavedBufferTarget {
-    pub source_membership_id: SourceMembershipId,
-    pub workspace_view_revision_id: WorkspaceViewRevisionId,
-    pub buffer_snapshot_id: BufferSnapshotId,
-    pub buffer_version: u64,
-    pub byte_start: u64,
-    pub byte_end: u64,
-    pub excerpt_digest: Blake3Digest32,
-    pub content_digest: Blake3Digest32,
-    pub profile_digest: Blake3Digest32,
-    pub residency_digest: Blake3Digest32,
+/// One private stored entry. C00 lifecycle records are the canonical persisted
+/// shape; these extra fields exist only for package-local invalidation,
+/// reauthorization and the process-local source protection guard.
+struct StoredHandle {
+    record: SearchSourceHandleRecord,
+    source: HandleSourceBinding,
+    owner_epoch: OwnerEpoch,
+    disclosure_ceiling: DisclosureCeiling,
+    invalidation_generation: u64,
+    source_protection: Option<Box<dyn RetainedSourceProtectionGuard>>,
 }
 
-/// Server-owned exact target.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum HandleTarget {
-    RetainedSource(RetainedSourceTarget),
-    UnsavedBuffer(UnsavedBufferTarget),
-}
+impl StoredHandle {
+    pub(crate) const fn record(&self) -> &SearchSourceHandleRecord {
+        &self.record
+    }
 
-impl HandleTarget {
-    #[must_use]
-    pub const fn source_membership_id(&self) -> SourceMembershipId {
-        match self {
-            Self::RetainedSource(target) => target.source_membership_id,
-            Self::UnsavedBuffer(target) => target.source_membership_id,
+    pub(crate) const fn handle_id(&self) -> HandleId {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => record.handle_id,
+            SearchSourceHandleRecord::DurableSource(record) => record.handle_id,
         }
     }
 
-    #[must_use]
-    pub const fn range(&self) -> (u64, u64) {
-        match self {
-            Self::RetainedSource(target) => (target.byte_start, target.byte_end),
-            Self::UnsavedBuffer(target) => (target.byte_start, target.byte_end),
+    pub(crate) const fn handle_revision(&self) -> NonZeroRevision {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => record.handle_revision,
+            SearchSourceHandleRecord::DurableSource(record) => record.handle_revision,
         }
     }
 
-    #[must_use]
-    pub const fn residency_digest(&self) -> Blake3Digest32 {
-        match self {
-            Self::RetainedSource(target) => target.residency_digest,
-            Self::UnsavedBuffer(target) => target.residency_digest,
+    pub(crate) const fn token_digest(&self) -> HandleTokenDigest {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => record.token_digest,
+            SearchSourceHandleRecord::DurableSource(record) => record.token_digest,
         }
     }
-}
 
-/// Authority binding retained only in the server record.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HandleBinding {
-    pub binding_id: BindingId,
-    pub grant_id: GrantId,
-    pub owner_epoch: OwnerEpoch,
-    pub disclosure_ceiling: DisclosureCeiling,
-}
+    pub(crate) const fn class(&self) -> HandleClass {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(_) => HandleClass::Ephemeral,
+            SearchSourceHandleRecord::DurableSource(_) => HandleClass::DurableSource,
+        }
+    }
 
-/// Handle lifecycle.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HandleRecordState {
-    Active,
-    Invalidated,
-    Expired,
-}
+    pub(crate) const fn status(&self) -> LifecycleRecordStatus {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => record.status,
+            SearchSourceHandleRecord::DurableSource(record) => record.status,
+        }
+    }
 
-/// Server-owned handle record keyed by token digest.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HandleRecord {
-    pub handle_id: HandleId,
-    pub handle_revision: NonZeroRevision,
-    pub handle_class: HandleClass,
-    pub token_digest: HandleTokenDigest,
-    pub target: HandleTarget,
-    pub binding: HandleBinding,
-    pub created_at: UtcTimestamp,
-    pub expires_at: UtcTimestamp,
-    pub state: HandleRecordState,
-    pub invalidation_generation: u64,
+    pub(crate) const fn expires_at(&self) -> Option<&UtcTimestamp> {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => Some(&record.expires_at),
+            SearchSourceHandleRecord::DurableSource(record) => record.retention_expiry.as_ref(),
+        }
+    }
+
+    pub(crate) fn set_revision_status(
+        &mut self,
+        revision: NonZeroRevision,
+        status: LifecycleRecordStatus,
+        generation: u64,
+    ) {
+        match &mut self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => {
+                record.handle_revision = revision;
+                record.status = status;
+            }
+            SearchSourceHandleRecord::DurableSource(record) => {
+                record.handle_revision = revision;
+                record.status = status;
+            }
+        }
+        self.invalidation_generation = generation;
+        if status != LifecycleRecordStatus::Active {
+            self.source_protection = None;
+        }
+    }
+
+    pub(crate) const fn target(&self) -> Option<&EphemeralHandleTarget> {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => Some(&record.target),
+            SearchSourceHandleRecord::DurableSource(_) => None,
+        }
+    }
+
+    pub(crate) const fn workspace_view_revision_id(&self) -> Option<WorkspaceViewRevisionId> {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => match &record.target {
+                EphemeralHandleTarget::RetainedSource(target) => target.workspace_view_revision_ref,
+                EphemeralHandleTarget::UnsavedBuffer(target) => {
+                    Some(target.workspace_view_revision_ref)
+                }
+            },
+            SearchSourceHandleRecord::DurableSource(record) => record.workspace_view_revision_ref,
+        }
+    }
+
+    pub(crate) const fn buffer_snapshot_id(&self) -> Option<BufferSnapshotId> {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => match &record.target {
+                EphemeralHandleTarget::UnsavedBuffer(target) => Some(target.buffer_snapshot_id),
+                EphemeralHandleTarget::RetainedSource(_) => None,
+            },
+            SearchSourceHandleRecord::DurableSource(_) => None,
+        }
+    }
+
+    pub(crate) const fn residency(&self) -> Option<ObjectResidencyKeyDigest> {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(record) => match &record.target {
+                EphemeralHandleTarget::RetainedSource(target) => {
+                    Some(target.object_residency_key_digest)
+                }
+                EphemeralHandleTarget::UnsavedBuffer(_) => None,
+            },
+            SearchSourceHandleRecord::DurableSource(record) => {
+                Some(record.object_residency_key_digest)
+            }
+        }
+    }
+
+    pub(crate) const fn retention_lease_ref(&self) -> Option<&OpaqueRef> {
+        match &self.record {
+            SearchSourceHandleRecord::Ephemeral(_) => None,
+            SearchSourceHandleRecord::DurableSource(record) => Some(&record.retention_lease_ref),
+        }
+    }
+
+    pub(crate) const fn source_membership_id(&self) -> SourceMembershipId {
+        self.source.membership
+    }
 }
 
 /// CSPRNG/token-digest output supplied by an injected crypto provider.
@@ -265,18 +327,166 @@ pub trait HandleCryptoPort {
     type Error;
 
     fn mint_material(&mut self) -> Result<MintMaterial, Self::Error>;
-    fn token_digest(
-        &self,
-        token: &OpaqueHandleToken,
-    ) -> Result<HandleTokenDigest, Self::Error>;
+    fn token_digest(&self, token: &OpaqueHandleToken) -> Result<HandleTokenDigest, Self::Error>;
 }
 
-/// Finite server-owned handle store.
+/// Source-owner-created protection held for the full ephemeral handle lifetime.
+/// Drop must release this exact process-local guard. It is not a receipt or a
+/// source of authorization.
+pub trait RetainedSourceProtectionGuard: PackageOpaque {
+    fn target(&self) -> &RetainedSourceTarget;
+    fn expires_at(&self) -> &UtcTimestamp;
+    fn revalidate_current(&self) -> Result<(), HandleError>;
+}
+
+/// Narrow source protection seam. A retained-source handle cannot be minted
+/// unless an actual source owner returns a guard for its exact C00 target.
+pub trait RetainedSourceProtectionPort: PackageOpaque {
+    type Guard: RetainedSourceProtectionGuard;
+
+    fn protect(
+        &mut self,
+        target: &RetainedSourceTarget,
+        handle_expires_at: &UtcTimestamp,
+    ) -> Result<Self::Guard, HandleError>;
+}
+
+/// Checkpoint phases required by exact handle expansion.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum HandleAuthorizationPhase {
+    BeforeSourceReadback,
+    BeforeOutput,
+}
+
+/// Opaque current C18 authorization checkpoint held through its operation.
+pub trait HandleAuthorizationCheckpoint: PackageOpaque {
+    fn now(&self) -> &UtcTimestamp;
+
+    fn revalidate(
+        &self,
+        record: &SearchSourceHandleRecord,
+        source_membership_id: Option<SourceMembershipId>,
+        representation_id: Option<RepresentationId>,
+        unit_id: Option<UnitId>,
+        owner_epoch: OwnerEpoch,
+        disclosure_ceiling: DisclosureCeiling,
+    ) -> Result<(), HandleError>;
+}
+
+/// Owner port that creates a fresh opaque C18 checkpoint for each phase.
+pub trait HandleReauthorizationPort: PackageOpaque {
+    type Checkpoint: HandleAuthorizationCheckpoint;
+
+    fn checkpoint(
+        &mut self,
+        record: &SearchSourceHandleRecord,
+        source_membership_id: Option<SourceMembershipId>,
+        representation_id: Option<RepresentationId>,
+        unit_id: Option<UnitId>,
+        owner_epoch: OwnerEpoch,
+        disclosure_ceiling: DisclosureCeiling,
+        phase: HandleAuthorizationPhase,
+    ) -> Result<Self::Checkpoint, HandleError>;
+}
+
+/// Package-created readback permit. Its fields and constructors are private;
+/// the token, selected C00 target and exact original anchor stay store-owned.
+pub struct HandleExpansionPermit {
+    target: EphemeralHandleTarget,
+    source_membership_id: Option<SourceMembershipId>,
+    representation_id: Option<RepresentationId>,
+    unit_id: Option<UnitId>,
+    maximum_bytes: u64,
+}
+
+impl HandleExpansionPermit {
+    #[must_use]
+    pub const fn target(&self) -> &EphemeralHandleTarget {
+        &self.target
+    }
+
+    #[must_use]
+    pub const fn source_membership_id(&self) -> Option<SourceMembershipId> {
+        self.source_membership_id
+    }
+
+    #[must_use]
+    pub const fn representation_id(&self) -> Option<RepresentationId> {
+        self.representation_id
+    }
+
+    #[must_use]
+    pub const fn unit_id(&self) -> Option<UnitId> {
+        self.unit_id
+    }
+
+    #[must_use]
+    pub const fn maximum_bytes(&self) -> u64 {
+        self.maximum_bytes
+    }
+}
+
+/// Exact source bytes returned by the immutable source owner. Digests are
+/// computed by `search-handles`; the port cannot authorize by echoing them.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HandleReadback {
+    pub target: EphemeralHandleTarget,
+    pub bytes: Vec<u8>,
+}
+
+/// Exact immutable source readback seam.
+pub trait HandleReadbackPort {
+    type Error;
+    type OwnerObservation: PackageOpaque;
+
+    fn read_exact(
+        &mut self,
+        permit: &HandleExpansionPermit,
+    ) -> Result<(HandleReadback, Self::OwnerObservation), Self::Error>;
+
+    fn verify_owner_observation(
+        &self,
+        observation: &Self::OwnerObservation,
+        permit: &HandleExpansionPermit,
+    ) -> Result<(), Self::Error>;
+}
+
+/// Bounded source-backed expansion delivered while the store and current
+/// authorization checkpoint remain borrowed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HandleExpansion {
+    pub handle_id: HandleId,
+    pub handle_revision: NonZeroRevision,
+    pub target: EphemeralHandleTarget,
+    pub bytes: Vec<u8>,
+    pub excerpt_digest: Blake3Digest32,
+}
+
+/// Handle-side failure or caller output failure.
 #[derive(Debug)]
+pub enum HandleDeliveryError<E> {
+    Handle(HandleError),
+    Output(E),
+}
+
+/// Finite server-owned handle store. The primary map is keyed only by the
+/// dedicated-domain token digest; C00 records and protection guards never
+/// contain the plaintext bearer token.
 pub struct HandleStore {
     policy: HandlePolicy,
-    records: BTreeMap<HandleTokenDigest, HandleRecord>,
+    records: BTreeMap<HandleTokenDigest, StoredHandle>,
     by_id: BTreeMap<HandleId, HandleTokenDigest>,
+}
+
+impl fmt::Debug for HandleStore {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("HandleStore")
+            .field("policy", &self.policy)
+            .field("records", &self.records.len())
+            .field("by_id", &self.by_id.len())
+            .finish_non_exhaustive()
+    }
 }
 
 impl HandleStore {
@@ -298,119 +508,340 @@ impl HandleStore {
         self.records.is_empty()
     }
 
-    /// Mints a memory-only ephemeral handle.
+    /// Mints a memory-only unsaved-buffer handle. Retained-source targets must
+    /// use `mint_ephemeral_retained_source`, which requires a source-owner guard.
+    /// `source_membership_id` must be resolved by the authenticated buffer owner;
+    /// it is never inferred from a source ID, workspace or buffer snapshot.
     pub fn mint_ephemeral<C: HandleCryptoPort>(
         &mut self,
-        target: HandleTarget,
-        binding: HandleBinding,
+        target: EphemeralHandleTarget,
+        source_membership_id: SourceMembershipId,
+        binding_id: BindingId,
+        grant_id: GrantId,
+        owner_epoch: OwnerEpoch,
+        disclosure_ceiling: DisclosureCeiling,
         crypto: &mut C,
         cancelled: bool,
     ) -> Result<SearchSourceHandle, HandleError> {
+        let EphemeralHandleTarget::UnsavedBuffer(buffer) = target else {
+            return Err(HandleError::SourceProtectionUnavailable);
+        };
         if cancelled {
             return Err(HandleError::CancellationBeforeMint);
         }
         self.enforce_quota(HandleClass::Ephemeral)?;
-        let material = crypto
-            .mint_material()
-            .map_err(|_| HandleError::TokenInvalid)?;
-        self.insert_record(target, binding, HandleClass::Ephemeral, material)
-    }
-
-    /// Mints a durable handle only for immutable retained source revisions.
-    pub fn mint_durable_source<C: HandleCryptoPort>(
-        &mut self,
-        target: RetainedSourceTarget,
-        binding: HandleBinding,
-        crypto: &mut C,
-        cancelled: bool,
-    ) -> Result<SearchSourceHandle, HandleError> {
-        if cancelled {
-            return Err(HandleError::CancellationBeforeMint);
-        }
-        if target.byte_start >= target.byte_end {
-            return Err(HandleError::RetainedRevisionRequired);
-        }
-        self.enforce_quota(HandleClass::DurableSource)?;
-        let material = crypto
-            .mint_material()
-            .map_err(|_| HandleError::TokenInvalid)?;
-        self.insert_record(
-            HandleTarget::RetainedSource(target),
-            binding,
-            HandleClass::DurableSource,
+        let (material, token_digest) = verified_mint_material(crypto)?;
+        let source = HandleSourceBinding {
+            membership: source_membership_id,
+            representation: None,
+            unit: None,
+        };
+        self.insert_ephemeral(
+            EphemeralHandleTarget::UnsavedBuffer(buffer),
+            source,
+            binding_id,
+            grant_id,
+            owner_epoch,
+            disclosure_ceiling,
             material,
+            token_digest,
+            None,
         )
     }
 
-    fn insert_record(
+    /// Mints a retained-source handle only while the exact source owner holds a
+    /// protection guard through the handle's expiry. There is intentionally no
+    /// fallback when the C17 source-protection producer is unavailable.
+    #[allow(clippy::too_many_arguments)]
+    pub fn mint_ephemeral_retained_source<C, P>(
         &mut self,
-        target: HandleTarget,
-        binding: HandleBinding,
-        class: HandleClass,
-        material: MintMaterial,
-    ) -> Result<SearchSourceHandle, HandleError> {
-        let (start, end) = target.range();
-        if start >= end || material.expires_at <= material.created_at {
-            return Err(HandleError::InvalidPolicy);
+        target: RetainedSourceTarget,
+        source_membership_id: SourceMembershipId,
+        representation_id: RepresentationId,
+        unit_id: UnitId,
+        binding_id: BindingId,
+        grant_id: GrantId,
+        owner_epoch: OwnerEpoch,
+        disclosure_ceiling: DisclosureCeiling,
+        protection: &mut P,
+        crypto: &mut C,
+        cancelled: bool,
+    ) -> Result<SearchSourceHandle, HandleError>
+    where
+        C: HandleCryptoPort,
+        P: RetainedSourceProtectionPort,
+    {
+        if cancelled {
+            return Err(HandleError::CancellationBeforeMint);
         }
-        if self.records.contains_key(&material.token_digest)
+        validate_retained_target(&target)?;
+        self.enforce_quota(HandleClass::Ephemeral)?;
+        let (material, token_digest) = verified_mint_material(crypto)?;
+        let guard = protection.protect(&target, &material.expires_at)?;
+        if guard.target() != &target || guard.expires_at() < &material.expires_at {
+            return Err(HandleError::SourceProtectionMismatch);
+        }
+        guard.revalidate_current()?;
+        self.insert_ephemeral(
+            EphemeralHandleTarget::RetainedSource(target),
+            HandleSourceBinding {
+                membership: source_membership_id,
+                representation: Some(representation_id),
+                unit: Some(unit_id),
+            },
+            binding_id,
+            grant_id,
+            owner_epoch,
+            disclosure_ceiling,
+            material,
+            token_digest,
+            Some(Box::new(guard)),
+        )
+    }
+
+    fn insert_ephemeral(
+        &mut self,
+        target: EphemeralHandleTarget,
+        source: HandleSourceBinding,
+        binding_id: BindingId,
+        grant_id: GrantId,
+        owner_epoch: OwnerEpoch,
+        disclosure_ceiling: DisclosureCeiling,
+        material: MintMaterial,
+        token_digest: HandleTokenDigest,
+        source_protection: Option<Box<dyn RetainedSourceProtectionGuard>>,
+    ) -> Result<SearchSourceHandle, HandleError> {
+        if material.expires_at <= material.created_at
+            || self.records.contains_key(&token_digest)
             || self.by_id.contains_key(&material.handle_id)
         {
-            return Err(HandleError::TokenCollision);
+            return Err(
+                if self.records.contains_key(&token_digest)
+                    || self.by_id.contains_key(&material.handle_id)
+                {
+                    HandleError::TokenCollision
+                } else {
+                    HandleError::InvalidPolicy
+                },
+            );
         }
-        let record = HandleRecord {
+        let handle_revision =
+            NonZeroRevision::new(1).map_err(|_| HandleError::InvalidTransition)?;
+        let invalidation_refs = BoundedList::new(Vec::<OpaqueRef>::new())
+            .map_err(|_| HandleError::InvalidTransition)?;
+        let record = SearchSourceHandleRecord::Ephemeral(EphemeralSourceHandleRecord {
             handle_id: material.handle_id,
-            handle_revision: NonZeroRevision::new(1)
-                .map_err(|_| HandleError::InvalidTransition)?,
-            handle_class: class,
-            token_digest: material.token_digest,
+            handle_revision,
+            token_digest,
+            binding_id,
+            grant_id,
             target,
-            binding,
             created_at: material.created_at.clone(),
             expires_at: material.expires_at.clone(),
-            state: HandleRecordState::Active,
+            invalidation_refs,
+            status: LifecycleRecordStatus::Active,
+        });
+        let stored = StoredHandle {
+            record,
+            source,
+            owner_epoch,
+            disclosure_ceiling,
             invalidation_generation: 0,
+            source_protection,
         };
-        self.by_id.insert(record.handle_id, record.token_digest);
-        self.records.insert(record.token_digest, record);
+        self.by_id.insert(material.handle_id, token_digest);
+        self.records.insert(token_digest, stored);
         Ok(SearchSourceHandle {
             handle_id: material.handle_id,
-            handle_revision: NonZeroRevision::new(1)
-                .map_err(|_| HandleError::InvalidTransition)?,
-            handle_class: class,
+            handle_revision,
+            handle_class: HandleClass::Ephemeral,
             expires_at: Some(material.expires_at),
             opaque_token: material.opaque_token,
         })
     }
 
-    /// Resolves a public token to its private server record.
-    pub fn resolve<C: HandleCryptoPort>(
-        &self,
+    /// Resolves the public bearer token inside this store, reauthorizes twice,
+    /// verifies exact owner readback bytes, and invokes delivery while the
+    /// current C18 checkpoint and mutable store borrow remain live. The only
+    /// expansion request is the original C00 anchor; callers cannot supply a
+    /// wider range or a record clone.
+    pub fn expand<C, A, P, F, T, E>(
+        &mut self,
         handle: &SearchSourceHandle,
+        requested_max_bytes: u64,
         crypto: &C,
-    ) -> Result<&HandleRecord, HandleError> {
-        let digest = crypto
+        authorization: &mut A,
+        readback: &mut P,
+        deliver: F,
+    ) -> Result<T, HandleDeliveryError<E>>
+    where
+        C: HandleCryptoPort,
+        A: HandleReauthorizationPort,
+        P: HandleReadbackPort,
+        F: FnOnce(&HandleExpansion) -> Result<T, E>,
+    {
+        let token_digest = crypto
             .token_digest(&handle.opaque_token)
-            .map_err(|_| HandleError::HandleNotFound)?;
-        let record = self
-            .records
-            .get(&digest)
-            .ok_or(HandleError::HandleNotFound)?;
-        if record.handle_id != handle.handle_id
-            || record.handle_revision != handle.handle_revision
-            || record.handle_class != handle.handle_class
-        {
-            return Err(HandleError::HandleNotFound);
+            .map_err(|_| HandleDeliveryError::Handle(HandleError::HandleNotFound))?;
+        let store_limit = self.policy.max_expansion_bytes;
+        if requested_max_bytes == 0 || requested_max_bytes > store_limit {
+            return Err(HandleDeliveryError::Handle(
+                HandleError::RangeBudgetExceeded,
+            ));
         }
-        Ok(record)
+        let stored = self
+            .records
+            .get_mut(&token_digest)
+            .ok_or(HandleDeliveryError::Handle(HandleError::HandleNotFound))?;
+        if stored.handle_id() != handle.handle_id
+            || stored.handle_revision() != handle.handle_revision
+            || stored.class() != handle.handle_class
+            || stored.token_digest() != token_digest
+            || stored.expires_at() != handle.expires_at.as_ref()
+        {
+            return Err(HandleDeliveryError::Handle(HandleError::HandleNotFound));
+        }
+        match stored.status() {
+            LifecycleRecordStatus::Active => {}
+            LifecycleRecordStatus::Revoked => {
+                return Err(HandleDeliveryError::Handle(HandleError::HandleInvalidated));
+            }
+            LifecycleRecordStatus::Expired => {
+                return Err(HandleDeliveryError::Handle(HandleError::HandleExpired));
+            }
+        }
+        let target = stored.target().cloned().ok_or(HandleDeliveryError::Handle(
+            HandleError::RetainedRevisionRequired,
+        ))?;
+        let hash_ceiling = u64::try_from(MAX_BLAKE3_EXACT_BYTES)
+            .map_err(|_| HandleDeliveryError::Handle(HandleError::RangeBudgetExceeded))?;
+        let permitted_bytes = store_limit.min(requested_max_bytes).min(hash_ceiling);
+        let selected_byte_length = anchor_byte_length(target_anchor(&target));
+        if selected_byte_length.is_some_and(|length| length == 0 || length > permitted_bytes) {
+            return Err(HandleDeliveryError::Handle(
+                HandleError::RangeBudgetExceeded,
+            ));
+        }
+        let permit = HandleExpansionPermit {
+            target: target.clone(),
+            source_membership_id: Some(stored.source.membership),
+            representation_id: stored.source.representation,
+            unit_id: stored.source.unit,
+            maximum_bytes: selected_byte_length.unwrap_or(permitted_bytes),
+        };
+
+        let before_read = authorization
+            .checkpoint(
+                stored.record(),
+                Some(stored.source.membership),
+                stored.source.representation,
+                stored.source.unit,
+                stored.owner_epoch,
+                stored.disclosure_ceiling,
+                HandleAuthorizationPhase::BeforeSourceReadback,
+            )
+            .map_err(HandleDeliveryError::Handle)?;
+        before_read
+            .revalidate(
+                stored.record(),
+                Some(stored.source.membership),
+                stored.source.representation,
+                stored.source.unit,
+                stored.owner_epoch,
+                stored.disclosure_ceiling,
+            )
+            .map_err(HandleDeliveryError::Handle)?;
+        if stored
+            .expires_at()
+            .is_some_and(|expiry| expiry <= before_read.now())
+        {
+            return Err(HandleDeliveryError::Handle(HandleError::HandleExpired));
+        }
+        if let Some(guard) = &stored.source_protection {
+            guard
+                .revalidate_current()
+                .map_err(HandleDeliveryError::Handle)?;
+        } else if matches!(target, EphemeralHandleTarget::RetainedSource(_)) {
+            return Err(HandleDeliveryError::Handle(
+                HandleError::SourceProtectionUnavailable,
+            ));
+        }
+        drop(before_read);
+
+        let (readback_value, owner_observation) = readback
+            .read_exact(&permit)
+            .map_err(|_| HandleDeliveryError::Handle(HandleError::SourceUnreadable))?;
+        let actual_byte_length = u64::try_from(readback_value.bytes.len())
+            .map_err(|_| HandleDeliveryError::Handle(HandleError::ReadbackMismatch))?;
+        if readback_value.target != permit.target
+            || actual_byte_length == 0
+            || actual_byte_length > permit.maximum_bytes
+            || selected_byte_length.is_some_and(|length| actual_byte_length != length)
+        {
+            return Err(HandleDeliveryError::Handle(HandleError::ReadbackMismatch));
+        }
+        readback
+            .verify_owner_observation(&owner_observation, &permit)
+            .map_err(|_| HandleDeliveryError::Handle(HandleError::ReadbackMismatch))?;
+        let digest_limit = Blake3ExactInputLimit::new(readback_value.bytes.len())
+            .map_err(|_| HandleDeliveryError::Handle(HandleError::RangeBudgetExceeded))?;
+        let excerpt_digest = blake3_exact_bytes(&readback_value.bytes, digest_limit)
+            .map_err(|_| HandleDeliveryError::Handle(HandleError::ReadbackMismatch))?;
+        let expected_excerpt_digest = target_excerpt_digest(&permit.target);
+        if excerpt_digest != expected_excerpt_digest {
+            return Err(HandleDeliveryError::Handle(HandleError::ReadbackMismatch));
+        }
+
+        let expansion = HandleExpansion {
+            handle_id: stored.handle_id(),
+            handle_revision: stored.handle_revision(),
+            target: permit.target.clone(),
+            bytes: readback_value.bytes,
+            excerpt_digest,
+        };
+        let before_output = authorization
+            .checkpoint(
+                stored.record(),
+                Some(stored.source.membership),
+                stored.source.representation,
+                stored.source.unit,
+                stored.owner_epoch,
+                stored.disclosure_ceiling,
+                HandleAuthorizationPhase::BeforeOutput,
+            )
+            .map_err(HandleDeliveryError::Handle)?;
+        before_output
+            .revalidate(
+                stored.record(),
+                Some(stored.source.membership),
+                stored.source.representation,
+                stored.source.unit,
+                stored.owner_epoch,
+                stored.disclosure_ceiling,
+            )
+            .map_err(HandleDeliveryError::Handle)?;
+        if stored
+            .expires_at()
+            .is_some_and(|expiry| expiry <= before_output.now())
+        {
+            return Err(HandleDeliveryError::Handle(HandleError::HandleExpired));
+        }
+        if let Some(guard) = &stored.source_protection {
+            guard
+                .revalidate_current()
+                .map_err(HandleDeliveryError::Handle)?;
+        } else if matches!(target, EphemeralHandleTarget::RetainedSource(_)) {
+            return Err(HandleDeliveryError::Handle(
+                HandleError::SourceProtectionUnavailable,
+            ));
+        }
+        let output = deliver(&expansion).map_err(HandleDeliveryError::Output);
+        drop(before_output);
+        output
     }
 
-    /// Monotonically invalidates a bounded exact scope.
-    ///
-    /// Terminal records do not consume the mutation budget. Every selected
-    /// revision is checked before the first record changes, so a returned error
-    /// cannot leave a partially invalidated batch. Large security populations
-    /// use `begin_security_invalidation` under the external domain barrier.
+    /// Monotonically invalidates a bounded exact scope. Terminal records keep
+    /// their token-digest index but immediately drop any source protection guard.
     pub fn invalidate(
         &mut self,
         scope: &HandleInvalidationScope,
@@ -418,7 +849,7 @@ impl HandleStore {
     ) -> Result<InvalidationReceipt, HandleError> {
         let mut prepared = Vec::new();
         for (digest, record) in &self.records {
-            if !scope.matches(record) || record.state != HandleRecordState::Active {
+            if !scope.matches(record) || record.status() != LifecycleRecordStatus::Active {
                 continue;
             }
             if prepared.len() == self.policy.max_invalidate_batch {
@@ -430,16 +861,20 @@ impl HandleStore {
         }
         let invalidated = prepared.len();
         invalidation::apply_prepared(self, &prepared, generation);
-        Ok(InvalidationReceipt { generation, invalidated })
+        Ok(InvalidationReceipt {
+            generation,
+            invalidated,
+        })
     }
 
-    /// Expires a bounded deterministic slice at caller-supplied time.
+    /// Expires a bounded deterministic slice at the owner-supplied trusted time.
     pub fn expire(&mut self, now: &UtcTimestamp) -> ExpiryReceipt {
         let candidates = self
             .records
             .iter()
             .filter(|(_, record)| {
-                record.state == HandleRecordState::Active && record.expires_at <= *now
+                record.status() == LifecycleRecordStatus::Active
+                    && record.expires_at().is_some_and(|expiry| expiry <= now)
             })
             .map(|(digest, _)| *digest)
             .take(self.policy.max_expire_batch)
@@ -447,12 +882,17 @@ impl HandleStore {
         let mut expired = 0_usize;
         for digest in candidates {
             if let Some(record) = self.records.get_mut(&digest) {
-                record.state = HandleRecordState::Expired;
+                record.set_revision_status(
+                    record.handle_revision(),
+                    LifecycleRecordStatus::Expired,
+                    record.invalidation_generation,
+                );
                 expired = expired.saturating_add(1);
             }
         }
         let more_expired = self.records.values().any(|record| {
-            record.state == HandleRecordState::Active && record.expires_at <= *now
+            record.status() == LifecycleRecordStatus::Active
+                && record.expires_at().is_some_and(|expiry| expiry <= now)
         });
         ExpiryReceipt {
             expired,
@@ -464,7 +904,9 @@ impl HandleStore {
         let used = self
             .records
             .values()
-            .filter(|record| record.handle_class == class && record.state == HandleRecordState::Active)
+            .filter(|record| {
+                record.class() == class && record.status() == LifecycleRecordStatus::Active
+            })
             .count();
         let limit = match class {
             HandleClass::Ephemeral => self.policy.max_ephemeral_records,
@@ -478,178 +920,94 @@ impl HandleStore {
     }
 }
 
-/// Current authority and lifecycle inputs for handle revalidation.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HandleValidationContext {
-    pub binding_id: BindingId,
-    pub grant_id: GrantId,
-    pub owner_epoch: OwnerEpoch,
-    pub source_owner_generation: Option<Blake3Digest32>,
-    pub workspace_view_revision_id: Option<WorkspaceViewRevisionId>,
-    pub buffer_snapshot_id: Option<BufferSnapshotId>,
-    pub allowed_residencies: BTreeSet<Blake3Digest32>,
-    pub purged_memberships: BTreeSet<SourceMembershipId>,
-    pub now: UtcTimestamp,
-    pub requested_bytes: u64,
-    pub disclosure_ceiling: DisclosureCeiling,
+fn verified_mint_material<C: HandleCryptoPort>(
+    crypto: &mut C,
+) -> Result<(MintMaterial, HandleTokenDigest), HandleError> {
+    let material = crypto
+        .mint_material()
+        .map_err(|_| HandleError::TokenInvalid)?;
+    if material.expires_at <= material.created_at {
+        return Err(HandleError::InvalidPolicy);
+    }
+    let computed = crypto
+        .token_digest(&material.opaque_token)
+        .map_err(|_| HandleError::TokenInvalid)?;
+    if computed != material.token_digest {
+        return Err(HandleError::TokenInvalid);
+    }
+    Ok((material, computed))
 }
 
-/// Ephemeral exact expansion permit.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HandleExpansionPermit {
-    pub handle_id: HandleId,
-    pub handle_revision: NonZeroRevision,
-    pub target: HandleTarget,
-    pub maximum_bytes: u64,
-    pub authorization_digest: Blake3Digest32,
-}
-
-/// Revalidates possession against current server authority.
-pub fn revalidate(
-    record: &HandleRecord,
-    context: &HandleValidationContext,
-    authorization_digest: Blake3Digest32,
-) -> Result<HandleExpansionPermit, HandleError> {
-    match record.state {
-        HandleRecordState::Invalidated => return Err(HandleError::HandleInvalidated),
-        HandleRecordState::Expired => return Err(HandleError::HandleExpired),
-        HandleRecordState::Active => {}
-    }
-    if record.expires_at <= context.now {
-        return Err(HandleError::HandleExpired);
-    }
-    if record.binding.binding_id != context.binding_id {
-        return Err(HandleError::BindingMismatch);
-    }
-    if record.binding.grant_id != context.grant_id {
-        return Err(HandleError::GrantMismatch);
-    }
-    if record.binding.owner_epoch != context.owner_epoch {
-        return Err(HandleError::OwnerEpochMismatch);
-    }
-    if context
-        .purged_memberships
-        .contains(&record.target.source_membership_id())
+fn validate_retained_target(target: &RetainedSourceTarget) -> Result<(), HandleError> {
+    if target.source_namespace_id != target.source_revision_ref.source_namespace_id
+        || target.native_anchor.validate().is_err()
+        || target.source_view.validate().is_err()
     {
-        return Err(HandleError::Purged);
+        return Err(HandleError::RetainedRevisionRequired);
     }
-    if !context
-        .allowed_residencies
-        .contains(&record.target.residency_digest())
+    if let SourceView::RetainedRevision(view_revision) = &target.source_view
+        && *view_revision != target.source_revision_ref.revision_id
     {
-        return Err(HandleError::ResidencyDenied);
+        return Err(HandleError::RetainedRevisionRequired);
     }
-    if context.disclosure_ceiling < record.binding.disclosure_ceiling {
-        return Err(HandleError::DisclosureDenied);
-    }
-    let (start, end) = record.target.range();
-    let length = end.saturating_sub(start);
-    if context.requested_bytes == 0 || context.requested_bytes > length {
-        return Err(HandleError::RangeBudgetExceeded);
-    }
-    match &record.target {
-        HandleTarget::RetainedSource(target) => {
-            if context.source_owner_generation != Some(target.source_owner_generation) {
-                return Err(HandleError::SourceOwnerMismatch);
-            }
-            if target
-                .retention_expires_at
-                .as_ref()
-                .is_some_and(|expiry| expiry <= &context.now)
+    match &target.native_anchor {
+        NativeAnchor::TextBytes(anchor) => {
+            if anchor.content_digest != target.source_revision_ref.content_digest
+                || anchor.byte_start_0 >= anchor.byte_end_exclusive_0
+                || anchor.byte_end_exclusive_0 > target.source_revision_ref.byte_length
             {
-                return Err(HandleError::RetentionExpired);
+                return Err(HandleError::RetainedRevisionRequired);
             }
         }
-        HandleTarget::UnsavedBuffer(target) => {
-            if context.workspace_view_revision_id != Some(target.workspace_view_revision_id) {
-                return Err(HandleError::WorkspaceViewMismatch);
+        NativeAnchor::GitBlobBytes(anchor) => {
+            if anchor.byte_start_0 >= anchor.byte_end_exclusive_0
+                || anchor.byte_end_exclusive_0 > target.source_revision_ref.byte_length
+            {
+                return Err(HandleError::RetainedRevisionRequired);
             }
-            if context.buffer_snapshot_id != Some(target.buffer_snapshot_id) {
-                return Err(HandleError::BufferSnapshotMismatch);
+        }
+        NativeAnchor::PdfRegion(anchor) => {
+            if anchor.source_revision_id != target.source_revision_ref.revision_id {
+                return Err(HandleError::RetainedRevisionRequired);
             }
         }
-    }
-    Ok(HandleExpansionPermit {
-        handle_id: record.handle_id,
-        handle_revision: record.handle_revision,
-        target: record.target.clone(),
-        maximum_bytes: context.requested_bytes,
-        authorization_digest,
-    })
-}
-
-/// Exact expansion readback result.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HandleReadback {
-    pub target: HandleTarget,
-    pub content_digest: Blake3Digest32,
-    pub excerpt_digest: Blake3Digest32,
-    pub bytes: Vec<u8>,
-}
-
-/// Exact expansion readback seam.
-pub trait HandleReadbackPort {
-    type Error;
-
-    fn read_exact(
-        &mut self,
-        permit: &HandleExpansionPermit,
-    ) -> Result<HandleReadback, Self::Error>;
-}
-
-/// Bounded source-backed handle expansion.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct HandleExpansion {
-    pub handle_id: HandleId,
-    pub handle_revision: NonZeroRevision,
-    pub target: HandleTarget,
-    pub bytes: Vec<u8>,
-    pub content_digest: Blake3Digest32,
-    pub excerpt_digest: Blake3Digest32,
-}
-
-/// Expands only the exact revalidated target and performs a second authority check.
-pub fn expand<P: HandleReadbackPort>(
-    record: &HandleRecord,
-    before: &HandleValidationContext,
-    after: &HandleValidationContext,
-    authorization_digest: Blake3Digest32,
-    port: &mut P,
-    cancelled_before_emission: bool,
-) -> Result<HandleExpansion, HandleError> {
-    let permit = revalidate(record, before, authorization_digest)?;
-    let readback = port
-        .read_exact(&permit)
-        .map_err(|_| HandleError::SourceUnreadable)?;
-    if readback.target != permit.target
-        || readback.bytes.is_empty()
-        || u64::try_from(readback.bytes.len()).unwrap_or(u64::MAX) > permit.maximum_bytes
-    {
-        return Err(HandleError::ReadbackMismatch);
-    }
-    let expected = match &permit.target {
-        HandleTarget::RetainedSource(target) => {
-            (target.content_digest, target.excerpt_digest)
+        NativeAnchor::ArchiveMember(anchor) => {
+            if anchor.archive_revision_id != target.source_revision_ref.revision_id {
+                return Err(HandleError::RetainedRevisionRequired);
+            }
         }
-        HandleTarget::UnsavedBuffer(target) => {
-            (target.content_digest, target.excerpt_digest)
+        NativeAnchor::BufferRange(_) => return Err(HandleError::RetainedRevisionRequired),
+    }
+    Ok(())
+}
+
+fn anchor_byte_range(anchor: &NativeAnchor) -> Option<(u64, u64)> {
+    match anchor {
+        NativeAnchor::TextBytes(anchor) => Some((anchor.byte_start_0, anchor.byte_end_exclusive_0)),
+        NativeAnchor::GitBlobBytes(anchor) => {
+            Some((anchor.byte_start_0, anchor.byte_end_exclusive_0))
         }
-    };
-    if (readback.content_digest, readback.excerpt_digest) != expected {
-        return Err(HandleError::ReadbackMismatch);
+        NativeAnchor::ArchiveMember(anchor) => anchor_byte_range(&anchor.nested_anchor),
+        NativeAnchor::BufferRange(_) | NativeAnchor::PdfRegion(_) => None,
     }
-    if cancelled_before_emission {
-        return Err(HandleError::ExpansionCancelled);
+}
+
+fn anchor_byte_length(anchor: &NativeAnchor) -> Option<u64> {
+    anchor_byte_range(anchor).and_then(|(start, end)| end.checked_sub(start))
+}
+
+const fn target_anchor(target: &EphemeralHandleTarget) -> &NativeAnchor {
+    match target {
+        EphemeralHandleTarget::RetainedSource(target) => &target.native_anchor,
+        EphemeralHandleTarget::UnsavedBuffer(target) => &target.native_anchor,
     }
-    revalidate(record, after, authorization_digest)?;
-    Ok(HandleExpansion {
-        handle_id: record.handle_id,
-        handle_revision: record.handle_revision,
-        target: permit.target,
-        bytes: readback.bytes,
-        content_digest: readback.content_digest,
-        excerpt_digest: readback.excerpt_digest,
-    })
+}
+
+const fn target_excerpt_digest(target: &EphemeralHandleTarget) -> Blake3Digest32 {
+    match target {
+        EphemeralHandleTarget::RetainedSource(target) => target.excerpt_digest,
+        EphemeralHandleTarget::UnsavedBuffer(target) => target.excerpt_digest,
+    }
 }
 
 /// Monotone invalidation scope.
@@ -662,33 +1020,37 @@ pub enum HandleInvalidationScope {
     Membership(SourceMembershipId),
     WorkspaceView(WorkspaceViewRevisionId),
     BufferSnapshot(BufferSnapshotId),
-    Residency(Blake3Digest32),
-    RetentionLease(OpaqueId),
+    Residency(ObjectResidencyKeyDigest),
+    RetentionLease(OpaqueRef),
 }
 
 impl HandleInvalidationScope {
-    fn matches(&self, record: &HandleRecord) -> bool {
+    fn matches(&self, record: &StoredHandle) -> bool {
         match self {
-            Self::AllEphemeral => record.handle_class == HandleClass::Ephemeral,
-            Self::Binding(value) => record.binding.binding_id == *value,
-            Self::Grant(value) => record.binding.grant_id == *value,
-            Self::OwnerEpoch(value) => record.binding.owner_epoch == *value,
-            Self::Membership(value) => record.target.source_membership_id() == *value,
-            Self::WorkspaceView(value) => matches!(
-                &record.target,
-                HandleTarget::UnsavedBuffer(target)
-                    if target.workspace_view_revision_id == *value
-            ),
-            Self::BufferSnapshot(value) => matches!(
-                &record.target,
-                HandleTarget::UnsavedBuffer(target) if target.buffer_snapshot_id == *value
-            ),
-            Self::Residency(value) => record.target.residency_digest() == *value,
-            Self::RetentionLease(value) => matches!(
-                &record.target,
-                HandleTarget::RetainedSource(target) if target.retention_lease_ref == *value
-            ),
+            Self::AllEphemeral => record.class() == HandleClass::Ephemeral,
+            Self::Binding(value) => record_binding_id(record) == *value,
+            Self::Grant(value) => record_grant_id(record) == *value,
+            Self::OwnerEpoch(value) => record.owner_epoch == *value,
+            Self::Membership(value) => record.source_membership_id() == *value,
+            Self::WorkspaceView(value) => record.workspace_view_revision_id() == Some(*value),
+            Self::BufferSnapshot(value) => record.buffer_snapshot_id() == Some(*value),
+            Self::Residency(value) => record.residency() == Some(*value),
+            Self::RetentionLease(value) => record.retention_lease_ref() == Some(value),
         }
+    }
+}
+
+const fn record_binding_id(record: &StoredHandle) -> BindingId {
+    match record.record() {
+        SearchSourceHandleRecord::Ephemeral(record) => record.binding_id,
+        SearchSourceHandleRecord::DurableSource(record) => record.binding_id,
+    }
+}
+
+const fn record_grant_id(record: &StoredHandle) -> GrantId {
+    match record.record() {
+        SearchSourceHandleRecord::Ephemeral(record) => record.grant_id,
+        SearchSourceHandleRecord::DurableSource(record) => record.grant_id,
     }
 }
 
@@ -705,3 +1067,6 @@ pub struct ExpiryReceipt {
     pub expired: usize,
     pub more_expired: bool,
 }
+
+#[cfg(test)]
+mod tests;
