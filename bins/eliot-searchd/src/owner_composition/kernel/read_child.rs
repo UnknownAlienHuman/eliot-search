@@ -14,7 +14,7 @@ use super::{NativeBindingView, NativeRootCapability, NativeRootRequest, NativeWo
 type ReadContext = Option<(NativeRootRequest, NativeWork)>;
 
 #[path = "fresh_root.rs"]
-mod fresh_root;
+pub(super) mod fresh_root;
 
 #[cfg(test)]
 pub(super) fn source_body_attempts_for_test() -> usize {

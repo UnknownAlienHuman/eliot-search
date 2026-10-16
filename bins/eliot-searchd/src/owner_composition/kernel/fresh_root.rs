@@ -40,6 +40,7 @@ mod native_retention_object_io;
 mod native_retention_time;
 #[path = "native_retention_security.rs"]
 mod native_retention_security;
+pub(crate) use native_retention_security::RetentionSecurity;
 
 #[derive(Debug)]
 pub enum FreshRootError {

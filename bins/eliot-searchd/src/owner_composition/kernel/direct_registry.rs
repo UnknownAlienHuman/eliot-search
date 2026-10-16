@@ -370,6 +370,8 @@ impl DirectRegistryOwner {
 mod command;
 #[path = "native_source_command.rs"]
 mod source_command;
+#[path = "native_retention_command.rs"]
+mod retention_command;
 #[path = "native_dek_command.rs"]
 mod dek_command;
 #[path = "native_dek_selection.rs"]

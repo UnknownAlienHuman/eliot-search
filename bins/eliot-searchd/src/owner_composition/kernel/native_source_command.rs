@@ -45,7 +45,7 @@ impl NativeSourceCommand {
     }
 }
 
-fn select_namespace(registry: &SourceRegistry, root: c::RootBindingId,
+pub(super) fn select_namespace(registry: &SourceRegistry, root: c::RootBindingId,
     profile: search_source_identity::FilesystemIdentityProfile, actual: SourceOwnerScopeV2,
     policy: &search_source_provenance::RetainedPolicyV2,
 ) -> Result<(SourceNamespaceSelectionV2, SourceOwnerScopeV2), String> {
@@ -111,30 +111,8 @@ impl DirectRegistryOwner {
             binding_observation: acquired.binding_observation().clone(), original: acquired.original().clone(),
             expected_source_revision: command.predecessor, operation_id: command.operation.clone(), receipt: intent,
         };
-        let first_refusal = RefCell::new(None);
-        let mut probe = || native.source_checkpoint().map_err(|error| {
-            let cancelled = error.is_cancelled();
-            if first_refusal.borrow().is_none() { *first_refusal.borrow_mut() = Some(error); }
-            if cancelled { CheckpointFailureV2::Cancelled } else { CheckpointFailureV2::DeadlineExceeded }
-        });
-        let preparation = prepare_source_admission_v2(&mut registry, &request, &mut port, native.context(), &mut probe);
-        if let Some(error) = first_refusal.borrow_mut().take() { return Err(error.to_string()); }
-        let preparation = preparation.map_err(|e| format!("{e:?}"))?;
-        let receipt = match preparation {
-            SourceAdmissionPreparationV2::Replayed(receipt) => receipt,
-            SourceAdmissionPreparationV2::Prepared(prepared) => {
-                native.source_full_checkpoint().map_err(|e| e.to_string())?;
-                acquired.check_current(&registry).map_err(|e| e.to_string())?;
-                match commit_source_admission_v2(&mut registry, &prepared, &mut port, native.context(), &mut probe) {
-                    Ok(receipt) => receipt,
-                    Err(error) => {
-                        if port.requires_recovery() { let _original = port.recover_pending(native.context()); }
-                        if let Some(first) = first_refusal.borrow_mut().take() { return Err(first.to_string()); }
-                        return Err(format!("{error:?}"));
-                    }
-                }
-            }
-        };
+        let receipt = commit_native_admission(&native, &mut registry, &request, &mut port,
+            |view| acquired.check_current(view).map_err(|error| error.to_string()))?;
         // The enclosing command performs its full Native fence before output.
         // Only held-source validation and journal readback remain before it.
         acquired.check_current(&registry).map_err(|e| e.to_string())?;
@@ -144,7 +122,40 @@ impl DirectRegistryOwner {
     }
 }
 
-fn validate_replay(record: &search_source_registry::recovery::DecodedBatch, command: &NativeSourceCommand,
+/// The shared admission boundary for metadata-only admission and retention.
+/// The held Source is checked immediately before the same C03 commit.
+pub(super) fn commit_native_admission(
+    native: &super::super::read_child::fresh_root::FreshRootContext<'_, '_>,
+    registry: &mut SourceRegistry, request: &SourceAdmissionRequestV2,
+    port: &mut crate::registry_control::RegistryJournal<'_, super::super::read_child::fresh_root::FreshRootCancellation>,
+    mut held_source: impl FnMut(&SourceRegistry) -> Result<(), String>,
+) -> Result<search_source_registry::source::AdmittedSourceReceipt, String> {
+    let first_refusal = RefCell::new(None);
+    let mut probe = || native.source_checkpoint().map_err(|error| {
+        let cancelled = error.is_cancelled();
+        if first_refusal.borrow().is_none() { *first_refusal.borrow_mut() = Some(error); }
+        if cancelled { CheckpointFailureV2::Cancelled } else { CheckpointFailureV2::DeadlineExceeded }
+    });
+    let preparation = prepare_source_admission_v2(registry, request, port, native.context(), &mut probe);
+    if let Some(error) = first_refusal.borrow_mut().take() { return Err(error.to_string()); }
+    match preparation.map_err(|error| format!("{error:?}"))? {
+        SourceAdmissionPreparationV2::Replayed(receipt) => Ok(receipt),
+        SourceAdmissionPreparationV2::Prepared(prepared) => {
+            native.source_full_checkpoint().map_err(|error| error.to_string())?;
+            held_source(registry)?;
+            match commit_source_admission_v2(registry, &prepared, port, native.context(), &mut probe) {
+                Ok(receipt) => Ok(receipt),
+                Err(error) => {
+                    if port.requires_recovery() { let _original = port.recover_pending(native.context()); }
+                    if let Some(first) = first_refusal.borrow_mut().take() { return Err(first.to_string()); }
+                    Err(format!("{error:?}"))
+                }
+            }
+        }
+    }
+}
+
+pub(super) fn validate_replay(record: &search_source_registry::recovery::DecodedBatch, command: &NativeSourceCommand,
     root: c::RootBindingId, intent: &c::ReceiptRef, policy: &search_source_provenance::RetainedPolicyV2,
     registry: &SourceRegistry, profile: search_source_identity::FilesystemIdentityProfile,
 ) -> Result<(), String> {
