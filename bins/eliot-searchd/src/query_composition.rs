@@ -7,9 +7,12 @@
 //! denominator travels with the output so top-k saturation can never narrow
 //! an exact proof.
 //!
-//! Production data plane lives in `search-qdrant-bridge::real::BlockingRealQueryPlane`,
-//! a synchronous facade over the qualified async `RealDataPlane` that owns one
-//! persistent single-thread Tokio runtime. The production call sequence mirrors
+//! The legacy data plane lives in `search-qdrant-bridge::real::BlockingRealQueryPlane`,
+//! a synchronous facade over async `RealDataPlane` that owns one persistent
+//! single-thread Tokio runtime. Its nine-field payload/filter profile does not
+//! implement the accepted shared S9.5/S10 contract. Normal indexed serving must
+//! use the canonical bridge and a new admitted collection generation. The
+//! retained legacy call sequence mirrors
 //! [`ProcessTestIndexedPort`] one-to-one:
 //!
 //! 1. `query_filtered` with one [`EligibilityFilter`] and
@@ -311,8 +314,11 @@ pub fn execute_pinned_leg(
     )
 }
 
-/// Real indexed retrieval over the bridge's single persistent runtime.
-/// This port returns nominations only; source evidence still requires C07 readback.
+/// Legacy-profile indexed retrieval over the bridge's persistent runtime.
+///
+/// This port is not the accepted S9.5/S10 product route. It returns nominations
+/// only; source evidence still requires C07 readback. Canonical serving must use
+/// the shared-contract bridge path after exact schema/route admission.
 pub struct RealIndexedPort<'plane> {
     plane: &'plane BlockingRealQueryPlane,
     route: CollectionRoute,
