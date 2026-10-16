@@ -275,6 +275,7 @@ impl DirectRegistryOwner {
         let result = self.select_revision_dek(command);
         self.complete_output(result, writer)
     }
+    #[expect(clippy::too_many_lines, reason = "One borrowed Native custody and journal span both exact phases, recovery and final backend fences")]
     fn select_revision_dek(&mut self, input: &SelectionCommand) -> Result<DirectOutput, String> {
         let deadline = self.owner.request.credential_context().0;
         let mut read = super::super::read_child::direct_operation(&mut self.owner)
