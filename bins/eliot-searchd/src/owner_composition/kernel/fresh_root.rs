@@ -178,10 +178,10 @@ mod cancellation_clone_tests {
             deadline,
             first_refusal: Arc::new(AtomicU8::new(0)),
         };
+        let cloned = original.clone();
         assert!(original.refusal().is_some());
         assert_eq!(original.first_refusal.load(Ordering::Acquire), 2);
         flag.store(true, Ordering::Release);
-        let cloned = original.clone();
         assert!(cloned.is_cancelled());
         assert_eq!(cloned.first_refusal.load(Ordering::Acquire), 2);
     }
@@ -195,10 +195,10 @@ mod cancellation_clone_tests {
             deadline,
             first_refusal: Arc::new(AtomicU8::new(0)),
         };
+        let cloned = original.clone();
         assert!(original.refusal().is_some());
         assert_eq!(original.first_refusal.load(Ordering::Acquire), 1);
         flag.store(false, Ordering::Release);
-        let cloned = original.clone();
         assert!(cloned.is_cancelled());
         assert_eq!(cloned.first_refusal.load(Ordering::Acquire), 1);
     }
