@@ -11,5 +11,8 @@
 pub mod diagnostics;
 #[doc(hidden)]
 pub mod native_file;
+#[cfg(windows)]
+#[doc(hidden)]
+pub mod native_provider_pipe;
 /// Measured resource budgets on a frozen corpus (T40; same single owner).
 pub mod resource_budgets;

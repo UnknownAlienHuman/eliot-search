@@ -10,6 +10,8 @@ mod endpoint;
 mod io;
 mod local;
 mod pairing;
+#[cfg(windows)]
+mod windows;
 
 pub use connection::{StandaloneOpenedConnection, StandaloneServingConnection};
 pub use endpoint::{StandaloneEndpointAdvertisement, StandaloneEndpointError};

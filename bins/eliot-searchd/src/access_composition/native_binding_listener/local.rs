@@ -10,25 +10,22 @@
 #![allow(dead_code)]
 
 use core::fmt;
-use std::io;
+use std::io::{self, Read, Write};
 use std::task::Poll;
 use std::time::{Duration, Instant};
 
 use search_contracts::{OpaqueId, ProtocolRange, protocol::PeerRole};
 use search_ports::{CancellationProbe, OperationContext};
 use search_provider_protocol::{
-    BindingSession, NativeEndpointNameV1, ProtocolLimits, TransportPeer,
+    BindingSession, MonotonicMillis, NativeEndpointNameV1, ProtocolLimits, TransportPeer,
 };
 
-use crate::provider_composition::LocalByteStream;
+use crate::provider_composition::{LocalByteStream, monotonic_millis};
 
+use super::super::{NativeBindingError, StandaloneBootstrapReady, StandaloneProcessOwner};
 use super::{
-    ACCEPT_SLEEP, MAX_ACCEPT_QUANTUM, StandaloneAcceptError,
-    StandaloneOpenedConnection, StandalonePairingIo, StandalonePairingIoError,
-    pairing,
-};
-use super::super::{
-    NativeBindingError, StandaloneBootstrapReady, StandaloneProcessOwner,
+    ACCEPT_SLEEP, MAX_ACCEPT_QUANTUM, StandaloneAcceptError, StandaloneOpenedConnection,
+    StandalonePairingIo, StandalonePairingIoError, pairing,
 };
 
 /// Nonblocking platform listener for one canonical local endpoint.
@@ -37,17 +34,20 @@ use super::super::{
 /// name supplied by [`StandaloneLocalOwner::bind`], configure accept as
 /// nonblocking, return one original un-cloned stream, and perform no scan,
 /// alternate-name retry, TCP fallback, framing or authentication decision.
-pub(crate) trait StandaloneLocalListener {
+pub(super) trait StandaloneLocalListener {
     /// Accepted stream type transferred into the canonical pairing/session owner.
     type Stream: LocalByteStream + 'static;
 
     /// Accept one stream or return `WouldBlock` when none is ready.
-    fn accept(&self) -> io::Result<Self::Stream>;
+    fn accept(&self, check: &dyn Fn() -> io::Result<()>) -> io::Result<Self::Stream>;
+
+    /// Close pending admission on original-context refusal; never wait or flush.
+    fn close(&self);
 }
 
 /// Listener construction or trusted registration refusal.
 #[derive(Debug)]
-pub(crate) enum StandaloneLocalBindError {
+pub(super) enum StandaloneLocalBindError {
     /// Finalized registration did not match its independently trusted expectation.
     Registration(NativeBindingError),
     /// Listener factory or local polling configuration failed.
@@ -82,7 +82,7 @@ impl From<StandalonePairingIoError> for StandaloneLocalBindError {
 /// Field order is intentional: listener admission closes before the process and
 /// data-root owner are dropped. An opened or serving connection borrows this
 /// owner, so neither transport nor retained work can outlive that root lock.
-pub(crate) struct StandaloneLocalOwner<L: StandaloneLocalListener> {
+pub(super) struct StandaloneLocalOwner<L: StandaloneLocalListener> {
     listener: L,
     process: StandaloneProcessOwner,
     endpoint_name: NativeEndpointNameV1,
@@ -109,19 +109,15 @@ impl<L: StandaloneLocalListener> StandaloneLocalOwner<L> {
         if accept_quantum.is_zero() || accept_quantum > MAX_ACCEPT_QUANTUM {
             return Err(StandalonePairingIoError::InvalidConfiguration.into());
         }
-        let local_protocols = ProtocolRange::new(
-            local_protocols.minimum,
-            local_protocols.maximum,
-        )
-        .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
+        let local_protocols = ProtocolRange::new(local_protocols.minimum, local_protocols.maximum)
+            .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
         let limits = limits
             .validate()
             .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
         let pairing = BindingSession::new(local_protocols, limits)
             .map_err(|_| StandalonePairingIoError::InvalidConfiguration)?;
         let endpoint_name = trusted_endpoint_name(&process)?;
-        let listener = create_listener(endpoint_name)
-            .map_err(StandalonePairingIoError::Io)?;
+        let listener = create_listener(endpoint_name).map_err(StandalonePairingIoError::Io)?;
         Ok(Self {
             listener,
             process,
@@ -141,7 +137,6 @@ impl<L: StandaloneLocalListener> StandaloneLocalOwner<L> {
     }
 
     /// Executed bootstrap evidence retained by the underlying process owner.
-    #[must_use]
     pub(crate) const fn readiness(&self) -> &StandaloneBootstrapReady {
         self.process.readiness()
     }
@@ -149,14 +144,15 @@ impl<L: StandaloneLocalListener> StandaloneLocalOwner<L> {
     /// Poll one accepted stream through pairing and current native validation.
     ///
     /// `Pending` means no connection arrived during the finite accept quantum;
-    /// it consumes no setup deadline or connection sequence. A failed accepted
+    /// it consumes the original setup deadline but no connection sequence. A failed accepted
     /// stream is dropped and is never retried or routed to TCP/legacy framing.
     pub(crate) fn poll_open<C: CancellationProbe + Clone>(
         &mut self,
         boot_id: &OpaqueId,
         context: &OperationContext<C>,
+        absolute_deadline: MonotonicMillis,
     ) -> Result<Poll<StandaloneOpenedConnection<'_>>, StandaloneAcceptError> {
-        let Some(mut stream) = self.poll_accept()? else {
+        let Some(mut stream) = self.poll_accept(context, absolute_deadline)? else {
             return Ok(Poll::Pending);
         };
         let sequence = self
@@ -167,20 +163,35 @@ impl<L: StandaloneLocalListener> StandaloneLocalOwner<L> {
 
         let record = self.process.readiness().record().clone();
         let expected = self.process.readiness().expectation().clone();
-        let mut io = StandalonePairingIo::new(&mut stream, context)?;
-        let paired = pairing::perform_native_pairing(
-            &mut io,
-            sequence,
-            &mut self.pairing,
-            self.local_protocols,
-            self.limits,
-            &record,
-            &expected,
-        )?;
-        let remaining = io.remaining_context()?;
-        drop(io);
+        let paired = (|| -> Result<_, StandaloneAcceptError> {
+            let remaining = remaining_setup_context(context, absolute_deadline)?;
+            // The existing pairing owner takes a relative context. Supply only
+            // the unspent portion and cap every actual byte operation against
+            // the caller's original absolute deadline as well.
+            let mut guarded = OriginalSetupStream {
+                stream: &mut stream,
+                context,
+                absolute_deadline,
+            };
+            let mut io = StandalonePairingIo::new(&mut guarded, &remaining)?;
+            let paired = pairing::perform_native_pairing(
+                &mut io,
+                sequence,
+                &mut self.pairing,
+                self.local_protocols,
+                self.limits,
+                &record,
+                &expected,
+            )?;
+            Ok((paired, io.remaining_context()?))
+        })();
+        if let Err(error) = check_setup(context, absolute_deadline) {
+            self.listener.close();
+            return Err(error.into());
+        }
+        let (paired, remaining) = paired?;
 
-        let (transport, pin) = self.process.open_local(
+        let opened = self.process.open_local(
             stream,
             paired.binding,
             paired.ceremony,
@@ -188,7 +199,12 @@ impl<L: StandaloneLocalListener> StandaloneLocalOwner<L> {
             self.limits,
             boot_id,
             &remaining,
-        )?;
+        );
+        if let Err(error) = check_setup(context, absolute_deadline) {
+            self.listener.close();
+            return Err(error.into());
+        }
+        let (transport, pin) = opened?;
         Ok(Poll::Ready(StandaloneOpenedConnection {
             transport: Some(transport),
             pin,
@@ -202,28 +218,140 @@ impl<L: StandaloneLocalListener> StandaloneLocalOwner<L> {
     /// this owner. Destructuring drops the listener before returning the process.
     #[must_use]
     pub(crate) fn close_listener(self) -> StandaloneProcessOwner {
-        let Self { listener, process, .. } = self;
+        let Self {
+            listener, process, ..
+        } = self;
         drop(listener);
         process
     }
 
-    fn poll_accept(&self) -> Result<Option<L::Stream>, StandalonePairingIoError> {
+    fn poll_accept<C: CancellationProbe>(
+        &self,
+        context: &OperationContext<C>,
+        absolute_deadline: MonotonicMillis,
+    ) -> Result<Option<L::Stream>, StandalonePairingIoError> {
         let started = Instant::now();
         loop {
-            match self.listener.accept() {
+            if let Err(error) = check_setup(context, absolute_deadline) {
+                self.listener.close();
+                return Err(error);
+            }
+            let accepted = self
+                .listener
+                .accept(&|| check_setup_io(context, absolute_deadline));
+            if let Err(error) = check_setup(context, absolute_deadline) {
+                self.listener.close();
+                return Err(error);
+            }
+            match accepted {
                 Ok(stream) => return Ok(Some(stream)),
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
                     let elapsed = started.elapsed();
                     if elapsed >= self.accept_quantum {
                         return Ok(None);
                     }
-                    std::thread::sleep(ACCEPT_SLEEP.min(self.accept_quantum - elapsed));
+                    let left = absolute_deadline
+                        .get()
+                        .saturating_sub(monotonic_millis().get());
+                    std::thread::sleep(
+                        ACCEPT_SLEEP
+                            .min(self.accept_quantum.saturating_sub(elapsed))
+                            .min(Duration::from_millis(left)),
+                    );
                 }
-                Err(error) => return Err(StandalonePairingIoError::Io(error)),
+                Err(error) => {
+                    self.listener.close();
+                    return Err(StandalonePairingIoError::Io(error));
+                }
             }
         }
     }
+}
+
+// Borrowed only during pairing; the original stream is then transferred to the
+// canonical session owner, which retains the existing request-specific budgets.
+struct OriginalSetupStream<'a, S, C: CancellationProbe> {
+    stream: &'a mut S,
+    context: &'a OperationContext<C>,
+    absolute_deadline: MonotonicMillis,
+}
+
+impl<S: Read, C: CancellationProbe> Read for OriginalSetupStream<'_, S, C> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        check_setup_io(self.context, self.absolute_deadline)?;
+        let result = self.stream.read(buffer);
+        check_setup_io(self.context, self.absolute_deadline)?;
+        result
+    }
+}
+
+impl<S: Write, C: CancellationProbe> Write for OriginalSetupStream<'_, S, C> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        check_setup_io(self.context, self.absolute_deadline)?;
+        let result = self.stream.write(buffer);
+        check_setup_io(self.context, self.absolute_deadline)?;
+        result
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        check_setup_io(self.context, self.absolute_deadline)?;
+        let result = self.stream.flush();
+        check_setup_io(self.context, self.absolute_deadline)?;
+        result
+    }
+}
+
+impl<S: LocalByteStream, C: CancellationProbe> LocalByteStream for OriginalSetupStream<'_, S, C> {
+    fn configure_nonblocking(&self) -> io::Result<()> {
+        check_setup_io(self.context, self.absolute_deadline)?;
+        self.stream.configure_nonblocking()?;
+        check_setup_io(self.context, self.absolute_deadline)
+    }
+}
+
+fn remaining_setup_context<C: CancellationProbe + Clone>(
+    context: &OperationContext<C>,
+    absolute_deadline: MonotonicMillis,
+) -> Result<OperationContext<C>, StandalonePairingIoError> {
+    check_setup(context, absolute_deadline)?;
+    let remaining = absolute_deadline
+        .get()
+        .checked_sub(monotonic_millis().get())
+        .filter(|left| *left > 0)
+        .ok_or(StandalonePairingIoError::DeadlineExpired)?;
+    OperationContext::new(
+        context.request_id(),
+        remaining,
+        context.cancellation().clone(),
+        context.budget_ref().clone(),
+    )
+    .map_err(|_| StandalonePairingIoError::InvalidConfiguration)
+}
+
+pub(super) fn check_setup<C: CancellationProbe>(
+    context: &OperationContext<C>,
+    absolute_deadline: MonotonicMillis,
+) -> Result<(), StandalonePairingIoError> {
+    if context.cancellation().is_cancelled() {
+        return Err(StandalonePairingIoError::Cancelled);
+    }
+    if monotonic_millis() >= absolute_deadline {
+        return Err(StandalonePairingIoError::DeadlineExpired);
+    }
+    Ok(())
+}
+
+pub(super) fn check_setup_io<C: CancellationProbe>(
+    context: &OperationContext<C>,
+    absolute_deadline: MonotonicMillis,
+) -> io::Result<()> {
+    check_setup(context, absolute_deadline).map_err(|error| {
+        if matches!(error, StandalonePairingIoError::Cancelled) {
+            io::ErrorKind::Interrupted.into()
+        } else {
+            io::ErrorKind::TimedOut.into()
+        }
+    })
 }
 
 impl<L: StandaloneLocalListener> fmt::Debug for StandaloneLocalOwner<L> {
