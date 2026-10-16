@@ -43,6 +43,10 @@ use search_epoch_pins::RouteIdentity;
 
 use super::{ExecuteError, LegCompletion, LegOutput, LegPinSet, LegTicket, RawNomination};
 
+#[cfg(test)]
+#[path = "../../search-query-planner/tests/support/canonical_plan.rs"]
+mod canonical_plan_fixture;
+
 /// Maximum nominations returned by one indexed leg.
 ///
 /// Matches the reference bridge baseline ceiling so the executor never asks
@@ -185,10 +189,9 @@ pub fn execute_indexed_leg<P: IndexedRetrievalPort>(
 ) -> Result<IndexedLegOutput, ExecuteError> {
     let safe_leg = ticket
         .leg
-        .safe_index_leg
-        .as_ref()
+        .safe_index_leg()
         .ok_or(ExecuteError::InvalidExecutionState)?;
-    if ticket.leg.leg_kind != LegKind::Lexical {
+    if ticket.leg.leg_kind() != LegKind::Lexical {
         return Err(ExecuteError::InvalidExecutionState);
     }
     if safe_leg.eligibility_plans.len() != 1 {
@@ -222,10 +225,10 @@ pub fn execute_indexed_leg<P: IndexedRetrievalPort>(
     if guard.route() != expected_route || guard.epoch() != safe_leg.route.visible_epoch {
         return Err(ExecuteError::PinAcquisitionFailed);
     }
-    if ticket.leg.memberships != safe_leg.memberships {
+    if ticket.leg.memberships() != &safe_leg.memberships {
         return Err(ExecuteError::InvalidExecutionState);
     }
-    let budget_limit = usize::try_from(ticket.leg.budget.max_candidates)
+    let budget_limit = usize::try_from(ticket.leg.budget().max_candidates())
         .map_err(|_| ExecuteError::BudgetExceeded)?;
     if limit == 0 || limit > MAX_INDEXED_LIMIT || limit > budget_limit {
         return Err(ExecuteError::BudgetExceeded);
@@ -271,14 +274,14 @@ pub fn execute_indexed_leg<P: IndexedRetrievalPort>(
         }
         if !ticket
             .leg
-            .memberships
+            .memberships()
             .contains(&nomination.source_membership_id)
         {
             return Err(ExecuteError::InvalidNomination);
         }
         let candidate_id = OpaqueId::new(format!(
             "candidate:{}:{}",
-            ticket.leg.leg_id,
+            ticket.leg.leg_id(),
             hex_point(nomination.point_id)
         ))
         .map_err(|_| ExecuteError::InvalidNomination)?;
@@ -309,9 +312,9 @@ pub fn execute_indexed_leg<P: IndexedRetrievalPort>(
     };
     Ok(IndexedLegOutput {
         output: LegOutput {
-            leg_id: ticket.leg.leg_id,
-            leg_kind: ticket.leg.leg_kind,
-            memberships: ticket.leg.memberships.clone(),
+            leg_id: ticket.leg.leg_id(),
+            leg_kind: ticket.leg.leg_kind(),
+            memberships: ticket.leg.memberships().clone(),
             security_generation: live_after.generation,
             scoring_population_digest: Some(population),
             nominations: mapped,
@@ -376,12 +379,12 @@ fn hex_point(bytes: [u8; 16]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::canonical_plan_fixture;
     use search_access::{
         AccessCheckpoint, AccessPermit, IndexedRouteFence, MembershipAccessBinding,
     };
     use search_contracts::{CollectionGenerationId, Epoch, LegKind, OwnerEpoch, RequestId};
     use search_epoch_pins::{PinLimits, PinRegistry};
-    use search_query_planner::{CancellationBoundary, LegBudget, PlannedLeg};
 
     struct StubPort {
         nominations: Vec<IndexedNomination>,
@@ -478,7 +481,6 @@ mod tests {
         let fence = route();
         let plan = search_access::compile_base_eligibility(&binding(membership_id), fence, 9, 2, 2)
             .expect("fixture plan");
-        let predicates = plan.predicates();
         let safe_leg = search_access::SafeRetrievalLeg {
             leg_id: 0,
             memberships: BTreeSet::from([membership_id]),
@@ -486,25 +488,42 @@ mod tests {
             route: fence,
             overlap_proof_digest: None,
         };
+        fixture_with_safe_leg(membership_id, safe_leg)
+    }
+
+    fn fixture_with_safe_leg(
+        membership_id: SourceMembershipId,
+        safe_leg: search_access::SafeRetrievalLeg,
+    ) -> Fixture {
+        let predicates = safe_leg
+            .eligibility_plans
+            .first()
+            .expect("fixture eligibility plan")
+            .predicates();
+        let route_fence = safe_leg.route.clone();
+        let security_memberships = safe_leg.memberships.clone();
+        let compiled_plan = canonical_plan_fixture::compile_lexical_plan(
+            RequestId::from_bytes([0x21; 16]),
+            safe_leg,
+            canonical_plan_fixture::lexical_budget(
+                1_000,
+                8,
+                1_048_576,
+                500,
+                67_108_864,
+            ),
+        );
+        let planned_leg = compiled_plan
+            .legs()
+            .iter()
+            .find(|leg| leg.leg_kind() == LegKind::Lexical)
+            .expect("canonical lexical leg")
+            .clone();
         let ticket = LegTicket {
-            request_id: RequestId::from_bytes([0x21; 16]),
-            plan_digest: search_query_planner::CompiledPlanDigest([0x33; 32]),
+            request_id: compiled_plan.request_id(),
+            plan_digest: compiled_plan.digest(),
             owner_id: OpaqueId::new("owner:test").expect("fixture owner"),
-            leg: PlannedLeg {
-                leg_id: 0,
-                leg_kind: LegKind::Lexical,
-                depends_on: Vec::new(),
-                memberships: BTreeSet::from([membership_id]),
-                safe_index_leg: Some(safe_leg),
-                budget: LegBudget {
-                    deadline_ms: 1_000,
-                    max_candidates: 8,
-                    max_source_read_bytes: 1_048_576,
-                    max_cpu_ms: 500,
-                    max_memory_bytes: 67_108_864,
-                },
-                cancellation_boundary: CancellationBoundary::BeforeDispatch,
-            },
+            leg: planned_leg,
             access_permit: AccessPermit {
                 checkpoint: AccessCheckpoint::BeforeLegDispatch,
                 live_generation: 9,
@@ -514,7 +533,7 @@ mod tests {
         };
         let request_security = RequestSecurityFence {
             planned_generation: 9,
-            memberships: BTreeSet::from([membership_id]),
+            memberships: security_memberships,
         };
         let live_security = LiveSecurityState {
             generation: 9,
@@ -525,10 +544,10 @@ mod tests {
         };
         let registry = PinRegistry::new(
             RouteIdentity {
-                collection_generation_id: fence.collection_generation_id,
-                route_revision: CollectionRouteRevision::new(fence.route_generation),
+                collection_generation_id: route_fence.collection_generation_id,
+                route_revision: CollectionRouteRevision::new(route_fence.route_generation),
             },
-            fence.visible_epoch,
+            route_fence.visible_epoch,
             PinLimits::BASELINE,
         )
         .expect("fixture registry");
@@ -687,18 +706,33 @@ mod tests {
 
     #[test]
     fn grouped_multi_plan_leg_denies() {
-        let mut fixture = fixture();
-        let second =
-            search_access::compile_base_eligibility(&binding(membership(0x22)), route(), 9, 2, 2)
-                .expect("second plan");
-        fixture
-            .ticket
-            .leg
-            .safe_index_leg
-            .as_mut()
-            .expect("safe leg")
-            .eligibility_plans
-            .push(second);
+        let first_membership = membership(0x11);
+        let second_membership = membership(0x22);
+        let fence = route();
+        let first = search_access::compile_base_eligibility(
+            &binding(first_membership),
+            fence,
+            9,
+            2,
+            2,
+        )
+        .expect("first plan");
+        let second = search_access::compile_base_eligibility(
+            &binding(second_membership),
+            fence,
+            9,
+            2,
+            2,
+        )
+        .expect("second plan");
+        let safe_leg = search_access::SafeRetrievalLeg {
+            leg_id: 0,
+            memberships: BTreeSet::from([first_membership, second_membership]),
+            eligibility_plans: vec![first, second],
+            route: fence,
+            overlap_proof_digest: None,
+        };
+        let fixture = fixture_with_safe_leg(first_membership, safe_leg);
         let pin_set = pins(&fixture);
         let mut port = StubPort::ready(vec![], 0);
         assert_eq!(

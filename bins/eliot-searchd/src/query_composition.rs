@@ -207,7 +207,7 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
         if limit == 0 || limit > MAX_INDEXED_LIMIT {
             return Err(IndexedPortError::Failure);
         }
-        for membership in &ticket.leg.memberships {
+        for membership in ticket.leg.memberships() {
             let name = membership_opaque_id(*membership).map_err(|_| IndexedPortError::Failure)?;
             if !self.allowed.contains_key(&name) {
                 return Err(IndexedPortError::Failure);
@@ -232,7 +232,7 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
         for point in &readback.points {
             let membership = parse_membership(&point.payload.source_membership_id)
                 .map_err(|_| IndexedPortError::Failure)?;
-            if !ticket.leg.memberships.contains(&membership) {
+            if !ticket.leg.memberships().contains(&membership) {
                 return Err(IndexedPortError::Failure);
             }
             by_id.insert(point.point_id, (point, membership));
