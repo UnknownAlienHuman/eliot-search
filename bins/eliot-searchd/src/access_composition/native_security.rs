@@ -15,7 +15,8 @@ use search_contracts::{
     SecurityMutationPhase, SourceNamespaceId, SourceOwnerGeneration,
 };
 use search_control_redb::{
-    ControlError, ControlSnapshotPublisher, JournalIdentity, PersistentControlJournal,
+    ControlError, ControlRecordCondition, ControlSnapshotPublisher, JournalIdentity,
+    PersistentControlJournal,
     access_policy::AccessPolicyJournalError,
     policy_codec::AccessPolicyRecord,
     security_restriction::{SecurityRestrictionCommit, SecurityRestrictionMutation},
@@ -368,6 +369,43 @@ impl NativeSecurityDomain {
     ) -> Result<T, AccessError> {
         if self.pending.is_some() { return Err(AccessError::SecurityFailClosed); }
         self.barrier.with_live_checkpoint(fence, checkpoint, operation)
+    }
+
+    /// Returns the exact current C02 source-restriction conditions after the
+    /// live barrier admits this source at `BeforeSourceReadback`.
+    ///
+    /// The caller must retain the same outer authority lock and current grant,
+    /// and account bounded condition metadata before calling. It must compare
+    /// these conditions with C03/root/source metadata in the scoped source read.
+    /// Conditions are read predicates, not a grant; this method performs no
+    /// restore, publication, invalidation, or journal mutation.
+    pub fn retained_source_read_conditions(
+        &self,
+        namespace: SourceNamespaceId,
+        semantic_source_owner: SourceOwnerGeneration,
+        journal: &PersistentControlJournal,
+        fence: &RequestSecurityFence,
+    ) -> Result<[ControlRecordCondition; 2], NativeSecurityError> {
+        self.require_journal(journal)?;
+        if self.binding.namespace != namespace
+            || self.binding.source_owner != semantic_source_owner
+        {
+            return Err(AccessError::SecurityOperationConflict.into());
+        }
+        let replacement = self.head.mutation().replacement();
+        if replacement.policy.namespace_id != namespace
+            || replacement.policy.owner_generation != semantic_source_owner
+        {
+            return Err(AccessError::SecurityOperationConflict.into());
+        }
+        self.with_live_checkpoint(fence, AccessCheckpoint::BeforeSourceReadback, |permit| {
+            if permit.live_generation != replacement.policy.live_deny_generation
+                || permit.live_snapshot_digest != replacement.snapshot_digest
+            {
+                return Err(NativeSecurityError::Access(AccessError::SecurityFailClosed));
+            }
+            self.head.current_conditions().map_err(Into::into)
+        })?
     }
 
     /// Current content-free phase, not authorization or a durability receipt.

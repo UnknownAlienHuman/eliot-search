@@ -255,3 +255,290 @@ fn qdrant_parity_deferred() {
         search_access::QDRANT_LIVE_PARITY_DEFERRED_TO
     );
 }
+
+mod retained_source_read_conditions {
+    use super::*;
+    use search_access::{
+        RequestSecurityFence, SecurityDependentReceipt, SecurityRestriction,
+        MAX_SECURITY_DEPENDENTS,
+    };
+    use search_contracts::{
+        BoundedList, BoundedSet, DataRootId, InstallationIncarnationId, OpaqueRef, ReceiptRef,
+        RequestId, SecurityMutationPhase,
+    };
+    use search_control_redb::{
+        ControlRecordCondition, ControlSnapshotPublisher, JournalIdentity, JournalLimits,
+        JournalProfileInitialization, MutationId, PersistentControlJournal,
+        policy_codec::AccessPolicyRecord,
+        security_restriction::SecurityPolicyState,
+    };
+    use search_handles::{HandlePolicy, HandleStore};
+    use search_ports::{FakeCancellation, OperationContext};
+    use std::fs::{self, OpenOptions};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            for _ in 0..128 {
+                let path = std::env::temp_dir().join(format!(
+                    "eliot-native-security-read-fence-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed),
+                ));
+                match fs::create_dir(&path) {
+                    Ok(()) => return Self(path),
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                    Err(error) => panic!("fixture directory: {error}"),
+                }
+            }
+            panic!("fixture collision limit");
+        }
+
+        fn create_journal(&self) -> PersistentControlJournal {
+            let file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .open(self.0.join("control.redb"))
+                .expect("create actual redb fixture");
+            let mut journal = PersistentControlJournal::create(
+                file,
+                JournalIdentity {
+                    installation_incarnation_id: InstallationIncarnationId::from_bytes([2; 16]),
+                    data_root_id: DataRootId::from_bytes([3; 16]),
+                    owner_epoch: OwnerEpoch::new(1).expect("owner epoch"),
+                    path_identity_digest: Blake3Digest32::from_bytes([4; 32]),
+                    schema_family_digest: Blake3Digest32::from_bytes([5; 32]),
+                    schema_version: search_control_redb::CURRENT_JOURNAL_SCHEMA_VERSION,
+                },
+                JournalLimits::BASELINE,
+            )
+            .expect("actual redb initialization");
+            journal
+                .initialize_operating_profile(
+                    JournalProfileInitialization::Direct,
+                    MutationId([6; 32]),
+                    Blake3Digest32::from_bytes([7; 32]),
+                    &context(),
+                )
+                .expect("explicit DIRECT profile");
+            journal
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    struct Fixture {
+        domain: NativeSecurityDomain,
+        binding: NativeSecurityBinding,
+        state: SecurityPolicyState,
+        expected: [ControlRecordCondition; 2],
+        journal: PersistentControlJournal,
+        publisher: ControlSnapshotPublisher,
+        _scratch: Scratch,
+    }
+
+    fn context() -> OperationContext<FakeCancellation> {
+        OperationContext::new(
+            RequestId::from_bytes([8; 16]),
+            60_000,
+            FakeCancellation::new(false),
+            OpaqueRef::new("budget:native-security-read-fence").expect("budget"),
+        )
+        .expect("operation context")
+    }
+
+    fn fixture() -> Fixture {
+        let scratch = Scratch::new();
+        let mut journal = scratch.create_journal();
+        let namespace = SourceNamespaceId::from_bytes([9; 16]);
+        let owner = SourceOwnerGeneration::from_bytes([10; 32]);
+        let domain_ref = OpaqueRef::new("domain:native-security-read-fence").expect("domain");
+        let binding = NativeSecurityBinding {
+            namespace,
+            source_owner: owner,
+            domain: domain_ref.clone(),
+            dependents: BoundedSet::from_items([
+                OpaqueId::new(HANDLE_SECURITY_DEPENDENT).expect("handle dependent"),
+            ])
+            .expect("required dependent"),
+        };
+        let state = SecurityPolicyState {
+            policy: AccessPolicyRecord {
+                namespace_id: namespace,
+                owner_generation: owner,
+                policy_revision: AccessPolicyRevision::new(11),
+                live_deny_generation: 7,
+                shadow_fence_revision: ShadowFenceRevision::new(6),
+                purge_fence_revision: PurgeFenceRevision::new(6),
+                policy_digest: Blake3Digest32::from_bytes([11; 32]),
+            },
+            security_domain_ref: domain_ref,
+            snapshot_digest: Blake3Digest32::from_bytes([12; 32]),
+            denied_memberships: BoundedSet::empty(),
+            purged_memberships: BoundedSet::empty(),
+            fail_closed: false,
+        };
+        let read = journal
+            .read_security_restriction(namespace, &context())
+            .expect("actual C02 readback");
+        let mutation = read
+            .initialize(
+                OpaqueId::new("native-security-read-fence-init").expect("operation"),
+                Blake3Digest32::from_bytes([13; 32]),
+                state.clone(),
+                binding.dependents.clone(),
+            )
+            .expect("explicit initial state");
+        let committed = journal
+            .commit_security_restriction(&mutation, &context())
+            .expect("actual C02 commit");
+        let expected = committed.current_conditions().expect("C02 head conditions");
+
+        let mut publisher = ControlSnapshotPublisher::new();
+        let mut handles = HandleStore::new(HandlePolicy::BASELINE).expect("handle owner");
+        let mut dependents =
+            SecurityInvalidationRegistry::new(&binding).expect("invalidation registry");
+        dependents.register_handles(&mut handles).expect("actual handle invalidator");
+        let domain = NativeSecurityDomain::restore(
+            binding.clone(),
+            &mut journal,
+            &mut publisher,
+            &mut dependents,
+            &context(),
+        )
+        .expect("restored native domain");
+
+        Fixture {
+            domain,
+            binding,
+            state,
+            expected,
+            journal,
+            publisher,
+            _scratch: scratch,
+        }
+    }
+
+    fn fence(state: &SecurityPolicyState) -> RequestSecurityFence {
+        RequestSecurityFence {
+            planned_generation: state.policy.live_deny_generation,
+            memberships: BTreeSet::new(),
+        }
+    }
+
+    fn pending_command(fixture: &Fixture) -> (SecurityRestriction, AccessPolicyRecord) {
+        let previous = &fixture.state;
+        let mut policy = previous.policy;
+        policy.policy_revision = AccessPolicyRevision::new(12);
+        policy.live_deny_generation = 8;
+        policy.policy_digest = Blake3Digest32::from_bytes([14; 32]);
+        let expected_live = LiveSecurityState {
+            generation: previous.policy.live_deny_generation,
+            denied_memberships: BTreeSet::new(),
+            purged_memberships: BTreeSet::new(),
+            fail_closed: previous.fail_closed,
+            snapshot_digest: previous.snapshot_digest,
+        };
+        let next_live = LiveSecurityState {
+            generation: policy.live_deny_generation,
+            denied_memberships: BTreeSet::from([SourceMembershipId::from_bytes([16; 16])]),
+            purged_memberships: BTreeSet::new(),
+            fail_closed: false,
+            snapshot_digest: Blake3Digest32::from_bytes([15; 32]),
+        };
+        (
+            SecurityRestriction {
+                operation_id: OpaqueId::new("native-security-read-fence-pending")
+                    .expect("operation"),
+                security_domain_ref: fixture.binding.domain.clone(),
+                expected_policy_revision: previous.policy.policy_revision,
+                policy_revision: policy.policy_revision,
+                expected_live,
+                next_live,
+                required_dependents: fixture.binding.dependents.clone(),
+            },
+            policy,
+        )
+    }
+
+    #[test]
+    fn exact_conditions_require_matching_binding_live_head_and_completed_barrier() {
+        let mut fixture = fixture();
+        let request = fence(&fixture.state);
+        let writes = fixture.journal.committed_writes();
+        let actual = fixture
+            .domain
+            .retained_source_read_conditions(
+                fixture.binding.namespace,
+                fixture.binding.source_owner,
+                &fixture.journal,
+                &request,
+            )
+            .expect("current bound source conditions");
+        assert_eq!(actual, fixture.expected);
+        assert_eq!(fixture.journal.committed_writes(), writes);
+
+        assert!(fixture
+            .domain
+            .retained_source_read_conditions(
+                SourceNamespaceId::from_bytes([99; 16]),
+                fixture.binding.source_owner,
+                &fixture.journal,
+                &request,
+            )
+            .is_err());
+        assert!(fixture
+            .domain
+            .retained_source_read_conditions(
+                fixture.binding.namespace,
+                SourceOwnerGeneration::from_bytes([99; 32]),
+                &fixture.journal,
+                &request,
+            )
+            .is_err());
+
+        let (command, policy) = pending_command(&fixture);
+        let mut fail_dependent = |
+            _: &search_control_redb::security_restriction::SecurityRestrictionCommit,
+            _: &ReceiptRef,
+            _: &search_contracts::LiveDenySnapshotRef,
+            _: &OperationContext<FakeCancellation>,
+        | -> Result<BoundedList<SecurityDependentReceipt, MAX_SECURITY_DEPENDENTS>, AccessError> {
+            Err(AccessError::SecurityFailClosed)
+        };
+        assert!(fixture
+            .domain
+            .apply(
+                command,
+                policy,
+                &mut fixture.journal,
+                &mut fixture.publisher,
+                &mut fail_dependent,
+                &context(),
+            )
+            .is_err());
+        assert_eq!(fixture.domain.phase(), SecurityMutationPhase::FailClosed);
+        let writes = fixture.journal.committed_writes();
+        let refused = fixture.domain.retained_source_read_conditions(
+            fixture.binding.namespace,
+            fixture.binding.source_owner,
+            &fixture.journal,
+            &request,
+        );
+        assert_eq!(
+            refused,
+            Err(NativeSecurityError::Access(AccessError::SecurityFailClosed)),
+        );
+        assert_eq!(fixture.journal.committed_writes(), writes);
+    }
+
+}
