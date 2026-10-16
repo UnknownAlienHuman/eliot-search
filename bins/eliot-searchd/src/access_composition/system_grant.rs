@@ -8,23 +8,22 @@
 
 mod policy;
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use search_contracts::UtcTimestamp;
 use search_provider_protocol::MonotonicMillis;
 
+use eliot_searchd::native_time::{
+    NativeTimeError, civil_from_unix_days as civil_days,
+    system_time_from_timestamp as system_time_from_canonical,
+    timestamp_from_system_time as timestamp_from_instant,
+};
 use crate::provider_composition::monotonic_millis;
 
 use super::grant::{
     BoundedStandaloneGrantIssuer, GrantEntropySource, GrantIssuerError,
     GrantTimeSource, GrantTimeWindow, GrantUseError, GrantValidationClock,
 };
-
-const SECONDS_PER_DAY: u64 = 86_400;
-const SECONDS_PER_HOUR: u64 = 3_600;
-const SECONDS_PER_MINUTE: u64 = 60;
-const CIVIL_EPOCH_OFFSET_DAYS: u128 = 719_468;
-const DAYS_PER_ERA: u128 = 146_097;
 
 /// Daemon-qualified operating-system entropy adapter.
 ///
@@ -117,39 +116,24 @@ impl GrantValidationClock for SystemGrantClock {
     }
 }
 
-// Inverse of this module's formatter, only for an already validated canonical
-// UTC value. Do not introduce a second public timestamp parser or accept input
-// outside the shared UtcTimestamp contract. Production timestamps are post-epoch.
+// The date algorithm lives in the one shared `crate::native_time` module. These
+// three wrappers keep this adapter's original refusals and call shapes exactly:
+// a refused conversion is still an unavailable issuer or an unavailable clock.
+
+const fn issuer_unavailable(_: NativeTimeError) -> GrantIssuerError {
+    GrantIssuerError::Unavailable
+}
+
+const fn clock_unavailable(_: NativeTimeError) -> GrantUseError {
+    GrantUseError::ClockUnavailable
+}
+
+// Inverse of the shared formatter, only for an already validated canonical UTC
+// value. No second public timestamp parser is introduced and nothing outside
+// the shared UtcTimestamp contract is accepted. Production timestamps are
+// post-epoch.
 fn system_time_from_timestamp(value: &UtcTimestamp) -> Result<SystemTime, GrantUseError> {
-    fn decimal(bytes: &[u8], start: usize, end: usize) -> Result<u64, GrantUseError> {
-        bytes.get(start..end).ok_or(GrantUseError::ClockUnavailable)?.iter()
-            .try_fold(0_u64, |number, byte| {
-                let digit = byte.checked_sub(b'0').filter(|digit| *digit <= 9)
-                    .ok_or(GrantUseError::ClockUnavailable)?;
-                number.checked_mul(10).and_then(|n| n.checked_add(u64::from(digit)))
-                    .ok_or(GrantUseError::ClockUnavailable)
-            })
-    }
-    let bytes = value.as_str().as_bytes();
-    let year = decimal(bytes, 0, 4)?;
-    let month = decimal(bytes, 5, 7)?;
-    let day = decimal(bytes, 8, 10)?;
-    let prior_year = year.checked_sub(1).ok_or(GrantUseError::ClockUnavailable)?;
-    const MONTH_OFFSETS: [u64; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
-    const UNIX_DAYS: u64 = 365 * 1969 + 1969 / 4 - 1969 / 100 + 1969 / 400;
-    let month_index = usize::try_from(month.checked_sub(1).ok_or(GrantUseError::ClockUnavailable)?)
-        .map_err(|_| GrantUseError::ClockUnavailable)?;
-    let offset = *MONTH_OFFSETS.get(month_index).ok_or(GrantUseError::ClockUnavailable)?;
-    let leap_day = u64::from(month > 2 && year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
-    let days = (365 * prior_year + prior_year / 4 - prior_year / 100 + prior_year / 400
-        + offset + leap_day + day.checked_sub(1).ok_or(GrantUseError::ClockUnavailable)?)
-        .checked_sub(UNIX_DAYS).ok_or(GrantUseError::ClockUnavailable)?;
-    // The shared four-digit year bound keeps these products within u64.
-    let seconds = days * SECONDS_PER_DAY + decimal(bytes, 11, 13)? * SECONDS_PER_HOUR
-        + decimal(bytes, 14, 16)? * SECONDS_PER_MINUTE + decimal(bytes, 17, 19)?;
-    UNIX_EPOCH.checked_add(Duration::from_secs(seconds))
-        .and_then(|time| time.checked_add(Duration::from_micros(decimal(bytes, 20, 26).ok()?)))
-        .ok_or(GrantUseError::ClockUnavailable)
+    system_time_from_canonical(value).map_err(clock_unavailable)
 }
 
 /// Concrete boot-local issuer using the daemon-qualified OS CSPRNG and clock.
@@ -198,75 +182,19 @@ fn issue_window_at(
 fn timestamp_from_system_time(
     instant: &SystemTime,
 ) -> Result<UtcTimestamp, GrantIssuerError> {
-    let since_epoch = instant
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| GrantIssuerError::Unavailable)?;
-    let seconds = since_epoch.as_secs();
-    let days = seconds / SECONDS_PER_DAY;
-    let second_of_day = seconds % SECONDS_PER_DAY;
-    let (year, month, day) = civil_from_unix_days(days)?;
-    let hour = second_of_day / SECONDS_PER_HOUR;
-    let minute =
-        (second_of_day % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE;
-    let second = second_of_day % SECONDS_PER_MINUTE;
-    let micros = since_epoch.subsec_micros();
-    UtcTimestamp::parse(format!(
-        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{micros:06}Z"
-    ))
-    .map_err(|_| GrantIssuerError::Unavailable)
+    timestamp_from_instant(*instant).map_err(issuer_unavailable)
 }
 
 fn civil_from_unix_days(
     days: u64,
 ) -> Result<(u32, u32, u32), GrantIssuerError> {
-    let shifted = u128::from(days)
-        .checked_add(CIVIL_EPOCH_OFFSET_DAYS)
-        .ok_or(GrantIssuerError::Unavailable)?;
-    let era = shifted / DAYS_PER_ERA;
-    let day_of_era = shifted % DAYS_PER_ERA;
-    let year_of_era = (
-        day_of_era
-            - day_of_era / 1_460
-            + day_of_era / 36_524
-            - day_of_era / 146_096
-    ) / 365;
-    let mut year = year_of_era
-        .checked_add(
-            era.checked_mul(400)
-                .ok_or(GrantIssuerError::Unavailable)?,
-        )
-        .ok_or(GrantIssuerError::Unavailable)?;
-    let day_of_year = day_of_era
-        - (
-            365 * year_of_era
-                + year_of_era / 4
-                - year_of_era / 100
-        );
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = if month_prime < 10 {
-        month_prime + 3
-    } else {
-        month_prime - 9
-    };
-    if month <= 2 {
-        year = year
-            .checked_add(1)
-            .ok_or(GrantIssuerError::Unavailable)?;
-    }
-    if !(1..=9_999).contains(&year) {
-        return Err(GrantIssuerError::Unavailable);
-    }
-    Ok((
-        u32::try_from(year).map_err(|_| GrantIssuerError::Unavailable)?,
-        u32::try_from(month).map_err(|_| GrantIssuerError::Unavailable)?,
-        u32::try_from(day).map_err(|_| GrantIssuerError::Unavailable)?,
-    ))
+    civil_days(days).map_err(issuer_unavailable)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::UNIX_EPOCH;
 
     #[test]
     fn canonical_clock_formats_epoch_and_leap_day() {

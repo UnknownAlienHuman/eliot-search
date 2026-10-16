@@ -36,6 +36,8 @@ use policy_v2::RootPolicy;
 mod native_source;
 #[path = "native_retention_object_io.rs"]
 mod native_retention_object_io;
+#[path = "native_retention_time.rs"]
+mod native_retention_time;
 
 #[derive(Debug)]
 pub enum FreshRootError {
