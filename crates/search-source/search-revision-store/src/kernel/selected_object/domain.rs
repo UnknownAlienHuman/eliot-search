@@ -1,7 +1,8 @@
 //! Closed domain kinds and genuine-UUID domain bindings with full tagged BLAKE3.
 
 use search_contracts::{
-    blake3_raw, Blake3Digest32, CanonicalDigestDomain, CanonicalValue, DigestInputLimit,
+    blake3_raw, parse_canonical_cbor, Blake3Digest32, CanonicalDigestDomain,
+    CanonicalValue, DigestInputLimit,
 };
 
 use super::super::error::RevisionStoreError;
@@ -36,16 +37,6 @@ impl DomainKind {
         }
     }
 
-    /// Canonical digest domain for tagged BLAKE3 over the complete body.
-    ///
-    /// # Panics
-    /// Panics if the static domain literal fails to parse (which is impossible
-    /// for a hardcoded valid string).
-    pub fn digest_domain() -> CanonicalDigestDomain {
-        CanonicalDigestDomain::parse("eliot/raw/selected-domain-binding/v1")
-            .expect("static domain literal is valid")
-    }
-
     /// All six domain kinds in canonical order.
     pub const ALL: [Self; 6] = [
         Self::Scope,
@@ -55,39 +46,102 @@ impl DomainKind {
         Self::Retention,
         Self::Erasure,
     ];
+
+    /// Per-kind tagged BLAKE3 domain. Each domain kind uses a distinct static
+    /// domain string so identical bodies under different kinds produce
+    /// different tagged digests.
+    pub fn digest_domain(self) -> CanonicalDigestDomain {
+        match self {
+            Self::Scope => {
+                parse_static_domain("eliot/raw/selected-domain-scope/v1")
+            }
+            Self::Access => {
+                parse_static_domain("eliot/raw/selected-domain-access/v1")
+            }
+            Self::Confidentiality => {
+                parse_static_domain("eliot/raw/selected-domain-confidentiality/v1")
+            }
+            Self::EncryptionKey => {
+                parse_static_domain("eliot/raw/selected-domain-encryption-key/v1")
+            }
+            Self::Retention => {
+                parse_static_domain("eliot/raw/selected-domain-retention/v1")
+            }
+            Self::Erasure => {
+                parse_static_domain("eliot/raw/selected-domain-erasure/v1")
+            }
+        }
+    }
+}
+
+/// Parses a static domain literal. Panics if the literal is invalid (which is
+/// impossible for hardcoded valid strings).
+fn parse_static_domain(name: &str) -> CanonicalDigestDomain {
+    CanonicalDigestDomain::parse(name).expect("static domain literal is valid")
 }
 
 /// Genuine metered UUID supplied by the root, never digest-truncated or derived.
 pub type GenuineUuid = [u8; 16];
 
 /// Complete domain binding: kind, genuine UUID, bounded canonical body, full tagged BLAKE3.
+///
+/// Fields are private. Use `new` to construct and the getters to inspect.
+/// `new` validates canonical CBOR body, RFC 4122 version-4 UUID, and computes
+/// the full tagged BLAKE3 digest over the complete body using a per-kind
+/// static domain.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DomainBinding {
-    /// Closed semantic domain kind.
-    pub kind: DomainKind,
-    /// Genuine 16-byte UUID metered by the root.
-    pub uuid: GenuineUuid,
-    /// Complete bounded canonical body for this domain (CBOR bytes).
-    pub canonical_body: Vec<u8>,
-    /// Full tagged BLAKE3 digest over the canonical body.
-    pub tagged_digest: Blake3Digest32,
+    kind: DomainKind,
+    uuid: GenuineUuid,
+    canonical_body: Vec<u8>,
+    tagged_digest: Blake3Digest32,
 }
 
 impl DomainBinding {
     /// Maximum canonical body bytes per domain binding.
     pub const MAX_BODY_BYTES: usize = 8192;
 
+    /// Returns the closed semantic domain kind.
+    pub const fn kind(&self) -> DomainKind {
+        self.kind
+    }
+
+    /// Returns the genuine 16-byte UUID.
+    pub const fn uuid(&self) -> GenuineUuid {
+        self.uuid
+    }
+
+    /// Returns the complete bounded canonical body bytes.
+    pub fn canonical_body(&self) -> &[u8] {
+        &self.canonical_body
+    }
+
+    /// Returns the full tagged BLAKE3 digest.
+    pub const fn tagged_digest(&self) -> Blake3Digest32 {
+        self.tagged_digest
+    }
+
     /// Creates a domain binding after validating the body and computing the
-    /// full tagged BLAKE3 digest.
+    /// full tagged BLAKE3 digest using the per-kind static domain.
+    ///
+    /// The body must be valid canonical CBOR and at most
+    /// `MAX_BODY_BYTES` bytes. The UUID must be RFC 4122 version 4
+    /// (version nibble 4, variant bits 10).
     pub fn new(
         kind: DomainKind,
         uuid: GenuineUuid,
         canonical_body: Vec<u8>,
     ) -> Result<Self, RevisionStoreError> {
-        if canonical_body.is_empty() || canonical_body.len() > Self::MAX_BODY_BYTES {
+        if canonical_body.is_empty()
+            || canonical_body.len() > Self::MAX_BODY_BYTES
+            || !is_valid_canonical_cbor(&canonical_body)
+        {
             return Err(RevisionStoreError::AddressInvalid);
         }
-        let domain = DomainKind::digest_domain();
+        if !is_rfc4122_v4(uuid) {
+            return Err(RevisionStoreError::AddressInvalid);
+        }
+        let domain = kind.digest_domain();
         let limit = DigestInputLimit::new(Self::MAX_BODY_BYTES + domain.as_str().len() + 1)
             .map_err(|_| RevisionStoreError::ContractExhausted)?;
         let tagged_digest = blake3_raw(&domain, &canonical_body, limit)
@@ -102,24 +156,33 @@ impl DomainBinding {
 
     /// Verifies that a candidate binding matches this binding exactly.
     pub fn verify(&self, candidate: &Self) -> Result<(), RevisionStoreError> {
-        if self.kind != candidate.kind {
+        if self.kind() != candidate.kind() {
             return Err(RevisionStoreError::ResidencyMismatch);
         }
-        if self.uuid != candidate.uuid {
+        if self.uuid() != candidate.uuid() {
             return Err(RevisionStoreError::ResidencyMismatch);
         }
-        if self.canonical_body != candidate.canonical_body {
+        if self.canonical_body() != candidate.canonical_body() {
             return Err(RevisionStoreError::ResidencyMismatch);
         }
-        if self.tagged_digest != candidate.tagged_digest {
+        if self.tagged_digest() != candidate.tagged_digest() {
             return Err(RevisionStoreError::ResidencyMismatch);
         }
         Ok(())
     }
 
-    /// Refuses a collision: same UUID with different body bytes.
+    /// Refuses a collision: same UUID with different kind or body bytes.
+    ///
+    /// The same UUID under different domain kinds is a cross-kind collision
+    /// and is refused even when the body bytes are identical.
     pub fn refuse_uuid_collision(&self, other: &Self) -> Result<(), RevisionStoreError> {
-        if self.uuid == other.uuid && self.canonical_body != other.canonical_body {
+        if self.uuid() != other.uuid() {
+            return Ok(());
+        }
+        if self.kind() != other.kind() {
+            return Err(RevisionStoreError::ResidencyMismatch);
+        }
+        if self.canonical_body() != other.canonical_body() {
             return Err(RevisionStoreError::ResidencyMismatch);
         }
         Ok(())
@@ -127,7 +190,13 @@ impl DomainBinding {
 
     /// Refuses a collision: same tagged digest with different canonical body bytes.
     pub fn refuse_digest_collision(&self, other: &Self) -> Result<(), RevisionStoreError> {
-        if self.tagged_digest == other.tagged_digest && self.canonical_body != other.canonical_body {
+        if self.tagged_digest() != other.tagged_digest() {
+            return Ok(());
+        }
+        if self.kind() != other.kind() {
+            return Err(RevisionStoreError::ResidencyMismatch);
+        }
+        if self.canonical_body() != other.canonical_body() {
             return Err(RevisionStoreError::ResidencyMismatch);
         }
         Ok(())
@@ -135,14 +204,40 @@ impl DomainBinding {
 }
 
 /// Builds the complete canonical residency bytes from six domain bindings.
+///
+/// Validates the full set: one binding per domain kind in canonical order,
+/// cross-kind UUID uniqueness, exact digest/body agreement, and total size
+/// cap of 8192 bytes.
 pub fn residency_canonical_bytes(
     bindings: &[DomainBinding; 6],
 ) -> Result<Vec<u8>, RevisionStoreError> {
+    // Validate exact domain order.
     for (index, binding) in bindings.iter().enumerate() {
         if binding.kind != DomainKind::ALL[index] {
             return Err(RevisionStoreError::ResidencyMismatch);
         }
     }
+    // Enforce cross-kind UUID uniqueness.
+    for i in 0..bindings.len() {
+        for j in (i + 1)..bindings.len() {
+            if bindings[i].uuid() == bindings[j].uuid() {
+                return Err(RevisionStoreError::ResidencyMismatch);
+            }
+        }
+    }
+    // Enforce exact digest/body agreement.
+    for binding in bindings {
+        let expected = binding.tagged_digest;
+        let candidate = DomainBinding::new(
+            binding.kind,
+            binding.uuid,
+            binding.canonical_body.clone(),
+        )?;
+        if candidate.tagged_digest() != expected {
+            return Err(RevisionStoreError::ResidencyMismatch);
+        }
+    }
+    // Build the canonical CBOR array.
     let mut rows: Vec<CanonicalValue> = Vec::with_capacity(6);
     for binding in bindings {
         let mut object: search_contracts::BoundedMap<
@@ -162,7 +257,7 @@ pub fn residency_canonical_bytes(
             search_contracts::CanonicalKey::new_non_empty("uuid")
                 .map_err(|_| RevisionStoreError::ContractExhausted)?,
             CanonicalValue::Bytes(
-                search_contracts::BoundedBytes::new(binding.uuid.to_vec())
+                search_contracts::BoundedBytes::new(binding.uuid().to_vec())
                     .map_err(|_| RevisionStoreError::ContractExhausted)?,
             ),
         ).map_err(|_| RevisionStoreError::ContractExhausted)?;
@@ -170,7 +265,7 @@ pub fn residency_canonical_bytes(
             search_contracts::CanonicalKey::new_non_empty("body")
                 .map_err(|_| RevisionStoreError::ContractExhausted)?,
             CanonicalValue::Bytes(
-                search_contracts::BoundedBytes::new(binding.canonical_body.clone())
+                search_contracts::BoundedBytes::new(binding.canonical_body().to_vec())
                     .map_err(|_| RevisionStoreError::ContractExhausted)?,
             ),
         ).map_err(|_| RevisionStoreError::ContractExhausted)?;
@@ -178,7 +273,7 @@ pub fn residency_canonical_bytes(
             search_contracts::CanonicalKey::new_non_empty("tagged_digest")
                 .map_err(|_| RevisionStoreError::ContractExhausted)?,
             CanonicalValue::Bytes(
-                search_contracts::BoundedBytes::new(binding.tagged_digest.as_bytes().to_vec())
+                search_contracts::BoundedBytes::new(binding.tagged_digest().as_bytes().to_vec())
                     .map_err(|_| RevisionStoreError::ContractExhausted)?,
             ),
         ).map_err(|_| RevisionStoreError::ContractExhausted)?;
@@ -189,5 +284,31 @@ pub fn residency_canonical_bytes(
     let value = CanonicalValue::Array(array);
     search_contracts::to_canonical_cbor(&value)
         .map_err(|_| RevisionStoreError::ContractExhausted)
-        .map(|bytes| bytes.as_slice().to_vec())
+        .map(|bytes| {
+            let out = bytes.as_slice().to_vec();
+            if out.len() > 8192 {
+                return Err(RevisionStoreError::ContractExhausted);
+            }
+            Ok(out)
+        })?
+}
+
+/// Validates that bytes are canonical CBOR by round-tripping through the
+/// canonical CBOR parser and encoder.
+fn is_valid_canonical_cbor(bytes: &[u8]) -> bool {
+    match parse_canonical_cbor(bytes) {
+        Ok(value) => {
+            match search_contracts::to_canonical_cbor(&value) {
+                Ok(reencoded) => reencoded.as_slice() == bytes,
+                Err(_) => false,
+            }
+        }
+        Err(_) => false,
+    }
+}
+
+/// Validates RFC 4122 version-4 UUID: version nibble is 4 and variant bits
+/// are 10 (0x80-0xBF for byte 8).
+fn is_rfc4122_v4(uuid: GenuineUuid) -> bool {
+    (uuid[6] >> 4) == 0x4 && (uuid[8] & 0xC0) == 0x80
 }

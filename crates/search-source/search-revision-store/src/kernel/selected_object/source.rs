@@ -5,7 +5,7 @@ use search_contracts::{
 };
 
 use super::super::error::RevisionStoreError;
-use super::super::model::EncryptionBinding;
+use super::super::model::{EncryptedRevisionPayload, EncryptionBinding};
 use super::domain::{DomainBinding, residency_canonical_bytes};
 
 /// Typed source identity for one retained revision occurrence.
@@ -70,8 +70,7 @@ impl PreSealDescriptor {
     /// content digest/length, and operation ID.
     ///
     /// The residency canonical bytes are computed from the six domain bindings.
-    /// The total residency canonical is bounded by
-    /// `6 * DomainBinding::MAX_BODY_BYTES + framing`.
+    /// Empty source bodies are valid for selected-v2.
     pub fn new(
         source: TypedSourceIdentity,
         domain_bindings: [DomainBinding; 6],
@@ -79,9 +78,6 @@ impl PreSealDescriptor {
         content_bytes: u64,
         operation_id: OpaqueId,
     ) -> Result<Self, RevisionStoreError> {
-        if content_bytes == 0 {
-            return Err(RevisionStoreError::PlaintextSizeInvalid);
-        }
         let residency_canonical = residency_canonical_bytes(&domain_bindings)?;
         if residency_canonical.is_empty() || residency_canonical.len() > 8192 {
             return Err(RevisionStoreError::ContractExhausted);
@@ -116,45 +112,37 @@ impl PreSealDescriptor {
 ///
 /// This binds the derived physical object identity (storage object ID,
 /// ciphertext digest, ciphertext length) to the pre-seal descriptor after
-/// encryption is complete. It is applied before any filesystem publication.
-/// The binding verifies that the pre-seal descriptor's content digest matches
-/// the expected plaintext digest.
+/// encryption is complete. The ciphertext digest and length are derived from
+/// the owned `EncryptedRevisionPayload` bytes, not caller-asserted.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ObjectMetadataBinding {
     /// Pre-seal descriptor this binding extends.
     pub preseal: PreSealDescriptor,
     /// Opaque storage object identity (CAS address).
     pub storage_object_id: OpaqueId,
-    /// Exact ciphertext digest (raw BLAKE3 over ciphertext bytes).
-    pub ciphertext_digest: Blake3Digest32,
-    /// Exact ciphertext byte count.
-    pub ciphertext_bytes: u64,
     /// Exact encryption-key binding (reference, version, cipher suite).
     pub encryption: EncryptionBinding,
+    /// Owned encrypted payload (ciphertext digest/length derived from bytes).
+    payload: EncryptedRevisionPayload,
 }
 
 impl ObjectMetadataBinding {
-    /// Creates a late object metadata binding after verifying the pre-seal
-    /// descriptor's content digest is nonzero and the ciphertext is non-empty.
+    /// Creates a late object metadata binding from the owned encrypted payload.
+    ///
+    /// The ciphertext digest and length are derived from the payload's owned
+    /// bytes via `ciphertext_digest()` and `ciphertext_len()`, not from
+    /// caller-asserted values.
     pub fn new(
         preseal: PreSealDescriptor,
         storage_object_id: OpaqueId,
-        ciphertext_digest: Blake3Digest32,
-        ciphertext_bytes: u64,
+        payload: EncryptedRevisionPayload,
         encryption: EncryptionBinding,
     ) -> Result<Self, RevisionStoreError> {
-        if ciphertext_bytes == 0 {
-            return Err(RevisionStoreError::CiphertextSizeInvalid);
-        }
-        if ciphertext_digest.as_bytes() == &[0; 32] {
-            return Err(RevisionStoreError::CiphertextSizeInvalid);
-        }
         Ok(Self {
             preseal,
             storage_object_id,
-            ciphertext_digest,
-            ciphertext_bytes,
             encryption,
+            payload,
         })
     }
 
@@ -170,17 +158,22 @@ impl ObjectMetadataBinding {
 
     /// Returns the ciphertext digest.
     pub const fn ciphertext_digest(&self) -> Blake3Digest32 {
-        self.ciphertext_digest
+        self.payload.ciphertext_digest()
     }
 
     /// Returns the ciphertext byte count.
-    pub const fn ciphertext_bytes(&self) -> u64 {
-        self.ciphertext_bytes
+    pub fn ciphertext_bytes(&self) -> u64 {
+        self.payload.ciphertext_len() as u64
     }
 
     /// Returns the encryption binding.
     pub const fn encryption(&self) -> &EncryptionBinding {
         &self.encryption
+    }
+
+    /// Returns the owned encrypted payload.
+    pub fn payload(&self) -> &EncryptedRevisionPayload {
+        &self.payload
     }
 
     /// Returns the complete canonical residency bytes for AAD construction.

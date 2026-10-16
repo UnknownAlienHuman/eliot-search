@@ -125,6 +125,52 @@ impl EncryptedRevisionPayload {
     pub fn ciphertext_len(&self) -> usize {
         self.ciphertext.len()
     }
+
+    /// Creates a selected-v2 encrypted payload that allows empty plaintext.
+    ///
+    /// Unlike `new`, this constructor accepts `plaintext_bytes == 0` for
+    /// selected-v2 empty-source support. The ciphertext must still be non-empty
+    /// and at least `MIN_CIPHERTEXT_BYTES`. The ciphertext digest is derived
+    /// from the owned bytes via `blake3_bounded_bytes`.
+    ///
+    /// This is a minimal explicit selected-v2 path; it does not change v1
+    /// semantics or add a new object lifecycle.
+    pub fn new_selected_v2(
+        plaintext_digest: Blake3Digest32,
+        plaintext_bytes: u64,
+        nonce: Vec<u8>,
+        ciphertext: Vec<u8>,
+        encryption: EncryptionBinding,
+        limits: RevisionStoreLimits,
+    ) -> Result<Self, RevisionStoreError> {
+        let limits = limits.validate()?;
+        if plaintext_bytes > limits.max_plaintext_bytes {
+            return Err(RevisionStoreError::PlaintextSizeInvalid);
+        }
+        let ciphertext_len = u64::try_from(ciphertext.len())
+            .map_err(|_| RevisionStoreError::CiphertextSizeInvalid)?;
+        if ciphertext.is_empty()
+            || ciphertext_len > limits.max_ciphertext_bytes
+            || ciphertext.len() < MIN_CIPHERTEXT_BYTES
+        {
+            return Err(RevisionStoreError::CiphertextSizeInvalid);
+        }
+        if nonce.is_empty() || nonce.len() > limits.max_nonce_bytes {
+            return Err(RevisionStoreError::NonceInvalid);
+        }
+        let budget = Blake3ByteBudget::new(ciphertext.len())
+            .map_err(|_| RevisionStoreError::ContractExhausted)?;
+        let ciphertext_digest = blake3_bounded_bytes(&ciphertext, budget)
+            .map_err(|_| RevisionStoreError::ContractExhausted)?;
+        Ok(Self {
+            plaintext_digest,
+            plaintext_bytes,
+            ciphertext_digest,
+            nonce,
+            ciphertext,
+            encryption,
+        })
+    }
 }
 
 impl fmt::Debug for EncryptedRevisionPayload {
