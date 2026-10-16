@@ -1,15 +1,14 @@
 //! Focused ownership and parity proof for the product-owned Git helper.
 //!
-//! #214 requires the conservative repository-path grammar and the planner file-byte ceiling to
+//! #214 requires the conservative repository-path grammar and the bounded file-byte ceiling to
 //! live in product-owned tooling. These tests pin that ownership at the real reader seam, and
-//! verify the legacy planner aliases stay behaviour-identical delegations.
+//! keep the product grammar and immutable reader independent of controller aliases.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use xtask::git_tree::GitTree;
-use xtask::product_git_helper::{helper_safe_path, helper_under, HELPER_FILE_BYTE_CEILING};
-use xtask::ticket_planner::{safe_path, under, PLANNER_FILE_BYTE_CEILING};
+use xtask::product_git_helper::helper_safe_path;
 
 /// Bounded matrix over the closed safe-path grammar, including its boundary cases.
 #[test]
@@ -44,35 +43,6 @@ fn safe_path_matrix_covers_the_grammar_boundaries() {
     // A backslash byte is not in the accepted character class, so such a path is unsafe.
     let backslash = format!("crates{}src{}lib.rs", char::from(92u8), char::from(92u8));
     assert!(!helper_safe_path(&backslash), "must refuse {backslash}");
-}
-
-/// Legacy planner names remain thin, behaviour-identical delegations of the product helper.
-#[test]
-fn legacy_planner_aliases_delegate_to_the_helper() {
-    for case in [
-        "Cargo.toml",
-        "crates/search-contracts/src/lib.rs",
-        "swarm/tickets/a.toml",
-        "",
-        "/etc/passwd",
-        "a//b",
-        "a/../b",
-        "a/./b",
-        "..",
-        "crates/search contracts/src/lib.rs",
-    ] {
-        assert_eq!(helper_safe_path(case), safe_path(case), "safe_path drift at {case:?}");
-    }
-    for (path, prefix) in [
-        ("docs", "docs"),
-        ("docs/adr/0005.md", "docs"),
-        ("docs-archive", "docs"),
-        ("do", "docs"),
-        ("", ""),
-    ] {
-        assert_eq!(helper_under(path, prefix), under(path, prefix), "under drift at {path:?}");
-    }
-    assert_eq!(PLANNER_FILE_BYTE_CEILING, HELPER_FILE_BYTE_CEILING);
 }
 
 /// The immutable Git reader refuses unsafe paths at its real read seam.

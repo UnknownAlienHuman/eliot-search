@@ -63,30 +63,4 @@ mod tests {
         assert!(!helper_under("do", "docs"));
     }
 
-    #[test]
-    fn planner_aliases_delegate_to_the_same_grammar() {
-        for case in [
-            "Cargo.toml",
-            "crates/search-contracts/src/lib.rs",
-            "",
-            "/etc/passwd",
-            "a//b",
-            "a/../b",
-            "a/./b",
-            "..",
-        ] {
-            assert_eq!(
-                helper_safe_path(case),
-                crate::ticket_planner::safe_path(case),
-                "divergent safe_path for {case:?}"
-            );
-        }
-        for (path, prefix) in [("docs", "docs"), ("docs/a.md", "docs"), ("docs-x", "docs")] {
-            assert_eq!(
-                helper_under(path, prefix),
-                crate::ticket_planner::under(path, prefix),
-                "divergent under for {path:?}"
-            );
-        }
-    }
 }
