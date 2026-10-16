@@ -137,12 +137,12 @@ impl PortFailure for RetentionControlError {
 /// Borrowed server composition; no database, grant, ID allocator or query store.
 pub(super) struct NativeRetentionControl<'journal, 'work, C: CancellationProbe> {
     port: BoundControlJournal<'journal, C>,
-    namespace: c::SourceNamespaceId,
-    source: c::SourceId,
+    source_namespace_id: c::SourceNamespaceId,
+    source_id: c::SourceId,
     source_state: SourceRevisionSourceState,
     content_digest: c::Blake3Digest32,
-    content_bytes: u64,
-    stability_receipt: c::ReceiptRef,
+    byte_length: u64,
+    stability_receipt_ref: c::ReceiptRef,
     guards: Vec<Condition>,
     deadline: Instant,
     work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
@@ -173,7 +173,6 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         let source_state = match source.lifecycle() {
             SourceLifecycle::Active => SourceRevisionSourceState::Active,
             SourceLifecycle::Retired => SourceRevisionSourceState::Retired,
-            _ => return Err(ControlError::OperationConflict.into()),
         };
         security.checkpoint().map_err(|_| ControlError::OperationConflict)?;
         if source.permanent_admission().is_none()
@@ -207,14 +206,13 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
             guards.push(key.current_condition(&encoded, LIMITS)?);
         }
         guards.extend_from_slice(security.conditions());
-        let namespace = source.identity().source_namespace_id;
+        let source_namespace_id = source.identity().source_namespace_id;
         let content_digest = source.binding().content_digest();
-        let content_bytes = source.binding().content_bytes();
-        let stability_receipt = source.binding().observation_receipt().clone();
-        let source = source.identity().source_id;
+        let byte_length = source.binding().content_bytes();
+        let stability_receipt_ref = source.binding().observation_receipt().clone();
+        let source_id = source.identity().source_id;
         let port = journal.bind_control_port(publisher)?;
-        let adapter = Self { port, namespace, source, source_state, content_digest,
-            content_bytes, stability_receipt, guards, deadline, work, object: None };
+        let adapter = Self { port, source_namespace_id, source_id, source_state, content_digest, byte_length, stability_receipt_ref, guards, deadline, work, object: None };
         let keys = adapter.guards.iter().map(|guard| guard.key().clone()).collect::<Vec<_>>();
         let read = adapter.read(&keys)?;
         adapter.require_source(&read)?;
@@ -235,8 +233,8 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     }
     fn scoped_key(&self, phase: &str, revision: Option<c::SourceRevisionId>) -> Result<ControlKey, RetentionControlError> {
         match revision {
-            Some(id) => self.key(phase, &[self.namespace.as_bytes(), self.source.as_bytes(), id.as_bytes()]),
-            None => self.key(phase, &[self.namespace.as_bytes(), self.source.as_bytes()]),
+            Some(id) => self.key(phase, &[self.source_namespace_id.as_bytes(), self.source_id.as_bytes(), id.as_bytes()]),
+            None => self.key(phase, &[self.source_namespace_id.as_bytes(), self.source_id.as_bytes()]),
         }
     }
     fn operation_key(&self, phase: &str, operation: &c::OpaqueId) -> Result<ControlKey, RetentionControlError> {
@@ -246,7 +244,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         let work = |unit| (self.work)(unit);
         self.port.read_control_keys_with_original_context(keys, self.deadline, &work).map_err(Into::into)
     }
-    fn value<'read>(&self, read: &'read ScopedControlRecordsReadback, key: &ControlKey,
+    fn value<'read>(read: &'read ScopedControlRecordsReadback, key: &ControlKey,
         class: Class) -> Result<Option<&'read ControlValue>, RetentionControlError> {
         if let Some(value) = read.get(key) {
             if value.class() != class { return Err(ControlError::StoreCorrupt.into()); }
@@ -279,14 +277,14 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         context.preflight().map_err(|_| ControlError::ReadCancelled)?;
         (self.work)(Work::Checkpoint).map_err(|first| RetentionControlError { control: ControlError::ReadCancelled, first: Some(first) })
     }
-    fn encode_value(&self, class: Class, bytes: Vec<u8>) -> Result<ControlValue, RetentionControlError> {
+    fn encode_value(class: Class, bytes: Vec<u8>) -> Result<ControlValue, RetentionControlError> {
         if bytes.len() > MAX_METADATA { return Err(ControlError::BudgetExceeded.into()); }
         Ok(ControlValue::new(class, bytes, LIMITS)?)
     }
     fn claim_value(&self, operation: &c::OpaqueId) -> Result<ControlValue, RetentionControlError> {
         self.charge(operation.as_str().len().checked_mul(4).and_then(|n| n.checked_add(64))
             .ok_or(ControlError::BudgetExceeded)?)?;
-        self.encode_value(Class::Operation, c::to_canonical_cbor(&V::Text(
+        Self::encode_value(Class::Operation, c::to_canonical_cbor(&V::Text(
             c::CanonicalText::new(operation.as_str()).map_err(|_| ControlError::InvalidValue)?))
             .map_err(|_| ControlError::InvalidValue)?.into_vec())
     }
@@ -337,14 +335,14 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     ) -> Result<(search_revision_store::PersistedSelectedObjectMetadata,
         db::source_retention::SealReservationReadback), RetentionControlError> {
         self.contextual(context)?;
-        if expected.source_namespace_id != self.namespace || expected.source_id != self.source {
+        if expected.source_namespace_id != self.source_namespace_id || expected.source_id != self.source_id {
             return Err(ControlError::OperationConflict.into());
         }
         let link = self.scoped_key("object-link", Some(expected.revision_id))?;
         let read = self.read(&self.scope(std::slice::from_ref(&link))?)?;
         self.require_source(&read)?;
         self.charge(4 * MAX_METADATA)?;
-        let linked = self.value(&read, &link, Class::State)?.ok_or(ControlError::StoreUnavailable)?;
+        let linked = Self::value(&read, &link, Class::State)?.ok_or(ControlError::StoreUnavailable)?;
         let metadata = search_revision_store::PersistedSelectedObjectMetadata::decode(linked.as_bytes())
             .map_err(|_| ControlError::StoreCorrupt)?;
         if metadata.source().namespace_id != expected.source_namespace_id
@@ -383,10 +381,10 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         let read = self.read(&self.scope(&[revision.clone(), link.clone(), preseal.clone(), result.clone(),
             reservation_key, intent_key, retention.clone()])?)?;
         self.require_source(&read)?;
-        let required = |key: &ControlKey, class| self.value(&read, key, class)?
+        let required = |key: &ControlKey, class| Self::value(&read, key, class)?
             .ok_or_else(|| RetentionControlError::from(ControlError::StoreCorrupt));
-        if profile.source_namespace_id != self.namespace || profile.source_id != self.source
-            || committed.source_namespace_id != self.namespace || committed.source_id != self.source
+        if profile.source_namespace_id != self.source_namespace_id || profile.source_id != self.source_id
+            || committed.source_namespace_id != self.source_namespace_id || committed.source_id != self.source_id
             || committed.operation_id != profile.operation_id || committed.expected_head != profile.expected_head
             || late_bind_object_residency(profile, committed.revision.object_residency_key_digest)
                 .map_err(|_| ControlError::StoreCorrupt)? != committed.revision
@@ -406,7 +404,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
             .map_err(|_| ControlError::StoreCorrupt)?;
         if metadata.storage_object_id() != &object_id
             || metadata.object_residency_key_digest() != committed.revision.object_residency_key_digest
-            || metadata.source().namespace_id != self.namespace || metadata.source().source_id != self.source
+            || metadata.source().namespace_id != self.source_namespace_id || metadata.source().source_id != self.source_id
             || metadata.source().revision_id != profile.revision_id || metadata.source().sequence.get() != profile.occurrence_sequence
             || metadata.operation_id() != &profile.operation_id || metadata.content_digest() != profile.content_digest
             || metadata.content_bytes() != profile.byte_length
@@ -418,7 +416,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
             || seal.residency_canonical() != profile.residency_closure.as_slice()
             || seal.content_digest() != profile.content_digest || seal.plaintext_length() != profile.byte_length
             || cause.object_id != object_id || cause.residency_digest != committed.revision.object_residency_key_digest
-            || cause.namespace_id != self.namespace || cause.source_id != self.source || cause.source_revision_id != profile.revision_id
+            || cause.namespace_id != self.source_namespace_id || cause.source_id != self.source_id || cause.source_revision_id != profile.revision_id
             || cause.operation.operation_id != profile.operation_id || cause.operation.request_digest != committed.request_digest
             || !matches!(cause.cause, search_retention::source_retention::SourceRetentionCause::UntilExplicitRelease)
             || (require_active && cause.state != search_retention::source_retention::SourceRetentionState::Active)
@@ -465,7 +463,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         match observed {
             Ok(Some(readback)) if readback.operation_id == mutation.operation_id
                 && readback.request_digest == mutation.request_digest && readback.revision == mutation.revision
-                && readback.source_namespace_id == self.namespace && readback.source_id == self.source
+                && readback.source_namespace_id == self.source_namespace_id && readback.source_id == self.source_id
                 && readback.expected_head == mutation.expected_head => Ok(readback),
             _ => match outcome { Err(first) => Err(first), Ok(()) => Err(ControlError::CommitOutcomeUnknown.into()) },
         }
@@ -474,7 +472,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     fn commit_final(&mut self, mutation: &SourceRevisionMutation) -> Result<(), RetentionControlError> {
         self.charge(32 * MAX_METADATA)?;
         let object = self.object.as_ref().ok_or(ControlError::OperationConflict)?;
-        if mutation.revision.source_id != self.source
+        if mutation.revision.source_id != self.source_id
             || mutation.revision.object_residency_key_digest != object.physical
         { return Err(ControlError::OperationConflict.into()); }
         let preseal = self.operation_key("preseal", &mutation.operation_id)?;
@@ -490,19 +488,19 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         extra.extend_from_slice(&publication_keys);
         let read = self.read(&self.scope(&extra)?)?;
         self.require_source(&read)?;
-        if self.value(&read, &result, Class::Operation)?.is_some()
-            || self.value(&read, &revision, Class::Revision)?.is_some()
-            || self.value(&read, &link, Class::State)?.is_some()
-            || self.value(&read, &retention, Class::State)?.is_some()
+        if Self::value(&read, &result, Class::Operation)?.is_some()
+            || Self::value(&read, &revision, Class::Revision)?.is_some()
+            || Self::value(&read, &link, Class::State)?.is_some()
+            || Self::value(&read, &retention, Class::State)?.is_some()
         { return Err(ControlError::OperationConflict.into()); }
-        let preseal_value = self.value(&read, &preseal, Class::Operation)?.ok_or(ControlError::OperationConflict)?;
+        let preseal_value = Self::value(&read, &preseal, Class::Operation)?.ok_or(ControlError::OperationConflict)?;
         let profile = decode_source_revision_preseal_profile(preseal_value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
-        if profile.operation_id != mutation.operation_id || profile.source_namespace_id != self.namespace
-            || profile.source_id != self.source || profile.expected_head != mutation.expected_head
-            || profile.content_digest != self.content_digest || profile.byte_length != self.content_bytes
-            || profile.stability_receipt_ref != self.stability_receipt
+        if profile.operation_id != mutation.operation_id || profile.source_namespace_id != self.source_namespace_id
+            || profile.source_id != self.source_id || profile.expected_head != mutation.expected_head
+            || profile.content_digest != self.content_digest || profile.byte_length != self.byte_length
+            || profile.stability_receipt_ref != self.stability_receipt_ref
             || late_bind_object_residency(&profile, object.physical).map_err(|_| ControlError::StoreCorrupt)? != mutation.revision
-            || self.value(&read, &claim, Class::Operation)? != Some(&self.claim_value(&mutation.operation_id)?)
+            || Self::value(&read, &claim, Class::Operation)? != Some(&self.claim_value(&mutation.operation_id)?)
         { return Err(ControlError::OperationConflict.into()); }
         let reservation = db::source_retention::SealReservationReadback::read(&read, object.reservation, LIMITS)?;
         let intent = db::source_retention::ObjectPublicationIntentReadback::read(&read, object.reservation, LIMITS)?;
@@ -511,43 +509,43 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
             || reservation.residency_canonical() != profile.residency_closure.as_slice()
             || reservation.content_digest() != profile.content_digest || reservation.plaintext_length() != profile.byte_length
             || intent.object_metadata_canonical() != object.metadata
-            || self.value(&read, &publication_keys[2], Class::State)?.map(ControlValue::as_bytes)
+            || Self::value(&read, &publication_keys[2], Class::State)?.map(ControlValue::as_bytes)
                 != Some(reservation.selected_current_canonical())
         { return Err(ControlError::OperationConflict.into()); }
-        let expected_head = self.value(&read, &head, Class::Revision)?;
+        let expected_head = Self::value(&read, &head, Class::Revision)?;
         let observed = expected_head.map(|value| decode_source_revision_record(value.as_bytes())
             .map_err(|_| ControlError::StoreCorrupt)).transpose()?;
         if observed.as_ref().map(|value| value.revision_id) != mutation.expected_head
             || observed.as_ref().map_or(Some(1), |value| value.occurrence_sequence.checked_add(1))
                 != Some(mutation.revision.occurrence_sequence)
         { return Err(ControlError::OperationConflict.into()); }
-        let request = SourceRevisionRegistrationRequest::new(mutation.operation_id.clone(), self.namespace,
-            self.source, mutation.expected_head, profile.content_digest, profile.byte_length,
-            profile.observed_at.clone(), profile.acquisition_kind, profile.stability_receipt_ref.clone(), object.physical);
+        let request = SourceRevisionRegistrationRequest::new(mutation.operation_id.clone(), self.source_namespace_id,
+            self.source_id, mutation.expected_head, profile.content_digest, profile.byte_length,
+            profile.observed_at.clone(), profile.acquisition_kind, profile.stability_receipt_ref, object.physical);
         if request.request_digest() != mutation.request_digest { return Err(ControlError::OperationConflict.into()); }
         let receipt = c::ReceiptRef::new(format!("native-retained-v1:{}:{}:{}",
-            super::super::super::codec::hex(self.namespace.as_bytes()),
-            super::super::super::codec::hex(self.source.as_bytes()),
+            super::super::super::codec::hex(self.source_namespace_id.as_bytes()),
+            super::super::super::codec::hex(self.source_id.as_bytes()),
             super::super::super::codec::hex(mutation.revision.revision_id.as_bytes())))
             .map_err(|_| ControlError::InvalidValue)?;
         let readback = SourceRevisionMutationReadback { operation_id: mutation.operation_id.clone(),
-            request_digest: mutation.request_digest, source_namespace_id: self.namespace, source_id: self.source,
+            request_digest: mutation.request_digest, source_namespace_id: self.source_namespace_id, source_id: self.source_id,
             expected_head: mutation.expected_head, revision: mutation.revision.clone(), receipt };
         let cause = search_retention::source_retention::SourceRetentionRecord {
-            object_id: object.id.clone(), residency_digest: object.physical, namespace_id: self.namespace,
-            source_id: self.source, source_revision_id: mutation.revision.revision_id,
+            object_id: object.id.clone(), residency_digest: object.physical, namespace_id: self.source_namespace_id,
+            source_id: self.source_id, source_revision_id: mutation.revision.revision_id,
             cause: search_retention::source_retention::SourceRetentionCause::UntilExplicitRelease,
             operation: search_retention::RetentionOperation { operation_id: mutation.operation_id.clone(),
                 request_digest: mutation.request_digest },
             state: search_retention::source_retention::SourceRetentionState::Active,
         };
-        let revision_value = self.encode_value(Class::Revision,
+        let revision_value = Self::encode_value(Class::Revision,
             encode_source_revision_record(&mutation.revision).map_err(|_| ControlError::InvalidValue)?)?;
-        let result_value = self.encode_value(Class::Operation,
+        let result_value = Self::encode_value(Class::Operation,
             encode_source_revision_mutation_readback(&readback).map_err(|_| ControlError::InvalidValue)?)?;
-        let cause_value = self.encode_value(Class::State,
+        let cause_value = Self::encode_value(Class::State,
             search_retention::source_retention::encode_source_retention_record(&cause).map_err(|_| ControlError::InvalidValue)?)?;
-        let link_value = self.encode_value(Class::State, object.metadata.clone())?;
+        let link_value = Self::encode_value(Class::State, object.metadata.clone())?;
         let mut conditions = vec![Condition::absent(revision.clone()), Condition::absent(result.clone()),
             Condition::absent(link.clone()), Condition::absent(retention.clone()),
             Condition::exact(preseal, preseal_value.clone()), Condition::exact(claim, self.claim_value(&mutation.operation_id)?)];
@@ -570,20 +568,20 @@ impl<C: CancellationProbe> SourceRevisionPreparePort for NativeRetentionControl<
         let key = self.operation_key("preseal", operation)?;
         let read = self.read(std::slice::from_ref(&key))?;
         self.charge(4 * MAX_METADATA)?;
-        self.value(&read, &key, Class::Operation)?.map(|value| {
+        Self::value(&read, &key, Class::Operation)?.map(|value| {
             let profile = decode_source_revision_preseal_profile(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
-            if &profile.operation_id != operation || profile.source_namespace_id != self.namespace
-                || profile.source_id != self.source { return Err(ControlError::OperationConflict.into()); }
+            if &profile.operation_id != operation || profile.source_namespace_id != self.source_namespace_id
+                || profile.source_id != self.source_id { return Err(ControlError::OperationConflict.into()); }
             Ok(profile)
         }).transpose()
     }
     fn retain_source_revision_preseal_profile(&mut self, profile: &SourceRevisionPresealProfile,
         context: &OperationContext<C>) -> Result<(), Self::Error> {
         self.contextual(context)?;
-        if profile.source_namespace_id != self.namespace || profile.source_id != self.source
+        if profile.source_namespace_id != self.source_namespace_id || profile.source_id != self.source_id
             || self.source_state != SourceRevisionSourceState::Active
-            || profile.content_digest != self.content_digest || profile.byte_length != self.content_bytes
-            || profile.stability_receipt_ref != self.stability_receipt {
+            || profile.content_digest != self.content_digest || profile.byte_length != self.byte_length
+            || profile.stability_receipt_ref != self.stability_receipt_ref {
             return Err(ControlError::OperationConflict.into());
         }
         self.charge(4 * MAX_METADATA)?;
@@ -594,16 +592,16 @@ impl<C: CancellationProbe> SourceRevisionPreparePort for NativeRetentionControl<
         let revision = self.scoped_key("revision", Some(profile.revision_id))?;
         let read = self.read(&self.scope(&[preseal.clone(), claim.clone(), head.clone(), revision.clone()])?)?;
         self.require_source(&read)?;
-        let value = self.encode_value(Class::Operation, encoded)?;
+        let value = Self::encode_value(Class::Operation, encoded)?;
         let claim_value = self.claim_value(&profile.operation_id)?;
-        if let Some(existing) = self.value(&read, &preseal, Class::Operation)? {
-            if existing == &value && self.value(&read, &claim, Class::Operation)? == Some(&claim_value) { return Ok(()); }
+        if let Some(existing) = Self::value(&read, &preseal, Class::Operation)? {
+            if existing == &value && Self::value(&read, &claim, Class::Operation)? == Some(&claim_value) { return Ok(()); }
             return Err(ControlError::OperationConflict.into());
         }
-        if self.value(&read, &claim, Class::Operation)?.is_some() || self.value(&read, &revision, Class::Revision)?.is_some() {
+        if Self::value(&read, &claim, Class::Operation)?.is_some() || Self::value(&read, &revision, Class::Revision)?.is_some() {
             return Err(ControlError::OperationConflict.into());
         }
-        let observed_head = self.value(&read, &head, Class::Revision)?;
+        let observed_head = Self::value(&read, &head, Class::Revision)?;
         let current = observed_head.map(|value| decode_source_revision_record(value.as_bytes())
             .map_err(|_| ControlError::StoreCorrupt)).transpose()?;
         if current.as_ref().map(|value| value.revision_id) != profile.expected_head {
@@ -623,22 +621,22 @@ impl<C: CancellationProbe> SourceRevisionControlPort for NativeRetentionControl<
         let key = self.operation_key("result", operation)?;
         let read = self.read(std::slice::from_ref(&key))?;
         self.charge(4 * MAX_METADATA)?;
-        self.value(&read, &key, Class::Operation)?.map(|value| {
+        Self::value(&read, &key, Class::Operation)?.map(|value| {
             let result = decode_source_revision_mutation_readback(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
-            if &result.operation_id != operation || result.source_namespace_id != self.namespace
-                || result.source_id != self.source { return Err(ControlError::OperationConflict.into()); }
+            if &result.operation_id != operation || result.source_namespace_id != self.source_namespace_id
+                || result.source_id != self.source_id { return Err(ControlError::OperationConflict.into()); }
             Ok(result)
         }).transpose()
     }
     fn load_source_revision_head(&self, namespace: &c::SourceNamespaceId, source: &c::SourceId,
         context: &OperationContext<C>) -> Result<Option<SourceRevisionHead>, Self::Error> {
         self.contextual(context)?;
-        if *namespace != self.namespace || *source != self.source { return Err(ControlError::OperationConflict.into()); }
+        if *namespace != self.source_namespace_id || *source != self.source_id { return Err(ControlError::OperationConflict.into()); }
         let head = self.scoped_key("head", None)?;
         let read = self.read(&self.scope(std::slice::from_ref(&head))?)?;
         self.require_source(&read)?;
         self.charge(4 * MAX_METADATA)?;
-        let revision = self.value(&read, &head, Class::Revision)?.map(|value|
+        let revision = Self::value(&read, &head, Class::Revision)?.map(|value|
             decode_source_revision_record(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)).transpose()?;
         if revision.as_ref().is_some_and(|revision| revision.source_id != *source) { return Err(ControlError::StoreCorrupt.into()); }
         Ok(Some(SourceRevisionHead { source_namespace_id: *namespace, source_id: *source,
@@ -647,11 +645,11 @@ impl<C: CancellationProbe> SourceRevisionControlPort for NativeRetentionControl<
     fn load_source_revision(&self, namespace: &c::SourceNamespaceId, source: &c::SourceId,
         revision: &c::SourceRevisionId, context: &OperationContext<C>) -> Result<Option<c::SourceRevision>, Self::Error> {
         self.contextual(context)?;
-        if *namespace != self.namespace || *source != self.source { return Err(ControlError::OperationConflict.into()); }
+        if *namespace != self.source_namespace_id || *source != self.source_id { return Err(ControlError::OperationConflict.into()); }
         let key = self.scoped_key("revision", Some(*revision))?;
         let read = self.read(std::slice::from_ref(&key))?;
         self.charge(4 * MAX_METADATA)?;
-        self.value(&read, &key, Class::Revision)?.map(|value| {
+        Self::value(&read, &key, Class::Revision)?.map(|value| {
             let record = decode_source_revision_record(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
             if record.revision_id != *revision || record.source_id != *source { return Err(ControlError::StoreCorrupt.into()); }
             Ok(record)
@@ -660,8 +658,8 @@ impl<C: CancellationProbe> SourceRevisionControlPort for NativeRetentionControl<
     fn compare_and_append_source_revision(&mut self, mutation: &SourceRevisionMutation,
         context: &OperationContext<C>, identity: &MutationIdentity) -> Result<(), Self::Error> {
         self.contextual(context)?;
-        if identity.operation_id != mutation.operation_id || mutation.source_namespace_id != self.namespace
-            || mutation.source_id != self.source || self.source_state != SourceRevisionSourceState::Active
+        if identity.operation_id != mutation.operation_id || mutation.source_namespace_id != self.source_namespace_id
+            || mutation.source_id != self.source_id || self.source_state != SourceRevisionSourceState::Active
         { return Err(ControlError::OperationConflict.into()); }
         self.commit_final(mutation)
     }

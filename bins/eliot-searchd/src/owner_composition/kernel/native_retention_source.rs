@@ -5,7 +5,7 @@ use search_contracts as c;
 use search_control_redb::{ControlSnapshotPublisher, MigrationBootstrapWork as Work, PersistentControlJournal};
 use search_source_admission::policy_v2::CheckpointFailureV2;
 use search_source_registry::{api::{NamespaceCutoverState, NativeNamespacePreparationV2,
-    NativeNamespaceRequestV2, SourceAdmissionRequestV2, SourceNamespaceSelectionV2, SourceRegistry,
+    NativeNamespaceRequestV2, SourceAdmissionRequestV2, SourceNamespaceSelectionV2,
     commit_native_namespace_v2, prepare_native_namespace_v2},
     error::RegistryControlPort, recovery::RegistryBatchLookup,
     root::RootRecord, source::{AdmittedSourceReceipt, RegisteredSource}};

@@ -88,7 +88,7 @@ fn object_metadata(input: &RetentionSourceInput<'_, '_, '_>, profile: &SourceRev
             *payload.ciphertext_digest().as_bytes()),
     };
     let physical = derive_object_residency_key_digest(&key);
-    let object = c::OpaqueId::new(format!("selected-source-v2:{}", physical)).map_err(|_| "NATIVE_RETENTION_OBJECT_INVALID")?;
+    let object = c::OpaqueId::new(format!("selected-source-v2:{physical}")).map_err(|_| "NATIVE_RETENTION_OBJECT_INVALID")?;
     let source = TypedSourceIdentity::new(profile.source_namespace_id, profile.source_id, profile.revision_id,
         c::NonZeroRevision::new(profile.occurrence_sequence).map_err(|_| "NATIVE_RETENTION_OCCURRENCE_INVALID")?);
     let descriptor = PreSealDescriptor::new(source, domains, profile.content_digest, profile.byte_length,
@@ -204,7 +204,7 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
             &residency, &profile.operation_id, counter, profile.content_digest, profile.byte_length)
             .map_err(|_| "NATIVE_RETENTION_CRYPTO_BINDING_INVALID")?;
         let seal_metadata = RevisionSealMetadata { operation_id: profile.operation_id.clone(),
-            preseal_occurrence_canonical: profile_bytes.clone(), residency_canonical: residency.clone(),
+            preseal_occurrence_canonical: profile_bytes, residency_canonical: residency,
             aad_canonical: crypto.aad_bytes().to_vec(), plaintext_length: profile.byte_length, content_digest: profile.content_digest };
         let (_, digest) = retention_control::phase_id(&profile.operation_id, "seal", &work).map_err(|error| error.to_string())?;
         let command = RevisionUseCommand::reserve(&read, input.existing.reservation_id, digest,
@@ -212,7 +212,6 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
         let identity = db::control_mutation_identity(command.command().mutation().id()).map_err(|error| error.code().to_owned())?;
         let (_, permit) = port.transact_revision_use_with_original_context(&command, &identity, input.deadline, &work)
             .map_err(|error| error.control.code().to_owned())?;
-        drop(port);
         let permit = permit.ok_or("NATIVE_RETENTION_SEAL_USE_ALREADY_BURNED")?;
         let encrypted = os::seal_revision(permit, body, config.secrets_settings(), &mut native_key)
             .map_err(|error| error.code().to_owned())?;
@@ -232,7 +231,6 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
             && !matches!(port.recover_revision_use_with_original_context(&command, &identity, input.deadline, &work),
                 Ok(db::CommitRecoveryDecision::Committed(_)))
         { return Err("NATIVE_RETENTION_OBJECT_INTENT_UNKNOWN".into()); }
-        drop(port);
         input.security.checkpoint().map_err(|error| error.to_string())?;
         if let Some(check) = input.current_source { check()?; }
         let publication = input.native.publish_selected_object(metadata.object_residency_key_digest(), id,
@@ -270,8 +268,8 @@ fn prepare_occurrence(input: &RetentionSourceInput<'_, '_, '_>, journal: &mut Pe
     let previous = input.existing.profile.as_ref();
     let request = SourceRevisionPresealRequest::new(input.command.operation.clone(),
         input.source.identity().source_namespace_id, input.source.identity().source_id, input.command.expected_revision,
-        previous.map_or(input.source.binding().content_digest(), |profile| profile.content_digest),
-        previous.map_or(input.source.binding().content_bytes(), |profile| profile.byte_length), observed_at,
+        previous.map_or_else(|| input.source.binding().content_digest(), |profile| profile.content_digest),
+        previous.map_or_else(|| input.source.binding().content_bytes(), |profile| profile.byte_length), observed_at,
         c::AcquisitionKind::Filesystem,
         previous.map_or_else(|| input.source.binding().observation_receipt().clone(), |profile| profile.stability_receipt_ref.clone()),
         residency);
