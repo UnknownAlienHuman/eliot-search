@@ -37,6 +37,18 @@ receipt; changed intent conflicts. Output is Source-admission metadata only:
 `retained_revision:false`, `source_body_serving:false`, `ready:false`. Immutable
 revision retention, ingestion batches and indexed query serving remain separate.
 
+`--prepare-revision-dek-v1 DATA_ROOT OPERATION_ID` prepares one fresh revision
+DEK candidate. OPID is a stable nonzero 16-byte lowercase hex nonce. Actual
+Windows user observation, Native root custody and the original invocation
+context bind RNG, current-user DPAPI and exact Credential Manager publication.
+The same redb retains Intent before publication and conditionally records
+CandidateNonServing only after protected-key and control readback. Current must
+remain absent. Replay looks up the retained operation before key preparation;
+unknown/missing/contradictory state never creates a replacement. This command
+issues no Current selection, key-use capability, revision encryption or serving
+readiness. Fixture targets are captured before possible writes and deleted by
+exact reference with verified absence on every teardown path.
+
 Native executable verification hashes fresh bytes at every full fence. The
 native caller uses admitted heap scratch up to 1 MiB and the actual opened length,
 charges each requested read/short-read attempt, and verifies one-byte EOF before

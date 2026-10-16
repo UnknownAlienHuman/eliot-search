@@ -11,8 +11,10 @@ pub const REVISION_DEK_CURRENT_KEY: &[u8] = b"secret/revision-dek/v1/current";
 
 pub(crate) fn reserved(key: &[u8]) -> bool { key.starts_with(b"secret/revision-dek/v1/") }
 
-/// Closed conditional command. Construction validates framing, not Core facts,
-/// Native custody, credential existence or permission. The caller accounts for
+/// Closed conditional command.
+///
+/// Construction validates framing, not Core facts, Native custody, credential
+/// existence or permission. The caller accounts for
 /// pure preparation; dispatch separately validates the executing journal limits.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RevisionDekCommand { command: ConditionalControlMutation }

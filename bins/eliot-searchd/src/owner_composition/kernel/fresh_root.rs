@@ -166,7 +166,7 @@ impl CancellationProbe for FreshRootCancellation {
 
 // Current Native creator epoch, distinct from key version and logical source epoch.
 #[derive(Clone, Copy)]
-pub(crate) struct RevisionDekRootFacts {
+pub struct RevisionDekRootFacts {
     pub(crate) data_root: c::DataRootId,
     pub(crate) installation: c::InstallationId,
     pub(crate) incarnation: c::InstallationIncarnationId,

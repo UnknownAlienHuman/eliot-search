@@ -197,10 +197,9 @@ impl DirectRegistryOwner {
                 intent
             }
         };
-        if let Some(candidate) = candidate {
-            if !matches!(candidate, RevisionDekRecord::CandidateNonServing(ref value) if value.intent() == &intent) {
-                return Ok(output(false, true, "REVISION_DEK_CONTROL_CONTRADICTION"));
-            }
+        if let Some(candidate) = candidate
+            && !matches!(candidate, RevisionDekRecord::CandidateNonServing(ref value) if value.intent() == &intent) {
+            return Ok(output(false, true, "REVISION_DEK_CONTROL_CONTRADICTION"));
         }
         let observed = match os::read_revision_dek(&binding, &mut context) {
             Ok(Some(value)) => value,
@@ -225,7 +224,6 @@ impl DirectRegistryOwner {
             || final_view.get(&keys[2]).is_some() { return Err("REVISION_DEK_FINAL_READBACK_REFUSED".into()); }
         if os::observe_revision_user(&mut context).map_err(|error| error.code().to_owned())?.user_scope_digest()
             != binding.user_scope_digest() { return Ok(output(false, historical, "REVISION_DEK_USER_SCOPE_MISMATCH")); }
-        drop(port);
         let _published = published_metadata(journal, &mut self.control.publisher, deadline, &callback)?;
         Ok(output(true, historical, "REVISION_DEK_CANDIDATE_VERIFIED"))
     }

@@ -60,6 +60,7 @@ unsafe extern "system" {
     #[link_name = "CredFree"]
     fn cred_free(buffer: *mut c_void);
     #[link_name = "CredDeleteW"]
+    #[cfg(feature = "test-credential-cleanup")]
     fn cred_delete_w(target_name: *const u16, credential_type: u32, flags: u32) -> i32;
 }
 
@@ -150,6 +151,7 @@ impl Drop for ProviderCredentialBlob {
 }
 
 impl WindowsCredentialPlatform {
+    #[cfg(feature = "test-credential-cleanup")]
     pub(super) fn delete_credential(target: &[u16]) -> i32 {
         // SAFETY: the caller supplies one validated, terminated target.
         unsafe { cred_delete_w(target.as_ptr(), CRED_TYPE_GENERIC, 0) }

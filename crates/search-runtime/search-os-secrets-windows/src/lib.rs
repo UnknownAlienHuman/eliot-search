@@ -6,7 +6,7 @@
 //! process, source-catalog or policy I/O. Context-aware revision operations poll
 //! a caller-supplied monotonic deadline and the original cancellation flag.
 //!
-//! Three bounded production surfaces are exposed:
+//! Bounded production surfaces are exposed:
 //!
 //! - legacy revision root-secret read/create receives one namespace identity
 //!   plus the caller's already-established missing-key requirement;
@@ -18,6 +18,10 @@
 //!   plus the already-derived 32-byte optional entropy; additive contextual
 //!   functions charge validated native output before copying, preserve paired
 //!   causes and retain original caller accounting through native release.
+//! - revision-DEK candidates use actual process-user SID observation without
+//!   thread impersonation, a fresh private 32-byte key owner, scoped DPAPI and
+//!   an exact versioned credential. They grant no Current selection or key use;
+//!   durable Intent/Candidate role publication remains with Core/C02/daemon.
 //!
 //! The optional `test-credential-cleanup` feature adds one exact-namespace,
 //! readback-verified cleanup operation for native test harnesses.

@@ -1,5 +1,13 @@
 # Function contract — `search-control-redb`
 
+The revision-DEK candidate adapter reserves `secret/revision-dek/v1/{intent,candidate,current}`.
+Ordinary generic writers cannot touch that namespace. The closed original-context
+route permits one canonical State Intent when all three are absent, then one
+Candidate against the exact Intent while Candidate/Current remain absent. It
+never writes Current or deletes keys. Core owns full record semantics. Targeted
+operation-existence reads validate the existing immutable operation metadata and
+perform no writes; a positive result fences entropy, not serving authority.
+
 Normal DIRECT/registry adapters may borrow the original absolute deadline and
 work callback through the checked owner facades. Every admitted read/copy/hash/
 write site retains cumulative accounting and first refusal; unknown commit
