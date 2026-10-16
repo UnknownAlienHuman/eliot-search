@@ -37,6 +37,7 @@ mod manifest;
 mod model;
 mod plan;
 mod point;
+mod raw_code_profile;
 mod validate;
 
 pub use diff::diff_manifests;
@@ -48,6 +49,7 @@ pub use model::{
 };
 pub use plan::{PlanningScope, plan_projection, validate_scope_binding};
 pub use point::validate_membership_isolation;
+pub use raw_code_profile::RawCodeProjectionProfileSetDescriptor;
 
 use search_contracts::ProjectionMembershipId;
 use search_contracts::indexed::CollectionSchema;

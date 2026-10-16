@@ -15,15 +15,16 @@ use std::{
 use search_contracts::indexed::{
     CollectionSchema, MAX_STORED_VECTOR_VALUES, VectorMode, VectorRequirement, VectorValue,
 };
-use search_contracts::{BoundedName, Modality, NonZeroRevision};
+use search_contracts::{Blake3Digest32, BoundedName, Modality, NonZeroRevision};
 use search_lexical::{
     AcceptedCodeIdentifiersProfile, CodeEncodingError, CodeIdentifierLimits, LexicalInput,
-    SparseLimits, encode_code_document,
+    SparseEncodingKind, SparseLimits, encode_code_document,
 };
 use search_materializer::api::MaterializationProduct;
 use search_projection_planner::{
     PlannedUnit, PlannedVector, PlanningScope, ProjectionBudget, ProjectionError, ProjectionPlan,
-    plan_projection, validate_schema, validate_scope_binding,
+    RawCodeProjectionProfileSetDescriptor, plan_projection, validate_schema,
+    validate_scope_binding,
 };
 use search_unitizer::{UnitDescriptor, V3RepresentationKind, VerifiedUnitSet};
 
@@ -59,6 +60,8 @@ fn verify_product_binding(
         || provenance.canonical_digest() != product.canonical_digest()
         || provenance.coordinate_digest() != product.coordinate_digest()
         || provenance.loss_digest() != product.loss_digest()
+        || provenance.materializer_profile_digest()
+            != Blake3Digest32::from_bytes(*product.profile_id().as_bytes())
         || provenance.binding().source_id.to_string() != product.source_id().as_str()
         || provenance.legacy_revision_sequence() != product.revision().get()
         || schema.mode() != VectorMode::SparseOnly
@@ -95,8 +98,9 @@ fn lexical_unit_input(
 
 /// Encode every owner-verified raw code unit and build one exact point plan.
 ///
-/// The caller supplies the admitted generation's exact schema and accepted
-/// lexical profile. Neither is inferred from a locator, a payload or a digest.
+/// The caller supplies the generation's exact schema and C11 profile object.
+/// A full C13 profile-set descriptor is derived from those owner identities and
+/// the verified materializer/unitizer profiles before any vector is planned.
 /// The returned units retain their real vectors for the canonical bridge's
 /// stage operation; no synthetic vector or field value is introduced.
 #[allow(clippy::too_many_arguments)]
@@ -136,6 +140,26 @@ pub(super) fn plan_raw_code_projection(
     ) {
         return Err(CodeProjectionError::ContextMismatch);
     }
+    let code_profile = profile.profile();
+    let profile_set = RawCodeProjectionProfileSetDescriptor::new(
+        code_profile.id().clone(),
+        code_profile.revision(),
+        code_profile.fingerprint(),
+        code_profile.artifact_set_identity(),
+        code_profile.compatibility_fixture_identity(),
+        code_profile.collision_fixture_identity(),
+        requirement.clone(),
+        Blake3Digest32::from_bytes(*product.profile_id().as_bytes()),
+        units.manifest().profile_id().clone(),
+    )
+    .map_err(CodeProjectionError::Projection)?;
+    if profile_set.profile_set_id() != &scope.membership.projection_profile_set_id
+        || profile_set.profile_set_id() != schema.projection_profile_set_id()
+    {
+        return Err(CodeProjectionError::Projection(
+            ProjectionError::ProfileSetMismatch,
+        ));
+    }
     let requirements = BTreeMap::from([(
         requirement.name().as_str().to_owned(),
         requirement.requirement(),
@@ -172,7 +196,22 @@ pub(super) fn plan_raw_code_projection(
         )
         .map_err(CodeProjectionError::Encoding)?;
         check(cancelled, deadline)?;
-        let vector = &encoded.encoding().vector;
+        let encoding = encoded.encoding();
+        let receipt = &encoding.receipt;
+        let vector = &encoding.vector;
+        if receipt.kind != SparseEncodingKind::Document
+            || !profile_set.matches_encoding_profile(
+                &receipt.profile_id,
+                receipt.profile_revision,
+                receipt.profile_fingerprint,
+                receipt.analyzer_fingerprint,
+            )
+            || receipt.qualification_receipt != profile.qualification().qualification_receipt
+            || receipt.vector_fingerprint != vector.fingerprint()
+            || receipt.vector_values != vector.indices.len()
+        {
+            return Err(CodeProjectionError::ContextMismatch);
+        }
         total_values = total_values
             .checked_add(vector.indices.len())
             .filter(|total| *total <= max_total_vector_values)
