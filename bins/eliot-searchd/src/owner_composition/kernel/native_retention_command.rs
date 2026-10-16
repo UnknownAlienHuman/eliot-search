@@ -215,6 +215,41 @@ mod tests {
     }
 
     #[test]
+    fn real_history_preseal_object_is_preserved_in_selected_crypto_aad() {
+        use search_source_history::prepare::{SourceRevisionPresealProfile, encode_source_revision_preseal_profile};
+        let owner_array = c::to_canonical_cbor(&c::CanonicalValue::Array(
+            c::BoundedList::new(vec![c::CanonicalValue::U64(1)]).unwrap())).unwrap().into_vec();
+        let uuid = |seed| {
+            let mut bytes = [seed; 16]; bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128; bytes
+        };
+        let profile = SourceRevisionPresealProfile {
+            operation_id: c::OpaqueId::new("fixture:real-preseal-map").unwrap(),
+            source_namespace_id: c::SourceNamespaceId::from_bytes(uuid(1)),
+            source_id: c::SourceId::from_bytes(uuid(2)), expected_head: None,
+            revision_id: c::SourceRevisionId::from_bytes(uuid(3)), occurrence_sequence: 1,
+            content_digest: c::Blake3Digest32::from_bytes([4; 32]), byte_length: 4,
+            observed_at: c::UtcTimestamp::parse("2026-10-16T00:00:00.000000Z").unwrap(),
+            acquisition_kind: c::AcquisitionKind::Filesystem,
+            stability_receipt_ref: c::ReceiptRef::new("fixture:stable-source").unwrap(),
+            residency_closure: c::OpaqueCanonicalBytes::from_validated(owner_array.clone()).unwrap(),
+        };
+        let occurrence = encode_source_revision_preseal_profile(&profile).unwrap();
+        assert!(matches!(c::parse_canonical_cbor(&occurrence).unwrap(), c::CanonicalValue::Object(_)));
+        // Only the occurrence interoperability is exercised here; this fixture
+        // creates no Current, source admission, key-use or access authority.
+        let binding = search_revision_crypto::SelectedRevisionBindingV2::from_owner_records(
+            &owner_array, &occurrence, &owner_array, &profile.operation_id, 0,
+            profile.content_digest, profile.byte_length).expect("real C04 owner record must be admissible");
+        let c::CanonicalValue::Array(aad) = c::parse_canonical_cbor(binding.aad_bytes()).unwrap() else { panic!("AAD array"); };
+        let c::CanonicalValue::Bytes(retained) = &aad.as_slice()[5] else { panic!("exact owner bytes"); };
+        assert_eq!(retained.as_slice(), occurrence);
+        let scalar = c::to_canonical_cbor(&c::CanonicalValue::U64(1)).unwrap();
+        assert!(search_revision_crypto::SelectedRevisionBindingV2::from_owner_records(
+            &owner_array, scalar.as_slice(), &owner_array, &profile.operation_id, 0,
+            profile.content_digest, profile.byte_length).is_err());
+    }
+
+    #[test]
     fn retention_parse_reuses_admission_and_derives_two_distinct_operations() {
         let command = NativeRetentionCommand::parse(&retain(V4)).expect("valid retention input");
         assert_eq!(command.relative.as_bytes(), b"dir/file.txt");

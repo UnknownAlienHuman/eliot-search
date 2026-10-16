@@ -454,7 +454,15 @@ fn validate_record(record: &[u8]) -> Result<(), SelectedRevisionErrorV2> {
     }
     let value =
         c::parse_canonical_cbor(record).map_err(|_| SelectedRevisionErrorV2::InvalidMetadata)?;
-    if !matches!(&value, V::Array(fields) if !fields.as_slice().is_empty()) {
+    // Owner records use their own canonical schema: Current/residency are
+    // arrays, while the real C04 pre-seal profile is a canonical object.
+    // Preserve either complete nonempty container verbatim in AAD.
+    let record_shape = match &value {
+        V::Array(fields) => !fields.as_slice().is_empty(),
+        V::Object(fields) => !fields.is_empty(),
+        _ => false,
+    };
+    if !record_shape {
         return Err(SelectedRevisionErrorV2::InvalidMetadata);
     }
     if c::to_canonical_cbor(&value)
