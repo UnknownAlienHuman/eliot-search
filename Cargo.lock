@@ -1343,7 +1343,9 @@ dependencies = [
 name = "search-os-secrets-windows"
 version = "0.0.0"
 dependencies = [
+ "search-control-redb",
  "search-os-secrets",
+ "search-revision-crypto",
 ]
 
 [[package]]
@@ -1504,6 +1506,7 @@ version = "0.0.0"
 dependencies = [
  "aes-gcm",
  "getrandom 0.3.4",
+ "search-contracts",
  "sha2",
  "zeroize",
 ]
