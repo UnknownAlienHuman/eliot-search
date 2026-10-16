@@ -39,6 +39,15 @@ pub mod sweep;
 /// erasure. T37 sweep decisions are reused, never duplicated.
 pub mod purge;
 
+/// C28 source retention cause record for the #598 direct-operation consumer.
+///
+/// One bounded typed canonical `UntilExplicitRelease` cause bound to one exact
+/// physical object identity, its complete residency digest and its typed source
+/// coordinates. Constructors and codecs are untrusted metadata; only the
+/// original control-store commit makes a record durable, and the current live
+/// purge always dominates it.
+pub mod source_retention;
+
 /// Closed retention/purge/restore failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum RetentionError {
