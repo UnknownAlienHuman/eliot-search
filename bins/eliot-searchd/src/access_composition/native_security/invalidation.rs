@@ -2,14 +2,17 @@
 
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Instant;
 
 use search_access::{AccessError, MAX_SECURITY_DEPENDENTS, SecurityDependentReceipt};
 use search_contracts::{BoundedList, LiveDenySnapshotRef, OpaqueId, ReceiptRef};
 use search_control_redb::security_restriction::SecurityRestrictionCommit;
+use search_control_redb::MigrationBootstrapWork;
 use search_continuation::{ContinuationCleanup, ContinuationEffect, ContinuationStore};
 use search_epoch_pins::ContinuationPins;
 use search_handles::HandleStore;
 use search_ports::{CancellationProbe, OperationContext};
+use search_runtime_owner::OwnerError;
 
 use super::{
     NativeSecurityBinding, NativeSecurityError, SecurityInvalidationSink,
@@ -42,6 +45,21 @@ pub trait SecurityDependentInvalidator<C: CancellationProbe> {
         published: &LiveDenySnapshotRef,
         context: &OperationContext<C>,
     ) -> Result<ReceiptRef, AccessError>;
+
+    /// Executes with the original Direct deadline and cumulative allowance.
+    /// An owner without this implementation cannot acknowledge Direct work.
+    #[allow(clippy::too_many_arguments)]
+    fn invalidate_direct_with_original_context(
+        &mut self,
+        _committed: &SecurityRestrictionCommit,
+        _mutation_receipt: &ReceiptRef,
+        _published: &LiveDenySnapshotRef,
+        _context: &OperationContext<C>,
+        _deadline: Instant,
+        _work: &dyn Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
+    ) -> Result<ReceiptRef, NativeSecurityError> {
+        Err(AccessError::SecurityFailClosed.into())
+    }
 }
 
 enum RegisteredInvalidator<'a, C: CancellationProbe> {
@@ -210,7 +228,45 @@ impl<C: CancellationProbe + Clone> SecurityInvalidationSink<C>
         context: &OperationContext<C>,
     ) -> Result<BoundedList<SecurityDependentReceipt, MAX_SECURITY_DEPENDENTS>, AccessError> {
         let budget = MutationBudget::new(context).map_err(access_error)?;
+        self.invalidate_with_budget(committed, mutation_receipt, published, &budget)
+    }
+
+    fn invalidate_direct_with_original_context(
+        &mut self,
+        committed: &SecurityRestrictionCommit,
+        mutation_receipt: &ReceiptRef,
+        published: &LiveDenySnapshotRef,
+        context: &OperationContext<C>,
+        deadline: Instant,
+        work: &dyn Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
+    ) -> Result<BoundedList<SecurityDependentReceipt, MAX_SECURITY_DEPENDENTS>, NativeSecurityError> {
+        let budget = MutationBudget::direct(context, deadline, work)?;
+        self.invalidate_with_budget(committed, mutation_receipt, published, &budget)
+            .map_err(|error| budget.first_failure().unwrap_or_else(|| error.into()))
+    }
+}
+
+impl<C: CancellationProbe + Clone> SecurityInvalidationRegistry<'_, C> {
+    fn invalidate_with_budget(
+        &mut self,
+        committed: &SecurityRestrictionCommit,
+        mutation_receipt: &ReceiptRef,
+        published: &LiveDenySnapshotRef,
+        budget: &MutationBudget<'_, C>,
+    ) -> Result<BoundedList<SecurityDependentReceipt, MAX_SECURITY_DEPENDENTS>, AccessError> {
         self.require_complete()?;
+        if budget.original_allowance().is_some()
+            && self.owners.values().any(|owner| matches!(owner,
+                RegisteredInvalidator::Continuations { .. }
+                | RegisteredInvalidator::ContinuationsWithPins { .. }))
+        {
+            // These owners have no original-byte-budget adapter yet. Refuse
+            // before any owner runs, retaining every cleanup obligation.
+            return Err(AccessError::SecurityFailClosed);
+        }
+        budget.descriptor(committed.mutation()).map_err(access_error)?;
+        budget.metadata(self.owners.len(), mutation_receipt.as_str().len())
+            .map_err(access_error)?;
         mapping::validate_binding(self.binding, committed.mutation()).map_err(access_error)?;
         if mapping::receipt_ref(committed).map_err(access_error)? != *mutation_receipt
             || mapping::snapshot_ref(committed) != *published
@@ -226,10 +282,10 @@ impl<C: CancellationProbe + Clone> SecurityInvalidationSink<C>
             budget.check().map_err(access_error)?;
             let receipt_ref = match invalidator {
                 RegisteredInvalidator::Handles(store) => {
-                    handles::invalidate(store, committed, mutation_receipt, &budget)?
+                    handles::invalidate(store, committed, mutation_receipt, budget)?
                 }
                 RegisteredInvalidator::Continuations { store, cleanup } => {
-                    continuations::invalidate(store, &mut **cleanup, committed, mutation_receipt, &budget)?
+                    continuations::invalidate(store, &mut **cleanup, committed, mutation_receipt, budget)?
                 }
                 RegisteredInvalidator::ContinuationsWithPins { store, pins, durable_cleanup } => {
                     let mut cleanup = |native: &SecurityRestrictionCommit,
@@ -253,12 +309,18 @@ impl<C: CancellationProbe + Clone> SecurityInvalidationSink<C>
                     };
                     // The existing pass verifies the exact native operation and
                     // checks cancellation/deadline before AND after each effect.
-                    continuations::invalidate(store, &mut cleanup, committed, mutation_receipt, &budget)?
+                    continuations::invalidate(store, &mut cleanup, committed, mutation_receipt, budget)?
                 }
-                RegisteredInvalidator::Owner(invalidator) => invalidator.invalidate(
-                    committed, mutation_receipt, published,
-                    &budget.context().map_err(access_error)?,
-                )?,
+                RegisteredInvalidator::Owner(invalidator) => {
+                    let context = budget.context().map_err(access_error)?;
+                    if let Some((deadline, work)) = budget.original_allowance() {
+                        invalidator.invalidate_direct_with_original_context(
+                            committed, mutation_receipt, published, &context, deadline, work,
+                        ).map_err(|error| access_error(budget.retain_failure(error)))?
+                    } else {
+                        invalidator.invalidate(committed, mutation_receipt, published, &context)?
+                    }
+                }
             };
             budget.check().map_err(access_error)?;
             if !references.insert(receipt_ref.clone()) {

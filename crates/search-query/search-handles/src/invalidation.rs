@@ -173,6 +173,30 @@ impl HandleStore {
 }
 
 impl HandleSecurityInvalidation<'_> {
+    /// Conservative logical allocation/processing bytes for the NEXT bounded step.
+    ///
+    /// This reads no token/target inventory and allocates nothing. A cooperative
+    /// caller debits its original allowance before `advance`; unused capacity
+    /// is not refunded. It is not an allocator/RSS measurement.
+    pub fn next_step_work_bound(&self) -> Result<(usize, usize), HandleError> {
+        if self.complete { return Ok((0, 0)); }
+        let limit = self.store.policy.max_invalidate_batch.min(MAX_LIST_ITEMS);
+        if limit == 0 { return Err(HandleError::InvalidPolicy); }
+        let records = self.store.records.len().min(limit).checked_add(1)
+            .ok_or(HandleError::InvalidTransition)?;
+        let selectors = match &self.selector {
+            HandleInvalidationSelector::Memberships { denied, purged } => denied.len().checked_add(purged.len()),
+            HandleInvalidationSelector::Binding(_) => Some(1),
+        }.ok_or(HandleError::InvalidTransition)?;
+        let allocation = limit.checked_mul(std::mem::size_of::<(HandleTokenDigest, NonZeroRevision, u64)>())
+            .and_then(|n| n.checked_mul(4)).ok_or(HandleError::InvalidTransition)?;
+        let processing = selectors.checked_mul(std::mem::size_of::<SourceMembershipId>())
+            .and_then(|n| n.checked_add(std::mem::size_of::<HandleRecord>()))
+            .and_then(|n| n.checked_mul(records)).and_then(|n| n.checked_add(allocation))
+            .ok_or(HandleError::InvalidTransition)?;
+        Ok((allocation, processing))
+    }
+
     /// Advances through at most the configured invalidation batch, capped by the
     /// shared item bound, plus one lookahead for completion. Revisions and totals
     /// are prepared before any mutation; a returned error leaves this step and

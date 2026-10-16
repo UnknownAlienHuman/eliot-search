@@ -21,6 +21,8 @@ use search_control_redb::{
     security_restriction::{SecurityRestrictionCommit, SecurityRestrictionMutation},
 };
 use search_ports::{CancellationProbe, OperationContext};
+use search_control_redb::MigrationBootstrapWork;
+use search_runtime_owner::OwnerError;
 
 mod budget;
 mod effects;
@@ -59,6 +61,18 @@ pub trait SecurityInvalidationSink<C: CancellationProbe> {
         published: &LiveDenySnapshotRef,
         context: &OperationContext<C>,
     ) -> Result<BoundedList<SecurityDependentReceipt, MAX_SECURITY_DEPENDENTS>, AccessError>;
+
+    /// Executes the actual dependent pass under the original Direct allowance.
+    /// Unsupported owners refuse; the legacy callback is never a success fallback.
+    #[allow(clippy::too_many_arguments)]
+    fn invalidate_direct_with_original_context(
+        &mut self, _committed: &SecurityRestrictionCommit, _mutation_receipt: &ReceiptRef,
+        _published: &LiveDenySnapshotRef, _context: &OperationContext<C>,
+        _deadline: std::time::Instant,
+        _work: &dyn Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
+    ) -> Result<BoundedList<SecurityDependentReceipt, MAX_SECURITY_DEPENDENTS>, NativeSecurityError> {
+        Err(AccessError::SecurityFailClosed.into())
+    }
 }
 
 impl<C, F> SecurityInvalidationSink<C> for F
@@ -89,6 +103,7 @@ pub enum NativeSecurityError {
     Journal(AccessPolicyJournalError),
     Cancelled,
     DeadlineElapsed,
+    OriginalContext { control: ControlError, first: Option<OwnerError> },
 }
 
 impl fmt::Display for NativeSecurityError {
@@ -98,6 +113,7 @@ impl fmt::Display for NativeSecurityError {
             Self::Journal(error) => fmt::Display::fmt(error, f),
             Self::Cancelled => f.write_str("DAEMON_SECURITY_CANCELLED"),
             Self::DeadlineElapsed => f.write_str("DAEMON_SECURITY_DEADLINE_ELAPSED"),
+            Self::OriginalContext { control, .. } => fmt::Display::fmt(control, f),
         }
     }
 }
@@ -172,13 +188,34 @@ impl NativeSecurityDomain {
         D: SecurityInvalidationSink<C>,
     {
         let budget = MutationBudget::new(context)?;
-        let read = journal.read_security_restriction(binding.namespace, &budget.context()?)?;
+        Self::restore_with_budget(binding, journal, publisher, dependents, &budget)
+    }
+
+    /// Restores the Direct profile with the actual original deadline and allowance.
+    /// Missing policy or an unsupported dependent refuses before usable state.
+    pub fn restore_direct_with_original_context<C, D, F>(binding: NativeSecurityBinding,
+        journal: &mut PersistentControlJournal, publisher: &mut ControlSnapshotPublisher,
+        dependents: &mut D, context: &OperationContext<C>, deadline: std::time::Instant, work: &F,
+    ) -> Result<Self, NativeSecurityError>
+    where C: CancellationProbe + Clone, D: SecurityInvalidationSink<C>,
+        F: Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
+    {
+        let budget = MutationBudget::direct(context, deadline, work)?;
+        Self::restore_with_budget(binding, journal, publisher, dependents, &budget)
+    }
+
+    fn restore_with_budget<C, D>(binding: NativeSecurityBinding, journal: &mut PersistentControlJournal,
+        publisher: &mut ControlSnapshotPublisher, dependents: &mut D, budget: &MutationBudget<'_, C>,
+    ) -> Result<Self, NativeSecurityError>
+    where C: CancellationProbe + Clone, D: SecurityInvalidationSink<C>,
+    {
+        let read = budget.read(journal, binding.namespace)?;
+        budget.descriptor(read.mutation().ok_or(AccessError::SecurityFailClosed)?)?;
         let descriptor = read.mutation().ok_or(AccessError::SecurityFailClosed)?.clone();
         mapping::validate_binding(&binding, &descriptor)?;
-        let committed = journal
-            .recover_security_restriction(&descriptor, &budget.context()?)?
+        let committed = budget.recover(journal, &descriptor)?
             .ok_or(AccessError::SecurityFailClosed)?;
-        let current = journal.read_security_restriction(binding.namespace, &budget.context()?)?;
+        let current = budget.read(journal, binding.namespace)?;
         current.confirm_current(&committed)?;
         let replacement = descriptor.replacement();
 
@@ -190,9 +227,9 @@ impl NativeSecurityDomain {
                 binding.domain.clone(), replacement.policy.policy_revision,
                 mapping::live(replacement), binding.dependents.clone(),
             )?;
-            let published = publish_current(journal, publisher, &committed, &budget)?;
-            let receipts = dependents.invalidate(
-                &committed, &mapping::receipt_ref(&committed)?, &published, &budget.context()?,
+            let published = publish_current(journal, publisher, &committed, budget)?;
+            let receipts = budget.invalidate(dependents,
+                &committed, &mapping::receipt_ref(&committed)?, &published,
             )?;
             mapping::validate_receipts(&committed, &published, &receipts)?;
             budget.check()?;
@@ -214,7 +251,7 @@ impl NativeSecurityDomain {
             }),
             head: committed,
         };
-        owner.run(None, journal, publisher, dependents, &budget)?;
+        owner.run(None, journal, publisher, dependents, budget)?;
         Ok(owner)
     }
 
@@ -235,6 +272,30 @@ impl NativeSecurityDomain {
         D: SecurityInvalidationSink<C>,
     {
         let budget = MutationBudget::new(context)?;
+        self.apply_with_budget(command, policy, journal, publisher, dependents, &budget)
+    }
+
+    /// Applies one Direct restriction without renewing its original allowance.
+    #[allow(clippy::too_many_arguments)]
+    pub fn apply_direct_with_original_context<C, D, F>(&mut self, command: SecurityRestriction,
+        policy: AccessPolicyRecord, journal: &mut PersistentControlJournal,
+        publisher: &mut ControlSnapshotPublisher, dependents: &mut D, context: &OperationContext<C>,
+        deadline: std::time::Instant, work: &F,
+    ) -> Result<SecurityMutationReceipt, NativeSecurityError>
+    where C: CancellationProbe + Clone, D: SecurityInvalidationSink<C>,
+        F: Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
+    {
+        let budget = MutationBudget::direct(context, deadline, work)?;
+        self.apply_with_budget(command, policy, journal, publisher, dependents, &budget)
+    }
+
+    fn apply_with_budget<C, D>(&mut self, command: SecurityRestriction, policy: AccessPolicyRecord,
+        journal: &mut PersistentControlJournal, publisher: &mut ControlSnapshotPublisher,
+        dependents: &mut D, budget: &MutationBudget<'_, C>,
+    ) -> Result<SecurityMutationReceipt, NativeSecurityError>
+    where C: CancellationProbe + Clone, D: SecurityInvalidationSink<C>,
+    {
+        budget.command(&command)?;
         self.require_journal(journal)?;
         mapping::validate_target(&self.binding, &command, &policy)?;
         if let Some(pending) = &self.pending {
@@ -254,7 +315,7 @@ impl NativeSecurityDomain {
                 policy, descriptor: None, expected_generation: None, committed: None,
             });
         }
-        self.run(Some(command), journal, publisher, dependents, &budget)
+        self.run(Some(command), journal, publisher, dependents, budget)
     }
 
     /// Resolves the frozen pending operation; never replaces its generation,
@@ -271,11 +332,31 @@ impl NativeSecurityDomain {
         D: SecurityInvalidationSink<C>,
     {
         let budget = MutationBudget::new(context)?;
+        self.recover_with_budget(journal, publisher, dependents, &budget)
+    }
+
+    /// Resolves exactly the frozen Direct operation with the caller's allowance.
+    pub fn recover_direct_with_original_context<C, D, F>(&mut self, journal: &mut PersistentControlJournal,
+        publisher: &mut ControlSnapshotPublisher, dependents: &mut D, context: &OperationContext<C>,
+        deadline: std::time::Instant, work: &F,
+    ) -> Result<SecurityMutationReceipt, NativeSecurityError>
+    where C: CancellationProbe + Clone, D: SecurityInvalidationSink<C>,
+        F: Fn(MigrationBootstrapWork) -> Result<(), OwnerError>,
+    {
+        let budget = MutationBudget::direct(context, deadline, work)?;
+        self.recover_with_budget(journal, publisher, dependents, &budget)
+    }
+
+    fn recover_with_budget<C, D>(&mut self, journal: &mut PersistentControlJournal,
+        publisher: &mut ControlSnapshotPublisher, dependents: &mut D, budget: &MutationBudget<'_, C>,
+    ) -> Result<SecurityMutationReceipt, NativeSecurityError>
+    where C: CancellationProbe + Clone, D: SecurityInvalidationSink<C>,
+    {
         self.require_journal(journal)?;
         if self.pending.is_none() {
             return Err(AccessError::SecurityOperationConflict.into());
         }
-        self.run(None, journal, publisher, dependents, &budget)
+        self.run(None, journal, publisher, dependents, budget)
     }
 
     /// Runs a hot-path checkpoint without redb reads/writes or snapshot cloning.

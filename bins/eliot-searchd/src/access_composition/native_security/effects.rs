@@ -55,7 +55,7 @@ where
             }
             return Ok(());
         }
-        let read = self.journal.read_security_restriction(self.binding.namespace, &self.budget.context()?)?;
+        let read = self.budget.read(self.journal, self.binding.namespace)?;
         read.confirm_current(self.head)?;
         let previous = self.head.mutation().replacement();
         if mapping::live(previous) != command.expected_live
@@ -64,6 +64,7 @@ where
             return Err(AccessError::SecurityFenceStale.into());
         }
         mapping::validate_metadata(&previous.policy, &self.pending.policy)?;
+        self.budget.command(command)?;
         let replacement = mapping::replacement(command, self.pending.policy)?;
         let native = read.prepare_restriction(
             self.head, command.operation_id.clone(),
@@ -92,7 +93,7 @@ where
         // Retain a known native commit before any further read/check can fail.
         self.pending.committed = Some(committed);
         let committed = self.pending.committed.as_ref().expect("retained native commit");
-        let read = self.journal.read_security_restriction(self.binding.namespace, &self.budget.context()?)?;
+        let read = self.budget.read(self.journal, self.binding.namespace)?;
         read.confirm_current(committed)?;
         self.budget.check()?;
         Ok(DurableSecurityRestriction {
@@ -103,7 +104,7 @@ where
     fn commit(&mut self, command: &SecurityRestriction) -> Result<DurableSecurityRestriction, NativeSecurityError> {
         self.prepare(command)?;
         let native = self.pending.descriptor.as_ref().expect("prepared native request");
-        let committed = self.journal.commit_security_restriction(native, &self.budget.context()?)?;
+        let committed = self.budget.commit(self.journal, native)?;
         self.accept_commit(command, committed)
     }
 
@@ -112,11 +113,11 @@ where
         // dispatch a write. Capture once, then still consult the real ledger.
         self.prepare(command)?;
         let native = self.pending.descriptor.as_ref().expect("prepared native request");
-        match self.journal.recover_security_restriction(native, &self.budget.context()?)? {
+        match self.budget.recover(self.journal, native)? {
             Some(committed) => self.accept_commit(command, committed).map(Some),
             None => {
                 if self.pending.committed.is_some() { return Err(AccessError::SecurityFailClosed.into()); }
-                let read = self.journal.read_security_restriction(self.binding.namespace, &self.budget.context()?)?;
+                let read = self.budget.read(self.journal, self.binding.namespace)?;
                 read.confirm_current(self.head)?;
                 if self.pending.expected_generation != Some(read.generation()) {
                     return Err(AccessError::SecurityFenceStale.into());
@@ -151,8 +152,8 @@ where
         self.require_commit(requested)?;
         let native = self.pending.committed.as_ref().expect("verified pending commit");
         let published = self.published.as_ref().ok_or(AccessError::SecurityFailClosed)?;
-        let received = self.dependents.invalidate(
-            native, &mapping::receipt_ref(native)?, published, &self.budget.context()?,
+        let received = self.budget.invalidate(self.dependents,
+            native, &mapping::receipt_ref(native)?, published,
         )?;
         mapping::validate_receipts(native, published, &received)?;
         self.budget.check()?;
@@ -200,14 +201,13 @@ pub(super) fn publish_current<C: CancellationProbe + Clone>(
     budget: &MutationBudget<'_, C>,
 ) -> Result<LiveDenySnapshotRef, NativeSecurityError> {
     let namespace = committed.mutation().replacement().policy.namespace_id;
-    let current = journal.read_security_restriction(namespace, &budget.context()?)?;
+    let current = budget.read(journal, namespace)?;
     current.confirm_current(committed)?;
     // The restriction can remain current after unrelated journal writes. Do
     // not present its historical receipt as the global head or replay it just
     // to acquire a new generation. The journal verifies and publishes its actual
     // latest native snapshot, retaining its own rollback and corruption fences.
-    journal.recover_snapshot_publication_with_context(publisher, &budget.context()?)?
-        .ok_or(ControlError::SnapshotPublicationFailed)?;
+    budget.publish(journal, publisher)?;
     let published = publisher.current().ok_or(ControlError::SnapshotPublicationFailed)?;
     if published.identity != committed.mutation().identity() || published.generation != current.generation() {
         return Err(ControlError::SnapshotPublicationFailed.into());

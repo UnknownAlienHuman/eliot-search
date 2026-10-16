@@ -5,6 +5,7 @@ use search_contracts::ReceiptRef;
 use search_control_redb::security_restriction::SecurityRestrictionCommit;
 use search_handles::HandleStore;
 use search_ports::CancellationProbe;
+use search_control_redb::MigrationBootstrapWork as Work;
 
 use super::{HANDLE_SECURITY_DEPENDENT, MutationBudget, access_error};
 
@@ -15,6 +16,7 @@ pub(super) fn invalidate<C: CancellationProbe + Clone>(
     budget: &MutationBudget<'_, C>,
 ) -> Result<ReceiptRef, AccessError> {
     let state = committed.mutation().replacement();
+    budget.metadata(0, mutation_receipt.as_str().len() + 128).map_err(access_error)?;
     // Prepare the bounded reference before touching records. It addresses this
     // process-local owner's completed pass for a real native ledger operation;
     // it does not assert durable handle deletion or retention-lease release.
@@ -31,6 +33,9 @@ pub(super) fn invalidate<C: CancellationProbe + Clone>(
     );
     loop {
         budget.check().map_err(access_error)?;
+        let (allocate, process) = pass.next_step_work_bound().map_err(|_| AccessError::SecurityFailClosed)?;
+        budget.reserve(Work::Allocate(allocate)).map_err(access_error)?;
+        budget.reserve(Work::Process(process)).map_err(access_error)?;
         let progress = pass.advance().map_err(|_| AccessError::SecurityFailClosed)?;
         budget.check().map_err(access_error)?;
         if progress.complete {
