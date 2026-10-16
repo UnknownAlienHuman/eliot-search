@@ -92,6 +92,18 @@ impl RegistryStateKey {
     pub fn canonical_bytes(&self) -> &[u8] {
         &self.bytes
     }
+
+    /// Exact existing-registry row condition for a consuming atomic operation.
+    /// Owner bytes remain opaque; this method neither writes nor grants access.
+    /// The caller accounts for encoding before invoking this pure constructor.
+    ///
+    /// # Errors
+    /// Refuses an empty or oversized key/value under the executing journal limits.
+    pub fn current_condition(&self, owner_bytes: &[u8], limits: JournalLimits)
+        -> Result<crate::ControlRecordCondition, ControlError> {
+        Ok(crate::ControlRecordCondition::exact(codec::state_key(self, limits)?,
+            codec::state_value(self.family, owner_bytes, limits)?))
+    }
 }
 
 /// Complete exact before/after metadata supplied by the source owner.

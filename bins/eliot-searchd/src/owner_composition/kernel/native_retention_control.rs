@@ -1,0 +1,450 @@
+//! Source-history and retained-object records in the existing DIRECT journal.
+
+use std::{fmt, time::Instant};
+use search_contracts::{self as c, CanonicalValue as V};
+use search_control_redb::{self as db, BoundControlJournal, ConditionalControlMutation,
+    ControlError, ControlKey, ControlMutation, ControlRecordClass as Class,
+    ControlRecordCondition as Condition, ControlValue, ControlWrite, JournalLimits,
+    MigrationBootstrapFailure, MigrationBootstrapWork as Work, MutationId,
+    ScopedControlRecordsReadback};
+use search_ports::{CancellationProbe, DisclosureClass, IdempotencyClass, MutationIdentity,
+    OperationContext, Port, PortErrorKind, PortFailure, PortRetryability};
+use search_runtime_owner::OwnerError;
+use search_source_history::{prepare::{SourceRevisionPreparePort, SourceRevisionPresealProfile,
+    decode_source_revision_preseal_profile, encode_source_revision_preseal_profile,
+    late_bind_object_residency}, revision::{SourceRevisionControlPort, SourceRevisionHead,
+    SourceRevisionMutation, SourceRevisionMutationReadback, SourceRevisionRegistrationRequest,
+    SourceRevisionSourceState, decode_source_revision_mutation_readback, decode_source_revision_record,
+    encode_source_revision_mutation_readback, encode_source_revision_record}};
+use search_source_registry::{api::NamespaceCutoverState, recovery::RegistryStateRecord,
+    root::RootRecord, source::{RegisteredSource, SourceLifecycle}};
+
+const LIMITS: JournalLimits = JournalLimits::BASELINE;
+const PREFIX: &[u8] = b"eliot.control.native-retention.v1/";
+const MAX_METADATA: usize = 8192;
+
+#[derive(Clone, Copy)]
+pub(super) struct RetentionControlError { pub(super) control: ControlError, pub(super) first: Option<OwnerError> }
+impl From<ControlError> for RetentionControlError {
+    fn from(control: ControlError) -> Self { Self { control, first: None } }
+}
+impl From<MigrationBootstrapFailure<OwnerError>> for RetentionControlError {
+    fn from(error: MigrationBootstrapFailure<OwnerError>) -> Self {
+        Self { control: error.control, first: error.first_context }
+    }
+}
+impl fmt::Debug for RetentionControlError {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::Display::fmt(self, out) }
+}
+impl fmt::Display for RetentionControlError {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::Display::fmt(&self.control, out) }
+}
+impl PortFailure for RetentionControlError {
+    fn kind(&self) -> PortErrorKind {
+        match self.control {
+            ControlError::CommitOutcomeUnknown => PortErrorKind::OutcomeUnknown,
+            ControlError::OperationConflict => PortErrorKind::Conflict,
+            ControlError::BudgetExceeded => PortErrorKind::ResourceExhausted,
+            _ => PortErrorKind::Quarantined,
+        }
+    }
+    fn retryability(&self) -> PortRetryability { PortRetryability::AfterReadback }
+    fn disclosure(&self) -> DisclosureClass { DisclosureClass::Redacted }
+    fn operation_id(&self) -> Option<&c::OpaqueId> { None }
+}
+
+/// Borrowed server composition; no database, grant, ID allocator or query store.
+pub(super) struct NativeRetentionControl<'journal, 'work, C: CancellationProbe> {
+    port: BoundControlJournal<'journal, C>,
+    namespace: c::SourceNamespaceId,
+    source: c::SourceId,
+    guards: Vec<Condition>,
+    deadline: Instant,
+    work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
+    object: Option<FinalObject>,
+}
+
+struct FinalObject {
+    id: c::OpaqueId,
+    physical: c::ObjectResidencyKeyDigest,
+    metadata: Vec<u8>,
+    reservation: MutationId,
+}
+
+impl<C: CancellationProbe> Port for NativeRetentionControl<'_, '_, C> {
+    type Error = RetentionControlError;
+    type Cancellation = C;
+}
+
+impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'work, C> {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn bind(journal: &'journal mut db::PersistentControlJournal,
+        publisher: &'journal mut db::ControlSnapshotPublisher, source: &RegisteredSource,
+        namespace: &NamespaceCutoverState, root: &RootRecord, security: &[Condition],
+        deadline: Instant, work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
+    ) -> Result<Self, RetentionControlError> {
+        if source.lifecycle() != SourceLifecycle::Active
+            || source.permanent_admission().is_none()
+            || source.identity().source_namespace_id != namespace.ownership.source_namespace_id
+            || source.binding().root_binding_id() != root.root_binding_id
+            || namespace.ownership.status != c::NamespaceOwnershipStatus::Active
+            || namespace.fenced || namespace.preparation.is_some() || namespace.activation.is_some()
+            || root.status != search_source_registry::root::RootStatus::Active || security.len() != 2
+        { return Err(ControlError::OperationConflict.into()); }
+        // Complete source/namespace owner encodings are finite technical metadata.
+        // Pay before cloning or encoding any of them.
+        for unit in [Work::Checkpoint, Work::Allocate(4 * LIMITS.max_value_bytes),
+            Work::Process(4 * LIMITS.max_value_bytes)] {
+            work(unit).map_err(|first| RetentionControlError { control: ControlError::BudgetExceeded, first: Some(first) })?;
+        }
+        let records = [RegistryStateRecord::Source(source.clone()),
+            RegistryStateRecord::Namespace(namespace.clone()), RegistryStateRecord::Root(root.clone())];
+        let mut guards = Vec::with_capacity(5);
+        for record in records {
+            let family = match &record {
+                RegistryStateRecord::Source(_) => db::RegistryStateFamily::Source,
+                RegistryStateRecord::Namespace(_) => db::RegistryStateFamily::Namespace,
+                RegistryStateRecord::Root(_) => db::RegistryStateFamily::Root,
+                _ => return Err(ControlError::InvalidValue.into()),
+            };
+            let key = db::RegistryStateKey::new(family,
+                record.key().encode().map_err(|_| ControlError::InvalidValue)?, LIMITS)?;
+            let encoded = if matches!(record, RegistryStateRecord::Root(_)) { record.encode() }
+                else { record.encode_with_profile("eliot.registry-state.v4") }
+                .map_err(|_| ControlError::InvalidValue)?;
+            guards.push(key.current_condition(&encoded, LIMITS)?);
+        }
+        guards.extend_from_slice(security);
+        let namespace = source.identity().source_namespace_id;
+        let source = source.identity().source_id;
+        let port = journal.bind_control_port(publisher)?;
+        let adapter = Self { port, namespace, source, guards, deadline, work, object: None };
+        let keys = adapter.guards.iter().map(|guard| guard.key().clone()).collect::<Vec<_>>();
+        let read = adapter.read(&keys)?;
+        adapter.require_source(&read)?;
+        Ok(adapter)
+    }
+
+    fn charge(&self, bytes: usize) -> Result<(), RetentionControlError> {
+        for unit in [Work::Checkpoint, Work::Allocate(bytes), Work::Process(bytes)] {
+            (self.work)(unit).map_err(|first| RetentionControlError {
+                control: ControlError::BudgetExceeded, first: Some(first),
+            })?;
+        }
+        Ok(())
+    }
+
+    fn key(&self, phase: &str, parts: &[&[u8]]) -> Result<ControlKey, RetentionControlError> {
+        let bytes = parts.iter().try_fold(PREFIX.len() + phase.len() + 64,
+            |sum, part| sum.checked_add(part.len()).ok_or(ControlError::BudgetExceeded))?;
+        self.charge(bytes.checked_mul(4).ok_or(ControlError::BudgetExceeded)?)?;
+        let mut values = vec![V::Text(c::CanonicalText::new(phase).map_err(|_| ControlError::InvalidKey)?)];
+        for part in parts { values.push(V::Bytes(c::BoundedBytes::new(part.to_vec()).map_err(|_| ControlError::InvalidKey)?)); }
+        let encoded = c::to_canonical_cbor(&V::Array(c::BoundedList::new(values).map_err(|_| ControlError::InvalidKey)?))
+            .map_err(|_| ControlError::InvalidKey)?;
+        let mut key = PREFIX.to_vec();
+        key.extend_from_slice(encoded.as_slice());
+        Ok(ControlKey::new(key, LIMITS)?)
+    }
+    fn scoped_key(&self, phase: &str, revision: Option<c::SourceRevisionId>) -> Result<ControlKey, RetentionControlError> {
+        match revision {
+            Some(id) => self.key(phase, &[self.namespace.as_bytes(), self.source.as_bytes(), id.as_bytes()]),
+            None => self.key(phase, &[self.namespace.as_bytes(), self.source.as_bytes()]),
+        }
+    }
+    fn operation_key(&self, phase: &str, operation: &c::OpaqueId) -> Result<ControlKey, RetentionControlError> {
+        self.key(phase, &[operation.as_str().as_bytes()])
+    }
+    fn read(&self, keys: &[ControlKey]) -> Result<ScopedControlRecordsReadback, RetentionControlError> {
+        let work = |unit| (self.work)(unit);
+        self.port.read_control_keys_with_original_context(keys, self.deadline, &work).map_err(Into::into)
+    }
+    fn value<'read>(&self, read: &'read ScopedControlRecordsReadback, key: &ControlKey,
+        class: Class) -> Result<Option<&'read ControlValue>, RetentionControlError> {
+        if let Some(value) = read.get(key) {
+            if value.class() != class { return Err(ControlError::StoreCorrupt.into()); }
+            Ok(Some(value))
+        } else if read.missing_keys().contains(key) { Ok(None) }
+        else { Err(ControlError::OperationConflict.into()) }
+    }
+    fn require_source(&self, read: &ScopedControlRecordsReadback) -> Result<(), RetentionControlError> {
+        if self.guards.iter().any(|guard| read.get(guard.key()) != guard.expected()) {
+            return Err(ControlError::OperationConflict.into());
+        }
+        Ok(())
+    }
+    fn scope(&self, extra: &[ControlKey]) -> Result<Vec<ControlKey>, RetentionControlError> {
+        self.charge(self.guards.len().checked_add(extra.len()).and_then(|n| n.checked_mul(LIMITS.max_key_bytes))
+            .ok_or(ControlError::BudgetExceeded)?)?;
+        let mut keys = self.guards.iter().map(|guard| guard.key().clone()).collect::<Vec<_>>();
+        keys.extend_from_slice(extra);
+        keys.sort(); keys.dedup();
+        Ok(keys)
+    }
+    fn contextual(&self, context: &OperationContext<C>) -> Result<(), RetentionControlError> {
+        context.preflight().map_err(|_| ControlError::ReadCancelled)?;
+        (self.work)(Work::Checkpoint).map_err(|first| RetentionControlError { control: ControlError::ReadCancelled, first: Some(first) })
+    }
+    fn encode_value(&self, class: Class, bytes: Vec<u8>) -> Result<ControlValue, RetentionControlError> {
+        if bytes.len() > MAX_METADATA { return Err(ControlError::BudgetExceeded.into()); }
+        Ok(ControlValue::new(class, bytes, LIMITS)?)
+    }
+    fn claim_value(&self, operation: &c::OpaqueId) -> Result<ControlValue, RetentionControlError> {
+        self.charge(operation.as_str().len().checked_mul(4).and_then(|n| n.checked_add(64))
+            .ok_or(ControlError::BudgetExceeded)?)?;
+        self.encode_value(Class::Operation, c::to_canonical_cbor(&V::Text(
+            c::CanonicalText::new(operation.as_str()).map_err(|_| ControlError::InvalidValue)?))
+            .map_err(|_| ControlError::InvalidValue)?.into_vec())
+    }
+    fn commit(&mut self, phase: &str, operation: &c::OpaqueId, read: &ScopedControlRecordsReadback,
+        writes: Vec<ControlWrite>, mut conditions: Vec<Condition>,
+    ) -> Result<(), RetentionControlError> {
+        self.charge(8 * LIMITS.max_value_bytes)?;
+        conditions.extend_from_slice(&self.guards);
+        let material = V::Array(c::BoundedList::new(vec![
+            V::Text(c::CanonicalText::new(phase).map_err(|_| ControlError::InvalidValue)?),
+            V::Text(c::CanonicalText::new(operation.as_str()).map_err(|_| ControlError::InvalidValue)?),
+            V::U64(read.generation()),
+        ]).map_err(|_| ControlError::InvalidValue)?);
+        let digest = c::blake3_canonical(&c::CanonicalDigestDomain::parse("eliot/cbor/native-retention-control/v1")
+            .map_err(|_| ControlError::InvalidValue)?, &material,
+            c::DigestInputLimit::new(MAX_METADATA).map_err(|_| ControlError::InvalidValue)?)
+            .map_err(|_| ControlError::InvalidValue)?;
+        let id = MutationId(*digest.as_bytes());
+        let identity = db::control_mutation_identity(id)?;
+        let command = ConditionalControlMutation::new(ControlMutation::new(id, digest, read.generation(), writes, Vec::new()), conditions);
+        let work = |unit| (self.work)(unit);
+        match self.port.transact_records_with_original_context(&command, &identity, self.deadline, &work) {
+            Ok(_) => Ok(()),
+            Err(first) => {
+                // Resolve exactly this command while its original generation,
+                // bytes and allowance are still retained. Never replay it.
+                match self.port.recover_records_with_original_context(&command, &identity, self.deadline, &work) {
+                    Ok(db::CommitRecoveryDecision::Committed(_)) => Ok(()),
+                    _ => Err(first.into()),
+                }
+            }
+        }
+    }
+
+    /// Called only after the Native C07 publication/decrypt/source checks.
+    /// The journal additionally verifies the original reservation and late intent.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn commit_verified_object(&mut self, profile: &SourceRevisionPresealProfile,
+        object_id: c::OpaqueId, physical: c::ObjectResidencyKeyDigest, metadata: &[u8],
+        reservation: MutationId, context: &OperationContext<C>,
+    ) -> Result<SourceRevisionMutationReadback, RetentionControlError> {
+        self.contextual(context)?;
+        self.charge(16 * MAX_METADATA)?;
+        if metadata.is_empty() || metadata.len() > MAX_METADATA
+            || c::parse_canonical_cbor(metadata).is_err()
+        { return Err(ControlError::InvalidValue.into()); }
+        let revision = late_bind_object_residency(profile, physical).map_err(|_| ControlError::InvalidValue)?;
+        let request = SourceRevisionRegistrationRequest::new(profile.operation_id.clone(),
+            profile.source_namespace_id, profile.source_id, profile.expected_head,
+            profile.content_digest, profile.byte_length, profile.observed_at.clone(),
+            profile.acquisition_kind, profile.stability_receipt_ref.clone(), physical);
+        let mutation = SourceRevisionMutation { operation_id: profile.operation_id.clone(),
+            request_digest: request.request_digest(), source_namespace_id: profile.source_namespace_id,
+            source_id: profile.source_id, expected_head: profile.expected_head, revision };
+        self.object = Some(FinalObject { id: object_id, physical, metadata: metadata.to_vec(), reservation });
+        let identity = MutationIdentity::new(profile.operation_id.clone(), IdempotencyClass::RetrySameIdentity);
+        let outcome = self.compare_and_append_source_revision(&mutation, context, &identity);
+        self.object = None;
+        let observed = self.load_source_revision_operation(&profile.operation_id, context);
+        match observed {
+            Ok(Some(readback)) if readback.operation_id == mutation.operation_id
+                && readback.request_digest == mutation.request_digest && readback.revision == mutation.revision
+                && readback.source_namespace_id == self.namespace && readback.source_id == self.source
+                && readback.expected_head == mutation.expected_head => Ok(readback),
+            _ => match outcome { Err(first) => Err(first), Ok(()) => Err(ControlError::CommitOutcomeUnknown.into()) },
+        }
+    }
+
+    fn commit_final(&mut self, mutation: &SourceRevisionMutation) -> Result<(), RetentionControlError> {
+        self.charge(32 * MAX_METADATA)?;
+        let object = self.object.as_ref().ok_or(ControlError::OperationConflict)?;
+        if mutation.revision.source_id != self.source
+            || mutation.revision.object_residency_key_digest != object.physical
+        { return Err(ControlError::OperationConflict.into()); }
+        let preseal = self.operation_key("preseal", &mutation.operation_id)?;
+        let claim = self.scoped_key("occurrence-reservation", Some(mutation.revision.revision_id))?;
+        let revision = self.scoped_key("revision", Some(mutation.revision.revision_id))?;
+        let result = self.operation_key("result", &mutation.operation_id)?;
+        let head = self.scoped_key("head", None)?;
+        let link = self.scoped_key("object-link", Some(mutation.revision.revision_id))?;
+        let retention_key = search_retention::source_retention::source_retention_record_key(&object.id, &mutation.operation_id);
+        let retention = ControlKey::new(retention_key.into_bytes(), LIMITS)?;
+        let publication_keys = db::source_retention::object_publication_intent_keys(object.reservation, LIMITS)?;
+        let mut extra = vec![preseal.clone(), claim.clone(), revision.clone(), result.clone(), head.clone(), link.clone(), retention.clone()];
+        extra.extend_from_slice(&publication_keys);
+        let read = self.read(&self.scope(&extra)?)?;
+        self.require_source(&read)?;
+        if self.value(&read, &result, Class::Operation)?.is_some()
+            || self.value(&read, &revision, Class::Revision)?.is_some()
+            || self.value(&read, &link, Class::State)?.is_some()
+            || self.value(&read, &retention, Class::State)?.is_some()
+        { return Err(ControlError::OperationConflict.into()); }
+        let preseal_value = self.value(&read, &preseal, Class::Operation)?.ok_or(ControlError::OperationConflict)?;
+        let profile = decode_source_revision_preseal_profile(preseal_value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
+        if profile.operation_id != mutation.operation_id || profile.source_namespace_id != self.namespace
+            || profile.source_id != self.source || profile.expected_head != mutation.expected_head
+            || late_bind_object_residency(&profile, object.physical).map_err(|_| ControlError::StoreCorrupt)? != mutation.revision
+            || self.value(&read, &claim, Class::Operation)? != Some(&self.claim_value(&mutation.operation_id)?)
+        { return Err(ControlError::OperationConflict.into()); }
+        let reservation = db::source_retention::SealReservationReadback::read(&read, object.reservation, LIMITS)?;
+        let intent = db::source_retention::ObjectPublicationIntentReadback::read(&read, object.reservation, LIMITS)?;
+        if !intent.binds(&reservation) || intent.operation_id() != &mutation.operation_id
+            || reservation.preseal_occurrence_canonical() != preseal_value.as_bytes()
+            || reservation.residency_canonical() != profile.residency_closure.as_slice()
+            || reservation.content_digest() != profile.content_digest || reservation.plaintext_length() != profile.byte_length
+            || intent.object_metadata_canonical() != object.metadata
+            || self.value(&read, &publication_keys[2], Class::State)?.map(ControlValue::as_bytes)
+                != Some(reservation.selected_current_canonical())
+        { return Err(ControlError::OperationConflict.into()); }
+        let expected_head = self.value(&read, &head, Class::Revision)?;
+        let observed = expected_head.map(|value| decode_source_revision_record(value.as_bytes())
+            .map_err(|_| ControlError::StoreCorrupt)).transpose()?;
+        if observed.as_ref().map(|value| value.revision_id) != mutation.expected_head
+            || observed.as_ref().map_or(Some(1), |value| value.occurrence_sequence.checked_add(1))
+                != Some(mutation.revision.occurrence_sequence)
+        { return Err(ControlError::OperationConflict.into()); }
+        let request = SourceRevisionRegistrationRequest::new(mutation.operation_id.clone(), self.namespace,
+            self.source, mutation.expected_head, profile.content_digest, profile.byte_length,
+            profile.observed_at.clone(), profile.acquisition_kind, profile.stability_receipt_ref.clone(), object.physical);
+        if request.request_digest() != mutation.request_digest { return Err(ControlError::OperationConflict.into()); }
+        let receipt = c::ReceiptRef::new(format!("native-retained-v1:{}:{}:{}",
+            super::super::super::codec::hex(self.namespace.as_bytes()),
+            super::super::super::codec::hex(self.source.as_bytes()),
+            super::super::super::codec::hex(mutation.revision.revision_id.as_bytes())))
+            .map_err(|_| ControlError::InvalidValue)?;
+        let readback = SourceRevisionMutationReadback { operation_id: mutation.operation_id.clone(),
+            request_digest: mutation.request_digest, source_namespace_id: self.namespace, source_id: self.source,
+            expected_head: mutation.expected_head, revision: mutation.revision.clone(), receipt };
+        let cause = search_retention::source_retention::SourceRetentionRecord {
+            object_id: object.id.clone(), residency_digest: object.physical, namespace_id: self.namespace,
+            source_id: self.source, source_revision_id: mutation.revision.revision_id,
+            cause: search_retention::source_retention::SourceRetentionCause::UntilExplicitRelease,
+            operation: search_retention::RetentionOperation { operation_id: mutation.operation_id.clone(),
+                request_digest: mutation.request_digest },
+            state: search_retention::source_retention::SourceRetentionState::Active,
+        };
+        let revision_value = self.encode_value(Class::Revision,
+            encode_source_revision_record(&mutation.revision).map_err(|_| ControlError::InvalidValue)?)?;
+        let result_value = self.encode_value(Class::Operation,
+            encode_source_revision_mutation_readback(&readback).map_err(|_| ControlError::InvalidValue)?)?;
+        let cause_value = self.encode_value(Class::State,
+            search_retention::source_retention::encode_source_retention_record(&cause).map_err(|_| ControlError::InvalidValue)?)?;
+        let link_value = self.encode_value(Class::State, object.metadata.clone())?;
+        let mut conditions = vec![Condition::absent(revision.clone()), Condition::absent(result.clone()),
+            Condition::absent(link.clone()), Condition::absent(retention.clone()),
+            Condition::exact(preseal, preseal_value.clone()), Condition::exact(claim, self.claim_value(&mutation.operation_id)?)];
+        conditions.push(expected_head.map_or_else(|| Condition::absent(head.clone()), |value| Condition::exact(head.clone(), value.clone())));
+        for index in [2, 3, 4] {
+            conditions.push(Condition::exact(publication_keys[index].clone(),
+                read.get(&publication_keys[index]).ok_or(ControlError::OperationConflict)?.clone()));
+        }
+        let writes = vec![ControlWrite { key: revision, value: revision_value.clone() },
+            ControlWrite { key: head, value: revision_value }, ControlWrite { key: result, value: result_value },
+            ControlWrite { key: link, value: link_value }, ControlWrite { key: retention, value: cause_value }];
+        self.commit("complete", &mutation.operation_id, &read, writes, conditions)
+    }
+}
+
+impl<C: CancellationProbe> SourceRevisionPreparePort for NativeRetentionControl<'_, '_, C> {
+    fn load_source_revision_preseal_profile(&self, operation: &c::OpaqueId, context: &OperationContext<C>)
+        -> Result<Option<SourceRevisionPresealProfile>, Self::Error> {
+        self.contextual(context)?;
+        let key = self.operation_key("preseal", operation)?;
+        let read = self.read(std::slice::from_ref(&key))?;
+        self.charge(4 * MAX_METADATA)?;
+        self.value(&read, &key, Class::Operation)?.map(|value| {
+            let profile = decode_source_revision_preseal_profile(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
+            if &profile.operation_id != operation { return Err(ControlError::OperationConflict.into()); }
+            Ok(profile)
+        }).transpose()
+    }
+    fn retain_source_revision_preseal_profile(&mut self, profile: &SourceRevisionPresealProfile,
+        context: &OperationContext<C>) -> Result<(), Self::Error> {
+        self.contextual(context)?;
+        if profile.source_namespace_id != self.namespace || profile.source_id != self.source {
+            return Err(ControlError::OperationConflict.into());
+        }
+        self.charge(4 * MAX_METADATA)?;
+        let encoded = encode_source_revision_preseal_profile(profile).map_err(|_| ControlError::InvalidValue)?;
+        let preseal = self.operation_key("preseal", &profile.operation_id)?;
+        let claim = self.scoped_key("occurrence-reservation", Some(profile.revision_id))?;
+        let head = self.scoped_key("head", None)?;
+        let revision = self.scoped_key("revision", Some(profile.revision_id))?;
+        let read = self.read(&self.scope(&[preseal.clone(), claim.clone(), head.clone(), revision.clone()])?)?;
+        self.require_source(&read)?;
+        let value = self.encode_value(Class::Operation, encoded)?;
+        let claim_value = self.claim_value(&profile.operation_id)?;
+        if let Some(existing) = self.value(&read, &preseal, Class::Operation)? {
+            if existing == &value && self.value(&read, &claim, Class::Operation)? == Some(&claim_value) { return Ok(()); }
+            return Err(ControlError::OperationConflict.into());
+        }
+        if self.value(&read, &claim, Class::Operation)?.is_some() || self.value(&read, &revision, Class::Revision)?.is_some() {
+            return Err(ControlError::OperationConflict.into());
+        }
+        let observed_head = self.value(&read, &head, Class::Revision)?;
+        let current = observed_head.map(|value| decode_source_revision_record(value.as_bytes())
+            .map_err(|_| ControlError::StoreCorrupt)).transpose()?;
+        if current.as_ref().map(|value| value.revision_id) != profile.expected_head {
+            return Err(ControlError::OperationConflict.into());
+        }
+        let expected = observed_head.map_or_else(|| Condition::absent(head.clone()), |value| Condition::exact(head.clone(), value.clone()));
+        self.commit("preseal", &profile.operation_id, &read,
+            vec![ControlWrite { key: preseal.clone(), value }, ControlWrite { key: claim.clone(), value: claim_value }],
+            vec![Condition::absent(preseal), Condition::absent(claim), Condition::absent(revision), expected])
+    }
+}
+
+impl<C: CancellationProbe> SourceRevisionControlPort for NativeRetentionControl<'_, '_, C> {
+    fn load_source_revision_operation(&self, operation: &c::OpaqueId, context: &OperationContext<C>)
+        -> Result<Option<SourceRevisionMutationReadback>, Self::Error> {
+        self.contextual(context)?;
+        let key = self.operation_key("result", operation)?;
+        let read = self.read(std::slice::from_ref(&key))?;
+        self.charge(4 * MAX_METADATA)?;
+        self.value(&read, &key, Class::Operation)?.map(|value| {
+            let result = decode_source_revision_mutation_readback(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
+            if &result.operation_id != operation { return Err(ControlError::OperationConflict.into()); }
+            Ok(result)
+        }).transpose()
+    }
+    fn load_source_revision_head(&self, namespace: &c::SourceNamespaceId, source: &c::SourceId,
+        context: &OperationContext<C>) -> Result<Option<SourceRevisionHead>, Self::Error> {
+        self.contextual(context)?;
+        if *namespace != self.namespace || *source != self.source { return Err(ControlError::OperationConflict.into()); }
+        let head = self.scoped_key("head", None)?;
+        let read = self.read(&self.scope(std::slice::from_ref(&head))?)?;
+        self.require_source(&read)?;
+        self.charge(4 * MAX_METADATA)?;
+        let revision = self.value(&read, &head, Class::Revision)?.map(|value|
+            decode_source_revision_record(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)).transpose()?;
+        if revision.as_ref().is_some_and(|revision| revision.source_id != *source) { return Err(ControlError::StoreCorrupt.into()); }
+        Ok(Some(SourceRevisionHead { source_namespace_id: *namespace, source_id: *source,
+            state: SourceRevisionSourceState::Active, revision }))
+    }
+    fn load_source_revision(&self, namespace: &c::SourceNamespaceId, source: &c::SourceId,
+        revision: &c::SourceRevisionId, context: &OperationContext<C>) -> Result<Option<c::SourceRevision>, Self::Error> {
+        self.contextual(context)?;
+        if *namespace != self.namespace || *source != self.source { return Err(ControlError::OperationConflict.into()); }
+        let key = self.scoped_key("revision", Some(*revision))?;
+        let read = self.read(std::slice::from_ref(&key))?;
+        self.charge(4 * MAX_METADATA)?;
+        self.value(&read, &key, Class::Revision)?.map(|value| {
+            let record = decode_source_revision_record(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)?;
+            if record.revision_id != *revision || record.source_id != *source { return Err(ControlError::StoreCorrupt.into()); }
+            Ok(record)
+        }).transpose()
+    }
+    fn compare_and_append_source_revision(&mut self, mutation: &SourceRevisionMutation,
+        context: &OperationContext<C>, identity: &MutationIdentity) -> Result<(), Self::Error> {
+        self.contextual(context)?;
+        if identity.operation_id != mutation.operation_id || mutation.source_namespace_id != self.namespace
+            || mutation.source_id != self.source { return Err(ControlError::OperationConflict.into()); }
+        self.commit_final(mutation)
+    }
+}
