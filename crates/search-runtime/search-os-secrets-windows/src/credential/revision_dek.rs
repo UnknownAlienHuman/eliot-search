@@ -347,9 +347,11 @@ pub fn read_revision_dek<C: RevisionDekContext>(
 /// The caller must consume the guard within the finite operation deadline.
 #[cfg(windows)]
 pub(crate) fn read_revision_dek_key<C: RevisionDekContext>(
-    binding: &CoreRevisionDekBinding,
+    current: &search_os_secrets::RevisionDekCurrent,
     context: &mut C,
 ) -> Result<Option<ValidatedRevisionDekKey>, RevisionDekError<C::Error>> {
+    let candidate = current.intent().candidate();
+    let binding = candidate.intent().binding();
     let observed = observe_revision_user(context)?;
     if observed.user_scope_digest() != binding.user_scope_digest() {
         return Err(RevisionDekError::UserScopeMismatch);
@@ -359,28 +361,33 @@ pub(crate) fn read_revision_dek_key<C: RevisionDekContext>(
     let Some(frame) = read_credential(context, &target)? else {
         return Ok(None);
     };
+    // Validate THIS read against the exact selected protected material. The
+    // credential header is never passed to CryptUnprotectData.
+    let protected = decode_frame::<C::Error>(frame.as_slice(), binding.binding_digest())?;
+    context.charge(LegacyRevisionDpapiWork::Allocate(2 * search_os_secrets::REVISION_DEK_MAX_RECORD_BYTES))
+        .map_err(RevisionDekError::Context)?;
+    context.charge(LegacyRevisionDpapiWork::Process(protected.len() + 4 * search_os_secrets::REVISION_DEK_MAX_RECORD_BYTES))
+        .map_err(RevisionDekError::Context)?;
+    let actual = search_os_secrets::RevisionDekCandidate::new(candidate.intent(), binding, protected)
+        .map_err(|_| RevisionDekError::CredentialReadbackInvalid)?;
+    if &actual != candidate { return Err(RevisionDekError::CredentialReadbackInvalid); }
     context.charge(LegacyRevisionDpapiWork::Allocate(crate::MAX_SCOPE_BYTES)).map_err(RevisionDekError::Context)?;
     context.charge(LegacyRevisionDpapiWork::Process(crate::MAX_SCOPE_BYTES.saturating_mul(2))).map_err(RevisionDekError::Context)?;
     let mut entropy = binding.protection_entropy();
     if entropy.is_empty() || entropy.len() > crate::MAX_SCOPE_BYTES {
         return Err(RevisionDekError::BindingInvalid);
     }
-    let guard = unwrap_and_validate_revision_dek(context, frame.as_slice(), &entropy);
+    let guard = unwrap_and_validate_revision_dek(context, protected, &entropy);
     clear_bytes(&mut entropy);
     let guard = guard?;
-    context
-        .charge(LegacyRevisionDpapiWork::Allocate(frame.as_slice().len()))
-        .map_err(RevisionDekError::Context)?;
-    context
-        .charge(LegacyRevisionDpapiWork::Process(frame.as_slice().len().saturating_mul(2)))
-        .map_err(RevisionDekError::Context)?;
+    context.checkpoint().map_err(RevisionDekError::Context)?;
     Ok(Some(guard))
 }
 
 /// Reads, unwraps and validates the DEK, returning a zeroizing key guard.
 #[cfg(not(windows))]
 pub(crate) fn read_revision_dek_key<C: RevisionDekContext>(
-    _binding: &CoreRevisionDekBinding,
+    _current: &search_os_secrets::RevisionDekCurrent,
     _context: &mut C,
 ) -> Result<Option<ValidatedRevisionDekKey>, RevisionDekError<C::Error>> {
     Err(RevisionDekError::UnsupportedPlatform)
