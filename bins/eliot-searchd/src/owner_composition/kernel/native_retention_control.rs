@@ -319,6 +319,69 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         }
     }
 
+    /// Joins one historical occurrence to its exact durable object and cause.
+    /// This reads metadata only; it grants neither plaintext nor client access.
+    pub(super) fn load_committed_object(&self, profile: &SourceRevisionPresealProfile,
+        committed: &SourceRevisionMutationReadback, context: &OperationContext<C>,
+    ) -> Result<search_revision_store::PersistedSelectedObjectMetadata, RetentionControlError> {
+        self.contextual(context)?;
+        self.charge(32 * MAX_METADATA)?;
+        let object_id = search_revision_store::selected_object_storage_id(committed.revision.object_residency_key_digest)
+            .map_err(|_| ControlError::StoreCorrupt)?;
+        let revision = self.scoped_key("revision", Some(profile.revision_id))?;
+        let link = self.scoped_key("object-link", Some(profile.revision_id))?;
+        let preseal = self.operation_key("preseal", &profile.operation_id)?;
+        let result = self.operation_key("result", &profile.operation_id)?;
+        let (reservation_id, _) = phase_id(&profile.operation_id, "seal", self.work)?;
+        let reservation_key = db::source_retention::revision_seal_reservation_key(reservation_id, LIMITS)?;
+        let intent_key = db::source_retention::object_publication_intent_key(reservation_id, LIMITS)?;
+        let retention_key = search_retention::source_retention::source_retention_record_key(&object_id, &profile.operation_id);
+        let retention = ControlKey::new(retention_key.into_bytes(), LIMITS)?;
+        let read = self.read(&self.scope(&[revision.clone(), link.clone(), preseal.clone(), result.clone(),
+            reservation_key, intent_key, retention.clone()])?)?;
+        self.require_source(&read)?;
+        let required = |key: &ControlKey, class| self.value(&read, key, class)?
+            .ok_or_else(|| RetentionControlError::from(ControlError::StoreCorrupt));
+        if profile.source_namespace_id != self.namespace || profile.source_id != self.source
+            || committed.source_namespace_id != self.namespace || committed.source_id != self.source
+            || committed.operation_id != profile.operation_id || committed.expected_head != profile.expected_head
+            || late_bind_object_residency(profile, committed.revision.object_residency_key_digest)
+                .map_err(|_| ControlError::StoreCorrupt)? != committed.revision
+            || required(&revision, Class::Revision)?.as_bytes()
+                != encode_source_revision_record(&committed.revision).map_err(|_| ControlError::StoreCorrupt)?
+            || required(&preseal, Class::Operation)?.as_bytes()
+                != encode_source_revision_preseal_profile(profile).map_err(|_| ControlError::StoreCorrupt)?
+            || required(&result, Class::Operation)?.as_bytes()
+                != encode_source_revision_mutation_readback(committed).map_err(|_| ControlError::StoreCorrupt)?
+        { return Err(ControlError::StoreCorrupt.into()); }
+        let linked = required(&link, Class::State)?.as_bytes();
+        let metadata = search_revision_store::PersistedSelectedObjectMetadata::decode(linked)
+            .map_err(|_| ControlError::StoreCorrupt)?;
+        let seal = db::source_retention::SealReservationReadback::read(&read, reservation_id, LIMITS)?;
+        let intent = db::source_retention::ObjectPublicationIntentReadback::read(&read, reservation_id, LIMITS)?;
+        let cause = search_retention::source_retention::decode_source_retention_record(required(&retention, Class::State)?.as_bytes())
+            .map_err(|_| ControlError::StoreCorrupt)?;
+        if metadata.storage_object_id() != &object_id
+            || metadata.object_residency_key_digest() != committed.revision.object_residency_key_digest
+            || metadata.source().namespace_id != self.namespace || metadata.source().source_id != self.source
+            || metadata.source().revision_id != profile.revision_id || metadata.source().sequence.get() != profile.occurrence_sequence
+            || metadata.operation_id() != &profile.operation_id || metadata.content_digest() != profile.content_digest
+            || metadata.content_bytes() != profile.byte_length
+            || search_revision_store::residency_canonical_bytes(metadata.domain_bindings())
+                .map_err(|_| ControlError::StoreCorrupt)?.as_slice() != profile.residency_closure.as_slice()
+            || !intent.binds(&seal) || intent.object_metadata_canonical() != linked
+            || seal.operation_id() != &profile.operation_id
+            || seal.preseal_occurrence_canonical() != required(&preseal, Class::Operation)?.as_bytes()
+            || seal.residency_canonical() != profile.residency_closure.as_slice()
+            || seal.content_digest() != profile.content_digest || seal.plaintext_length() != profile.byte_length
+            || cause.object_id != object_id || cause.residency_digest != committed.revision.object_residency_key_digest
+            || cause.namespace_id != self.namespace || cause.source_id != self.source || cause.source_revision_id != profile.revision_id
+            || cause.operation.operation_id != profile.operation_id || cause.operation.request_digest != committed.request_digest
+            || !matches!(cause.cause, search_retention::source_retention::SourceRetentionCause::UntilExplicitRelease)
+        { return Err(ControlError::StoreCorrupt.into()); }
+        Ok(metadata)
+    }
+
     /// Called only after the Native C07 publication/decrypt/source checks.
     /// The journal additionally verifies the original reservation and late intent.
     #[allow(clippy::too_many_arguments)]

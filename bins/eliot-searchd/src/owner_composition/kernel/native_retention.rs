@@ -130,7 +130,14 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
         let replay = prepare_occurrence(&input, journal, publisher,
             profile.residency_closure.as_slice().to_vec(), profile.observed_at.clone())?;
         return match replay {
-            SourceRevisionPreparation::Committed(committed) => Ok(Some(output(&committed.readback, true, false))),
+            SourceRevisionPreparation::Committed(committed) => {
+                let work = |unit| input.native.work(unit);
+                let control = NativeRetentionControl::bind(journal, publisher, input.source, input.namespace,
+                    input.root, input.security, input.deadline, &work).map_err(|error| error.to_string())?;
+                control.load_committed_object(&committed.profile, &committed.readback, input.native.context())
+                    .map_err(|error| error.to_string())?;
+                Ok(Some(output(&committed.readback, true, false)))
+            },
             SourceRevisionPreparation::Pending(_) => Err("NATIVE_RETENTION_COMMIT_UNRESOLVED".into()),
         };
     }
