@@ -31,6 +31,7 @@ mod error;
 mod limits;
 mod model;
 mod residency;
+mod selected_object;
 mod store;
 
 pub use address::*;
@@ -40,6 +41,7 @@ pub use error::*;
 pub use limits::*;
 pub use model::*;
 pub use residency::*;
+pub use selected_object::*;
 pub use store::*;
 
 #[cfg(test)]
