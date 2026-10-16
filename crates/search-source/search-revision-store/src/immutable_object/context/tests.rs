@@ -352,6 +352,37 @@ fn contextual_success_retains_stage_and_legacy_cleanup_remains_distinct() {
 }
 
 #[test]
+fn contextual_full_stage_recovers_but_partial_stage_is_never_overwritten() {
+    let fixture = Fixture::new();
+    let shard = fixture.0.join("resume");
+    fs::create_dir(&shard).unwrap();
+    let platform = TestPlatform { fail_sync: false };
+    fs::write(shard.join(".object.tmp"), b"bytes").unwrap();
+    let mut context = Context::new();
+    let receipt = publish_legacy_revision_object_with_context(&platform, &mut context,
+        &shard, "object", ".object.tmp", b"bytes", 8).unwrap();
+    assert_eq!(fs::read(shard.join("object")).unwrap(), b"bytes");
+    assert_eq!(fs::read(shard.join(".object.tmp")).unwrap(), b"bytes");
+    assert!(!receipt.staging_cleanup_deferred(), "this call did not create the retained stage");
+    assert!(!receipt.reused(), "the final link was first published by this recovery");
+    assert!(!context.works.iter().any(|work| matches!(work, LegacyRevisionObjectWork::Write(_))),
+        "recovery may sync/link verified bytes but never writes the retained file");
+
+    fs::write(shard.join(".partial.tmp"), b"byt").unwrap();
+    let error = publish_legacy_revision_object_with_context(&platform, &mut Context::new(),
+        &shard, "partial", ".partial.tmp", b"bytes", 8).unwrap_err();
+    assert_eq!(error.object_code(), Some("REVISION_OBJECT_CONFLICT"));
+    assert!(error.outcome_unknown());
+    assert_eq!(fs::read(shard.join(".partial.tmp")).unwrap(), b"byt");
+    assert!(!shard.join("partial").exists());
+
+    let legacy = super::super::publish_legacy_revision_object(&platform, &shard,
+        "legacy-resume", ".partial.tmp", b"bytes", 8);
+    assert!(legacy.is_err(), "legacy unqualified recovery behavior remains unchanged");
+    assert_eq!(fs::read(shard.join(".partial.tmp")).unwrap(), b"byt");
+}
+
+#[test]
 fn refusal_after_real_creation_or_publication_preserves_artifacts() {
     let fixture = Fixture::new();
     let platform = TestPlatform { fail_sync: false };

@@ -873,7 +873,7 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
         // Declared before the file so legacy error unwinding closes the file
         // before its unchanged cleanup guard runs. Contextual calls keep None.
         let mut staging = None;
-        let mut temporary = self.call(
+        let created = self.call(
             LegacyRevisionObjectWork::Effect,
             ContextualRevisionObjectEffect::StagingAttempted,
             || {
@@ -884,7 +884,26 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
                     .open(&temporary_path)
                     .map_err(ObjectError::Create)
             },
-        )?;
+        );
+        let (mut temporary, retained_identity) = match created {
+            Ok(file) => (file, None),
+            Err(Failure::Object(ObjectError::Create(error)))
+                if self.retain_stage && error.kind() == io::ErrorKind::AlreadyExists => {
+                // Recovery reuses only a complete exact stage under the same
+                // qualified locator/identity. Never truncate, overwrite, unlink
+                // or redraw a name after an uncertain publication.
+                let ObjectRead { bytes: retained, identity } = self.read(&temporary_path, maximum_bytes, None)?;
+                if !self.compare(&retained, bytes)? {
+                    return Err(Failure::Object(ObjectError::ImmutableConflict));
+                }
+                drop(retained);
+                let file = self.call(LegacyRevisionObjectWork::Open,
+                    ContextualRevisionObjectEffect::NotAttempted,
+                    || OpenOptions::new().read(true).write(true).open(&temporary_path).map_err(ObjectError::Create))?;
+                (file, Some(identity))
+            }
+            Err(error) => return Err(error),
+        };
         let metadata = self.call(
             LegacyRevisionObjectWork::Observe,
             ContextualRevisionObjectEffect::NotAttempted,
@@ -898,6 +917,9 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
             ObjectError::Platform,
             |platform, context| platform.identity_contextual(context, &temporary),
         )?;
+        if retained_identity.as_ref().is_some_and(|identity| identity != &temporary_identity) {
+            return Err(Failure::Object(ObjectError::IdentityChanged));
+        }
         if !self.retain_stage {
             staging = Some(TemporaryObjectGuard {
                 platform: self.platform,
@@ -913,7 +935,7 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
                 platform.verify_locator_contextual(context, &temporary, &temporary_path)
             },
         )?;
-        self.write_data(&mut temporary, bytes)?;
+        if retained_identity.is_none() { self.write_data(&mut temporary, bytes)?; }
         self.call(
             LegacyRevisionObjectWork::Effect,
             ContextualRevisionObjectEffect::StagingAttempted,
@@ -992,7 +1014,7 @@ impl<'a, P: ContextualLegacyRevisionObjectPlatform<C>, C: LegacyRevisionObjectCo
                 encoded_bytes,
                 reused,
             },
-            staging_cleanup_deferred: self.retain_stage,
+            staging_cleanup_deferred: self.retain_stage && retained_identity.is_none(),
         })
     }
 }
