@@ -1,13 +1,13 @@
-//! Authenticated encryption for immutable source-revision bytes.
+//! Authenticated encryption primitives for immutable Search payloads.
 //!
 //! Large revisions are encrypted with a random-nonce AES-256-GCM envelope. The
 //! data-encryption key is deliberately external: on Windows it is expected to
 //! be persisted only after wrapping by `search-os-secrets-windows` DPAPI.
 //!
-//! Every envelope authenticates its source-revision, residency, encryption
-//! profile, key generation, plaintext length, and expected content digest. A
-//! ciphertext cannot therefore be replayed under another revision or policy
-//! binding even when its bytes are copied successfully.
+//! The raw source-revision envelope authenticates its source, residency,
+//! encryption profile, key generation, plaintext length, and content digest.
+//! Derived-artifact v1 has separate entrypoints that consume C07 canonical AAD
+//! and encoded-body identity without changing either raw envelope profile.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -21,7 +21,9 @@ use aes_gcm::{Aes256Gcm, Nonce};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
+mod derived_v1;
 mod selected_v2;
+pub use derived_v1::*;
 pub use selected_v2::*;
 
 /// AES-256 key size.
@@ -39,6 +41,12 @@ pub const MAX_REVISION_ENVELOPE_BYTES: usize =
     REVISION_ENVELOPE_HEADER_BYTES + MAX_REVISION_PLAINTEXT_BYTES + REVISION_TAG_BYTES;
 /// Current envelope version.
 pub const REVISION_ENVELOPE_VERSION: u16 = 1;
+
+fn selected_revision_nonce(counter: u64) -> [u8; REVISION_NONCE_BYTES] {
+    let mut result = [0; REVISION_NONCE_BYTES];
+    result[4..].copy_from_slice(&counter.to_be_bytes());
+    result
+}
 
 const ENVELOPE_MAGIC: [u8; 8] = *b"ELSREV01";
 const ALGORITHM_AES_256_GCM: u8 = 1;

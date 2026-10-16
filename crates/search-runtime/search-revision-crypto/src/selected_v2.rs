@@ -444,9 +444,7 @@ fn validate_content(
     Ok(())
 }
 fn nonce(counter: u64) -> [u8; REVISION_NONCE_BYTES] {
-    let mut result = [0; REVISION_NONCE_BYTES];
-    result[4..].copy_from_slice(&counter.to_be_bytes());
-    result
+    crate::selected_revision_nonce(counter)
 }
 fn validate_record(record: &[u8]) -> Result<(), SelectedRevisionErrorV2> {
     if record.is_empty() || record.len() > SELECTED_OWNER_RECORD_MAX_BYTES {
