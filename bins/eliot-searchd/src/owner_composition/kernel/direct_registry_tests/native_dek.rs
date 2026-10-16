@@ -155,8 +155,47 @@ fn native_dek_first_current_reopens_replays_without_config_and_cleans_exact_targ
     assert!(os::read_revision_dek(&binding, &mut CleanupContext::new()).unwrap().is_none());
 }
 
+fn reopen_deleted_retained_source(arguments: &[OsString], config: &crate::config_composition::EffectiveDaemonConfig) {
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let (request, selected) = NativeRootRequest::for_direct_registry(arguments,
+        DataRootOpenMode::OpenExistingMutating, deadline, Arc::new(AtomicBool::new(false)),
+        super::super::super::super::native_request::NativeRootLimits::for_source_retention()).unwrap();
+    let command = super::super::retention_command::NativeRetentionCommand::parse(&selected).unwrap();
+    let mut work = NativeWork::new();
+    let policy = super::super::super::super::direct_policy_v2::capture(
+        &request, &mut work, Path::new(&selected[4])).unwrap();
+    let hints = crate::config_composition::RootLocatorHints::from_config(config).unwrap();
+    let mut owner = DirectRegistryOwner::open_with_work(request, work).unwrap();
+    // This is a Native source-owner proof. Provider grant/IPC qualification is
+    // separate; the fixture does not expose a new command or mint permission.
+    owner.with_retention_source(&hints, Path::new(&selected[2]), &policy, &command,
+        |input, journal, publisher| {
+            assert!(input.body.is_none(), "deleted source must never be reacquired");
+            let profile = input.existing.profile.as_ref().unwrap();
+            let expected = search_contracts::SourceRevisionRef {
+                source_namespace_id: profile.source_namespace_id, source_id: profile.source_id,
+                revision_id: profile.revision_id, content_digest: profile.content_digest,
+                byte_length: profile.byte_length,
+            };
+            let work = |unit| input.native.work(unit);
+            let control = super::super::retention_control::NativeRetentionControl::bind(journal, publisher,
+                input.source, input.namespace, input.root, input.security, input.deadline, &work)
+                .map_err(|error| error.to_string())?;
+            let mut wrong = expected;
+            wrong.content_digest = search_contracts::Blake3Digest32::from_bytes([0x55; 32]);
+            assert!(control.load_retained_revision(&wrong, input.native.context()).is_err());
+            let plaintext = super::super::retained_reader::open_retained_revision(input.native,
+                &control, &expected, config)?;
+            assert_eq!(plaintext.as_bytes(), b"fn retained_native_fixture() {}\n");
+            drop(plaintext);
+            drop(control);
+            super::super::retention::consume_source(input, journal, publisher, config)
+        }).unwrap();
+    owner.finish().unwrap();
+}
+
 #[test]
-fn native_retained_source_commits_exact_object_and_replays_without_source_or_key_use() {
+fn native_retained_source_reopens_deleted_source_and_replays_without_key_use() {
     let s = Scratch::new(true);
     // Capture the exact target before any candidate write; cleanup precedes
     // Scratch teardown on success and every panic/error path.
@@ -203,6 +242,7 @@ fn native_retained_source_commits_exact_object_and_replays_without_source_or_key
     }
 
     fs::remove_file(&source).unwrap();
+    reopen_deleted_retained_source(&arguments, &config);
     assert!(owned.cleanup(), "exact owned candidate cleanup");
     assert!(os::read_revision_dek(&binding, &mut CleanupContext::new()).unwrap().is_none());
     fs::write(&s.config, config_bytes.replace("lease_ttl_ms=20000", "lease_ttl_ms=20001")).unwrap();
