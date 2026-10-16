@@ -58,6 +58,7 @@ impl RealDataPlane {
             .map_err(map_read_error)?;
         Ok(Self {
             client,
+            single_attempt: SingleAttemptTransport::new(endpoint)?,
             auth_lease,
             gate,
             limits,

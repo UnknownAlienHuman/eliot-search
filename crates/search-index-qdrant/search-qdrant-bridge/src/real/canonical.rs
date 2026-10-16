@@ -583,11 +583,12 @@ impl RealDataPlane {
             ..Default::default()
         };
         self.authorize_dispatch()?;
-        let created =
-            tokio::time::timeout(context.remaining()?, self.client.create_collection(create))
-                .await
-                .map_err(|_| BridgeError::MutationOutcomeUnknown)?
-                .map_err(super::map_create_error)?;
+        let created = tokio::time::timeout(
+            context.remaining()?,
+            self.canonical_create_once(create, context),
+        )
+        .await
+        .map_err(|_| BridgeError::MutationOutcomeUnknown)??;
         if !created.result {
             return Err(BridgeError::MutationOutcomeUnknown);
         }
@@ -597,18 +598,20 @@ impl RealDataPlane {
             self.authorize_dispatch().map_err(post_create_error)?;
             let indexed = tokio::time::timeout(
                 context.remaining_after_dispatch()?,
-                self.client.create_field_index(CreateFieldIndexCollection {
-                    collection_name: name.clone(),
-                    field_name: field.name.to_owned(),
-                    field_type: Some(vendor_field_type(field.kind) as i32),
-                    wait: Some(true),
-                    ordering: Some(super::strong_ordering()),
-                    ..Default::default()
-                }),
+                self.canonical_create_index_once(
+                    CreateFieldIndexCollection {
+                        collection_name: name.clone(),
+                        field_name: field.name.to_owned(),
+                        field_type: Some(vendor_field_type(field.kind) as i32),
+                        wait: Some(true),
+                        ordering: Some(super::strong_ordering()),
+                        ..Default::default()
+                    },
+                    context,
+                ),
             )
             .await
             .map_err(|_| BridgeError::MutationOutcomeUnknown)?
-            .map_err(super::map_create_error)
             .map_err(post_create_error)?;
             if !indexed
                 .result
@@ -623,15 +626,17 @@ impl RealDataPlane {
         self.authorize_dispatch().map_err(post_create_error)?;
         let hardened = tokio::time::timeout(
             context.remaining_after_dispatch()?,
-            self.client.update_collection(UpdateCollection {
-                collection_name: name.clone(),
-                strict_mode_config: Some(strict_mode_config(true)),
-                ..Default::default()
-            }),
+            self.canonical_update_once(
+                UpdateCollection {
+                    collection_name: name.clone(),
+                    strict_mode_config: Some(strict_mode_config(true)),
+                    ..Default::default()
+                },
+                context,
+            ),
         )
         .await
         .map_err(|_| BridgeError::MutationOutcomeUnknown)?
-        .map_err(super::map_create_error)
         .map_err(post_create_error)?;
         if !hardened.result {
             return Err(BridgeError::MutationOutcomeUnknown);

@@ -475,17 +475,19 @@ impl RealDataPlane {
         self.authorize_dispatch()?;
         let acknowledged = tokio::time::timeout(
             context.remaining()?,
-            self.client.upsert_points(UpsertPoints {
-                collection_name: admission.collection_name.clone(),
-                wait: Some(true),
-                ordering: Some(super::strong_ordering()),
-                points: vendor_points,
-                ..Default::default()
-            }),
+            self.canonical_upsert_once(
+                UpsertPoints {
+                    collection_name: admission.collection_name.clone(),
+                    wait: Some(true),
+                    ordering: Some(super::strong_ordering()),
+                    points: vendor_points,
+                    ..Default::default()
+                },
+                context,
+            ),
         )
         .await
-        .map_err(|_| BridgeError::MutationOutcomeUnknown)?
-        .map_err(super::map_mutation_error)?;
+        .map_err(|_| BridgeError::MutationOutcomeUnknown)??;
         if !acknowledged
             .result
             .as_ref()
@@ -576,27 +578,31 @@ impl RealDataPlane {
         self.authorize_dispatch()?;
         let acknowledged = tokio::time::timeout(
             context.remaining()?,
-            self.client.set_payload(SetPayloadPoints {
-                collection_name: admission.collection_name.clone(),
-                wait: Some(true),
-                payload,
-                points_selector: Some(PointsSelector {
-                    points_selector_one_of: Some(points_selector::PointsSelectorOneOf::Points(
-                        PointsIdsList {
-                            ids: closed_ordered
-                                .iter()
-                                .map(|input| canonical_vendor_point_id(input.identity.point_id()))
-                                .collect(),
-                        },
-                    )),
-                }),
-                ordering: Some(super::strong_ordering()),
-                ..Default::default()
-            }),
+            self.canonical_close_once(
+                SetPayloadPoints {
+                    collection_name: admission.collection_name.clone(),
+                    wait: Some(true),
+                    payload,
+                    points_selector: Some(PointsSelector {
+                        points_selector_one_of: Some(points_selector::PointsSelectorOneOf::Points(
+                            PointsIdsList {
+                                ids: closed_ordered
+                                    .iter()
+                                    .map(|input| {
+                                        canonical_vendor_point_id(input.identity.point_id())
+                                    })
+                                    .collect(),
+                            },
+                        )),
+                    }),
+                    ordering: Some(super::strong_ordering()),
+                    ..Default::default()
+                },
+                context,
+            ),
         )
         .await
-        .map_err(|_| BridgeError::MutationOutcomeUnknown)?
-        .map_err(super::map_mutation_error)?;
+        .map_err(|_| BridgeError::MutationOutcomeUnknown)??;
         if !acknowledged
             .result
             .as_ref()
@@ -661,23 +667,25 @@ impl RealDataPlane {
         self.authorize_dispatch()?;
         let acknowledged = tokio::time::timeout(
             context.remaining()?,
-            self.client.delete_points(DeletePoints {
-                collection_name: admission.collection_name.clone(),
-                wait: Some(true),
-                points: Some(PointsSelector {
-                    points_selector_one_of: Some(points_selector::PointsSelectorOneOf::Points(
-                        PointsIdsList {
-                            ids: ids.iter().copied().map(canonical_vendor_point_id).collect(),
-                        },
-                    )),
-                }),
-                ordering: Some(super::strong_ordering()),
-                ..Default::default()
-            }),
+            self.canonical_delete_once(
+                DeletePoints {
+                    collection_name: admission.collection_name.clone(),
+                    wait: Some(true),
+                    points: Some(PointsSelector {
+                        points_selector_one_of: Some(points_selector::PointsSelectorOneOf::Points(
+                            PointsIdsList {
+                                ids: ids.iter().copied().map(canonical_vendor_point_id).collect(),
+                            },
+                        )),
+                    }),
+                    ordering: Some(super::strong_ordering()),
+                    ..Default::default()
+                },
+                context,
+            ),
         )
         .await
-        .map_err(|_| BridgeError::MutationOutcomeUnknown)?
-        .map_err(super::map_mutation_error)?;
+        .map_err(|_| BridgeError::MutationOutcomeUnknown)??;
         if !acknowledged
             .result
             .as_ref()

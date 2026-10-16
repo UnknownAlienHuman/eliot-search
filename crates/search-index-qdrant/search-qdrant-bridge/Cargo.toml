@@ -26,6 +26,9 @@ sha2 = { version = "=0.10.9", default-features = false }
 # Async live-qualification path only (the pinned client is async-only):
 # multithreaded runtime handle plus timers. Macros stay test-only below.
 tokio = { version = "=1.53.1", features = ["rt-multi-thread", "time"] }
+# The SDK's high-level mutation helpers retry ambiguous RPCs. Use its generated
+# services directly through the same already-locked tonic transport instead.
+tonic = { version = "=0.14.6", default-features = false, features = ["channel"] }
 
 [dev-dependencies]
 # Live-probe test harness: #[tokio::test] support. Exact pin matching the

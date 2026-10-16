@@ -1442,6 +1442,7 @@ dependencies = [
  "search-ports",
  "sha2",
  "tokio",
+ "tonic",
 ]
 
 [[package]]

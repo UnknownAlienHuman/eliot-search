@@ -236,6 +236,7 @@ pub use canonical_mutation::{
 /// ledger for exact replay. There is no fallback to the in-memory oracle.
 pub struct RealDataPlane {
     client: Qdrant,
+    single_attempt: SingleAttemptTransport,
     auth_lease: QdrantApiKeyLease,
     gate: QualifiedGate,
     limits: BridgeLimits,
@@ -245,6 +246,7 @@ pub struct RealDataPlane {
 }
 
 include!("real/connect_schema.rs");
+include!("real/single_attempt.rs");
 mod mutations;
 include!("real/queries.rs");
 include!("real/ledger.rs");
