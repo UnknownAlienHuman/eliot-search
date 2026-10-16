@@ -356,6 +356,7 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
             check.check(Point::PlanRecord)?;
             if super::publication::port_reserved_key(key.as_bytes())
                 || crate::provider_authority::port_reserved_key(key.as_bytes())
+                || crate::revision_dek::reserved(key.as_bytes())
             {
                 return Err(ControlError::InvalidKey);
             }
