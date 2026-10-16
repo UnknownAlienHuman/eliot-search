@@ -1103,3 +1103,360 @@ fn source_v2_unknown_blocks_other_prepared_dispatch_and_exact_recovery_reuses_id
     assert_eq!(ids.allocations, allocated);
     assert_eq!(registry.sources().len(), 1);
 }
+
+fn assert_source_original_references(
+    registry: &SourceRegistry,
+    identity: &search_contracts::SourceIdentity,
+    policy_reference: &[u8],
+    admission_reference: &[u8],
+) {
+    let source = registry
+        .sources()
+        .get(identity)
+        .expect("retained source identity");
+    let admission = source
+        .permanent_admission()
+        .expect("restored permanent source admission");
+    assert_eq!(admission.policy_reference(), policy_reference);
+    assert_eq!(admission.admission_reference(), admission_reference);
+
+    let namespace = registry
+        .namespaces()
+        .get(&identity.source_namespace_id)
+        .expect("retained namespace identity");
+    assert_eq!(
+        namespace
+            .permanent_metadata()
+            .expect("restored v4 namespace metadata")
+            .policy_reference(),
+        policy_reference,
+    );
+}
+
+fn assert_permanent_membership_scope(
+    registry: &SourceRegistry,
+    member: &search_contracts::SourceMembership,
+    source_identity: &search_contracts::SourceIdentity,
+    policy_reference: &[u8],
+    admission_reference: &[u8],
+    lifecycle: search_source_registry::api::MembershipLifecycle,
+) {
+    let key = search_source_registry::api::MembershipKey {
+        corpus_id: OpaqueId::new(member.corpus_id.to_string()).expect("corpus key"),
+        source_identity: source_identity.clone(),
+    };
+    assert_eq!(
+        member.source_id, source_identity.source_id,
+        "the contract member uses the ID assigned by the source identity owner"
+    );
+    assert_eq!(
+        registry
+            .membership_key_by_id(member.source_membership_id)
+            .expect("reverse membership key"),
+        &key,
+        "the reverse index resolves the exact corpus and full source identity"
+    );
+    let record = registry
+        .memberships()
+        .get(&key)
+        .expect("membership stored under its scoped key");
+    assert_eq!(record.key(), &key);
+    assert_eq!(record.lifecycle(), lifecycle);
+    let permanent = record
+        .permanent_v2()
+        .expect("full typed permanent membership state");
+    assert_eq!(permanent.member(), member);
+    assert_eq!(permanent.provenance().source_identity(), source_identity);
+    assert_eq!(permanent.provenance().policy_reference(), policy_reference);
+    assert_eq!(
+        permanent.provenance().admission_reference(),
+        admission_reference
+    );
+}
+
+#[test]
+fn permanent_membership_v5_restores_replays_and_keeps_lifecycle_through_real_redb() {
+    let scratch = Scratch::new();
+    let context = context();
+    let (platform, capabilities) = platform();
+    let identity_profile = profile();
+    let retained_policy = policy(RuleEffect::Allow, 7);
+    let original = original(&retained_policy, "src/member.rs", 71);
+    let root_id = RootBindingId::from_bytes([13; 16]);
+    let mut source_request = request(
+        original.clone(),
+        root_id,
+        identity_profile,
+        1,
+        SourceNamespaceSelectionV2::CreateNew,
+        "src/member.rs",
+        71,
+        "semantic-membership-source",
+    );
+    // The immutable root predates this namespace owner epoch. The namespace
+    // selection below is taken back from the actual admitted source registry.
+    source_request.owner.epoch = OwnerEpoch::new(4).expect("namespace owner epoch");
+    let owner = source_request.owner.clone();
+    let policy_reference =
+        OriginalInputsLayoutV2::policy_reference(&retained_policy, &mut || Ok(()))
+            .expect("source policy reference");
+    let admission_reference =
+        OriginalInputsLayoutV2::admission_reference(&original, &mut || Ok(()))
+            .expect("source admission reference");
+    let work = |_: MigrationBootstrapWork| -> Result<(), OwnerError> { Ok(()) };
+    let operation_id = OpaqueId::new("semantic-membership-bind").expect("bind operation");
+    let mutation_digest = Blake3Digest32::from_bytes([55; 32]);
+    let bind_receipt = ReceiptRef::new("semantic-membership-bind-receipt").expect("bind receipt");
+
+    let (
+        member,
+        source_identity,
+        namespace_selection,
+        source_revision,
+        first_bind,
+        restricted_member,
+        restricted_snapshot,
+    ) = {
+        let mut journal = super::journal(&scratch, &context);
+        let mut publisher = search_control_redb::ControlSnapshotPublisher::new();
+        let mut registry =
+            SourceRegistry::new(search_source_registry::api::DEFAULT_REGISTRY_LIMITS)
+                .expect("registry");
+        let mut ids = CounterIds::new(1);
+        let mut port = bind_v4(
+            &mut journal,
+            &mut publisher,
+            &work,
+            platform.clone(),
+            capabilities.clone(),
+        );
+
+        register_source_root(&mut registry, &mut port, &context, &original);
+        let prepared_source = prepared(
+            &mut registry,
+            &source_request,
+            &mut ids,
+            &mut port,
+            &context,
+        );
+        let mut source_probe = || Ok::<_, CheckpointFailureV2>(());
+        commit_source_admission_v2(
+            &mut registry,
+            &prepared_source,
+            &mut port,
+            &context,
+            &mut source_probe,
+        )
+        .expect("actual C03 source admission through C02");
+
+        let source_identity = registry
+            .sources()
+            .keys()
+            .next()
+            .expect("C04-assigned source identity")
+            .clone();
+        let source_revision = registry
+            .sources()
+            .get(&source_identity)
+            .expect("admitted source")
+            .source_revision();
+        let namespace = registry
+            .namespaces()
+            .get(&source_identity.source_namespace_id)
+            .expect("source-owned namespace");
+        assert_eq!(
+            registry.root(root_id).expect("registered root").owner_epoch,
+            OwnerEpoch::new(1).expect("earlier root epoch")
+        );
+        assert_eq!(namespace.ownership.owner_epoch, owner.epoch);
+        let namespace_selection = SourceNamespaceSelectionV2::Existing {
+            id: namespace.ownership.source_namespace_id,
+            revision: namespace.ownership.ownership_record_revision,
+            generation: namespace.ownership.source_owner_generation,
+        };
+
+        let member = search_contracts::SourceMembership {
+            source_membership_id: search_contracts::SourceMembershipId::from_bytes([50; 16]),
+            corpus_id: search_contracts::CorpusId::from_bytes([51; 16]),
+            source_id: source_identity.source_id,
+            workspace_id: search_contracts::WorkspaceId::from_bytes([52; 16]),
+            role: search_contracts::MembershipRole::Documentation,
+            preparation_profile_id: search_contracts::ProfileId::new("profile:prepared-text-v2")
+                .expect("preparation profile"),
+            access_policy_binding_id: search_contracts::AccessPolicyBindingId::from_bytes([53; 16]),
+            retention_policy_id: search_contracts::ProfileId::new("profile:retention-v2")
+                .expect("retention profile"),
+            residency_policy_binding_id: search_contracts::ResidencyPolicyBindingId::from_bytes(
+                [54; 16],
+            ),
+            membership_revision: search_contracts::MembershipRevision::new(1),
+        };
+        let first_bind = search_source_registry::api::bind_source_membership_v2(
+            &mut registry,
+            &member,
+            root_id,
+            NonZeroRevision::new(1).expect("root record revision"),
+            namespace_selection.clone(),
+            &owner,
+            source_revision,
+            &operation_id,
+            mutation_digest,
+            &bind_receipt,
+            &mut port,
+            &context,
+        )
+        .expect("permanent membership C02 commit and v5 adapter readback");
+        assert!(!first_bind.replayed);
+        assert_eq!(first_bind.registry_revision, registry.revision());
+        assert_permanent_membership_scope(
+            &registry,
+            &member,
+            &source_identity,
+            &policy_reference,
+            &admission_reference,
+            search_source_registry::api::MembershipLifecycle::Active,
+        );
+
+        let bound_snapshot = search_source_registry::api::registry_snapshot(&registry);
+        let mut restored = port
+            .restore(&context)
+            .unwrap_or_else(|error| {
+                panic!("exact mixed-profile C02 restore: {:?}", error.reason())
+            })
+            .into_registry();
+        assert_eq!(
+            search_source_registry::api::registry_snapshot(&restored),
+            bound_snapshot,
+            "v5 membership, v4 source/namespace and prior history restore exactly"
+        );
+        assert_source_original_references(
+            &restored,
+            &source_identity,
+            &policy_reference,
+            &admission_reference,
+        );
+        assert_permanent_membership_scope(
+            &restored,
+            &member,
+            &source_identity,
+            &policy_reference,
+            &admission_reference,
+            search_source_registry::api::MembershipLifecycle::Active,
+        );
+        let (active_member, active_identity) =
+            search_source_registry::api::active_source_membership_v2(
+                &restored,
+                member.source_membership_id,
+            )
+            .expect("active membership is bound to the restored source identity");
+        assert_eq!(active_member, &member);
+        assert_eq!(active_identity, &source_identity);
+
+        let restriction = search_source_registry::api::transition_source_membership_v2(
+            &mut restored,
+            member.source_membership_id,
+            member.membership_revision,
+            search_source_registry::api::MembershipCommand::Restrict,
+            &OpaqueId::new("semantic-membership-restrict").expect("restrict operation"),
+            Blake3Digest32::from_bytes([56; 32]),
+            &ReceiptRef::new("semantic-membership-restrict-receipt").expect("restrict receipt"),
+            &mut port,
+            &context,
+        )
+        .expect("membership lifecycle C02 commit and v5 readback");
+        assert!(!restriction.replayed);
+        assert_eq!(
+            restriction.member.membership_revision,
+            search_contracts::MembershipRevision::new(2)
+        );
+        assert_permanent_membership_scope(
+            &restored,
+            &restriction.member,
+            &source_identity,
+            &policy_reference,
+            &admission_reference,
+            search_source_registry::api::MembershipLifecycle::Restricted,
+        );
+        let restricted_snapshot = search_source_registry::api::registry_snapshot(&restored);
+        (
+            member,
+            source_identity,
+            namespace_selection,
+            source_revision,
+            first_bind,
+            restriction.member,
+            restricted_snapshot,
+        )
+    };
+
+    let mut reopened = search_control_redb::PersistentControlJournal::open(
+        scratch.file(false),
+        super::identity(),
+        search_control_redb::JournalLimits::BASELINE,
+    )
+    .expect("reopen actual redb journal");
+    let mut reopened_publisher = search_control_redb::ControlSnapshotPublisher::new();
+    let mut port = bind_v4(
+        &mut reopened,
+        &mut reopened_publisher,
+        &work,
+        platform,
+        capabilities,
+    );
+    let mut restored = port
+        .restore(&context)
+        .expect("exact v5 lifecycle restore with v4 originals")
+        .into_registry();
+    assert_eq!(
+        search_source_registry::api::registry_snapshot(&restored),
+        restricted_snapshot
+    );
+    assert_source_original_references(
+        &restored,
+        &source_identity,
+        &policy_reference,
+        &admission_reference,
+    );
+    assert_permanent_membership_scope(
+        &restored,
+        &restricted_member,
+        &source_identity,
+        &policy_reference,
+        &admission_reference,
+        search_source_registry::api::MembershipLifecycle::Restricted,
+    );
+
+    let replay = search_source_registry::api::bind_source_membership_v2(
+        &mut restored,
+        &member,
+        root_id,
+        NonZeroRevision::new(1).expect("root record revision"),
+        namespace_selection,
+        &owner,
+        source_revision,
+        &operation_id,
+        mutation_digest,
+        &bind_receipt,
+        &mut port,
+        &context,
+    )
+    .expect("durable original bind replay precedes duplicate-membership checks");
+    assert!(replay.replayed);
+    assert_eq!(replay.member, first_bind.member);
+    assert_eq!(replay.registry_revision, first_bind.registry_revision);
+    assert_eq!(replay.operation_id, first_bind.operation_id);
+    assert_eq!(replay.receipt, first_bind.receipt);
+    assert_eq!(
+        search_source_registry::api::registry_snapshot(&restored),
+        restricted_snapshot,
+        "historical bind replay cannot reactivate the restricted membership"
+    );
+    assert_permanent_membership_scope(
+        &restored,
+        &restricted_member,
+        &source_identity,
+        &policy_reference,
+        &admission_reference,
+        search_source_registry::api::MembershipLifecycle::Restricted,
+    );
+}
