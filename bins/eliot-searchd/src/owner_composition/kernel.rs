@@ -63,3 +63,14 @@ pub use initialization::InitializingDataRoot;
 pub use initialization::initialize_new;
 pub use initialization::initialize_direct;
 pub use native_admission::direct_registry::maybe_run as maybe_run_direct_registry;
+
+#[cfg(all(test, windows))]
+pub(crate) fn fixture_initialization_namespace(root: &std::path::Path) -> Result<Option<[u8; 32]>, &'static str> {
+    let bytes = match std::fs::read(root.join(initialization_journal::JOURNAL_FILE)) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err("fixture-journal-unavailable"),
+    };
+    initialization_journal::fixture_subject_namespace(&bytes)
+        .map(Some).map_err(|_| "fixture-journal-invalid")
+}

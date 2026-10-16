@@ -6,7 +6,7 @@ use crate::direct_store::migration_context::{MigrationContext, NativeMigrationIn
 use crate::owner_composition::{
     NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing, initialize_new,
 };
-use crate::revision_protection::RevisionProtector;
+use crate::revision_protection::{RevisionProtector, TestCredentialGuard};
 use search_runtime_owner::DataRootOpenMode;
 use search_runtime_owner::OwnerError;
 use std::cell::Cell;
@@ -27,6 +27,7 @@ struct MainFixture {
     root: PathBuf,
     output: PathBuf,
     namespace: Option<[u8; 32]>,
+    credentials: Option<TestCredentialGuard>,
 }
 
 impl MainFixture {
@@ -47,6 +48,7 @@ impl MainFixture {
             root,
             output,
             namespace: None,
+            credentials: None,
         };
         for path in [&fixture.root, &fixture.output, &sources] {
             fs::create_dir(path).unwrap();
@@ -64,11 +66,8 @@ impl MainFixture {
         )
         .unwrap();
         let mut terminal = Vec::new();
-        initialize_new(request)
-            .unwrap()
-            .emit(&mut terminal)
-            .unwrap();
-        assert_eq!(terminal, b"{\"initialized\":true,\"replayed\":false}\n");
+        fixture.credentials = Some(TestCredentialGuard::for_native_data_root(&fixture.root));
+        let initialized = initialize_new(request).unwrap();
         fixture.namespace = Some(
             sha256::decode_digest(
                 fs::read_to_string(fixture.root.join("control/namespace.id"))
@@ -77,6 +76,9 @@ impl MainFixture {
             )
             .unwrap(),
         );
+        assert_eq!(fixture.credentials.as_ref().unwrap().capture_native_namespace().unwrap(), fixture.namespace);
+        initialized.emit(&mut terminal).unwrap();
+        assert_eq!(terminal, b"{\"initialized\":true,\"replayed\":false}\n");
         let registration =
             search_source_registry::encode_legacy_source_root_catalog([sources.to_str().unwrap()])
                 .unwrap();
@@ -109,10 +111,15 @@ impl MainFixture {
 
 impl Drop for MainFixture {
     fn drop(&mut self) {
-        // Retain failed evidence/credentials; cleanup is only for this exact owned fixture.
+        // Always clean the captured credential; retain failed filesystem evidence.
+        let cleaned = self
+            .credentials
+            .as_ref()
+            .is_none_or(TestCredentialGuard::cleanup_captured);
         if std::thread::panicking() {
             return;
         }
+        assert!(cleaned, "exact fixture credential cleanup failed; artifacts retained");
         let current = fs::canonicalize(&self.base).unwrap();
         assert_eq!(current, self.base);
         assert_eq!(
@@ -127,10 +134,6 @@ impl Drop for MainFixture {
                 .unwrap()
                 .starts_with(PREFIX)
         );
-        if let Some(namespace) = &self.namespace {
-            search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(namespace)
-                .unwrap();
-        }
         fs::remove_dir_all(&current).unwrap();
     }
 }

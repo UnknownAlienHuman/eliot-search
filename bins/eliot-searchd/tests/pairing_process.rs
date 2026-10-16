@@ -614,7 +614,8 @@ mod native {
     use search_contracts::OpaqueId;
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::Arc;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     const CRED_TYPE_GENERIC: u32 = 1;
@@ -781,19 +782,23 @@ mod native {
     }
 
     /// Test-local OS vault: real Credential Manager entries under a unique
-    /// per-run tag. `Send` by construction (only owned strings and counters).
+    /// per-run tag. Owned data and the atomic cleanup flag remain `Send`.
     pub struct NativePairingVault {
         tag: String,
         created: Vec<String>,
         draws: u64,
+        cleanup_failed: Arc<AtomicBool>,
+        failure_manifest: PathBuf,
     }
 
     impl NativePairingVault {
-        pub const fn new(tag: String) -> Self {
+        fn new(scratch: &NativeScratch) -> Self {
             Self {
-                tag,
+                tag: scratch.tag.clone(),
                 created: Vec::new(),
                 draws: 0,
+                cleanup_failed: Arc::clone(&scratch.cleanup_failed),
+                failure_manifest: scratch.base.join("unresolved-pairing-targets.txt"),
             }
         }
         fn target_for(&self, id: &OpaqueId) -> String {
@@ -893,16 +898,22 @@ mod native {
             false
         }
 
-        /// Deletes every entry this vault created, verifying absence.
-        /// Best-effort and never panics; reports unverified targets.
+        /// Deletes every exact target this vault may have written, verifying absence.
+        /// Unverified targets remain tracked and retain their owned disk evidence.
         pub fn cleanup(&mut self) {
-            let targets = core::mem::take(&mut self.created);
-            for target in &targets {
-                if !Self::delete_entry_best_effort(target) {
-                    eprintln!(
-                        "ELIOT_TEST_CLEANUP: pairing credential still present: target={target}"
-                    );
+            self.cleanup_with(Self::delete_entry_best_effort);
+        }
+
+        fn cleanup_with(&mut self, mut delete: impl FnMut(&str) -> bool) {
+            self.created.retain(|target| !delete(target));
+            if !self.created.is_empty() {
+                self.cleanup_failed.store(true, Ordering::Release);
+                if fs::write(&self.failure_manifest, self.created.join("\n")).is_err() {
+                    let _ = std::io::Write::write_all(&mut std::io::stderr(),
+                        b"ELIOT_TEST_CLEANUP: unresolved target manifest write failed\n");
                 }
+                let _ = std::io::Write::write_all(&mut std::io::stderr(),
+                    b"ELIOT_TEST_CLEANUP: pairing credential unresolved; disk retained\n");
             }
         }
 
@@ -913,7 +924,9 @@ mod native {
 
     impl Drop for NativePairingVault {
         fn drop(&mut self) {
-            self.cleanup();
+            if !self.cleanup_failed.load(Ordering::Acquire) { self.cleanup(); }
+            assert!(self.created.is_empty() || std::thread::panicking(),
+                "exact pairing credential cleanup unresolved; disk retained");
         }
     }
 
@@ -952,6 +965,9 @@ mod native {
             key: &[u8; 32],
         ) -> Result<VaultWriteEvidence, SecretCompositionError> {
             let target = self.target_for(id);
+            // Register the exact per-run test target before any write attempt:
+            // Drop must also cover failed writes and failed/mismatched readback.
+            self.track(&target);
             // Bounded write+verify: a content mismatch fails closed
             // immediately and is never papered over by another attempt.
             let mut last = SecretCompositionError::VaultWriteFailed;
@@ -968,7 +984,6 @@ mod native {
                             if mismatch != 0 {
                                 return Err(SecretCompositionError::ReadbackMismatch);
                             }
-                            self.track(&target);
                             let digest = Blake3Digest32::from_bytes(*blake3::hash(key).as_bytes());
                             return Ok(VaultWriteEvidence {
                                 blob_digest: digest,
@@ -1017,6 +1032,7 @@ mod native {
         base: PathBuf,
         tree: common::RevisionKeyTreeGuard,
         tag: String,
+        cleanup_failed: Arc<AtomicBool>,
     }
 
     impl NativeScratch {
@@ -1025,7 +1041,7 @@ mod native {
             let base = std::env::temp_dir().join(format!("eliot-pairing-{tag}"));
             fs::create_dir_all(&base).expect("scratch");
             let tree = common::RevisionKeyTreeGuard::for_tree(&base);
-            Self { base, tree, tag }
+            Self { base, tree, tag, cleanup_failed: Arc::new(AtomicBool::new(false)) }
         }
 
         fn cmdkey_hits_for_tag(&self) -> usize {
@@ -1044,6 +1060,7 @@ mod native {
     impl Drop for NativeScratch {
         fn drop(&mut self) {
             self.tree.cleanup();
+            if self.cleanup_failed.load(Ordering::Acquire) || std::thread::panicking() { return; }
             let base = self.base.clone();
             let _ = fs::remove_dir_all(&base);
         }
@@ -1052,11 +1069,30 @@ mod native {
     const NOW_TICKS: u64 = super::NOW_TICKS;
 
     #[test]
+    fn unverified_cleanup_preserves_exact_targets_and_scratch_without_vault_calls() {
+        let scratch = NativeScratch::new();
+        let base = scratch.base.clone();
+        let mut vault = NativePairingVault::new(&scratch);
+        let target = vault.target_for(&OpaqueId::new("cleanup-fault-fixture").unwrap());
+        vault.track(&target);
+        vault.cleanup_with(|_| false);
+        assert_eq!(vault.created_targets(), &[target.clone()]);
+        assert_eq!(fs::read_to_string(&vault.failure_manifest).unwrap(), target);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(vault)));
+        let panic = outcome.expect_err("normal unresolved cleanup must fail the test");
+        assert_eq!(panic.downcast_ref::<&str>().copied(),
+            Some("exact pairing credential cleanup unresolved; disk retained"));
+        drop(scratch);
+        assert!(base.exists());
+        assert_eq!(fs::read_to_string(base.join("unresolved-pairing-targets.txt")).unwrap(), target);
+    }
+
+    #[test]
     fn native_credential_lifecycle_with_cleanup_leaves_nothing_behind() {
         let scratch = NativeScratch::new();
         // Pre-run hygiene: no stale entry may carry our fresh unique tag.
         assert_eq!(scratch.cmdkey_hits_for_tag(), 0, "fresh tag must be absent");
-        let mut vault = NativePairingVault::new(scratch.tag.clone());
+        let mut vault = NativePairingVault::new(&scratch);
         assert!(vault.is_os_backed());
         let mut composer = PairingSecretComposer::new(test_binding()).expect("composer");
         // Provision through the real vault.
@@ -1131,7 +1167,7 @@ mod native {
     #[test]
     fn native_vault_loss_is_detected_not_relabelled() {
         let scratch = NativeScratch::new();
-        let mut vault = NativePairingVault::new(scratch.tag.clone());
+        let mut vault = NativePairingVault::new(&scratch);
         let mut composer = PairingSecretComposer::new(test_binding()).expect("composer");
         composer
             .provision(

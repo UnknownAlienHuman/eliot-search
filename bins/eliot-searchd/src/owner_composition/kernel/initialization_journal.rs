@@ -373,6 +373,17 @@ pub(super) fn decode_journal(
     })
 }
 
+// Test cleanup needs the validated immutable subject even when initialization
+// failed while appending its completion. Production journal decoding stays strict.
+#[cfg(all(test, windows))]
+pub(super) fn fixture_subject_namespace(bytes: &[u8]) -> Result<[u8; 32], OwnerError> {
+    if bytes.len() > MAX_JOURNAL || !bytes.starts_with(MAGIC) { return Err(quarantine()); }
+    let mut remaining = &bytes[MAGIC.len()..];
+    let subject = InitializationSubject::decode(take_frame(&mut remaining, MAX_BODY)?)?;
+    subject.validate(&mut |_| Ok(()))?;
+    Ok(subject.namespace)
+}
+
 pub(super) fn initialization_namespace(
     initialization: [u8; 16],
     installation: [u8; 16],

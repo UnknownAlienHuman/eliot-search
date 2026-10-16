@@ -423,6 +423,7 @@ impl LegacyRevisionObjectContext for &MigrationContext<'_, '_> {
 #[cfg(all(test, windows))]
 mod object_progress_tests {
     use super::*;
+    use crate::revision_protection::TestCredentialGuard;
     use std::cell::Cell;
     use std::fs;
 
@@ -448,13 +449,16 @@ mod object_progress_tests {
         let limits = || NativeRootLimits::new([256, 256 * 1024, 512 * 1024,
             1024 * 1024 * 1024, 16384, 256]).unwrap();
         let deadline = Instant::now() + Duration::from_secs(120);
-        initialize_new(NativeRootRequest::new(DataRootOpenMode::InitializeNew,
+        let credentials = TestCredentialGuard::for_native_data_root(&root);
+        let initialized = initialize_new(NativeRootRequest::new(DataRootOpenMode::InitializeNew,
             &[OsString::from("--initialize-data-root"), root.as_os_str().to_owned(),
                 OsString::from("02690269026902690269026902690269")],
             deadline, Arc::new(AtomicBool::new(false)), limits()).unwrap())
-            .unwrap().emit(&mut Vec::new()).unwrap();
+            .unwrap();
         let namespace = crate::sha256::decode_digest(
             fs::read_to_string(root.join("control/namespace.id")).unwrap().trim()).unwrap();
+        assert_eq!(credentials.capture_native_namespace().unwrap(), Some(namespace));
+        initialized.emit(&mut Vec::new()).unwrap();
         let registration = search_source_registry::encode_legacy_source_root_catalog(
             [sources.to_str().unwrap()]).unwrap();
         {
@@ -534,7 +538,7 @@ mod object_progress_tests {
         assert_eq!(fs::read_dir(&output).unwrap().count(), 0);
         assert!(!root.join("control/source-roots.tmp").exists());
         assert!(!cancelled.load(Ordering::Acquire));
-        search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&namespace).unwrap();
+        assert!(credentials.cleanup_captured(), "exact fixture credential cleanup failed; artifacts retained");
         let current = fs::canonicalize(&base).unwrap();
         assert_eq!(current, base);
         assert_eq!(current.parent(), Some(temp.as_path()));
@@ -563,13 +567,16 @@ mod object_progress_tests {
         let limits = || NativeRootLimits::new([256, 256 * 1024, 512 * 1024,
             1024 * 1024 * 1024, 16384, 256]).unwrap();
         let deadline = Instant::now() + Duration::from_secs(120);
-        initialize_new(NativeRootRequest::new(DataRootOpenMode::InitializeNew,
+        let credentials = TestCredentialGuard::for_native_data_root(&root);
+        let initialized = initialize_new(NativeRootRequest::new(DataRootOpenMode::InitializeNew,
             &[OsString::from("--initialize-data-root"), root.as_os_str().to_owned(),
                 OsString::from("02690269026902690269026902690269")],
             deadline, Arc::new(AtomicBool::new(false)), limits()).unwrap())
-            .unwrap().emit(&mut Vec::new()).unwrap();
+            .unwrap();
         let before = fs::read(root.join("control/namespace.id")).unwrap();
         let namespace = crate::sha256::decode_digest(std::str::from_utf8(&before).unwrap().trim()).unwrap();
+        assert_eq!(credentials.capture_native_namespace().unwrap(), Some(namespace));
+        initialized.emit(&mut Vec::new()).unwrap();
         let cancelled = Arc::new(AtomicBool::new(false));
         let (request, _) = NativeRootRequest::for_source_control_migration(
             &[OsString::from("--stage-source-control-migration"),
@@ -606,7 +613,7 @@ mod object_progress_tests {
         assert_eq!(outcome, Err(OwnerError::OwnerCancelledBeforeMutation.code().to_owned()));
         assert_eq!(fs::read(root.join("control/namespace.id")).unwrap(), before);
         assert_eq!(fs::read_dir(&output).unwrap().count(), 0);
-        search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&namespace).unwrap();
+        assert!(credentials.cleanup_captured(), "exact fixture credential cleanup failed; artifacts retained");
         let current = fs::canonicalize(&base).unwrap();
         assert_eq!(current, base);
         assert_eq!(current.parent(), Some(temp.as_path()));

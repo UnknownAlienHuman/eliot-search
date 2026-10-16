@@ -1,5 +1,5 @@
 //! Native initializer cases authored for Q215; NOT_COMPILED/NOT_RUN.
-//! Qualification owns retained temporary roots and credentials; no blind key deletion.
+//! Retain disk evidence; delete only each fixture's captured original credential.
 
 use super::super::native_admission::{NativeRootAdmission, admit_existing};
 use super::super::native_request::NativeRootLimits;
@@ -13,6 +13,51 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 type Trace = Rc<RefCell<Vec<(&'static str, [usize; 4], usize)>>>;
 type Credentials = Rc<RefCell<Vec<(bool, Instant, usize)>>>;
+
+use crate::revision_protection::TestCredentialGuard as FixtureCredentialGuard;
+
+#[test]
+fn native_fixture_credential_cleanup_survives_unwind_and_corrupt_metadata() {
+    let root = scratch();
+    let namespace = std::cell::Cell::new(None);
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let guard = FixtureCredentialGuard::for_native_data_root(&root);
+        assert_eq!(run(&root, [0x21; 16], 1024 * 1024 * 1024).0, Ok(()));
+        namespace.set(guard.capture_native_namespace().unwrap());
+        assert!(namespace.get().is_some());
+        fs::write(root.join("control/namespace.id"), b"corrupt test namespace").unwrap();
+        fs::write(root.join(JOURNAL_FILE), b"corrupt test journal").unwrap();
+        panic!("owned fixture unwind");
+    }));
+    let panic = outcome.expect_err("deliberate fixture unwind");
+    assert_eq!(panic.downcast_ref::<&str>().copied(), Some("owned fixture unwind"));
+    assert_eq!(fs::read(root.join("control/namespace.id")).unwrap(), b"corrupt test namespace");
+    assert_eq!(fs::read(root.join(JOURNAL_FILE)).unwrap(), b"corrupt test journal");
+    let namespace = namespace.get().expect("original captured before corruption");
+    let existing = search_os_secrets_windows::load_existing_legacy_revision_root_secret_with_context(
+        &namespace, Instant::now() + Duration::from_secs(30), &AtomicBool::new(false)).unwrap();
+    assert!(existing.is_none(), "exact owned credential survived unwind");
+    assert!(root.join(JOURNAL_FILE).exists(), "failed disk evidence retained");
+}
+
+#[test]
+fn native_fixture_credential_cleanup_reads_original_before_torn_completion() {
+    let root = scratch();
+    let guard = FixtureCredentialGuard::for_native_data_root(&root);
+    assert_eq!(run(&root, [0x22; 16], 1024 * 1024 * 1024).0, Ok(()));
+    let journal = decode_journal(&fs::read(root.join(JOURNAL_FILE)).unwrap(), &mut |_| Ok(())).unwrap();
+    let namespace = journal.subject.namespace;
+    let mut torn = journal.subject.frame().unwrap();
+    torn.extend_from_slice(&[1, 0, 0]);
+    assert!(decode_journal(&torn, &mut |_| Ok(())).is_err());
+    fs::write(root.join(JOURNAL_FILE), &torn).unwrap();
+    // No capture call: Drop must recover the original before the torn seal.
+    drop(guard);
+    let existing = search_os_secrets_windows::load_existing_legacy_revision_root_secret_with_context(
+        &namespace, Instant::now() + Duration::from_secs(30), &AtomicBool::new(false)).unwrap();
+    assert!(existing.is_none(), "exact owned credential survived torn completion");
+    assert_eq!(fs::read(root.join(JOURNAL_FILE)).unwrap(), torn);
+}
 
 fn scratch() -> PathBuf {
     let stamp = SystemTime::now()
@@ -117,7 +162,9 @@ fn inventory(root: &std::path::Path) -> Vec<(PathBuf, Vec<u8>)> {
 #[test]
 fn complete_secure_initialization_and_terminal_use_one_cumulative_meter() {
     let root = scratch();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     let (result, trace, credentials, output) = run(&root, [1; 16], 1024 * 1024 * 1024);
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace").is_some());
     assert_eq!(result, Ok(()));
     assert_eq!(output, b"{\"initialized\":true,\"replayed\":false}\n");
     assert_eq!(credentials.borrow().iter().filter(|row| row.0).count(), 1);
@@ -180,7 +227,9 @@ fn historical_replay_keeps_appended_catalog_and_later_released_epoch() {
         }
     }
     let root = scratch();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     assert_eq!(run(&root, [2; 16], 1024 * 1024 * 1024).0, Ok(()));
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace").is_some());
     let journal_before = fs::read(root.join(JOURNAL_FILE)).unwrap();
     let prior = decode_journal(&journal_before, &mut |_| Ok(()))
         .unwrap()
@@ -267,7 +316,9 @@ fn historical_replay_keeps_appended_catalog_and_later_released_epoch() {
 #[test]
 fn missing_component_and_conflicting_request_do_not_recreate_layout() {
     let root = scratch();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     assert_eq!(run(&root, [3; 16], 1024 * 1024 * 1024).0, Ok(()));
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace before removal").is_some());
     let before = inventory(&root);
     let (result, _, credentials, output) = run(&root, [4; 16], 1024 * 1024 * 1024);
     assert_eq!(result, Err(OwnerError::OwnerOperationConflict));
@@ -286,6 +337,7 @@ fn missing_component_and_conflicting_request_do_not_recreate_layout() {
 fn retained_native_handles_deny_writes_rename_and_journal_deletion() {
     use std::os::windows::fs::OpenOptionsExt;
     let root = scratch();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     let req = request(
         &root,
         [5; 16],
@@ -294,6 +346,7 @@ fn retained_native_handles_deny_writes_rename_and_journal_deletion() {
         1024 * 1024 * 1024,
     );
     let result = initialize_new(req).unwrap();
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace").is_some());
     for path in [&root, &root.join("control"), &root.join("revisions")] {
         let error = OpenOptions::new()
             .read(true)
@@ -380,6 +433,7 @@ fn foreign_entry_before_journal_reservation_refuses_without_effects() {
 fn terminal_drop_and_failure_release_children_before_both_exclusions() {
     for kind in 0..3 {
         let root = scratch();
+        let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
         let observed = Rc::new(RefCell::new(Vec::new()));
         let witness = Rc::clone(&observed);
         let path = root.clone();
@@ -415,6 +469,7 @@ fn terminal_drop_and_failure_release_children_before_both_exclusions() {
             1024 * 1024 * 1024,
         );
         let result = initialize_with_work(req, work);
+        assert!(credential_guard.capture_native_namespace().expect("original fixture namespace").is_some());
         if kind == 0 {
             result.unwrap().emit(&mut Vec::new()).unwrap();
         } else if kind == 1 {
@@ -438,6 +493,7 @@ fn terminal_drop_and_failure_release_children_before_both_exclusions() {
 #[test]
 fn credential_dispatch_preserves_original_context_and_is_never_repeated() {
     let root = scratch();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     let deadline = Instant::now() + Duration::from_secs(120);
     let flag = Arc::new(AtomicBool::new(false));
     let trace = Rc::new(RefCell::new(Vec::new()));
@@ -460,6 +516,7 @@ fn credential_dispatch_preserves_original_context_and_is_never_repeated() {
         initialize_with_work(req, work),
         Err(OwnerError::OwnerAcquireOutcomeUnknown)
     ));
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace after credential dispatch").is_some());
     assert_eq!(
         credentials.borrow().as_slice(),
         &[(true, deadline, Arc::as_ptr(&flag) as usize)]
@@ -476,7 +533,9 @@ fn credential_dispatch_preserves_original_context_and_is_never_repeated() {
 fn body_only_torn_seal_and_changed_selected_key_are_refused_without_repair() {
     for kind in 0..3 {
         let root = scratch();
+        let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
         assert_eq!(run(&root, [8; 16], 1024 * 1024 * 1024).0, Ok(()));
+        assert!(credential_guard.capture_native_namespace().expect("original fixture namespace before corruption").is_some());
         let path = root.join(JOURNAL_FILE);
         let bytes = fs::read(&path).unwrap();
         let journal = decode_journal(&bytes, &mut |_| Ok(())).unwrap();
@@ -506,11 +565,15 @@ fn body_only_torn_seal_and_changed_selected_key_are_refused_without_repair() {
 #[test]
 fn terminal_reservation_refusal_distinguishes_prior_durable_effect_and_readonly_replay() {
     let control = scratch();
+    let control_credential = FixtureCredentialGuard::for_native_data_root(&control);
     let (result, trace, _, _) = run(&control, [9; 16], 1024 * 1024 * 1024);
+    assert!(control_credential.capture_native_namespace().expect("original control fixture namespace").is_some());
     assert_eq!(result, Ok(()));
     let ceiling = terminal_io_ceiling(&trace);
     let root = scratch();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     let (result, trace, _, output) = run(&root, [9; 16], ceiling);
+    assert!(credential_guard.capture_native_namespace().expect("original terminal-refusal fixture namespace").is_some());
     assert_eq!(result, Err(OwnerError::OwnerReleaseOutcomeUnknown));
     assert!(output.is_empty());
     assert!(

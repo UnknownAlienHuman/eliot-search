@@ -6,6 +6,9 @@ use std::ffi::OsString;
 use std::io::Write;
 use std::time::Duration;
 
+#[cfg(windows)]
+use crate::revision_protection::TestCredentialGuard as FixtureCredentialGuard;
+
 fn request(io: usize, calls: usize, flag: Arc<AtomicBool>) -> NativeRootRequest {
     NativeRootRequest::new(
         DataRootOpenMode::InspectExistingReadOnly,
@@ -83,6 +86,7 @@ fn native_service_keeps_read_custody_and_original_shutdown_through_release() {
     ));
     std::fs::create_dir(&root).unwrap();
     let root = std::fs::canonicalize(root).unwrap();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     let limits = request(1024 * 1024 * 1024, 16384, Arc::new(AtomicBool::new(false))).limits;
     let init = NativeRootRequest::new(
         DataRootOpenMode::InitializeNew,
@@ -97,6 +101,7 @@ fn native_service_keeps_read_custody_and_original_shutdown_through_release() {
     )
     .unwrap();
     initialize_new(init).unwrap().emit(&mut Vec::new()).unwrap();
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace").is_some());
     let startup_flag = Arc::new(AtomicBool::new(false));
     let req = NativeRootRequest::for_service(
         &[
@@ -198,7 +203,7 @@ fn native_service_keeps_read_custody_and_original_shutdown_through_release() {
     .map(|name| std::fs::read(root.join(name)).unwrap())
     .into();
     assert_eq!(before, after);
-    // Qualification retains this root and its credential; no blind deletion.
+    // Retain disk evidence; the guard deletes only this root's original credential.
 }
 
 #[derive(Default)]
@@ -364,6 +369,7 @@ fn one_shot_output_keeps_original_context_closes_children_and_preserves_owner_sl
     ));
     std::fs::create_dir(&root).unwrap();
     let root = std::fs::canonicalize(root).unwrap();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     let limits = request(1024 * 1024 * 1024, 16384, Arc::new(AtomicBool::new(false))).limits;
     let init = NativeRootRequest::new(
         DataRootOpenMode::InitializeNew,
@@ -378,6 +384,7 @@ fn one_shot_output_keeps_original_context_closes_children_and_preserves_owner_sl
     )
     .unwrap();
     initialize_new(init).unwrap().emit(&mut Vec::new()).unwrap();
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace").is_some());
     let slots = || {
         [
             ".eliot-search-owner-state-a.v1",
@@ -448,7 +455,7 @@ fn one_shot_output_keeps_original_context_closes_children_and_preserves_owner_sl
             NativeRootAdmission::Inspection(_)
         ));
     }
-    // Qualification retains the native root and credential; no blind cleanup.
+    // Retain disk evidence; the guard deletes only this root's original credential.
 }
 
 #[test]
@@ -579,6 +586,7 @@ fn registration_catalog_refuses_corrupt_and_pending_bytes_without_recovery_or_wr
     assert!(!absent.exists());
     std::fs::create_dir(&root).unwrap();
     let root = std::fs::canonicalize(root).unwrap();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     initialize_new(
         NativeRootRequest::new(
             DataRootOpenMode::InitializeNew,
@@ -596,6 +604,7 @@ fn registration_catalog_refuses_corrupt_and_pending_bytes_without_recovery_or_wr
     .unwrap()
     .emit(&mut Vec::new())
     .unwrap();
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace").is_some());
     let catalog = root.join("control/source-roots.v1");
     let sources = root.with_extension("sources");
     std::fs::create_dir(&sources).unwrap();
@@ -763,7 +772,7 @@ fn registration_catalog_refuses_corrupt_and_pending_bytes_without_recovery_or_wr
             assert_eq!(&std::fs::read(root.join(name)).unwrap(), before);
         }
     }
-    // Retain native root/credential evidence; qualification owns cleanup.
+    // Retain disk evidence; the guard deletes only this root's original credential.
 }
 
 #[cfg(windows)]
@@ -781,6 +790,7 @@ fn registration_output_retains_pin_original_work_and_terminal_cancellation() {
     ));
     std::fs::create_dir(&root).unwrap();
     let root = std::fs::canonicalize(root).unwrap();
+    let credential_guard = FixtureCredentialGuard::for_native_data_root(&root);
     let limits = request(1024 * 1024 * 1024, 16384, Arc::new(AtomicBool::new(false))).limits;
     let args = [
         OsString::from("--source-roots"),
@@ -803,6 +813,7 @@ fn registration_output_retains_pin_original_work_and_terminal_cancellation() {
     .unwrap()
     .emit(&mut Vec::new())
     .unwrap();
+    assert!(credential_guard.capture_native_namespace().expect("original fixture namespace").is_some());
     let catalog = root.join("control/source-roots.v1");
     std::fs::write(&catalog, b"# ELIOT Search source roots v1\n").unwrap();
     for mode in [0, 1, 2] {
@@ -879,5 +890,5 @@ fn registration_output_retains_pin_original_work_and_terminal_cancellation() {
             b"# ELIOT Search source roots v1\n"
         );
     }
-    // Retain native root/credential evidence; qualification owns cleanup.
+    // Retain disk evidence; the guard deletes only this root's original credential.
 }
