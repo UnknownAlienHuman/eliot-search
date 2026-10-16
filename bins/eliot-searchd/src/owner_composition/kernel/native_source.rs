@@ -137,8 +137,7 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
         let location_text = match location {
             nf::NativeLocationClass::LocalFixed => "local-fixed",
             nf::NativeLocationClass::LocalRemovable => "local-removable",
-            nf::NativeLocationClass::NetworkShare => "remote",
-            nf::NativeLocationClass::Remote => "remote",
+            nf::NativeLocationClass::NetworkShare | nf::NativeLocationClass::Remote => "remote",
             _ => return Err(refused("NATIVE_SOURCE_LOCATION_UNAVAILABLE")),
         };
         let name = self.source_name(leaf.file(), NormalizedNameKind::VolumeGuid)?;
