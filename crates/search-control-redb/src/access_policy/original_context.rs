@@ -106,8 +106,10 @@ impl PersistentControlJournal {
                 return Err(ControlError::IdentityMismatch);
             }
             metered_command(&mutation.command, &seam)?;
-            let receipt = seam.transact(self, mutation.command.clone())?;
+            // No fallible allowance reservation belongs after a known commit:
+            // such refusal could otherwise misclassify its durable effect.
             metered_clone(&mutation.command, &seam)?;
+            let receipt = seam.transact(self, mutation.command.clone())?;
             Ok(AccessPolicyCommit { mutation: mutation.clone(), receipt })
         })();
         result.map_err(|error| seam.failure(error))
@@ -226,20 +228,24 @@ where
 /// Exact input-derived capacity of one prepared conditional command.
 fn command_capacity(command: &ConditionalControlMutation) -> Result<usize, ControlError> {
     let mutation = command.mutation();
-    let mut parts = vec![32 + 32 + 8];
+    let mut bytes = 32_usize + 32 + 8;
+    let mut add = |count: usize| {
+        bytes = bytes.checked_add(count).ok_or(ControlError::BudgetExceeded)?;
+        Ok::<(), ControlError>(())
+    };
     for write in mutation.writes() {
-        parts.push(write.key.as_bytes().len() + write.value.len());
+        add(std::mem::size_of::<crate::ControlWrite>())?;
+        add(write.key.as_bytes().len())?;
+        add(write.value.len())?;
     }
     for key in mutation.deletes() {
-        parts.push(key.as_bytes().len());
+        add(std::mem::size_of::<ControlKey>())?;
+        add(key.as_bytes().len())?;
     }
     for condition in command.conditions() {
-        parts.push(condition.key().as_bytes().len());
-        parts.push(condition.expected().map_or(0, crate::ControlValue::len));
+        add(std::mem::size_of::<crate::ControlRecordCondition>())?;
+        add(condition.key().as_bytes().len())?;
+        add(condition.expected().map_or(0, crate::ControlValue::len))?;
     }
-    parts
-        .into_iter()
-        .try_fold(0_usize, |total, part| {
-            total.checked_add(part).ok_or(ControlError::BudgetExceeded)
-        })
+    Ok(bytes)
 }

@@ -35,6 +35,18 @@ pub fn revision_use_keys(limits: JournalLimits) -> Result<[ControlKey; 4], Contr
         key(crate::REVISION_DEK_CANDIDATE_KEY, limits)?, key(crate::REVISION_DEK_CURRENT_KEY, limits)?])
 }
 
+/// Complete point-read scope for preparing one operation-addressed reservation.
+///
+/// The fifth key must be explicitly observed absent; a four-key genesis/material
+/// read alone cannot establish its absence.
+/// # Errors
+/// Refuses keys exceeding the executing journal limits.
+pub fn revision_use_reservation_keys(id: MutationId, limits: JournalLimits)
+    -> Result<[ControlKey; 5], ControlError> {
+    let [usage, intent, candidate, current] = revision_use_keys(limits)?;
+    Ok([usage, intent, candidate, current, revision_seal_reservation_key(id, limits)?])
+}
+
 /// Full operation-addressed reservation key; no truncation or second ledger.
 /// # Errors
 /// Refuses a key exceeding the executing journal limits.

@@ -220,7 +220,9 @@ fn metered_command_decode<F, E>(
 where
     F: Fn(Work) -> Result<(), E>,
 {
-    let doubled = observed_bytes.checked_mul(2).ok_or(ControlError::BudgetExceeded)?;
+    // The decoder also reconstructs bounded strings/sets and re-encodes the
+    // complete command. Include vector growth and all transient copies.
+    let doubled = observed_bytes.checked_mul(8).ok_or(ControlError::BudgetExceeded)?;
     seam.reserve(Work::Read(observed_bytes))?;
     seam.reserve(Work::Allocate(doubled))?;
     seam.reserve(Work::Process(doubled))?;
@@ -257,60 +259,60 @@ where
     mutation.native_command()
 }
 
-/// Exact input-derived capacity of one encoded restart command plus its
-/// derived operation-identity hashing work.
+/// Conservative input-derived preparation capacity, computed without allocation.
 fn command_capacity(mutation: &SecurityRestrictionMutation) -> Result<usize, ControlError> {
-    let mut parts = vec![
+    let mut total = bounded_sum([
         8 + 4,                                     // magic and version
         16 + 16 + 8 + 32 + 32 + 4,                  // full journal identity
         8 + 32,                                     // expected generation and digest
         4 + mutation.operation_id().as_str().len(), // operation-id text
         1,                                          // expected-policy flag
-    ];
+    ])?;
     // The expected-policy flag and the expected-state flag are independent
     // fields in the canonical codec; neither implies the other.
     if mutation.expected_policy.is_some() {
-        parts.push(ACCESS_POLICY_RECORD_LEN);
+        total = bounded_sum([total, ACCESS_POLICY_RECORD_LEN])?;
     }
-    parts.push(1); // expected-state flag
+    total = bounded_sum([total, 1])?; // expected-state flag
     for state in [mutation.expected_state(), Some(mutation.replacement())].into_iter().flatten() {
-        parts.push(state_capacity(state)?);
+        total = bounded_sum([total, state_capacity(state)?])?;
     }
-    parts.push(4); // dependent count
+    total = bounded_sum([total, 4])?; // dependent count
     for owner in mutation.required_dependents() {
-        parts.push(4 + owner.as_str().len());
+        total = bounded_sum([total, 4, owner.as_str().len()])?;
     }
-    let encoded = bounded_sum(parts)?;
-    // The derived identity hashes the same identity/namespace/domain/op text.
-    bounded_sum([encoded, mutation.replacement().security_domain_ref.as_str().len()])
+    // Encoding can grow a buffer, while the native command owns key/condition/
+    // write vectors and policy copies. Charge this before their first allocation.
+    total.checked_mul(8).and_then(|bytes| bytes.checked_add(1024))
+        .ok_or(ControlError::BudgetExceeded)
 }
 
-/// Exact input-derived capacity of one retained policy-state descriptor.
+/// Finite input-derived size of one retained policy-state descriptor.
 fn state_capacity(state: &SecurityPolicyState) -> Result<usize, ControlError> {
-    let mut parts = vec![
+    let mut total = bounded_sum([
         ACCESS_POLICY_RECORD_LEN,
         4 + state.security_domain_ref.as_str().len(),
         32 + 1,
-    ];
+    ])?;
     for members in [&state.denied_memberships, &state.purged_memberships] {
-        parts.push(4 + members.len().checked_mul(16).ok_or(ControlError::BudgetExceeded)?);
+        total = bounded_sum([total, 4, members.len().checked_mul(16).ok_or(ControlError::BudgetExceeded)?])?;
     }
-    bounded_sum(parts)
+    Ok(total)
 }
 
 /// Capacity of one original descriptor without its encoded framing.
 fn mutation_capacity(mutation: &SecurityRestrictionMutation) -> Result<usize, ControlError> {
-    let mut parts = vec![4 + mutation.operation_id().as_str().len()];
+    let mut total = bounded_sum([4, mutation.operation_id().as_str().len()])?;
     for state in [mutation.expected_state(), Some(mutation.replacement())]
         .into_iter()
         .flatten()
     {
-        parts.push(state_capacity(state)?);
+        total = bounded_sum([total, state_capacity(state)?])?;
     }
     for owner in mutation.required_dependents() {
-        parts.push(4 + owner.as_str().len());
+        total = bounded_sum([total, std::mem::size_of::<search_contracts::OpaqueId>(), owner.as_str().len()])?;
     }
-    bounded_sum(parts)
+    Ok(total)
 }
 
 /// Saturating-free exact sum of input-derived capacities.
