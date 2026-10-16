@@ -16,6 +16,7 @@ mod verify;
 
 pub use build::build_unit_manifest;
 pub use codec::{canonicalize_unit_manifest, decode_unit_manifest};
+pub use digest::raw_v3_unit_content_digest;
 pub use input::{UnitSetInput, UnitizationBudget, prepare_unit_set_input};
 pub use model::{
     CanonicalUnitManifestBytes, MaterializerProvenance, UnitDescriptor, UnitManifest,

@@ -441,7 +441,7 @@ fn validator_nomination(
         unit_byte_end: revision.bytes.len() as u64,
         expected_content_digest: raw.payload_digest,
         expected_unit_digest: digest(0xC1),
-        expected_excerpt_digest: digest(0xC2),
+        expected_excerpt_digest: Some(digest(0xC2)),
         expected_assurance: CandidateAssurance::Exact,
         expected_residency_digest: revision.residency_digest,
         raw_score: raw.raw_score,

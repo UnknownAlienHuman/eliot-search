@@ -15,13 +15,30 @@ overlay shadow, current grant/live deny/purge and candidate budget before any so
 
 ### `build_readback_request(nomination, plan) -> Result<ExactRevisionReadbackRequest, ValidationError>`
 
-Requests the exact source revision, representation/unit, native anchor, excerpt digest, profile and
-assurance expected by the nomination. It cannot substitute the latest path/revision.
+Requests the exact source revision, representation/unit, native anchor, optional fixed excerpt digest,
+profile and assurance expected by the nomination. It cannot substitute the latest path/revision.
 
-### `reopen_and_verify(request, readback_port, context) -> Result<VerifiedSourceSlice, ValidationError>`
+`expected_excerpt_digest = Some(digest)` retains the legacy exact-digest requirement.
+`expected_excerpt_digest = None` is accepted only by the versioned raw-v3 full-unit entrypoint below;
+the legacy `validate` and `reopen_and_verify` paths refuse it before source readback.
+
+### `reopen_and_verify(request, readback_port) -> Result<VerifiedSourceSlice, ValidationError>`
 
 Verifies source/revision IDs, content digest, byte length, residency authorization, coordinate/loss map,
 anchor bounds, unit/extractor/profile identity and requested disclosure ceiling.
+
+### `validate_raw_v3_full_unit_v1(nomination, context, readback_port, final_live_state) -> ValidationOutcome`
+
+Uses the same nomination precheck, source metadata/range/residency/profile checks and final live-fence
+recheck as `validate`. The caller must bind the request to the current accepted profile and supply
+the complete byte range of one verified raw-v3 unit. The validator checks the v3 profile-ID shape
+and returned bytes, but cannot establish profile acceptance or whole-unit membership from the
+request alone.
+The verifier recomputes the v3 unit-content digest through `search-unitizer` from the returned bytes,
+compares it with `expected_unit_digest`, and computes the separate exact-byte excerpt digest through
+`search-contracts::blake3_exact_bytes`. A supplied excerpt digest is compared as an additional
+expectation; absence derives the digest only after full-unit byte verification. This entrypoint cannot
+prove from its request alone that a caller-selected subrange is a complete unit.
 
 ### `recheck_before_emission(verified, plan, live_state) -> Result<EmissionPermit, ValidationError>`
 

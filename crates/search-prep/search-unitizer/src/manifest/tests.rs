@@ -49,6 +49,22 @@ fn v3_canonical_golden() {
 }
 
 #[test]
+fn exposed_v3_raw_digest_is_the_verified_unit_digest() {
+    let text = "whole\n";
+    let profile = descriptor();
+    let verified = set(text, &profile, binding());
+    let unit = verified.units().first().expect("one verified unit");
+    assert_eq!(verified.units().len(), 1);
+    let digest =
+        raw_v3_unit_content_digest(text.as_bytes(), profile.limits.max_unit_bytes).unwrap();
+    assert_eq!(digest, unit.unit_content_digest());
+    assert_eq!(
+        raw_v3_unit_content_digest(text.as_bytes(), 1),
+        Err(UnitizationError::UnitTooLarge)
+    );
+}
+
+#[test]
 fn truncated_identity_collision_and_duplicate_fail_closed() {
     let mut ids = std::collections::BTreeMap::new();
     let id = search_contracts::UnitId::from_bytes([1; 16]);

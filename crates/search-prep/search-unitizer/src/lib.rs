@@ -31,8 +31,8 @@ pub use manifest::{
     UnitManifest, UnitManifestDiff, UnitManifestVerificationReceipt, UnitizerProfileChange,
     UnitizerProfileDescriptor, UnitizerProfileId, ValidatedUnitizerProfile, build_unit_manifest,
     canonicalize_unit_manifest, classify_unitizer_profile_change, decode_unit_manifest,
-    diff_unit_manifests, manifest_digest, unitizer_profile_digest, validate_unitizer_profile,
-    verify_unit_manifest,
+    diff_unit_manifests, manifest_digest, raw_v3_unit_content_digest, unitizer_profile_digest,
+    validate_unitizer_profile, verify_unit_manifest,
 };
 pub use manifest::{
     UnitSetInput, UnitizationBudget, V3AnchorPolicy, V3AttachmentPolicy, V3EmptyPolicy,

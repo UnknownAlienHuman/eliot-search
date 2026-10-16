@@ -19,7 +19,7 @@ use std::process::ExitCode;
 
 #[allow(dead_code)]
 #[path = "preparation_composition/raw_v2.rs"]
-mod raw_v2;
+pub(crate) mod raw_v2;
 
 #[cfg(feature = "wave3-index")]
 #[allow(dead_code)]

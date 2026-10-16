@@ -1,6 +1,6 @@
 //! Complete v3 construction with package-derived occurrence identities.
 use super::codec::{anchor_value, body_value, canonicalize_unit_manifest, provenance_value};
-use super::digest::{bytes, hash_cbor, hash_raw, object, text};
+use super::digest::{bytes, hash_cbor, object, raw_v3_unit_content_digest, text};
 use super::input::{UnitSetInput, UnitizationBudget};
 use super::model::{ManifestBody, UnitDescriptor, UnitManifest, VerifiedUnitSet};
 use super::v3_profile::{ValidatedV3UnitizerProfile, validate_v3_unitizer_profile};
@@ -165,15 +165,8 @@ fn derive_occurrence(
     native_anchor
         .validate()
         .map_err(|_| UnitizationError::InvalidLineSpan)?;
-    let unit_content_digest = hash_raw(
-        "eliot/raw/unit-content/v3",
-        content.as_bytes(),
-        descriptor
-            .limits
-            .max_unit_bytes
-            .checked_add(128)
-            .ok_or(UnitizationError::OffsetOverflow)?,
-    )?;
+    let unit_content_digest =
+        raw_v3_unit_content_digest(content.as_bytes(), descriptor.limits.max_unit_bytes)?;
     let reference = object(vec![
         ("provenance", bytes(provenance_digest.as_bytes())?),
         ("anchor", anchor_value(&native_anchor)?),

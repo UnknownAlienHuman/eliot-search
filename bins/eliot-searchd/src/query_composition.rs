@@ -58,6 +58,7 @@
 
 pub(crate) mod registry;
 pub(crate) mod service;
+mod nomination_source;
 #[cfg(test)]
 #[path = "query_composition/real_port_tests.rs"]
 mod real_port_tests;

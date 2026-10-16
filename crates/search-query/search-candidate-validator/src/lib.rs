@@ -21,9 +21,11 @@ use search_access::{
     RequestSecurityFence, recheck_live_access,
 };
 use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, ProfileId,
+    Blake3Digest32, Blake3ExactInputLimit, CollectionGenerationId, Epoch, OpaqueId, ProfileId,
     RepresentationId, RequestId, SourceMembershipId, SourceRevisionId, UnitId,
+    blake3_exact_bytes,
 };
+use search_unitizer::raw_v3_unit_content_digest;
 
 /// Closed candidate-validation failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -135,7 +137,9 @@ pub struct CandidateNomination {
     pub unit_byte_end: u64,
     pub expected_content_digest: Blake3Digest32,
     pub expected_unit_digest: Blake3Digest32,
-    pub expected_excerpt_digest: Blake3Digest32,
+    /// Expected exact-byte excerpt digest, absent only for the versioned
+    /// whole-unit raw-v3 verification path.
+    pub expected_excerpt_digest: Option<Blake3Digest32>,
     pub expected_assurance: CandidateAssurance,
     pub expected_residency_digest: Blake3Digest32,
     pub raw_score: f32,
@@ -225,7 +229,9 @@ pub struct ExactRevisionReadbackRequest {
     pub byte_end: u64,
     pub expected_content_digest: Blake3Digest32,
     pub expected_unit_digest: Blake3Digest32,
-    pub expected_excerpt_digest: Blake3Digest32,
+    /// Expected exact-byte excerpt digest, absent only for the versioned
+    /// whole-unit raw-v3 verification path.
+    pub expected_excerpt_digest: Option<Blake3Digest32>,
     pub expected_profile_id: ProfileId,
     pub expected_profile_digest: Blake3Digest32,
     pub expected_residency_digest: Blake3Digest32,
@@ -365,14 +371,50 @@ impl VerifiedSourceSlice {
     }
 }
 
-/// Reopens and verifies one exact immutable source slice.
+/// Reopens and verifies one legacy nomination with an owner-supplied excerpt digest.
+///
+/// This entrypoint refuses nominations without `expected_excerpt_digest`. Use
+/// [`reopen_and_verify_raw_v3_full_unit_v1`] only when the caller has bound the
+/// request range to one complete raw-v3 unit from a verified unit set.
 pub fn reopen_and_verify<P: RevisionReadbackPort>(
     request: &ExactRevisionReadbackRequest,
     port: &mut P,
 ) -> Result<VerifiedSourceSlice, ValidationError> {
+    if request.expected_excerpt_digest.is_none() {
+        return Err(ValidationError::ContentDigestMismatch);
+    }
     let readback = port
         .read_exact(request)
         .map_err(|_| ValidationError::SourceUnreadable)?;
+    verify_source_slice(request, readback)
+}
+
+/// Reopens one complete raw-v3 unit and derives its standard excerpt digest.
+///
+/// The caller must set `byte_start..byte_end` to the complete unit span from the
+/// matching verified raw-v3 unit set. This API verifies that the returned bytes
+/// have the owner's v3 unit-content digest and computes the separate standard
+/// exact-byte excerpt digest. It cannot determine from this request alone that
+/// the profile is accepted or that an arbitrary subspan is a complete unit.
+pub fn reopen_and_verify_raw_v3_full_unit_v1<P: RevisionReadbackPort>(
+    request: &ExactRevisionReadbackRequest,
+    port: &mut P,
+) -> Result<VerifiedSourceSlice, ValidationError> {
+    if request.expected_assurance != CandidateAssurance::Exact
+        || !raw_v3_profile_matches(&request.expected_profile_id, request.expected_profile_digest)
+    {
+        return Err(ValidationError::ProfileMismatch);
+    }
+    let readback = port
+        .read_exact(request)
+        .map_err(|_| ValidationError::SourceUnreadable)?;
+    verify_source_slice_raw_v3_full_unit_v1(request, readback)
+}
+
+fn validate_readback_metadata(
+    request: &ExactRevisionReadbackRequest,
+    readback: &SourceReadback,
+) -> Result<usize, ValidationError> {
     if readback.source_membership_id != request.source_membership_id
         || readback.source_revision_id != request.source_revision_id
     {
@@ -384,10 +426,7 @@ pub fn reopen_and_verify<P: RevisionReadbackPort>(
     if readback.unit_id != request.unit_id {
         return Err(ValidationError::UnitMismatch);
     }
-    if readback.content_digest != request.expected_content_digest
-        || readback.unit_digest != request.expected_unit_digest
-        || readback.excerpt_digest != request.expected_excerpt_digest
-    {
+    if readback.content_digest != request.expected_content_digest {
         return Err(ValidationError::ContentDigestMismatch);
     }
     if readback.profile_id != request.expected_profile_id
@@ -417,6 +456,22 @@ pub fn reopen_and_verify<P: RevisionReadbackPort>(
     {
         return Err(ValidationError::LengthMismatch);
     }
+    Ok(expected_length)
+}
+
+fn verify_source_slice(
+    request: &ExactRevisionReadbackRequest,
+    readback: SourceReadback,
+) -> Result<VerifiedSourceSlice, ValidationError> {
+    let expected_excerpt_digest = request
+        .expected_excerpt_digest
+        .ok_or(ValidationError::ContentDigestMismatch)?;
+    validate_readback_metadata(request, &readback)?;
+    if readback.unit_digest != request.expected_unit_digest
+        || readback.excerpt_digest != expected_excerpt_digest
+    {
+        return Err(ValidationError::ContentDigestMismatch);
+    }
     Ok(VerifiedSourceSlice {
         source_membership_id: readback.source_membership_id,
         source_revision_id: readback.source_revision_id,
@@ -430,6 +485,57 @@ pub fn reopen_and_verify<P: RevisionReadbackPort>(
         assurance: readback.assurance,
         bytes: readback.bytes,
     })
+}
+
+fn verify_source_slice_raw_v3_full_unit_v1(
+    request: &ExactRevisionReadbackRequest,
+    readback: SourceReadback,
+) -> Result<VerifiedSourceSlice, ValidationError> {
+    if request.expected_assurance != CandidateAssurance::Exact
+        || !raw_v3_profile_matches(&request.expected_profile_id, request.expected_profile_digest)
+    {
+        return Err(ValidationError::ProfileMismatch);
+    }
+    let expected_length = validate_readback_metadata(request, &readback)?;
+    let unit_digest = raw_v3_unit_content_digest(&readback.bytes, expected_length)
+        .map_err(|_| ValidationError::LengthMismatch)?;
+    if unit_digest != request.expected_unit_digest || readback.unit_digest != unit_digest {
+        return Err(ValidationError::ContentDigestMismatch);
+    }
+    let excerpt_limit =
+        Blake3ExactInputLimit::new(expected_length).map_err(|_| ValidationError::LengthMismatch)?;
+    let excerpt_digest = blake3_exact_bytes(&readback.bytes, excerpt_limit)
+        .map_err(|_| ValidationError::LengthMismatch)?;
+    // The returned excerpt-digest field is legacy metadata. The raw-v3 path
+    // derives the verified value from the returned bytes and compares only the
+    // nomination's optional expected digest against that computation.
+    if request
+        .expected_excerpt_digest
+        .is_some_and(|expected| expected != excerpt_digest)
+    {
+        return Err(ValidationError::ContentDigestMismatch);
+    }
+    Ok(VerifiedSourceSlice {
+        source_membership_id: readback.source_membership_id,
+        source_revision_id: readback.source_revision_id,
+        representation_id: readback.representation_id,
+        unit_id: readback.unit_id,
+        byte_start: readback.source_byte_start,
+        byte_end: readback.source_byte_end,
+        content_digest: readback.content_digest,
+        unit_digest,
+        excerpt_digest,
+        assurance: readback.assurance,
+        bytes: readback.bytes,
+    })
+}
+
+fn raw_v3_profile_matches(profile_id: &ProfileId, profile_digest: Blake3Digest32) -> bool {
+    profile_id
+        .as_str()
+        .strip_prefix("unitizer-v3-")
+        .and_then(|digest| Blake3Digest32::parse_hex(digest).ok())
+        == Some(profile_digest)
 }
 
 /// Final emission permit bound to live security state.
@@ -490,7 +596,9 @@ pub enum ValidationOutcome {
     ContaminatedLeg(ReplanSignal),
 }
 
-/// Complete validation pipeline over one nomination.
+/// Complete legacy validation pipeline over one nomination.
+///
+/// An absent expected excerpt digest is refused before source readback.
 pub fn validate<P: RevisionReadbackPort>(
     nomination: &CandidateNomination,
     context: &ValidationContext,
@@ -498,6 +606,52 @@ pub fn validate<P: RevisionReadbackPort>(
     port: &mut P,
     final_live_security: &LiveSecurityState,
 ) -> ValidationOutcome {
+    validate_with(
+        nomination,
+        context,
+        max_read_bytes,
+        port,
+        final_live_security,
+        reopen_and_verify::<P>,
+    )
+}
+
+/// Complete validation pipeline for one whole-unit raw-v3 nomination.
+///
+/// The range must come from one complete verified raw-v3 unit. The same
+/// request precheck and final live-security fence as [`validate`] still run.
+pub fn validate_raw_v3_full_unit_v1<P: RevisionReadbackPort>(
+    nomination: &CandidateNomination,
+    context: &ValidationContext,
+    max_read_bytes: u64,
+    port: &mut P,
+    final_live_security: &LiveSecurityState,
+) -> ValidationOutcome {
+    validate_with(
+        nomination,
+        context,
+        max_read_bytes,
+        port,
+        final_live_security,
+        reopen_and_verify_raw_v3_full_unit_v1::<P>,
+    )
+}
+
+fn validate_with<P, V>(
+    nomination: &CandidateNomination,
+    context: &ValidationContext,
+    max_read_bytes: u64,
+    port: &mut P,
+    final_live_security: &LiveSecurityState,
+    reopen: V,
+) -> ValidationOutcome
+where
+    P: RevisionReadbackPort,
+    V: FnOnce(
+        &ExactRevisionReadbackRequest,
+        &mut P,
+    ) -> Result<VerifiedSourceSlice, ValidationError>,
+{
     match precheck(nomination, context) {
         ValidationPrecheck::ContaminatedLeg => {
             return ValidationOutcome::ContaminatedLeg(ReplanSignal {
@@ -514,7 +668,7 @@ pub fn validate<P: RevisionReadbackPort>(
         ValidationPrecheck::Proceed => {}
     }
     let result = build_readback_request(nomination, max_read_bytes)
-        .and_then(|request| reopen_and_verify(&request, port))
+        .and_then(|request| reopen(&request, port))
         .and_then(|verified| {
             let permit = recheck_before_emission(
                 &verified,
@@ -600,6 +754,146 @@ mod spine_gate_tests {
     use super::*;
     use std::collections::BTreeSet;
 
+    const RAW_UNIT: &[u8] = b"alpha\n";
+
+    fn raw_v3_profile() -> (ProfileId, Blake3Digest32) {
+        let profile = search_unitizer::validate_v3_unitizer_profile(
+            &search_unitizer::V3UnitizerProfileDescriptor {
+                profile_name: ProfileId::new("candidate-validator-test-v3").unwrap(),
+                profile_revision: 1,
+                representation_kind: search_unitizer::V3RepresentationKind::Text,
+                unit_kind: search_contracts::UnitKind::File,
+                boundary_revision: 1,
+                overlap_policy: search_unitizer::V3OverlapPolicy::None,
+                anchor_policy: search_unitizer::V3AnchorPolicy::ExactTextBytes,
+                attachment_policy: search_unitizer::V3AttachmentPolicy::Absent,
+                omission_policy: search_unitizer::V3OmissionPolicy::Forbidden,
+                empty_policy: search_unitizer::V3EmptyPolicy::Reject,
+                limits: search_unitizer::UnitizationLimits {
+                    max_input_bytes: 128,
+                    preferred_unit_bytes: 64,
+                    max_unit_bytes: 128,
+                    max_lines: 128,
+                    max_units: 16,
+                },
+                min_unit_bytes: 1,
+                max_unit_scalars: 128,
+                max_unit_lines: 128,
+                max_anchor_depth: 1,
+                max_manifest_bytes: 4096,
+                max_steps: 4096,
+                fixture_digest: Blake3Digest32::from_bytes([0x71; 32]),
+            },
+        )
+        .unwrap();
+        let digest_hex = profile
+            .id()
+            .as_str()
+            .strip_prefix("unitizer-v3-")
+            .expect("owner v3 profile identity");
+        (
+            profile.id().clone(),
+            Blake3Digest32::parse_hex(digest_hex).unwrap(),
+        )
+    }
+
+    fn raw_nomination(expected_excerpt_digest: Option<Blake3Digest32>) -> CandidateNomination {
+        let (profile_id, profile_digest) = raw_v3_profile();
+        let exact_limit = search_contracts::Blake3ExactInputLimit::new(RAW_UNIT.len()).unwrap();
+        CandidateNomination {
+            request_id: RequestId::from_bytes([0x11; 16]),
+            plan_digest: [0x12; 32],
+            leg_id: 3,
+            point_id: [0x13; 16],
+            source_membership_id: SourceMembershipId::from_bytes([0x14; 16]),
+            collection_generation_id: CollectionGenerationId::from_bytes([0x15; 16]),
+            valid_from_epoch: Epoch::new(7).unwrap(),
+            valid_until_epoch_exclusive: None,
+            profile_id,
+            profile_digest,
+            source_revision_id: SourceRevisionId::from_bytes([0x16; 16]),
+            representation_id: RepresentationId::from_bytes([0x17; 16]),
+            unit_id: UnitId::from_bytes([0x18; 16]),
+            unit_byte_start: 0,
+            unit_byte_end: RAW_UNIT.len() as u64,
+            expected_content_digest: search_contracts::blake3_exact_bytes(RAW_UNIT, exact_limit)
+                .unwrap(),
+            expected_unit_digest: raw_v3_unit_content_digest(RAW_UNIT, RAW_UNIT.len()).unwrap(),
+            expected_excerpt_digest,
+            expected_assurance: CandidateAssurance::Exact,
+            expected_residency_digest: Blake3Digest32::from_bytes([0x19; 32]),
+            raw_score: 1.0,
+        }
+    }
+
+    fn raw_readback(
+        nomination: &CandidateNomination,
+        bytes: &[u8],
+    ) -> SourceReadback {
+        let exact_limit = search_contracts::Blake3ExactInputLimit::new(bytes.len()).unwrap();
+        SourceReadback {
+            source_membership_id: nomination.source_membership_id,
+            source_revision_id: nomination.source_revision_id,
+            representation_id: nomination.representation_id,
+            unit_id: nomination.unit_id,
+            content_digest: nomination.expected_content_digest,
+            unit_digest: nomination.expected_unit_digest,
+            excerpt_digest: search_contracts::blake3_exact_bytes(bytes, exact_limit).unwrap(),
+            profile_id: nomination.profile_id.clone(),
+            profile_digest: nomination.profile_digest,
+            residency_digest: nomination.expected_residency_digest,
+            assurance: CandidateAssurance::Exact,
+            source_byte_start: nomination.unit_byte_start,
+            source_byte_end: nomination.unit_byte_end,
+            coordinate_map_exact: true,
+            residency_authorized: true,
+            bytes: bytes.to_vec(),
+        }
+    }
+
+    fn raw_context(nomination: &CandidateNomination) -> ValidationContext {
+        let memberships = BTreeSet::from([nomination.source_membership_id]);
+        ValidationContext {
+            request_id: nomination.request_id,
+            plan_digest: nomination.plan_digest,
+            collection_generation_id: nomination.collection_generation_id,
+            visible_epoch: nomination.valid_from_epoch,
+            allowed_memberships: memberships.clone(),
+            shadowed_units: BTreeSet::new(),
+            max_candidates: 4,
+            candidate_ordinal: 0,
+            request_security: RequestSecurityFence {
+                planned_generation: 2,
+                memberships,
+            },
+            live_security: LiveSecurityState {
+                generation: 2,
+                denied_memberships: BTreeSet::new(),
+                purged_memberships: BTreeSet::new(),
+                fail_closed: false,
+                snapshot_digest: Blake3Digest32::from_bytes([0x20; 32]),
+            },
+            contaminated_legs: BTreeSet::new(),
+        }
+    }
+
+    struct FixedReadback {
+        value: SourceReadback,
+        reads: usize,
+    }
+
+    impl RevisionReadbackPort for FixedReadback {
+        type Error = ();
+
+        fn read_exact(
+            &mut self,
+            _request: &ExactRevisionReadbackRequest,
+        ) -> Result<SourceReadback, Self::Error> {
+            self.reads += 1;
+            Ok(self.value.clone())
+        }
+    }
+
     #[test]
     fn gap_reason_codes_are_stable_closed_and_distinct() {
         let cases = [
@@ -677,5 +971,117 @@ mod spine_gate_tests {
         assert!(CandidateAssurance::SourceBacked < CandidateAssurance::Exact);
         assert!(CandidateAssurance::Exact >= CandidateAssurance::Exact);
         assert!(CandidateAssurance::Derived < CandidateAssurance::Exact);
+    }
+
+    #[test]
+    fn raw_v3_pipeline_verifies_actual_full_unit_bytes_and_final_live_fence() {
+        let exact_limit = search_contracts::Blake3ExactInputLimit::new(RAW_UNIT.len()).unwrap();
+        let excerpt_digest = search_contracts::blake3_exact_bytes(RAW_UNIT, exact_limit).unwrap();
+        let nomination = raw_nomination(Some(excerpt_digest));
+        let context = raw_context(&nomination);
+        let mut port = FixedReadback {
+            value: raw_readback(&nomination, RAW_UNIT),
+            reads: 0,
+        };
+
+        let outcome = validate_raw_v3_full_unit_v1(
+            &nomination,
+            &context,
+            RAW_UNIT.len() as u64,
+            &mut port,
+            &context.live_security,
+        );
+        let ValidationOutcome::Validated(candidate) = outcome else {
+            panic!("expected verified raw-v3 candidate, got {outcome:?}");
+        };
+        assert_eq!(port.reads, 1);
+        assert_eq!(candidate.source.bytes(), RAW_UNIT);
+        assert_eq!(
+            candidate.source.unit_digest(),
+            nomination.expected_unit_digest
+        );
+        assert_eq!(candidate.source.excerpt_digest(), excerpt_digest);
+    }
+
+    #[test]
+    fn raw_v3_rejects_wrong_bytes_even_when_readback_echoes_expected_digests() {
+        let nomination = raw_nomination(None);
+        let mut readback = raw_readback(&nomination, b"wrong\n");
+        readback.unit_digest = nomination.expected_unit_digest;
+        readback.excerpt_digest = search_contracts::blake3_exact_bytes(
+            RAW_UNIT,
+            search_contracts::Blake3ExactInputLimit::new(RAW_UNIT.len()).unwrap(),
+        )
+        .unwrap();
+        let request = build_readback_request(&nomination, RAW_UNIT.len() as u64).unwrap();
+
+        assert_eq!(
+            verify_source_slice_raw_v3_full_unit_v1(&request, readback),
+            Err(ValidationError::ContentDigestMismatch)
+        );
+    }
+
+    #[test]
+    fn legacy_reopen_refuses_missing_excerpt_digest_before_readback() {
+        let nomination = raw_nomination(None);
+        let request = build_readback_request(&nomination, RAW_UNIT.len() as u64).unwrap();
+        let mut port = FixedReadback {
+            value: raw_readback(&nomination, RAW_UNIT),
+            reads: 0,
+        };
+
+        assert_eq!(
+            reopen_and_verify(&request, &mut port),
+            Err(ValidationError::ContentDigestMismatch)
+        );
+        assert_eq!(port.reads, 0);
+    }
+
+    #[test]
+    fn raw_v3_reopen_refuses_unrecognized_profile_before_readback() {
+        let nomination = raw_nomination(None);
+        let mut request = build_readback_request(&nomination, RAW_UNIT.len() as u64).unwrap();
+        request.expected_profile_id = ProfileId::new("unaccepted-profile").unwrap();
+        let mut port = FixedReadback {
+            value: raw_readback(&nomination, RAW_UNIT),
+            reads: 0,
+        };
+
+        assert_eq!(
+            reopen_and_verify_raw_v3_full_unit_v1(&request, &mut port),
+            Err(ValidationError::ProfileMismatch)
+        );
+        assert_eq!(port.reads, 0);
+    }
+
+    #[test]
+    fn raw_v3_none_derives_standard_excerpt_digest_from_verified_bytes() {
+        let nomination = raw_nomination(None);
+        let request = build_readback_request(&nomination, RAW_UNIT.len() as u64).unwrap();
+        let verified =
+            verify_source_slice_raw_v3_full_unit_v1(&request, raw_readback(&nomination, RAW_UNIT))
+                .unwrap();
+        let expected_excerpt = search_contracts::blake3_exact_bytes(
+            RAW_UNIT,
+            search_contracts::Blake3ExactInputLimit::new(RAW_UNIT.len()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(verified.excerpt_digest(), expected_excerpt);
+        assert_ne!(verified.excerpt_digest(), verified.unit_digest());
+    }
+
+    #[test]
+    fn raw_v3_some_rejects_a_wrong_standard_excerpt_digest() {
+        let wrong_excerpt = Blake3Digest32::from_bytes([0xD1; 32]);
+        let nomination = raw_nomination(Some(wrong_excerpt));
+        let request = build_readback_request(&nomination, RAW_UNIT.len() as u64).unwrap();
+
+        assert_eq!(
+            verify_source_slice_raw_v3_full_unit_v1(
+                &request,
+                raw_readback(&nomination, RAW_UNIT),
+            ),
+            Err(ValidationError::ContentDigestMismatch)
+        );
     }
 }

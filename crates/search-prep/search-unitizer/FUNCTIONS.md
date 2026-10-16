@@ -6,6 +6,12 @@ This package owns deterministic bounded unit occurrences and manifests derived f
 representation. It owns no source/revision storage, materialization, semantic enrichment, lexical/model
 encoding, ranking, Qdrant projection or query behavior.
 
+`raw_v3_unit_content_digest(content, max_content_bytes)` exposes the existing bounded
+`eliot/raw/unit-content/v3` commitment for exact bytes. The v3 manifest builder calls this same owner
+function, preserving v1-v3 manifest bytes. Callers use it to verify bytes already read under their own
+source authority; the caller supplies a finite ceiling (the manifest builder uses the profile's unit
+ceiling). It does not verify a source revision, unit span or admission.
+
 ## Global rules
 
 - one unit is an occurrence in one exact representation/profile, not a globally stable semantic entity;

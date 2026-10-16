@@ -15,7 +15,7 @@ use std::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum RawPreparationError {
+pub(crate) enum RawPreparationError {
     Materialization(MaterializationError),
     Unitization(UnitizationError),
 }
@@ -76,7 +76,7 @@ impl RevisionReadPort for BoundBytes<'_> {
 
 /// Materialize exact retained UTF-8 bytes and build the owners' opaque v3 `UnitSet`.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn prepare_raw_v2(
+pub(crate) fn prepare_raw_v2(
     source: &SourceRevisionRef,
     occurrence_sequence: u64,
     retained_body: &[u8],

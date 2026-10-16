@@ -93,6 +93,25 @@ pub(super) fn hash_raw(
     search_contracts::blake3_raw(&domain, value, limit).map_err(|_| UnitizationError::InputTooLarge)
 }
 
+/// Computes the existing bounded v3 raw-unit content commitment.
+///
+/// `max_content_bytes` is a finite byte ceiling. Manifest construction passes
+/// its profile's `max_unit_bytes`; exact readback may pass the already bounded
+/// range length. The helper delegates to the same domain-separated contract
+/// digest as the v3 manifest owner; it does not create another digest format.
+pub fn raw_v3_unit_content_digest(
+    content: &[u8],
+    max_content_bytes: usize,
+) -> Result<Blake3Digest32, UnitizationError> {
+    if content.len() > max_content_bytes {
+        return Err(UnitizationError::UnitTooLarge);
+    }
+    let limit = max_content_bytes
+        .checked_add(128)
+        .ok_or(UnitizationError::OffsetOverflow)?;
+    hash_raw("eliot/raw/unit-content/v3", content, limit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::digest32;

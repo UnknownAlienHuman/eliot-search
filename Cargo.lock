@@ -1178,6 +1178,7 @@ dependencies = [
  "search-contracts",
  "search-domain",
  "search-ports",
+ "search-unitizer",
 ]
 
 [[package]]
