@@ -200,6 +200,50 @@ proof, Current selection, key-use/lease, rotation, deletion or C07 encryption au
 Key, SID and credential coordinates are absent from public Debug/errors; protected bytes never
 enter these control records. Legacy lifecycle and compatibility codecs remain separate.
 
+## Revision DEK first-Current application metadata
+
+`RevisionDekSelectionPolicy::from_config(&ValidatedSecretsConfig, ConfigFingerprint)` returns
+`Result<RevisionDekSelectionPolicy, RevisionDekSelectionError>`. It requires the exact BLAKE3 /
+`eliot/cbor/config-snapshot/v2` / revision-2 tag, the source-admitted `windows_user_bound` backend,
+nonzero config/section digests and the current owner descriptor registry identity. Getters `backend()`,
+`config_fingerprint()`, `secrets_section_digest()` and `registry_digest()` return the fixed backend
+string and three `[u8; 32]` equality identities. Decoding retains bytes under this fixed profile;
+it does not reconstruct a typed ConfigFingerprint or restore/apply the whole configuration.
+
+`expected_backend_identity(&RevisionDekCandidate) -> Result<[u8; 32], RevisionDekSelectionError>`
+hashes `[canonical_candidate_v1_bytes, backend, application_scope]` through the shared canonical owner
+under `eliot/cbor/revision-dek-backend-identity/v1`. This is equality metadata, never Native evidence.
+The sole application scope is `revision-dek-current-selection/windows-user-bound/v1`. TTL, rotation
+grace and the Qdrant reference remain unapplied; no lease, key use or revision encryption is exposed.
+
+`RevisionDekApplicationIntent::new(RevisionDekCandidate, [u8; 16], RevisionDekSelectionPolicy,
+OwnerEpoch)` returns a fallible pure metadata value with private fields. Getters expose `candidate()`,
+`operation_id()`, `policy()`, `creator_epoch()` and `request_digest()`. A nonzero distinct-purpose
+selection operation and exact existing candidate are retained. Request hashing uses the complete
+seven logical intent fields below under `eliot/cbor/revision-dek-selection-request/v1`, excluding
+only the application-intent creator epoch. The candidate's immutable historical epoch remains in its
+unchanged canonical bytes. A fresh invocation's Native custody is never represented by replay identity.
+
+`RevisionDekCurrent::new(&RevisionDekApplicationIntent)` plans metadata only. `intent()`,
+`applied_policy_revision()` and `selection_revision()` expose the original intent and planned initial
+revisions 1/1. These axes are distinct from key version, descriptor revision, fingerprint format,
+Native epoch and journal generation. Only Root's actual Windows dependency readback plus an exact
+absent-state C02 CAS and operation readback can establish durable application/Current publication.
+Constructing or decoding this type does not establish any of those effects.
+
+`RevisionDekSelectionRecord::{Intent, Current}` shares `intent()`. The fallible
+`encode_revision_dek_selection_record` / `decode_revision_dek_selection_record` codec has an
+8192-byte finite ceiling and exact canonical four-array framing:
+`["eliot.revision-dek.selection.v1", 1, kind, body]`. Intent kind 0 has body
+`[selection_op16, canonical_candidate_v1_bytes, config_v2_digest32, secrets_section_digest32,
+descriptor_registry_digest32, "windows_user_bound", application_scope, intent_creator_epoch]`.
+Current kind 1 has body `[intent_body, 1, 1, expected_backend_identity32]`. Candidate bytes are
+encoded/decoded only by the existing candidate owner; Candidate v1 and its original Intent are never
+relabelled or rewritten. Fixed profiles/versions, nonzero identities, positive historical epoch,
+exact lengths/counts, expected backend identity and canonical/trailing/truncation framing refuse
+closed. Debug/errors disclose no protected bytes, credential coordinates, raw references or paths.
+Exact C02 record/command bytes remain separately bound by the journal command identity.
+
 ## Legacy revision compatibility envelope
 
 These functions preserve the frozen DIRECT protected-object format while platform effects remain in

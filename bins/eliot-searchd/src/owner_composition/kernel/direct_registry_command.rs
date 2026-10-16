@@ -43,6 +43,7 @@ fn is_direct_command(argument: &OsStr) -> bool {
                 | "--register-source-root-v2"
                 | "--admit-source-v2"
                 | "--prepare-revision-dek-v1"
+                | "--select-revision-dek-v1"
                 | "--unregister-source-root"
                 | "--source-roots"
                 | "--health-data-root"
@@ -68,7 +69,7 @@ pub(super) fn run(
         .and_then(|v| v.to_str())
         .ok_or("SOURCE_ROOT_USAGE_ERROR")?;
     let expected = match command {
-        "--register-source-root-v2" => 4,
+        "--register-source-root-v2" | "--select-revision-dek-v1" => 4,
         "--admit-source-v2" => 7,
         "--register-source-root"
         | "--prepare-revision-dek-v1"
@@ -82,7 +83,7 @@ pub(super) fn run(
     if selected.len() != expected || !cli.overrides.is_empty() {
         return Err("DIRECT_INPUT_UNAVAILABLE".into());
     }
-    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--prepare-revision-dek-v1") {
+    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--prepare-revision-dek-v1" | "--select-revision-dek-v1") {
         DataRootOpenMode::OpenExistingMutating
     } else {
         DataRootOpenMode::InspectExistingReadOnly
@@ -109,7 +110,11 @@ pub(super) fn run(
     .map_err(|e| e.code().to_owned())?;
     let mut work = NativeWork::new();
     let preflight = (|| {
-        let hints = capture_hints(&request, &mut work, cli, command, &selected)?;
+        let (hints, selection) = if command == "--select-revision-dek-v1" {
+            (None, Some(super::dek_selection::SelectionCommand::parse(&selected, cli)?))
+        } else {
+            (Some(capture_hints(&request, &mut work, cli, command, &selected)?), None)
+        };
         let policy = if matches!(command, "--register-source-root-v2" | "--admit-source-v2") {
             Some(super::super::super::direct_policy_v2::capture(
                 &request, &mut work, Path::new(&selected[if command == "--admit-source-v2" { 4 } else { 3 }]),
@@ -117,9 +122,9 @@ pub(super) fn run(
         } else { None };
         let source = (command == "--admit-source-v2").then(|| super::source_command::NativeSourceCommand::parse(&selected)).transpose()?;
         let dek = (command == "--prepare-revision-dek-v1").then(|| super::dek_command::RevisionDekCommand::parse(&selected)).transpose()?;
-        Ok::<_, String>((hints, policy, source, dek))
+        Ok::<_, String>((hints, policy, source, dek, selection))
     })();
-    let (hints, policy, source, dek) = match preflight {
+    let (hints, policy, source, dek, selection) = match preflight {
         Ok(value) => value,
         Err(error) => {
             let line = format!(
@@ -134,6 +139,8 @@ pub(super) fn run(
     };
     let owner = DirectRegistryOwner::open_for_command(request, work, writer)?;
     if let Some(dek) = dek { return owner.execute_revision_dek(&dek, writer); }
+    if let Some(selection) = selection { return owner.execute_revision_dek_selection(&selection, writer); }
+    let hints = hints.ok_or("DIRECT_CONFIG_VARIANT_UNAVAILABLE")?;
     owner.execute(
         &hints,
         if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2") {

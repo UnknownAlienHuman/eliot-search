@@ -366,6 +366,8 @@ mod command;
 mod source_command;
 #[path = "native_dek_command.rs"]
 mod dek_command;
+#[path = "native_dek_selection.rs"]
+mod dek_selection;
 pub use command::maybe_run;
 
 #[cfg(all(test, windows))]

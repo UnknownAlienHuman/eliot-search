@@ -3,6 +3,7 @@
 use super::*;
 use crate::{ControlRecordCondition, JournalProfileInitialization, MigrationBootstrapWork as Work};
 use crate::{CommitRecoveryDecision, RevisionDekCommand, REVISION_DEK_INTENT_KEY, REVISION_DEK_CANDIDATE_KEY, REVISION_DEK_CURRENT_KEY};
+use crate::{RevisionDekSelectionCommand, REVISION_DEK_APPLICATION_INTENT_KEY};
 use std::{
     cell::Cell,
     time::{Duration, Instant},
@@ -369,4 +370,176 @@ fn revision_dek_operation_lookup_is_read_only_and_never_treats_refusal_as_absenc
     write.commit().unwrap();
     let bound = journal.bind_control_port::<Cancel>(&mut publisher).unwrap();
     assert_eq!(bound.revision_dek_operation_exists_with_original_context(MutationId([90; 32]), deadline, &work).unwrap_err().control, ControlError::StoreCorrupt);
+}
+
+// C02 closes envelopes and CAS structure only; these opaque bodies are not Core
+// records, applied backend proofs or Native qualification.
+fn selection_array(values: Vec<search_contracts::CanonicalValue>) -> search_contracts::CanonicalValue {
+    search_contracts::CanonicalValue::Array(search_contracts::BoundedList::new(values).unwrap())
+}
+fn selection_frame(marker: &str, codec: u64, kind: u64, body: search_contracts::CanonicalValue) -> ControlValue {
+    use search_contracts::{CanonicalText, CanonicalValue as V, to_canonical_cbor};
+    let value = selection_array(vec![V::Text(CanonicalText::new(marker).unwrap()), V::U64(codec), V::U64(kind), body]);
+    ControlValue::new(ControlRecordClass::State, to_canonical_cbor(&value).unwrap().as_slice().to_vec(), LIMITS).unwrap()
+}
+fn selection_value(current: bool) -> ControlValue {
+    use search_contracts::CanonicalValue as V;
+    let intent = selection_array(vec![V::Null; 8]);
+    let body = if current { selection_array(vec![intent, V::U64(1), V::U64(1), V::Null]) } else { intent };
+    selection_frame("eliot.revision-dek.selection.v1", 1, u64::from(current), body)
+}
+fn selection_command(id: u8, generation: u64, current: bool) -> RevisionDekSelectionCommand {
+    RevisionDekSelectionCommand::new(ConditionalControlMutation::new(ControlMutation::new(
+        MutationId([id; 32]), digest(), generation, vec![ControlWrite {
+            key: key(if current { REVISION_DEK_CURRENT_KEY } else { REVISION_DEK_APPLICATION_INTENT_KEY }),
+            value: selection_value(current),
+        }], vec![]), vec![
+            ControlRecordCondition::exact(key(REVISION_DEK_INTENT_KEY), dek_value("eliot.revision-dek.record.v1", 1, 0, 0)),
+            ControlRecordCondition::exact(key(REVISION_DEK_CANDIDATE_KEY), dek_value("eliot.revision-dek.record.v1", 1, 1, 0)),
+            if current { ControlRecordCondition::exact(key(REVISION_DEK_APPLICATION_INTENT_KEY), selection_value(false)) }
+            else { ControlRecordCondition::absent(key(REVISION_DEK_APPLICATION_INTENT_KEY)) },
+            ControlRecordCondition::absent(key(REVISION_DEK_CURRENT_KEY)),
+        ])).unwrap()
+}
+fn altered_selection(command: &RevisionDekSelectionCommand, writes: Vec<ControlWrite>, deletes: Vec<ControlKey>,
+    conditions: Vec<ControlRecordCondition>) -> Result<RevisionDekSelectionCommand, ControlError> {
+    let mutation = command.command().mutation();
+    RevisionDekSelectionCommand::new(ConditionalControlMutation::new(ControlMutation::new(
+        mutation.id(), mutation.command_digest(), mutation.expected_generation(), writes, deletes), conditions))
+}
+
+#[test]
+fn revision_dek_selection_profiles_keep_candidate_commands_separate() {
+    let application = selection_command(93, 3, false);
+    let current = selection_command(94, 4, true);
+    assert_eq!(application.command().conditions().len(), 4);
+    assert_eq!(current.command().conditions().len(), 4);
+    assert_eq!(current.command().mutation().writes()[0].key.as_bytes(), REVISION_DEK_CURRENT_KEY);
+    assert_eq!(dek_command(92, 2, true).command().conditions().len(), 3);
+    assert!(RevisionDekCommand::new(application.command().clone()).is_err());
+    assert!(RevisionDekCommand::new(current.command().clone()).is_err());
+    assert!(RevisionDekSelectionCommand::new(dek_command(92, 2, true).command().clone()).is_err());
+}
+
+#[test]
+fn revision_dek_selection_closes_single_write_keys_deletes_and_four_conditions() {
+    for command in [selection_command(93, 3, false), selection_command(94, 4, true)] {
+        let writes = command.command().mutation().writes().to_vec();
+        let conditions = command.command().conditions().to_vec();
+        for target in [REVISION_DEK_INTENT_KEY, REVISION_DEK_CANDIDATE_KEY, b"unrelated".as_slice()] {
+            let mut changed = writes.clone(); changed[0].key = key(target);
+            assert!(altered_selection(&command, changed, vec![], conditions.clone()).is_err());
+        }
+        assert!(altered_selection(&command, vec![], vec![], conditions.clone()).is_err());
+        assert!(altered_selection(&command, [writes.clone(), writes.clone()].concat(), vec![], conditions.clone()).is_err());
+        assert!(altered_selection(&command, writes.clone(), vec![key(REVISION_DEK_CURRENT_KEY)], conditions.clone()).is_err());
+        for index in 0..4 {
+            let mut changed = conditions.clone(); changed.remove(index);
+            assert!(altered_selection(&command, writes.clone(), vec![], changed).is_err());
+        }
+        let mut duplicate = conditions.clone(); duplicate[0] = duplicate[1].clone();
+        assert!(altered_selection(&command, writes.clone(), vec![], duplicate).is_err());
+        let mut present_current = conditions.clone();
+        present_current[3] = ControlRecordCondition::exact(key(REVISION_DEK_CURRENT_KEY), selection_value(true));
+        assert!(altered_selection(&command, writes, vec![], present_current).is_err());
+    }
+}
+
+#[test]
+fn revision_dek_selection_condition_values_require_exact_closed_predecessor_frames() {
+    for current in [false, true] {
+        let command = selection_command(93, 3, current);
+        let writes = command.command().mutation().writes().to_vec();
+        for index in 0..3 {
+            let mut changed = command.command().conditions().to_vec();
+            let condition_key = changed[index].key().clone();
+            changed[index] = if index == 2 && !current {
+                ControlRecordCondition::exact(condition_key, selection_value(false))
+            } else { ControlRecordCondition::absent(condition_key) };
+            assert!(altered_selection(&command, writes.clone(), vec![], changed).is_err());
+        }
+        for (index, value) in [(0, dek_value("eliot.revision-dek.record.v1", 1, 1, 0)),
+            (1, dek_value("eliot.revision-dek.record.v1", 1, 0, 0))] {
+            let mut changed = command.command().conditions().to_vec();
+            changed[index] = ControlRecordCondition::exact(changed[index].key().clone(), value);
+            assert!(altered_selection(&command, writes.clone(), vec![], changed).is_err());
+        }
+    }
+    let command = selection_command(94, 4, true);
+    let mut changed = command.command().conditions().to_vec();
+    changed[2] = ControlRecordCondition::exact(key(REVISION_DEK_APPLICATION_INTENT_KEY), selection_value(true));
+    assert!(altered_selection(&command, command.command().mutation().writes().to_vec(), vec![], changed).is_err());
+}
+
+#[test]
+fn revision_dek_selection_requires_canonical_marker_codec_kind_and_nested_body_shapes() {
+    use search_contracts::CanonicalValue as V;
+    let intent = selection_command(93, 3, false);
+    let current = selection_command(94, 4, true);
+    let mut bad_values = vec![
+        selection_frame("wrong-marker", 1, 0, selection_array(vec![V::Null; 8])),
+        selection_frame("eliot.revision-dek.selection.v1", 2, 0, selection_array(vec![V::Null; 8])),
+        selection_frame("eliot.revision-dek.selection.v1", 1, 2, selection_array(vec![V::Null; 8])),
+        selection_frame("eliot.revision-dek.selection.v1", 1, 0, V::Null),
+        selection_value(true),
+    ];
+    for size in [7, 9] { bad_values.push(selection_frame("eliot.revision-dek.selection.v1", 1, 0, selection_array(vec![V::Null; size]))); }
+    let valid = selection_value(false);
+    bad_values.push(ControlValue::new(ControlRecordClass::Operation, valid.as_bytes().to_vec(), LIMITS).unwrap());
+    bad_values.push(ControlValue::new(ControlRecordClass::State, valid.as_bytes().iter().copied().chain([0]).collect(), LIMITS).unwrap());
+    for value in bad_values {
+        let mut changed = intent.command().mutation().writes().to_vec(); changed[0].value = value;
+        assert!(altered_selection(&intent, changed, vec![], intent.command().conditions().to_vec()).is_err());
+    }
+    for body in [selection_array(vec![V::Null; 3]), selection_array(vec![V::Null; 5]),
+        selection_array(vec![V::Null; 4]),
+        selection_array(vec![selection_array(vec![V::Null; 7]), V::Null, V::Null, V::Null]),
+        selection_array(vec![selection_array(vec![V::Null; 9]), V::Null, V::Null, V::Null])] {
+        let mut changed = current.command().mutation().writes().to_vec();
+        changed[0].value = selection_frame("eliot.revision-dek.selection.v1", 1, 1, body);
+        assert!(altered_selection(&current, changed, vec![], current.command().conditions().to_vec()).is_err());
+    }
+}
+
+#[test]
+fn revision_dek_selection_receipts_reconstruct_original_cas_and_recover_exact_history() {
+    use search_contracts::CanonicalValue as V;
+    let scratch = Scratch::new();
+    let mut journal = direct(&scratch);
+    let mut publisher = ControlSnapshotPublisher::new();
+    let work = |_| Ok::<_, &str>(());
+    let deadline = end();
+    let mut bound = journal.bind_control_port::<Cancel>(&mut publisher).unwrap();
+    for command in [dek_command(91, 1, false), dek_command(92, 2, true)] {
+        let identity = control_mutation_identity(command.command().mutation().id()).unwrap();
+        bound.transact_revision_dek_with_original_context(&command, &identity, deadline, &work).unwrap();
+    }
+    let application = selection_command(93, 3, false);
+    let current = selection_command(94, 4, true);
+    let application_id = control_mutation_identity(application.command().mutation().id()).unwrap();
+    let current_id = control_mutation_identity(current.command().mutation().id()).unwrap();
+    assert_eq!(bound.revision_dek_selection_operation_with_original_context(MutationId([93; 32]), deadline, &work).unwrap(), None);
+    assert_eq!(bound.revision_dek_selection_operation_with_original_context(MutationId([92; 32]), deadline, &work).unwrap_err().control, ControlError::OperationConflict);
+    bound.transact_revision_dek_selection_with_original_context(&application, &application_id, deadline, &work).unwrap();
+    let receipt = bound.revision_dek_selection_operation_with_original_context(MutationId([93; 32]), deadline, &work).unwrap().unwrap();
+    assert_eq!(receipt.operation_id, application.command().mutation().id());
+    assert_eq!(receipt.command_digest, application.command().mutation().command_digest());
+    assert_eq!((receipt.before_generation, receipt.after_generation), (3, 4));
+    let error = bound.transact_revision_dek_selection_with_original_context(&current, &current_id, deadline, &|unit|
+        if matches!(unit, Work::Write(n) if n > 0) { Err("selection-stage-refusal") } else { Ok(()) }).unwrap_err();
+    assert_eq!(error.control, ControlError::CommitOutcomeUnknown);
+    assert_eq!(error.first_context, Some("selection-stage-refusal"));
+    assert_eq!(bound.revision_dek_selection_operation_with_original_context(MutationId([94; 32]), deadline, &work).unwrap_err().control, ControlError::StoreQuarantined);
+    assert_eq!(bound.recover_revision_dek_selection_with_original_context(&current, &current_id, deadline, &work).unwrap(), CommitRecoveryDecision::NotCommittedRetrySameOperation);
+    bound.transact_revision_dek_selection_with_original_context(&current, &current_id, deadline, &work).unwrap();
+    let stored = bound.revision_dek_selection_operation_with_original_context(MutationId([94; 32]), deadline, &work).unwrap().unwrap();
+    assert_eq!((stored.before_generation, stored.after_generation), (4, 5));
+    assert!(matches!(bound.recover_revision_dek_selection_with_original_context(&application, &application_id, deadline, &work).unwrap(), CommitRecoveryDecision::Committed(receipt) if receipt.replayed));
+    // Same phase CID and even the same declared digest cannot replay changed bytes.
+    let mut changed = application.command().mutation().writes().to_vec();
+    let mut body = vec![V::Null; 8]; body[7] = V::U64(9);
+    changed[0].value = selection_frame("eliot.revision-dek.selection.v1", 1, 0, selection_array(body));
+    let changed = altered_selection(&application, changed, vec![], application.command().conditions().to_vec()).unwrap();
+    assert_eq!(bound.transact_revision_dek_selection_with_original_context(&changed, &application_id, deadline, &work).unwrap_err().control, ControlError::OperationConflict);
+    assert_eq!(bound.read_control_snapshot_with_original_context(deadline, &work).unwrap().generation, 5);
 }

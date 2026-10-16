@@ -97,6 +97,11 @@ impl NativeRootRequest {
                 || mode != DataRootOpenMode::OpenExistingMutating) {
             return Err(OwnerError::OwnerOperationConflict);
         }
+        if selected.first().is_some_and(|v| v == "--select-revision-dek-v1")
+            && (selected.len() != 4 || selected[1..].iter().any(|v| v.is_empty())
+                || mode != DataRootOpenMode::OpenExistingMutating) {
+            return Err(OwnerError::OwnerOperationConflict);
+        }
         request.root = PathBuf::from(&selected[1]);
         Ok((request, selected))
     }
