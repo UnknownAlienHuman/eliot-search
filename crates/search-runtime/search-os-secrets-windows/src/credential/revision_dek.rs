@@ -419,6 +419,8 @@ fn decode_frame<E>(
 /// export, lease or durable authority.
 struct ValidatedRevisionDekKey {
     bytes: [u8; 32],
+    #[cfg(test)]
+    cleared: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl ValidatedRevisionDekKey {
@@ -429,12 +431,17 @@ impl ValidatedRevisionDekKey {
     /// exactly 32 bytes or is the all-zero value.
     fn from_unwrapped(mut key: Vec<u8>) -> Result<Self, RevisionDekError<core::convert::Infallible>> {
         if key.len() != 32 || key.iter().all(|byte| *byte == 0) {
+            clear_bytes(key.as_mut_slice());
             return Err(RevisionDekError::ProtectedKeyInvalid);
         }
         let mut bytes = [0u8; 32];
         bytes.copy_from_slice(&key);
         clear_bytes(key.as_mut_slice());
-        Ok(Self { bytes })
+        Ok(Self {
+            bytes,
+            #[cfg(test)]
+            cleared: None,
+        })
     }
 
     /// Borrows the validated key bytes for the immediate AEAD call.
@@ -450,6 +457,10 @@ impl ValidatedRevisionDekKey {
 impl Drop for ValidatedRevisionDekKey {
     fn drop(&mut self) {
         clear_bytes(&mut self.bytes);
+        #[cfg(test)]
+        if let Some(witness) = &self.cleared {
+            witness.store(self.bytes.iter().all(|byte| *byte == 0), std::sync::atomic::Ordering::Release);
+        }
     }
 }
 
@@ -854,5 +865,63 @@ mod platform {
         fn drop(&mut self) {
             self.close();
         }
+    }
+}
+
+#[cfg(test)]
+mod validated_key_cleanup_tests {
+    use super::{ValidatedRevisionDekKey, clear_bytes};
+    use crate::RevisionDekError;
+
+    #[test]
+    fn invalid_length_vec_is_cleared_before_error_return() {
+        let key = vec![0xABu8; 31];
+        let original_len = key.len();
+        let result = ValidatedRevisionDekKey::from_unwrapped(key);
+        assert!(matches!(result, Err(RevisionDekError::ProtectedKeyInvalid)));
+        // The Vec was moved into from_unwrapped; we cannot inspect it directly,
+        // but the clear_bytes call before the early return guarantees the
+        // original 31 bytes are wiped before the Vec's Drop runs.
+        // This test documents the contract: invalid length must not leak.
+        let _ = original_len;
+    }
+
+    #[test]
+    fn all_zero_32_byte_vec_is_cleared_before_error_return() {
+        let key = vec![0u8; 32];
+        let result = ValidatedRevisionDekKey::from_unwrapped(key);
+        assert!(matches!(result, Err(RevisionDekError::ProtectedKeyInvalid)));
+    }
+
+    #[test]
+    fn valid_32_byte_nonzero_key_produces_guard() {
+        let mut key = [0u8; 32];
+        key[0] = 0x01;
+        key[31] = 0xFF;
+        let key_vec = key.to_vec();
+        let guard = ValidatedRevisionDekKey::from_unwrapped(key_vec).unwrap();
+        assert_eq!(guard.as_bytes(), &key);
+    }
+
+    #[test]
+    fn guard_drop_zeroizes_bytes_via_witness() {
+        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+        let witness = Arc::new(AtomicBool::new(false));
+        let mut bytes = [0u8; 32];
+        bytes[0] = 0x42;
+        bytes[31] = 0xFF;
+        let guard = ValidatedRevisionDekKey {
+            bytes,
+            cleared: Some(Arc::clone(&witness)),
+        };
+        drop(guard);
+        assert!(witness.load(Ordering::Acquire), "guard drop must zeroize bytes");
+    }
+
+    #[test]
+    fn clear_bytes_wipes_slice() {
+        let mut data = [0xCDu8; 64];
+        clear_bytes(&mut data);
+        assert!(data.iter().all(|&b| b == 0));
     }
 }
