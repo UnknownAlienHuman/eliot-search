@@ -458,7 +458,7 @@ fn map_full_read_error(error: FullReadError, limit_error: &str) -> String {
             SafeReadError::RootIdentityMismatch => "DIRECT_SOURCE_ESCAPE_DENIED".to_owned(),
             SafeReadError::UnsupportedFileKind => "DIRECT_SOURCE_FINAL_OBJECT_INVALID".to_owned(),
             SafeReadError::ReparseBoundaryDenied => "DIRECT_SOURCE_LINK_DENIED".to_owned(),
-            SafeReadError::SecurityDenied | SafeReadError::SecurityRevisionMismatch => {
+            SafeReadError::SecurityDenied | SafeReadError::SecurityRevisionMismatch | SafeReadError::RootPurposeMismatch => {
                 "DIRECT_SOURCE_ACCESS_DENIED".to_owned()
             }
             SafeReadError::SourceSizeInvalid => limit_error.to_owned(),

@@ -173,8 +173,16 @@ fn initialize_target(
         anchor_root: None,
         exclusions: Vec::new(),
     };
-    cap.provision_target(direct).map_err(|error| cap.failure(error))?;
-    cap.verify_completed().map_err(|error| cap.failure(error))?;
+    cap.provision_target(direct).map_err(|error| {
+        #[cfg(test)]
+        eprintln!("native initialization provision failed: {error:?}");
+        cap.failure(error)
+    })?;
+    cap.verify_completed().map_err(|error| {
+        #[cfg(test)]
+        eprintln!("native initialization verification failed: {error:?}");
+        cap.failure(error)
+    })?;
     Ok(InitializationResult {
         root: cap,
         replayed: false,

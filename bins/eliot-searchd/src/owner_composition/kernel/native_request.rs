@@ -87,6 +87,11 @@ impl NativeRootRequest {
                 || mode != DataRootOpenMode::OpenExistingMutating) {
             return Err(OwnerError::OwnerOperationConflict);
         }
+        if selected.first().is_some_and(|v| v == "--admit-source-v2")
+            && (selected.len() != 7 || selected[1..].iter().any(|v| v.is_empty())
+                || mode != DataRootOpenMode::OpenExistingMutating) {
+            return Err(OwnerError::OwnerOperationConflict);
+        }
         request.root = PathBuf::from(&selected[1]);
         Ok((request, selected))
     }
@@ -736,6 +741,8 @@ impl NativeWork {
     ) -> Result<(), OwnerError> {
         request.check()?;
         #[cfg(test)]
+        if std::env::var_os("ELIOT_SEARCH_TEST_NATIVE_PHASE_TRACE").is_some() { eprintln!("native-phase:{phase}"); }
+        #[cfg(test)]
         if let Some(hook) = &mut self.phase_hook {
             hook(phase);
         }
@@ -851,6 +858,8 @@ fn charge(total: &mut usize, amount: usize, ceiling: usize) -> Result<(), OwnerE
         .checked_add(amount)
         .ok_or(OwnerError::ContractExhausted)?;
     if next > ceiling {
+        #[cfg(test)]
+        eprintln!("native-work exhausted: ceiling={ceiling} used={total} requested={amount}");
         return Err(OwnerError::ContractExhausted);
     }
     *total = next;

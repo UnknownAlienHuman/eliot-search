@@ -87,6 +87,33 @@ fn direct_v2_noncanonical_and_unknown_policy_refuse_before_owner_acquisition() {
         assert_eq!(fs::read(s.root.join("control/control.redb")).unwrap(), journal);
     }
 }
+
+#[test]
+fn native_source_v2_root_fd_policy_identity_redb_and_original_replay() {
+    let s = Scratch::new(true);
+    let policy = retained_v2(7);
+    let archive = s.base.join("native-policy.cbor");
+    fs::write(&archive, policy.encoded_inputs()).unwrap();
+    fs::write(s.source.join("one.rs"), b"pub fn native_source_fixture() {}\n").unwrap();
+    run_v2(&s, &s.source, &archive).unwrap();
+    let args = [OsString::from("--admit-source-v2"), s.root.as_os_str().to_owned(),
+        s.source.as_os_str().to_owned(), OsString::from("one.rs"), archive.as_os_str().to_owned(),
+        OsString::from("41414141414141414141414141414141"), OsString::from("new"),
+        OsString::from("--config-file"), s.config.as_os_str().to_owned()];
+    let mut output = Vec::new();
+    command::run(&args, Instant::now(), &mut output).unwrap();
+    let first = String::from_utf8(output).unwrap();
+    assert!(first.contains("\"admitted\":true"), "{first}");
+    assert!(first.contains("\"registry_revision\":2"), "{first}");
+    assert!(first.contains("\"ready\":false"));
+    fs::remove_file(s.source.join("one.rs")).unwrap();
+    let mut replay = Vec::new();
+    command::run(&args, Instant::now(), &mut replay).unwrap();
+    let replay = String::from_utf8(replay).unwrap();
+    assert!(replay.contains("\"admitted\":true"), "{replay}");
+    assert!(replay.contains("\"historical_commit\":true"), "{replay}");
+    assert!(replay.contains("\"registry_revision\":2"), "{replay}");
+}
 impl Scratch {
     fn new(direct: bool) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);

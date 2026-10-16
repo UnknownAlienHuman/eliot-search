@@ -11,7 +11,8 @@ const MAX_CLASSIFIER_PATH_BYTES: usize = 4_096;
 const MAX_CLASSIFIER_COMPONENTS: usize = 256;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct ClassifiedSource {
+#[expect(clippy::struct_excessive_bools, reason = "Independent closed metadata signals required by the admission observation owner")]
+pub struct ClassifiedSource {
     pub(crate) source_class: SourceClass,
     pub(crate) sensitivity: SensitivityLevel,
     pub(crate) is_generated: bool,
@@ -20,7 +21,7 @@ pub(crate) struct ClassifiedSource {
     pub(crate) is_system: bool,
 }
 
-pub(crate) fn classify(path: &Path) -> Result<ClassifiedSource, String> {
+pub fn classify(path: &Path) -> Result<ClassifiedSource, String> {
     let raw_name = file_name_text(path)?;
     let name = raw_name.to_ascii_lowercase();
     let components = path_components_lower(path)?;
@@ -55,11 +56,7 @@ pub(crate) fn classify(path: &Path) -> Result<ClassifiedSource, String> {
     })
 }
 
-pub(crate) fn classify_bytes(path: &Path, bytes: &[u8]) -> Result<ClassifiedSource, String> {
-    Ok(narrow_with_bytes(classify(path)?, bytes))
-}
-
-pub(crate) fn narrow_with_bytes(mut input: ClassifiedSource, bytes: &[u8]) -> ClassifiedSource {
+pub fn narrow_with_bytes(mut input: ClassifiedSource, bytes: &[u8]) -> ClassifiedSource {
     input.is_binary = bytes.contains(&0) || std::str::from_utf8(bytes).is_err();
     if pem_private_key_header(bytes) {
         input.source_class = SourceClass::PrivateKey;

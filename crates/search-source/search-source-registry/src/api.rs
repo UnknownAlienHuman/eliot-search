@@ -732,3 +732,4 @@ where
 {
     recovery_apply_batch(registry, batch, receipt, control_port, context)
 }
+pub use search_source_records::source_request_v2::source_receipt;

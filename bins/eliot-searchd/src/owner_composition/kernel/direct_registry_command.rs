@@ -41,6 +41,7 @@ fn is_direct_command(argument: &OsStr) -> bool {
             command,
             "--register-source-root"
                 | "--register-source-root-v2"
+                | "--admit-source-v2"
                 | "--unregister-source-root"
                 | "--source-roots"
                 | "--health-data-root"
@@ -67,6 +68,7 @@ pub(super) fn run(
         .ok_or("SOURCE_ROOT_USAGE_ERROR")?;
     let expected = match command {
         "--register-source-root-v2" => 4,
+        "--admit-source-v2" => 7,
         "--register-source-root"
         | "--unregister-source-root"
         | "--search-root"
@@ -78,7 +80,7 @@ pub(super) fn run(
     if selected.len() != expected || !cli.overrides.is_empty() {
         return Err("DIRECT_INPUT_UNAVAILABLE".into());
     }
-    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2") {
+    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2") {
         DataRootOpenMode::OpenExistingMutating
     } else {
         DataRootOpenMode::InspectExistingReadOnly
@@ -106,14 +108,15 @@ pub(super) fn run(
     let mut work = NativeWork::new();
     let preflight = (|| {
         let hints = capture_hints(&request, &mut work, cli, command, &selected)?;
-        let policy = if command == "--register-source-root-v2" {
+        let policy = if matches!(command, "--register-source-root-v2" | "--admit-source-v2") {
             Some(super::super::super::direct_policy_v2::capture(
-                &request, &mut work, Path::new(&selected[3]),
+                &request, &mut work, Path::new(&selected[if command == "--admit-source-v2" { 4 } else { 3 }]),
             ).map_err(|e| e.code().to_owned())?)
         } else { None };
-        Ok::<_, String>((hints, policy))
+        let source = (command == "--admit-source-v2").then(|| super::source_command::NativeSourceCommand::parse(&selected)).transpose()?;
+        Ok::<_, String>((hints, policy, source))
     })();
-    let (hints, policy) = match preflight {
+    let (hints, policy, source) = match preflight {
         Ok(value) => value,
         Err(error) => {
             let line = format!(
@@ -129,12 +132,13 @@ pub(super) fn run(
     let owner = DirectRegistryOwner::open_for_command(request, work, writer)?;
     owner.execute(
         &hints,
-        if matches!(command, "--register-source-root" | "--register-source-root-v2") {
+        if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2") {
             Some(Path::new(&selected[2]))
         } else {
             None
         },
         policy.as_ref(),
+        source.as_ref(),
         writer,
     )
 }
@@ -331,7 +335,7 @@ impl DirectOutput {
     }
 }
 
-fn published_metadata(
+pub(super) fn published_metadata(
     journal: &search_control_redb::PersistentControlJournal,
     publisher: &mut search_control_redb::ControlSnapshotPublisher,
     deadline: Instant,
@@ -347,7 +351,7 @@ fn published_metadata(
     Ok(snapshot)
 }
 
-fn original_port<'a, C: search_ports::CancellationProbe>(
+pub(super) fn original_port<'a, C: search_ports::CancellationProbe>(
     journal: &'a mut search_control_redb::PersistentControlJournal,
     publisher: &'a mut search_control_redb::ControlSnapshotPublisher,
     deadline: Instant,
@@ -432,12 +436,12 @@ fn capture_hints(
     let effective = config::build_effective(file, None, None, "direct", "direct")
         .map_err(|_| "DIRECT_CONFIG_INVALID")?;
     let hints = RootLocatorHints::from_config(&effective)?;
-    if matches!(command, "--register-source-root" | "--register-source-root-v2") {
+    if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2") {
         hints.selected(Path::new(&selected[2]))?;
     }
     if !matches!(
         command,
-        "--register-source-root" | "--register-source-root-v2" | "--source-roots" | "--health-data-root" | "--verify-root"
+        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--source-roots" | "--health-data-root" | "--verify-root"
     ) {
         return Err("DIRECT_CONSUMER_UNAVAILABLE".into());
     }
