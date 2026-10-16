@@ -430,18 +430,7 @@ impl ValidatedRevisionDekKey {
     /// Returns [`RevisionDekError::ProtectedKeyInvalid`] if the key is not
     /// exactly 32 bytes or is the all-zero value.
     fn from_unwrapped(mut key: Vec<u8>) -> Result<Self, RevisionDekError<core::convert::Infallible>> {
-        if key.len() != 32 || key.iter().all(|byte| *byte == 0) {
-            clear_bytes(key.as_mut_slice());
-            return Err(RevisionDekError::ProtectedKeyInvalid);
-        }
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(&key);
-        clear_bytes(key.as_mut_slice());
-        Ok(Self {
-            bytes,
-            #[cfg(test)]
-            cleared: None,
-        })
+        copy_and_clear(key.as_mut_slice())
     }
 
     /// Borrows the validated key bytes for the immediate AEAD call.
@@ -452,6 +441,25 @@ impl ValidatedRevisionDekKey {
     fn as_bytes(&self) -> &[u8; 32] {
         &self.bytes
     }
+}
+
+/// Private slice helper: validates, copies to [u8; 32], clears source slice.
+///
+/// Called from `from_unwrapped` with the raw Vec's mutable slice.
+/// Tests call this directly with a mutable buffer to prove cleanup.
+fn copy_and_clear(key: &mut [u8]) -> Result<ValidatedRevisionDekKey, RevisionDekError<core::convert::Infallible>> {
+    if key.len() != 32 || key.iter().all(|byte| *byte == 0) {
+        clear_bytes(key);
+        return Err(RevisionDekError::ProtectedKeyInvalid);
+    }
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(key);
+    clear_bytes(key);
+    Ok(ValidatedRevisionDekKey {
+        bytes,
+        #[cfg(test)]
+        cleared: None,
+    })
 }
 
 impl Drop for ValidatedRevisionDekKey {
@@ -870,37 +878,34 @@ mod platform {
 
 #[cfg(test)]
 mod validated_key_cleanup_tests {
-    use super::{ValidatedRevisionDekKey, clear_bytes};
+    use super::{ValidatedRevisionDekKey, clear_bytes, copy_and_clear};
     use crate::RevisionDekError;
 
     #[test]
-    fn invalid_length_vec_is_cleared_before_error_return() {
-        let key = vec![0xABu8; 31];
-        let original_len = key.len();
-        let result = ValidatedRevisionDekKey::from_unwrapped(key);
+    fn copy_and_clear_invalid_length_clears_source_slice() {
+        let mut key = [0xABu8; 31];
+        let result = copy_and_clear(&mut key);
         assert!(matches!(result, Err(RevisionDekError::ProtectedKeyInvalid)));
-        // The Vec was moved into from_unwrapped; we cannot inspect it directly,
-        // but the clear_bytes call before the early return guarantees the
-        // original 31 bytes are wiped before the Vec's Drop runs.
-        // This test documents the contract: invalid length must not leak.
-        let _ = original_len;
+        assert!(key.iter().all(|&b| b == 0), "invalid length must clear source slice");
     }
 
     #[test]
-    fn all_zero_32_byte_vec_is_cleared_before_error_return() {
-        let key = vec![0u8; 32];
-        let result = ValidatedRevisionDekKey::from_unwrapped(key);
+    fn copy_and_clear_all_zero_clears_source_slice() {
+        let mut key = [0u8; 32];
+        let result = copy_and_clear(&mut key);
         assert!(matches!(result, Err(RevisionDekError::ProtectedKeyInvalid)));
+        assert!(key.iter().all(|&b| b == 0), "all-zero must clear source slice");
     }
 
     #[test]
-    fn valid_32_byte_nonzero_key_produces_guard() {
+    fn copy_and_clear_valid_preserves_key_and_clears_source() {
         let mut key = [0u8; 32];
         key[0] = 0x01;
         key[31] = 0xFF;
-        let key_vec = key.to_vec();
-        let guard = ValidatedRevisionDekKey::from_unwrapped(key_vec).unwrap();
-        assert_eq!(guard.as_bytes(), &key);
+        let expected = key;
+        let guard = copy_and_clear(&mut key).unwrap();
+        assert_eq!(guard.as_bytes(), &expected);
+        assert!(key.iter().all(|&b| b == 0), "valid path must clear source slice");
     }
 
     #[test]
