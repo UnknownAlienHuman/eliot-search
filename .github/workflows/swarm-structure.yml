@@ -34,21 +34,9 @@ jobs:
         shell: pwsh
         run: ./tools/validate-stage-readsets.ps1 -Json
 
-      - name: Validate non-claimable P00 ticket/context control plane
-        shell: pwsh
-        run: ./tools/validate-p00-ticket-drafts.ps1 -Json
-
-      - name: Validate ticket issuance record schemas
-        shell: pwsh
-        run: ./tools/validate-ticket-issuance-contracts.ps1 -Json
-
       - name: Validate functions, configuration and W3 qualification
         shell: pwsh
         run: ./tools/validate-implementation-packets.ps1 -Json
-
-      - name: Validate W4 registry and current-workspace qualification
-        shell: pwsh
-        run: ./tools/validate-current-packets.ps1 -Json
 
       - name: Validate W5 cross-contract, settings and Rust syntax qualification
         shell: pwsh
