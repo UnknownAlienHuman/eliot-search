@@ -22,6 +22,9 @@
 //!   thread impersonation, a fresh private 32-byte key owner, scoped DPAPI and
 //!   an exact versioned credential. They grant no Current selection or key use;
 //!   durable Intent/Candidate role publication remains with Core/C02/daemon.
+//! - first Current selection reconstructs the configured backend by reading and
+//!   unwrap-validating the exact existing candidate. Its private dependency
+//!   retains protected readback through caller fences; publication stays in C02.
 //!
 //! The optional `test-credential-cleanup` feature adds one exact-namespace,
 //! readback-verified cleanup operation for native test harnesses.
@@ -34,12 +37,14 @@
 mod credential;
 mod dpapi;
 mod model;
+mod revision_selection;
 #[cfg(feature = "test-credential-cleanup")]
 mod test_credential_cleanup;
 
 pub use credential::*;
 pub use dpapi::*;
 pub use model::*;
+pub use revision_selection::*;
 #[cfg(feature = "test-credential-cleanup")]
 pub use test_credential_cleanup::*;
 
