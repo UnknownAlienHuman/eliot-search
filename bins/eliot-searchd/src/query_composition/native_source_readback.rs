@@ -1,21 +1,16 @@
-//! C24 exact raw-unit readback through the retained native process owner.
-//!
-//! Source bytes and residency metadata come from the same guarded C02/C07
-//! reopen. No metadata copied from a nomination can authorize residency. The
-//! caller retains one read state for the entire admitted request, including
-//! yields; reopening a small unit still charges the full encrypted revision.
+//! C24 validation through the retained native process owner and actual C03 state.
+//! Source bytes and residency metadata come from the same guarded C02/C07 reopen.
+//! The caller retains one read state across the entire admitted request.
 
 use search_candidate_validator::{
-    CandidateAssurance, ExactRevisionReadbackRequest, RevisionReadbackPort, SourceReadback,
-    VerifiedSourceSlice, reopen_and_verify_raw_v3_full_unit_v1,
+    CandidateAssurance, CandidateNomination, ExactRevisionReadbackRequest, RevisionReadbackPort,
+    SourceReadback, ValidationContext, ValidationOutcome, validate_raw_v3_full_unit_v1,
 };
 use search_contracts::{
-    Blake3Digest32, Blake3ExactInputLimit, SourceMembershipId, SourceRevisionRef,
-    blake3_exact_bytes,
+    Blake3Digest32, Blake3ExactInputLimit, CandidateId, NamespaceOwnershipStatus, SourceOwnerFence,
+    SourceRevision, SourceRevisionRef, blake3_exact_bytes,
 };
-use search_unitizer::{
-    V3AnchorPolicy, V3AttachmentPolicy, V3OmissionPolicy, V3OverlapPolicy, VerifiedUnitSet,
-};
+use search_unitizer::VerifiedUnitSet;
 
 use crate::{
     access_composition::StandalonePreRetrievalAdmission,
@@ -53,73 +48,72 @@ where
     }
 }
 
-/// Reopen and verify exactly one complete raw-v3 unit in the current live turn.
+/// Validate through C24, then the original native read and actual C07 metadata.
 ///
-/// `expected` is the immutable source reference used by the source owner, not a
-/// path or Qdrant record. The native owner independently resolves its exact
-/// committed object and checks access, purge and original request context.
+/// The ID is allocated once by the admitted task's ID source. C24 owns source,
+/// unit, profile and range validation, actual-byte hashing, final permit and
+/// receipt construction. Root supplies current C03 ownership and the concrete
+/// native port. No query-time store write or fresh source-read budget is created.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn reopen_retained_raw_v3(
+pub(super) fn validate_retained_raw_v3(
     custody: &mut NativeProcessRootCustody,
     state: &mut RetainedRevisionReadState,
     registry: &search_source_registry::SourceRegistry,
     output: &mut CanonicalWorkOutput<'_, '_, '_>,
     admission: &StandalonePreRetrievalAdmission,
-    membership: SourceMembershipId,
+    source_revision: &SourceRevision,
     expected: &SourceRevisionRef,
     units: &VerifiedUnitSet,
-    request: &ExactRevisionReadbackRequest,
+    nomination: &CandidateNomination,
+    validation: &ValidationContext,
+    candidate_id: CandidateId,
+    final_live_security: &search_access::LiveSecurityState,
     config: &EffectiveDaemonConfig,
-) -> Result<VerifiedSourceSlice, CanonicalServingError> {
-    let profile = units.manifest().profile();
-    let provenance = units.manifest().provenance();
-    let binding = provenance.binding();
-    let unit = units
-        .units()
-        .iter()
-        .find(|unit| unit.unit_id() == request.unit_id)
+) -> Result<ValidationOutcome, CanonicalServingError> {
+    if registry.revision() != admission.scope.source_catalog_generation {
+        return Err(CanonicalServingError::Access(
+            search_access::AccessError::SnapshotStale,
+        ));
+    }
+    let membership_id = nomination.source_membership_id;
+    let (membership, identity) = registry
+        .active_source_membership_v2(membership_id)
+        .map_err(|_| unavailable())?;
+    let namespace = registry
+        .namespaces()
+        .get(&identity.source_namespace_id)
         .ok_or_else(unavailable)?;
-    let profile_id = units.manifest().profile_id();
-    let profile_digest = profile_id
-        .as_str()
-        .strip_prefix("unitizer-v3-")
-        .and_then(|digest| Blake3Digest32::parse_hex(digest).ok())
-        .ok_or_else(unavailable)?;
-    if profile.anchor_policy != V3AnchorPolicy::ExactTextBytes
-        || profile.attachment_policy != V3AttachmentPolicy::Absent
-        || profile.omission_policy != V3OmissionPolicy::Forbidden
-        || profile.overlap_policy != V3OverlapPolicy::None
-        || binding.source_namespace_id != expected.source_namespace_id
-        || binding.source_id != expected.source_id
-        || binding.source_revision_id != expected.revision_id
-        || provenance.input_digest() != expected.content_digest
-        || provenance.canonical_digest() != expected.content_digest
-        || provenance.native_bytes() != expected.byte_length
-        || provenance.canonical_bytes() != expected.byte_length
-        || request.source_membership_id != membership
-        || request.source_revision_id != expected.revision_id
-        || request.representation_id != units.representation().representation_id
-        || request.byte_start != unit.source_start()
-        || request.byte_end != unit.source_end()
-        || request.expected_content_digest != expected.content_digest
-        || request.expected_unit_digest != unit.unit_content_digest()
-        || request.expected_profile_id != *profile_id
-        || request.expected_profile_digest != profile_digest
-        || request.expected_assurance != CandidateAssurance::Exact
-        || request.byte_start >= request.byte_end
-        || request.byte_end - request.byte_start > request.max_read_bytes
+    if namespace.ownership.status != NamespaceOwnershipStatus::Active
+        || namespace.fenced
+        || namespace.preparation.is_some()
+        || namespace.activation.is_some()
     {
         return Err(unavailable());
     }
-    let start = usize::try_from(unit.source_start()).map_err(|_| unavailable())?;
-    let end = usize::try_from(unit.source_end()).map_err(|_| unavailable())?;
-    let read = |_: &ExactRevisionReadbackRequest| {
+    let owner_fence = SourceOwnerFence {
+        source_namespace_id: identity.source_namespace_id,
+        source_owner_generation: namespace.ownership.source_owner_generation,
+    };
+    let read = |request: &ExactRevisionReadbackRequest| {
+        let unit = units
+            .units()
+            .iter()
+            .find(|unit| unit.unit_id() == request.unit_id)
+            .ok_or_else(unavailable)?;
+        let profile_id = units.manifest().profile_id();
+        let profile_digest = profile_id
+            .as_str()
+            .strip_prefix("unitizer-v3-")
+            .and_then(|digest| Blake3Digest32::parse_hex(digest).ok())
+            .ok_or_else(unavailable)?;
+        let start = usize::try_from(unit.source_start()).map_err(|_| unavailable())?;
+        let end = usize::try_from(unit.source_end()).map_err(|_| unavailable())?;
         custody.with_serving_retained_read(
             state,
             registry,
             output,
             admission,
-            membership,
+            membership_id,
             expected,
             config,
             |body, metadata| {
@@ -137,7 +131,7 @@ pub(super) fn reopen_retained_raw_v3(
                     .map_err(|_| unavailable())?;
                 copied.extend_from_slice(bytes);
                 Ok(SourceReadback {
-                    source_membership_id: membership,
+                    source_membership_id: membership_id,
                     source_revision_id: expected.revision_id,
                     representation_id: units.representation().representation_id,
                     unit_id: unit.unit_id(),
@@ -161,9 +155,21 @@ pub(super) fn reopen_retained_raw_v3(
         read,
         failure: None,
     };
-    let verified = reopen_and_verify_raw_v3_full_unit_v1(request, &mut port);
+    let validated = validate_raw_v3_full_unit_v1(
+        nomination,
+        validation,
+        candidate_id,
+        membership,
+        source_revision,
+        expected,
+        owner_fence,
+        units,
+        expected.byte_length,
+        &mut port,
+        final_live_security,
+    );
     if let Some(error) = port.failure {
         return Err(error);
     }
-    verified.map_err(|_| unavailable())
+    Ok(validated)
 }
