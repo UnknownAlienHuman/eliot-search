@@ -47,6 +47,9 @@ impl RevisionStore {
                 return Err(RevisionStoreError::OperationConflict);
             }
             RevisionState::Active(record) if &record.operation == operation => {
+                if self.is_fenced(key) {
+                    return Err(RevisionStoreError::Tombstoned);
+                }
                 return Ok(RecoveryResult::Applied(receipt_from_record(record, true)));
             }
             RevisionState::Active(_) => return Err(RevisionStoreError::RevisionConflict),

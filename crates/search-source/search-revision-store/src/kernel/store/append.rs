@@ -42,6 +42,9 @@ impl RevisionStore {
                 && record.operation == intent.operation
                 && exact_record_matches_intent(record, &intent)
             {
+                if self.is_fenced(&intent.key) {
+                    return Err(RevisionStoreError::Tombstoned);
+                }
                 let mut replay = receipt.clone();
                 replay.replayed = true;
                 return Ok(PrepareAppendResult::AlreadyStored(replay));
@@ -115,6 +118,9 @@ impl RevisionStore {
                 return Err(RevisionStoreError::OperationConflict);
             }
             RevisionState::Active(record) if &record.operation == operation => {
+                if self.is_fenced(key) {
+                    return Err(RevisionStoreError::Tombstoned);
+                }
                 return Ok(receipt_from_record(record, true));
             }
             RevisionState::Active(_) => return Err(RevisionStoreError::RevisionConflict),

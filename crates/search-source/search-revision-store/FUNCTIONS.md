@@ -237,6 +237,12 @@ Stores/activates the non-content tombstone generation at the revision/object adm
 later write/import/restore/reindex attempt for the tombstoned scope/owner generation is rejected before
 object publication. Tombstone removal is not a public operation.
 
+In the implemented kernel, an installed complete-residency or whole-scope tombstone also blocks
+`active_record` and successful append/confirmation/recovery replays, including retained Active records.
+`state()` remains historical diagnostic state; it grants no active read. Exact lifecycle-authorized
+deletion and its replay remain available for purge cleanup. Refusal does not discard Pending or
+OutcomeUnknown evidence, and non-fenced keys retain their existing behavior.
+
 ## `enter_restore_quarantine`
 
 ```text
