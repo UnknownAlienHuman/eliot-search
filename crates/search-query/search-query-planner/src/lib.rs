@@ -18,9 +18,9 @@ use std::collections::BTreeSet;
 
 use search_access::{AccessModality, AuthorizedScope, SafeRetrievalLeg, ValidatedGrant};
 use search_contracts::{
-    Blake3ExactInputLimit, LegKind, QueryExecutionBudget, QuerySnapshotFence, RecipeBodyV1,
-    RecipeIdV1, RequestId, SearchReadGrantClaims, SearchRecipeRequest, SearchTaskPlan,
-    SourceMembershipId, blake3_exact_bytes,
+    Blake3ExactInputLimit, LegKind, ObservationFreshnessState, QueryExecutionBudget,
+    QuerySnapshotFence, RecipeBodyV1, RecipeIdV1, RequestId, SearchReadGrantClaims,
+    SearchRecipeRequest, SearchTaskPlan, SourceMembershipId, blake3_exact_bytes,
 };
 
 /// Closed query-planning failure.
@@ -169,7 +169,8 @@ pub enum OmittedCapability {
     Rerank,
 }
 
-/// Frozen package-local deterministic plan digest.
+/// Plan identity bytes. Legacy compilation preserves its frozen graph digest;
+/// canonical compilation carries the verified contract BLAKE3 plan fingerprint.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct CompiledPlanDigest(pub [u8; 32]);
 
@@ -222,11 +223,11 @@ pub fn compile_plan(
 /// Compiles the executor graph against an already admitted canonical task plan.
 ///
 /// The native serving owner must authenticate and check grant lifetime and source authorization
-/// before calling this pure planner. This function verifies the request, recipe/budget grant
-/// fields, exact plan/grant/scope fences, canonical fingerprints, and safe-leg closure. The
+/// before calling this pure planner. This function also enforces the canonical grant's membership,
+/// source-read and exact-scan ceilings, freshness and budgets before building the graph. The
 /// contract's `Modality` describes source content classes, so it is deliberately not translated
-/// into the legacy retrieval `AccessModality` values here. The returned legacy graph digest is
-/// retained for existing consumers; callers use `task_plan.plan_fingerprint` as plan identity.
+/// into the legacy retrieval `AccessModality` values here. The returned `digest` carries the
+/// verified `task_plan.plan_fingerprint`; relaxed observation gaps remain explicit in `snapshot`.
 pub fn compile_canonical_plan(
     task_plan: &SearchTaskPlan,
     grant: &SearchReadGrantClaims,
@@ -236,6 +237,9 @@ pub fn compile_canonical_plan(
     safe_index_legs: &[SafeRetrievalLeg],
 ) -> Result<CompiledSearchPlan, PlanError> {
     let request = recipe.request();
+    grant
+        .validate_shape()
+        .map_err(|_| PlanError::CanonicalPlanInvalid)?;
     task_plan
         .validate()
         .map_err(|_| PlanError::CanonicalPlanInvalid)?;
@@ -250,6 +254,36 @@ pub fn compile_canonical_plan(
     }
     if grant.maximum_budget_class != request.requested_budget_class {
         return Err(PlanError::BudgetClassDenied);
+    }
+    let source_reads = canonical_requires_source_read(&request.body);
+    let exact_recipe = matches!(
+        request.recipe,
+        RecipeIdV1::CompileExactScan | RecipeIdV1::ExecuteExactScan
+    );
+    if (source_reads && !grant.source_read_permission)
+        || (exact_recipe && !grant.exact_scan_permission)
+    {
+        return Err(PlanError::RecipeDenied);
+    }
+    let budget = task_plan.query_execution_budget;
+    let exact_budget_enabled = budget.max_exact_scan_items > 0 && budget.max_exact_scan_bytes > 0;
+    if exact_recipe && !exact_budget_enabled {
+        return Err(PlanError::BudgetExceeded);
+    }
+    let freshness = task_plan.query_snapshot_fence.observation_freshness.state;
+    let requires_current = task_plan.exactness_requirements.require_current_observation
+        || matches!(
+            &request.body,
+            RecipeBodyV1::CompileExactScan { body, .. }
+                if body.completeness_requirements.require_current_observation
+        );
+    if (requires_current && freshness != ObservationFreshnessState::CurrentConfirmed)
+        || (matches!(
+            freshness,
+            ObservationFreshnessState::GapDetected | ObservationFreshnessState::Unknown
+        ) && !task_plan.exactness_requirements.allow_truthful_partial)
+    {
+        return Err(PlanError::StrictCurrentnessUnavailable);
     }
     if task_plan.grant_fence.grant_id != grant.grant_id
         || task_plan.grant_fence.revocation_generation != grant.revocation_generation
@@ -267,19 +301,44 @@ pub fn compile_canonical_plan(
         request,
         &authorized_scope,
         safe_index_legs,
+        recipe_modalities(request.recipe).retrieval.lexical
+            && capabilities.retrieval.lexical
+            && grant.source_read_permission,
     )?;
     verify_canonical_snapshot(&task_plan.query_snapshot_fence)?;
     verify_canonical_plan(task_plan)?;
 
-    compile_plan_inner(
+    let mut compiled = compile_plan_inner(
         recipe,
         authorized_scope,
         task_plan.query_snapshot_fence.clone(),
         capabilities,
         task_plan.query_execution_budget,
         safe_index_legs,
-        |_| true,
-    )
+        |modality| match modality {
+            AccessModality::Direct => !source_reads || grant.source_read_permission,
+            AccessModality::Exact => {
+                grant.source_read_permission && grant.exact_scan_permission && exact_budget_enabled
+            }
+            _ => grant.source_read_permission,
+        },
+    )?;
+    compiled.digest = CompiledPlanDigest(*task_plan.plan_fingerprint.as_bytes());
+    Ok(compiled)
+}
+
+const fn canonical_requires_source_read(body: &RecipeBodyV1) -> bool {
+    match body {
+        RecipeBodyV1::CorpusProfile(_)
+        | RecipeBodyV1::CorpusDelta(_)
+        | RecipeBodyV1::Provenance(_) => false,
+        RecipeBodyV1::ExpandHandle(recipe) => matches!(
+            recipe.expansion,
+            search_contracts::HandleExpansionKind::Excerpt
+                | search_contracts::HandleExpansionKind::Continuation
+        ),
+        _ => true,
+    }
 }
 
 fn compile_plan_inner<F>(
@@ -480,6 +539,7 @@ fn validate_canonical_scope(
     request: &SearchRecipeRequest,
     scope: &AuthorizedScope,
     safe_legs: &[SafeRetrievalLeg],
+    lexical_enabled: bool,
 ) -> Result<(), PlanError> {
     let snapshot = &task_plan.query_snapshot_fence;
     if snapshot.installation_incarnation_id != grant.installation_incarnation_id
@@ -511,6 +571,9 @@ fn validate_canonical_scope(
     if authorized_memberships.is_empty()
         || selected_memberships.len() != task_plan.selected_membership_ids.len()
         || selected_memberships != authorized_memberships
+        || selected_memberships
+            .iter()
+            .any(|membership| !grant.allowed_membership_ids.contains(membership))
         || scope
             .memberships
             .iter()
@@ -588,6 +651,11 @@ fn validate_canonical_scope(
             }
             common_live_security_generation = Some(eligibility.live_security_generation);
         }
+    }
+    // No legs already produces the builder's explicit lexical omission marker.
+    // A nonempty partial set must not masquerade as full lexical coverage.
+    if lexical_enabled && !safe_legs.is_empty() && safe_memberships != authorized_memberships {
+        return Err(PlanError::ScopeMismatch);
     }
     Ok(())
 }
@@ -1614,6 +1682,120 @@ mod canonical_plan_tests {
         )
     }
 
+    fn set_recipe(fixture: &mut Fixture, body: RecipeBodyV1) {
+        let mut request = fixture.recipe.request().clone();
+        request.recipe = body.recipe_id();
+        request.body = body;
+        fixture.grant.permitted_recipe_families =
+            BoundedSet::from_items([request.recipe]).expect("recipe grant");
+        fixture.task_plan.recipe_request_digest = request
+            .canonical_request_digest()
+            .expect("changed request digest");
+        fixture.recipe = normalize_recipe(request).expect("changed recipe");
+        seal_plan(&mut fixture.task_plan);
+    }
+
+    fn predicate() -> search_contracts::ExactPredicate {
+        search_contracts::ExactPredicate {
+            kind: search_contracts::ExactPredicateKind::Literal,
+            engine_and_version: profile("literal-v1"),
+            serialized_form: search_contracts::BoundedCanonicalBytes::from_validated(
+                b"needle".to_vec(),
+            )
+            .expect("predicate bytes"),
+            input_domain: search_contracts::ExactInputDomain::DecodedText,
+            worst_case_complexity_class: profile("linear"),
+        }
+    }
+
+    fn compile_exact_body() -> RecipeBodyV1 {
+        RecipeBodyV1::CompileExactScan {
+            predicate: predicate(),
+            body: search_contracts::CompileExactScanRecipe {
+                completeness_requirements: search_contracts::ExactCompletenessRequirements {
+                    require_every_denominator_item: true,
+                    require_stable_or_retained_revision: true,
+                    require_current_observation: true,
+                    include_authenticated_unsaved_buffers: false,
+                    fail_on_timeout: true,
+                    fail_on_cancellation: true,
+                    fail_on_scope_drift: true,
+                },
+            },
+        }
+    }
+
+    fn exact_fixture() -> Fixture {
+        let mut fixture = fixture();
+        let body = RecipeBodyV1::ExecuteExactScan(search_contracts::ExecuteExactScanRecipe {
+            plan_ref: search_contracts::ExactScanPlanRef {
+                plan_id: fixture.task_plan.plan_id,
+                plan_fingerprint: fixture.task_plan.plan_fingerprint,
+            },
+        });
+        fixture.grant.exact_scan_permission = true;
+        fixture.capabilities.retrieval.direct = false;
+        fixture.capabilities.retrieval.lexical = false;
+        fixture.capabilities.retrieval.exact = true;
+        fixture.safe_legs.clear();
+        fixture
+            .task_plan
+            .query_execution_budget
+            .max_exact_scan_items = 16;
+        fixture
+            .task_plan
+            .query_execution_budget
+            .max_exact_scan_bytes = 1000;
+        set_recipe(&mut fixture, body);
+        fixture
+    }
+
+    fn find_text_fixture() -> Fixture {
+        let mut fixture = exact_fixture();
+        fixture.capabilities.retrieval.direct = true;
+        set_recipe(
+            &mut fixture,
+            RecipeBodyV1::FindText(search_contracts::FindTextRecipe {
+                predicate: predicate(),
+                case_policy: search_contracts::CasePolicy::Exact,
+                context_bytes_before: 0,
+                context_bytes_after: 0,
+            }),
+        );
+        fixture
+    }
+
+    fn set_freshness(fixture: &mut Fixture, state: ObservationFreshnessState) {
+        let snapshot = &mut fixture.task_plan.query_snapshot_fence;
+        snapshot.observation_freshness.state = state;
+        snapshot.observation_freshness.observed_age_ms =
+            (state == ObservationFreshnessState::ObservedWithAge).then_some(1);
+        seal_snapshot(snapshot);
+        seal_plan(&mut fixture.task_plan);
+    }
+
+    fn add_selected_membership(fixture: &mut Fixture) {
+        let membership = SourceMembershipId::from_bytes([17; 16]);
+        let mut binding = fixture.scope.memberships.values().next().unwrap().clone();
+        binding.membership_id = membership;
+        binding.projection_membership_id = OpaqueId::new("projection-member-2").unwrap();
+        fixture.scope.memberships.insert(membership, binding);
+        let members = fixture
+            .scope
+            .memberships
+            .keys()
+            .copied()
+            .collect::<Vec<_>>();
+        fixture.grant.allowed_membership_ids = BoundedSet::from_items(members.clone()).unwrap();
+        fixture.task_plan.selected_membership_ids = BoundedList::new(members.clone()).unwrap();
+        let mut request = fixture.recipe.request().clone();
+        request.requested_scope =
+            RequestedScope::ExplicitMemberships(BoundedList::new(members).unwrap());
+        fixture.task_plan.recipe_request_digest = request.canonical_request_digest().unwrap();
+        fixture.recipe = normalize_recipe(request).unwrap();
+        seal_plan(&mut fixture.task_plan);
+    }
+
     #[test]
     fn canonical_plan_reuses_graph_builder_and_safe_leg_closure() {
         let fixture = fixture();
@@ -1626,6 +1808,322 @@ mod canonical_plan_tests {
             compiled.global_budget,
             fixture.task_plan.query_execution_budget
         );
+        assert_eq!(
+            compiled.digest.0,
+            *fixture.task_plan.plan_fingerprint.as_bytes()
+        );
+    }
+
+    #[test]
+    fn canonical_plan_rejects_memberships_outside_grant_ceiling() {
+        for allowed in [
+            BoundedSet::empty(),
+            BoundedSet::from_items([SourceMembershipId::from_bytes([99; 16])]).unwrap(),
+        ] {
+            let mut fixture = fixture();
+            fixture.grant.allowed_membership_ids = allowed;
+            assert_eq!(compile(&fixture), Err(PlanError::ScopeMismatch));
+        }
+        let mut partial_grant = fixture();
+        let original_members = partial_grant.grant.allowed_membership_ids.clone();
+        add_selected_membership(&mut partial_grant);
+        partial_grant.grant.allowed_membership_ids = original_members;
+        partial_grant.capabilities.retrieval.lexical = false;
+        partial_grant.safe_legs.clear();
+        assert_eq!(compile(&partial_grant), Err(PlanError::ScopeMismatch));
+    }
+
+    #[test]
+    fn canonical_plan_enforces_source_and_exact_permissions_before_graph() {
+        let mut source = fixture();
+        source.grant.source_read_permission = false;
+        assert_eq!(compile(&source), Err(PlanError::RecipeDenied));
+
+        for compile_recipe in [false, true] {
+            let mut exact = exact_fixture();
+            if compile_recipe {
+                set_recipe(&mut exact, compile_exact_body());
+            }
+            exact.grant.exact_scan_permission = false;
+            assert_eq!(compile(&exact), Err(PlanError::RecipeDenied));
+            exact.grant.exact_scan_permission = true;
+            exact.grant.source_read_permission = false;
+            assert_eq!(compile(&exact), Err(PlanError::RecipeDenied));
+        }
+    }
+
+    #[test]
+    fn canonical_plan_allows_metadata_recipe_without_source_read_permission() {
+        let mut fixture = fixture();
+        fixture.grant.source_read_permission = false;
+        fixture.safe_legs.clear();
+        set_recipe(
+            &mut fixture,
+            RecipeBodyV1::CorpusProfile(search_contracts::CorpusProfileRecipe {
+                facets: BoundedSet::empty(),
+            }),
+        );
+        let compiled = compile(&fixture).expect("metadata-only direct plan");
+        assert_eq!(compiled.legs.len(), 1);
+        assert_eq!(compiled.legs[0].leg_kind, LegKind::Direct);
+    }
+
+    #[test]
+    fn canonical_plan_rejects_malformed_grant_shape() {
+        let mut fixture = fixture();
+        fixture.grant.expires_at = fixture.grant.issued_at.clone();
+        assert_eq!(compile(&fixture), Err(PlanError::CanonicalPlanInvalid));
+    }
+
+    #[test]
+    fn canonical_plan_requires_confirmed_observation_when_strict() {
+        for state in [
+            ObservationFreshnessState::GapDetected,
+            ObservationFreshnessState::Unknown,
+            ObservationFreshnessState::ObservedWithAge,
+        ] {
+            let mut fixture = fixture();
+            set_freshness(&mut fixture, state);
+            assert_eq!(
+                compile(&fixture),
+                Err(PlanError::StrictCurrentnessUnavailable)
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_plan_refuses_relaxed_gap_without_truthful_partial_coverage() {
+        for state in [
+            ObservationFreshnessState::GapDetected,
+            ObservationFreshnessState::Unknown,
+        ] {
+            let mut fixture = fixture();
+            fixture
+                .task_plan
+                .exactness_requirements
+                .require_current_observation = false;
+            fixture
+                .task_plan
+                .exactness_requirements
+                .allow_truthful_partial = false;
+            set_freshness(&mut fixture, state);
+            assert_eq!(
+                compile(&fixture),
+                Err(PlanError::StrictCurrentnessUnavailable)
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_plan_preserves_relaxed_gap_for_truthful_partial_coverage() {
+        for state in [
+            ObservationFreshnessState::GapDetected,
+            ObservationFreshnessState::Unknown,
+        ] {
+            let mut fixture = fixture();
+            fixture
+                .task_plan
+                .exactness_requirements
+                .require_current_observation = false;
+            set_freshness(&mut fixture, state);
+            let compiled = compile(&fixture).expect("truthful relaxed plan");
+            assert_eq!(compiled.snapshot.observation_freshness.state, state);
+        }
+    }
+
+    #[test]
+    fn canonical_plan_requires_full_nonempty_lexical_scope() {
+        let mut fixture = fixture();
+        add_selected_membership(&mut fixture);
+        assert_eq!(compile(&fixture), Err(PlanError::ScopeMismatch));
+        fixture.safe_legs = search_access::compile_safe_legs(
+            &fixture.scope,
+            fixture.safe_legs[0].route,
+            12,
+            1,
+            1,
+            None,
+            2,
+        )
+        .expect("complete safe legs");
+        fixture.task_plan.query_execution_budget.max_scoring_legs = 3;
+        seal_plan(&mut fixture.task_plan);
+        assert_eq!(compile(&fixture).unwrap().legs.len(), 3);
+    }
+
+    #[test]
+    fn canonical_plan_keeps_direct_only_and_explicit_lexical_omission() {
+        for lexical_capability in [false, true] {
+            let mut fixture = fixture();
+            add_selected_membership(&mut fixture);
+            fixture.safe_legs.clear();
+            fixture.capabilities.retrieval.lexical = lexical_capability;
+            let snapshot = &mut fixture.task_plan.query_snapshot_fence;
+            snapshot.collection_generation_id = None;
+            snapshot.visible_epoch = None;
+            snapshot.lexical_profile_ids = BoundedList::empty();
+            seal_snapshot(snapshot);
+            seal_plan(&mut fixture.task_plan);
+            let compiled = compile(&fixture).expect("direct plan with no index legs");
+            assert_eq!(compiled.legs.len(), 1);
+            assert_eq!(compiled.legs[0].leg_kind, LegKind::Direct);
+            assert!(
+                compiled
+                    .omitted_capabilities
+                    .contains(&super::OmittedCapability::Lexical)
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_plan_disables_exact_recipes_when_either_exact_budget_is_zero() {
+        for compile_recipe in [false, true] {
+            for zero_items in [false, true] {
+                let mut fixture = exact_fixture();
+                if compile_recipe {
+                    set_recipe(&mut fixture, compile_exact_body());
+                }
+                if zero_items {
+                    fixture
+                        .task_plan
+                        .query_execution_budget
+                        .max_exact_scan_items = 0;
+                } else {
+                    fixture
+                        .task_plan
+                        .query_execution_budget
+                        .max_exact_scan_bytes = 0;
+                }
+                seal_plan(&mut fixture.task_plan);
+                assert_eq!(compile(&fixture), Err(PlanError::BudgetExceeded));
+            }
+        }
+    }
+
+    #[test]
+    fn canonical_plan_omits_optional_exact_work_without_permission_or_budget() {
+        for disabled_axis in 0..3 {
+            let mut fixture = find_text_fixture();
+            match disabled_axis {
+                0 => fixture.grant.exact_scan_permission = false,
+                1 => {
+                    fixture
+                        .task_plan
+                        .query_execution_budget
+                        .max_exact_scan_items = 0
+                }
+                _ => {
+                    fixture
+                        .task_plan
+                        .query_execution_budget
+                        .max_exact_scan_bytes = 0
+                }
+            }
+            seal_plan(&mut fixture.task_plan);
+            let compiled = compile(&fixture).expect("remaining direct path");
+            assert_eq!(compiled.legs.len(), 1);
+            assert_eq!(compiled.legs[0].leg_kind, LegKind::Direct);
+            assert!(
+                compiled
+                    .omitted_capabilities
+                    .contains(&super::OmittedCapability::Exact)
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_plan_emits_exact_leg_with_permission_and_positive_budget() {
+        let fixture = exact_fixture();
+        let compiled = compile(&fixture).expect("enabled exact path");
+        assert_eq!(compiled.legs.len(), 1);
+        assert_eq!(compiled.legs[0].leg_kind, LegKind::Exact);
+        assert_eq!(
+            compiled.digest.0,
+            *fixture.task_plan.plan_fingerprint.as_bytes()
+        );
+    }
+
+    #[test]
+    fn canonical_plan_result_identity_tracks_budget_profile_and_dependencies() {
+        let baseline = compile(&fixture()).unwrap();
+        let changes: [fn(&mut SearchTaskPlan); 3] = [
+            |plan| plan.query_execution_budget.max_validated_candidates += 1,
+            |plan| {
+                plan.profile_fence.fusion_profile_id = FusionProfileId::new("fusion-v2").unwrap()
+            },
+            |plan| {
+                plan.additional_state_dependencies =
+                    BoundedList::new(vec![search_contracts::StateDependency {
+                        kind: search_contracts::StateDependencyKind::ProviderCapability,
+                        identity_digest: Blake3Digest32::from_bytes([77; 32]),
+                    }])
+                    .unwrap()
+            },
+        ];
+        for change in changes {
+            let mut fixture = fixture();
+            change(&mut fixture.task_plan);
+            seal_plan(&mut fixture.task_plan);
+            let compiled = compile(&fixture).unwrap();
+            assert_eq!(
+                compiled.digest.0,
+                *fixture.task_plan.plan_fingerprint.as_bytes()
+            );
+            assert_ne!(compiled.digest, baseline.digest);
+            assert_eq!(compiled.legs, baseline.legs);
+        }
+    }
+
+    #[test]
+    fn legacy_graph_digest_remains_frozen_at_cdf9b6ab() {
+        let fixture = fixture();
+        let legacy = super::compile_plan_inner(
+            &fixture.recipe,
+            fixture.scope,
+            fixture.task_plan.query_snapshot_fence,
+            fixture.capabilities,
+            fixture.task_plan.query_execution_budget,
+            &fixture.safe_legs,
+            |modality| {
+                matches!(
+                    modality,
+                    search_access::AccessModality::Direct | search_access::AccessModality::Lexical
+                )
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            legacy.digest.0,
+            [
+                91, 28, 151, 107, 248, 209, 231, 184, 124, 234, 69, 245, 243, 148, 209, 17, 147,
+                15, 1, 151, 14, 121, 113, 45, 169, 152, 163, 213, 47, 73, 101, 194,
+            ]
+        );
+    }
+
+    #[test]
+    fn legacy_exact_zero_budget_behavior_remains_unchanged() {
+        let mut fixture = exact_fixture();
+        fixture
+            .task_plan
+            .query_execution_budget
+            .max_exact_scan_items = 0;
+        fixture
+            .task_plan
+            .query_execution_budget
+            .max_exact_scan_bytes = 0;
+        let legacy = super::compile_plan_inner(
+            &fixture.recipe,
+            fixture.scope,
+            fixture.task_plan.query_snapshot_fence,
+            fixture.capabilities,
+            fixture.task_plan.query_execution_budget,
+            &fixture.safe_legs,
+            |modality| modality == search_access::AccessModality::Exact,
+        )
+        .expect("legacy behavior is unchanged by the canonical-only gate");
+        assert_eq!(legacy.legs.len(), 1);
+        assert_eq!(legacy.legs[0].leg_kind, LegKind::Exact);
     }
 
     #[test]
