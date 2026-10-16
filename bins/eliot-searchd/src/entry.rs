@@ -12,6 +12,7 @@
 #[allow(dead_code)]
 mod access_composition;
 mod app;
+mod source_classification;
 #[cfg(feature = "legacy-loopback-harness")]
 mod authenticated_proxy;
 mod catalog_presence;

@@ -23,6 +23,13 @@ pub const LEGACY_REVISION_ROOT_SECRET_BYTES: usize = 32;
 #[cfg(windows)]
 mod windows;
 
+#[cfg(feature = "test-credential-cleanup")]
+pub(super) fn qualification_trace(stage: &str, status: i64) {
+    if std::env::var_os("ELIOT_SEARCH_TEST_NATIVE_PHASE_TRACE").is_some() {
+        eprintln!("native-credential:{stage}:{status}");
+    }
+}
+
 mod pairing;
 pub use pairing::{
     ProviderPairingCredential, ProviderPairingCredentialError, ProviderPairingCredentialIntent,
@@ -350,6 +357,8 @@ fn publish_once<P: RootSecretPlatform, C: RootSecretCheckpoint>(
     })?;
     let observed = platform.read_credential(target);
     let checked = context.check();
+    #[cfg(feature = "test-credential-cleanup")]
+    qualification_trace("readback-shape", match &observed { Ok(Some(_)) => 1, Ok(None) => 0, Err(_) => -1 });
     if checked.is_err() {
         return Err(LegacyRevisionRootSecretError::CredentialWriteOutcomeUnknown.into());
     }

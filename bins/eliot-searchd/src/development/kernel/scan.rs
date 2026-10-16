@@ -169,7 +169,7 @@ fn map_full_read_error(error: crate::safe_reader_adapter::FullReadError) -> Stri
             SafeReadError::RootIdentityMismatch => "SCAN_FILE_ESCAPE_DENIED".to_owned(),
             SafeReadError::UnsupportedFileKind => "SCAN_FILE_FINAL_OBJECT_INVALID".to_owned(),
             SafeReadError::ReparseBoundaryDenied => "SCAN_FILE_LINK_DENIED".to_owned(),
-            SafeReadError::SecurityDenied | SafeReadError::SecurityRevisionMismatch => {
+            SafeReadError::SecurityDenied | SafeReadError::SecurityRevisionMismatch | SafeReadError::RootPurposeMismatch => {
                 "SCAN_FILE_ACCESS_DENIED".to_owned()
             }
             SafeReadError::SourceSizeInvalid => "SCAN_INPUT_TOO_LARGE".to_owned(),

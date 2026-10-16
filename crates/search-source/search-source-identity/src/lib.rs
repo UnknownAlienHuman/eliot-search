@@ -22,6 +22,7 @@ pub mod git_digest;
 pub mod legacy_digest;
 pub mod lineage;
 pub mod ntfs_directory;
+pub mod ntfs_source;
 pub mod observation_codec;
 pub mod redaction;
 pub mod resolution;
@@ -64,6 +65,7 @@ pub use lineage::{
     WorkspaceViewFence, advance_workspace_view, classify_repository_lineage,
     derive_workspace_identity, validate_repository_observation,
 };
+pub use ntfs_source::{ntfs_file_identity_v1, ntfs_source_profile_v1, ntfs_volume_identity_v1};
 pub use redaction::{
     RedactedIdentityState, RedactedIdentityView, redacted_binding_view, redacted_resolution_view,
 };

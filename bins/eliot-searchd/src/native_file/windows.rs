@@ -1,10 +1,36 @@
-use super::{ChildMembershipScratch, DirectoryIdentity, File, Observation, ObservationError, directory_batch_matches};
+use super::{
+    ChildMembershipScratch, DirectoryIdentity, File, NativeLocationClass, NormalizedNameKind,
+    Observation, ObservationError, SyncReadFile, NORMALIZED_NAME_MAX_UTF16, directory_batch_matches,
+};
 use core::ffi::c_void;
+use std::fs::OpenOptions;
 use std::os::windows::io::AsRawHandle;
+use std::path::Path;
 
 const FILE_TYPE_DISK: u32 = 1;
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+const FILE_SHARE_READ: u32 = 1;
+const FILE_NAME_NORMALIZED: u32 = 0;
+const VOLUME_NAME_DOS: u32 = 0;
+const VOLUME_NAME_GUID: u32 = 1;
+// FS_INFORMATION_CLASS from ntifs.h/MS-FSCC: FileFsDeviceInformation is level 4.
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/ee12042a-9352-46e3-9f67-c094b75fe6c3
+const FILE_FS_DEVICE_INFORMATION_CLASS: i32 = 4;
+// FILE_INFO_BY_HANDLE_CLASS from minwinbase.h: FileCaseSensitiveInfo follows
+// FileRenameInfoEx and therefore has the documented value 23.
+// https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ne-file_info_by_handle_class
+const FILE_CASE_SENSITIVE_INFO_CLASS: i32 = 23;
+// FILE_FS_DEVICE_INFORMATION / DEVICE_OBJECT characteristics from ntifs.h.
+// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/616b66d5-b335-4e1c-8f87-b4a55e8d3e4a
+const FILE_DEVICE_DISK: u32 = 0x0000_0007;
+const FILE_REMOVABLE_MEDIA: u32 = 0x0000_0001;
+const FILE_REMOTE_DEVICE: u32 = 0x0000_0010;
+const FILE_VIRTUAL_VOLUME: u32 = 0x0000_0040;
+const FILE_CHARACTERISTIC_WEBDAV_DEVICE: u32 = 0x0000_2000;
+const FILE_PORTABLE_DEVICE: u32 = 0x0000_4000;
+const FILE_CS_FLAG_CASE_SENSITIVE_DIR: u32 = 0x0000_0001;
 const FILE_ID_BOTH_DIRECTORY_INFO: i32 = 10;
 const FILE_ID_BOTH_DIRECTORY_RESTART_INFO: i32 = 11;
 const ERROR_NO_MORE_FILES: u32 = 18;
@@ -45,6 +71,54 @@ const _: () = assert!(core::mem::align_of::<FileInformation>() == 4);
 const _: () = assert!(core::mem::offset_of!(FileInformation, volume_serial) == 28);
 const _: () = assert!(core::mem::offset_of!(FileInformation, index_high) == 44);
 
+// FILE_FS_DEVICE_INFORMATION is exactly two ULONG fields in the documented
+// WDK type: DeviceType followed by Characteristics.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct FileFsDeviceInformation {
+    device_type: u32,
+    characteristics: u32,
+}
+
+// FILE_CASE_SENSITIVE_INFORMATION contains one ULONG Flags field.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct FileCaseSensitiveInformation {
+    flags: u32,
+}
+
+// IO_STATUS_BLOCK is the documented Native API completion record. The union
+// is pointer-sized; the x64 assertions below prevent ABI drift.
+#[repr(C)]
+union IoStatusValue {
+    status: i32,
+    pointer: *mut c_void,
+}
+
+#[repr(C)]
+struct IoStatusBlock {
+    status: IoStatusValue,
+    information: usize,
+}
+
+const _: () = {
+    let pointer = core::mem::size_of::<*mut c_void>();
+    assert!(pointer == 4 || pointer == 8);
+    assert!(core::mem::size_of::<IoStatusValue>() == pointer);
+    assert!(core::mem::size_of::<IoStatusBlock>() == pointer * 2);
+    assert!(core::mem::offset_of!(IoStatusBlock, information) == pointer);
+    assert!(core::mem::size_of::<FileFsDeviceInformation>() == 8);
+    assert!(core::mem::align_of::<FileFsDeviceInformation>() == 4);
+    assert!(core::mem::size_of::<FileCaseSensitiveInformation>() == 4);
+    assert!(core::mem::align_of::<FileCaseSensitiveInformation>() == 4);
+};
+
+#[cfg(target_pointer_width = "64")]
+const _: () = {
+    assert!(core::mem::size_of::<IoStatusBlock>() == 16);
+    assert!(core::mem::offset_of!(IoStatusBlock, information) == 8);
+};
+
 #[link(name = "Kernel32")]
 unsafe extern "system" {
     fn GetFileType(file: *mut c_void) -> u32;
@@ -53,6 +127,9 @@ unsafe extern "system" {
     fn GetFileInformationByHandleEx(
         file: *mut c_void, information_class: i32, output: *mut c_void, bytes: u32,
     ) -> i32;
+    fn GetFinalPathNameByHandleW(
+        file: *mut c_void, output: *mut u16, output_length: u32, flags: u32,
+    ) -> u32;
     fn GetLastError() -> u32;
     fn GetVolumeInformationByHandleW(
         file: *mut c_void,
@@ -64,6 +141,131 @@ unsafe extern "system" {
         filesystem_name: *mut u16,
         filesystem_name_length: u32,
     ) -> i32;
+}
+
+#[link(name = "ntdll")]
+unsafe extern "system" {
+    // User mode uses the Nt name. The safe wrapper accepts only the private
+    // synchronous leaf constructed below, never an arbitrary public File.
+    fn NtQueryVolumeInformationFile(
+        file: *mut c_void,
+        io_status: *mut IoStatusBlock,
+        fs_information: *mut c_void,
+        length: u32,
+        information_class: i32,
+    ) -> i32;
+}
+
+pub(super) fn open_no_follow(
+    path: &Path,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<SyncReadFile, ObservationError> {
+    check(true)?;
+    let opened = {
+        use std::os::windows::fs::OpenOptionsExt;
+        // No FILE_FLAG_OVERLAPPED is specified: this is the synchronous
+        // physical leaf whose handle may be used by the Native volume query.
+        OpenOptions::new()
+            .read(true)
+            .write(false)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+            .share_mode(FILE_SHARE_READ)
+            .open(path)
+    };
+    let refusal = check(false).err();
+    let file = match refusal {
+        Some(error) => return Err(error),
+        None => opened.map_err(|_| ObservationError::ObservationFailed)?,
+    };
+    let observed = observe_with_check(&file, check)?;
+    if observed.attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+        return Err(ObservationError::UnsupportedHandle);
+    }
+    Ok(SyncReadFile { file })
+}
+
+pub(super) fn location_with_check(
+    file: &SyncReadFile,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<NativeLocationClass, ObservationError> {
+    let mut information = FileFsDeviceInformation::default();
+    let mut io_status = IoStatusBlock {
+        status: IoStatusValue { pointer: core::ptr::null_mut() },
+        information: 0,
+    };
+    let length = u32::try_from(core::mem::size_of::<FileFsDeviceInformation>())
+        .map_err(|_| ObservationError::ObservationFailed)?;
+    check(true)?;
+    // SAFETY: the private SyncReadFile owns a live synchronous handle; both
+    // ABI outputs are initialized, correctly laid out and uniquely borrowed.
+    // The synchronous handle keeps these stack outputs live until completion.
+    let result = unsafe {
+        NtQueryVolumeInformationFile(
+            file.file.as_raw_handle(),
+            &raw mut io_status,
+            (&raw mut information).cast(),
+            length,
+            FILE_FS_DEVICE_INFORMATION_CLASS,
+        )
+    };
+    let completion = unsafe { io_status.status.status };
+    let bytes = io_status.information;
+    let facts = information;
+    check(false)?;
+    if result != 0 || completion != 0 || bytes != core::mem::size_of::<FileFsDeviceInformation>() {
+        return Err(ObservationError::ObservationFailed);
+    }
+    Ok(classify_location(facts))
+}
+
+const fn classify_location(information: FileFsDeviceInformation) -> NativeLocationClass {
+    let characteristics = information.characteristics;
+    let remote = characteristics & FILE_REMOTE_DEVICE != 0;
+    let webdav = characteristics & FILE_CHARACTERISTIC_WEBDAV_DEVICE != 0;
+    let removable = characteristics & (FILE_REMOVABLE_MEDIA | FILE_PORTABLE_DEVICE) != 0;
+    if remote && webdav { return NativeLocationClass::Remote; }
+    if remote { return if removable { NativeLocationClass::Unknown } else { NativeLocationClass::NetworkShare }; }
+    if webdav { return NativeLocationClass::Remote; }
+    if information.device_type != FILE_DEVICE_DISK { return NativeLocationClass::Unsupported; }
+    if characteristics & FILE_VIRTUAL_VOLUME != 0 { return NativeLocationClass::Unsupported; }
+    if removable { NativeLocationClass::LocalRemovable } else { NativeLocationClass::LocalFixed }
+}
+
+pub(super) fn normalized_name_with_check(
+    file: &File,
+    kind: NormalizedNameKind,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<String, ObservationError> {
+    let mut buffer = Vec::new();
+    buffer.try_reserve_exact(NORMALIZED_NAME_MAX_UTF16).map_err(|_| ObservationError::ObservationFailed)?;
+    buffer.resize(NORMALIZED_NAME_MAX_UTF16, 0);
+    let capacity = u32::try_from(buffer.len()).map_err(|_| ObservationError::ObservationFailed)?;
+    let flags = match kind { NormalizedNameKind::VolumeGuid => VOLUME_NAME_GUID | FILE_NAME_NORMALIZED, NormalizedNameKind::Dos => VOLUME_NAME_DOS | FILE_NAME_NORMALIZED };
+    check(true)?;
+    // SAFETY: the borrowed handle remains live; the fixed bounded UTF-16 buffer is writable.
+    let result = unsafe { GetFinalPathNameByHandleW(file.as_raw_handle(), buffer.as_mut_ptr(), capacity, flags) };
+    check(false)?;
+    let length = usize::try_from(result).map_err(|_| ObservationError::ObservationFailed)?;
+    if result == 0 || length >= buffer.len() || buffer[length] != 0 { return Err(ObservationError::ObservationFailed); }
+    let units = &buffer[..length];
+    if units.contains(&0) { return Err(ObservationError::ObservationFailed); }
+    String::from_utf16(units).map_err(|_| ObservationError::ObservationFailed)
+}
+
+pub(super) fn case_sensitive_directory_with_check(
+    file: &File,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<bool, ObservationError> {
+    let observed = file_information_with_check(file, check)?;
+    if observed.attributes & FILE_ATTRIBUTE_DIRECTORY == 0 { return Err(ObservationError::UnsupportedHandle); }
+    let mut information = FileCaseSensitiveInformation::default();
+    let length = u32::try_from(core::mem::size_of::<FileCaseSensitiveInformation>()).map_err(|_| ObservationError::ObservationFailed)?;
+    check(true)?;
+    // SAFETY: the borrowed handle remains live and the fixed output is initialized and uniquely borrowed.
+    let result = unsafe { GetFileInformationByHandleEx(file.as_raw_handle(), FILE_CASE_SENSITIVE_INFO_CLASS, (&raw mut information).cast(), length) };
+    check(false)?;
+    if result == 0 || information.flags & !FILE_CS_FLAG_CASE_SENSITIVE_DIR != 0 { return Err(ObservationError::ObservationFailed); }
+    Ok(information.flags & FILE_CS_FLAG_CASE_SENSITIVE_DIR != 0)
 }
 
 pub(super) fn observe_with_check(file: &File, check: &dyn Fn(bool) -> Result<(), ObservationError>) -> Result<Observation, ObservationError> {

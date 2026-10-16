@@ -229,6 +229,87 @@ impl fmt::Debug for AdmissionDecisionV2 {
     }
 }
 
+/// Provisional Root-bound inspection result before content facts are observed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PreReadOutcome {
+    /// Root-bound inspection may acquire the bounded body for final admission.
+    Proceed,
+    /// A known deny dominates the deferred-content boundary.
+    Deny,
+    /// Required nondeferred metadata or an explicit review rule remains.
+    ReviewRequired,
+    /// The source kind or explicit rule is unsupported.
+    Unsupported,
+}
+
+/// Typed pre-read result; this is not an admission decision or receipt.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PreReadVerdict {
+    outcome: PreReadOutcome,
+    reason_codes: Vec<AdmissionReasonCode>,
+}
+
+impl PreReadVerdict {
+    /// Provisional outcome for the Root-bound inspection caller.
+    #[must_use]
+    pub const fn outcome(&self) -> PreReadOutcome {
+        self.outcome
+    }
+
+    /// Effective reasons retained for the caller's bounded diagnostic path.
+    #[must_use]
+    pub fn reason_codes(&self) -> &[AdmissionReasonCode] {
+        &self.reason_codes
+    }
+
+    /// Whether the caller may perform the bounded content acquisition step.
+    #[must_use]
+    pub const fn read_allowed(&self) -> bool {
+        matches!(self.outcome, PreReadOutcome::Proceed)
+    }
+}
+
+/// Evaluates the closed v2 matcher for Root-bound inspection before body facts.
+///
+/// Only explicit `binary-flag` and `sensitivity` deferrals may turn a review-only
+/// result into `Proceed`; final all-facts evaluation remains [`evaluate_v2`].
+pub fn evaluate_pre_read_v2(
+    policy: &CompiledAdmissionPolicyV2,
+    observation: &AdmissionObservationV2,
+    limits: EvaluationLimitsV2,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<PreReadVerdict, AdmissionError> {
+    let mut scratch = policy.new_match_buffer();
+    let decision = evaluate_v2(policy, observation, &mut scratch, limits, probe)?;
+    let has_unavailable = observation.metadata().unavailable_fields().next().is_some();
+    let deferred_only = observation
+        .metadata()
+        .unavailable_fields()
+        .all(|field| matches!(field.as_str(), "binary-flag" | "sensitivity"));
+    let is_deferred = |name: &str| observation.metadata().unavailable_fields().any(|field| field == name);
+    let outcome = match decision.outcome() {
+        AdmissionOutcome::Deny => PreReadOutcome::Deny,
+        AdmissionOutcome::Unsupported => PreReadOutcome::Unsupported,
+        AdmissionOutcome::ReviewRequired
+            if has_unavailable
+                && deferred_only
+                && decision.reason_codes().iter().all(|reason| {
+                    match reason {
+                        AdmissionReasonCode::ReviewSensitivityUnknown => is_deferred("sensitivity"),
+                        AdmissionReasonCode::ReviewMetadataUnavailable => is_deferred("binary-flag"),
+                        _ => false,
+                    }
+                }) => PreReadOutcome::Proceed,
+        AdmissionOutcome::ReviewRequired => PreReadOutcome::ReviewRequired,
+        AdmissionOutcome::Allow if !has_unavailable => PreReadOutcome::Proceed,
+        AdmissionOutcome::Allow => PreReadOutcome::ReviewRequired,
+    };
+    Ok(PreReadVerdict {
+        outcome,
+        reason_codes: decision.reason_codes().to_vec(),
+    })
+}
+
 /// Evaluates all canonical class-scoped rules into one immutable bound decision.
 ///
 /// The caller's original checkpoint is reused around synchronous work and at
@@ -751,6 +832,36 @@ mod tests {
         let locator =
             path.map(|p| AdmissionRelativeLocator::from_bytes(p).expect("bounded locator"));
         AdmissionObservationV2::new(metadata, locator).expect("bounded model")
+    }
+
+    #[test]
+    fn pre_read_allows_only_explicit_content_deferral() {
+        let mut raw = raw_observation();
+        raw.is_binary = None;
+        raw.sensitivity = None;
+        raw.unavailable_fields = vec!["binary-flag".into(), "sensitivity".into()];
+        let observed = model(&raw, Some(b"src/lib.rs"));
+        let policy = policy(Vec::new());
+        let verdict = evaluate_pre_read_v2(
+            &policy, &observed, DEFAULT_EVALUATION_LIMITS, &mut || Ok(()),
+        )
+        .expect("pre-read verdict");
+        assert_eq!(verdict.outcome(), PreReadOutcome::Proceed);
+        assert!(verdict.read_allowed());
+    }
+
+    #[test]
+    fn pre_read_keeps_known_hard_deny() {
+        let mut raw = raw_observation();
+        raw.source_class = "private-key".into();
+        let observed = model(&raw, Some(b"private.pem"));
+        let policy = policy(Vec::new());
+        let verdict = evaluate_pre_read_v2(
+            &policy, &observed, DEFAULT_EVALUATION_LIMITS, &mut || Ok(()),
+        )
+        .expect("pre-read verdict");
+        assert_eq!(verdict.outcome(), PreReadOutcome::Deny);
+        assert!(!verdict.read_allowed());
     }
 
     /// Probe that succeeds until call `fail_at`, then reports the original failure.

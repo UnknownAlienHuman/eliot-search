@@ -6,6 +6,34 @@ observations only; actual FD custody and current permission checks remain Native
 producer obligations. Shared bounded tuple/binary helpers are value construction,
 not an additional canonical encoder or native identity/grant issuer.
 
+The additive `ntfs_source_profile_v1()` returns a fixed **descriptor**, not Native
+qualification. Its revision is 1: pre-normalized insensitive lookup, preserved
+Unicode scalar values, required volume/file identities, stable physical hard-link
+identity and rejected reparses. Its schema digest is shared canonical CBOR/BLAKE3
+over the complete descriptor: revision, canonical encoding profile, three digest
+domains, six behavior fields, and the labeled Native ABI/name/case/encoding/tuple
+contracts in `ntfs_source::NATIVE_CONTRACT`. Any change requires a new profile.
+
+`ntfs_volume_identity_v1(volume_guid, volume_serial)` hashes the exact tuple
+`[1, "windows", "ntfs", volume_guid, volume_serial]` in
+`eliot/cbor/source-identity/ntfs-volume/v1`. The GUID is exactly the 49 ASCII bytes
+of `\\?\Volume{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}\`, with lowercase hex and no
+suffix. `ntfs_file_identity_v1(file_index, creation_time)` hashes
+`[1, "windows", "ntfs", file_index, creation_time]` in the separate
+`eliot/cbor/source-identity/ntfs-file/v1` domain. Full unsigned index/creation
+FILETIME values are retained; creation protects against index reuse. Pair the
+file digest with the volume digest and use `generation: None`, not a fabricated
+counter. Existing `ntfs-directory/v1` bytes and behavior are unchanged.
+
+All three functions return `Result<_, IdentityError>` and perform no Native I/O.
+The Native caller must obtain actual held-FD volume/file/creation values, prove
+current Root/FD custody, reject reparses, measure Root and every Root-relative
+naming directory as case-insensitive, and obtain native normalized stored long
+names with strict UTF-16 decoding before attesting. Paths remain locators; no
+ASCII folding, Unicode normalization, drive-letter mapping, fixture default or
+schema digest substitutes for these proofs. Pure fixtures cover descriptor and
+digest semantics only, not Native qualification.
+
 **Status:** W2/P03 logical contract; no Windows filesystem/repository identity evidence exists.
 
 This package owns pure source/path/repository/workspace identity decisions over bounded observations. It

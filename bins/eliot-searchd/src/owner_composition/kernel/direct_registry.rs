@@ -295,9 +295,12 @@ impl DirectRegistryOwner {
         hints: &crate::config_composition::RootLocatorHints,
         selected: Option<&Path>,
         policy: Option<&super::super::direct_policy_v2::CapturedPolicyV2>,
+        source: Option<&source_command::NativeSourceCommand>,
         writer: &mut impl Write,
     ) -> Result<(), String> {
-        let result = self.prepare_output(hints, selected, policy);
+        let result = if let Some(source) = source {
+            self.prepare_source_output(hints, selected, policy, source)
+        } else { self.prepare_output(hints, selected, policy) };
         match result {
             Ok(output) => {
                 self.owner
@@ -356,6 +359,8 @@ impl DirectRegistryOwner {
 
 #[path = "direct_registry_command.rs"]
 mod command;
+#[path = "native_source_command.rs"]
+mod source_command;
 pub use command::maybe_run;
 
 #[cfg(all(test, windows))]

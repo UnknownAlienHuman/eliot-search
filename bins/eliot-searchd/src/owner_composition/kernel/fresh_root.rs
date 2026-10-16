@@ -32,12 +32,16 @@ pub const ROOT_POLICY_DOMAIN: &str = "eliot/cbor/source-registry/root-bootstrap-
 #[path = "fresh_root_policy_v2.rs"]
 mod policy_v2;
 use policy_v2::RootPolicy;
+#[path = "native_source.rs"]
+mod native_source;
 
 #[derive(Debug)]
 pub enum FreshRootError {
     Native(OwnerError),
     Admission(admission::AdmissionError),
     Registry(RegistryError),
+    Source(&'static str),
+    Observation(ObservationError),
 }
 impl std::fmt::Display for FreshRootError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -45,7 +49,23 @@ impl std::fmt::Display for FreshRootError {
             Self::Native(error) => write!(f, "{error:?}"),
             Self::Admission(error) => write!(f, "{error:?}"),
             Self::Registry(error) => write!(f, "{error:?}"),
+            Self::Source(code) => f.write_str(code),
+            Self::Observation(error) => f.write_str(error.code()),
         }
+    }
+}
+impl FreshRootError {
+    pub(crate) const fn source_refusal_code(&self) -> &'static str {
+        match self {
+            Self::Native(error) => error.code(),
+            Self::Admission(_) => "NATIVE_SOURCE_ADMISSION_REFUSED",
+            Self::Registry(_) => "NATIVE_SOURCE_ROOT_OR_REGISTRY_REFUSED",
+            Self::Source(code) => code,
+            Self::Observation(error) => error.code(),
+        }
+    }
+    pub(crate) const fn is_cancelled(&self) -> bool {
+        matches!(self, Self::Native(OwnerError::OwnerCancelledBeforeMutation))
     }
 }
 const fn invalid() -> FreshRootError {
@@ -676,6 +696,13 @@ impl RequalifiedFreshRoot<'_, '_, '_> {
     pub const fn root(&self) -> &RootRecord { &self.root }
     pub fn check_current(&self, registry: &SourceRegistry) -> Result<(), FreshRootError> {
         self.native.verify_owner()?;
+        self.check_pins_current(registry)
+    }
+    // Borrowed acquisition keeps the actual Native owner/exclusions alive.
+    // Warm source fences recheck original context, Root state, pins and access;
+    // complete Native owner fences remain at acquisition/commit boundaries.
+    fn check_pins_current(&self, registry: &SourceRegistry) -> Result<(), FreshRootError> {
+        self.native.checkpoint()?;
         if registry.roots().get(&self.root.root_binding_id) != Some(&self.root)
             || self.policy.fingerprint() != self.root.policy_fingerprint { return Err(invalid()); }
         for pin in &self.pins {

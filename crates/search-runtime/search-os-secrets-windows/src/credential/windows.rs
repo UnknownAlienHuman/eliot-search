@@ -126,6 +126,8 @@ impl WindowsCredentialPlatform {
         if success == 0 {
             // SAFETY: captured immediately after the failed credential call.
             let error = unsafe { get_last_error() };
+            #[cfg(feature = "test-credential-cleanup")]
+            super::qualification_trace("read-error", i64::from(error));
             return if error == ERROR_NOT_FOUND {
                 Ok(None)
             } else {
@@ -298,10 +300,14 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
             // SAFETY: GetLastError has no preconditions and is captured
             // immediately after the failed credential call.
             let error = unsafe { get_last_error() };
+            #[cfg(feature = "test-credential-cleanup")]
+            super::qualification_trace("write-error", i64::from(error));
             return Err(
                 LegacyRevisionRootSecretError::CredentialWriteFailed(error),
             );
         }
+        #[cfg(feature = "test-credential-cleanup")]
+        super::qualification_trace("write-success", 0);
         Ok(())
     }
 
@@ -322,6 +328,8 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
             )
         };
         if status < 0 {
+            #[cfg(feature = "test-credential-cleanup")]
+            super::qualification_trace("rng-error", i64::from(status));
             clear_bytes(&mut secret);
             return Err(
                 LegacyRevisionRootSecretError::RandomGenerationFailed(status),
@@ -384,10 +392,18 @@ impl WindowsVaultLock {
         // SAFETY: null security attributes and a terminated name are valid inputs.
         let handle = unsafe { create_mutex_w(null_mut(), 0, name.as_ptr()) };
         if handle.is_null() {
+            #[cfg(feature = "test-credential-cleanup")]
+            {
+                // Capture thread-local error before diagnostic/environment calls.
+                let error = unsafe { get_last_error() };
+                super::qualification_trace("mutex-create-error", i64::from(error));
+            }
             return Err(());
         }
         // SAFETY: `handle` is a live mutex handle.
         let status = unsafe { wait_for_single_object(handle, wait_ms) };
+        #[cfg(feature = "test-credential-cleanup")]
+        super::qualification_trace("mutex-wait", i64::from(status));
         if status == WAIT_OBJECT_0 || status == WAIT_ABANDONED {
             return Ok(Some(Self(handle)));
         }

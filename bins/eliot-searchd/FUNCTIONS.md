@@ -26,6 +26,17 @@ and durable original-policy reference binding; an empty Root has no archive stor
 The shared Native journal identity recipe is compiled in the default DIRECT
 profile; it does not require the optional query/provider feature or Qdrant.
 
+`--admit-source-v2 DATA_ROOT SOURCE_ROOT RELATIVE_FILE POLICY_ARCHIVE OPERATION_ID EXPECTED_SOURCE_REVISION`
+admits one regular NTFS file under that registered v2 Root. The operation ID is
+32 nonzero lowercase hex digits; the predecessor is `new` or a positive Source
+record revision. Metadata admission precedes body reads; one retained synchronous
+read-only/no-follow FD supplies stable bytes and measured C04 identity. Final
+admission and Source/namespace originals commit through the same redb authority.
+Exact operation replay precedes a fresh Source open and preserves the original
+receipt; changed intent conflicts. Output is Source-admission metadata only:
+`retained_revision:false`, `source_body_serving:false`, `ready:false`. Immutable
+revision retention, ingestion batches and indexed query serving remain separate.
+
 Native executable verification hashes fresh bytes at every full fence. The
 native caller uses admitted heap scratch up to 1 MiB and the actual opened length,
 charges each requested read/short-read attempt, and verifies one-byte EOF before

@@ -6,6 +6,7 @@
 
 use core::fmt;
 use std::fs::File;
+use std::path::Path;
 use std::sync::Arc;
 
 /// Closed, content-free native observation failure.
@@ -72,6 +73,113 @@ pub struct Observation {
     pub creation_time: u64,
     /// Native last-write time in Windows FILETIME units.
     pub last_write_time: u64,
+}
+
+/// Closed native location classification measured from one qualified physical handle.
+///
+/// This is a fact for the `SourceV2` producer to compose, not a root grant or an
+/// admission decision. `Unknown` is deliberately representable so an optional
+/// native fact can never be replaced with `LocalFixed`.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum NativeLocationClass {
+    /// A fixed local disk volume.
+    LocalFixed,
+    /// A local volume with removable media or a portable device characteristic.
+    LocalRemovable,
+    /// A remote filesystem share, such as SMB/CIFS.
+    NetworkShare,
+    /// A remote filesystem that is not classified as a network share.
+    Remote,
+    /// A known unsupported device or volume type.
+    Unsupported,
+    /// The native facts were valid but did not establish one supported class.
+    Unknown,
+}
+
+/// Which documented final-name namespace the native name helper should return.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NormalizedNameKind {
+    /// `VOLUME_NAME_GUID | FILE_NAME_NORMALIZED`.
+    VolumeGuid,
+    /// `VOLUME_NAME_DOS | FILE_NAME_NORMALIZED`.
+    Dos,
+}
+
+/// Maximum UTF-16 units accepted from `GetFinalPathNameByHandleW`.
+///
+/// A required size at or above this bound is refused; the helper never grows
+/// the buffer in response to an OS-reported path length.
+pub const NORMALIZED_NAME_MAX_UTF16: usize = 32 * 1024;
+
+/// A private, synchronous, read-only physical source handle.
+///
+/// The only production constructor opens a regular NTFS object with
+/// `FILE_SHARE_READ`, no overlapped flag and final-object no-follow semantics,
+/// then qualifies the same handle. This type is physical I/O custody only: it
+/// does not establish a semantic root, containment, source grant or authority.
+pub struct SyncReadFile {
+    file: File,
+}
+
+impl SyncReadFile {
+    /// Opens and qualifies one regular physical source leaf.
+    ///
+    /// The caller supplies the semantic-root selection and the original
+    /// callback/meter. This helper does not authorize the path or read its
+    /// contents.
+    /// # Errors
+    /// Returns a closed failure for open, callback, disk/NTFS, directory or
+    /// reparse qualification failure.
+    pub fn open_no_follow(
+        path: &Path,
+        check: &dyn Fn(bool) -> Result<(), ObservationError>,
+    ) -> Result<Self, ObservationError> {
+        platform::open_no_follow(path, check)
+    }
+
+    /// Borrows the exact qualified handle for the caller's metered body read.
+    #[must_use]
+    pub const fn file(&self) -> &File { &self.file }
+}
+
+/// Measures location facts from the exact qualified synchronous source handle.
+///
+/// No arbitrary `File`, path or mount-point string is accepted. The query is
+/// content-free and does not grant read authority.
+/// # Errors
+/// Native status, output-length or callback refusal returns no classification.
+pub fn location_with_check(
+    file: &SyncReadFile,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<NativeLocationClass, ObservationError> {
+    platform::location_with_check(file, check)
+}
+
+/// Returns one bounded normalized name from an already-held file or directory.
+///
+/// The returned UTF-16 is converted strictly; malformed UTF-16, embedded NUL,
+/// an over-bound OS length or a native failure is refused. The helper never
+/// opens or resolves the caller's locator.
+/// # Errors
+/// Native failure, callback refusal, malformed UTF-16 or a path beyond the
+/// fixed bound returns no name.
+pub fn normalized_name_with_check(
+    file: &File,
+    kind: NormalizedNameKind,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<String, ObservationError> {
+    platform::normalized_name_with_check(file, kind, check)
+}
+
+/// Reads the documented per-directory case-sensitive flag from a held handle.
+/// # Errors
+/// Non-directory, unsupported-filesystem, native or callback failure returns no
+/// case-sensitivity fact.
+pub fn case_sensitive_directory_with_check(
+    file: &File,
+    check: &dyn Fn(bool) -> Result<(), ObservationError>,
+) -> Result<bool, ObservationError> {
+    platform::case_sensitive_directory_with_check(file, check)
 }
 
 impl Observation {
@@ -342,7 +450,44 @@ fn directory_batch_matches(
 
 #[cfg(not(windows))]
 mod platform {
-    use super::{ChildMembershipScratch, DirectoryIdentity, File, Observation, ObservationError};
+    use super::{
+        ChildMembershipScratch, DirectoryIdentity, File, NativeLocationClass, NormalizedNameKind,
+        Observation, ObservationError, SyncReadFile,
+    };
+    use std::path::Path;
+
+    pub(super) fn open_no_follow(
+        _path: &Path,
+        check: &dyn Fn(bool) -> Result<(), ObservationError>,
+    ) -> Result<SyncReadFile, ObservationError> {
+        check(false)?;
+        Err(ObservationError::UnsupportedPlatform)
+    }
+
+    pub(super) fn location_with_check(
+        _file: &SyncReadFile,
+        check: &dyn Fn(bool) -> Result<(), ObservationError>,
+    ) -> Result<NativeLocationClass, ObservationError> {
+        check(false)?;
+        Err(ObservationError::UnsupportedPlatform)
+    }
+
+    pub(super) fn normalized_name_with_check(
+        _file: &File,
+        _kind: NormalizedNameKind,
+        check: &dyn Fn(bool) -> Result<(), ObservationError>,
+    ) -> Result<String, ObservationError> {
+        check(false)?;
+        Err(ObservationError::UnsupportedPlatform)
+    }
+
+    pub(super) fn case_sensitive_directory_with_check(
+        _file: &File,
+        check: &dyn Fn(bool) -> Result<(), ObservationError>,
+    ) -> Result<bool, ObservationError> {
+        check(false)?;
+        Err(ObservationError::UnsupportedPlatform)
+    }
 
     pub(super) fn qualified_directory_identity_with_check(
         _file: &File, _volume_serial: u32,
