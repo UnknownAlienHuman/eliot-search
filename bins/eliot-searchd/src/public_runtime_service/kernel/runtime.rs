@@ -44,8 +44,6 @@ pub(super) fn run_service(arguments: &[OsString], started: Instant) -> Result<()
             .map_err(owner_error)?;
     let request = NativeRootRequest::for_service(arguments, deadline, cancellation, limits)
         .map_err(owner_error)?;
-    let (_, cli) = crate::config_composition::strip_config_args_os(arguments)?;
-    let config = crate::config_composition::effective_from_process(&cli)?;
     let mut startup = match admit_existing(request).map_err(owner_error)? {
         NativeRootAdmission::Inspection(owner) => owner.read_startup().map_err(owner_error)?,
         NativeRootAdmission::Unavailable(RootOpenState::Absent, _) => {
@@ -55,6 +53,8 @@ pub(super) fn run_service(arguments: &[OsString], started: Instant) -> Result<()
             return Err("SERVICE_NATIVE_ROOT_UNAVAILABLE".to_owned());
         }
     };
+    let (_, cli) = crate::config_composition::strip_config_args_os(arguments)?;
+    let config = crate::config_composition::effective_from_process(&cli)?;
     let output = io::stdout();
     let mut writer = output.lock();
     let (namespace, mut storage) = announce_startup(&mut startup, &mut writer, &config)?;
