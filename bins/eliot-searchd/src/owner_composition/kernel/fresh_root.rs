@@ -123,11 +123,11 @@ fn receipt_digests(
 }
 
 /// Same original flag and absolute deadline; constructing a port context renews neither.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FreshRootCancellation {
     flag: Arc<AtomicBool>,
     deadline: Instant,
-    first_refusal: AtomicU8,
+    first_refusal: Arc<AtomicU8>,
 }
 impl FreshRootCancellation {
     fn refusal(&self) -> Option<OwnerError> {
@@ -161,6 +161,46 @@ impl PackageOpaque for FreshRootCancellation {
 impl CancellationProbe for FreshRootCancellation {
     fn is_cancelled(&self) -> bool {
         self.refusal().is_some()
+    }
+}
+
+#[cfg(test)]
+mod cancellation_clone_tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn clone_sees_first_deadline_refusal_even_after_cancellation_toggles() {
+        let flag = Arc::new(AtomicBool::new(false));
+        let deadline = Instant::now();
+        let original = FreshRootCancellation {
+            flag: flag.clone(),
+            deadline,
+            first_refusal: Arc::new(AtomicU8::new(0)),
+        };
+        assert!(original.refusal().is_some());
+        assert_eq!(original.first_refusal.load(Ordering::Acquire), 2);
+        flag.store(true, Ordering::Release);
+        let cloned = original.clone();
+        assert!(cloned.is_cancelled());
+        assert_eq!(cloned.first_refusal.load(Ordering::Acquire), 2);
+    }
+
+    #[test]
+    fn clone_sees_first_cancellation_refusal_even_after_flag_clears() {
+        let flag = Arc::new(AtomicBool::new(true));
+        let deadline = Instant::now() + std::time::Duration::from_secs(60);
+        let original = FreshRootCancellation {
+            flag: flag.clone(),
+            deadline,
+            first_refusal: Arc::new(AtomicU8::new(0)),
+        };
+        assert!(original.refusal().is_some());
+        assert_eq!(original.first_refusal.load(Ordering::Acquire), 1);
+        flag.store(false, Ordering::Release);
+        let cloned = original.clone();
+        assert!(cloned.is_cancelled());
+        assert_eq!(cloned.first_refusal.load(Ordering::Acquire), 1);
     }
 }
 
@@ -205,7 +245,7 @@ impl<'owner> NativeReadOperation<'owner> {
                     FreshRootCancellation {
                         flag: request.original_cancellation(),
                         deadline,
-                        first_refusal: AtomicU8::new(0),
+                        first_refusal: Arc::new(AtomicU8::new(0)),
                     },
                     c::OpaqueRef::new("original-native-root-budget")
                         .map_err(|_| OwnerError::ContractExhausted)?,
