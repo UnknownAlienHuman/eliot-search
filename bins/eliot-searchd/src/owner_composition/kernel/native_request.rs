@@ -445,6 +445,22 @@ impl NativeRootRequest {
         Ok(request)
     }
 
+    #[cfg(feature = "wave4-query")]
+    pub(super) fn withhold_provider_millis(&mut self, millis: u64) -> Result<(), OwnerError> {
+        self.deadline = self.deadline.checked_sub(std::time::Duration::from_millis(millis))
+            .ok_or(OwnerError::OwnerDeadlineInvalid)?;
+        Ok(())
+    }
+
+    #[cfg(all(test, feature = "wave4-query"))]
+    pub(super) fn provider_read_fixture(id: RequestId, deadline: Instant) -> Self {
+        Self { mode: DataRootOpenMode::InspectExistingReadOnly, root: PathBuf::new(),
+            deadline, cancellation: Arc::new(AtomicBool::new(false)), id, digest: [0; 32],
+            digest_bytes: 0, arguments: Vec::new(),
+            limits: NativeRootLimits::new([2, 16, 32, 8, 2, 2]).unwrap(),
+            terminal_work: Box::new(RefCell::new(None)), terminal_refusal: Cell::new(None) }
+    }
+
     /// Refusal binds exact transport bytes separately from native argv admission.
     /// Its private caller emits only a closed error; this grants no root authority.
     pub(super) fn service_refusal(

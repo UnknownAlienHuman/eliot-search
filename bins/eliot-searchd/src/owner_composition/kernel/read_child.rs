@@ -8,6 +8,10 @@ use std::time::Instant;
 use crate::provider_composition::{CanonicalWorkBudget, monotonic_millis};
 #[cfg(feature = "wave4-query")]
 use search_provider_protocol::{AdmittedProviderRequest, MonotonicMillis};
+#[cfg(feature = "wave4-query")]
+use search_provider_protocol::request::RequestCancellation;
+#[cfg(feature = "wave4-query")]
+use search_contracts::RequestId;
 use search_runtime_owner::OwnerError;
 
 use super::super::native_objects::read_bytes;
@@ -33,16 +37,67 @@ pub(super) const fn direct_operation(owner: &mut NativeRootCapability) -> Result
         first_refusal: None })
 }
 
-/// Adds native custody for one admitted source-read callback. This carries no
-/// grant: callers must invoke it only inside the canonical standalone-read gate.
-/// Its first native use still must run `fresh_root_context`'s complete owner gate.
+/// One non-cloneable context retained by the canonical task across all read turns.
 #[cfg(feature = "wave4-query")]
-#[allow(dead_code)] // The parent composition branch owns the callback/facade wiring.
-pub(super) fn direct_read_operation<'turn>(
-    owner: &'turn mut NativeRootCapability,
-    admitted_provider_request: &'turn AdmittedProviderRequest,
-    original_work_budget: CanonicalWorkBudget,
-) -> Result<NativeReadOperation<'turn>, OwnerError> {
+pub(super) struct NativeRequestReadState {
+    context: ReadContext,
+    monotonic_deadline: MonotonicMillis,
+    owner_record: [u8; 32],
+}
+
+#[cfg(feature = "wave4-query")]
+#[allow(dead_code)] // The parent composition branch owns task/facade wiring.
+impl NativeRequestReadState {
+    pub(super) fn new(owner: &NativeRootCapability, admitted: &AdmittedProviderRequest,
+        original_budget: CanonicalWorkBudget,
+    ) -> Result<Self, OwnerError> {
+        original_budget.check().map_err(|_| OwnerError::OwnerDeadlineInvalid)?;
+        let guard = admitted.guard();
+        let monotonic_deadline = guard.deadline().ok_or(OwnerError::OwnerDeadlineInvalid)?
+            .min(original_budget.deadline());
+        let anchor = Instant::now();
+        let observed = monotonic_millis();
+        let deadline = provider_read_deadline_at(guard.deadline(), original_budget.deadline(), anchor, observed)?;
+        let request = owner.request.provider_source_read(*guard.request_id(), deadline)?;
+        let work = NativeWork::for_provider_source_read(guard.cancellation());
+        work.check(&request)?;
+        Ok(Self { context: Some((request, work)), monotonic_deadline,
+            owner_record: owner.record.record_digest })
+    }
+
+    // Identity only: the caller still supplies the canonical admitted request and grant gate.
+    fn check(&mut self, id: &RequestId, observer: &RequestCancellation,
+        current_deadline: MonotonicMillis,
+    ) -> Result<(), OwnerError> {
+        let (request, work) = self.context.as_mut().ok_or(OwnerError::OwnerInvalidTransition)?;
+        if request.binding().0 != *id
+            || !work.provider_cancellation().is_some_and(|original| original.same_request(observer))
+        { return Err(OwnerError::OwnerGuardMismatch); }
+        let deadline = self.monotonic_deadline.min(current_deadline);
+        request.withhold_provider_millis(self.monotonic_deadline.get() - deadline.get())?;
+        self.monotonic_deadline = deadline;
+        work.check(request)
+    }
+}
+
+#[cfg(feature = "wave4-query")]
+struct RestoreOnDrop<T, F: FnMut(&mut T)> { value: T, restore: F }
+#[cfg(feature = "wave4-query")]
+impl<T, F: FnMut(&mut T)> Drop for RestoreOnDrop<T, F> {
+    fn drop(&mut self) { (self.restore)(&mut self.value); }
+}
+
+/// Loans the task's same meter synchronously; no operation or grant escapes.
+/// Call only inside the canonical standalone-read gate, using the full fresh-root checks.
+#[cfg(feature = "wave4-query")]
+#[allow(dead_code)]
+pub(super) fn with_direct_read_operation<T>(
+    owner: &mut NativeRootCapability,
+    admitted: &AdmittedProviderRequest,
+    state: &mut NativeRequestReadState,
+    current_budget: CanonicalWorkBudget,
+    callback: impl for<'operation, 'root> FnOnce(&'operation mut NativeReadOperation<'root>) -> T,
+) -> Result<T, OwnerError> {
     if owner.pins.direct.is_none()
         || !owner.mutation
         || owner.record.lifecycle != LifecycleState::Active
@@ -52,28 +107,19 @@ pub(super) fn direct_read_operation<'turn>(
     if let Some(error) = owner.poisoned {
         return Err(error);
     }
-    let provider_cancellation = admitted_provider_request.guard().cancellation();
-    let anchor = Instant::now();
-    let observed = monotonic_millis();
-    let deadline = provider_read_deadline_at(
-        admitted_provider_request.guard().deadline(),
-        original_work_budget.deadline(),
-        anchor,
-        observed,
-    )?;
-    let request = owner.request.provider_source_read(
-        *admitted_provider_request.guard().request_id(),
-        deadline,
-    )?;
-    let work = NativeWork::for_provider_source_read(provider_cancellation);
-    work.check(&request)?;
-    Ok(NativeReadOperation {
-        owner,
-        context: Some((request, work)),
-        output_attempted: false,
-        registration: None,
-        first_refusal: None,
-    })
+    if state.owner_record != owner.record.record_digest { return Err(OwnerError::OwnerGuardMismatch); }
+    current_budget.check().map_err(|_| OwnerError::OwnerDeadlineInvalid)?;
+    state.check(admitted.guard().request_id(), &admitted.guard().cancellation(), current_budget.deadline())?;
+    let context = state.context.take().ok_or(OwnerError::OwnerInvalidTransition)?;
+    let mut frame = RestoreOnDrop {
+        value: NativeReadOperation { owner, context: Some(context), output_attempted: false,
+            registration: None, first_refusal: None },
+        restore: |operation: &mut NativeReadOperation<'_>| { state.context = operation.context.take(); },
+    };
+    let value = callback(&mut frame.value);
+    current_budget.check().map_err(|_| OwnerError::OwnerDeadlineInvalid)?;
+    frame.value.with_binding(|_, request, work, _| work.check(request))?;
+    Ok(value)
 }
 
 #[cfg(feature = "wave4-query")]
@@ -96,6 +142,11 @@ fn provider_read_deadline_at(
     anchor
         .checked_add(std::time::Duration::from_millis(remaining))
         .ok_or(OwnerError::OwnerDeadlineInvalid)
+}
+
+const fn provider_read_local_refusal(error: OwnerError) -> bool {
+    matches!(error, OwnerError::OwnerCancelledBeforeMutation
+        | OwnerError::OwnerDeadlineInvalid | OwnerError::ContractExhausted)
 }
 
 #[derive(Clone, Copy)]
@@ -219,11 +270,7 @@ impl NativeReadOperation<'_> {
                 }
             });
         if let Err(error) = result.as_ref()
-            && (!provider_source_read
-                || !matches!(
-                    *error,
-                    OwnerError::OwnerCancelledBeforeMutation | OwnerError::OwnerDeadlineInvalid
-                ))
+            && (!provider_source_read || !provider_read_local_refusal(*error))
         {
             self.owner.poisoned = Some(*error);
         }
@@ -462,9 +509,107 @@ impl NativeReadOperation<'_> {
 
 #[cfg(all(test, feature = "wave4-query"))]
 mod provider_read_deadline_tests {
-    use super::provider_read_deadline_at;
-    use search_provider_protocol::MonotonicMillis;
+    use super::*;
+    use search_provider_protocol::{DEFAULT_PROTOCOL_LIMITS, RequestGuard};
     use std::time::{Duration, Instant};
+
+    fn guard() -> RequestGuard {
+        RequestGuard::new(RequestId::from_bytes([0x71; 16]), 1, MonotonicMillis::new(1),
+            Some(10_000), DEFAULT_PROTOCOL_LIMITS).unwrap()
+    }
+
+    fn state(guard: &RequestGuard, deadline: Instant) -> NativeRequestReadState {
+        NativeRequestReadState {
+            context: Some((NativeRootRequest::provider_read_fixture(*guard.request_id(), deadline),
+                NativeWork::for_provider_source_read(guard.cancellation()))),
+            monotonic_deadline: MonotonicMillis::new(10_000), owner_record: [0; 32],
+        }
+    }
+
+    fn loan<T>(state: &mut NativeRequestReadState,
+        callback: impl FnOnce(&NativeRootRequest, &mut NativeWork) -> T,
+    ) -> T {
+        let context = state.context.take();
+        let mut frame = RestoreOnDrop { value: context,
+            restore: |context: &mut ReadContext| { state.context = context.take(); } };
+        let (request, work) = frame.value.as_mut().unwrap();
+        callback(request, work)
+    }
+
+    #[test]
+    fn provider_read_context_meter_survives_success_error_and_multiple_loans() {
+        let guard = guard();
+        let mut state = state(&guard, Instant::now() + Duration::from_secs(30));
+        for fail in [true, false] {
+            let result = loan(&mut state, |request, work| {
+                work.read(request, 4).unwrap();
+                work.open(request).unwrap();
+                work.call(request, || Ok(())).unwrap();
+                if fail { Err("consumer refusal") } else { Ok(()) }
+            });
+            assert_eq!(result.is_err(), fail);
+        }
+        loan(&mut state, |request, work| {
+            assert!(matches!(work.read(request, 1), Err(OwnerError::ContractExhausted)));
+            assert!(matches!(work.open(request), Err(OwnerError::ContractExhausted)));
+            assert!(matches!(work.call(request, || Ok(())), Err(OwnerError::ContractExhausted)));
+        });
+    }
+
+    #[test]
+    fn provider_read_context_meter_is_restored_during_unwind() {
+        let guard = guard();
+        let mut state = state(&guard, Instant::now() + Duration::from_secs(30));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            loan(&mut state, |request, work| {
+                work.read(request, 1).unwrap();
+                panic!("pure callback unwind");
+            });
+        }));
+        assert!(result.is_err());
+        loan(&mut state, |request, work| {
+            assert!(matches!(work.read(request, 8), Err(OwnerError::ContractExhausted)));
+            work.read(request, 7).unwrap();
+        });
+    }
+
+    #[test]
+    fn provider_read_context_refuses_equal_id_foreign_observer_and_never_renews_deadline() {
+        let guard = guard();
+        let foreign = self::guard();
+        let original_deadline = Instant::now() + Duration::from_secs(30);
+        let mut state = state(&guard, original_deadline);
+        assert!(matches!(state.check(guard.request_id(), &foreign.cancellation(),
+            MonotonicMillis::new(8_000)), Err(OwnerError::OwnerGuardMismatch)));
+        let observer = guard.cancellation();
+        state.check(guard.request_id(), &observer, MonotonicMillis::new(9_000)).unwrap();
+        state.check(guard.request_id(), &observer, MonotonicMillis::new(9_500)).unwrap();
+        assert_eq!(state.context.as_ref().unwrap().0.credential_context().0,
+            original_deadline - Duration::from_millis(1_000));
+        assert!(matches!(state.check(&RequestId::from_bytes([0x72; 16]), &observer,
+            MonotonicMillis::new(9_000)), Err(OwnerError::OwnerGuardMismatch)));
+    }
+
+    #[test]
+    fn provider_read_context_retains_cancel_and_expiry_across_loans() {
+        let mut guard = guard();
+        let mut active = state(&guard, Instant::now() + Duration::from_secs(30));
+        loan(&mut active, |request, work| work.read(request, 1).unwrap());
+        guard.mark_cancelled();
+        assert!(matches!(active.check(guard.request_id(), &guard.cancellation(),
+            MonotonicMillis::new(10_000)), Err(OwnerError::OwnerCancelledBeforeMutation)));
+        let guard = self::guard();
+        let mut expired = state(&guard, Instant::now());
+        assert!(matches!(expired.check(guard.request_id(), &guard.cancellation(),
+            MonotonicMillis::new(10_000)), Err(OwnerError::OwnerDeadlineInvalid)));
+    }
+
+    #[test]
+    fn provider_read_context_local_limits_do_not_mask_corruption_poisoning() {
+        for error in [OwnerError::OwnerCancelledBeforeMutation, OwnerError::OwnerDeadlineInvalid,
+            OwnerError::ContractExhausted] { assert!(provider_read_local_refusal(error)); }
+        assert!(!provider_read_local_refusal(OwnerError::OwnerGuardMismatch));
+    }
 
     #[test]
     fn provider_read_context_deadline_uses_earliest_guard_or_budget() {

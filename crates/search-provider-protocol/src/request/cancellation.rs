@@ -45,6 +45,12 @@ impl RequestCancellation {
             })
     }
 
+    /// Same original request/session signal; this grants no admission authority.
+    #[must_use]
+    pub fn same_request(&self, other: &Self) -> bool {
+        self.same_signal(other)
+    }
+
     // Identity, not the observed boolean: equal IDs/timestamps in another
     // connection do not make a constructed guard an admitted one.
     pub(crate) fn same_signal(&self, other: &Self) -> bool {
@@ -88,5 +94,21 @@ impl PackageOpaque for RequestCancellation {
 impl CancellationProbe for RequestCancellation {
     fn is_cancelled(&self) -> bool {
         Self::is_cancelled(self)
+    }
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    use crate::{DEFAULT_PROTOCOL_LIMITS, MonotonicMillis};
+    use search_contracts::RequestId;
+
+    #[test]
+    fn provider_read_context_identity_accepts_clone_and_refuses_equal_id_foreign_request() {
+        let guard = || RequestGuard::new(RequestId::from_bytes([0x61; 16]), 1,
+            MonotonicMillis::new(1), Some(100), DEFAULT_PROTOCOL_LIMITS).unwrap();
+        let original = guard().cancellation();
+        assert!(original.same_request(&original.clone()));
+        assert!(!original.same_request(&guard().cancellation()));
     }
 }
