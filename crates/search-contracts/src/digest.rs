@@ -180,6 +180,34 @@ impl Blake3ExactInputLimit {
     }
 }
 
+/// Caller-supplied finite computation budget for unframed BLAKE3 bytes.
+///
+/// This budget limits only the bytes consumed by one digest computation. It
+/// does not own or allocate the input, bound input production or retention,
+/// admit data, qualify a source, impose a deadline or total-work budget, or
+/// grant authority to the caller.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Blake3ByteBudget(usize);
+
+impl Blake3ByteBudget {
+    /// Accept a nonzero finite computation budget.
+    pub fn new(max_bytes: usize) -> Result<Self, ContractError> {
+        if max_bytes == 0 {
+            return Err(ContractError::new(
+                ContractErrorKind::ZeroNotAllowed,
+                "blake3_byte_budget",
+            ));
+        }
+        Ok(Self(max_bytes))
+    }
+
+    /// Maximum bytes this computation may consume.
+    #[must_use]
+    pub const fn get(self) -> usize {
+        self.0
+    }
+}
+
 /// Hash canonical CBOR without retaining another payload or complete preimage.
 pub fn blake3_canonical(
     domain: &CanonicalDigestDomain,
@@ -354,9 +382,31 @@ pub fn blake3_exact_bytes(
             bytes.len(),
         ));
     }
-    Ok(Blake3Digest32::from_computed_bytes(
-        *blake3::hash(bytes).as_bytes(),
-    ))
+    Ok(blake3_hash_exact(bytes))
+}
+
+/// Standard BLAKE3 of the supplied bytes under a caller-selected finite
+/// computation budget, with no domain or framing.
+///
+/// The caller owns input allocation, retention, admission and source
+/// qualification. This helper checks the complete input before hashing and
+/// computes equality only; it supplies no authority, deadline or total-work
+/// proof. Empty bytes retain the standard BLAKE3 result.
+///
+/// # Errors
+/// Returns a content-free size error if the input exceeds the budget.
+pub fn blake3_bounded_bytes(
+    bytes: &[u8],
+    budget: Blake3ByteBudget,
+) -> Result<Blake3Digest32, ContractError> {
+    if bytes.len() > budget.get() {
+        return Err(ContractError::oversize(
+            "blake3_bounded_payload",
+            budget.get(),
+            bytes.len(),
+        ));
+    }
+    Ok(blake3_hash_exact(bytes))
 }
 
 /// Standard SHA-256 of the supplied bytes with no added domain or framing.
@@ -397,6 +447,10 @@ fn check_raw(
         ));
     }
     Ok(())
+}
+
+fn blake3_hash_exact(bytes: &[u8]) -> Blake3Digest32 {
+    Blake3Digest32::from_computed_bytes(*blake3::hash(bytes).as_bytes())
 }
 
 #[cfg(test)]
@@ -444,6 +498,39 @@ mod tests {
         assert_eq!(error.field(), "blake3_exact_payload");
         assert!(DigestInputLimit::new(MAX_CANONICAL_BYTES).is_ok());
         assert!(DigestInputLimit::new(MAX_CANONICAL_BYTES + 1).is_err());
+    }
+
+    #[test]
+    fn bounded_blake3_matches_published_nonempty_vector() {
+        let input = [0_u8];
+        let digest = blake3_bounded_bytes(&input, Blake3ByteBudget::new(1).unwrap())
+            .expect("bounded digest");
+        assert_eq!(
+            crate::hex_encode(digest.as_bytes()),
+            "2d3adedff11b61f14c886e35afa036736dcd87a74d27b5c1510225d0f592e213"
+        );
+    }
+
+    #[test]
+    fn bounded_blake3_refuses_input_above_budget_before_hashing() {
+        let error = blake3_bounded_bytes(b"abcd", Blake3ByteBudget::new(3).unwrap())
+            .unwrap_err();
+        assert_eq!(error.kind(), ContractErrorKind::OversizePayload);
+        assert_eq!(error.field(), "blake3_bounded_payload");
+        assert_eq!(error.limit(), Some(3));
+        assert_eq!(error.actual(), Some(4));
+    }
+
+    #[test]
+    fn bounded_blake3_preserves_custom_limits_above_source_profile_ceiling() {
+        let input = vec![0_u8; MAX_BLAKE3_EXACT_BYTES + 1];
+        let budget = Blake3ByteBudget::new(input.len()).unwrap();
+        assert!(blake3_bounded_bytes(&input, budget).is_ok());
+
+        let exact_limit = Blake3ExactInputLimit::new(MAX_BLAKE3_EXACT_BYTES).unwrap();
+        let error = blake3_exact_bytes(&input, exact_limit).unwrap_err();
+        assert_eq!(error.kind(), ContractErrorKind::OversizePayload);
+        assert_eq!(error.field(), "blake3_exact_payload");
     }
 
     #[test]
