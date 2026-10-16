@@ -30,6 +30,8 @@ use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
 mod batch;
 #[path = "source_v2.rs"]
 pub mod source_v2;
+#[path = "source_namespace_v2.rs"]
+pub mod source_namespace_v2;
 pub use batch::{
     DecodedBatch, PreparedBatch, PreparedStateDelta, RegistryBatchLookup, RegistryBatchReadback,
     RegistryStateDelta, RegistryStateFamily, RegistryStateKey, RegistryStateRecord,

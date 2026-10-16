@@ -8,6 +8,10 @@
 pub use search_source_records::source_request_v2::{SourceAdmissionRequestV2, SourceNamespaceSelectionV2, SourceOwnerScopeV2};
 pub use crate::recovery::source_v2::{prepare_source_admission_v2, commit_source_admission_v2, recover_source_admission_v2,
     SourceAdmissionPreparationV2, SourceAdmissionRecoveryV2, PreparedSourceAdmissionV2, SourceAdmissionV2Error};
+pub use crate::recovery::source_namespace_v2::{
+    NativeNamespaceRequestV2, NativeNamespacePreparationV2, PreparedNativeNamespaceV2,
+    CommittedNativeNamespaceV2, prepare_native_namespace_v2, commit_native_namespace_v2,
+};
 
 pub use crate::cutover::{
     CutoverPreparation, CutoverRecoveryDecision, NamespaceCutoverState, NamespaceOwnershipCommand,

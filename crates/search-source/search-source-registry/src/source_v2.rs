@@ -551,12 +551,36 @@ where
     let Some(mut cache) = registry.identity_cache_v2.take() else {
         return Err(RegistryError::SnapshotInvalid.into());
     };
-    let record = prepared.batch.record();
+    if let Err(error) = commit_prepared_v4(registry, &prepared.batch, control, context, probe) {
+        registry.identity_cache_v2 = Some(cache);
+        return Err(error);
+    }
+    cache.lookup.install(prepared.lookup_delta.clone());
+    cache.namespaces.insert(prepared.result.source_identity.source_namespace_id);
+    registry.identity_cache_v2 = Some(cache);
+    Ok(prepared.result.clone())
+}
+
+// The same owner-validated v4 boundary serves Source admission and a closed
+// preread namespace initialization. Neither path creates another journal engine.
+pub(super) fn commit_prepared_v4<C, P>(registry: &mut SourceRegistry,
+    prepared: &batch::PreparedBatch, control: &mut P, context: &OperationContext<C>,
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<(), SourceAdmissionV2Error<P::Error>>
+where C: CancellationProbe, P: RegistryControlPort<Cancellation = C>,
+{
+    context.preflight().map_err(|_| RegistryError::CancelledBeforeCommit)?;
+    checkpoint(probe)?;
+    if registry.pending_batch.is_some() { return Err(RegistryError::MutationOutcomeUnknown.into()); }
+    if registry.revision != prepared.expected_registry_revision() {
+        return Err(RegistryError::RegistryRevisionConflict.into());
+    }
+    batch::validate_install(registry, prepared.record())?;
+    let record = prepared.record();
     let mutation = crate::error::registry_mutation(&record.entry().operation_id);
-    let observed = match control.commit_batch(&prepared.batch, context, &mutation) {
+    let observed = match control.commit_batch(prepared, context, &mutation) {
         Ok(observed) => observed,
         Err(error) => {
-            registry.identity_cache_v2 = Some(cache);
             if !matches!(
                 error.kind(),
                 PortErrorKind::CancelledBeforeSideEffect
@@ -581,20 +605,14 @@ where
         || observed.verify().is_err()
         || checkpoint::<P::Error>(probe).is_err()
     {
-        registry.identity_cache_v2 = Some(cache);
         registry.pending_batch = Some((
             record.entry().operation_id.clone(),
             record.request_fingerprint(),
         ));
         return Err(RegistryError::MutationOutcomeUnknown.into());
     }
-    cache.lookup.install(prepared.lookup_delta.clone());
-    cache
-        .namespaces
-        .insert(prepared.result.source_identity.source_namespace_id);
-    batch::install_prepared(registry, &prepared.batch);
-    registry.identity_cache_v2 = Some(cache);
-    Ok(prepared.result.clone())
+    batch::install_prepared(registry, prepared);
+    Ok(())
 }
 
 pub use search_source_records::source_request_v2::SourceAdmissionRecoveryV2;
