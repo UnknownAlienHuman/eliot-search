@@ -93,7 +93,9 @@ pub(super) fn run(
     let deadline = started
         .checked_add(Duration::from_secs(120))
         .ok_or("DIRECT_DEADLINE_INVALID")?;
-    let limits = super::super::super::native_request::NativeRootLimits::new([
+    let limits = if command == "--retain-source-v2" {
+        super::super::super::native_request::NativeRootLimits::for_source_retention()
+    } else { super::super::super::native_request::NativeRootLimits::new([
         256,
         256 * 1024,
         512 * 1024,
@@ -101,7 +103,7 @@ pub(super) fn run(
         16384,
         256,
     ])
-    .map_err(|e| e.code().to_owned())?;
+    .map_err(|e| e.code().to_owned())? };
     let (request, _) = NativeRootRequest::for_direct_registry(
         arguments,
         mode,

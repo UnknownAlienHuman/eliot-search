@@ -25,6 +25,16 @@ pub struct NativeRootLimits {
 }
 
 impl NativeRootLimits {
+    // One source-retention invocation composes namespace/security admission,
+    // Source/C04 reservation, selected-key use and C07 publication/readback.
+    // The original metadata-only 256-open profile reaches 254 before AES on
+    // the measured one-file consumer. Keep that legacy ceiling frozen and give
+    // only this closed compound operation one finite 512-open allowance.
+    pub(super) const fn for_source_retention() -> Self {
+        Self { arguments: 256, input_bytes: 256 * 1024, encoded_bytes: 512 * 1024,
+            read_bytes: 1024 * 1024 * 1024, native_calls: 16384, opens: 512 }
+    }
+
     pub fn new(values: [usize; 6]) -> Result<Self, OwnerError> {
         let maxima = [256, 256 * 1024, 512 * 1024, 1024 * 1024 * 1024, 16384, 256];
         if values
