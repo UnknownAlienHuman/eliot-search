@@ -13,7 +13,7 @@ use std::time::{Duration, SystemTime};
 use search_contracts::UtcTimestamp;
 use search_provider_protocol::MonotonicMillis;
 
-use eliot_searchd::native_time::{
+use crate::native_time::{
     NativeTimeError, civil_from_unix_days as civil_days,
     system_time_from_timestamp as system_time_from_canonical,
     timestamp_from_system_time as timestamp_from_instant,

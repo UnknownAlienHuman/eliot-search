@@ -33,6 +33,7 @@ mod maintenance;
 #[cfg(test)]
 mod maintenance_guard;
 mod native_root_command;
+mod native_time;
 pub(crate) mod owner_composition;
 #[path = "direct_store.rs"]
 mod plaintext_direct_store;

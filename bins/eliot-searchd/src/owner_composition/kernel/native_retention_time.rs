@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use search_contracts::UtcTimestamp;
 
-use eliot_searchd::native_time::timestamp_from_system_time;
+use crate::native_time::timestamp_from_system_time;
 
 use super::{FreshRootContext, FreshRootError, Work};
 

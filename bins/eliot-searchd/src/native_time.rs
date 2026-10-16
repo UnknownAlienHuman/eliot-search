@@ -21,7 +21,7 @@ const DAYS_PER_ERA: u128 = 146_097;
 /// The value is deliberately empty: it carries no instant, path, credential or
 /// caller refusal. Each caller maps it to its own existing closed refusal.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NativeTimeError {
+pub(crate) enum NativeTimeError {
     /// The instant or value is outside the shared canonical UTC contract.
     OutOfContract,
 }
@@ -35,7 +35,7 @@ pub enum NativeTimeError {
 ///
 /// Returns [`NativeTimeError::OutOfContract`] for a pre-epoch instant, an
 /// overflowing civil computation, or a year outside the four-digit contract.
-pub fn timestamp_from_system_time(instant: SystemTime) -> Result<UtcTimestamp, NativeTimeError> {
+pub(crate) fn timestamp_from_system_time(instant: SystemTime) -> Result<UtcTimestamp, NativeTimeError> {
     let since_epoch = instant
         .duration_since(UNIX_EPOCH)
         .map_err(|_| NativeTimeError::OutOfContract)?;
@@ -63,7 +63,7 @@ pub fn timestamp_from_system_time(instant: SystemTime) -> Result<UtcTimestamp, N
 ///
 /// Returns [`NativeTimeError::OutOfContract`] on any checked-arithmetic
 /// overflow or a civil year outside `1..=9999`.
-pub fn civil_from_unix_days(days: u64) -> Result<(u32, u32, u32), NativeTimeError> {
+pub(crate) fn civil_from_unix_days(days: u64) -> Result<(u32, u32, u32), NativeTimeError> {
     let shifted = u128::from(days)
         .checked_add(CIVIL_EPOCH_OFFSET_DAYS)
         .ok_or(NativeTimeError::OutOfContract)?;
@@ -119,7 +119,7 @@ pub fn civil_from_unix_days(days: u64) -> Result<(u32, u32, u32), NativeTimeErro
 ///
 /// Returns [`NativeTimeError::OutOfContract`] for a non-decimal field or an
 /// instant that cannot be represented after the Unix epoch.
-pub fn system_time_from_timestamp(value: &UtcTimestamp) -> Result<SystemTime, NativeTimeError> {
+pub(crate) fn system_time_from_timestamp(value: &UtcTimestamp) -> Result<SystemTime, NativeTimeError> {
     const MONTH_OFFSETS: [u64; 12] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
     const UNIX_DAYS: u64 = 365 * 1969 + 1969 / 4 - 1969 / 100 + 1969 / 400;
     fn decimal(bytes: &[u8], start: usize, end: usize) -> Result<u64, NativeTimeError> {
