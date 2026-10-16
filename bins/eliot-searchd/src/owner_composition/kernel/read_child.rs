@@ -78,6 +78,7 @@ impl NativeReadOperation<'_> {
         }
         let NativeRootCapability {
             pins,
+            storage_acl,
             root,
             installation,
             record,
@@ -102,6 +103,7 @@ impl NativeReadOperation<'_> {
             let result = operation(
                 NativeBindingView {
                     pins,
+                    storage_acl: storage_acl.as_ref(),
                     root,
                     installation,
                     record,
