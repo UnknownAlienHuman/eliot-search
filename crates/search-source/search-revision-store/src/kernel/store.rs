@@ -43,15 +43,18 @@ impl RevisionStore {
         })
     }
 
-    /// Returns the exact state of one domain-qualified source/revision key.
+    /// Returns historical state for diagnosis or cleanup, including fenced keys.
     pub fn state(&self, key: &RevisionKey) -> Result<&RevisionState, RevisionStoreError> {
         self.states
             .get(key)
             .ok_or(RevisionStoreError::RevisionNotFound)
     }
 
-    /// Returns one exact active immutable record.
+    /// Returns one exact active immutable record only when no purge fence applies.
     pub fn active_record(&self, key: &RevisionKey) -> Result<&RevisionRecord, RevisionStoreError> {
+        if self.is_fenced(key) {
+            return Err(RevisionStoreError::Tombstoned);
+        }
         match self.state(key)? {
             RevisionState::Active(record) => Ok(record),
             RevisionState::Pending(_) | RevisionState::OutcomeUnknown(_) => {
