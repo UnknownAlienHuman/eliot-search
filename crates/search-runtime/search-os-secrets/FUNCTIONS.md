@@ -67,6 +67,9 @@ The byte budget grants no allocation, admission, total-work or backend authority
 This const constructor copies the payload-owned digest into the record. It accepts no caller
 ciphertext digest. `SecretCatalog::create` retains its existing capacity, payload and operation
 checks; constructing a record proves no encryption or durable backend effect.
+Deletion clears both payload bytes and their cached digest to the standard empty-input value;
+the record's admitted ciphertext digest remains historical metadata. A cleared payload cloned
+from a tombstone cannot be re-admitted because catalog admission rejects empty ciphertext.
 
 ### `SecretCatalog::prepare_rotation(id, binding, replacement_version, replacement_ciphertext, replacement_record_revision, operation)`
 

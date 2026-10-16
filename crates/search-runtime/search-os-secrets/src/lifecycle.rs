@@ -406,7 +406,7 @@ impl SecretRecord {
         &self.ciphertext
     }
 
-    /// Digest of exact encrypted bytes.
+    /// Digest of admitted ciphertext, retained as historical metadata after deletion.
     #[must_use]
     pub const fn ciphertext_digest(&self) -> Blake3Digest32 {
         self.ciphertext_digest
@@ -726,9 +726,13 @@ impl SecretCatalog {
             .durable_receipt
             .clone()
             .ok_or(SecretError::RecoveryEvidenceMissing)?;
+        let empty_digest = c::blake3_bounded_bytes(&[],
+            c::Blake3ByteBudget::new(1).map_err(|_| SecretError::ContractExhausted)?)
+            .map_err(|_| SecretError::ContractExhausted)?;
         let record = self.records.get_mut(id).ok_or(SecretError::NotFound)?;
         record.ciphertext.0.fill(0);
         record.ciphertext.0.clear();
+        record.ciphertext.1 = empty_digest;
         record.last_operation = pending.operation.clone();
         record.state = SecretRecordState::Deleted(pending.operation.clone());
         Ok(SecretTransitionReceipt {
@@ -1229,7 +1233,7 @@ mod tests {
                 &id,
                 &SecretDeleteReadback {
                     reference_absent: false,
-                    operation,
+                    operation: operation.clone(),
                     durable_receipt: Some(
                         ReceiptRef::new("receipt:delete").expect("receipt"),
                     ),
@@ -1237,6 +1241,21 @@ mod tests {
             ),
             Err(SecretError::OutcomeUnknown)
         );
+        let historical_digest = catalog.get(&id).unwrap().ciphertext_digest();
+        catalog.confirm_delete(&id, &SecretDeleteReadback {
+            reference_absent: true, operation,
+            durable_receipt: Some(ReceiptRef::new("receipt:delete-confirmed").unwrap()),
+        }).expect("exact deletion");
+        let deleted = catalog.get(&id).unwrap();
+        assert!(deleted.ciphertext().is_empty());
+        assert_eq!(deleted.ciphertext_digest(), historical_digest);
+        let recycled = SecretRecord::new_active(deleted.reference().clone(),
+            deleted.ciphertext().clone(), deleted.record_revision(), deleted.last_operation().clone());
+        assert_eq!(recycled.ciphertext_digest(), Blake3Digest32::parse_hex(
+            "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262").unwrap());
+        let mut fresh = SecretCatalog::new().unwrap();
+        assert_eq!(fresh.create(recycled), Err(SecretError::EmptySecret));
+        assert!(fresh.is_empty() && fresh.operations.is_empty());
     }
 
     #[test]
