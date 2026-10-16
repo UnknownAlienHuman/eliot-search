@@ -102,7 +102,7 @@ impl DirectRegistryOwner {
             Ok(value) => value,
             Err(error) => return Ok(DirectOutput { current: false, line: format!(
                 "{{\"event\":\"native_source\",\"admitted\":false,\"reason\":\"{}\",\"ready\":false,\"source_body_serving\":false}}",
-                eliot_searchd::diagnostics::sanitize_code(&error.to_string())) }),
+                error.source_refusal_code()) }),
         };
         let request = SourceAdmissionRequestV2 {
             expected_registry_revision: registry.revision(), root_binding_id: root_id,

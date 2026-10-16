@@ -55,6 +55,15 @@ impl std::fmt::Display for FreshRootError {
     }
 }
 impl FreshRootError {
+    pub(crate) const fn source_refusal_code(&self) -> &'static str {
+        match self {
+            Self::Native(error) => error.code(),
+            Self::Admission(_) => "NATIVE_SOURCE_ADMISSION_REFUSED",
+            Self::Registry(_) => "NATIVE_SOURCE_ROOT_OR_REGISTRY_REFUSED",
+            Self::Source(code) => code,
+            Self::Observation(error) => error.code(),
+        }
+    }
     pub(crate) const fn is_cancelled(&self) -> bool {
         matches!(self, Self::Native(OwnerError::OwnerCancelledBeforeMutation))
     }

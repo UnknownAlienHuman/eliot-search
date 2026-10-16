@@ -97,5 +97,5 @@ fn native_source_changed_root_policy_attempts_no_body_and_publishes_no_source() 
     let changed = s.base.join("changed-policy.cbor");
     fs::write(&changed, retained_v2(8).encoded_inputs()).unwrap();
     assert_denied(&s, &changed, "one.rs", b"denial-body-canary", 64,
-        "SnapshotInvalid", false);
+        "NATIVE_SOURCE_ROOT_OR_REGISTRY_REFUSED", false);
 }
