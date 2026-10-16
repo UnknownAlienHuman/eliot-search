@@ -144,7 +144,6 @@ impl PairingSecretComposer {
             &self.binding,
             replacement_version,
             payload,
-            evidence.blob_digest,
             replacement_revision,
             operation.clone(),
         );
