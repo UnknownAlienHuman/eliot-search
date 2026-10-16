@@ -6,6 +6,7 @@ use crate::canonical::{
     BoundedExpression, BoundedNonContentMetadata, BoundedObservation, CanonicalBytes, CanonicalKey,
     CanonicalText, CanonicalValue, OpaqueId, OpaqueRef, UtcTimestamp, domain_separated_preimage,
 };
+use crate::digest::blake3_exact_bytes;
 use crate::ids::{
     AccessPartitionId, AccessPolicyBindingId, AccessPolicyRevision, BindingId, Blake3Digest32,
     BufferSnapshotId, CatalogRevision, CollectionGenerationId, CollectionRouteRevision, CorpusId,
@@ -19,13 +20,21 @@ use crate::ids::{
 };
 use crate::protocol::{ContinuationHandle, ProtocolVersion, SearchSourceHandle};
 use crate::reasons::SearchReasonCodeV1;
-use crate::recipes::RecipeIdV1;
+use crate::recipes::{
+    CompareImplementationsRecipe, CorpusDeltaDimension, CorpusFacetDimension, CorpusProfileRecipe,
+    ExpandHandleRecipe, ExpandHandleTarget, ExploreEntityRecipe, FindTextRecipe,
+    InspectEntityRecipe, LocateRecipe, NormalizedNameSelector, PathSelector,
+    QualifiedSymbolSelector, RecipeBodyV1, RecipeIdV1, ReferencePortfolioScope, RequestedScope,
+    SearchRecipeRequest, SubjectSelector,
+};
 use crate::schema::{
     DisclosureCeiling, EntityKind, EvidenceRole, Modality, ObservationFreshnessState,
     SensitivityClass,
 };
 use crate::source::{SourceRevisionRef, SourceView};
-use crate::{AuthorizedScopeRef, ContractError, ContractErrorKind, ExactScanPlanRef};
+use crate::{
+    AuthorizedScopeRef, Blake3ExactInputLimit, ContractError, ContractErrorKind, ExactScanPlanRef,
+};
 use core::{cmp::Ordering, hash::Hash};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -477,6 +486,39 @@ impl SearchTaskPlan {
             ("additional_state_dependencies", state_dependencies),
         ])?;
         domain_separated_preimage("eliot-search/plan-fingerprint/v1", &value)
+    }
+}
+
+impl SearchRecipeRequest {
+    /// BLAKE3-256 identity for every normalized request field.
+    ///
+    /// This uses the contract canonical-CBOR encoder and does not expose serialized query or
+    /// handle fields. Callers normalize the request before using this digest as plan input.
+    pub fn canonical_request_digest(&self) -> Result<Blake3Digest32, ContractError> {
+        if self.recipe != self.body.recipe_id() {
+            return Err(ContractError::new(
+                ContractErrorKind::FamilyMismatch,
+                "recipe_body",
+            ));
+        }
+        self.source_view.validate()?;
+        let value = canonical_tuple(
+            "search_recipe_request_v1",
+            vec![
+                canonical_uuid(self.request_id.as_bytes())?,
+                canonical_text(self.recipe.as_str())?,
+                canonical_source_view(&self.source_view)?,
+                canonical_requested_scope(&self.requested_scope)?,
+                canonical_text(self.requested_budget_class.as_str())?,
+                canonical_recipe_body(&self.body)?,
+            ],
+        )?;
+        let input =
+            domain_separated_preimage("eliot-search/recipe-request-fingerprint/v1", &value)?;
+        blake3_exact_bytes(
+            input.as_slice(),
+            Blake3ExactInputLimit::new(input.as_slice().len())?,
+        )
     }
 }
 
@@ -1012,6 +1054,377 @@ fn canonical_source_view(value: &SourceView) -> Result<CanonicalValue, ContractE
         ),
     };
     canonical_object(vec![(tag, body)])
+}
+
+fn canonical_requested_scope(value: &RequestedScope) -> Result<CanonicalValue, ContractError> {
+    match value {
+        RequestedScope::ActiveWorkspace(workspace) => canonical_tuple(
+            "active_workspace",
+            vec![canonical_uuid(workspace.as_bytes())?],
+        ),
+        RequestedScope::ExplicitMemberships(memberships) => canonical_tuple(
+            "explicit_memberships",
+            vec![canonical_list(
+                memberships
+                    .iter()
+                    .map(|membership| canonical_uuid(membership.as_bytes()))
+                    .collect::<Result<Vec<_>, _>>()?,
+            )?],
+        ),
+        RequestedScope::Corpus(corpus) => {
+            canonical_tuple("corpus", vec![canonical_uuid(corpus.as_bytes())?])
+        }
+        RequestedScope::ReferencePortfolio(portfolio) => canonical_reference_portfolio(portfolio),
+        RequestedScope::SourceHandle(handle) => {
+            canonical_tuple("source_handle", vec![canonical_source_handle(handle)?])
+        }
+    }
+}
+
+fn canonical_reference_portfolio(
+    value: &ReferencePortfolioScope,
+) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        "reference_portfolio",
+        vec![
+            canonical_uuid(value.portfolio_id.as_bytes())?,
+            CanonicalValue::U64(value.portfolio_revision.get()),
+        ],
+    )
+}
+
+fn canonical_recipe_body(value: &RecipeBodyV1) -> Result<CanonicalValue, ContractError> {
+    match value {
+        RecipeBodyV1::Locate(recipe) => canonical_locate(recipe),
+        RecipeBodyV1::FindText(recipe) => canonical_find_text(recipe),
+        RecipeBodyV1::InspectEntity(recipe) => canonical_inspect_entity(recipe),
+        RecipeBodyV1::CompareImplementations(recipe) => canonical_compare(recipe),
+        RecipeBodyV1::ExploreEntity(recipe) => canonical_explore(recipe),
+        RecipeBodyV1::CorpusProfile(recipe) => canonical_corpus_profile(recipe),
+        RecipeBodyV1::CorpusDelta(recipe) => canonical_corpus_delta(recipe),
+        RecipeBodyV1::Provenance(recipe) => canonical_provenance(recipe),
+        RecipeBodyV1::CompileExactScan { predicate, body } => canonical_tuple(
+            RecipeIdV1::CompileExactScan.as_str(),
+            vec![
+                canonical_predicate(predicate)?,
+                canonical_completeness(body.completeness_requirements)?,
+            ],
+        ),
+        RecipeBodyV1::ExecuteExactScan(recipe) => canonical_tuple(
+            RecipeIdV1::ExecuteExactScan.as_str(),
+            vec![
+                canonical_uuid(recipe.plan_ref.plan_id.as_bytes())?,
+                canonical_digest(recipe.plan_ref.plan_fingerprint.as_bytes())?,
+            ],
+        ),
+        RecipeBodyV1::ExpandHandle(recipe) => canonical_expand_handle(recipe),
+    }
+}
+
+fn canonical_locate(value: &LocateRecipe) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        RecipeIdV1::Locate.as_str(),
+        vec![
+            canonical_subject(&value.subject)?,
+            canonical_enum_set(&value.evidence_roles, EvidenceRole::as_str)?,
+        ],
+    )
+}
+
+fn canonical_find_text(value: &FindTextRecipe) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        RecipeIdV1::FindText.as_str(),
+        vec![
+            canonical_predicate(&value.predicate)?,
+            canonical_text(value.case_policy.as_str())?,
+            CanonicalValue::U64(u64::from(value.context_bytes_before)),
+            CanonicalValue::U64(u64::from(value.context_bytes_after)),
+        ],
+    )
+}
+
+fn canonical_inspect_entity(value: &InspectEntityRecipe) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        RecipeIdV1::InspectEntity.as_str(),
+        vec![
+            canonical_subject(&value.subject)?,
+            canonical_enum_set(&value.evidence_roles, EvidenceRole::as_str)?,
+            canonical_enum_set(&value.include_relations, crate::RelationKind::as_str)?,
+        ],
+    )
+}
+
+fn canonical_compare(
+    value: &CompareImplementationsRecipe,
+) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        RecipeIdV1::CompareImplementations.as_str(),
+        vec![
+            canonical_subject(&value.subject)?,
+            canonical_reference_portfolio(&value.references)?,
+            canonical_enum_set(&value.comparison_axes, crate::ComparisonAxis::as_str)?,
+        ],
+    )
+}
+
+fn canonical_explore(value: &ExploreEntityRecipe) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        RecipeIdV1::ExploreEntity.as_str(),
+        vec![
+            canonical_subject(&value.subject)?,
+            canonical_enum_set(&value.relation_kinds, crate::RelationKind::as_str)?,
+            CanonicalValue::U64(u64::from(value.max_depth)),
+        ],
+    )
+}
+
+fn canonical_corpus_profile(value: &CorpusProfileRecipe) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        RecipeIdV1::CorpusProfile.as_str(),
+        vec![canonical_enum_set(
+            &value.facets,
+            CorpusFacetDimension::as_str,
+        )?],
+    )
+}
+
+fn canonical_corpus_delta(
+    value: &crate::CorpusDeltaRecipe,
+) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        RecipeIdV1::CorpusDelta.as_str(),
+        vec![
+            canonical_source_view(&value.from_view)?,
+            canonical_source_view(&value.to_view)?,
+            canonical_enum_set(&value.dimensions, CorpusDeltaDimension::as_str)?,
+        ],
+    )
+}
+
+fn canonical_provenance(value: &crate::ProvenanceRecipe) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        RecipeIdV1::Provenance.as_str(),
+        vec![
+            canonical_source_handle(&value.source_handle)?,
+            CanonicalValue::U64(u64::from(value.max_lineage_depth)),
+        ],
+    )
+}
+
+fn canonical_expand_handle(value: &ExpandHandleRecipe) -> Result<CanonicalValue, ContractError> {
+    let target = match &value.handle {
+        ExpandHandleTarget::Source(handle) => {
+            canonical_tuple("source", vec![canonical_source_handle(handle)?])?
+        }
+        ExpandHandleTarget::Continuation(handle) => {
+            canonical_tuple("continuation", vec![canonical_continuation_handle(handle)?])?
+        }
+    };
+    canonical_tuple(
+        RecipeIdV1::ExpandHandle.as_str(),
+        vec![
+            target,
+            canonical_text(value.expansion.as_str())?,
+            CanonicalValue::U64(value.max_bytes),
+        ],
+    )
+}
+
+fn canonical_subject(value: &SubjectSelector) -> Result<CanonicalValue, ContractError> {
+    match value {
+        SubjectSelector::SourceHandle(handle) => {
+            canonical_tuple("source_handle", vec![canonical_source_handle(handle)?])
+        }
+        SubjectSelector::EditorPosition(selector) => {
+            selector.anchor.validate()?;
+            canonical_tuple(
+                "editor_position",
+                vec![
+                    canonical_uuid(selector.workspace_id.as_bytes())?,
+                    selector
+                        .buffer_snapshot_id
+                        .as_ref()
+                        .map_or(Ok(CanonicalValue::Null), |id| canonical_uuid(id.as_bytes()))?,
+                    canonical_anchor(&selector.anchor)?,
+                ],
+            )
+        }
+        SubjectSelector::QualifiedSymbol(QualifiedSymbolSelector {
+            normalized_symbol_key,
+            entity_kinds,
+        }) => canonical_tuple(
+            "qualified_symbol",
+            vec![
+                canonical_text(normalized_symbol_key.as_str())?,
+                canonical_enum_set(entity_kinds, crate::EntityKind::as_str)?,
+            ],
+        ),
+        SubjectSelector::NormalizedName(NormalizedNameSelector { name, entity_kinds }) => {
+            canonical_tuple(
+                "normalized_name",
+                vec![
+                    canonical_text(name.as_str())?,
+                    canonical_enum_set(entity_kinds, crate::EntityKind::as_str)?,
+                ],
+            )
+        }
+        SubjectSelector::Path(PathSelector {
+            workspace_id,
+            display_path,
+        }) => canonical_tuple(
+            "path",
+            vec![
+                canonical_uuid(workspace_id.as_bytes())?,
+                canonical_text(display_path.as_str())?,
+            ],
+        ),
+    }
+}
+
+fn canonical_predicate(value: &ExactPredicate) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        "exact_predicate",
+        vec![
+            canonical_text(value.kind.as_str())?,
+            canonical_text(value.engine_and_version.as_str())?,
+            canonical_bytes(value.serialized_form.as_slice())?,
+            canonical_text(value.input_domain.as_str())?,
+            canonical_text(value.worst_case_complexity_class.as_str())?,
+        ],
+    )
+}
+
+fn canonical_completeness(
+    value: ExactCompletenessRequirements,
+) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        "exact_completeness",
+        vec![
+            CanonicalValue::Bool(value.require_every_denominator_item),
+            CanonicalValue::Bool(value.require_stable_or_retained_revision),
+            CanonicalValue::Bool(value.require_current_observation),
+            CanonicalValue::Bool(value.include_authenticated_unsaved_buffers),
+            CanonicalValue::Bool(value.fail_on_timeout),
+            CanonicalValue::Bool(value.fail_on_cancellation),
+            CanonicalValue::Bool(value.fail_on_scope_drift),
+        ],
+    )
+}
+
+fn canonical_anchor(value: &NativeAnchor) -> Result<CanonicalValue, ContractError> {
+    match value {
+        NativeAnchor::TextBytes(anchor) => canonical_tuple(
+            "text_bytes",
+            vec![
+                canonical_digest(anchor.content_digest.as_bytes())?,
+                CanonicalValue::U64(anchor.byte_start_0),
+                CanonicalValue::U64(anchor.byte_end_exclusive_0),
+            ],
+        ),
+        NativeAnchor::GitBlobBytes(anchor) => canonical_tuple(
+            "git_blob_bytes",
+            vec![
+                canonical_uuid(anchor.repository_lineage_id.as_bytes())?,
+                canonical_text(anchor.commit_oid.as_str())?,
+                canonical_bytes(anchor.path_bytes.as_slice())?,
+                CanonicalValue::U64(anchor.byte_start_0),
+                CanonicalValue::U64(anchor.byte_end_exclusive_0),
+            ],
+        ),
+        NativeAnchor::BufferRange(anchor) => canonical_tuple(
+            "buffer_range",
+            vec![
+                canonical_uuid(anchor.buffer_snapshot_id.as_bytes())?,
+                CanonicalValue::U64(anchor.buffer_version),
+                canonical_text(anchor.position_encoding.as_str())?,
+                CanonicalValue::U64(anchor.start_line_0),
+                CanonicalValue::U64(anchor.start_character_0),
+                CanonicalValue::U64(anchor.end_line_0),
+                CanonicalValue::U64(anchor.end_character_0),
+            ],
+        ),
+        NativeAnchor::PdfRegion(anchor) => canonical_tuple(
+            "pdf_region",
+            vec![
+                canonical_uuid(anchor.source_revision_id.as_bytes())?,
+                CanonicalValue::U64(anchor.page_1),
+                canonical_finite_f64(anchor.x0)?,
+                canonical_finite_f64(anchor.y0)?,
+                canonical_finite_f64(anchor.x1)?,
+                canonical_finite_f64(anchor.y1)?,
+            ],
+        ),
+        NativeAnchor::ArchiveMember(anchor) => canonical_tuple(
+            "archive_member",
+            vec![
+                canonical_uuid(anchor.archive_revision_id.as_bytes())?,
+                canonical_bytes(anchor.member_path_bytes.as_slice())?,
+                canonical_anchor(&anchor.nested_anchor)?,
+            ],
+        ),
+    }
+}
+
+fn canonical_source_handle(value: &SearchSourceHandle) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        "search_source_handle",
+        vec![
+            canonical_uuid(value.handle_id.as_bytes())?,
+            CanonicalValue::U64(value.handle_revision.get()),
+            canonical_text(value.handle_class.as_str())?,
+            value
+                .expires_at
+                .as_ref()
+                .map_or(Ok(CanonicalValue::Null), |time| {
+                    canonical_text(time.as_str())
+                })?,
+            canonical_bytes(value.opaque_token.as_bytes())?,
+        ],
+    )
+}
+
+fn canonical_continuation_handle(
+    value: &ContinuationHandle,
+) -> Result<CanonicalValue, ContractError> {
+    canonical_tuple(
+        "continuation_handle",
+        vec![
+            canonical_uuid(value.continuation_id.as_bytes())?,
+            canonical_text(value.expires_at.as_str())?,
+            canonical_bytes(value.opaque_token.as_bytes())?,
+        ],
+    )
+}
+
+fn canonical_finite_f64(value: FiniteF64) -> Result<CanonicalValue, ContractError> {
+    canonical_bytes(&value.get().to_bits().to_be_bytes())
+}
+
+fn canonical_bytes(value: &[u8]) -> Result<CanonicalValue, ContractError> {
+    BoundedBytes::new(value.to_vec()).map(CanonicalValue::Bytes)
+}
+
+fn canonical_enum_set<T: Copy + Ord>(
+    values: &BoundedSet<T, MAX_SET_ITEMS>,
+    as_str: fn(T) -> &'static str,
+) -> Result<CanonicalValue, ContractError> {
+    canonical_list(
+        values
+            .iter()
+            .copied()
+            .map(|value| canonical_text(as_str(value)))
+            .collect::<Result<Vec<_>, _>>()?,
+    )
+}
+
+fn canonical_tuple(
+    tag: &str,
+    fields: Vec<CanonicalValue>,
+) -> Result<CanonicalValue, ContractError> {
+    let mut values = Vec::with_capacity(fields.len() + 1);
+    values.push(canonical_text(tag)?);
+    values.extend(fields);
+    canonical_list(values)
 }
 
 fn canonical_source_owner_fence(value: &SourceOwnerFence) -> Result<CanonicalValue, ContractError> {
