@@ -91,3 +91,66 @@ fn native_dek_candidate_persists_restarts_conflicts_and_cleans_exact_target() {
     assert!(owned.cleanup(), "exact candidate cleanup");
     assert!(os::read_revision_dek(&binding, &mut CleanupContext::new()).unwrap().is_none(), "candidate still present");
 }
+
+fn select(s: &Scratch, operation: &str, expected: &[u8; 32], config_file: &Path) -> (Result<(), String>, String) {
+    let args = [OsString::from("--select-revision-dek-v1"), s.root.as_os_str().to_owned(), operation.into(),
+        super::super::super::super::codec::hex(expected).into(), "--config-file".into(), config_file.as_os_str().to_owned()];
+    let deadline = Instant::now() + Duration::from_secs(120);
+    let (request, selected) = NativeRootRequest::for_direct_registry(&args,
+        DataRootOpenMode::OpenExistingMutating, deadline, Arc::new(AtomicBool::new(false)),
+        super::super::super::super::native_request::NativeRootLimits::new(
+            [256, 256 * 1024, 512 * 1024, 1024 * 1024 * 1024, 16384, 256]).unwrap()).unwrap();
+    let (_, cli) = crate::config_composition::strip_config_args_os(&args).unwrap();
+    let command = super::super::dek_selection::SelectionCommand::parse(&selected, cli).unwrap();
+    let owner = DirectRegistryOwner::open_with_work(request, NativeWork::new()).unwrap();
+    let mut output = Vec::new();
+    let result = owner.execute_revision_dek_selection(&command, &mut output);
+    (result, String::from_utf8(output).unwrap())
+}
+
+#[test]
+fn native_dek_first_current_reopens_replays_without_config_and_cleans_exact_target() {
+    let s = Scratch::new(true);
+    let owned = OwnedCandidates::new();
+    let (result, candidate_output) = run(&s, &owned, "61616161616161616161616161616161");
+    assert!(result.is_ok(), "{candidate_output}: {result:?}");
+    assert_eq!(owned.targets.borrow().len(), 1);
+    let binding = owned.targets.borrow()[0].clone();
+    let before = os::read_revision_dek(&binding, &mut CleanupContext::new()).unwrap().unwrap();
+    let config_file = s.base.join("selection-backend.toml");
+    let config_bytes = b"schema_version=2\nprofile=\"direct\"\n[secrets]\nbackend=\"windows_user_bound\"\nlease_ttl_ms=20000\nrotation_grace_ms=0\n";
+    fs::write(&config_file, config_bytes).unwrap();
+    let document = crate::config_composition::capture_file_document(config_bytes, "config-file").unwrap();
+    let effective = crate::config_composition::build_effective(Some(document), None, None, "direct", "direct").unwrap();
+    let expected = *effective.fingerprint().as_bytes();
+    let operation = "62626262626262626262626262626262";
+    let (result, first) = select(&s, operation, &expected, &config_file);
+    assert!(result.is_ok(), "{first}: {result:?}");
+    for field in ["\"durable_current_committed\":true", "\"current_backend_validated\":true",
+        "\"historical_commit\":false", "\"whole_daemon_config_applied\":false",
+        "\"ttl_enforced\":false", "\"rotation_enforced\":false", "\"key_use\":false",
+        "\"leases\":false", "\"source_body_serving\":false", "\"ready\":false"] {
+        assert!(first.contains(field), "{first}");
+    }
+    fs::write(&config_file, b"invalid selection replay input").unwrap();
+    let (result, replay) = select(&s, operation, &expected, &config_file);
+    assert!(result.is_ok(), "{replay}: {result:?}");
+    assert!(replay.contains("\"historical_commit\":true"), "{replay}");
+    fs::remove_file(&config_file).unwrap();
+    let (result, replay) = select(&s, operation, &expected, &config_file);
+    assert!(result.is_ok(), "{replay}: {result:?}");
+    assert!(replay.contains("\"current_backend_validated\":true"), "{replay}");
+    let mut changed = expected;
+    changed[0] ^= 1;
+    let (result, conflict) = select(&s, operation, &changed, &config_file);
+    assert!(result.is_err());
+    assert!(conflict.contains("REVISION_DEK_SELECTION_OPERATION_CONFLICT"), "{conflict}");
+    let (result, conflict) = select(&s, "63636363636363636363636363636363", &expected, &config_file);
+    assert!(result.is_err());
+    assert!(conflict.contains("REVISION_DEK_SELECTION_OPERATION_CONFLICT"), "{conflict}");
+    let after = os::read_revision_dek(&binding, &mut CleanupContext::new()).unwrap().unwrap();
+    assert!(before.protected_bytes() == after.protected_bytes(), "selection must not replace a key");
+    assert_eq!(owned.targets.borrow().len(), 1);
+    assert!(owned.cleanup(), "exact candidate cleanup");
+    assert!(os::read_revision_dek(&binding, &mut CleanupContext::new()).unwrap().is_none());
+}

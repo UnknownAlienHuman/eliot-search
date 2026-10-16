@@ -26,7 +26,7 @@ impl RevisionDekCommand {
 }
 
 #[derive(Clone, Copy)]
-struct InvocationRefusal { first: OwnerError, cleanup_exhausted: bool }
+pub(super) struct InvocationRefusal { first: OwnerError, cleanup_exhausted: bool }
 impl std::fmt::Debug for InvocationRefusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RevisionDekInvocationRefusal").field("first", &self.first.code())
@@ -36,12 +36,12 @@ impl std::fmt::Debug for InvocationRefusal {
 impl From<OwnerError> for InvocationRefusal {
     fn from(first: OwnerError) -> Self { Self { first, cleanup_exhausted: false } }
 }
-struct NativeContext<'a> {
-    deadline: Instant,
-    poll: &'a dyn Fn() -> Result<(), OwnerError>,
-    work: &'a dyn Fn(LegacyRevisionDpapiWork) -> Result<(), OwnerError>,
-    open: &'a dyn Fn() -> Result<(), OwnerError>,
-    clear: &'a dyn Fn(usize) -> Result<(), (OwnerError, bool)>,
+pub(super) struct NativeContext<'a> {
+    pub(super) deadline: Instant,
+    pub(super) poll: &'a dyn Fn() -> Result<(), OwnerError>,
+    pub(super) work: &'a dyn Fn(LegacyRevisionDpapiWork) -> Result<(), OwnerError>,
+    pub(super) open: &'a dyn Fn() -> Result<(), OwnerError>,
+    pub(super) clear: &'a dyn Fn(usize) -> Result<(), (OwnerError, bool)>,
 }
 impl LegacyRevisionDpapiContext for NativeContext<'_> {
     type Error = InvocationRefusal;
@@ -58,20 +58,20 @@ impl os::RevisionDekContext for NativeContext<'_> {
     fn charge_open(&mut self) -> Result<(), Self::Error> { (self.open)().map_err(Into::into) }
 }
 
-fn bind<'j, C: CancellationProbe>(journal: &'j mut db::PersistentControlJournal,
+pub(super) fn bind<'j, C: CancellationProbe>(journal: &'j mut db::PersistentControlJournal,
     publisher: &'j mut db::ControlSnapshotPublisher, _: &OperationContext<C>,
 ) -> Result<BoundControlJournal<'j, C>, String> {
     journal.bind_control_port(publisher).map_err(|_| "REVISION_DEK_CONTROL_UNAVAILABLE".into())
 }
-fn key(value: &[u8]) -> Result<ControlKey, String> {
+pub(super) fn key(value: &[u8]) -> Result<ControlKey, String> {
     ControlKey::new(value.to_vec(), JournalLimits::BASELINE).map_err(|_| "REVISION_DEK_CONTROL_KEY_INVALID".into())
 }
-fn stored(record: &RevisionDekRecord) -> Result<ControlValue, String> {
+pub(super) fn stored(record: &RevisionDekRecord) -> Result<ControlValue, String> {
     let bytes = encode_revision_dek_record(record).map_err(|error| error.code().to_owned())?;
     ControlValue::new(ControlRecordClass::State, bytes, JournalLimits::BASELINE)
         .map_err(|_| "REVISION_DEK_CONTROL_VALUE_INVALID".into())
 }
-fn load(snapshot: &ScopedControlRecordsReadback, key: &ControlKey) -> Result<Option<RevisionDekRecord>, String> {
+pub(super) fn load(snapshot: &ScopedControlRecordsReadback, key: &ControlKey) -> Result<Option<RevisionDekRecord>, String> {
     if let Some(value) = snapshot.get(key) {
         if value.class() != ControlRecordClass::State { return Err("REVISION_DEK_CONTROL_CLASS_INVALID".into()); }
         return decode_revision_dek_record(value.as_bytes()).map(Some).map_err(|error| error.code().to_owned());
@@ -79,13 +79,13 @@ fn load(snapshot: &ScopedControlRecordsReadback, key: &ControlKey) -> Result<Opt
     if !snapshot.missing_keys().contains(key) { return Err("REVISION_DEK_CONTROL_READBACK_INCOMPLETE".into()); }
     Ok(None)
 }
-fn digest(domain: &str, fields: Vec<V>) -> Result<c::Blake3Digest32, String> {
+pub(super) fn digest(domain: &str, fields: Vec<V>) -> Result<c::Blake3Digest32, String> {
     let value = c::BoundedList::new(fields).map(V::Array).map_err(|_| "REVISION_DEK_COMMAND_INVALID")?;
     c::blake3_canonical(&c::CanonicalDigestDomain::parse(domain).map_err(|_| "REVISION_DEK_COMMAND_INVALID")?,
         &value, c::DigestInputLimit::new(8192).map_err(|_| "REVISION_DEK_COMMAND_INVALID")?)
         .map_err(|_| "REVISION_DEK_COMMAND_INVALID".into())
 }
-fn bytes(value: &[u8]) -> Result<V, String> {
+pub(super) fn bytes(value: &[u8]) -> Result<V, String> {
     c::BoundedBytes::new(value.to_vec()).map(V::Bytes).map_err(|_| "REVISION_DEK_COMMAND_INVALID".into())
 }
 fn phase_id(binding: &RevisionDekBinding, phase: u64) -> Result<MutationId, String> {

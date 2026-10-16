@@ -34,13 +34,6 @@ impl EffectiveDaemonConfig {
 
     /// Owner-checked immutable settings; no runtime application or key authority.
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "The Current-key settings consumer remains under #307"
-        )
-    )]
     pub const fn secrets_settings(&self) -> &ValidatedSecretsConfig {
         &self.secrets_settings
     }

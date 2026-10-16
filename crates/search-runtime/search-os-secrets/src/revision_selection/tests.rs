@@ -501,7 +501,7 @@ fn public_debug_and_errors_never_claim_effect_or_expose_candidate_coordinates() 
     let debug = format!(
         "{:?} {intent:?} {current:?} {:?}",
         intent.policy(),
-        RevisionDekSelectionRecord::Current(current)
+        RevisionDekSelectionRecord::Current(current.clone())
     );
     assert!(!debug.contains("protected-fixture"));
     assert!(!debug.contains("windows_user_bound"));
