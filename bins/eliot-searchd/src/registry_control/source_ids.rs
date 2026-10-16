@@ -105,6 +105,14 @@ impl<'a, C: CancellationProbe> SourceIdentityIdsV2<'a, C> {
             cancellation: PhantomData,
         }
     }
+
+    /// Mints a domain UUID under the original context; it confers no residency authority.
+    pub(crate) fn fresh_residency_domain_uuid(
+        &mut self,
+        context: &OperationContext<C>,
+    ) -> Result<[u8; 16], SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context)
+    }
 }
 
 impl<C: CancellationProbe> Port for SourceIdentityIdsV2<'_, C> {
@@ -122,6 +130,16 @@ impl<C: CancellationProbe> SourceIdentityIdPortV2 for SourceIdentityIdsV2<'_, C>
         context: &OperationContext<C>,
     ) -> Result<SourceNamespaceId, Self::Error> {
         mint_fresh_id(self.deadline, self.work, context).map(SourceNamespaceId::from_bytes)
+    }
+}
+
+impl<C: CancellationProbe> search_source_registry::SourceRevisionIdPort for SourceIdentityIdsV2<'_, C> {
+    fn fresh_source_revision_id(
+        &mut self,
+        context: &OperationContext<C>,
+    ) -> Result<search_contracts::SourceRevisionId, Self::Error> {
+        mint_fresh_id(self.deadline, self.work, context)
+            .map(search_contracts::SourceRevisionId::from_bytes)
     }
 }
 

@@ -21,12 +21,33 @@ pub struct AcquiredNativeSource<'view, 'operation, 'owner> {
     location: nf::NativeLocationClass, name: String,
     identity: search_source_identity::ValidatedIdentityObservation,
     binding: SourceObservation, original: OriginalAdmissionV2,
+    body: zeroize::Zeroizing<Vec<u8>>,
 }
+
+/// A failed post-consumer fence is distinct from a refusal before any consumer dispatch.
+pub(crate) enum SourceBodyUseError<E> {
+    Before(FreshRootError),
+    Consumer(E),
+    After(FreshRootError),
+}
+
 impl AcquiredNativeSource<'_, '_, '_> {
     pub(crate) const fn root(&self) -> &search_source_registry::root::RootRecord { self.qualified.root() }
     pub(crate) const fn identity_observation(&self) -> &search_source_identity::ValidatedIdentityObservation { &self.identity }
     pub(crate) const fn binding_observation(&self) -> &SourceObservation { &self.binding }
     pub(crate) const fn original(&self) -> &OriginalAdmissionV2 { &self.original }
+    pub(crate) fn with_retained_body<T, E>(&self, registry: &SourceRegistry,
+        consume: impl FnOnce(&[u8]) -> Result<T, E>,
+    ) -> Result<T, SourceBodyUseError<E>> {
+        self.check_current(registry).map_err(SourceBodyUseError::Before)?;
+        let result = consume(&self.body);
+        let after = self.check_current(registry);
+        // Preserve the first consumer failure, including an unknown external outcome.
+        match result {
+            Err(first) => Err(SourceBodyUseError::Consumer(first)),
+            Ok(value) => after.map(|()| value).map_err(SourceBodyUseError::After),
+        }
+    }
     pub(crate) fn check_current(&self, registry: &SourceRegistry) -> Result<(), FreshRootError> {
         check_root_state(&self.qualified, registry)?;
         check_leaf(self.qualified.native, &self.pins, &self.leaf, &self.path,
@@ -174,11 +195,13 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
             expected_stable_file_identity_digest: physical, expected_root_purpose_digest: purpose,
             range: search_safe_reader::ReadRange { offset: 0, length, require_eof: true },
         };
+        // Reserve the retained allocation's wipe before acquiring it; Drop must not poll.
+        self.charge(Work::Compare(length))?;
         let result = search_safe_reader::acquire_with_cancel_v2(&mut backend, &request,
             search_safe_reader::DEFAULT_SAFE_READ_LIMITS, &mut || self.checkpoint().is_err());
         if result.is_err() { self.checkpoint()?; }
         let result = result.map_err(|_| refused("NATIVE_SOURCE_STABLE_READ_REFUSED"))?;
-        let body = result.into_bytes();
+        let body = zeroize::Zeroizing::new(result.into_bytes());
         self.charge(Work::Compare(body.len()))?;
         let content = c::blake3_exact_bytes(&body, c::Blake3ExactInputLimit::new(body.len()).map_err(|_| invalid())?).map_err(|_| invalid())?;
         raw = metadata_input(crate::source_classification::narrow_with_bytes(class, &body), location_text, observed.length, false);
@@ -205,7 +228,7 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
             relative_path: search_source_identity::CanonicalRelativePath::new(canonical, search_source_identity::DEFAULT_IDENTITY_LIMITS).map_err(|_| invalid())?,
             stable_file_identity_digest: Some(physical), content_digest: content, content_bytes: observed.length,
             observation_receipt: reference(evidence)? };
-        let acquired = AcquiredNativeSource { qualified, pins, leaf, path, observed, location, name, identity, binding, original };
+        let acquired = AcquiredNativeSource { qualified, pins, leaf, path, observed, location, name, identity, binding, original, body };
         acquired.check_current(registry)?;
         Ok(acquired)
     }
