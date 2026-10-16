@@ -193,16 +193,16 @@ pub fn admit(
         return Err(ExecuteError::BindingQuotaExceeded);
     }
     let deadline_tick = now_tick
-        .checked_add(plan.global_budget.deadline_ms)
+        .checked_add(plan.global_budget().deadline_ms)
         .ok_or(ExecuteError::DeadlineExceeded)?;
-    let max_candidates = usize::try_from(plan.global_budget.max_validated_candidates)
+    let max_candidates = usize::try_from(plan.global_budget().max_validated_candidates)
         .map_err(|_| ExecuteError::BudgetExceeded)?;
     if max_candidates == 0 {
         return Err(ExecuteError::BudgetExceeded);
     }
     Ok(ExecutionGuard {
-        request_id: plan.request_id,
-        plan_digest: plan.digest,
+        request_id: plan.request_id(),
+        plan_digest: plan.digest(),
         owner_id,
         lane,
         deadline_tick,
@@ -245,20 +245,20 @@ pub fn schedule_leg(
         return Err(ExecuteError::DeadlineExceeded);
     }
     if leg
-        .depends_on
+        .depends_on()
         .iter()
         .any(|dependency| !dependencies.completed_leg_ids.contains(dependency))
     {
         return Err(ExecuteError::DependencyIncomplete);
     }
     if leg
-        .depends_on
+        .depends_on()
         .iter()
         .any(|dependency| dependencies.failed_leg_ids.contains(dependency))
     {
         return Err(ExecuteError::DependencyIncomplete);
     }
-    validate_leg_budget(leg.budget)?;
+    validate_leg_budget(*leg.budget())?;
     let access_permit = recheck_live_access(
         request_security,
         live_security,
@@ -304,7 +304,7 @@ pub fn acquire_leg_pins(
     registry: &PinRegistry,
     now_ms: u64,
 ) -> Result<LegPinSet, ExecuteError> {
-    let Some(safe_leg) = &ticket.leg.safe_index_leg else {
+    let Some(safe_leg) = ticket.leg.safe_index_leg() else {
         return Ok(LegPinSet {
             epoch_pins: Vec::new(),
         });
@@ -375,11 +375,11 @@ pub fn dispatch_leg<B: LegBackend>(
     let output = backend
         .dispatch(ticket)
         .map_err(|_| ExecuteError::BackendFailure)?;
-    if output.leg_id != ticket.leg.leg_id
-        || output.leg_kind != ticket.leg.leg_kind
-        || output.memberships != ticket.leg.memberships
+    if output.leg_id != ticket.leg.leg_id()
+        || output.leg_kind != ticket.leg.leg_kind()
+        || &output.memberships != ticket.leg.memberships()
         || output.nominations.len()
-            > usize::try_from(ticket.leg.budget.max_candidates)
+            > usize::try_from(ticket.leg.budget().max_candidates())
                 .map_err(|_| ExecuteError::BudgetExceeded)?
     {
         return Err(ExecuteError::InvalidNomination);
@@ -587,13 +587,13 @@ pub fn classify_completion(
         output.completion == LegCompletion::CompleteCandidateScope
     });
     let complete_candidate_scope = all_complete
-        && executed_legs.len() == plan.legs.len()
+        && executed_legs.len() == plan.legs().len()
         && failed_legs.is_empty()
         && execution.discarded_legs.is_empty()
         && execution.omitted_legs.is_empty()
         && !execution.cancelled;
     ExecutionCoverage {
-        planned_legs: plan.legs.len(),
+        planned_legs: plan.legs().len(),
         executed_legs,
         failed_legs,
         discarded_legs: execution.discarded_legs.clone(),
@@ -626,11 +626,11 @@ pub struct CancelOutcome {
 }
 
 const fn validate_leg_budget(budget: LegBudget) -> Result<(), ExecuteError> {
-    if budget.deadline_ms == 0
-        || budget.max_candidates == 0
-        || budget.max_source_read_bytes == 0
-        || budget.max_cpu_ms == 0
-        || budget.max_memory_bytes == 0
+    if budget.deadline_ms() == 0
+        || budget.max_candidates() == 0
+        || budget.max_source_read_bytes() == 0
+        || budget.max_cpu_ms() == 0
+        || budget.max_memory_bytes() == 0
     {
         Err(ExecuteError::BudgetExceeded)
     } else {

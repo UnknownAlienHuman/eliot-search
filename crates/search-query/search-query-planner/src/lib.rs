@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 
 use search_access::{
     AccessModality, AuthorizedScope, BaseEligibilityPlan, IndexedRouteFence,
-    MembershipAccessBinding, SafeRetrievalLeg, ValidatedGrant,
+    MembershipAccessBinding, SafeRetrievalLeg,
 };
 use search_contracts::{
     Blake3ExactInputLimit, BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalText,
@@ -339,26 +339,90 @@ fn execution_text(value: &str) -> Result<CanonicalValue, PlanError> {
         .map_err(|_| PlanError::IdentityEncoding)
 }
 
-/// One finite plan-leg budget.
+/// One finite plan-leg budget. Values are exposed read-only to executors.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LegBudget {
-    pub deadline_ms: u64,
-    pub max_candidates: u32,
-    pub max_source_read_bytes: u64,
-    pub max_cpu_ms: u64,
-    pub max_memory_bytes: u64,
+    deadline_ms: u64,
+    max_candidates: u32,
+    max_source_read_bytes: u64,
+    max_cpu_ms: u64,
+    max_memory_bytes: u64,
 }
 
-/// One typed executable plan leg.
+impl LegBudget {
+    #[must_use]
+    pub const fn deadline_ms(&self) -> u64 {
+        self.deadline_ms
+    }
+
+    #[must_use]
+    pub const fn max_candidates(&self) -> u32 {
+        self.max_candidates
+    }
+
+    #[must_use]
+    pub const fn max_source_read_bytes(&self) -> u64 {
+        self.max_source_read_bytes
+    }
+
+    #[must_use]
+    pub const fn max_cpu_ms(&self) -> u64 {
+        self.max_cpu_ms
+    }
+
+    #[must_use]
+    pub const fn max_memory_bytes(&self) -> u64 {
+        self.max_memory_bytes
+    }
+}
+
+/// One typed executable plan leg. Its accepted contents cannot be replaced by callers.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlannedLeg {
-    pub leg_id: usize,
-    pub leg_kind: LegKind,
-    pub depends_on: Vec<usize>,
-    pub memberships: BTreeSet<SourceMembershipId>,
-    pub safe_index_leg: Option<SafeRetrievalLeg>,
-    pub budget: LegBudget,
-    pub cancellation_boundary: CancellationBoundary,
+    leg_id: usize,
+    leg_kind: LegKind,
+    depends_on: Vec<usize>,
+    memberships: BTreeSet<SourceMembershipId>,
+    safe_index_leg: Option<SafeRetrievalLeg>,
+    budget: LegBudget,
+    cancellation_boundary: CancellationBoundary,
+}
+
+impl PlannedLeg {
+    #[must_use]
+    pub const fn leg_id(&self) -> usize {
+        self.leg_id
+    }
+
+    #[must_use]
+    pub const fn leg_kind(&self) -> LegKind {
+        self.leg_kind
+    }
+
+    #[must_use]
+    pub fn depends_on(&self) -> &[usize] {
+        &self.depends_on
+    }
+
+    #[must_use]
+    pub const fn memberships(&self) -> &BTreeSet<SourceMembershipId> {
+        &self.memberships
+    }
+
+    #[must_use]
+    pub const fn safe_index_leg(&self) -> Option<&SafeRetrievalLeg> {
+        self.safe_index_leg.as_ref()
+    }
+
+    #[must_use]
+    pub const fn budget(&self) -> &LegBudget {
+        &self.budget
+    }
+
+    #[must_use]
+    pub const fn cancellation_boundary(&self) -> CancellationBoundary {
+        self.cancellation_boundary
+    }
 }
 
 /// Where executor cancellation must be observed.
@@ -380,55 +444,70 @@ pub enum OmittedCapability {
     Rerank,
 }
 
-/// Plan identity bytes. Legacy compilation preserves its frozen graph digest;
-/// canonical compilation carries the verified contract BLAKE3 plan fingerprint.
+/// Verified canonical task-plan fingerprint carried by the compiled execution graph.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct CompiledPlanDigest(pub [u8; 32]);
+pub struct CompiledPlanDigest([u8; 32]);
+
+impl CompiledPlanDigest {
+    #[must_use]
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
 
 /// Finite deterministic executable task plan.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompiledSearchPlan {
-    pub request_id: RequestId,
-    pub recipe: RecipeIdV1,
-    pub snapshot: QuerySnapshotFence,
-    pub authorized_scope: AuthorizedScope,
-    pub global_budget: QueryExecutionBudget,
-    pub legs: Vec<PlannedLeg>,
-    pub omitted_capabilities: BTreeSet<OmittedCapability>,
-    pub digest: CompiledPlanDigest,
+    request_id: RequestId,
+    recipe: RecipeIdV1,
+    snapshot: QuerySnapshotFence,
+    authorized_scope: AuthorizedScope,
+    global_budget: QueryExecutionBudget,
+    legs: Vec<PlannedLeg>,
+    omitted_capabilities: BTreeSet<OmittedCapability>,
+    digest: CompiledPlanDigest,
 }
 
-/// Compiles a finite typed leg DAG.
-pub fn compile_plan(
-    recipe: &NormalizedRecipeRequest,
-    grant: &ValidatedGrant,
-    authorized_scope: AuthorizedScope,
-    snapshot: QuerySnapshotFence,
-    capabilities: CapabilitySet,
-    global_budget: QueryExecutionBudget,
-    safe_index_legs: &[SafeRetrievalLeg],
-) -> Result<CompiledSearchPlan, PlanError> {
-    let request = recipe.request();
-    if !grant.permits_recipe(request.recipe) {
-        return Err(PlanError::RecipeDenied);
+impl CompiledSearchPlan {
+    #[must_use]
+    pub const fn request_id(&self) -> RequestId {
+        self.request_id
     }
-    if !grant
-        .claims()
-        .allowed_budget_classes
-        .iter()
-        .any(|candidate| candidate.as_str() == request.requested_budget_class.as_str())
-    {
-        return Err(PlanError::BudgetClassDenied);
+
+    #[must_use]
+    pub const fn recipe(&self) -> RecipeIdV1 {
+        self.recipe
     }
-    compile_plan_inner(
-        recipe,
-        authorized_scope,
-        snapshot,
-        capabilities,
-        global_budget,
-        safe_index_legs,
-        |modality| grant.permits_modality(modality),
-    )
+
+    #[must_use]
+    pub const fn snapshot(&self) -> &QuerySnapshotFence {
+        &self.snapshot
+    }
+
+    #[must_use]
+    pub const fn authorized_scope(&self) -> &AuthorizedScope {
+        &self.authorized_scope
+    }
+
+    #[must_use]
+    pub const fn global_budget(&self) -> QueryExecutionBudget {
+        self.global_budget
+    }
+
+    #[must_use]
+    pub fn legs(&self) -> &[PlannedLeg] {
+        &self.legs
+    }
+
+    #[must_use]
+    pub const fn omitted_capabilities(&self) -> &BTreeSet<OmittedCapability> {
+        &self.omitted_capabilities
+    }
+
+    #[must_use]
+    pub const fn digest(&self) -> CompiledPlanDigest {
+        self.digest
+    }
 }
 
 /// Compiles the executor graph against an already admitted canonical task plan.
@@ -538,13 +617,14 @@ pub fn compile_canonical_plan(
         return Err(PlanError::PlanFingerprintMismatch);
     }
 
-    let mut compiled = compile_plan_inner(
+    compile_plan_inner(
         recipe,
         authorized_scope,
         task_plan.query_snapshot_fence.clone(),
         capabilities,
         task_plan.query_execution_budget,
         safe_index_legs,
+        CompiledPlanDigest(*task_plan.plan_fingerprint.as_bytes()),
         |modality| match modality {
             AccessModality::Direct => !source_reads || grant.source_read_permission,
             AccessModality::Exact => {
@@ -552,9 +632,7 @@ pub fn compile_canonical_plan(
             }
             _ => grant.source_read_permission,
         },
-    )?;
-    compiled.digest = CompiledPlanDigest(*task_plan.plan_fingerprint.as_bytes());
-    Ok(compiled)
+    )
 }
 
 const fn canonical_requires_source_read(body: &RecipeBodyV1) -> bool {
@@ -578,6 +656,7 @@ fn compile_plan_inner<F>(
     capabilities: CapabilitySet,
     global_budget: QueryExecutionBudget,
     safe_index_legs: &[SafeRetrievalLeg],
+    digest: CompiledPlanDigest,
     modality_allowed: F,
 ) -> Result<CompiledSearchPlan, PlanError>
 where
@@ -708,14 +787,6 @@ where
         });
     }
     validate_dag(&legs)?;
-    let digest = fingerprint_plan(
-        request.request_id,
-        request.recipe,
-        &snapshot,
-        &authorized_scope,
-        global_budget,
-        &legs,
-    );
     Ok(CompiledSearchPlan {
         request_id: request.request_id,
         recipe: request.recipe,
@@ -1206,66 +1277,6 @@ fn validate_dag(legs: &[PlannedLeg]) -> Result<(), PlanError> {
         }
     }
     Ok(())
-}
-
-fn fingerprint_plan(
-    request_id: RequestId,
-    recipe: RecipeIdV1,
-    snapshot: &QuerySnapshotFence,
-    scope: &AuthorizedScope,
-    budget: QueryExecutionBudget,
-    legs: &[PlannedLeg],
-) -> CompiledPlanDigest {
-    let mut lanes = [
-        0xcbf2_9ce4_8422_2325_u64,
-        0x8422_2325_cbf2_9ce4,
-        0x9e37_79b9_7f4a_7c15,
-        0xc2b2_ae3d_27d4_eb4f,
-    ];
-    mix(&mut lanes, request_id.as_bytes());
-    mix(&mut lanes, recipe.as_str().as_bytes());
-    mix(&mut lanes, snapshot.snapshot_fingerprint.as_bytes());
-    mix(&mut lanes, scope.snapshot_digest.as_bytes());
-    mix(&mut lanes, &budget.deadline_ms.to_be_bytes());
-    mix(&mut lanes, &budget.max_source_read_bytes.to_be_bytes());
-    for leg in legs {
-        mix(
-            &mut lanes,
-            &u64::try_from(leg.leg_id).unwrap_or(u64::MAX).to_be_bytes(),
-        );
-        mix(&mut lanes, &[leg_kind_tag(leg.leg_kind)]);
-        for membership in &leg.memberships {
-            mix(&mut lanes, membership.as_bytes());
-        }
-        mix(&mut lanes, &leg.budget.deadline_ms.to_be_bytes());
-        mix(&mut lanes, &leg.budget.max_source_read_bytes.to_be_bytes());
-    }
-    let mut digest = [0_u8; 32];
-    for (index, lane) in lanes.into_iter().enumerate() {
-        digest[index * 8..index * 8 + 8].copy_from_slice(&lane.to_be_bytes());
-    }
-    CompiledPlanDigest(digest)
-}
-
-const fn leg_kind_tag(kind: LegKind) -> u8 {
-    match kind {
-        LegKind::Direct => 1,
-        LegKind::Exact => 2,
-        LegKind::Structural => 3,
-        LegKind::Lexical => 4,
-        LegKind::Semantic => 5,
-        LegKind::Rerank => 6,
-    }
-}
-
-fn mix(lanes: &mut [u64; 4], bytes: &[u8]) {
-    for (index, byte) in bytes.iter().copied().enumerate() {
-        let lane = index % lanes.len();
-        lanes[lane] ^= u64::from(byte);
-        lanes[lane] = lanes[lane]
-            .wrapping_mul(0x0000_0100_0000_01b3)
-            .rotate_left(u32::try_from(17 + lane * 3).unwrap_or(17));
-    }
 }
 
 #[cfg(test)]
@@ -2708,58 +2719,6 @@ mod canonical_plan_tests {
             assert_ne!(compiled.digest, baseline.digest);
             assert_eq!(compiled.legs, baseline.legs);
         }
-    }
-
-    #[test]
-    fn legacy_graph_digest_remains_frozen_at_cdf9b6ab() {
-        let fixture = fixture();
-        let legacy = super::compile_plan_inner(
-            &fixture.recipe,
-            fixture.scope,
-            fixture.task_plan.query_snapshot_fence,
-            fixture.capabilities,
-            fixture.task_plan.query_execution_budget,
-            &fixture.safe_legs,
-            |modality| {
-                matches!(
-                    modality,
-                    search_access::AccessModality::Direct | search_access::AccessModality::Lexical
-                )
-            },
-        )
-        .unwrap();
-        assert_eq!(
-            legacy.digest.0,
-            [
-                91, 28, 151, 107, 248, 209, 231, 184, 124, 234, 69, 245, 243, 148, 209, 17, 147,
-                15, 1, 151, 14, 121, 113, 45, 169, 152, 163, 213, 47, 73, 101, 194,
-            ]
-        );
-    }
-
-    #[test]
-    fn legacy_exact_zero_budget_behavior_remains_unchanged() {
-        let mut fixture = exact_fixture();
-        fixture
-            .task_plan
-            .query_execution_budget
-            .max_exact_scan_items = 0;
-        fixture
-            .task_plan
-            .query_execution_budget
-            .max_exact_scan_bytes = 0;
-        let legacy = super::compile_plan_inner(
-            &fixture.recipe,
-            fixture.scope,
-            fixture.task_plan.query_snapshot_fence,
-            fixture.capabilities,
-            fixture.task_plan.query_execution_budget,
-            &fixture.safe_legs,
-            |modality| modality == search_access::AccessModality::Exact,
-        )
-        .expect("legacy behavior is unchanged by the canonical-only gate");
-        assert_eq!(legacy.legs.len(), 1);
-        assert_eq!(legacy.legs[0].leg_kind, LegKind::Exact);
     }
 
     #[test]

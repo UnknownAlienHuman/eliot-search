@@ -19,6 +19,9 @@
 #![cfg(feature = "wave4-query")]
 #![forbid(unsafe_code)]
 
+#[path = "../../../crates/search-query/search-query-planner/tests/support/canonical_plan.rs"]
+mod canonical_plan_fixture;
+
 #[path = "../src/query_composition.rs"]
 mod query_composition;
 
@@ -53,7 +56,6 @@ use search_qdrant_bridge::{
     IndexGates, PointPayload, PointRecord, QdrantBridge, QdrantPointId, StrictnessFloors,
     SupervisorReceipt, TopologyGates, VectorSchema, probe_capabilities,
 };
-use search_query_planner::{CancellationBoundary, CompiledPlanDigest, LegBudget, PlannedLeg};
 use search_result_projector::{
     CandidateProjectionInput, CandidatePublicMetadata, CandidateSetEnvelope, ProjectionBudget,
     project_candidate_set,
@@ -115,31 +117,35 @@ fn request_fence(membership_id: SourceMembershipId) -> RequestSecurityFence {
 }
 
 fn ticket_for(membership_id: SourceMembershipId, plan: &BaseEligibilityPlan) -> LegTicket {
+    let safe_leg = search_access::SafeRetrievalLeg {
+        leg_id: 0,
+        memberships: BTreeSet::from([membership_id]),
+        eligibility_plans: vec![plan.clone()],
+        route: fence(),
+        overlap_proof_digest: None,
+    };
+    let compiled_plan = canonical_plan_fixture::compile_lexical_plan(
+        RequestId::from_bytes([0x21; 16]),
+        safe_leg,
+        canonical_plan_fixture::lexical_budget(
+            5_000,
+            8,
+            1_048_576,
+            2_000,
+            67_108_864,
+        ),
+    );
+    let leg = compiled_plan
+        .legs()
+        .iter()
+        .find(|leg| leg.leg_kind() == LegKind::Lexical)
+        .expect("canonical lexical leg")
+        .clone();
     LegTicket {
-        request_id: RequestId::from_bytes([0x21; 16]),
-        plan_digest: CompiledPlanDigest([0x33; 32]),
+        request_id: compiled_plan.request_id(),
+        plan_digest: compiled_plan.digest(),
         owner_id: OpaqueId::new("owner:t28").expect("fixture owner"),
-        leg: PlannedLeg {
-            leg_id: 0,
-            leg_kind: LegKind::Lexical,
-            depends_on: Vec::new(),
-            memberships: BTreeSet::from([membership_id]),
-            safe_index_leg: Some(search_access::SafeRetrievalLeg {
-                leg_id: 0,
-                memberships: BTreeSet::from([membership_id]),
-                eligibility_plans: vec![plan.clone()],
-                route: fence(),
-                overlap_proof_digest: None,
-            }),
-            budget: LegBudget {
-                deadline_ms: 5_000,
-                max_candidates: 8,
-                max_source_read_bytes: 1_048_576,
-                max_cpu_ms: 2_000,
-                max_memory_bytes: 67_108_864,
-            },
-            cancellation_boundary: CancellationBoundary::BeforeDispatch,
-        },
+        leg,
         access_permit: AccessPermit {
             checkpoint: AccessCheckpoint::BeforeLegDispatch,
             live_generation: 9,
@@ -425,7 +431,7 @@ fn validator_nomination(
 ) -> (CandidateNomination, ValidationContext) {
     let nomination = CandidateNomination {
         request_id: chain.ticket.request_id,
-        plan_digest: chain.ticket.plan_digest.0,
+        plan_digest: *chain.ticket.plan_digest.as_bytes(),
         leg_id: 0,
         point_id: raw.point_id,
         source_membership_id: raw.source_membership_id,
@@ -448,7 +454,7 @@ fn validator_nomination(
     };
     let context = ValidationContext {
         request_id: chain.ticket.request_id,
-        plan_digest: chain.ticket.plan_digest.0,
+        plan_digest: *chain.ticket.plan_digest.as_bytes(),
         collection_generation_id: CollectionGenerationId::from_bytes([0x31; 16]),
         visible_epoch: Epoch::new(7).expect("fixture epoch"),
         allowed_memberships: BTreeSet::from([chain.membership]),
@@ -657,8 +663,7 @@ fn indexed_chain_validates_and_projects() {
         &chain
             .ticket
             .leg
-            .safe_index_leg
-            .as_ref()
+            .safe_index_leg()
             .expect("safe leg")
             .eligibility_plans[0]
             .predicates(),
