@@ -410,6 +410,74 @@ fn decode_frame<E>(
     Ok(&frame[RECORD_HEADER_BYTES..])
 }
 
+/// Private non-Clone zeroizing guard for an unwrapped revision DEK.
+///
+/// This guard holds the raw 32-byte key returned by DPAPI unprotect and
+/// guarantees it is nonzero and exactly 32 bytes. It zeroizes on drop and
+/// cannot be cloned, preventing accidental key duplication. The guard is
+/// used only inside the existing read-validation path; it grants no key
+/// export, lease or durable authority.
+struct ValidatedRevisionDekKey {
+    bytes: [u8; 32],
+}
+
+impl ValidatedRevisionDekKey {
+    /// Validates the unwrapped key bytes and returns a zeroizing guard.
+    ///
+    /// # Errors
+    /// Returns [`RevisionDekError::ProtectedKeyInvalid`] if the key is not
+    /// exactly 32 bytes or is the all-zero value.
+    fn from_unwrapped(mut key: Vec<u8>) -> Result<Self, RevisionDekError<core::convert::Infallible>> {
+        if key.len() != 32 || key.iter().all(|byte| *byte == 0) {
+            return Err(RevisionDekError::ProtectedKeyInvalid);
+        }
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&key);
+        clear_bytes(key.as_mut_slice());
+        Ok(Self { bytes })
+    }
+
+    /// Borrows the validated key bytes for the immediate AEAD call.
+    ///
+    /// This grants no ownership or clone; the guard retains exclusive access.
+    /// Used by the closed seal/open consumer once the C02 permit interface lands.
+    #[allow(dead_code)]
+    fn as_bytes(&self) -> &[u8; 32] {
+        &self.bytes
+    }
+}
+
+impl Drop for ValidatedRevisionDekKey {
+    fn drop(&mut self) {
+        clear_bytes(&mut self.bytes);
+    }
+}
+
+impl fmt::Debug for ValidatedRevisionDekKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("ValidatedRevisionDekKey(<redacted>)")
+    }
+}
+
+/// Unwraps and validates the protected DEK, returning a zeroizing guard.
+///
+/// This is the single factorization point for the existing read-validation
+/// path. It performs the native unprotect call, validates the key shape and
+/// nonzero constraint, and returns a guard that zeroizes on drop. The caller
+/// retains the protected bytes separately for the readback result.
+fn unwrap_and_validate_revision_dek<C: RevisionDekContext>(
+    context: &mut C,
+    protected: &[u8],
+    entropy: &[u8],
+) -> Result<ValidatedRevisionDekKey, RevisionDekError<C::Error>> {
+    // Prepay clearing even an unexpected, bounded short-secret output before
+    // native unprotect; only an exact nonzero 32-byte DEK can pass below.
+    context.charge(LegacyRevisionDpapiWork::Process(crate::MAX_SECRET_BYTES)).map_err(RevisionDekError::Context)?;
+    let key = unprotect_revision_dek_with_context(context, protected, entropy)
+        .map_err(RevisionDekError::Dpapi)?;
+    ValidatedRevisionDekKey::from_unwrapped(key).map_err(|_| RevisionDekError::ProtectedKeyInvalid)
+}
+
 fn validate_frame_and_unwrap<C: RevisionDekContext>(
     context: &mut C,
     frame: &[u8],
@@ -418,16 +486,7 @@ fn validate_frame_and_unwrap<C: RevisionDekContext>(
 ) -> Result<Vec<u8>, RevisionDekError<C::Error>> {
     let protected = decode_frame::<()>(frame, binding_digest)
         .map_err(|_| RevisionDekError::CredentialReadbackInvalid)?;
-    // Prepay clearing even an unexpected, bounded short-secret output before
-    // native unprotect; only an exact nonzero 32-byte DEK can pass below.
-    context.charge(LegacyRevisionDpapiWork::Process(crate::MAX_SECRET_BYTES)).map_err(RevisionDekError::Context)?;
-    let mut key = unprotect_revision_dek_with_context(context, protected, entropy)
-        .map_err(RevisionDekError::Dpapi)?;
-    if key.len() != 32 || key.iter().all(|byte| *byte == 0) {
-        clear_bytes(&mut key);
-        return Err(RevisionDekError::ProtectedKeyInvalid);
-    }
-    clear_bytes(&mut key);
+    let _guard = unwrap_and_validate_revision_dek(context, protected, entropy)?;
     context
         .charge(LegacyRevisionDpapiWork::Allocate(protected.len()))
         .map_err(RevisionDekError::Context)?;
