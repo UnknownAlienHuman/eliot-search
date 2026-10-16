@@ -92,6 +92,11 @@ impl NativeRootRequest {
                 || mode != DataRootOpenMode::OpenExistingMutating) {
             return Err(OwnerError::OwnerOperationConflict);
         }
+        if selected.first().is_some_and(|v| v == "--prepare-revision-dek-v1")
+            && (selected.len() != 3 || selected[1..].iter().any(|v| v.is_empty())
+                || mode != DataRootOpenMode::OpenExistingMutating) {
+            return Err(OwnerError::OwnerOperationConflict);
+        }
         request.root = PathBuf::from(&selected[1]);
         Ok((request, selected))
     }
@@ -708,6 +713,8 @@ pub(super) struct NativeWork {
     pub(super) usage_hook: Option<Box<dyn FnMut(&'static str, [usize; 4], usize)>>,
     #[cfg(test)]
     pub(super) credential_hook: Option<Box<dyn FnMut(bool, Instant, &AtomicBool)>>,
+    #[cfg(test)]
+    pub(super) revision_dek_target_hook: Option<Box<dyn FnMut(&search_os_secrets::RevisionDekBinding)>>,
 }
 
 impl NativeWork {
@@ -725,6 +732,8 @@ impl NativeWork {
             usage_hook: None,
             #[cfg(test)]
             credential_hook: None,
+            #[cfg(test)]
+            revision_dek_target_hook: None,
         }
     }
 

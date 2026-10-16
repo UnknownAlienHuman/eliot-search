@@ -284,6 +284,15 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
     pub(crate) fn revision_dek_account_native_clear(&self, bytes: usize) -> Result<(), (OwnerError, bool)> {
         self.operation.borrow_mut().migration_account_native_clear(bytes)
     }
+    #[cfg(test)]
+    pub(crate) fn revision_dek_track_test_target(&self, binding: &search_os_secrets::RevisionDekBinding) -> Result<(), OwnerError> {
+        self.guard()?;
+        self.operation.borrow_mut().with_binding(|_, request, work, _| {
+            work.arrive(request, "revision-dek-before-key-write")?;
+            if let Some(hook) = &mut work.revision_dek_target_hook { hook(binding); }
+            request.check()
+        })
+    }
     // A port can observe original cancellation before the next Native seam.
     // Carry that first refusal into the original owner even if the external
     // flag is subsequently reset; no replacement context or allowance exists.

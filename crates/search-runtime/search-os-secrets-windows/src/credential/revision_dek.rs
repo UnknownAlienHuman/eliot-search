@@ -182,6 +182,8 @@ pub fn prepare_revision_dek<C: RevisionDekContext>(
     if observed.user_scope_digest() != binding.user_scope_digest() {
         return Err(RevisionDekError::UserScopeMismatch);
     }
+    context.charge(LegacyRevisionDpapiWork::Allocate(crate::MAX_SCOPE_BYTES)).map_err(RevisionDekError::Context)?;
+    context.charge(LegacyRevisionDpapiWork::Process(crate::MAX_SCOPE_BYTES.saturating_mul(2))).map_err(RevisionDekError::Context)?;
     let entropy = binding.protection_entropy();
     if entropy.is_empty() || entropy.len() > crate::MAX_SCOPE_BYTES {
         return Err(RevisionDekError::BindingInvalid);
@@ -190,17 +192,16 @@ pub fn prepare_revision_dek<C: RevisionDekContext>(
         .charge(LegacyRevisionDpapiWork::Process(entropy.len()))
         .map_err(RevisionDekError::Context)?;
     #[cfg(windows)]
-    let mut key = super::windows::WindowsCredentialPlatform::generate_revision_dek_key(context)?;
+    let key = super::windows::WindowsCredentialPlatform::generate_revision_dek_key(context)?;
     #[cfg(not(windows))]
     let key = return Err(RevisionDekError::UnsupportedPlatform);
-    let protected = match protect_revision_dek_with_context(context, &key, &entropy) {
+    let protected = match protect_revision_dek_with_context(context, key.bytes(), &entropy) {
         Ok(protected) => protected,
         Err(error) => {
-            clear_bytes(&mut key);
             return Err(RevisionDekError::Dpapi(error));
         }
     };
-    clear_bytes(&mut key);
+    drop(key);
     if protected.is_empty() || protected.len() > MAX_PROTECTED_RECORD_BYTES {
         return Err(RevisionDekError::RecordTooLarge);
     }
@@ -232,71 +233,55 @@ pub fn write_revision_dek_once<C: RevisionDekContext>(
         .charge(LegacyRevisionDpapiWork::Allocate(frame_bytes))
         .map_err(RevisionDekError::Context)?;
     context
-        .charge(LegacyRevisionDpapiWork::Process(frame_bytes))
+        .charge(LegacyRevisionDpapiWork::Process(frame_bytes.saturating_mul(2)))
         .map_err(RevisionDekError::Context)?;
     let frame = encode_frame(prepared.binding_digest, &prepared.protected)?;
+    let mut record = ProviderCredentialBlob::new(frame).map_err(RevisionDekError::Credential)?;
     let target = target_name(prepared.reference_digest);
     let mutex = mutex_name(prepared.reference_digest);
-    let wait = wait_millis(context);
-    context
-        .charge_open()
-        .map_err(RevisionDekError::Context)?;
-    let lock = acquire_lock(&mutex, wait)?;
+    let lock = acquire_lock(context, &mutex)?;
     let existing = match read_credential(context, &target) {
         Ok(existing) => existing,
         Err(error) => {
-            release_lock(context, lock);
+            let _ = release_lock(context, lock);
             return Err(error);
         }
     };
     if existing.is_some() {
-        release_lock(context, lock);
+        let _ = release_lock(context, lock);
         return Err(RevisionDekError::ExistingCredential);
     }
-    let mut record = match ProviderCredentialBlob::new(frame.clone()) {
-        Ok(record) => record,
-        Err(error) => {
-            release_lock(context, lock);
-            return Err(RevisionDekError::Credential(error));
-        }
-    };
-    if let Err(error) = context.charge_open() {
-        release_lock(context, lock);
+    if let Err(error) = context.charge(LegacyRevisionDpapiWork::NativeCall) {
+        let _ = release_lock(context, lock);
         return Err(RevisionDekError::Context(error));
     }
-    let written = WindowsCredentialPlatform::write_revision_dek_credential(&target, &mut record);
+    let written = WindowsCredentialPlatform::write_revision_dek_credential(&target, &mut record, context);
     if written.is_err() {
-        release_lock(context, lock);
+        let _ = release_lock(context, lock);
         return Err(RevisionDekError::WriteOutcomeUnknown);
     }
     if context.checkpoint().is_err() {
-        release_lock(context, lock);
+        let _ = release_lock(context, lock);
         return Err(RevisionDekError::WriteOutcomeUnknown);
     }
-    let observed = match read_credential(context, &target) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) | Err(_) => {
-            release_lock(context, lock);
-            return Err(RevisionDekError::WriteOutcomeUnknown);
-        }
+    let Ok(Some(observed)) = read_credential(context, &target) else {
+        let _ = release_lock(context, lock);
+        return Err(RevisionDekError::WriteOutcomeUnknown);
     };
-    if observed != frame {
-        release_lock(context, lock);
+    if observed.as_slice() != record.as_slice() {
+        let _ = release_lock(context, lock);
         return Err(RevisionDekError::WriteOutcomeUnknown);
     }
-    let protected = match validate_frame_and_unwrap(
+    let Ok(protected) = validate_frame_and_unwrap(
         context,
-        &observed,
+        observed.as_slice(),
         prepared.binding_digest,
         &prepared.entropy,
-    ) {
-        Ok(protected) => protected,
-        Err(_) => {
-            release_lock(context, lock);
-            return Err(RevisionDekError::WriteOutcomeUnknown);
-        }
+    ) else {
+        let _ = release_lock(context, lock);
+        return Err(RevisionDekError::WriteOutcomeUnknown);
     };
-    release_lock(context, lock);
+    if release_lock(context, lock).is_err() { return Err(RevisionDekError::WriteOutcomeUnknown); }
     Ok(RevisionDekReadback {
         protected,
     })
@@ -326,16 +311,20 @@ pub fn read_revision_dek<C: RevisionDekContext>(
     let Some(frame) = read_credential(context, &target)? else {
         return Ok(None);
     };
-    let entropy = binding.protection_entropy();
+    context.charge(LegacyRevisionDpapiWork::Allocate(crate::MAX_SCOPE_BYTES)).map_err(RevisionDekError::Context)?;
+    context.charge(LegacyRevisionDpapiWork::Process(crate::MAX_SCOPE_BYTES.saturating_mul(2))).map_err(RevisionDekError::Context)?;
+    let mut entropy = binding.protection_entropy();
     if entropy.is_empty() || entropy.len() > crate::MAX_SCOPE_BYTES {
         return Err(RevisionDekError::BindingInvalid);
     }
     let protected = validate_frame_and_unwrap(
         context,
-        &frame,
+        frame.as_slice(),
         binding.binding_digest(),
         &entropy,
-    )?;
+    );
+    clear_bytes(&mut entropy);
+    let protected = protected?;
     Ok(Some(RevisionDekReadback {
         protected,
     }))
@@ -365,20 +354,13 @@ pub fn delete_revision_dek_for_test<C: RevisionDekContext>(
     charge_name_budget(context, MUTEX_PREFIX.len())?;
     let target = target_name(binding.reference_digest());
     let mutex = mutex_name(binding.reference_digest());
-    let wait = wait_millis(context);
+    let lock = acquire_lock(context, &mutex)?;
     context
-        .charge_open()
-        .map_err(RevisionDekError::Context)?;
-    context
-        .charge_open()
-        .map_err(RevisionDekError::Context)?;
-    let lock = acquire_lock(&mutex, wait)?;
-    context
-        .charge_open()
+        .charge(LegacyRevisionDpapiWork::NativeCall)
         .map_err(RevisionDekError::Context)?;
     let _ = WindowsCredentialPlatform::delete_credential(&target);
     let absent = read_credential(context, &target)?.is_none();
-    release_lock(context, lock);
+    release_lock(context, lock).map_err(RevisionDekError::Context)?;
     if absent { Ok(()) } else { Err(RevisionDekError::WriteOutcomeUnknown) }
 }
 
@@ -407,14 +389,14 @@ fn encode_frame<E>(
     Ok(frame)
 }
 
-fn decode_frame<'a, E>(
-    frame: &'a [u8],
+fn decode_frame<E>(
+    frame: &[u8],
     expected_binding: [u8; 32],
-) -> Result<&'a [u8], RevisionDekError<E>> {
+) -> Result<&[u8], RevisionDekError<E>> {
     if frame.len() < RECORD_HEADER_BYTES
         || frame.len() > MAX_CREDENTIAL_BLOB_BYTES
         || frame.get(..8) != Some(RECORD_MAGIC)
-        || frame[8..40] != expected_binding.as_slice()
+        || &frame[8..40] != expected_binding.as_slice()
     {
         return Err(RevisionDekError::CredentialReadbackInvalid);
     }
@@ -436,6 +418,9 @@ fn validate_frame_and_unwrap<C: RevisionDekContext>(
 ) -> Result<Vec<u8>, RevisionDekError<C::Error>> {
     let protected = decode_frame::<()>(frame, binding_digest)
         .map_err(|_| RevisionDekError::CredentialReadbackInvalid)?;
+    // Prepay clearing even an unexpected, bounded short-secret output before
+    // native unprotect; only an exact nonzero 32-byte DEK can pass below.
+    context.charge(LegacyRevisionDpapiWork::Process(crate::MAX_SECRET_BYTES)).map_err(RevisionDekError::Context)?;
     let mut key = unprotect_revision_dek_with_context(context, protected, entropy)
         .map_err(RevisionDekError::Dpapi)?;
     if key.len() != 32 || key.iter().all(|byte| *byte == 0) {
@@ -447,7 +432,7 @@ fn validate_frame_and_unwrap<C: RevisionDekContext>(
         .charge(LegacyRevisionDpapiWork::Allocate(protected.len()))
         .map_err(RevisionDekError::Context)?;
     context
-        .charge(LegacyRevisionDpapiWork::Process(protected.len()))
+        .charge(LegacyRevisionDpapiWork::Process(protected.len().saturating_mul(2)))
         .map_err(RevisionDekError::Context)?;
     Ok(protected.to_vec())
 }
@@ -456,48 +441,45 @@ fn validate_frame_and_unwrap<C: RevisionDekContext>(
 fn read_credential<C: RevisionDekContext>(
     context: &mut C,
     target: &[u16],
-) -> Result<Option<Vec<u8>>, RevisionDekError<C::Error>> {
+) -> Result<Option<ProviderCredentialBlob>, RevisionDekError<C::Error>> {
     context
         .checkpoint()
         .map_err(RevisionDekError::Context)?;
     context
-        .charge_open()
+        .charge(LegacyRevisionDpapiWork::NativeCall)
         .map_err(RevisionDekError::Context)?;
     context
         .charge(LegacyRevisionDpapiWork::Allocate(MAX_CREDENTIAL_BLOB_BYTES))
         .map_err(RevisionDekError::Context)?;
     context
-        .charge(LegacyRevisionDpapiWork::Process(MAX_CREDENTIAL_BLOB_BYTES))
+        .charge(LegacyRevisionDpapiWork::Process(MAX_CREDENTIAL_BLOB_BYTES.saturating_mul(3)))
         .map_err(RevisionDekError::Context)?;
     context
-        .charge_open()
+        .charge(LegacyRevisionDpapiWork::NativeCall)
         .map_err(RevisionDekError::Context)?;
     let result = WindowsCredentialPlatform::read_provider_credential(target)
         .map_err(RevisionDekError::Credential)?;
     context
         .checkpoint()
         .map_err(RevisionDekError::Context)?;
-    let Some(record) = result else { return Ok(None); };
-    let length = record.as_slice().len();
-    context
-        .charge(LegacyRevisionDpapiWork::Allocate(length))
-        .map_err(RevisionDekError::Context)?;
-    context
-        .charge(LegacyRevisionDpapiWork::Process(length))
-        .map_err(RevisionDekError::Context)?;
-    Ok(Some(record.as_slice().to_vec()))
+    Ok(result)
 }
 
 #[cfg(windows)]
-fn acquire_lock<E>(name: &[u16], wait: u32) -> Result<WindowsVaultLock, RevisionDekError<E>> {
-    WindowsVaultLock::acquire_named(name, wait).map_err(|_| RevisionDekError::LockUnavailable)?.ok_or(RevisionDekError::LockUnavailable)
+fn acquire_lock<C: RevisionDekContext>(context: &mut C, name: &[u16]) -> Result<WindowsVaultLock, RevisionDekError<C::Error>> {
+    context.charge_open().map_err(RevisionDekError::Context)?;
+    // Wait plus both release calls are reserved before native acquisition.
+    for _ in 0..3 { context.charge(LegacyRevisionDpapiWork::NativeCall).map_err(RevisionDekError::Context)?; }
+    let lock = WindowsVaultLock::acquire_named(name, wait_millis(context))
+        .map_err(|()| RevisionDekError::LockUnavailable)?.ok_or(RevisionDekError::LockUnavailable)?;
+    context.checkpoint().map_err(RevisionDekError::Context)?;
+    Ok(lock)
 }
 
 #[cfg(windows)]
-fn release_lock<C: RevisionDekContext>(context: &mut C, lock: WindowsVaultLock) {
-    let _ = context.charge_open();
-    let _ = context.charge_open();
+fn release_lock<C: RevisionDekContext>(context: &mut C, lock: WindowsVaultLock) -> Result<(), C::Error> {
     drop(lock);
+    context.checkpoint()
 }
 
 #[cfg(windows)]
@@ -537,13 +519,14 @@ fn mutex_name(reference_digest: [u8; 32]) -> Vec<u16> {
 
 fn wide_with_digest(prefix: &str, digest: [u8; 32]) -> Vec<u16> {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut value = String::with_capacity(prefix.len() + 64);
-    value.push_str(prefix);
+    let mut value = Vec::with_capacity(prefix.len() + 65);
+    value.extend(prefix.encode_utf16());
     for byte in digest {
-        value.push(char::from(HEX[usize::from(byte >> 4)]));
-        value.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        value.push(u16::from(HEX[usize::from(byte >> 4)]));
+        value.push(u16::from(HEX[usize::from(byte & 0x0f)]));
     }
-    value.encode_utf16().chain(core::iter::once(0)).collect()
+    value.push(0);
+    value
 }
 
 fn clear_bytes(bytes: &mut [u8]) {
@@ -556,7 +539,8 @@ fn clear_bytes(bytes: &mut [u8]) {
 
 #[cfg(windows)]
 mod platform {
-    use super::*;
+    use super::{LegacyRevisionDpapiWork, MAX_USER_TOKEN_BYTES, RevisionDekContext,
+        RevisionDekError, RevisionUserObservation};
     use core::ffi::c_void;
     use core::ptr::{null_mut, read_unaligned};
 
@@ -612,54 +596,53 @@ mod platform {
         context
             .charge_open()
             .map_err(RevisionDekError::Context)?;
+        for _ in 0..3 {
+            // Current-thread pseudo-handle, possible error capture and token
+            // release are prepaid; no callback may precede GetLastError.
+            context.charge(LegacyRevisionDpapiWork::NativeCall).map_err(RevisionDekError::Context)?;
+        }
         let mut thread_token = null_mut();
         // SAFETY: the current thread pseudo-handle and output token pointer are valid.
-        let thread_opened = unsafe {
-            OpenThreadToken(
+        let (thread_opened, thread_error) = unsafe {
+            let opened = OpenThreadToken(
                 GetCurrentThread(),
                 TOKEN_QUERY,
                 1,
-                &mut thread_token,
-            )
+                &raw mut thread_token,
+            );
+            (opened, if opened == 0 { GetLastError() } else { 0 })
         };
+        let mut thread_guard = TokenGuard(thread_token);
+        context.checkpoint().map_err(RevisionDekError::Context)?;
         if thread_opened != 0 {
-            let mut guard = TokenGuard(thread_token);
-            close_token(context, &mut guard)?;
+            close_token(context, &mut thread_guard)?;
             return Err(RevisionDekError::ThreadImpersonationDetected);
         }
-        context
-            .charge_open()
-            .map_err(RevisionDekError::Context)?;
-        let thread_error = unsafe { GetLastError() };
-        if thread_error != ERROR_NO_TOKEN {
-            if !thread_token.is_null() {
-                let mut guard = TokenGuard(thread_token);
-                let _ = close_token(context, &mut guard);
-            }
+        if thread_error != ERROR_NO_TOKEN || !thread_token.is_null() {
             return Err(RevisionDekError::UserObservationInvalid);
         }
 
         context
             .charge_open()
             .map_err(RevisionDekError::Context)?;
+        for _ in 0..2 {
+            // Current-process pseudo-handle and release of the owned token.
+            context.charge(LegacyRevisionDpapiWork::NativeCall).map_err(RevisionDekError::Context)?;
+        }
         let mut process_token = null_mut();
         // SAFETY: the current process pseudo-handle and output token pointer are valid.
         let process_opened = unsafe {
-            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut process_token)
+            OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut process_token)
         };
+        let mut guard = TokenGuard(process_token);
+        context.checkpoint().map_err(RevisionDekError::Context)?;
         if process_opened == 0 || process_token.is_null() {
-            if !process_token.is_null() {
-                let mut guard = TokenGuard(process_token);
-                let _ = close_token(context, &mut guard);
-            }
             return Err(RevisionDekError::UserObservationInvalid);
         }
-        let mut guard = TokenGuard(process_token);
         let result = observe_token_info(context, process_token);
         let closed = close_token(context, &mut guard);
         match (result, closed) {
-            (Err(error), _) => Err(error),
-            (Ok(observation), Err(error)) => Err(error),
+            (Err(error), _) | (Ok(_), Err(error)) => Err(error),
             (Ok(observation), Ok(())) => Ok(observation),
         }
     }
@@ -669,31 +652,34 @@ mod platform {
         token: *mut c_void,
     ) -> Result<RevisionUserObservation, RevisionDekError<C::Error>> {
         let mut required = 0_u32;
-        context
-            .charge_open()
-            .map_err(RevisionDekError::Context)?;
+        for _ in 0..2 {
+            context.charge(LegacyRevisionDpapiWork::NativeCall).map_err(RevisionDekError::Context)?;
+        }
         // SAFETY: the first query intentionally supplies no output buffer.
-        let _ = unsafe {
-            GetTokenInformation(
+        let (sized, sizing_error) = unsafe {
+            let sized = GetTokenInformation(
                 token,
                 TOKEN_USER_CLASS,
                 null_mut(),
                 0,
-                &mut required,
-            )
+                &raw mut required,
+            );
+            (sized, if sized == 0 { GetLastError() } else { 0 })
         };
-        let required = usize::try_from(required).map_err(|_| RevisionDekError::UserObservationInvalid)?;
-        if required == 0 || required > MAX_USER_TOKEN_BYTES {
+        context.checkpoint().map_err(RevisionDekError::Context)?;
+        let required_bytes = usize::try_from(required).map_err(|_| RevisionDekError::UserObservationInvalid)?;
+        if sized != 0 || sizing_error != 122 || required_bytes < core::mem::size_of::<TokenUser>()
+            || required_bytes > MAX_USER_TOKEN_BYTES {
             return Err(RevisionDekError::UserObservationInvalid);
         }
         context
-            .charge(LegacyRevisionDpapiWork::Allocate(required))
+            .charge(LegacyRevisionDpapiWork::Allocate(required_bytes))
             .map_err(RevisionDekError::Context)?;
         let mut buffer = Vec::new();
-        buffer.try_reserve_exact(required).map_err(|_| RevisionDekError::UserObservationInvalid)?;
-        buffer.resize(required, 0);
+        buffer.try_reserve_exact(required_bytes).map_err(|_| RevisionDekError::UserObservationInvalid)?;
+        buffer.resize(required_bytes, 0);
         context
-            .charge_open()
+            .charge(LegacyRevisionDpapiWork::NativeCall)
             .map_err(RevisionDekError::Context)?;
         // SAFETY: the buffer is live and has the exact requested capacity.
         let success = unsafe {
@@ -702,40 +688,76 @@ mod platform {
                 TOKEN_USER_CLASS,
                 buffer.as_mut_ptr().cast(),
                 u32::try_from(buffer.len()).map_err(|_| RevisionDekError::UserObservationInvalid)?,
-                &mut required,
+                &raw mut required,
             )
         };
+        context.checkpoint().map_err(RevisionDekError::Context)?;
         if success == 0 {
             return Err(RevisionDekError::UserObservationInvalid);
         }
+        let returned = usize::try_from(required).map_err(|_| RevisionDekError::UserObservationInvalid)?;
+        if returned < core::mem::size_of::<TokenUser>() || returned > buffer.len() {
+            return Err(RevisionDekError::UserObservationInvalid);
+        }
         let token_user = unsafe { read_unaligned(buffer.as_ptr().cast::<TokenUser>()) };
+        let sid = checked_sid(&buffer, returned, token_user.user.sid)
+            .ok_or(RevisionDekError::UserObservationInvalid)?;
         context
-            .charge_open()
+            .charge(LegacyRevisionDpapiWork::NativeCall)
             .map_err(RevisionDekError::Context)?;
-        if token_user.user.sid.is_null()
-            || unsafe { IsValidSid(token_user.user.sid) } == 0
-        {
+        let valid = unsafe { IsValidSid(sid.as_ptr().cast_mut().cast()) };
+        context.checkpoint().map_err(RevisionDekError::Context)?;
+        if valid == 0 {
             return Err(RevisionDekError::UserObservationInvalid);
         }
         context
-            .charge_open()
+            .charge(LegacyRevisionDpapiWork::NativeCall)
             .map_err(RevisionDekError::Context)?;
-        let sid_length = usize::try_from(unsafe { GetLengthSid(token_user.user.sid) })
+        let sid_length = usize::try_from(unsafe { GetLengthSid(sid.as_ptr().cast_mut().cast()) })
             .map_err(|_| RevisionDekError::UserObservationInvalid)?;
-        let start = buffer.as_ptr() as usize;
-        let end = start.checked_add(buffer.len()).ok_or(RevisionDekError::UserObservationInvalid)?;
-        let sid_start = token_user.user.sid as usize;
-        let sid_end = sid_start.checked_add(sid_length).ok_or(RevisionDekError::UserObservationInvalid)?;
-        if sid_length == 0 || sid_start < start || sid_end > end {
+        context.checkpoint().map_err(RevisionDekError::Context)?;
+        if sid_length != sid.len() {
             return Err(RevisionDekError::UserObservationInvalid);
         }
         context
             .charge(LegacyRevisionDpapiWork::Process(sid_length.saturating_mul(2)))
             .map_err(RevisionDekError::Context)?;
-        let sid = unsafe { core::slice::from_raw_parts(token_user.user.sid.cast::<u8>(), sid_length) };
-        let digest = search_os_secrets::derive_windows_user_scope_digest(sid)
-            .map_err(|_| RevisionDekError::UserObservationInvalid)?;
+        let digest = search_os_secrets::hash_native_revision_user_sid(sid);
         Ok(RevisionUserObservation { user_scope_digest: digest })
+    }
+
+    // Derive a Rust slice only from a checked offset into the owned buffer;
+    // the native SID pointer is never dereferenced to validate its own bounds.
+    fn checked_sid(buffer: &[u8], returned: usize, pointer: *mut c_void) -> Option<&[u8]> {
+        if pointer.is_null() || returned > buffer.len() { return None; }
+        let offset = (pointer as usize).checked_sub(buffer.as_ptr() as usize)?;
+        let header_end = offset.checked_add(8)?;
+        if header_end > returned { return None; }
+        let header = buffer.get(offset..header_end)?;
+        if header[0] != 1 || header[1] > 15 { return None; }
+        let end = offset.checked_add(8 + 4 * usize::from(header[1]))?;
+        if end > returned { return None; }
+        buffer.get(offset..end)
+    }
+
+    #[cfg(test)]
+    mod sid_bounds_tests {
+        use super::checked_sid;
+        #[test]
+        fn malformed_sid_pointers_and_counts_are_rejected_without_native_reads() {
+            let mut buffer = [0u8; 84];
+            let start = buffer.as_mut_ptr();
+            assert!(checked_sid(&buffer, buffer.len(), core::ptr::null_mut()).is_none());
+            assert!(checked_sid(&buffer, buffer.len(), start.wrapping_sub(1).cast()).is_none());
+            buffer[16] = 1;
+            buffer[17] = 15;
+            assert!(checked_sid(&buffer, 24, start.wrapping_add(16).cast()).is_none());
+            buffer[17] = 1;
+            assert!(checked_sid(&buffer, 27, start.wrapping_add(16).cast()).is_none());
+            assert!(checked_sid(&buffer, 28, start.wrapping_add(16).cast()).is_some_and(|sid| sid.len() == 12));
+            buffer[17] = 16;
+            assert!(checked_sid(&buffer, buffer.len(), start.wrapping_add(16).cast()).is_none());
+        }
     }
 
     struct TokenGuard(*mut c_void);
@@ -757,11 +779,10 @@ mod platform {
         if guard.0.is_null() {
             return Ok(());
         }
-        let reservation = context.charge_open();
+        // The release was reserved before the corresponding Open*Token call.
         // SAFETY: this guard owns the token handle returned by Open*Token.
         let closed = unsafe { CloseHandle(guard.0) };
         guard.0 = null_mut();
-        reservation.map_err(RevisionDekError::Context)?;
         if closed == 0 {
             return Err(RevisionDekError::UserObservationInvalid);
         }

@@ -139,7 +139,7 @@ pub fn unprotect_legacy_revision_current_user_with_context<C: LegacyRevisionDpap
 }
 
 /// Protects one fresh revision DEK through the shared contextual DPAPI kernel.
-pub fn protect_revision_dek_with_context<C: RevisionDekContext>(
+pub(crate) fn protect_revision_dek_with_context<C: RevisionDekContext>(
     context: &mut C,
     key: &[u8; 32],
     entropy: &[u8],
@@ -159,7 +159,7 @@ pub fn protect_revision_dek_with_context<C: RevisionDekContext>(
 }
 
 /// Unprotects one stored revision DEK through the shared contextual DPAPI kernel.
-pub fn unprotect_revision_dek_with_context<C: RevisionDekContext>(
+pub(crate) fn unprotect_revision_dek_with_context<C: RevisionDekContext>(
     context: &mut C,
     protected: &[u8],
     entropy: &[u8],
@@ -508,16 +508,18 @@ mod windows {
 
     pub(super) fn revision_dek_with_context<C: RevisionDekContext>(
         context: &mut C,
-        key: &[u8; 32],
+        input: &[u8],
         entropy: &[u8],
         protecting: bool,
     ) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
         run_bytes(
             context,
-            key,
+            input,
             entropy,
-            32,
-            super::MAX_PROTECTED_BYTES,
+            if protecting { 32 } else { search_os_secrets::REVISION_DEK_MAX_PROTECTED_BYTES },
+            // The existing short-secret ceiling admits bounded cleanup of an
+            // unexpected plaintext shape; the candidate owner still requires 32.
+            if protecting { search_os_secrets::REVISION_DEK_MAX_PROTECTED_BYTES } else { MAX_SECRET_BYTES },
             protecting,
             true,
         )

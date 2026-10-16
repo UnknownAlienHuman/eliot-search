@@ -94,6 +94,41 @@ unsafe extern "system" {
 
 pub(super) struct WindowsCredentialPlatform;
 
+// Keep the material in one heap allocation across moves and callback unwinds.
+pub(super) struct RevisionDekKey {
+    bytes: Box<[u8; 32]>,
+    #[cfg(test)]
+    cleared: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+}
+impl RevisionDekKey {
+    pub(super) fn bytes(&self) -> &[u8; 32] { &self.bytes }
+}
+impl Drop for RevisionDekKey {
+    fn drop(&mut self) {
+        clear_bytes(self.bytes.as_mut_slice());
+        #[cfg(test)]
+        if let Some(witness) = &self.cleared {
+            witness.store(self.bytes.iter().all(|byte| *byte == 0), std::sync::atomic::Ordering::Release);
+        }
+    }
+}
+
+#[cfg(test)]
+mod revision_dek_key_tests {
+    #[test]
+    fn raw_dek_owner_clears_on_callback_unwind() {
+        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+        let witness = Arc::new(AtomicBool::new(false));
+        let owned = super::RevisionDekKey { bytes: Box::new([7; 32]), cleared: Some(Arc::clone(&witness)) };
+        let outcome = std::panic::catch_unwind(|| {
+            let _owned = owned;
+            panic!("DEK callback fixture");
+        });
+        assert!(outcome.is_err());
+        assert!(witness.load(Ordering::Acquire), "owned DEK was not cleared on unwind");
+    }
+}
+
 /// Zeroizing private owner for one provider credential record.
 pub(super) struct ProviderCredentialBlob(Vec<u8>);
 
@@ -182,11 +217,20 @@ impl WindowsCredentialPlatform {
         Self::write_credential(target, blob, "ELIOT Search Provider Pairing")
     }
 
-    pub(super) fn write_revision_dek_credential(
+    pub(super) fn write_revision_dek_credential<C: crate::RevisionDekContext>(
         target: &[u16],
         blob: &mut ProviderCredentialBlob,
-    ) -> Result<(), LegacyRevisionRootSecretError> {
-        Self::write_credential(target, blob, "ELIOT Search Revision DEK Candidate")
+        context: &mut C,
+    ) -> Result<(), crate::RevisionDekError<C::Error>> {
+        let name = "ELIOT Search Revision DEK Candidate";
+        let bytes = target.len().checked_add(name.encode_utf16().count() + 1)
+            .and_then(|units| units.checked_mul(2)).ok_or(crate::RevisionDekError::RecordTooLarge)?;
+        context.charge(crate::LegacyRevisionDpapiWork::Allocate(bytes)).map_err(crate::RevisionDekError::Context)?;
+        context.charge(crate::LegacyRevisionDpapiWork::Process(bytes)).map_err(crate::RevisionDekError::Context)?;
+        // Error capture is prepaid before the actual write; no callback may
+        // intervene between CredWriteW failure and its GetLastError capture.
+        context.charge(crate::LegacyRevisionDpapiWork::NativeCall).map_err(crate::RevisionDekError::Context)?;
+        Self::write_credential(target, blob, name).map_err(crate::RevisionDekError::Credential)
     }
 
     fn write_credential(
@@ -360,41 +404,6 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
         Ok(LegacyRevisionRootSecret::from_bytes(secret))
     }
 
-    pub(super) fn generate_revision_dek_key<C: crate::RevisionDekContext>(
-        context: &mut C,
-    ) -> Result<[u8; 32], crate::RevisionDekError<C::Error>> {
-        context
-            .checkpoint()
-            .map_err(crate::RevisionDekError::Context)?;
-        context
-            .charge_open()
-            .map_err(crate::RevisionDekError::Context)?;
-        let mut secret = [0_u8; 32];
-        // SAFETY: the fixed buffer is live and writable for exactly 32 bytes.
-        let status = unsafe {
-            bcrypt_gen_random(
-                null_mut(),
-                secret.as_mut_ptr(),
-                32,
-                BCRYPT_USE_SYSTEM_PREFERRED_RNG,
-            )
-        };
-        let checked = context.checkpoint();
-        if status < 0 {
-            clear_bytes(&mut secret);
-            return Err(crate::RevisionDekError::RandomGenerationFailed(status));
-        }
-        if let Err(error) = checked {
-            clear_bytes(&mut secret);
-            return Err(crate::RevisionDekError::Context(error));
-        }
-        if secret.iter().all(|byte| *byte == 0) {
-            clear_bytes(&mut secret);
-            return Err(crate::RevisionDekError::InvalidKey);
-        }
-        Ok(secret)
-    }
-
     fn acquire_vault_lock(&mut self) -> Result<Self::VaultGuard, ()> {
         WindowsVaultLock::acquire()
     }
@@ -402,6 +411,43 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
     fn sleep(&mut self, duration: Duration) {
         std::thread::sleep(duration);
     }
+}
+
+impl WindowsCredentialPlatform {
+    pub(super) fn generate_revision_dek_key<C: crate::RevisionDekContext>(
+        context: &mut C,
+    ) -> Result<RevisionDekKey, crate::RevisionDekError<C::Error>> {
+        context
+            .checkpoint()
+            .map_err(crate::RevisionDekError::Context)?;
+        context
+            .charge(crate::LegacyRevisionDpapiWork::NativeCall)
+            .map_err(crate::RevisionDekError::Context)?;
+        context.charge(crate::LegacyRevisionDpapiWork::Process(32)).map_err(crate::RevisionDekError::Context)?;
+        context.charge(crate::LegacyRevisionDpapiWork::Allocate(32)).map_err(crate::RevisionDekError::Context)?;
+        let mut secret = RevisionDekKey { bytes: Box::new([0; 32]), #[cfg(test)] cleared: None };
+        // SAFETY: the fixed buffer is live and writable for exactly 32 bytes.
+        let status = unsafe {
+            bcrypt_gen_random(
+                null_mut(),
+                secret.bytes.as_mut_ptr(),
+                32,
+                BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+            )
+        };
+        let checked = context.checkpoint();
+        if status < 0 {
+            return Err(crate::RevisionDekError::RandomGenerationFailed(status));
+        }
+        if let Err(error) = checked {
+            return Err(crate::RevisionDekError::Context(error));
+        }
+        if secret.bytes.iter().all(|byte| *byte == 0) {
+            return Err(crate::RevisionDekError::ProtectedKeyInvalid);
+        }
+        Ok(secret)
+    }
+
 }
 
 struct CredentialAllocation(*mut CredentialW);
