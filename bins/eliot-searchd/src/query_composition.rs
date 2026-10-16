@@ -7,11 +7,10 @@
 //! denominator travels with the output so top-k saturation can never narrow
 //! an exact proof.
 //!
-//! Production data plane (async, qualified gate, live server) lives in
-//! `search-qdrant-bridge::real::RealDataPlane` and is intentionally not
-//! called here: it needs an async runtime plus an executed T22
-//! qualification gate that this composition does not own. The production
-//! call sequence mirrors [`ProcessTestIndexedPort`] one-to-one:
+//! Production data plane lives in `search-qdrant-bridge::real::BlockingRealQueryPlane`,
+//! a synchronous facade over the qualified async `RealDataPlane` that owns one
+//! persistent single-thread Tokio runtime. The production call sequence mirrors
+//! [`ProcessTestIndexedPort`] one-to-one:
 //!
 //! 1. `query_filtered` with one [`EligibilityFilter`] and
 //!    `IdfScope::ScopedToRetrieval` (the retrieval filter cloned as the IDF
@@ -56,8 +55,14 @@
 
 pub(crate) mod registry;
 pub(crate) mod service;
+#[cfg(test)]
+#[path = "query_composition/real_port_tests.rs"]
+mod real_port_tests;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use search_access::{BaseEligibilityPlan, EligibilityPredicates};
 use search_contracts::{OpaqueId, SourceMembershipId};
@@ -68,6 +73,7 @@ use search_retrieval_executor::{
     ExecuteError, LegTicket,
     indexed::{IndexedNomination, IndexedPortError, IndexedRetrievalPort, MAX_INDEXED_LIMIT},
 };
+use search_qdrant_bridge::real::{BlockingRealQueryPlane, IdfScope, OpContext};
 
 /// Closed query-composition failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -302,5 +308,152 @@ pub fn execute_pinned_leg(
         live_before,
         live_after,
         port,
+    )
+}
+
+/// Real indexed retrieval over the bridge's single persistent runtime.
+/// This port returns nominations only; source evidence still requires C07 readback.
+pub struct RealIndexedPort<'plane> {
+    plane: &'plane BlockingRealQueryPlane,
+    route: CollectionRoute,
+    filter: EligibilityFilter,
+    leg: search_access::SafeRetrievalLeg,
+    deadline: Instant,
+    cancelled: Arc<AtomicBool>,
+}
+
+fn validate_real_ticket(
+    expected: &search_access::SafeRetrievalLeg,
+    route: &CollectionRoute,
+    ticket: &LegTicket,
+    predicates: &EligibilityPredicates,
+) -> Result<(), IndexedPortError> {
+    let actual = ticket.leg.safe_index_leg.as_ref().ok_or(IndexedPortError::Failure)?;
+    let [plan] = expected.eligibility_plans.as_slice() else { return Err(IndexedPortError::Failure); };
+    if actual != expected || ticket.leg.memberships != expected.memberships
+        || ticket.leg.leg_id != expected.leg_id
+        || ticket.leg.leg_kind != search_contracts::LegKind::Lexical
+        || *predicates != plan.predicates()
+        || route.generation != expected.route.collection_generation_id
+        || route.generation != plan.collection_generation_id
+        || expected.route.visible_epoch != plan.visible_epoch
+    { return Err(IndexedPortError::Failure); }
+    Ok(())
+}
+
+impl<'plane> RealIndexedPort<'plane> {
+    /// Bind one accepted pinned leg, deriving its exact filter internally.
+    /// The caller supplies the original deadline and shared cancellation flag.
+    pub fn new(
+        plane: &'plane BlockingRealQueryPlane,
+        route: CollectionRoute,
+        ticket: &LegTicket,
+        deadline: Instant,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<Self, IndexedPortError> {
+        let leg = ticket.leg.safe_index_leg.as_ref().ok_or(IndexedPortError::Failure)?;
+        let [plan] = leg.eligibility_plans.as_slice() else { return Err(IndexedPortError::Failure); };
+        validate_real_ticket(leg, &route, ticket, &plan.predicates())?;
+        let filter = render_eligibility_filter(plan, &ticket.leg.memberships)
+            .map_err(|_| IndexedPortError::Failure)?;
+        let port = Self { plane, route, filter, leg: leg.clone(), deadline, cancelled };
+        port.context()?;
+        Ok(port)
+    }
+
+    /// Single immutable filter shared by retrieval, IDF and exact counting.
+    #[must_use]
+    pub const fn filter(&self) -> &EligibilityFilter { &self.filter }
+
+    fn context(&self) -> Result<OpContext, IndexedPortError> {
+        real_rpc_context(self.deadline, Instant::now(), &self.cancelled)
+    }
+}
+
+fn real_rpc_context(deadline: Instant, now: Instant, cancelled: &Arc<AtomicBool>)
+    -> Result<OpContext, IndexedPortError> {
+    if cancelled.load(Ordering::SeqCst) { return Err(IndexedPortError::Failure); }
+    let remaining = deadline.saturating_duration_since(now);
+    if remaining.is_zero() { return Err(IndexedPortError::Failure); }
+    Ok(OpContext::with_cancel(remaining, Arc::clone(cancelled)))
+}
+
+impl IndexedRetrievalPort for RealIndexedPort<'_> {
+    fn query_filtered(
+        &mut self,
+        ticket: &LegTicket,
+        predicates: &EligibilityPredicates,
+        vector_name: &str,
+        query_vector: &[(u32, f32)],
+        limit: usize,
+        idf_scoped_to_retrieval: bool,
+    ) -> Result<Vec<IndexedNomination>, IndexedPortError> {
+        validate_real_ticket(&self.leg, &self.route, ticket, predicates)?;
+        if !idf_scoped_to_retrieval || limit == 0 || limit > MAX_INDEXED_LIMIT {
+            return Err(IndexedPortError::Failure);
+        }
+        let scored = self.plane.query_filtered(
+            &self.route, &self.filter, vector_name, query_vector, limit,
+            IdfScope::ScopedToRetrieval, &self.context()?,
+        ).map_err(map_bridge_error)?;
+        self.context()?;
+        if scored.len() > limit { return Err(IndexedPortError::Failure); }
+        if scored.is_empty() { return Ok(Vec::new()); }
+        let ids = scored.iter().map(|hit| hit.point_id).collect();
+        let readback = self.plane.readback_exact(&self.route, ids, &self.context()?)
+            .map_err(map_bridge_error)?;
+        self.context()?;
+        if !readback.unexpected_ids.is_empty() { return Err(IndexedPortError::Failure); }
+        let mut by_id = BTreeMap::new();
+        for point in &readback.points {
+            let membership = parse_membership(&point.payload.source_membership_id)
+                .map_err(|_| IndexedPortError::Failure)?;
+            if !self.leg.memberships.contains(&membership)
+                || by_id.insert(point.point_id, (point, membership)).is_some()
+            { return Err(IndexedPortError::Failure); }
+        }
+        let mut nominations = Vec::with_capacity(scored.len());
+        for hit in &scored {
+            let (point, membership) = by_id.get(&hit.point_id).ok_or(IndexedPortError::Failure)?;
+            if point.payload.payload_digest != hit.payload_digest
+                || point.payload.identity_digest != hit.identity_digest
+            { return Err(IndexedPortError::Failure); }
+            nominations.push(IndexedNomination {
+                point_id: hit.point_id.0, source_membership_id: *membership,
+                identity_digest: point.payload.identity_digest,
+                payload_digest: point.payload.payload_digest, raw_score: hit.score,
+            });
+        }
+        self.context()?;
+        Ok(nominations)
+    }
+
+    fn count_exact(&mut self, ticket: &LegTicket, predicates: &EligibilityPredicates)
+        -> Result<usize, IndexedPortError> {
+        validate_real_ticket(&self.leg, &self.route, ticket, predicates)?;
+        let count = self.plane.count_exact(&self.route, &self.filter, &self.context()?)
+            .map_err(map_bridge_error)?;
+        self.context()?;
+        Ok(count.count)
+    }
+}
+
+/// Execute the real qualified backend through the unchanged indexed kernel.
+#[allow(clippy::too_many_arguments)]
+pub fn execute_pinned_leg_real(
+    ticket: &LegTicket,
+    pins: &search_retrieval_executor::LegPinSet,
+    predicates: &EligibilityPredicates,
+    vector_name: &str,
+    query_vector: &[(u32, f32)],
+    limit: usize,
+    request_security: &search_access::RequestSecurityFence,
+    live_before: &search_access::LiveSecurityState,
+    live_after: &search_access::LiveSecurityState,
+    port: &mut RealIndexedPort<'_>,
+) -> Result<search_retrieval_executor::indexed::IndexedLegOutput, ExecuteError> {
+    search_retrieval_executor::indexed::execute_indexed_leg(
+        ticket, pins, predicates, vector_name, query_vector, limit, true,
+        request_security, live_before, live_after, port,
     )
 }
