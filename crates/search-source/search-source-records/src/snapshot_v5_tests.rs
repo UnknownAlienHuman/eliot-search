@@ -199,5 +199,12 @@ fn legacy_v4_empty_digest_remains_deterministic_without_v2_projection() {
             250, 9, 64, 172, 109, 125, 41, 228, 164, 230, 231, 51, 87,
         ])
     );
+    assert_eq!(
+        v5.expect("v5 digest").0,
+        Blake3Digest32::from_bytes([
+            176, 187, 96, 88, 120, 207, 147, 155, 130, 182, 161, 26, 2, 243, 28, 164, 162, 238,
+            250, 202, 39, 17, 121, 39, 189, 66, 184, 2, 174, 94, 212, 39,
+        ])
+    );
     assert_ne!(v4.expect("v4 digest").0, v5.expect("v5 digest").0);
 }

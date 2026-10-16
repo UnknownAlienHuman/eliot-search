@@ -129,12 +129,27 @@ pub(super) fn prepare(
     batch: &RegistryBatch,
     receipt: &ReceiptRef,
 ) -> Result<PreparedBatch, RegistryError> {
+    let permanent_membership = batch.changes.iter().any(|change| {
+        matches!(
+            change,
+            RegistryChange::BindPermanentMembershipV2 { .. }
+                | RegistryChange::TransitionPermanentMembershipV2 { .. }
+        )
+    });
     prepare_profiled(
         registry,
         batch,
         receipt,
-        codec::CURRENT_BATCH_PROFILE,
-        codec::CURRENT_STATE_PROFILE,
+        if permanent_membership {
+            "eliot.registry-batch.v5"
+        } else {
+            codec::CURRENT_BATCH_PROFILE
+        },
+        if permanent_membership {
+            "eliot.registry-state.v5"
+        } else {
+            codec::CURRENT_STATE_PROFILE
+        },
     )
 }
 
@@ -203,6 +218,33 @@ fn prepare_profiled(
                 RegistryStateKey::Source(member.source_identity.clone()),
                 registry.limits,
             )?;
+        }
+        match change {
+            RegistryChange::BindPermanentMembershipV2 {
+                member,
+                source_identity,
+                ..
+            } => {
+                include(
+                    &mut keys,
+                    RegistryStateKey::Membership(super::membership_v2::state_key(
+                        member,
+                        source_identity.clone(),
+                    )?),
+                    registry.limits,
+                )?;
+            }
+            RegistryChange::TransitionPermanentMembershipV2 { membership_id, .. } => {
+                include(
+                    &mut keys,
+                    RegistryStateKey::Membership(super::membership_v2::key_for_id(
+                        &registry.reverse_memberships,
+                        *membership_id,
+                    )?),
+                    registry.limits,
+                )?;
+            }
+            _ => {}
         }
         match change {
             RegistryChange::RetireSource { identity, .. } => {
@@ -306,15 +348,67 @@ fn prepare_profiled(
     let before_roots = roots.len();
     let before_memberships = memberships.len();
     for change in &batch.changes {
-        apply_change(
-            change,
-            after_revision,
-            registry.limits,
-            &mut roots,
-            &mut sources,
-            &mut memberships,
-            &mut generations,
-        )?;
+        match change {
+            RegistryChange::BindPermanentMembershipV2 {
+                member,
+                source_namespace_id,
+                root_binding_id,
+                owner,
+                source_identity,
+                expected_source_revision,
+                expected_root_record_revision,
+                expected_namespace_record_revision,
+                expected_owner_generation,
+                receipt,
+            } => {
+                let (key, record) = super::membership_v2::stage_bind(
+                    registry,
+                    member,
+                    *source_namespace_id,
+                    *root_binding_id,
+                    owner,
+                    source_identity,
+                    *expected_source_revision,
+                    *expected_root_record_revision,
+                    *expected_namespace_record_revision,
+                    *expected_owner_generation,
+                    after_revision,
+                    receipt,
+                )?;
+                memberships.insert(key, record);
+            }
+            RegistryChange::TransitionPermanentMembershipV2 {
+                membership_id,
+                expected_membership_revision,
+                command,
+                receipt,
+            } => {
+                let key = super::membership_v2::key_for_id(
+                    &registry.reverse_memberships,
+                    *membership_id,
+                )?;
+                let current = memberships
+                    .get(&key)
+                    .ok_or(RegistryError::MembershipNotFound)?;
+                let updated = super::membership_v2::stage_transition(
+                    current,
+                    *expected_membership_revision,
+                    *command,
+                    after_revision,
+                    receipt,
+                )?;
+                memberships.insert(key, updated);
+            }
+            _ => apply_change(
+                change,
+                after_revision,
+                registry.limits,
+                &mut roots,
+                &mut sources,
+                &mut memberships,
+                &mut generations,
+            )?,
+        }
     }
     if registry.roots.len() - before_roots + roots.len() > registry.limits.max_roots
         || registry.sources.len() - before_sources + sources.len() > registry.limits.max_sources
@@ -350,22 +444,42 @@ fn prepare_profiled(
             after,
         )?);
     }
-    let record = DecodedBatch::from_observed_parts(
-        encoding_profile,
-        state_encoding_profile,
-        RegistryJournalEntry::new(
-            batch.operation.operation_id().clone(),
-            batch.operation.mutation_digest(),
-            registry.revision,
-            after_revision,
-            JournalEntryKind::BatchApply,
-            receipt.clone(),
-        ),
-        codec::request_fingerprint(batch)?,
-        batch.changes.len(),
-        deltas,
-        registry.limits,
-    )?;
+    let entry = RegistryJournalEntry::new(
+        batch.operation.operation_id().clone(),
+        batch.operation.mutation_digest(),
+        registry.revision,
+        after_revision,
+        JournalEntryKind::BatchApply,
+        receipt.clone(),
+    );
+    let fingerprint = codec::request_fingerprint(batch)?;
+    let record = if encoding_profile == "eliot.registry-batch.v5" {
+        DecodedBatch::from_observed_parts_v5(
+            entry,
+            fingerprint,
+            batch.changes.len(),
+            deltas,
+            batch.changes.clone(),
+            registry.limits,
+            &mut || Ok(()),
+        )
+        .map_err(|error| match error {
+            codec::BatchCodecV4Error::Registry(error) => error,
+            codec::BatchCodecV4Error::Admission(_) => {
+                RegistryError::AdmissionRestorationUnavailable
+            }
+        })?
+    } else {
+        DecodedBatch::from_observed_parts(
+            encoding_profile,
+            state_encoding_profile,
+            entry,
+            fingerprint,
+            batch.changes.len(),
+            deltas,
+            registry.limits,
+        )?
+    };
     let encoded = record.encode()?;
     let states = record
         .deltas()

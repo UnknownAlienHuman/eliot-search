@@ -2,9 +2,12 @@
 //!
 //! These metadata values do not perform mutations or establish current authority.
 use crate::error::{RegistryError, RegistryLimits};
-use crate::membership::{MembershipKey, NewMembership};
+use crate::membership::{MembershipCommand, MembershipKey, NewMembership};
 use crate::source::AdmissionBindingProof;
-use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, ReceiptRef, SourceIdentity};
+use search_contracts::{
+    Blake3Digest32, MembershipRevision, NonZeroRevision, OpaqueId, ReceiptRef, SourceIdentity,
+    SourceMembership, SourceMembershipId, SourceOwnerGeneration,
+};
 use search_source_admission::AdmissionReceipt;
 use search_source_identity::SourceBinding;
 use std::collections::BTreeSet;
@@ -135,6 +138,40 @@ pub enum RegistryChange {
         /// Content-free retirement receipt.
         receipt: ReceiptRef,
     },
+    /// Bind the accepted typed SourceMembership under exact live owner fences.
+    BindPermanentMembershipV2 {
+        /// Exact accepted public contract member, retained without conversion.
+        member: SourceMembership,
+        /// Namespace used to resolve the member's source ID to one full identity.
+        source_namespace_id: search_contracts::SourceNamespaceId,
+        /// Exact admitted root binding used by the source.
+        root_binding_id: search_contracts::RootBindingId,
+        /// Exact namespace owner identity observed by the operation.
+        owner: crate::source_request_v2::SourceOwnerScopeV2,
+        /// Full current source identity resolved by the source owner.
+        source_identity: SourceIdentity,
+        /// Expected current source-record revision.
+        expected_source_revision: NonZeroRevision,
+        /// Expected active root record revision.
+        expected_root_record_revision: NonZeroRevision,
+        /// Expected active namespace ownership record revision.
+        expected_namespace_record_revision: NonZeroRevision,
+        /// Expected active namespace owner generation.
+        expected_owner_generation: SourceOwnerGeneration,
+        /// Content-free membership receipt.
+        receipt: ReceiptRef,
+    },
+    /// Apply a closed lifecycle command while retaining all typed policy fields.
+    TransitionPermanentMembershipV2 {
+        /// Exact stable accepted membership UUID.
+        membership_id: SourceMembershipId,
+        /// Exact current typed membership revision.
+        expected_membership_revision: MembershipRevision,
+        /// Closed lifecycle command.
+        command: MembershipCommand,
+        /// Content-free transition receipt.
+        receipt: ReceiptRef,
+    },
     /// Atomically replace one corpus active inventory and generation.
     CutoverNamespace(NamespaceCutover),
 }
@@ -173,6 +210,15 @@ impl RegistryChange {
         }
     }
 
+    /// Permanent-contract membership identity targeted by this change.
+    pub fn permanent_membership_target(&self) -> Option<SourceMembershipId> {
+        match self {
+            Self::BindPermanentMembershipV2 { member, .. } => Some(member.source_membership_id),
+            Self::TransitionPermanentMembershipV2 { membership_id, .. } => Some(*membership_id),
+            _ => None,
+        }
+    }
+
     /// Corpus cutover target, if present in this immutable descriptor.
     pub fn cutover_target(&self) -> Option<&OpaqueId> {
         match self {
@@ -204,6 +250,7 @@ impl RegistryBatch {
         let mut roots = BTreeSet::new();
         let mut original_bytes = 0_usize;
         let mut memberships = BTreeSet::new();
+        let mut permanent_memberships = BTreeSet::new();
         let mut cutovers = BTreeSet::new();
         for change in &self.changes {
             if let Some(root) = change.root_target()
@@ -233,6 +280,14 @@ impl RegistryBatch {
             {
                 return Err(RegistryError::DuplicateBatchTarget);
             }
+            if let Some(membership) = change.permanent_membership_target()
+                && (!permanent_memberships.insert(membership)
+                    || memberships.iter().any(|legacy| {
+                        crate::membership::derive_membership_id(legacy) == membership
+                    }))
+            {
+                return Err(RegistryError::DuplicateBatchTarget);
+            }
             if let Some(corpus) = change.cutover_target() {
                 if !cutovers.insert(corpus.clone()) {
                     return Err(RegistryError::DuplicateBatchTarget);
@@ -249,6 +304,13 @@ impl RegistryBatch {
             if cutovers.contains(&membership.corpus_id) {
                 return Err(RegistryError::DuplicateBatchTarget);
             }
+            if permanent_memberships.contains(&crate::membership::derive_membership_id(membership))
+            {
+                return Err(RegistryError::DuplicateBatchTarget);
+            }
+        }
+        if !permanent_memberships.is_empty() && self.changes.len() != 1 {
+            return Err(RegistryError::BatchSizeInvalid);
         }
         Ok(())
     }

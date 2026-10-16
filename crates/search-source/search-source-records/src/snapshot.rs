@@ -27,6 +27,12 @@ pub const REGISTRY_SNAPSHOT_V5_HEADER: &str = "registry-snapshot-v5";
 pub const REGISTRY_SNAPSHOT_V5_SCHEMA: u64 = 5;
 /// Domain-separated digest domain for the full permanent-v2 snapshot.
 pub const REGISTRY_SNAPSHOT_V5_DOMAIN: &str = "eliot/cbor/registry-snapshot/v5";
+/// Stable schema header for full snapshots containing permanent membership V2.
+pub const REGISTRY_SNAPSHOT_V6_HEADER: &str = "registry-snapshot-v6";
+/// Numeric schema version for full snapshots containing permanent membership V2.
+pub const REGISTRY_SNAPSHOT_V6_SCHEMA: u64 = 6;
+/// Domain-separated digest domain for full membership V2 snapshots.
+pub const REGISTRY_SNAPSHOT_V6_DOMAIN: &str = "eliot/cbor/registry-snapshot/v6";
 
 /// Immutable registry snapshot.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -119,6 +125,10 @@ pub struct RegistrySnapshotDigest(pub Blake3Digest32);
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct RegistrySnapshotDigestV5(pub Blake3Digest32);
 
+/// Domain-separated canonical digest over complete permanent-membership-v2 state.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct RegistrySnapshotDigestV6(pub Blake3Digest32);
+
 /// Validates registry/root/source/membership/portfolio/owner generations,
 /// uniqueness, referential integrity, closed states and bounded counts.
 pub fn validate_registry_snapshot(
@@ -176,10 +186,39 @@ pub fn validate_registry_snapshot(
             .sources
             .get(&key.source_identity)
             .ok_or(RegistryError::SnapshotInvalid)?;
+        if let Some(permanent) = membership.permanent_v2() {
+            let member = permanent.member();
+            let provenance = permanent.provenance();
+            let canonical_corpus_id = member.corpus_id.to_string();
+            let admission = source
+                .permanent_admission()
+                .ok_or(RegistryError::SnapshotInvalid)?;
+            if member.source_membership_id != membership.membership_id()
+                || member.source_id != key.source_identity.source_id
+                || member.membership_revision.get() != membership.membership_revision().get()
+                || provenance.source_revision() > source.source_revision()
+                || permanent.lifecycle() != membership.lifecycle()
+                || permanent.registry_revision() != membership.registry_revision()
+                || permanent.last_receipt() != membership.last_receipt()
+                || canonical_corpus_id != key.corpus_id.as_str()
+                || provenance.source_identity() != &key.source_identity
+                || provenance.root_binding_id() != source.binding().root_binding_id()
+                || provenance.policy_reference() != admission.policy_reference()
+                || provenance.admission_reference() != admission.admission_reference()
+                || provenance.root_record_revision() != admission.root_record_revision()
+                || provenance.namespace_record_revision() != admission.namespace_record_revision()
+                || provenance.owner_generation() != admission.owner_generation()
+            {
+                return Err(RegistryError::SnapshotInvalid);
+            }
+        }
         if source.lifecycle() == SourceLifecycle::Retired
             && membership.lifecycle() == MembershipLifecycle::Active
         {
             return Err(RegistryError::SnapshotInvalid);
+        }
+        if membership.is_permanent_v2() {
+            continue;
         }
         if let Some(active) = snapshot.active_generations.get(&key.corpus_id) {
             if membership.lifecycle() == MembershipLifecycle::Active
@@ -298,6 +337,10 @@ pub fn snapshot_digest(
             .namespace_states
             .values()
             .any(NamespaceCutoverState::is_permanent_v2)
+        || snapshot
+            .memberships
+            .values()
+            .any(MembershipRecord::is_permanent_v2)
     {
         return Err(RegistryError::SnapshotInvalid);
     }
@@ -319,8 +362,24 @@ pub fn snapshot_digest(
 pub fn snapshot_digest_v5(
     snapshot: &RegistrySnapshot,
 ) -> Result<RegistrySnapshotDigestV5, RegistryError> {
+    if snapshot
+        .memberships
+        .values()
+        .any(MembershipRecord::is_permanent_v2)
+    {
+        return Err(RegistryError::SnapshotInvalid);
+    }
     validate_namespace_projection(snapshot)?;
     canonical::digest_v5(snapshot)
+}
+
+/// Computes the version-6 canonical digest over every snapshot field,
+/// including the accepted typed permanent membership and exact provenance.
+pub fn snapshot_digest_v6(
+    snapshot: &RegistrySnapshot,
+) -> Result<RegistrySnapshotDigestV6, RegistryError> {
+    validate_namespace_projection(snapshot)?;
+    canonical::digest_v6(snapshot)
 }
 
 fn validate_namespace_projection(snapshot: &RegistrySnapshot) -> Result<(), RegistryError> {

@@ -48,15 +48,21 @@ pub mod view;
 use search_source_records::legacy_direct as source_legacy_direct;
 
 pub use api::{
-    DEFAULT_REGISTRY_LIMITS, InMemoryRegistryJournal, JournalEntryKind, RegistryControlPort,
-    RegistryError, RegistryJournalEntry, RegistryLimits, RegistryPortError,
+    DEFAULT_REGISTRY_LIMITS, InMemoryRegistryJournal, JournalEntryKind, PreparedSourceMembershipV2,
+    RegistryControlPort, RegistryError, RegistryJournalEntry, RegistryLimits, RegistryPortError,
+    SourceMembershipReceiptV2, active_source_membership_v2, bind_source_membership_v2,
+    commit_source_membership_v2, prepare_source_membership_transition_v2,
+    prepare_source_membership_v2, transition_source_membership_v2,
 };
 pub use legacy_root_catalog::{
     LEGACY_SOURCE_ROOT_CATALOG_HEADER, LEGACY_SOURCE_ROOT_CATALOG_MAX_BYTES,
     LEGACY_SOURCE_ROOT_CATALOG_MAX_ROOTS, LegacySourceRootCatalogError,
     decode_legacy_source_root_catalog, encode_legacy_source_root_catalog,
 };
-pub use membership::{MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership};
+pub use membership::{
+    MembershipKey, MembershipLifecycle, MembershipRecord, NewMembership,
+    PermanentMembershipProvenanceV2, PermanentMembershipRecordV2,
+};
 pub use portfolio::PortfolioItem;
 pub use portfolio_history::{
     ImmutablePortfolioRevision, PortfolioCurrentPointer, PortfolioHistory, PortfolioRevisionKey,

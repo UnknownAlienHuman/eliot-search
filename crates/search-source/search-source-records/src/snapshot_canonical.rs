@@ -1,7 +1,8 @@
 //! Canonical digest input for the registry's existing snapshot projection.
 use super::{
     REGISTRY_SNAPSHOT_V5_DOMAIN, REGISTRY_SNAPSHOT_V5_HEADER, REGISTRY_SNAPSHOT_V5_SCHEMA,
-    RegistrySnapshot, RegistrySnapshotDigest, RegistrySnapshotDigestV5,
+    REGISTRY_SNAPSHOT_V6_DOMAIN, REGISTRY_SNAPSHOT_V6_HEADER, REGISTRY_SNAPSHOT_V6_SCHEMA,
+    RegistrySnapshot, RegistrySnapshotDigest, RegistrySnapshotDigestV5, RegistrySnapshotDigestV6,
 };
 use crate::error::RegistryError;
 use crate::membership::{MembershipKey, MembershipLifecycle, MembershipRecord};
@@ -868,4 +869,148 @@ pub(super) fn digest_v5(
     )
     .map_err(|_| RegistryError::SnapshotInvalid)?;
     Ok(RegistrySnapshotDigestV5(value))
+}
+
+pub(super) fn digest_v6(
+    snapshot: &RegistrySnapshot,
+) -> Result<RegistrySnapshotDigestV6, RegistryError> {
+    let base = digest_v5(snapshot)?.0;
+    let permanent_memberships: Vec<_> = snapshot
+        .memberships
+        .iter()
+        .filter_map(|(key, record)| record.permanent_v2().map(|value| (key, value)))
+        .collect();
+    if permanent_memberships.len() > MAX_COLLECTION_ITEMS {
+        return Err(RegistryError::CapacityExceeded);
+    }
+    let rows = permanent_memberships.iter().map(|(key, value)| {
+        let member = value.member();
+        let provenance = value.provenance();
+        row(
+            "permanent-membership-v2",
+            membership_key(key)?,
+            object(vec![
+                (
+                    "schema",
+                    V::U64(crate::membership::PERMANENT_MEMBERSHIP_RECORD_V2_SCHEMA),
+                ),
+                (
+                    "source_membership_id",
+                    bytes(member.source_membership_id.as_bytes())?,
+                ),
+                ("corpus_id", bytes(member.corpus_id.as_bytes())?),
+                ("source_id", bytes(member.source_id.as_bytes())?),
+                ("workspace_id", bytes(member.workspace_id.as_bytes())?),
+                (
+                    "role",
+                    text(match member.role {
+                        search_contracts::MembershipRole::Source => "source",
+                        search_contracts::MembershipRole::Test => "test",
+                        search_contracts::MembershipRole::Documentation => "documentation",
+                        search_contracts::MembershipRole::Generated => "generated",
+                        search_contracts::MembershipRole::Vendor => "vendor",
+                        search_contracts::MembershipRole::Reference => "reference",
+                    })?,
+                ),
+                (
+                    "preparation_profile_id",
+                    text(member.preparation_profile_id.as_str())?,
+                ),
+                (
+                    "access_policy_binding_id",
+                    bytes(member.access_policy_binding_id.as_bytes())?,
+                ),
+                (
+                    "retention_policy_id",
+                    text(member.retention_policy_id.as_str())?,
+                ),
+                (
+                    "residency_policy_binding_id",
+                    bytes(member.residency_policy_binding_id.as_bytes())?,
+                ),
+                (
+                    "membership_revision",
+                    V::U64(member.membership_revision.get()),
+                ),
+                ("source_identity", identity(provenance.source_identity())?),
+                (
+                    "source_revision",
+                    V::U64(provenance.source_revision().get()),
+                ),
+                (
+                    "root_binding_id",
+                    bytes(provenance.root_binding_id().as_bytes())?,
+                ),
+                (
+                    "root_record_revision",
+                    V::U64(provenance.root_record_revision().get()),
+                ),
+                (
+                    "source_namespace_id",
+                    bytes(provenance.source_namespace_id().as_bytes())?,
+                ),
+                (
+                    "namespace_record_revision",
+                    V::U64(provenance.namespace_record_revision().get()),
+                ),
+                (
+                    "owner_generation",
+                    bytes(provenance.owner_generation().as_bytes())?,
+                ),
+                ("policy_reference", bytes(provenance.policy_reference())?),
+                (
+                    "admission_reference",
+                    bytes(provenance.admission_reference())?,
+                ),
+                (
+                    "policy_revision",
+                    V::U64(provenance.policy_revision().get()),
+                ),
+                (
+                    "lifecycle",
+                    text(match value.lifecycle() {
+                        MembershipLifecycle::Active => "active",
+                        MembershipLifecycle::Restricted => "restricted",
+                        MembershipLifecycle::Suspended => "suspended",
+                        MembershipLifecycle::Retired => "retired",
+                        MembershipLifecycle::Removed => "removed",
+                    })?,
+                ),
+                ("registry_revision", V::U64(value.registry_revision())),
+                ("receipt", text(value.last_receipt().as_str())?),
+            ])?,
+        )
+    });
+    let count = permanent_memberships
+        .len()
+        .checked_add(1)
+        .ok_or(RegistryError::CapacityExceeded)?;
+    let header = object(vec![
+        (
+            "header",
+            text(REGISTRY_SNAPSHOT_V6_HEADER).map_err(|_| RegistryError::SnapshotInvalid)?,
+        ),
+        ("schema", V::U64(REGISTRY_SNAPSHOT_V6_SCHEMA)),
+        ("revision", V::U64(snapshot.revision)),
+        (
+            "base_snapshot_digest_v5",
+            bytes(base.as_bytes()).map_err(|_| RegistryError::SnapshotInvalid)?,
+        ),
+        (
+            "permanent_membership_count",
+            V::U64(permanent_memberships.len() as u64),
+        ),
+    ])
+    .map_err(|_| RegistryError::SnapshotInvalid)?;
+    let rows = std::iter::once(Ok(header)).chain(rows);
+    let domain = CanonicalDigestDomain::parse(REGISTRY_SNAPSHOT_V6_DOMAIN)
+        .map_err(|_| RegistryError::SnapshotInvalid)?;
+    let digest = blake3_canonical_array(
+        &domain,
+        count,
+        rows,
+        limit().map_err(|_| RegistryError::SnapshotInvalid)?,
+    )
+    .map_err(|_| RegistryError::SnapshotInvalid)?;
+    Ok(RegistrySnapshotDigestV6(digest))
 }

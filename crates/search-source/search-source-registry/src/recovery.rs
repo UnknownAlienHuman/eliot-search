@@ -28,6 +28,8 @@ use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
 
 #[path = "batch.rs"]
 mod batch;
+#[path = "membership_v2.rs"]
+mod membership_v2;
 #[path = "source_v2.rs"]
 pub mod source_v2;
 #[path = "source_namespace_v2.rs"]
@@ -37,6 +39,11 @@ pub use batch::{
     RegistryStateDelta, RegistryStateFamily, RegistryStateKey, RegistryStateRecord,
     decode_batch_record, decode_registry_state, decode_registry_state_entry,
     decode_registry_state_key,
+};
+pub(crate) use membership_v2::replay_committed_source_membership_bind_v2;
+pub use membership_v2::{
+    PreparedSourceMembershipV2, SourceMembershipReceiptV2, commit_source_membership_v2,
+    prepare_source_membership_transition_v2, prepare_source_membership_v2,
 };
 
 #[path = "registry_restore.rs"]
@@ -53,9 +60,11 @@ pub use search_source_records::operation::{
 };
 
 pub use search_source_records::batch::{
-    BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4, decode_registry_state_key_v4,
-    decode_registry_state_v4, required_original_refs_from_state_v4, required_original_refs_from_batch_v4,
-    decode_batch_record_with_original_probe, decode_registry_state_entry_profiled_with_original_probe,
+    BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4,
+    decode_batch_record_with_original_probe,
+    decode_registry_state_entry_profiled_with_original_probe, decode_registry_state_key_v4,
+    decode_registry_state_v4, required_original_refs_from_batch_v4,
+    required_original_refs_from_state_v4,
 };
 
 /// Finite atomic source registry.
@@ -168,6 +177,114 @@ impl SourceRegistry {
         self.reverse_memberships
             .get(&membership_id)
             .ok_or(RegistryError::MembershipNotFound)
+    }
+
+    /// Returns the exact permanent typed membership by its accepted UUID.
+    pub fn permanent_membership(
+        &self,
+        membership_id: search_contracts::SourceMembershipId,
+    ) -> Result<&search_source_records::membership::PermanentMembershipRecordV2, RegistryError>
+    {
+        let key = self.membership_key_by_id(membership_id)?;
+        self.memberships
+            .get(key)
+            .and_then(MembershipRecord::permanent_v2)
+            .ok_or(RegistryError::MembershipNotFound)
+    }
+
+    /// Resolves an active permanent contract member to its exact source identity.
+    ///
+    /// Legacy memberships and stale root/namespace/source admission bindings
+    /// are refused. Access-policy authorization remains with the shared grant
+    /// owner that calls this read seam.
+    pub fn active_source_membership_v2(
+        &self,
+        membership_id: search_contracts::SourceMembershipId,
+    ) -> Result<(&search_contracts::SourceMembership, &SourceIdentity), RegistryError> {
+        let key = self.membership_key_by_id(membership_id)?;
+        let record = self
+            .memberships
+            .get(key)
+            .ok_or(RegistryError::MembershipNotFound)?;
+        if record.lifecycle() != MembershipLifecycle::Active {
+            return Err(RegistryError::MembershipNotFound);
+        }
+        let permanent = record
+            .permanent_v2()
+            .ok_or(RegistryError::AdmissionReceiptMismatch)?;
+        let member = permanent.member();
+        let provenance = permanent.provenance();
+        let identity = provenance.source_identity();
+        if member.source_membership_id != membership_id
+            || member.source_id != identity.source_id
+            || identity != &key.source_identity
+            || key.corpus_id.as_str() != member.corpus_id.to_string()
+        {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+        let source = self
+            .sources
+            .get(identity)
+            .ok_or(RegistryError::SourceNotFound)?;
+        let admission = source
+            .permanent_admission()
+            .ok_or(RegistryError::AdmissionReceiptMismatch)?;
+        if source.lifecycle() != SourceLifecycle::Active
+            || source.source_revision() != provenance.source_revision()
+            || source.binding().root_binding_id() != provenance.root_binding_id()
+            || admission.policy_reference() != provenance.policy_reference()
+            || admission.admission_reference() != provenance.admission_reference()
+            || admission.root_record_revision() != provenance.root_record_revision()
+            || admission.namespace_record_revision() != provenance.namespace_record_revision()
+            || admission.owner_generation() != provenance.owner_generation()
+            || source.admission_outcome() != search_source_admission::AdmissionOutcome::Allow
+        {
+            return Err(RegistryError::AdmissionReceiptStale);
+        }
+        let root = self
+            .roots
+            .get(&provenance.root_binding_id())
+            .ok_or(RegistryError::RootNotRegistered)?;
+        let decision = admission.original().receipt().decision();
+        if root.status != crate::root::RootStatus::Active
+            || root.record_revision != provenance.root_record_revision()
+            || root.policy_revision != provenance.policy_revision()
+            || root.policy_fingerprint.as_bytes() != decision.policy_fingerprint().as_bytes()
+            || source.binding().root_binding_id() != root.root_binding_id
+        {
+            return Err(RegistryError::AdmissionReceiptStale);
+        }
+        let namespace = self
+            .namespaces
+            .get(&provenance.source_namespace_id())
+            .ok_or(RegistryError::NamespaceOwnershipConflict)?;
+        let metadata = namespace
+            .permanent_metadata()
+            .ok_or(RegistryError::NamespaceOwnershipConflict)?;
+        if namespace.ownership.status != search_contracts::NamespaceOwnershipStatus::Active
+            || namespace.fenced
+            || namespace.preparation.is_some()
+            || namespace.activation.is_some()
+            || namespace.ownership.ownership_record_revision
+                != provenance.namespace_record_revision()
+            || namespace.ownership.source_owner_generation != provenance.owner_generation()
+            // Root records retain the epoch at registration. Namespace
+            // ownership records retain the epoch of admission; a later
+            // namespace epoch is valid after Native restart, while a root
+            // from a future epoch is not.
+            || root.owner_epoch > namespace.ownership.owner_epoch
+            || metadata.root_binding_id() != provenance.root_binding_id()
+            || metadata.policy_reference() != provenance.policy_reference()
+            || namespace.ownership.source_admission_policy_revision.get()
+                != decision.policy_revision().get()
+        {
+            return Err(RegistryError::AdmissionReceiptStale);
+        }
+        admission
+            .original()
+            .verify_current(metadata.policy().compiled(), &mut || Ok(()))
+            .map_err(|_| RegistryError::AdmissionReceiptStale)?;
+        Ok((member, identity))
     }
 
     /// Returns one exact root record.
@@ -686,6 +803,10 @@ fn apply_change(
             registry_revision,
             memberships,
         ),
+        RegistryChange::BindPermanentMembershipV2 { .. }
+        | RegistryChange::TransitionPermanentMembershipV2 { .. } => {
+            Err(RegistryError::SnapshotInvalid)
+        }
         RegistryChange::CutoverNamespace(cutover) => apply_cutover(
             cutover,
             registry_revision,
@@ -790,6 +911,13 @@ fn retire_source(
     sources: &mut BTreeMap<SourceIdentity, RegisteredSource>,
     memberships: &mut BTreeMap<MembershipKey, MembershipRecord>,
 ) -> Result<(), RegistryError> {
+    if memberships.values().any(|membership| {
+        membership
+            .permanent_v2()
+            .is_some_and(|permanent| permanent.provenance().source_identity() == identity)
+    }) {
+        return Err(RegistryError::MembershipConflict);
+    }
     let source = sources.get(identity).ok_or(RegistryError::SourceNotFound)?;
     if source.lifecycle() != SourceLifecycle::Active
         || source.source_revision() != expected_source_revision
@@ -882,6 +1010,9 @@ fn retire_membership(
     let membership = memberships
         .get(key)
         .ok_or(RegistryError::MembershipNotFound)?;
+    if membership.is_permanent_v2() {
+        return Err(RegistryError::MembershipConflict);
+    }
     if membership.lifecycle() != MembershipLifecycle::Active
         || membership.membership_revision() != expected_membership_revision
     {
@@ -912,6 +1043,12 @@ fn apply_cutover(
     memberships: &mut BTreeMap<MembershipKey, MembershipRecord>,
     active_generations: &mut BTreeMap<OpaqueId, NonZeroRevision>,
 ) -> Result<(), RegistryError> {
+    if memberships
+        .iter()
+        .any(|(key, record)| key.corpus_id == cutover.corpus_id && record.is_permanent_v2())
+    {
+        return Err(RegistryError::MembershipConflict);
+    }
     if !cutover.authorization_verified || !cutover.readback_verified {
         return Err(RegistryError::CutoverEvidenceMissing);
     }

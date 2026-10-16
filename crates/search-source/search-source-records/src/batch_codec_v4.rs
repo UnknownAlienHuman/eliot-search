@@ -441,6 +441,7 @@ pub fn decode_batch_record_v4<R: OriginalInputResolver + ?Sized>(
         request_fingerprint,
         change_count,
         deltas,
+        original_changes: None,
     };
     if encode_record_v4(&result).map_err(BatchCodecV4Error::Registry)? != bytes {
         return Err(bad().into());
@@ -494,7 +495,7 @@ pub fn encode_batch_record_v4(value: &DecodedBatch) -> Result<Vec<u8>, RegistryE
     encode_record_v4(value)
 }
 
-fn state_value_v4(value: &RegistryStateRecord) -> Result<V, RegistryError> {
+pub(super) fn state_value_v4(value: &RegistryStateRecord) -> Result<V, RegistryError> {
     match value {
         RegistryStateRecord::Root(_)
         | RegistryStateRecord::Membership(_)
@@ -504,7 +505,7 @@ fn state_value_v4(value: &RegistryStateRecord) -> Result<V, RegistryError> {
     }
 }
 
-fn read_state_v4<R: OriginalInputResolver + ?Sized>(
+pub(super) fn read_state_v4<R: OriginalInputResolver + ?Sized>(
     value: V,
     resolver: &mut R,
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
@@ -1062,7 +1063,7 @@ fn read_activation(value: V) -> Result<SourceOwnerActivationReceipt, RegistryErr
     })
 }
 
-fn key_value_v4(key: &RegistryStateKey) -> Result<V, RegistryError> {
+pub(super) fn key_value_v4(key: &RegistryStateKey) -> Result<V, RegistryError> {
     match key {
         RegistryStateKey::Namespace(namespace_id) => object(vec![
             ("family", text("namespace")?),
@@ -1072,7 +1073,7 @@ fn key_value_v4(key: &RegistryStateKey) -> Result<V, RegistryError> {
     }
 }
 
-fn read_key_v4(value: V) -> Result<RegistryStateKey, RegistryError> {
+pub(super) fn read_key_v4(value: V) -> Result<RegistryStateKey, RegistryError> {
     let mut fields = open(value)?;
     let family = string(take(&mut fields, "family")?)?;
     let key = match family.as_str() {

@@ -23,7 +23,8 @@ use crate::source::{RegisteredSource, SourceLifecycle};
 pub use search_source_records::membership::{
     BindMembershipRequest, MembershipCommand, MembershipKey, MembershipLifecycle,
     MembershipObligation, MembershipPolicies, MembershipRecord, MembershipTransitionReceipt,
-    NewMembership, SourceMembershipReceipt, derive_membership_id,
+    NewMembership, PermanentMembershipProvenanceV2, PermanentMembershipRecordV2,
+    SourceMembershipReceipt, derive_membership_id,
 };
 
 /// Binds one explicit membership under the exact current verified admission.
@@ -215,6 +216,10 @@ where
     let record = memberships
         .get_mut(key)
         .ok_or(RegistryError::MembershipNotFound)?;
+    if record.is_permanent_v2() {
+        // The legacy API lacks permanent owner guards and must never erase typed policy fields.
+        return Err(RegistryError::MembershipConflict);
+    }
     if record.membership_revision() != expected_membership_revision {
         return Err(RegistryError::MembershipGenerationMismatch);
     }

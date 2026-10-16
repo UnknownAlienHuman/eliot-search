@@ -183,7 +183,8 @@ pub fn resolve_source_view(
             missing.push(id);
             continue;
         };
-        if key.corpus_id != request.corpus_id
+        if membership.is_permanent_v2()
+            || key.corpus_id != request.corpus_id
             || membership.generation() != request.generation
             || membership.lifecycle() != MembershipLifecycle::Active
         {
@@ -301,7 +302,9 @@ pub fn verify_view(
     let reverse: BTreeSet<SourceMembershipId> = inner
         .memberships
         .values()
-        .filter(|record| record.lifecycle() == MembershipLifecycle::Active)
+        .filter(|record| {
+            record.lifecycle() == MembershipLifecycle::Active && !record.is_permanent_v2()
+        })
         .map(MembershipRecord::membership_id)
         .collect();
     for id in &view.allowed_memberships {
@@ -327,7 +330,9 @@ pub fn redacted_registry_view(
         .memberships
         .iter()
         .filter(|(key, record)| {
-            &key.corpus_id == corpus_id && record.lifecycle() == MembershipLifecycle::Active
+            &key.corpus_id == corpus_id
+                && record.lifecycle() == MembershipLifecycle::Active
+                && !record.is_permanent_v2()
         })
         .map(|(_, record)| record.membership_id())
         .collect();
@@ -454,6 +459,7 @@ impl SourceInventoryPort for RegistryInventoryAdapter {
             .values()
             .filter(|record| {
                 record.lifecycle() == MembershipLifecycle::Active
+                    && !record.is_permanent_v2()
                     && self.access_allowed.contains(&record.membership_id())
             })
             .map(MembershipRecord::membership_id)

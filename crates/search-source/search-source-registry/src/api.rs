@@ -5,12 +5,21 @@
 //! revision-guarded durable mutations. Every durable mutation persists its
 //! content-free receipt through the vendor-neutral [`crate::error::RegistryControlPort`].
 
-pub use search_source_records::source_request_v2::{SourceAdmissionRequestV2, SourceNamespaceSelectionV2, SourceOwnerScopeV2};
-pub use crate::recovery::source_v2::{prepare_source_admission_v2, commit_source_admission_v2, recover_source_admission_v2,
-    SourceAdmissionPreparationV2, SourceAdmissionRecoveryV2, PreparedSourceAdmissionV2, SourceAdmissionV2Error};
 pub use crate::recovery::source_namespace_v2::{
     NativeNamespaceRequestV2, NativeNamespacePreparationV2, PreparedNativeNamespaceV2,
     CommittedNativeNamespaceV2, prepare_native_namespace_v2, commit_native_namespace_v2,
+};
+pub use crate::recovery::source_v2::{
+    PreparedSourceAdmissionV2, SourceAdmissionPreparationV2, SourceAdmissionRecoveryV2,
+    SourceAdmissionV2Error, commit_source_admission_v2, prepare_source_admission_v2,
+    recover_source_admission_v2,
+};
+pub use crate::recovery::{
+    PreparedSourceMembershipV2, SourceMembershipReceiptV2, commit_source_membership_v2,
+    prepare_source_membership_transition_v2, prepare_source_membership_v2,
+};
+pub use search_source_records::source_request_v2::{
+    SourceAdmissionRequestV2, SourceNamespaceSelectionV2, SourceOwnerScopeV2,
 };
 
 pub use crate::cutover::{
@@ -28,7 +37,8 @@ pub use crate::error::{
 pub use crate::membership::{
     BindMembershipRequest, MembershipCommand, MembershipKey, MembershipLifecycle,
     MembershipObligation, MembershipPolicies, MembershipRecord, MembershipTransitionReceipt,
-    NewMembership, SourceMembershipReceipt, derive_membership_id,
+    NewMembership, PermanentMembershipProvenanceV2, PermanentMembershipRecordV2,
+    SourceMembershipReceipt, derive_membership_id,
 };
 pub use crate::portfolio::{
     PortfolioItem, PortfolioReceipt, PublishPortfolioRequest, ReferencePortfolioRecord,
@@ -52,7 +62,8 @@ pub use crate::root::{
 };
 pub use crate::snapshot::{
     OriginalAdmissionAvailability, RegistrySnapshot, RegistrySnapshotDigest,
-    ValidatedRegistrySnapshot, snapshot_digest, validate_registry_snapshot,
+    RegistrySnapshotDigestV5, RegistrySnapshotDigestV6, ValidatedRegistrySnapshot, snapshot_digest,
+    snapshot_digest_v5, snapshot_digest_v6, validate_registry_snapshot,
 };
 pub use crate::source::{
     AdmissionBindingProof, AdmittedSourceReceipt, RegisteredSource, SourceAdmissionUpdateReceipt,
@@ -69,8 +80,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use search_contracts::{
     Blake3Digest32, InstallationIncarnationId, NonZeroRevision, OpaqueId, ReceiptRef,
-    SourceIdentity, SourceMembershipId, SourceNamespaceId, SourceNamespaceOwnership,
-    SourceOwnerCutoverReceipt,
+    SourceIdentity, SourceMembership, SourceMembershipId, SourceNamespaceId,
+    SourceNamespaceOwnership, SourceOwnerCutoverReceipt,
 };
 use search_ports::{CancellationProbe, OperationContext};
 
@@ -113,6 +124,13 @@ pub fn live_snapshot_digest(
     registry: &SourceRegistry,
 ) -> Result<RegistrySnapshotDigest, RegistryError> {
     snapshot_digest(&registry_snapshot(registry))
+}
+
+/// Computes the explicit version-6 digest including permanent typed memberships.
+pub fn live_snapshot_digest_v6(
+    registry: &SourceRegistry,
+) -> Result<crate::snapshot::RegistrySnapshotDigestV6, RegistryError> {
+    snapshot_digest_v6(&registry_snapshot(registry))
 }
 
 // ---------------------------------------------------------------------------
@@ -345,6 +363,102 @@ where
         registry.set_revision(next);
     }
     Ok(out)
+}
+
+/// Binds and commits the accepted permanent `SourceMembership` contract.
+///
+/// The UUID membership ID is preserved verbatim from the typed member. Root,
+/// namespace, owner, source and admission-policy fences are checked before
+/// preparation; before that fresh check, the existing C02 port resolves an
+/// exact committed operation so retries survive restart and later lifecycle
+/// changes without reinstalling historical membership state.
+#[allow(clippy::too_many_arguments)]
+pub fn bind_source_membership_v2<C, P>(
+    registry: &mut SourceRegistry,
+    member: &SourceMembership,
+    root_binding_id: search_contracts::RootBindingId,
+    expected_root_record_revision: NonZeroRevision,
+    namespace: SourceNamespaceSelectionV2,
+    owner: &SourceOwnerScopeV2,
+    expected_source_revision: NonZeroRevision,
+    operation_id: &OpaqueId,
+    mutation_digest: Blake3Digest32,
+    receipt: &ReceiptRef,
+    control_port: &mut P,
+    context: &OperationContext<C>,
+) -> Result<SourceMembershipReceiptV2, RegistryError>
+where
+    C: CancellationProbe,
+    P: RegistryControlPort<Cancellation = C>,
+{
+    if let Some(replayed) = crate::recovery::replay_committed_source_membership_bind_v2(
+        registry,
+        member,
+        root_binding_id,
+        expected_root_record_revision,
+        namespace,
+        owner,
+        expected_source_revision,
+        operation_id,
+        mutation_digest,
+        receipt,
+        control_port,
+        context,
+    )? {
+        return Ok(replayed);
+    }
+    let prepared = crate::recovery::prepare_source_membership_v2(
+        registry,
+        member,
+        root_binding_id,
+        expected_root_record_revision,
+        namespace,
+        owner,
+        expected_source_revision,
+        operation_id,
+        mutation_digest,
+        receipt,
+        context,
+    )?;
+    crate::recovery::commit_source_membership_v2(registry, &prepared, control_port, context)
+}
+
+/// Applies a policy-preserving permanent-membership lifecycle change.
+#[allow(clippy::too_many_arguments)]
+pub fn transition_source_membership_v2<C, P>(
+    registry: &mut SourceRegistry,
+    membership_id: SourceMembershipId,
+    expected_membership_revision: search_contracts::MembershipRevision,
+    command: crate::membership::MembershipCommand,
+    operation_id: &OpaqueId,
+    mutation_digest: Blake3Digest32,
+    receipt: &ReceiptRef,
+    control_port: &mut P,
+    context: &OperationContext<C>,
+) -> Result<SourceMembershipReceiptV2, RegistryError>
+where
+    C: CancellationProbe,
+    P: RegistryControlPort<Cancellation = C>,
+{
+    let prepared = crate::recovery::prepare_source_membership_transition_v2(
+        registry,
+        membership_id,
+        expected_membership_revision,
+        command,
+        operation_id,
+        mutation_digest,
+        receipt,
+        context,
+    )?;
+    crate::recovery::commit_source_membership_v2(registry, &prepared, control_port, context)
+}
+
+/// Resolves an active permanent member and exact source identity for a retained reader.
+pub fn active_source_membership_v2(
+    registry: &SourceRegistry,
+    membership_id: SourceMembershipId,
+) -> Result<(&SourceMembership, &SourceIdentity), RegistryError> {
+    registry.active_source_membership_v2(membership_id)
 }
 
 /// Applies one closed membership transition durably through the control port.

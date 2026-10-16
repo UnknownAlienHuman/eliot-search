@@ -24,6 +24,13 @@ pub use v4::{
     encode_state_v4,
 };
 
+#[path = "batch_codec_v5.rs"]
+mod v5;
+pub(super) use v5::{BATCH_PROFILE_V5, STATE_PROFILE_V5};
+pub(super) use v5::{
+    decode_batch_record_v5, decode_state_v5, encode_batch_record_v5, encode_state_v5,
+};
+
 fn bad() -> RegistryError {
     RegistryError::SnapshotInvalid
 }
@@ -359,6 +366,8 @@ pub(super) fn state_value(v: &RegistryStateRecord) -> Result<V, RegistryError> {
             ("registry_revision", V::U64(v.registry_revision())),
             ("receipt", text(v.last_receipt().as_str())?),
         ]),
+        RegistryStateRecord::Membership(v) if v.is_permanent_v2() => Err(bad()),
+        RegistryStateRecord::Membership(v) if v.is_permanent_v2() => Err(bad()),
         RegistryStateRecord::Membership(v) => object(vec![
             ("family", text("membership")?),
             ("key", member_key(v.key())?),
@@ -544,15 +553,25 @@ pub(super) fn decode_state_profiled_with_original_probe(
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<(RegistryStateRecord, &'static str), BatchCodecV4Error> {
     probe().map_err(checkpoint_error)?;
+    let mut marker = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
+    if string(take(&mut marker, "profile")?)? == STATE_PROFILE_V5 {
+        return v5::decode_state_v5(bytes, probe).map(|state| (state, STATE_PROFILE_V5));
+    }
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
     let profile = string(take(&mut o, "profile")?)?;
     let encoding_profile = match profile.as_str() {
         "eliot.registry-state.v3" => STATE_PROFILE_V3,
         "eliot.registry-state.v2" => STATE_PROFILE_V2,
-        "eliot.registry-state.v1" => return Err(RegistryError::AdmissionRestorationUnavailable.into()),
+        "eliot.registry-state.v1" => {
+            return Err(RegistryError::AdmissionRestorationUnavailable.into());
+        }
         _ => return Err(bad().into()),
     };
-    let state = read_state_with_original_probe(take(&mut o, "state")?, profile == "eliot.registry-state.v3", probe)?;
+    let state = read_state_with_original_probe(
+        take(&mut o, "state")?,
+        profile == "eliot.registry-state.v3",
+        probe,
+    )?;
     finish(o)?;
     if encode_state_profile(&state, &profile)? != bytes {
         return Err(bad().into());
@@ -675,12 +694,18 @@ pub fn decode_batch_record_with_original_probe(
 ) -> Result<DecodedBatch, BatchCodecV4Error> {
     probe().map_err(checkpoint_error)?;
     limits.validate()?;
+    let mut marker = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
+    if string(take(&mut marker, "profile")?)? == BATCH_PROFILE_V5 {
+        return v5::decode_batch_record_v5(bytes, limits, probe);
+    }
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
     let profile = string(take(&mut o, "profile")?)?;
     let (encoding_profile, state_encoding_profile) = match profile.as_str() {
         "eliot.registry-batch.v3" => (BATCH_PROFILE_V3, STATE_PROFILE_V3),
         "eliot.registry-batch.v2" => (BATCH_PROFILE_V2, STATE_PROFILE_V2),
-        "eliot.registry-batch.v1" => return Err(RegistryError::AdmissionRestorationUnavailable.into()),
+        "eliot.registry-batch.v1" => {
+            return Err(RegistryError::AdmissionRestorationUnavailable.into());
+        }
         _ => return Err(bad().into()),
     };
     let operation_id = opaque(take(&mut o, "operation")?)?;
@@ -711,9 +736,17 @@ pub fn decode_batch_record_with_original_probe(
         let key = read_key(take(&mut d, "key")?)?;
         let before = match take(&mut d, "before")? {
             V::Null => None,
-            value => Some(read_state_with_original_probe(value, profile == "eliot.registry-batch.v3", probe)?),
+            value => Some(read_state_with_original_probe(
+                value,
+                profile == "eliot.registry-batch.v3",
+                probe,
+            )?),
         };
-        let after = read_state_with_original_probe(take(&mut d, "after")?, profile == "eliot.registry-batch.v3", probe)?;
+        let after = read_state_with_original_probe(
+            take(&mut d, "after")?,
+            profile == "eliot.registry-batch.v3",
+            probe,
+        )?;
         finish(d)?;
         if previous.as_ref().is_some_and(|p| p >= &key)
             || after.key() != key
@@ -739,6 +772,7 @@ pub fn decode_batch_record_with_original_probe(
         request_fingerprint,
         change_count,
         deltas,
+        original_changes: None,
     };
     if encode_record_profile(&result, &profile)? != bytes {
         return Err(bad().into());
@@ -848,6 +882,8 @@ fn change_value(change: &RegistryChange) -> Result<V, RegistryError> {
             ("generation", V::U64(v.generation.get())),
             ("receipt", text(v.receipt.as_str())?),
         ]),
+        RegistryChange::BindPermanentMembershipV2 { .. }
+        | RegistryChange::TransitionPermanentMembershipV2 { .. } => Err(bad()),
         RegistryChange::RetireMembership {
             key,
             expected_membership_revision,
@@ -878,6 +914,15 @@ fn change_value(change: &RegistryChange) -> Result<V, RegistryError> {
     }
 }
 pub(super) fn request_fingerprint(batch: &RegistryBatch) -> Result<Blake3Digest32, RegistryError> {
+    if batch.changes.iter().any(|change| {
+        matches!(
+            change,
+            RegistryChange::BindPermanentMembershipV2 { .. }
+                | RegistryChange::TransitionPermanentMembershipV2 { .. }
+        )
+    }) {
+        return v5::request_fingerprint_v5(batch);
+    }
     let roots = batch
         .changes
         .iter()
@@ -934,3 +979,7 @@ mod tests {
         assert_eq!(calls, 1);
     }
 }
+
+#[cfg(test)]
+#[path = "batch_codec_v5_tests.rs"]
+mod v5_tests;

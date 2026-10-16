@@ -602,8 +602,9 @@ fn allow_receipt(policy_revision: u64) -> AdmissionReceipt {
     original_admission(policy_revision).receipt().clone()
 }
 
-fn original_admission(policy_revision: u64)
-    -> search_source_admission::original_envelope::OriginalAdmissionEnvelope {
+fn original_admission(
+    policy_revision: u64,
+) -> search_source_admission::original_envelope::OriginalAdmissionEnvelope {
     let policy = baseline_policy(policy_revision, 1_024);
     let input = UnvalidatedObservationInput {
         locator_class: "normalized-file".to_owned(),
@@ -636,8 +637,13 @@ fn original_admission(policy_revision: u64)
     );
     let issued = issue_receipt(&policy, &observation, &decision).expect("receipt");
     search_source_admission::original_envelope::retain_original_admission(
-        &policy, &observation, &issued, AdmissionBudget::default_budget(), CancelFlag::live())
-        .expect("retain original owner inputs")
+        &policy,
+        &observation,
+        &issued,
+        AdmissionBudget::default_budget(),
+        CancelFlag::live(),
+    )
+    .expect("retain original owner inputs")
 }
 
 fn root_policy_fingerprint() -> Blake3Digest32 {
@@ -1946,7 +1952,7 @@ fn crash_unknown_outcome_at_every_transaction() {
         &mut port,
         &ctx,
     )
-        .expect("apply");
+    .expect("apply");
     let recovered = api::recover_registry_mutation(
         &registry,
         &opaque("registry-operation:register"),

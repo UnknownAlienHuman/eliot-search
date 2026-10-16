@@ -5,8 +5,8 @@
 use crate::error::{JournalEntryKind, RegistryError, RegistryJournalEntry, RegistryLimits};
 use crate::membership::{MembershipKey, MembershipRecord};
 use crate::operation::{
-    BatchItemOutcome, BatchItemStatus, RegistryBatch, RegistryBatchReceipt, RegistryOperation,
-    RegistryReceipt,
+    BatchItemOutcome, BatchItemStatus, RegistryBatch, RegistryBatchReceipt, RegistryChange,
+    RegistryOperation, RegistryReceipt,
 };
 use crate::root::RootRecord;
 use crate::source::RegisteredSource;
@@ -14,12 +14,13 @@ use search_contracts::{Blake3Digest32, NonZeroRevision, OpaqueId, SourceIdentity
 use search_source_admission::policy_v2::CheckpointFailureV2;
 use std::collections::BTreeMap;
 
+const BATCH_PROFILE_V5: &str = "eliot.registry-batch.v5";
+const STATE_PROFILE_V5: &str = "eliot.registry-state.v5";
+
 #[path = "batch_codec.rs"]
 mod codec;
+pub use codec::{BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4};
 pub use codec::{decode_batch_record, decode_batch_record_with_original_probe};
-pub use codec::{
-    BatchCodecV4Error, OriginalInputResolver, decode_batch_record_v4,
-};
 
 /// Extract required original-input references from an explicit v4 state.
 pub fn required_original_refs_from_state_v4(
@@ -98,7 +99,9 @@ pub enum RegistryStateRecord {
 impl RegistryStateRecord {
     /// Stable owner bytes for one complete technical state value.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        if matches!(self, Self::Namespace(_)) {
+        if matches!(self, Self::Membership(record) if record.is_permanent_v2()) {
+            codec::encode_state_v5(self)
+        } else if matches!(self, Self::Namespace(_)) {
             codec::encode_state_v4(self)
         } else {
             codec::encode_state(self)
@@ -108,11 +111,20 @@ impl RegistryStateRecord {
     pub fn encode_with_profile(&self, profile: &str) -> Result<Vec<u8>, RegistryError> {
         if !matches!(
             profile,
-            "eliot.registry-state.v2" | "eliot.registry-state.v3" | codec::STATE_PROFILE_V4
+            "eliot.registry-state.v2"
+                | "eliot.registry-state.v3"
+                | codec::STATE_PROFILE_V4
+                | STATE_PROFILE_V5
         ) {
             return Err(RegistryError::SnapshotInvalid);
         }
-        if profile == codec::STATE_PROFILE_V4 {
+        if profile == STATE_PROFILE_V5 {
+            if matches!(self, Self::Membership(record) if record.is_permanent_v2()) {
+                codec::encode_state_v5(self)
+            } else {
+                Err(RegistryError::SnapshotInvalid)
+            }
+        } else if profile == codec::STATE_PROFILE_V4 {
             codec::encode_state_v4(self)
         } else {
             codec::encode_state_profile(self, profile)
@@ -143,6 +155,14 @@ pub fn decode_registry_state_v4<R: OriginalInputResolver + ?Sized>(
     probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
 ) -> Result<RegistryStateRecord, BatchCodecV4Error> {
     codec::decode_state_v4(bytes, resolver, probe)
+}
+
+/// Decode one explicit v5 state value through the original-input owner and caller probe.
+pub fn decode_registry_state_v5(
+    bytes: &[u8],
+    probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+) -> Result<RegistryStateRecord, BatchCodecV4Error> {
+    codec::decode_state_v5(bytes, probe)
 }
 
 impl RegistryStateKey {
@@ -256,6 +276,7 @@ pub struct DecodedBatch {
     request_fingerprint: Blake3Digest32,
     change_count: usize,
     deltas: Vec<RegistryStateDelta>,
+    original_changes: Option<Vec<RegistryChange>>,
 }
 impl DecodedBatch {
     /// Reconstitutes complete immutable metadata through the sole closed decoder.
@@ -283,6 +304,7 @@ impl DecodedBatch {
             request_fingerprint,
             change_count,
             deltas,
+            original_changes: None,
         };
         let restored = codec::decode_batch_record(&codec::encode(&observed)?, limits)?;
         if restored != observed {
@@ -309,9 +331,37 @@ impl DecodedBatch {
             request_fingerprint,
             change_count,
             deltas,
+            original_changes: None,
         };
         let encoded = codec::encode_batch_record_v4(&observed)?;
         let restored = codec::decode_batch_record_v4(&encoded, limits, resolver, probe)?;
+        if restored != observed {
+            return Err(RegistryError::SnapshotInvalid.into());
+        }
+        Ok(restored)
+    }
+
+    /// Constructs and exactly rehydrates one v5 permanent-membership batch.
+    pub fn from_observed_parts_v5(
+        entry: RegistryJournalEntry,
+        request_fingerprint: Blake3Digest32,
+        change_count: usize,
+        deltas: Vec<RegistryStateDelta>,
+        original_changes: Vec<RegistryChange>,
+        limits: RegistryLimits,
+        probe: &mut impl FnMut() -> Result<(), CheckpointFailureV2>,
+    ) -> Result<Self, BatchCodecV4Error> {
+        let observed = Self {
+            encoding_profile: BATCH_PROFILE_V5,
+            state_encoding_profile: STATE_PROFILE_V5,
+            entry,
+            request_fingerprint,
+            change_count,
+            deltas,
+            original_changes: Some(original_changes),
+        };
+        let encoded = codec::encode_batch_record_v5(&observed)?;
+        let restored = codec::decode_batch_record_v5(&encoded, limits, probe)?;
         if restored != observed {
             return Err(RegistryError::SnapshotInvalid.into());
         }
@@ -347,13 +397,30 @@ impl DecodedBatch {
     pub fn deltas(&self) -> &[RegistryStateDelta] {
         &self.deltas
     }
+    /// Exact original business inputs retained by the V5 membership profile.
+    pub fn original_changes(&self) -> Option<&[RegistryChange]> {
+        self.original_changes.as_deref()
+    }
+    /// Rebuilds the exact original request for C02 same-operation replay.
+    pub fn replay_batch(&self) -> Option<RegistryBatch> {
+        Some(RegistryBatch {
+            expected_registry_revision: self.entry.before_revision,
+            operation: RegistryOperation::new(
+                self.entry.operation_id.clone(),
+                self.entry.mutation_digest,
+            ),
+            changes: self.original_changes.clone()?,
+        })
+    }
     /// Number of original business changes, distinct from affected target count.
     pub const fn change_count(&self) -> usize {
         self.change_count
     }
     /// Stable canonical record for the operation row.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        if self.encoding_profile == codec::BATCH_PROFILE_V4 {
+        if self.encoding_profile == BATCH_PROFILE_V5 {
+            codec::encode_batch_record_v5(self)
+        } else if self.encoding_profile == codec::BATCH_PROFILE_V4 {
             codec::encode_batch_record_v4(self)
         } else {
             codec::encode(self)
