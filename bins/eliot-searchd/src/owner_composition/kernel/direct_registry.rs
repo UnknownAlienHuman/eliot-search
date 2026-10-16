@@ -1,6 +1,7 @@
 //! One closed fresh DIRECT root/journal owner. No migration adoption or legacy store.
 use super::super::native_objects::DirectPin;
 use super::super::native_objects::native_identity;
+use super::super::storage_acl::StorageAclSnapshot;
 use super::{
     AcquiredNativeRoot, NativeRootCapability, NativeRootRequest, NativeWork,
     acquire_existing_direct, finish_in_place,
@@ -17,6 +18,7 @@ pub(in super::super) struct DirectJournal {
     pub(in super::super) journal: Option<PersistentControlJournal>,
     pub(in super::super) publisher: ControlSnapshotPublisher,
     pub(in super::super) pin: Option<DirectPin>,
+    pub(in super::super) acl_before_open: eliot_searchd::native_file::StorageAclObservation,
 }
 
 pub(in super::super) fn journal_owner(
@@ -69,8 +71,11 @@ impl DirectJournal {
         parent: &File,
         owner: JournalOwnerBinding,
         create: bool,
+        storage_acl: &StorageAclSnapshot,
     ) -> Result<Self, OwnerError> {
         let (file, readable) = open_files(request, work, root, parent, create)?;
+        // A redb open may mutate. Qualify this actual retained DB handle first.
+        let acl_before_open = storage_acl.qualify_file(request, work, &file)?;
         let metadata = work.call(request, || {
             file.metadata().map_err(|_| OwnerError::OwnerGuardMismatch)
         })?;
@@ -145,6 +150,7 @@ impl DirectJournal {
             journal: Some(journal),
             publisher,
             pin: Some(pin),
+            acl_before_open,
         })
     }
     pub(in super::super) fn verify(
