@@ -6,6 +6,26 @@ This package owns immutable, residency-aware Search source revisions, coordinate
 exact readback. It does not decide retention deletion, purge policy or restore admission. Lifecycle
 owners consume its vendor-neutral ports and exact receipts.
 
+## Encrypted payload identity
+
+`EncryptedRevisionPayload::new(plaintext_digest, plaintext_bytes, nonce, ciphertext, encryption,
+limits)` preserves the existing size/tag/nonce checks, then computes raw BLAKE3 over exactly the
+owned ciphertext through `search-contracts::blake3_bounded_bytes`. Its exact byte budget comes
+from the already-admitted ciphertext length; no new product limit is introduced. Existing default
+and custom finite ceilings, including ciphertext above the separate Source 16 MiB hash profile,
+remain valid.
+
+The ciphertext and cached digest are private. `ciphertext_digest() -> Blake3Digest32` is read-only;
+there is no caller digest, setter or unchecked payload factory. Append/replay/record checks use
+this cached identity, while backend readback must still independently observe actual stored bytes
+and match the expected digest. Wrong readback remains a refusal. Cloning preserves the exact
+immutable byte/digest pair.
+
+This pure owned-buffer calculation delegates the concrete hash to the shared owner. It performs no
+filesystem acquisition, object traversal or legacy object-content hashing. It proves byte equality,
+not encryption, authentication, source admission, publication or full C07 qualification. No persisted
+format is added or relabelled; correctly supplied historical BLAKE3 values are byte-compatible.
+
 ## State ownership
 
 The package owns:
