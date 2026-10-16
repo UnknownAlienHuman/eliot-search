@@ -34,6 +34,13 @@ impl EffectiveDaemonConfig {
 
     /// Owner-checked immutable settings; no runtime application or key authority.
     #[must_use]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "The Current-key settings consumer remains under #307"
+        )
+    )]
     pub const fn secrets_settings(&self) -> &ValidatedSecretsConfig {
         &self.secrets_settings
     }
@@ -78,11 +85,7 @@ pub fn build_effective(
     let mut secrets_settings = None;
     for (_, descriptor) in registry.sections() {
         let input = project_section(&merged, descriptor)?;
-        let section = ValidatedSection::new(
-            input,
-            selected.clone(),
-            daemon_limits(),
-        )?;
+        let section = ValidatedSection::new(input, selected.clone(), daemon_limits())?;
         if section.section_name().as_str() == "secrets" {
             secrets_settings = Some(search_os_secrets::validate_secrets_section(&section)?);
         }
@@ -90,7 +93,11 @@ pub fn build_effective(
     }
     let secrets_settings = secrets_settings.ok_or(ConfigError::MissingSection)?;
     let snapshot = assemble_effective(&registry, validated, selected, daemon_limits())?;
-    Ok(EffectiveDaemonConfig { snapshot, registry, secrets_settings })
+    Ok(EffectiveDaemonConfig {
+        snapshot,
+        registry,
+        secrets_settings,
+    })
 }
 
 /// Defaults-only effective snapshot for the W1 shell profile.

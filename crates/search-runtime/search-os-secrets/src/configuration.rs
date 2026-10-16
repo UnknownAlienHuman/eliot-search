@@ -150,11 +150,19 @@ pub fn validate_secrets_section(
     section: &ValidatedSection,
 ) -> Result<ValidatedSecretsConfig, ConfigError> {
     let descriptor = section_descriptor()?;
-    if section.section_name() != descriptor.name()
-        || section.owner() != descriptor.owner()
-        || section.schema_revision() != descriptor.schema_revision()
-        || section.field_registry_digest() != descriptor.field_registry_digest()
-    {
+    let actual = (
+        section.section_name(),
+        section.owner(),
+        section.schema_revision(),
+        section.field_registry_digest(),
+    );
+    let expected = (
+        descriptor.name(),
+        descriptor.owner(),
+        descriptor.schema_revision(),
+        descriptor.field_registry_digest(),
+    );
+    if actual != expected {
         return Err(ConfigError::StaleDescriptor);
     }
     for (key, value) in section.fields() {
