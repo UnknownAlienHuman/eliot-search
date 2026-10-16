@@ -21,7 +21,18 @@ pub struct AcquiredNativeSource<'view, 'operation, 'owner> {
     location: nf::NativeLocationClass, name: String,
     identity: search_source_identity::ValidatedIdentityObservation,
     binding: SourceObservation, original: OriginalAdmissionV2,
-    body: zeroize::Zeroizing<Vec<u8>>,
+    body: SourceBody,
+}
+
+// This acquisition never shrinks or reallocates after filling the exact range.
+// Wipe its initialized bytes once; Vec's zeroize also wipes capacity a second time.
+struct SourceBody(Vec<u8>);
+impl std::ops::Deref for SourceBody {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl Drop for SourceBody {
+    fn drop(&mut self) { zeroize::Zeroize::zeroize(self.0.as_mut_slice()); }
 }
 
 /// A failed post-consumer fence is distinct from a refusal before any consumer dispatch.
@@ -201,7 +212,7 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
             search_safe_reader::DEFAULT_SAFE_READ_LIMITS, &mut || self.checkpoint().is_err());
         if result.is_err() { self.checkpoint()?; }
         let result = result.map_err(|_| refused("NATIVE_SOURCE_STABLE_READ_REFUSED"))?;
-        let body = zeroize::Zeroizing::new(result.into_bytes());
+        let body = SourceBody(result.into_bytes());
         self.charge(Work::Compare(body.len()))?;
         let content = c::blake3_exact_bytes(&body, c::Blake3ExactInputLimit::new(body.len()).map_err(|_| invalid())?).map_err(|_| invalid())?;
         raw = metadata_input(crate::source_classification::narrow_with_bytes(class, &body), location_text, observed.length, false);
