@@ -1,5 +1,18 @@
 # Wave 1 single-manager execution packet — 2026-10-09
 
+> **HISTORICAL / SUPERSEDED — NO CURRENT AUTHORITY**
+>
+> This entire packet is preserved as historical record. Its launch verdict, FORBIDDEN/BLOCKED rules,
+> single-manager launch rules, coordinator #97 references and `SINGLE_MANAGER_LAUNCH_SHA` published-SHA
+> authority have **no current authority** and cannot authorize or block any product work.
+>
+> The current authority order is defined by root [AGENTS.md](../../AGENTS.md) and Architecture Part I:
+> Part I → accepted ADRs → accepted contracts → nearest package instructions → current maintainer
+> request/issue/PR → source manifests → historical metadata. Per ADR-0005 decisions #4 and #7, no ticket,
+> lease, coordinator or published SHA is required for or can block product implementation.
+>
+> This banner does not rewrite or erase the historical content below. Read it as archaeology only.
+
 **Repository:** `UnknownAlienHuman/eliot-search`  
 **Reviewed main before this packet:** `e358d3c06d211b269efd501cd8d4002a260ba0a5`  
 **Launch SHA authority:** the latest `SINGLE_MANAGER_LAUNCH_SHA` comment on [coordinator #97](https://github.com/UnknownAlienHuman/eliot-search/pull/97) after this packet is merged.  
