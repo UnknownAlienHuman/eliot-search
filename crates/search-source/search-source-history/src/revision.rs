@@ -732,7 +732,7 @@ where
     }
 }
 
-fn validate_expected_head<'a>(
+pub(crate) fn validate_expected_head<'a>(
     request: &SourceRevisionRegistrationRequest,
     head: &'a SourceRevisionHead,
 ) -> Result<Option<&'a SourceRevision>, RegistryError> {
@@ -780,13 +780,13 @@ fn validate_source_revision(revision: &SourceRevision) -> Result<(), RegistryErr
     Ok(())
 }
 
-fn is_fresh_uuid_v4(revision_id: &SourceRevisionId) -> bool {
+pub(crate) fn is_fresh_uuid_v4(revision_id: &SourceRevisionId) -> bool {
     let bytes = revision_id.as_bytes();
     bytes[6] & UUID_V4_VERSION_MASK == UUID_V4_VERSION
         && bytes[8] & UUID_VARIANT_MASK == UUID_RFC4122_VARIANT
 }
 
-fn acquisition_tag(value: AcquisitionKind) -> u8 {
+pub(crate) fn acquisition_tag(value: AcquisitionKind) -> u8 {
     match value {
         AcquisitionKind::Filesystem => 1,
         AcquisitionKind::GitObject => 2,
@@ -795,7 +795,7 @@ fn acquisition_tag(value: AcquisitionKind) -> u8 {
     }
 }
 
-fn acquisition_from_tag(tag: u8) -> Result<AcquisitionKind, RegistryError> {
+pub(crate) fn acquisition_from_tag(tag: u8) -> Result<AcquisitionKind, RegistryError> {
     match tag {
         1 => Ok(AcquisitionKind::Filesystem),
         2 => Ok(AcquisitionKind::GitObject),
@@ -805,7 +805,7 @@ fn acquisition_from_tag(tag: u8) -> Result<AcquisitionKind, RegistryError> {
     }
 }
 
-fn append_optional_uuid(bytes: &mut Vec<u8>, value: Option<&SourceRevisionId>) {
+pub(crate) fn append_optional_uuid(bytes: &mut Vec<u8>, value: Option<&SourceRevisionId>) {
     match value {
         None => bytes.push(0),
         Some(value) => {
@@ -815,7 +815,7 @@ fn append_optional_uuid(bytes: &mut Vec<u8>, value: Option<&SourceRevisionId>) {
     }
 }
 
-fn load_operation<C, P>(
+pub(crate) fn load_operation<C, P>(
     control_port: &P,
     operation_id: &OpaqueId,
     context: &OperationContext<C>,
@@ -829,7 +829,7 @@ where
         .map_err(|_| RegistryError::DurabilityRejected)
 }
 
-fn load_head<C, P>(
+pub(crate) fn load_head<C, P>(
     control_port: &P,
     source_namespace_id: &SourceNamespaceId,
     source_id: &SourceId,
@@ -844,7 +844,7 @@ where
         .map_err(|_| RegistryError::DurabilityRejected)
 }
 
-fn load_revision<C, P>(
+pub(crate) fn load_revision<C, P>(
     control_port: &P,
     source_namespace_id: &SourceNamespaceId,
     source_id: &SourceId,
