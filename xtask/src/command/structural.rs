@@ -16,11 +16,6 @@ use xtask::coverage_graph_validation::{
     render_report_json as render_coverage_graph_json,
     validate_coverage_graph as validate_coverage,
 };
-use xtask::impl_program::{
-    exit_code as program_exit_code,
-    render_report_json as render_program_json,
-    validate_implementation_program as validate_program,
-};
 use xtask::package_maps::{
     exit_code as package_maps_exit_code,
     render_report_json as render_package_maps_json,
@@ -49,13 +44,6 @@ pub(super) fn validate_coverage_graph() -> ExitCode {
     println!("{}", render_coverage_graph_json(&report));
     code(coverage_graph_exit_code(&report))
 }
-
-pub(super) fn validate_implementation_program() -> ExitCode {
-    let report = validate_program(Path::new("."));
-    println!("{}", render_program_json(&report));
-    code(program_exit_code(&report))
-}
-
 pub(super) fn validate_package_map_closure() -> ExitCode {
     let report = validate_package_maps(Path::new("."));
     println!("{}", render_package_maps_json(&report));
