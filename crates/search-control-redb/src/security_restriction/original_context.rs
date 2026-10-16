@@ -16,7 +16,7 @@ use search_contracts::SourceNamespaceId;
 
 use super::{
     POLICY_PREFIX, RESTRICTION_PREFIX, SecurityPolicyState, SecurityRestrictionCommit,
-    SecurityRestrictionMutation, SecurityRestrictionReadback, codec, key,
+    SecurityRestrictionMutation, SecurityRestrictionReadback, codec, key, same_journal_history,
 };
 use crate::persistent::original_seam::OriginalSeam;
 use crate::policy_codec::{ACCESS_POLICY_RECORD_LEN, decode_access_policy};
@@ -49,10 +49,18 @@ impl PersistentControlJournal {
         F: Fn(Work) -> Result<(), E>,
     {
         let seam = OriginalSeam::new(deadline, work);
-        let result = (|| {
+        self.read_security_restriction_at_owner(namespace, &seam, false)
+            .map_err(|error| seam.failure(error))
+    }
+
+    fn read_security_restriction_at_owner<F, E>(&self, namespace: SourceNamespaceId,
+        seam: &OriginalSeam<'_, F, E>, retained_owner: bool,
+    ) -> Result<SecurityRestrictionReadback, ControlError>
+    where F: Fn(Work) -> Result<(), E>,
+    {
             seam.start()?;
-            let policy_key = metered_key(POLICY_PREFIX, namespace, &seam)?;
-            let command_key = metered_key(RESTRICTION_PREFIX, namespace, &seam)?;
+            let policy_key = metered_key(POLICY_PREFIX, namespace, seam)?;
+            let command_key = metered_key(RESTRICTION_PREFIX, namespace, seam)?;
             let snapshot = seam.read_snapshot(self)?;
             let policy = snapshot
                 .get(&policy_key)
@@ -60,7 +68,7 @@ impl PersistentControlJournal {
                     if value.class() != ControlRecordClass::State {
                         return Err(ControlError::StoreCorrupt);
                     }
-                    metered_policy_decode(value.len(), &seam)?;
+                    metered_policy_decode(value.len(), seam)?;
                     let record = decode_access_policy(value.as_bytes())
                         .map_err(|_| ControlError::StoreCorrupt)?;
                     if record.namespace_id != namespace { return Err(ControlError::StoreCorrupt); }
@@ -73,9 +81,12 @@ impl PersistentControlJournal {
                     if value.class() != ControlRecordClass::Operation {
                         return Err(ControlError::StoreCorrupt);
                     }
-                    metered_command_decode(value.len(), &seam)?;
+                    metered_command_decode(value.len(), seam)?;
                     let command = codec::decode(value.as_bytes())?;
-                    if command.identity != snapshot.identity { return Err(ControlError::IdentityMismatch); }
+                    if command.identity != snapshot.identity
+                        && !(retained_owner && same_journal_history(command.identity, snapshot.identity)) {
+                        return Err(ControlError::IdentityMismatch);
+                    }
                     if command.replacement.policy.namespace_id != namespace
                         || policy != Some(command.replacement.policy)
                         || command.expected_generation >= snapshot.generation
@@ -93,8 +104,45 @@ impl PersistentControlJournal {
                 policy,
                 mutation,
             })
+    }
+
+    /// Observes the latest complete restriction and its exact committed native
+    /// request after a verified owner succession on the same durable journal.
+    /// No record, original identity or receipt is rewritten, and no write is
+    /// replayed. Strict commit and ordinary recovery entry points remain fenced
+    /// to the caller's current owner identity.
+    ///
+    /// # Errors
+    /// Refuses future/foreign identities, missing or conflicting native receipts,
+    /// partial state and any policy movement before current confirmation.
+    pub fn observe_security_restriction_with_original_context<F, E>(&mut self,
+        namespace: SourceNamespaceId, deadline: Instant, work: &F,
+    ) -> Result<(SecurityRestrictionReadback, Option<SecurityRestrictionCommit>), MigrationBootstrapFailure<E>>
+    where F: Fn(Work) -> Result<(), E>,
+    {
+        let seam = OriginalSeam::new(deadline, work);
+        let result = (|| {
+            let read = self.read_security_restriction_at_owner(namespace, &seam, true)?;
+            let Some(mutation) = read.mutation() else { return Ok((read, None)); };
+            let command = metered_command(mutation, &seam)?;
+            metered_clone(mutation, &seam)?;
+            let receipt = match seam.recover(self, &command)? {
+                CommitRecoveryDecision::Committed(receipt) => receipt,
+                CommitRecoveryDecision::ConflictingInput => return Err(ControlError::OperationConflict),
+                CommitRecoveryDecision::NotCommittedRetrySameOperation
+                    | CommitRecoveryDecision::PartialOrCorruptQuarantine => return Err(ControlError::StoreCorrupt),
+            };
+            let committed = SecurityRestrictionCommit { mutation: mutation.clone(), receipt,
+                observed_identity: self.identity() };
+            let current = self.read_security_restriction_at_owner(namespace, &seam, true)?;
+            current.confirm_current(&committed)?;
+            seam.complete()?;
+            Ok((current, Some(committed)))
         })();
-        result.map_err(|error| seam.failure(error))
+        result.map_err(|error| {
+            let error = if seam.interrupted() { ControlError::CommitOutcomeUnknown } else { error };
+            seam.failure(error)
+        })
     }
 
     /// Commits metadata and the complete original restart request atomically
@@ -126,7 +174,7 @@ impl PersistentControlJournal {
             let command = metered_command(mutation, &seam)?;
             metered_clone(mutation, &seam)?;
             let receipt = seam.transact(self, command)?;
-            Ok(SecurityRestrictionCommit { mutation: mutation.clone(), receipt })
+            Ok(SecurityRestrictionCommit { mutation: mutation.clone(), receipt, observed_identity: self.identity() })
         })();
         result.map_err(|error| seam.failure(error))
     }
@@ -160,6 +208,7 @@ impl PersistentControlJournal {
             metered_clone(mutation, &seam)?;
             match seam.recover(self, &command)? {
                 CommitRecoveryDecision::Committed(receipt) => Ok(Some(SecurityRestrictionCommit {
+                    observed_identity: self.identity(),
                     mutation: mutation.clone(),
                     receipt,
                 })),

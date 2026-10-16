@@ -195,7 +195,7 @@ where
 }
 
 pub(super) fn publish_current<C: CancellationProbe + Clone>(
-    journal: &PersistentControlJournal,
+    journal: &mut PersistentControlJournal,
     publisher: &mut ControlSnapshotPublisher,
     committed: &SecurityRestrictionCommit,
     budget: &MutationBudget<'_, C>,
@@ -209,7 +209,7 @@ pub(super) fn publish_current<C: CancellationProbe + Clone>(
     // latest native snapshot, retaining its own rollback and corruption fences.
     budget.publish(journal, publisher)?;
     let published = publisher.current().ok_or(ControlError::SnapshotPublicationFailed)?;
-    if published.identity != committed.mutation().identity() || published.generation != current.generation() {
+    if published.identity != committed.observed_identity() || published.generation != current.generation() {
         return Err(ControlError::SnapshotPublicationFailed.into());
     }
     budget.check()?;

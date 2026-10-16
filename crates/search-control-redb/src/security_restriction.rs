@@ -24,6 +24,11 @@ use crate::{
 mod codec;
 mod original_context;
 
+fn same_journal_history(original: JournalIdentity, current: JournalIdentity) -> bool {
+    original.owner_epoch <= current.owner_epoch
+        && JournalIdentity { owner_epoch: current.owner_epoch, ..original } == current
+}
+
 /// Maximum configured dependent-owner identifiers in one restart command.
 pub const MAX_RESTRICTION_DEPENDENTS: usize = 64;
 /// Inline command ceiling. Larger sets require a separately qualified manifest
@@ -261,7 +266,8 @@ impl SecurityRestrictionReadback {
     pub fn confirm_current(&self, commit: &SecurityRestrictionCommit) -> Result<(), ControlError> {
         let command = &commit.mutation;
         let receipt = &commit.receipt;
-        if self.identity != command.identity || self.namespace != command.replacement.policy.namespace_id {
+        if self.identity != commit.observed_identity || !same_journal_history(command.identity, self.identity)
+            || self.namespace != command.replacement.policy.namespace_id {
             return Err(ControlError::IdentityMismatch);
         }
         let mut changed = vec![key(POLICY_PREFIX, self.namespace)?, key(RESTRICTION_PREFIX, self.namespace)?];
@@ -286,6 +292,7 @@ impl SecurityRestrictionReadback {
 pub struct SecurityRestrictionCommit {
     mutation: SecurityRestrictionMutation,
     receipt: ControlCommitReceipt,
+    observed_identity: JournalIdentity,
 }
 
 impl fmt::Debug for SecurityRestrictionCommit {
@@ -298,6 +305,10 @@ impl fmt::Debug for SecurityRestrictionCommit {
 }
 
 impl SecurityRestrictionCommit {
+    /// Exact current journal under which the original receipt was observed.
+    /// The immutable mutation retains its original owner identity.
+    #[must_use]
+    pub const fn observed_identity(&self) -> JournalIdentity { self.observed_identity }
     /// Original lossless request, including the prior state and all required owners.
     #[must_use]
     pub const fn mutation(&self) -> &SecurityRestrictionMutation { &self.mutation }
@@ -364,7 +375,7 @@ impl PersistentControlJournal {
     ) -> Result<SecurityRestrictionCommit, AccessPolicyJournalError> {
         if self.identity() != mutation.identity { return Err(ControlError::IdentityMismatch.into()); }
         let receipt = self.transact_conditionally(mutation.native_command()?, context)?;
-        Ok(SecurityRestrictionCommit { mutation: mutation.clone(), receipt })
+        Ok(SecurityRestrictionCommit { mutation: mutation.clone(), receipt, observed_identity: self.identity() })
     }
 
     /// Resolves the exact stored request against the native ledger without writing.
@@ -381,6 +392,7 @@ impl PersistentControlJournal {
         if self.identity() != mutation.identity { return Err(ControlError::IdentityMismatch.into()); }
         match self.recover_conditional_transaction(&mutation.native_command()?, context)? {
             CommitRecoveryDecision::Committed(receipt) => Ok(Some(SecurityRestrictionCommit {
+                observed_identity: self.identity(),
                 mutation: mutation.clone(), receipt,
             })),
             CommitRecoveryDecision::NotCommittedRetrySameOperation => Ok(None),

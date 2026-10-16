@@ -31,6 +31,81 @@ fn successor() -> SecurityPolicyState {
 }
 
 #[test]
+fn current_observation_survives_owner_succession_without_rebinding_or_writes() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(JournalLimits::BASELINE);
+    let original = initial(&mut journal);
+    let namespace = state().policy.namespace_id;
+    let original_bytes = codec::encode(original.mutation()).unwrap();
+    let next = JournalIdentity { owner_epoch: OwnerEpoch::new(2).unwrap(), ..identity() };
+    let mut journal = journal.advance_owner_with_context(next, MutationId([71; 32]),
+        &context(&Cancel::default())).unwrap();
+    let end = Instant::now() + Duration::from_secs(60);
+    let charged_bytes = Cell::new(0_usize);
+    let work = |unit| { charged_bytes.set(charged_bytes.get() + charged(unit)); Ok::<_, &str>(()) };
+    let snapshot = journal.read_snapshot().unwrap();
+    let writes = journal.committed_writes();
+    assert_eq!(journal.read_security_restriction_with_original_context(namespace, end, &work)
+        .unwrap_err().control, ControlError::IdentityMismatch);
+    assert_eq!(journal.recover_security_restriction_with_original_context(original.mutation(), end, &work)
+        .unwrap_err().control, ControlError::IdentityMismatch);
+    let (current, observed) = journal.observe_security_restriction_with_original_context(namespace, end, &work).unwrap();
+    let observed = observed.unwrap();
+    current.confirm_current(&observed).unwrap();
+    assert_eq!(observed.observed_identity(), next);
+    assert_eq!(observed.mutation(), original.mutation());
+    assert_eq!(codec::encode(observed.mutation()).unwrap(), original_bytes);
+    assert_eq!(observed.mutation().replacement(), &state());
+    assert!(!observed.mutation().replacement().denied_memberships.is_empty());
+    assert!(!observed.mutation().replacement().purged_memberships.is_empty());
+    assert_eq!(journal.read_snapshot().unwrap(), snapshot);
+    assert_eq!(journal.committed_writes(), writes);
+    assert!(charged_bytes.get() > 0);
+    assert_eq!(current.confirm_current(&original), Err(ControlError::IdentityMismatch));
+    // A new restriction is a new current-owner command, not a rebound old one.
+    let update = current.prepare_restriction(&observed, op("operation:new-owner"), digest(), successor(), owners()).unwrap();
+    assert_eq!(update.identity(), next);
+    let committed = journal.commit_security_restriction_with_original_context(&update, end, &work).unwrap();
+    let (latest, _) = journal.observe_security_restriction_with_original_context(namespace, end, &work).unwrap();
+    latest.confirm_current(&committed).unwrap();
+    assert_eq!(latest.confirm_current(&observed), Err(ControlError::TransactionConflict));
+}
+
+#[test]
+fn current_observation_refuses_foreign_future_and_uncommitted_state() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(JournalLimits::BASELINE);
+    let original = initial(&mut journal);
+    let namespace = state().policy.namespace_id;
+    let end = Instant::now() + Duration::from_secs(60);
+    let work = |_| Ok::<_, &str>(());
+    let command_key = key(RESTRICTION_PREFIX, namespace).unwrap();
+    let mut foreign = original.mutation().clone();
+    foreign.identity.data_root_id = DataRootId::from_bytes([99; 16]);
+    raw_write(&mut journal, vec![ControlWrite { key: command_key.clone(),
+        value: ControlValue::new(ControlRecordClass::Operation, codec::encode(&foreign).unwrap(), JournalLimits::BASELINE).unwrap() }], 72);
+    let snapshot = journal.read_snapshot().unwrap();
+    assert_eq!(journal.observe_security_restriction_with_original_context(namespace, end, &work).unwrap_err().control,
+        ControlError::IdentityMismatch);
+    assert_eq!(journal.read_snapshot().unwrap(), snapshot);
+    let mut future = original.mutation().clone();
+    future.identity.owner_epoch = OwnerEpoch::new(2).unwrap();
+    raw_write(&mut journal, vec![ControlWrite { key: command_key.clone(),
+        value: ControlValue::new(ControlRecordClass::Operation, codec::encode(&future).unwrap(), JournalLimits::BASELINE).unwrap() }], 73);
+    assert_eq!(journal.observe_security_restriction_with_original_context(namespace, end, &work).unwrap_err().control,
+        ControlError::IdentityMismatch);
+    // Equal policy bytes cannot stand in for a native commit ledger row.
+    let mut missing = original.mutation().clone();
+    missing.operation_id = op("operation:record-without-commit");
+    raw_write(&mut journal, vec![ControlWrite { key: command_key,
+        value: ControlValue::new(ControlRecordClass::Operation, codec::encode(&missing).unwrap(), JournalLimits::BASELINE).unwrap() }], 74);
+    let snapshot = journal.read_snapshot().unwrap();
+    assert_eq!(journal.observe_security_restriction_with_original_context(namespace, end, &work).unwrap_err().control,
+        ControlError::StoreCorrupt);
+    assert_eq!(journal.read_snapshot().unwrap(), snapshot);
+}
+
+#[test]
 fn original_context_expired_deadline_refuses_before_writes_and_never_renews_the_allowance() {
     let scratch = Scratch::new();
     let mut journal = scratch.create(JournalLimits::BASELINE);

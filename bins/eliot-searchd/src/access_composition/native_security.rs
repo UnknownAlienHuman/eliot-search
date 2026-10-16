@@ -209,12 +209,11 @@ impl NativeSecurityDomain {
     ) -> Result<Self, NativeSecurityError>
     where C: CancellationProbe + Clone, D: SecurityInvalidationSink<C>,
     {
-        let read = budget.read(journal, binding.namespace)?;
+        let (read, committed) = budget.observe(journal, binding.namespace)?;
         budget.descriptor(read.mutation().ok_or(AccessError::SecurityFailClosed)?)?;
         let descriptor = read.mutation().ok_or(AccessError::SecurityFailClosed)?.clone();
         mapping::validate_binding(&binding, &descriptor)?;
-        let committed = budget.recover(journal, &descriptor)?
-            .ok_or(AccessError::SecurityFailClosed)?;
+        let committed = committed.ok_or(AccessError::SecurityFailClosed)?;
         let current = budget.read(journal, binding.namespace)?;
         current.confirm_current(&committed)?;
         let replacement = descriptor.replacement();

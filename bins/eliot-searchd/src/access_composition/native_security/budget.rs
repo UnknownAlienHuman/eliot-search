@@ -107,13 +107,27 @@ impl<'a, C: CancellationProbe + Clone> MutationBudget<'a, C> {
         self.metadata(members, command.operation_id.as_str().len() + command.security_domain_ref.as_str().len())
     }
 
-    pub(super) fn read(&self, journal: &PersistentControlJournal, namespace: SourceNamespaceId)
+    pub(super) fn read(&self, journal: &mut PersistentControlJournal, namespace: SourceNamespaceId)
         -> Result<SecurityRestrictionReadback, NativeSecurityError> {
         if let Some(work) = self.work {
             let callback = |unit| work(unit);
-            journal.read_security_restriction_with_original_context(namespace, self.deadline, &callback)
+            journal.observe_security_restriction_with_original_context(namespace, self.deadline, &callback)
+                .map(|(read, _)| read)
                 .map_err(|error| self.original_failure(&error))
         } else { Ok(journal.read_security_restriction(namespace, &self.context()?)?) }
+    }
+
+    pub(super) fn observe(&self, journal: &mut PersistentControlJournal, namespace: SourceNamespaceId)
+        -> Result<(SecurityRestrictionReadback, Option<SecurityRestrictionCommit>), NativeSecurityError> {
+        if let Some(work) = self.work {
+            let callback = |unit| work(unit);
+            journal.observe_security_restriction_with_original_context(namespace, self.deadline, &callback)
+                .map_err(|error| self.original_failure(&error))
+        } else {
+            let read = journal.read_security_restriction(namespace, &self.context()?)?;
+            let committed = read.mutation().map(|mutation| self.recover(journal, mutation)).transpose()?.flatten();
+            Ok((read, committed))
+        }
     }
 
     pub(super) fn commit(&self, journal: &mut PersistentControlJournal, mutation: &SecurityRestrictionMutation)
@@ -129,6 +143,15 @@ impl<'a, C: CancellationProbe + Clone> MutationBudget<'a, C> {
         -> Result<Option<SecurityRestrictionCommit>, NativeSecurityError> {
         if let Some(work) = self.work {
             let callback = |unit| work(unit);
+            if mutation.identity() != journal.identity() {
+                let (_, committed) = journal.observe_security_restriction_with_original_context(
+                    mutation.replacement().policy.namespace_id, self.deadline, &callback)
+                    .map_err(|error| self.original_failure(&error))?;
+                return match committed {
+                    Some(committed) if committed.mutation() == mutation => Ok(Some(committed)),
+                    _ => Err(ControlError::IdentityMismatch.into()),
+                };
+            }
             journal.recover_security_restriction_with_original_context(mutation, self.deadline, &callback)
                 .map_err(|error| self.original_failure(&error))
         } else { Ok(journal.recover_security_restriction(mutation, &self.context()?)?) }

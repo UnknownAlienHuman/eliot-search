@@ -117,7 +117,7 @@ impl FreshRootContext<'_, '_> {
             .map_err(|_| refused())?]).map_err(|_| refused())?;
         let binding = NativeSecurityBinding { namespace: ownership.source_namespace_id,
             source_owner: ownership.source_owner_generation, domain: domain.clone(), dependents };
-        let read = journal.read_security_restriction_with_original_context(binding.namespace, deadline, &work)
+        let (read, _) = journal.observe_security_restriction_with_original_context(binding.namespace, deadline, &work)
             .map_err(|error| NativeSecurityError::OriginalContext {
                 control: error.control, first: error.first_context,
             })?;
@@ -149,7 +149,7 @@ impl FreshRootContext<'_, '_> {
                     control: error.control, first: error.first_context,
                 })?;
         }
-        let current = journal.read_security_restriction_with_original_context(binding.namespace, deadline, &work)
+        let (current, committed) = journal.observe_security_restriction_with_original_context(binding.namespace, deadline, &work)
             .map_err(|error| NativeSecurityError::OriginalContext { control: error.control, first: error.first_context })?;
         let stored = current.mutation().ok_or_else(refused)?;
         let state = stored.replacement();
@@ -159,9 +159,7 @@ impl FreshRootContext<'_, '_> {
             || state.policy.shadow_fence_revision.get() != 1 || state.policy.purge_fence_revision.get() != 1
         { return Err(refused()); }
         let generation = state.policy.live_deny_generation;
-        let committed = journal.recover_security_restriction_with_original_context(stored, deadline, &work)
-            .map_err(|error| NativeSecurityError::OriginalContext { control: error.control, first: error.first_context })?
-            .ok_or_else(refused)?;
+        let committed = committed.ok_or_else(refused)?;
         current.confirm_current(&committed)?;
         work(W::Allocate(preparation)).map_err(|first| NativeSecurityError::OriginalContext {
             control: ControlError::BudgetExceeded, first: Some(first) })?;
