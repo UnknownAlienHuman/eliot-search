@@ -11,7 +11,7 @@ use super::{
 // This private selection cannot be supplied or widened by a package consumer.
 // Sets originate only from a bounded resume window or a bounded durable binding.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) enum EmissionSelection {
+pub enum EmissionSelection {
     Ephemeral(BTreeSet<Blake3Digest32>),
     DurableReplan { max_items: usize },
     DurableBatch(BTreeSet<Blake3Digest32>),

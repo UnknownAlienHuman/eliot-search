@@ -47,7 +47,7 @@ impl fmt::Debug for ContinuationSecurityScope {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub(super) struct PendingCleanup {
+pub struct PendingCleanup {
     operation_receipt: ReceiptRef,
     generation: u64,
 }
@@ -114,6 +114,7 @@ pub struct SecurityInvalidationProgress {
 }
 
 /// Completed process-local invalidation and cleanup pass, not a durable receipt.
+///
 /// Only a completed pass can construct this value. Counters describe this attempt,
 /// not records invalidated in an earlier interrupted attempt.
 #[derive(Debug)]
@@ -171,6 +172,13 @@ impl ContinuationStore {
     /// planned influence population before returning the token. No second index
     /// or candidate copy is created. Durable restore must supply its original
     /// population; when unavailable, ordinary `create` remains conservative.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the record just inserted by `create` cannot be found under
+    /// the exclusive store borrow. This is an internal invariant: the record
+    /// was inserted one line above and no code path can remove it between
+    /// insertion and this lookup.
     pub fn create_with_security_scope(
         &mut self,
         request: CreateContinuationRequest,
