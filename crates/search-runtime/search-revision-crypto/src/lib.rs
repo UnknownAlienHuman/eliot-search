@@ -21,6 +21,9 @@ use aes_gcm::{Aes256Gcm, Nonce};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
+mod selected_v2;
+pub use selected_v2::*;
+
 /// AES-256 key size.
 pub const REVISION_KEY_BYTES: usize = 32;
 /// GCM nonce size.
