@@ -4,7 +4,6 @@
 //! This crate is not a swarm controller and never issues control records.
 
 pub mod accepted_evidence;
-pub mod agent_drafts;
 pub mod architecture_coverage;
 pub mod architecture_coverage_contracts;
 pub mod canonical_digest_guard;
@@ -16,7 +15,6 @@ pub mod coverage_graph_validation;
 pub mod git_tree;
 pub mod impl_program;
 pub mod integration_bootstrap;
-pub mod milestone_packets;
 pub mod p00_acceptance;
 pub mod package_maps;
 mod package_status;

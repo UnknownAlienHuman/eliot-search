@@ -3,6 +3,8 @@
 //! The companion `tooling_runtime_inventory` test scans the complete required
 //! tooling roots. This test keeps the explicit retired-validator-to-`xtask`
 //! ownership map and user-facing documentation from drifting independently.
+//! Retired draft/milestone commands must stay absent rather than remain required
+//! Rust entrypoints. Their Python runtime exclusions still apply.
 
 use std::fs;
 use std::path::Path;
@@ -40,11 +42,6 @@ const MIGRATED: &[MigratedEntrypoint] = &[
         retired_python: "tools/validate-context-artifact-candidate.py",
     },
     MigratedEntrypoint {
-        wrapper: "tools/validate-p00-ticket-drafts.ps1",
-        command: "p00-ticket-drafts",
-        retired_python: "tools/validate-p00-ticket-drafts.py",
-    },
-    MigratedEntrypoint {
         wrapper: "tools/validate-p00-foundation-acceptance.ps1",
         command: "p00-foundation-acceptance",
         retired_python: "tools/validate-p00-foundation-acceptance.py",
@@ -58,6 +55,14 @@ const MIGRATED: &[MigratedEntrypoint] = &[
         wrapper: "tools/validate-ticket-issuance-plan.ps1",
         command: "ticket-issuance-plan",
         retired_python: "tools/validate-ticket-issuance-plan.py",
+    },
+];
+
+const RETIRED_DRAFT_MILESTONE: &[MigratedEntrypoint] = &[
+    MigratedEntrypoint {
+        wrapper: "tools/validate-p00-ticket-drafts.ps1",
+        command: "p00-ticket-drafts",
+        retired_python: "tools/validate-p00-ticket-drafts.py",
     },
     MigratedEntrypoint {
         wrapper: "tools/validate-w1-agent-drafts.ps1",
@@ -95,6 +100,23 @@ const MIGRATED: &[MigratedEntrypoint] = &[
         retired_python: "tools/validate-w3-milestone-packets.py",
     },
 ];
+
+#[test]
+fn retired_draft_milestone_entrypoints_stay_absent() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("xtask must be a workspace member");
+
+    for entrypoint in RETIRED_DRAFT_MILESTONE {
+        for relative in [entrypoint.wrapper, entrypoint.retired_python] {
+            assert!(
+                !root.join(relative).exists(),
+                "retired {} entrypoint returned: {relative}",
+                entrypoint.command
+            );
+        }
+    }
+}
 
 #[test]
 fn migrated_required_entrypoints_remain_rust_only() {
@@ -151,7 +173,7 @@ fn workflows_do_not_reference_retired_validator_files() {
         }
         let text = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-        for migrated in MIGRATED {
+        for migrated in MIGRATED.iter().chain(RETIRED_DRAFT_MILESTONE) {
             assert!(
                 !text.contains(migrated.retired_python),
                 "{} references retired {}",
@@ -171,7 +193,7 @@ fn tooling_documentation_does_not_advertise_retired_validators() {
     let readme = fs::read_to_string(&readme_path)
         .unwrap_or_else(|error| panic!("{}: {error}", readme_path.display()));
 
-    for migrated in MIGRATED {
+    for migrated in MIGRATED.iter().chain(RETIRED_DRAFT_MILESTONE) {
         assert!(
             !readme.contains(migrated.retired_python),
             "{} advertises retired {}",
