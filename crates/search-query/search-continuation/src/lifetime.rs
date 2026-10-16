@@ -3,7 +3,7 @@
 
 use search_contracts::UtcTimestamp;
 
-pub(super) fn fits_ttl(
+pub fn fits_ttl(
     created_at: &UtcTimestamp,
     expires_at: &UtcTimestamp,
     ttl_millis: u64,
@@ -15,7 +15,7 @@ pub(super) fn fits_ttl(
     })
 }
 
-pub(super) fn duration_micros(start: &UtcTimestamp, end: &UtcTimestamp) -> Option<u64> {
+pub fn duration_micros(start: &UtcTimestamp, end: &UtcTimestamp) -> Option<u64> {
     timestamp_micros(end)?.checked_sub(timestamp_micros(start)?)
 }
 
