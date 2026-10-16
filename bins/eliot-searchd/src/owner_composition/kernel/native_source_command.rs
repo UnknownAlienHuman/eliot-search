@@ -83,24 +83,24 @@ impl DirectRegistryOwner {
         let journal = self.control.journal.as_mut().ok_or("DIRECT_JOURNAL_UNAVAILABLE")?;
         let mut port = original_port(journal, &mut self.control.publisher, deadline, &callback)?;
         let mut registry = port.restore(native.context()).map_err(|_| "NATIVE_SOURCE_RESTORE_REFUSED")?.into_registry();
+        let profile = search_source_identity::ntfs_source_profile_v1()
+            .map_err(|_| "NATIVE_SOURCE_PROFILE_UNAVAILABLE")?;
         // Exact immutable operation comes before opening a fresh Source FD.
         if let RegistryBatchLookup::Committed(observed) = port.load_batch(&command.operation, native.context())
             .map_err(|_| "NATIVE_SOURCE_LOOKUP_REFUSED")? {
             observed.verify_operation().map_err(|_| "NATIVE_SOURCE_ORIGINAL_REFUSED")?;
             let record = observed.record();
-            validate_replay(record, command, root_id, &intent, &policy.retained)?;
+            validate_replay(record, command, root_id, &intent, &policy.retained, &registry, profile)?;
             let receipt = search_source_registry::api::source_receipt(record, true)
                 .map_err(|_| "NATIVE_SOURCE_ORIGINAL_REFUSED")?;
             return Ok(source_output(&receipt, true));
         }
-        let profile = search_source_identity::ntfs_source_profile_v1()
-            .map_err(|_| "NATIVE_SOURCE_PROFILE_UNAVAILABLE")?;
         let (namespace, owner) = select_namespace(&registry, root_id, profile,
             native.source_owner_scope().map_err(|e| e.to_string())?, &policy.retained)?;
         let acquired = match native.acquire_source_v2(path, root_id, &registry, policy,
             command.relative.as_bytes(), profile) {
             Ok(value) => value,
-            Err(error) => return Ok(DirectOutput { current: true, line: format!(
+            Err(error) => return Ok(DirectOutput { current: false, line: format!(
                 "{{\"event\":\"native_source\",\"admitted\":false,\"reason\":\"{}\",\"ready\":false,\"source_body_serving\":false}}",
                 eliot_searchd::diagnostics::sanitize_code(&error.to_string())) }),
         };
@@ -146,6 +146,7 @@ impl DirectRegistryOwner {
 
 fn validate_replay(record: &search_source_registry::recovery::DecodedBatch, command: &NativeSourceCommand,
     root: c::RootBindingId, intent: &c::ReceiptRef, policy: &search_source_provenance::RetainedPolicyV2,
+    registry: &SourceRegistry, profile: search_source_identity::FilesystemIdentityProfile,
 ) -> Result<(), String> {
     let conflict = || "NATIVE_SOURCE_OPERATION_CONFLICT".to_owned();
     if record.encoding_profile() != "eliot.registry-batch.v4" || record.entry().operation_id != command.operation
@@ -155,6 +156,11 @@ fn validate_replay(record: &search_source_registry::recovery::DecodedBatch, comm
     if sources.next().is_some() { return Err(conflict()); }
     let RegistryStateRecord::Source(source) = delta.after() else { return Err(conflict()); };
     let original = source.permanent_admission().ok_or_else(conflict)?.original();
+    if registry.namespaces().get(&source.identity().source_namespace_id)
+        .and_then(|namespace| namespace.permanent_metadata())
+        .is_none_or(|metadata| metadata.root_binding_id() != root || metadata.identity_profile() != profile) {
+        return Err(conflict());
+    }
     if source.binding().root_binding_id() != root
         || source.lifecycle() != search_source_registry::source::SourceLifecycle::Active
         || original.policy().encoded_inputs() != policy.encoded_inputs()
@@ -176,7 +182,7 @@ fn validate_replay(record: &search_source_registry::recovery::DecodedBatch, comm
                 && namespace.ownership.status == c::NamespaceOwnershipStatus::Active
                 && !namespace.fenced && namespace.preparation.is_none() && namespace.activation.is_none()
                 && namespace.permanent_metadata().is_some_and(|m| m.root_binding_id() == root
-                    && m.policy().encoded_inputs() == policy.encoded_inputs()) => {}
+                    && m.identity_profile() == profile && m.policy().encoded_inputs() == policy.encoded_inputs()) => {}
             _ => return Err(conflict()),
         }
     }

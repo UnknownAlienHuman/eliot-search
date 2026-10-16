@@ -114,6 +114,25 @@ fn native_source_v2_root_fd_policy_identity_redb_and_original_replay() {
     assert!(replay.contains("\"historical_commit\":true"), "{replay}");
     assert!(replay.contains("\"registry_revision\":2"), "{replay}");
 }
+
+#[test]
+fn native_fixture_existing_credential_readback_only() {
+    let path = PathBuf::from(std::env::var_os("ELIOT_SEARCH_TEST_RECOVERY_ROOT").expect("explicit retained fixture"));
+    let path = fs::canonicalize(path).unwrap();
+    let base = path.parent().unwrap();
+    assert_eq!(base.parent(), Some(fs::canonicalize(std::env::temp_dir()).unwrap().as_path()));
+    assert!(base.file_name().unwrap().to_str().unwrap().starts_with("search-direct-owner-"));
+    assert_eq!(path.file_name().unwrap(), "data");
+    let history = fs::read(path.join(super::super::super::initialization_journal::JOURNAL_FILE)).unwrap();
+    let original = super::super::super::initialization_journal::decode_journal(&history, &mut |_| Ok(())).unwrap();
+    let observed = search_os_secrets_windows::load_existing_legacy_revision_root_secret_with_context(
+        &original.subject.namespace, Instant::now() + Duration::from_secs(30), &AtomicBool::new(false));
+    match observed {
+        Ok(Some(secret)) => { drop(secret); eprintln!("native-existing-readback:present"); }
+        Ok(None) => eprintln!("native-existing-readback:absent"),
+        Err(error) => panic!("native-existing-readback:error:{}", error.code()),
+    }
+}
 impl Scratch {
     fn new(direct: bool) -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -198,6 +217,10 @@ impl Scratch {
 }
 impl Drop for Scratch {
     fn drop(&mut self) {
+        if std::thread::panicking() {
+            eprintln!("native fixture retained after failure: {}", self.base.file_name().unwrap().to_string_lossy());
+            return;
+        }
         assert_eq!(self.base.parent(), Some(std::env::temp_dir().as_path()));
         assert!(
             self.base
@@ -207,6 +230,14 @@ impl Drop for Scratch {
                 .unwrap()
                 .starts_with("search-direct-owner-")
         );
+        // The fixture created this root and journal; never enumerate/delete
+        // credentials by prefix or infer ownership from a timestamp.
+        let journal = self.root.join(super::super::super::initialization_journal::JOURNAL_FILE);
+        if let Ok(bytes) = fs::read(journal) {
+            let original = super::super::super::initialization_journal::decode_journal(&bytes, &mut |_| Ok(())).unwrap();
+            search_os_secrets_windows::delete_legacy_revision_root_secret_for_test(&original.subject.namespace)
+                .expect("exact fixture credential cleanup");
+        }
         fs::remove_dir_all(&self.base).unwrap();
     }
 }
