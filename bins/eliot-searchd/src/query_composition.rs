@@ -61,7 +61,6 @@ mod real_port_tests;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use search_access::{BaseEligibilityPlan, EligibilityPredicates};
@@ -74,6 +73,7 @@ use search_retrieval_executor::{
     indexed::{IndexedNomination, IndexedPortError, IndexedRetrievalPort, MAX_INDEXED_LIMIT},
 };
 use search_qdrant_bridge::real::{BlockingRealQueryPlane, IdfScope, OpContext};
+use search_ports::CancellationProbe;
 
 /// Closed query-composition failure.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -319,7 +319,7 @@ pub struct RealIndexedPort<'plane> {
     filter: EligibilityFilter,
     leg: search_access::SafeRetrievalLeg,
     deadline: Instant,
-    cancelled: Arc<AtomicBool>,
+    cancellation: Arc<dyn CancellationProbe + Send + Sync>,
 }
 
 fn validate_real_ticket(
@@ -343,20 +343,20 @@ fn validate_real_ticket(
 
 impl<'plane> RealIndexedPort<'plane> {
     /// Bind one accepted pinned leg, deriving its exact filter internally.
-    /// The caller supplies the original deadline and shared cancellation flag.
+    /// The caller supplies the original deadline and shared cancellation observer.
     pub fn new(
         plane: &'plane BlockingRealQueryPlane,
         route: CollectionRoute,
         ticket: &LegTicket,
         deadline: Instant,
-        cancelled: Arc<AtomicBool>,
+        cancellation: Arc<dyn CancellationProbe + Send + Sync>,
     ) -> Result<Self, IndexedPortError> {
         let leg = ticket.leg.safe_index_leg.as_ref().ok_or(IndexedPortError::Failure)?;
         let [plan] = leg.eligibility_plans.as_slice() else { return Err(IndexedPortError::Failure); };
         validate_real_ticket(leg, &route, ticket, &plan.predicates())?;
         let filter = render_eligibility_filter(plan, &ticket.leg.memberships)
             .map_err(|_| IndexedPortError::Failure)?;
-        let port = Self { plane, route, filter, leg: leg.clone(), deadline, cancelled };
+        let port = Self { plane, route, filter, leg: leg.clone(), deadline, cancellation };
         port.context()?;
         Ok(port)
     }
@@ -366,16 +366,20 @@ impl<'plane> RealIndexedPort<'plane> {
     pub const fn filter(&self) -> &EligibilityFilter { &self.filter }
 
     fn context(&self) -> Result<OpContext, IndexedPortError> {
-        real_rpc_context(self.deadline, Instant::now(), &self.cancelled)
+        real_rpc_context(self.deadline, Instant::now(), &self.cancellation)
     }
 }
 
-fn real_rpc_context(deadline: Instant, now: Instant, cancelled: &Arc<AtomicBool>)
+fn real_rpc_context(
+    deadline: Instant,
+    now: Instant,
+    cancellation: &Arc<dyn CancellationProbe + Send + Sync>,
+)
     -> Result<OpContext, IndexedPortError> {
-    if cancelled.load(Ordering::SeqCst) { return Err(IndexedPortError::Failure); }
+    if cancellation.is_cancelled() { return Err(IndexedPortError::Failure); }
     let remaining = deadline.saturating_duration_since(now);
     if remaining.is_zero() { return Err(IndexedPortError::Failure); }
-    Ok(OpContext::with_cancel(remaining, Arc::clone(cancelled)))
+    Ok(OpContext::with_cancellation_probe(remaining, Arc::clone(cancellation)))
 }
 
 impl IndexedRetrievalPort for RealIndexedPort<'_> {

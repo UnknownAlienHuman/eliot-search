@@ -43,6 +43,7 @@
 //! because dense layouts need a distinct accepted scoring profile.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -60,6 +61,7 @@ use qdrant_client::qdrant::{
     value, vector_output, vectors, vectors_output,
 };
 use search_contracts::{OpaqueId, ReceiptRef};
+use search_ports::CancellationProbe;
 
 use crate::live::LiveEndpoint;
 use crate::qualified::{QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate};
@@ -84,32 +86,70 @@ const CODE_UNAUTHENTICATED: i32 = 16;
 
 /// Bounded per-operation context.
 ///
-/// A finite deadline plus an optional cancellation flag. Cancellation is
-/// checked before dispatch and between bounded pages/batches; expiry after a
-/// mutation dispatch reports `MutationOutcomeUnknown` because the write may
-/// have committed.
-#[derive(Clone, Debug)]
+/// A finite deadline plus an optional shared cancellation observer. The
+/// observer is queried before dispatch and between bounded pages/batches;
+/// expiry after a mutation dispatch reports `MutationOutcomeUnknown` because
+/// the write may have committed.
+#[derive(Clone)]
 pub struct OpContext {
     deadline: Duration,
-    cancelled: Option<Arc<AtomicBool>>,
+    cancellation: Option<CancellationObserver>,
+}
+
+#[derive(Clone)]
+enum CancellationObserver {
+    Flag(Arc<AtomicBool>),
+    Probe(Arc<dyn CancellationProbe + Send + Sync>),
+}
+
+impl CancellationObserver {
+    fn is_cancelled(&self) -> bool {
+        match self {
+            Self::Flag(flag) => flag.load(Ordering::SeqCst),
+            Self::Probe(probe) => probe.is_cancelled(),
+        }
+    }
+}
+
+impl fmt::Debug for OpContext {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OpContext")
+            .field("deadline", &self.deadline)
+            .finish_non_exhaustive()
+    }
 }
 
 impl OpContext {
-    /// Builds a context with a finite deadline and no cancellation flag.
+    /// Builds a context with a finite deadline and no cancellation observer.
     #[must_use]
     pub const fn new(deadline: Duration) -> Self {
         Self {
             deadline,
-            cancelled: None,
+            cancellation: None,
         }
     }
 
     /// Builds a context with a finite deadline and a shared cancellation flag.
+    ///
+    /// Retained for callers that already use an atomic flag. New callers with
+    /// an Eliot cancellation capability should use [`Self::with_cancellation_probe`].
     #[must_use]
     pub const fn with_cancel(deadline: Duration, cancelled: Arc<AtomicBool>) -> Self {
         Self {
             deadline,
-            cancelled: Some(cancelled),
+            cancellation: Some(CancellationObserver::Flag(cancelled)),
+        }
+    }
+
+    /// Builds a context retaining the caller's live, read-only cancellation observer.
+    #[must_use]
+    pub fn with_cancellation_probe(
+        deadline: Duration,
+        probe: Arc<dyn CancellationProbe + Send + Sync>,
+    ) -> Self {
+        Self {
+            deadline,
+            cancellation: Some(CancellationObserver::Probe(probe)),
         }
     }
 
@@ -119,13 +159,9 @@ impl OpContext {
         self.deadline
     }
 
-    /// Fails with [`BridgeError::Cancelled`] when the flag is set.
+    /// Fails with [`BridgeError::Cancelled`] when its shared observer reports cancellation.
     pub fn check(&self) -> Result<(), BridgeError> {
-        if self
-            .cancelled
-            .as_ref()
-            .is_some_and(|flag| flag.load(Ordering::SeqCst))
-        {
+        if self.cancellation.as_ref().is_some_and(CancellationObserver::is_cancelled) {
             return Err(BridgeError::Cancelled);
         }
         Ok(())

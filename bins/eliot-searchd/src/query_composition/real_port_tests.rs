@@ -3,7 +3,30 @@ use super::*;
 use search_access::{AccessCheckpoint, AccessPermit, IndexedRouteFence, MembershipAccessBinding};
 use search_contracts::{Blake3Digest32, CollectionGenerationId, Epoch, LegKind, OwnerEpoch, RequestId};
 use search_query_planner::{CancellationBoundary, CompiledPlanDigest, LegBudget, PlannedLeg};
+use search_ports::{CancellationProbe, PackageOpaque};
+use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+
+struct SharedProbe(Arc<AtomicBool>);
+
+impl fmt::Debug for SharedProbe {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("SharedProbe([redacted])")
+    }
+}
+
+impl PackageOpaque for SharedProbe {
+    fn owner_package(&self) -> &'static str {
+        "eliot-searchd-tests"
+    }
+}
+
+impl CancellationProbe for SharedProbe {
+    fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
 
 fn fixture() -> (LegTicket, CollectionRoute, EligibilityPredicates) {
     let membership = SourceMembershipId::from_bytes([1; 16]);
@@ -50,16 +73,29 @@ fn real_port_rejects_widened_scope_contract_and_route_before_rpc() {
 }
 
 #[test]
-fn real_rpc_budget_shrinks_and_keeps_original_cancel_flag() {
+fn real_rpc_budget_shrinks_and_port_context_retains_live_probe() {
     let start = Instant::now();
     let deadline = start + Duration::from_secs(1);
-    let flag = Arc::new(AtomicBool::new(false));
-    let first = real_rpc_context(deadline, start, &flag).unwrap();
-    let next = real_rpc_context(deadline, start + Duration::from_millis(400), &flag).unwrap();
+    let signal = Arc::new(AtomicBool::new(false));
+    let probe: Arc<dyn CancellationProbe + Send + Sync> =
+        Arc::new(SharedProbe(Arc::clone(&signal)));
+    let first = real_rpc_context(deadline, start, &probe).unwrap();
+    let cloned = first.clone();
+    let next = real_rpc_context(deadline, start + Duration::from_millis(400), &probe).unwrap();
     assert_eq!(first.deadline(), Duration::from_secs(1));
     assert_eq!(next.deadline(), Duration::from_millis(600));
-    assert!(real_rpc_context(deadline, deadline, &flag).is_err());
-    flag.store(true, Ordering::SeqCst);
+    assert!(real_rpc_context(deadline, deadline, &probe).is_err());
+    assert_eq!(first.check(), Ok(()));
+    signal.store(true, Ordering::SeqCst);
     assert_eq!(first.check(), Err(BridgeError::Cancelled));
-    assert!(real_rpc_context(deadline, start, &flag).is_err());
+    assert_eq!(cloned.check(), Err(BridgeError::Cancelled));
+    assert!(real_rpc_context(deadline, start, &probe).is_err());
+}
+
+#[test]
+fn real_rpc_context_refuses_a_pre_cancelled_probe_before_dispatch() {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    let probe: Arc<dyn CancellationProbe + Send + Sync> =
+        Arc::new(SharedProbe(Arc::new(AtomicBool::new(true))));
+    assert!(real_rpc_context(deadline, Instant::now(), &probe).is_err());
 }
