@@ -160,7 +160,7 @@ search-result-projector = { workspace = true, optional = true }
 search-continuation = { workspace = true, optional = true }
 
 search-retention.workspace = true
-search-revision-crypto.workspace = true
+search-revision-crypto = { path = "../../crates/search-runtime/search-revision-crypto" }
 search-eval = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
