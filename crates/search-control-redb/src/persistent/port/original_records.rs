@@ -14,6 +14,28 @@ use search_ports::{CancellationProbe, MutationIdentity};
 use std::time::Instant;
 
 impl<C: CancellationProbe> BoundControlJournal<'_, C> {
+    /// True fences fresh entropy only; false is not preparation or key authority.
+    /// # Errors
+    /// Pending, corrupt or interrupted reads prove no absence and clear no fence.
+    pub fn revision_dek_operation_exists_with_original_context<F, E>(
+        &self, id: crate::MutationId, deadline: Instant, work: &F,
+    ) -> Result<bool, MigrationBootstrapFailure<E>>
+    where F: Fn(MigrationBootstrapWork) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            self.journal.ensure_available()?;
+            check.check(Point::ReadHeader)?;
+            let read = self.journal.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
+            let header = self.journal.header_from_checked(&read, &check)?;
+            let observed = super::super::operation_from_checked(&read, id, &header, self.journal.limits, &check)?;
+            check.check(Point::ReadComplete)?;
+            Ok(observed.is_some())
+        })();
+        result.map_err(|error| check.failure(error))
+    }
+
     /// Commit one closed revision-DEK command using the actual original allowance.
     /// # Errors
     /// Identity/bounds/context refusal precedes effects; uncertain writes remain

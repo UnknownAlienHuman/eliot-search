@@ -295,7 +295,10 @@ fn revision_dek_two_phases_readback_replay_and_exact_intent_without_current() {
     let work = |_| Ok::<_, &str>(());
     let deadline = end();
     let mut bound = journal.bind_control_port::<Cancel>(&mut publisher).unwrap();
+    assert!(!bound.revision_dek_operation_exists_with_original_context(intent.command().mutation().id(), deadline, &work).unwrap());
     assert_eq!(bound.transact_revision_dek_with_original_context(&intent, &intent_id, deadline, &work).unwrap().after_generation, 2);
+    assert!(bound.revision_dek_operation_exists_with_original_context(intent.command().mutation().id(), deadline, &work).unwrap());
+    assert!(!bound.revision_dek_operation_exists_with_original_context(candidate.command().mutation().id(), deadline, &work).unwrap());
     let mut wrong = candidate.command().conditions().to_vec();
     wrong[0] = ControlRecordCondition::exact(key(REVISION_DEK_INTENT_KEY), dek_value("eliot.revision-dek.record.v1", 1, 0, 1));
     let wrong = altered_dek(&candidate, candidate.command().mutation().writes().to_vec(), vec![], wrong).unwrap();
@@ -328,6 +331,7 @@ fn revision_dek_original_refusal_unknown_and_identical_recovery_keep_fences() {
         if matches!(unit, Work::Write(n) if n > 0) { Err("stage-refusal") } else { Ok(()) }).unwrap_err();
     assert_eq!(error.control, ControlError::CommitOutcomeUnknown);
     assert_eq!(error.first_context, Some("stage-refusal"));
+    assert_eq!(bound.revision_dek_operation_exists_with_original_context(command.command().mutation().id(), end(), &|_| Ok::<_, &str>(())).unwrap_err().control, ControlError::StoreQuarantined);
     let foreign = dek_command(93, 1, false);
     let foreign_id = control_mutation_identity(foreign.command().mutation().id()).unwrap();
     assert_eq!(bound.recover_revision_dek_with_original_context(&foreign, &foreign_id, end(), &|_| Ok::<_, &str>(())).unwrap(), CommitRecoveryDecision::ConflictingInput);
@@ -336,4 +340,33 @@ fn revision_dek_original_refusal_unknown_and_identical_recovery_keep_fences() {
     assert_eq!(cancelled.first_context, Some("recovery-refusal"));
     assert_eq!(bound.recover_revision_dek_with_original_context(&command, &identity, end(), &|_| Ok::<_, &str>(())).unwrap(), CommitRecoveryDecision::NotCommittedRetrySameOperation);
     assert_eq!(bound.read_control_snapshot_with_original_context(end(), &|_| Ok::<_, &str>(())).unwrap().generation, 1);
+}
+
+#[test]
+fn revision_dek_operation_lookup_is_read_only_and_never_treats_refusal_as_absence() {
+    let scratch = Scratch::new();
+    let mut journal = direct(&scratch);
+    let mut publisher = ControlSnapshotPublisher::new();
+    let before = journal.read_snapshot().unwrap();
+    let bound = journal.bind_control_port::<Cancel>(&mut publisher).unwrap();
+    let work = |_| Ok::<_, &str>(());
+    let deadline = end();
+    let slots = [key(REVISION_DEK_INTENT_KEY), key(REVISION_DEK_CANDIDATE_KEY), key(REVISION_DEK_CURRENT_KEY)];
+    assert_eq!(bound.read_control_keys_with_original_context(&slots, deadline, &work).unwrap().missing_keys().len(), 3);
+    // Even a different valid operation at the phase CID is a fence, never authority.
+    assert!(bound.revision_dek_operation_exists_with_original_context(MutationId([90; 32]), deadline, &work).unwrap());
+    assert!(!bound.revision_dek_operation_exists_with_original_context(MutationId([91; 32]), deadline, &work).unwrap());
+    assert_eq!(bound.revision_dek_operation_exists_with_original_context(MutationId([91; 32]), deadline, &|_| Err("lookup-refusal")).unwrap_err().first_context, Some("lookup-refusal"));
+    assert_eq!(bound.revision_dek_operation_exists_with_original_context(MutationId([91; 32]), Instant::now(), &work).unwrap_err().control, ControlError::BudgetExceeded);
+    assert_eq!(bound.read_control_snapshot_with_original_context(deadline, &work).unwrap(), before);
+    drop(bound);
+    // Same row count, malformed operation bytes: never relabel corruption absent.
+    let write = journal.database.begin_write().unwrap();
+    {
+        let mut operations = write.open_table(crate::persistent::OPERATIONS).unwrap();
+        operations.insert(MutationId([90; 32]).0.as_slice(), b"invalid".as_slice()).unwrap();
+    }
+    write.commit().unwrap();
+    let bound = journal.bind_control_port::<Cancel>(&mut publisher).unwrap();
+    assert_eq!(bound.revision_dek_operation_exists_with_original_context(MutationId([90; 32]), deadline, &work).unwrap_err().control, ControlError::StoreCorrupt);
 }
