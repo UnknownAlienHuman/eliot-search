@@ -60,8 +60,7 @@ fn selected(input: &RetentionSourceInput<'_, '_, '_>, journal: &mut PersistentCo
     let usage = RevisionUseUsageReadback::read(&read, &preparation, LIMITS)
         .map_err(|error| error.code().to_owned())?;
     let encryption = EncryptionBinding {
-        key_reference: c::OpaqueId::new(format!("revision-dek:{}",
-            super::super::super::codec::hex(&intent.binding().reference_digest())))
+        key_reference: intent.binding().key_reference()
             .map_err(|_| "NATIVE_RETENTION_KEY_REFERENCE_INVALID")?,
         key_version: c::NonZeroRevision::new(intent.binding().key_version())
             .map_err(|_| "NATIVE_RETENTION_KEY_REFERENCE_INVALID")?,

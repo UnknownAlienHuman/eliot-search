@@ -112,6 +112,16 @@ impl RevisionDekBinding {
     /// Internally derived opaque reference identity.
     #[must_use]
     pub const fn reference_digest(&self) -> [u8; 32] { self.reference_digest }
+    /// Existing selected-key reference spelling, as metadata rather than key authority.
+    pub fn key_reference(&self) -> Result<c::OpaqueId, RevisionDekError> {
+        use core::fmt::Write;
+        let mut value = String::with_capacity(13 + 64);
+        value.push_str("revision-dek:");
+        for byte in self.reference_digest {
+            write!(value, "{byte:02x}").map_err(|_| RevisionDekError::Encoding)?;
+        }
+        c::OpaqueId::new(value).map_err(|_| RevisionDekError::InvalidBinding)
+    }
     /// Internally computed complete binding fingerprint.
     #[must_use]
     pub const fn binding_digest(&self) -> [u8; 32] { self.binding_digest }

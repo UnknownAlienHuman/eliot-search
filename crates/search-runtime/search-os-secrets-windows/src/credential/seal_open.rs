@@ -9,6 +9,9 @@ use super::RevisionDekContext;
 use crate::{LegacyRevisionDpapiContext, LegacyRevisionDpapiWork as Work, RevisionDekError,
     observe_revision_user, read_revision_dek_key};
 
+mod derived;
+pub use derived::*;
+
 /// Original caller refusal or expiration of the private one-use key window.
 pub enum RevisionLeaseRefusal<E> {
     /// The original refusal; cleanup still uses that same allowance.

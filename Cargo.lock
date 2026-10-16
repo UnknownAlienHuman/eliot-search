@@ -1349,6 +1349,7 @@ dependencies = [
  "search-control-redb",
  "search-os-secrets",
  "search-revision-crypto",
+ "search-revision-store",
 ]
 
 [[package]]
