@@ -37,6 +37,9 @@ pub use pairing::{
     publish_provider_pairing_credential,
 };
 
+mod revision_dek;
+pub use revision_dek::*;
+
 #[cfg(test)]
 mod tests;
 

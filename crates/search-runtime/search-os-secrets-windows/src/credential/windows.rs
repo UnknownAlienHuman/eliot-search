@@ -15,7 +15,7 @@ const CRED_TYPE_GENERIC: u32 = 1;
 const CRED_PERSIST_LOCAL_MACHINE: u32 = 2;
 const ERROR_NOT_FOUND: u32 = 1_168;
 const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
-const MAX_CREDENTIAL_BLOB_BYTES: usize = 5 * 512;
+pub(super) const MAX_CREDENTIAL_BLOB_BYTES: usize = 5 * 512;
 const VAULT_MUTEX_NAME: &str = "ELIOT-Search-RevisionVault-v1";
 const VAULT_LOCK_WAIT_MILLIS: u32 = 5_000;
 const WAIT_OBJECT_0: u32 = 0;
@@ -59,6 +59,8 @@ unsafe extern "system" {
     fn cred_write_w(credential: *const CredentialW, flags: u32) -> i32;
     #[link_name = "CredFree"]
     fn cred_free(buffer: *mut c_void);
+    #[link_name = "CredDeleteW"]
+    fn cred_delete_w(target_name: *const u16, credential_type: u32, flags: u32) -> i32;
 }
 
 #[link(name = "Kernel32")]
@@ -113,6 +115,11 @@ impl Drop for ProviderCredentialBlob {
 }
 
 impl WindowsCredentialPlatform {
+    pub(super) fn delete_credential(target: &[u16]) -> i32 {
+        // SAFETY: the caller supplies one validated, terminated target.
+        unsafe { cred_delete_w(target.as_ptr(), CRED_TYPE_GENERIC, 0) }
+    }
+
     /// Reads one bounded provider record without applying the legacy 32-byte shape.
     pub(super) fn read_provider_credential(
         target: &[u16],
@@ -172,8 +179,23 @@ impl WindowsCredentialPlatform {
         target: &[u16],
         blob: &mut ProviderCredentialBlob,
     ) -> Result<(), LegacyRevisionRootSecretError> {
+        Self::write_credential(target, blob, "ELIOT Search Provider Pairing")
+    }
+
+    pub(super) fn write_revision_dek_credential(
+        target: &[u16],
+        blob: &mut ProviderCredentialBlob,
+    ) -> Result<(), LegacyRevisionRootSecretError> {
+        Self::write_credential(target, blob, "ELIOT Search Revision DEK Candidate")
+    }
+
+    fn write_credential(
+        target: &[u16],
+        blob: &mut ProviderCredentialBlob,
+        user_name_text: &str,
+    ) -> Result<(), LegacyRevisionRootSecretError> {
         let mut target = target.to_vec();
-        let mut user_name = wide("ELIOT Search Provider Pairing");
+        let mut user_name = wide(user_name_text);
         let size = blob.as_slice().len();
         if size == 0 || size > MAX_CREDENTIAL_BLOB_BYTES {
             return Err(LegacyRevisionRootSecretError::CredentialTooLarge);
@@ -336,6 +358,41 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
             );
         }
         Ok(LegacyRevisionRootSecret::from_bytes(secret))
+    }
+
+    pub(super) fn generate_revision_dek_key<C: crate::RevisionDekContext>(
+        context: &mut C,
+    ) -> Result<[u8; 32], crate::RevisionDekError<C::Error>> {
+        context
+            .checkpoint()
+            .map_err(crate::RevisionDekError::Context)?;
+        context
+            .charge_open()
+            .map_err(crate::RevisionDekError::Context)?;
+        let mut secret = [0_u8; 32];
+        // SAFETY: the fixed buffer is live and writable for exactly 32 bytes.
+        let status = unsafe {
+            bcrypt_gen_random(
+                null_mut(),
+                secret.as_mut_ptr(),
+                32,
+                BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+            )
+        };
+        let checked = context.checkpoint();
+        if status < 0 {
+            clear_bytes(&mut secret);
+            return Err(crate::RevisionDekError::RandomGenerationFailed(status));
+        }
+        if let Err(error) = checked {
+            clear_bytes(&mut secret);
+            return Err(crate::RevisionDekError::Context(error));
+        }
+        if secret.iter().all(|byte| *byte == 0) {
+            clear_bytes(&mut secret);
+            return Err(crate::RevisionDekError::InvalidKey);
+        }
+        Ok(secret)
     }
 
     fn acquire_vault_lock(&mut self) -> Result<Self::VaultGuard, ()> {
