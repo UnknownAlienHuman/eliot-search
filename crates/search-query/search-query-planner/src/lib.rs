@@ -16,11 +16,16 @@
 use core::fmt;
 use std::collections::BTreeSet;
 
-use search_access::{AccessModality, AuthorizedScope, SafeRetrievalLeg, ValidatedGrant};
+use search_access::{
+    AccessModality, AuthorizedScope, BaseEligibilityPlan, IndexedRouteFence,
+    MembershipAccessBinding, SafeRetrievalLeg, ValidatedGrant,
+};
 use search_contracts::{
-    Blake3ExactInputLimit, LegKind, ObservationFreshnessState, QueryExecutionBudget,
-    QuerySnapshotFence, RecipeBodyV1, RecipeIdV1, RequestId, SearchReadGrantClaims,
-    SearchRecipeRequest, SearchTaskPlan, SourceMembershipId, blake3_exact_bytes,
+    Blake3ExactInputLimit, BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalText,
+    CanonicalValue, DigestInputLimit, LegKind, MAX_CANONICAL_BYTES, MAX_COLLECTION_ITEMS,
+    ObservationFreshnessState, QueryExecutionBudget, QuerySnapshotFence, RecipeBodyV1, RecipeIdV1,
+    RequestId, SearchReadGrantClaims, SearchRecipeRequest, SearchTaskPlan, SourceMembershipId,
+    StateDependency, StateDependencyKind, blake3_canonical, blake3_exact_bytes,
 };
 
 /// Closed query-planning failure.
@@ -128,6 +133,212 @@ pub struct CapabilitySet {
     pub advanced: AdvancedCapabilities,
 }
 
+/// Captures one aggregate `ProviderCapability` execution-environment dependency.
+///
+/// The v1 canonical CBOR tuple binds all capability flags, the complete scope capture (including
+/// keyed membership bindings), and every ordered safe-leg, eligibility and route field. Capture
+/// actual runtime capabilities and current owner bindings, insert exactly one such dependency
+/// alongside other dependency kinds, then compute the canonical task-plan fingerprint. This pure
+/// metadata hash does not authenticate grants or qualify the captured source/provider state.
+/// Its fixed domain is `eliot/cbor/query-execution-environment/v1`.
+pub fn canonical_execution_dependency(
+    capabilities: CapabilitySet,
+    scope: &AuthorizedScope,
+    ordered_safe_legs: &[SafeRetrievalLeg],
+) -> Result<StateDependency, PlanError> {
+    if scope.memberships.len() > MAX_COLLECTION_ITEMS
+        || ordered_safe_legs.len() > MAX_COLLECTION_ITEMS
+    {
+        return Err(PlanError::IdentityEncoding);
+    }
+    let (mut members, mut eligibility) = (0_usize, 0_usize);
+    for leg in ordered_safe_legs {
+        members = members
+            .checked_add(leg.memberships.len())
+            .ok_or(PlanError::IdentityEncoding)?;
+        eligibility = eligibility
+            .checked_add(leg.eligibility_plans.len())
+            .ok_or(PlanError::IdentityEncoding)?;
+        if members > MAX_COLLECTION_ITEMS || eligibility > MAX_COLLECTION_ITEMS {
+            return Err(PlanError::IdentityEncoding);
+        }
+    }
+    let CapabilitySet {
+        retrieval:
+            RetrievalCapabilities {
+                direct,
+                lexical,
+                exact,
+            },
+        advanced:
+            AdvancedCapabilities {
+                structural,
+                semantic,
+                rerank,
+            },
+    } = capabilities;
+    let AuthorizedScope {
+        memberships,
+        access_snapshot_generation,
+        source_catalog_generation,
+        membership_generation,
+        snapshot_digest,
+    } = scope;
+    let bindings = memberships
+        .iter()
+        .map(|(key, binding)| {
+            let MembershipAccessBinding {
+                membership_id,
+                projection_membership_id,
+                access_partition_digest,
+                scoring_partition_digest,
+                active,
+            } = binding;
+            execution_array(vec![
+                execution_bytes(key.as_bytes())?,
+                execution_bytes(membership_id.as_bytes())?,
+                execution_text(projection_membership_id.as_str())?,
+                execution_bytes(access_partition_digest.as_bytes())?,
+                execution_bytes(scoring_partition_digest.as_bytes())?,
+                CanonicalValue::Bool(*active),
+            ])
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let value = execution_array(vec![
+        execution_array(vec![
+            CanonicalValue::Bool(direct),
+            CanonicalValue::Bool(lexical),
+            CanonicalValue::Bool(exact),
+            CanonicalValue::Bool(structural),
+            CanonicalValue::Bool(semantic),
+            CanonicalValue::Bool(rerank),
+        ])?,
+        execution_array(vec![
+            CanonicalValue::U64(*access_snapshot_generation),
+            CanonicalValue::U64(*source_catalog_generation),
+            CanonicalValue::U64(*membership_generation),
+            execution_bytes(snapshot_digest.as_bytes())?,
+            execution_array(bindings)?,
+        ])?,
+        execution_array(
+            ordered_safe_legs
+                .iter()
+                .map(execution_leg_value)
+                .collect::<Result<Vec<_>, _>>()?,
+        )?,
+    ])?;
+    let domain = CanonicalDigestDomain::parse("eliot/cbor/query-execution-environment/v1")
+        .map_err(|_| PlanError::IdentityEncoding)?;
+    let limit =
+        DigestInputLimit::new(MAX_CANONICAL_BYTES).map_err(|_| PlanError::IdentityEncoding)?;
+    let identity_digest =
+        blake3_canonical(&domain, &value, limit).map_err(|_| PlanError::IdentityEncoding)?;
+    Ok(StateDependency {
+        kind: StateDependencyKind::ProviderCapability,
+        identity_digest,
+    })
+}
+
+fn execution_leg_value(leg: &SafeRetrievalLeg) -> Result<CanonicalValue, PlanError> {
+    let SafeRetrievalLeg {
+        leg_id,
+        memberships,
+        eligibility_plans,
+        route,
+        overlap_proof_digest,
+    } = leg;
+    execution_array(vec![
+        CanonicalValue::U64(u64::try_from(*leg_id).map_err(|_| PlanError::IdentityEncoding)?),
+        execution_array(
+            memberships
+                .iter()
+                .map(|id| execution_bytes(id.as_bytes()))
+                .collect::<Result<Vec<_>, _>>()?,
+        )?,
+        execution_array(
+            eligibility_plans
+                .iter()
+                .map(execution_eligibility_value)
+                .collect::<Result<Vec<_>, _>>()?,
+        )?,
+        execution_route_value(route)?,
+        overlap_proof_digest
+            .as_ref()
+            .map_or(Ok(CanonicalValue::Null), |digest| {
+                execution_bytes(digest.as_bytes())
+            })?,
+    ])
+}
+
+fn execution_eligibility_value(plan: &BaseEligibilityPlan) -> Result<CanonicalValue, PlanError> {
+    let BaseEligibilityPlan {
+        membership_id,
+        projection_membership_id,
+        access_partition_digest,
+        scoring_partition_digest,
+        collection_generation_id,
+        visible_epoch,
+        live_security_generation,
+        shadow_generation,
+        purge_generation,
+        predicate_digest,
+    } = plan;
+    execution_array(vec![
+        execution_bytes(membership_id.as_bytes())?,
+        execution_text(projection_membership_id.as_str())?,
+        execution_bytes(access_partition_digest.as_bytes())?,
+        execution_bytes(scoring_partition_digest.as_bytes())?,
+        execution_bytes(collection_generation_id.as_bytes())?,
+        execution_epoch(*visible_epoch),
+        CanonicalValue::U64(*live_security_generation),
+        CanonicalValue::U64(*shadow_generation),
+        CanonicalValue::U64(*purge_generation),
+        execution_bytes(&predicate_digest.0)?,
+    ])
+}
+
+fn execution_route_value(route: &IndexedRouteFence) -> Result<CanonicalValue, PlanError> {
+    let IndexedRouteFence {
+        collection_generation_id,
+        visible_epoch,
+        route_generation,
+        owner_epoch,
+    } = route;
+    execution_array(vec![
+        execution_bytes(collection_generation_id.as_bytes())?,
+        execution_epoch(*visible_epoch),
+        CanonicalValue::U64(*route_generation),
+        CanonicalValue::U64(owner_epoch.get()),
+    ])
+}
+
+const fn execution_epoch(epoch: search_contracts::Epoch) -> CanonicalValue {
+    let value = epoch.get();
+    if value < 0 {
+        CanonicalValue::I64(value)
+    } else {
+        CanonicalValue::U64(value.unsigned_abs())
+    }
+}
+
+fn execution_array(values: Vec<CanonicalValue>) -> Result<CanonicalValue, PlanError> {
+    BoundedList::new(values)
+        .map(CanonicalValue::Array)
+        .map_err(|_| PlanError::IdentityEncoding)
+}
+
+fn execution_bytes(value: &[u8]) -> Result<CanonicalValue, PlanError> {
+    BoundedBytes::new(value.to_vec())
+        .map(CanonicalValue::Bytes)
+        .map_err(|_| PlanError::IdentityEncoding)
+}
+
+fn execution_text(value: &str) -> Result<CanonicalValue, PlanError> {
+    CanonicalText::new(value)
+        .map(CanonicalValue::Text)
+        .map_err(|_| PlanError::IdentityEncoding)
+}
+
 /// One finite plan-leg budget.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct LegBudget {
@@ -228,6 +439,10 @@ pub fn compile_plan(
 /// contract's `Modality` describes source content classes, so it is deliberately not translated
 /// into the legacy retrieval `AccessModality` values here. The returned `digest` carries the
 /// verified `task_plan.plan_fingerprint`; relaxed observation gaps remain explicit in `snapshot`.
+/// `additional_state_dependencies` must contain exactly one aggregate `ProviderCapability`
+/// produced by [`canonical_execution_dependency`] from these exact capabilities, scope and
+/// ordered safe legs before fingerprinting. Missing/duplicate aggregates or execution drift fail
+/// closed; all other dependency kinds retain their existing canonical-plan semantics.
 pub fn compile_canonical_plan(
     task_plan: &SearchTaskPlan,
     grant: &SearchReadGrantClaims,
@@ -307,6 +522,21 @@ pub fn compile_canonical_plan(
     )?;
     verify_canonical_snapshot(&task_plan.query_snapshot_fence)?;
     verify_canonical_plan(task_plan)?;
+    let mut execution_dependencies = task_plan
+        .additional_state_dependencies
+        .iter()
+        .filter(|dependency| dependency.kind == StateDependencyKind::ProviderCapability);
+    let dependency = execution_dependencies
+        .next()
+        .ok_or(PlanError::CanonicalPlanInvalid)?;
+    if execution_dependencies.next().is_some() {
+        return Err(PlanError::CanonicalPlanInvalid);
+    }
+    if *dependency
+        != canonical_execution_dependency(capabilities, &authorized_scope, safe_index_legs)?
+    {
+        return Err(PlanError::PlanFingerprintMismatch);
+    }
 
     let mut compiled = compile_plan_inner(
         recipe,
@@ -1492,6 +1722,28 @@ mod canonical_plan_tests {
         safe_legs: Vec<SafeRetrievalLeg>,
     }
 
+    fn capture_execution(fixture: &mut Fixture) {
+        let mut dependencies = fixture
+            .task_plan
+            .additional_state_dependencies
+            .iter()
+            .filter(|dependency| {
+                dependency.kind != search_contracts::StateDependencyKind::ProviderCapability
+            })
+            .copied()
+            .collect::<Vec<_>>();
+        dependencies.push(
+            super::canonical_execution_dependency(
+                fixture.capabilities,
+                &fixture.scope,
+                &fixture.safe_legs,
+            )
+            .expect("captured execution environment"),
+        );
+        fixture.task_plan.additional_state_dependencies = BoundedList::new(dependencies).unwrap();
+        seal_plan(&mut fixture.task_plan);
+    }
+
     fn fixture() -> Fixture {
         let member = SourceMembershipId::from_bytes([6; 16]);
         let source_view = source_view();
@@ -1648,6 +1900,22 @@ mod canonical_plan_tests {
             created_at: UtcTimestamp::parse("2026-10-16T00:00:00.000000Z").expect("created at"),
             expires_at: UtcTimestamp::parse("2026-10-16T00:01:00.000000Z").expect("expires at"),
         };
+        let capabilities = PlannerCapabilities {
+            retrieval: PlannerRetrievalCapabilities {
+                direct: true,
+                lexical: true,
+                exact: false,
+            },
+            advanced: PlannerAdvancedCapabilities {
+                structural: false,
+                semantic: false,
+                rerank: false,
+            },
+        };
+        task_plan.additional_state_dependencies = BoundedList::new(vec![
+            super::canonical_execution_dependency(capabilities, &scope, &safe_legs).unwrap(),
+        ])
+        .unwrap();
         seal_plan(&mut task_plan);
 
         Fixture {
@@ -1655,18 +1923,7 @@ mod canonical_plan_tests {
             grant,
             recipe,
             scope,
-            capabilities: PlannerCapabilities {
-                retrieval: PlannerRetrievalCapabilities {
-                    direct: true,
-                    lexical: true,
-                    exact: false,
-                },
-                advanced: PlannerAdvancedCapabilities {
-                    structural: false,
-                    semantic: false,
-                    rerank: false,
-                },
-            },
+            capabilities,
             safe_legs,
         }
     }
@@ -1692,7 +1949,7 @@ mod canonical_plan_tests {
             .canonical_request_digest()
             .expect("changed request digest");
         fixture.recipe = normalize_recipe(request).expect("changed recipe");
-        seal_plan(&mut fixture.task_plan);
+        capture_execution(fixture);
     }
 
     fn predicate() -> search_contracts::ExactPredicate {
@@ -1793,7 +2050,7 @@ mod canonical_plan_tests {
             RequestedScope::ExplicitMemberships(BoundedList::new(members).unwrap());
         fixture.task_plan.recipe_request_digest = request.canonical_request_digest().unwrap();
         fixture.recipe = normalize_recipe(request).unwrap();
-        seal_plan(&mut fixture.task_plan);
+        capture_execution(fixture);
     }
 
     #[test]
@@ -1815,6 +2072,380 @@ mod canonical_plan_tests {
     }
 
     #[test]
+    fn canonical_plan_rejects_fixed_identity_capability_drift() {
+        let flips: [fn(&mut PlannerCapabilities); 6] = [
+            |caps| caps.retrieval.direct = !caps.retrieval.direct,
+            |caps| caps.retrieval.lexical = !caps.retrieval.lexical,
+            |caps| caps.retrieval.exact = !caps.retrieval.exact,
+            |caps| caps.advanced.structural = !caps.advanced.structural,
+            |caps| caps.advanced.semantic = !caps.advanced.semantic,
+            |caps| caps.advanced.rerank = !caps.advanced.rerank,
+        ];
+        for flip in flips {
+            let mut fixture = fixture();
+            flip(&mut fixture.capabilities);
+            assert_eq!(compile(&fixture), Err(PlanError::PlanFingerprintMismatch));
+        }
+    }
+
+    #[test]
+    fn canonical_plan_rejects_fixed_identity_leg_availability_drift() {
+        let mut fixture = fixture();
+        let captured_legs = fixture.safe_legs.clone();
+        fixture.safe_legs.clear();
+        assert_eq!(compile(&fixture), Err(PlanError::PlanFingerprintMismatch));
+        capture_execution(&mut fixture);
+        let empty_identity = fixture.task_plan.plan_fingerprint;
+        assert!(compile(&fixture).is_ok());
+        fixture.safe_legs = captured_legs;
+        assert_eq!(fixture.task_plan.plan_fingerprint, empty_identity);
+        assert_eq!(compile(&fixture), Err(PlanError::PlanFingerprintMismatch));
+    }
+
+    #[test]
+    fn canonical_plan_rejects_fixed_identity_direct_scope_drift() {
+        let changes: [fn(&mut AuthorizedScope); 5] = [
+            |scope| scope.access_snapshot_generation += 1,
+            |scope| scope.snapshot_digest = Blake3Digest32::from_bytes([41; 32]),
+            |scope| {
+                scope
+                    .memberships
+                    .values_mut()
+                    .next()
+                    .unwrap()
+                    .projection_membership_id = OpaqueId::new("changed").unwrap()
+            },
+            |scope| {
+                scope
+                    .memberships
+                    .values_mut()
+                    .next()
+                    .unwrap()
+                    .access_partition_digest = Blake3Digest32::from_bytes([42; 32])
+            },
+            |scope| {
+                scope
+                    .memberships
+                    .values_mut()
+                    .next()
+                    .unwrap()
+                    .scoring_partition_digest = Blake3Digest32::from_bytes([43; 32])
+            },
+        ];
+        for change in changes {
+            let mut fixture = fixture();
+            fixture.capabilities.retrieval.lexical = false;
+            fixture.safe_legs.clear();
+            capture_execution(&mut fixture);
+            change(&mut fixture.scope);
+            assert_eq!(compile(&fixture), Err(PlanError::PlanFingerprintMismatch));
+        }
+    }
+
+    #[test]
+    fn canonical_plan_recapture_changes_graph_budgets_and_identity() {
+        let baseline = compile(&fixture()).unwrap();
+        for change_capability in [false, true] {
+            let mut fixture = fixture();
+            if change_capability {
+                fixture.capabilities.retrieval.lexical = false;
+            } else {
+                fixture.safe_legs.clear();
+            }
+            assert_eq!(compile(&fixture), Err(PlanError::PlanFingerprintMismatch));
+            fixture.task_plan.additional_state_dependencies = BoundedList::new(vec![
+                super::canonical_execution_dependency(
+                    fixture.capabilities,
+                    &fixture.scope,
+                    &fixture.safe_legs,
+                )
+                .unwrap(),
+            ])
+            .unwrap();
+            assert_eq!(compile(&fixture), Err(PlanError::PlanFingerprintMismatch));
+            seal_plan(&mut fixture.task_plan);
+            let changed = compile(&fixture).expect("recaptured execution environment");
+            assert_eq!(changed.legs.len(), 1);
+            assert_ne!(changed.legs, baseline.legs);
+            assert_ne!(changed.legs[0].budget, baseline.legs[0].budget);
+            assert_ne!(changed.digest, baseline.digest);
+            assert_eq!(
+                changed.digest.0,
+                *fixture.task_plan.plan_fingerprint.as_bytes()
+            );
+            assert!(
+                changed
+                    .omitted_capabilities
+                    .contains(&super::OmittedCapability::Lexical)
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_plan_requires_exactly_one_matching_execution_aggregate() {
+        let fixture = fixture();
+        let aggregate = fixture
+            .task_plan
+            .additional_state_dependencies
+            .iter()
+            .next()
+            .copied()
+            .unwrap();
+        let mut wrong = aggregate;
+        wrong.identity_digest = Blake3Digest32::from_bytes([99; 32]);
+        let other = search_contracts::StateDependency {
+            kind: search_contracts::StateDependencyKind::MaterializerProfile,
+            identity_digest: Blake3Digest32::from_bytes([98; 32]),
+        };
+        for dependencies in [
+            vec![],
+            vec![other],
+            vec![aggregate, aggregate],
+            vec![aggregate, wrong],
+        ] {
+            let mut fixture = self::fixture();
+            fixture.task_plan.additional_state_dependencies =
+                BoundedList::new(dependencies).unwrap();
+            seal_plan(&mut fixture.task_plan);
+            assert_eq!(compile(&fixture), Err(PlanError::CanonicalPlanInvalid));
+        }
+        let mut mismatched = self::fixture();
+        mismatched.task_plan.additional_state_dependencies = BoundedList::new(vec![wrong]).unwrap();
+        seal_plan(&mut mismatched.task_plan);
+        assert_eq!(
+            compile(&mismatched),
+            Err(PlanError::PlanFingerprintMismatch)
+        );
+    }
+
+    #[test]
+    fn canonical_plan_preserves_nonprovider_dependencies() {
+        let mut fixture = fixture();
+        let baseline = compile(&fixture).unwrap();
+        let mut dependencies = fixture
+            .task_plan
+            .additional_state_dependencies
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        for kind in [
+            search_contracts::StateDependencyKind::MaterializerProfile,
+            search_contracts::StateDependencyKind::UnitizerProfile,
+            search_contracts::StateDependencyKind::EnricherProfile,
+            search_contracts::StateDependencyKind::OverlapRouteProof,
+            search_contracts::StateDependencyKind::RetentionLease,
+        ] {
+            dependencies.push(search_contracts::StateDependency {
+                kind,
+                identity_digest: Blake3Digest32::from_bytes([88; 32]),
+            });
+        }
+        fixture.task_plan.additional_state_dependencies = BoundedList::new(dependencies).unwrap();
+        seal_plan(&mut fixture.task_plan);
+        let captured = fixture.task_plan.clone();
+        let compiled = compile(&fixture).unwrap();
+        assert_eq!(fixture.task_plan, captured);
+        assert_ne!(compiled.digest, baseline.digest);
+        assert_eq!(compiled.legs, baseline.legs);
+    }
+
+    #[test]
+    fn canonical_execution_dependency_binds_every_external_field() {
+        let baseline = fixture();
+        let expected = super::canonical_execution_dependency(
+            baseline.capabilities,
+            &baseline.scope,
+            &baseline.safe_legs,
+        )
+        .unwrap();
+        assert_eq!(
+            expected,
+            super::canonical_execution_dependency(
+                baseline.capabilities,
+                &baseline.scope,
+                &baseline.safe_legs
+            )
+            .unwrap()
+        );
+        let changes: [fn(&mut Fixture); 28] = [
+            |f| f.scope.access_snapshot_generation += 1,
+            |f| f.scope.source_catalog_generation += 1,
+            |f| f.scope.membership_generation += 1,
+            |f| f.scope.snapshot_digest = Blake3Digest32::from_bytes([90; 32]),
+            |f| {
+                let (_, value) = f.scope.memberships.pop_first().unwrap();
+                f.scope
+                    .memberships
+                    .insert(SourceMembershipId::from_bytes([90; 16]), value);
+            },
+            |f| {
+                f.scope
+                    .memberships
+                    .values_mut()
+                    .next()
+                    .unwrap()
+                    .membership_id = SourceMembershipId::from_bytes([90; 16])
+            },
+            |f| {
+                f.scope
+                    .memberships
+                    .values_mut()
+                    .next()
+                    .unwrap()
+                    .projection_membership_id = OpaqueId::new("changed").unwrap()
+            },
+            |f| {
+                f.scope
+                    .memberships
+                    .values_mut()
+                    .next()
+                    .unwrap()
+                    .access_partition_digest = Blake3Digest32::from_bytes([90; 32])
+            },
+            |f| {
+                f.scope
+                    .memberships
+                    .values_mut()
+                    .next()
+                    .unwrap()
+                    .scoring_partition_digest = Blake3Digest32::from_bytes([90; 32])
+            },
+            |f| f.scope.memberships.values_mut().next().unwrap().active = false,
+            |f| f.safe_legs[0].leg_id += 1,
+            |f| f.safe_legs[0].memberships.clear(),
+            |f| f.safe_legs[0].eligibility_plans.clear(),
+            |f| {
+                f.safe_legs[0].eligibility_plans[0].membership_id =
+                    SourceMembershipId::from_bytes([90; 16])
+            },
+            |f| {
+                f.safe_legs[0].eligibility_plans[0].projection_membership_id =
+                    OpaqueId::new("changed").unwrap()
+            },
+            |f| {
+                f.safe_legs[0].eligibility_plans[0].access_partition_digest =
+                    Blake3Digest32::from_bytes([90; 32])
+            },
+            |f| {
+                f.safe_legs[0].eligibility_plans[0].scoring_partition_digest =
+                    Blake3Digest32::from_bytes([90; 32])
+            },
+            |f| {
+                f.safe_legs[0].eligibility_plans[0].collection_generation_id =
+                    CollectionGenerationId::from_bytes([90; 16])
+            },
+            |f| f.safe_legs[0].eligibility_plans[0].visible_epoch = Epoch::new(4).unwrap(),
+            |f| f.safe_legs[0].eligibility_plans[0].live_security_generation += 1,
+            |f| f.safe_legs[0].eligibility_plans[0].shadow_generation += 1,
+            |f| f.safe_legs[0].eligibility_plans[0].purge_generation += 1,
+            |f| f.safe_legs[0].eligibility_plans[0].predicate_digest.0[0] ^= 1,
+            |f| {
+                f.safe_legs[0].route.collection_generation_id =
+                    CollectionGenerationId::from_bytes([90; 16])
+            },
+            |f| f.safe_legs[0].route.visible_epoch = Epoch::new(4).unwrap(),
+            |f| f.safe_legs[0].route.route_generation += 1,
+            |f| f.safe_legs[0].route.owner_epoch = OwnerEpoch::new(2).unwrap(),
+            |f| f.safe_legs[0].overlap_proof_digest = Some(Blake3Digest32::from_bytes([90; 32])),
+        ];
+        for change in changes {
+            let mut fixture = fixture();
+            change(&mut fixture);
+            assert_ne!(
+                super::canonical_execution_dependency(
+                    fixture.capabilities,
+                    &fixture.scope,
+                    &fixture.safe_legs
+                )
+                .unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_execution_dependency_preserves_leg_and_eligibility_order() {
+        let mut fixture = fixture();
+        add_selected_membership(&mut fixture);
+        fixture.safe_legs = search_access::compile_safe_legs(
+            &fixture.scope,
+            fixture.safe_legs[0].route,
+            12,
+            1,
+            1,
+            None,
+            2,
+        )
+        .unwrap();
+        let baseline = super::canonical_execution_dependency(
+            fixture.capabilities,
+            &fixture.scope,
+            &fixture.safe_legs,
+        )
+        .unwrap();
+        fixture.safe_legs.swap(0, 1);
+        assert_ne!(
+            super::canonical_execution_dependency(
+                fixture.capabilities,
+                &fixture.scope,
+                &fixture.safe_legs
+            )
+            .unwrap(),
+            baseline
+        );
+        let second = fixture.safe_legs.pop().unwrap();
+        fixture.safe_legs[0].memberships.extend(second.memberships);
+        fixture.safe_legs[0]
+            .eligibility_plans
+            .extend(second.eligibility_plans);
+        let baseline = super::canonical_execution_dependency(
+            fixture.capabilities,
+            &fixture.scope,
+            &fixture.safe_legs,
+        )
+        .unwrap();
+        fixture.safe_legs[0].eligibility_plans.reverse();
+        assert_ne!(
+            super::canonical_execution_dependency(
+                fixture.capabilities,
+                &fixture.scope,
+                &fixture.safe_legs
+            )
+            .unwrap(),
+            baseline
+        );
+    }
+
+    #[test]
+    fn canonical_execution_dependency_rejects_oversized_captures() {
+        let mut fixture = fixture();
+        fixture.safe_legs =
+            vec![fixture.safe_legs[0].clone(); search_contracts::MAX_COLLECTION_ITEMS + 1];
+        assert_eq!(
+            super::canonical_execution_dependency(
+                fixture.capabilities,
+                &fixture.scope,
+                &fixture.safe_legs
+            ),
+            Err(PlanError::IdentityEncoding)
+        );
+        fixture.safe_legs.truncate(1);
+        fixture.safe_legs[0].eligibility_plans = vec![
+            fixture.safe_legs[0].eligibility_plans[0]
+                .clone();
+            search_contracts::MAX_COLLECTION_ITEMS + 1
+        ];
+        assert_eq!(
+            super::canonical_execution_dependency(
+                fixture.capabilities,
+                &fixture.scope,
+                &fixture.safe_legs
+            ),
+            Err(PlanError::IdentityEncoding)
+        );
+    }
+
+    #[test]
     fn canonical_plan_rejects_memberships_outside_grant_ceiling() {
         for allowed in [
             BoundedSet::empty(),
@@ -1830,6 +2461,7 @@ mod canonical_plan_tests {
         partial_grant.grant.allowed_membership_ids = original_members;
         partial_grant.capabilities.retrieval.lexical = false;
         partial_grant.safe_legs.clear();
+        capture_execution(&mut partial_grant);
         assert_eq!(compile(&partial_grant), Err(PlanError::ScopeMismatch));
     }
 
@@ -1947,7 +2579,7 @@ mod canonical_plan_tests {
         )
         .expect("complete safe legs");
         fixture.task_plan.query_execution_budget.max_scoring_legs = 3;
-        seal_plan(&mut fixture.task_plan);
+        capture_execution(&mut fixture);
         assert_eq!(compile(&fixture).unwrap().legs.len(), 3);
     }
 
@@ -1963,7 +2595,7 @@ mod canonical_plan_tests {
             snapshot.visible_epoch = None;
             snapshot.lexical_profile_ids = BoundedList::empty();
             seal_snapshot(snapshot);
-            seal_plan(&mut fixture.task_plan);
+            capture_execution(&mut fixture);
             let compiled = compile(&fixture).expect("direct plan with no index legs");
             assert_eq!(compiled.legs.len(), 1);
             assert_eq!(compiled.legs[0].leg_kind, LegKind::Direct);
@@ -2052,12 +2684,16 @@ mod canonical_plan_tests {
                 plan.profile_fence.fusion_profile_id = FusionProfileId::new("fusion-v2").unwrap()
             },
             |plan| {
-                plan.additional_state_dependencies =
-                    BoundedList::new(vec![search_contracts::StateDependency {
-                        kind: search_contracts::StateDependencyKind::ProviderCapability,
-                        identity_digest: Blake3Digest32::from_bytes([77; 32]),
-                    }])
-                    .unwrap()
+                let mut dependencies = plan
+                    .additional_state_dependencies
+                    .iter()
+                    .copied()
+                    .collect::<Vec<_>>();
+                dependencies.push(search_contracts::StateDependency {
+                    kind: search_contracts::StateDependencyKind::MaterializerProfile,
+                    identity_digest: Blake3Digest32::from_bytes([77; 32]),
+                });
+                plan.additional_state_dependencies = BoundedList::new(dependencies).unwrap();
             },
         ];
         for change in changes {
