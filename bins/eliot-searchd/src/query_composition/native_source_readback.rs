@@ -7,8 +7,8 @@ use search_candidate_validator::{
     SourceReadback, ValidationContext, ValidationOutcome, validate_raw_v3_full_unit_v1,
 };
 use search_contracts::{
-    Blake3Digest32, Blake3ExactInputLimit, CandidateId, NamespaceOwnershipStatus, SourceOwnerFence,
-    SourceRevision, SourceRevisionRef, blake3_exact_bytes,
+    Blake3Digest32, Blake3ExactInputLimit, CandidateId, NamespaceOwnershipStatus,
+    SourceNamespaceId, SourceOwnerFence, SourceRevision, SourceRevisionRef, blake3_exact_bytes,
 };
 use search_unitizer::VerifiedUnitSet;
 
@@ -21,6 +21,27 @@ use crate::{
 
 const fn unavailable() -> CanonicalServingError {
     CanonicalServingError::Backend("SOURCE_REVISION_UNAVAILABLE")
+}
+
+fn current_owner_fence(
+    registry: &search_source_registry::SourceRegistry,
+    namespace_id: SourceNamespaceId,
+) -> Result<SourceOwnerFence, CanonicalServingError> {
+    let namespace = registry
+        .namespaces()
+        .get(&namespace_id)
+        .ok_or_else(unavailable)?;
+    if namespace.ownership.status != NamespaceOwnershipStatus::Active
+        || namespace.fenced
+        || namespace.preparation.is_some()
+        || namespace.activation.is_some()
+    {
+        return Err(unavailable());
+    }
+    Ok(SourceOwnerFence {
+        source_namespace_id: namespace_id,
+        source_owner_generation: namespace.ownership.source_owner_generation,
+    })
 }
 
 struct NativeReadback<F> {
@@ -79,21 +100,7 @@ pub(super) fn validate_retained_raw_v3(
     let (membership, identity) = registry
         .active_source_membership_v2(membership_id)
         .map_err(|_| unavailable())?;
-    let namespace = registry
-        .namespaces()
-        .get(&identity.source_namespace_id)
-        .ok_or_else(unavailable)?;
-    if namespace.ownership.status != NamespaceOwnershipStatus::Active
-        || namespace.fenced
-        || namespace.preparation.is_some()
-        || namespace.activation.is_some()
-    {
-        return Err(unavailable());
-    }
-    let owner_fence = SourceOwnerFence {
-        source_namespace_id: identity.source_namespace_id,
-        source_owner_generation: namespace.ownership.source_owner_generation,
-    };
+    let owner_fence = current_owner_fence(registry, identity.source_namespace_id)?;
     let read = |request: &ExactRevisionReadbackRequest| {
         let unit = units
             .units()
