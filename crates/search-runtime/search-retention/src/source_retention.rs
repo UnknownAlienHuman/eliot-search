@@ -14,8 +14,13 @@
 //! no missing root.
 //!
 //! The cause projects onto the existing `RetentionRootKind::RetentionPolicy`
-//! durable root. No expiring lease, new store, catalog, state machine,
-//! controller, clock or identity issuer is introduced.
+//! durable root. That root is aggregated per physical object and carries no
+//! cause identity, so releasing one exact cause commits one exact record update
+//! through the original control-store compare-and-set; the caller then
+//! recollects every active root row at one coherent generation. This module
+//! never rewrites, filters or rebuilds an aggregated root set. No expiring
+//! lease, new store, catalog, state machine, controller, clock or identity
+//! issuer is introduced.
 
 use core::fmt;
 
@@ -162,10 +167,10 @@ pub enum SourceRetentionRecordError {
     NotActive,
     /// One operation identity was reused with a different release request.
     OperationConflict,
-    /// The exact durable root of this cause is absent; it is never inferred.
-    RootMissing,
-    /// The exact durable root of this cause appears more than once.
-    RootAmbiguous,
+    /// The original creation operation identity was presented as a new release.
+    ReleaseOperationReusesCreation,
+    /// A committed object root cannot be projected at generation zero.
+    ZeroControlGeneration,
 }
 
 impl SourceRetentionRecordError {
@@ -185,8 +190,10 @@ impl SourceRetentionRecordError {
             Self::InvalidIdentity => "RETENTION_POLICY_RECORD_INVALID_IDENTITY",
             Self::NotActive => "RETENTION_POLICY_RECORD_NOT_ACTIVE",
             Self::OperationConflict => "RETENTION_POLICY_RECORD_OPERATION_CONFLICT",
-            Self::RootMissing => "RETENTION_POLICY_RECORD_ROOT_MISSING",
-            Self::RootAmbiguous => "RETENTION_POLICY_RECORD_ROOT_AMBIGUOUS",
+            Self::ReleaseOperationReusesCreation => {
+                "RETENTION_POLICY_RECORD_RELEASE_REUSES_CREATION"
+            }
+            Self::ZeroControlGeneration => "RETENTION_POLICY_RECORD_ZERO_CONTROL_GENERATION",
         }
     }
 }
@@ -201,24 +208,40 @@ impl std::error::Error for SourceRetentionRecordError {}
 
 /// Deterministic full-identity technical key for one record.
 ///
-/// The key is the exact object identity text hex-encoded at full length: no
-/// truncation, no digest substitution, no alias and no namespace allocation.
-/// Distinct identities always produce distinct keys.
+/// The key distinguishes the exact physical object identity together with the
+/// exact original creation operation identity, so two independent causes for
+/// the same physical object never alias onto one key and never overwrite each
+/// other. Both identity texts are hex-encoded at full length and framed by a
+/// separator outside the hex alphabet: no truncation, no digest substitution,
+/// no alias and no namespace allocation. Distinct identity pairs always
+/// produce distinct keys.
 #[must_use]
-pub fn source_retention_record_key(object_id: &OpaqueId) -> String {
+pub fn source_retention_record_key(
+    object_id: &OpaqueId,
+    cause_operation_id: &OpaqueId,
+) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let identity = object_id.as_str();
+    let object_identity = object_id.as_str();
+    let cause_identity = cause_operation_id.as_str();
     let mut key = String::with_capacity(
         SOURCE_RETENTION_RECORD_KEY_PREFIX
             .len()
-            .saturating_add(identity.len().saturating_mul(2)),
+            .saturating_add(object_identity.len().saturating_mul(2))
+            .saturating_add(cause_identity.len().saturating_mul(2))
+            .saturating_add(1),
     );
     key.push_str(SOURCE_RETENTION_RECORD_KEY_PREFIX);
-    for byte in identity.as_bytes() {
-        key.push(char::from(HEX[usize::from(byte >> 4)]));
-        key.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
+    push_hex(&mut key, object_identity.as_bytes(), HEX);
+    key.push(':');
+    push_hex(&mut key, cause_identity.as_bytes(), HEX);
     key
+}
+
+fn push_hex(key: &mut String, bytes: &[u8], hex: &[u8; 16]) {
+    for byte in bytes {
+        key.push(char::from(hex[usize::from(byte >> 4)]));
+        key.push(char::from(hex[usize::from(byte & 0x0f)]));
+    }
 }
 
 /// Encodes one record to its canonical bounded bytes.
@@ -403,13 +426,27 @@ pub fn decode_source_retention_record(
 /// different operation refuses instead of overwriting the recorded one. No
 /// object is deleted and no other root, pin or hold is touched.
 ///
+/// The original creation operation identity is never accepted as a new release
+/// request: admission and release stay distinct, so reusing the creation
+/// identity cannot silently release the cause it created.
+///
+/// Releasing commits exactly this record through the original control-store
+/// compare-and-set. It never edits, filters or rebuilds an aggregated durable
+/// root row; the caller recollects every active root row at one coherent
+/// generation after the exact record update commits.
+///
 /// # Errors
-/// Returns [`SourceRetentionRecordError::OperationConflict`] when a released
-/// record is presented with a different release operation.
+/// Returns [`SourceRetentionRecordError::ReleaseOperationReusesCreation`] when
+/// the presented release operation reuses the original creation operation
+/// identity, and [`SourceRetentionRecordError::OperationConflict`] when a
+/// released record is presented with a different release operation.
 pub fn release_source_retention_record(
     record: &SourceRetentionRecord,
     release_operation: &RetentionOperation,
 ) -> Result<SourceRetentionRecord, SourceRetentionRecordError> {
+    if release_operation.operation_id == record.operation.operation_id {
+        return Err(SourceRetentionRecordError::ReleaseOperationReusesCreation);
+    }
     match &record.state {
         SourceRetentionState::Active => {
             let mut released = record.clone();
@@ -434,10 +471,13 @@ pub fn release_source_retention_record(
 ///
 /// `control_generation` must be the actual coherent control readback
 /// generation the caller observed. This function never invents, advances or
-/// defaults a generation. A released record never yields an active root.
+/// defaults a generation, and it refuses generation zero because an actually
+/// committed object root cannot have zero. A released record never yields an
+/// active root.
 ///
 /// # Errors
-/// Returns [`SourceRetentionRecordError::NotActive`] for a released record.
+/// Returns [`SourceRetentionRecordError::NotActive`] for a released record and
+/// [`SourceRetentionRecordError::ZeroControlGeneration`] for generation zero.
 pub fn project_source_retention_root(
     record: &SourceRetentionRecord,
     control_generation: u64,
@@ -445,51 +485,15 @@ pub fn project_source_retention_root(
     if !matches!(record.state, SourceRetentionState::Active) {
         return Err(SourceRetentionRecordError::NotActive);
     }
+    if control_generation == 0 {
+        return Err(SourceRetentionRecordError::ZeroControlGeneration);
+    }
     Ok(DurableRoot {
         object_id: record.object_id.clone(),
         kind: RetentionRootKind::RetentionPolicy,
         residency_digest: record.residency_digest,
         control_generation,
     })
-}
-
-/// Returns the same roots with only this cause's exact root removed.
-///
-/// The exact root is identified by physical object identity, the closed
-/// [`RetentionRootKind::RetentionPolicy`] kind, the complete residency digest
-/// and the caller's coherent readback generation. It must be present exactly
-/// once: a missing root refuses instead of being inferred, and a duplicated
-/// root refuses instead of being collapsed. Every other root is preserved in
-/// its original order, and no pin or hold is consulted or altered.
-///
-/// # Errors
-/// Returns [`SourceRetentionRecordError::RootMissing`] when the exact root is
-/// absent and [`SourceRetentionRecordError::RootAmbiguous`] when it is
-/// duplicated.
-pub fn retained_roots_without_cause(
-    roots: &[DurableRoot],
-    record: &SourceRetentionRecord,
-    control_generation: u64,
-) -> Result<Vec<DurableRoot>, SourceRetentionRecordError> {
-    let exact = |root: &DurableRoot| {
-        root.object_id == record.object_id
-            && root.kind == RetentionRootKind::RetentionPolicy
-            && root.residency_digest == record.residency_digest
-            && root.control_generation == control_generation
-    };
-    let mut matching = roots.iter().filter(|root| exact(root));
-    let Some(found) = matching.next() else {
-        return Err(SourceRetentionRecordError::RootMissing);
-    };
-    if matching.next().is_some() {
-        return Err(SourceRetentionRecordError::RootAmbiguous);
-    }
-    let found = found.clone();
-    Ok(roots
-        .iter()
-        .filter(|root| **root != found)
-        .cloned()
-        .collect())
 }
 
 fn text_value(value: &str) -> Result<CanonicalValue, SourceRetentionRecordError> {

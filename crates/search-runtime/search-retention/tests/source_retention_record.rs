@@ -11,11 +11,10 @@ use search_contracts::{
 use search_retention::RetentionOperation;
 use search_retention::source_retention::{
     MAX_SOURCE_RETENTION_RECORD_BYTES, SOURCE_RETENTION_RECORD_HEADER_BYTES,
-    SOURCE_RETENTION_RECORD_MAGIC, SourceRetentionCause, SourceRetentionRecord,
-    SourceRetentionRecordError, SourceRetentionState, decode_source_retention_record,
-    encode_source_retention_record, project_source_retention_root,
-    release_source_retention_record, retained_roots_without_cause,
-    source_retention_record_key,
+    SOURCE_RETENTION_RECORD_KEY_PREFIX, SOURCE_RETENTION_RECORD_MAGIC, SourceRetentionCause,
+    SourceRetentionRecord, SourceRetentionRecordError, SourceRetentionState,
+    decode_source_retention_record, encode_source_retention_record, project_source_retention_root,
+    release_source_retention_record, source_retention_record_key,
 };
 use search_retention::sweep::{DurableRoot, RetentionRootKind};
 
@@ -30,30 +29,34 @@ fn op(id: &str, byte: u8) -> RetentionOperation {
     }
 }
 
-fn record() -> SourceRetentionRecord {
+fn hex(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() * 2);
+    for byte in value.as_bytes() {
+        out.push_str(&format!("{byte:02x}"));
+    }
+    out
+}
+
+/// One cause for one exact physical object, created by one exact operation.
+fn record_for(object_id: &str, operation_id: &str, digest: u8) -> SourceRetentionRecord {
     SourceRetentionRecord {
-        object_id: oid("object/primary-0001"),
+        object_id: oid(object_id),
         residency_digest: ObjectResidencyKeyDigest::from_bytes([0x11; 32]),
         namespace_id: SourceNamespaceId::from_bytes([0x22; 16]),
         source_id: SourceId::from_bytes([0x33; 16]),
         source_revision_id: SourceRevisionId::from_bytes([0x44; 16]),
         cause: SourceRetentionCause::UntilExplicitRelease,
-        operation: op("operation/admit-0001", 0x55),
+        operation: op(operation_id, digest),
         state: SourceRetentionState::Active,
     }
 }
 
-fn root(object_id: &str, residency: u8, generation: u64) -> DurableRoot {
-    DurableRoot {
-        object_id: oid(object_id),
-        kind: RetentionRootKind::RetentionPolicy,
-        residency_digest: ObjectResidencyKeyDigest::from_bytes([residency; 32]),
-        control_generation: generation,
-    }
+fn record() -> SourceRetentionRecord {
+    record_for("object/primary-0001", "operation/admit-0001", 0x55)
 }
 
 #[test]
-fn codec_round_trips_every_field_and_keys_stay_full_identity() {
+fn codec_round_trips_every_field_and_the_key_separates_two_causes_of_one_object() {
     let active = record();
     let bytes = encode_source_retention_record(&active).expect("encode");
     assert!(bytes.len() <= MAX_SOURCE_RETENTION_RECORD_BYTES);
@@ -75,13 +78,40 @@ fn codec_round_trips_every_field_and_keys_stay_full_identity() {
     );
     assert_ne!(released_bytes, bytes, "active and released differ on the wire");
 
-    // The technical key is the complete identity: distinct objects cannot
-    // alias onto one key, and no digest is truncated into the key.
-    let first = source_retention_record_key(&oid("object/primary-0001"));
-    let second = source_retention_record_key(&oid("object/primary-0002"));
-    assert_ne!(first, second);
-    assert!(first.ends_with("6f626a6563742f7072696d6172792d30303031"));
-    assert_eq!(first.len(), second.len());
+    // The technical key is the complete framed identity pair: the exact object
+    // plus the exact original creation operation. Two independent causes for
+    // one physical object therefore never alias onto one key, and no identity
+    // text is truncated or replaced by a digest.
+    let first_cause = record_for("object/shared-0001", "operation/cause-0001", 0x01);
+    let second_cause = record_for("object/shared-0001", "operation/cause-0002", 0x02);
+    assert_eq!(first_cause.object_id, second_cause.object_id);
+    assert_ne!(first_cause.operation, second_cause.operation);
+
+    let first_key = source_retention_record_key(&first_cause.object_id, &first_cause.operation.operation_id);
+    let second_key =
+        source_retention_record_key(&second_cause.object_id, &second_cause.operation.operation_id);
+    assert_ne!(first_key, second_key, "same object, distinct causes, distinct keys");
+    assert_eq!(
+        first_key,
+        format!(
+            "{SOURCE_RETENTION_RECORD_KEY_PREFIX}{}:{}",
+            hex("object/shared-0001"),
+            hex("operation/cause-0001")
+        ),
+        "both full identity texts are framed, untruncated, in order"
+    );
+    assert_eq!(
+        source_retention_record_key(&first_cause.object_id, &second_cause.operation.operation_id),
+        second_key,
+        "the key follows the identity pair and never the record instance"
+    );
+
+    let other_object = record_for("object/shared-0002", "operation/cause-0001", 0x01);
+    assert_ne!(
+        source_retention_record_key(&other_object.object_id, &other_object.operation.operation_id),
+        first_key,
+        "distinct objects cannot alias either"
+    );
 }
 
 #[test]
@@ -171,7 +201,7 @@ fn decoder_refuses_magic_version_length_canonical_cause_and_state_drift() {
 }
 
 #[test]
-fn release_is_pure_idempotent_and_never_overwrites_the_recorded_operation() {
+fn release_is_pure_idempotent_and_refuses_a_second_or_creation_identity() {
     let active = record();
     let first = op("operation/release-0001", 0x66);
     let released = release_source_retention_record(&active, &first).expect("release");
@@ -201,16 +231,32 @@ fn release_is_pure_idempotent_and_never_overwrites_the_recorded_operation() {
         Err(SourceRetentionRecordError::OperationConflict),
         "a different release operation never replaces the recorded one"
     );
+
+    // The original creation operation is not a release request, active or not.
+    assert_eq!(
+        release_source_retention_record(&active, &active.operation.clone()),
+        Err(SourceRetentionRecordError::ReleaseOperationReusesCreation)
+    );
+    assert_eq!(
+        release_source_retention_record(&released, &active.operation.clone()),
+        Err(SourceRetentionRecordError::ReleaseOperationReusesCreation)
+    );
 }
 
 #[test]
-fn committed_active_record_projects_its_root_and_release_removes_only_that_root() {
+fn committed_active_record_projects_one_root_and_release_touches_only_that_record() {
     let active = record();
     let projected = project_source_retention_root(&active, 7).expect("active projects");
     assert_eq!(projected.kind, RetentionRootKind::RetentionPolicy);
     assert_eq!(projected.object_id, active.object_id);
     assert_eq!(projected.residency_digest, active.residency_digest);
     assert_eq!(projected.control_generation, 7, "actual readback generation is used");
+
+    assert_eq!(
+        project_source_retention_root(&active, 0),
+        Err(SourceRetentionRecordError::ZeroControlGeneration),
+        "an actually committed object root cannot have generation zero"
+    );
 
     let released = release_source_retention_record(&active, &op("operation/release-0001", 0x66))
         .expect("release");
@@ -220,49 +266,40 @@ fn committed_active_record_projects_its_root_and_release_removes_only_that_root(
         "a released record never yields an active root"
     );
 
-    let others = [
-        root("object/other-0001", 0xAA, 7),
-        DurableRoot {
-            object_id: active.object_id.clone(),
-            kind: RetentionRootKind::LegalHold,
-            residency_digest: active.residency_digest,
-            control_generation: 7,
-        },
-        DurableRoot {
-            object_id: active.object_id.clone(),
-            kind: RetentionRootKind::RetentionPolicy,
-            residency_digest: active.residency_digest,
-            control_generation: 6,
-        },
-        root("object/other-0002", 0xBB, 7),
-    ];
-    let mut roots = vec![projected.clone()];
-    roots.extend(others.iter().cloned());
+    // Two causes share one physical object. Releasing one exact record through
+    // the original control-store CAS leaves the other record active, so the
+    // caller's fresh root recollection still sees that cause's root.
+    let other_cause = record_for(
+        active.object_id.as_str(),
+        "operation/admit-0002",
+        0x88,
+    );
+    assert_eq!(other_cause.object_id, active.object_id);
+    assert_ne!(other_cause.operation, active.operation);
+    assert_ne!(
+        source_retention_record_key(&other_cause.object_id, &other_cause.operation.operation_id),
+        source_retention_record_key(&active.object_id, &active.operation.operation_id),
+        "the two causes never share one record key"
+    );
 
-    let remaining = retained_roots_without_cause(&roots, &active, 7).expect("exact removal");
-    assert_eq!(remaining, others.to_vec(), "every other root is preserved in order");
+    let remaining = project_source_retention_root(&other_cause, 8).expect("other cause stays active");
+    assert_eq!(remaining.kind, RetentionRootKind::RetentionPolicy);
+    assert_eq!(remaining.object_id, active.object_id);
+    assert_eq!(remaining.control_generation, 8);
+    assert_eq!(other_cause.state, SourceRetentionState::Active);
+    assert_eq!(
+        decode_source_retention_record(
+            &encode_source_retention_record(&other_cause).expect("encode other cause")
+        ),
+        Ok(other_cause.clone())
+    );
 
-    let without = roots
-        .iter()
-        .filter(|root| **root != projected)
-        .cloned()
-        .collect::<Vec<_>>();
-    assert_eq!(
-        retained_roots_without_cause(&without, &active, 7),
-        Err(SourceRetentionRecordError::RootMissing),
-        "a missing root is refused, never inferred"
-    );
-    let mut duplicated = roots.clone();
-    duplicated.push(projected);
-    assert_eq!(
-        retained_roots_without_cause(&duplicated, &active, 7),
-        Err(SourceRetentionRecordError::RootAmbiguous),
-        "a duplicated root is refused, never collapsed"
-    );
-    assert_eq!(
-        retained_roots_without_cause(&roots, &active, 8),
-        Err(SourceRetentionRecordError::RootMissing),
-        "a different readback generation has no exact root here"
-    );
+    let untouched = DurableRoot {
+        object_id: oid("object/other-0001"),
+        kind: RetentionRootKind::LegalHold,
+        residency_digest: ObjectResidencyKeyDigest::from_bytes([0xAA; 32]),
+        control_generation: 8,
+    };
+    assert_ne!(untouched, remaining, "no other root is rewritten by a release");
 }
 

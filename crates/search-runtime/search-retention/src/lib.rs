@@ -45,7 +45,10 @@ pub mod purge;
 /// physical object identity, its complete residency digest and its typed source
 /// coordinates. Constructors and codecs are untrusted metadata; only the
 /// original control-store commit makes a record durable, and the current live
-/// purge always dominates it.
+/// purge always dominates it. Release commits exactly one record through that
+/// same original compare-and-set; the aggregated per-object durable root row
+/// carries no cause identity, so the caller recollects active roots at one
+/// coherent generation instead of this module editing a root set.
 pub mod source_retention;
 
 /// Closed retention/purge/restore failure.
