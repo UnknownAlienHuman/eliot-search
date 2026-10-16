@@ -24,6 +24,86 @@ const LIMITS: JournalLimits = JournalLimits::BASELINE;
 const PREFIX: &[u8] = b"eliot.control.native-retention.v1/";
 const MAX_METADATA: usize = 8192;
 
+pub(super) struct RetentionOperationReadback {
+    pub(super) profile: Option<SourceRevisionPresealProfile>,
+    pub(super) result: Option<SourceRevisionMutationReadback>,
+    pub(super) reservation: Option<db::source_retention::SealReservationReadback>,
+    pub(super) object: Option<db::source_retention::ObjectPublicationIntentReadback>,
+    pub(super) reservation_id: MutationId,
+}
+
+fn address(phase: &str, parts: &[&[u8]], work: &dyn Fn(Work) -> Result<(), OwnerError>)
+    -> Result<ControlKey, RetentionControlError> {
+    let bytes = parts.iter().try_fold(PREFIX.len() + phase.len() + 64,
+        |sum, part| sum.checked_add(part.len()).ok_or(ControlError::BudgetExceeded))?;
+    let bytes = bytes.checked_mul(4).ok_or(ControlError::BudgetExceeded)?;
+    for unit in [Work::Checkpoint, Work::Allocate(bytes), Work::Process(bytes)] {
+        work(unit).map_err(|first| RetentionControlError { control: ControlError::BudgetExceeded, first: Some(first) })?;
+    }
+    let mut values = vec![V::Text(c::CanonicalText::new(phase).map_err(|_| ControlError::InvalidKey)?)];
+    for part in parts { values.push(V::Bytes(c::BoundedBytes::new(part.to_vec()).map_err(|_| ControlError::InvalidKey)?)); }
+    let encoded = c::to_canonical_cbor(&V::Array(c::BoundedList::new(values).map_err(|_| ControlError::InvalidKey)?))
+        .map_err(|_| ControlError::InvalidKey)?;
+    let mut key = PREFIX.to_vec(); key.extend_from_slice(encoded.as_slice());
+    Ok(ControlKey::new(key, LIMITS)?)
+}
+
+/// Technical phase ID, never a source/revision/domain identity.
+pub(super) fn phase_id(operation: &c::OpaqueId, phase: &str,
+    work: &dyn Fn(Work) -> Result<(), OwnerError>) -> Result<(MutationId, c::Blake3Digest32), RetentionControlError> {
+    let key = address(phase, &[operation.as_str().as_bytes()], work)?;
+    work(Work::Process(key.as_bytes().len())).map_err(|first| RetentionControlError {
+        control: ControlError::BudgetExceeded, first: Some(first) })?;
+    let digest = c::blake3_raw(&c::CanonicalDigestDomain::parse("eliot/raw/native-retention-phase/v1")
+        .map_err(|_| ControlError::InvalidValue)?, key.as_bytes(),
+        c::DigestInputLimit::new(LIMITS.max_key_bytes).map_err(|_| ControlError::BudgetExceeded)?)
+        .map_err(|_| ControlError::InvalidValue)?;
+    Ok((MutationId(*digest.as_bytes()), digest))
+}
+
+/// Resolves all durable phases before source reads, clocks or identity draws.
+/// Returned metadata is historical; Native/source/policy qualification follows.
+pub(super) fn lookup_before_source<C: CancellationProbe>(journal: &mut db::PersistentControlJournal,
+    publisher: &mut db::ControlSnapshotPublisher, operation: &c::OpaqueId,
+    context: &OperationContext<C>, deadline: Instant, work: &dyn Fn(Work) -> Result<(), OwnerError>,
+) -> Result<RetentionOperationReadback, RetentionControlError> {
+    context.preflight().map_err(|_| ControlError::ReadCancelled)?;
+    let profile_key = address("preseal", &[operation.as_str().as_bytes()], work)?;
+    let result_key = address("result", &[operation.as_str().as_bytes()], work)?;
+    let (reservation_id, _) = phase_id(operation, "seal", work)?;
+    let reservation_key = db::source_retention::revision_seal_reservation_key(reservation_id, LIMITS)?;
+    let object_key = db::source_retention::object_publication_intent_key(reservation_id, LIMITS)?;
+    let keys = [profile_key.clone(), result_key.clone(), reservation_key.clone(), object_key.clone()];
+    let port = journal.bind_control_port::<C>(publisher)?;
+    let callback = |unit| work(unit);
+    let read = port.read_control_keys_with_original_context(&keys, deadline, &callback)?;
+    for unit in [Work::Allocate(16 * MAX_METADATA), Work::Process(16 * MAX_METADATA)] {
+        work(unit).map_err(|first| RetentionControlError { control: ControlError::BudgetExceeded, first: Some(first) })?;
+    }
+    let get = |key: &ControlKey, class| -> Result<Option<&ControlValue>, RetentionControlError> {
+        match read.get(key) {
+            Some(value) if value.class() == class => Ok(Some(value)),
+            None if read.missing_keys().contains(key) => Ok(None),
+            _ => Err(ControlError::StoreCorrupt.into()),
+        }
+    };
+    let profile = get(&profile_key, Class::Operation)?.map(|value|
+        decode_source_revision_preseal_profile(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)).transpose()?;
+    let result = get(&result_key, Class::Operation)?.map(|value|
+        decode_source_revision_mutation_readback(value.as_bytes()).map_err(|_| ControlError::StoreCorrupt)).transpose()?;
+    let reservation = get(&reservation_key, Class::State)?.map(|_| db::source_retention::SealReservationReadback::read(&read, reservation_id, LIMITS)).transpose()?;
+    let object = get(&object_key, Class::State)?.map(|_| db::source_retention::ObjectPublicationIntentReadback::read(&read, reservation_id, LIMITS)).transpose()?;
+    if profile.as_ref().is_some_and(|profile| &profile.operation_id != operation)
+        || result.as_ref().is_some_and(|result| &result.operation_id != operation)
+        || reservation.as_ref().is_some_and(|reservation| reservation.operation_id() != operation)
+        || object.as_ref().is_some_and(|object| object.operation_id() != operation)
+        || ((result.is_some() || reservation.is_some()) && profile.is_none())
+        || (object.is_some() && reservation.is_none()) || (result.is_some() && object.is_none())
+        || object.as_ref().zip(reservation.as_ref()).is_some_and(|(object, reservation)| !object.binds(reservation))
+    { return Err(ControlError::StoreCorrupt.into()); }
+    Ok(RetentionOperationReadback { profile, result, reservation, object, reservation_id })
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct RetentionControlError { pub(super) control: ControlError, pub(super) first: Option<OwnerError> }
 impl From<ControlError> for RetentionControlError {
@@ -149,16 +229,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     }
 
     fn key(&self, phase: &str, parts: &[&[u8]]) -> Result<ControlKey, RetentionControlError> {
-        let bytes = parts.iter().try_fold(PREFIX.len() + phase.len() + 64,
-            |sum, part| sum.checked_add(part.len()).ok_or(ControlError::BudgetExceeded))?;
-        self.charge(bytes.checked_mul(4).ok_or(ControlError::BudgetExceeded)?)?;
-        let mut values = vec![V::Text(c::CanonicalText::new(phase).map_err(|_| ControlError::InvalidKey)?)];
-        for part in parts { values.push(V::Bytes(c::BoundedBytes::new(part.to_vec()).map_err(|_| ControlError::InvalidKey)?)); }
-        let encoded = c::to_canonical_cbor(&V::Array(c::BoundedList::new(values).map_err(|_| ControlError::InvalidKey)?))
-            .map_err(|_| ControlError::InvalidKey)?;
-        let mut key = PREFIX.to_vec();
-        key.extend_from_slice(encoded.as_slice());
-        Ok(ControlKey::new(key, LIMITS)?)
+        address(phase, parts, self.work)
     }
     fn scoped_key(&self, phase: &str, revision: Option<c::SourceRevisionId>) -> Result<ControlKey, RetentionControlError> {
         match revision {
@@ -260,6 +331,17 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         if metadata.is_empty() || metadata.len() > MAX_METADATA
             || c::parse_canonical_cbor(metadata).is_err()
         { return Err(ControlError::InvalidValue.into()); }
+        let decoded = search_revision_store::PersistedSelectedObjectMetadata::decode(metadata)
+            .map_err(|_| ControlError::InvalidValue)?;
+        if decoded.storage_object_id() != &object_id || decoded.object_residency_key_digest() != physical
+            || decoded.source().namespace_id != profile.source_namespace_id
+            || decoded.source().source_id != profile.source_id || decoded.source().revision_id != profile.revision_id
+            || decoded.source().sequence.get() != profile.occurrence_sequence
+            || decoded.operation_id() != &profile.operation_id || decoded.content_digest() != profile.content_digest
+            || decoded.content_bytes() != profile.byte_length
+            || search_revision_store::residency_canonical_bytes(decoded.domain_bindings())
+                .map_err(|_| ControlError::InvalidValue)?.as_slice() != profile.residency_closure.as_slice()
+        { return Err(ControlError::OperationConflict.into()); }
         let revision = late_bind_object_residency(profile, physical).map_err(|_| ControlError::InvalidValue)?;
         let request = SourceRevisionRegistrationRequest::new(profile.operation_id.clone(),
             profile.source_namespace_id, profile.source_id, profile.expected_head,

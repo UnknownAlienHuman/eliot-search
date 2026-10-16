@@ -10,9 +10,11 @@
 
 pub mod domain;
 pub mod source;
+mod metadata;
 
 pub use domain::*;
 pub use source::*;
+pub use metadata::*;
 
 #[cfg(test)]
 mod tests;

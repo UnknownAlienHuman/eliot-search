@@ -34,12 +34,15 @@ mod policy_v2;
 use policy_v2::RootPolicy;
 #[path = "native_source.rs"]
 mod native_source;
+pub(crate) use native_source::SourceBodyUseError;
 #[path = "native_retention_object_io.rs"]
 mod native_retention_object_io;
 #[path = "native_retention_time.rs"]
 mod native_retention_time;
 #[path = "native_retention_security.rs"]
 mod native_retention_security;
+#[path = "native_retention_domains.rs"]
+mod native_retention_domains;
 pub(crate) use native_retention_security::RetentionSecurity;
 
 #[derive(Debug)]

@@ -32,7 +32,7 @@ impl NativeSourceCommand {
         };
         Ok(Self { relative, operation, predecessor })
     }
-    fn intent(&self, root: c::RootBindingId, policy: &[u8]) -> Result<c::ReceiptRef, String> {
+    pub(super) fn intent(&self, root: c::RootBindingId, policy: &[u8]) -> Result<c::ReceiptRef, String> {
         let bytes = |v: &[u8]| c::BoundedBytes::new(v.to_vec()).map(V::Bytes).map_err(|_| "NATIVE_SOURCE_INTENT_INVALID");
         let value = c::BoundedList::new(vec![V::U64(1), bytes(root.as_bytes())?,
             bytes(self.relative.as_bytes())?, bytes(policy)?, self.predecessor.map_or(V::Null, |v| V::U64(v.get()))])

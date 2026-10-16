@@ -38,6 +38,13 @@ pub(super) struct NativeRetentionCommand {
 }
 
 impl NativeRetentionCommand {
+    pub(super) fn admission(&self) -> Result<NativeSourceCommand, String> {
+        let id = self.operation.as_str().strip_prefix("native-retain:")
+            .ok_or("NATIVE_RETENTION_OPERATION_INVALID")?;
+        Ok(NativeSourceCommand { relative: self.relative.clone(), predecessor: self.predecessor,
+            operation: c::OpaqueId::new(format!("native-source:{id}"))
+                .map_err(|_| "NATIVE_RETENTION_OPERATION_INVALID")? })
+    }
     /// Exact eight-argument parse with no side effect beyond the two derived
     /// operation identities.
     ///

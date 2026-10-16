@@ -42,6 +42,7 @@ fn is_direct_command(argument: &OsStr) -> bool {
             "--register-source-root"
                 | "--register-source-root-v2"
                 | "--admit-source-v2"
+                | "--retain-source-v2"
                 | "--prepare-revision-dek-v1"
                 | "--select-revision-dek-v1"
                 | "--unregister-source-root"
@@ -71,6 +72,7 @@ pub(super) fn run(
     let expected = match command {
         "--register-source-root-v2" | "--select-revision-dek-v1" => 4,
         "--admit-source-v2" => 7,
+        "--retain-source-v2" => 8,
         "--register-source-root"
         | "--prepare-revision-dek-v1"
         | "--unregister-source-root"
@@ -83,7 +85,7 @@ pub(super) fn run(
     if selected.len() != expected || !cli.overrides.is_empty() {
         return Err("DIRECT_INPUT_UNAVAILABLE".into());
     }
-    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--prepare-revision-dek-v1" | "--select-revision-dek-v1") {
+    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2" | "--prepare-revision-dek-v1" | "--select-revision-dek-v1") {
         DataRootOpenMode::OpenExistingMutating
     } else {
         DataRootOpenMode::InspectExistingReadOnly
@@ -110,21 +112,23 @@ pub(super) fn run(
     .map_err(|e| e.code().to_owned())?;
     let mut work = NativeWork::new();
     let preflight = (|| {
-        let (hints, selection) = if command == "--select-revision-dek-v1" {
-            (None, Some(super::dek_selection::SelectionCommand::parse(&selected, cli)?))
+        let (hints, effective, selection) = if command == "--select-revision-dek-v1" {
+            (None, None, Some(super::dek_selection::SelectionCommand::parse(&selected, cli)?))
         } else {
-            (Some(capture_hints(&request, &mut work, cli, command, &selected)?), None)
+            let (hints, effective) = capture_configuration(&request, &mut work, cli, command, &selected)?;
+            (Some(hints), Some(effective), None)
         };
-        let policy = if matches!(command, "--register-source-root-v2" | "--admit-source-v2") {
+        let policy = if matches!(command, "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2") {
             Some(super::super::super::direct_policy_v2::capture(
-                &request, &mut work, Path::new(&selected[if command == "--admit-source-v2" { 4 } else { 3 }]),
+                &request, &mut work, Path::new(&selected[if matches!(command, "--admit-source-v2" | "--retain-source-v2") { 4 } else { 3 }]),
             ).map_err(|e| e.code().to_owned())?)
         } else { None };
         let source = (command == "--admit-source-v2").then(|| super::source_command::NativeSourceCommand::parse(&selected)).transpose()?;
         let dek = (command == "--prepare-revision-dek-v1").then(|| super::dek_command::RevisionDekCommand::parse(&selected)).transpose()?;
-        Ok::<_, String>((hints, policy, source, dek, selection))
+        let retention = (command == "--retain-source-v2").then(|| super::retention_command::NativeRetentionCommand::parse(&selected)).transpose()?;
+        Ok::<_, String>((hints, effective, policy, source, dek, selection, retention))
     })();
-    let (hints, policy, source, dek, selection) = match preflight {
+    let (hints, effective, policy, source, dek, selection, retention) = match preflight {
         Ok(value) => value,
         Err(error) => {
             let line = format!(
@@ -141,6 +145,10 @@ pub(super) fn run(
     if let Some(dek) = dek { return owner.execute_revision_dek(&dek, writer); }
     if let Some(selection) = selection { return owner.execute_revision_dek_selection(&selection, writer); }
     let hints = hints.ok_or("DIRECT_CONFIG_VARIANT_UNAVAILABLE")?;
+    if let Some(retention) = retention {
+        return owner.execute_retention(&hints, Path::new(&selected[2]), policy.as_ref().ok_or("NATIVE_RETENTION_POLICY_REQUIRED")?,
+            &retention, effective.as_ref().ok_or("NATIVE_RETENTION_CONFIGURATION_REQUIRED")?, writer);
+    }
     owner.execute(
         &hints,
         if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2") {
@@ -415,13 +423,13 @@ fn registry_metadata(registry: &search_source_registry::SourceRegistry) -> (usiz
     (registry.roots().len(), registry.revision(), roots)
 }
 
-fn capture_hints(
+fn capture_configuration(
     request: &NativeRootRequest,
     work: &mut NativeWork,
     cli: config::CliConfigArgs,
     command: &str,
     selected: &[OsString],
-) -> Result<RootLocatorHints, String> {
+) -> Result<(RootLocatorHints, config::EffectiveDaemonConfig), String> {
     let file = if let Some(path) = cli.config_file {
         work.open(request).map_err(|e| e.code().to_owned())?;
         work.read(request, config::MAX_CAPTURED_FILE_BYTES)
@@ -436,7 +444,7 @@ fn capture_hints(
             .map_err(|_| "DIRECT_CONFIG_INVALID")?;
         if document
             .declared_sections()
-            .any(|v| v.as_str() != "source_root_locators")
+            .any(|v| v.as_str() != "source_root_locators" && !(command == "--retain-source-v2" && v.as_str() == "secrets"))
         {
             return Err("DIRECT_CONFIG_VARIANT_UNAVAILABLE".into());
         }
@@ -447,14 +455,14 @@ fn capture_hints(
     let effective = config::build_effective(file, None, None, "direct", "direct")
         .map_err(|_| "DIRECT_CONFIG_INVALID")?;
     let hints = RootLocatorHints::from_config(&effective)?;
-    if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2") {
+    if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2") {
         hints.selected(Path::new(&selected[2]))?;
     }
     if !matches!(
         command,
-        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--prepare-revision-dek-v1" | "--source-roots" | "--health-data-root" | "--verify-root"
+        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2" | "--prepare-revision-dek-v1" | "--source-roots" | "--health-data-root" | "--verify-root"
     ) {
         return Err("DIRECT_CONSUMER_UNAVAILABLE".into());
     }
-    Ok(hints)
+    Ok((hints, effective))
 }
