@@ -1,8 +1,10 @@
 //! Pre-dispatch contract and original-budget proofs; no server or qualification is fabricated.
+#[path = "../../../../crates/search-query/search-query-planner/tests/support/canonical_plan.rs"]
+mod canonical_plan_fixture;
+
 use super::*;
 use search_access::{AccessCheckpoint, AccessPermit, IndexedRouteFence, MembershipAccessBinding};
 use search_contracts::{Blake3Digest32, CollectionGenerationId, Epoch, LegKind, OwnerEpoch, RequestId};
-use search_query_planner::{CancellationBoundary, CompiledPlanDigest, LegBudget, PlannedLeg};
 use search_ports::{CancellationProbe, PackageOpaque};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -39,37 +41,78 @@ fn fixture() -> (LegTicket, CollectionRoute, EligibilityPredicates) {
     let predicates = plan.predicates();
     let leg = search_access::SafeRetrievalLeg { leg_id: 0, memberships: BTreeSet::from([membership]),
         eligibility_plans: vec![plan], route, overlap_proof_digest: None };
-    let ticket = LegTicket { request_id: RequestId::from_bytes([5; 16]), plan_digest: CompiledPlanDigest([6; 32]),
+    let compiled_plan = canonical_plan_fixture::compile_lexical_plan(
+        RequestId::from_bytes([5; 16]),
+        leg,
+        canonical_plan_fixture::lexical_budget(100, 8, 1024, 100, 1024 * 1024),
+    );
+    let ticket = ticket_for(&compiled_plan);
+    (ticket, CollectionRoute { generation: route.collection_generation_id,
+        physical_name: OpaqueId::new("fixture:qualified-route").unwrap() }, predicates)
+}
+
+fn ticket_for(plan: &search_query_planner::CompiledSearchPlan) -> LegTicket {
+    let leg = plan.legs().iter().find(|leg| leg.leg_kind() == LegKind::Lexical)
+        .expect("canonical lexical leg").clone();
+    LegTicket { request_id: plan.request_id(), plan_digest: plan.digest(),
         owner_id: OpaqueId::new("fixture:owner").unwrap(), issued_at_tick: 0,
         access_permit: AccessPermit { checkpoint: AccessCheckpoint::BeforeLegDispatch,
             live_generation: 1, live_snapshot_digest: Blake3Digest32::from_bytes([7; 32]) },
-        leg: PlannedLeg { leg_id: 0, leg_kind: LegKind::Lexical, depends_on: Vec::new(),
-            memberships: leg.memberships.clone(), safe_index_leg: Some(leg),
-            budget: LegBudget { deadline_ms: 100, max_candidates: 8, max_source_read_bytes: 1024,
-                max_cpu_ms: 100, max_memory_bytes: 1024 * 1024 }, cancellation_boundary: CancellationBoundary::BeforeDispatch } };
-    (ticket, CollectionRoute { generation: route.collection_generation_id,
-        physical_name: OpaqueId::new("fixture:qualified-route").unwrap() }, predicates)
+        leg }
 }
 
 #[test]
 fn real_port_rejects_widened_scope_contract_and_route_before_rpc() {
     let (ticket, route, predicates) = fixture();
-    let expected = ticket.leg.safe_index_leg.as_ref().unwrap();
-    validate_real_ticket(expected, &route, &ticket, &predicates).unwrap();
-    let filter = render_eligibility_filter(&expected.eligibility_plans[0], &ticket.leg.memberships).unwrap();
-    assert_eq!(filter.allowed_source_memberships.len(), ticket.leg.memberships.len());
-    let mut wider = ticket.clone();
-    wider.leg.memberships.insert(SourceMembershipId::from_bytes([99; 16]));
-    assert!(validate_real_ticket(expected, &route, &wider, &predicates).is_err());
-    let mut changed = ticket.clone();
-    changed.leg.safe_index_leg.as_mut().unwrap().eligibility_plans[0].scoring_partition_digest = Blake3Digest32::from_bytes([98; 32]);
-    assert!(validate_real_ticket(expected, &route, &changed, &predicates).is_err());
+    let expected = ticket.leg.safe_index_leg().unwrap().clone();
+    validate_real_ticket(&expected, &route, &ticket, &predicates).unwrap();
+    let filter = render_eligibility_filter(&expected.eligibility_plans[0], ticket.leg.memberships()).unwrap();
+    assert_eq!(filter.allowed_source_memberships.len(), ticket.leg.memberships().len());
+
+    let other_membership = SourceMembershipId::from_bytes([99; 16]);
+    let other_plan = search_access::compile_base_eligibility(
+        &MembershipAccessBinding { membership_id: other_membership,
+            access_partition_digest: Blake3Digest32::from_bytes([3; 32]),
+            scoring_partition_digest: Blake3Digest32::from_bytes([4; 32]),
+            projection_membership_id: OpaqueId::new("fixture:projection:other").unwrap(), active: true },
+        IndexedRouteFence { collection_generation_id: route.generation,
+            visible_epoch: Epoch::new(1).unwrap(), route_generation: 1, owner_epoch: OwnerEpoch::new(1).unwrap() },
+        1, 1, 1).unwrap();
+    let mut wider = expected.clone();
+    wider.memberships.insert(other_membership);
+    wider.eligibility_plans.push(other_plan);
+    let wider_plan = canonical_plan_fixture::compile_lexical_plan(
+        RequestId::from_bytes([8; 16]), wider,
+        canonical_plan_fixture::lexical_budget(100, 8, 1024, 100, 1024 * 1024));
+    let wider_ticket = ticket_for(&wider_plan);
+    assert!(validate_real_ticket(&expected, &route, &wider_ticket, &predicates).is_err());
+
+    let changed_binding = MembershipAccessBinding { membership_id: expected.memberships.iter().next().copied().unwrap(),
+        access_partition_digest: Blake3Digest32::from_bytes([3; 32]),
+        scoring_partition_digest: Blake3Digest32::from_bytes([98; 32]),
+        projection_membership_id: OpaqueId::new("fixture:projection").unwrap(), active: true };
+    let changed_plan = search_access::compile_base_eligibility(
+        &changed_binding, IndexedRouteFence { collection_generation_id: route.generation,
+            visible_epoch: Epoch::new(1).unwrap(), route_generation: 1, owner_epoch: OwnerEpoch::new(1).unwrap() },
+        1, 1, 1).unwrap();
+    let changed_leg = search_access::SafeRetrievalLeg { leg_id: 0,
+        memberships: BTreeSet::from([changed_binding.membership_id]),
+        eligibility_plans: vec![changed_plan],
+        route: IndexedRouteFence { collection_generation_id: route.generation,
+            visible_epoch: Epoch::new(1).unwrap(), route_generation: 1, owner_epoch: OwnerEpoch::new(1).unwrap() },
+        overlap_proof_digest: None };
+    let changed_compiled = canonical_plan_fixture::compile_lexical_plan(
+        RequestId::from_bytes([9; 16]), changed_leg,
+        canonical_plan_fixture::lexical_budget(100, 8, 1024, 100, 1024 * 1024));
+    let changed_ticket = ticket_for(&changed_compiled);
+    assert!(validate_real_ticket(&expected, &route, &changed_ticket, &predicates).is_err());
+
     let mut diverged = predicates;
     diverged.idf_digest = search_access::EligibilityPlanDigest([97; 32]);
-    assert!(validate_real_ticket(expected, &route, &ticket, &diverged).is_err());
+    assert!(validate_real_ticket(&expected, &route, &ticket, &diverged).is_err());
     let mut foreign = route.clone();
     foreign.generation = CollectionGenerationId::from_bytes([96; 16]);
-    assert!(validate_real_ticket(expected, &foreign, &ticket, &predicates).is_err());
+    assert!(validate_real_ticket(&expected, &foreign, &ticket, &predicates).is_err());
 }
 
 #[test]
