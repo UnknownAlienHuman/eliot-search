@@ -455,6 +455,11 @@
       "state": "OPEN",
       "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/586",
       "reviewed_at": "2026-10-16"
+    },
+    "588": {
+      "state": "OPEN",
+      "url": "https://github.com/UnknownAlienHuman/eliot-search/issues/588",
+      "reviewed_at": "2026-10-16"
     }
   },
   "sites": [
@@ -8492,7 +8497,7 @@
       "signal": "digest-macro-review",
       "count": 1,
       "test": false,
-      "source_sha256": "76dc41d36bce9b540eab909b59bb45ad8ce508b42e2ab446651eeade4ea64982",
+      "source_sha256": "075446f2f221c59f779fc0182a5bbe65de836fbedea9c82132a434f886440b7c",
       "classification": "typed-schema-encoding",
       "owner_issue": 321,
       "phase": "owner-migration-new-profile",
@@ -8504,7 +8509,7 @@
       "signal": "digest-import-review",
       "count": 1,
       "test": false,
-      "source_sha256": "76dc41d36bce9b540eab909b59bb45ad8ce508b42e2ab446651eeade4ea64982",
+      "source_sha256": "075446f2f221c59f779fc0182a5bbe65de836fbedea9c82132a434f886440b7c",
       "classification": "opaque-value-use",
       "owner_issue": 321,
       "phase": "accepted",
@@ -58976,7 +58981,7 @@
       "signal": "short-prefix-review",
       "count": 1,
       "test": false,
-      "source_sha256": "bca2115815622818442a36a190221a264e77c18a622452bded0878e95e90252b",
+      "source_sha256": "85ac29db5620d30d0c7a037479bdba07a923b5e49d060ef1a0b77a0157eb290e",
       "classification": "non-digest-surface",
       "owner_issue": 456,
       "phase": "accepted",
@@ -72001,6 +72006,18 @@
       "owner_issue": 586,
       "phase": "accepted",
       "reason": "Pure cfg(test) configuration causality fixture/support; shared BLAKE3 reproduces historical descriptor bytes or bounded source equality only. No native, runtime or Current authority."
+    },
+    {
+      "count": 2,
+      "path": "bins/eliot-searchd/src/public_runtime_service/kernel/retained_config_tests.rs",
+      "signal": "digest-macro-review",
+      "source_sha256": "344cd7e31f0696c50de9e673e5b5779ba7b438f56f79469bc0a28ffe2c792af2",
+      "symbol": "status_health_readiness_retains_capture_after_file_corruption_and_removal",
+      "test": true,
+      "classification": "test-vector",
+      "owner_issue": 588,
+      "phase": "accepted",
+      "reason": "Causal real-file capture regression compares the retained snapshot fingerprint before/after external corruption and deletion. It performs no hashing or durable activation and grants no key/runtime authority."
     }
   ]
 }

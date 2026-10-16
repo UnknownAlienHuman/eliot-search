@@ -4,6 +4,7 @@ use std::io::Write;
 
 #[cfg(test)]
 use crate::catalog_quarantine;
+use crate::config_composition::EffectiveDaemonConfig;
 #[cfg(test)]
 use crate::direct_store::PreparationCursor;
 use crate::direct_store::{DirectRead, ReadOnlyStore};
@@ -34,16 +35,25 @@ pub(super) fn execute_command(
     handles: &mut crate::result_handles::ResultHandleCatalog,
     storage: &mut crate::storage_security::StorageSecurityStatus,
     writer: &mut impl Write,
+    config: &EffectiveDaemonConfig,
 ) -> Result<ServiceControl, String> {
     with_read_command(command, |name| {
         store.checkpoint()?;
         let root = store.root();
         let fields = command.split('\t').take(6).collect::<Vec<_>>();
         match (name, fields.as_slice()) {
-            ("health", [_]) => cmd_health(writer, store, continuations, handles, &root, storage)?,
+            ("health", [_]) => cmd_health(
+                writer,
+                store,
+                continuations,
+                handles,
+                &root,
+                storage,
+                config,
+            )?,
             ("status", [_]) => {
                 refresh_storage(storage, &root)?;
-                cmd_status(writer, store, storage)?;
+                cmd_status(writer, store, storage, config)?;
             }
             ("version", [_]) => cmd_version(writer)?,
             ("shutdown", [_]) => {

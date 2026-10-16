@@ -1,9 +1,9 @@
 //! Read-only runtime status and diagnostic commands.
 
-use std::env;
 use std::io::Write;
 use std::path::Path;
 
+use crate::config_composition::{EffectiveDaemonConfig, ReadinessReport};
 use crate::continuation::ContinuationCatalog;
 use crate::development::Health;
 use crate::direct_store::DirectRead;
@@ -42,8 +42,9 @@ pub(super) fn cmd_status(
     writer: &mut impl Write,
     store: &impl DirectRead,
     storage: &StorageSecurityStatus,
+    config: &EffectiveDaemonConfig,
 ) -> Result<(), String> {
-    let readiness = current_readiness()?;
+    let readiness = current_readiness(config);
     emit_provider_status(
         writer,
         &store.namespace_id()?,
@@ -55,18 +56,12 @@ pub(super) fn cmd_status(
     )
 }
 
-pub(super) fn current_readiness() -> Result<crate::config_composition::ReadinessReport, String> {
-    let cli_args = env::args_os().skip(1).take(257).collect::<Vec<_>>();
-    if cli_args.len() > 256 {
-        return Err("DAEMON_CONFIG_BOUNDS_EXCEEDED".to_owned());
-    }
-    let (_, cli) = crate::config_composition::strip_config_args_os(&cli_args)?;
-    let effective = crate::config_composition::effective_from_process(&cli)?;
-    Ok(crate::config_composition::derive_readiness(
-        &effective,
+pub(super) fn current_readiness(config: &EffectiveDaemonConfig) -> ReadinessReport {
+    crate::config_composition::derive_readiness(
+        config,
         crate::config_composition::direct_dependencies(),
         crate::config_composition::AcceptedReceipts::default(),
-    ))
+    )
 }
 
 pub(super) fn cmd_health(
@@ -76,11 +71,12 @@ pub(super) fn cmd_health(
     handles: &mut ResultHandleCatalog,
     canonical_root: &Path,
     storage: &mut StorageSecurityStatus,
+    config: &EffectiveDaemonConfig,
 ) -> Result<(), String> {
     let verification = store.verify()?;
     let manifests = verify_directory_manifests(canonical_root, &store.namespace_id()?)?;
     refresh_storage(storage, canonical_root)?;
-    let readiness = current_readiness()?;
+    let readiness = current_readiness(config);
     let health = Health::from_readiness(&readiness);
     write_line(
         writer,
@@ -184,3 +180,7 @@ pub(super) fn refresh_storage(
     *storage = StorageSecurityStatus::inspect(canonical_root)?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "retained_config_tests.rs"]
+mod retained_config_tests;
