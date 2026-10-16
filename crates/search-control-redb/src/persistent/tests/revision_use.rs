@@ -8,15 +8,19 @@
 
 use super::*;
 use crate::source_retention::{reserved, revision_seal_reservation_key, revision_use_keys,
-    CommittedRevisionSealUse, RevisionSealMetadata, RevisionUseCommand, REVISION_USE_STATE_KEY};
-use crate::{ConditionalControlMutation, ControlRecordCondition};
+    CommittedDerivedArtifactSealUse, CommittedRevisionSealUse, DerivedArtifactReservationReadback,
+    DerivedArtifactScopeGuardKeysV1, DerivedArtifactUseCommand, DerivedArtifactUseMetadataV1,
+    RevisionSealMetadata, RevisionUseCommand, REVISION_USE_STATE_KEY,
+    derived_artifact_reservation_keys};
+use crate::{ConditionalControlMutation, ControlPortCommand, ControlRecordCondition};
 use crate::{RevisionDekCommand, RevisionDekSelectionCommand};
 use crate::{REVISION_DEK_APPLICATION_INTENT_KEY, REVISION_DEK_CANDIDATE_KEY,
     REVISION_DEK_CURRENT_KEY, REVISION_DEK_INTENT_KEY};
 use search_contracts::{to_canonical_cbor, BoundedList, CanonicalText, CanonicalValue as V,
-    OpaqueId, OpaqueRef, RequestId};
-use search_ports::{CancellationProbe, ControlSnapshotPort, MutationIdentity, OperationContext,
-    PackageOpaque};
+    MaterializationId, OpaqueId, OpaqueRef, RepresentationId, RequestId, SourceId,
+    SourceNamespaceId, SourceRevisionId, SourceRevisionRef};
+use search_ports::{CancellationProbe, ControlJournalPort, ControlSnapshotPort, MutationIdentity,
+    OperationContext, PackageOpaque};
 use std::cell::Cell;
 use std::time::{Duration, Instant};
 
@@ -114,6 +118,48 @@ fn use_read(bound: &BoundControlJournal<'_, Cancel>, reservation: MutationId)
     keys.push(revision_seal_reservation_key(reservation, LIMITS).unwrap());
     let work = |_unit: MigrationBootstrapWork| -> Result<(), &str> { Ok(()) };
     bound.read_control_keys_with_original_context(&keys, deadline(), &work).unwrap()
+}
+
+fn install_derived_scope_guards(bound: &mut BoundControlJournal<'_, Cancel>)
+    -> DerivedArtifactScopeGuardKeysV1
+{
+    let guards = DerivedArtifactScopeGuardKeysV1::new(key(b"root/owner"), key(b"source/revision"),
+        key(b"namespace/owner"), key(b"residency/policy"), key(b"purge/fence")).unwrap();
+    let guard_keys = [guards.root_owner().clone(), guards.source_revision().clone(),
+        guards.namespace_owner().clone(), guards.residency_policy().clone(), guards.purge_fence().clone()];
+    let work = |_unit: MigrationBootstrapWork| -> Result<(), &str> { Ok(()) };
+    let generation = bound.read_control_snapshot_with_original_context(deadline(), &work).unwrap().generation;
+    let writes = guard_keys.iter().enumerate().map(|(index, key)| ControlWrite {
+        key: key.clone(),
+        value: ControlValue::new(ControlRecordClass::State,
+            cbor(&V::U64(u64::try_from(index).unwrap() + 1)), LIMITS).unwrap(),
+    }).collect();
+    let conditions = guard_keys.iter().cloned().map(ControlRecordCondition::absent).collect();
+    let command = ControlPortCommand::Records(ConditionalControlMutation::new(ControlMutation::new(
+        MutationId([40; 32]), digest32(40), generation, writes, vec![]), conditions));
+    bound.transact(&command, &context(), &id(40)).unwrap();
+    guards
+}
+
+fn derived_use_metadata(current: &[u8], counter: u64) -> DerivedArtifactUseMetadataV1 {
+    DerivedArtifactUseMetadataV1 {
+        operation_id: OpaqueId::new("derived-operation:disk-fixture").unwrap(),
+        source_revision: SourceRevisionRef {
+            source_namespace_id: SourceNamespaceId::from_bytes([51; 16]),
+            source_id: SourceId::from_bytes([52; 16]),
+            revision_id: SourceRevisionId::from_bytes([53; 16]),
+            content_digest: digest32(54), byte_length: 32,
+        },
+        materialization_id: MaterializationId::from_bytes([55; 16]),
+        representation_id: RepresentationId::from_bytes([56; 16]),
+        // Generic canonical fixtures exercise C02 opacity only; they are not C07 receipts.
+        descriptor_canonical: cbor(&V::U64(57)),
+        residency_canonical: cbor(&V::U64(3)),
+        selected_current_canonical: current.to_vec(),
+        aad_canonical: cbor(&V::U64(58 + counter)),
+        plaintext_length: 32,
+        expected_counter: counter,
+    }
 }
 
 fn materialize_bound_state(bound: &mut BoundControlJournal<'_, Cancel>, preparation: &[u8]) -> Vec<u8> {
@@ -258,5 +304,62 @@ fn revision_use_postcommit_refusal_is_unknown_without_a_permit() {
     }
     assert!(!journal.requires_recovery());
     assert_eq!(journal.verify().unwrap().generation, 8);
+}
+
+#[test]
+fn derived_artifact_use_is_fresh_only_and_burns_the_shared_counter() {
+    let scratch = Scratch::new();
+    let mut journal = create5(&scratch);
+    let mut publisher = ControlSnapshotPublisher::new();
+    let preparation = cbor(&V::U64(1));
+    let work = |_unit: MigrationBootstrapWork| -> Result<(), &str> { Ok(()) };
+    {
+        let mut bound = journal.bind_control_port::<Cancel>(&mut publisher).unwrap();
+        let current = materialize_bound_state(&mut bound, &preparation);
+        let guards = install_derived_scope_guards(&mut bound);
+        let reservation_id = MutationId([41; 32]);
+        let read_keys = derived_artifact_reservation_keys(reservation_id, &guards, LIMITS).unwrap();
+        let read = bound.read_control_keys_with_original_context(&read_keys, deadline(), &work).unwrap();
+        assert_eq!(RevisionUseCommand::next_counter(&read, &preparation, LIMITS).unwrap(), 0);
+
+        let metadata = derived_use_metadata(&current, 0);
+        let command = DerivedArtifactUseCommand::reserve(&read, reservation_id, digest32(41),
+            &preparation, metadata.clone(), &guards, LIMITS).unwrap();
+        let (receipt, permit) = bound.transact_derived_artifact_use_with_original_context(
+            &command, &id(41), deadline(), &work).unwrap();
+        assert!(!receipt.replayed);
+        let permit: CommittedDerivedArtifactSealUse = permit.expect("fresh ack mints one permit");
+        assert_eq!(permit.metadata(), &metadata);
+        assert_eq!(permit.selected_current_canonical(), current);
+        assert_eq!(permit.aad_canonical(), metadata.aad_canonical);
+        assert_eq!(permit.counter(), 0);
+        assert_eq!(permit.plaintext_length(), 32);
+        assert_eq!(permit.authenticated_blocks(), 4);
+        drop(permit);
+
+        let (replay_receipt, replay_permit) = bound.transact_derived_artifact_use_with_original_context(
+            &command, &id(41), deadline(), &work).unwrap();
+        assert!(replay_receipt.replayed);
+        assert!(replay_permit.is_none(), "replay cannot reissue the permit");
+        let recovery = bound.recover_derived_artifact_use_with_original_context(
+            &command, &id(41), deadline(), &work).unwrap();
+        assert!(matches!(recovery, CommitRecoveryDecision::Committed(receipt) if receipt.replayed));
+
+        let read = bound.read_control_keys_with_original_context(&read_keys, deadline(), &work).unwrap();
+        let reservation = DerivedArtifactReservationReadback::read(&read, reservation_id, LIMITS).unwrap();
+        assert_eq!(reservation.source_revision_ref().content_digest, digest32(54));
+        assert_eq!(reservation.descriptor_canonical(), metadata.descriptor_canonical);
+        assert_eq!(reservation.aad_canonical(), metadata.aad_canonical);
+        assert_eq!(reservation.counter(), 0);
+        assert_eq!(reservation.authenticated_blocks(), 4);
+        assert_eq!(RevisionUseCommand::next_counter(&read, &preparation, LIMITS).unwrap(), 1);
+        let usage = crate::source_retention::RevisionUseUsageReadback::read(&read, &preparation, LIMITS)
+            .unwrap();
+        assert_eq!(usage.attempts(), 1);
+        assert_eq!(usage.blocks(), 4);
+        assert_eq!(usage.plaintext_bytes(), 32);
+        assert_eq!(usage.residency_canonical(), Some(metadata.residency_canonical.as_slice()));
+    }
+    assert_eq!(journal.verify().unwrap().generation, 9);
 }
 

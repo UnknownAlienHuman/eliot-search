@@ -35,6 +35,43 @@ The Direct initialization operation binds complete actual JournalIdentity and
 the original request through the shared canonical owner. No Native/root/access
 authority is created by a storage profile or restored metadata.
 
+### C07 derived-artifact v1
+
+The additive `derived_artifact` profile uses the same selected-v2 usage row, selected Current record,
+residency claim, attempt/block/plaintext caps, checked GCM charge, and original-context transaction
+engine. It does not append `SourceHistory` or mutate any raw selected-v2 key/value bytes. Its explicit
+`secret/revision-use/v2/derived-artifact/v1/` records are versioned rebuild state.
+
+The Root caller supplies `DerivedArtifactScopeGuardKeysV1` in Root-owner, source-revision,
+namespace-owner, residency-policy, purge-fence order. It reads the returned
+`derived_artifact_reservation_keys(...)` through `read_control_keys_with_original_context` so usage,
+material intent, selected Current, three derived-record absences and all five exact guard values come
+from one coherent disk read. `RevisionUseCommand::next_counter` remains the only counter reader. After
+the parent constructs the C07 descriptor and final AAD for that counter, it passes
+`DerivedArtifactUseMetadataV1` to `DerivedArtifactUseCommand::reserve`. The reservation conditionally
+writes the shared usage counters, a versioned subject row, a versioned exact Current/AAD/charge row, and
+the five captured guard values in one existing-journal transaction.
+
+`BoundControlJournal::transact_derived_artifact_use_with_original_context` returns a
+`CommittedDerivedArtifactSealUse` only after a fresh acknowledged commit. The permit is non-Clone and
+exposes `metadata()`, `selected_current_canonical()`, `counter()`, `aad_canonical()`,
+`plaintext_length()`, and `authenticated_blocks()`. Its checked charge is exactly
+`ceil(P/16) + ceil(AAD/16) + 1`. Replay returns no permit; recovery through
+`recover_derived_artifact_use_with_original_context` returns only the existing recovery decision.
+Unknown/refused use stays charged and never authorizes blind re-encryption.
+
+After AES and C07 reference/address derivation, the caller builds
+`DerivedArtifactObjectPublicationV1` from the exact canonical object-reference bytes, address bytes,
+actual stored-object digest and stored-object length. `DerivedArtifactUseCommand::bind_object_publication`
+creates a separate immutable late-intent command conditioned on the exact subject/reservation rows,
+selected Current and the same five Root/source/namespace/policy/purge values. The caller commits it via
+`transact_derived_artifact_object_intent_with_original_context` before calling C07 filesystem publish.
+Its recovery method returns no permit. `DerivedArtifactReservationReadback::read` and
+`DerivedArtifactObjectIntentReadback::read` expose equality metadata; `binds` joins reservation
+coordinates, while the C07/Root verifier must compare the opaque descriptor/reference/AAD and validate
+actual source/root/policy state. C02 does not parse the C07 codec or claim a stored-byte digest proves
+owner authenticity.
+
 ## Frozen schema-5 operating profile
 
 - `JournalOperatingProfile`: closed Direct / Indexed / MigrationInert observation.

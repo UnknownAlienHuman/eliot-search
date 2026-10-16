@@ -414,5 +414,6 @@ mod tests;
 mod original_registry;
 mod original_records;
 mod original_revision_use;
+mod original_derived_artifact_use;
 mod original_records_targeted;
 pub use original_records_targeted::ScopedControlRecordsReadback;

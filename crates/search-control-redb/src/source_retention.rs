@@ -10,7 +10,19 @@ use crate::{ConditionalControlMutation, ControlError, ControlKey, ControlMutatio
     ControlRecordClass, ControlRecordCondition, ControlValue, ControlWrite,
     JournalIdentity, JournalLimits, MutationId, ScopedControlRecordsReadback};
 
+mod derived_artifact;
 mod publication;
+pub use derived_artifact::{
+    derived_artifact_guard_snapshot_key, derived_artifact_object_intent_key,
+    derived_artifact_object_intent_keys, derived_artifact_reservation_key,
+    derived_artifact_reservation_keys, derived_artifact_subject_key,
+    CommittedDerivedArtifactSealUse, DerivedArtifactObjectIntentCommand,
+    DerivedArtifactObjectIntentReadback, DerivedArtifactObjectPublicationV1,
+    DerivedArtifactReservationReadback, DerivedArtifactScopeGuardKeysV1,
+    DerivedArtifactUseCommand, DerivedArtifactUseMetadataV1,
+    MAX_DERIVED_ARTIFACT_ADDRESS_BYTES, MAX_DERIVED_ARTIFACT_DESCRIPTOR_BYTES,
+    MAX_DERIVED_ARTIFACT_REFERENCE_BYTES,
+};
 pub use publication::{object_publication_intent_key, object_publication_intent_keys,
     ObjectPublicationIntentReadback, RevisionUseUsageReadback, SealReservationReadback,
     MAX_OBJECT_METADATA_BYTES};
