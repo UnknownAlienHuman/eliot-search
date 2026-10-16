@@ -736,18 +736,32 @@ pub(crate) fn validate_expected_head<'a>(
     request: &SourceRevisionRegistrationRequest,
     head: &'a SourceRevisionHead,
 ) -> Result<Option<&'a SourceRevision>, RegistryError> {
-    if head.source_namespace_id != request.source_namespace_id
-        || head.source_id != request.source_id
+    validate_expected_head_parts(
+        request.source_namespace_id,
+        request.source_id,
+        request.expected_head,
+        head,
+    )
+}
+
+pub(crate) fn validate_expected_head_parts(
+    source_namespace_id: SourceNamespaceId,
+    source_id: SourceId,
+    expected_head: Option<SourceRevisionId>,
+    head: &SourceRevisionHead,
+) -> Result<Option<&SourceRevision>, RegistryError> {
+    if head.source_namespace_id != source_namespace_id
+        || head.source_id != source_id
     {
         return Err(RegistryError::MutationOutcomeUnknown);
     }
     if let Some(revision) = head.revision.as_ref() {
         validate_source_revision(revision)?;
-        if revision.source_id != request.source_id {
+        if revision.source_id != source_id {
             return Err(RegistryError::MutationOutcomeUnknown);
         }
     }
-    match (request.expected_head, head.revision.as_ref()) {
+    match (expected_head, head.revision.as_ref()) {
         (None, None) => Ok(None),
         (Some(expected), Some(current)) if expected == current.revision_id => Ok(Some(current)),
         _ => Err(RegistryError::SourceRevisionConflict),
