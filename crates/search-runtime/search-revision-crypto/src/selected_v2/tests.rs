@@ -5,7 +5,7 @@
 
 use super::*;
 
-/// Published BLAKE3 empty-input digest (RFC 7693 test vector).
+/// Published BLAKE3 empty-input digest from the BLAKE3 test vectors.
 const EMPTY_BLAKE3_HEX: &str =
     "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262";
 

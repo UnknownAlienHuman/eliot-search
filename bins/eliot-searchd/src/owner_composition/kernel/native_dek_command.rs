@@ -122,6 +122,28 @@ fn commit<C: CancellationProbe>(port: &mut BoundControlJournal<'_, C>, command: 
         _ => Err("REVISION_DEK_CONTROL_OUTCOME_UNKNOWN".into()),
     }
 }
+fn usage_identity(binding: &RevisionDekBinding, phase: u64) -> Result<(MutationId, c::Blake3Digest32), String> {
+    let hash = digest("eliot/cbor/revision-dek-use-operation/v2", vec![
+        bytes(&binding.protection_entropy())?, V::U64(phase)])?;
+    Ok((MutationId(*hash.as_bytes()), hash))
+}
+fn commit_usage<C: CancellationProbe>(port: &mut BoundControlJournal<'_, C>,
+    command: &db::source_retention::RevisionUseCommand, deadline: Instant,
+    work: &impl Fn(Work) -> Result<(), OwnerError>,
+) -> Result<bool, String> {
+    let mutation = db::control_mutation_identity(command.command().mutation().id())
+        .map_err(|_| "REVISION_DEK_USE_IDENTITY_INVALID")?;
+    match port.transact_revision_use_with_original_context(command, &mutation, deadline, work) {
+        Ok((receipt, None)) => Ok(!receipt.replayed),
+        Ok((_, Some(_))) => Err("REVISION_DEK_USE_UNEXPECTED_SEAL_PERMIT".into()),
+        Err(_) => match port.recover_revision_use_with_original_context(command, &mutation, deadline, work) {
+            // A recovered receipt may establish metadata; it never proves that
+            // the original caller did not already draw fresh key material.
+            Ok(db::CommitRecoveryDecision::Committed(_)) => Ok(false),
+            _ => Err("REVISION_DEK_USE_OUTCOME_UNKNOWN".into()),
+        },
+    }
+}
 fn output(prepared: bool, historical: bool, reason: &str) -> DirectOutput {
     // `current` qualifies this command's Native result, never a Current key role.
     DirectOutput { current: prepared, line: format!(
@@ -154,8 +176,10 @@ impl DirectRegistryOwner {
             user.user_scope_digest(), command_input.operation).map_err(|error| error.code().to_owned())?;
         let callback = |work| native.work(work);
         let journal = self.control.journal.as_mut().ok_or("REVISION_DEK_CONTROL_UNAVAILABLE")?;
+        let limits = journal.limits();
         let mut port = bind(journal, &mut self.control.publisher, native.context())?;
-        let keys = [key(db::REVISION_DEK_INTENT_KEY)?, key(db::REVISION_DEK_CANDIDATE_KEY)?, key(db::REVISION_DEK_CURRENT_KEY)?];
+        let keys = [key(db::REVISION_DEK_INTENT_KEY)?, key(db::REVISION_DEK_CANDIDATE_KEY)?,
+            key(db::REVISION_DEK_CURRENT_KEY)?, key(db::source_retention::REVISION_USE_STATE_KEY)?];
         let mut snapshot = port.read_control_keys_with_original_context(&keys, deadline, &callback)
             .map_err(|_| "REVISION_DEK_CONTROL_READ_REFUSED")?;
         if snapshot.get(&keys[2]).is_some() { return Ok(output(false, false, "REVISION_DEK_CURRENT_EXISTS")); }
@@ -177,6 +201,19 @@ impl DirectRegistryOwner {
                 if os::read_revision_dek(&binding, &mut context).map_err(|error| error.code().to_owned())?.is_some() {
                     return Ok(output(false, false, "REVISION_DEK_UNOWNED_BACKEND_RECORD"));
                 }
+                // Bound pure command/codec preparation before copies or hashes;
+                // disk effects have their own original-context accounting.
+                native.work(Work::Allocate(32 * 1024)).map_err(|e| e.code().to_owned())?;
+                native.work(Work::Process(32 * 1024)).map_err(|e| e.code().to_owned())?;
+                let (genesis_id, genesis_digest) = usage_identity(&binding, 0)?;
+                let genesis = db::source_retention::RevisionUseCommand::genesis(&snapshot, genesis_id,
+                    genesis_digest, &binding.protection_entropy(), limits)
+                    .map_err(|_| "REVISION_DEK_USE_GENESIS_REFUSED")?;
+                if !commit_usage(&mut port, &genesis, deadline, &callback)? {
+                    return Ok(output(false, false, "REVISION_DEK_USE_GENESIS_NOT_FRESH"));
+                }
+                snapshot = port.read_control_keys_with_original_context(&keys, deadline, &callback)
+                    .map_err(|_| "REVISION_DEK_CONTROL_READ_REFUSED")?;
                 let prepared = os::prepare_revision_dek(&binding, &mut context).map_err(|error| error.code().to_owned())?;
                 let intent = RevisionDekIntent::new(binding.clone(), facts.creator_epoch, prepared.protected_bytes())
                     .map_err(|error| error.code().to_owned())?;
@@ -186,6 +223,15 @@ impl DirectRegistryOwner {
                 let value = stored(&RevisionDekRecord::Intent(intent.clone()))?;
                 let request = command(&binding, 0, snapshot.generation(), value, None)?;
                 commit(&mut port, &request, deadline, &callback)?;
+                snapshot = port.read_control_keys_with_original_context(&keys, deadline, &callback)
+                    .map_err(|_| "REVISION_DEK_CONTROL_READ_REFUSED")?;
+                native.work(Work::Allocate(32 * 1024)).map_err(|e| e.code().to_owned())?;
+                native.work(Work::Process(32 * 1024)).map_err(|e| e.code().to_owned())?;
+                let (material_id, material_digest) = usage_identity(&binding, 1)?;
+                let material = db::source_retention::RevisionUseCommand::bind_material(&snapshot,
+                    material_id, material_digest, &binding.protection_entropy(), limits)
+                    .map_err(|_| "REVISION_DEK_USE_MATERIAL_REFUSED")?;
+                let _fresh_material = commit_usage(&mut port, &material, deadline, &callback)?;
                 native.source_full_checkpoint().map_err(|_| "REVISION_DEK_NATIVE_SCOPE_REFUSED")?;
                 #[cfg(test)]
                 native.revision_dek_track_test_target(&binding).map_err(|e| e.code().to_owned())?;

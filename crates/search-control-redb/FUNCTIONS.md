@@ -1,5 +1,23 @@
 # Function contract — `search-control-redb`
 
+## Selected-reference finite use (#598)
+
+The additive `source_retention` profile reserves `secret/revision-use/v2/`.
+Generic writers cannot write or delete it. Explicit NoMaterial genesis requires
+proven absence of original DEK rows; an exact Core Intent is then bound before
+credential effects. Missing usage state never proves a fresh key. One complete
+residency claim and cumulative attempts/GHASH/plaintext charges remain permanent.
+`RevisionUseCommand` prepares only from scoped readback with explicit missing
+keys. The original-context port uses the existing conditional transaction engine;
+only a fresh acknowledged reservation yields a non-Clone
+`CommittedRevisionSealUse`. Replay and recovery return no use permit. Dropped,
+cancelled and uncertain uses remain charged. Complete original canonical AAD and
+occurrence metadata stay in the operation-addressed reservation, never plaintext.
+Windows must reconstruct and compare the entire AAD before consuming the permit.
+Native freshness/access, exact key selection, crypto validation and immutable
+object publication remain with their actual owners. This source seam alone does
+not qualify the complete consumer or paired restore continuity.
+
 The revision-DEK candidate adapter reserves `secret/revision-dek/v1/{intent,candidate,current}`.
 Ordinary generic writers cannot touch that namespace. The closed original-context
 route permits one canonical State Intent when all three are absent, then one
