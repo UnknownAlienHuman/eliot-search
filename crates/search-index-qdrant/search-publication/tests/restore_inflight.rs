@@ -190,7 +190,7 @@ fn input(level: u8, replacement: bool) -> RestoreScenario {
             missing_point_ids: Vec::new(),
             unexpected_point_ids: Vec::new(),
         },
-        readback_script: Default::default(),
+        readback_script: publication_support::PhaseReadback::default(),
     }
 }
 fn restore(input: &RestoreScenario) -> (PublicationCoordinator, PublicationRecoveryDecision) {
@@ -698,7 +698,7 @@ fn missing_or_foreign_intent_bindings_return_no_coordinator() {
             }
             8 => {
                 request.readback_script.intent_route_generation_override =
-                    Some(CollectionGenerationId::from_bytes([2; 16]))
+                    Some(CollectionGenerationId::from_bytes([2; 16]));
             }
             9 => request.readback_script.intent_schema_identity_override = Some(digest(99)),
             _ => {
@@ -746,11 +746,11 @@ fn receipt_ids_epochs_and_combined_digests_are_revalidated_by_the_existing_trans
         match case {
             0 => {
                 request.readback_script.binding_transaction_override =
-                    Some((PublicationEffectKind::StageNewPoints, id("foreign")))
+                    Some((PublicationEffectKind::StageNewPoints, id("foreign")));
             }
             1 => {
                 request.readback_script.binding_target_epoch_override =
-                    Some((PublicationEffectKind::StageNewPoints, epoch(8)))
+                    Some((PublicationEffectKind::StageNewPoints, epoch(8)));
             }
             2 => request
                 .readback_script
@@ -758,7 +758,7 @@ fn receipt_ids_epochs_and_combined_digests_are_revalidated_by_the_existing_trans
                 .push((PublicationEffectKind::StageNewPoints, vec![point(2)])),
             3 => {
                 request.readback_script.missing_point_ids_override =
-                    Some((PublicationEffectKind::CloseOldPoints, vec![closure_id]))
+                    Some((PublicationEffectKind::CloseOldPoints, vec![closure_id]));
             }
             4 => request
                 .readback_script
@@ -766,19 +766,19 @@ fn receipt_ids_epochs_and_combined_digests_are_revalidated_by_the_existing_trans
                 .push((PublicationEffectKind::CloseOldPoints, vec![point(9)])),
             5 => {
                 request.readback_script.corrupt_vector =
-                    Some((PublicationEffectKind::VerifyReadback, stage_id))
+                    Some((PublicationEffectKind::VerifyReadback, stage_id));
             }
             6 => {
                 request.readback_script.binding_transaction_override =
-                    Some((PublicationEffectKind::VerifyReadback, id("foreign")))
+                    Some((PublicationEffectKind::VerifyReadback, id("foreign")));
             }
             7 => {
                 request.readback_script.binding_new_manifest_override =
-                    Some((PublicationEffectKind::VerifyReadback, digest(99)))
+                    Some((PublicationEffectKind::VerifyReadback, digest(99)));
             }
             8 => {
                 request.readback_script.binding_old_manifest_override =
-                    Some((PublicationEffectKind::VerifyReadback, None))
+                    Some((PublicationEffectKind::VerifyReadback, None));
             }
             9 => request.readback_script.control_generation_override = Some(0),
             10 => {
@@ -825,11 +825,7 @@ fn fresh_control_visibility_must_match_the_validated_committed_or_precommit_stat
                 assert_eq!(decision, PublicationRecoveryDecision::PublishSnapshot);
                 assert_eq!(restored.visible_epoch(), Some(epoch(1)));
             }
-            (0, 1) => assert_eq!(
-                request.restore(32).unwrap_err(),
-                PublicationError::RecoveryBlocked
-            ),
-            (4, 0) => assert_eq!(
+            (0, 1) | (4, 0) => assert_eq!(
                 request.restore(32).unwrap_err(),
                 PublicationError::RecoveryBlocked
             ),
