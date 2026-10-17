@@ -1,6 +1,10 @@
 use std::cell::RefCell;
 
 use search_contracts::protocol::{HelloBody, PeerRole};
+use search_contracts::evidence::{
+    EvidenceHints, EvidenceIntent, PublicScopeSelector, RecipeIdV2, RetrieveEvidenceRequestV2,
+};
+use search_contracts::query::{PriorityClass, QueryExecutionBudget};
 use search_contracts::{
     AccessPartitionId, BindingId, BoundedNonContentMetadata, BoundedProgressCounts, BoundedSet,
     DisclosureCeiling, ErrorBody, GrantId, InstallationId, InstallationIncarnationId, MessageKind,
@@ -8,7 +12,7 @@ use search_contracts::{
     ProtocolRetryability, ProtocolVersion, ProviderBodyV1, ProviderEnvelope, RecipeBodyV1,
     RecipeIdV1, RequestBody, RequestId, RequestedScope, ScopeDomainId, SearchReadGrantClaims,
     SearchReasonCodeV1, SearchRecipeRequest, SensitivityClass, SourceMembershipId, SourceView,
-    UtcTimestamp, WorkspaceId, WorkspaceViewRevisionId, WorkspaceViewSource,
+    SourceRevisionId, UtcTimestamp, WorkspaceId, WorkspaceViewRevisionId, WorkspaceViewSource,
     protocol::{ProgressBody, ProgressPhase},
 };
 
@@ -23,7 +27,8 @@ use crate::request::{
     AuthenticatedEnvelope, ControlCommand, MonotonicMillis, RequestStatus, seal_envelope,
 };
 use crate::terminal::TerminalKind;
-use crate::frame::{ClientEnvelopeCodec, ServerEnvelopeCodec};
+use crate::frame::{ClientEnvelopeCodec, FrameCodec, ServerEnvelopeCodec};
+use crate::grant::SearchReadGrantClaimsV2;
 
 fn version(major: u16, minor: u16) -> ProtocolVersion {
     ProtocolVersion { major, minor }
@@ -306,6 +311,220 @@ fn profile_request_body(request_id: RequestId, peer: TransportPeer) -> RequestBo
         },
         recipe_request,
     }
+}
+
+fn evidence_request_envelope_v2(
+    request_id: RequestId,
+    connection_sequence: u64,
+    peer: TransportPeer,
+) -> crate::frame::EvidenceRequestEnvelopeV2 {
+    let mut legacy_claims = profile_request_body(RequestId::from_bytes([0x61; 16]), peer).grant;
+    legacy_claims.source_read_permission = true;
+    let recipe_request = crate::frame::EvidenceRecipeRequestV2::RetrieveEvidence(
+        RetrieveEvidenceRequestV2 {
+            scope: PublicScopeSelector::WorkspaceRevision(
+                WorkspaceViewRevisionId::from_bytes([0x62; 16]),
+            ),
+            source_view: SourceView::RetainedRevision(SourceRevisionId::from_bytes([0x63; 16])),
+            question: search_contracts::BoundedText::new("find the index owner")
+                .expect("question"),
+            intent: EvidenceIntent::LocateImplementation,
+            requested_roles: BoundedSet::empty(),
+            optional_hints: EvidenceHints::default(),
+            profile_id: ProfileId::new("lexical-v1").expect("profile"),
+            budgets: QueryExecutionBudget {
+                priority_class: PriorityClass::Interactive,
+                deadline_ms: 1_000,
+                max_scoring_legs: 1,
+                max_prefetch_candidates_per_leg: 1,
+                max_validated_candidates: 1,
+                max_source_read_bytes: 1,
+                max_exact_scan_items: 1,
+                max_exact_scan_bytes: 1,
+                max_materialized_result_bytes: 1,
+                max_cpu_ms: 1,
+                max_memory_bytes: 1,
+            },
+            progressive: true,
+        },
+    );
+    crate::frame::EvidenceRequestEnvelopeV2 {
+        protocol_major: 1,
+        protocol_minor: 0,
+        installation_incarnation_id: peer.incarnation,
+        binding_id: peer.binding,
+        connection_sequence,
+        request_id,
+        relative_deadline_ms: Some(1_000),
+        grant: SearchReadGrantClaimsV2 {
+            claims: legacy_claims,
+            permitted_evidence_recipes: BoundedSet::from_items([
+                RecipeIdV2::RetrieveEvidence,
+            ])
+            .expect("evidence recipe permission"),
+        },
+        recipe_request,
+    }
+}
+
+#[test]
+fn v2_evidence_admission_shares_session_slots_deadline_and_cancel_guard() {
+    let peer = peer();
+    let request_id = RequestId::from_bytes([0x6a; 16]);
+    let supported = ProtocolRange::new(version(1, 0), version(1, 0)).expect("range");
+    let legacy = ProviderEnvelope {
+        protocol_major: 1,
+        protocol_minor: 0,
+        installation_incarnation_id: peer.incarnation,
+        binding_id: peer.binding,
+        connection_sequence: 1,
+        request_id,
+        message_kind: MessageKind::Request,
+        relative_deadline_ms: Some(1_000),
+        body: ProviderBodyV1::Request(profile_request_body(request_id, peer)),
+    };
+    let legacy_frame = ClientEnvelopeCodec::encode(
+        &legacy,
+        DEFAULT_PROTOCOL_LIMITS,
+        supported,
+    )
+    .expect("legacy v1 frame");
+    assert!(matches!(
+        ClientEnvelopeCodec::decode(legacy_frame.as_slice(), DEFAULT_PROTOCOL_LIMITS, supported)
+            .expect("legacy request remains decodable")
+            .body,
+        ProviderBodyV1::Request(_)
+    ));
+
+    let envelope = evidence_request_envelope_v2(request_id, 1, peer);
+    let frame = ClientEnvelopeCodec::encode_evidence_request_v2(
+        &envelope,
+        DEFAULT_PROTOCOL_LIMITS,
+        supported,
+    )
+    .expect("V2 evidence frame");
+    let decoded = ClientEnvelopeCodec::decode_evidence_request_v2(
+        frame.as_slice(),
+        DEFAULT_PROTOCOL_LIMITS,
+        supported,
+    )
+    .expect("V2 round trip");
+    assert_eq!(decoded, envelope);
+
+    let payload = core::str::from_utf8(&frame.as_slice()[4..]).expect("JSON payload");
+    let unknown_field = payload.replacen(
+        "\"v\":2,\"grant\":",
+        "\"v\":2,\"unknown\":0,\"grant\":",
+        1,
+    );
+    let unknown_payload = search_contracts::protocol::JsonFramePayload::new(
+        unknown_field.into_bytes(),
+    )
+    .expect("bounded unknown-field payload");
+    let unknown_frame = FrameCodec::encode(&unknown_payload, DEFAULT_PROTOCOL_LIMITS)
+        .expect("unknown-field frame");
+    assert!(matches!(
+        ClientEnvelopeCodec::decode_evidence_request_v2(
+            unknown_frame.as_slice(),
+            DEFAULT_PROTOCOL_LIMITS,
+            supported,
+        ),
+        Err(ProtocolError::InvalidBody)
+    ));
+
+    let mut session = bound_session();
+    let proof = ProofDigest::from_bytes([0x6b; 32]);
+    let mut clock = || Ok(MonotonicMillis::new(10));
+    let admitted = session
+        .admit_evidence_provider_request_v2(
+            frame.as_slice(),
+            &proof,
+            1_000,
+            &mut clock,
+            |transcript| {
+                assert_eq!(transcript.frame(), frame.as_slice());
+                Ok(proof)
+            },
+        )
+        .expect("authenticated shared-session admission");
+    assert_eq!(session.in_flight_len(), 1);
+    assert_eq!(admitted.guard().request_id(), &request_id);
+    assert_eq!(admitted.next_event_sequence(), Some(1));
+    assert_eq!(
+        admitted.envelope().recipe_request.recipe_id(),
+        RecipeIdV2::RetrieveEvidence
+    );
+    assert_eq!(
+        session.cancel(&request_id),
+        CancelOutcome::Cancelled { terminal: false }
+    );
+    assert!(admitted.guard().is_cancelled());
+    assert_eq!(session.in_flight_len(), 0);
+    assert_eq!(
+        session.complete_request(&request_id, TerminalKind::Success),
+        Err(ProtocolError::InvalidSessionTransition)
+    );
+    assert_eq!(
+        session.complete_request(&request_id, TerminalKind::Cancelled),
+        Ok(RequestStatus::Cancelled)
+    );
+}
+
+#[test]
+fn v2_evidence_auth_failure_is_pre_mutation_and_guard_is_connection_local() {
+    let peer = peer();
+    let request_id = RequestId::from_bytes([0x6c; 16]);
+    let envelope = evidence_request_envelope_v2(request_id, 1, peer);
+    let versions = ProtocolRange::new(version(1, 0), version(1, 0)).expect("range");
+    let frame = ClientEnvelopeCodec::encode_evidence_request_v2(
+        &envelope,
+        DEFAULT_PROTOCOL_LIMITS,
+        versions,
+    )
+    .expect("frame");
+    let observed = ProofDigest::from_bytes([0x6d; 32]);
+    let wrong = ProofDigest::from_bytes([0x6e; 32]);
+    let mut owner = bound_session();
+    let mut foreign = bound_session();
+    let mut failed_clock = || Ok(MonotonicMillis::new(10));
+    assert!(matches!(
+        owner.admit_evidence_provider_request_v2(
+            frame.as_slice(),
+            &wrong,
+            1_000,
+            &mut failed_clock,
+            |_| Ok(observed),
+        ),
+        Err(ProtocolError::AuthenticationFailed)
+    ));
+    assert_eq!(owner.in_flight_len(), 0);
+
+    let mut accepted_clock = || Ok(MonotonicMillis::new(11));
+    let admitted = owner
+        .admit_evidence_provider_request_v2(
+            frame.as_slice(),
+            &observed,
+            1_000,
+            &mut accepted_clock,
+            |_| Ok(observed),
+        )
+        .expect("retry uses unchanged sequence after proof refusal");
+    assert_eq!(owner.in_flight_len(), 1);
+    assert_eq!(
+        foreign.complete_request(&request_id, TerminalKind::Success),
+        Err(ProtocolError::InvalidSessionTransition)
+    );
+    assert_eq!(foreign.in_flight_len(), 0);
+    assert_eq!(owner.in_flight_len(), 1);
+    assert_eq!(
+        owner.cancel(&request_id),
+        CancelOutcome::Cancelled { terminal: false }
+    );
+    assert!(admitted.guard().is_cancelled());
+    assert_eq!(
+        owner.complete_request(&request_id, TerminalKind::Cancelled),
+        Ok(RequestStatus::Cancelled)
+    );
 }
 
 #[test]

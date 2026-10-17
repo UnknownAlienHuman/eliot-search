@@ -17,9 +17,12 @@ pub use search_contracts::AuthoritativeGrantPolicy;
 use search_contracts::{
     AccessPartitionId, BindingId, BoundedSet, CorpusOrPortfolioId, DisclosureCeiling, GrantId,
     InstallationId, InstallationIncarnationId, Modality, OpaqueId, OpaqueRef, PortfolioRevision,
-    ProfileId, RecipeIdV1, ScopeDomainId, SearchReadGrantClaims, SensitivityClass,
+    ProfileId, RecipeIdV1, ScopeDomainId,
+    SearchReadGrantClaims, SensitivityClass,
     SourceMembershipId, UtcTimestamp, MAX_SET_ITEMS,
 };
+use search_contracts::evidence::RecipeIdV2;
+use search_provider_protocol::SearchReadGrantClaimsV2;
 
 /// Bounded client request. Every field is a requested ceiling, never authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -33,6 +36,7 @@ pub struct StandaloneGrantRequest {
     pub requested_access_partitions: BoundedSet<AccessPartitionId, MAX_SET_ITEMS>,
     pub requested_modalities: BoundedSet<Modality, MAX_SET_ITEMS>,
     pub requested_recipe_families: BoundedSet<RecipeIdV1, MAX_SET_ITEMS>,
+    pub requested_evidence_recipes: BoundedSet<RecipeIdV2, MAX_SET_ITEMS>,
     pub requested_budget_class: ProfileId,
     pub requested_sensitivity_ceiling: SensitivityClass,
     pub requested_disclosure_ceiling: DisclosureCeiling,
@@ -62,6 +66,7 @@ pub struct StandaloneGrantTemplate {
     pub allowed_access_partitions: BoundedSet<AccessPartitionId, MAX_SET_ITEMS>,
     pub allowed_modalities: BoundedSet<Modality, MAX_SET_ITEMS>,
     pub permitted_recipe_families: BoundedSet<RecipeIdV1, MAX_SET_ITEMS>,
+    pub permitted_evidence_recipes: BoundedSet<RecipeIdV2, MAX_SET_ITEMS>,
     pub maximum_budget_class: ProfileId,
     pub sensitivity_ceiling: SensitivityClass,
     pub disclosure_ceiling: DisclosureCeiling,
@@ -163,39 +168,78 @@ pub fn mint_standalone_grant<I: StandaloneGrantIssuer>(
     policy: &AuthoritativeGrantPolicy,
 ) -> Result<SearchReadGrantClaims, GrantMintError> {
     validate_request(request, policy)?;
+    if request.requested_recipe_families.is_empty()
+        || !request.requested_evidence_recipes.is_empty()
+    {
+        return Err(GrantMintError::RequestedScopeEmpty);
+    }
     let template = build_template(request, policy);
     let material = issuer.issue(&template).map_err(map_issuer_error)?;
     validate_material(&template, policy, &material)?;
 
-    let claims = SearchReadGrantClaims {
-        grant_id: material.grant_id,
-        installation_id: template.installation_id,
-        installation_incarnation_id: template.installation_incarnation_id,
-        binding_id: template.binding_id,
-        principal_opaque_id: template.principal_opaque_id,
-        client_scope_ref: template.client_scope_ref,
-        scope_domain_id: template.scope_domain_id,
-        allowed_membership_ids: template.allowed_membership_ids,
-        allowed_corpus_or_portfolio_ids: template.allowed_corpus_or_portfolio_ids,
-        reference_portfolio_revision: template.reference_portfolio_revision,
-        allowed_access_partitions: template.allowed_access_partitions,
-        allowed_modalities: template.allowed_modalities,
-        permitted_recipe_families: template.permitted_recipe_families,
-        maximum_budget_class: template.maximum_budget_class,
-        sensitivity_ceiling: template.sensitivity_ceiling,
-        disclosure_ceiling: template.disclosure_ceiling,
-        source_read_permission: template.source_read_permission,
-        exact_scan_permission: template.exact_scan_permission,
-        issued_boot_id: template.issued_boot_id,
-        issued_at: material.issued_at,
-        expires_at: material.expires_at,
-        nonce: material.nonce,
-        revocation_generation: template.revocation_generation,
+    let claims = claims_from_template(&template, &material);
+    claims
+        .validate_shape()
+        .map_err(|_| GrantMintError::IssuerReturnedInvalidGrant)?;
+    Ok(claims)
+}
+
+/// Mints an explicit evidence/orientation grant through the same bounded
+/// issuer ledger, binding policy snapshots and trusted lifetime as v1 grants.
+pub fn mint_standalone_evidence_grant<I: StandaloneGrantIssuer>(
+    issuer: &mut I,
+    request: &StandaloneGrantRequest,
+    policy: &AuthoritativeGrantPolicy,
+) -> Result<SearchReadGrantClaimsV2, GrantMintError> {
+    validate_request(request, policy)?;
+    if request.requested_evidence_recipes.is_empty()
+        || !request.requested_recipe_families.is_empty()
+        || request.requested_exact_scan_permission
+    {
+        return Err(GrantMintError::RequestedScopeEmpty);
+    }
+    let template = build_template(request, policy);
+    let material = issuer.issue(&template).map_err(map_issuer_error)?;
+    validate_material(&template, policy, &material)?;
+    let claims = SearchReadGrantClaimsV2 {
+        claims: claims_from_template(&template, &material),
+        permitted_evidence_recipes: template.permitted_evidence_recipes.clone(),
     };
     claims
         .validate_shape()
         .map_err(|_| GrantMintError::IssuerReturnedInvalidGrant)?;
     Ok(claims)
+}
+
+fn claims_from_template(
+    template: &StandaloneGrantTemplate,
+    material: &StandaloneGrantMaterial,
+) -> SearchReadGrantClaims {
+    SearchReadGrantClaims {
+        grant_id: material.grant_id,
+        installation_id: template.installation_id,
+        installation_incarnation_id: template.installation_incarnation_id,
+        binding_id: template.binding_id,
+        principal_opaque_id: template.principal_opaque_id.clone(),
+        client_scope_ref: template.client_scope_ref.clone(),
+        scope_domain_id: template.scope_domain_id,
+        allowed_membership_ids: template.allowed_membership_ids.clone(),
+        allowed_corpus_or_portfolio_ids: template.allowed_corpus_or_portfolio_ids.clone(),
+        reference_portfolio_revision: template.reference_portfolio_revision,
+        allowed_access_partitions: template.allowed_access_partitions.clone(),
+        allowed_modalities: template.allowed_modalities.clone(),
+        permitted_recipe_families: template.permitted_recipe_families.clone(),
+        maximum_budget_class: template.maximum_budget_class.clone(),
+        sensitivity_ceiling: template.sensitivity_ceiling,
+        disclosure_ceiling: template.disclosure_ceiling,
+        source_read_permission: template.source_read_permission,
+        exact_scan_permission: template.exact_scan_permission,
+        issued_boot_id: template.issued_boot_id.clone(),
+        issued_at: material.issued_at.clone(),
+        expires_at: material.expires_at.clone(),
+        nonce: material.nonce.clone(),
+        revocation_generation: template.revocation_generation,
+    }
 }
 
 fn validate_request(
@@ -209,7 +253,8 @@ fn validate_request(
         || policy.allowed_membership_ids.is_empty()
         || policy.allowed_access_partitions.is_empty()
         || policy.allowed_modalities.is_empty()
-        || policy.permitted_recipe_families.is_empty()
+        || (policy.permitted_recipe_families.is_empty()
+            && policy.permitted_evidence_recipes.is_empty())
         || policy.allowed_budget_classes.is_empty()
         || (policy.exact_scan_permission && !policy.source_read_permission)
         || (has_portfolio(&policy.allowed_corpus_or_portfolio_ids)
@@ -230,7 +275,8 @@ fn validate_request(
     }
     if request.requested_membership_ids.is_empty()
         || request.requested_modalities.is_empty()
-        || request.requested_recipe_families.is_empty()
+        || (request.requested_recipe_families.is_empty()
+            && request.requested_evidence_recipes.is_empty())
     {
         return Err(GrantMintError::RequestedScopeEmpty);
     }
@@ -247,10 +293,8 @@ fn validate_request(
         &request.requested_access_partitions,
         &policy.allowed_access_partitions,
     ) || !is_subset(&request.requested_modalities, &policy.allowed_modalities)
-        || !is_subset(
-            &request.requested_recipe_families,
-            &policy.permitted_recipe_families,
-        )
+        || !is_subset(&request.requested_recipe_families, &policy.permitted_recipe_families)
+        || !is_subset(&request.requested_evidence_recipes, &policy.permitted_evidence_recipes)
         || !policy
             .allowed_budget_classes
             .contains(&request.requested_budget_class)
@@ -297,6 +341,7 @@ fn build_template(
         allowed_access_partitions: request.requested_access_partitions.clone(),
         allowed_modalities: request.requested_modalities.clone(),
         permitted_recipe_families: request.requested_recipe_families.clone(),
+        permitted_evidence_recipes: request.requested_evidence_recipes.clone(),
         maximum_budget_class: request.requested_budget_class.clone(),
         sensitivity_ceiling: request.requested_sensitivity_ceiling,
         disclosure_ceiling: request.requested_disclosure_ceiling,
@@ -332,7 +377,7 @@ fn validate_material(
     Ok(())
 }
 
-fn map_issuer_error(error: GrantIssuerError) -> GrantMintError {
+const fn map_issuer_error(error: GrantIssuerError) -> GrantMintError {
     match error {
         GrantIssuerError::Unavailable => GrantMintError::IssuerUnavailable,
         GrantIssuerError::CapacityExceeded => GrantMintError::IssuerCapacityExceeded,

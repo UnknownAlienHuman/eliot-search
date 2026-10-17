@@ -5,7 +5,7 @@ use std::cell::{Cell, RefCell};
 use search_contracts::SearchReadGrantClaims;
 use search_provider_protocol::{
     BindingContext, BoundSession, MonotonicMillis, ProtocolError, RequestGuard,
-    StandaloneGrantRequestV1,
+    SearchReadGrantClaimsV2, StandaloneGrantRequestV1, StandaloneGrantRequestV2,
 };
 
 use super::{GrantAuthorityError, SessionBoundGrantAuthority, StandaloneGrantPolicySource};
@@ -97,6 +97,39 @@ where
         let result = observed.mint_protocol_request(session, *request.request_id(), body);
         // Also cover pure mapping/intersection/receipt validation between the
         // callbacks. An earlier interruption is sticky and cannot be cleared.
+        let _ = check.check();
+        if let Some(reason) = check.interrupted.get() {
+            return Err(if check.issuer_entered.get() {
+                GrantExecutionError::OutcomeUnknown(reason)
+            } else {
+                GrantExecutionError::Interrupted(reason)
+            });
+        }
+        result.map_err(GrantExecutionError::Authority)
+    }
+
+    /// Issues one explicit evidence grant under the same admitted guard checks.
+    pub fn mint_admitted_protocol_request_v2(
+        &mut self,
+        session: &BoundSession,
+        request: &RequestGuard,
+        body: StandaloneGrantRequestV2,
+        now: impl FnMut() -> MonotonicMillis,
+    ) -> Result<SearchReadGrantClaimsV2, GrantExecutionError> {
+        let check = ExecutionCheck {
+            session,
+            request,
+            clock: RefCell::new(now),
+            last_observed: Cell::new(request.admitted_at()),
+            issuer_entered: Cell::new(false),
+            interrupted: Cell::new(None),
+        };
+        check.check().map_err(GrantExecutionError::Interrupted)?;
+        let mut observed = SessionBoundGrantAuthority::new(
+            ObservedPolicy { inner: &mut self.policy_source, check: &check },
+            ObservedIssuer { inner: &mut self.issuer, check: &check },
+        );
+        let result = observed.mint_protocol_request_v2(session, *request.request_id(), body);
         let _ = check.check();
         if let Some(reason) = check.interrupted.get() {
             return Err(if check.issuer_entered.get() {

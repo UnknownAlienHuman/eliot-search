@@ -7,11 +7,15 @@
 use search_contracts::{ProtocolFailureCode, SearchReadGrantClaims};
 
 use crate::error::ProtocolError;
+use crate::grant::SearchReadGrantClaimsV2;
 use crate::frame::{decode_grant_response_schema, encode_grant_response_schema};
+use crate::frame::{decode_grant_response_schema_v2, encode_grant_response_schema_v2};
 use crate::request::RequestStatus;
 
 /// Version of the canonical standalone-grant response body.
 pub const STANDALONE_GRANT_RESPONSE_VERSION: u16 = 1;
+/// Version of the explicit evidence-grant response body.
+pub const STANDALONE_EVIDENCE_GRANT_RESPONSE_VERSION: u16 = 2;
 /// Independent response-body ceiling below the canonical transport frame cap.
 pub const MAX_STANDALONE_GRANT_RESPONSE_BYTES: usize = 1024 * 1024;
 
@@ -25,6 +29,34 @@ pub enum StandaloneGrantResponseBodyV1 {
     Claims(SearchReadGrantClaims),
     /// Public protocol/search failure classification without private details.
     Failure(ProtocolFailureCode),
+}
+
+/// Exact body returned by one authenticated evidence-grant command.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StandaloneGrantResponseBodyV2 {
+    /// Exact server-issued claims, including explicit evidence recipe permissions.
+    Claims(SearchReadGrantClaimsV2),
+    /// Public protocol/search failure classification without private details.
+    Failure(ProtocolFailureCode),
+}
+
+impl StandaloneGrantResponseBodyV2 {
+    /// Validate that the authenticated response status and typed body agree.
+    pub fn validate_for_status(&self, status: RequestStatus) -> Result<(), ProtocolError> {
+        match (status, self) {
+            (RequestStatus::Ok, Self::Claims(_))
+            | (
+                RequestStatus::Cancelled | RequestStatus::Failed | RequestStatus::OutcomeUnknown,
+                Self::Failure(_),
+            ) => Ok(()),
+            (RequestStatus::Partial, _)
+            | (RequestStatus::Ok, Self::Failure(_))
+            | (
+                RequestStatus::Cancelled | RequestStatus::Failed | RequestStatus::OutcomeUnknown,
+                Self::Claims(_),
+            ) => Err(ProtocolError::InvalidStatus),
+        }
+    }
 }
 
 impl StandaloneGrantResponseBodyV1 {
@@ -77,6 +109,25 @@ pub fn decode_standalone_grant_response_body(
     bytes: &[u8],
 ) -> Result<StandaloneGrantResponseBodyV1, ProtocolError> {
     let body = decode_grant_response_schema(bytes)?;
+    body.validate_for_status(status)?;
+    Ok(body)
+}
+
+/// Encodes the exact V2 response associated with an authenticated terminal.
+pub fn encode_standalone_grant_response_body_v2(
+    status: RequestStatus,
+    body: &StandaloneGrantResponseBodyV2,
+) -> Result<Vec<u8>, ProtocolError> {
+    body.validate_for_status(status)?;
+    encode_grant_response_schema_v2(body)
+}
+
+/// Decodes the exact V2 response and rejects status/body disagreement.
+pub fn decode_standalone_grant_response_body_v2(
+    status: RequestStatus,
+    bytes: &[u8],
+) -> Result<StandaloneGrantResponseBodyV2, ProtocolError> {
+    let body = decode_grant_response_schema_v2(bytes)?;
     body.validate_for_status(status)?;
     Ok(body)
 }

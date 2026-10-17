@@ -3,24 +3,32 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use search_contracts::protocol::{HelloBody, PeerRole};
+use search_contracts::evidence::RecipeIdV2;
+use search_contracts::evidence::{
+    EvidenceHints, EvidenceIntent, OrientationDimension, OrientationHints,
+    OrientScopeRequestV2, PublicScopeSelector, RetrieveEvidenceRequestV2,
+};
+use search_contracts::query::{PriorityClass, QueryExecutionBudget};
 use search_contracts::{
     AccessPartitionId, BindingId, BoundedSet, CorpusId, CorpusOrPortfolioId,
     DisclosureCeiling, GrantId, InstallationId, InstallationIncarnationId,
     Modality, OpaqueId, OpaqueRef, PortfolioRevision, ProfileId, ProtocolRange,
     ProtocolVersion, RecipeIdV1, ReferencePortfolioId, ScopeDomainId,
-    SensitivityClass, SourceMembershipId, UtcTimestamp, MAX_SET_ITEMS,
+    SensitivityClass, SourceMembershipId, UtcTimestamp,
 };
 use search_provider_protocol::{
-    authenticate_binding, BindingContext, BoundSession, ClientNonce, PairingChallenge,
-    PairingMachine, ProofDigest, ServerNonce, SessionId, TransportPeer,
-    DEFAULT_PROTOCOL_LIMITS,
+    authenticate_binding, BindingContext, BoundSession, ClientEnvelopeCodec, ClientNonce,
+    EvidenceRecipeRequestV2, EvidenceRequestEnvelopeV2, MonotonicMillis, PairingChallenge,
+    PairingMachine, ProofDigest, SearchReadGrantClaimsV2, ServerNonce, SessionId,
+    StandaloneGrantRequestV2, TerminalKind, TransportPeer, CancelOutcome, DEFAULT_PROTOCOL_LIMITS,
 };
 
 use super::*;
 use crate::access_composition::{
-    AuthoritativeGrantPolicy, GrantIssuerError, GrantMintError,
-    StandaloneGrantIssuer, StandaloneGrantMaterial, StandaloneGrantRequest,
-    StandaloneGrantTemplate,
+    AuthoritativeGrantPolicy, BoundedStandaloneGrantIssuer, EvidenceRequestAdmissionError,
+    GrantEntropySource, GrantIssuerError, GrantMintError, GrantTimeSource, GrantTimeWindow,
+    GrantUseError, GrantValidationClock, StandaloneGrantIssuer, StandaloneGrantMaterial,
+    StandaloneGrantRequest, StandaloneGrantTemplate,
 };
 
 fn timestamp(value: &str) -> UtcTimestamp {
@@ -63,6 +71,7 @@ fn policy() -> AuthoritativeGrantPolicy {
         ]),
         allowed_modalities: set([Modality::Code, Modality::Text]),
         permitted_recipe_families: set([RecipeIdV1::Locate, RecipeIdV1::FindText]),
+        permitted_evidence_recipes: BoundedSet::empty(),
         allowed_budget_classes: set([profile("interactive"), profile("verification")]),
         sensitivity_ceiling: SensitivityClass::Confidential,
         disclosure_ceiling: DisclosureCeiling::NamedClient,
@@ -87,6 +96,7 @@ fn request() -> StandaloneGrantRequest {
         requested_access_partitions: set([AccessPartitionId::from_bytes([30; 16])]),
         requested_modalities: set([Modality::Code]),
         requested_recipe_families: set([RecipeIdV1::Locate]),
+        requested_evidence_recipes: BoundedSet::empty(),
         requested_budget_class: profile("interactive"),
         requested_sensitivity_ceiling: SensitivityClass::Project,
         requested_disclosure_ceiling: DisclosureCeiling::LocalOnly,
@@ -135,6 +145,113 @@ fn bound_session(role: PeerRole) -> BoundSession {
         DEFAULT_PROTOCOL_LIMITS,
     )
     .expect("bound session")
+}
+
+#[derive(Debug, Default)]
+struct EvidenceEntropy(u8);
+
+impl GrantEntropySource for EvidenceEntropy {
+    fn fill_random(&mut self, output: &mut [u8]) -> Result<(), GrantIssuerError> {
+        self.0 = self.0.wrapping_add(1).max(1);
+        output.fill(self.0);
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default)]
+struct EvidenceClock;
+
+impl GrantTimeSource for EvidenceClock {
+    fn issue_window(&mut self, requested_ttl_ms: u64) -> Result<GrantTimeWindow, GrantIssuerError> {
+        GrantTimeWindow::new(
+            timestamp("2026-10-17T00:00:00.000000Z"),
+            timestamp("2026-10-17T00:00:30.000000Z"),
+            requested_ttl_ms,
+        )?
+        .with_monotonic_origin(crate::provider_composition::monotonic_millis())
+    }
+}
+
+impl GrantValidationClock for EvidenceClock {
+    fn check_grant_window(
+        &mut self,
+        _issued_at: &UtcTimestamp,
+        _expires_at: &UtcTimestamp,
+        monotonic_expiry: MonotonicMillis,
+    ) -> Result<MonotonicMillis, GrantUseError> {
+        Ok(monotonic_expiry)
+    }
+}
+
+fn evidence_recipe(recipe: RecipeIdV2) -> EvidenceRecipeRequestV2 {
+    let scope = PublicScopeSelector::WorkspaceRevision(
+        search_contracts::WorkspaceViewRevisionId::from_bytes([0x71; 16]),
+    );
+    let source_view = search_contracts::SourceView::RetainedRevision(
+        search_contracts::SourceRevisionId::from_bytes([0x72; 16]),
+    );
+    let question = search_contracts::BoundedText::new("trace the entry point")
+        .expect("question");
+    let profile_id = profile("interactive");
+    let budgets = QueryExecutionBudget {
+        priority_class: PriorityClass::Interactive,
+        deadline_ms: 30_000,
+        max_scoring_legs: 1,
+        max_prefetch_candidates_per_leg: 1,
+        max_validated_candidates: 1,
+        max_source_read_bytes: 1,
+        max_exact_scan_items: 1,
+        max_exact_scan_bytes: 1,
+        max_materialized_result_bytes: 1,
+        max_cpu_ms: 1,
+        max_memory_bytes: 1,
+    };
+    match recipe {
+        RecipeIdV2::RetrieveEvidence => {
+            EvidenceRecipeRequestV2::RetrieveEvidence(RetrieveEvidenceRequestV2 {
+                scope,
+                source_view,
+                question,
+                intent: EvidenceIntent::LocateImplementation,
+                requested_roles: BoundedSet::empty(),
+                optional_hints: EvidenceHints::default(),
+                profile_id,
+                budgets,
+                progressive: true,
+            })
+        }
+        RecipeIdV2::OrientScope => {
+            EvidenceRecipeRequestV2::OrientScope(OrientScopeRequestV2 {
+                scope,
+                source_view,
+                question,
+                dimensions: set([OrientationDimension::EntryPoints]),
+                optional_hints: OrientationHints::default(),
+                profile_id,
+                budgets,
+                progressive: true,
+            })
+        }
+    }
+}
+
+fn evidence_envelope(
+    request_id: RequestId,
+    connection_sequence: u64,
+    grant: SearchReadGrantClaimsV2,
+    recipe: RecipeIdV2,
+) -> EvidenceRequestEnvelopeV2 {
+    EvidenceRequestEnvelopeV2 {
+        protocol_major: 1,
+        protocol_minor: 0,
+        installation_incarnation_id: InstallationIncarnationId::from_bytes([3; 16]),
+        binding_id: BindingId::from_bytes([1; 16]),
+        connection_sequence,
+        request_id,
+        relative_deadline_ms: Some(30_000),
+        grant,
+        recipe_request: evidence_recipe(recipe),
+    }
 }
 
 struct SequencedPolicySource {
@@ -223,6 +340,160 @@ fn active_authenticated_standalone_session_mints_after_equal_policy_reads() {
     assert_eq!(grant.installation_incarnation_id, policy.installation_incarnation_id);
     assert_eq!(source_calls.get(), 2);
     assert_eq!(issuer_calls.get(), 1);
+}
+
+#[test]
+fn authenticated_session_issues_only_the_policy_approved_v2_recipe() {
+    let session = bound_session(PeerRole::StandaloneCli);
+    let mut policy = policy();
+    policy.permitted_evidence_recipes = set([RecipeIdV2::RetrieveEvidence]);
+    let source_calls = Rc::new(Cell::new(0));
+    let issuer_calls = Rc::new(Cell::new(0));
+    let source = SequencedPolicySource::new(
+        [policy.clone(), policy.clone()],
+        Rc::clone(&source_calls),
+    );
+    let mut authority = fixture_authority(source, Rc::clone(&issuer_calls));
+    let body = StandaloneGrantRequestV2 {
+        expected_binding_generation: policy.binding_generation,
+        expected_policy_generation: policy.policy_generation,
+        requested_membership_ids: set([membership(10)]),
+        requested_corpus_or_portfolio_ids: set([CorpusOrPortfolioId::Corpus(
+            CorpusId::from_bytes([20; 16]),
+        )]),
+        requested_access_partitions: set([AccessPartitionId::from_bytes([30; 16])]),
+        requested_modalities: set([Modality::Code]),
+        requested_evidence_recipes: set([RecipeIdV2::RetrieveEvidence]),
+        requested_budget_class: profile("interactive"),
+        requested_sensitivity_ceiling: SensitivityClass::Project,
+        requested_disclosure_ceiling: DisclosureCeiling::LocalOnly,
+        requested_source_read_permission: true,
+        requested_exact_scan_permission: false,
+        requested_ttl_ms: 30_000,
+    };
+
+    let claims = authority
+        .mint_protocol_request_v2(&session, RequestId::from_bytes([0x66; 16]), body)
+        .expect("V2 grant");
+    assert_eq!(claims.claims.binding_id, policy.binding_id);
+    assert!(claims.claims.permitted_recipe_families.is_empty());
+    assert_eq!(
+        claims.permitted_evidence_recipes,
+        set([RecipeIdV2::RetrieveEvidence])
+    );
+    assert_eq!(source_calls.get(), 2);
+    assert_eq!(issuer_calls.get(), 1);
+}
+
+#[test]
+fn evidence_admission_requires_exact_issued_recipe_and_cancels_denied_slot() {
+    let mut session = bound_session(PeerRole::StandaloneCli);
+    let mut current_policy = policy();
+    current_policy.permitted_evidence_recipes = set([
+        RecipeIdV2::RetrieveEvidence,
+        RecipeIdV2::OrientScope,
+    ]);
+    let policy_calls = Rc::new(Cell::new(0));
+    let policy_source = SequencedPolicySource::new(
+        [
+            current_policy.clone(),
+            current_policy.clone(),
+            current_policy.clone(),
+            current_policy.clone(),
+        ],
+        Rc::clone(&policy_calls),
+    );
+    let issuer = BoundedStandaloneGrantIssuer::new(EvidenceEntropy::default(), EvidenceClock, 4, 4)
+        .expect("bounded issuer");
+    let mut authority = SessionBoundGrantAuthority::new(policy_source, issuer);
+    let grant_request = StandaloneGrantRequestV2 {
+        expected_binding_generation: current_policy.binding_generation,
+        expected_policy_generation: current_policy.policy_generation,
+        requested_membership_ids: set([membership(10)]),
+        requested_corpus_or_portfolio_ids: set([CorpusOrPortfolioId::Corpus(
+            CorpusId::from_bytes([20; 16]),
+        )]),
+        requested_access_partitions: set([AccessPartitionId::from_bytes([30; 16])]),
+        requested_modalities: set([Modality::Code]),
+        requested_evidence_recipes: set([RecipeIdV2::RetrieveEvidence]),
+        requested_budget_class: profile("interactive"),
+        requested_sensitivity_ceiling: SensitivityClass::Project,
+        requested_disclosure_ceiling: DisclosureCeiling::LocalOnly,
+        requested_source_read_permission: true,
+        requested_exact_scan_permission: false,
+        requested_ttl_ms: 30_000,
+    };
+    let claims = authority
+        .mint_protocol_request_v2(&session, RequestId::from_bytes([0x70; 16]), grant_request)
+        .expect("server-issued V2 claims");
+
+    // The recipe is also allowed by current policy, but this altered permission
+    // was never issued for this grant ID and must release its admitted slot.
+    let mut altered = claims.clone();
+    altered.permitted_evidence_recipes = set([RecipeIdV2::OrientScope]);
+    let denied_id = RequestId::from_bytes([0x71; 16]);
+    let versions = ProtocolRange::new(
+        ProtocolVersion { major: 1, minor: 0 },
+        ProtocolVersion { major: 1, minor: 0 },
+    )
+    .expect("protocol range");
+    let denied_frame = ClientEnvelopeCodec::encode_evidence_request_v2(
+        &evidence_envelope(denied_id, 1, altered, RecipeIdV2::OrientScope),
+        DEFAULT_PROTOCOL_LIMITS,
+        versions,
+    )
+    .expect("authenticated V2 frame shape");
+    let proof = ProofDigest::from_bytes([0x75; 32]);
+    let mut clock = || Ok(crate::provider_composition::monotonic_millis());
+    assert!(matches!(
+        authority.admit_evidence_request_v2(
+            &mut session,
+            denied_frame.as_slice(),
+            &proof,
+            30_000,
+            &mut clock,
+            |transcript| {
+                assert_eq!(transcript.frame(), denied_frame.as_slice());
+                Ok(proof)
+            },
+        ),
+        Err(EvidenceRequestAdmissionError::Grant(GrantUseError::InvalidGrant))
+    ));
+    assert_eq!(session.in_flight_len(), 0);
+    assert_eq!(
+        session.complete_request(&denied_id, TerminalKind::Cancelled),
+        Ok(search_provider_protocol::RequestStatus::Cancelled)
+    );
+
+    let accepted_id = RequestId::from_bytes([0x72; 16]);
+    let accepted_frame = ClientEnvelopeCodec::encode_evidence_request_v2(
+        &evidence_envelope(accepted_id, 2, claims, RecipeIdV2::RetrieveEvidence),
+        DEFAULT_PROTOCOL_LIMITS,
+        versions,
+    )
+    .expect("exact issued V2 request");
+    let mut accepted_clock = || Ok(crate::provider_composition::monotonic_millis());
+    let admitted = authority
+        .admit_evidence_request_v2(
+            &mut session,
+            accepted_frame.as_slice(),
+            &proof,
+            30_000,
+            &mut accepted_clock,
+            |_| Ok(proof),
+        )
+        .expect("exact issued recipe admitted");
+    assert_eq!(admitted.guard().request_id(), &accepted_id);
+    assert_eq!(policy_calls.get(), 4);
+    assert_eq!(session.in_flight_len(), 1);
+    assert_eq!(
+        session.cancel(&accepted_id),
+        CancelOutcome::Cancelled { terminal: false }
+    );
+    assert_eq!(
+        session.complete_request(&accepted_id, TerminalKind::Cancelled),
+        Ok(search_provider_protocol::RequestStatus::Cancelled)
+    );
 }
 
 #[test]

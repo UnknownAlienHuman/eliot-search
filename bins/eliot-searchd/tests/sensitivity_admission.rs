@@ -115,6 +115,7 @@ mod sensitivity_admission {
                 allowed_access_partitions: grant.allowed_access_partitions.clone(),
                 allowed_modalities: grant.allowed_modalities.clone(),
                 permitted_recipe_families: grant.permitted_recipe_families.clone(),
+                permitted_evidence_recipes: BoundedSet::empty(),
                 maximum_budget_class: grant.maximum_budget_class.clone(),
                 sensitivity_ceiling: grant.sensitivity_ceiling,
                 disclosure_ceiling: grant.disclosure_ceiling,

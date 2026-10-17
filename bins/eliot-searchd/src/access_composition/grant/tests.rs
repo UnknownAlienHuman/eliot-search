@@ -1,5 +1,7 @@
 use super::*;
 use search_contracts::{CorpusId, ReferencePortfolioId};
+use search_contracts::evidence::RecipeIdV2;
+use search_provider_protocol::MonotonicMillis;
 
 fn timestamp(value: &str) -> UtcTimestamp {
     UtcTimestamp::parse(value).expect("timestamp")
@@ -41,6 +43,7 @@ fn fixture_policy() -> AuthoritativeGrantPolicy {
         ]),
         allowed_modalities: set([Modality::Code, Modality::Text]),
         permitted_recipe_families: set([RecipeIdV1::Locate, RecipeIdV1::FindText]),
+        permitted_evidence_recipes: BoundedSet::empty(),
         allowed_budget_classes: set([profile("interactive"), profile("verification")]),
         sensitivity_ceiling: SensitivityClass::Confidential,
         disclosure_ceiling: DisclosureCeiling::NamedClient,
@@ -65,6 +68,7 @@ fn fixture_request() -> StandaloneGrantRequest {
         requested_access_partitions: set([AccessPartitionId::from_bytes([30; 16])]),
         requested_modalities: set([Modality::Code]),
         requested_recipe_families: set([RecipeIdV1::Locate]),
+        requested_evidence_recipes: BoundedSet::empty(),
         requested_budget_class: profile("interactive"),
         requested_sensitivity_ceiling: SensitivityClass::Project,
         requested_disclosure_ceiling: DisclosureCeiling::LocalOnly,
@@ -157,7 +161,19 @@ impl GrantTimeSource for FixedTime {
             timestamp("2026-09-15T10:00:00.000000Z"),
             timestamp("2026-09-15T10:00:30.000000Z"),
             requested_ttl_ms,
-        )
+        )?
+        .with_monotonic_origin(MonotonicMillis::new(1_000_000))
+    }
+}
+
+impl GrantValidationClock for FixedTime {
+    fn check_grant_window(
+        &mut self,
+        _issued_at: &UtcTimestamp,
+        _expires_at: &UtcTimestamp,
+        monotonic_expiry: MonotonicMillis,
+    ) -> Result<MonotonicMillis, GrantUseError> {
+        Ok(monotonic_expiry)
     }
 }
 
@@ -356,4 +372,46 @@ fn bounded_issuer_rejects_repeated_entropy_instead_of_reusing_identity() {
         Err(GrantMintError::IssuerUnavailable)
     );
     assert_eq!(issuer.retained_operations(), 1);
+}
+
+#[test]
+fn bounded_issuer_retains_and_verifies_v2_evidence_permissions() {
+    let mut policy = fixture_policy();
+    policy.permitted_evidence_recipes = set([
+        RecipeIdV2::RetrieveEvidence,
+        RecipeIdV2::OrientScope,
+    ]);
+    let mut request = fixture_request();
+    request.requested_recipe_families = BoundedSet::empty();
+    request.requested_evidence_recipes = set([RecipeIdV2::RetrieveEvidence]);
+    let mut issuer = BoundedStandaloneGrantIssuer::new(
+        CounterEntropy::default(),
+        FixedTime,
+        2,
+        4,
+    )
+    .expect("issuer");
+
+    let claims = mint_standalone_evidence_grant(&mut issuer, &request, &policy)
+        .expect("explicit evidence grant");
+    assert!(claims.claims.permitted_recipe_families.is_empty());
+    assert_eq!(
+        claims.permitted_evidence_recipes,
+        request.requested_evidence_recipes
+    );
+    let verified = issuer
+        .verify_issued_evidence_claims(&claims)
+        .expect("claim matches retained issuer template");
+    assert_eq!(
+        verified.template().permitted_evidence_recipes,
+        request.requested_evidence_recipes
+    );
+    assert_eq!(issuer.retained_operations(), 1);
+
+    let mut altered = claims;
+    altered.permitted_evidence_recipes = set([RecipeIdV2::OrientScope]);
+    assert_eq!(
+        issuer.verify_issued_evidence_claims(&altered).map(|_| ()),
+        Err(GrantUseError::InvalidGrant)
+    );
 }

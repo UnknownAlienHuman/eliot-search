@@ -39,7 +39,8 @@ mod provider;
 pub use drain::SessionDrainHandle;
 pub(crate) use drain::SessionDrainState;
 pub use provider::{
-    AdmittedProviderRequest, PreparedProviderDeliveryError, ProviderDeliveryError,
+    AdmittedEvidenceProviderRequestV2, AdmittedProviderRequest,
+    PreparedProviderDeliveryError, ProviderDeliveryError,
     ProviderEventPreparationV1, ProviderFrameTranscript,
 };
 

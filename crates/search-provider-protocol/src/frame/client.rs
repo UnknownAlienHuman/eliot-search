@@ -37,7 +37,8 @@ use crate::config::{FRAME_PREFIX_BYTES, ProtocolLimits};
 use crate::error::ProtocolError;
 use crate::grant::{
     MAX_STANDALONE_GRANT_RESPONSE_BYTES, STANDALONE_GRANT_RESPONSE_VERSION,
-    StandaloneGrantResponseBodyV1,
+    STANDALONE_EVIDENCE_GRANT_RESPONSE_VERSION, StandaloneGrantResponseBodyV1,
+    StandaloneGrantResponseBodyV2,
 };
 use super::FrameCodec;
 use wire::{Decoder, Encoder, Result, Schema, record};
@@ -124,6 +125,108 @@ impl ClientEnvelopeCodec {
         supported: ProtocolRange,
     ) -> Result<ProviderEnvelope> {
         Self::decode_direction(bytes, limits, supported, Direction::Client)
+    }
+
+    /// Encodes the additive authenticated V2 evidence request envelope.
+    ///
+    /// The outer transport header and framing match the current provider
+    /// protocol. Only the closed body tag is new; the legacy `request` schema
+    /// remains byte-for-byte unchanged.
+    pub fn encode_evidence_request_v2(
+        envelope: &evidence_schema::EvidenceRequestEnvelopeV2,
+        limits: ProtocolLimits,
+        supported: ProtocolRange,
+    ) -> Result<BoundedBytes<MAX_FRAME_BYTES>> {
+        let limits = limits.validate()?;
+        validate_range(supported)?;
+        let version = ProtocolVersion {
+            major: envelope.protocol_major,
+            minor: envelope.protocol_minor,
+        };
+        validate_version(version, supported)?;
+        envelope.validate()?;
+        let maximum = limits.max_body_bytes.min(
+            limits.max_frame_bytes.checked_sub(FRAME_PREFIX_BYTES)
+                .ok_or(ProtocolError::InvalidLimits)?,
+        );
+        let mut output = Encoder::new(maximum);
+        output.open(b'{')?;
+        let mut first = true;
+        macro_rules! field {
+            ($name:ident) => {
+                output.field(&mut first, stringify!($name))?;
+                envelope.$name.put(&mut output)?;
+            };
+        }
+        field!(protocol_major);
+        field!(protocol_minor);
+        field!(installation_incarnation_id);
+        field!(binding_id);
+        field!(connection_sequence);
+        field!(request_id);
+        output.field(&mut first, "message_kind")?;
+        MessageKind::Request.put(&mut output)?;
+        output.field(&mut first, "relative_deadline_ms")?;
+        envelope.relative_deadline_ms.put(&mut output)?;
+        output.field(&mut first, "body")?;
+        evidence_schema::put_evidence_request_v2_body(envelope, &mut output)?;
+        output.close(b'}')?;
+        let payload = JsonFramePayload::new(output.finish()?)
+            .map_err(|_| ProtocolError::FrameTooLarge)?;
+        FrameCodec::encode(&payload, limits)
+    }
+
+    /// Decodes the exact additive V2 evidence request envelope.
+    ///
+    /// This performs strict framing and typed decoding only. The caller must
+    /// authenticate the exact frame through `BoundSession` and verify the
+    /// issued grant against the live issuer/policy owners.
+    pub fn decode_evidence_request_v2(
+        bytes: &[u8],
+        limits: ProtocolLimits,
+        supported: ProtocolRange,
+    ) -> Result<evidence_schema::EvidenceRequestEnvelopeV2> {
+        validate_range(supported)?;
+        let payload = FrameCodec::decode(bytes, limits)?;
+        let mut input = Decoder::new(payload.as_slice());
+        input.open(b'{')?;
+        let mut first = true;
+        macro_rules! field {
+            ($name:ident) => {{
+                input.field(&mut first, stringify!($name))?;
+                Schema::get(&mut input)?
+            }};
+        }
+        let protocol_major = field!(protocol_major);
+        let protocol_minor = field!(protocol_minor);
+        validate_version(ProtocolVersion { major: protocol_major, minor: protocol_minor }, supported)?;
+        let installation_incarnation_id = field!(installation_incarnation_id);
+        let binding_id = field!(binding_id);
+        let connection_sequence = field!(connection_sequence);
+        let request_id = field!(request_id);
+        let message_kind: MessageKind = field!(message_kind);
+        if message_kind != MessageKind::Request {
+            return Err(ProtocolError::InvalidEnvelope);
+        }
+        let relative_deadline_ms = field!(relative_deadline_ms);
+        input.field(&mut first, "body")?;
+        let envelope = evidence_schema::get_evidence_request_v2_body(
+            &mut input,
+            protocol_major,
+            protocol_minor,
+            installation_incarnation_id,
+            binding_id,
+            connection_sequence,
+            request_id,
+            relative_deadline_ms,
+        )?;
+        input.close(b'}')?;
+        input.finish()?;
+        envelope.validate()?;
+        if Self::encode_evidence_request_v2(&envelope, limits, supported)?.as_slice() != bytes {
+            return Err(ProtocolError::InvalidEnvelope);
+        }
+        Ok(envelope)
     }
 
     fn decode_direction(
@@ -260,6 +363,65 @@ pub fn decode_grant_response_schema(
     input.close(b'}')?;
     input.finish()?;
     if encode_grant_response_schema(&body)?.as_slice() != bytes {
+        return Err(ProtocolError::InvalidBody);
+    }
+    Ok(body)
+}
+
+/// Encodes the strict version-2 standalone evidence-grant response body.
+pub fn encode_grant_response_schema_v2(
+    body: &StandaloneGrantResponseBodyV2,
+) -> Result<Vec<u8>> {
+    let mut output = Encoder::new(MAX_STANDALONE_GRANT_RESPONSE_BYTES);
+    output.open(b'{')?;
+    let mut first = true;
+    output.field(&mut first, "v")?;
+    STANDALONE_EVIDENCE_GRANT_RESPONSE_VERSION.put(&mut output)?;
+    output.field(&mut first, "outcome")?;
+    match body {
+        StandaloneGrantResponseBodyV2::Claims(claims) => {
+            output.tag("claims_v2")?;
+            claims.put(&mut output)?;
+        }
+        StandaloneGrantResponseBodyV2::Failure(code) => {
+            output.tag("failure")?;
+            code.put(&mut output)?;
+        }
+    }
+    output.close(b'}')?;
+    output.close(b'}')?;
+    output.finish()
+}
+
+/// Decodes the strict version-2 standalone evidence-grant response body.
+pub fn decode_grant_response_schema_v2(
+    bytes: &[u8],
+) -> Result<StandaloneGrantResponseBodyV2> {
+    if bytes.is_empty() || bytes.len() > MAX_STANDALONE_GRANT_RESPONSE_BYTES {
+        return Err(if bytes.len() > MAX_STANDALONE_GRANT_RESPONSE_BYTES {
+            ProtocolError::FrameTooLarge
+        } else {
+            ProtocolError::InvalidBody
+        });
+    }
+    let mut input = Decoder::new(bytes);
+    input.open(b'{')?;
+    let mut first = true;
+    input.field(&mut first, "v")?;
+    let version = u16::get(&mut input)?;
+    if version != STANDALONE_EVIDENCE_GRANT_RESPONSE_VERSION {
+        return Err(ProtocolError::NoCompatibleVersion);
+    }
+    input.field(&mut first, "outcome")?;
+    let body = match input.tag()?.as_str() {
+        "claims_v2" => StandaloneGrantResponseBodyV2::Claims(Schema::get(&mut input)?),
+        "failure" => StandaloneGrantResponseBodyV2::Failure(Schema::get(&mut input)?),
+        _ => return Err(ProtocolError::InvalidBody),
+    };
+    input.close(b'}')?;
+    input.close(b'}')?;
+    input.finish()?;
+    if encode_grant_response_schema_v2(&body)?.as_slice() != bytes {
         return Err(ProtocolError::InvalidBody);
     }
     Ok(body)

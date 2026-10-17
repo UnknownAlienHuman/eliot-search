@@ -6,7 +6,8 @@ use crate::error::ProtocolError;
 
 use super::super::{
     MAX_STANDALONE_GRANT_REQUEST_BYTES, STANDALONE_GRANT_REQUEST_VERSION,
-    StandaloneGrantRequestV1,
+    STANDALONE_EVIDENCE_GRANT_REQUEST_VERSION, StandaloneGrantRequestV1,
+    StandaloneGrantRequestV2,
 };
 
 /// Encodes the exact canonical UTF-8 JSON grant-request body.
@@ -73,6 +74,72 @@ pub fn encode_standalone_grant_request(
         request.requested_recipe_families.iter(),
         |out, value| push_quoted_ascii(out, value.as_str().as_bytes()),
     );
+    output.extend_from_slice(b",\"budget_hex\":\"");
+    push_hex(&mut output, request.requested_budget_class.as_str().as_bytes());
+    output.extend_from_slice(b"\",\"sensitivity\":\"");
+    output.extend_from_slice(request.requested_sensitivity_ceiling.as_str().as_bytes());
+    output.extend_from_slice(b"\",\"disclosure\":\"");
+    output.extend_from_slice(request.requested_disclosure_ceiling.as_str().as_bytes());
+    output.extend_from_slice(b"\",\"source_read\":");
+    push_bool(&mut output, request.requested_source_read_permission);
+    output.extend_from_slice(b",\"exact_scan\":");
+    push_bool(&mut output, request.requested_exact_scan_permission);
+    output.extend_from_slice(b",\"ttl_ms\":");
+    push_u64(&mut output, request.requested_ttl_ms);
+    output.push(b'}');
+    if output.len() > MAX_STANDALONE_GRANT_REQUEST_BYTES {
+        return Err(ProtocolError::FrameTooLarge);
+    }
+    Ok(output)
+}
+
+/// Encodes the strict version-2 request for explicit evidence recipe grants.
+pub fn encode_standalone_grant_request_v2(
+    request: &StandaloneGrantRequestV2,
+) -> Result<Vec<u8>, ProtocolError> {
+    request.validate()?;
+    let mut output = Vec::with_capacity(1024);
+    output.extend_from_slice(b"{\"v\":");
+    push_u64(&mut output, u64::from(STANDALONE_EVIDENCE_GRANT_REQUEST_VERSION));
+    output.extend_from_slice(b",\"binding_generation\":");
+    push_u64(&mut output, request.expected_binding_generation);
+    output.extend_from_slice(b",\"policy_generation\":");
+    push_u64(&mut output, request.expected_policy_generation);
+    output.extend_from_slice(b",\"memberships\":");
+    push_array(&mut output, request.requested_membership_ids.iter(), |out, value| {
+        push_quoted_hex(out, value.as_bytes());
+    });
+    output.extend_from_slice(b",\"targets\":");
+    push_array(
+        &mut output,
+        request.requested_corpus_or_portfolio_ids.iter(),
+        |out, value| {
+            out.push(b'"');
+            match value {
+                CorpusOrPortfolioId::Corpus(id) => {
+                    out.extend_from_slice(b"c:");
+                    push_hex(out, id.as_bytes());
+                }
+                CorpusOrPortfolioId::Portfolio(id) => {
+                    out.extend_from_slice(b"p:");
+                    push_hex(out, id.as_bytes());
+                }
+            }
+            out.push(b'"');
+        },
+    );
+    output.extend_from_slice(b",\"partitions\":");
+    push_array(&mut output, request.requested_access_partitions.iter(), |out, value| {
+        push_quoted_hex(out, value.as_bytes());
+    });
+    output.extend_from_slice(b",\"modalities\":");
+    push_array(&mut output, request.requested_modalities.iter(), |out, value| {
+        push_quoted_ascii(out, value.as_str().as_bytes());
+    });
+    output.extend_from_slice(b",\"evidence_recipes\":");
+    push_array(&mut output, request.requested_evidence_recipes.iter(), |out, value| {
+        push_quoted_ascii(out, value.as_str().as_bytes());
+    });
     output.extend_from_slice(b",\"budget_hex\":\"");
     push_hex(&mut output, request.requested_budget_class.as_str().as_bytes());
     output.extend_from_slice(b"\",\"sensitivity\":\"");

@@ -18,7 +18,8 @@
 //! [`error`](crate::error).
 
 pub use crate::binding::{
-    AdmittedProviderRequest, BindingContext, BindingSession, BoundSession, NegotiatedHello,
+    AdmittedEvidenceProviderRequestV2, AdmittedProviderRequest, BindingContext,
+    BindingSession, BoundSession, NegotiatedHello,
     PreparedProviderDeliveryError, ProviderDeliveryError, ProviderEventPreparationV1,
     ProviderFrameTranscript, SessionDrainHandle, TransportPeer, authenticate_binding,
     project_capability_descriptor,
@@ -33,16 +34,22 @@ pub use crate::frame::{
     TypedTransportProfileV1,
     decode_frame, encode_frame,
 };
+pub use crate::frame::EvidenceRequestEnvelopeV2;
 pub use crate::grant::{
     AuthenticatedStandaloneGrantEnvelope, MAX_STANDALONE_GRANT_ENVELOPE_JSON_BYTES,
     MAX_STANDALONE_GRANT_REQUEST_BYTES, MAX_STANDALONE_GRANT_RESPONSE_BYTES,
     STANDALONE_GRANT_ENVELOPE_DOMAIN, STANDALONE_GRANT_REQUEST_VERSION,
+    STANDALONE_EVIDENCE_GRANT_REQUEST_VERSION,
     STANDALONE_GRANT_RESPONSE_VERSION, StandaloneGrantRequestV1,
-    StandaloneGrantResponseBodyV1, decode_standalone_grant_envelope,
+    StandaloneGrantRequestV2, SearchReadGrantClaimsV2, StandaloneGrantResponseBodyV1,
+    StandaloneGrantResponseBodyV2, decode_standalone_grant_envelope,
     decode_standalone_grant_envelope_json, decode_standalone_grant_request,
-    decode_standalone_grant_response_body, encode_standalone_grant_envelope,
+    decode_standalone_grant_request_v2, decode_standalone_grant_response_body,
+    decode_standalone_grant_response_body_v2, encode_standalone_grant_envelope,
     encode_standalone_grant_envelope_json, encode_standalone_grant_request,
-    encode_standalone_grant_response_body, seal_standalone_grant_envelope,
+    encode_standalone_grant_request_v2, encode_standalone_grant_response_body,
+    encode_standalone_grant_response_body_v2, seal_standalone_grant_envelope,
+    STANDALONE_EVIDENCE_GRANT_RESPONSE_VERSION,
     standalone_grant_envelope_transcript, verify_standalone_grant_envelope_proof,
 };
 pub use crate::indexed::{

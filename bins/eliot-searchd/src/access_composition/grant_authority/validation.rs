@@ -1,10 +1,13 @@
 //! Revalidate a retained standalone grant around a canonical recipe work turn.
 
 use search_contracts::{
-    CorpusOrPortfolioId, HandleExpansionKind, RecipeBodyV1, ReferencePortfolioScope,
-    RequestBody, RequestedScope, SearchReadGrantClaims, protocol::PeerRole,
+    CorpusOrPortfolioId, HandleExpansionKind, RecipeBodyV1,
+    ReferencePortfolioScope, RequestBody, RequestedScope, SearchReadGrantClaims,
+    protocol::PeerRole,
 };
-use search_provider_protocol::{AdmittedProviderRequest, BindingContext, MonotonicMillis};
+use search_provider_protocol::{
+    AdmittedEvidenceProviderRequestV2, AdmittedProviderRequest, BindingContext, MonotonicMillis,
+};
 
 use crate::provider_composition::monotonic_millis;
 use super::{SessionBoundGrantAuthority, StandaloneGrantPolicySource, validate_policy_binding};
@@ -42,6 +45,56 @@ where
     ) -> Result<(), GrantUseError> {
         let _issued = self.verify_issued_request(binding, request)?;
         Ok(())
+    }
+
+    /// Verify an admitted V2 request against the original issuer record and
+    /// current server policy, using the same ledger and grant lifetime.
+    pub(super) fn verify_evidence_request(
+        &mut self,
+        binding: &BindingContext,
+        request: &AdmittedEvidenceProviderRequestV2,
+        policy: &AuthoritativeGrantPolicy,
+    ) -> Result<(), GrantUseError> {
+        let issued = self.verify_issued_evidence_request(binding, request)?;
+        validate_policy(&request.envelope().grant.claims, &issued, policy)?;
+        if request
+            .envelope()
+            .grant
+            .permitted_evidence_recipes
+            .iter()
+            .any(|recipe| !policy.permitted_evidence_recipes.contains(recipe))
+        {
+            return Err(GrantUseError::PolicyChanged);
+        }
+        Ok(())
+    }
+
+    fn verify_issued_evidence_request<'a>(
+        &'a mut self,
+        binding: &BindingContext,
+        request: &AdmittedEvidenceProviderRequestV2,
+    ) -> Result<VerifiedStandaloneGrant<'a>, GrantUseError> {
+        validate_bound_evidence_request(binding, request)?;
+        let envelope = request.envelope();
+        let issued = self
+            .verify_issued_evidence_claims(&envelope.grant)
+            ?;
+        if !envelope
+            .grant
+            .permitted_evidence_recipes
+            .contains(&envelope.recipe_request.recipe_id())
+        {
+            return Err(GrantUseError::RequestDenied);
+        }
+        let now = monotonic_millis();
+        if now >= issued.valid_until()
+            || request.guard().is_cancelled()
+            || now < request.guard().admitted_at()
+            || request.guard().is_expired(now)
+        {
+            return Err(GrantUseError::RequestInactive);
+        }
+        Ok(issued)
     }
 
     /// Verify the original issuer ledger against policy borrowed under the live
@@ -251,7 +304,8 @@ fn validate_policy(
         || policy.allowed_membership_ids.is_empty()
         || policy.allowed_access_partitions.is_empty()
         || policy.allowed_modalities.is_empty()
-        || policy.permitted_recipe_families.is_empty()
+        || (policy.permitted_recipe_families.is_empty()
+            && policy.permitted_evidence_recipes.is_empty())
         || policy.allowed_budget_classes.is_empty()
         || (policy.reference_portfolio_revision.is_none()
             && policy
@@ -283,6 +337,10 @@ fn validate_policy(
         || !subset!(allowed_access_partitions)
         || !subset!(allowed_modalities)
         || !subset!(permitted_recipe_families)
+        || !template
+            .permitted_evidence_recipes
+            .iter()
+            .all(|recipe| policy.permitted_evidence_recipes.contains(recipe))
         || !policy
             .allowed_budget_classes
             .contains(&claims.maximum_budget_class)
@@ -294,6 +352,21 @@ fn validate_policy(
             && claims.reference_portfolio_revision != policy.reference_portfolio_revision)
     {
         return Err(GrantUseError::PolicyChanged);
+    }
+    Ok(())
+}
+
+fn validate_bound_evidence_request(
+    binding: &BindingContext,
+    request: &AdmittedEvidenceProviderRequestV2,
+) -> Result<(), GrantUseError> {
+    let envelope = request.envelope();
+    if binding.role() != PeerRole::StandaloneCli
+        || envelope.grant.claims.binding_id != binding.binding_id()
+        || envelope.grant.claims.installation_incarnation_id != binding.incarnation()
+        || envelope.request_id != *request.guard().request_id()
+    {
+        return Err(GrantUseError::BindingMismatch);
     }
     Ok(())
 }

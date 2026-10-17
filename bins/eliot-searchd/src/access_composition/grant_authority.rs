@@ -24,12 +24,17 @@ pub use validation::RecipeGrantUseError;
 
 pub use execution::{GrantExecutionError, GrantRequestInterruption};
 
-use search_contracts::{OpaqueId, RequestId, SearchReadGrantClaims, protocol::PeerRole};
-use search_provider_protocol::{BindingContext, BoundSession, StandaloneGrantRequestV1};
+use search_contracts::{BoundedSet, OpaqueId, RequestId, SearchReadGrantClaims, protocol::PeerRole};
+use search_provider_protocol::{
+    AdmittedEvidenceProviderRequestV2, BindingContext, BoundSession, MonotonicMillis,
+    ProofDigest, ProtocolError, ProviderFrameTranscript, SearchReadGrantClaimsV2,
+    StandaloneGrantRequestV1, StandaloneGrantRequestV2,
+};
 
 use super::grant::{
-    AuthoritativeGrantPolicy, GrantMintError, StandaloneGrantIssuer,
-    StandaloneGrantRequest, mint_standalone_grant,
+    AuthoritativeGrantPolicy, BoundedStandaloneGrantIssuer, GrantMintError, GrantUseError,
+    GrantValidationClock, StandaloneGrantIssuer, StandaloneGrantRequest,
+    mint_standalone_evidence_grant, mint_standalone_grant,
 };
 
 /// Server-owned source for the current active policy of one authenticated
@@ -73,6 +78,29 @@ pub enum GrantAuthorityError {
     ProtocolRequestInvalid,
     /// Exact grant intersection or issuance failed.
     Mint(GrantMintError),
+}
+
+/// Failure while authenticating and verifying an additive evidence request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EvidenceRequestAdmissionError {
+    /// Exact frame, proof, deadline or shared session admission failed.
+    Protocol(ProtocolError),
+    /// The authenticated binding or current policy could not be proved.
+    Authority(GrantAuthorityError),
+    /// The claim was not issued for this request or is no longer live.
+    Grant(GrantUseError),
+}
+
+impl EvidenceRequestAdmissionError {
+    /// Stable content-free diagnostic.
+    #[must_use]
+    pub const fn code(self) -> &'static str {
+        match self {
+            Self::Protocol(error) => error.code(),
+            Self::Authority(error) => error.code(),
+            Self::Grant(error) => error.code(),
+        }
+    }
 }
 
 impl GrantAuthorityError {
@@ -169,6 +197,18 @@ where
         self.mint_for_binding(&binding, &request)
     }
 
+    /// Mints an explicit evidence/orientation grant under the exact session binding.
+    pub fn mint_protocol_request_v2(
+        &mut self,
+        session: &BoundSession,
+        request_id: RequestId,
+        body: StandaloneGrantRequestV2,
+    ) -> Result<SearchReadGrantClaimsV2, GrantAuthorityError> {
+        let binding = active_standalone_binding(session)?;
+        let request = map_protocol_request_v2(binding.binding_id(), &request_id, body)?;
+        self.mint_evidence_for_binding(&binding, &request)
+    }
+
     fn mint_for_binding(
         &mut self,
         binding: &BindingContext,
@@ -192,6 +232,81 @@ where
             return Err(GrantAuthorityError::PolicyChangedDuringIssuance);
         }
         Ok(claims)
+    }
+
+    fn mint_evidence_for_binding(
+        &mut self,
+        binding: &BindingContext,
+        request: &StandaloneGrantRequest,
+    ) -> Result<SearchReadGrantClaimsV2, GrantAuthorityError> {
+        let before = self
+            .policy_source
+            .snapshot(binding)
+            .map_err(|_| GrantAuthorityError::PolicyUnavailable)?;
+        validate_policy_binding(binding, &before)?;
+        let claims = mint_standalone_evidence_grant(&mut self.issuer, request, &before)?;
+        let after = self
+            .policy_source
+            .snapshot(binding)
+            .map_err(|_| GrantAuthorityError::PolicyChangedDuringIssuance)?;
+        validate_policy_binding(binding, &after)
+            .map_err(|_| GrantAuthorityError::PolicyChangedDuringIssuance)?;
+        if before != after {
+            return Err(GrantAuthorityError::PolicyChangedDuringIssuance);
+        }
+        Ok(claims)
+    }
+}
+
+impl<P, E, T> SessionBoundGrantAuthority<P, BoundedStandaloneGrantIssuer<E, T>>
+where
+    P: StandaloneGrantPolicySource,
+    T: GrantValidationClock,
+{
+    /// Authenticates a V2 evidence frame, reserves the ordinary `BoundSession`
+    /// slot, and returns it only when the same original issuer ledger and live
+    /// binding policy authorize its explicit recipe ID.
+    pub fn admit_evidence_request_v2(
+        &mut self,
+        session: &mut BoundSession,
+        frame: &[u8],
+        observed_proof: &ProofDigest,
+        maximum_deadline_ms: u64,
+        clock: &mut impl FnMut() -> Result<MonotonicMillis, ProtocolError>,
+        prove: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<ProofDigest, ProtocolError>,
+    ) -> Result<AdmittedEvidenceProviderRequestV2, EvidenceRequestAdmissionError> {
+        let admitted = session
+            .admit_evidence_provider_request_v2(
+                frame,
+                observed_proof,
+                maximum_deadline_ms,
+                clock,
+                prove,
+            )
+            .map_err(EvidenceRequestAdmissionError::Protocol)?;
+        let request_id = *admitted.guard().request_id();
+        let verification = (|| {
+            let binding = active_standalone_binding(session)
+                .map_err(EvidenceRequestAdmissionError::Authority)?;
+            let policy = self
+                .policy_source
+                .snapshot(&binding)
+                .map_err(|_| {
+                    EvidenceRequestAdmissionError::Authority(
+                        GrantAuthorityError::PolicyUnavailable,
+                    )
+                })?;
+            validate_policy_binding(&binding, &policy)
+                .map_err(EvidenceRequestAdmissionError::Authority)?;
+            self.issuer
+                .verify_evidence_request(&binding, &admitted, &policy)
+                .map_err(EvidenceRequestAdmissionError::Grant)
+        })();
+        if let Err(error) = verification {
+            let _ = session.cancel(&request_id);
+            return Err(error);
+        }
+        Ok(admitted)
     }
 }
 
@@ -225,6 +340,34 @@ fn map_protocol_request(
         requested_access_partitions: body.requested_access_partitions,
         requested_modalities: body.requested_modalities,
         requested_recipe_families: body.requested_recipe_families,
+        requested_evidence_recipes: BoundedSet::empty(),
+        requested_budget_class: body.requested_budget_class,
+        requested_sensitivity_ceiling: body.requested_sensitivity_ceiling,
+        requested_disclosure_ceiling: body.requested_disclosure_ceiling,
+        requested_source_read_permission: body.requested_source_read_permission,
+        requested_exact_scan_permission: body.requested_exact_scan_permission,
+        requested_ttl_ms: body.requested_ttl_ms,
+    })
+}
+
+fn map_protocol_request_v2(
+    binding_id: search_contracts::BindingId,
+    request_id: &RequestId,
+    body: StandaloneGrantRequestV2,
+) -> Result<StandaloneGrantRequest, GrantAuthorityError> {
+    body.validate()
+        .map_err(|_| GrantAuthorityError::ProtocolRequestInvalid)?;
+    Ok(StandaloneGrantRequest {
+        operation_id: grant_operation_id_with_prefix(request_id, "standalone-grant-v2:")?,
+        binding_id,
+        expected_binding_generation: body.expected_binding_generation,
+        expected_policy_generation: body.expected_policy_generation,
+        requested_membership_ids: body.requested_membership_ids,
+        requested_corpus_or_portfolio_ids: body.requested_corpus_or_portfolio_ids,
+        requested_access_partitions: body.requested_access_partitions,
+        requested_modalities: body.requested_modalities,
+        requested_recipe_families: BoundedSet::empty(),
+        requested_evidence_recipes: body.requested_evidence_recipes,
         requested_budget_class: body.requested_budget_class,
         requested_sensitivity_ceiling: body.requested_sensitivity_ceiling,
         requested_disclosure_ceiling: body.requested_disclosure_ceiling,
@@ -235,9 +378,16 @@ fn map_protocol_request(
 }
 
 fn grant_operation_id(request_id: &RequestId) -> Result<OpaqueId, GrantAuthorityError> {
+    grant_operation_id_with_prefix(request_id, "standalone-grant-v1:")
+}
+
+fn grant_operation_id_with_prefix(
+    request_id: &RequestId,
+    prefix: &str,
+) -> Result<OpaqueId, GrantAuthorityError> {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut value = String::with_capacity(64);
-    value.push_str("standalone-grant-v1:");
+    value.push_str(prefix);
     for byte in request_id.as_bytes() {
         value.push(char::from(HEX[usize::from(byte >> 4)]));
         value.push(char::from(HEX[usize::from(byte & 0x0f)]));

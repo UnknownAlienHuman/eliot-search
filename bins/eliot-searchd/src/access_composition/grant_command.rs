@@ -13,7 +13,9 @@ use search_contracts::{
 };
 use search_provider_protocol::{
     AuthenticatedStandaloneGrantEnvelope, BoundSession, MonotonicMillis, ProofDigest,
-    ProtocolError, RequestGuard, RequestStatus, TerminalKind, decode_standalone_grant_request,
+    ProtocolError, RequestGuard, RequestStatus, SearchReadGrantClaimsV2,
+    TerminalKind, decode_standalone_grant_request,
+    decode_standalone_grant_request_v2,
 };
 
 use super::grant::{GrantMintError, StandaloneGrantIssuer};
@@ -209,7 +211,64 @@ where
     finish_outcome(outcome, status).map_err(GrantDeliveryFailure::Command)
 }
 
+/// Executes one authenticated V2 evidence-grant command through the existing
+/// `BoundSession` and bounded issuer. The V1 request and response APIs are intact.
+pub fn execute_standalone_evidence_grant_command<P, I>(
+    session: &mut BoundSession,
+    authority: &mut SessionBoundGrantAuthority<P, I>,
+    input: StandaloneGrantCommandInput<'_>,
+) -> Result<SearchReadGrantClaimsV2, GrantCommandFailure>
+where
+    P: StandaloneGrantPolicySource,
+    I: StandaloneGrantIssuer,
+{
+    let (mut pending, outcome) = execute_pending_v2(session, authority, input)?;
+    let terminal = terminal_for_outcome(&outcome);
+    let status = pending
+        .session
+        .complete_request(pending.request.request_id(), terminal)
+        .map_err(terminal_failure)?;
+    pending.finished = true;
+    finish_v2_outcome(outcome, status)
+}
+
+/// Delivers one authenticated V2 evidence-grant response before request release.
+pub fn execute_standalone_evidence_grant_command_with_delivery<P, I, E>(
+    session: &mut BoundSession,
+    authority: &mut SessionBoundGrantAuthority<P, I>,
+    input: StandaloneGrantCommandInput<'_>,
+    output: impl FnOnce(
+        &RequestGuard,
+        RequestStatus,
+        Result<&SearchReadGrantClaimsV2, &GrantCommandError>,
+    ) -> Result<(), E>,
+) -> Result<SearchReadGrantClaimsV2, GrantDeliveryFailure<E>>
+where
+    P: StandaloneGrantPolicySource,
+    I: StandaloneGrantIssuer,
+{
+    let (mut pending, outcome) = execute_pending_v2(session, authority, input)
+        .map_err(GrantDeliveryFailure::Command)?;
+    let terminal = terminal_for_outcome(&outcome);
+    let attempted_status = RequestStatus::from_terminal(terminal);
+    let grant_may_exist = outcome.is_ok() || terminal == TerminalKind::OutcomeUnknown;
+    let prepared = pending
+        .session
+        .prepare_request_terminal(pending.request.request_id(), terminal)
+        .map_err(|error| GrantDeliveryFailure::Command(terminal_failure(error)))?;
+    let status = prepared
+        .deliver(|status| output(&pending.request, status, outcome.as_ref()))
+        .map_err(|error| GrantDeliveryFailure::Output {
+            error,
+            attempted_status,
+            grant_may_exist,
+        })?;
+    pending.finished = true;
+    finish_v2_outcome(outcome, status).map_err(GrantDeliveryFailure::Command)
+}
+
 type GrantCommandOutcome = Result<SearchReadGrantClaims, GrantCommandError>;
+type EvidenceGrantCommandOutcome = Result<SearchReadGrantClaimsV2, GrantCommandError>;
 
 // Installed immediately after successful admission. External callbacks may
 // unwind, so dropping the borrowed owner without terminal completion must
@@ -269,6 +328,53 @@ where
     Ok((pending, outcome))
 }
 
+fn execute_pending_v2<'a, P, I>(
+    session: &'a mut BoundSession,
+    authority: &mut SessionBoundGrantAuthority<P, I>,
+    input: StandaloneGrantCommandInput<'_>,
+) -> Result<(PendingGrantCommand<'a>, EvidenceGrantCommandOutcome), GrantCommandFailure>
+where
+    P: StandaloneGrantPolicySource,
+    I: StandaloneGrantIssuer,
+{
+    let started = Instant::now();
+    let observed_body_digest =
+        ProofDigest::from_bytes(*blake3::hash(input.body_bytes).as_bytes());
+    let request = session
+        .admit_standalone_grant_with_deadline(
+            input.envelope,
+            input.expected_proof,
+            &observed_body_digest,
+            input.sequence,
+            input.now,
+            input.relative_deadline_ms,
+        )
+        .map_err(|error| GrantCommandFailure {
+            error: GrantCommandError::Protocol(error),
+            status: None,
+        })?;
+    let pending = PendingGrantCommand {
+        session,
+        request,
+        finished: false,
+    };
+    let outcome = match decode_standalone_grant_request_v2(input.body_bytes) {
+        Ok(body) => authority
+            .mint_admitted_protocol_request_v2(
+                pending.session,
+                &pending.request,
+                body,
+                || input.now.plus(u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)),
+            )
+            .map_err(|error| match error {
+                GrantExecutionError::Authority(error) => GrantCommandError::Authority(error),
+                interruption => GrantCommandError::Execution(interruption),
+            }),
+        Err(error) => Err(GrantCommandError::Protocol(error)),
+    };
+    Ok((pending, outcome))
+}
+
 fn finish_outcome(
     outcome: GrantCommandOutcome,
     status: RequestStatus,
@@ -276,38 +382,54 @@ fn finish_outcome(
     outcome.map_err(|error| GrantCommandFailure { error, status: Some(status) })
 }
 
-fn terminal_failure(error: ProtocolError) -> GrantCommandFailure {
+fn finish_v2_outcome(
+    outcome: EvidenceGrantCommandOutcome,
+    status: RequestStatus,
+) -> Result<SearchReadGrantClaimsV2, GrantCommandFailure> {
+    outcome.map_err(|error| GrantCommandFailure {
+        error,
+        status: Some(status),
+    })
+}
+
+const fn terminal_failure(error: ProtocolError) -> GrantCommandFailure {
     GrantCommandFailure {
         error: GrantCommandError::TerminalOutcomeUnknown(error),
         status: None,
     }
 }
 
-fn terminal_for_outcome(
-    outcome: &GrantCommandOutcome,
-) -> TerminalKind {
+const fn terminal_for_outcome<T>(outcome: &Result<T, GrantCommandError>) -> TerminalKind {
     match outcome {
         Ok(_) => TerminalKind::Success,
-        Err(GrantCommandError::Authority(error))
-        | Err(GrantCommandError::Execution(GrantExecutionError::Authority(error))) => {
+        Err(
+            GrantCommandError::Authority(error)
+            | GrantCommandError::Execution(GrantExecutionError::Authority(error)),
+        ) => {
             terminal_for_authority_error(*error)
         }
-        Err(GrantCommandError::Execution(GrantExecutionError::OutcomeUnknown(_)))
-        | Err(GrantCommandError::TerminalOutcomeUnknown(_)) => TerminalKind::OutcomeUnknown,
+        Err(
+            GrantCommandError::Execution(GrantExecutionError::OutcomeUnknown(_))
+            | GrantCommandError::TerminalOutcomeUnknown(_),
+        ) => TerminalKind::OutcomeUnknown,
         Err(GrantCommandError::Execution(GrantExecutionError::Interrupted(
             GrantRequestInterruption::Cancelled,
         ))) => TerminalKind::Cancelled,
-        Err(GrantCommandError::Execution(GrantExecutionError::Interrupted(_)))
-        | Err(GrantCommandError::Protocol(_)) => TerminalKind::Failed,
+        Err(
+            GrantCommandError::Execution(GrantExecutionError::Interrupted(_))
+            | GrantCommandError::Protocol(_),
+        ) => TerminalKind::Failed,
     }
 }
 
 const fn terminal_for_authority_error(error: GrantAuthorityError) -> TerminalKind {
     match error {
         GrantAuthorityError::PolicyChangedDuringIssuance
-        | GrantAuthorityError::Mint(GrantMintError::IssuerOutcomeUnknown)
-        | GrantAuthorityError::Mint(GrantMintError::IssuerReceiptMismatch)
-        | GrantAuthorityError::Mint(GrantMintError::IssuerReturnedInvalidGrant) => {
+        | GrantAuthorityError::Mint(
+            GrantMintError::IssuerOutcomeUnknown
+            | GrantMintError::IssuerReceiptMismatch
+            | GrantMintError::IssuerReturnedInvalidGrant,
+        ) => {
             TerminalKind::OutcomeUnknown
         }
         GrantAuthorityError::SessionInactive

@@ -120,9 +120,24 @@ impl ProviderEventPreparationV1 {
 #[must_use = "complete, cancel or disconnect the admitted request"]
 pub struct AdmittedProviderRequest {
     body: RequestBody,
+    custody: AdmittedRequestCustody,
+}
+
+/// Shared sequenced request custody for legacy and additive provider requests.
+struct AdmittedRequestCustody {
     guard: RequestGuard,
     next_event: Option<u64>,
     last_clock: MonotonicMillis,
+}
+
+/// One strictly decoded V2 evidence request admitted by a real `BoundSession`.
+///
+/// Fields are private so callers cannot forge an admission or replace its
+/// session-owned request guard. Grant authority is verified by the daemon owner.
+#[must_use = "complete, cancel or disconnect the admitted request"]
+pub struct AdmittedEvidenceProviderRequestV2 {
+    envelope: crate::frame::EvidenceRequestEnvelopeV2,
+    custody: AdmittedRequestCustody,
 }
 
 impl AdmittedProviderRequest {
@@ -132,19 +147,45 @@ impl AdmittedProviderRequest {
 
     /// Original session-owned admission; clones share its cancellation signal.
     #[must_use]
-    pub const fn guard(&self) -> &RequestGuard { &self.guard }
+    pub const fn guard(&self) -> &RequestGuard { &self.custody.guard }
 
     /// Next progress/result event number, or None after terminal delivery.
     #[must_use]
-    pub const fn next_event_sequence(&self) -> Option<u64> { self.next_event }
+    pub const fn next_event_sequence(&self) -> Option<u64> { self.custody.next_event }
+}
+
+impl AdmittedEvidenceProviderRequestV2 {
+    /// Decoded request and issued claims, still subject to live grant and scope checks.
+    #[must_use]
+    pub const fn envelope(&self) -> &crate::frame::EvidenceRequestEnvelopeV2 {
+        &self.envelope
+    }
+
+    /// Original connection-owned admission guard.
+    #[must_use]
+    pub const fn guard(&self) -> &RequestGuard { &self.custody.guard }
+
+    /// Next event sequence under the shared provider-request lifecycle.
+    #[must_use]
+    pub const fn next_event_sequence(&self) -> Option<u64> { self.custody.next_event }
 }
 
 impl core::fmt::Debug for AdmittedProviderRequest {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("AdmittedProviderRequest")
-            .field("request_id", self.guard.request_id())
+            .field("request_id", self.custody.guard.request_id())
             .field("recipe", &self.body.recipe_request.recipe)
-            .field("next_event", &self.next_event)
+            .field("next_event", &self.custody.next_event)
+            .finish_non_exhaustive()
+    }
+}
+
+impl core::fmt::Debug for AdmittedEvidenceProviderRequestV2 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("AdmittedEvidenceProviderRequestV2")
+            .field("request_id", self.custody.guard.request_id())
+            .field("recipe", &self.envelope.recipe_request.recipe_id())
+            .field("next_event", &self.custody.next_event)
             .finish_non_exhaustive()
     }
 }
@@ -226,7 +267,52 @@ impl BoundSession {
             envelope.request_id, envelope.connection_sequence, now,
             Some(deadline.get() - now.get()),
         )?;
-        Ok(AdmittedProviderRequest { body, guard, next_event: Some(1), last_clock: now })
+        Ok(AdmittedProviderRequest {
+            body,
+            custody: AdmittedRequestCustody {
+                guard,
+                next_event: Some(1),
+                last_clock: now,
+            },
+        })
+    }
+
+    /// Authenticates and admits one additive V2 evidence request.
+    ///
+    /// The exact full frame is proven with the existing request transcript,
+    /// then decoded under the strict `request_v2` schema. Successful admission
+    /// consumes the same connection sequence and in-flight slot as a V1 request
+    /// and returns the original session-owned guard. This is transport admission;
+    /// the daemon must still verify the claim against its live issuer and policy.
+    pub fn admit_evidence_provider_request_v2(
+        &mut self,
+        frame: &[u8],
+        observed_proof: &ProofDigest,
+        maximum_deadline_ms: u64,
+        clock: &mut impl FnMut() -> Result<MonotonicMillis, ProtocolError>,
+        prove: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<ProofDigest, ProtocolError>,
+    ) -> Result<AdmittedEvidenceProviderRequestV2, ProtocolError> {
+        let (envelope, now, deadline) = self.authenticate_evidence_provider_frame_v2(
+            frame,
+            observed_proof,
+            maximum_deadline_ms,
+            clock,
+            prove,
+        )?;
+        let guard = self.commit_checked_request(
+            envelope.request_id,
+            envelope.connection_sequence,
+            now,
+            Some(deadline.get() - now.get()),
+        )?;
+        Ok(AdmittedEvidenceProviderRequestV2 {
+            envelope,
+            custody: AdmittedRequestCustody {
+                guard,
+                next_event: Some(1),
+                last_clock: now,
+            },
+        })
     }
 
     // Both typed ingress paths authenticate the exact frame before touching
@@ -268,6 +354,62 @@ impl BoundSession {
         Ok((envelope, now, MonotonicMillis::new(deadline)))
     }
 
+    fn authenticate_evidence_provider_frame_v2(
+        &self,
+        frame: &[u8],
+        observed_proof: &ProofDigest,
+        maximum_deadline_ms: u64,
+        clock: &mut impl FnMut() -> Result<MonotonicMillis, ProtocolError>,
+        prove: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<ProofDigest, ProtocolError>,
+    ) -> Result<(
+        crate::frame::EvidenceRequestEnvelopeV2,
+        MonotonicMillis,
+        MonotonicMillis,
+    ), ProtocolError> {
+        self.validate_session_header(self.binding.version(), &self.server_nonce)?;
+        if maximum_deadline_ms == 0 {
+            return Err(ProtocolError::InvalidLimits);
+        }
+        let started = clock()?;
+        let versions = ProtocolRange {
+            minimum: self.binding.version(),
+            maximum: self.binding.version(),
+        };
+        let envelope = ClientEnvelopeCodec::decode_evidence_request_v2(
+            frame,
+            self.limits,
+            versions,
+        )?;
+        if envelope.binding_id != self.binding.binding_id()
+            || envelope.installation_incarnation_id != self.binding.incarnation()
+        {
+            return Err(ProtocolError::AuthenticationFailed);
+        }
+        let budget = envelope
+            .relative_deadline_ms
+            .unwrap_or(maximum_deadline_ms)
+            .min(maximum_deadline_ms);
+        let deadline = started
+            .get()
+            .checked_add(budget)
+            .filter(|end| *end > started.get())
+            .ok_or(ProtocolError::DeadlineExpired)?;
+        let transcript = ProviderFrameTranscript::request(
+            self.pairing.session(),
+            self.server_nonce,
+            frame,
+        );
+        let expected = prove(&transcript)?;
+        if !verify_proof(&expected, observed_proof) {
+            return Err(ProtocolError::AuthenticationFailed);
+        }
+        let now = clock()?;
+        if now < started || now.get() >= deadline {
+            return Err(ProtocolError::DeadlineExpired);
+        }
+        Ok((envelope, now, MonotonicMillis::new(deadline)))
+    }
+
     /// Encodes and delivers one correlated typed event, then commits its cursors.
     ///
     /// Progress is nonterminal; results require Success or Partial, ordinary
@@ -300,9 +442,10 @@ impl BoundSession {
         output: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<(), E>,
     ) -> Result<(), ProviderDeliveryError<E>> {
         let started = clock().map_err(ProviderDeliveryError::Protocol)?;
-        self.validate_provider_guard(request, started)
+        self.validate_provider_guard(&request.custody, started)
             .map_err(ProviderDeliveryError::Protocol)?;
         let event = request
+            .custody
             .next_event
             .ok_or(ProviderDeliveryError::Protocol(ProtocolError::DuplicateTerminal))?;
         validate_event(request, &body, terminal, event)
@@ -373,8 +516,8 @@ impl BoundSession {
         use PreparedProviderDeliveryError::{AfterOutput, Output, Preparation, Protocol};
 
         let started = clock().map_err(Protocol)?;
-        self.validate_provider_guard(request, started).map_err(Protocol)?;
-        let event = request.next_event.ok_or(Protocol(ProtocolError::DuplicateTerminal))?;
+        self.validate_provider_guard(&request.custody, started).map_err(Protocol)?;
+        let event = request.custody.next_event.ok_or(Protocol(ProtocolError::DuplicateTerminal))?;
         let next_event = if terminal.is_some() { None } else {
             Some(event.checked_add(1).ok_or(Protocol(ProtocolError::SequenceExhausted))?)
         };
@@ -385,7 +528,7 @@ impl BoundSession {
             protocol_version: self.binding.version(),
             installation_incarnation_id: self.binding.incarnation(),
             binding_id: self.binding.binding_id(),
-            request_id: *request.guard.request_id(),
+            request_id: *request.custody.guard.request_id(),
             event_sequence: event,
             connection_sequence: assigned,
             limits: self.limits,
@@ -395,7 +538,7 @@ impl BoundSession {
             .map_err(Protocol)?;
         validate_event(request, &prepared.envelope.body, terminal, event).map_err(Protocol)?;
 
-        let mut progress_guard = self.guards.get(request.guard.request_id())
+        let mut progress_guard = self.guards.get(request.custody.guard.request_id())
             .ok_or(Protocol(ProtocolError::InvalidSessionTransition))?.clone();
         if let ProviderBodyV1::Progress(progress) = &prepared.envelope.body {
             progress_guard.advance_progress(
@@ -407,8 +550,8 @@ impl BoundSession {
 
         let before_output = clock().map_err(Protocol)?;
         if before_output < started { return Err(Protocol(ProtocolError::DeadlineExpired)); }
-        self.validate_provider_guard(request, before_output).map_err(Protocol)?;
-        if terminal.is_none() && request.guard.is_cancelled() {
+        self.validate_provider_guard(&request.custody, before_output).map_err(Protocol)?;
+        if terminal.is_none() && request.custody.guard.is_cancelled() {
             return Err(Protocol(ProtocolError::InvalidSessionTransition));
         }
         let transcript = ProviderFrameTranscript::response(
@@ -419,33 +562,33 @@ impl BoundSession {
         let deliver = || {
             output(&transcript).map_err(Output)?;
             let after = clock().map_err(AfterOutput)?;
-            if after < before_output || request.guard.is_expired(after) {
+            if after < before_output || request.custody.guard.is_expired(after) {
                 return Err(AfterOutput(ProtocolError::DeadlineExpired));
             }
             finished_at = Some(after);
             Ok(())
         };
         if let Some(kind) = terminal {
-            pending.session.prepare_request_terminal(request.guard.request_id(), kind)
+            pending.session.prepare_request_terminal(request.custody.guard.request_id(), kind)
                 .map_err(Protocol)?.deliver(|_| deliver())?;
         } else {
             deliver()?;
-            *pending.session.guards.get_mut(request.guard.request_id())
+            *pending.session.guards.get_mut(request.custody.guard.request_id())
                 .expect("retained progress guard under exclusive session borrow") = progress_guard;
         }
         // This exact next sequence was previewed before output; exclusive
         // borrowing prevents admission, disconnect or another emission here.
         pending.session.session.accept_provider_sequence(assigned)
             .expect("provider sequence reserved under exclusive session borrow");
-        request.next_event = next_event;
-        request.last_clock = finished_at.expect("successful output sampled the clock");
+        request.custody.next_event = next_event;
+        request.custody.last_clock = finished_at.expect("successful output sampled the clock");
         pending.committed = true;
         Ok(())
     }
 
     fn validate_provider_guard(
         &self,
-        request: &AdmittedProviderRequest,
+        request: &AdmittedRequestCustody,
         now: MonotonicMillis,
     ) -> Result<(), ProtocolError> {
         match self.session.state() {
@@ -491,8 +634,9 @@ fn validate_event(
                 && value.result.recipe_id() == request.body.recipe_request.recipe => Ok(()),
         (ProviderBodyV1::Error(_), Some(TerminalKind::Failed)) => Ok(()),
         (ProviderBodyV1::Cancelled(value), Some(TerminalKind::Cancelled))
-            if value.terminal && &value.target_request_id == request.guard.request_id()
-                && request.guard.is_cancelled() => Ok(()),
+            if value.terminal
+                && &value.target_request_id == request.custody.guard.request_id()
+                && request.custody.guard.is_cancelled() => Ok(()),
         _ => Err(ProtocolError::InvalidBody),
     }
 }

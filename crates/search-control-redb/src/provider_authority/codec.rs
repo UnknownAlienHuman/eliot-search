@@ -9,12 +9,17 @@ use search_contracts::{
     StandalonePolicyRecord, StandalonePolicyState, UtcTimestamp, MAX_OPAQUE_ID_BYTES,
     MAX_OPAQUE_REF_BYTES, MAX_PROFILE_ID_BYTES, MAX_SET_ITEMS, protocol::PeerRole,
 };
+use search_contracts::evidence::RecipeIdV2;
 
 use crate::{ControlError, ControlRecordClass, ControlValue, JournalLimits};
 
 const BINDING_MAGIC: &[u8; 8] = b"ELBIND01";
 const POLICY_MAGIC: &[u8; 8] = b"ELGRPOL1";
+const EVIDENCE_RECIPE_PERMISSION_EXTENSION: &[u8; 8] = b"ELGREV02";
 const VALUE_LIMIT: usize = JournalLimits::BASELINE.max_value_bytes;
+
+#[cfg(test)]
+mod tests;
 
 pub(super) fn encode_binding(
     record: &ProviderBindingRecord,
@@ -256,6 +261,12 @@ pub(super) fn encode_policy(
     output.text(policy.issued_boot_id.as_str())?;
     output.u64(policy.revocation_generation)?;
     output.u64(policy.maximum_ttl_ms)?;
+    if !policy.permitted_evidence_recipes.is_empty() {
+        output.raw(EVIDENCE_RECIPE_PERMISSION_EXTENSION)?;
+        output.set(&policy.permitted_evidence_recipes, |writer, recipe| {
+            writer.text(recipe.as_str())
+        })?;
+    }
     ControlValue::new(
         ControlRecordClass::State,
         output.finish(),
@@ -343,6 +354,7 @@ pub(super) fn decode_policy(
             .map_err(|_| ControlError::StoreCorrupt)?,
         revocation_generation: input.u64()?,
         maximum_ttl_ms: input.u64()?,
+        permitted_evidence_recipes: decode_evidence_recipe_permissions(&mut input)?,
     };
     input.finish()?;
     let record = StandalonePolicyRecord {
@@ -355,6 +367,26 @@ pub(super) fn decode_policy(
         .validate_shape()
         .map_err(|_| ControlError::StoreCorrupt)?;
     Ok(record)
+}
+
+fn decode_evidence_recipe_permissions(
+    input: &mut Reader<'_>,
+) -> Result<BoundedSet<RecipeIdV2, MAX_SET_ITEMS>, ControlError> {
+    if input.remaining().is_empty() {
+        return Ok(BoundedSet::empty());
+    }
+    if input.take(EVIDENCE_RECIPE_PERMISSION_EXTENSION.len())?
+        != EVIDENCE_RECIPE_PERMISSION_EXTENSION
+    {
+        return Err(ControlError::StoreCorrupt);
+    }
+    let recipes = input.set(|reader| {
+        RecipeIdV2::parse(reader.text(64)?).map_err(|_| ControlError::StoreCorrupt)
+    })?;
+    if recipes.is_empty() {
+        return Err(ControlError::StoreCorrupt);
+    }
+    Ok(recipes)
 }
 
 fn append(

@@ -1,18 +1,21 @@
 use std::collections::VecDeque;
 
 use search_contracts::protocol::{HelloBody, PeerRole};
+use search_contracts::evidence::RecipeIdV2;
 use search_contracts::{
     AccessPartitionId, BindingId, BoundedSet, CorpusId, CorpusOrPortfolioId,
     DisclosureCeiling, GrantId, InstallationId, InstallationIncarnationId,
     Modality, OpaqueId, OpaqueRef, PortfolioRevision, ProfileId, ProtocolRange,
     ProtocolVersion, RecipeIdV1, ReferencePortfolioId, RequestId, ScopeDomainId,
-    SensitivityClass, SourceMembershipId, UtcTimestamp, MAX_SET_ITEMS,
+    SensitivityClass, SourceMembershipId, UtcTimestamp,
 };
 use search_provider_protocol::{
-    authenticate_binding, encode_standalone_grant_request, seal_standalone_grant_envelope,
+    authenticate_binding, encode_standalone_grant_request, encode_standalone_grant_request_v2,
+    seal_standalone_grant_envelope,
     BindingContext, BoundSession, ClientNonce, MonotonicMillis, PairingChallenge,
     PairingMachine, ProofDigest, ProtocolError, RequestStatus, ServerNonce, SessionId,
-    StandaloneGrantRequestV1, TerminalKind, TransportPeer, DEFAULT_PROTOCOL_LIMITS,
+    StandaloneGrantRequestV1, StandaloneGrantRequestV2, TerminalKind, TransportPeer,
+    DEFAULT_PROTOCOL_LIMITS,
 };
 
 use super::*;
@@ -61,6 +64,7 @@ fn policy() -> AuthoritativeGrantPolicy {
         ]),
         allowed_modalities: set([Modality::Code, Modality::Text]),
         permitted_recipe_families: set([RecipeIdV1::Locate, RecipeIdV1::FindText]),
+        permitted_evidence_recipes: BoundedSet::empty(),
         allowed_budget_classes: set([profile("interactive"), profile("verification")]),
         sensitivity_ceiling: SensitivityClass::Confidential,
         disclosure_ceiling: DisclosureCeiling::NamedClient,
@@ -83,6 +87,26 @@ fn request_body() -> StandaloneGrantRequestV1 {
         requested_access_partitions: set([AccessPartitionId::from_bytes([30; 16])]),
         requested_modalities: set([Modality::Code]),
         requested_recipe_families: set([RecipeIdV1::Locate]),
+        requested_budget_class: profile("interactive"),
+        requested_sensitivity_ceiling: SensitivityClass::Project,
+        requested_disclosure_ceiling: DisclosureCeiling::LocalOnly,
+        requested_source_read_permission: true,
+        requested_exact_scan_permission: false,
+        requested_ttl_ms: 30_000,
+    }
+}
+
+fn evidence_request_body() -> StandaloneGrantRequestV2 {
+    StandaloneGrantRequestV2 {
+        expected_binding_generation: 4,
+        expected_policy_generation: 7,
+        requested_membership_ids: set([membership(10)]),
+        requested_corpus_or_portfolio_ids: set([CorpusOrPortfolioId::Corpus(
+            CorpusId::from_bytes([20; 16]),
+        )]),
+        requested_access_partitions: set([AccessPartitionId::from_bytes([30; 16])]),
+        requested_modalities: set([Modality::Code]),
+        requested_evidence_recipes: set([RecipeIdV2::RetrieveEvidence]),
         requested_budget_class: profile("interactive"),
         requested_sensitivity_ceiling: SensitivityClass::Project,
         requested_disclosure_ceiling: DisclosureCeiling::LocalOnly,
@@ -230,6 +254,37 @@ fn exact_authenticated_body_mints_and_releases_one_terminal() {
     .expect("grant command");
 
     assert_eq!(claims.binding_id, policy.binding_id);
+    assert_eq!(session.in_flight_len(), 0);
+    assert_eq!(
+        session.complete_request(&request_id, TerminalKind::Success),
+        Err(ProtocolError::DuplicateTerminal)
+    );
+}
+
+#[test]
+fn authenticated_v2_grant_command_issues_only_explicit_policy_recipes() {
+    let mut policy = policy();
+    policy.permitted_evidence_recipes = set([RecipeIdV2::RetrieveEvidence]);
+    let body = encode_standalone_grant_request_v2(&evidence_request_body()).expect("body");
+    let proof = ProofDigest::from_bytes([0x76; 32]);
+    let request_id = RequestId::from_bytes([0x59; 16]);
+    let envelope = envelope(request_id, &body, proof);
+    let mut session = bound_session();
+    let mut authority = authority([policy.clone(), policy.clone()]);
+
+    let claims = execute_standalone_evidence_grant_command(
+        &mut session,
+        &mut authority,
+        input(&envelope, &proof, &body),
+    )
+    .expect("V2 grant command");
+
+    assert_eq!(claims.claims.binding_id, policy.binding_id);
+    assert!(claims.claims.permitted_recipe_families.is_empty());
+    assert_eq!(
+        claims.permitted_evidence_recipes,
+        set([RecipeIdV2::RetrieveEvidence])
+    );
     assert_eq!(session.in_flight_len(), 0);
     assert_eq!(
         session.complete_request(&request_id, TerminalKind::Success),

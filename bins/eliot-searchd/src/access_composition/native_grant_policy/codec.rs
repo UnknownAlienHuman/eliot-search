@@ -11,6 +11,7 @@ use search_contracts::{
     SensitivityClass, SourceMembershipId, UtcTimestamp, MAX_OPAQUE_ID_BYTES,
     MAX_OPAQUE_REF_BYTES, MAX_PROFILE_ID_BYTES, MAX_SET_ITEMS,
 };
+use search_contracts::evidence::RecipeIdV2;
 use search_control_redb::{ControlRecordClass, ControlValue, JournalLimits};
 
 use super::{
@@ -20,6 +21,7 @@ use super::{
 
 type Result<T> = std::result::Result<T, NativeGrantPolicyError>;
 const MAGIC: &[u8; 8] = b"ELGRPOL1";
+const EVIDENCE_RECIPE_PERMISSION_EXTENSION: &[u8; 8] = b"ELGREV02";
 const LIMIT: usize = JournalLimits::BASELINE.max_value_bytes;
 const INVALID: NativeGrantPolicyError = NativeGrantPolicyError::InvalidRecord;
 
@@ -93,6 +95,7 @@ pub(super) fn decode(value: &ControlValue) -> Result<StandalonePolicyRecord> {
         issued_boot_id: OpaqueId::new(input.text(MAX_OPAQUE_ID_BYTES)?).map_err(|_| INVALID)?,
         revocation_generation: input.u64()?,
         maximum_ttl_ms: input.u64()?,
+        permitted_evidence_recipes: evidence_recipe_permissions(&mut input)?,
     };
     input.finish()?;
     let record = StandalonePolicyRecord {
@@ -103,6 +106,24 @@ pub(super) fn decode(value: &ControlValue) -> Result<StandalonePolicyRecord> {
     };
     validate_policy_record(&record)?;
     Ok(record)
+}
+
+fn evidence_recipe_permissions(
+    input: &mut Reader<'_>,
+) -> Result<BoundedSet<RecipeIdV2, MAX_SET_ITEMS>> {
+    if input.remaining().is_empty() {
+        return Ok(BoundedSet::empty());
+    }
+    if input.take(EVIDENCE_RECIPE_PERMISSION_EXTENSION.len())?
+        != EVIDENCE_RECIPE_PERMISSION_EXTENSION
+    {
+        return Err(INVALID);
+    }
+    let recipes = input.set(|input| RecipeIdV2::parse(input.text(64)?).map_err(|_| INVALID))?;
+    if recipes.is_empty() {
+        return Err(INVALID);
+    }
+    Ok(recipes)
 }
 
 struct Reader<'a> {

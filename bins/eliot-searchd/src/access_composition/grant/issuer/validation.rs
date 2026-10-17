@@ -1,6 +1,7 @@
 //! Reference-grant verification against the issuing owner's existing ledger.
 
 use search_contracts::{SearchReadGrantClaims, UtcTimestamp};
+use search_provider_protocol::SearchReadGrantClaimsV2;
 use search_provider_protocol::MonotonicMillis;
 
 use super::{BoundedStandaloneGrantIssuer, IssuedGrantRecord, StandaloneGrantTemplate};
@@ -100,6 +101,20 @@ impl VerifiedStandaloneGrant<'_> {
         }
         Ok(())
     }
+
+    /// Recheck the exact retained V2 evidence grant.
+    pub(crate) fn verify_current_evidence_claims(
+        &self,
+        claims: &SearchReadGrantClaimsV2,
+    ) -> Result<(), GrantUseError> {
+        if crate::provider_composition::monotonic_millis() >= self.valid_until {
+            return Err(GrantUseError::Expired);
+        }
+        if !matches_issued_v2(self.record, claims) {
+            return Err(GrantUseError::InvalidGrant);
+        }
+        Ok(())
+    }
 }
 
 impl<E, T: GrantValidationClock> BoundedStandaloneGrantIssuer<E, T> {
@@ -128,9 +143,46 @@ impl<E, T: GrantValidationClock> BoundedStandaloneGrantIssuer<E, T> {
         if valid_until > original_expiry { return Err(GrantUseError::ClockUnavailable); }
         Ok(VerifiedStandaloneGrant { record, valid_until })
     }
+
+    /// Compare a V2 evidence grant with the same finite original issuer ledger.
+    pub fn verify_issued_evidence_claims(
+        &mut self,
+        claims: &SearchReadGrantClaimsV2,
+    ) -> Result<VerifiedStandaloneGrant<'_>, GrantUseError> {
+        claims.validate_shape().map_err(|_| GrantUseError::InvalidGrant)?;
+        let record = self.records.values().find(|record| {
+            record.material.grant_id == claims.claims.grant_id
+                && record.template.binding_id == claims.claims.binding_id
+                && record.template.installation_incarnation_id
+                    == claims.claims.installation_incarnation_id
+        }).ok_or(GrantUseError::InvalidGrant)?;
+        if !matches_issued_v2(record, claims) {
+            return Err(GrantUseError::InvalidGrant);
+        }
+        let original_expiry = record.monotonic_expiry.ok_or(GrantUseError::ClockUnavailable)?;
+        let valid_until = self.time.check_grant_window(
+            &record.material.issued_at, &record.material.expires_at, original_expiry,
+        )?;
+        if valid_until > original_expiry { return Err(GrantUseError::ClockUnavailable); }
+        Ok(VerifiedStandaloneGrant { record, valid_until })
+    }
 }
 
 fn matches_issued(record: &IssuedGrantRecord, claims: &SearchReadGrantClaims) -> bool {
+    record.template.permitted_evidence_recipes.is_empty()
+        && matches_issued_common(record, claims)
+}
+
+fn matches_issued_v2(
+    record: &IssuedGrantRecord,
+    claims: &SearchReadGrantClaimsV2,
+) -> bool {
+    !record.template.permitted_evidence_recipes.is_empty()
+        && record.template.permitted_evidence_recipes == claims.permitted_evidence_recipes
+        && matches_issued_common(record, &claims.claims)
+}
+
+fn matches_issued_common(record: &IssuedGrantRecord, claims: &SearchReadGrantClaims) -> bool {
     let template = &record.template;
     let material = &record.material;
     // Work over every byte of the retained nonce even on a mismatch. Do not

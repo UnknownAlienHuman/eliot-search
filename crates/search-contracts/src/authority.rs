@@ -7,6 +7,7 @@
 
 use crate::bounds::{BoundedSet, MAX_SET_ITEMS};
 use crate::canonical::{OpaqueId, OpaqueRef, UtcTimestamp};
+use crate::evidence::RecipeIdV2;
 use crate::ids::{
     AccessPartitionId, BindingId, Blake3Digest32, CorpusOrPortfolioId, InstallationId,
     InstallationIncarnationId, NonZeroRevision, PortfolioRevision, ProfileId, ScopeDomainId,
@@ -101,6 +102,9 @@ pub struct AuthoritativeGrantPolicy {
     pub allowed_access_partitions: BoundedSet<AccessPartitionId, MAX_SET_ITEMS>,
     pub allowed_modalities: BoundedSet<Modality, MAX_SET_ITEMS>,
     pub permitted_recipe_families: BoundedSet<RecipeIdV1, MAX_SET_ITEMS>,
+    /// Explicit evidence/orientation permissions. A missing legacy policy-row
+    /// extension decodes as an empty set; it never inherits v1 recipe grants.
+    pub permitted_evidence_recipes: BoundedSet<RecipeIdV2, MAX_SET_ITEMS>,
     pub allowed_budget_classes: BoundedSet<ProfileId, MAX_SET_ITEMS>,
     pub sensitivity_ceiling: SensitivityClass,
     pub disclosure_ceiling: DisclosureCeiling,
@@ -127,7 +131,8 @@ impl AuthoritativeGrantPolicy {
         if self.allowed_membership_ids.is_empty()
             || self.allowed_access_partitions.is_empty()
             || self.allowed_modalities.is_empty()
-            || self.permitted_recipe_families.is_empty()
+            || (self.permitted_recipe_families.is_empty()
+                && self.permitted_evidence_recipes.is_empty())
             || self.allowed_budget_classes.is_empty()
         {
             return Err(ContractError::new(

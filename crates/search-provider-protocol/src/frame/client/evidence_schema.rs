@@ -22,14 +22,18 @@ use search_contracts::evidence::{
 use search_contracts::ids::{RepresentationId, UnitId};
 use search_contracts::query::{PriorityClass, QueryExecutionBudget};
 use search_contracts::source::{UnitKind, UnitOccurrence};
+use search_contracts::{BindingId, InstallationIncarnationId, RequestId};
 
 use super::wire::{Decoder, Encoder, Result, Schema, record, tagged};
 use crate::config::DEFAULT_PROTOCOL_LIMITS;
 use crate::error::ProtocolError;
 use crate::frame::FrameCodec;
+use crate::grant::SearchReadGrantClaimsV2;
 
 /// Schema version of the additive new-generation recipe envelope.
 pub const EVIDENCE_RECIPE_SCHEMA_VERSION: u16 = 2;
+/// Body version for the authenticated `request_v2` provider envelope.
+pub const EVIDENCE_PROVIDER_REQUEST_SCHEMA_VERSION: u16 = 2;
 
 /// Independent response-body ceiling below the canonical transport frame cap.
 pub(super) const MAX_EVIDENCE_SCHEMA_BYTES: usize = 1024 * 1024;
@@ -41,6 +45,52 @@ pub enum EvidenceRecipeRequestV2 {
     RetrieveEvidence(RetrieveEvidenceRequestV2),
     /// One bounded `orient_scope@1` request.
     OrientScope(OrientScopeRequestV2),
+}
+
+/// One authenticated provider request carrying a V2 grant and evidence recipe.
+///
+/// The transport version remains the negotiated provider version. The distinct
+/// body tag and schema versions separate this request from the unchanged v1
+/// `request` body.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EvidenceRequestEnvelopeV2 {
+    /// Negotiated provider protocol major.
+    pub protocol_major: u16,
+    /// Negotiated provider protocol minor.
+    pub protocol_minor: u16,
+    /// Authenticated local installation incarnation.
+    pub installation_incarnation_id: InstallationIncarnationId,
+    /// Authenticated provider binding.
+    pub binding_id: BindingId,
+    /// Shared monotonic connection sequence.
+    pub connection_sequence: u64,
+    /// Request identity owned by the shared session.
+    pub request_id: RequestId,
+    /// Optional request-relative deadline.
+    pub relative_deadline_ms: Option<u64>,
+    /// Server-issued claims with explicit V2 recipe permissions.
+    pub grant: SearchReadGrantClaimsV2,
+    /// One accepted `retrieve_evidence@1` or `orient_scope@1` request.
+    pub recipe_request: EvidenceRecipeRequestV2,
+}
+
+impl EvidenceRequestEnvelopeV2 {
+    /// Validate request shape and consistency with its issued claim set.
+    pub fn validate(&self) -> Result<()> {
+        self.grant.validate_shape()?;
+        self.recipe_request.validate()?;
+        if self.grant.claims.binding_id != self.binding_id
+            || self.grant.claims.installation_incarnation_id != self.installation_incarnation_id
+            || !self
+                .grant
+                .permitted_evidence_recipes
+                .contains(&self.recipe_request.recipe_id())
+        {
+            return Err(ProtocolError::InvalidBody);
+        }
+        let _bounded_recipe_schema = encode_evidence_request(&self.recipe_request)?;
+        Ok(())
+    }
 }
 
 impl EvidenceRecipeRequestV2 {
@@ -294,6 +344,37 @@ record!(OrientScopeRequestV2 {
     scope, source_view, question, dimensions, optional_hints, profile_id, budgets, progressive,
 } => |value: &OrientScopeRequestV2| value.validate().map_err(|_| ProtocolError::InvalidBody));
 
+struct VersionedEvidenceRecipeRequestV2(EvidenceRecipeRequestV2);
+
+impl Schema for VersionedEvidenceRecipeRequestV2 {
+    fn put(&self, output: &mut Encoder) -> Result<()> {
+        put_versioned(output, self.0.recipe_id())?;
+        self.0.put(output)?;
+        output.close(b'}')
+    }
+
+    fn get(input: &mut Decoder<'_>) -> Result<Self> {
+        input.open(b'{')?;
+        let mut first = true;
+        input.field(&mut first, "v")?;
+        if u16::get(input)? != EVIDENCE_RECIPE_SCHEMA_VERSION {
+            return Err(ProtocolError::NoCompatibleVersion);
+        }
+        input.field(&mut first, "recipe")?;
+        let declared = RecipeIdV2::parse(&input.text(64)?)
+            .map_err(|_| ProtocolError::InvalidBody)?;
+        input.field(&mut first, "body")?;
+        let value = EvidenceRecipeRequestV2::get(input)?;
+        if value.recipe_id() != declared {
+            return Err(ProtocolError::InvalidBody);
+        }
+        input.close(b'}')?;
+        value.validate()?;
+        let _bounded_recipe_schema = encode_evidence_request(&value)?;
+        Ok(Self(value))
+    }
+}
+
 record!(RetrieveEvidenceResultV2 {
     request_id, plan_id, plan_fingerprint, result_fence, resolved_scope, cards, groups,
     suggested_exact_checks, coverage, continuation,
@@ -342,6 +423,64 @@ fn read_versioned(input: &mut Decoder<'_>, expected: RecipeIdV2) -> Result<()> {
     }
     input.field(&mut first, "body")?;
     Ok(())
+}
+
+pub(super) fn put_evidence_request_v2_body(
+    envelope: &EvidenceRequestEnvelopeV2,
+    output: &mut Encoder,
+) -> Result<()> {
+    envelope.validate()?;
+    output.tag("request_v2")?;
+    output.open(b'{')?;
+    let mut first = true;
+    output.field(&mut first, "v")?;
+    EVIDENCE_PROVIDER_REQUEST_SCHEMA_VERSION.put(output)?;
+    output.field(&mut first, "grant")?;
+    envelope.grant.put(output)?;
+    output.field(&mut first, "recipe_request")?;
+    VersionedEvidenceRecipeRequestV2(envelope.recipe_request.clone()).put(output)?;
+    output.close(b'}')?;
+    output.close(b'}')
+}
+
+pub(super) fn get_evidence_request_v2_body(
+    input: &mut Decoder<'_>,
+    protocol_major: u16,
+    protocol_minor: u16,
+    installation_incarnation_id: InstallationIncarnationId,
+    binding_id: BindingId,
+    connection_sequence: u64,
+    request_id: RequestId,
+    relative_deadline_ms: Option<u64>,
+) -> Result<EvidenceRequestEnvelopeV2> {
+    if input.tag()? != "request_v2" {
+        return Err(ProtocolError::InvalidBody);
+    }
+    input.open(b'{')?;
+    let mut first = true;
+    input.field(&mut first, "v")?;
+    if u16::get(input)? != EVIDENCE_PROVIDER_REQUEST_SCHEMA_VERSION {
+        return Err(ProtocolError::NoCompatibleVersion);
+    }
+    input.field(&mut first, "grant")?;
+    let grant = SearchReadGrantClaimsV2::get(input)?;
+    input.field(&mut first, "recipe_request")?;
+    let VersionedEvidenceRecipeRequestV2(recipe_request) = Schema::get(input)?;
+    input.close(b'}')?;
+    input.close(b'}')?;
+    let envelope = EvidenceRequestEnvelopeV2 {
+        protocol_major,
+        protocol_minor,
+        installation_incarnation_id,
+        binding_id,
+        connection_sequence,
+        request_id,
+        relative_deadline_ms,
+        grant,
+        recipe_request,
+    };
+    envelope.validate()?;
+    Ok(envelope)
 }
 
 /// Encodes the exact `retrieve_evidence@1` request schema.

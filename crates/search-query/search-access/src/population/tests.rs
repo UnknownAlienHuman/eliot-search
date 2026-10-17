@@ -160,6 +160,7 @@ impl Fixture {
             allowed_access_partitions: grant.allowed_access_partitions.clone(),
             allowed_modalities: grant.allowed_modalities.clone(),
             permitted_recipe_families: grant.permitted_recipe_families.clone(),
+            permitted_evidence_recipes: BoundedSet::empty(),
             allowed_budget_classes: BoundedSet::from_items([grant.maximum_budget_class.clone()])
                 .unwrap(),
             sensitivity_ceiling: grant.sensitivity_ceiling,
