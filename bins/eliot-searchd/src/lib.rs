@@ -14,5 +14,9 @@ pub mod native_file;
 #[cfg(windows)]
 #[doc(hidden)]
 pub mod native_provider_pipe;
+/// Native contained Qdrant process producer (compiled with the indexed profile).
+#[cfg(feature = "wave3-index")]
+#[doc(hidden)]
+pub mod native_qdrant_job;
 /// Measured resource budgets on a frozen corpus (T40; same single owner).
 pub mod resource_budgets;

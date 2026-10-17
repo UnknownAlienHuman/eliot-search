@@ -1,16 +1,14 @@
 //! Owned child execution: readiness, bounded termination, and receipts.
 //!
-//! [`OwnedChild`] wraps the [`Child`] handle produced by
-//! [`spawn_qualified`](crate::launch::spawn_qualified). Holding the OS
-//! handle (not a bare PID) is what makes PID reuse harmless: Windows never
-//! recycles the identity behind an open handle, and every observation is
-//! re-checked against executable digest, owner fence, and endpoint before
-//! the pure supervisor may confirm readiness.
+//! [`OwnedChild`] wraps the exact [`Child`] plus any native containment custody
+//! returned by the contained spawn path. Holding these OS handles (not a bare
+//! PID) makes PID reuse harmless and keeps the Windows Job alive through bounded
+//! tree termination/reap. Identity is re-checked before readiness admission.
 //!
 //! Composition recipe with the pure [`QdrantSupervisor`](crate::QdrantSupervisor):
 //!
 //! ```text
-//! prepare_start -> spawn_qualified -> OwnedChild::from
+//! prepare_start -> spawn_qualified[_contained] -> OwnedChild::from
 //!   -> wait_ready -> confirm_ready -> Ready
 //!   -> begin_shutdown -> terminate_bounded -> confirm_stopped -> Stopped
 //! ```
@@ -31,9 +29,9 @@ use std::time::{Duration, Instant};
 
 use search_contracts::{OpaqueId, ReceiptRef, Sha256Digest32};
 
-use crate::containment::{ContainmentReport, LoopbackHost};
+use crate::containment::{ContainmentObservation, ContainmentReport, LoopbackHost};
 use crate::identity::VerifiedExecutable;
-use crate::launch::{ArgvSnapshot, LaunchPlan, SpawnedChild};
+use crate::launch::{ArgvSnapshot, ChildContainmentCustody, LaunchPlan, SpawnedChild};
 use crate::secret::SecretMaterial;
 use crate::sha256::sha256_bytes;
 use crate::{SupervisorError, spawn_unix_millis};
@@ -51,24 +49,36 @@ const REAP_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// Owned running (or recently reaped) child with its spawn evidence.
 pub struct OwnedChild {
     child: Child,
+    containment_custody: Option<Box<dyn ChildContainmentCustody>>,
     pid: NonZeroU32,
     verified: VerifiedExecutable,
     argv_snapshot: ArgvSnapshot,
     containment: ContainmentReport,
+    containment_observation: Option<ContainmentObservation>,
     spawn_unix_millis: NonZeroU64,
     canonical_data_dir: std::path::PathBuf,
 }
 
 impl From<SpawnedChild> for OwnedChild {
     fn from(spawned: SpawnedChild) -> Self {
+        let pid = spawned.pid();
+        let spawn_unix_millis = spawned.spawn_unix_millis();
+        let containment = spawned.containment_report();
+        let canonical_data_dir = spawned.canonical_data_dir().clone();
+        let verified = spawned.verified().clone();
+        let argv_snapshot = spawned.argv_snapshot().clone();
+        let containment_observation = spawned.containment_observation().cloned();
+        let (child, containment_custody, _) = spawned.into_parts();
         Self {
-            pid: spawned.pid(),
-            spawn_unix_millis: spawned.spawn_unix_millis(),
-            containment: spawned.containment_report(),
-            canonical_data_dir: spawned.canonical_data_dir().clone(),
-            verified: spawned.verified().clone(),
-            argv_snapshot: spawned.argv_snapshot().clone(),
-            child: spawned.into_child(),
+            child,
+            containment_custody,
+            pid,
+            verified,
+            argv_snapshot,
+            containment,
+            containment_observation,
+            spawn_unix_millis,
+            canonical_data_dir,
         }
     }
 }
@@ -84,10 +94,12 @@ impl OwnedChild {
         let pid = NonZeroU32::new(child.id()).ok_or(SupervisorError::StartFailed)?;
         Ok(Self {
             child,
+            containment_custody: None,
             pid,
             verified: VerifiedExecutable::for_tests(label),
             argv_snapshot: ArgvSnapshot::for_tests(label),
             containment: ContainmentReport::for_tests(),
+            containment_observation: None,
             spawn_unix_millis: spawn_unix_millis(),
             canonical_data_dir: std::path::PathBuf::from(label),
         })
@@ -115,6 +127,12 @@ impl OwnedChild {
     #[must_use]
     pub const fn containment_report(&self) -> ContainmentReport {
         self.containment
+    }
+
+    /// Actual Windows Job and held-root ACL observations, when natively contained.
+    #[must_use]
+    pub const fn containment_observation(&self) -> Option<&ContainmentObservation> {
+        self.containment_observation.as_ref()
     }
 
     /// Spawn marker used as the pure `creation_marker`.
@@ -154,13 +172,17 @@ impl OwnedChild {
         wait_ready(&mut self.child, host, http_port, secret, deadline)
     }
 
-    /// Bounded terminate-and-reap. An already-exited child reports its code
-    /// immediately; otherwise `kill` is issued once and the handle is
-    /// polled until `deadline`. A missed deadline yields
-    /// [`SupervisorError::ShutdownOutcomeUnknown`] with the handle retained
-    /// for a later bounded attempt.
+    /// Bounded terminate-and-reap. A contained child terminates its Job and
+    /// waits until both the exact direct child is reaped and the Job is empty.
+    /// A missed deadline yields [`SupervisorError::ShutdownOutcomeUnknown`]
+    /// with Child and Job custody retained for a later bounded attempt.
     pub fn terminate_bounded(&mut self, deadline: Instant) -> Result<Option<i32>, SupervisorError> {
-        terminate_bounded(&mut self.child, deadline)
+        match self.containment_custody.as_mut() {
+            Some(custody) => {
+                terminate_child_with_custody(&mut self.child, custody.as_mut(), deadline)
+            }
+            None => terminate_bounded(&mut self.child, deadline),
+        }
     }
 }
 
@@ -169,6 +191,9 @@ impl Drop for OwnedChild {
     /// Every normal path reaps explicitly with typed outcomes; this only
     /// covers unwinding and forgotten guards, where no error can propagate.
     fn drop(&mut self) {
+        if let Some(custody) = self.containment_custody.as_mut() {
+            let _ = custody.terminate();
+        }
         let _ = self.child.kill();
     }
 }
@@ -231,6 +256,56 @@ pub fn terminate_bounded(
         }
         if Instant::now() >= deadline {
             return Err(SupervisorError::ShutdownOutcomeUnknown);
+        }
+        std::thread::sleep(REAP_POLL_INTERVAL);
+    }
+}
+
+/// Terminates one contained process tree and retains both handles until the Job
+/// reports empty and the exact direct child has been reaped.
+pub(crate) fn terminate_child_with_custody(
+    child: &mut Child,
+    custody: &mut dyn ChildContainmentCustody,
+    deadline: Instant,
+) -> Result<Option<i32>, SupervisorError> {
+    let mut direct_status = child.try_wait().ok().flatten();
+    if custody.terminate().is_err() {
+        let _ = child.kill();
+        reap_direct_until(child, deadline);
+        return Err(SupervisorError::ShutdownOutcomeUnknown);
+    }
+    // Also kill the exact Child handle: assignment may itself have failed, in
+    // which case closing/terminating the empty Job cannot reach this process.
+    let _ = child.kill();
+    loop {
+        let Ok(active) = custody.active_processes() else {
+            let _ = child.kill();
+            reap_direct_until(child, deadline);
+            return Err(SupervisorError::ShutdownOutcomeUnknown);
+        };
+        if direct_status.is_none() {
+            direct_status = child.try_wait().ok().flatten();
+        }
+        if active == 0
+            && let Some(status) = direct_status.take()
+        {
+            return Ok(status.code());
+        }
+        if Instant::now() >= deadline {
+            return Err(SupervisorError::ShutdownOutcomeUnknown);
+        }
+        std::thread::sleep(REAP_POLL_INTERVAL);
+    }
+}
+
+fn reap_direct_until(child: &mut Child, deadline: Instant) {
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => return,
+            Ok(None) => {}
+        }
+        if Instant::now() >= deadline {
+            return;
         }
         std::thread::sleep(REAP_POLL_INTERVAL);
     }

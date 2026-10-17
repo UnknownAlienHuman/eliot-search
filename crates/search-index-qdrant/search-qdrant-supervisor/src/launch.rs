@@ -23,12 +23,13 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
 use std::num::{NonZeroU32, NonZeroU64};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use search_contracts::{Blake3Digest32, OpaqueId, Sha256Digest32};
 
 use crate::containment::{
-    ContainmentEvidence, ContainmentReport, LoopbackHost, evaluate_containment,
+    ContainmentEvidence, ContainmentObservation, ContainmentReport, LoopbackHost,
+    evaluate_containment,
 };
 use crate::identity::{ExecutableExpectation, VerifiedExecutable, verify_executable_identity};
 use crate::secret::SecretMaterial;
@@ -237,6 +238,182 @@ impl LaunchPlan {
     }
 }
 
+/// Retained native custody for the exact child returned by a contained spawn.
+///
+/// Implementations are expected to own the operating-system containment handle
+/// (on Windows, the Job Object). `active_processes` must query that same object.
+pub trait ChildContainmentCustody: Send {
+    /// Terminates every process currently in the owned containment boundary.
+    fn terminate(&mut self) -> Result<(), SupervisorError>;
+
+    /// Returns the fresh active-process count for the owned boundary.
+    fn active_processes(&mut self) -> Result<u32, SupervisorError>;
+}
+
+/// Actual child and retained custody returned only after native containment succeeds.
+pub struct ContainedSpawn {
+    child: Child,
+    custody: Box<dyn ChildContainmentCustody>,
+    observation: ContainmentObservation,
+}
+
+impl ContainedSpawn {
+    /// Binds the exact spawned child and owned native custody to their observations.
+    ///
+    /// A caller must return this only after its OS-specific spawn path has created
+    /// the child suspended, assigned and verified the child in the boundary, and
+    /// resumed that exact suspended primary thread.
+    pub fn new<C: ChildContainmentCustody + 'static>(
+        child: Child,
+        custody: C,
+        job_object_digest: Blake3Digest32,
+        data_root_acl_receipt: search_contracts::ReceiptRef,
+    ) -> Self {
+        Self {
+            child,
+            custody: Box::new(custody),
+            observation: ContainmentObservation::from_spawn_port(
+                job_object_digest,
+                data_root_acl_receipt,
+            ),
+        }
+    }
+
+    fn into_parts(
+        self,
+    ) -> (
+        Child,
+        Box<dyn ChildContainmentCustody>,
+        ContainmentObservation,
+    ) {
+        (self.child, self.custody, self.observation)
+    }
+}
+
+/// The daemon's narrow native process-creation seam.
+pub trait ContainedSpawnPort {
+    /// Native failure type, including the original caller-context refusal.
+    type Error;
+
+    /// Performs the platform's contained spawn for the already-qualified command.
+    ///
+    /// If any operation fails after creating a child, implementations must return
+    /// `ContainedSpawnPortFailure::after_spawn` so the exact child and its custody
+    /// remain available for bounded recovery.
+    fn spawn_contained(
+        &mut self,
+        command: Command,
+    ) -> Result<ContainedSpawn, ContainedSpawnPortFailure<Self::Error>>;
+}
+
+/// Port error plus optional exact-child recovery custody.
+#[derive(Debug)]
+pub struct ContainedSpawnPortFailure<E> {
+    cause: E,
+    recovery: Option<SpawnRecovery>,
+}
+
+impl<E> ContainedSpawnPortFailure<E> {
+    /// Failure before a child was created.
+    #[must_use]
+    pub const fn before_spawn(cause: E) -> Self {
+        Self {
+            cause,
+            recovery: None,
+        }
+    }
+
+    /// Failure after child creation; retains the exact child and OS custody.
+    #[must_use]
+    pub fn after_spawn<C: ChildContainmentCustody + 'static>(
+        cause: E,
+        child: Child,
+        custody: C,
+    ) -> Self {
+        Self {
+            cause,
+            recovery: Some(SpawnRecovery {
+                child,
+                custody: Box::new(custody),
+            }),
+        }
+    }
+
+    fn into_launch_error(self) -> ContainedLaunchError<E> {
+        match self.recovery {
+            Some(recovery) => ContainedLaunchError::RecoveryRequired {
+                cause: ContainedLaunchFailureCause::Port(self.cause),
+                recovery,
+            },
+            None => ContainedLaunchError::Port(self.cause),
+        }
+    }
+}
+
+/// Failure cause for a launch whose exact spawned child still requires recovery.
+#[derive(Debug)]
+pub enum ContainedLaunchFailureCause<E> {
+    /// The supervisor failed after the native port returned its child.
+    Supervisor(SupervisorError),
+    /// The native contained-spawn port failed after creating its child.
+    Port(E),
+}
+
+/// Failure from the contained launch path.
+#[derive(Debug)]
+pub enum ContainedLaunchError<E> {
+    /// Qualification or another supervisor check failed before native spawn.
+    Supervisor(SupervisorError),
+    /// The native port failed before it created a child.
+    Port(E),
+    /// A child exists and must stay with its recovery guard until cleanup is known.
+    RecoveryRequired {
+        /// Exact failure that left the child requiring cleanup.
+        cause: ContainedLaunchFailureCause<E>,
+        /// Exact spawned child plus retained Job custody.
+        recovery: SpawnRecovery,
+    },
+}
+
+/// Exact child and native containment custody retained after an uncertain spawn.
+pub struct SpawnRecovery {
+    child: Child,
+    custody: Box<dyn ChildContainmentCustody>,
+}
+
+impl std::fmt::Debug for SpawnRecovery {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SpawnRecovery")
+            .field("pid", &self.child.id())
+            .field("custody", &"<retained native containment handle>")
+            .finish()
+    }
+}
+
+impl SpawnRecovery {
+    /// PID of the exact still-owned child; it is never used as its identity.
+    #[must_use]
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// Attempts job termination and waits for the exact child and boundary to empty.
+    ///
+    /// On timeout or observation failure this guard retains both OS handles so a
+    /// later bounded attempt remains possible.
+    pub fn terminate_bounded(&mut self, deadline: Instant) -> Result<Option<i32>, SupervisorError> {
+        crate::owned::terminate_child_with_custody(&mut self.child, self.custody.as_mut(), deadline)
+    }
+}
+
+impl Drop for SpawnRecovery {
+    fn drop(&mut self) {
+        let _ = self.custody.terminate();
+        let _ = self.child.kill();
+    }
+}
+
 /// Printable argv without secrets: executable plus `--config-path` only.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArgvSnapshot(String);
@@ -317,10 +494,12 @@ pub fn check_loopback_port_free(host: &LoopbackHost, port: u16) -> Result<(), Su
 /// Spawned owned child plus the evidence that authorized the spawn.
 pub struct SpawnedChild {
     child: Child,
+    containment_custody: Option<Box<dyn ChildContainmentCustody>>,
     pid: NonZeroU32,
     verified: VerifiedExecutable,
     argv_snapshot: ArgvSnapshot,
     containment: ContainmentReport,
+    containment_observation: Option<ContainmentObservation>,
     spawn_unix_millis: NonZeroU64,
     canonical_data_dir: PathBuf,
     canonical_config_path: PathBuf,
@@ -347,6 +526,12 @@ impl SpawnedChild {
         self.containment
     }
 
+    /// Actual Windows Job and held-root ACL observations, when natively contained.
+    #[must_use]
+    pub const fn containment_observation(&self) -> Option<&ContainmentObservation> {
+        self.containment_observation.as_ref()
+    }
+
     #[must_use]
     pub const fn spawn_unix_millis(&self) -> NonZeroU64 {
         self.spawn_unix_millis
@@ -362,8 +547,18 @@ impl SpawnedChild {
         &self.canonical_config_path
     }
 
-    pub(crate) fn into_child(self) -> Child {
-        self.child
+    pub(crate) fn into_parts(
+        self,
+    ) -> (
+        Child,
+        Option<Box<dyn ChildContainmentCustody>>,
+        Option<ContainmentObservation>,
+    ) {
+        (
+            self.child,
+            self.containment_custody,
+            self.containment_observation,
+        )
     }
 }
 
@@ -377,6 +572,83 @@ pub fn spawn_qualified(
     secret: &SecretMaterial,
 ) -> Result<SpawnedChild, SupervisorError> {
     let containment = evaluate_containment(plan.containment())?;
+    let mut prepared = prepare_command(plan, secret)?;
+    let mut child = prepared
+        .command
+        .spawn()
+        .map_err(|_| SupervisorError::StartFailed)?;
+    // Re-check liveness immediately: a spawn that exited before we observe
+    // it is still our owned child (same handle), never a foreign process.
+    let pid = NonZeroU32::new(child.id()).ok_or(SupervisorError::StartFailed)?;
+    let _ = child.try_wait().map_err(|_| SupervisorError::StartFailed)?;
+    Ok(SpawnedChild {
+        child,
+        containment_custody: None,
+        pid,
+        verified: prepared.verified,
+        argv_snapshot: prepared.snapshot,
+        containment,
+        containment_observation: None,
+        spawn_unix_millis: spawn_unix_millis(),
+        canonical_data_dir: prepared.canonical_data_dir,
+        canonical_config_path: prepared.config_path,
+    })
+}
+
+/// Spawns through the daemon's actual OS-contained process producer.
+///
+/// Unlike [`spawn_qualified`], this path does not accept pre-spawn Windows
+/// receipts as proof. The returned port value must contain the exact child and
+/// its retained containment handle, and is accepted only after the port reports
+/// that its native assignment/resume sequence completed.
+pub fn spawn_qualified_contained<P: ContainedSpawnPort>(
+    plan: &LaunchPlan,
+    secret: &SecretMaterial,
+    port: &mut P,
+) -> Result<SpawnedChild, ContainedLaunchError<P::Error>> {
+    if !plan.containment.windows_spawn_required() {
+        return Err(ContainedLaunchError::Supervisor(
+            SupervisorError::ContainmentUnavailable,
+        ));
+    }
+    let prepared = prepare_command(plan, secret).map_err(ContainedLaunchError::Supervisor)?;
+    let contained = port
+        .spawn_contained(prepared.command)
+        .map_err(ContainedSpawnPortFailure::into_launch_error)?;
+    let (mut child, custody, observation) = contained.into_parts();
+    let Some(pid) = NonZeroU32::new(child.id()) else {
+        return Err(recovery_error(SupervisorError::StartFailed, child, custody));
+    };
+    if child.try_wait().is_err() {
+        return Err(recovery_error(SupervisorError::StartFailed, child, custody));
+    }
+    let containment = ContainmentReport::windows_after_spawn(&observation);
+    Ok(SpawnedChild {
+        child,
+        containment_custody: Some(custody),
+        pid,
+        verified: prepared.verified,
+        argv_snapshot: prepared.snapshot,
+        containment,
+        containment_observation: Some(observation),
+        spawn_unix_millis: spawn_unix_millis(),
+        canonical_data_dir: prepared.canonical_data_dir,
+        canonical_config_path: prepared.config_path,
+    })
+}
+
+struct PreparedCommand {
+    command: Command,
+    verified: VerifiedExecutable,
+    snapshot: ArgvSnapshot,
+    canonical_data_dir: PathBuf,
+    config_path: PathBuf,
+}
+
+fn prepare_command(
+    plan: &LaunchPlan,
+    secret: &SecretMaterial,
+) -> Result<PreparedCommand, SupervisorError> {
     check_loopback_port_free(&plan.host(), plan.http_port())?;
     check_loopback_port_free(&plan.host(), plan.grpc_port())?;
     secret.validate_header_safe()?;
@@ -398,30 +670,33 @@ pub fn spawn_qualified(
         .map_err(|_| SupervisorError::StartFailed)?;
     let stderr_log = std::fs::File::create(canonical_data_dir.join("run-stderr.log"))
         .map_err(|_| SupervisorError::StartFailed)?;
-    let mut child = Command::new(verified.canonical_path())
+    let mut command = Command::new(verified.canonical_path());
+    command
         .arg(QDRANT_CONFIG_ARG)
         .arg(&config_path)
         .current_dir(&canonical_data_dir)
         .env(QDRANT_API_KEY_ENV, secret_text)
         .stdin(Stdio::null())
         .stdout(stdout_log)
-        .stderr(stderr_log)
-        .spawn()
-        .map_err(|_| SupervisorError::StartFailed)?;
-    // Re-check liveness immediately: a spawn that exited before we observe
-    // it is still our owned child (same handle), never a foreign process.
-    let pid = NonZeroU32::new(child.id()).ok_or(SupervisorError::StartFailed)?;
-    let _ = child.try_wait().map_err(|_| SupervisorError::StartFailed)?;
-    Ok(SpawnedChild {
-        child,
-        pid,
+        .stderr(stderr_log);
+    Ok(PreparedCommand {
+        command,
         verified,
-        argv_snapshot: snapshot,
-        containment,
-        spawn_unix_millis: spawn_unix_millis(),
+        snapshot,
         canonical_data_dir,
-        canonical_config_path: config_path,
+        config_path,
     })
+}
+
+fn recovery_error<E>(
+    cause: SupervisorError,
+    child: Child,
+    custody: Box<dyn ChildContainmentCustody>,
+) -> ContainedLaunchError<E> {
+    ContainedLaunchError::RecoveryRequired {
+        cause: ContainedLaunchFailureCause::Supervisor(cause),
+        recovery: SpawnRecovery { child, custody },
+    }
 }
 
 /// Canonicalizes the owner-scoped data directory; refuses missing/non-dir paths.

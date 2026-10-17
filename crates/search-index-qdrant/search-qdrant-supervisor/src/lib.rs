@@ -29,17 +29,19 @@ pub mod secret;
 pub mod sha256;
 
 pub use containment::{
-    ContainmentEvidence, ContainmentMethod, ContainmentReport, LoopbackHost, evaluate_containment,
-    parse_loopback_host,
+    ContainmentEvidence, ContainmentMethod, ContainmentObservation, ContainmentReport,
+    LoopbackHost, evaluate_containment, parse_loopback_host,
 };
 pub use identity::{
     ExecutableExpectation, QUALIFIED_EXE_BYTES, QUALIFIED_EXE_SHA256_HEX, QUALIFIED_QDRANT_VERSION,
     VERSION_PROBE_ARG, VerifiedExecutable, parse_qdrant_version_output, verify_executable_identity,
 };
 pub use launch::{
-    ArgvSnapshot, CONFIG_FILE_NAME, LaunchPlan, MAX_LAUNCH_TIMEOUT, MIN_LAUNCH_TIMEOUT,
-    PORT_CHECK_TIMEOUT, QDRANT_API_KEY_ENV, QDRANT_CONFIG_ARG, SpawnedChild, VERSION_PROBE_TIMEOUT,
-    build_argv_snapshot, check_loopback_port_free, materialize_config_yaml, spawn_qualified,
+    ArgvSnapshot, CONFIG_FILE_NAME, ChildContainmentCustody, ContainedLaunchError,
+    ContainedLaunchFailureCause, ContainedSpawn, ContainedSpawnPort, ContainedSpawnPortFailure,
+    LaunchPlan, MAX_LAUNCH_TIMEOUT, MIN_LAUNCH_TIMEOUT, PORT_CHECK_TIMEOUT, QDRANT_API_KEY_ENV,
+    QDRANT_CONFIG_ARG, SpawnRecovery, SpawnedChild, VERSION_PROBE_TIMEOUT, build_argv_snapshot,
+    check_loopback_port_free, materialize_config_yaml, spawn_qualified, spawn_qualified_contained,
 };
 pub use owned::{
     LaunchReceipt, MAX_PROBE_RESPONSE_BYTES, OwnedChild, PROBE_SOCKET_TIMEOUT,

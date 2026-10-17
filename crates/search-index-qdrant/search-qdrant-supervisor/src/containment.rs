@@ -1,14 +1,15 @@
-//! Containment intent: Job Object, filesystem ACL, and loopback binding.
+//! Containment intent and post-spawn containment reports.
 //!
 //! This package cannot call the Windows Job Object or ACL APIs from its
 //! frozen dependency closure (no `windows-*` crate, `unsafe` forbidden).
-//! Containment is therefore an explicit verified precondition, never a
-//! silent skip:
+//! A plan cannot claim containment before a process exists. Windows reports
+//! are minted only after the daemon's typed spawn port returns the exact child,
+//! retained Job custody, and the held-root ACL observation:
 //!
-//! * daemon composition applies the Job Object and the owner-only data-root
-//!   ACL through its qualified platform means and hands over evidence;
-//! * [`evaluate_containment`] accepts only coherent evidence and otherwise
-//!   fails closed with [`SupervisorError::ContainmentUnavailable`];
+//! * daemon composition applies the Job Object and observes the held data-root
+//!   ACL through its qualified platform means;
+//! * [`evaluate_containment`] accepts only the explicit test-only uncontained
+//!   mode; pre-spawn Windows evidence cannot make a launch contained;
 //! * test launches state [`ContainmentMethod::ExplicitUncontainedTestOnly`]
 //!   explicitly, and every receipt records the resulting status, so an
 //!   uncontained run can never be mistaken for contained product execution.
@@ -29,14 +30,11 @@ pub enum ContainmentMethod {
     ExplicitUncontainedTestOnly,
 }
 
-/// Preconditions the daemon proves before any spawn.
+/// Requested launch mode. This is not proof that a child is contained.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContainmentEvidence {
     method: ContainmentMethod,
-    job_object_applied: bool,
-    job_object_digest: Option<Blake3Digest32>,
-    data_root_acl_applied: bool,
-    acl_receipt: Option<ReceiptRef>,
+    spawn_required: bool,
 }
 
 impl ContainmentEvidence {
@@ -45,25 +43,16 @@ impl ContainmentEvidence {
     pub const fn missing() -> Self {
         Self {
             method: ContainmentMethod::WindowsJobObjectAndAcl,
-            job_object_applied: false,
-            job_object_digest: None,
-            data_root_acl_applied: false,
-            acl_receipt: None,
+            spawn_required: false,
         }
     }
 
-    /// Product evidence: Job Object plus owner-only ACL, both applied.
+    /// Requests the native Windows Job Object and held data-root ACL spawn path.
     #[must_use]
-    pub const fn windows_contained(
-        job_object_digest: Blake3Digest32,
-        acl_receipt: ReceiptRef,
-    ) -> Self {
+    pub const fn windows_containment_required() -> Self {
         Self {
             method: ContainmentMethod::WindowsJobObjectAndAcl,
-            job_object_applied: true,
-            job_object_digest: Some(job_object_digest),
-            data_root_acl_applied: true,
-            acl_receipt: Some(acl_receipt),
+            spawn_required: true,
         }
     }
 
@@ -72,10 +61,7 @@ impl ContainmentEvidence {
     pub const fn explicit_uncontained_test_only() -> Self {
         Self {
             method: ContainmentMethod::ExplicitUncontainedTestOnly,
-            job_object_applied: false,
-            job_object_digest: None,
-            data_root_acl_applied: false,
-            acl_receipt: None,
+            spawn_required: true,
         }
     }
 
@@ -84,23 +70,8 @@ impl ContainmentEvidence {
         self.method
     }
 
-    #[must_use]
-    pub(crate) const fn job_object_applied(&self) -> bool {
-        self.job_object_applied
-    }
-
-    #[must_use]
-    pub(crate) const fn job_object_digest(&self) -> Option<Blake3Digest32> {
-        self.job_object_digest
-    }
-
-    #[must_use]
-    pub(crate) const fn data_root_acl_applied(&self) -> bool {
-        self.data_root_acl_applied
-    }
-
-    pub(crate) const fn acl_receipt(&self) -> Option<&ReceiptRef> {
-        self.acl_receipt.as_ref()
+    pub(crate) const fn windows_spawn_required(&self) -> bool {
+        matches!(self.method, ContainmentMethod::WindowsJobObjectAndAcl) && self.spawn_required
     }
 }
 
@@ -113,7 +84,49 @@ pub struct ContainmentReport {
     pub method: ContainmentMethod,
 }
 
+/// Actual, content-free Windows containment observations returned by the
+/// daemon's contained-spawn port and retained beside the child custody.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContainmentObservation {
+    job_object_digest: Blake3Digest32,
+    data_root_acl_receipt: ReceiptRef,
+}
+
+impl ContainmentObservation {
+    /// Job Object policy digest observed by the native spawn owner.
+    #[must_use]
+    pub const fn job_object_digest(&self) -> Blake3Digest32 {
+        self.job_object_digest
+    }
+
+    /// Receipt derived from the qualified held data-root ACL observation.
+    #[must_use]
+    pub const fn data_root_acl_receipt(&self) -> &ReceiptRef {
+        &self.data_root_acl_receipt
+    }
+
+    pub(crate) const fn from_spawn_port(
+        job_object_digest: Blake3Digest32,
+        data_root_acl_receipt: ReceiptRef,
+    ) -> Self {
+        Self {
+            job_object_digest,
+            data_root_acl_receipt,
+        }
+    }
+}
+
 impl ContainmentReport {
+    /// Product report created after the contained-spawn port returns the
+    /// actual child, retained Job custody, and held-root ACL observation.
+    #[must_use]
+    pub(crate) const fn windows_after_spawn(_observation: &ContainmentObservation) -> Self {
+        Self {
+            contained: true,
+            method: ContainmentMethod::WindowsJobObjectAndAcl,
+        }
+    }
+
     /// Test-only uncontained report for lifecycle fixtures.
     #[must_use]
     pub const fn for_tests() -> Self {
@@ -133,19 +146,7 @@ pub const fn evaluate_containment(
             contained: false,
             method: ContainmentMethod::ExplicitUncontainedTestOnly,
         }),
-        ContainmentMethod::WindowsJobObjectAndAcl => {
-            if !evidence.job_object_applied()
-                || !evidence.data_root_acl_applied()
-                || evidence.job_object_digest().is_none()
-                || evidence.acl_receipt().is_none()
-            {
-                return Err(SupervisorError::ContainmentUnavailable);
-            }
-            Ok(ContainmentReport {
-                contained: true,
-                method: ContainmentMethod::WindowsJobObjectAndAcl,
-            })
-        }
+        ContainmentMethod::WindowsJobObjectAndAcl => Err(SupervisorError::ContainmentUnavailable),
     }
 }
 
@@ -181,8 +182,6 @@ pub fn parse_loopback_host(value: &str) -> Result<LoopbackHost, SupervisorError>
 
 #[cfg(test)]
 mod tests {
-    use search_contracts::{Blake3Digest32, ReceiptRef};
-
     use super::{
         ContainmentEvidence, ContainmentMethod, LoopbackHost, evaluate_containment,
         parse_loopback_host,
@@ -198,14 +197,18 @@ mod tests {
     }
 
     #[test]
-    fn product_evidence_reports_contained() {
-        let evidence = ContainmentEvidence::windows_contained(
-            Blake3Digest32::from_bytes([0xA1; 32]),
-            ReceiptRef::new("acl-receipt").unwrap(),
+    fn pre_spawn_windows_request_cannot_mint_containment_report() {
+        let evidence = ContainmentEvidence::windows_containment_required();
+        assert_eq!(
+            evaluate_containment(&evidence),
+            Err(SupervisorError::ContainmentUnavailable)
         );
-        let report = evaluate_containment(&evidence).unwrap();
-        assert!(report.contained);
-        assert_eq!(report.method, ContainmentMethod::WindowsJobObjectAndAcl);
+    }
+
+    #[test]
+    fn missing_windows_containment_is_not_a_spawn_request() {
+        assert!(!ContainmentEvidence::missing().windows_spawn_required());
+        assert!(ContainmentEvidence::windows_containment_required().windows_spawn_required());
     }
 
     #[test]
