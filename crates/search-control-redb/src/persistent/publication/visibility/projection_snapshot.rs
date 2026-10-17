@@ -5,7 +5,7 @@ use super::{
     PublicationVisibilityState, SHADOWS, codec,
 };
 use crate::{JournalIdentity, MigrationBootstrapWork as Work, PreparedArtifactSetRecordV1};
-use search_contracts::{ProjectionMembershipId, ReceiptRef};
+use search_contracts::{Epoch, ProjectionMembershipId, PublicationIntent, ReceiptRef};
 use std::collections::BTreeMap;
 
 /// Exact committed projection references and shadow records from one disk read.
@@ -46,7 +46,9 @@ impl PublicationProjectionSnapshot {
     /// Legacy or replaced routes return None and require their own route owner.
     /// This technical coordinate does not qualify the physical Qdrant route.
     #[must_use]
-    pub const fn initial_route_revision(&self) -> Option<search_contracts::CollectionRouteRevision> {
+    pub const fn initial_route_revision(
+        &self,
+    ) -> Option<search_contracts::CollectionRouteRevision> {
         self.initial_route_revision
     }
     /// Current exact membership-to-manifest references; no point data is stored here.
@@ -75,10 +77,111 @@ impl core::fmt::Debug for PublicationProjectionSnapshot {
             .field("generation", &self.generation)
             .field("visible_epoch", &self.visibility.visible_epoch)
             .field("manifest_count", &self.manifests.len())
-            .field("prepared_artifact_set_count", &self.prepared_artifact_sets.len())
+            .field(
+                "prepared_artifact_set_count",
+                &self.prepared_artifact_sets.len(),
+            )
             .field("shadow_count", &self.shadows.len())
             .finish_non_exhaustive()
     }
+}
+
+/// Coherent technical references for restoring an unresolved publication.
+///
+/// This is recovery input only. It does not make the route query-ready, grant
+/// publication permission, or prove that referenced C07 objects remain valid.
+/// Private construction binds every field to one verified C02 read transaction.
+#[derive(Clone, Eq, PartialEq)]
+pub struct PublicationRecoveryProjectionSnapshot {
+    identity: JournalIdentity,
+    generation: u64,
+    visibility: PublicationVisibilityState,
+    initial_route_revision: Option<search_contracts::CollectionRouteRevision>,
+    intent: Option<PublicationIntent>,
+    last_reserved_epoch: Epoch,
+    manifests: BTreeMap<ProjectionMembershipId, ReceiptRef>,
+    prepared_artifact_sets: BTreeMap<ProjectionMembershipId, PreparedArtifactSetRecordV1>,
+    shadows: BTreeMap<ProjectionMembershipId, PublicationSourceShadow>,
+}
+
+impl PublicationRecoveryProjectionSnapshot {
+    /// Exact installation/root/schema/owner identity observed on disk.
+    #[must_use]
+    pub const fn identity(&self) -> JournalIdentity {
+        self.identity
+    }
+    /// Generation shared by visibility, intent, reservation floor and references.
+    #[must_use]
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
+    /// Actual committed visibility and owner guards; unresolved intent does not alter it.
+    #[must_use]
+    pub const fn visibility(&self) -> &PublicationVisibilityState {
+        &self.visibility
+    }
+    /// Initial route coordinate of this verified immutable genesis/adoption route, if any.
+    #[must_use]
+    pub const fn initial_route_revision(
+        &self,
+    ) -> Option<search_contracts::CollectionRouteRevision> {
+        self.initial_route_revision
+    }
+    /// Last actual durable intent from the same read, including unresolved terminal states.
+    #[must_use]
+    pub const fn intent(&self) -> Option<&PublicationIntent> {
+        self.intent.as_ref()
+    }
+    /// Consumed epoch floor from the retained intent, or committed visibility when no intent exists.
+    #[must_use]
+    pub const fn last_reserved_epoch(&self) -> Epoch {
+        self.last_reserved_epoch
+    }
+    /// Current membership-to-manifest references; no point data is stored here.
+    #[must_use]
+    pub const fn manifests(&self) -> &BTreeMap<ProjectionMembershipId, ReceiptRef> {
+        &self.manifests
+    }
+    /// Existing bounded v1 metadata selected by current manifest pointers.
+    #[must_use]
+    pub const fn prepared_artifact_sets(
+        &self,
+    ) -> &BTreeMap<ProjectionMembershipId, PreparedArtifactSetRecordV1> {
+        &self.prepared_artifact_sets
+    }
+    /// Source-specific shadow records from the same verified read.
+    #[must_use]
+    pub const fn shadows(&self) -> &BTreeMap<ProjectionMembershipId, PublicationSourceShadow> {
+        &self.shadows
+    }
+}
+
+impl core::fmt::Debug for PublicationRecoveryProjectionSnapshot {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("PublicationRecoveryProjectionSnapshot")
+            .field("generation", &self.generation)
+            .field("visible_epoch", &self.visibility.visible_epoch)
+            .field("has_intent", &self.intent.is_some())
+            .field("manifest_count", &self.manifests.len())
+            .field(
+                "prepared_artifact_set_count",
+                &self.prepared_artifact_sets.len(),
+            )
+            .field("shadow_count", &self.shadows.len())
+            .finish_non_exhaustive()
+    }
+}
+
+struct VerifiedProjectionRead {
+    snapshot: super::super::super::JournalReadSnapshot,
+    visibility: PublicationVisibilityState,
+}
+
+struct ProjectionReferences {
+    initial_route_revision: Option<search_contracts::CollectionRouteRevision>,
+    manifests: BTreeMap<ProjectionMembershipId, ReceiptRef>,
+    prepared_artifact_sets: BTreeMap<ProjectionMembershipId, PreparedArtifactSetRecordV1>,
+    shadows: BTreeMap<ProjectionMembershipId, PublicationSourceShadow>,
 }
 
 impl PersistentControlJournal {
@@ -86,6 +189,57 @@ impl PersistentControlJournal {
         &self,
         check: &dyn Check,
     ) -> Result<Option<PublicationProjectionSnapshot>, ControlError> {
+        let Some(read) = self.read_verified_projection_state_checked(check)? else {
+            return Ok(None);
+        };
+        // Recovery checkpoints intentionally retain unresolved work. This serving
+        // input must not turn it into a ready reference population.
+        super::super::require_resolved(&read.snapshot.records)?;
+        validate_projection_owner(&read)?;
+        let references = self.read_projection_references_checked(&read, check)?;
+        check.check(Point::ReadComplete)?;
+        Ok(Some(PublicationProjectionSnapshot {
+            identity: read.snapshot.identity,
+            generation: read.snapshot.generation,
+            visibility: read.visibility,
+            initial_route_revision: references.initial_route_revision,
+            manifests: references.manifests,
+            prepared_artifact_sets: references.prepared_artifact_sets,
+            shadows: references.shadows,
+        }))
+    }
+
+    pub(in crate::persistent) fn read_recovery_projection_snapshot_checked(
+        &self,
+        check: &dyn Check,
+    ) -> Result<Option<PublicationRecoveryProjectionSnapshot>, ControlError> {
+        let Some(read) = self.read_verified_projection_state_checked(check)? else {
+            return Ok(None);
+        };
+        validate_projection_owner(&read)?;
+        let intent = read_publication_intent(&read, check)?;
+        let last_reserved_epoch = intent
+            .as_ref()
+            .map_or(read.visibility.visible_epoch, |intent| intent.target_epoch);
+        let references = self.read_projection_references_checked(&read, check)?;
+        check.check(Point::ReadComplete)?;
+        Ok(Some(PublicationRecoveryProjectionSnapshot {
+            identity: read.snapshot.identity,
+            generation: read.snapshot.generation,
+            visibility: read.visibility,
+            initial_route_revision: references.initial_route_revision,
+            intent,
+            last_reserved_epoch,
+            manifests: references.manifests,
+            prepared_artifact_sets: references.prepared_artifact_sets,
+            shadows: references.shadows,
+        }))
+    }
+
+    fn read_verified_projection_state_checked(
+        &self,
+        check: &dyn Check,
+    ) -> Result<Option<VerifiedProjectionRead>, ControlError> {
         self.ensure_available()?;
         check.check(Point::Start)?;
         if !crate::has_visibility_schema(self.identity.schema_version) {
@@ -107,8 +261,6 @@ impl PersistentControlJournal {
                 return Err(ControlError::MigrationUnverified);
             }
         }
-        // verify_from_checked already validates visibility and its receipt ledger
-        // in this transaction. Decode that same value without a second scan.
         let visibility = if let Ok(index) = snapshot
             .records
             .binary_search_by(|(key, _)| key.as_bytes().cmp(super::STATE))
@@ -118,19 +270,26 @@ impl PersistentControlJournal {
             check.check(Point::ReadComplete)?;
             return Ok(None);
         };
-        // Recovery checkpoints intentionally retain unresolved work. This serving
-        // input must not turn it into a ready reference population.
-        super::super::require_resolved(&snapshot.records)?;
-        if visibility.guards.owner_epoch != snapshot.identity.owner_epoch {
-            return Err(ControlError::GenerationMismatch);
-        }
-        let mut manifests = BTreeMap::new();
+        Ok(Some(VerifiedProjectionRead {
+            snapshot,
+            visibility,
+        }))
+    }
+
+    fn read_projection_references_checked(
+        &self,
+        read: &VerifiedProjectionRead,
+        check: &dyn Check,
+    ) -> Result<ProjectionReferences, ControlError> {
         let initial_route_revision = crate::persistent::operating_profile::initial_route_revision(
-            &snapshot, &visibility, self.limits,
+            &read.snapshot,
+            &read.visibility,
+            self.limits,
         )?;
+        let mut manifests = BTreeMap::new();
         let mut prepared_artifact_sets = BTreeMap::new();
         let mut shadows = BTreeMap::new();
-        for (key, value) in &snapshot.records {
+        for (key, value) in &read.snapshot.records {
             check.check(Point::ReadRecord)?;
             let (suffix, manifest) = if let Some(id) = key.as_bytes().strip_prefix(MANIFESTS) {
                 (id, true)
@@ -157,7 +316,10 @@ impl PersistentControlJournal {
             let duplicate = if manifest {
                 let reference = codec::read_manifest(value)?;
                 if let Some(record) = super::super::prepared_artifacts::read_reference(
-                    &snapshot, &reference, self.limits, check,
+                    &read.snapshot,
+                    &reference,
+                    self.limits,
+                    check,
                 )? {
                     check.reserve(Work::Allocate(256))?;
                     if prepared_artifact_sets.insert(id, record).is_some() {
@@ -172,15 +334,41 @@ impl PersistentControlJournal {
                 return Err(ControlError::StoreCorrupt);
             }
         }
-        check.check(Point::ReadComplete)?;
-        Ok(Some(PublicationProjectionSnapshot {
-            identity: snapshot.identity,
-            generation: snapshot.generation,
-            visibility,
+        Ok(ProjectionReferences {
             initial_route_revision,
             manifests,
             prepared_artifact_sets,
             shadows,
-        }))
+        })
     }
+}
+
+fn validate_projection_owner(read: &VerifiedProjectionRead) -> Result<(), ControlError> {
+    if read.visibility.guards.owner_epoch != read.snapshot.identity.owner_epoch {
+        return Err(ControlError::GenerationMismatch);
+    }
+    Ok(())
+}
+
+fn read_publication_intent(
+    read: &VerifiedProjectionRead,
+    check: &dyn Check,
+) -> Result<Option<PublicationIntent>, ControlError> {
+    check.check(Point::ReadRecord)?;
+    let Ok(index) = read
+        .snapshot
+        .records
+        .binary_search_by(|(key, _)| key.as_bytes().cmp(super::super::KEY))
+    else {
+        // verify_from_checked verified never-written history in this same read.
+        return Ok(None);
+    };
+    let value = &read.snapshot.records[index].1;
+    let work = value
+        .len()
+        .checked_add(core::mem::size_of::<PublicationIntent>())
+        .ok_or(ControlError::BudgetExceeded)?;
+    check.reserve(Work::Allocate(work))?;
+    check.reserve(Work::Process(value.len()))?;
+    super::super::codec::decode(value).map(Some)
 }

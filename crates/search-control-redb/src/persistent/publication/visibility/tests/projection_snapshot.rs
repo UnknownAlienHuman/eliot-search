@@ -98,3 +98,66 @@ fn projection_snapshot_schema5_uses_the_same_profile_and_original_allowance() {
         assert!(refused.get());
     }
 }
+
+#[test]
+fn reopened_unresolved_intent_is_recovery_metadata_but_not_a_serving_snapshot() {
+    let scratch = Scratch::new();
+    let (journal, _) = scratch.ready();
+    drop(journal);
+
+    let (writes, writes_after) = {
+        let mut journal = scratch.reopen();
+        let writes = journal.committed_writes();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let work_calls = Cell::new(0);
+        let work = |_| {
+            work_calls.set(work_calls.get() + 1);
+            Ok::<(), ()>(())
+        };
+        {
+            let mut publisher = ControlSnapshotPublisher::new();
+            let port = journal
+                .bind_control_port_with_original_context::<Cancel, _>(
+                    &mut publisher,
+                    deadline,
+                    &work,
+                )
+                .unwrap();
+            let calls_after_bind = work_calls.get();
+
+            let serving = port
+                .read_publication_projection_snapshot_with_original_context(deadline, &work)
+                .unwrap_err();
+            assert_eq!(serving.control, ControlError::SnapshotRebuildFailed);
+
+            let recovery = port
+                .read_publication_recovery_projection_snapshot_with_original_context(
+                    deadline, &work,
+                )
+                .unwrap()
+                .unwrap();
+            assert_eq!(recovery.identity(), identity());
+            assert_eq!(recovery.generation(), 6);
+            assert_eq!(recovery.visibility(), &state());
+            let intent = recovery.intent().unwrap();
+            assert_eq!(intent.state, PublicationIntentState::ReadbackVerified);
+            assert_eq!(intent.target_epoch.get(), 1);
+            assert_eq!(
+                intent.prepared_manifest_ref,
+                reference("prepared-manifest-sentinel")
+            );
+            assert_eq!(recovery.last_reserved_epoch().get(), 1);
+            assert_eq!(recovery.initial_route_revision(), None);
+            assert_eq!(
+                recovery.manifests().get(&member(1)),
+                Some(&reference("old"))
+            );
+            assert!(recovery.prepared_artifact_sets().is_empty());
+            assert_eq!(recovery.shadows().get(&member(1)), Some(&shadow(1)));
+            assert_eq!(recovery.shadows().get(&member(2)), Some(&shadow(2)));
+            assert!(work_calls.get() > calls_after_bind);
+        }
+        (writes, journal.committed_writes())
+    };
+    assert_eq!(writes_after, writes);
+}

@@ -18,7 +18,7 @@ pub(in crate::persistent) mod codec;
 mod validation;
 mod succession;
 mod projection_snapshot;
-pub use projection_snapshot::PublicationProjectionSnapshot;
+pub use projection_snapshot::{PublicationProjectionSnapshot, PublicationRecoveryProjectionSnapshot};
 pub use succession::PublicationSuccessor;
 #[cfg(test)]
 mod tests;

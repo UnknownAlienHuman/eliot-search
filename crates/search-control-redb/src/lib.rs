@@ -39,7 +39,7 @@ pub use persistent::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBoo
     MigrationBootstrapPlatform, MigrationBootstrapReceipt, MigrationBootstrapWork};
 pub use persistent::{BoundControlJournal, ControlPortCommand, ControlPortError,
     ScopedControlRecordsReadback, control_mutation_identity};
-pub use persistent::PublicationProjectionSnapshot;
+pub use persistent::{PublicationProjectionSnapshot, PublicationRecoveryProjectionSnapshot};
 pub use persistent::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
     PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
 pub use persistent::{PreparationInputMetadataV1, PreparationInputReadbackV1,

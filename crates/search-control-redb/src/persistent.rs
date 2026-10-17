@@ -57,7 +57,7 @@ pub use publication::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1
 pub use publication::{PreparationInputMetadataV1, PreparationInputReadbackV1,
     PreparationInputRecordV1, MAX_PREPARATION_INPUT_POLICY_BYTES,
     MAX_PREPARATION_INPUT_RECORD_BYTES, MAX_PREPARATION_INPUT_RESIDENCY_BYTES};
-pub use publication::PublicationProjectionSnapshot;
+pub use publication::{PublicationProjectionSnapshot, PublicationRecoveryProjectionSnapshot};
 pub use operation::{ControlCallError, ControlInterruption};
 pub use quarantine::{ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest};
 pub use diagnostics::{ControlStoreHealth, JournalHealthState, JournalWriteCounters, SnapshotHealthState};
