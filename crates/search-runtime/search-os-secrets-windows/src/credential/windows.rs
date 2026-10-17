@@ -315,9 +315,10 @@ impl WindowsCredentialPlatform {
             let _ = allocation.release_with_context(context);
             return Err(CredentialWorkError::Context(error));
         }
-        if let Err(error) =
-            reserve_credential_work(context, crate::LegacyRevisionDpapiWork::Process(size))
-        {
+        if let Err(error) = reserve_credential_work(
+            context,
+            crate::LegacyRevisionDpapiWork::Process(size.saturating_mul(3)),
+        ) {
             let _ = allocation.release_with_context(context);
             return Err(CredentialWorkError::Context(error));
         }

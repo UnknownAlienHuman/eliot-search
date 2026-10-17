@@ -1087,12 +1087,7 @@ fn dispatch_prepared_windows(
         .map_err(|_| QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
     let observed =
         WindowsCredentialPlatform::read_provider_credential_with_context(&target, context)
-            .map_err(|error| {
-                contextual_credential_error(
-                    &error,
-                    QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown,
-                )
-            })?;
+            .map_err(|_| QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
     remaining().ok_or(QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
     contextual_checkpoint(context)
         .map_err(|_| QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
