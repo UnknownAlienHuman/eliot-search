@@ -414,6 +414,10 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
     pub const fn context(&self) -> &OperationContext<FreshRootCancellation> {
         &self.context
     }
+    /// Original absolute deadline of this admitted native operation.
+    pub(crate) const fn original_deadline(&self) -> Instant {
+        self.context.cancellation().deadline
+    }
     /// Confirms a bounded producer budget borrows this exact invocation's
     /// cancellation flag and absolute deadline without exposing either value.
     pub(crate) fn matches_original_work(

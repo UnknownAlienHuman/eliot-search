@@ -115,9 +115,6 @@ impl CanonicalPopulationSnapshot {
         fence: QuerySnapshotFence,
         reads: &[NativePublishedProjectionRead<'_, '_>],
     ) -> Result<Self, AccessError> {
-        if reads.is_empty() {
-            return Err(AccessError::AuthorizedScopeEmpty);
-        }
         if reads.len() > MAX_COLLECTION_ITEMS {
             return Err(AccessError::EligibilityPopulationTooLarge);
         }
@@ -131,8 +128,10 @@ impl CanonicalPopulationSnapshot {
         let mut snapshot = Self {
             c02_generation: c02.generation(),
             visibility: *c02.visibility(),
-            manifests: BTreeMap::new(),
-            shadows: BTreeMap::new(),
+            // Retain the actual complete C02 reference population. Missing C07
+            // headers are unavailable data, never evidence of corpus absence.
+            manifests: c02.manifests().clone(),
+            shadows: c02.shadows().clone(),
             schema,
             route,
             fence,
@@ -190,16 +189,6 @@ impl CanonicalPopulationSnapshot {
                 c07_set_reference: read.set_reference().clone(),
                 c07_set_graph: read.set_graph().clone(),
             };
-            if snapshot
-                .manifests
-                .insert(projection_id, pointer.clone())
-                .is_some()
-            {
-                return Err(AccessError::SnapshotStale);
-            }
-            if let Some(shadow) = c02.shadows().get(&projection_id) {
-                snapshot.shadows.insert(projection_id, *shadow);
-            }
             if snapshot
                 .rows
                 .insert(binding.source_membership_id, row)
@@ -271,8 +260,6 @@ impl CanonicalPopulationSnapshot {
         }
         if self.fence.catalog_revision.get() != current.access.source_catalog_generation
             || self.fence.membership_revision.get() != current.access.membership_generation
-            || self.rows.len() != current.sources.len()
-            || self.rows.keys().ne(current.sources.keys())
         {
             return Err(AccessError::SnapshotStale);
         }

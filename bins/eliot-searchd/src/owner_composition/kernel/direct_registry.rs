@@ -411,6 +411,11 @@ mod dek_selection;
 mod process_custody;
 pub(crate) use process_custody::NativeProcessRootCustody;
 #[cfg(feature = "wave4-query")]
+#[path = "native_query_population.rs"]
+mod query_population;
+#[cfg(feature = "wave4-query")]
+pub(crate) use query_population::NativePopulationInput;
+#[cfg(feature = "wave4-query")]
 pub(crate) use retained_reader::RetainedRevisionReadState;
 pub use command::maybe_run;
 

@@ -374,8 +374,10 @@ impl NativeSecurityDomain {
     /// Returns the exact current C02 source-restriction conditions after the
     /// live barrier admits this source at `BeforeSourceReadback`.
     ///
-    /// The caller must retain the same outer authority lock and current grant,
-    /// and account bounded condition metadata before calling. It must compare
+    /// A serving caller retains the same outer authority lock and current grant.
+    /// Internal C07-header bootstrap instead retains the verified native Root
+    /// operation; it grants no source-body read and publishes no query output.
+    /// Account bounded condition metadata before calling, and compare
     /// these conditions with C03/root/source metadata in the scoped source read.
     /// Conditions are read predicates, not a grant; this method performs no
     /// restore, publication, invalidation, or journal mutation.

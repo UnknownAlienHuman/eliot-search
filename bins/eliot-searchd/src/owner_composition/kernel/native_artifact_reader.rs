@@ -851,10 +851,13 @@ fn require_same_projection_snapshot(
     control: &NativeRetentionControl<'_, '_, FreshRootCancellation>,
     expected: &PublicationProjectionSnapshot,
 ) -> Result<(), NativeArtifactReaderError> {
-    let actual = control
-        .read_publication_projection_snapshot()
+    let (identity, generation) = control
+        .projection_metadata_checkpoint()
         .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
-    if actual.as_ref() != Some(expected) {
+    // The expected view came from a complete verified read of this exact journal.
+    // Its monotone generation plus the source guard set detects any intervening
+    // transaction without re-reading every other source's projection metadata.
+    if identity != expected.identity() || generation != expected.generation() {
         return Err(NativeArtifactReaderError::CurrentSetChanged);
     }
     Ok(())

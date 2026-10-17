@@ -144,6 +144,28 @@ impl LiveNativeQuerySnapshot {
         Ok(self)
     }
 
+    /// Load the actual C02/C03/C07 metadata through the retained Root before
+    /// publishing this complete authority image at startup or visibility refresh.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_native_canonical_population(
+        self,
+        custody: &mut crate::owner_composition::NativeProcessRootCustody,
+        registry: &search_source_registry::SourceRegistry,
+        schema: search_contracts::indexed::CollectionSchema,
+        route: search_contracts::CollectionRoute,
+        fence: search_contracts::QuerySnapshotFence,
+        config: &crate::config_composition::EffectiveDaemonConfig,
+    ) -> Result<Self, AccessError> {
+        self.validate_bundle()?;
+        let population = custody.capture_query_population(
+            crate::owner_composition::NativePopulationInput {
+                registry, domain: &self.domain, sources: &self.sources,
+                access_generation: self.access.generation, schema, route, fence, config,
+            },
+        )?;
+        self.with_canonical_population(population)
+    }
+
     fn validate_bundle(&self) -> Result<(), AccessError> {
         if self.live.fail_closed {
             return Err(AccessError::SecurityFailClosed);
@@ -410,19 +432,30 @@ where
     R: StandaloneScopeResolver,
     V: FnMut(&RequestBody, &ProviderBodyV1) -> Result<(), AccessError>,
 {
-    /// Create exactly one serving owner and one non-clonable update capability.
+    /// Load real native metadata, then create exactly one serving owner and
+    /// one non-clonable update capability from that complete image.
+    #[allow(clippy::too_many_arguments)] // Actual owner boundaries stay explicit at composition.
     pub(crate) fn new(
+        custody: &mut crate::owner_composition::NativeProcessRootCustody,
+        registry: &search_source_registry::SourceRegistry,
         snapshot: LiveNativeQuerySnapshot,
+        schema: search_contracts::indexed::CollectionSchema,
+        route: search_contracts::CollectionRoute,
+        fence: search_contracts::QuerySnapshotFence,
+        config: &crate::config_composition::EffectiveDaemonConfig,
         resolver: R,
         validate_output: V,
-    ) -> (Self, LiveNativeQueryAuthorityUpdater<R, V>) {
+    ) -> Result<(Self, LiveNativeQueryAuthorityUpdater<R, V>), AccessError> {
+        let snapshot = snapshot.with_native_canonical_population(
+            custody, registry, schema, route, fence, config,
+        )?;
         let profile_digest = snapshot.publication_guards.profile_digest;
         let state = Arc::new(Mutex::new(LiveNativeQueryState {
             snapshot,
             resolver,
             validate_output,
         }));
-        (
+        Ok((
             Self {
                 state: Arc::clone(&state),
                 profile_digest,
@@ -431,7 +464,7 @@ where
                 state,
                 profile_digest,
             },
-        )
+        ))
     }
 }
 
@@ -451,6 +484,9 @@ where
         resolver: R,
         validate_output: V,
     ) -> Result<(), AccessError> {
+        if snapshot.canonical_population.is_none() {
+            return Err(AccessError::SnapshotStale);
+        }
         if snapshot.publication_guards.profile_digest != self.profile_digest {
             return Err(AccessError::RouteMismatch);
         }

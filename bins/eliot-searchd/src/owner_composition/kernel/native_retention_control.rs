@@ -8,7 +8,7 @@ use search_control_redb::{self as db, BoundControlJournal, ConditionalControlMut
     MigrationBootstrapFailure, MigrationBootstrapWork as Work, MutationId,
     ScopedControlRecordsReadback};
 #[cfg(feature = "wave3-index")]
-use search_control_redb::{PublicationProjectionSnapshot, source_retention::{
+use search_control_redb::{source_retention::{
     DerivedArtifactObjectIntentReadback, DerivedArtifactReservationReadback,
     DerivedArtifactScopeGuardKeysV1, RevisionUseUsageReadback,
 }};
@@ -197,20 +197,22 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     pub(super) const fn deadline(&self) -> Instant { self.deadline }
 
     #[cfg(feature = "wave3-index")]
-    pub(super) fn read_publication_projection_snapshot(
-        &self,
-    ) -> Result<Option<PublicationProjectionSnapshot>, RetentionControlError> {
-        let work = |unit| (self.work)(unit);
-        self.port
-            .read_publication_projection_snapshot_with_original_context(self.deadline, &work)
-            .map_err(Into::into)
-    }
-
-    #[cfg(feature = "wave3-index")]
     pub(super) fn verify_current_source(&self) -> Result<(), RetentionControlError> {
         let keys = self.scope(&[])?;
         let read = self.read(&keys)?;
         self.require_source(&read)
+    }
+
+    /// The actual journal identity/generation with this source's complete guard
+    /// set, using bounded key reads rather than a full projection-population scan.
+    #[cfg(feature = "wave3-index")]
+    pub(super) fn projection_metadata_checkpoint(
+        &self,
+    ) -> Result<(db::JournalIdentity, u64), RetentionControlError> {
+        let keys = self.scope(&[])?;
+        let read = self.read(&keys)?;
+        self.require_source(&read)?;
+        Ok((read.identity(), read.generation()))
     }
 
     /// Reads C07's exact late intent/reservation and actual selected Current
@@ -408,6 +410,37 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     /// from `NativeSecurityDomain::retained_source_read_conditions`.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind_for_serving(journal: &'journal mut db::PersistentControlJournal,
+        publisher: &'journal mut db::ControlSnapshotPublisher, source: &RegisteredSource,
+        namespace: &NamespaceCutoverState, root: &RootRecord,
+        member: &search_source_registry::membership::MembershipRecord,
+        conditions: &[Condition; 2], deadline: Instant,
+        work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
+    ) -> Result<Self, RetentionControlError> {
+        Self::bind_active_member(journal, publisher, source, namespace, root, member,
+            conditions, deadline, work)
+    }
+
+    /// Internal Root bootstrap reads only C07 graph headers. The verified native
+    /// owner and current namespace predicates authorize this technical metadata
+    /// read; this does not issue a query grant or source-body read permission.
+    #[cfg(feature = "wave4-query")]
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn bind_for_projection_metadata(
+        native: &super::super::read_child::fresh_root::FreshRootContext<'_, '_>,
+        journal: &'journal mut db::PersistentControlJournal,
+        publisher: &'journal mut db::ControlSnapshotPublisher, source: &RegisteredSource,
+        namespace: &NamespaceCutoverState, root: &RootRecord,
+        member: &search_source_registry::membership::MembershipRecord,
+        conditions: &[Condition; 2], deadline: Instant,
+        work: &'work dyn Fn(Work) -> Result<(), OwnerError>,
+    ) -> Result<Self, RetentionControlError> {
+        native.source_full_checkpoint().map_err(|_| ControlError::OperationConflict)?;
+        Self::bind_active_member(journal, publisher, source, namespace, root, member,
+            conditions, deadline, work)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn bind_active_member(journal: &'journal mut db::PersistentControlJournal,
         publisher: &'journal mut db::ControlSnapshotPublisher, source: &RegisteredSource,
         namespace: &NamespaceCutoverState, root: &RootRecord,
         member: &search_source_registry::membership::MembershipRecord,
