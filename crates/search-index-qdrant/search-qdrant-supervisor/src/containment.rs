@@ -90,9 +90,20 @@ pub struct ContainmentReport {
 pub struct ContainmentObservation {
     job_object_digest: Blake3Digest32,
     data_root_acl_receipt: ReceiptRef,
+    process_creation_marker: Option<core::num::NonZeroU64>,
 }
 
 impl ContainmentObservation {
+    /// Native creation time observed on the retained child handle. Absent on
+    /// older fixture-only ports; a wall-clock spawn marker is never substituted.
+    #[must_use]
+    pub const fn process_creation_marker(&self) -> Option<core::num::NonZeroU64> {
+        self.process_creation_marker
+    }
+
+    pub(crate) const fn bind_process_creation_marker(&mut self, marker: core::num::NonZeroU64) {
+        self.process_creation_marker = Some(marker);
+    }
     /// Job Object policy digest observed by the native spawn owner.
     #[must_use]
     pub const fn job_object_digest(&self) -> Blake3Digest32 {
@@ -112,6 +123,7 @@ impl ContainmentObservation {
         Self {
             job_object_digest,
             data_root_acl_receipt,
+            process_creation_marker: None,
         }
     }
 }

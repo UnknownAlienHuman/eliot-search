@@ -261,6 +261,14 @@ pub struct ContainedSpawn {
 }
 
 impl ContainedSpawn {
+    /// Attaches the actual creation time read from this child handle by the
+    /// native spawn owner. This is content-free identity metadata, not a PID lookup.
+    #[must_use]
+    pub const fn with_native_creation_marker(mut self, marker: NonZeroU64) -> Self {
+        self.observation.bind_process_creation_marker(marker);
+        self
+    }
+
     /// Binds the exact spawned child and owned native custody to their observations.
     ///
     /// A caller must return this only after its OS-specific spawn path has created

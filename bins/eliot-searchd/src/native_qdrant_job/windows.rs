@@ -50,6 +50,13 @@ const MAX_THREAD_SNAPSHOT_ENTRIES: usize = 65_536;
 const JOB_POLICY_DOMAIN: &[u8] = b"eliot-search/qdrant-job-policy/v1\0";
 const INVALID_HANDLE_VALUE: RawHandle = (-1_isize) as RawHandle;
 
+#[repr(C)]
+#[derive(Default)]
+struct FileTime {
+    low: u32,
+    high: u32,
+}
+
 #[repr(C, align(8))]
 struct BasicLimitInformation {
     _per_process_user_time_limit: i64,
@@ -146,6 +153,13 @@ unsafe extern "system" {
     fn OpenThread(access: u32, inherit: i32, thread_id: u32) -> RawHandle;
     fn GetProcessIdOfThread(thread: RawHandle) -> u32;
     fn ResumeThread(thread: RawHandle) -> u32;
+    fn GetProcessTimes(
+        process: RawHandle,
+        creation: *mut FileTime,
+        exit: *mut FileTime,
+        kernel: *mut FileTime,
+        user: *mut FileTime,
+    ) -> i32;
 }
 
 struct JobCustody {
@@ -286,6 +300,10 @@ impl<C: StorageSecurityContext> WindowsPort<'_, C> {
     ) -> Result<ContainedSpawn, ContainedSpawnPortFailure<NativeQdrantJobError<C::Error>>> {
         let pid = child.id();
         let process = child.as_raw_handle();
+        let creation_marker = match observe_child_creation(self.context, process) {
+            Ok(marker) => marker,
+            Err(error) => return Err(ContainedSpawnPortFailure::after_spawn(error, child, job)),
+        };
         if let Err(error) = assign_to_job(self.context, job.handle.as_raw_handle(), process)
             .and_then(|()| verify_job_membership(self.context, job.handle.as_raw_handle(), process))
         {
@@ -309,8 +327,33 @@ impl<C: StorageSecurityContext> WindowsPort<'_, C> {
             return Err(ContainedSpawnPortFailure::after_spawn(error, child, job));
         }
 
-        Ok(ContainedSpawn::new(child, job, job_digest, acl_receipt))
+        Ok(ContainedSpawn::new(child, job, job_digest, acl_receipt)
+            .with_native_creation_marker(creation_marker))
     }
+}
+
+fn observe_child_creation<C: StorageSecurityContext>(
+    context: &mut C,
+    process: RawHandle,
+) -> Result<core::num::NonZeroU64, NativeQdrantJobError<C::Error>> {
+    before_native(context)?;
+    let (mut creation, mut exit, mut kernel, mut user) = (
+        FileTime::default(),
+        FileTime::default(),
+        FileTime::default(),
+        FileTime::default(),
+    );
+    // SAFETY: the exact owned Child keeps this process handle valid; all four
+    // output structures have the Win32 FILETIME layout and live for the call.
+    let observed = unsafe {
+        GetProcessTimes(process, &raw mut creation, &raw mut exit, &raw mut kernel, &raw mut user)
+    };
+    after_native(context)?;
+    if observed == 0 {
+        return Err(NativeQdrantJobError::NativeOperationFailed);
+    }
+    core::num::NonZeroU64::new((u64::from(creation.high) << 32) | u64::from(creation.low))
+        .ok_or(NativeQdrantJobError::NativeOperationFailed)
 }
 
 fn assign_to_job<C: StorageSecurityContext>(
