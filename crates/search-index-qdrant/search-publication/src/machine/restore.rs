@@ -15,6 +15,7 @@ use super::{
     PublicationEffectPreparationOwners, PublicationPhase, PublicationReadbackPort,
     PublicationTransaction, ReadbackVerified, SnapshotPublishReceipt, StageReceipt,
     VisibleCommitReceipt, point_readback_matches, readback_only,
+    validate_control_generation_transition,
 };
 
 /// Restore request contains only the original canonical proposal. Durable
@@ -315,7 +316,7 @@ impl PublicationCoordinator {
                 visible_epoch: transaction.target_epoch,
                 visible_manifest_digest: transaction.prepared.new_manifest_digest,
                 retired_manifest_digest: verified.retired_manifest_digest,
-                control_generation: control.control_generation,
+                control_generation: control.after_control_generation,
                 control_state_digest: control.control_state_digest,
             });
             transaction.phase = PublicationPhase::ControlCommitted;
@@ -501,10 +502,9 @@ fn validate_control(
         || control.collection_generation_id != transaction.prepared.collection_generation_id
         || control.previous_visible_manifest_digest != transaction.prepared.old_manifest_digest
         || control.visible_manifest_digest != expected_current_manifest
+        || validate_control_generation_transition(control, Some(intent_generation), outcome)
+            .is_err()
     {
-        return Err(PublicationError::ControlConflict);
-    }
-    if committed && intent_generation.checked_add(1) != Some(control.control_generation) {
         return Err(PublicationError::ControlConflict);
     }
     Ok(())

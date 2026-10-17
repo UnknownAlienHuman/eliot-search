@@ -5,7 +5,7 @@ use search_ports::{CancellationProbe, OperationContext};
 use crate::PublicationPointExpectation;
 use crate::machine::{
     DurableIntent, PublicationPhase, PublicationReadbackPort, PublicationTransaction,
-    point_readback_matches, readback_only,
+    point_readback_matches, readback_only, validate_control_generation_transition,
 };
 use crate::model::{
     ClosureReceipt, PublicationControlReadback, PublicationEffectKind, PublicationEffectOutcome,
@@ -648,6 +648,15 @@ fn exact_control(
             } else {
                 transaction.prepared.observed.current_guards
             }
+        || validate_control_generation_transition(
+            control,
+            transaction
+                .durable_intent
+                .as_ref()
+                .map(|intent| intent.control_generation),
+            outcome,
+        )
+        .is_err()
     {
         return Err(PublicationError::ControlConflict);
     }
@@ -665,16 +674,6 @@ fn exact_control(
     if control.visible_manifest_digest != expected_manifest {
         return Err(PublicationError::ControlConflict);
     }
-    if outcome == PublicationEffectOutcome::Applied {
-        let generation = transaction
-            .durable_intent
-            .as_ref()
-            .ok_or(PublicationError::ControlConflict)?
-            .control_generation;
-        if generation.checked_add(1) != Some(control.control_generation) {
-            return Err(PublicationError::ControlConflict);
-        }
-    }
     Ok(())
 }
 
@@ -691,7 +690,7 @@ fn visible_receipt(
         visible_epoch: transaction.target_epoch,
         visible_manifest_digest: transaction.prepared.new_manifest_digest,
         retired_manifest_digest: verified.retired_manifest_digest,
-        control_generation: control.control_generation,
+        control_generation: control.after_control_generation,
         control_state_digest: control.control_state_digest,
     })
 }

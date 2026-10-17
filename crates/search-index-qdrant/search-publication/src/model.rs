@@ -263,8 +263,10 @@ pub struct PublicationControlReadback {
     pub last_reserved_epoch: Epoch,
     /// Current owner guards from the same control readback.
     pub guards: PublicationGuards,
-    /// Generation of the durable control record.
-    pub control_generation: u64,
+    /// C02 journal generation immediately before this visibility CAS.
+    pub before_control_generation: u64,
+    /// C02 journal generation immediately after this visibility CAS.
+    pub after_control_generation: u64,
     /// Exact digest of the observed control record.
     pub control_state_digest: Blake3Digest32,
     /// Collection route selected by the same control record.
@@ -419,6 +421,14 @@ pub struct VisibleCommitReceipt {
     pub(crate) control_generation: u64,
     /// Digest of exact committed control state.
     pub(crate) control_state_digest: Blake3Digest32,
+}
+
+impl VisibleCommitReceipt {
+    /// Exact C02 journal generation after the visibility compare-and-swap.
+    #[must_use]
+    pub const fn control_generation(&self) -> u64 {
+        self.control_generation
+    }
 }
 
 /// Immutable in-memory control snapshot publication receipt.

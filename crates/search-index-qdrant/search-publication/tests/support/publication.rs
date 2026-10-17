@@ -554,6 +554,9 @@ pub struct PhaseReadback {
     pub intent_deadline_override: Option<u64>,
     /// Context metadata returned by an untrusted durable-intent readback.
     pub intent_budget_ref_override: Option<OpaqueRef>,
+    /// C02 generation immediately before the synthetic visibility CAS/readback.
+    pub control_before_generation_override: Option<u64>,
+    /// C02 generation immediately after the synthetic visibility CAS/readback.
     pub control_generation_override: Option<u64>,
     pub control_state_digest_override: Option<c::Blake3Digest32>,
     pub snapshot_generation_override: Option<u64>,
@@ -877,7 +880,8 @@ fn control_readback(
                 command.current_guards()
             }
         }),
-        control_generation: readback
+        before_control_generation: readback.control_before_generation_override.unwrap_or(8),
+        after_control_generation: readback
             .control_generation_override
             .unwrap_or(if committed { 9 } else { 8 }),
         control_state_digest: readback
@@ -906,7 +910,10 @@ fn abort_control_readback(
         after_visible_epoch: request.previous_visible_epoch,
         last_reserved_epoch: request.intent.target_epoch(),
         guards: request.current_guards,
-        control_generation: readback
+        before_control_generation: readback
+            .control_before_generation_override
+            .unwrap_or(request.expected_control_generation),
+        after_control_generation: readback
             .control_generation_override
             .unwrap_or_else(|| request.expected_control_generation + 1),
         control_state_digest: readback

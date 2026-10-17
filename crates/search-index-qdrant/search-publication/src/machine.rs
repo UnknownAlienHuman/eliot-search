@@ -23,10 +23,11 @@ use search_projection_planner::{
 
 use crate::model::PreparedPointSets;
 use crate::{
-    ClosureReceipt, CompensationPlan, PreparedGeneration, PublicationEffectBinding,
-    PublicationEffectKind, PublicationEffectOutcome, PublicationEffectReadback, PublicationError,
-    PublicationGuards, PublicationPointExpectation, PublicationPointReadback, ReadbackVerified,
-    RetiredManifest, SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
+    ClosureReceipt, CompensationPlan, PreparedGeneration, PublicationControlReadback,
+    PublicationEffectBinding, PublicationEffectKind, PublicationEffectOutcome,
+    PublicationEffectReadback, PublicationError, PublicationGuards, PublicationPointExpectation,
+    PublicationPointReadback, ReadbackVerified, RetiredManifest, SnapshotPublishReceipt,
+    StageReceipt, VisibleCommitReceipt,
 };
 
 /// Maximum exact points in one publication transaction.
@@ -797,7 +798,12 @@ impl PublicationCoordinator {
             || control.collection_generation_id != transaction.prepared.collection_generation_id
             || control.previous_visible_manifest_digest != transaction.prepared.old_manifest_digest
             || control.visible_manifest_digest != expected_manifest
-            || intent_generation.checked_add(1) != Some(control.control_generation)
+            || validate_control_generation_transition(
+                &control,
+                Some(intent_generation),
+                PublicationEffectOutcome::Applied,
+            )
+            .is_err()
         {
             transaction.phase = PublicationPhase::PublicationBlocked;
             return Err(PublicationError::ControlConflict);
@@ -816,7 +822,7 @@ impl PublicationCoordinator {
             visible_epoch: transaction.target_epoch,
             visible_manifest_digest: transaction.prepared.new_manifest_digest,
             retired_manifest_digest: verified.retired_manifest_digest,
-            control_generation: control.control_generation,
+            control_generation: control.after_control_generation,
             control_state_digest: control.control_state_digest,
         };
         transaction.visible_commit = Some(receipt.clone());
@@ -1316,6 +1322,35 @@ fn effect_points(
         _ => {}
     }
     Ok(points)
+}
+
+/// Validates the actual single-transaction C02 generation pair independently
+/// from the earlier intent/checkpoint generation. Other journal transactions
+/// may legitimately advance the global generation between those observations.
+pub fn validate_control_generation_transition(
+    control: &PublicationControlReadback,
+    intent_generation: Option<u64>,
+    outcome: PublicationEffectOutcome,
+) -> Result<(), PublicationError> {
+    let valid = match outcome {
+        PublicationEffectOutcome::Applied => intent_generation.is_some_and(|intent_generation| {
+            control.before_control_generation >= intent_generation
+                && control.before_control_generation.checked_add(1)
+                    == Some(control.after_control_generation)
+        }),
+        PublicationEffectOutcome::NotApplied => {
+            control.before_control_generation == control.after_control_generation
+                && intent_generation.is_none_or(|intent_generation| {
+                    control.before_control_generation >= intent_generation
+                })
+        }
+        PublicationEffectOutcome::Conflict | PublicationEffectOutcome::Unknown => false,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(PublicationError::ControlConflict)
+    }
 }
 
 pub fn effect_command<C: CancellationProbe>(

@@ -239,11 +239,9 @@ impl PublicationCoordinator {
                 || control.after_visible_epoch != request.previous_visible_epoch
                 || control.last_reserved_epoch != request.intent.target_epoch
                 || control.guards != request.current_guards
-                || control.control_generation
-                    != request
-                        .expected_control_generation
-                        .checked_add(1)
-                        .ok_or(PublicationError::ContractExhausted)?
+                || control.before_control_generation != request.expected_control_generation
+                || control.before_control_generation.checked_add(1)
+                    != Some(control.after_control_generation)
                 || control.collection_generation_id != request.collection_generation_id
                 || control.previous_visible_manifest_digest != request.intent.old_manifest_digest
                 || control.visible_manifest_digest != request.intent.old_manifest_digest
@@ -256,7 +254,7 @@ impl PublicationCoordinator {
                 visible_epoch: control.after_visible_epoch,
                 last_reserved_epoch: control.last_reserved_epoch,
                 observed_guards: control.guards,
-                control_generation: control.control_generation,
+                control_generation: control.after_control_generation,
                 control_state_digest: control.control_state_digest,
             }
         };
