@@ -5,6 +5,29 @@
 The package compiles server-authoritative eligibility before retrieval and owns the live restrictive
 security fence. It exposes no Qdrant filter, collection, point ID or reusable authorization decision.
 
+## Typed lexical evidence population
+
+`compile_canonical_evidence_population(owner, issued, request)` accepts the real
+`RetrieveEvidenceRequestV2` through `EvidencePopulationRecipe`, its explicit V2
+permission extension and the same canonical owner/snapshot inputs as V1.
+`CanonicalEligibilityPopulationRequest` has a defaulted recipe type parameter;
+existing V1 calls and recipe validation retain their behavior. No V1 recipe alias
+or additional V1 permission is required for an evidence-only grant.
+
+`CanonicalEvidencePopulationVerificationPort` extends the existing owner port
+with independently retained V2 permissions and exact immutable-scope resolution.
+Presented permissions must equal the original issuer's set and fit current
+policy. Scope IDs/revisions, source view and resolved membership set must agree
+with grant/fence/owner state. The same observations are checked again after
+compilation. Code/Text are the supported lexical modalities; other modalities
+refuse explicitly. OrientScope is not an input to this entry.
+
+The result is the existing private `CompiledEligibilityPopulation`, built only by
+the shared compiler after full original grant, route/schema/fingerprint,
+deny/purge/shadow, C02 map and typed projection-owner validation. Its population
+remains the single denominator for retrieval, filtered IDF, count and scroll.
+No receipt, public proof constructor, store or optional model is introduced.
+
 ## Grant and scope operations
 
 ### `validate_grant(claims, binding, installation, now) -> Result<ValidatedGrant, AccessError>`

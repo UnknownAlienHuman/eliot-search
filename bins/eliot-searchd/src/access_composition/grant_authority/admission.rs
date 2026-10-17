@@ -43,6 +43,27 @@ pub trait StandaloneScopeResolver {
         &mut self,
         requested: &RequestedScope,
     ) -> Result<RequestedMembershipScope, AccessError>;
+
+    /// Resolve an immutable V2 selector against the same current owner fence.
+    /// The baseline corpus lookup reuses this same server-owned resolver only at
+    /// the exact captured membership revision. Other selectors require their
+    /// owner's explicit implementation; no implicit active-workspace alias exists.
+    fn resolve_evidence(
+        &mut self,
+        selector: &search_contracts::evidence::PublicScopeSelector,
+        fence: &search_contracts::QuerySnapshotFence,
+    ) -> Result<RequestedMembershipScope, AccessError> {
+        use search_contracts::evidence::PublicScopeSelector;
+        match selector {
+            PublicScopeSelector::CorpusRevision { corpus_id, membership_revision }
+                if *membership_revision == fence.membership_revision =>
+            {
+                self.resolve(&RequestedScope::Corpus(*corpus_id))
+            }
+            PublicScopeSelector::CorpusRevision { .. } => Err(AccessError::SnapshotStale),
+            _ => Err(AccessError::ScopeUnknown),
+        }
+    }
 }
 
 /// Canonical source-level ceilings not present in the older vendor-neutral
@@ -299,7 +320,7 @@ fn validate_explicit_resolution(
     Ok(())
 }
 
-fn validate_membership_security(
+pub fn validate_membership_security(
     template: &StandaloneGrantTemplate,
     resolved: &RequestedMembershipScope,
     authoritative: &AuthoritativeAccessSnapshot,

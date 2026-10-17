@@ -21,9 +21,11 @@ pub use barrier::{
     SecurityMutationBarrier, SecurityMutationEffects, SecurityMutationReceipt, SecurityRestriction,
 };
 pub use population::{
+    CanonicalEvidencePopulationRequest, CanonicalEvidencePopulationVerificationPort,
     CanonicalEligibilityPopulationRequest, CanonicalEligibilitySecuritySnapshot,
     CanonicalPopulationVerificationPort, CanonicalProjectionMembership,
-    CompiledEligibilityPopulation, compile_canonical_eligibility_population,
+    CompiledEligibilityPopulation, EvidencePopulationRecipe,
+    compile_canonical_eligibility_population, compile_canonical_evidence_population,
 };
 
 use core::fmt;

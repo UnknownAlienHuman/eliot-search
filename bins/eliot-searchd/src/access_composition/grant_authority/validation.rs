@@ -32,6 +32,31 @@ impl<E, T> BoundedStandaloneGrantIssuer<E, T>
 where
     T: GrantValidationClock,
 {
+    /// Borrow the existing V2 issuance under the live query owner's lock. The
+    /// original request guard and retained grant lifetime bracket the callback.
+    pub(crate) fn with_locked_evidence_grant<R, F>(
+        &mut self,
+        binding: &BindingContext,
+        request: &mut AdmittedEvidenceProviderRequestV2,
+        policy: &AuthoritativeGrantPolicy,
+        operation: impl FnOnce(VerifiedStandaloneGrant<'_>, &mut AdmittedEvidenceProviderRequestV2)
+            -> Result<R, F>,
+    ) -> Result<R, RecipeGrantUseError<F>> {
+        use RecipeGrantUseError::{AfterOperation, Operation, Refused};
+        validate_policy_binding(binding, policy)
+            .map_err(|_| Refused(GrantUseError::BindingMismatch))?;
+        let issued = self.verify_issued_evidence_request(binding, request).map_err(Refused)?;
+        validate_policy(&request.envelope().grant.claims, &issued, policy).map_err(Refused)?;
+        if request.envelope().grant.permitted_evidence_recipes.iter()
+            .any(|recipe| !policy.permitted_evidence_recipes.contains(recipe))
+        { return Err(Refused(GrantUseError::PolicyChanged)); }
+        let valid_until = issued.valid_until();
+        let result = operation(issued, request).map_err(Operation)?;
+        if monotonic_millis() >= valid_until { return Err(AfterOperation(GrantUseError::Expired)); }
+        self.verify_evidence_request(binding, request, policy).map_err(AfterOperation)?;
+        Ok(result)
+    }
+
     /// Ledger-only early refusal before bounded source-free task allocation.
     ///
     /// This verifies the exact issued claims, paired binding, request identity,

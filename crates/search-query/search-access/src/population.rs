@@ -128,10 +128,10 @@ impl CompiledEligibilityPopulation {
 /// Presented claims, maps and candidate rows remain data. Independent issuer
 /// and typed-binding observations come only through the owner port supplied to
 /// the compiler. This record creates no permit, receipt or persistence.
-pub struct CanonicalEligibilityPopulationRequest<'a, S> {
+pub struct CanonicalEligibilityPopulationRequest<'a, S, R = RecipeIdV1> {
     pub grant: &'a SearchReadGrantClaims,
     pub grant_policy: &'a AuthoritativeGrantPolicy,
-    pub recipe: RecipeIdV1,
+    pub recipe: R,
     pub modality: Modality,
     pub requested_scope: &'a RequestedMembershipScope,
     pub authoritative_access: &'a AuthoritativeAccessSnapshot,
@@ -174,6 +174,14 @@ pub fn compile_canonical_eligibility_population<
         request.recipe,
         request.modality,
     )?;
+    compile_verified_population(owner, issued, request)
+}
+
+fn compile_verified_population<S, R, O: CanonicalPopulationVerificationPort + ?Sized>(
+    owner: &mut O,
+    issued: &O::IssuedGrant,
+    request: &CanonicalEligibilityPopulationRequest<'_, S, R>,
+) -> Result<CompiledEligibilityPopulation, AccessError> {
     validate_snapshot_owners(request)?;
     if request.requested_scope.memberships.len() > MAX_COLLECTION_ITEMS {
         return Err(AccessError::EligibilityPopulationTooLarge);
@@ -229,6 +237,22 @@ fn validate_grant_policy(
     recipe: RecipeIdV1,
     modality: Modality,
 ) -> Result<(), AccessError> {
+    validate_common_grant_policy(grant, policy)?;
+    if grant.permitted_recipe_families.is_empty() {
+        return Err(AccessError::ScopeUnauthorized);
+    }
+    if !grant.permitted_recipe_families.contains(&recipe)
+        || !policy.permitted_recipe_families.contains(&recipe)
+    {
+        return Err(AccessError::RecipeDenied);
+    }
+    validate_modality(grant, policy, modality)
+}
+
+fn validate_common_grant_policy(
+    grant: &SearchReadGrantClaims,
+    policy: &AuthoritativeGrantPolicy,
+) -> Result<(), AccessError> {
     grant
         .validate_shape()
         .map_err(|_| AccessError::ScopeUnauthorized)?;
@@ -257,7 +281,6 @@ fn validate_grant_policy(
         || grant.allowed_membership_ids.is_empty()
         || grant.allowed_access_partitions.is_empty()
         || grant.allowed_modalities.is_empty()
-        || grant.permitted_recipe_families.is_empty()
         || !grant
             .allowed_membership_ids
             .iter()
@@ -289,11 +312,14 @@ fn validate_grant_policy(
     {
         return Err(AccessError::ScopeUnauthorized);
     }
-    if !grant.permitted_recipe_families.contains(&recipe)
-        || !policy.permitted_recipe_families.contains(&recipe)
-    {
-        return Err(AccessError::RecipeDenied);
-    }
+    Ok(())
+}
+
+fn validate_modality(
+    grant: &SearchReadGrantClaims,
+    policy: &AuthoritativeGrantPolicy,
+    modality: Modality,
+) -> Result<(), AccessError> {
     if !grant.allowed_modalities.contains(&modality)
         || !policy.allowed_modalities.contains(&modality)
     {
@@ -303,7 +329,7 @@ fn validate_grant_policy(
 }
 
 fn validate_snapshot_owners(
-    request: &CanonicalEligibilityPopulationRequest<'_, impl Sized>,
+    request: &CanonicalEligibilityPopulationRequest<'_, impl Sized, impl Sized>,
 ) -> Result<(), AccessError> {
     let fence = request.snapshot_fence;
     fence.validate().map_err(|_| AccessError::SnapshotStale)?;
@@ -382,7 +408,7 @@ fn validate_snapshot_fingerprint(fence: &QuerySnapshotFence) -> Result<(), Acces
 
 fn validate_live_restrictions(
     memberships: &BTreeSet<SourceMembershipId>,
-    request: &CanonicalEligibilityPopulationRequest<'_, impl Sized>,
+    request: &CanonicalEligibilityPopulationRequest<'_, impl Sized, impl Sized>,
 ) -> Result<(), AccessError> {
     let live = request.security.live;
     if live.fail_closed {
@@ -399,7 +425,7 @@ fn validate_live_restrictions(
 
 fn compile_population_memberships<O: CanonicalPopulationVerificationPort + ?Sized>(
     authorized: &BTreeMap<SourceMembershipId, crate::MembershipAccessBinding>,
-    request: &CanonicalEligibilityPopulationRequest<'_, impl Sized>,
+    request: &CanonicalEligibilityPopulationRequest<'_, impl Sized, impl Sized>,
     owner: &mut O,
     issued: &O::IssuedGrant,
 ) -> Result<(EligibilityPopulation, BTreeMap<SourceMembershipId, CanonicalProjectionMembership>), AccessError> {
@@ -499,3 +525,9 @@ fn compile_population_memberships<O: CanonicalPopulationVerificationPort + ?Size
 
 #[cfg(test)]
 mod tests;
+
+mod evidence;
+pub use evidence::{
+    CanonicalEvidencePopulationRequest, CanonicalEvidencePopulationVerificationPort,
+    EvidencePopulationRecipe, compile_canonical_evidence_population,
+};

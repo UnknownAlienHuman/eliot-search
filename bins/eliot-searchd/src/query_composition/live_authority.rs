@@ -8,6 +8,9 @@
 
 #![allow(dead_code)]
 
+#[path = "live_authority/evidence.rs"]
+mod evidence;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 
@@ -176,7 +179,8 @@ impl LiveNativeQuerySnapshot {
             || self.policy.allowed_membership_ids.is_empty()
             || self.policy.allowed_access_partitions.is_empty()
             || self.policy.allowed_modalities.is_empty()
-            || self.policy.permitted_recipe_families.is_empty()
+            || (self.policy.permitted_recipe_families.is_empty()
+                && self.policy.permitted_evidence_recipes.is_empty())
             || self.policy.allowed_budget_classes.is_empty()
             || (self.policy.exact_scan_permission && !self.policy.source_read_permission)
         {

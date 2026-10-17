@@ -25,6 +25,9 @@ use search_contracts::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "tests/evidence.rs"]
+mod evidence;
+
 // Private test-only issuer token. Production must adapt the existing Root
 // issuer token; there is intentionally no production fixture/receipt issuer.
 struct IssuedFixture {

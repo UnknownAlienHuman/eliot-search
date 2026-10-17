@@ -6,6 +6,10 @@
 
 use std::collections::BTreeMap;
 
+#[path = "canonical_population/evidence.rs"]
+mod evidence;
+pub use evidence::compile_current_evidence_population;
+
 use search_access::{
     AccessCheckpoint, AccessError, AuthoritativeAccessSnapshot, AuthoritativePolicyState,
     CanonicalEligibilityPopulationRequest, CanonicalEligibilitySecuritySnapshot,
@@ -383,7 +387,9 @@ pub(super) fn compile_current_population(
     let modality = modality.ok_or(AccessError::AuthorizedScopeEmpty)?;
     let mut port = NativeCanonicalPopulationPort {
         metadata,
-        request,
+        claims: &request.grant,
+        evidence: None,
+        resolver: None,
         issued,
     };
     let result = compile_canonical_eligibility_population(
@@ -455,7 +461,9 @@ fn canonical_projection_membership(
 
 struct NativeCanonicalPopulationPort<'a, 'request, 'borrow, 'grant> {
     metadata: &'a CanonicalPopulationSnapshot,
-    request: &'request RequestBody,
+    claims: &'request search_contracts::SearchReadGrantClaims,
+    evidence: Option<&'request search_provider_protocol::SearchReadGrantClaimsV2>,
+    resolver: Option<&'borrow mut dyn crate::access_composition::StandaloneScopeResolver>,
     issued: &'borrow VerifiedStandaloneGrant<'grant>,
 }
 
@@ -471,10 +479,13 @@ impl<'grant> CanonicalPopulationVerificationPort
         if !std::ptr::eq(issued, self.issued) {
             return Err(AccessError::GrantBindingMismatch);
         }
-        issued
-            .verify_current_claims(&self.request.grant)
-            .map_err(map_grant_error)?;
-        Ok(self.request.grant.clone())
+        if let Some(evidence) = self.evidence {
+            if &evidence.claims != self.claims { return Err(AccessError::GrantBindingMismatch); }
+            issued.verify_current_evidence_claims(evidence).map_err(map_grant_error)?;
+        } else {
+            issued.verify_current_claims(self.claims).map_err(map_grant_error)?;
+        }
+        Ok(self.claims.clone())
     }
 
     fn current_projection_binding(

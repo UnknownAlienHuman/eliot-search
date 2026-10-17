@@ -12,6 +12,7 @@ mod admission;
 mod execution;
 mod serving;
 mod validation;
+pub use admission::validate_membership_security;
 
 pub use admission::{
     StandaloneAdmissionRequest, StandaloneMembershipSecurity,
