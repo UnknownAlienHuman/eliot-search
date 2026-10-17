@@ -1,8 +1,9 @@
 # search-publication
 
-Pure, vendor-neutral publication admission, single-flight phase accounting and
-recovery decisions. C02 remains the sole durable epoch/intent/visibility owner;
-C15 owns actual Qdrant effects. No method in this package performs those effects.
+Vendor-neutral publication admission, single-flight phase accounting and recovery
+decisions. Effectful phases invoke injected effect/readback ports. C02 remains
+the sole durable epoch/intent/visibility owner; C15 owns actual Qdrant effects.
+This package has no concrete journal, Qdrant or platform implementation.
 
 ## Canonical admission (#260)
 
@@ -35,6 +36,21 @@ is computed once; stage, closure, combined readback, compensation, recovery and
 retired-manifest emission borrow it. Retained points keep their exact original
 readback shape and validity; creation binds to the admitted target epoch.
 
+## Effect and readback boundary (#261.model)
+
+`PublicationEffectPreparationOwners` supplies the actual planned vectors alongside
+the admitted C13 products. Effect commands retain the full expected point identities,
+payloads, vectors, validity and original operation context. `PublicationEffectPort`
+performs an effect; `PublicationReadbackPort` supplies untrusted observations. The
+coordinator compares the complete expected/read-back records before constructing
+private stage, closure, control, snapshot or compensation proofs. A transport ACK
+or matching caller digest cannot advance a phase.
+
+An uncertain effect retains its original identity and blocks the next effect until
+exact readback reconciles it. Visibility validates the actual CAS predecessor and
+successor generations; intervening journal checkpoints need not be adjacent to the
+original intent. Root still must provide real durable-control and Qdrant adapters.
+
 ## Empty targets and source completeness
 
 `PublicationTarget::Retirement` is explicit. It requires the exact old verified
@@ -58,8 +74,9 @@ Restore re-admits original preparation through the same function, validates the
 retained route/target/guards and receipt prefix, and never calls normal submit or
 allocates another epoch. Changed pre-commit guards lead to compensation; bare
 aborted/blocked records retain the occupied slot. Prior-process snapshot labels
-never authorize current-process admission. Effect-proof production, actual
-journal-prefix readback and Native/Qdrant execution remain #261/Root work.
+never authorize current-process admission. Private effect-proof construction
+belongs to this package. Actual journal-prefix readback and Native/Qdrant
+execution remain #261/Root adapter work.
 
 ## Verification boundary
 

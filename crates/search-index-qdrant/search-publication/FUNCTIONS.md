@@ -1,11 +1,18 @@
 # Function contract — `search-publication`
 
-**Status:** W3/P07 linearizable state-machine contract; no storage implementation yet.
+**Status:** vendor-neutral phase owner with typed effect/readback ports and private
+validated proofs. Root supplies the real durable-control and Qdrant adapters.
 
 At most one publication transaction is active globally. Prepared work may run concurrently, but a later
 epoch cannot enter staging while an earlier intent is unresolved.
 
 ## Core operations
+
+The signatures below describe logical operations. Concrete phase methods take
+`PublicationEffectPort`, `PublicationReadbackPort` and the original operation
+context. Readbacks are untrusted observations; the owner checks complete expected
+inputs and readback before constructing a private proof. Uncertain effects retain
+their original operation and must be reconciled before another phase can run.
 
 ### `submit(prepared, ports, context) -> Result<PublicationReceipt, PublicationError>`
 
@@ -73,7 +80,9 @@ keep the old collection alive.
 Each external mutation has one durable operation identity. Replaying identical input is safe; differing
 input with the same identity is rejected. Cancellation before intent creation has no effect. After
 intent durability, cancellation yields a recoverable unresolved intent, never silent rollback.
-Every state transition and failpoint is crash-reopen tested.
+The package fixtures exercise pure phase/recovery behavior with synthetic ports.
+Actual journal restart, lost-acknowledgement and Native/Qdrant qualification require
+the integrated real adapters; fixture success does not establish those results.
 
 ## Required fixtures
 
