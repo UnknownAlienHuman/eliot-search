@@ -16,7 +16,7 @@ use super::spec::{
 };
 
 /// Deterministic field-registry digest over the exact declared fields.
-fn section_registry_digest(
+pub(super) fn section_registry_digest(
     section: &str,
     owner: &str,
     revision: u64,
@@ -68,11 +68,16 @@ fn make_field(spec: FieldSpec<'_>) -> Result<ConfigFieldDescriptor, ConfigError>
 /// Mirrors `config/sections.toml` for the daemon-observed subset. Every
 /// reload/obligation class the daemon must gate appears at least once.
 pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
+    daemon_registry_for_profile(super::spec::DAEMON_DIRECT_PROFILE)
+}
+
+pub(super) fn daemon_registry_for_profile(profile: &str) -> Result<ConfigRegistry, ConfigError> {
     register_sections(
         DAEMON_CONFIG_SCHEMA_VERSION,
         [
             instance_section()?,
             search_os_secrets::section_descriptor()?,
+            super::native_qdrant_settings::section_descriptor(profile)?,
             control_section()?,
             admission_section()?,
             lexical_section()?,

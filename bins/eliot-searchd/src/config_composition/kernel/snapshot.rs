@@ -8,7 +8,10 @@ use search_contracts::ProfileId;
 use search_handles::ValidatedHandlesConfig;
 use search_os_secrets::ValidatedSecretsConfig;
 
+use super::registry::daemon_registry_for_profile;
+#[cfg(test)]
 use super::registry::daemon_registry;
+use super::NativeQdrantSettings;
 use super::spec::{DAEMON_DIRECT_PROFILE, daemon_limits, defaults_source, profile_id};
 
 /// Immutable daemon-effective configuration: the authoritative snapshot plus
@@ -19,9 +22,17 @@ pub struct EffectiveDaemonConfig {
     registry: ConfigRegistry,
     secrets_settings: ValidatedSecretsConfig,
     handles_settings: ValidatedHandlesConfig,
+    native_qdrant_settings: NativeQdrantSettings,
 }
 
 impl EffectiveDaemonConfig {
+    /// Typed requested Qdrant settings only; no artifact, secret or readiness proof.
+    #[must_use]
+    #[allow(dead_code)] // Startup consumption is a separately owned composition slice.
+    pub const fn native_qdrant_settings(&self) -> &NativeQdrantSettings {
+        &self.native_qdrant_settings
+    }
+
     /// Authoritative effective snapshot.
     #[must_use]
     pub const fn snapshot(&self) -> &EffectiveConfigSnapshot {
@@ -68,7 +79,7 @@ pub fn build_effective(
     requested_profile: &str,
     selected_profile: &str,
 ) -> Result<EffectiveDaemonConfig, ConfigError> {
-    let registry = daemon_registry()?;
+    let registry = daemon_registry_for_profile(selected_profile)?;
     let requested = profile_id(requested_profile)?;
     let selected = profile_id(selected_profile)?;
     let merged = merge_layers(
@@ -102,11 +113,13 @@ pub fn build_effective(
     let secrets_settings = secrets_settings.ok_or(ConfigError::MissingSection)?;
     let handles_settings = handles_settings.ok_or(ConfigError::MissingSection)?;
     let snapshot = assemble_effective(&registry, validated, selected, daemon_limits())?;
+    let native_qdrant_settings = NativeQdrantSettings::from_snapshot(&snapshot, &secrets_settings)?;
     Ok(EffectiveDaemonConfig {
         snapshot,
         registry,
         secrets_settings,
         handles_settings,
+        native_qdrant_settings,
     })
 }
 

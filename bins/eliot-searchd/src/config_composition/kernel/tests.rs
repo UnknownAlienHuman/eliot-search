@@ -27,7 +27,7 @@ fn direct_file(extra: &str) -> ConfigDocument {
 fn registry_mirrors_declared_owners_and_reload_classes() {
     let registry = daemon_registry().expect("registry");
     assert_eq!(registry.config_schema_version(), 2);
-    assert_eq!(registry.len(), 9);
+    assert_eq!(registry.len(), 10);
     let owner = |section: &str| {
         registry
             .section(
@@ -41,6 +41,7 @@ fn registry_mirrors_declared_owners_and_reload_classes() {
     };
     assert_eq!(owner("instance"), "search-runtime-owner");
     assert_eq!(owner("secrets"), "search-os-secrets");
+    assert_eq!(owner("qdrant_process"), "search-qdrant-supervisor");
     assert_eq!(owner("control"), "search-control-redb");
     assert_eq!(owner("source_admission"), "search-source-admission");
     assert_eq!(owner("lexical"), "search-lexical");

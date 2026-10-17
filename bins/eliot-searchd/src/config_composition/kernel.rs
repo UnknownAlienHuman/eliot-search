@@ -12,6 +12,8 @@ mod registry;
 mod snapshot;
 mod spec;
 mod root_locators;
+mod native_qdrant_settings;
+pub use native_qdrant_settings::NativeQdrantSettings;
 pub use root_locators::RootLocatorHints;
 
 pub use activation::*;
