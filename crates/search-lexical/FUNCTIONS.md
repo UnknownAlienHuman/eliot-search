@@ -1,7 +1,9 @@
 # Function contract — `search-lexical`
 
-**Status:** legacy analyzer/sparse source and additive code_identifiers@1 source are present.
-Product/profile execution qualification is not established by source presence or identity matching.
+**Status:** legacy analyzer/sparse source and additive code_identifiers@1 source are present. The
+code-identifiers owner executes its frozen runtime qualification fixtures before issuing an
+`AcceptedCodeIdentifiersProfile`; source presence or identity matching alone is not qualification.
+Runtime qualification is distinct from configured-profile state and `ReleaseQualified` evidence.
 
 The crate owns deterministic local sparse-vector encoding only. It stores no corpus and implements no
 inverted index. One collection generation selects one accepted lexical provider path and profile.
@@ -16,17 +18,26 @@ inverted index. One collection generation selects one accepted lexical provider 
   Invalid parent runs are discarded whole; invalid-start components are filtered after attempt charge.
   Parent positions/counts and raw expansion counts are separate; dedup is per parent only.
 - `accept_code_identifiers_profile`: compare profile/artifact-set/fixture-definition identities and the
-  existing qualification contract; matching is not external acceptance or execution evidence.
+  existing qualification contract; matching alone is not execution or release evidence.
+- `qualify_code_identifiers_profile`: run every frozen compatibility case, the exact document/query
+  index and weighting fixture, and the complete collision corpus under one caller-owned absolute
+  deadline/checkpoint. It compares token normalization/spans, sparse indices and values, feature
+  mapping, and collision report against frozen owner outputs. It returns the opaque accepted profile
+  only after all checks pass; it does not issue configured-profile or `ReleaseQualified` state.
 - `encode_code_document` / `encode_code_query`: same borrowed input and immutable accepted profile,
   one private new route and shared private numerical bodies, Raw document/Binary query/Qdrant IDF.
-  No new local-statistics/BM25 mode. Old legacy numerical options and public APIs remain unchanged.
+  `encode_code_document_with_checkpoint` adds a caller-owned absolute deadline and live observer to
+  that same kernel. No new local-statistics/BM25 mode. Old legacy numerical options and public APIs
+  remain unchanged.
 - `validate_code_identifiers_pair`: compare owner-produced new document/query kinds and profile identity.
   Collection-generation selection/authorization remains with the projection owner.
 
 Artifact-set identity hashes an exact canonical descriptor of published SHA256 release/table facts;
-it is not a relabelled BLAKE3 archive checksum. Compatibility/collision identities bind authored
-synthetic definitions, not a run verdict. All source fixtures remain AUTHORED_NOT_RUN under #215.
-New profile adoption requires VERSIONED_REBUILD; real legacy daemon/frozen consumers remain separate.
+it is not a relabelled BLAKE3 archive checksum. Compatibility/collision identities bind the frozen
+definitions, while `qualify_code_identifiers_profile` separately executes and checks their owner
+outputs. The operational bootstrap is not #215 product, scale, external acceptance or
+`ReleaseQualified` evidence. New profile adoption requires VERSIONED_REBUILD; real legacy
+daemon/frozen consumers remain separate.
 
 ## Profile operations
 
@@ -40,6 +51,16 @@ parameters, Qdrant sparse modifier/schema and compatibility-fixture digest.
 
 Requires an accepted P06 qualification receipt and golden document/query fixtures. `latest`, implicit
 defaults and partially specified profiles are rejected.
+
+### `qualify_code_identifiers_profile(profile, lexical_limits, sparse_limits, deadline, checkpoint)`
+
+Runs the code-identifiers owner's frozen runtime cases through the same analyzer, mapping, numerical
+weighting and collision implementations used for ordinary document/query encoding. The expected
+normalization, sparse index, document/query weight, and collision outputs are owner-frozen data; the
+qualifier does not derive its expectations from the values it is checking. Cancellation, deadline,
+limit failure or any expected-output mismatch returns no accepted profile. This is operational runtime
+qualification only; configuration admission, `ReleaseQualified`, independent scale evidence and release
+acceptance remain separate.
 
 ### `profile_digest(profile) -> LexicalProfileId`
 
@@ -98,6 +119,10 @@ requires an accepted profile plus new collection generation.
 ## Cancellation, retry and failure
 
 Encoding is pure and retry-safe. Budget or cancellation returns no partial vector advertised as valid.
+The live code-document entry point polls after at most 64 tracked analysis, mapping, weighting,
+validation or fingerprint work units, and at aggregate allocation/result boundaries. Its absolute
+`Instant` deadline is fixed for the call; deadline expiry returns `SPARSE_ENCODING_CANCELLED`, while
+observer errors propagate unchanged.
 Failures include profile mismatch/unqualified provider, unsupported input, collision threshold failure,
 non-finite weight and budget exhaustion.
 
