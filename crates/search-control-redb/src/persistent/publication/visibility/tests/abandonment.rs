@@ -266,3 +266,188 @@ fn abandonment_fence_unknown_reopens_replays_conflicts_and_is_retained_by_abort(
         Err(ControlError::SnapshotRebuildFailed)
     );
 }
+
+fn ready_with_original_binding(
+    scratch: &Scratch,
+) -> (PersistentControlJournal, VisibleEpochCommit) {
+    let mut journal = scratch.empty(PUBLICATION_VISIBILITY_SCHEMA_VERSION);
+    journal
+        .initialize_publication_visibility(state(), MutationId([1; 32]), digest(), &context(false))
+        .unwrap();
+    insert_previous_shadows(&mut journal);
+    let mut intent = durable_intent(&mut journal);
+    let mut prior = None;
+    for (id, phase) in [
+        (34, PublicationIntentState::NewPointsAcknowledged),
+        (35, PublicationIntentState::OldPointsClosedAcknowledged),
+        (36, PublicationIntentState::ReadbackVerified),
+    ] {
+        let update = PublicationIntentUpdate::advance(
+            MutationId([id; 32]),
+            digest(),
+            journal.verify().unwrap().generation,
+            intent.clone(),
+            phase,
+        )
+        .unwrap();
+        prior = Some(
+            journal
+            .persist_publication_intent(&update, &context(false))
+            .unwrap(),
+        );
+        intent = update.intent().clone();
+    }
+    let publication = VisibleEpochCommit::new(
+        MutationId([7; 32]),
+        digest(),
+        prior.unwrap(),
+        intent,
+        state(),
+        PublicationReceiptId::from_bytes([7; 16]),
+        PublicationReadbackEvidence {
+            exact_new_manifest_ref: reference("new-points"),
+            exact_retired_manifest_ref: reference("retired-points"),
+            readback_digest: digest(),
+        },
+        vec![PublicationManifestChange {
+            membership_id: member(1),
+            previous_manifest: None,
+            next_manifest: Some(reference("new")),
+            matching_shadow: Some(shadow(9)),
+        }],
+    )
+    .unwrap();
+    (journal, publication)
+}
+
+fn durable_next_intent(
+    journal: &mut PersistentControlJournal,
+    publisher: &ControlSnapshotPublisher,
+    previous_visibility: PublicationVisibilityState,
+) -> PublicationIntent {
+    let checkpoint = journal
+        .read_checkpoint_checked(&super::super::super::super::Unscoped)
+        .unwrap()
+        .unwrap();
+    let previous = checkpoint.intent().unwrap().clone();
+    let previous_binding = checkpoint.original_binding().unwrap().clone();
+    let expected_generation = checkpoint.generation();
+    let prepared = PublicationIntent {
+        publication_intent_id: PublicationIntentId::from_bytes([73; 16]),
+        target_epoch: Epoch::new(2).unwrap(),
+        prepared_manifest_ref: reference("abandon-next-epoch"),
+        owner_source_membership_access_guards: previous_visibility.guards,
+        state: PublicationIntentState::Prepared,
+    };
+    let binding = PublicationIntentBindingRecordV1::prepare_with_original_context(
+        PublicationIntentBindingMetadataV1 {
+            publication_intent_id: prepared.publication_intent_id,
+            publication_receipt_id: PublicationReceiptId::from_bytes([74; 16]),
+            target_epoch: prepared.target_epoch,
+            prepared_manifest_reference: prepared.prepared_manifest_ref.clone(),
+            guards: prepared.owner_source_membership_access_guards,
+            c02_mutation_id: MutationId([75; 32]),
+            c02_command_digest: digest(),
+            expected_control_generation: expected_generation,
+            original_operation_id: OpaqueId::new("operation:next-publication").unwrap(),
+            original_request_id: RequestId::from_bytes([76; 16]),
+            original_relative_deadline_ms: 60_000,
+            original_budget_ref: OpaqueRef::new("budget:next-publication").unwrap(),
+        },
+        LIMITS,
+        Instant::now() + Duration::from_secs(20),
+        &|_: MigrationBootstrapWork| Ok::<(), ()>(()),
+    )
+    .unwrap();
+    let successor = PublicationSuccessor::new(
+        MutationId([75; 32]),
+        digest(),
+        expected_generation,
+        previous,
+        previous_visibility,
+        &prepared,
+    )
+    .unwrap()
+    .with_original_binding_v1(binding, previous_binding)
+    .unwrap();
+    journal
+        .reserve_next_publication(&successor, publisher, &context(false))
+        .unwrap();
+    successor.intent().clone()
+}
+
+#[test]
+fn committed_visibility_and_same_handle_abandonment_recovery_preserve_the_receipt() {
+    let scratch = Scratch::new();
+    let (mut journal, publication) = ready_with_original_binding(&scratch);
+    let commit = apply(&mut journal, &publication).unwrap();
+    let mut publisher = ControlSnapshotPublisher::new();
+    journal
+        .publish_committed_snapshot(&commit, &mut publisher)
+        .unwrap();
+    let previous_visibility = journal
+        .read_publication_visibility(&context(false))
+        .unwrap()
+        .unwrap();
+    assert_eq!(previous_visibility.visible_epoch, Epoch::new(1).unwrap());
+    let receipt_id = previous_visibility.last_receipt.unwrap();
+
+    let intent = durable_next_intent(&mut journal, &publisher, previous_visibility);
+    let expected_generation = journal.verify().unwrap().generation;
+    let request = PublicationAbandonFenceRequestV1::new(
+        OpaqueId::new("operation:abandon-after-visible").unwrap(),
+        MutationId([77; 32]),
+        digest(),
+        expected_generation,
+        RequestId::from_bytes([78; 16]),
+        60_000,
+        OpaqueRef::new("budget:abandon-after-visible").unwrap(),
+        intent,
+        previous_visibility,
+        vec![
+            PublicationAbandonFenceMembershipV1 {
+                membership_id: member(1),
+                source_revision_id: SourceRevisionId::from_bytes([41; 16]),
+                previous_shadow: None,
+            },
+            PublicationAbandonFenceMembershipV1 {
+                membership_id: member(2),
+                source_revision_id: SourceRevisionId::from_bytes([22; 16]),
+                previous_shadow: Some(shadow(10)),
+            },
+        ],
+    )
+    .unwrap();
+    let unknown = journal.abandon_publication_checked(
+        &request,
+        super::super::super::super::Boundary::LostAcknowledgement,
+        &super::super::super::super::Unscoped,
+    );
+    assert_eq!(unknown, Err(ControlError::CommitOutcomeUnknown));
+    assert!(journal.requires_recovery());
+
+    let recovered = journal
+        .recover_abandon_publication_checked(
+            &request,
+            &super::super::super::super::Unscoped,
+        )
+        .unwrap();
+    assert!(matches!(recovered, CommitRecoveryDecision::Committed(_)));
+    assert!(!journal.requires_recovery());
+
+    let checkpoint = journal
+        .read_checkpoint_checked(&super::super::super::super::Unscoped)
+        .unwrap()
+        .unwrap();
+    assert_eq!(checkpoint.visibility().visible_epoch, Epoch::new(1).unwrap());
+    assert_eq!(checkpoint.visibility().last_receipt, Some(receipt_id));
+    assert_eq!(
+        checkpoint.publication_receipt().unwrap().publication_receipt_id,
+        receipt_id
+    );
+    assert_eq!(
+        checkpoint.visibility().guards.shadow_generation,
+        previous_visibility.guards.shadow_generation + 1
+    );
+    assert!(checkpoint.abandonment_fence().is_some());
+}

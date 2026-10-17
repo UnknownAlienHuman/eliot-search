@@ -116,6 +116,12 @@ impl PublicationIntentBindingRecordV1 {
         metadata.guards == intent.owner_source_membership_access_guards
     }
 
+    /// Encoded size for a bounded parent-record preflight; does not copy the record.
+    #[must_use]
+    pub(super) const fn encoded_len(&self) -> usize {
+        self.canonical.len()
+    }
+
     pub(in crate::persistent) fn value(
         &self,
         limits: JournalLimits,

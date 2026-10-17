@@ -394,7 +394,6 @@ impl PublicationAbandonFenceRecordV1 {
         limits: JournalLimits,
         check: &dyn Check,
     ) -> Result<Self, ControlError> {
-        request.validate(limits)?;
         if !original_binding.matches_intent(&request.intent)
             || original_binding.metadata().original_operation_id == request.resolution_operation_id
             || original_binding.metadata().c02_mutation_id == request.mutation_id
@@ -418,10 +417,19 @@ impl PublicationAbandonFenceRecordV1 {
             .map_err(|_| ControlError::GenerationExhausted)?;
         let mut fenced_visibility = request.previous_visibility;
         fenced_visibility.guards.shadow_generation = next_shadow_generation;
-        let memberships = request
-            .affected_memberships
-            .iter()
-            .map(|member| FencedMembership {
+        let member_count = request.affected_memberships.len();
+        let member_bytes = member_count
+            .checked_mul(core::mem::size_of::<FencedMembership>())
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(member_bytes))?;
+        check.reserve(Work::Process(member_bytes))?;
+        let mut memberships = Vec::new();
+        memberships
+            .try_reserve_exact(member_count)
+            .map_err(|_| ControlError::BudgetExceeded)?;
+        for member in &request.affected_memberships {
+            check.check(Point::PlanRecord)?;
+            memberships.push(FencedMembership {
                 membership_id: member.membership_id,
                 source_revision_id: member.source_revision_id,
                 previous_shadow: member.previous_shadow,
@@ -429,9 +437,25 @@ impl PublicationAbandonFenceRecordV1 {
                     source_revision_id: member.source_revision_id,
                     fence_revision: next_fence,
                 },
-            })
-            .collect::<Vec<_>>();
+            });
+        }
+        let digest_work = member_count
+            .checked_mul(core::mem::size_of::<ProjectionMembershipId>())
+            .and_then(|bytes| bytes.checked_add(core::mem::size_of::<u64>()))
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Process(digest_work))?;
         let membership_digest = membership_set_digest(&memberships)?;
+        let cloned_text_bytes = request
+            .resolution_operation_id
+            .as_str()
+            .len()
+            .checked_add(request.budget_ref.as_str().len())
+            .and_then(|bytes| {
+                bytes.checked_add(request.intent.prepared_manifest_ref.as_str().len())
+            })
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(cloned_text_bytes))?;
+        check.reserve(Work::Process(cloned_text_bytes))?;
         let mut record = Self {
             identity,
             resolution_operation_id: request.resolution_operation_id.clone(),
@@ -545,13 +569,24 @@ impl PublicationAbandonFenceRecordV1 {
             membership_digest,
             canonical: bytes.to_vec(),
         };
-        record.validate()?;
+        record.validate(check)?;
         check.check(Point::ReadComplete)?;
         Ok(record)
     }
 
     fn encode(&self, limits: JournalLimits, check: &dyn Check) -> Result<Vec<u8>, ControlError> {
+        let (encoded_len, nested_len) = self.encoded_lengths(check)?;
+        if encoded_len > limits.max_value_bytes.min(MAX_RECORD_BYTES) {
+            return Err(ControlError::BudgetExceeded);
+        }
+        let work_bytes = encoded_len
+            .checked_add(nested_len)
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(work_bytes))?;
+        check.reserve(Work::Process(work_bytes))?;
         let mut out = Vec::new();
+        out.try_reserve_exact(encoded_len)
+            .map_err(|_| ControlError::BudgetExceeded)?;
         out.extend_from_slice(MAGIC);
         encode_identity(self.identity, &mut out);
         put_text(
@@ -599,15 +634,95 @@ impl PublicationAbandonFenceRecordV1 {
             encode_shadow(member.fenced_shadow, &mut out);
         }
         out.extend_from_slice(self.membership_digest.as_bytes());
+        if out.len() != encoded_len {
+            return Err(ControlError::StoreCorrupt);
+        }
         if out.len() > limits.max_value_bytes.min(MAX_RECORD_BYTES) {
             return Err(ControlError::BudgetExceeded);
         }
-        check.reserve(Work::Allocate(out.len()))?;
-        check.reserve(Work::Process(out.len()))?;
         Ok(out)
     }
 
-    fn validate(&self) -> Result<(), ControlError> {
+    fn encoded_lengths(&self, check: &dyn Check) -> Result<(usize, usize), ControlError> {
+        let membership_work = self
+            .memberships
+            .len()
+            .checked_mul(core::mem::size_of::<FencedMembership>())
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Process(membership_work))?;
+        let member_bytes = self.memberships.iter().try_fold(0_usize, |total, member| {
+            let bytes = 16_usize
+                .checked_add(16)
+                .and_then(|value| value.checked_add(1))
+                .and_then(|value| {
+                    value.checked_add(if member.previous_shadow.is_some() {
+                        16 + 8
+                    } else {
+                        0
+                    })
+                })
+                .and_then(|value| value.checked_add(16 + 8))
+                .ok_or(ControlError::BudgetExceeded)?;
+            total.checked_add(bytes).ok_or(ControlError::BudgetExceeded)
+        })?;
+        let intent_len = 8_usize
+            .checked_add(16 + 8 + 1 + 6 * 8 + 32 + 2)
+            .and_then(|value| {
+                value.checked_add(self.intent.prepared_manifest_ref.as_str().len())
+            })
+            .ok_or(ControlError::BudgetExceeded)?;
+        let visibility_len = |visibility: &PublicationVisibilityState| {
+            8_usize
+                .checked_add(16 + 32 + 8 + 6 * 8 + 32 + 1)
+                .and_then(|value| {
+                    value.checked_add(usize::from(visibility.last_receipt.is_some()) * 16)
+                })
+                .ok_or(ControlError::BudgetExceeded)
+        };
+        let previous_visibility_len = visibility_len(&self.previous_visibility)?;
+        let fenced_visibility_len = visibility_len(&self.fenced_visibility)?;
+        let binding_len = self.original_binding.encoded_len();
+        let fixed = [
+            8_usize,
+            108,
+            2 + self.resolution_operation_id.as_str().len(),
+            32,
+            32,
+            8,
+            8,
+            16,
+            8,
+            2 + self.abort_budget_ref.as_str().len(),
+            4 + intent_len,
+            4 + previous_visibility_len,
+            4 + fenced_visibility_len,
+            4 + binding_len,
+            4,
+            32,
+        ];
+        let mut encoded_len = 0_usize;
+        for bytes in fixed {
+            encoded_len = encoded_len
+                .checked_add(bytes)
+                .ok_or(ControlError::BudgetExceeded)?;
+        }
+        encoded_len = encoded_len
+            .checked_add(member_bytes)
+            .ok_or(ControlError::BudgetExceeded)?;
+        let nested_len = intent_len
+            .checked_add(previous_visibility_len)
+            .and_then(|value| value.checked_add(fenced_visibility_len))
+            .ok_or(ControlError::BudgetExceeded)?;
+        Ok((encoded_len, nested_len))
+    }
+
+    fn validate(&self, check: &dyn Check) -> Result<(), ControlError> {
+        let membership_work = self
+            .memberships
+            .len()
+            .checked_mul(core::mem::size_of::<FencedMembership>())
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Process(membership_work))?;
         if self.expected_control_generation == 0
             || self.expected_control_generation.checked_add(1)
                 != Some(self.resulting_control_generation)
@@ -751,7 +866,6 @@ impl PersistentControlJournal {
                 return Err(ControlError::SchemaUnsupported);
             }
             super::super::operating_profile::require_indexed_checked(self, check)?;
-            request.validate(self.limits)?;
             let (record, replay) = self.prepare_abandonment_record(request, check)?;
             if replay {
                 match self.read_abandonment_fence_checked(&record, check) {
@@ -789,13 +903,17 @@ impl PersistentControlJournal {
         check: &dyn Check,
     ) -> Result<CommitRecoveryDecision, ControlError> {
         let result = (|| {
-            self.ensure_available()?;
+            // The exact recovery path must inspect a pending lost-ack operation.
+            // recover_transaction_with_conditions_checked rejects any different
+            // pending fingerprint and clears only the matching original one.
+            if self.quarantined {
+                return Ok(CommitRecoveryDecision::PartialOrCorruptQuarantine);
+            }
             check.check(Point::Start)?;
             if !crate::has_visibility_schema(self.identity.schema_version) {
                 return Err(ControlError::SchemaUnsupported);
             }
             super::super::operating_profile::require_indexed_checked(self, check)?;
-            request.validate(self.limits)?;
             let (record, _) = self.prepare_abandonment_record(request, check)?;
             let command = record.command(self.limits, check)?;
             self.recover_transaction_with_conditions_checked(
@@ -819,6 +937,13 @@ impl PersistentControlJournal {
         request: &PublicationAbandonFenceRequestV1,
         check: &dyn Check,
     ) -> Result<(PublicationAbandonFenceRecordV1, bool), ControlError> {
+        let membership_work = request
+            .affected_memberships
+            .len()
+            .checked_mul(core::mem::size_of::<PublicationAbandonFenceMembershipV1>())
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Process(membership_work))?;
+        request.validate(self.limits)?;
         let (binding, replay) = self.load_original_binding_for_abandon(request, check)?;
         let record = PublicationAbandonFenceRecordV1::from_request(
             self.identity,

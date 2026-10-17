@@ -163,6 +163,7 @@ pub(in crate::persistent) fn read_recovery_references(
 pub(super) fn read_checkpoint_receipt(
     snapshot: &JournalReadSnapshot,
     visibility: &PublicationVisibilityState,
+    abandonment_fence: Option<&super::abandonment::PublicationAbandonFenceRecordV1>,
     limits: JournalLimits,
     check: &dyn Check,
 ) -> Result<Option<PublicationReceipt>, ControlError> {
@@ -176,11 +177,26 @@ pub(super) fn read_checkpoint_receipt(
     check.reserve(Work::Allocate(value.len()))?;
     check.reserve(Work::Process(value.len()))?;
     let bound = codec::read_receipt(value)?;
+    let shadow_generation_matches =
+        bound.committed_shadow_generation == visibility.guards.shadow_generation
+            || abandonment_fence.is_some_and(|fence| {
+                let previous = fence.previous_visibility();
+                let mut receipt_guards = bound.intent.owner_source_membership_access_guards;
+                receipt_guards.shadow_generation = bound.committed_shadow_generation;
+                previous.collection_generation_id == bound.collection_generation_id
+                    && previous.schema_identity_digest == bound.schema_identity_digest
+                    && previous.visible_epoch == bound.publication.target_epoch
+                    && previous.last_receipt == Some(id)
+                    && previous.guards == receipt_guards
+                    && fence.fenced_visibility() == visibility
+                    && bound.committed_shadow_generation.checked_add(1)
+                        == Some(visibility.guards.shadow_generation)
+            });
     if bound.publication.publication_receipt_id != id
         || bound.publication.target_epoch != visibility.visible_epoch
         || bound.collection_generation_id != visibility.collection_generation_id
         || bound.schema_identity_digest != visibility.schema_identity_digest
-        || bound.committed_shadow_generation != visibility.guards.shadow_generation
+        || !shadow_generation_matches
     {
         return Err(ControlError::StoreCorrupt);
     }

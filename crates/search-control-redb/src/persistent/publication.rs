@@ -416,7 +416,15 @@ impl PersistentControlJournal {
         }
         let publication_receipt = visibility
             .as_ref()
-            .map(|state| visibility::read_checkpoint_receipt(&snapshot, state, self.limits, check))
+            .map(|state| {
+                visibility::read_checkpoint_receipt(
+                    &snapshot,
+                    state,
+                    abandonment_fence.as_ref(),
+                    self.limits,
+                    check,
+                )
+            })
             .transpose()?
             .flatten();
         check.check(Point::ReadComplete)?;
