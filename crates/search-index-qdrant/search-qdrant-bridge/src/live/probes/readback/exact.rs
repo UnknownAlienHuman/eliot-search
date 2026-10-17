@@ -1,24 +1,24 @@
 //! Exact count/readback, missing-ID and exact-delete qualification probe.
 
 use qdrant_client::qdrant::{
-    CountPoints, DeletePoints, GetPoints, PointId, PointsIdsList, PointsSelector,
-    point_id, points_selector, value,
+    CountPoints, DeletePoints, GetPoints, PointId, PointsIdsList, PointsSelector, point_id,
+    points_selector, value,
 };
 
+use super::super::super::LiveError;
 use super::super::super::fixtures::{
-    FIELD_FROM, FIELD_TENANT, QUALIFICATION_COLLECTION, TENANT_A, UUID_POINT,
-    base_filter, num_point_id, snapshot_id, strong_ordering, update_completed,
+    FIELD_FROM, FIELD_TENANT, TENANT_A, UUID_POINT, base_filter, num_point_id, snapshot_id,
+    strong_ordering, update_completed,
 };
 use super::super::super::suite::Suite;
-use super::super::super::LiveError;
 
 pub(in crate::live) async fn probe_count_and_readback(
-    suite: &mut Suite,
+    suite: &mut Suite<'_>,
 ) -> Result<(), LiveError> {
     let count = suite
         .client
         .count(CountPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             filter: Some(base_filter()?),
             exact: Some(true),
             ..Default::default()
@@ -28,15 +28,13 @@ pub(in crate::live) async fn probe_count_and_readback(
     let readback = suite
         .client
         .get_points(GetPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             ids: vec![
                 num_point_id(1),
                 num_point_id(2),
                 num_point_id(9),
                 PointId {
-                    point_id_options: Some(point_id::PointIdOptions::Uuid(
-                        UUID_POINT.to_owned(),
-                    )),
+                    point_id_options: Some(point_id::PointIdOptions::Uuid(UUID_POINT.to_owned())),
                 },
             ],
             with_payload: Some(true.into()),
@@ -54,14 +52,15 @@ pub(in crate::live) async fn probe_count_and_readback(
     let payload_ok = readback.result.iter().all(|point| {
         point.payload.get(FIELD_TENANT).is_some_and(|tenant| {
             tenant.kind == Some(value::Kind::StringValue(TENANT_A.to_owned()))
-        }) && point.payload.get(FIELD_FROM).is_some_and(|from| {
-            matches!(from.kind, Some(value::Kind::IntegerValue(_)))
-        })
+        }) && point
+            .payload
+            .get(FIELD_FROM)
+            .is_some_and(|from| matches!(from.kind, Some(value::Kind::IntegerValue(_))))
     });
     let unknown = suite
         .client
         .get_points(GetPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             ids: vec![num_point_id(777)],
             with_payload: Some(false.into()),
             with_vectors: Some(false.into()),
@@ -70,13 +69,7 @@ pub(in crate::live) async fn probe_count_and_readback(
         .await
         .map_err(|_| LiveError::TransportFailed)?;
     let passed = count.result.as_ref().map(|result| result.count) == Some(4)
-        && found
-            == [
-                "1",
-                "2",
-                "550e8400-e29b-41d4-a716-446655440000",
-                "9",
-            ]
+        && found == ["1", "2", "550e8400-e29b-41d4-a716-446655440000", "9"]
         && payload_ok
         && unknown.result.is_empty();
     suite.record(
@@ -92,14 +85,14 @@ pub(in crate::live) async fn probe_count_and_readback(
     let deleted = suite
         .client
         .delete_points(DeletePoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             wait: Some(true),
             points: Some(PointsSelector {
-                points_selector_one_of: Some(
-                    points_selector::PointsSelectorOneOf::Points(PointsIdsList {
+                points_selector_one_of: Some(points_selector::PointsSelectorOneOf::Points(
+                    PointsIdsList {
                         ids: vec![num_point_id(2)],
-                    }),
-                ),
+                    },
+                )),
             }),
             ordering: Some(strong_ordering()),
             ..Default::default()
@@ -118,7 +111,7 @@ pub(in crate::live) async fn probe_count_and_readback(
     let recount = suite
         .client
         .count(CountPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             filter: Some(base_filter()?),
             exact: Some(true),
             ..Default::default()

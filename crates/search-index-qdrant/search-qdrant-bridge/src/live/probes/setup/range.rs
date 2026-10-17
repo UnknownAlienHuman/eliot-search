@@ -2,20 +2,17 @@
 
 use qdrant_client::qdrant::{CountPoints, Filter};
 
+use super::super::super::LiveError;
 use super::super::super::fixtures::{
-    EPOCH_MAX, EPOCH_MIN, FIELD_FROM, FIELD_UNTIL, QUALIFICATION_COLLECTION,
-    exact_f64, range_condition,
+    EPOCH_MAX, EPOCH_MIN, FIELD_FROM, FIELD_UNTIL, exact_f64, range_condition,
 };
 use super::super::super::suite::Suite;
-use super::super::super::LiveError;
 
-pub(in crate::live) async fn probe_signed_range(
-    suite: &mut Suite,
-) -> Result<(), LiveError> {
+pub(in crate::live) async fn probe_signed_range(suite: &mut Suite<'_>) -> Result<(), LiveError> {
     let lower = suite
         .client
         .count(CountPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             filter: Some(Filter {
                 must: vec![range_condition(
                     FIELD_FROM,
@@ -32,7 +29,7 @@ pub(in crate::live) async fn probe_signed_range(
     let upper = suite
         .client
         .count(CountPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             filter: Some(Filter {
                 must: vec![range_condition(
                     FIELD_UNTIL,
@@ -51,9 +48,7 @@ pub(in crate::live) async fn probe_signed_range(
     suite.record(
         "signed_i64_epoch_range",
         lower_count == Some(1) && upper_count == Some(1),
-        format!(
-            "from<=MIN count={lower_count:?} until>=MAX count={upper_count:?}"
-        ),
+        format!("from<=MIN count={lower_count:?} until>=MAX count={upper_count:?}"),
     );
     Ok(())
 }

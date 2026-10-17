@@ -2,19 +2,16 @@
 
 use qdrant_client::qdrant::{CollectionStatus, Modifier};
 
+use super::super::super::LiveError;
 use super::super::super::fixtures::{
-    FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNTIL,
-    QUALIFICATION_COLLECTION, VECTOR_CODE, VECTOR_TEXT,
+    FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNTIL, VECTOR_CODE, VECTOR_TEXT,
 };
 use super::super::super::suite::Suite;
-use super::super::super::LiveError;
 
-pub(in crate::live) async fn probe_schema_digest(
-    suite: &mut Suite,
-) -> Result<(), LiveError> {
+pub(in crate::live) async fn probe_schema_digest(suite: &mut Suite<'_>) -> Result<(), LiveError> {
     let info = suite
         .client
-        .collection_info(QUALIFICATION_COLLECTION)
+        .collection_info(suite.client.collection_name())
         .await
         .map_err(|_| LiveError::TransportFailed)?
         .result
@@ -74,12 +71,7 @@ pub(in crate::live) async fn probe_schema_digest(
     digest_parts.push(format!("status={status}"));
     suite.record(
         "schema_digest_equality",
-        sparse_ok
-            && payload_ok
-            && shard_ok
-            && strict_enabled
-            && !retrieve_open
-            && !update_open,
+        sparse_ok && payload_ok && shard_ok && strict_enabled && !retrieve_open && !update_open,
         digest_parts.join("|"),
     );
     Ok(())

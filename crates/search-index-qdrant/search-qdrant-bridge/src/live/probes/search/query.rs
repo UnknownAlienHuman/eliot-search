@@ -1,14 +1,10 @@
 //! Exact tenant-A sparse query capture and order-independent score comparison.
 
-use qdrant_client::qdrant::{
-    IdfParams, Query, QueryPoints, SearchParams, VectorInput,
-};
+use qdrant_client::qdrant::{IdfParams, Query, QueryPoints, SearchParams, VectorInput};
 
-use super::super::super::fixtures::{
-    QUALIFICATION_COLLECTION, VECTOR_CODE, base_filter, snapshot_id,
-};
-use super::super::super::suite::Suite;
 use super::super::super::LiveError;
+use super::super::super::fixtures::{VECTOR_CODE, base_filter, snapshot_id};
+use super::super::super::suite::Suite;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct ScoredSnapshot {
@@ -17,7 +13,7 @@ pub(super) struct ScoredSnapshot {
 }
 
 pub(super) async fn query_tenant_a(
-    suite: &Suite,
+    suite: &Suite<'_>,
     term: u32,
     with_idf_corpus: bool,
 ) -> Result<Vec<ScoredSnapshot>, LiveError> {
@@ -34,7 +30,7 @@ pub(super) async fn query_tenant_a(
     let response = suite
         .client
         .query(QueryPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             query: Some(Query::new_nearest(VectorInput::new_sparse(
                 vec![term],
                 vec![1.0_f32],
@@ -59,10 +55,7 @@ pub(super) async fn query_tenant_a(
 
 /// Compares the exact ID/score population without depending on Qdrant's
 /// unspecified ordering among equal-score candidates.
-pub(super) fn same_scores(
-    left: &[ScoredSnapshot],
-    right: &[ScoredSnapshot],
-) -> bool {
+pub(super) fn same_scores(left: &[ScoredSnapshot], right: &[ScoredSnapshot]) -> bool {
     if left.len() != right.len() {
         return false;
     }

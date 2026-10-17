@@ -50,7 +50,8 @@ pub mod qualified;
 /// Real T24 data-plane adapter over the pinned `qdrant-client` transport.
 ///
 /// The in-memory [`QdrantBridge`] stays as the behavioral test oracle only.
-/// Production data-plane work goes through [`real::RealDataPlane`], which
-/// admits only an executed [`qualified::QualifiedGate`] and never falls back
-/// to the oracle.
+/// Operational composition should use [`real::BlockingRealQueryPlane::connect_and_probe`]
+/// to execute the live probe suite before admission. The lower-level
+/// [`real::RealDataPlane::connect`] path accepts a transport gate and does not
+/// itself prove that the gate was minted from executed observations.
 pub mod real;

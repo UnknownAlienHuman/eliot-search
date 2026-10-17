@@ -1,15 +1,13 @@
-//! Live T22 qualification path beside the in-memory oracle.
+//! Bridge-owned capability probes over Qdrant's authenticated gRPC API.
 //!
-//! This module spawns the exact qualified native server on disposable
-//! storage with OS-assigned loopback ports, executes every bridge-owned
-//! mandatory probe through the pinned `qdrant-client` gRPC transport, then
-//! kills the server and removes the storage. Indexed admission still requires
-//! [`QualifiedGate`](crate::qualified::QualifiedGate), which rechecks the
-//! executed [`LiveProbeReceipt`](crate::qualified::LiveProbeReceipt).
+//! Operational admission runs through
+//! [`BlockingRealQueryPlane::connect_and_probe`](crate::real::BlockingRealQueryPlane::connect_and_probe)
+//! against an already-supervised endpoint and does not manage a process. The
+//! [`DisposableServer`] path is a fixture for running the same probe suite in
+//! tests; process lifecycle remains outside the bridge's operational path.
 //!
-//! Vendor types remain private to this package. Public callers consume only
-//! Eliot-owned qualification types and the stable live-path wrappers re-exported
-//! below.
+//! Passing these probes establishes operational endpoint behavior only. It is
+//! not release qualification. Vendor types remain private to this package.
 
 mod error;
 mod fixtures;
@@ -31,4 +29,5 @@ pub use server::{
     DisposableServer, LiveEndpoint, NATIVE_EXE_PATH, free_loopback_ports, spawn_disposable_server,
     verify_executable,
 };
+pub(crate) use suite::{ExecutedProbeReceipt, run_live_probe_suite};
 pub use suite::{LiveSuiteReport, run_qualification_suite, verify_compiled_client};

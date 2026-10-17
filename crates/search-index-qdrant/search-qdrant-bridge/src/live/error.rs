@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::BridgeError;
 use crate::qualified::QualificationError;
 
 /// Closed live-path failure.
@@ -14,6 +15,7 @@ pub enum LiveError {
     ServerNotReady,
     AuthenticationNotEnforced,
     TransportFailed,
+    Bridge(BridgeError),
     ServerVersionUnexpected,
     ServerBuildUnexpected,
     FixtureNotRepresentable,
@@ -34,11 +36,18 @@ impl LiveError {
             Self::ServerNotReady => "QDRANT_LIVE_SERVER_NOT_READY",
             Self::AuthenticationNotEnforced => "QDRANT_LIVE_AUTHENTICATION_NOT_ENFORCED",
             Self::TransportFailed => "QDRANT_LIVE_TRANSPORT_FAILED",
+            Self::Bridge(error) => error.code(),
             Self::ServerVersionUnexpected => "QDRANT_LIVE_SERVER_VERSION_UNEXPECTED",
             Self::ServerBuildUnexpected => "QDRANT_LIVE_SERVER_BUILD_UNEXPECTED",
             Self::FixtureNotRepresentable => "QDRANT_LIVE_FIXTURE_NOT_REPRESENTABLE",
             Self::ProbeFailed { .. } => "QDRANT_LIVE_PROBE_FAILED",
         }
+    }
+}
+
+impl From<BridgeError> for LiveError {
+    fn from(error: BridgeError) -> Self {
+        Self::Bridge(error)
     }
 }
 

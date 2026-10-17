@@ -3,38 +3,20 @@
 use std::collections::HashMap;
 
 use qdrant_client::qdrant::{
-    CreateCollection, CreateFieldIndexCollection, FieldType, Modifier,
-    SparseVectorConfig, SparseVectorParams, StrictModeConfig,
+    CreateCollection, CreateFieldIndexCollection, FieldType, Modifier, SparseVectorConfig,
+    SparseVectorParams, StrictModeConfig,
 };
 
+use super::super::super::LiveError;
 use super::super::super::fixtures::{
-    FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNTIL,
-    QUALIFICATION_COLLECTION, VECTOR_CODE, VECTOR_TEXT, strong_ordering,
+    FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNTIL, VECTOR_CODE, VECTOR_TEXT, strong_ordering,
     update_completed,
 };
 use super::super::super::suite::Suite;
-use super::super::super::LiveError;
 
 pub(in crate::live) async fn probe_create_and_topology(
-    suite: &mut Suite,
+    suite: &mut Suite<'_>,
 ) -> Result<(), LiveError> {
-    if suite
-        .client
-        .collection_exists(QUALIFICATION_COLLECTION)
-        .await
-        .map_err(|_| LiveError::TransportFailed)?
-    {
-        let deleted = suite
-            .client
-            .delete_collection(QUALIFICATION_COLLECTION)
-            .await
-            .map_err(|_| LiveError::TransportFailed)?;
-        if !deleted.result {
-            return Err(LiveError::ProbeFailed {
-                probe: "one_shard_topology",
-            });
-        }
-    }
     let mut sparse = HashMap::new();
     for name in [VECTOR_CODE, VECTOR_TEXT] {
         sparse.insert(
@@ -48,7 +30,7 @@ pub(in crate::live) async fn probe_create_and_topology(
     let created = suite
         .client
         .create_collection(CreateCollection {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             shard_number: Some(1),
             replication_factor: Some(1),
             write_consistency_factor: Some(1),
@@ -70,7 +52,7 @@ pub(in crate::live) async fn probe_create_and_topology(
     }
     let info = suite
         .client
-        .collection_info(QUALIFICATION_COLLECTION)
+        .collection_info(suite.client.collection_name())
         .await
         .map_err(|_| LiveError::TransportFailed)?
         .result
@@ -88,9 +70,7 @@ pub(in crate::live) async fn probe_create_and_topology(
     Ok(())
 }
 
-pub(in crate::live) async fn probe_payload_indexes(
-    suite: &mut Suite,
-) -> Result<(), LiveError> {
+pub(in crate::live) async fn probe_payload_indexes(suite: &mut Suite<'_>) -> Result<(), LiveError> {
     for (field, field_type) in [
         (FIELD_TENANT, FieldType::Keyword),
         (FIELD_ACCESS, FieldType::Keyword),
@@ -100,7 +80,7 @@ pub(in crate::live) async fn probe_payload_indexes(
         let indexed = suite
             .client
             .create_field_index(CreateFieldIndexCollection {
-                collection_name: QUALIFICATION_COLLECTION.to_owned(),
+                collection_name: suite.client.collection_name().to_owned(),
                 field_name: field.to_owned(),
                 field_type: Some(field_type as i32),
                 wait: Some(true),
@@ -121,7 +101,7 @@ pub(in crate::live) async fn probe_payload_indexes(
     }
     let info = suite
         .client
-        .collection_info(QUALIFICATION_COLLECTION)
+        .collection_info(suite.client.collection_name())
         .await
         .map_err(|_| LiveError::TransportFailed)?
         .result

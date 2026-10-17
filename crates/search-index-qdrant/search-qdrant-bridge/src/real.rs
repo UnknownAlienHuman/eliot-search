@@ -228,6 +228,9 @@ pub use canonical_mutation::{
     CanonicalDeleteReadback, CanonicalMutationPointReadback, CanonicalMutationReadback,
     CanonicalPointInput, CanonicalValidityRestoreOutcome,
 };
+mod probe;
+pub(crate) use probe::LiveProbeClient;
+pub use probe::{OperationalProbeFailure, QdrantProbeAttemptId, QdrantProbeMutationId};
 
 /// Real Qdrant data plane over the pinned client transport.
 ///

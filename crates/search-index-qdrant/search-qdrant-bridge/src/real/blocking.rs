@@ -17,7 +17,7 @@ use search_contracts::indexed::{
 };
 use search_point_identity::s11::{PointId128, PointIdentity};
 
-use crate::live::LiveEndpoint;
+use crate::live::{LiveEndpoint, LiveSuiteReport, run_live_probe_suite};
 use crate::qualified::QualifiedGate;
 use crate::{
     BoundedPointReadback, BridgeError, BridgeLimits, CandidateNomination, CollectionRoute,
@@ -28,7 +28,8 @@ use crate::{
 use super::{
     CanonicalCandidate, CanonicalDeleteReadback, CanonicalMutationReadback, CanonicalPointInput,
     CanonicalReadback, CanonicalRequestContext, CanonicalScrollPage,
-    CanonicalValidityRestoreOutcome, IdfScope, OpContext, RealDataPlane,
+    CanonicalValidityRestoreOutcome, IdfScope, LiveProbeClient, OpContext, OperationalProbeFailure,
+    RealDataPlane,
 };
 
 /// One real Qdrant query plane for synchronous composition.
@@ -45,6 +46,38 @@ pub struct BlockingRealQueryPlane {
 }
 
 impl BlockingRealQueryPlane {
+    /// Establishes an operational plane only after the bridge has executed and
+    /// read back all mandatory probes on the already-supervised endpoint.
+    ///
+    /// The probe attempt checks protected collection-list access, then uses one fresh
+    /// collection name, the original bounded request context and the supplied
+    /// purpose-bound lease. Existing names,
+    /// unknown mutation outcomes, failed probes, and failed exact cleanup all
+    /// refuse construction. The report proves this probe execution only; it is
+    /// not release qualification.
+    pub fn connect_and_probe(
+        endpoint: &LiveEndpoint,
+        supervisor: QdrantConnectionBinding,
+        auth_lease: QdrantApiKeyLease,
+        context: CanonicalRequestContext,
+        limits: BridgeLimits,
+    ) -> Result<(Self, LiveSuiteReport), OperationalProbeFailure> {
+        ensure_synchronous_context().map_err(OperationalProbeFailure::before_attempt)?;
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .thread_name("eliot-qdrant-query")
+            .enable_all()
+            .build()
+            .map_err(|_| OperationalProbeFailure::before_attempt(BridgeError::TransportFailed))?;
+        let client = LiveProbeClient::connect(endpoint, supervisor, auth_lease, context, limits)?;
+        let completed = runtime.block_on(run_live_probe_suite(&client))?;
+        let Ok(gate) = QualifiedGate::admit_executed(&completed.executed) else {
+            return Err(client.failure(BridgeError::CapabilityReceiptMismatch));
+        };
+        let plane = client.into_data_plane(gate)?;
+        Ok((Self { plane, runtime }, completed.report))
+    }
+
     /// Connect through the existing transport gate and supervisor/auth binding.
     ///
     /// Construction is valid only from synchronous composition. Calling this

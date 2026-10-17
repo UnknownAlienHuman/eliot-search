@@ -2,22 +2,17 @@
 
 use std::collections::HashMap;
 
-use qdrant_client::qdrant::{
-    GetPoints, PointId, PointStruct, UpsertPoints, point_id, value,
-};
+use qdrant_client::qdrant::{GetPoints, PointId, PointStruct, UpsertPoints, point_id, value};
 
+use super::super::super::LiveError;
 use super::super::super::fixtures::{
-    ACCESS_A, EPOCH_MAX, EPOCH_MIN, FIELD_ACCESS, FIELD_FROM, FIELD_TENANT,
-    FIELD_UNINDEXED, QUALIFICATION_COLLECTION, TENANT_A, UUID_POINT,
-    int_value, num_point_id, point, sparse_named, string_value,
+    ACCESS_A, EPOCH_MAX, EPOCH_MIN, FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNINDEXED,
+    TENANT_A, UUID_POINT, int_value, num_point_id, point, sparse_named, string_value,
     strong_ordering, update_completed,
 };
 use super::super::super::suite::Suite;
-use super::super::super::LiveError;
 
-pub(in crate::live) async fn probe_ingest_batch_a(
-    suite: &mut Suite,
-) -> Result<(), LiveError> {
+pub(in crate::live) async fn probe_ingest_batch_a(suite: &mut Suite<'_>) -> Result<(), LiveError> {
     let mut uuid_payload = HashMap::new();
     uuid_payload.insert(FIELD_TENANT.to_owned(), string_value(TENANT_A));
     uuid_payload.insert(FIELD_ACCESS.to_owned(), string_value(ACCESS_A));
@@ -32,14 +27,7 @@ pub(in crate::live) async fn probe_ingest_batch_a(
             vec![(0, 1.0), (1, 1.0)],
             vec![(100, 1.0)],
         ),
-        point(
-            2,
-            TENANT_A,
-            10,
-            Some(50),
-            vec![(0, 1.0)],
-            vec![(100, 1.0)],
-        ),
+        point(2, TENANT_A, 10, Some(50), vec![(0, 1.0)], vec![(100, 1.0)]),
         point(
             9,
             TENANT_A,
@@ -50,9 +38,7 @@ pub(in crate::live) async fn probe_ingest_batch_a(
         ),
         PointStruct {
             id: Some(PointId {
-                point_id_options: Some(point_id::PointIdOptions::Uuid(
-                    UUID_POINT.to_owned(),
-                )),
+                point_id_options: Some(point_id::PointIdOptions::Uuid(UUID_POINT.to_owned())),
             }),
             payload: uuid_payload,
             vectors: Some(sparse_named(vec![(1, 1.0)], vec![(101, 1.0)])),
@@ -61,7 +47,7 @@ pub(in crate::live) async fn probe_ingest_batch_a(
     let response = suite
         .client
         .upsert_points(UpsertPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             wait: Some(true),
             ordering: Some(strong_ordering()),
             points,
@@ -76,15 +62,13 @@ pub(in crate::live) async fn probe_ingest_batch_a(
     let readback = suite
         .client
         .get_points(GetPoints {
-            collection_name: QUALIFICATION_COLLECTION.to_owned(),
+            collection_name: suite.client.collection_name().to_owned(),
             ids: vec![
                 num_point_id(1),
                 num_point_id(2),
                 num_point_id(9),
                 PointId {
-                    point_id_options: Some(point_id::PointIdOptions::Uuid(
-                        UUID_POINT.to_owned(),
-                    )),
+                    point_id_options: Some(point_id::PointIdOptions::Uuid(UUID_POINT.to_owned())),
                 },
             ],
             with_payload: Some(true.into()),
@@ -107,8 +91,7 @@ pub(in crate::live) async fn probe_ingest_batch_a(
     suite.record(
         "strong_write_ordering",
         acked && visible,
-        "wait=true + WriteOrdering::Strong acknowledged and immediately readable"
-            .to_owned(),
+        "wait=true + WriteOrdering::Strong acknowledged and immediately readable".to_owned(),
     );
     Ok(())
 }

@@ -2,18 +2,22 @@
 
 use crate::qualified::{QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION};
 
-use super::super::super::suite::Suite;
 use super::super::super::LiveError;
+use super::super::super::suite::Suite;
 
-pub(in crate::live) async fn probe_server_identity(
-    suite: &mut Suite,
-) -> Result<(), LiveError> {
+pub(in crate::live) async fn probe_server_identity(suite: &mut Suite<'_>) -> Result<(), LiveError> {
     let reply = suite
         .client
         .health_check()
         .await
         .map_err(|_| LiveError::TransportFailed)?;
     let version_ok = reply.version == QUALIFIED_SERVER_VERSION;
+    if let Some(build) = reply.commit.as_ref() {
+        suite.observe_server_identity(reply.version.clone(), build.clone());
+    }
+    if let Some(build) = reply.commit.as_ref() {
+        suite.observe_server_identity(reply.version.clone(), build.clone());
+    }
     let commit_ok = reply
         .commit
         .as_deref()

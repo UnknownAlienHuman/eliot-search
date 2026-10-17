@@ -1,16 +1,18 @@
 # Function contract — `search-qdrant-bridge`
 
-**Status:** W3/P05 data-plane contract; no server/client pair is accepted yet.
+**Status:** operational endpoint probing is implemented; release qualification remains a separate gate.
 
-Vendor types remain private. Every public operation consumes/returns Search contract or port-support
-types and binds an accepted `QdrantCapabilityReceipt`.
+Vendor types remain private. Operational composition obtains its private transport gate only through actual bridge-owned RPC observations; lower-level compatibility admission is not execution proof.
 
 ## Connection and admission
 
-### `connect(endpoint, auth_lease, supervisor_receipt) -> Result<QdrantBridge, BridgeError>`
+`BlockingRealQueryPlane::connect_and_probe(endpoint, supervisor, auth_lease, context, limits)` is the operational constructor. It uses the already-supervised loopback endpoint, verifies protected collection-list access, executes all 13 mandatory bridge probes with one original bounded request context, and admits the real plane only after exact temporary-collection cleanup and absence readback. It returns the plane with an Eliot-owned probe report. It does not start or stop Qdrant. Unknown mutations return their exact attempt and mutation identities and are never retried or cleaned up blindly.
 
-Requires exact supervisor process identity, installation incarnation, loopback endpoint and bounded
-secret lease. It never discovers or starts a process.
+This establishes only that this endpoint passed the bridge's operational probe set. It is not release qualification, artifact qualification, or installed-product evidence. The older `BlockingRealQueryPlane::connect` path accepts a caller-supplied `QualifiedGate` for transport compatibility; that gate is not proof that probes executed and must not be used for operational admission.
+
+### `BlockingRealQueryPlane::connect(endpoint, supervisor, auth_lease, gate, limits)` (compatibility path)
+
+Accepts a caller-supplied `QualifiedGate` and validates the exact supervisor process identity, installation incarnation, loopback endpoint and bounded secret lease. It never discovers or starts a process, and the supplied gate does not prove that probes ran.
 
 ### `probe_capabilities(disposable_route, probe_manifest, context) -> Result<QdrantCapabilityReceipt, BridgeError>`
 
