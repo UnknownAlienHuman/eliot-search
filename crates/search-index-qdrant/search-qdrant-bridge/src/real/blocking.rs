@@ -2,10 +2,10 @@
 //!
 //! The daemon provider loop is synchronous, while the pinned `qdrant-client`
 //! transport is async-only. This owner keeps one finite Tokio runtime alive for
-//! one [`RealDataPlane`] and exposes only the read/query operations needed by the
-//! vendor-neutral indexed retrieval port. It never falls back to the in-memory
-//! oracle, creates a second protocol stack, or treats Qdrant payloads as source
-//! evidence.
+//! one [`RealDataPlane`] and exposes the synchronous canonical schema, query,
+//! readback and exact mutation operations needed by daemon composition. It never
+//! falls back to the in-memory oracle, creates a second protocol stack, or treats
+//! Qdrant payloads as source evidence.
 
 use std::fmt;
 
@@ -27,8 +27,8 @@ use crate::{
 
 use super::{
     CanonicalCandidate, CanonicalDeleteReadback, CanonicalMutationReadback, CanonicalPointInput,
-    CanonicalReadback, CanonicalRequestContext, CanonicalScrollPage, IdfScope, OpContext,
-    RealDataPlane,
+    CanonicalReadback, CanonicalRequestContext, CanonicalScrollPage,
+    CanonicalValidityRestoreOutcome, IdfScope, OpContext, RealDataPlane,
 };
 
 /// One real Qdrant query plane for synchronous composition.
@@ -215,6 +215,26 @@ impl BlockingRealQueryPlane {
             route,
             expected,
             valid_until_epoch_exclusive,
+            context,
+        ))
+    }
+
+    /// Restore the exact original validity bounds through the retained runtime.
+    /// The original canonical request context and the async bridge's
+    /// acknowledged/unknown outcome classification pass through unchanged.
+    pub fn restore_indexed_validity_exact(
+        &mut self,
+        route: &CollectionRoute,
+        original: &[CanonicalPointInput],
+        close_attempt_until: Epoch,
+        context: &CanonicalRequestContext,
+    ) -> Result<CanonicalValidityRestoreOutcome, BridgeError> {
+        ensure_synchronous_context()?;
+        let Self { plane, runtime } = self;
+        runtime.block_on(plane.restore_indexed_validity_exact(
+            route,
+            original,
+            close_attempt_until,
             context,
         ))
     }
