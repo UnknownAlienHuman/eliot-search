@@ -234,6 +234,14 @@ impl CanonicalWorkOutput<'_, '_, '_> {
     #[must_use]
     pub fn guard(&self) -> &RequestGuard { self.request.guard() }
 
+    /// Original request deadline tightened by this turn's current authority.
+    /// It is converted from the same process clock, never from a new timeout.
+    pub(crate) fn work_deadline_instant(&self) -> Result<std::time::Instant, CanonicalServingError> {
+        self.budget.check()?;
+        super::super::super::super::router::monotonic_deadline_instant(self.budget.deadline())
+            .ok_or(CanonicalServingError::DeadlineExpired)
+    }
+
     /// Sequence to put in the next progress/result event.
     #[must_use]
     pub fn next_event_sequence(&self) -> Option<u64> { self.request.next_event_sequence() }

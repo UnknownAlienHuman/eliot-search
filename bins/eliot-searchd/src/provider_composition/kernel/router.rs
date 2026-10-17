@@ -235,10 +235,21 @@ impl ProviderRouter {
 /// serialized; the T06 child-request budget (not this clock) bounds work.
 #[must_use]
 pub fn monotonic_millis() -> MonotonicMillis {
+    let epoch = monotonic_origin();
+    MonotonicMillis::new(u64::try_from(epoch.elapsed().as_millis()).unwrap_or(u64::MAX))
+}
+
+fn monotonic_origin() -> std::time::Instant {
     use std::sync::OnceLock;
     use std::time::Instant;
 
     static EPOCH: OnceLock<Instant> = OnceLock::new();
-    let epoch = EPOCH.get_or_init(Instant::now);
-    MonotonicMillis::new(u64::try_from(epoch.elapsed().as_millis()).unwrap_or(u64::MAX))
+    *EPOCH.get_or_init(Instant::now)
+}
+
+/// Converts the already admitted absolute clock value using its original
+/// process origin. Repeated conversion cannot renew a request's lifetime.
+#[cfg(feature = "wave4-query")]
+pub(super) fn monotonic_deadline_instant(value: MonotonicMillis) -> Option<std::time::Instant> {
+    monotonic_origin().checked_add(std::time::Duration::from_millis(value.get()))
 }

@@ -300,6 +300,7 @@ impl DirectRegistryOwner {
     #[allow(dead_code)] // Dormant until the qualified provider composition calls it.
     pub(in super::super) fn into_process_custody(
         mut self,
+        pin_limits: search_retention::sweep::SweepLimits,
     ) -> Result<NativeProcessRootCustody, OwnerError> {
         self.owner.verify()?;
         self.control.verify(&self.owner.request, &mut self.owner.work, &self.owner.root)?;
@@ -308,7 +309,9 @@ impl DirectRegistryOwner {
         if identity.owner_epoch.get() != self.owner.record.epoch {
             return Err(OwnerError::OwnerGuardMismatch);
         }
-        Ok(NativeProcessRootCustody { owner: self, journal_identity: identity })
+        let source_pins = search_retention::source_pins::SourcePinRegistry::new(pin_limits)
+            .map_err(|_| OwnerError::OwnerRecoveryQuarantined)?;
+        Ok(NativeProcessRootCustody { owner: self, journal_identity: identity, source_pins })
     }
     pub(crate) fn execute(
         mut self,

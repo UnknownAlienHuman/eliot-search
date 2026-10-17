@@ -61,6 +61,7 @@ pub(in crate::query_composition) mod handle_crypto;
 pub(crate) mod registry;
 pub(crate) mod service;
 pub(crate) mod native_source_readback;
+mod retained_handle;
 mod nomination_source;
 #[cfg(test)]
 #[path = "query_composition/real_port_tests.rs"]
