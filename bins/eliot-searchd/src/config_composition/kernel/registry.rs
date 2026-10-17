@@ -77,6 +77,7 @@ pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
             admission_section()?,
             lexical_section()?,
             query_section()?,
+            search_handles::section_descriptor()?,
             optional_section()?,
             root_locator_section()?,
         ],

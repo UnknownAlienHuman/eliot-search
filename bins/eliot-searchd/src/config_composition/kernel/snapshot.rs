@@ -5,6 +5,7 @@ use search_config::{
     EffectiveConfigSnapshot, ValidatedSection, assemble_effective, merge_layers, project_section,
 };
 use search_contracts::ProfileId;
+use search_handles::ValidatedHandlesConfig;
 use search_os_secrets::ValidatedSecretsConfig;
 
 use super::registry::daemon_registry;
@@ -17,6 +18,7 @@ pub struct EffectiveDaemonConfig {
     snapshot: EffectiveConfigSnapshot,
     registry: ConfigRegistry,
     secrets_settings: ValidatedSecretsConfig,
+    handles_settings: ValidatedHandlesConfig,
 }
 
 impl EffectiveDaemonConfig {
@@ -36,6 +38,12 @@ impl EffectiveDaemonConfig {
     #[must_use]
     pub const fn secrets_settings(&self) -> &ValidatedSecretsConfig {
         &self.secrets_settings
+    }
+
+    /// Owner-validated settings selected from this same effective snapshot.
+    #[must_use]
+    pub const fn handles_settings(&self) -> &ValidatedHandlesConfig {
+        &self.handles_settings
     }
 
     /// Exact effective fingerprint for persistence and receipts.
@@ -76,20 +84,29 @@ pub fn build_effective(
     )?;
     let mut validated = Vec::new();
     let mut secrets_settings = None;
+    let mut handles_settings = None;
     for (_, descriptor) in registry.sections() {
         let input = project_section(&merged, descriptor)?;
         let section = ValidatedSection::new(input, selected.clone(), daemon_limits())?;
-        if section.section_name().as_str() == "secrets" {
-            secrets_settings = Some(search_os_secrets::validate_secrets_section(&section)?);
+        match section.section_name().as_str() {
+            "secrets" => {
+                secrets_settings = Some(search_os_secrets::validate_secrets_section(&section)?);
+            }
+            "handles" => {
+                handles_settings = Some(search_handles::validate_handles_section(&section)?);
+            }
+            _ => {}
         }
         validated.push(section);
     }
     let secrets_settings = secrets_settings.ok_or(ConfigError::MissingSection)?;
+    let handles_settings = handles_settings.ok_or(ConfigError::MissingSection)?;
     let snapshot = assemble_effective(&registry, validated, selected, daemon_limits())?;
     Ok(EffectiveDaemonConfig {
         snapshot,
         registry,
         secrets_settings,
+        handles_settings,
     })
 }
 

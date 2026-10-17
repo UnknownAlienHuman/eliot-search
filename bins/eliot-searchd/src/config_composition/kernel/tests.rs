@@ -27,7 +27,7 @@ fn direct_file(extra: &str) -> ConfigDocument {
 fn registry_mirrors_declared_owners_and_reload_classes() {
     let registry = daemon_registry().expect("registry");
     assert_eq!(registry.config_schema_version(), 2);
-    assert_eq!(registry.len(), 8);
+    assert_eq!(registry.len(), 9);
     let owner = |section: &str| {
         registry
             .section(
@@ -45,6 +45,7 @@ fn registry_mirrors_declared_owners_and_reload_classes() {
     assert_eq!(owner("source_admission"), "search-source-admission");
     assert_eq!(owner("lexical"), "search-lexical");
     assert_eq!(owner("query"), "search-query-planner");
+    assert_eq!(owner("handles"), "search-handles");
     assert_eq!(owner("optional_profiles"), "eliot-searchd");
 }
 

@@ -47,6 +47,128 @@ fn secrets_owner_settings_are_retained_with_revision_two_defaults_and_restart_fl
 }
 
 #[test]
+fn selected_handles_config_comes_from_owner_and_marks_restrictive_changes() {
+    let defaults = build_effective_defaults().unwrap();
+    let handles_name = section_name("handles").unwrap();
+    let descriptor = defaults.registry().section(&handles_name).unwrap();
+    assert_eq!(descriptor, &search_handles::section_descriptor().unwrap());
+    assert_eq!(descriptor.schema_revision().get(), 1);
+    assert_eq!(descriptor.minimum_reload(), ReloadClass::ApplyLive);
+
+    let defaults_section = defaults
+        .snapshot()
+        .section(&handles_name)
+        .unwrap()
+        .validated();
+    assert_eq!(defaults_section.fields().len(), 5);
+    assert_eq!(
+        defaults.handles_settings(),
+        &search_handles::validate_handles_section(defaults_section).unwrap()
+    );
+    assert_eq!(
+        (
+            defaults.handles_settings().ephemeral_ttl_ms(),
+            defaults.handles_settings().max_ephemeral_per_binding(),
+            defaults.handles_settings().max_durable_per_binding(),
+            defaults.handles_settings().max_expansion_bytes(),
+            defaults.handles_settings().durable_unsaved_allowed(),
+        ),
+        (600_000, 256, 128, 1_048_576, false)
+    );
+
+    let file = capture_file_document(
+        b"schema_version = 2\nprofile = \"direct\"\n[handles]\nephemeral_ttl_ms = 300000\nmax_ephemeral_per_binding = 64\nmax_durable_per_binding = 32\nmax_expansion_bytes = 524288\ndurable_unsaved_allowed = false\n",
+        "handles-selection",
+    )
+    .unwrap();
+    let selected = build_effective(Some(file), None, None, "direct", "direct").unwrap();
+    let selected_section = selected
+        .snapshot()
+        .section(&handles_name)
+        .unwrap()
+        .validated();
+    assert_eq!(
+        selected.handles_settings(),
+        &search_handles::validate_handles_section(selected_section).unwrap()
+    );
+    assert_eq!(
+        (
+            selected.handles_settings().ephemeral_ttl_ms(),
+            selected.handles_settings().max_ephemeral_per_binding(),
+            selected.handles_settings().max_durable_per_binding(),
+            selected.handles_settings().max_expansion_bytes(),
+            selected.handles_settings().durable_unsaved_allowed(),
+        ),
+        (300_000, 64, 32, 524_288, false)
+    );
+
+    let delta = search_config::diff(
+        defaults.snapshot(),
+        selected.snapshot(),
+        defaults.registry(),
+    )
+    .unwrap();
+    let handles_delta = delta.sections.get(&handles_name).unwrap();
+    assert!(handles_delta.restrictive);
+    assert!(
+        handles_delta
+            .required_actions
+            .contains(&ReconfigurationAction::ApplyLive)
+    );
+}
+
+#[test]
+fn handles_config_rejects_invalid_bounds_and_non_file_sources() {
+    let zero_ttl = capture_file_document(
+        b"schema_version = 2\nprofile = \"direct\"\n[handles]\nephemeral_ttl_ms = 0\n",
+        "handles-zero-ttl",
+    )
+    .unwrap();
+    assert!(build_effective(Some(zero_ttl), None, None, "direct", "direct").is_err());
+
+    let minimum_ttl = capture_file_document(
+        b"schema_version = 2\nprofile = \"direct\"\n[handles]\nephemeral_ttl_ms = 1\n",
+        "handles-minimum-ttl",
+    )
+    .unwrap();
+    assert!(build_effective(Some(minimum_ttl), None, None, "direct", "direct").is_ok());
+
+    let maximum_ttl = capture_file_document(
+        b"schema_version = 2\nprofile = \"direct\"\n[handles]\nephemeral_ttl_ms = 16777216\n",
+        "handles-maximum-ttl",
+    )
+    .unwrap();
+    assert!(build_effective(Some(maximum_ttl), None, None, "direct", "direct").is_ok());
+
+    let over_bound = capture_file_document(
+        b"schema_version = 2\nprofile = \"direct\"\n[handles]\nephemeral_ttl_ms = 16777217\n",
+        "handles-over-bound",
+    )
+    .unwrap();
+    assert!(build_effective(Some(over_bound), None, None, "direct", "direct").is_err());
+
+    let unsaved_enabled = capture_file_document(
+        b"schema_version = 2\nprofile = \"direct\"\n[handles]\ndurable_unsaved_allowed = true\n",
+        "handles-unsaved-enabled",
+    )
+    .unwrap();
+    assert!(build_effective(Some(unsaved_enabled), None, None, "direct", "direct").is_err());
+
+    assert!(
+        super::super::capture_environment_document(&[(
+            "ELIOT_SEARCH__HANDLES__EPHEMERAL_TTL_MS",
+            "300000",
+        )])
+        .is_err()
+    );
+
+    let cli = super::super::capture_cli_document(&[("handles.ephemeral_ttl_ms", "300000")])
+        .unwrap()
+        .unwrap();
+    assert!(build_effective(None, None, Some(cli), "direct", "direct").is_err());
+}
+
+#[test]
 fn old_raw_opaque_ref_document_gets_owner_defaults_without_disclosing_reference() {
     let file = capture_file_document(b"schema_version = 2\nprofile = \"direct\"\n[secrets]\nqdrant_api_secret_ref = \"secret://credential/owner-cutover-canary\"\n", "fixture").unwrap();
     let effective = build_effective(Some(file), None, None, "direct", "direct").unwrap();

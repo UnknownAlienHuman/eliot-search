@@ -13,8 +13,12 @@
     clippy::too_many_lines
 )]
 
+mod configuration;
 mod invalidation;
 
+pub use configuration::{
+    ValidatedHandlesConfig, section_descriptor, section_digest, validate_handles_section,
+};
 pub use invalidation::{
     HandleInvalidationProgress, HandleSecurityInvalidation, HandleSecurityInvalidationReceipt,
 };
