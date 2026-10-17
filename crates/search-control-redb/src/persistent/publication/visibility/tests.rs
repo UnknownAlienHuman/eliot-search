@@ -2,8 +2,15 @@
 use super::*;
 use super::super::PublicationIntentUpdate;
 use super::super::super::{JournalIdentity, RECORDS, encode_value, Unscoped};
-use crate::ControlSnapshotPublisher;
-use search_contracts::{DataRootId, InstallationIncarnationId, OpaqueRef, OwnerEpoch, PublicationIntentId, RequestId};
+use crate::policy_codec::AccessPolicyRecord;
+use crate::security_restriction::{MAX_RESTRICTION_DEPENDENTS, SecurityPolicyState};
+use crate::{
+    ControlSnapshotPublisher, RegistryMutationRequest,
+    RegistryStateChange, RegistryStateFamily, RegistryStateKey, control_mutation_identity,
+};
+use search_contracts::{AccessPolicyRevision, BoundedSet, DataRootId, InstallationIncarnationId,
+    OpaqueId, OpaqueRef, OwnerEpoch, PublicationIntentId, PurgeFenceRevision, RequestId,
+    ShadowFenceRevision, SourceNamespaceId, SourceOwnerGeneration};
 use search_ports::PackageOpaque;
 use std::cell::RefCell;
 use std::fs::{self, File, OpenOptions};
@@ -34,6 +41,9 @@ fn identity() -> JournalIdentity {
         path_identity_digest: Blake3Digest32::from_bytes([3; 32]),
         schema_family_digest: Blake3Digest32::from_bytes([4; 32]), schema_version: PUBLICATION_VISIBILITY_SCHEMA_VERSION }
 }
+fn identity_at_owner(version: u32, owner_epoch: OwnerEpoch) -> JournalIdentity {
+    JournalIdentity { schema_version: version, owner_epoch, ..identity() }
+}
 fn state() -> PublicationVisibilityState {
     PublicationVisibilityState { collection_generation_id: CollectionGenerationId::from_bytes([5; 16]),
         schema_identity_digest: Blake3Digest32::from_bytes([6; 32]), visible_epoch: Epoch::new(0).unwrap(),
@@ -46,6 +56,27 @@ fn reference(name: &str) -> ReceiptRef { ReceiptRef::new(format!("cas:{name}")).
 fn member(id: u8) -> ProjectionMembershipId { ProjectionMembershipId::from_bytes([id; 16]) }
 fn shadow(n: u64) -> PublicationSourceShadow {
     PublicationSourceShadow { source_revision_id: SourceRevisionId::from_bytes([22; 16]), fence_revision: NonZeroRevision::new(n).unwrap() }
+}
+fn current_owner_security_state(namespace: SourceNamespaceId) -> SecurityPolicyState {
+    SecurityPolicyState {
+        policy: AccessPolicyRecord {
+            namespace_id: namespace,
+            owner_generation: SourceOwnerGeneration::from_bytes([23; 32]),
+            policy_revision: AccessPolicyRevision::new(11),
+            live_deny_generation: 7,
+            shadow_fence_revision: ShadowFenceRevision::new(12),
+            purge_fence_revision: PurgeFenceRevision::new(13),
+            policy_digest: Blake3Digest32::from_bytes([24; 32]),
+        },
+        security_domain_ref: OpaqueRef::new("domain:c01-guard-refresh").unwrap(),
+        snapshot_digest: Blake3Digest32::from_bytes([25; 32]),
+        denied_memberships: BoundedSet::empty(),
+        purged_memberships: BoundedSet::empty(),
+        fail_closed: false,
+    }
+}
+fn current_owner_security_owners() -> BoundedSet<OpaqueId, MAX_RESTRICTION_DEPENDENTS> {
+    BoundedSet::from_items([OpaqueId::new("owner:c01-guard-refresh").unwrap()]).unwrap()
 }
 struct Scratch {
     root: PathBuf,
@@ -74,14 +105,38 @@ impl Scratch {
     fn path(&self) -> PathBuf { self.root.join("control.redb") }
     fn file(&self) -> File { OpenOptions::new().read(true).write(true).open(self.path()).unwrap() }
     fn empty(&self, version: u32) -> PersistentControlJournal {
+        self.empty_with_identity(JournalIdentity { schema_version: version, ..identity() })
+    }
+    fn empty_with_identity(&self, identity: JournalIdentity) -> PersistentControlJournal {
         let file = OpenOptions::new().create_new(true).read(true).write(true).open(self.path()).unwrap();
         self.keep(&file);
-        PersistentControlJournal::create(file, JournalIdentity { schema_version: version, ..identity() }, LIMITS).unwrap()
+        PersistentControlJournal::create(file, identity, LIMITS).unwrap()
     }
     fn reopen(&self) -> PersistentControlJournal { PersistentControlJournal::open(self.file(), identity(), LIMITS).unwrap() }
     fn ready(&self) -> (PersistentControlJournal, VisibleEpochCommit) {
-        let mut journal = self.empty(PUBLICATION_VISIBILITY_SCHEMA_VERSION);
-        journal.initialize_publication_visibility(state(), MutationId([1; 32]), digest(), &context(false)).unwrap();
+        self.ready_for_owner(OwnerEpoch::new(1).unwrap())
+    }
+    fn ready_for_owner(&self, owner_epoch: OwnerEpoch) -> (PersistentControlJournal, VisibleEpochCommit) {
+        self.ready_for_owner_with_schema(PUBLICATION_VISIBILITY_SCHEMA_VERSION, owner_epoch)
+    }
+    fn ready_for_owner_with_schema(
+        &self,
+        schema_version: u32,
+        owner_epoch: OwnerEpoch,
+    ) -> (PersistentControlJournal, VisibleEpochCommit) {
+        let mut initial = state();
+        initial.guards.owner_epoch = owner_epoch;
+        let mut journal = self.empty_with_identity(identity_at_owner(schema_version, owner_epoch));
+        if schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+            journal.initialize_operating_profile(
+                crate::JournalProfileInitialization::Indexed(initial),
+                MutationId([1; 32]),
+                digest(),
+                &context(false),
+            ).unwrap();
+        } else {
+            journal.initialize_publication_visibility(initial, MutationId([1; 32]), digest(), &context(false)).unwrap();
+        }
         journal.transact(&ControlMutation::new(MutationId([2; 32]), digest(), 1, vec![
             ControlWrite { key: id_key(MANIFESTS, member(1).as_bytes(), LIMITS).unwrap(), value: codec::manifest(&reference("old"), LIMITS).unwrap() },
             ControlWrite { key: id_key(SHADOWS, member(1).as_bytes(), LIMITS).unwrap(), value: codec::shadow(&shadow(1), LIMITS).unwrap() },
@@ -89,7 +144,7 @@ impl Scratch {
         ], vec![])).unwrap();
         let prepared = PublicationIntent { publication_intent_id: PublicationIntentId::from_bytes([3; 16]),
             target_epoch: Epoch::new(1).unwrap(), prepared_manifest_ref: reference("prepared-manifest-sentinel"),
-            owner_source_membership_access_guards: state().guards, state: PublicationIntentState::Prepared };
+            owner_source_membership_access_guards: initial.guards, state: PublicationIntentState::Prepared };
         let mut update = PublicationIntentUpdate::begin(MutationId([3; 32]), digest(), 2, &prepared).unwrap();
         let mut prior = journal.persist_publication_intent(&update, &context(false)).unwrap();
         for (id, phase) in [(4, PublicationIntentState::NewPointsAcknowledged),
@@ -97,13 +152,20 @@ impl Scratch {
             update = PublicationIntentUpdate::advance(MutationId([id; 32]), digest(), prior.after_generation, update.intent().clone(), phase).unwrap();
             prior = journal.persist_publication_intent(&update, &context(false)).unwrap();
         }
-        let request = make_request(prior, update.intent().clone());
+        let request = make_request_with_previous(prior, update.intent().clone(), initial);
         (journal, request)
     }
 }
 impl Drop for Scratch { fn drop(&mut self) { let _ = fs::remove_dir_all(&self.root); } }
 fn make_request(prior: ControlCommitReceipt, intent: PublicationIntent) -> VisibleEpochCommit {
-    VisibleEpochCommit::new(MutationId([7; 32]), digest(), prior, intent, state(), PublicationReceiptId::from_bytes([7; 16]),
+    make_request_with_previous(prior, intent, state())
+}
+fn make_request_with_previous(
+    prior: ControlCommitReceipt,
+    intent: PublicationIntent,
+    previous: PublicationVisibilityState,
+) -> VisibleEpochCommit {
+    VisibleEpochCommit::new(MutationId([7; 32]), digest(), prior, intent, previous, PublicationReceiptId::from_bytes([7; 16]),
         PublicationReadbackEvidence { exact_new_manifest_ref: reference("new-points"), exact_retired_manifest_ref: reference("retired-points"), readback_digest: digest() },
         vec![PublicationManifestChange { membership_id: member(1), previous_manifest: Some(reference("old")),
             next_manifest: Some(reference("new")), matching_shadow: Some(shadow(1)) }]).unwrap()
@@ -412,4 +474,107 @@ fn interruption_after_durable_commit_recovers_without_reapplying_old_shadows() {
     assert_eq!(journal.read_publication_visibility(&context(false)).unwrap().unwrap().guards.shadow_generation, 12);
     assert!(apply(&mut journal, &request).unwrap().replayed);
     assert_eq!(journal.read_publication_visibility(&context(false)).unwrap().unwrap().guards.shadow_generation, 12);
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One finite C01/C03/C18/C02 guard-refresh integration case.
+fn guard_image_refreshes_old_owner_epoch_after_c01_handoff_and_preserves_receipt() {
+    use std::time::{Duration, Instant};
+
+    let scratch = Scratch::new();
+    let old_epoch = OwnerEpoch::new(3).unwrap();
+    let current_epoch = OwnerEpoch::new(4).unwrap();
+    let (mut journal, visibility_request) = scratch
+        .ready_for_owner_with_schema(crate::REGISTRY_JOURNAL_SCHEMA_VERSION, old_epoch);
+    apply(&mut journal, &visibility_request).unwrap();
+    let old_visibility = journal.read_publication_checkpoint(&context(false)).unwrap().unwrap();
+    let old_receipt = old_visibility.visibility().last_receipt.unwrap();
+    let next_identity = identity_at_owner(crate::REGISTRY_JOURNAL_SCHEMA_VERSION, current_epoch);
+    let mut journal = journal.advance_owner(next_identity).unwrap();
+    let current_checkpoint = journal.read_publication_checkpoint(&context(false)).unwrap().unwrap();
+    let previous = *current_checkpoint.visibility();
+    assert_eq!(previous.guards.owner_epoch, old_epoch);
+    assert_eq!(current_checkpoint.identity().owner_epoch, next_identity.owner_epoch);
+
+    let registry_request = RegistryMutationRequest::new(
+        OpaqueId::new("registry:c01-member-setup").unwrap(),
+        current_checkpoint.generation(),
+        0,
+        digest(),
+        b"owner:c01-member-setup".to_vec(),
+        vec![
+            RegistryStateChange::new(
+                RegistryStateKey::new(RegistryStateFamily::Source, b"source".to_vec(), LIMITS).unwrap(),
+                None,
+                b"source-state".to_vec(),
+                LIMITS,
+            ).unwrap(),
+            RegistryStateChange::new(
+                RegistryStateKey::new(RegistryStateFamily::Membership, b"membership".to_vec(), LIMITS).unwrap(),
+                None,
+                b"membership-state".to_vec(),
+                LIMITS,
+            ).unwrap(),
+        ],
+        LIMITS,
+    ).unwrap();
+    journal.commit_registry_batch(&registry_request, &context(false)).unwrap();
+
+    let namespace = SourceNamespaceId::from_bytes([26; 16]);
+    let security_before = journal.read_security_restriction(namespace, &context(false)).unwrap();
+    let security_mutation = security_before.initialize(
+        OpaqueId::new("security:c01-current-owner").unwrap(),
+        digest(),
+        current_owner_security_state(namespace),
+        current_owner_security_owners(),
+    ).unwrap();
+    journal.commit_security_restriction(&security_mutation, &context(false)).unwrap();
+
+    let registry = journal.read_registry_snapshot(&context(false)).unwrap();
+    let security = journal.read_security_restriction(namespace, &context(false)).unwrap();
+    let checkpoint = journal.read_publication_checkpoint(&context(false)).unwrap().unwrap();
+    assert_eq!(registry.identity(), next_identity);
+    assert_eq!(security.identity(), next_identity);
+    assert_eq!(checkpoint.identity(), next_identity);
+    assert_eq!(checkpoint.visibility().guards.owner_epoch, old_epoch);
+
+    let mut next_guards = previous.guards;
+    next_guards.owner_epoch = current_epoch;
+    next_guards.source_catalog_generation = 17;
+    next_guards.membership_generation = 29;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let work = |_unit: crate::MigrationBootstrapWork| Ok::<(), ()>(());
+    let mut publisher = ControlSnapshotPublisher::new();
+    let mut bound = journal
+        .bind_control_port_with_original_context::<Cancel, _>(&mut publisher, deadline, &work)
+        .unwrap();
+    let request = bound.prepare_publication_guard_image_with_original_context(
+        &checkpoint,
+        &registry,
+        std::slice::from_ref(&security),
+        next_guards,
+        MutationId([91; 32]),
+        digest(),
+        deadline,
+        &work,
+    ).unwrap();
+    let mutation_identity = control_mutation_identity(request.operation_id()).unwrap();
+    let readback = bound
+        .transact_publication_guard_image_with_original_context(
+            &request,
+            &mutation_identity,
+            deadline,
+            &work,
+        )
+        .unwrap();
+    let committed = readback.checkpoint();
+    assert_eq!(committed.generation(), request.expected_generation() + 1);
+    assert_eq!(committed.identity(), next_identity);
+    assert_eq!(committed.visibility().guards.owner_epoch, next_identity.owner_epoch);
+    assert_eq!(committed.visibility().visible_epoch, previous.visible_epoch);
+    assert_eq!(committed.visibility().last_receipt, Some(old_receipt));
+    assert_eq!(committed.visibility().collection_generation_id, previous.collection_generation_id);
+    assert_eq!(committed.visibility().schema_identity_digest, previous.schema_identity_digest);
+    assert_eq!(committed.visibility().guards.source_catalog_generation, 17);
+    assert_eq!(committed.visibility().guards.membership_generation, 29);
 }

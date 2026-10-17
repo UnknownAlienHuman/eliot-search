@@ -70,7 +70,9 @@ pub struct PublicationVisibilityState {
 /// checkpoint, C03 registry and C18 security readbacks.
 ///
 /// It changes only the guard image in the current visibility row; route, epoch,
-/// receipt and manifests remain exactly as read.
+/// receipt and manifests remain exactly as read. After C01 owner succession,
+/// the compared pre-state may carry an older owner epoch; the replacement image
+/// is bound to the current C02 identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicationGuardImageRequestV1 {
     identity: crate::JournalIdentity,
@@ -118,7 +120,7 @@ impl PublicationGuardImageRequestV1 {
             || security.len().checked_mul(2).and_then(|n| n.checked_add(2))
                 .is_none_or(|count| count.checked_add(1).is_none_or(|items| items > limits.max_mutation_items))
             || checkpoint.generation() < registry.journal_generation()
-            || previous.guards.owner_epoch != identity.owner_epoch
+            || previous.guards.owner_epoch > identity.owner_epoch
             || guards.owner_epoch != identity.owner_epoch
             || guards.profile_digest != previous.guards.profile_digest
             || (guards.source_catalog_generation < previous.guards.source_catalog_generation)
@@ -199,12 +201,12 @@ impl PublicationGuardImageRequestV1 {
         check: &dyn Check,
     ) -> Result<ConditionalControlMutation, ControlError> {
         check.check(Point::Start)?;
-        if self.identity.owner_epoch != self.previous.guards.owner_epoch
+        if self.previous.guards.owner_epoch > self.identity.owner_epoch
             || self.next.collection_generation_id != self.previous.collection_generation_id
             || self.next.schema_identity_digest != self.previous.schema_identity_digest
             || self.next.visible_epoch != self.previous.visible_epoch
             || self.next.last_receipt != self.previous.last_receipt
-            || self.next.guards.owner_epoch != self.previous.guards.owner_epoch
+            || self.next.guards.owner_epoch != self.identity.owner_epoch
             || self.next.guards.profile_digest != self.previous.guards.profile_digest
         {
             return Err(ControlError::InvalidValue);
