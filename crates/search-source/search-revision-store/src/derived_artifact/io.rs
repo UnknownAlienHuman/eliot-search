@@ -140,6 +140,25 @@ impl<I> DerivedArtifactReadReceiptV1<I> {
     }
 }
 
+/// Verified canonical `SetManifest` header and its root-object read observation.
+///
+/// Member references and graph commitments are checked, but member bodies are
+/// not opened and their availability or validity is not asserted.
+pub struct DerivedArtifactSetHeaderReadReceiptV1<I> {
+    set: DerivedArtifactSetDescriptorV1,
+    read: DerivedArtifactReadReceiptV1<I>,
+}
+impl<I> DerivedArtifactSetHeaderReadReceiptV1<I> {
+    /// Exact decoded four-reference C07 graph header.
+    pub const fn set(&self) -> &DerivedArtifactSetDescriptorV1 {
+        &self.set
+    }
+    /// Exact root-object native read observation; no member observations are included.
+    pub const fn read_observation(&self) -> &DerivedArtifactReadReceiptV1<I> {
+        &self.read
+    }
+}
+
 type IoResult<P, C, V, T> = Result<
     T,
     DerivedArtifactIoErrorV1<
@@ -147,6 +166,16 @@ type IoResult<P, C, V, T> = Result<
         <C as DerivedArtifactContextV1>::Error,
         <V as DerivedArtifactVerificationPortV1<C>>::Error,
     >,
+>;
+
+type SetModeReadResult<P, C, V> = IoResult<
+    P,
+    C,
+    V,
+    (
+        DerivedArtifactReadReceiptV1<<P as crate::LegacyRevisionObjectPlatform>::Identity>,
+        Option<DerivedArtifactSetDescriptorV1>,
+    ),
 >;
 
 fn charge<P, C, V>(context: &mut C, bytes: usize) -> IoResult<P, C, V, ()>
@@ -254,6 +283,73 @@ where
     P: DerivedArtifactPlatformV1<C>,
     V: DerivedArtifactVerificationPortV1<C>,
 {
+    read_derived_artifact_with_set_mode(
+        platform,
+        verifier,
+        context,
+        cas_root,
+        expected,
+        maximum_bytes,
+        DerivedArtifactSetReadMode::VerifyMembers,
+    )
+    .map(|(read, _)| read)
+}
+
+/// Read and authenticate a C07 `SetManifest` root without opening its four members.
+///
+/// The returned header proves only the exact root bytes, canonical four-reference
+/// graph and C07 set commitment. Member existence, body integrity, and source or
+/// preparation validity are not implied. The ordinary
+/// [`read_derived_artifact_v1`] remains the strict all-member read.
+pub fn read_derived_artifact_set_header_v1<P, C, V>(
+    platform: &P,
+    verifier: &mut V,
+    context: &mut C,
+    cas_root: &Path,
+    expected: &ObjectRef,
+    maximum_bytes: usize,
+) -> IoResult<P, C, V, DerivedArtifactSetHeaderReadReceiptV1<P::Identity>>
+where
+    C: DerivedArtifactContextV1,
+    P: DerivedArtifactPlatformV1<C>,
+    V: DerivedArtifactVerificationPortV1<C>,
+{
+    if expected.descriptor().kind() != Kind::SetManifest {
+        return Err(DerivedArtifactIoErrorV1::Profile(Error::Mismatch));
+    }
+    let (read, set) = read_derived_artifact_with_set_mode(
+        platform,
+        verifier,
+        context,
+        cas_root,
+        expected,
+        maximum_bytes,
+        DerivedArtifactSetReadMode::HeaderOnly,
+    )?;
+    let set = set.ok_or(DerivedArtifactIoErrorV1::Profile(Error::Mismatch))?;
+    Ok(DerivedArtifactSetHeaderReadReceiptV1 { set, read })
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum DerivedArtifactSetReadMode {
+    VerifyMembers,
+    HeaderOnly,
+}
+
+fn read_derived_artifact_with_set_mode<P, C, V>(
+    platform: &P,
+    verifier: &mut V,
+    context: &mut C,
+    cas_root: &Path,
+    expected: &ObjectRef,
+    maximum_bytes: usize,
+    set_mode: DerivedArtifactSetReadMode,
+) -> SetModeReadResult<P, C, V>
+where
+    C: DerivedArtifactContextV1,
+    P: DerivedArtifactPlatformV1<C>,
+    V: DerivedArtifactVerificationPortV1<C>,
+{
     charge::<P, C, V>(context, MAX_DERIVED_DESCRIPTOR_BYTES)?;
     let result = verifier.verify_storage_scope(
         context,
@@ -276,7 +372,7 @@ where
         maximum_bytes,
     )
     .map_err(DerivedArtifactIoErrorV1::Object)?;
-    verify_stored(
+    let set = verify_stored_with_set_mode(
         platform,
         verifier,
         context,
@@ -285,8 +381,9 @@ where
         native.bytes(),
         maximum_bytes,
         DerivedArtifactIoOperationV1::Read,
+        set_mode,
     )?;
-    Ok(DerivedArtifactReadReceiptV1 { reference, native })
+    Ok((DerivedArtifactReadReceiptV1 { reference, native }, set))
 }
 
 #[allow(clippy::too_many_arguments)] // Exact root/reference/action stay distinct at this private boundary.
@@ -300,6 +397,37 @@ fn verify_stored<P, C, V>(
     maximum_bytes: usize,
     operation: DerivedArtifactIoOperationV1,
 ) -> IoResult<P, C, V, ()>
+where
+    C: DerivedArtifactContextV1,
+    P: DerivedArtifactPlatformV1<C>,
+    V: DerivedArtifactVerificationPortV1<C>,
+{
+    verify_stored_with_set_mode(
+        platform,
+        verifier,
+        context,
+        cas_root,
+        reference,
+        encoded,
+        maximum_bytes,
+        operation,
+        DerivedArtifactSetReadMode::VerifyMembers,
+    )
+    .map(|_| ())
+}
+
+#[allow(clippy::too_many_arguments)] // Keep root, reference, action and graph policy explicit.
+fn verify_stored_with_set_mode<P, C, V>(
+    platform: &P,
+    verifier: &mut V,
+    context: &mut C,
+    cas_root: &Path,
+    reference: &ObjectRef,
+    encoded: &[u8],
+    maximum_bytes: usize,
+    operation: DerivedArtifactIoOperationV1,
+    set_mode: DerivedArtifactSetReadMode,
+) -> IoResult<P, C, V, Option<DerivedArtifactSetDescriptorV1>>
 where
     C: DerivedArtifactContextV1,
     P: DerivedArtifactPlatformV1<C>,
@@ -333,6 +461,7 @@ where
                 reference.descriptor(),
                 encoded,
                 maximum_bytes,
+                set_mode,
             )
         }
         DerivedArtifactStorageV1::Aes256GcmEnvelope => {
@@ -370,10 +499,12 @@ where
                 binding.descriptor(),
                 plaintext.as_bytes(),
                 maximum_bytes,
+                set_mode,
             )
         }
     }
 }
+#[allow(clippy::too_many_arguments)] // Keep exact root, body and graph-read policy explicit.
 fn verify_body<P, C, V>(
     platform: &P,
     verifier: &mut V,
@@ -382,7 +513,8 @@ fn verify_body<P, C, V>(
     descriptor: &Descriptor,
     encoded: &[u8],
     maximum_bytes: usize,
-) -> IoResult<P, C, V, ()>
+    set_mode: DerivedArtifactSetReadMode,
+) -> IoResult<P, C, V, Option<DerivedArtifactSetDescriptorV1>>
 where
     C: DerivedArtifactContextV1,
     P: DerivedArtifactPlatformV1<C>,
@@ -404,15 +536,23 @@ where
             .map_err(DerivedArtifactIoErrorV1::Profile)?;
         set.verify_descriptor(descriptor)
             .map_err(DerivedArtifactIoErrorV1::Profile)?;
+        if set_mode == DerivedArtifactSetReadMode::HeaderOnly {
+            context
+                .checkpoint()
+                .map_err(DerivedArtifactIoErrorV1::Context)?;
+            return Ok(Some(set));
+        }
         // Closed kinds exclude nested sets: depth is one and exactly four exact
         // member reads use the same root, original context and shared kernel.
         for member in set.members() {
             read_derived_artifact_v1(platform, verifier, context, cas_root, member, maximum_bytes)?;
         }
-        return context
+        context
             .checkpoint()
-            .map_err(DerivedArtifactIoErrorV1::Context);
+            .map_err(DerivedArtifactIoErrorV1::Context)?;
+        return Ok(None);
     }
     let result = verifier.verify_owner_payload(context, descriptor, encoded);
-    owner::<P, C, V, _>(context, result)
+    owner::<P, C, V, _>(context, result)?;
+    Ok(None)
 }

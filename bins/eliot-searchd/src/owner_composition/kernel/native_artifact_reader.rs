@@ -1,6 +1,6 @@
-//! Reopen one committed C07 prepared-artifact set inside the existing Native read.
+//! Reopen C07 projection metadata before Qdrant and full owner artifacts only after nomination.
 
-#![allow(dead_code)] // The parent provider facade will call this bounded reader at cutover.
+#![allow(dead_code)] // The parent provider facade integrates these bounded read phases at cutover.
 
 use std::path::Path;
 
@@ -16,8 +16,9 @@ use search_revision_store::{
     DomainBinding, decode_residency_canonical,
     derived_artifact::{
         DerivedArtifactDescriptorV1 as Descriptor, DerivedArtifactErrorV1,
-        DerivedArtifactIoOperationV1, DerivedArtifactObjectRefV1 as ObjectRef,
-        DerivedArtifactPlaintextV1, DerivedArtifactReadReceiptV1, DerivedArtifactSealBindingV1,
+        DerivedArtifactIoOperationV1, DerivedArtifactKindV1 as ArtifactKind,
+        DerivedArtifactObjectRefV1 as ObjectRef, DerivedArtifactPlaintextV1,
+        DerivedArtifactReadReceiptV1, DerivedArtifactSealBindingV1, DerivedArtifactSetDescriptorV1,
         DerivedArtifactStorageV1, DerivedArtifactVerificationPortV1, MAX_DERIVED_AAD_BYTES,
         MAX_DERIVED_SET_BYTES,
     },
@@ -94,11 +95,10 @@ impl NativeArtifactReaderError {
     }
 }
 
-/// Exact current C02 record, C07 read observation, and reconstructed owner outputs.
-/// The C02 record and C03 membership are borrowed from their current owner
-/// snapshots. This is read data, not reusable permission; callers still need
-/// the original request's live checkpoint and current authority for each use.
-pub(super) struct NativePublishedArtifactRead<'snapshot, 'registry> {
+/// Full C08/C09/C13 reconstruction for a nominated source candidate or recovery check.
+/// It is not the ordinary pre-Qdrant C18 metadata input. The C02 record and C03
+/// membership are borrowed snapshots; this data is not reusable permission.
+pub(super) struct NativeReopenedArtifactSet<'snapshot, 'registry> {
     snapshot: &'snapshot PublicationProjectionSnapshot,
     membership: ProjectionMembershipId,
     record: &'snapshot PreparedArtifactSetRecordV1,
@@ -112,7 +112,7 @@ pub(super) struct NativePublishedArtifactRead<'snapshot, 'registry> {
     prepared: PreparedRawCodeArtifacts,
 }
 
-impl NativePublishedArtifactRead<'_, '_> {
+impl NativeReopenedArtifactSet<'_, '_> {
     pub(super) const fn snapshot(&self) -> &PublicationProjectionSnapshot {
         self.snapshot
     }
@@ -160,18 +160,324 @@ impl NativePublishedArtifactRead<'_, '_> {
     }
 }
 
+/// Current C02/C03 projection metadata plus the authenticated C07 graph header.
+/// It retains the typed root reference and graph, not the encrypted root blob or
+/// any member body. No member availability or preparation-validity is claimed.
+///
+/// It is read data, not reusable permission; the original request's live checkpoint
+/// and current C18 authority remain required when consuming it.
+pub(super) struct NativePublishedProjectionRead<'snapshot, 'registry> {
+    snapshot: &'snapshot PublicationProjectionSnapshot,
+    membership: ProjectionMembershipId,
+    record: &'snapshot PreparedArtifactSetRecordV1,
+    generation: u64,
+    projection_membership: &'registry ProjectionMembershipRecord,
+    source_identity: SourceIdentity,
+    source_owner_generation: SourceOwnerGeneration,
+    source_registry_generation: u64,
+    source_revision: SourceRevisionRef,
+    set_reference: ObjectRef,
+    set_graph: DerivedArtifactSetDescriptorV1,
+}
+
+impl NativePublishedProjectionRead<'_, '_> {
+    pub(super) const fn snapshot(&self) -> &PublicationProjectionSnapshot {
+        self.snapshot
+    }
+
+    pub(super) const fn membership(&self) -> ProjectionMembershipId {
+        self.membership
+    }
+
+    pub(super) const fn record(&self) -> &PreparedArtifactSetRecordV1 {
+        self.record
+    }
+
+    pub(super) const fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub(super) const fn projection_membership(&self) -> &ProjectionMembershipRecord {
+        self.projection_membership
+    }
+
+    pub(super) const fn source_identity(&self) -> &SourceIdentity {
+        &self.source_identity
+    }
+
+    pub(super) const fn source_owner_generation(&self) -> SourceOwnerGeneration {
+        self.source_owner_generation
+    }
+
+    pub(super) const fn source_registry_generation(&self) -> u64 {
+        self.source_registry_generation
+    }
+
+    pub(super) const fn source_revision(&self) -> SourceRevisionRef {
+        self.source_revision
+    }
+
+    /// Actual C02-selected C07 `SetManifest` reference.
+    pub(super) const fn set_reference(&self) -> &ObjectRef {
+        &self.set_reference
+    }
+
+    /// Authenticated C07 graph header. Member bodies were not opened.
+    pub(super) const fn set_graph(&self) -> &DerivedArtifactSetDescriptorV1 {
+        &self.set_graph
+    }
+
+    pub(super) const fn projection_manifest_reference(&self) -> &ObjectRef {
+        &self.set_graph.members()[3]
+    }
+
+    pub(super) const fn projection_manifest_descriptor(&self) -> &Descriptor {
+        self.projection_manifest_reference().descriptor()
+    }
+}
+
+/// Metadata-only C18 pre-Qdrant read. It opens only the C07 set header and never
+/// opens source, representation, materialization, unit-manifest, or `ProjectionManifest`
+/// bodies. Its typed child descriptor/profile comes from the authenticated graph header.
+#[allow(clippy::too_many_arguments)] // Each live owner input remains explicit.
+#[allow(clippy::too_many_lines)] // Keep current C02/C03/C07 checks and final readback ordered.
+pub(super) fn read_published_projection_metadata_v1<'snapshot, 'registry>(
+    native: &FreshRootContext<'_, '_>,
+    control: &NativeRetentionControl<'_, '_, FreshRootCancellation>,
+    snapshot: &'snapshot PublicationProjectionSnapshot,
+    registry: &'registry SourceRegistry,
+    membership: ProjectionMembershipId,
+    expected_source: &SourceRevisionRef,
+    retained_metadata: &search_revision_store::PersistedSelectedObjectMetadata,
+    config: &EffectiveDaemonConfig,
+) -> Result<NativePublishedProjectionRead<'snapshot, 'registry>, NativeArtifactReaderError> {
+    native
+        .source_full_checkpoint()
+        .map_err(|_| NativeArtifactReaderError::OwnerRefused)?;
+    control
+        .verify_current_source()
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
+    require_same_projection_snapshot(control, snapshot)?;
+
+    let pointer = snapshot
+        .manifests()
+        .get(&membership)
+        .ok_or(NativeArtifactReaderError::CurrentSetUnavailable)?;
+    let record = snapshot
+        .prepared_artifact_sets()
+        .get(&membership)
+        .ok_or(NativeArtifactReaderError::CurrentSetUnavailable)?;
+    if record.reference() != pointer {
+        return Err(NativeArtifactReaderError::CurrentSetUnavailable);
+    }
+    let (
+        projection_membership,
+        source_identity,
+        source_owner_generation,
+        source_registry_generation,
+    ) = verify_current_projection_membership(registry, membership, expected_source, None)?;
+    let metadata = record.metadata();
+    if &metadata.source_revision != expected_source {
+        return Err(NativeArtifactReaderError::OwnerRefused);
+    }
+    let set_reference = ObjectRef::decode(&metadata.object_reference_canonical)
+        .map_err(NativeArtifactReaderError::Reference)?;
+    if set_reference
+        .encode()
+        .map_err(NativeArtifactReaderError::Reference)?
+        != metadata.object_reference_canonical
+        || set_reference.storage() != DerivedArtifactStorageV1::Aes256GcmEnvelope
+        || set_reference.stored_object_digest() != metadata.stored_object_digest
+        || set_reference.stored_bytes() != metadata.stored_object_length
+        || set_reference.descriptor().kind()
+            != search_revision_store::derived_artifact::DerivedArtifactKindV1::SetManifest
+        || set_reference.descriptor().source() != expected_source
+        || set_reference.descriptor().operation_id() != &metadata.operation_id
+        || set_reference.descriptor().materialization_id() != metadata.materialization_id
+        || set_reference.descriptor().representation_id() != metadata.representation_id
+    {
+        return Err(NativeArtifactReaderError::OwnerRefused);
+    }
+    let domains: [DomainBinding; 6] = decode_residency_canonical(&metadata.residency_canonical)
+        .map_err(|_| NativeArtifactReaderError::OwnerRefused)?;
+    if residency_canonical_bytes(&domains).map_err(|_| NativeArtifactReaderError::OwnerRefused)?
+        != metadata.residency_canonical
+    {
+        return Err(NativeArtifactReaderError::OwnerRefused);
+    }
+    verify_derived_artifact_scope(
+        set_reference.descriptor(),
+        expected_source,
+        &metadata.operation_id,
+        &domains,
+        metadata.materialization_id,
+        metadata.representation_id,
+        &metadata.residency_canonical,
+        &|unit| native.work(unit),
+    )
+    .map_err(|_| NativeArtifactReaderError::OwnerRefused)?;
+
+    let source_record = control
+        .load_source_revision(
+            &expected_source.source_namespace_id,
+            &expected_source.source_id,
+            &expected_source.revision_id,
+            native.context(),
+        )
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?
+        .ok_or(NativeArtifactReaderError::ControlRefused)?;
+    let head = control
+        .load_source_revision_head(
+            &expected_source.source_namespace_id,
+            &expected_source.source_id,
+            native.context(),
+        )
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?
+        .ok_or(NativeArtifactReaderError::ControlRefused)?;
+    if source_ref(&source_record, expected_source.source_namespace_id) != *expected_source
+        || head.state != SourceRevisionSourceState::Active
+        || head.revision.as_ref() != Some(&source_record)
+    {
+        return Err(NativeArtifactReaderError::OwnerRefused);
+    }
+
+    // Read C02's retained-object metadata only; no selected source object is opened.
+    let (source_metadata, source_seal) = control
+        .load_retained_revision(expected_source, native.context())
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
+    if &source_metadata != retained_metadata {
+        return Err(NativeArtifactReaderError::CurrentSetChanged);
+    }
+    verify_source_metadata(
+        &source_metadata,
+        expected_source,
+        &domains,
+        &metadata.residency_canonical,
+    )?;
+    let initial_set_evidence = control
+        .read_derived_artifact_evidence(
+            &set_reference,
+            &source_record,
+            &metadata.residency_canonical,
+            source_metadata.encryption(),
+            config,
+        )
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
+
+    let mut verifier = NativeArtifactReadVerifier {
+        native,
+        control,
+        source: *expected_source,
+        source_record: source_record.clone(),
+        operation: metadata.operation_id.clone(),
+        materialization_id: metadata.materialization_id,
+        representation_id: metadata.representation_id,
+        domains,
+        residency: metadata.residency_canonical.clone(),
+        encryption: source_metadata.encryption().clone(),
+        config,
+        prepared: None,
+        evidence: Vec::with_capacity(2),
+    };
+    let set_header = native
+        .read_derived_artifact_set_header_v1(&mut verifier, &set_reference, MAX_OBJECT_BYTES)
+        .map_err(NativeArtifactReaderError::C07)?;
+    if set_header.read_observation().object_ref() != &set_reference {
+        return Err(NativeArtifactReaderError::OwnerRefused);
+    }
+    for member in set_header.set().members() {
+        let descriptor = member.descriptor();
+        if member.storage() != DerivedArtifactStorageV1::Aes256GcmEnvelope
+            || descriptor.source() != expected_source
+            || descriptor.operation_id() != &metadata.operation_id
+            || descriptor.materialization_id() != metadata.materialization_id
+            || descriptor.representation_id() != metadata.representation_id
+            || descriptor.domains() != &verifier.domains
+        {
+            return Err(NativeArtifactReaderError::OwnerRefused);
+        }
+    }
+    let projection_reference = &set_header.set().members()[3];
+    if projection_reference.descriptor().kind() != ArtifactKind::ProjectionManifest {
+        return Err(NativeArtifactReaderError::OwnerRefused);
+    }
+    let set_graph = set_header.set().clone();
+    drop(verifier);
+
+    native
+        .source_full_checkpoint()
+        .map_err(|_| NativeArtifactReaderError::OwnerRefused)?;
+    control
+        .verify_current_source()
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
+    require_same_projection_snapshot(control, snapshot)?;
+    let (source_metadata_after, source_seal_after) = control
+        .load_retained_revision(expected_source, native.context())
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
+    let source_record_after = control
+        .load_source_revision(
+            &expected_source.source_namespace_id,
+            &expected_source.source_id,
+            &expected_source.revision_id,
+            native.context(),
+        )
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?
+        .ok_or(NativeArtifactReaderError::ControlRefused)?;
+    let head_after = control
+        .load_source_revision_head(
+            &expected_source.source_namespace_id,
+            &expected_source.source_id,
+            native.context(),
+        )
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?
+        .ok_or(NativeArtifactReaderError::ControlRefused)?;
+    let final_set_evidence = control
+        .read_derived_artifact_evidence(
+            &set_reference,
+            &source_record_after,
+            &metadata.residency_canonical,
+            source_metadata_after.encryption(),
+            config,
+        )
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
+    if source_metadata_after != source_metadata
+        || source_seal_after != source_seal
+        || source_record_after != source_record
+        || head_after.state != SourceRevisionSourceState::Active
+        || head_after.revision.as_ref() != Some(&source_record_after)
+        || !same_derived_artifact_readback(&initial_set_evidence, &final_set_evidence)
+    {
+        return Err(NativeArtifactReaderError::CurrentSetChanged);
+    }
+
+    Ok(NativePublishedProjectionRead {
+        snapshot,
+        membership,
+        record,
+        generation: snapshot.generation(),
+        projection_membership,
+        source_identity,
+        source_owner_generation,
+        source_registry_generation,
+        source_revision: *expected_source,
+        set_reference,
+        set_graph,
+    })
+}
+
 struct StoredReadEvidence {
     reference: ObjectRef,
     readback: DerivedArtifactReadback,
 }
 
-/// Reopens a committed C07 set selected by the current same-transaction C02 snapshot.
+/// Fully reopens a nominated source's committed C07 set for candidate/recovery validation.
 ///
 /// The producer is supplied by the caller's qualified owner-profile selection. This
 /// function derives source and materialization identities from C02/C07 bytes, reads
 /// the exact retained source object under this Native root, and reconstructs C08/C09/C13
 /// through their real producers. It creates no IDs, nonce reservations, journals or
-/// query state, and returns no readiness/visibility claim.
+/// query state, and returns no readiness/visibility claim. Ordinary C18 admission must
+/// use `read_published_projection_metadata_v1` before Qdrant instead of this full path.
 #[allow(clippy::too_many_arguments)] // Preserve the distinct original-owner inputs.
 #[allow(clippy::too_many_lines)] // Keep the original-context, before/read/after proof ordered in one path.
 pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
@@ -185,7 +491,7 @@ pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
     retained_metadata: &search_revision_store::PersistedSelectedObjectMetadata,
     producer: &RawCodeArtifactProducerInput<'_>,
     config: &EffectiveDaemonConfig,
-) -> Result<NativePublishedArtifactRead<'snapshot, 'registry>, NativeArtifactReaderError> {
+) -> Result<NativeReopenedArtifactSet<'snapshot, 'registry>, NativeArtifactReaderError> {
     native
         .source_full_checkpoint()
         .map_err(|_| NativeArtifactReaderError::OwnerRefused)?;
@@ -217,7 +523,7 @@ pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
         registry,
         membership,
         expected_source,
-        producer.scope,
+        Some(producer.scope),
     )?;
     let metadata = record.metadata();
     if &metadata.source_revision != expected_source {
@@ -363,7 +669,7 @@ pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
         residency: metadata.residency_canonical.clone(),
         encryption: source_metadata.encryption().clone(),
         config,
-        prepared: &prepared,
+        prepared: Some(&prepared),
         evidence: Vec::with_capacity(5),
     };
     let read = native
@@ -423,7 +729,7 @@ pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
         return Err(NativeArtifactReaderError::CurrentSetChanged);
     }
 
-    Ok(NativePublishedArtifactRead {
+    Ok(NativeReopenedArtifactSet {
         snapshot,
         membership,
         record,
@@ -444,7 +750,7 @@ fn verify_current_projection_membership<'registry>(
     registry: &'registry SourceRegistry,
     expected_projection_membership_id: ProjectionMembershipId,
     expected_source: &SourceRevisionRef,
-    scope: &search_projection_planner::PlanningScope,
+    scope: Option<&search_projection_planner::PlanningScope>,
 ) -> Result<
     (
         &'registry ProjectionMembershipRecord,
@@ -455,20 +761,26 @@ fn verify_current_projection_membership<'registry>(
     NativeArtifactReaderError,
 > {
     let registry_generation = registry.revision();
-    let source_membership_id = scope.membership.source_membership_id;
+    let source_membership_id = registry
+        .projection_source_membership(expected_projection_membership_id)
+        .map_err(|_| NativeArtifactReaderError::OwnerRefused)?;
     let record = read_projection_membership(registry, source_membership_id, registry_generation)
         .map_err(|_| NativeArtifactReaderError::OwnerRefused)?;
     let binding = record.binding();
-    let selected = &scope.membership;
-    if binding.projection_membership_id != expected_projection_membership_id
-        || binding.projection_membership_id != selected.projection_membership_id
-        || binding.source_membership_id != selected.source_membership_id
-        || binding.representation_id != selected.representation_id
-        || binding.access_partition_id != selected.access_partition_id
-        || binding.scoring_partition_id != selected.scoring_partition_id
-        || binding.projection_schema_id != selected.projection_schema_id
-    {
+    if binding.projection_membership_id != expected_projection_membership_id {
         return Err(NativeArtifactReaderError::OwnerRefused);
+    }
+    if let Some(scope) = scope {
+        let selected = &scope.membership;
+        if binding.projection_membership_id != selected.projection_membership_id
+            || binding.source_membership_id != selected.source_membership_id
+            || binding.representation_id != selected.representation_id
+            || binding.access_partition_id != selected.access_partition_id
+            || binding.scoring_partition_id != selected.scoring_partition_id
+            || binding.projection_schema_id != selected.projection_schema_id
+        {
+            return Err(NativeArtifactReaderError::OwnerRefused);
+        }
     }
 
     let (member, identity) = registry
@@ -575,6 +887,18 @@ fn verify_source_metadata(
     Ok(())
 }
 
+fn same_derived_artifact_readback(
+    first: &DerivedArtifactReadback,
+    second: &DerivedArtifactReadback,
+) -> bool {
+    first.reservation == second.reservation
+        && first.intent == second.intent
+        && first.selected.current == second.selected.current
+        && first.selected.preparation == second.selected.preparation
+        && first.selected.claim == second.selected.claim
+        && first.selected.encryption == second.selected.encryption
+}
+
 #[allow(clippy::too_many_arguments)] // Each identity is independently sourced and checked.
 fn validate_producer_input(
     native: &FreshRootContext<'_, '_>,
@@ -629,7 +953,7 @@ struct NativeArtifactReadVerifier<'a, 'operation, 'owner, 'journal, 'work> {
     residency: Vec<u8>,
     encryption: search_revision_store::EncryptionBinding,
     config: &'a EffectiveDaemonConfig,
-    prepared: &'a PreparedRawCodeArtifacts,
+    prepared: Option<&'a PreparedRawCodeArtifacts>,
     evidence: Vec<StoredReadEvidence>,
 }
 
@@ -699,6 +1023,7 @@ impl<'operation, 'owner, 'context>
             .work(Work::Process(encoded_body.len()))
             .map_err(|_| NativeArtifactReadVerificationError::Refused)?;
         self.prepared
+            .ok_or(NativeArtifactReadVerificationError::Refused)?
             .verify_owner_payload(descriptor, encoded_body)
             .map_err(|_| NativeArtifactReadVerificationError::Refused)
     }

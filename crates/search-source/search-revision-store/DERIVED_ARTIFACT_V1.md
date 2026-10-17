@@ -60,9 +60,13 @@ by C07 I/O.
 `DerivedArtifactSetDescriptorV1` contains exactly the four non-set kinds in order,
 with one exact source/materialization/representation and identical full residency.
 Its C07 schema fingerprint and semantic commitment are owner-computed separately
-from the encoded set-body digest. Publishing/reopening a set opens and verifies
-all four exact members under the same root/context; nested sets are impossible.
-These are object-graph edges, not a new catalogue, index or query language.
+from the encoded set-body digest. Publishing and the strict
+`read_derived_artifact_v1` path open and verify all four exact members under the
+same root/context; nested sets are impossible. The narrower
+`read_derived_artifact_set_header_v1` authenticates only the root object, canonical
+four-reference graph and set commitment. It does not read member objects or claim
+their availability or body validity. These are object-graph edges, not a new
+catalogue, index or query language.
 
 ## Actual I/O and required parent ports
 

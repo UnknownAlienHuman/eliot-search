@@ -14,8 +14,10 @@ use search_revision_store::{
 use search_revision_store::derived_artifact::{
     DerivedArtifactErrorV1, DerivedArtifactIoErrorV1, DerivedArtifactObjectRefV1,
     DerivedArtifactPayloadCandidateV1, DerivedArtifactReadReceiptV1,
+    DerivedArtifactSetHeaderReadReceiptV1,
     DerivedArtifactVerificationPortV1, DerivedArtifactWriteReceiptV1,
-    MAX_DERIVED_DESCRIPTOR_BYTES, publish_derived_artifact_v1, read_derived_artifact_v1,
+    MAX_DERIVED_DESCRIPTOR_BYTES, publish_derived_artifact_v1, read_derived_artifact_set_header_v1,
+    read_derived_artifact_v1,
 };
 use search_runtime_owner::OwnerError;
 use super::{FreshRootContext, FreshRootError};
@@ -396,6 +398,23 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
         })?;
         let mut context = OriginalObjectContext { native: self, first: None };
         read_derived_artifact_v1(&platform, verifier, &mut context, &root, expected, maximum_bytes)
+            .map_err(|cause| self.derived_artifact_failure(cause))
+    }
+
+    #[allow(dead_code)] // Narrow C18 metadata-only entrypoint; ordinary C07 reads remain recursive.
+    pub(crate) fn read_derived_artifact_set_header_v1<'native, V>(&'native self,
+        verifier: &mut V, expected: &DerivedArtifactObjectRefV1, maximum_bytes: usize,
+    ) -> Result<DerivedArtifactSetHeaderReadReceiptV1<Vec<u8>>,
+        NativeDerivedArtifactFailure<<V as DerivedArtifactVerificationPortV1<
+            OriginalObjectContext<'native, 'operation, 'owner>,
+        >>::Error>>
+    where V: DerivedArtifactVerificationPortV1<OriginalObjectContext<'native, 'operation, 'owner>> {
+        let (platform, root) = self.derived_object_platform(expected).map_err(|error| match error {
+            DerivedPlatformError::Native(cause) => self.derived_native_failure(cause),
+            DerivedPlatformError::Profile(error) => self.derived_artifact_failure(DerivedArtifactIoErrorV1::Profile(error)),
+        })?;
+        let mut context = OriginalObjectContext { native: self, first: None };
+        read_derived_artifact_set_header_v1(&platform, verifier, &mut context, &root, expected, maximum_bytes)
             .map_err(|cause| self.derived_artifact_failure(cause))
     }
 
