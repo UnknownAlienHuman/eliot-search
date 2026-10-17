@@ -54,6 +54,10 @@ pub use native_admission::{NativeReadOperation, NativeReadStartup, RetainedShutd
 pub use native_admission::{NativeRegistrationOperation, run_source_registration};
 pub use native_admission::{NativeRootAdmission, admit_existing};
 pub(crate) use native_admission::direct_registry::NativeProcessRootCustody;
+#[cfg(feature = "wave3-index")]
+pub(crate) use native_admission::direct_registry::artifact_store::{
+    NativeArtifactSetWrite, NativeArtifactStoreAdapter, NativeArtifactStoreError,
+};
 #[cfg(feature = "wave4-query")]
 pub(crate) use native_admission::direct_registry::RetainedRevisionReadState;
 pub use native_admission::{NativeSyncPreflightOperation, run_source_sync_preflight};

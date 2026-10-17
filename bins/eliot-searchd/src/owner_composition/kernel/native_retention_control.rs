@@ -48,6 +48,20 @@ fn address(phase: &str, parts: &[&[u8]], work: &dyn Fn(Work) -> Result<(), Owner
     Ok(ControlKey::new(key, LIMITS)?)
 }
 
+/// Existing exact C02 source-revision row address for a derived-artifact guard.
+pub(super) fn source_revision_guard_key(
+    namespace: c::SourceNamespaceId,
+    source: c::SourceId,
+    revision: c::SourceRevisionId,
+    work: &dyn Fn(Work) -> Result<(), OwnerError>,
+) -> Result<ControlKey, RetentionControlError> {
+    address(
+        "revision",
+        &[namespace.as_bytes(), source.as_bytes(), revision.as_bytes()],
+        work,
+    )
+}
+
 /// Technical phase ID, never a source/revision/domain identity.
 pub(super) fn phase_id(operation: &c::OpaqueId, phase: &str,
     work: &dyn Fn(Work) -> Result<(), OwnerError>) -> Result<(MutationId, c::Blake3Digest32), RetentionControlError> {

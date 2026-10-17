@@ -38,7 +38,7 @@ use policy_v2::RootPolicy;
 mod native_source;
 pub(crate) use native_source::SourceBodyUseError;
 #[path = "native_retention_object_io.rs"]
-mod native_retention_object_io;
+pub(super) mod native_retention_object_io;
 #[path = "native_retention_time.rs"]
 mod native_retention_time;
 #[path = "native_retention_security.rs"]
@@ -413,6 +413,17 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
     }
     pub const fn context(&self) -> &OperationContext<FreshRootCancellation> {
         &self.context
+    }
+    /// Confirms a bounded producer budget borrows this exact invocation's
+    /// cancellation flag and absolute deadline without exposing either value.
+    pub(crate) fn matches_original_work(
+        &self,
+        deadline: Instant,
+        cancellation: &AtomicBool,
+    ) -> bool {
+        let original = self.context.cancellation();
+        original.deadline == deadline
+            && std::ptr::eq(Arc::as_ptr(&original.flag), cancellation)
     }
     pub fn work(
         &self,

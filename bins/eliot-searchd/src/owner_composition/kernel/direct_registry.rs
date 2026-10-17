@@ -395,6 +395,9 @@ mod retention_control;
 mod retention_source;
 #[path = "native_retention.rs"]
 mod retention;
+#[cfg(feature = "wave3-index")]
+#[path = "native_artifact_store.rs"]
+pub(in super::super) mod artifact_store;
 #[path = "native_retained_reader.rs"]
 mod retained_reader;
 #[path = "native_dek_command.rs"]

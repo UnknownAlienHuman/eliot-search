@@ -22,11 +22,11 @@ use super::super::super::direct_policy_v2::CapturedPolicyV2;
 
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 
-struct Selected {
-    current: Vec<u8>,
-    preparation: Vec<u8>,
-    claim: Option<Vec<u8>>,
-    encryption: EncryptionBinding,
+pub(super) struct Selected {
+    pub(super) current: Vec<u8>,
+    pub(super) preparation: Vec<u8>,
+    pub(super) claim: Option<Vec<u8>>,
+    pub(super) encryption: EncryptionBinding,
 }
 
 fn reserve(input: &RetentionSourceInput<'_, '_, '_>, bytes: usize) -> Result<(), String> {
@@ -36,7 +36,7 @@ fn reserve(input: &RetentionSourceInput<'_, '_, '_>, bytes: usize) -> Result<(),
     Ok(())
 }
 
-fn selected(input: &RetentionSourceInput<'_, '_, '_>, journal: &mut PersistentControlJournal,
+pub(super) fn selected(input: &RetentionSourceInput<'_, '_, '_>, journal: &mut PersistentControlJournal,
     publisher: &mut ControlSnapshotPublisher, config: &EffectiveDaemonConfig,
 ) -> Result<Selected, String> {
     reserve(input, 16 * 32768)?;

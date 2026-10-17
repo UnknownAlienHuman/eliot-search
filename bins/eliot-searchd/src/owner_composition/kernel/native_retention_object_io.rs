@@ -73,6 +73,20 @@ impl<'a, 'operation, 'owner> OriginalObjectContext<'a, 'operation, 'owner> {
     pub(crate) const fn fresh_root(&self) -> &'a FreshRootContext<'operation, 'owner> {
         self.native
     }
+
+    /// Confirms C07's root argument is the CAS directory of this held Native root.
+    pub(crate) fn verify_cas_root(&self, expected: &Path) -> Result<(), OwnerError> {
+        self.native
+            .verify_owner()
+            .map_err(|error| owner_error(&error))?;
+        let actual = self.native.native_cas_root()?;
+        if actual.as_path() != expected {
+            return Err(OwnerError::OwnerGuardMismatch);
+        }
+        self.native
+            .source_full_checkpoint()
+            .map_err(|error| owner_error(&error))
+    }
 }
 
 /// C07 error plus the original Native operation's possible-effect fence.

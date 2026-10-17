@@ -23,6 +23,9 @@ type ReadContext = Option<(NativeRootRequest, NativeWork)>;
 
 #[path = "fresh_root.rs"]
 pub(super) mod fresh_root;
+pub(super) use fresh_root::native_retention_object_io::{
+    NativeDerivedArtifactFailure, OriginalObjectContext,
+};
 
 #[cfg(test)]
 pub(super) fn source_body_attempts_for_test() -> usize {

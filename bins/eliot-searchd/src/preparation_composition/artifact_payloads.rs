@@ -60,6 +60,28 @@ pub struct RawCodeArtifactPreparation<'a> {
     pub work: &'a dyn Fn(Work) -> Result<(), OwnerError>,
 }
 
+/// Producer-owned inputs for Root composition. Source provenance, occurrence,
+/// operation, residency domains and retained bytes are supplied by the actual
+/// Native/C02 owners when the composition runs.
+pub struct RawCodeArtifactProducerInput<'a> {
+    pub binding: &'a V3SourceBinding,
+    pub request: &'a ValidatedMaterializationRequest,
+    pub materializer: &'a ValidatedMaterializerProfile,
+    pub unitizer: &'a ValidatedV3UnitizerProfile,
+    pub materialization_budget: MaterializationBudget,
+    pub unitization_budget: &'a UnitizationBudget<'a>,
+    pub scope: &'a PlanningScope,
+    pub schema: &'a CollectionSchema,
+    pub lexical_profile: &'a AcceptedCodeIdentifiersProfile,
+    pub language: &'a c::BoundedName,
+    pub lexical_limits: CodeIdentifierLimits,
+    pub sparse_limits: SparseLimits,
+    pub projection_budget: ProjectionBudget,
+    pub max_input_bytes: usize,
+    pub max_total_vector_values: usize,
+    pub max_artifact_bytes: usize,
+}
+
 #[derive(Debug)]
 pub enum RawArtifactPreparationError {
     Preparation(RawPreparationError),
@@ -94,6 +116,8 @@ pub struct PreparedRawCodeArtifacts {
     plan: ProjectionPlan,
     vectors: Vec<PlannedUnit>,
     artifacts: [PreparedRawArtifact; 4],
+    scope: PlanningScope,
+    schema: CollectionSchema,
 }
 impl PreparedRawCodeArtifacts {
     pub const fn product(&self) -> &MaterializationProduct {
@@ -110,6 +134,14 @@ impl PreparedRawCodeArtifacts {
     }
     pub const fn artifacts(&self) -> &[PreparedRawArtifact; 4] {
         &self.artifacts
+    }
+    /// Exact caller-supplied scope retained for Root's C03 comparison.
+    pub const fn scope(&self) -> &PlanningScope {
+        &self.scope
+    }
+    /// Exact caller-supplied schema retained for Root's membership comparison.
+    pub const fn schema(&self) -> &CollectionSchema {
+        &self.schema
     }
 
     /// C07's actual owner-payload check. Storage/root/crypto checks are separate.
@@ -327,5 +359,45 @@ pub fn prepare_raw_code_artifacts(
         plan,
         vectors,
         artifacts,
+        scope: input.scope.clone(),
+        schema: input.schema.clone(),
     })
+}
+
+/// Bind producer inputs to provenance, source bytes, operation and residency
+/// obtained by the actual Native root operation before producing any artifact.
+pub fn prepare_raw_code_artifacts_from_native(
+    input: &RawCodeArtifactProducerInput<'_>,
+    source: &c::SourceRevisionRef,
+    occurrence_sequence: u64,
+    retained_body: &[u8],
+    domains: &[DomainBinding; 6],
+    operation: &c::OpaqueId,
+    work: &dyn Fn(Work) -> Result<(), OwnerError>,
+) -> Result<PreparedRawCodeArtifacts, RawArtifactPreparationError> {
+    let bound = RawCodeArtifactPreparation {
+        source,
+        occurrence_sequence,
+        retained_body,
+        binding: input.binding,
+        request: input.request,
+        materializer: input.materializer,
+        unitizer: input.unitizer,
+        materialization_budget: input.materialization_budget,
+        unitization_budget: input.unitization_budget,
+        scope: input.scope,
+        schema: input.schema,
+        lexical_profile: input.lexical_profile,
+        language: input.language,
+        lexical_limits: input.lexical_limits,
+        sparse_limits: input.sparse_limits,
+        projection_budget: input.projection_budget,
+        max_input_bytes: input.max_input_bytes,
+        max_total_vector_values: input.max_total_vector_values,
+        max_artifact_bytes: input.max_artifact_bytes,
+        domains,
+        operation,
+        work,
+    };
+    prepare_raw_code_artifacts(&bound)
 }
