@@ -11,6 +11,11 @@ mod error;
 mod machine;
 mod model;
 mod recovery;
+mod admission;
+
+pub use admission::{AdmissionPurpose, AdmissionWork, ProjectionEvidence, ProjectionUpdate,
+    PublicationAdmissionOwners, PublicationMembershipState, PublicationOwnerObservation,
+    PublicationProposal, PublicationScope, PublicationTarget, validate_prepared_generation};
 
 pub use error::PublicationError;
 pub use machine::{
@@ -20,8 +25,11 @@ pub use machine::{
 };
 pub use model::{
     AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt, ControlCommitObservation,
-    PreparedPublication, PublicationGuards, PublicationRecoveryDecision,
+    PreparedGeneration, PublicationGuards, PublicationRecoveryDecision,
     PublicationRecoveryObservation, ReadbackVerified, RestorationReceipt, RetiredManifest,
     SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
 };
 pub use recovery::recover;
+
+#[cfg(test)]
+mod admission_tests;

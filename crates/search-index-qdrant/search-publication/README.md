@@ -1,182 +1,77 @@
 # search-publication
 
-C16: the existing pure, vendor-neutral publication coordinator and recovery decisions.
-The module does not execute redb/Qdrant calls, persist epochs, verify live fences or provide a
-working daemon pipeline. Composition must supply authoritative port results. No product or gate
-acceptance is implied by these state transitions.
+Pure, vendor-neutral publication admission, single-flight phase accounting and
+recovery decisions. C02 remains the sole durable epoch/intent/visibility owner;
+C15 owns actual Qdrant effects. No method in this package performs those effects.
 
-## Consumed epochs
+## Canonical admission (#260)
 
-`PublicationCoordinator::new` requires both `visible_epoch` and `last_reserved_epoch`.
-The latter includes aborted and abandoned reservations and must be reconstructed from verified
-control history. It is never inferred from VisibleEpoch. `new` is only for a resolved checkpoint;
-`restore_inflight` below keeps unresolved work in the sole occupied coordinator slot.
+The primary owner is `search-publication`; the narrow C13 adapter exposes
+canonical encoding/digest access. `search-unitizer` is the explicit
+internal dependency needed to consume its opaque complete `VerifiedUnitSet`.
+No concrete control, object-store, platform or Qdrant dependency is introduced.
+The source/manifest/UnitSet/profile/currentness owners remain separate producers.
 
-`submit` advances the reservation floor only after input validation and single-flight checks.
-`finalize_aborted` releases the active slot only after durable-finalization and fresh snapshot
-acknowledgements; it neither lowers the consumed floor nor advances visibility.
-After aborting epoch 1 at visible epoch 0, the next reservation is epoch 2, not 1. Exhaustion rejects
-before changing either the slot or the floor. The coordinator is not Clone; immutable transaction
-snapshots remain cloneable for inspection, not as another owner.
+`validate_prepared_generation` is the sole admission function. Both normal
+`PublicationCoordinator::submit` and `restore_inflight` call it before hydrating
+an active slot, changing local epoch accounting or accepting a receipt prefix.
+Requests provide private producer tokens through `PublicationAdmissionOwners`;
+the production adapter must use actual preparation and coherent control/source
+observations. It must not echo proposed fields, flags, digests or receipt labels.
 
-This local accounting does not persist the floor across process death. The journal/owner adapter
-must retain it durably before index effects and reconstruct it during recovery. The current redb
-schema-3 normal successor/commit APIs still reject skipped epochs. A complete abnormal-finalization
-and fencing protocol is required before live composition can commit past an abandoned epoch.
-No second ledger is introduced here.
+Admission verifies the complete source/namespace/revision/materialization/
+representation and membership scope, schema/profile/partition coordinates, every
+opaque UnitSet occurrence and unit/reference digest, and C13 reconstruction of
+canonical manifest bytes and point specifications. The actual current manifest
+is independently checked by its owner. Captured owner state is checked again
+before return. Wrong bytes, subsets, duplicate/foreign units, mixed scope,
+changed physical IDs or changed guards return no accepted preparation.
 
-## In-flight restoration
+The result is `PreparedGeneration` with private fields and read-only accessors.
+Caller old/new digests and `preparation_receipt` are removed. C00 computes the
+new `eliot/cbor/prepared-generation/v1` digest over the actual frozen inputs.
+C13 alone owns manifest semantic digesting. The exact create/retain/retire diff
+is computed once; stage, closure, combined readback, compensation, recovery and
+retired-manifest emission borrow it. Retained points keep their exact original
+readback shape and validity; creation binds to the admitted target epoch.
 
-`restore_inflight(PublicationRestoreInput, max_points)` reconstructs an active coordinator and returns
-its recovery decision. The composition owner must supply the coherently verified journal route,
-original intent/preparation, exact recorded receipt prefix and fresh bound index observations under
-the live recovery barrier. It must not synthesize missing operation IDs, receipt references or digests.
-The input is transient and redacted in Debug, not another persisted schema or ownership credential.
+## Empty targets and source completeness
 
-Restoration does not call `submit`, advance the reserved floor, replay a durable write or touch Qdrant.
-The retained target must equal the highest consumed reservation, even when it exceeds VisibleEpoch + 1.
-Existing stage/closure/readback/commit validators check the recorded prefix. Fresh observations then
-select the existing recovery decision. Contradictory inputs return no usable coordinator.
+`PublicationTarget::Retirement` is explicit. It requires the exact old verified
+set and an independently observed retired membership, then derives a canonical
+zero-entry C13 publication target. This is not a newly qualified empty source
+representation. C09 raw-v3 rejects active empty input, and C13 rejects empty
+unit sets; their unsupported cases remain explicit rather than fabricating an
+empty UnitSet or using sentinel bytes. A retired target removes the current
+manifest pointer on completion.
 
-Changed pre-commit owner/source/membership/access/shadow/purge/profile guards or partial effects lock
-the restored slot into COMPENSATING; they cannot be overwritten with new guards to continue forward.
-Bare ABORTED and PUBLICATION_BLOCKED remain blocked with the slot occupied. A new owner cannot roll
-back a proven committed epoch. Historical guard equality is not live authorization to emit results.
+## Epochs and restoration
 
-A previous-process SNAPSHOT_PUBLISHED phase is normalized to CONTROL_COMMITTED. The input carries no
-old snapshot receipt, and a true `snapshot_published` observation is rejected. Completion and retired
-manifest emission require a new current-process snapshot acknowledgement through the existing path.
-The current-manifest pointer follows normal coordinator semantics: it installs the new manifest only
-at completion, while the occupied committed transaction retains both manifests for recovery.
+`PublicationCoordinator::new(max_points)` creates only finite, uninitialized
+process-local state. Epoch getters return `None` until actual owner admission.
+No caller constructor supplies accepted epochs or manifests. A validated normal
+submission proposes exactly the next durable floor; its local reservation is
+never reused. The Root adapter must commit the same target through C02 before
+Qdrant effects. This package is neither another epoch ledger nor a root lease.
 
-Nineteen tests in `tests/restore_inflight.rs` cover accepted prefixes, direct continuation, fresh snapshot
-acknowledgement, all seven guard changes, owner/route/epoch conflicts, receipt-prefix combinations,
-two-sided compensation, blocked terminal labels, point/receipt limits and redacted diagnostics.
-They are pure public-API fixtures, not executed process-restart or storage qualification; Rust tests
-remain NOT_RUN in this environment. Actual checkpoint/receipt producers and daemon startup wiring,
-durable abnormal finalization and skipped-epoch control commits remain unfinished. No shared port,
-existing signature, dependency, storage codec or redb-package size is changed by this additive API.
+Restore re-admits original preparation through the same function, validates the
+retained route/target/guards and receipt prefix, and never calls normal submit or
+allocates another epoch. Changed pre-commit guards lead to compensation; bare
+aborted/blocked records retain the occupied slot. Prior-process snapshot labels
+never authorize current-process admission. Effect-proof production, actual
+journal-prefix readback and Native/Qdrant execution remain #261/Root work.
 
-## Immutable point IDs before staging
+## Verification boundary
 
-A physical point ID shared by the current and proposed manifests is allowed only when the complete
-manifest entry is identical: identity key, source/projection memberships and all unit, reference,
-payload and named-vector digests. Unchanged entries are retained, not staged or closed.
+The canonical focused fixtures build real C08 and C09 products over an exact
+in-memory revision and a C13 plan. Their owner ports are test-only observations;
+they qualify neither storage, current policy nor Qdrant execution. The existing
+recovery, abort and restore fixtures under `tests/` use the same admission API.
+Their collision cases rebuild valid C13 products before checking immutable
+point conflicts; malformed manifests are tested separately.
 
-If an entry changes under the same ID, the raw planner diff places it in both create and retire.
-Qdrant upsert replaces the existing point, so staging would overwrite old-epoch data before control
-commit; the later closure would then close the new point at its own starting epoch. Exact-ID
-acknowledgements alone do not make this sequence safe. `submit` rejects it with
-`PUBLICATION_PREPARED_INVALID` before reserving an epoch or taking the active slot.
-
-The guard merge-walks the already bounded, sorted entries without allocating another manifest,
-lookup map or point set. It compares the complete entries, not only compact IDs or identity-key
-fields. Rejection leaves the current manifest, visibility and reservation floor unchanged.
-The point-identity/projection owner must provide a valid distinct identity for changed content;
-the coordinator does not invent IDs, reinterpret hash algorithms or edit supplied manifests.
-
-Recovery also blocks an already-recorded conflicting plan, even when all stage/closure IDs and
-commit/snapshot fields appear to match. It cannot return Continue, PublishSnapshot or automatic
-compensation for that plan. Existing evidence is retained for explicit verified repair; this guard
-neither repairs historical overwrites nor proves new IDs absent from every historical collection.
-Live artifact/schema/identity qualification and exact backend readback are still required.
-
-Backend reference: https://api.qdrant.tech/api-reference/points/upsert-points
-
-## Two-sided compensation
-
-`begin_compensation_plan` returns exact sorted new IDs to remove/exclude and exact old IDs whose
-pre-mutation state must be restored. Repeating the call while COMPENSATING returns the same plan.
-Normal replacement uses distinct IDs. A same-ID replacement is rejected before staging, rather
-than relying on eventual compensation to repair a pre-commit loss of the old version.
-
-`CompensationReceipt` is bound to the transaction and target epoch. `compensate_exact` is sufficient
-only if the diff contains no old retired points. Otherwise `compensate_and_restore` additionally
-requires a matching `RestorationReceipt` with the complete exact old ID list and no remaining work.
-Missing, duplicated, unexpected, wrong-epoch or foreign restoration leaves the transaction active.
-A receipt reference is not itself evidence that the external adapter executed or verified anything.
-
-The existing `begin_compensation` list-only projection is retained for create-only callers; using it
-does not bypass the required restoration at completion. Ordinary retired-point reclaim and security
-purge remain separate. This coordinator does not delete physical points or remove live policy fences.
-
-## Aborted-finalization acknowledgement barrier
-
-Compensation and abandonment now retain their exact verified readback/exclusion references instead
-of discarding them on entry to ABORTED. Large ID sets remain in the original manifests. The lifecycle is:
-
-```text
-verified compensation or exclusion
-→ prepare_abort_finalization (latch original command)
-→ authoritative journal commit/readback
-→ acknowledge_abort_commit
-→ current-process snapshot publication
-→ publish_abort_snapshot
-→ finalize_aborted (release slot)
-```
-
-The latched command binds the original intent/preparation, both manifest digests, consumed epoch,
-route, current guards, expected control generation, operation ID and exact resolution references.
-Changed retries cannot replace it. Commit acknowledgement requires that exact command, unchanged
-visibility and consumed floor, the same route/guards, and exactly the next control generation.
-Snapshot acknowledgement binds transaction, visible epoch and committed generation. Conflicting or
-missing acknowledgements preserve the slot and evidence; the old zero-argument `finalize_aborted`
-no longer succeeds on the ABORTED label alone. Previous acknowledgements never carry into a new task.
-
-The caller retains the live owner/recovery/admission barrier across these steps. This package checks
-supplied observations; it neither executes nor authenticates their producers. The disk operation,
-restart hydration of abnormal-finalization receipts and skipped-epoch commits are still unimplemented.
-Bare ABORTED restoration therefore stays blocked. No redb format, shared port or dependency changes.
-
-Sixteen new pure tests cover acknowledgement ordering, retained two-sided evidence, full exclusion,
-exact/changed retries, all guard axes, route/epoch/generation conflicts, stale snapshots, blocked
-recovery, next-transaction isolation and redaction. Existing successful abort fixtures now provide
-explicit synthetic commit/snapshot acknowledgements; negative fixtures remain. Rust tests are NOT_RUN
-without Cargo. Synthetic observations are not live journal/index or independent qualification evidence.
-
-## Abandonment and recovery
-
-`AbandonFence` names the complete affected projection memberships in addition to exact point
-accounting. A point-only filter does not qualify as membership-wide pre-retrieval/pre-IDF exclusion.
-The access/control owner must establish and verify the effective durable fence before supplying it.
-This API checks the exact membership set, transaction and epoch; it does not authenticate or execute
-the producer's scope receipt. Partition-only proofs and invalidation-only commits require their own
-complete port protocol.
-
-`recover` rejects unrelated visible epochs, missing or contradictory durable intents, oversized or
-duplicate observations, conflicting physical IDs, and incomplete committed readback. Old-point
-closures with no remaining new points still select two-sided compensation for nonconflicting plans.
-COMPENSATING never becomes forward staging just because the observed ID sets look complete.
-
-A committed decision requires the matching stage/closure/verified/control receipts and exact ID sets.
-A snapshot boolean cannot replace its bound acknowledgement. The bare `abandon_fence_durable` hint
-returns PublicationBlocked, not CommitInvalidationOnly: a boolean cannot prove complete scope
-exclusion. Continue means resume the normal verified steps, not permission to skip readback or commit.
-
-## Compatibility and verification
-
-This guard changes acceptance of invalid same-ID plans, not public signatures, shared contracts,
-point-ID derivation, storage codecs, dependencies, lockfile or workflows. It adds no state owner
-and does not grow `search-control-redb`. Previously persisted conflicting plans require explicit
-repair; they are not silently grandfathered, rewritten, deleted or declared successfully published.
-
-The 21 existing recovery tests are retained, with the two same-ID acceptance scenarios corrected:
-one tests valid distinct-ID two-sided compensation; the other proves rejection of an overlapping
-diff. Eleven additional tests cover every immutable field, vector-name/value changes, retained
-points, fresh/delete-only plans, valid full publication, unchanged state on rejection, competing
-submissions, 2,048 small manifest combinations and legacy recovery across phases. Fixtures are
-synthetic and exercise the public coordinator API, not live redb/Qdrant or native crash recovery.
-The child test module uses an explicit path and is not another Cargo test target.
-
-Rust compilation, tests, formatting and Clippy remain NOT_RUN: Cargo is unavailable in the authoring
-runtime (`cargo +1.98.0 test --locked -p search-publication --all-targets` exited 127).
-Source hashes and an independent merge-walk check are not executed Rust or independent acceptance.
-
-```sh
-cargo +1.98.0 test --locked -p search-publication --all-targets
-cargo +1.98.0 check --workspace --all-targets --all-features --locked
-```
-
-Source contract: [FUNCTIONS.md](FUNCTIONS.md), S13.1/S13.4/S13.5. Ownership and limits remain in
-[AGENTS.md](AGENTS.md). T27 and T09 remain unaccepted until real journal/index composition and the
-required executed evidence are present.
+There was no product caller of the removed boundary. Root producer/normal
+consumer wiring, full submit/restore qualification and installed/scale evidence
+remain required. In-memory inputs are intentionally replaced directly; existing
+C02 persisted codecs are unchanged. New prepared-input identity requires rebuild
+rather than relabelling an old caller-shaped preparation.

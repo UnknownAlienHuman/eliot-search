@@ -32,7 +32,7 @@ pub fn snapshot(commit: &AbortControlCommitObservation) -> SnapshotPublishReceip
 
 pub fn acknowledge(machine: &mut PublicationCoordinator) {
     let active = machine.active().unwrap();
-    let current_guards = active.prepared.guards;
+    let current_guards = active.durable_intent.as_ref().unwrap().guards;
     let target = active.target_epoch.get();
     let operation = OpaqueId::new(format!("fixture:abort-finalize-{target}")).unwrap();
     let generation = 100 + u64::try_from(target).unwrap();

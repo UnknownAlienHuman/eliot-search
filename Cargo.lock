@@ -1420,9 +1420,11 @@ version = "0.0.0"
 dependencies = [
  "search-contracts",
  "search-domain",
+ "search-materializer",
  "search-point-identity",
  "search-ports",
  "search-projection-planner",
+ "search-unitizer",
 ]
 
 [[package]]

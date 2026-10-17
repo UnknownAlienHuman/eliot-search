@@ -3,7 +3,6 @@
 use std::collections::BTreeSet;
 
 use search_point_identity::s11::PointId128;
-use search_projection_planner::{ProjectionManifest, diff_manifests};
 
 use crate::{
     PublicationError, PublicationPhase, PublicationRecoveryDecision,
@@ -29,33 +28,19 @@ pub fn recover(
         || transaction.target_epoch <= transaction.previous_visible_epoch
         || transaction.prepared.old_manifest.is_some()
             != transaction.prepared.old_manifest_digest.is_some()
+        || transaction.target_epoch != transaction.prepared.observed.target_epoch
+        || transaction.previous_visible_epoch != transaction.prepared.observed.previous_visible_epoch
     {
         return Err(PublicationError::InvalidPreparedPublication);
     }
-    crate::machine::validate_manifest(&transaction.prepared.new_manifest, transaction.max_points)?;
-    let empty = ProjectionManifest {
-        entries: Vec::new(),
-        canonical_bytes: b"eliot-search/empty-manifest/v1".to_vec(),
-    };
-    let old = transaction.prepared.old_manifest.as_ref().unwrap_or(&empty);
-    crate::machine::validate_manifest(old, transaction.max_points)?;
-    if crate::machine::changed_point_id_is_reused(Some(old), &transaction.prepared.new_manifest) {
-        // Legacy/conflicting plans can report every ID acknowledged while having
-        // overwritten old-epoch content and closed the new version at its own
-        // starting epoch. ID-only observations cannot prove either version safe.
-        // Preserve the unresolved operation for explicit verified repair; neither
-        // forward continuation nor snapshot publication is permitted here.
-        return Ok(Decision::PublicationBlocked);
-    }
     // Refuse oversized observation lists before building sets or manifest copies.
     if observation.staged_ids.len() > transaction.prepared.new_manifest.entries.len()
-        || observation.closed_ids.len() > old.entries.len()
+        || observation.closed_ids.len() > transaction.prepared.old_manifest.as_ref().map_or(0, |m| m.entries.len())
         || observation.abandon_fence_durable
     {
         return Ok(Decision::PublicationBlocked);
     }
-    let difference = diff_manifests(old, &transaction.prepared.new_manifest)
-        .map_err(|_| PublicationError::InvalidPreparedPublication)?;
+    let difference = &transaction.prepared.difference;
     let expected_staged = difference
         .create
         .iter()
