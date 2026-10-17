@@ -10,8 +10,9 @@ use std::time::Instant;
 
 use search_contracts::{
     AccessPartitionId, AccessPolicyBindingId, CorpusId, MaterializationId, OpaqueId,
-    ProjectionMembershipId, RepresentationId, ResidencyPolicyBindingId, ScoringPartitionId,
-    SourceId, SourceMembershipId, SourceNamespaceId, WorkspaceId,
+    ProjectionMembershipId, PublicationIntentId, PublicationReceiptId, RepresentationId,
+    ResidencyPolicyBindingId, ScoringPartitionId, SourceId, SourceMembershipId, SourceNamespaceId,
+    WorkspaceId,
 };
 use search_control_redb::{MigrationBootstrapWork, MutationId};
 use search_ports::{
@@ -156,6 +157,24 @@ impl<'a, C: CancellationProbe> SourceIdentityIdsV2<'a, C> {
         context: &OperationContext<C>,
     ) -> Result<ProjectionMembershipId, SourceIdentityIdError> {
         mint_fresh_id(self.deadline, self.work, context).map(ProjectionMembershipId::from_bytes)
+    }
+
+    /// Allocates an independent publication identity from the same qualified entropy owner.
+    /// Recovery must read the original retained ID before requesting a fresh allocation.
+    pub(crate) fn fresh_publication_intent_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<PublicationIntentId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(PublicationIntentId::from_bytes)
+    }
+
+    /// Allocates a receipt identity; allocating an ID does not prove a publication effect.
+    /// The control owner retains it with the original operation before dispatch.
+    pub(crate) fn fresh_publication_receipt_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<PublicationReceiptId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(PublicationReceiptId::from_bytes)
     }
 
     /// Allocates a new access partition only when the Root semantic owner has no equal class.
