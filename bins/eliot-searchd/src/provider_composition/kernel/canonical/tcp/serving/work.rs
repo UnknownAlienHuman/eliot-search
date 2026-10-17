@@ -1,6 +1,8 @@
 //! Explicit native authority and cooperative recipe ownership; no allow-all host.
 
-use search_access::{AccessCheckpoint, AccessError, RequestSecurityFence};
+use search_access::{
+    AccessCheckpoint, AccessError, CompiledEligibilityPopulation, RequestSecurityFence,
+};
 use search_contracts::{
     BoundedBytes, MAX_FRAME_BYTES, ProviderBodyV1, RecipeBodyV1, RecipeIdV1,
     RecipeResultV1, RequestBody, ResultBody, SearchCandidateSet, SourceIdentity,
@@ -23,6 +25,14 @@ use crate::access_composition::{
     StandalonePreRetrievalAdmission, VerifiedStandaloneGrant,
 };
 use super::{CanonicalServingError, CanonicalTcpConnection, CanonicalTcpError, monotonic_millis};
+
+#[allow(clippy::redundant_pub_crate)] // The containing provider module is private.
+pub(crate) type StandaloneCanonicalPopulationCompiler<'authority> = dyn for<'issued> FnMut(
+        &RequestBody,
+        &VerifiedStandaloneGrant<'issued>,
+        &StandalonePreRetrievalAdmission,
+    ) -> Result<CompiledEligibilityPopulation, AccessError>
+    + 'authority;
 
 /// One owner-issued work turn with separate lifetime and scheduling bounds.
 ///
@@ -118,6 +128,9 @@ pub struct CanonicalServingAuthority<'authority, 'grant> {
             &StandaloneGrantTemplate,
         ) -> Result<StandalonePreRetrievalAdmission, AccessError>,
     >,
+    /// C18 compiler over the current Root metadata image and exact issuer grant.
+    pub(crate) standalone_population:
+        Option<&'authority mut StandaloneCanonicalPopulationCompiler<'authority>>,
     /// Exact active C03 membership-to-source bindings captured with the current
     /// access snapshot under this same authority lock. Missing bindings deny
     /// source reads; request claims and object locators cannot supply them.
@@ -224,6 +237,7 @@ pub struct CanonicalWorkOutput<'io, 'authority, 'grant> {
     pub(super) budget: CanonicalWorkBudget,
     pub(super) emitted_terminal: Option<bool>,
     pub(super) failed: bool,
+    pub(super) canonical_population: Option<CompiledEligibilityPopulation>,
 }
 
 impl CanonicalWorkOutput<'_, '_, '_> {
@@ -270,6 +284,57 @@ impl CanonicalWorkOutput<'_, '_, '_> {
             .map_err(CanonicalServingError::Access)?;
         self.budget.check()?;
         Ok(admission)
+    }
+
+    /// Compile C18 from the held Root metadata image before a recipe can enter
+    /// its backend/source/IDF/count work. The result is scoped to this output turn.
+    pub(crate) fn compile_canonical_population(
+        &mut self,
+        admission: &StandalonePreRetrievalAdmission,
+    ) -> Result<(), CanonicalServingError> {
+        if self.failed || self.emitted_terminal.is_some() {
+            return Err(CanonicalServingError::InvalidCompletion);
+        }
+        self.canonical_population = None;
+        self.budget.check()?;
+        if self.request.guard().is_cancelled() {
+            return Err(CanonicalServingError::GrantRefused(
+                crate::access_composition::GrantUseError::RequestInactive,
+            ));
+        }
+        let (issued, compiler) = match (
+            self.authority.standalone_grant.as_ref(),
+            self.authority.standalone_population.as_mut(),
+        ) {
+            (Some(issued), Some(compiler)) => (issued, compiler),
+            _ => return Err(CanonicalServingError::InvalidConfiguration),
+        };
+        issued
+            .verify_current_claims(&self.request.body().grant)
+            .map_err(CanonicalServingError::GrantRefused)?;
+        let population = compiler(self.request.body(), issued, admission)
+            .map_err(CanonicalServingError::Access)?;
+        issued
+            .verify_current_claims(&self.request.body().grant)
+            .map_err(CanonicalServingError::GrantRefused)?;
+        self.budget.check()?;
+        if self.request.guard().is_cancelled() {
+            return Err(CanonicalServingError::GrantRefused(
+                crate::access_composition::GrantUseError::RequestInactive,
+            ));
+        }
+        self.canonical_population = Some(population);
+        Ok(())
+    }
+
+    /// Required C18 data compiled for this turn. This value is not a reusable permit.
+    #[must_use = "the canonical recipe must require the compiled C18 population"]
+    pub(crate) fn require_canonical_population(
+        &self,
+    ) -> Result<&CompiledEligibilityPopulation, CanonicalServingError> {
+        self.canonical_population
+            .as_ref()
+            .ok_or(CanonicalServingError::InvalidConfiguration)
     }
 
     /// Read an admitted membership under this turn's issuer and native authority.
