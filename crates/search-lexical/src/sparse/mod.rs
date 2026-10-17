@@ -25,6 +25,8 @@ pub use fingerprint::SparseFingerprint;
 // Crate-internal sharing with frozen-profile/scoring modules (see allow above).
 #[allow(clippy::redundant_pub_crate)]
 pub(crate) use fingerprint::fingerprint_bytes;
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) use fingerprint::fingerprint_bytes_checked;
 pub use mapping::{
     CollisionReport, SparseFeature, SparseFeatureSet, map_terms, measure_collision_terms,
     term_index,
@@ -36,8 +38,8 @@ pub use profile::{
 pub use vector::SparseVector;
 
 #[allow(clippy::redundant_pub_crate)]
-pub(crate) use mapping::map_terms_parameters;
+pub(crate) use mapping::map_terms_parameters_checked;
 #[allow(clippy::redundant_pub_crate)]
 pub(crate) use numerical::NumericalParameters;
 #[allow(clippy::redundant_pub_crate)]
-pub(crate) use vector::{weight_document_parameters, weight_query_parameters};
+pub(crate) use vector::{weight_document_parameters_checked, weight_query_parameters_checked};

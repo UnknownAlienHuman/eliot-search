@@ -690,16 +690,51 @@ fn normalize_term(value: &str, policy: CaseNormalization) -> String {
 // Shared with the sibling code-profile owner without exporting this policy.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) fn reject_binary_controls(bytes: &[u8]) -> Result<(), LexicalError> {
-    if bytes.contains(&0) {
-        return Err(LexicalError::BinaryContent);
+    reject_binary_controls_inner(bytes, None).map_err(|failure| match failure {
+        BinaryControlFailure::Lexical(error) => error,
+        BinaryControlFailure::Checkpoint(_) => {
+            unreachable!("the compatibility scanner has no checkpoint")
+        }
+    })
+}
+
+#[allow(clippy::redundant_pub_crate)]
+pub(super) fn reject_binary_controls_checkpointed(
+    bytes: &[u8],
+    checkpoint: &mut crate::code_identifiers::CodeEncodingCheckpoint<'_>,
+) -> Result<(), crate::CodeEncodingError> {
+    reject_binary_controls_inner(bytes, Some(checkpoint)).map_err(|failure| match failure {
+        BinaryControlFailure::Lexical(_) => crate::IdentifierError::BinaryContent.into(),
+        BinaryControlFailure::Checkpoint(error) => error.into(),
+    })
+}
+
+enum BinaryControlFailure {
+    Lexical(LexicalError),
+    Checkpoint(crate::SparseError),
+}
+
+fn reject_binary_controls_inner(
+    bytes: &[u8],
+    mut checkpoint: Option<&mut crate::code_identifiers::CodeEncodingCheckpoint<'_>>,
+) -> Result<(), BinaryControlFailure> {
+    let mut disallowed = 0;
+    for byte in bytes {
+        if let Some(checkpoint) = checkpoint.as_deref_mut() {
+            checkpoint
+                .worked()
+                .map_err(BinaryControlFailure::Checkpoint)?;
+        }
+        if *byte == 0 {
+            return Err(BinaryControlFailure::Lexical(LexicalError::BinaryContent));
+        }
+        if *byte < 0x20 && !matches!(*byte, b'\t' | b'\n' | b'\r' | 0x0c) {
+            disallowed += 1;
+        }
     }
-    let disallowed = bytes
-        .iter()
-        .filter(|byte| **byte < 0x20 && !matches!(**byte, b'\t' | b'\n' | b'\r' | 0x0c))
-        .count();
     let threshold = bytes.len().div_ceil(100).max(4);
     if disallowed >= threshold {
-        Err(LexicalError::BinaryContent)
+        Err(BinaryControlFailure::Lexical(LexicalError::BinaryContent))
     } else {
         Ok(())
     }

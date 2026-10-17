@@ -2,6 +2,7 @@
 
 use core::{fmt, ops::Range};
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 use search_contracts::{
     Blake3Digest32, BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalText,
@@ -9,6 +10,7 @@ use search_contracts::{
 };
 use unicode_normalization::UnicodeNormalization;
 
+use crate::SparseError;
 use crate::{LexicalAnalysis, LexicalInput, LexicalReceipt, LexicalToken, TermStatistics};
 
 mod encoding;
@@ -16,7 +18,8 @@ mod fixtures;
 
 pub use encoding::{
     AcceptedCodeIdentifiersProfile, CodeEncodingError, CodeIdentifierEncoding,
-    accept_code_identifiers_profile, encode_code_document, encode_code_query,
+    CodeProfileQualificationError, accept_code_identifiers_profile, encode_code_document,
+    encode_code_document_with_checkpoint, encode_code_query, qualify_code_identifiers_profile,
     validate_code_identifiers_pair,
 };
 
@@ -69,6 +72,74 @@ pub enum IdentifierError {
     UniqueTermsExceeded,
     /// Profile identity or document/query kind is incompatible.
     ProfileMismatch,
+}
+
+/// Maximum units of local work between live cancellation/deadline observations.
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) const CODE_ENCODING_POLL_INTERVAL: usize = 64;
+
+/// Shared cooperative checkpoint for the code-identifier encoder pipeline.
+#[allow(clippy::redundant_pub_crate)]
+pub(crate) struct CodeEncodingCheckpoint<'a> {
+    deadline: Option<Instant>,
+    observer: &'a mut dyn FnMut() -> Result<(), SparseError>,
+    work_since_poll: usize,
+}
+
+impl<'a> CodeEncodingCheckpoint<'a> {
+    /// Binds one immutable absolute deadline and one live cancellation observer.
+    pub(crate) fn new(
+        deadline: Option<Instant>,
+        observer: &'a mut dyn FnMut() -> Result<(), SparseError>,
+    ) -> Self {
+        Self {
+            deadline,
+            observer,
+            work_since_poll: 0,
+        }
+    }
+
+    /// Force an observation before allocation, emission, or a pipeline boundary.
+    pub(crate) fn poll(&mut self) -> Result<(), SparseError> {
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Err(SparseError::Cancelled);
+        }
+        (self.observer)()?;
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Err(SparseError::Cancelled);
+        }
+        self.work_since_poll = 0;
+        Ok(())
+    }
+
+    /// Account for one bounded work unit and observe every fixed interval.
+    pub(crate) fn worked(&mut self) -> Result<(), SparseError> {
+        self.work_since_poll += 1;
+        if self.work_since_poll >= CODE_ENCODING_POLL_INTERVAL {
+            self.poll()?;
+        }
+        Ok(())
+    }
+
+    /// Account for copied/hashed bytes without extending the fixed work interval.
+    pub(crate) fn worked_bytes(&mut self, mut bytes: usize) -> Result<(), SparseError> {
+        while bytes > 0 {
+            let remaining = CODE_ENCODING_POLL_INTERVAL - self.work_since_poll;
+            if bytes < remaining {
+                self.work_since_poll += bytes;
+                return Ok(());
+            }
+            bytes -= remaining;
+            self.poll()?;
+        }
+        Ok(())
+    }
 }
 
 impl IdentifierError {
@@ -191,7 +262,9 @@ impl CodeIdentifierLimits {
 
 /// Owner-produced immutable profile with exact artifact and fixture-definition identities.
 ///
-/// Fixture definitions and identity matching are not executed qualification.
+/// The identities bind frozen definitions; [`qualify_code_identifiers_profile`]
+/// executes those definitions and their expected outputs before issuing an
+/// accepted runtime profile.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodeIdentifiersProfile {
     id: OpaqueId,
@@ -279,19 +352,19 @@ impl CodeIdentifiersProfile {
     fn preflight(
         input: &LexicalInput,
         limits: CodeIdentifierLimits,
-    ) -> Result<(), IdentifierError> {
+        checkpoint: &mut CodeEncodingCheckpoint<'_>,
+    ) -> Result<(), CodeEncodingError> {
         if input.is_empty() {
-            return Err(IdentifierError::EmptyInput);
+            return Err(IdentifierError::EmptyInput.into());
         }
         if input.len() > limits.input_bytes {
-            return Err(IdentifierError::InputTooLarge);
+            return Err(IdentifierError::InputTooLarge.into());
         }
         let length = u64::try_from(input.len()).map_err(|_| IdentifierError::CoordinateInvalid)?;
         if input.source_start.checked_add(length) != Some(input.source_end) {
-            return Err(IdentifierError::CoordinateInvalid);
+            return Err(IdentifierError::CoordinateInvalid.into());
         }
-        crate::analyzer::reject_binary_controls(input.bytes())
-            .map_err(|_| IdentifierError::BinaryContent)
+        crate::analyzer::reject_binary_controls_checkpointed(input.bytes(), checkpoint)
     }
 
     /// Analyze immutable original UTF-8; only emitted terms undergo token-local NFC17.
@@ -303,12 +376,32 @@ impl CodeIdentifiersProfile {
         input: &LexicalInput,
         limits: CodeIdentifierLimits,
     ) -> Result<CodeIdentifierAnalysis, IdentifierError> {
-        Self::preflight(input, limits)?;
+        let mut observer = || Ok(());
+        let mut checkpoint = CodeEncodingCheckpoint::new(None, &mut observer);
+        self.analyze_checked(input, limits, &mut checkpoint)
+            .map_err(|error| match error {
+                CodeEncodingError::Identifier(error) => error,
+                CodeEncodingError::Sparse(_) => {
+                    unreachable!("the compatibility analyzer uses a no-op checkpoint")
+                }
+            })
+    }
+
+    fn analyze_checked(
+        &self,
+        input: &LexicalInput,
+        limits: CodeIdentifierLimits,
+        checkpoint: &mut CodeEncodingCheckpoint<'_>,
+    ) -> Result<CodeIdentifierAnalysis, CodeEncodingError> {
+        checkpoint.poll()?;
+        Self::preflight(input, limits, checkpoint)?;
+        checkpoint.poll()?;
         let mut output = Output::default();
         let mut start = None;
         let mut valid = false;
         let mut raw_scalars = 0;
         for (offset, character) in input.text().char_indices() {
+            checkpoint.worked()?;
             if character == '_' || unicode_ident::is_xid_continue(character) {
                 if start.is_none() {
                     start = Some(offset);
@@ -318,35 +411,37 @@ impl CodeIdentifiersProfile {
                 if valid {
                     raw_scalars += 1;
                     if raw_scalars > limits.raw_scalars {
-                        return Err(IdentifierError::TokenScalarsExceeded);
+                        return Err(IdentifierError::TokenScalarsExceeded.into());
                     }
                     let bytes = offset + character.len_utf8()
                         - start.ok_or(IdentifierError::CoordinateInvalid)?;
                     if bytes > limits.original_bytes {
-                        return Err(IdentifierError::OriginalBytesExceeded);
+                        return Err(IdentifierError::OriginalBytesExceeded.into());
                     }
                 }
             } else if let Some(begin) = start.take()
                 && valid
             {
-                output.parent(input, begin..offset, limits)?;
+                output.parent(input, begin..offset, limits, checkpoint)?;
             }
         }
         if let Some(begin) = start
             && valid
         {
-            output.parent(input, begin..input.len(), limits)?;
+            output.parent(input, begin..input.len(), limits, checkpoint)?;
         }
-        let terms = output
-            .statistics
-            .into_iter()
-            .map(|(term, values)| TermStatistics {
+        checkpoint.poll()?;
+        let mut terms = Vec::with_capacity(output.statistics.len());
+        for (term, values) in output.statistics {
+            checkpoint.worked()?;
+            terms.push(TermStatistics {
                 term,
                 frequency: values.0,
                 first_position: values.1,
                 last_position: values.2,
-            })
-            .collect::<Vec<_>>();
+            });
+        }
+        checkpoint.poll()?;
         let receipt = LexicalReceipt {
             source_id: input.source_id.clone(),
             source_revision: input.source_revision,
@@ -362,6 +457,7 @@ impl CodeIdentifiersProfile {
             unique_term_count: checked_u64(terms.len())?,
             position_span: output.position,
         };
+        checkpoint.poll()?;
         Ok(CodeIdentifierAnalysis {
             analysis: LexicalAnalysis {
                 tokens: output.tokens,
@@ -407,27 +503,32 @@ impl Output {
         input: &LexicalInput,
         range: Range<usize>,
         limits: CodeIdentifierLimits,
-    ) -> Result<(), IdentifierError> {
+        checkpoint: &mut CodeEncodingCheckpoint<'_>,
+    ) -> Result<(), CodeEncodingError> {
         let original = &input.text()[range.clone()];
-        let parts = component_ranges(original, limits)?;
-        let proper = parts
-            .iter()
-            .filter(|part| **part != (0..original.len()))
-            .count();
+        let parts = component_ranges(original, limits, checkpoint)?;
+        let mut proper = 0;
+        for part in &parts {
+            checkpoint.worked()?;
+            if part != &(0..original.len()) {
+                proper += 1;
+            }
+        }
         let attempts = proper + 1;
         if attempts > limits.expansions {
-            return Err(IdentifierError::ExpansionsExceeded);
+            return Err(IdentifierError::ExpansionsExceeded.into());
         }
         self.attempts = self
             .attempts
             .checked_add(attempts)
             .ok_or(IdentifierError::ExpansionsExceeded)?;
         if self.attempts > limits.total_expansions {
-            return Err(IdentifierError::ExpansionsExceeded);
+            return Err(IdentifierError::ExpansionsExceeded.into());
         }
         let first_token = self.tokens.len();
-        self.emit(input, range.clone(), first_token, limits)?;
+        self.emit(input, range.clone(), first_token, limits, checkpoint)?;
         for part in parts {
+            checkpoint.worked()?;
             if part == (0..original.len()) {
                 continue;
             }
@@ -443,6 +544,7 @@ impl Output {
                 range.start + part.start..range.start + part.end,
                 first_token,
                 limits,
+                checkpoint,
             )?;
         }
         self.position = self
@@ -458,35 +560,43 @@ impl Output {
         range: Range<usize>,
         first_token: usize,
         limits: CodeIdentifierLimits,
-    ) -> Result<(), IdentifierError> {
+        checkpoint: &mut CodeEncodingCheckpoint<'_>,
+    ) -> Result<(), CodeEncodingError> {
+        checkpoint.worked()?;
         let original = &input.text()[range.clone()];
         let mut term = String::new();
         let mut scalars = 0;
         for character in original.nfc() {
+            checkpoint.worked()?;
             scalars += 1;
             if scalars > limits.nfc_scalars {
-                return Err(IdentifierError::TokenScalarsExceeded);
+                return Err(IdentifierError::TokenScalarsExceeded.into());
             }
             if term
                 .len()
                 .checked_add(character.len_utf8())
                 .is_none_or(|size| size > limits.term_bytes)
             {
-                return Err(IdentifierError::TermBytesExceeded);
+                return Err(IdentifierError::TermBytesExceeded.into());
             }
             term.push(character);
         }
-        if self.tokens[first_token..]
-            .iter()
-            .any(|token| token.term == term)
-        {
+        let mut duplicate = false;
+        for token in &self.tokens[first_token..] {
+            checkpoint.worked()?;
+            if token.term == term {
+                duplicate = true;
+                break;
+            }
+        }
+        if duplicate {
             return Ok(());
         }
         if self.tokens.len() >= limits.tokens {
-            return Err(IdentifierError::TokensExceeded);
+            return Err(IdentifierError::TokensExceeded.into());
         }
         if !self.statistics.contains_key(&term) && self.statistics.len() >= limits.unique_terms {
-            return Err(IdentifierError::UniqueTermsExceeded);
+            return Err(IdentifierError::UniqueTermsExceeded.into());
         }
         let start = checked_u64(range.start)?;
         let end = checked_u64(range.end)?;
@@ -498,8 +608,14 @@ impl Output {
             .source_start
             .checked_add(end)
             .ok_or(IdentifierError::CoordinateInvalid)?;
-        let original_chars = u32::try_from(original.chars().count())
-            .map_err(|_| IdentifierError::CoordinateInvalid)?;
+        let mut original_char_count = 0_usize;
+        for _ in original.chars() {
+            checkpoint.worked()?;
+            original_char_count += 1;
+        }
+        let original_chars =
+            u32::try_from(original_char_count).map_err(|_| IdentifierError::CoordinateInvalid)?;
+        checkpoint.worked()?;
         if let Some(values) = self.statistics.get_mut(&term) {
             values.0 = values
                 .0
@@ -530,16 +646,24 @@ fn valid_start(character: char) -> bool {
 fn component_ranges(
     original: &str,
     limits: CodeIdentifierLimits,
-) -> Result<Vec<Range<usize>>, IdentifierError> {
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<Vec<Range<usize>>, CodeEncodingError> {
     let mut ranges = Vec::new();
     let mut segment = 0;
     for (offset, character) in original.char_indices() {
+        checkpoint.worked()?;
         if character == '_' {
-            camel_ranges(original, segment..offset, limits, &mut ranges)?;
+            camel_ranges(original, segment..offset, limits, &mut ranges, checkpoint)?;
             segment = offset + 1;
         }
     }
-    camel_ranges(original, segment..original.len(), limits, &mut ranges)?;
+    camel_ranges(
+        original,
+        segment..original.len(),
+        limits,
+        &mut ranges,
+        checkpoint,
+    )?;
     Ok(ranges)
 }
 
@@ -548,7 +672,8 @@ fn camel_ranges(
     segment: Range<usize>,
     limits: CodeIdentifierLimits,
     output: &mut Vec<Range<usize>>,
-) -> Result<(), IdentifierError> {
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<(), CodeEncodingError> {
     if segment.is_empty() {
         return Ok(());
     }
@@ -556,6 +681,7 @@ fn camel_ranges(
     let mut previous: Option<char> = None;
     let mut characters = original[segment.clone()].char_indices().peekable();
     while let Some((relative, character)) = characters.next() {
+        checkpoint.worked()?;
         let next_lower = characters
             .peek()
             .is_some_and(|(_, next)| next.is_ascii_lowercase());
@@ -566,21 +692,23 @@ fn camel_ranges(
                     || (prior.is_ascii_uppercase() && next_lower))
         });
         if split {
-            push_component(output, start..segment.start + relative, limits)?;
+            push_component(output, start..segment.start + relative, limits, checkpoint)?;
             start = segment.start + relative;
         }
         previous = Some(character);
     }
-    push_component(output, start..segment.end, limits)
+    push_component(output, start..segment.end, limits, checkpoint)
 }
 
 fn push_component(
     output: &mut Vec<Range<usize>>,
     range: Range<usize>,
     limits: CodeIdentifierLimits,
-) -> Result<(), IdentifierError> {
+    checkpoint: &mut CodeEncodingCheckpoint<'_>,
+) -> Result<(), CodeEncodingError> {
+    checkpoint.worked()?;
     if output.len() >= limits.components {
-        return Err(IdentifierError::ComponentsExceeded);
+        return Err(IdentifierError::ComponentsExceeded.into());
     }
     output.push(range);
     Ok(())
