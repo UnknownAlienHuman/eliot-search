@@ -85,6 +85,9 @@ impl<'a> OriginalContext<'a> {
 
 impl StorageSecurityContext for OriginalContext<'_> {
     type Error = OwnerError;
+    fn absolute_deadline(&self) -> Instant {
+        self.request.credential_context().0
+    }
     fn checkpoint(&mut self) -> Result<(), Self::Error> {
         self.checkpoint()
     }
@@ -217,10 +220,15 @@ pub(super) struct StorageAclSnapshot {
 }
 
 impl StorageAclSnapshot {
-    pub(super) fn current_user_scope(&self, request: &NativeRootRequest,
-        work: &mut NativeWork) -> Result<[u8; 32], OwnerError> {
+    pub(super) fn current_user_scope(
+        &self,
+        request: &NativeRootRequest,
+        work: &mut NativeWork,
+    ) -> Result<[u8; 32], OwnerError> {
         let actual = actual_user(&mut OriginalContext::new(request, work))?;
-        if actual != self.user { return Err(OwnerError::OwnerStorageAclUnqualified); }
+        if actual != self.user {
+            return Err(OwnerError::OwnerStorageAclUnqualified);
+        }
         Ok(actual)
     }
 
@@ -286,11 +294,11 @@ impl StorageAclSnapshot {
             .try_reserve_exact(count)
             .map_err(|_| OwnerError::ContractExhausted)?;
         let mut context = OriginalContext::new(request, work);
-        for file in pins
-            .files
-            .iter()
-            .chain(pins.direct.iter().map(super::native_objects::DirectPin::borrow_file))
-        {
+        for file in pins.files.iter().chain(
+            pins.direct
+                .iter()
+                .map(super::native_objects::DirectPin::borrow_file),
+        ) {
             observations.push(observe(&mut context, file, user)?);
         }
         Ok(Self {
@@ -316,7 +324,11 @@ impl StorageAclSnapshot {
         for (file, expected) in pins
             .files
             .iter()
-            .chain(pins.direct.iter().map(super::native_objects::DirectPin::borrow_file))
+            .chain(
+                pins.direct
+                    .iter()
+                    .map(super::native_objects::DirectPin::borrow_file),
+            )
             .zip(&self.observations)
         {
             if observe(&mut context, file, self.user)? != *expected {

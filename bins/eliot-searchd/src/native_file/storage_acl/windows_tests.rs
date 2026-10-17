@@ -4,6 +4,9 @@ use super::*;
 struct CopyContext;
 impl StorageSecurityContext for CopyContext {
     type Error = ();
+    fn absolute_deadline(&self) -> std::time::Instant {
+        std::time::Instant::now() + std::time::Duration::from_secs(30)
+    }
     fn checkpoint(&mut self) -> Result<(), ()> {
         Ok(())
     }

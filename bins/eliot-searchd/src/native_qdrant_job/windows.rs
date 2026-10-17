@@ -5,23 +5,29 @@
 //! single exact suspended primary thread is resumed. No PID is opened or adopted.
 
 use core::ffi::c_void;
+use std::cell::RefCell;
 use std::fmt::Write as _;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::mem::{size_of, zeroed};
+use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 use std::os::windows::process::CommandExt;
+use std::path::Path;
 use std::process::{Child, Command};
 use std::ptr::null;
+use std::sync::Arc;
 
 use search_contracts::{Blake3Digest32, ReceiptRef};
 use search_qdrant_supervisor::{
-    ChildContainmentCustody, ContainedLaunchError, ContainedSpawn, ContainedSpawnPort,
-    ContainedSpawnPortFailure, LaunchPlan, SecretMaterial, SpawnedChild, spawn_qualified_contained,
+    ChildContainmentCustody, ContainedLaunchError, ContainedLaunchWork, ContainedSpawn,
+    ContainedSpawnPort, ContainedSpawnPortFailure, LaunchPlan, SecretMaterial, SpawnedChild,
+    spawn_qualified_contained,
 };
 
 use crate::native_file::{
-    StorageAclError, StorageSecurityContext, StorageSecurityWork, observe_owner_private_acl,
+    DirectoryIdentity, Observation, QualifiedDirectory, StorageAclError, StorageSecurityContext,
+    StorageSecurityWork, observe_owner_private_acl, observe_with_check,
 };
 
 use super::{NativeQdrantJobError, original_suspend_count_is_single, record_thread_candidate};
@@ -35,6 +41,10 @@ const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x0000_2000;
 const THREAD_SUSPEND_RESUME: u32 = 0x0000_0002;
 const THREAD_QUERY_LIMITED_INFORMATION: u32 = 0x0000_0800;
 const TH32CS_SNAPTHREAD: u32 = 0x0000_0004;
+const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+const QUALIFIED_DIRECTORY_ACCESS: u32 = 0x0012_00a9;
+const FILE_SHARE_READ: u32 = 1;
 const ERROR_NO_MORE_FILES: i32 = 18;
 const MAX_THREAD_SNAPSHOT_ENTRIES: usize = 65_536;
 const JOB_POLICY_DOMAIN: &[u8] = b"eliot-search/qdrant-job-policy/v1\0";
@@ -111,6 +121,8 @@ unsafe extern "system" {
 
 struct JobCustody {
     handle: OwnedHandle,
+    directory_pin: QualifiedDirectory,
+    directory_identity: DirectoryIdentity,
 }
 
 impl ChildContainmentCustody for JobCustody {
@@ -172,21 +184,49 @@ pub(super) fn spawn_qualified<C: StorageSecurityContext>(
 impl<C: StorageSecurityContext> ContainedSpawnPort for WindowsPort<'_, C> {
     type Error = NativeQdrantJobError<C::Error>;
 
+    fn absolute_deadline(&self) -> std::time::Instant {
+        self.context.absolute_deadline()
+    }
+
+    fn admit(&mut self, work: ContainedLaunchWork) -> Result<(), Self::Error> {
+        self.context
+            .checkpoint()
+            .map_err(NativeQdrantJobError::Context)?;
+        let charge = match work {
+            ContainedLaunchWork::Checkpoint => None,
+            ContainedLaunchWork::NativeCall => Some(StorageSecurityWork::NativeCall),
+            ContainedLaunchWork::Open => Some(StorageSecurityWork::Open),
+            ContainedLaunchWork::Allocate(bytes) => Some(StorageSecurityWork::Allocate(bytes)),
+            ContainedLaunchWork::Process(bytes) => Some(StorageSecurityWork::Process(bytes)),
+        };
+        if let Some(charge) = charge {
+            self.context
+                .charge(charge)
+                .map_err(NativeQdrantJobError::Context)?;
+        }
+        self.context
+            .checkpoint()
+            .map_err(NativeQdrantJobError::Context)
+    }
+
     fn spawn_contained(
         &mut self,
         mut command: Command,
+        canonical_data_dir: &Path,
     ) -> Result<ContainedSpawn, ContainedSpawnPortFailure<Self::Error>> {
-        let acl = observe_owner_private_acl(
-            self.data_directory,
+        let (directory_pin, directory_identity) =
+            qualify_command_directory(canonical_data_dir, self.data_directory, self.context)
+                .map_err(ContainedSpawnPortFailure::before_spawn)?;
+        observe_owner_private_acl(
+            directory_pin.file(),
             self.expected_current_user_digest,
             self.context,
         )
         .map_err(|error| ContainedSpawnPortFailure::before_spawn(map_acl_error(error)))?;
-        let acl_receipt = acl_receipt(acl.semantic_fingerprint(), self.context)
-            .map_err(ContainedSpawnPortFailure::before_spawn)?;
         let job_digest =
             job_policy_digest(self.context).map_err(ContainedSpawnPortFailure::before_spawn)?;
-        let job = create_job(self.context).map_err(ContainedSpawnPortFailure::before_spawn)?;
+        let job = create_job(self.context, directory_pin, directory_identity)
+            .map_err(ContainedSpawnPortFailure::before_spawn)?;
         command.creation_flags(CREATE_SUSPENDED);
 
         if let Err(error) = before_native(self.context) {
@@ -197,7 +237,7 @@ impl<C: StorageSecurityContext> ContainedSpawnPort for WindowsPort<'_, C> {
             if let Err(error) = after_native(self.context) {
                 return Err(ContainedSpawnPortFailure::after_spawn(error, child, job));
             }
-            self.assign_verify_resume(child, job, acl_receipt, job_digest)
+            self.assign_verify_resume(child, job, canonical_data_dir, job_digest)
         } else {
             let context_error = after_native(self.context).err();
             Err(ContainedSpawnPortFailure::before_spawn(
@@ -212,7 +252,7 @@ impl<C: StorageSecurityContext> WindowsPort<'_, C> {
         &mut self,
         child: Child,
         job: JobCustody,
-        acl_receipt: ReceiptRef,
+        canonical_data_dir: &Path,
         job_digest: Blake3Digest32,
     ) -> Result<ContainedSpawn, ContainedSpawnPortFailure<NativeQdrantJobError<C::Error>>> {
         let pid = child.id();
@@ -222,6 +262,16 @@ impl<C: StorageSecurityContext> WindowsPort<'_, C> {
         {
             return Err(ContainedSpawnPortFailure::after_spawn(error, child, job));
         }
+        let acl_receipt = match revalidate_command_directory(
+            canonical_data_dir,
+            self.data_directory,
+            &job,
+            self.expected_current_user_digest,
+            self.context,
+        ) {
+            Ok(receipt) => receipt,
+            Err(error) => return Err(ContainedSpawnPortFailure::after_spawn(error, child, job)),
+        };
         let thread = match open_primary_thread(pid, self.context) {
             Ok(thread) => thread,
             Err(error) => return Err(ContainedSpawnPortFailure::after_spawn(error, child, job)),
@@ -315,8 +365,164 @@ fn resume_primary_thread<C: StorageSecurityContext>(
     Ok(())
 }
 
+fn qualify_command_directory<C: StorageSecurityContext>(
+    path: &Path,
+    held_data_directory: &File,
+    context: &mut C,
+) -> Result<(QualifiedDirectory, DirectoryIdentity), NativeQdrantJobError<C::Error>> {
+    let (directory, identity) = open_command_directory(path, context)?;
+    let held_observation = observe_native_handle(held_data_directory, context)?;
+    compare_directory_identities(identity, held_observation)
+        .map_err(|_| NativeQdrantJobError::DataDirectoryMismatch)?;
+    Ok((directory, identity))
+}
+
+fn revalidate_command_directory<C: StorageSecurityContext>(
+    path: &Path,
+    held_data_directory: &File,
+    custody: &JobCustody,
+    expected_user: [u8; 32],
+    context: &mut C,
+) -> Result<ReceiptRef, NativeQdrantJobError<C::Error>> {
+    let held = observe_native_handle(held_data_directory, context)?;
+    compare_directory_identities(custody.directory_identity, held)
+        .map_err(|_| NativeQdrantJobError::DataDirectoryMismatch)?;
+
+    let pinned = observe_pinned_directory(&custody.directory_pin, context)?;
+    if pinned != custody.directory_identity {
+        return Err(NativeQdrantJobError::DataDirectoryMismatch);
+    }
+
+    let (path_pin, path_identity) = open_command_directory(path, context)?;
+    drop(path_pin);
+    if path_identity != custody.directory_identity {
+        return Err(NativeQdrantJobError::DataDirectoryMismatch);
+    }
+
+    let acl = observe_owner_private_acl(custody.directory_pin.file(), expected_user, context)
+        .map_err(map_acl_error)?;
+    let receipt = acl_receipt(acl.semantic_fingerprint(), context)?;
+
+    let held = observe_native_handle(held_data_directory, context)?;
+    compare_directory_identities(custody.directory_identity, held)
+        .map_err(|_| NativeQdrantJobError::DataDirectoryMismatch)?;
+    let pinned = observe_pinned_directory(&custody.directory_pin, context)?;
+    if pinned != custody.directory_identity {
+        return Err(NativeQdrantJobError::DataDirectoryMismatch);
+    }
+    Ok(receipt)
+}
+
+fn open_command_directory<C: StorageSecurityContext>(
+    path: &Path,
+    context: &mut C,
+) -> Result<(QualifiedDirectory, DirectoryIdentity), NativeQdrantJobError<C::Error>> {
+    context
+        .checkpoint()
+        .map_err(NativeQdrantJobError::Context)?;
+    context
+        .charge(StorageSecurityWork::Open)
+        .map_err(NativeQdrantJobError::Context)?;
+    context
+        .checkpoint()
+        .map_err(NativeQdrantJobError::Context)?;
+    let opened = OpenOptions::new()
+        .access_mode(QUALIFIED_DIRECTORY_ACCESS)
+        .share_mode(FILE_SHARE_READ)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path);
+    context
+        .checkpoint()
+        .map_err(NativeQdrantJobError::Context)?;
+    let file = opened.map_err(|_| NativeQdrantJobError::NativeOperationFailed)?;
+    context
+        .charge(StorageSecurityWork::Allocate(
+            size_of::<File>() + 2 * size_of::<usize>(),
+        ))
+        .map_err(NativeQdrantJobError::Context)?;
+    let qualified = observe_native_file(context, |check| {
+        QualifiedDirectory::qualify_with_check(Arc::new(file), check)
+    })?
+    .ok_or(NativeQdrantJobError::NativeOperationFailed)?;
+    let identity = identity_from_native_observation(qualified.1)
+        .map_err(|_| NativeQdrantJobError::DataDirectoryMismatch)?;
+    Ok((qualified.0, identity))
+}
+
+fn observe_native_handle<C: StorageSecurityContext>(
+    file: &File,
+    context: &mut C,
+) -> Result<DirectoryIdentity, NativeQdrantJobError<C::Error>> {
+    let observation = observe_native_file(context, |check| observe_with_check(file, check))?;
+    identity_from_native_observation(observation)
+        .map_err(|_| NativeQdrantJobError::DataDirectoryMismatch)
+}
+
+fn observe_pinned_directory<C: StorageSecurityContext>(
+    directory: &QualifiedDirectory,
+    context: &mut C,
+) -> Result<DirectoryIdentity, NativeQdrantJobError<C::Error>> {
+    observe_native_file(context, |check| directory.identity_with_check(check))
+}
+
+fn observe_native_file<C, T>(
+    context: &mut C,
+    operation: impl FnOnce(
+        &dyn Fn(bool) -> Result<(), crate::native_file::ObservationError>,
+    ) -> Result<T, crate::native_file::ObservationError>,
+) -> Result<T, NativeQdrantJobError<C::Error>>
+where
+    C: StorageSecurityContext,
+{
+    let first = RefCell::new(None);
+    let result = {
+        let context_cell = RefCell::new(&mut *context);
+        let check = |before| {
+            let result = {
+                let mut context = context_cell.borrow_mut();
+                context.checkpoint().and_then(|()| {
+                    if before {
+                        context.charge(StorageSecurityWork::NativeCall)
+                    } else {
+                        Ok(())
+                    }
+                })
+            };
+            result.map_err(|error| {
+                if first.borrow().is_none() {
+                    *first.borrow_mut() = Some(error);
+                }
+                crate::native_file::ObservationError::ObservationFailed
+            })
+        };
+        operation(&check)
+    };
+    if let Some(error) = first.into_inner() {
+        return Err(NativeQdrantJobError::Context(error));
+    }
+    context
+        .checkpoint()
+        .map_err(NativeQdrantJobError::Context)?;
+    result.map_err(|_| NativeQdrantJobError::NativeOperationFailed)
+}
+
+const fn identity_from_native_observation(
+    observation: Observation,
+) -> Result<DirectoryIdentity, crate::native_qdrant_job::DirectoryBindingError> {
+    super::identity_from_observation(observation)
+}
+
+fn compare_directory_identities(
+    expected: DirectoryIdentity,
+    observed: DirectoryIdentity,
+) -> Result<(), crate::native_qdrant_job::DirectoryBindingError> {
+    super::compare_directory_identities(expected, observed)
+}
+
 fn create_job<C: StorageSecurityContext>(
     context: &mut C,
+    directory_pin: QualifiedDirectory,
+    directory_identity: DirectoryIdentity,
 ) -> Result<JobCustody, NativeQdrantJobError<C::Error>> {
     before_native(context)?;
     // SAFETY: null security attributes create a private unnamed Job handle;
@@ -326,12 +532,10 @@ fn create_job<C: StorageSecurityContext>(
         None
     } else {
         // SAFETY: successful CreateJobObjectW transfers one owned kernel handle.
-        Some(JobCustody {
-            handle: unsafe { OwnedHandle::from_raw_handle(raw) },
-        })
+        Some(unsafe { OwnedHandle::from_raw_handle(raw) })
     };
     after_native(context)?;
-    let job = job.ok_or(NativeQdrantJobError::NativeOperationFailed)?;
+    let handle = job.ok_or(NativeQdrantJobError::NativeOperationFailed)?;
 
     let mut limits: BasicLimitInformation =
         // SAFETY: every field is an integer and zero is a valid unset limit.
@@ -343,7 +547,7 @@ fn create_job<C: StorageSecurityContext>(
     // SAFETY: `limits` is fully initialized and matches JobObjectBasicLimitInformation.
     let configured = unsafe {
         SetInformationJobObject(
-            job.handle.as_raw_handle(),
+            handle.as_raw_handle(),
             JOBOBJECT_BASIC_LIMIT_INFORMATION_CLASS,
             (&raw const limits).cast(),
             length,
@@ -362,7 +566,7 @@ fn create_job<C: StorageSecurityContext>(
     // SAFETY: the retained Job handle is valid and both outputs have exact bounded storage.
     let queried = unsafe {
         QueryInformationJobObject(
-            job.handle.as_raw_handle(),
+            handle.as_raw_handle(),
             JOBOBJECT_BASIC_LIMIT_INFORMATION_CLASS,
             (&raw mut observed).cast(),
             length,
@@ -378,7 +582,11 @@ fn create_job<C: StorageSecurityContext>(
     {
         return Err(NativeQdrantJobError::NativeOperationFailed);
     }
-    Ok(job)
+    Ok(JobCustody {
+        handle,
+        directory_pin,
+        directory_identity,
+    })
 }
 
 fn primary_thread_id<C: StorageSecurityContext>(

@@ -9,8 +9,11 @@
 use std::io::Read as _;
 use std::path::Path;
 
+use crate::launch::ContainedLaunchWork;
+
 const BLOCK_BYTES: usize = 64;
 const STATE_WORDS: usize = 8;
+const FILE_HASH_BUFFER_BYTES: usize = 65_536;
 
 const K: [u32; 64] = [
     0x428a_2f98,
@@ -229,6 +232,57 @@ pub fn sha256_file(path: &Path) -> Result<[u8; 32], std::io::Error> {
             break;
         }
         hasher.update(&chunk[..read]);
+    }
+    Ok(hasher.finalize())
+}
+
+pub(crate) enum CheckedSha256FileError<E> {
+    Context(E),
+    Io,
+    ByteLimit,
+}
+
+/// Hashes one executable with bounded chunks and original-context admission.
+pub(crate) fn sha256_file_with_context<E>(
+    path: &Path,
+    max_bytes: u64,
+    admit: &mut impl FnMut(ContainedLaunchWork) -> Result<(), E>,
+) -> Result<[u8; 32], CheckedSha256FileError<E>> {
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedSha256FileError::Context)?;
+    admit(ContainedLaunchWork::Open).map_err(CheckedSha256FileError::Context)?;
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedSha256FileError::Context)?;
+    let mut file = std::fs::File::open(path).map_err(|_| CheckedSha256FileError::Io)?;
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedSha256FileError::Context)?;
+    admit(ContainedLaunchWork::Allocate(FILE_HASH_BUFFER_BYTES))
+        .map_err(CheckedSha256FileError::Context)?;
+    let mut buffer = vec![0_u8; FILE_HASH_BUFFER_BYTES];
+    let mut total = 0_u64;
+    let mut hasher = Sha256::new();
+    loop {
+        admit(ContainedLaunchWork::Checkpoint).map_err(CheckedSha256FileError::Context)?;
+        let remaining = max_bytes.saturating_sub(total);
+        let request = usize::try_from(remaining.min(FILE_HASH_BUFFER_BYTES as u64))
+            .unwrap_or(FILE_HASH_BUFFER_BYTES)
+            .saturating_add(usize::from(remaining < FILE_HASH_BUFFER_BYTES as u64));
+        let request = request.min(FILE_HASH_BUFFER_BYTES);
+        admit(ContainedLaunchWork::NativeCall).map_err(CheckedSha256FileError::Context)?;
+        admit(ContainedLaunchWork::Process(request)).map_err(CheckedSha256FileError::Context)?;
+        admit(ContainedLaunchWork::Checkpoint).map_err(CheckedSha256FileError::Context)?;
+        let read = file
+            .read(&mut buffer[..request])
+            .map_err(|_| CheckedSha256FileError::Io)?;
+        admit(ContainedLaunchWork::Checkpoint).map_err(CheckedSha256FileError::Context)?;
+        if read == 0 {
+            break;
+        }
+        total = total
+            .checked_add(u64::try_from(read).map_err(|_| CheckedSha256FileError::ByteLimit)?)
+            .ok_or(CheckedSha256FileError::ByteLimit)?;
+        if total > max_bytes {
+            return Err(CheckedSha256FileError::ByteLimit);
+        }
+        hasher.update(&buffer[..read]);
+        admit(ContainedLaunchWork::Checkpoint).map_err(CheckedSha256FileError::Context)?;
     }
     Ok(hasher.finalize())
 }

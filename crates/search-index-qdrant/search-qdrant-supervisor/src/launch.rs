@@ -31,7 +31,10 @@ use crate::containment::{
     ContainmentEvidence, ContainmentObservation, ContainmentReport, LoopbackHost,
     evaluate_containment,
 };
-use crate::identity::{ExecutableExpectation, VerifiedExecutable, verify_executable_identity};
+use crate::identity::{
+    CheckedIdentityError, ExecutableExpectation, VerifiedExecutable, verify_executable_identity,
+    verify_executable_identity_with_context,
+};
 use crate::secret::SecretMaterial;
 use crate::{
     QdrantOwnerFence, QualifiedArtifact, QualifiedProcessConfig, SecretLeaseEvidence,
@@ -291,9 +294,30 @@ impl ContainedSpawn {
 }
 
 /// The daemon's narrow native process-creation seam.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ContainedLaunchWork {
+    /// Polls the original request without charging an additional effect.
+    Checkpoint,
+    /// One bounded operating-system call performed during preflight.
+    NativeCall,
+    /// One bounded file open performed during preflight.
+    Open,
+    /// Capacity admitted before allocation.
+    Allocate(usize),
+    /// Bytes admitted before hashing or processing.
+    Process(usize),
+}
+
+/// The daemon's narrow native process-creation seam and original-operation fence.
 pub trait ContainedSpawnPort {
     /// Native failure type, including the original caller-context refusal.
     type Error;
+
+    /// Returns the immutable absolute deadline of that same original operation.
+    fn absolute_deadline(&self) -> Instant;
+
+    /// Polls the original context and reserves work before the requested effect.
+    fn admit(&mut self, work: ContainedLaunchWork) -> Result<(), Self::Error>;
 
     /// Performs the platform's contained spawn for the already-qualified command.
     ///
@@ -303,6 +327,7 @@ pub trait ContainedSpawnPort {
     fn spawn_contained(
         &mut self,
         command: Command,
+        canonical_data_dir: &Path,
     ) -> Result<ContainedSpawn, ContainedSpawnPortFailure<Self::Error>>;
 }
 
@@ -471,14 +496,25 @@ pub fn materialize_config_yaml(
 /// never adopt it. Unreachable/refused means free. Any other observation
 /// fails closed.
 pub fn check_loopback_port_free(host: &LoopbackHost, port: u16) -> Result<(), SupervisorError> {
+    check_loopback_port_free_with_timeout(*host, port, PORT_CHECK_TIMEOUT)
+}
+
+fn check_loopback_port_free_with_timeout(
+    host: LoopbackHost,
+    port: u16,
+    timeout: Duration,
+) -> Result<(), SupervisorError> {
     if port == 0 {
         return Err(SupervisorError::InvalidProcessConfig);
+    }
+    if timeout.is_zero() {
+        return Err(SupervisorError::EndpointUnavailable);
     }
     let address: SocketAddr = match host {
         LoopbackHost::V4 => SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
         LoopbackHost::V6 => SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
     };
-    match TcpStream::connect_timeout(&address, PORT_CHECK_TIMEOUT) {
+    match TcpStream::connect_timeout(&address, timeout) {
         Err(error)
             if matches!(
                 error.kind(),
@@ -606,14 +642,15 @@ pub fn spawn_qualified_contained<P: ContainedSpawnPort>(
     secret: &SecretMaterial,
     port: &mut P,
 ) -> Result<SpawnedChild, ContainedLaunchError<P::Error>> {
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
     if !plan.containment.windows_spawn_required() {
         return Err(ContainedLaunchError::Supervisor(
             SupervisorError::ContainmentUnavailable,
         ));
     }
-    let prepared = prepare_command(plan, secret).map_err(ContainedLaunchError::Supervisor)?;
+    let prepared = prepare_command_contained(plan, secret, port)?;
     let contained = port
-        .spawn_contained(prepared.command)
+        .spawn_contained(prepared.command, &prepared.canonical_data_dir)
         .map_err(ContainedSpawnPortFailure::into_launch_error)?;
     let (mut child, custody, observation) = contained.into_parts();
     let Some(pid) = NonZeroU32::new(child.id()) else {
@@ -686,6 +723,160 @@ fn prepare_command(
         canonical_data_dir,
         config_path,
     })
+}
+
+fn prepare_command_contained<P: ContainedSpawnPort>(
+    plan: &LaunchPlan,
+    secret: &SecretMaterial,
+    port: &mut P,
+) -> Result<PreparedCommand, ContainedLaunchError<P::Error>> {
+    check_loopback_contained(plan.host(), plan.http_port(), port)?;
+    check_loopback_contained(plan.host(), plan.grpc_port(), port)?;
+
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+    secret
+        .validate_header_safe()
+        .map_err(ContainedLaunchError::Supervisor)?;
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+
+    let expectation = plan
+        .expectation()
+        .map_err(ContainedLaunchError::Supervisor)?;
+    let absolute_deadline = port.absolute_deadline();
+    let mut admit = |work| port.admit(work);
+    let verified = verify_executable_identity_with_context(
+        &expectation,
+        absolute_deadline,
+        VERSION_PROBE_TIMEOUT,
+        &mut admit,
+    )
+    .map_err(|error| match error {
+        CheckedIdentityError::Context(error) => ContainedLaunchError::Port(error),
+        CheckedIdentityError::Supervisor(error) => ContainedLaunchError::Supervisor(error),
+    })?;
+
+    let canonical_data_dir = canonical_data_dir_contained(&plan.data_dir, port)?;
+    contained_work(port, ContainedLaunchWork::Allocate(512))?;
+    contained_work(port, ContainedLaunchWork::Process(512))?;
+    contained_work(port, ContainedLaunchWork::Open)?;
+    let config_path = materialize_config_yaml(
+        &canonical_data_dir,
+        plan.host(),
+        plan.http_port(),
+        plan.grpc_port(),
+    )
+    .map_err(ContainedLaunchError::Supervisor)?;
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+
+    let snapshot_capacity = verified
+        .canonical_path()
+        .as_os_str()
+        .len()
+        .saturating_add(config_path.as_os_str().len())
+        .saturating_add(QDRANT_CONFIG_ARG.len() + 2);
+    contained_work(port, ContainedLaunchWork::Allocate(snapshot_capacity))?;
+    contained_work(port, ContainedLaunchWork::Process(snapshot_capacity))?;
+    let snapshot = build_argv_snapshot(verified.canonical_path(), &config_path);
+    if secret.appears_in(snapshot.as_str()) {
+        return Err(ContainedLaunchError::Supervisor(
+            SupervisorError::SecretLeaseInvalid,
+        ));
+    }
+    let secret_text = core::str::from_utf8(secret.secret_bytes())
+        .map_err(|_| ContainedLaunchError::Supervisor(SupervisorError::SecretLeaseInvalid))?;
+    contained_work(
+        port,
+        ContainedLaunchWork::Allocate(secret.secret_bytes().len()),
+    )?;
+
+    contained_work(port, ContainedLaunchWork::Open)?;
+    let stdout_log = std::fs::File::create(canonical_data_dir.join("run-stdout.log"))
+        .map_err(|_| ContainedLaunchError::Supervisor(SupervisorError::StartFailed))?;
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+    contained_work(port, ContainedLaunchWork::Open)?;
+    let stderr_log = std::fs::File::create(canonical_data_dir.join("run-stderr.log"))
+        .map_err(|_| ContainedLaunchError::Supervisor(SupervisorError::StartFailed))?;
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+
+    let mut command = Command::new(verified.canonical_path());
+    command
+        .arg(QDRANT_CONFIG_ARG)
+        .arg(&config_path)
+        .current_dir(&canonical_data_dir)
+        .env(QDRANT_API_KEY_ENV, secret_text)
+        .stdin(Stdio::null())
+        .stdout(stdout_log)
+        .stderr(stderr_log);
+    Ok(PreparedCommand {
+        command,
+        verified,
+        snapshot,
+        canonical_data_dir,
+        config_path,
+    })
+}
+
+fn contained_checkpoint<P: ContainedSpawnPort>(port: &mut P) -> Result<(), P::Error> {
+    port.admit(ContainedLaunchWork::Checkpoint)
+}
+
+fn contained_work<P: ContainedSpawnPort>(
+    port: &mut P,
+    work: ContainedLaunchWork,
+) -> Result<(), ContainedLaunchError<P::Error>> {
+    port.admit(work).map_err(ContainedLaunchError::Port)
+}
+
+fn contained_timeout<P: ContainedSpawnPort>(
+    port: &mut P,
+    maximum: Duration,
+    expired: SupervisorError,
+) -> Result<Duration, ContainedLaunchError<P::Error>> {
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+    let timeout = port
+        .absolute_deadline()
+        .saturating_duration_since(Instant::now())
+        .min(maximum);
+    if timeout.is_zero() {
+        return Err(ContainedLaunchError::Supervisor(expired));
+    }
+    Ok(timeout)
+}
+
+fn check_loopback_contained<P: ContainedSpawnPort>(
+    host: LoopbackHost,
+    port_number: u16,
+    port: &mut P,
+) -> Result<(), ContainedLaunchError<P::Error>> {
+    contained_work(port, ContainedLaunchWork::NativeCall)?;
+    let timeout = contained_timeout(
+        port,
+        PORT_CHECK_TIMEOUT,
+        SupervisorError::EndpointUnavailable,
+    )?;
+    let result = check_loopback_port_free_with_timeout(host, port_number, timeout);
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+    result.map_err(ContainedLaunchError::Supervisor)
+}
+
+fn canonical_data_dir_contained<P: ContainedSpawnPort>(
+    data_dir: &Path,
+    port: &mut P,
+) -> Result<PathBuf, ContainedLaunchError<P::Error>> {
+    contained_work(port, ContainedLaunchWork::NativeCall)?;
+    let metadata = std::fs::metadata(data_dir)
+        .map_err(|_| ContainedLaunchError::Supervisor(SupervisorError::StartFailed))?;
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+    if !metadata.is_dir() {
+        return Err(ContainedLaunchError::Supervisor(
+            SupervisorError::StartFailed,
+        ));
+    }
+    contained_work(port, ContainedLaunchWork::NativeCall)?;
+    let canonical = std::fs::canonicalize(data_dir)
+        .map_err(|_| ContainedLaunchError::Supervisor(SupervisorError::StartFailed))?;
+    contained_checkpoint(port).map_err(ContainedLaunchError::Port)?;
+    Ok(canonical)
 }
 
 fn recovery_error<E>(

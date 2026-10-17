@@ -212,6 +212,9 @@ fn semantic_fingerprint_binds_owner_control_revision_order_flags_masks_and_sids(
 struct Refusal;
 impl StorageSecurityContext for Refusal {
     type Error = &'static str;
+    fn absolute_deadline(&self) -> std::time::Instant {
+        std::time::Instant::now()
+    }
     fn checkpoint(&mut self) -> Result<(), Self::Error> {
         Err("first caller refusal")
     }

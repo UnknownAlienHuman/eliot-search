@@ -15,7 +15,13 @@ use std::time::{Duration, Instant};
 use search_contracts::Sha256Digest32;
 
 use crate::SupervisorError;
-use crate::sha256::sha256_file;
+use crate::launch::ContainedLaunchWork;
+use crate::sha256::{CheckedSha256FileError, sha256_file, sha256_file_with_context};
+
+pub(crate) enum CheckedIdentityError<E> {
+    Context(E),
+    Supervisor(SupervisorError),
+}
 
 /// Pinned qualified Qdrant version.
 pub const QUALIFIED_QDRANT_VERSION: &str = "1.19.0";
@@ -196,6 +202,72 @@ pub fn verify_executable_identity(
     })
 }
 
+/// Verifies one executable under the caller's immutable absolute deadline and
+/// admission callbacks. The version child never receives a fresh phase budget.
+pub(crate) fn verify_executable_identity_with_context<E>(
+    expectation: &ExecutableExpectation,
+    absolute_deadline: Instant,
+    max_probe_timeout: Duration,
+    admit: &mut impl FnMut(ContainedLaunchWork) -> Result<(), E>,
+) -> Result<VerifiedExecutable, CheckedIdentityError<E>> {
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+    if Instant::now() >= absolute_deadline {
+        return Err(CheckedIdentityError::Supervisor(
+            SupervisorError::ExecutableProbeFailed,
+        ));
+    }
+    admit(ContainedLaunchWork::NativeCall).map_err(CheckedIdentityError::Context)?;
+    let metadata = std::fs::metadata(&expectation.path)
+        .map_err(|_| CheckedIdentityError::Supervisor(SupervisorError::InvalidArtifact))?;
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+    if !metadata.is_file() || metadata.len() != expectation.bytes {
+        return Err(CheckedIdentityError::Supervisor(
+            SupervisorError::ArtifactDigestMismatch,
+        ));
+    }
+
+    let observed = match sha256_file_with_context(&expectation.path, expectation.bytes, admit) {
+        Ok(digest) => digest,
+        Err(CheckedSha256FileError::Context(error)) => {
+            return Err(CheckedIdentityError::Context(error));
+        }
+        Err(CheckedSha256FileError::Io | CheckedSha256FileError::ByteLimit) => {
+            return Err(CheckedIdentityError::Supervisor(
+                SupervisorError::ExecutableProbeFailed,
+            ));
+        }
+    };
+    if observed != *expectation.sha256.as_bytes() {
+        return Err(CheckedIdentityError::Supervisor(
+            SupervisorError::ArtifactDigestMismatch,
+        ));
+    }
+
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+    let probe_cap = Instant::now()
+        .checked_add(max_probe_timeout)
+        .unwrap_or(absolute_deadline);
+    let probe_deadline = absolute_deadline.min(probe_cap);
+    let version = probe_version_with_context(&expectation.path, probe_deadline, admit)?;
+    if version != expectation.version {
+        return Err(CheckedIdentityError::Supervisor(
+            SupervisorError::ArtifactVersionMismatch,
+        ));
+    }
+
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+    admit(ContainedLaunchWork::NativeCall).map_err(CheckedIdentityError::Context)?;
+    let canonical_path = std::fs::canonicalize(&expectation.path)
+        .map_err(|_| CheckedIdentityError::Supervisor(SupervisorError::ExecutableProbeFailed))?;
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+    Ok(VerifiedExecutable {
+        canonical_path,
+        sha256: expectation.sha256,
+        bytes: expectation.bytes,
+        version,
+    })
+}
+
 /// Runs `<exe> --version` with a finite deadline; kills and reaps on timeout.
 fn probe_version(exe: &Path, timeout: Duration) -> Result<String, SupervisorError> {
     let mut child = Command::new(exe)
@@ -231,16 +303,127 @@ fn probe_version(exe: &Path, timeout: Duration) -> Result<String, SupervisorErro
     }
 }
 
+fn probe_version_with_context<E>(
+    exe: &Path,
+    deadline: Instant,
+    admit: &mut impl FnMut(ContainedLaunchWork) -> Result<(), E>,
+) -> Result<String, CheckedIdentityError<E>> {
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+    if Instant::now() >= deadline {
+        return Err(CheckedIdentityError::Supervisor(
+            SupervisorError::ExecutableProbeFailed,
+        ));
+    }
+    admit(ContainedLaunchWork::NativeCall).map_err(CheckedIdentityError::Context)?;
+    admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+    let spawned = Command::new(exe)
+        .arg(VERSION_PROBE_ARG)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn();
+    let mut child = spawned
+        .map_err(|_| CheckedIdentityError::Supervisor(SupervisorError::ExecutableProbeFailed))?;
+    if let Err(error) = admit(ContainedLaunchWork::Checkpoint) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(CheckedIdentityError::Context(error));
+    }
+
+    loop {
+        if let Err(error) = admit(ContainedLaunchWork::Checkpoint) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(CheckedIdentityError::Context(error));
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(CheckedIdentityError::Supervisor(
+                SupervisorError::ExecutableProbeFailed,
+            ));
+        }
+        if let Err(error) = admit(ContainedLaunchWork::NativeCall) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(CheckedIdentityError::Context(error));
+        }
+        let status = child.try_wait();
+        if let Err(error) = admit(ContainedLaunchWork::Checkpoint) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(CheckedIdentityError::Context(error));
+        }
+        let Ok(status) = status else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(CheckedIdentityError::Supervisor(
+                SupervisorError::ExecutableProbeFailed,
+            ));
+        };
+        if let Some(status) = status {
+            if !status.success() {
+                return Err(CheckedIdentityError::Supervisor(
+                    SupervisorError::ExecutableProbeFailed,
+                ));
+            }
+            admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+            admit(ContainedLaunchWork::NativeCall).map_err(CheckedIdentityError::Context)?;
+            let output = child.wait_with_output().map_err(|_| {
+                CheckedIdentityError::Supervisor(SupervisorError::ExecutableProbeFailed)
+            })?;
+            admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+            let text = String::from_utf8_lossy(&output.stdout);
+            return parse_qdrant_version_output(&text).map_err(CheckedIdentityError::Supervisor);
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        std::thread::sleep(PROBE_POLL_INTERVAL.min(remaining));
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{
+        path::PathBuf,
+        time::{Duration, Instant},
+    };
 
     use search_contracts::Sha256Digest32;
 
     use super::{
-        ExecutableExpectation, QUALIFIED_EXE_BYTES, QUALIFIED_QDRANT_VERSION, is_plausible_version,
+        CheckedIdentityError, ExecutableExpectation, QUALIFIED_EXE_BYTES, QUALIFIED_QDRANT_VERSION,
+        is_plausible_version, verify_executable_identity_with_context,
     };
-    use crate::SupervisorError;
+    use crate::{ContainedLaunchWork, SupervisorError};
+
+    #[test]
+    fn expired_original_deadline_stops_before_version_probe_work() {
+        let expectation = ExecutableExpectation::custom(
+            PathBuf::from("must-not-be-opened.exe"),
+            Sha256Digest32::from_bytes([0x5a; 32]),
+            1,
+            "1.19.0".to_owned(),
+        )
+        .unwrap();
+        let mut work = Vec::new();
+        let mut admit = |item| {
+            work.push(item);
+            Ok::<(), ()>(())
+        };
+        let result = verify_executable_identity_with_context(
+            &expectation,
+            Instant::now() - Duration::from_millis(1),
+            Duration::from_secs(30),
+            &mut admit,
+        );
+        assert!(matches!(
+            result,
+            Err(CheckedIdentityError::Supervisor(
+                SupervisorError::ExecutableProbeFailed
+            ))
+        ));
+        assert_eq!(work, [ContainedLaunchWork::Checkpoint]);
+    }
 
     #[test]
     fn qualified_default_pins_exact_artifact() {

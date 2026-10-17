@@ -9,7 +9,7 @@ use std::fs::File;
 
 use search_qdrant_supervisor::{ContainedLaunchError, LaunchPlan, SecretMaterial, SpawnedChild};
 
-use crate::native_file::StorageSecurityContext;
+use crate::native_file::{DirectoryIdentity, Observation, StorageSecurityContext};
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
@@ -28,6 +28,8 @@ pub enum NativeQdrantJobError<E> {
     PrimaryThreadAmbiguous,
     /// The primary thread's prior suspend count was not exactly one.
     PrimaryThreadResumeRefused,
+    /// The qualified command directory and held data-directory handles differ.
+    DataDirectoryMismatch,
     /// This target has no qualified native Qdrant containment producer.
     UnsupportedPlatform,
 }
@@ -40,6 +42,7 @@ impl<E> core::fmt::Debug for NativeQdrantJobError<E> {
             Self::NativeOperationFailed => "NATIVE_QDRANT_NATIVE_OPERATION_FAILED",
             Self::PrimaryThreadAmbiguous => "NATIVE_QDRANT_PRIMARY_THREAD_AMBIGUOUS",
             Self::PrimaryThreadResumeRefused => "NATIVE_QDRANT_PRIMARY_THREAD_RESUME_REFUSED",
+            Self::DataDirectoryMismatch => "NATIVE_QDRANT_DATA_DIRECTORY_MISMATCH",
             Self::UnsupportedPlatform => "NATIVE_QDRANT_UNSUPPORTED_PLATFORM",
         };
         formatter.write_str(code)
@@ -48,10 +51,15 @@ impl<E> core::fmt::Debug for NativeQdrantJobError<E> {
 
 /// Starts one already-qualified Qdrant plan through the native contained-spawn port.
 ///
-/// `data_directory` must be the exact held directory used for `plan`; the ACL
-/// owner is freshly observed through `native_file::observe_owner_private_acl`.
-/// Every producer-side native call and bounded enumeration uses `context`.
-/// The returned child owns its Job handle through supervisor shutdown/recovery.
+/// `data_directory` is the caller's retained directory handle. The Windows
+/// producer opens the supervisor's canonical `current_dir` using the qualified
+/// no-follow directory boundary, compares the native volume/file/creation
+/// identity against this held handle before resume, and retains that exact pin
+/// inside Job custody. The ACL owner is observed on that same pin. Every
+/// preflight/native call uses `context`'s original deadline, cancellation and
+/// cumulative work allowance; bounded probe/connect waits are clipped to its
+/// absolute deadline. The returned child owns Job and directory pins through
+/// supervisor shutdown/recovery.
 pub fn spawn_qualified<C: StorageSecurityContext>(
     plan: &LaunchPlan,
     secret: &SecretMaterial,
@@ -111,9 +119,52 @@ const fn original_suspend_count_is_single(count: u32) -> bool {
     count == 1
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DirectoryBindingError {
+    NotDirectory,
+    Mismatch,
+}
+
+const fn identity_from_observation(
+    observation: Observation,
+) -> Result<DirectoryIdentity, DirectoryBindingError> {
+    if observation.attributes & 0x10 == 0 {
+        return Err(DirectoryBindingError::NotDirectory);
+    }
+    Ok(DirectoryIdentity {
+        volume_serial: observation.volume_serial,
+        file_index: observation.file_index,
+        creation_time: observation.creation_time,
+        attributes: observation.attributes,
+    })
+}
+
+#[cfg(test)]
+fn compare_directory_observation(
+    expected: DirectoryIdentity,
+    observed: Observation,
+) -> Result<(), DirectoryBindingError> {
+    let actual = identity_from_observation(observed)?;
+    compare_directory_identities(expected, actual)
+}
+
+fn compare_directory_identities(
+    expected: DirectoryIdentity,
+    observed: DirectoryIdentity,
+) -> Result<(), DirectoryBindingError> {
+    if observed == expected {
+        Ok(())
+    } else {
+        Err(DirectoryBindingError::Mismatch)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ThreadCandidateError, original_suspend_count_is_single, record_thread_candidate};
+    use super::{
+        DirectoryBindingError, DirectoryIdentity, Observation, ThreadCandidateError,
+        compare_directory_observation, original_suspend_count_is_single, record_thread_candidate,
+    };
 
     #[test]
     fn primary_thread_selection_requires_one_nonzero_candidate() {
@@ -137,5 +188,44 @@ mod tests {
         for other in [0, 2, u32::MAX] {
             assert!(!original_suspend_count_is_single(other));
         }
+    }
+
+    #[test]
+    fn held_data_directory_must_match_the_qualified_command_directory_identity() {
+        let expected = DirectoryIdentity {
+            volume_serial: 7,
+            file_index: 11,
+            creation_time: 13,
+            attributes: 0x10,
+        };
+        let observed = Observation {
+            volume_serial: 7,
+            file_index: 11,
+            creation_time: 13,
+            attributes: 0x10,
+            length: 0,
+            last_write_time: 17,
+        };
+        assert_eq!(compare_directory_observation(expected, observed), Ok(()));
+        assert_eq!(
+            compare_directory_observation(
+                expected,
+                Observation {
+                    file_index: 12,
+                    ..observed
+                },
+            ),
+            Err(DirectoryBindingError::Mismatch)
+        );
+        assert_eq!(
+            compare_directory_observation(
+                expected,
+                Observation {
+                    attributes: 0x80,
+                    ..observed
+                },
+            ),
+            Err(DirectoryBindingError::NotDirectory)
+        );
     }
 }

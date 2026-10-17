@@ -6,7 +6,7 @@
 
 use core::fmt;
 use search_contracts::{self as c, CanonicalValue as V};
-use std::{fs::File, path::Path};
+use std::{fs::File, path::Path, time::Instant};
 
 /// Work charged to the original Native invocation before the corresponding action.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,6 +25,8 @@ pub enum StorageSecurityWork {
 pub trait StorageSecurityContext {
     /// Original typed refusal, retained without formatting it.
     type Error;
+    /// Immutable absolute deadline belonging to this same original operation.
+    fn absolute_deadline(&self) -> Instant;
     /// Poll original custody, cancellation and deadline.
     fn checkpoint(&mut self) -> Result<(), Self::Error>;
     /// Reserve cumulative work before its action; refusal remains sticky.

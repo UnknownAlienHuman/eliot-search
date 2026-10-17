@@ -67,6 +67,9 @@ impl Context {
 }
 impl StorageSecurityContext for Context {
     type Error = &'static str;
+    fn absolute_deadline(&self) -> Instant {
+        self.deadline
+    }
     fn checkpoint(&mut self) -> Result<(), Self::Error> {
         self.poll()
     }

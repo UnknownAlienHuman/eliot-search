@@ -38,10 +38,11 @@ pub use identity::{
 };
 pub use launch::{
     ArgvSnapshot, CONFIG_FILE_NAME, ChildContainmentCustody, ContainedLaunchError,
-    ContainedLaunchFailureCause, ContainedSpawn, ContainedSpawnPort, ContainedSpawnPortFailure,
-    LaunchPlan, MAX_LAUNCH_TIMEOUT, MIN_LAUNCH_TIMEOUT, PORT_CHECK_TIMEOUT, QDRANT_API_KEY_ENV,
-    QDRANT_CONFIG_ARG, SpawnRecovery, SpawnedChild, VERSION_PROBE_TIMEOUT, build_argv_snapshot,
-    check_loopback_port_free, materialize_config_yaml, spawn_qualified, spawn_qualified_contained,
+    ContainedLaunchFailureCause, ContainedLaunchWork, ContainedSpawn, ContainedSpawnPort,
+    ContainedSpawnPortFailure, LaunchPlan, MAX_LAUNCH_TIMEOUT, MIN_LAUNCH_TIMEOUT,
+    PORT_CHECK_TIMEOUT, QDRANT_API_KEY_ENV, QDRANT_CONFIG_ARG, SpawnRecovery, SpawnedChild,
+    VERSION_PROBE_TIMEOUT, build_argv_snapshot, check_loopback_port_free, materialize_config_yaml,
+    spawn_qualified, spawn_qualified_contained,
 };
 pub use owned::{
     LaunchReceipt, MAX_PROBE_RESPONSE_BYTES, OwnedChild, PROBE_SOCKET_TIMEOUT,
