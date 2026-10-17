@@ -888,7 +888,7 @@ mod tests {
                 profile.clone(),
                 CodeIdentifierLimits::HARD,
                 SparseLimits::BASELINE,
-                Instant::now() - Duration::from_secs(1),
+                Instant::now().checked_sub(Duration::from_secs(1)).expect("fixture deadline"),
                 &mut || Ok(()),
             ),
             Err(crate::CodeProfileQualificationError::Encoding(
@@ -916,7 +916,7 @@ mod tests {
     #[test]
     fn document_encoder_observes_cancellation_during_analysis_work() {
         let profile = CodeIdentifiersProfile::new().expect("profile");
-        let accepted = qualified(profile.clone());
+        let accepted = qualified(profile);
         let value = "alpha ".repeat(128);
         let checks = AtomicUsize::new(0);
         let mut cancellation = || {
