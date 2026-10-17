@@ -60,6 +60,7 @@ use search_unitizer::{
     validate_v3_unitizer_profile, verify_unit_manifest,
 };
 
+use super::super::read_child::fresh_root::FreshRootContext;
 use super::retention_control::NativeRetentionControl;
 use super::retention_source::RetentionSourceInput;
 use super::{command::original_port, retention};
@@ -75,13 +76,14 @@ const C09_FIXTURE_SOURCE: &[u8] = b"fn main() {}\n";
 const C09_FIXTURE_DEFINITION: &[u8] =
     b"native-raw-code-unitizer-v3:fixture=fn main() {}\n;utf8-exact;units=1;span=0..input-len;omitted=0;exact-byte-anchor;verified-manifest";
 
-/// Owner-produced C08/C09/C11 profiles. Construction executes a frozen C08/C09
-/// raw-code fixture and C11's own complete runtime qualification before any
-/// membership or collection identity is selected.
-struct QualifiedNativeProfiles {
+/// Qualified static C08/C09/C11 profile data. This describes a compatible
+/// projection; it is not permission to access a Root, source, or collection.
+pub struct QualifiedNativeProfiles {
     materializer: ValidatedMaterializerProfile,
     unitizer: ValidatedV3UnitizerProfile,
     lexical: AcceptedCodeIdentifiersProfile,
+    vector: NamedVectorRequirement,
+    profile_set: RawCodeProjectionProfileSetDescriptor,
 }
 
 impl QualifiedNativeProfiles {
@@ -110,11 +112,66 @@ impl QualifiedNativeProfiles {
         )
         .map_err(|_| "NATIVE_PREPARATION_C11_PROFILE_QUALIFICATION_REFUSED")?;
         check_original(deadline, cancelled, work)?;
+        let vector = raw_code_vector_requirement()?;
+        let profile_set = raw_code_profile_set(&materializer, &unitizer, &lexical, &vector)?;
         Ok(Self {
             materializer,
             unitizer,
             lexical,
+            vector,
+            profile_set,
         })
+    }
+
+    /// Qualifies frozen profile fixtures under this exact `FreshRootContext` original context.
+    /// It reads no source body and returns static profile data, not Root permission.
+    #[allow(dead_code)] // Consumed by the parent C27 startup bootstrap once runtime wiring is ready.
+    pub(crate) fn qualify_for_startup(
+        native: &FreshRootContext<'_, '_>,
+    ) -> Result<Self, &'static str> {
+        let work = |unit| native.work(unit);
+        let mut checkpoint = || {
+            native
+                .source_full_checkpoint()
+                .map_err(|_| SparseError::Cancelled)
+        };
+        let profiles = Self::qualify(
+            native.original_deadline(),
+            native.original_cancellation_flag(),
+            &work,
+            &mut checkpoint,
+        )?;
+        native
+            .source_full_checkpoint()
+            .map_err(|_| "NATIVE_PREPARATION_ORIGINAL_CONTEXT_REFUSED")?;
+        Ok(profiles)
+    }
+
+    /// Read-only C11 profile data; this grants no query or Root authority.
+    #[allow(dead_code)] // Consumed by the parent C27 query/bootstrap owner.
+    pub(crate) const fn lexical_profile(&self) -> &AcceptedCodeIdentifiersProfile {
+        &self.lexical
+    }
+
+    /// Builds the shared static schema for Root-supplied physical coordinates.
+    ///
+    /// The installation incarnation and generation are data coordinates only;
+    /// callers must obtain them from the retained Root/C02 route owners.
+    pub(crate) fn collection_schema(
+        &self,
+        installation: c::InstallationIncarnationId,
+        generation: c::CollectionGenerationId,
+    ) -> Result<(CollectionSchema, ProfileId), &'static str> {
+        let schema = CollectionSchema::initial(
+            installation,
+            generation,
+            self.profile_set.profile_set_id().clone(),
+            std::slice::from_ref(&self.vector),
+        )
+        .map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")?;
+        let projection_schema_id = ProfileId::new(RAW_CODE_SCHEMA_PROFILE_ID)
+            .map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")?;
+        Ok((schema, projection_schema_id))
     }
 
     const fn member_profiles(&self) -> NativeMemberProfiles<'_> {
@@ -494,11 +551,23 @@ fn projection_operation(
     ))
 }
 
+fn raw_code_vector_requirement() -> Result<NamedVectorRequirement, &'static str> {
+    NamedVectorRequirement::new(
+        VectorName::new(RAW_CODE_VECTOR_NAME).map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")?,
+        VectorRequirement::Sparse {
+            index_ceiling: RAW_CODE_INDEX_CEILING,
+            idf_enabled: true,
+        },
+    )
+    .map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")
+}
 fn raw_code_profile_set(
-    profiles: &QualifiedNativeProfiles,
+    materializer: &ValidatedMaterializerProfile,
+    unitizer: &ValidatedV3UnitizerProfile,
+    lexical: &AcceptedCodeIdentifiersProfile,
     vector: &NamedVectorRequirement,
 ) -> Result<RawCodeProjectionProfileSetDescriptor, &'static str> {
-    let code = profiles.lexical.profile();
+    let code = lexical.profile();
     RawCodeProjectionProfileSetDescriptor::new(
         code.id().clone(),
         code.revision(),
@@ -507,8 +576,8 @@ fn raw_code_profile_set(
         code.compatibility_fixture_identity(),
         code.collision_fixture_identity(),
         vector.clone(),
-        Blake3Digest32::from_bytes(*profiles.materializer.id().as_bytes()),
-        profiles.unitizer.id().clone(),
+        Blake3Digest32::from_bytes(*materializer.id().as_bytes()),
+        unitizer.id().clone(),
     )
     .map_err(|_| "NATIVE_PREPARATION_C13_PROFILE_SET_REFUSED")
 }
@@ -1109,30 +1178,18 @@ pub(super) fn prepare_native_raw_code_artifacts(
         .visible_epoch
         .checked_next()
         .map_err(|_| "NATIVE_PREPARATION_TARGET_EPOCH_REFUSED")?;
-    let vector = NamedVectorRequirement::new(
-        VectorName::new(RAW_CODE_VECTOR_NAME).map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")?,
-        VectorRequirement::Sparse {
-            index_ceiling: RAW_CODE_INDEX_CEILING,
-            idf_enabled: true,
-        },
-    )
-    .map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")?;
-    let profile_set = raw_code_profile_set(&profiles, &vector)?;
-    let schema = CollectionSchema::initial(
+    let vector = &profiles.vector;
+    let profile_set = &profiles.profile_set;
+    let (schema, projection_schema_id) = profiles.collection_schema(
         journal.identity().installation_incarnation_id,
         visibility.collection_generation_id,
-        profile_set.profile_set_id().clone(),
-        std::slice::from_ref(&vector),
-    )
-    .map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")?;
+    )?;
     let schema_identity = schema
         .identity()
         .map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")?;
     if *schema_identity.as_digest() != visibility.schema_identity_digest {
         return Err("NATIVE_PREPARATION_SCHEMA_NOT_CURRENT");
     }
-    let projection_schema_id = ProfileId::new(RAW_CODE_SCHEMA_PROFILE_ID)
-        .map_err(|_| "NATIVE_PREPARATION_SCHEMA_INVALID")?;
 
     let mut port = original_port(journal, publisher, input.deadline, &work)
         .map_err(|_| "NATIVE_PREPARATION_C03_RESTORE_REFUSED")?;
@@ -1186,8 +1243,8 @@ pub(super) fn prepare_native_raw_code_artifacts(
         input,
         &domains,
         &profiles,
-        &profile_set,
-        &vector,
+        profile_set,
+        vector,
     )?;
     let (projection_operation_id, projection_receipt) =
         projection_operation(&input.command.operation, source_membership_id)?;

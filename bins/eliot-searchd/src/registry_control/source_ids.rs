@@ -9,8 +9,8 @@ use std::marker::PhantomData;
 use std::time::Instant;
 
 use search_contracts::{
-    AccessPartitionId, AccessPolicyBindingId, CorpusId, MaterializationId, OpaqueId,
-    ProjectionMembershipId, PublicationIntentId, PublicationReceiptId, RepresentationId,
+    AccessPartitionId, AccessPolicyBindingId, CollectionGenerationId, CorpusId, MaterializationId,
+    OpaqueId, ProjectionMembershipId, PublicationIntentId, PublicationReceiptId, RepresentationId,
     ResidencyPolicyBindingId, ScoringPartitionId, SourceId, SourceMembershipId, SourceNamespaceId,
     WorkspaceId,
 };
@@ -175,6 +175,18 @@ impl<'a, C: CancellationProbe> SourceIdentityIdsV2<'a, C> {
         context: &OperationContext<C>,
     ) -> Result<PublicationReceiptId, SourceIdentityIdError> {
         mint_fresh_id(self.deadline, self.work, context).map(PublicationReceiptId::from_bytes)
+    }
+
+    /// Allocates a genuinely fresh C27 collection generation from the Root CSPRNG.
+    ///
+    /// The caller must first read retained C02 route state and call this only when
+    /// no generation is bound. Adoption and recovery reuse the retained ID.
+    #[allow(dead_code)] // Consumed by the parent runtime bootstrap once C27 is wired.
+    pub(crate) fn fresh_collection_generation_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<CollectionGenerationId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(CollectionGenerationId::from_bytes)
     }
 
     /// Allocates a new access partition only when the Root semantic owner has no equal class.

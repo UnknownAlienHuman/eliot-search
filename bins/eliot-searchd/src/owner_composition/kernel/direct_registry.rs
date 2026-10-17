@@ -423,6 +423,8 @@ mod query_population;
 pub(crate) use query_population::NativePopulationInput;
 #[cfg(feature = "wave4-query")]
 pub(crate) use retained_reader::RetainedRevisionReadState;
+#[cfg(feature = "wave3-index")]
+pub use native_preparation_factory::QualifiedNativeProfiles;
 pub use command::maybe_run;
 
 #[cfg(all(test, windows))]

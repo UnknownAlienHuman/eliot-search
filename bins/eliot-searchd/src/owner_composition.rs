@@ -20,6 +20,10 @@ pub use kernel::{NativeReadOperation, NativeReadStartup, RetainedShutdown};
 pub use kernel::{NativeRootAdmission, NativeRootLimits, NativeRootRequest, admit_existing};
 #[allow(unused_imports)] // Used by the dormant native process constructor.
 pub(crate) use kernel::NativeProcessRootCustody;
+/// Static profile data for C27 startup; this is not Root permission.
+#[cfg(feature = "wave3-index")]
+#[allow(unused_imports)] // Consumed by the parent native index runtime bootstrap.
+pub use kernel::QualifiedNativeProfiles;
 #[cfg(feature = "wave4-query")]
 pub(crate) use kernel::NativePopulationInput;
 #[cfg(feature = "wave3-index")]
