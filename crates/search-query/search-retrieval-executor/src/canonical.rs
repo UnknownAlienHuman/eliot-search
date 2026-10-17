@@ -21,6 +21,10 @@ use search_epoch_pins::RouteIdentity;
 
 use crate::{ExecuteError, LegCompletion, LegPinSet, LegTicket};
 
+#[cfg(test)]
+#[path = "../../search-query-planner/tests/support/canonical_plan.rs"]
+mod canonical_plan_fixture;
+
 /// Byte-exact Qdrant point address. It is a locator, never an identity digest.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CanonicalPointAddress([u8; 16]);
@@ -419,16 +423,41 @@ const fn map_post_leg_error(error: AccessError) -> ExecuteError {
 
 #[cfg(test)]
 mod tests {
+    use super::canonical_plan_fixture;
     use super::{
-        CanonicalPointAddress, candidate_scope_completion, same_owner, validate_owner_memberships,
+        CanonicalIndexedPortError, CanonicalIndexedReadback, CanonicalIndexedReadbackBatch,
+        CanonicalIndexedRetrievalPort, CanonicalPointAddress, candidate_scope_completion,
+        execute_canonical_indexed_leg, same_owner, validate_owner_memberships,
     };
-    use crate::LegCompletion;
-    use search_access::CanonicalProjectionMembership;
-    use search_contracts::indexed::EligibilityPopulation;
+    use crate::{ExecuteError, LegCompletion, LegPinSet, LegTicket, acquire_leg_pins};
+    use search_access::{
+        AccessCheckpoint, AccessError, AccessPermit, AuthoritativeAccessSnapshot,
+        AuthoritativePolicyState, CanonicalEligibilityPopulationRequest,
+        CanonicalEligibilitySecuritySnapshot, CanonicalPopulationVerificationPort,
+        CanonicalProjectionMembership, CompiledEligibilityPopulation, IndexedRouteFence,
+        LiveSecurityState, MembershipAccessBinding, NamespacePolicyFence, RequestSecurityFence,
+        RequestedMembershipScope, compile_base_eligibility,
+        compile_canonical_eligibility_population,
+    };
+    use search_contracts::indexed::{
+        CollectionSchema, EligibilityPopulation, NamedVectorRequirement, VectorName,
+        VectorRequirement, VectorValue,
+    };
     use search_contracts::{
-        AccessPartitionId, CollectionGenerationId, Epoch, InstallationIncarnationId,
-        ProjectionMembershipId, ProjectionProfileSetId, ScoringPartitionId, SourceMembershipId,
+        AccessPartitionId, AccessPolicyRevision, ArtifactDigest, AuthoritativeGrantPolicy,
+        Blake3Digest32, Blake3ExactInputLimit, BoundedList, BoundedSet, CatalogRevision,
+        CollectionGenerationId, CollectionRoute, CollectionRouteRevision, DisclosureCeiling, Epoch,
+        GrantId, InstallationId, InstallationIncarnationId, MembershipRevision, Modality,
+        ObservationCursorRevision, ObservationFreshness, ObservationFreshnessState, OpaqueId,
+        OpaqueRef, OverlayRevision, OwnerEpoch, ProfileId, ProjectionMembershipId,
+        ProjectionProfileSetId, PurgeFenceRevision, QuerySnapshotFence, QuerySnapshotFingerprint,
+        ReceiptRef, RecipeIdV1, ScoringPartitionId, SearchReadGrantClaims, SensitivityClass,
+        ShadowFenceRevision, SourceMembershipId, SourceNamespaceId, SourceOwnerGeneration,
+        SourceRevisionId, SourceView, UtcTimestamp, blake3_exact_bytes,
     };
+    use search_epoch_pins::{PinLimits, PinRegistry, RouteIdentity};
+    use std::cell::Cell;
+    use std::collections::{BTreeMap, BTreeSet};
 
     fn population(memberships: &[ProjectionMembershipId]) -> EligibilityPopulation {
         EligibilityPopulation::new(
@@ -505,5 +534,577 @@ mod tests {
     fn canonical_point_address_preserves_bytes_without_digest_conversion() {
         let bytes = [0xA5; 16];
         assert_eq!(CanonicalPointAddress::from_bytes(bytes).as_bytes(), &bytes);
+    }
+
+    struct IssuedFixture(SearchReadGrantClaims);
+
+    struct OwnerFixture {
+        claims: SearchReadGrantClaims,
+        bindings: BTreeMap<SourceMembershipId, CanonicalProjectionMembership>,
+        fence: QuerySnapshotFence,
+    }
+
+    impl CanonicalPopulationVerificationPort for OwnerFixture {
+        type IssuedGrant = IssuedFixture;
+
+        fn verified_issued_claims(
+            &mut self,
+            issued: &Self::IssuedGrant,
+        ) -> Result<SearchReadGrantClaims, AccessError> {
+            if issued.0 != self.claims {
+                return Err(AccessError::GrantBindingMismatch);
+            }
+            Ok(issued.0.clone())
+        }
+
+        fn current_projection_binding(
+            &mut self,
+            issued: &Self::IssuedGrant,
+            membership_id: SourceMembershipId,
+            fence: &QuerySnapshotFence,
+        ) -> Result<CanonicalProjectionMembership, AccessError> {
+            if issued.0 != self.claims || fence != &self.fence {
+                return Err(AccessError::SnapshotStale);
+            }
+            self.bindings
+                .get(&membership_id)
+                .cloned()
+                .ok_or(AccessError::ScopeUnknown)
+        }
+    }
+
+    struct PopulationFixture {
+        grant: SearchReadGrantClaims,
+        policy: AuthoritativeGrantPolicy,
+        scope: RequestedMembershipScope,
+        access: AuthoritativeAccessSnapshot,
+        policy_fence: NamespacePolicyFence,
+        policy_state: AuthoritativePolicyState,
+        fence: QuerySnapshotFence,
+        schema: CollectionSchema,
+        route: CollectionRoute,
+        rows: BTreeMap<ProjectionMembershipId, CanonicalProjectionMembership>,
+        manifests: BTreeMap<ProjectionMembershipId, ReceiptRef>,
+        live: LiveSecurityState,
+    }
+
+    impl PopulationFixture {
+        fn new() -> Self {
+            let membership = SourceMembershipId::from_bytes([0x11; 16]);
+            let incarnation = InstallationIncarnationId::from_bytes([0x12; 16]);
+            let generation = CollectionGenerationId::from_bytes([0x13; 16]);
+            let projection = ProjectionMembershipId::from_bytes([0x14; 16]);
+            let access_partition = AccessPartitionId::from_bytes([0x15; 16]);
+            let scoring_partition = ScoringPartitionId::from_bytes([0x16; 16]);
+            let profile = ProjectionProfileSetId::new("lexical-v1").expect("profile");
+            let schema = CollectionSchema::initial(
+                incarnation,
+                generation,
+                profile.clone(),
+                &[NamedVectorRequirement {
+                    name: VectorName::new("lex_code_v1").expect("vector name"),
+                    requirement: VectorRequirement::Sparse {
+                        index_ceiling: 1024,
+                        idf_enabled: true,
+                    },
+                }],
+            )
+            .expect("schema");
+            let row = CanonicalProjectionMembership {
+                source_membership_id: membership,
+                installation_incarnation_id: incarnation,
+                collection_generation_id: generation,
+                projection_membership_id: projection,
+                access_partition_id: access_partition,
+                scoring_partition_id: scoring_partition,
+                projection_profile_set_id: profile,
+            };
+            let grant = SearchReadGrantClaims {
+                grant_id: GrantId::from_bytes([0x17; 16]),
+                installation_id: InstallationId::from_bytes([0x18; 16]),
+                installation_incarnation_id: incarnation,
+                binding_id: search_contracts::BindingId::from_bytes([0x19; 16]),
+                principal_opaque_id: OpaqueId::new("principal").expect("principal"),
+                client_scope_ref: OpaqueRef::new("scope").expect("scope"),
+                scope_domain_id: search_contracts::ScopeDomainId::from_bytes([0x1A; 16]),
+                allowed_membership_ids: BoundedSet::from_items([membership]).expect("members"),
+                allowed_corpus_or_portfolio_ids: BoundedSet::empty(),
+                reference_portfolio_revision: None,
+                allowed_access_partitions: BoundedSet::from_items([access_partition])
+                    .expect("partitions"),
+                allowed_modalities: BoundedSet::from_items([Modality::Code]).expect("modalities"),
+                permitted_recipe_families: BoundedSet::from_items([RecipeIdV1::Locate])
+                    .expect("recipes"),
+                maximum_budget_class: ProfileId::new("interactive").expect("budget class"),
+                sensitivity_ceiling: SensitivityClass::Confidential,
+                disclosure_ceiling: DisclosureCeiling::LocalOnly,
+                source_read_permission: true,
+                exact_scan_permission: false,
+                issued_boot_id: OpaqueId::new("boot").expect("boot"),
+                issued_at: UtcTimestamp::parse("2026-10-16T00:00:00.000000Z").expect("issued at"),
+                expires_at: UtcTimestamp::parse("2026-10-16T00:01:00.000000Z").expect("expires at"),
+                nonce: OpaqueId::new("retained-nonce").expect("nonce"),
+                revocation_generation: 1,
+            };
+            let policy = AuthoritativeGrantPolicy {
+                binding_id: grant.binding_id,
+                binding_generation: 1,
+                policy_generation: 1,
+                installation_id: grant.installation_id,
+                installation_incarnation_id: incarnation,
+                principal_opaque_id: grant.principal_opaque_id.clone(),
+                client_scope_ref: grant.client_scope_ref.clone(),
+                scope_domain_id: grant.scope_domain_id,
+                allowed_membership_ids: grant.allowed_membership_ids.clone(),
+                allowed_corpus_or_portfolio_ids: grant.allowed_corpus_or_portfolio_ids.clone(),
+                reference_portfolio_revision: None,
+                allowed_access_partitions: grant.allowed_access_partitions.clone(),
+                allowed_modalities: grant.allowed_modalities.clone(),
+                permitted_recipe_families: grant.permitted_recipe_families.clone(),
+                allowed_budget_classes: BoundedSet::from_items([grant
+                    .maximum_budget_class
+                    .clone()])
+                .expect("budget classes"),
+                sensitivity_ceiling: grant.sensitivity_ceiling,
+                disclosure_ceiling: grant.disclosure_ceiling,
+                source_read_permission: true,
+                exact_scan_permission: false,
+                issued_boot_id: grant.issued_boot_id.clone(),
+                revocation_generation: 1,
+                maximum_ttl_ms: 60_000,
+            };
+            let policy_state = AuthoritativePolicyState {
+                namespace_id: SourceNamespaceId::from_bytes([0x1B; 16]),
+                owner_generation: SourceOwnerGeneration::from_bytes([0x1C; 32]),
+                policy_revision: AccessPolicyRevision::new(1),
+                shadow_revision: ShadowFenceRevision::new(1),
+                purge_revision: PurgeFenceRevision::new(1),
+            };
+            let mut fence = QuerySnapshotFence {
+                installation_incarnation_id: incarnation,
+                collection_generation_id: Some(generation),
+                visible_epoch: Some(Epoch::new(1).expect("epoch")),
+                collection_route_revision: CollectionRouteRevision::new(1),
+                catalog_revision: CatalogRevision::new(1),
+                membership_revision: MembershipRevision::new(1),
+                reference_portfolio_revision: None,
+                access_policy_revision: policy_state.policy_revision,
+                shadow_fence_revision: policy_state.shadow_revision,
+                purge_fence_revision: policy_state.purge_revision,
+                overlay_revision: OverlayRevision::new(1),
+                observation_cursor_revision: ObservationCursorRevision::new(1),
+                observation_freshness: ObservationFreshness {
+                    state: ObservationFreshnessState::CurrentConfirmed,
+                    observation_cursor_revision: ObservationCursorRevision::new(1),
+                    observed_age_ms: None,
+                },
+                source_view: SourceView::RetainedRevision(SourceRevisionId::from_bytes([0x1D; 16])),
+                workspace_view_revision_ref: None,
+                lexical_profile_ids: BoundedList::empty(),
+                snapshot_fingerprint: QuerySnapshotFingerprint::from_bytes([0; 32]),
+            };
+            seal_snapshot(&mut fence);
+            let route = CollectionRoute {
+                collection_generation_id: generation,
+                physical_collection_name: OpaqueRef::new("fixture-collection").expect("collection"),
+                schema_identity_digest: *schema.identity().expect("schema identity").as_digest(),
+                qualified_qdrant_build: ArtifactDigest::from_bytes([0x1E; 32]),
+                committed_visible_epoch: fence.visible_epoch.expect("visible epoch"),
+                collection_route_revision: fence.collection_route_revision,
+            };
+            Self {
+                grant,
+                policy,
+                scope: RequestedMembershipScope {
+                    memberships: BTreeSet::from([membership]),
+                },
+                access: AuthoritativeAccessSnapshot {
+                    generation: 217,
+                    source_catalog_generation: 1,
+                    membership_generation: 1,
+                    bindings: BTreeMap::from([(
+                        membership,
+                        MembershipAccessBinding {
+                            membership_id: membership,
+                            access_partition_digest: Blake3Digest32::from_bytes([0x1F; 32]),
+                            scoring_partition_digest: Blake3Digest32::from_bytes([0x20; 32]),
+                            projection_membership_id: OpaqueId::new("legacy-alias-not-used")
+                                .expect("legacy alias"),
+                            active: true,
+                        },
+                    )]),
+                    snapshot_digest: Blake3Digest32::from_bytes([0x21; 32]),
+                },
+                policy_fence: NamespacePolicyFence {
+                    namespace_id: policy_state.namespace_id,
+                    owner_generation: policy_state.owner_generation,
+                    policy_revision: policy_state.policy_revision,
+                },
+                policy_state,
+                fence,
+                schema,
+                route,
+                rows: BTreeMap::from([(projection, row)]),
+                manifests: BTreeMap::from([(
+                    projection,
+                    ReceiptRef::new("manifest-fixture").expect("manifest"),
+                )]),
+                live: LiveSecurityState {
+                    generation: 217,
+                    denied_memberships: BTreeSet::new(),
+                    purged_memberships: BTreeSet::new(),
+                    fail_closed: false,
+                    snapshot_digest: Blake3Digest32::from_bytes([0x22; 32]),
+                },
+            }
+        }
+
+        fn compile(&self) -> CompiledEligibilityPopulation {
+            let issued = IssuedFixture(self.grant.clone());
+            let mut owner = OwnerFixture {
+                claims: self.grant.clone(),
+                bindings: self
+                    .rows
+                    .values()
+                    .map(|row| (row.source_membership_id, row.clone()))
+                    .collect(),
+                fence: self.fence.clone(),
+            };
+            compile_canonical_eligibility_population(
+                &mut owner,
+                &issued,
+                &CanonicalEligibilityPopulationRequest::<()> {
+                    grant: &self.grant,
+                    grant_policy: &self.policy,
+                    recipe: RecipeIdV1::Locate,
+                    modality: Modality::Code,
+                    requested_scope: &self.scope,
+                    authoritative_access: &self.access,
+                    namespace_policy_fence: &self.policy_fence,
+                    authoritative_policy: &self.policy_state,
+                    snapshot_fence: &self.fence,
+                    collection_schema: &self.schema,
+                    collection_route: &self.route,
+                    publication_manifests: &self.manifests,
+                    publication_shadows: &BTreeMap::new(),
+                    projection_memberships: &self.rows,
+                    security: CanonicalEligibilitySecuritySnapshot {
+                        live: &self.live,
+                        namespace_id: self.policy_state.namespace_id,
+                        access_policy_revision: self.policy_state.policy_revision,
+                        shadow_fence_revision: self.policy_state.shadow_revision,
+                        purge_fence_revision: self.policy_state.purge_revision,
+                        overlay_revision: self.fence.overlay_revision,
+                    },
+                },
+            )
+            .expect("real C18 compiler fixture")
+        }
+    }
+
+    fn seal_snapshot(snapshot: &mut QuerySnapshotFence) {
+        let input = snapshot
+            .canonical_fingerprint_input()
+            .expect("snapshot fingerprint input");
+        let digest = blake3_exact_bytes(
+            input.as_slice(),
+            Blake3ExactInputLimit::new(input.len()).expect("bounded fingerprint input"),
+        )
+        .expect("snapshot fingerprint");
+        snapshot.snapshot_fingerprint = QuerySnapshotFingerprint::from_bytes(*digest.as_bytes());
+    }
+
+    struct ExecutorFixture {
+        compiled: CompiledEligibilityPopulation,
+        ticket: LegTicket,
+        pins: LegPinSet,
+        _registry: PinRegistry,
+        request_security: RequestSecurityFence,
+        live: LiveSecurityState,
+        membership: SourceMembershipId,
+        projection: ProjectionMembershipId,
+        vector_name: VectorName,
+        query: VectorValue,
+    }
+
+    impl ExecutorFixture {
+        fn new() -> Self {
+            let population_fixture = PopulationFixture::new();
+            let compiled = population_fixture.compile();
+            let membership = *population_fixture
+                .scope
+                .memberships
+                .first()
+                .expect("single C18 membership");
+            let projection = compiled
+                .projection_memberships()
+                .get(&membership)
+                .expect("owner-retained C18 link")
+                .projection_membership_id;
+            let route = IndexedRouteFence {
+                collection_generation_id: compiled.population().collection_generation_id(),
+                visible_epoch: compiled.population().visible_epoch(),
+                route_generation: 1,
+                owner_epoch: OwnerEpoch::new(1).expect("owner epoch"),
+            };
+            let access_binding = MembershipAccessBinding {
+                membership_id: membership,
+                access_partition_digest: Blake3Digest32::from_bytes([0xA1; 32]),
+                scoring_partition_digest: Blake3Digest32::from_bytes([0xB2; 32]),
+                projection_membership_id: OpaqueId::new("planner-binding-only")
+                    .expect("planner binding"),
+                active: true,
+            };
+            let safe_leg = search_access::SafeRetrievalLeg {
+                leg_id: 0,
+                memberships: BTreeSet::from([membership]),
+                eligibility_plans: vec![
+                    compile_base_eligibility(&access_binding, route, 217, 1, 1)
+                        .expect("C15 eligibility plan"),
+                ],
+                route,
+                overlap_proof_digest: None,
+            };
+            let compiled_plan = canonical_plan_fixture::compile_lexical_plan(
+                search_contracts::RequestId::from_bytes([0x23; 16]),
+                safe_leg,
+                canonical_plan_fixture::lexical_budget(1_000, 4, 4096, 500, 1_048_576),
+            );
+            let leg = compiled_plan
+                .legs()
+                .iter()
+                .find(|leg| leg.leg_kind() == search_contracts::LegKind::Lexical)
+                .expect("C15 compiled lexical leg")
+                .clone();
+            let ticket = LegTicket {
+                request_id: compiled_plan.request_id(),
+                plan_digest: compiled_plan.digest(),
+                owner_id: OpaqueId::new("canonical-executor-test").expect("owner"),
+                leg,
+                access_permit: AccessPermit {
+                    checkpoint: AccessCheckpoint::BeforeLegDispatch,
+                    live_generation: population_fixture.live.generation,
+                    live_snapshot_digest: population_fixture.live.snapshot_digest,
+                },
+                issued_at_tick: 100,
+            };
+            let registry = PinRegistry::new(
+                RouteIdentity {
+                    collection_generation_id: route.collection_generation_id,
+                    route_revision: CollectionRouteRevision::new(route.route_generation),
+                },
+                route.visible_epoch,
+                PinLimits::BASELINE,
+            )
+            .expect("C15 route pin registry");
+            let pins = acquire_leg_pins(&ticket, &registry, 1_000).expect("C15 route pin");
+            Self {
+                compiled,
+                ticket,
+                pins,
+                _registry: registry,
+                request_security: RequestSecurityFence {
+                    planned_generation: population_fixture.live.generation,
+                    memberships: BTreeSet::from([membership]),
+                },
+                live: population_fixture.live,
+                membership,
+                projection,
+                vector_name: VectorName::new("lex_code_v1").expect("vector name"),
+                query: VectorValue::Sparse {
+                    indices: vec![0, 2],
+                    values: vec![1.0, 0.5],
+                },
+            }
+        }
+
+        fn execute<'a>(
+            &'a self,
+            live_before: &LiveSecurityState,
+            live_after: &LiveSecurityState,
+            port: &mut RecordingPort<'a>,
+        ) -> Result<super::CanonicalIndexedLegOutput<'a, u8>, ExecuteError> {
+            execute_canonical_indexed_leg(
+                &self.ticket,
+                &self.pins,
+                &self.compiled,
+                &self.vector_name,
+                &self.query,
+                4,
+                &self.request_security,
+                live_before,
+                live_after,
+                port,
+            )
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum CanonicalCall {
+        Query,
+        ExactReadback,
+        ExactCount,
+    }
+
+    struct RecordingPort<'population> {
+        compiled: &'population CompiledEligibilityPopulation,
+        batch: CanonicalIndexedReadbackBatch<u8>,
+        denominator: u64,
+        context_error: Option<CanonicalIndexedPortError>,
+        request_checks: Cell<usize>,
+        calls: Vec<(CanonicalCall, &'population CompiledEligibilityPopulation)>,
+    }
+
+    impl<'population> RecordingPort<'population> {
+        fn new(
+            compiled: &'population CompiledEligibilityPopulation,
+            batch: CanonicalIndexedReadbackBatch<u8>,
+            denominator: u64,
+            context_error: Option<CanonicalIndexedPortError>,
+        ) -> Self {
+            Self {
+                compiled,
+                batch,
+                denominator,
+                context_error,
+                request_checks: Cell::new(0),
+                calls: Vec::new(),
+            }
+        }
+
+        fn record(&mut self, call: CanonicalCall) {
+            self.calls.push((call, self.compiled));
+        }
+    }
+
+    impl CanonicalIndexedRetrievalPort for RecordingPort<'_> {
+        type Candidate = u8;
+
+        fn compiled_population(&self) -> &CompiledEligibilityPopulation {
+            self.compiled
+        }
+
+        fn query_and_readback(
+            &mut self,
+            _vector_name: &VectorName,
+            _query: &VectorValue,
+            _limit: usize,
+        ) -> Result<CanonicalIndexedReadbackBatch<Self::Candidate>, CanonicalIndexedPortError>
+        {
+            self.record(CanonicalCall::Query);
+            self.record(CanonicalCall::ExactReadback);
+            Ok(self.batch.clone())
+        }
+
+        fn count_exact(&mut self) -> Result<u64, CanonicalIndexedPortError> {
+            self.record(CanonicalCall::ExactCount);
+            Ok(self.denominator)
+        }
+
+        fn check_request(&self) -> Result<(), CanonicalIndexedPortError> {
+            self.request_checks
+                .set(self.request_checks.get().saturating_add(1));
+            if let Some(error) = self.context_error {
+                return Err(error);
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn canonical_executor_uses_one_compiled_population_and_refuses_before_dispatch() {
+        let fixture = ExecutorFixture::new();
+        let returned = CanonicalPointAddress::from_bytes([0x31; 16]);
+        let disappeared = CanonicalPointAddress::from_bytes([0x32; 16]);
+        let batch = CanonicalIndexedReadbackBatch {
+            nominated_addresses: vec![returned, disappeared],
+            readback_missing_addresses: vec![disappeared],
+            nominations: vec![CanonicalIndexedReadback {
+                point_address: returned,
+                projection_membership_id: fixture.projection,
+                raw_score: 2.0,
+                candidate: 0xAA,
+            }],
+        };
+        let mut port = RecordingPort::new(&fixture.compiled, batch.clone(), 1, None);
+        let output = fixture
+            .execute(&fixture.live, &fixture.live, &mut port)
+            .expect("canonical indexed execution");
+        assert_eq!(
+            port.calls.iter().map(|(call, _)| *call).collect::<Vec<_>>(),
+            vec![
+                CanonicalCall::Query,
+                CanonicalCall::ExactReadback,
+                CanonicalCall::ExactCount,
+            ]
+        );
+        assert!(
+            port.calls
+                .iter()
+                .all(|(_, population)| std::ptr::eq(*population, &fixture.compiled))
+        );
+        assert!(std::ptr::eq(output.compiled_population, &fixture.compiled));
+        assert_eq!(
+            output.compiled_population.population(),
+            fixture.compiled.population()
+        );
+        assert_eq!(output.nominations.len(), 1);
+        assert_eq!(
+            output.nominations[0].source_membership_id,
+            fixture.membership
+        );
+        assert_eq!(
+            output.nominations[0].projection_membership_id,
+            fixture.projection
+        );
+        assert_eq!(output.exact_denominator, 1);
+        assert_eq!(output.readback_missing_addresses, vec![disappeared]);
+        assert_eq!(output.completion, LegCompletion::PartialCandidateScope);
+        assert_eq!(port.request_checks.get(), 2);
+
+        for (context_error, expected) in [
+            (
+                CanonicalIndexedPortError::Cancelled,
+                ExecuteError::Cancelled,
+            ),
+            (
+                CanonicalIndexedPortError::DeadlineExceeded,
+                ExecuteError::DeadlineExceeded,
+            ),
+        ] {
+            let mut refused =
+                RecordingPort::new(&fixture.compiled, batch.clone(), 1, Some(context_error));
+            assert!(matches!(
+                fixture.execute(&fixture.live, &fixture.live, &mut refused),
+                Err(error) if error == expected
+            ));
+            assert!(
+                refused.calls.is_empty(),
+                "request refusal dispatched retrieval"
+            );
+            assert_eq!(refused.request_checks.get(), 1);
+        }
+
+        for (restriction, expected) in [
+            (0, ExecuteError::AccessDenied),
+            (1, ExecuteError::AccessDenied),
+        ] {
+            let mut live_before = fixture.live.clone();
+            if restriction == 0 {
+                live_before.denied_memberships.insert(fixture.membership);
+            } else {
+                live_before.purged_memberships.insert(fixture.membership);
+            }
+            let mut refused = RecordingPort::new(&fixture.compiled, batch.clone(), 1, None);
+            assert!(matches!(
+                fixture.execute(&live_before, &fixture.live, &mut refused),
+                Err(error) if error == expected
+            ));
+            assert!(
+                refused.calls.is_empty(),
+                "live restriction dispatched retrieval"
+            );
+            assert_eq!(refused.request_checks.get(), 0);
+        }
     }
 }
