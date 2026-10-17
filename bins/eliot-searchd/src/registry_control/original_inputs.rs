@@ -468,6 +468,7 @@ fn source_original_layouts<P: FnMut() -> Result<(), CheckpointFailureV2>>(
                 }
                 RegistryStateRecord::Root(_)
                 | RegistryStateRecord::Membership(_)
+                | RegistryStateRecord::ProjectionMembership(_)
                 | RegistryStateRecord::Generation { .. } => {}
             }
             Ok(())
