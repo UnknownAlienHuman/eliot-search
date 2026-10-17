@@ -8,19 +8,24 @@
 //! mismatch, substitution, or inconclusive probe fails closed; the server
 //! is never started on suspicion.
 
+use std::io::Read as _;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use search_contracts::Sha256Digest32;
 
 use crate::SupervisorError;
-use crate::launch::ContainedLaunchWork;
+use crate::launch::{ContainedLaunchFailureCause, ContainedLaunchWork, SpawnRecovery};
 use crate::sha256::{CheckedSha256FileError, sha256_file, sha256_file_with_context};
 
 pub(crate) enum CheckedIdentityError<E> {
     Context(E),
     Supervisor(SupervisorError),
+    Recovery {
+        cause: ContainedLaunchFailureCause<E>,
+        recovery: SpawnRecovery,
+    },
 }
 
 /// Pinned qualified Qdrant version.
@@ -38,6 +43,10 @@ pub const MIN_PROBE_TIMEOUT: Duration = Duration::from_secs(1);
 pub const MAX_PROBE_TIMEOUT: Duration = Duration::from_secs(120);
 /// Poll interval while waiting for the version probe to exit.
 pub const PROBE_POLL_INTERVAL: Duration = Duration::from_millis(25);
+/// Maximum time reserved solely to confirm termination of a failed version-probe child.
+const PROBE_CLEANUP_TIMEOUT: Duration = Duration::from_secs(1);
+/// Bounded stdout frame: the `qdrant ` prefix, a 128-byte version and CRLF.
+const MAX_VERSION_PROBE_OUTPUT_BYTES: usize = 7 + 128 + 2;
 
 /// Expected identity of one executable file.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -325,40 +334,42 @@ fn probe_version_with_context<E>(
     let mut child = spawned
         .map_err(|_| CheckedIdentityError::Supervisor(SupervisorError::ExecutableProbeFailed))?;
     if let Err(error) = admit(ContainedLaunchWork::Checkpoint) {
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err(CheckedIdentityError::Context(error));
+        return Err(cleanup_probe_child(
+            child,
+            ContainedLaunchFailureCause::Port(error),
+        ));
     }
 
     loop {
         if let Err(error) = admit(ContainedLaunchWork::Checkpoint) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(CheckedIdentityError::Context(error));
+            return Err(cleanup_probe_child(
+                child,
+                ContainedLaunchFailureCause::Port(error),
+            ));
         }
         if Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(CheckedIdentityError::Supervisor(
-                SupervisorError::ExecutableProbeFailed,
+            return Err(cleanup_probe_child(
+                child,
+                ContainedLaunchFailureCause::Supervisor(SupervisorError::ExecutableProbeFailed),
             ));
         }
         if let Err(error) = admit(ContainedLaunchWork::NativeCall) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(CheckedIdentityError::Context(error));
+            return Err(cleanup_probe_child(
+                child,
+                ContainedLaunchFailureCause::Port(error),
+            ));
         }
         let status = child.try_wait();
         if let Err(error) = admit(ContainedLaunchWork::Checkpoint) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(CheckedIdentityError::Context(error));
+            return Err(cleanup_probe_child(
+                child,
+                ContainedLaunchFailureCause::Port(error),
+            ));
         }
         let Ok(status) = status else {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(CheckedIdentityError::Supervisor(
-                SupervisorError::ExecutableProbeFailed,
+            return Err(cleanup_probe_child(
+                child,
+                ContainedLaunchFailureCause::Supervisor(SupervisorError::ExecutableProbeFailed),
             ));
         };
         if let Some(status) = status {
@@ -368,19 +379,73 @@ fn probe_version_with_context<E>(
                 ));
             }
             admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
-            admit(ContainedLaunchWork::NativeCall).map_err(CheckedIdentityError::Context)?;
-            let output = child.wait_with_output().map_err(|_| {
-                CheckedIdentityError::Supervisor(SupervisorError::ExecutableProbeFailed)
-            })?;
+            let version = read_version_probe_output(&mut child, admit)?;
             admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
-            let text = String::from_utf8_lossy(&output.stdout);
-            return parse_qdrant_version_output(&text).map_err(CheckedIdentityError::Supervisor);
+            return Ok(version);
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         std::thread::sleep(PROBE_POLL_INTERVAL.min(remaining));
     }
 }
 
+fn cleanup_probe_child<E>(
+    mut child: Child,
+    cause: ContainedLaunchFailureCause<E>,
+) -> CheckedIdentityError<E> {
+    let cleanup_deadline = Instant::now()
+        .checked_add(PROBE_CLEANUP_TIMEOUT)
+        .unwrap_or_else(Instant::now);
+    match crate::owned::terminate_bounded(&mut child, cleanup_deadline) {
+        Ok(_) => match cause {
+            ContainedLaunchFailureCause::Port(error) => CheckedIdentityError::Context(error),
+            ContainedLaunchFailureCause::Supervisor(error) => {
+                CheckedIdentityError::Supervisor(error)
+            }
+        },
+        Err(_) => CheckedIdentityError::Recovery {
+            cause,
+            recovery: SpawnRecovery::uncontained_probe(child),
+        },
+    }
+}
+
+fn read_version_probe_output<E>(
+    child: &mut Child,
+    admit: &mut impl FnMut(ContainedLaunchWork) -> Result<(), E>,
+) -> Result<String, CheckedIdentityError<E>> {
+    let mut stdout = child.stdout.take().ok_or(CheckedIdentityError::Supervisor(
+        SupervisorError::ExecutableProbeFailed,
+    ))?;
+    let mut output = [0_u8; MAX_VERSION_PROBE_OUTPUT_BYTES + 1];
+    let mut length = 0_usize;
+    loop {
+        if length == output.len() {
+            return Err(CheckedIdentityError::Supervisor(
+                SupervisorError::ExecutableProbeFailed,
+            ));
+        }
+        let remaining = output.len() - length;
+        admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+        admit(ContainedLaunchWork::NativeCall).map_err(CheckedIdentityError::Context)?;
+        admit(ContainedLaunchWork::Process(remaining)).map_err(CheckedIdentityError::Context)?;
+        let read = stdout.read(&mut output[length..]).map_err(|_| {
+            CheckedIdentityError::Supervisor(SupervisorError::ExecutableProbeFailed)
+        })?;
+        admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
+        if read == 0 {
+            break;
+        }
+        length = length.saturating_add(read);
+        if length > MAX_VERSION_PROBE_OUTPUT_BYTES {
+            return Err(CheckedIdentityError::Supervisor(
+                SupervisorError::ExecutableProbeFailed,
+            ));
+        }
+    }
+    let text = core::str::from_utf8(&output[..length])
+        .map_err(|_| CheckedIdentityError::Supervisor(SupervisorError::InvalidArtifact))?;
+    parse_qdrant_version_output(text).map_err(CheckedIdentityError::Supervisor)
+}
 #[cfg(test)]
 mod tests {
     use std::{

@@ -359,7 +359,7 @@ impl<E> ContainedSpawnPortFailure<E> {
             cause,
             recovery: Some(SpawnRecovery {
                 child,
-                custody: Box::new(custody),
+                custody: Some(Box::new(custody)),
             }),
         }
     }
@@ -395,15 +395,15 @@ pub enum ContainedLaunchError<E> {
     RecoveryRequired {
         /// Exact failure that left the child requiring cleanup.
         cause: ContainedLaunchFailureCause<E>,
-        /// Exact spawned child plus retained Job custody.
+        /// Exact child plus any retained native containment custody.
         recovery: SpawnRecovery,
     },
 }
 
-/// Exact child and native containment custody retained after an uncertain spawn.
+/// Exact child and any native containment custody retained after uncertain cleanup.
 pub struct SpawnRecovery {
     child: Child,
-    custody: Box<dyn ChildContainmentCustody>,
+    custody: Option<Box<dyn ChildContainmentCustody>>,
 }
 
 impl std::fmt::Debug for SpawnRecovery {
@@ -411,30 +411,53 @@ impl std::fmt::Debug for SpawnRecovery {
         formatter
             .debug_struct("SpawnRecovery")
             .field("pid", &self.child.id())
-            .field("custody", &"<retained native containment handle>")
+            .field(
+                "custody",
+                &if self.custody.is_some() {
+                    "<retained native containment handle>"
+                } else {
+                    "<child handle only>"
+                },
+            )
             .finish()
     }
 }
 
 impl SpawnRecovery {
+    /// Retains the exact version-probe child when bounded cleanup cannot confirm exit.
+    pub(crate) fn uncontained_probe(child: Child) -> Self {
+        Self {
+            child,
+            custody: None,
+        }
+    }
     /// PID of the exact still-owned child; it is never used as its identity.
     #[must_use]
     pub fn pid(&self) -> u32 {
         self.child.id()
     }
 
-    /// Attempts job termination and waits for the exact child and boundary to empty.
+    /// Attempts bounded termination and reaps the exact child; native custody, when present, must also empty.
     ///
-    /// On timeout or observation failure this guard retains both OS handles so a
-    /// later bounded attempt remains possible.
+    /// On timeout or observation failure this guard retains the exact Child and any
+    /// native custody so a later bounded attempt remains possible.
     pub fn terminate_bounded(&mut self, deadline: Instant) -> Result<Option<i32>, SupervisorError> {
-        crate::owned::terminate_child_with_custody(&mut self.child, self.custody.as_mut(), deadline)
+        match self.custody.as_mut() {
+            Some(custody) => crate::owned::terminate_child_with_custody(
+                &mut self.child,
+                custody.as_mut(),
+                deadline,
+            ),
+            None => crate::owned::terminate_bounded(&mut self.child, deadline),
+        }
     }
 }
 
 impl Drop for SpawnRecovery {
     fn drop(&mut self) {
-        let _ = self.custody.terminate();
+        if let Some(custody) = self.custody.as_mut() {
+            let _ = custody.terminate();
+        }
         let _ = self.child.kill();
     }
 }
@@ -753,6 +776,9 @@ fn prepare_command_contained<P: ContainedSpawnPort>(
     .map_err(|error| match error {
         CheckedIdentityError::Context(error) => ContainedLaunchError::Port(error),
         CheckedIdentityError::Supervisor(error) => ContainedLaunchError::Supervisor(error),
+        CheckedIdentityError::Recovery { cause, recovery } => {
+            ContainedLaunchError::RecoveryRequired { cause, recovery }
+        }
     })?;
 
     let canonical_data_dir = canonical_data_dir_contained(&plan.data_dir, port)?;
@@ -886,7 +912,10 @@ fn recovery_error<E>(
 ) -> ContainedLaunchError<E> {
     ContainedLaunchError::RecoveryRequired {
         cause: ContainedLaunchFailureCause::Supervisor(cause),
-        recovery: SpawnRecovery { child, custody },
+        recovery: SpawnRecovery {
+            child,
+            custody: Some(custody),
+        },
     }
 }
 

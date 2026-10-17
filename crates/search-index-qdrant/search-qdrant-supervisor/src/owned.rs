@@ -227,38 +227,61 @@ pub fn wait_ready(
     }
 }
 
+trait ReapChild {
+    type Status;
+
+    fn request_kill(&mut self) -> Result<(), ()>;
+    fn observe_exit(&mut self) -> Result<Option<Self::Status>, ()>;
+}
+
+impl ReapChild for Child {
+    type Status = std::process::ExitStatus;
+
+    fn request_kill(&mut self) -> Result<(), ()> {
+        Self::kill(self).map_err(|_| ())
+    }
+
+    fn observe_exit(&mut self) -> Result<Option<Self::Status>, ()> {
+        Self::try_wait(self).map_err(|_| ())
+    }
+}
+
+fn terminate_and_reap_with_clock<C, N, S>(
+    child: &mut C,
+    deadline: Instant,
+    mut now: N,
+    mut sleep: S,
+) -> Result<C::Status, ()>
+where
+    C: ReapChild,
+    N: FnMut() -> Instant,
+    S: FnMut(Duration),
+{
+    // A failed kill is not evidence of either exit or continued execution.
+    let _ = child.request_kill();
+    loop {
+        if let Ok(Some(status)) = child.observe_exit() {
+            return Ok(status);
+        }
+        let current = now();
+        if current >= deadline {
+            return Err(());
+        }
+        sleep(REAP_POLL_INTERVAL.min(deadline.saturating_duration_since(current)));
+    }
+}
+
 /// Terminates and reaps one owned child handle within `deadline`.
 pub fn terminate_bounded(
     child: &mut Child,
     deadline: Instant,
 ) -> Result<Option<i32>, SupervisorError> {
-    if let Some(status) = child
-        .try_wait()
-        .map_err(|_| SupervisorError::ShutdownOutcomeUnknown)?
-    {
+    if let Ok(Some(status)) = child.try_wait() {
         return Ok(status.code());
     }
-    if child.kill().is_err() {
-        match child
-            .try_wait()
-            .map_err(|_| SupervisorError::ShutdownOutcomeUnknown)?
-        {
-            Some(status) => return Ok(status.code()),
-            None => return Err(SupervisorError::ShutdownOutcomeUnknown),
-        }
-    }
-    loop {
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|_| SupervisorError::ShutdownOutcomeUnknown)?
-        {
-            return Ok(status.code());
-        }
-        if Instant::now() >= deadline {
-            return Err(SupervisorError::ShutdownOutcomeUnknown);
-        }
-        std::thread::sleep(REAP_POLL_INTERVAL);
-    }
+    let status = terminate_and_reap_with_clock(child, deadline, Instant::now, std::thread::sleep)
+        .map_err(|()| SupervisorError::ShutdownOutcomeUnknown)?;
+    Ok(status.code())
 }
 
 /// Terminates one contained process tree and retains both handles until the Job
@@ -461,7 +484,77 @@ fn path_identity_bytes(path: &std::path::Path) -> &[u8] {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_response, zero_bytes};
+
+    use std::cell::Cell;
+    use std::time::{Duration, Instant};
+
+    use super::{ReapChild, parse_response, terminate_and_reap_with_clock, zero_bytes};
+
+    struct FakeReapChild {
+        kill_calls: usize,
+        polls: usize,
+        exits_after: Option<usize>,
+    }
+
+    impl ReapChild for FakeReapChild {
+        type Status = i32;
+
+        fn request_kill(&mut self) -> Result<(), ()> {
+            self.kill_calls += 1;
+            Err(())
+        }
+
+        fn observe_exit(&mut self) -> Result<Option<Self::Status>, ()> {
+            self.polls += 1;
+            if self.exits_after.is_some_and(|limit| self.polls >= limit) {
+                Ok(Some(23))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    #[test]
+    fn kill_refusal_still_reaps_if_exit_is_observed_within_cleanup_budget() {
+        let start = Instant::now();
+        let clock = Cell::new(start);
+        let mut child = FakeReapChild {
+            kill_calls: 0,
+            polls: 0,
+            exits_after: Some(2),
+        };
+        let status = terminate_and_reap_with_clock(
+            &mut child,
+            start + Duration::from_secs(1),
+            || clock.get(),
+            |delay| clock.set(clock.get() + delay),
+        )
+        .unwrap();
+        assert_eq!(status, 23);
+        assert_eq!(child.kill_calls, 1);
+        assert_eq!(child.polls, 2);
+    }
+
+    #[test]
+    fn expired_cleanup_returns_unknown_after_bounded_observation_on_kill_refusal() {
+        let deadline = Instant::now();
+        let mut child = FakeReapChild {
+            kill_calls: 0,
+            polls: 0,
+            exits_after: None,
+        };
+        assert!(
+            terminate_and_reap_with_clock(
+                &mut child,
+                deadline,
+                || deadline,
+                |_| panic!("expired cleanup must not sleep"),
+            )
+            .is_err()
+        );
+        assert_eq!(child.kill_calls, 1);
+        assert_eq!(child.polls, 1);
+    }
 
     #[test]
     fn response_parser_accepts_only_http_status_lines() {
