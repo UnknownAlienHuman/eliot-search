@@ -56,8 +56,12 @@ Three production surfaces are available:
 
 The Qdrant lease expires no later than the remaining issuer operation deadline
 and retains that operation's cancellation capability and request coordinates.
-Disclosure requires the original context identity to remain live; a fresh
-context cannot extend or replace it.
+Disclosure requires the original context identity and the same native monotonic
+lease window before and after the callback; a fresh context cannot extend or
+replace either bound. The credential record's version is included in Qdrant-only
+DPAPI entropy while its Credential Manager locator stays stable, so a changed
+header version cannot reuse the old protected payload. No detached launch
+evidence is exposed; callers must consume the lease callback at dispatch.
 
 The optional `test-credential-cleanup` feature adds one exact-namespace cleanup
 operation for native test harnesses. It serializes with production key creation,

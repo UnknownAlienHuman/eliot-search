@@ -39,14 +39,20 @@ installation ID/incarnation and the current user's independently observed SID-sc
 `QdrantApiSecretReference::for_owner` binds those facts before the platform read. The adapter derives
 one exact Credential Manager target from that binding, reads it through the existing bounded
 `read_provider_credential` owner, validates the versioned `ELQDRT01` record and selection digest,
-then opens the protected payload through current-user DPAPI with Qdrant-only entropy. The exact
-versioned `SecretReference` is passed to Core's finite `SecretLease::issue_selected` lifecycle.
+then opens the protected payload through current-user DPAPI with Qdrant-only entropy that also binds
+the exact nonzero record version. The target locator remains stable across versions, but changing the
+unauthenticated header version changes DPAPI entropy and therefore fails closed. There is no fallback
+to the former unversioned entropy format. The exact versioned `SecretReference` is passed to Core's
+finite `SecretLease::issue_selected` lifecycle.
 The issued expiry is the earlier of the configured lease TTL and the remaining original operation
 allowance. The lease retains the issuer cancellation capability, request ID, budget reference and
 relative deadline; each disclosure requires those exact request coordinates and a live issuer
 deadline/cancellation state. A later context cannot extend or substitute that issuer authority.
-`QdrantApiSecretLease::launch_evidence` samples observed and expiry ticks from this same native
-monotonic clock and refuses a stale issuer before returning the non-secret supervisor binding.
+There is no detached launch-evidence value: a historical copied tick cannot authorize process launch.
+`QdrantApiSecretLease::with_secret` checks the issuer coordinates and the native monotonic TTL both
+before and after the callback. Daemon composition must perform the effect that consumes the secret
+inside this live callback and retain any spawned-child recovery custody if the callback refuses after
+an effect attempt.
 
 The store cannot create, rotate or delete records. A missing or malformed selected record returns a
 content-free failure; it never searches other credentials, falls back to provider-pairing or

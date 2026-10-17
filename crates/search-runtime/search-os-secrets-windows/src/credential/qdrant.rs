@@ -1,8 +1,9 @@
 //! Read-only Qdrant API-key selection from the current-user Windows secret store.
 //!
-//! The credential name and DPAPI entropy bind the stable config reference to
-//! the exact Search installation, incarnation, current-user scope, and Qdrant
-//! API-key purpose. This adapter never creates, rotates, or deletes a key.
+//! The credential name binds the stable config reference to the exact Search
+//! installation, incarnation, current-user scope, and Qdrant API-key purpose.
+//! DPAPI entropy additionally authenticates the exact credential version. This
+//! adapter never creates, rotates, or deletes a key.
 
 use core::{convert::Infallible, fmt, marker::PhantomData, num::NonZeroU64, time::Duration};
 use std::time::Instant;
@@ -206,50 +207,6 @@ pub struct QdrantApiSecretLease<C: CancellationProbe + Clone> {
     issuer_request_id: RequestId,
     issuer_budget_ref: OpaqueRef,
     issuer_relative_deadline_ms: u64,
-    reference_digest: Blake3Digest32,
-    installation_incarnation_id: InstallationIncarnationId,
-}
-
-/// Non-secret launch evidence sampled from a live Qdrant API lease.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct QdrantApiSecretLeaseEvidence {
-    reference_digest: Blake3Digest32,
-    installation_incarnation_id: InstallationIncarnationId,
-    purpose_digest: Blake3Digest32,
-    observed_tick: NonZeroU64,
-    expires_at_tick: NonZeroU64,
-}
-
-impl QdrantApiSecretLeaseEvidence {
-    /// Digest of the exact selected Qdrant secret reference and binding.
-    #[must_use]
-    pub const fn reference_digest(self) -> Blake3Digest32 {
-        self.reference_digest
-    }
-
-    /// Installation incarnation bound into the selected credential.
-    #[must_use]
-    pub const fn installation_incarnation_id(self) -> InstallationIncarnationId {
-        self.installation_incarnation_id
-    }
-
-    /// Fixed Qdrant API-key purpose digest.
-    #[must_use]
-    pub const fn purpose_digest(self) -> Blake3Digest32 {
-        self.purpose_digest
-    }
-
-    /// Actual Qdrant-secret monotonic clock sample for launch-plan validation.
-    #[must_use]
-    pub const fn observed_tick(self) -> NonZeroU64 {
-        self.observed_tick
-    }
-
-    /// Exact lease expiry on that same monotonic clock.
-    #[must_use]
-    pub const fn expires_at_tick(self) -> NonZeroU64 {
-        self.expires_at_tick
-    }
 }
 
 impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
@@ -259,64 +216,10 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
         self.lease.reference()
     }
 
-    /// Captures non-secret launch evidence only while the exact issuer context
-    /// and finite lease remain live. The caller cannot substitute its clock.
-    pub fn launch_evidence(
-        &self,
-        context: &OperationContext<impl CancellationProbe>,
-    ) -> Result<QdrantApiSecretLeaseEvidence, QdrantApiSecretStoreError> {
-        context
-            .preflight()
-            .map_err(|_| QdrantApiSecretStoreError::ContextRefused)?;
-        if !issuer_context_allows_use(
-            &self.issuer_cancellation,
-            self.issuer_deadline,
-            self.issuer_request_id,
-            &self.issuer_budget_ref,
-            self.issuer_relative_deadline_ms,
-            context,
-            Instant::now(),
-        ) {
-            return Err(QdrantApiSecretStoreError::ContextRefused);
-        }
-        #[cfg(windows)]
-        let observed = monotonic_now().ticks();
-        #[cfg(not(windows))]
-        let observed = monotonic_now()?.ticks();
-        let observed_tick =
-            NonZeroU64::new(observed).ok_or(QdrantApiSecretStoreError::InvalidLeasePolicy)?;
-        let expires_at_tick = NonZeroU64::new(self.expires_at_tick)
-            .ok_or(QdrantApiSecretStoreError::InvalidLeasePolicy)?;
-        if !lease_window_is_live(observed_tick, expires_at_tick) {
-            return Err(QdrantApiSecretStoreError::ContextRefused);
-        }
-        context
-            .preflight()
-            .map_err(|_| QdrantApiSecretStoreError::ContextRefused)?;
-        if !issuer_context_allows_use(
-            &self.issuer_cancellation,
-            self.issuer_deadline,
-            self.issuer_request_id,
-            &self.issuer_budget_ref,
-            self.issuer_relative_deadline_ms,
-            context,
-            Instant::now(),
-        ) {
-            return Err(QdrantApiSecretStoreError::ContextRefused);
-        }
-        Ok(QdrantApiSecretLeaseEvidence {
-            reference_digest: self.reference_digest,
-            installation_incarnation_id: self.installation_incarnation_id,
-            purpose_digest: Blake3Digest32::from_bytes(
-                *blake3::hash(QDRANT_API_SECRET_PURPOSE_ID.as_bytes()).as_bytes(),
-            ),
-            observed_tick,
-            expires_at_tick,
-        })
-    }
-
-    /// Exposes the bytes only during a callback, after checking the same
-    /// Windows monotonic clock that bounded lease creation.
+    /// Exposes the bytes only within the live lease callback. Call this at the
+    /// external-effect boundary; do not detach launch evidence or retain a
+    /// secret copy for a later dispatch. The same native monotonic clock is
+    /// checked again after the callback returns.
     pub fn with_secret<T>(
         &self,
         context: &OperationContext<impl CancellationProbe>,
@@ -325,6 +228,14 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
         context
             .preflight()
             .map_err(|_| QdrantApiSecretStoreError::ContextRefused)?;
+        let expires_at_tick = NonZeroU64::new(self.expires_at_tick)
+            .ok_or(QdrantApiSecretStoreError::InvalidLeasePolicy)?;
+        #[cfg(windows)]
+        let observed_before = monotonic_now();
+        #[cfg(not(windows))]
+        let observed_before = monotonic_now()?;
+        let observed_before = NonZeroU64::new(observed_before.ticks())
+            .ok_or(QdrantApiSecretStoreError::InvalidLeasePolicy)?;
         if !issuer_context_allows_use(
             &self.issuer_cancellation,
             self.issuer_deadline,
@@ -333,17 +244,24 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
             self.issuer_relative_deadline_ms,
             context,
             Instant::now(),
-        ) {
+        ) || !lease_window_is_live(observed_before, expires_at_tick) {
             return Err(QdrantApiSecretStoreError::ContextRefused);
         }
-        #[cfg(windows)]
-        let now = monotonic_now();
-        #[cfg(not(windows))]
-        let now = monotonic_now()?;
+        let now = MonotonicInstant::from_ticks(observed_before.get());
         let result = self
             .lease
             .with_secret(now, consume)
             .map_err(QdrantApiSecretStoreError::LeaseRejected)?;
+
+        // The issuer can remain live after the shorter Qdrant lease TTL. Check
+        // the same native clock after user work so a slow callback cannot turn
+        // an expired lease into a successful dispatch authorization.
+        #[cfg(windows)]
+        let observed_after = monotonic_now();
+        #[cfg(not(windows))]
+        let observed_after = monotonic_now()?;
+        let observed_after = NonZeroU64::new(observed_after.ticks())
+            .ok_or(QdrantApiSecretStoreError::InvalidLeasePolicy)?;
         context
             .preflight()
             .map_err(|_| QdrantApiSecretStoreError::ContextRefused)?;
@@ -355,7 +273,7 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
             self.issuer_relative_deadline_ms,
             context,
             Instant::now(),
-        ) {
+        ) || !lease_window_is_live(observed_after, expires_at_tick) {
             return Err(QdrantApiSecretStoreError::ContextRefused);
         }
         Ok(result)
@@ -492,12 +410,12 @@ impl<C: CancellationProbe + Clone> SecretStorePort for QdrantApiSecretStore<C> {
             .checked_add(lease_ttl_ms)
             .map(MonotonicInstant::from_ticks)
             .ok_or(QdrantApiSecretStoreError::InvalidLeasePolicy)?;
-        let plaintext = unprotect_selected(&protected, secret_ref)?;
+        let version = NonZeroRevision::new(version)
+            .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
+        let plaintext = unprotect_selected(&protected, secret_ref, version)?;
         if remaining().is_none() {
             return Err(QdrantApiSecretStoreError::ContextRefused);
         }
-        let version = NonZeroRevision::new(version)
-            .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
         let selected = SecretReference::new(
             secret_ref.stable_reference.clone(),
             secret_ref.binding.clone(),
@@ -520,8 +438,6 @@ impl<C: CancellationProbe + Clone> SecretStorePort for QdrantApiSecretStore<C> {
             issuer_request_id,
             issuer_budget_ref,
             issuer_relative_deadline_ms,
-            reference_digest: Blake3Digest32::from_bytes(selection_digest(secret_ref)),
-            installation_incarnation_id: secret_ref.binding.installation_incarnation_id(),
         })
     }
 
@@ -569,8 +485,9 @@ fn load_selected_windows(
 fn unprotect_selected(
     protected: &ProtectedSecret,
     selected: &QdrantApiSecretReference,
+    version: NonZeroRevision,
 ) -> Result<SecretBytes, QdrantApiSecretStoreError> {
-    let scope = protection_scope(selected)?;
+    let scope = protection_scope(selected, version)?;
     unprotect_current_user(protected, &scope)
         .map_err(|_| QdrantApiSecretStoreError::ProtectionFailed)
 }
@@ -579,6 +496,7 @@ fn unprotect_selected(
 fn unprotect_selected(
     _protected: &ProtectedSecret,
     _selected: &QdrantApiSecretReference,
+    _version: NonZeroRevision,
 ) -> Result<SecretBytes, QdrantApiSecretStoreError> {
     Err(QdrantApiSecretStoreError::UnsupportedPlatform)
 }
@@ -657,15 +575,25 @@ fn decode_record(
     Ok((version, protected_version, protected_bytes))
 }
 
+#[cfg(any(windows, test))]
+fn versioned_protection_purpose(locator: &[u8; 32], version: NonZeroRevision) -> String {
+    format!(
+        "{QDRANT_API_SECRET_PURPOSE_ID}/{}/version/{}",
+        hex(locator),
+        version.get(),
+    )
+}
+
 #[cfg(windows)]
 fn protection_scope(
     selected: &QdrantApiSecretReference,
+    version: NonZeroRevision,
 ) -> Result<ProtectionScope, QdrantApiSecretStoreError> {
     let locator = selection_digest(selected);
     let user = hex(selected.binding.user_scope_digest().as_bytes());
     let installation = hex(selected.binding.installation_id().as_bytes());
     let incarnation = hex(selected.binding.installation_incarnation_id().as_bytes());
-    let purpose = format!("{QDRANT_API_SECRET_PURPOSE_ID}/{}", hex(&locator));
+    let purpose = versioned_protection_purpose(&locator, version);
     ProtectionScope::new(&user, &installation, &incarnation, &purpose)
         .map_err(|_| QdrantApiSecretStoreError::InvalidReference)
 }
@@ -689,7 +617,7 @@ fn push_hex(output: &mut String, bytes: &[u8]) {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 fn hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len().saturating_mul(2));
@@ -709,7 +637,8 @@ mod tests {
     };
 
     use search_contracts::{
-        Blake3Digest32, InstallationId, InstallationIncarnationId, OpaqueId, OpaqueRef, RequestId,
+        Blake3Digest32, InstallationId, InstallationIncarnationId, NonZeroRevision, OpaqueId,
+        OpaqueRef, RequestId,
     };
     use search_ports::{CancellationProbe, OperationContext, PackageOpaque};
 
@@ -717,6 +646,7 @@ mod tests {
         QDRANT_API_SECRET_PURPOSE_ID, QDRANT_CREDENTIAL_FIXED_BYTES, QDRANT_CREDENTIAL_MAGIC,
         QdrantApiSecretReference, QdrantApiSecretStoreError, decode_record,
         issuer_context_allows_use, lease_window_is_live, selection_digest,
+        versioned_protection_purpose,
     };
 
     #[derive(Clone, Debug)]
@@ -813,6 +743,31 @@ mod tests {
     }
 
     #[test]
+    fn record_version_is_bound_to_dpapi_purpose_while_locator_stays_stable() {
+        let selected = selected("secret://credential/qdrant", 0x41);
+        let locator = selection_digest(&selected);
+        let version_seven = NonZeroRevision::new(7).expect("nonzero version");
+        let version_eight = NonZeroRevision::new(8).expect("nonzero version");
+        let frame = record(locator);
+        let mut changed_header = frame.clone();
+        changed_header[8..16].copy_from_slice(&8_u64.to_be_bytes());
+        let (observed_version, _, _) =
+            decode_record(&changed_header, &locator).expect("bounded version header");
+
+        let exact_purpose = versioned_protection_purpose(&locator, version_seven);
+        let changed_header_purpose = versioned_protection_purpose(
+            &locator,
+            NonZeroRevision::new(observed_version).expect("nonzero observed version"),
+        );
+
+        assert_eq!(selection_digest(&selected), locator);
+        assert_eq!(observed_version, version_eight.get());
+        assert_ne!(exact_purpose, changed_header_purpose);
+        assert!(exact_purpose.ends_with("/version/7"));
+        assert!(changed_header_purpose.ends_with("/version/8"));
+    }
+
+    #[test]
     fn lease_use_remains_bound_to_issuer_request_cancellation_and_deadline() {
         let issuer_cancellation = TestCancellation(Arc::new(AtomicBool::new(false)));
         let issuer = context(1, "budget:qdrant-startup", issuer_cancellation.clone());
@@ -867,12 +822,26 @@ mod tests {
     }
 
     #[test]
-    fn launch_evidence_requires_the_same_live_monotonic_lease_window() {
-        let issued = NonZeroU64::new(41).expect("nonzero tick");
-        let expired = NonZeroU64::new(40).expect("nonzero tick");
-        let live = NonZeroU64::new(42).expect("nonzero tick");
-        assert!(!lease_window_is_live(issued, expired));
-        assert!(lease_window_is_live(issued, live));
-        assert!(!lease_window_is_live(live, live));
+    fn secret_use_rechecks_ttl_after_callback_even_when_issuer_remains_live() {
+        let cancellation = TestCancellation(Arc::new(AtomicBool::new(false)));
+        let issuer = context(7, "budget:qdrant-startup", cancellation.clone());
+        let issuer_deadline =
+            std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let expires = NonZeroU64::new(1_000).expect("nonzero expiry");
+        let live_after_callback = NonZeroU64::new(999).expect("nonzero tick");
+        let expired_after_callback = NonZeroU64::new(1_000).expect("expiry tick");
+        let now = std::time::Instant::now();
+
+        assert!(issuer_context_allows_use(
+            &cancellation,
+            issuer_deadline,
+            issuer.request_id(),
+            issuer.budget_ref(),
+            issuer.relative_deadline_ms().get(),
+            &issuer,
+            now,
+        ));
+        assert!(lease_window_is_live(live_after_callback, expires));
+        assert!(!lease_window_is_live(expired_after_callback, expires));
     }
 }
