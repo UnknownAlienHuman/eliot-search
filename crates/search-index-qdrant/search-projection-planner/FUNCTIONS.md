@@ -41,6 +41,14 @@ before the plan may enter publication.
 
 ## Semantics
 
+Stored reads use `decode_projection_manifest_data(bytes, budget)` to check the exact existing
+canonical field sets, finite bounds, ordering and byte-identical re-encoding without preparing
+a source. `validate_projection_manifest_metadata(manifest, scope, schema, budget)` recomputes
+existing S11 addresses/full digests and scoring-document identities and checks scope/vector names.
+These return ordinary metadata, never source/completeness/access/publication proof. Root still
+authenticates actual C07 bytes and current C02/C03 bindings; publication uses complete UnitSet
+admission and citations require C24 exact source readback.
+
 Planning is pure, deterministic and retry-safe. Budget/cancellation yields no usable partial manifest.
 The crate performs no Qdrant/redb/CAS I/O and makes no source/admission/access decision.
 
