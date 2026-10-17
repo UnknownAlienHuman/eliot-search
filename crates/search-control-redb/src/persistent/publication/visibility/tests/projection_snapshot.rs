@@ -103,10 +103,16 @@ fn projection_snapshot_schema5_uses_the_same_profile_and_original_allowance() {
 fn reopened_unresolved_intent_is_recovery_metadata_but_not_a_serving_snapshot() {
     let scratch = Scratch::new();
     let (journal, _) = scratch.ready();
+    let next_owner = JournalIdentity {
+        owner_epoch: OwnerEpoch::new(2).unwrap(),
+        ..identity()
+    };
+    let journal = journal.advance_owner(next_owner).unwrap();
     drop(journal);
 
     let (writes, writes_after) = {
-        let mut journal = scratch.reopen();
+        let mut journal =
+            PersistentControlJournal::open(scratch.file(), next_owner, LIMITS).unwrap();
         let writes = journal.committed_writes();
         let deadline = Instant::now() + Duration::from_secs(30);
         let work_calls = Cell::new(0);
@@ -136,11 +142,15 @@ fn reopened_unresolved_intent_is_recovery_metadata_but_not_a_serving_snapshot() 
                 )
                 .unwrap()
                 .unwrap();
-            assert_eq!(recovery.identity(), identity());
+            assert_eq!(recovery.identity(), next_owner);
             assert_eq!(recovery.generation(), 6);
             assert_eq!(recovery.visibility(), &state());
             let intent = recovery.intent().unwrap();
             assert_eq!(intent.state, PublicationIntentState::ReadbackVerified);
+            assert_eq!(
+                intent.owner_source_membership_access_guards.owner_epoch,
+                OwnerEpoch::new(1).unwrap()
+            );
             assert_eq!(intent.target_epoch.get(), 1);
             assert_eq!(
                 intent.prepared_manifest_ref,
@@ -160,4 +170,27 @@ fn reopened_unresolved_intent_is_recovery_metadata_but_not_a_serving_snapshot() 
         (writes, journal.committed_writes())
     };
     assert_eq!(writes_after, writes);
+}
+
+#[test]
+fn serving_projection_reader_refuses_resolved_visibility_from_a_prior_owner() {
+    let scratch = Scratch::new();
+    let (mut journal, request) = scratch.ready();
+    apply(&mut journal, &request).unwrap();
+    let next_owner = JournalIdentity {
+        owner_epoch: OwnerEpoch::new(2).unwrap(),
+        ..identity()
+    };
+    let mut journal = journal.advance_owner(next_owner).unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let work = |_: MigrationBootstrapWork| Ok::<(), ()>(());
+    let mut publisher = ControlSnapshotPublisher::new();
+    let port = journal
+        .bind_control_port_with_original_context::<Cancel, _>(&mut publisher, deadline, &work)
+        .unwrap();
+    let error = port
+        .read_publication_projection_snapshot_with_original_context(deadline, &work)
+        .unwrap_err();
+    assert_eq!(error.control, ControlError::GenerationMismatch);
 }

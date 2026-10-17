@@ -216,7 +216,9 @@ impl PersistentControlJournal {
         let Some(read) = self.read_verified_projection_state_checked(check)? else {
             return Ok(None);
         };
-        validate_projection_owner(&read)?;
+        // A verified owner handoff advances only the journal header. Recovery
+        // checkpoint semantics retain the prior visibility/intent owner epoch
+        // so the caller can classify that immutable state without serving it.
         let intent = read_publication_intent(&read, check)?;
         let last_reserved_epoch = intent
             .as_ref()
