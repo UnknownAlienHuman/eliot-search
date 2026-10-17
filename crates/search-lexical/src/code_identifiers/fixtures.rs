@@ -888,7 +888,9 @@ mod tests {
                 profile.clone(),
                 CodeIdentifierLimits::HARD,
                 SparseLimits::BASELINE,
-                Instant::now().checked_sub(Duration::from_secs(1)).expect("fixture deadline"),
+                Instant::now()
+                    .checked_sub(Duration::from_secs(1))
+                    .expect("fixture deadline"),
                 &mut || Ok(()),
             ),
             Err(crate::CodeProfileQualificationError::Encoding(
@@ -909,6 +911,48 @@ mod tests {
             ),
             Err(crate::CodeProfileQualificationError::Encoding(
                 crate::CodeEncodingError::Identifier(IdentifierError::TokensExceeded)
+            ))
+        );
+    }
+
+    #[test]
+    fn final_observer_cannot_extend_the_original_qualification_deadline() {
+        let profile = CodeIdentifiersProfile::new().expect("profile");
+        let mut expected_checks = 0_usize;
+        qualify_code_identifiers_profile(
+            profile.clone(),
+            CodeIdentifierLimits::HARD,
+            SparseLimits::BASELINE,
+            Instant::now() + Duration::from_secs(30),
+            &mut || {
+                expected_checks += 1;
+                Ok(())
+            },
+        )
+        .expect("measure the complete real owner path");
+        let deadline = Instant::now() + Duration::from_millis(100);
+        let mut actual_checks = 0_usize;
+        let result = qualify_code_identifiers_profile(
+            profile,
+            CodeIdentifierLimits::HARD,
+            SparseLimits::BASELINE,
+            deadline,
+            &mut || {
+                actual_checks += 1;
+                if actual_checks == expected_checks {
+                    std::thread::sleep(deadline.saturating_duration_since(Instant::now()));
+                }
+                Ok(())
+            },
+        );
+        assert_eq!(
+            actual_checks, expected_checks,
+            "reach the last real owner checkpoint"
+        );
+        assert_eq!(
+            result,
+            Err(crate::CodeProfileQualificationError::Encoding(
+                crate::CodeEncodingError::Sparse(SparseError::Cancelled)
             ))
         );
     }

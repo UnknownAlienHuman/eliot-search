@@ -108,6 +108,12 @@ impl<'a> CodeEncodingCheckpoint<'a> {
             return Err(SparseError::Cancelled);
         }
         (self.observer)()?;
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Err(SparseError::Cancelled);
+        }
         self.work_since_poll = 0;
         Ok(())
     }
