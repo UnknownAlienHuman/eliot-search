@@ -204,7 +204,7 @@ fn vector_digest(
 ///
 /// Membership, access and epoch state are deliberately excluded so the same
 /// scoring population is not fragmented by authorization changes.
-fn derive_scoring_document_id(
+pub fn derive_scoring_document_id(
     source_revision_id: SourceRevisionId,
     representation_id: RepresentationId,
     unit_id: UnitId,

@@ -24,6 +24,83 @@ use search_projection_planner::{
 };
 use support::{Blake3Digest32, ProfileId, verified_unit_set};
 
+fn stored_manifest_fixture() -> (
+    search_projection_planner::ProjectionManifest,
+    PlanningScope,
+    search_contracts::indexed::CollectionSchema,
+) {
+    let text = "metadata\nsource\n";
+    let units = verified_unit_set(text);
+    let scope = scope();
+    let plan = plan_projection(&units, &scope, &planned_units(text), &lexical_requirement(),
+        ProjectionBudget::BASELINE).unwrap();
+    let schema = search_contracts::indexed::CollectionSchema::initial(
+        scope.membership.installation_incarnation_id,
+        scope.membership.collection_generation_id,
+        scope.membership.projection_profile_set_id.clone(),
+        &[search_contracts::indexed::NamedVectorRequirement::new(
+            VectorName::new("lexical-sparse").unwrap(),
+            lexical_requirement()["lexical-sparse"],
+        ).unwrap()],
+    ).unwrap();
+    search_projection_planner::validate_schema(&schema, &plan, ProjectionBudget::BASELINE).unwrap();
+    drop(units);
+    (plan.manifest, scope, schema)
+}
+
+#[test]
+fn stored_manifest_data_reads_without_source_preparation_and_checks_its_scope() {
+    use search_projection_planner::{decode_projection_manifest_data,
+        validate_projection_manifest_metadata, canonical_projection_manifest_semantic_digest};
+    let (manifest, scope, schema) = stored_manifest_fixture();
+    let decoded = decode_projection_manifest_data(&manifest.canonical_bytes, ProjectionBudget::BASELINE).unwrap();
+    assert_eq!(decoded, manifest);
+    validate_projection_manifest_metadata(&decoded, &scope, &schema, ProjectionBudget::BASELINE).unwrap();
+    let mut foreign = scope.clone();
+    foreign.membership.access_partition_id = AccessPartitionId::from_bytes([99; 16]);
+    assert_eq!(validate_projection_manifest_metadata(&decoded, &foreign, &schema, ProjectionBudget::BASELINE),
+        Err(ProjectionError::ScopeMismatch));
+    let mut changed = decoded;
+    changed.entries[0].point_identity_digest_256 = Blake3Digest32::from_stored_bytes([99; 32]);
+    changed.canonical_bytes = search_projection_planner::manifest_canonical_bytes(&changed,
+        ProjectionBudget::BASELINE).unwrap().as_slice().to_vec();
+    let changed = decode_projection_manifest_data(&changed.canonical_bytes, ProjectionBudget::BASELINE).unwrap();
+    assert_eq!(validate_projection_manifest_metadata(&changed, &scope, &schema, ProjectionBudget::BASELINE),
+        Err(ProjectionError::ManifestMismatch));
+
+    // Codec consistency cannot authenticate opaque payload digests. Root must
+    // compare the actual C07 owner's semantic commitment for this different body.
+    let mut changed = manifest.clone();
+    changed.entries[0].payload_identity = Blake3Digest32::from_stored_bytes([88; 32]);
+    changed.canonical_bytes = search_projection_planner::manifest_canonical_bytes(&changed,
+        ProjectionBudget::BASELINE).unwrap().as_slice().to_vec();
+    let changed = decode_projection_manifest_data(&changed.canonical_bytes, ProjectionBudget::BASELINE).unwrap();
+    assert_ne!(canonical_projection_manifest_semantic_digest(&manifest, ProjectionBudget::BASELINE).unwrap(),
+        canonical_projection_manifest_semantic_digest(&changed, ProjectionBudget::BASELINE).unwrap());
+}
+
+#[test]
+fn stored_manifest_decode_refuses_unknown_fields_order_and_finite_budget_overflow() {
+    use search_projection_planner::{decode_projection_manifest_data, manifest_canonical_bytes};
+    use search_contracts::{CanonicalKey, CanonicalText, CanonicalValue, BoundedMap, to_canonical_cbor};
+    let (manifest, _, _) = stored_manifest_fixture();
+    let narrow_bytes = ProjectionBudget { max_manifest_bytes: manifest.canonical_bytes.len() - 1,
+        ..ProjectionBudget::BASELINE };
+    assert_eq!(decode_projection_manifest_data(&manifest.canonical_bytes, narrow_bytes), Err(ProjectionError::ManifestTooLarge));
+    let narrow_rows = ProjectionBudget { max_points: manifest.entries.len() - 1,
+        ..ProjectionBudget::BASELINE };
+    assert_eq!(decode_projection_manifest_data(&manifest.canonical_bytes, narrow_rows), Err(ProjectionError::ManifestTooLarge));
+    let CanonicalValue::Object(fields) = search_contracts::parse_canonical_cbor(&manifest.canonical_bytes).unwrap() else { panic!("manifest object"); };
+    let mut fields = fields.iter().map(|(key,value)| (key.clone(), value.clone())).collect::<Vec<_>>();
+    fields.push((CanonicalKey::new_non_empty("extra").unwrap(), CanonicalValue::Text(CanonicalText::new("foreign").unwrap())));
+    let encoded = to_canonical_cbor(&CanonicalValue::Object(BoundedMap::from_entries(fields).unwrap())).unwrap();
+    assert_eq!(decode_projection_manifest_data(encoded.as_slice(), ProjectionBudget::BASELINE), Err(ProjectionError::InvalidManifest));
+    let mut reversed = manifest;
+    reversed.entries.reverse();
+    let encoded = manifest_canonical_bytes(&reversed, ProjectionBudget::BASELINE).unwrap();
+    assert_eq!(decode_projection_manifest_data(encoded.as_slice(), ProjectionBudget::BASELINE), Err(ProjectionError::InvalidManifest));
+}
+
 /// The one sparse lexical requirement accepted by every fixture profile.
 fn lexical_requirement() -> BTreeMap<String, VectorRequirement> {
     let name = VectorName::new("lexical-sparse").expect("closed vector name");
