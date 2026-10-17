@@ -19,8 +19,9 @@
 
 pub use crate::binding::{
     AdmittedProviderRequest, BindingContext, BindingSession, BoundSession, NegotiatedHello,
-    ProviderDeliveryError, ProviderFrameTranscript, SessionDrainHandle, TransportPeer,
-    authenticate_binding, project_capability_descriptor,
+    PreparedProviderDeliveryError, ProviderDeliveryError, ProviderEventPreparationV1,
+    ProviderFrameTranscript, SessionDrainHandle, TransportPeer, authenticate_binding,
+    project_capability_descriptor,
 };
 pub use crate::cancel::{CancelOutcome, cancel_request};
 pub use crate::cleanup::{DisconnectReceipt, disconnect_all};

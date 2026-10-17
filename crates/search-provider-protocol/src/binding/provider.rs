@@ -1,7 +1,8 @@
 //! Typed request/cancellation admission and output on the bound-session owner.
 
 use search_contracts::{
-    MessageKind, ProtocolRange, ProviderBodyV1, ProviderEnvelope, RequestBody,
+    BoundedBytes, BindingId, InstallationIncarnationId, MAX_FRAME_BYTES, MessageKind,
+    ProtocolRange, ProtocolVersion, ProviderBodyV1, ProviderEnvelope, RequestBody, RequestId,
 };
 
 use crate::error::ProtocolError;
@@ -52,6 +53,64 @@ impl<'a> ProviderFrameTranscript<'a> {
     pub const fn frame(&self) -> &[u8] { self.frame }
 }
 
+/// Finite response metadata previewed under the exclusive bound-session borrow.
+///
+/// The event and connection sequences remain uncommitted until output succeeds.
+/// This value carries no session, key, reservation, or authority and cannot be
+/// used to emit a frame by itself.
+pub struct ProviderEventPreparationV1 {
+    protocol_version: ProtocolVersion,
+    installation_incarnation_id: InstallationIncarnationId,
+    binding_id: BindingId,
+    request_id: RequestId,
+    event_sequence: u64,
+    connection_sequence: u64,
+    limits: crate::config::ProtocolLimits,
+}
+
+impl ProviderEventPreparationV1 {
+    /// Request-local event sequence selected for this attempted delivery.
+    #[must_use]
+    pub const fn event_sequence(&self) -> u64 { self.event_sequence }
+
+    /// Connection-local provider sequence selected for this attempted delivery.
+    #[must_use]
+    pub const fn connection_sequence(&self) -> u64 { self.connection_sequence }
+
+    /// Existing negotiated protocol version for the response envelope.
+    #[must_use]
+    pub const fn protocol_version(&self) -> ProtocolVersion { self.protocol_version }
+
+    /// Existing bounded frame limits for `ServerEnvelopeCodec`.
+    #[must_use]
+    pub const fn limits(&self) -> crate::config::ProtocolLimits { self.limits }
+
+    /// Exact negotiated range accepted by the existing provider codec.
+    #[must_use]
+    pub const fn supported_versions(&self) -> ProtocolRange {
+        ProtocolRange { minimum: self.protocol_version, maximum: self.protocol_version }
+    }
+
+    /// Build the envelope skeleton bound to this attempted delivery.
+    ///
+    /// The caller supplies only its typed body. The protocol validates the
+    /// resulting encoded frame against this complete envelope before output.
+    #[must_use]
+    pub fn envelope(&self, body: ProviderBodyV1) -> ProviderEnvelope {
+        ProviderEnvelope {
+            protocol_major: self.protocol_version.major,
+            protocol_minor: self.protocol_version.minor,
+            installation_incarnation_id: self.installation_incarnation_id,
+            binding_id: self.binding_id,
+            connection_sequence: self.connection_sequence,
+            request_id: self.request_id,
+            message_kind: body.message_kind(),
+            relative_deadline_ms: None,
+            body,
+        }
+    }
+}
+
 /// One admitted typed recipe and its event cursor. It cannot be cloned or
 /// constructed from caller-selected guards. Replay/slots stay in BoundSession.
 ///
@@ -99,6 +158,42 @@ pub enum ProviderDeliveryError<E> {
     Output(E),
     /// Output returned, but the original deadline/clock check failed.
     AfterOutput(ProtocolError),
+}
+
+/// Separates preparation refusal from protocol validation and actual output.
+#[derive(Debug)]
+pub enum PreparedProviderDeliveryError<P, E> {
+    /// Session, body, sequence, or prepared-frame validation failed.
+    Protocol(ProtocolError),
+    /// The one-shot caller preparation callback failed before output.
+    Preparation(P),
+    /// The output callback failed; it may already have written bytes.
+    Output(E),
+    /// Output returned, but the original deadline/clock check failed.
+    AfterOutput(ProtocolError),
+}
+
+/// Protocol-private frame/body pair accepted only after full-envelope readback.
+struct PreparedProviderDeliveryV1 {
+    envelope: ProviderEnvelope,
+    frame: BoundedBytes<MAX_FRAME_BYTES>,
+}
+
+impl PreparedProviderDeliveryV1 {
+    fn validate(
+        context: &ProviderEventPreparationV1,
+        body: ProviderBodyV1,
+        frame: BoundedBytes<MAX_FRAME_BYTES>,
+    ) -> Result<Self, ProtocolError> {
+        let expected = context.envelope(body);
+        let decoded = ServerEnvelopeCodec::decode(
+            frame.as_slice(), context.limits(), context.supported_versions(),
+        )?;
+        if decoded != expected {
+            return Err(ProtocolError::InvalidBody);
+        }
+        Ok(Self { envelope: expected, frame })
+    }
 }
 
 impl BoundSession {
@@ -204,40 +299,112 @@ impl BoundSession {
         clock: &mut impl FnMut() -> Result<MonotonicMillis, ProtocolError>,
         output: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<(), E>,
     ) -> Result<(), ProviderDeliveryError<E>> {
-        use ProviderDeliveryError::{AfterOutput, Output, Protocol};
+        let started = clock().map_err(ProviderDeliveryError::Protocol)?;
+        self.validate_provider_guard(request, started)
+            .map_err(ProviderDeliveryError::Protocol)?;
+        let event = request
+            .next_event
+            .ok_or(ProviderDeliveryError::Protocol(ProtocolError::DuplicateTerminal))?;
+        validate_event(request, &body, terminal, event)
+            .map_err(ProviderDeliveryError::Protocol)?;
+        let mut initial_clock = Some(started);
+        let mut delegated_clock = || match initial_clock.take() {
+            Some(now) => Ok(now),
+            None => clock(),
+        };
+        let result = self.deliver_provider_event_prepared(
+            request,
+            terminal,
+            &mut delegated_clock,
+            move |context| {
+                let envelope = context.envelope(body.clone());
+                let frame = ServerEnvelopeCodec::encode(
+                    &envelope, context.limits(), context.supported_versions(),
+                )?;
+                Ok((body, frame))
+            },
+            output,
+        );
+        match result {
+            Ok(()) => Ok(()),
+            Err(PreparedProviderDeliveryError::Protocol(error)
+                | PreparedProviderDeliveryError::Preparation(error)) => {
+                Err(ProviderDeliveryError::Protocol(error))
+            }
+            Err(PreparedProviderDeliveryError::Output(error)) => {
+                Err(ProviderDeliveryError::Output(error))
+            }
+            Err(PreparedProviderDeliveryError::AfterOutput(error)) => {
+                Err(ProviderDeliveryError::AfterOutput(error))
+            }
+        }
+    }
+
+    /// Prepares and delivers one exact provider frame under this exclusive session borrow.
+    ///
+    /// The protocol previews both sequence spaces, then invokes `prepare` once
+    /// with finite metadata and the envelope builder. The callback returns the
+    /// typed body plus the complete length-prefixed frame encoded by the
+    /// existing `ServerEnvelopeCodec`. This method decodes that frame and
+    /// requires exact equality with the expected envelope and body, then builds
+    /// the response transcript over those same bytes for the existing key-owning
+    /// output adapter to sign and write.
+    ///
+    /// Preparation and frame-validation failures occur before output and do not
+    /// commit either sequence or terminal state. Once output begins, the same
+    /// pending-output disconnect, deadline, and post-write commit semantics as
+    /// [`BoundSession::deliver_provider_event`] apply. The preparation context
+    /// is a sequence preview, not a transferable reservation.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the retained progress guard disappears while this method
+    /// holds the exclusive bound-session borrow after successful output.
+    pub fn deliver_provider_event_prepared<P, E>(
+        &mut self,
+        request: &mut AdmittedProviderRequest,
+        terminal: Option<TerminalKind>,
+        clock: &mut impl FnMut() -> Result<MonotonicMillis, ProtocolError>,
+        prepare: impl FnOnce(
+            &ProviderEventPreparationV1,
+        ) -> Result<(ProviderBodyV1, BoundedBytes<MAX_FRAME_BYTES>), P>,
+        output: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<(), E>,
+    ) -> Result<(), PreparedProviderDeliveryError<P, E>> {
+        use PreparedProviderDeliveryError::{AfterOutput, Output, Preparation, Protocol};
 
         let started = clock().map_err(Protocol)?;
         self.validate_provider_guard(request, started).map_err(Protocol)?;
         let event = request.next_event.ok_or(Protocol(ProtocolError::DuplicateTerminal))?;
-        validate_event(request, &body, terminal, event).map_err(Protocol)?;
         let next_event = if terminal.is_some() { None } else {
             Some(event.checked_add(1).ok_or(Protocol(ProtocolError::SequenceExhausted))?)
         };
+        let mut sequence = self.session.sequences().provider();
+        let assigned = sequence.next_expected().ok_or(Protocol(ProtocolError::SequenceExhausted))?;
+        SequenceTracker::require_accepted(sequence.observe(assigned)).map_err(Protocol)?;
+        let context = ProviderEventPreparationV1 {
+            protocol_version: self.binding.version(),
+            installation_incarnation_id: self.binding.incarnation(),
+            binding_id: self.binding.binding_id(),
+            request_id: *request.guard.request_id(),
+            event_sequence: event,
+            connection_sequence: assigned,
+            limits: self.limits,
+        };
+        let (body, frame) = prepare(&context).map_err(Preparation)?;
+        let prepared = PreparedProviderDeliveryV1::validate(&context, body, frame)
+            .map_err(Protocol)?;
+        validate_event(request, &prepared.envelope.body, terminal, event).map_err(Protocol)?;
+
         let mut progress_guard = self.guards.get(request.guard.request_id())
             .ok_or(Protocol(ProtocolError::InvalidSessionTransition))?.clone();
-        if let ProviderBodyV1::Progress(progress) = &body {
+        if let ProviderBodyV1::Progress(progress) = &prepared.envelope.body {
             progress_guard.advance_progress(
                 u64::from(progress.bounded_counts.total_planned_legs),
                 u64::from(progress.bounded_counts.completed_legs), self.limits,
             ).map_err(Protocol)?;
         }
         if let Some(kind) = terminal { progress_guard.finish(kind, self.limits).map_err(Protocol)?; }
-        let mut sequence = self.session.sequences().provider();
-        let assigned = sequence.next_expected().ok_or(Protocol(ProtocolError::SequenceExhausted))?;
-        SequenceTracker::require_accepted(sequence.observe(assigned)).map_err(Protocol)?;
-        let envelope = ProviderEnvelope {
-            protocol_major: self.binding.version().major,
-            protocol_minor: self.binding.version().minor,
-            installation_incarnation_id: self.binding.incarnation(),
-            binding_id: self.binding.binding_id(),
-            connection_sequence: assigned,
-            request_id: *request.guard.request_id(),
-            message_kind: body.message_kind(),
-            relative_deadline_ms: None,
-            body,
-        };
-        let versions = ProtocolRange { minimum: self.binding.version(), maximum: self.binding.version() };
-        let frame = ServerEnvelopeCodec::encode(&envelope, self.limits, versions).map_err(Protocol)?;
+
         let before_output = clock().map_err(Protocol)?;
         if before_output < started { return Err(Protocol(ProtocolError::DeadlineExpired)); }
         self.validate_provider_guard(request, before_output).map_err(Protocol)?;
@@ -245,7 +412,7 @@ impl BoundSession {
             return Err(Protocol(ProtocolError::InvalidSessionTransition));
         }
         let transcript = ProviderFrameTranscript::response(
-            self.pairing.session(), self.server_nonce, frame.as_slice(),
+            self.pairing.session(), self.server_nonce, prepared.frame.as_slice(),
         );
         let mut pending = PendingOutput { session: self, committed: false };
         let mut finished_at = None;

@@ -38,7 +38,10 @@ mod provider;
 
 pub use drain::SessionDrainHandle;
 pub(crate) use drain::SessionDrainState;
-pub use provider::{AdmittedProviderRequest, ProviderDeliveryError, ProviderFrameTranscript};
+pub use provider::{
+    AdmittedProviderRequest, PreparedProviderDeliveryError, ProviderDeliveryError,
+    ProviderEventPreparationV1, ProviderFrameTranscript,
+};
 
 /// Transport peer identity supplied by the daemon adapter.
 ///

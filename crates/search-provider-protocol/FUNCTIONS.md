@@ -104,6 +104,27 @@ one in-flight slot. The terminal guard remains retained for duplicate-terminal
 detection until disconnect. A cancelled request may complete only as cancelled;
 it cannot be relabelled success.
 
+### `BoundSession::deliver_provider_event_prepared(request, terminal, clock, prepare, output)`
+
+An additive, versioned preparation API over the existing provider-event lifecycle. Under the
+exclusive `BoundSession` borrow it previews the request event sequence and provider connection
+sequence, then invokes the one-shot callback with `ProviderEventPreparationV1`. The context exposes
+only those sequence values, the negotiated codec limits/range, and an envelope builder; it carries
+no session, key, or transferable reservation.
+
+The callback returns the typed `ProviderBodyV1` plus the complete bounded, length-prefixed frame
+produced by the existing `ServerEnvelopeCodec`. A protocol-private prepared value decodes those
+bytes with the existing server codec and requires the decoded full `ProviderEnvelope` to equal the
+context-derived expected envelope and typed body. It retains and passes the original frame bytes
+unchanged into `ProviderFrameTranscript::response`; the existing key-owning output adapter signs
+and writes those bytes through the callback.
+
+Preparation errors and frame mismatches happen before output and consume neither sequence nor
+terminal state. Once output begins, the existing pending-output disconnect/unknown-outcome behavior
+applies; successful output commits the provider sequence, request event cursor and terminal state in
+the same order as `deliver_provider_event`. The existing `deliver_provider_event` API delegates to
+this path using the existing encoder, so P00 wire bytes and the separate MAC record are unchanged.
+
 ### `cancel_request(connection, target_request_id) -> CancelOutcome`
 
 Idempotently marks cancellation and releases the request's in-flight slot.
