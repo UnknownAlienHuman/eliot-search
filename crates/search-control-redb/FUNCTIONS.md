@@ -33,9 +33,16 @@ retain their semantic validation. MigrationInert cannot bind normal registry or
 publish/admit a current snapshot. Generic mutation cannot write/delete the profile.
 The original profile codec/operation join is checked on disk verification and snapshot
 publication. Schemas 1/2/3/4 and v1 bootstrap semantics remain unchanged.
-Later Direct-to-Indexed and inert adoption explicitly refuse until a separately
-accepted exact owner/source/access-counter transition contract exists. Root owns
-native v2 creation and source admission; this package mints none of those authorities.
+`prepare_indexed_profile_adoption` captures the actual immutable DIRECT profile and
+current control generation. `adopt_indexed_profile` conditionally writes one immutable
+original-input adoption record plus the supplied epoch-zero visibility in the SAME
+journal. It never rewrites genesis or source metadata. `recover_indexed_profile_adoption`
+resolves only the original command; replay/conflict/unknown retain existing semantics.
+Disk/snapshot verification joins both immutable records to their actual transactions.
+Root must verify the real qualified route/schema and current owner/source/access
+guards before preparation; these technical APIs do not establish Qdrant readiness.
+MigrationInert adoption still refuses. Native v2 creation and source admission remain
+Root responsibilities; this package mints none of those authorities.
 
 ## Concrete registry reservation (#269)
 
