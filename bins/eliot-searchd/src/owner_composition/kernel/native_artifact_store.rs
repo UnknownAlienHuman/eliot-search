@@ -722,8 +722,11 @@ impl<'input, 'view, 'operation, 'owner, 'journal>
         {
             return Err(NativeArtifactStoreError::ControlRefused);
         }
-        let _ = reservation_operation;
-        Ok(usage.attempts())
+        // C02 owns the counter admission and exhaustion check. Do not derive
+        // nonce/AAD from a raw observation before that owner accepts it.
+        db::source_retention::RevisionUseCommand::next_counter(
+            &read, &self.selected.preparation, LIMITS,
+        ).map_err(|_| NativeArtifactStoreError::ControlRefused)
     }
 
     fn read_reservation(
