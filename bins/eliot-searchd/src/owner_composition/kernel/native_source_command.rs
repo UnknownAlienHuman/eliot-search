@@ -104,6 +104,17 @@ impl DirectRegistryOwner {
                 "{{\"event\":\"native_source\",\"admitted\":false,\"reason\":\"{}\",\"ready\":false,\"source_body_serving\":false}}",
                 error.source_refusal_code()) }),
         };
+        let first_scope_refusal = RefCell::new(None);
+        let scope = port.ensure_source_scope(&registry, acquired.root(), native.context(), &mut || {
+            acquired.check_current(&registry).map_err(|error| {
+                let code = if error.is_cancelled() { search_runtime_owner::OwnerError::OwnerCancelledBeforeMutation }
+                    else { search_runtime_owner::OwnerError::OwnerOperationConflict };
+                if first_scope_refusal.borrow().is_none() { *first_scope_refusal.borrow_mut() = Some(error); }
+                code
+            })
+        });
+        if let Some(error) = first_scope_refusal.into_inner() { return Err(error.to_string()); }
+        let _scope = scope.map_err(|_| "NATIVE_SOURCE_SCOPE_SETUP_REFUSED")?;
         let request = SourceAdmissionRequestV2 {
             expected_registry_revision: registry.revision(), root_binding_id: root_id,
             expected_root_revision: acquired.root().record_revision, namespace, owner,

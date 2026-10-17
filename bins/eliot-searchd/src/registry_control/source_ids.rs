@@ -8,7 +8,9 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::time::Instant;
 
-use search_contracts::{OpaqueId, SourceId, SourceNamespaceId};
+use search_contracts::{
+    CorpusId, OpaqueId, SourceId, SourceMembershipId, SourceNamespaceId, WorkspaceId,
+};
 use search_control_redb::MigrationBootstrapWork;
 use search_ports::{
     CancellationProbe, ContextReason, DisclosureClass, OperationContext, Port, PortError,
@@ -113,6 +115,32 @@ impl<'a, C: CancellationProbe> SourceIdentityIdsV2<'a, C> {
     ) -> Result<[u8; 16], SourceIdentityIdError> {
         mint_fresh_id(self.deadline, self.work, context)
     }
+
+    /// Allocates logical workspace metadata, independently of physical Root identity.
+    pub(crate) fn fresh_workspace_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<WorkspaceId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(WorkspaceId::from_bytes)
+    }
+
+    /// Allocates a corpus independently of its workspace and sources.
+    pub(crate) fn fresh_corpus_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<CorpusId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(CorpusId::from_bytes)
+    }
+
+    /// Supplies C03's caller-assigned member ID. Selected policy/profile owners
+    /// must still supply every semantic field before a membership can be admitted.
+    #[allow(dead_code)] // The selected membership policy/profile producer is not yet wired.
+    pub(crate) fn fresh_source_membership_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<SourceMembershipId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(SourceMembershipId::from_bytes)
+    }
 }
 
 impl<C: CancellationProbe> Port for SourceIdentityIdsV2<'_, C> {
@@ -133,7 +161,9 @@ impl<C: CancellationProbe> SourceIdentityIdPortV2 for SourceIdentityIdsV2<'_, C>
     }
 }
 
-impl<C: CancellationProbe> search_source_registry::SourceRevisionIdPort for SourceIdentityIdsV2<'_, C> {
+impl<C: CancellationProbe> search_source_registry::SourceRevisionIdPort
+    for SourceIdentityIdsV2<'_, C>
+{
     fn fresh_source_revision_id(
         &mut self,
         context: &OperationContext<C>,
@@ -172,7 +202,7 @@ impl<C: CancellationProbe> SourceIdentityIdPortV2 for super::RegistryJournal<'_,
     }
 }
 
-fn map_source_identity_error(error: SourceIdentityIdError) -> RegistryPortError {
+pub(super) fn map_source_identity_error(error: SourceIdentityIdError) -> RegistryPortError {
     let kind = error.kind();
     let retryability = error.retryability();
     let reason = match kind {
@@ -271,6 +301,18 @@ mod tests {
         let mut adapter = SourceIdentityIdsV2::<FakeCancellation>::bind(deadline, &work);
         let result = adapter.fresh_source_id(&context(true));
         assert!(matches!(result, Err(SourceIdentityIdError::Context(_))));
+        assert!(matches!(
+            adapter.fresh_workspace_id(&context(true)),
+            Err(SourceIdentityIdError::Context(_))
+        ));
+        assert!(matches!(
+            adapter.fresh_corpus_id(&context(true)),
+            Err(SourceIdentityIdError::Context(_))
+        ));
+        assert!(matches!(
+            adapter.fresh_source_membership_id(&context(true)),
+            Err(SourceIdentityIdError::Context(_))
+        ));
         assert!(!called.get());
     }
 
