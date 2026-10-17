@@ -252,7 +252,7 @@ fn fixture_migration_valid_replacement_reaches_commit_and_snapshot_acknowledgeme
             .map(|e| e.point_id)
             .collect::<Vec<_>>()
     );
-    let difference = machine.active().unwrap().prepared.difference();
+    let difference = machine.active().unwrap().prepared().difference();
     assert_eq!(difference.create, expected_new.entries);
     assert_eq!(difference.retain, Vec::new());
     assert_eq!(difference.retire, old.plan.manifest.entries);
