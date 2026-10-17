@@ -2,14 +2,14 @@
 
 use core::fmt;
 use search_contracts::{Blake3Digest32, CollectionGenerationId, Epoch, NonZeroRevision,
-    ProjectionMembershipId, PublicationGuards, PublicationIntent,
-    PublicationIntentState, PublicationReceipt, PublicationReceiptId, ReceiptRef, SourceRevisionId};
+    ProjectionMembershipId, PublicationGuards, PublicationIntent, PublicationIntentState,
+    PublicationReceipt, PublicationReceiptId, ReceiptRef, SourceRevisionId};
 use search_ports::{CancellationProbe, OperationContext};
-use crate::{ConditionalControlMutation, ControlRecordCondition, ControlRecordClass, ControlValue, ControlWrite};
+use crate::{ConditionalControlMutation, ControlRecordCondition, ControlRecordClass, ControlMutation, ControlValue, ControlWrite};
 use super::super::operation::{Budget, Check, Point};
 use crate::MigrationBootstrapWork as Work;
 use super::super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitReceipt,
-    ControlError, ControlKey, ControlMutation, JournalLimits, JournalReadSnapshot, MutationId,
+    ControlError, ControlKey, JournalLimits, JournalReadSnapshot, MutationId,
     PersistentControlJournal, ReadTransaction, is_corruption};
 #[cfg(test)]
 use super::super::operation_from;
@@ -64,6 +64,202 @@ pub struct PublicationVisibilityState {
     pub guards: PublicationGuards,
     /// Latest exact publication receipt, absent only at initial epoch zero.
     pub last_receipt: Option<PublicationReceiptId>,
+}
+
+/// One source-backed, exact C02 guard-image update prepared from coherent C02
+/// checkpoint, C03 registry and C18 security readbacks.
+///
+/// It changes only the guard image in the current visibility row; route, epoch,
+/// receipt and manifests remain exactly as read.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublicationGuardImageRequestV1 {
+    identity: crate::JournalIdentity,
+    operation_id: MutationId,
+    command_digest: Blake3Digest32,
+    expected_generation: u64,
+    previous: PublicationVisibilityState,
+    next: PublicationVisibilityState,
+    conditions: Vec<ControlRecordCondition>,
+}
+
+impl PublicationGuardImageRequestV1 {
+    /// Exact C02 operation identity retained for same-request recovery.
+    #[must_use]
+    pub const fn operation_id(&self) -> MutationId { self.operation_id }
+
+    /// Exact original generation observed by the verified C02 checkpoint.
+    #[must_use]
+    pub const fn expected_generation(&self) -> u64 { self.expected_generation }
+
+    /// Guarded pre-state; all route and visibility fields are part of equality.
+    #[must_use]
+    pub const fn previous_visibility(&self) -> &PublicationVisibilityState { &self.previous }
+
+    /// Requested guard image. Only this field differs from `previous_visibility`.
+    #[must_use]
+    pub const fn next_visibility(&self) -> &PublicationVisibilityState { &self.next }
+
+    #[allow(clippy::too_many_arguments)] // Distinct readbacks and C02 operation fields remain explicit.
+    pub(in crate::persistent) fn prepare(
+        checkpoint: &crate::PublicationRecoveryCheckpoint,
+        registry: &crate::RegistryReadSnapshot,
+        security: &[crate::security_restriction::SecurityRestrictionReadback],
+        guards: PublicationGuards,
+        operation_id: MutationId,
+        command_digest: Blake3Digest32,
+        limits: JournalLimits,
+        check: &dyn Check,
+    ) -> Result<Self, ControlError> {
+        check.check(Point::Start)?;
+        let identity = checkpoint.identity();
+        let previous = *checkpoint.visibility();
+        if registry.identity() != identity
+            || security.is_empty()
+            || security.len().checked_mul(2).and_then(|n| n.checked_add(2))
+                .is_none_or(|count| count.checked_add(1).is_none_or(|items| items > limits.max_mutation_items))
+            || checkpoint.generation() < registry.journal_generation()
+            || previous.guards.owner_epoch != identity.owner_epoch
+            || guards.owner_epoch != identity.owner_epoch
+            || guards.profile_digest != previous.guards.profile_digest
+            || (guards.source_catalog_generation < previous.guards.source_catalog_generation)
+            || (guards.membership_generation < previous.guards.membership_generation)
+            || (guards.access_generation < previous.guards.access_generation)
+            || (guards.shadow_generation < previous.guards.shadow_generation)
+            || (guards.purge_generation < previous.guards.purge_generation)
+            || (previous.visible_epoch.get() > 0
+                && guards.shadow_generation != previous.guards.shadow_generation)
+        {
+            return Err(ControlError::GenerationMismatch);
+        }
+        if checkpoint.abandonment_fence().is_some()
+            || checkpoint.intent().is_some_and(|intent| {
+                !matches!(intent.state, PublicationIntentState::ControlCommitted | PublicationIntentState::Reclaimable)
+            })
+        {
+            return Err(ControlError::OperationConflict);
+        }
+
+        let mut condition_bytes = registry.publication_revision_condition_bytes(limits)?;
+        let mut security_axes = None;
+        for readback in security {
+            check.check(Point::PlanRecord)?;
+            if readback.identity() != identity {
+                return Err(ControlError::IdentityMismatch);
+            }
+            if checkpoint.generation() < readback.generation() {
+                return Err(ControlError::GenerationMismatch);
+            }
+            let observed_axes = readback.publication_guard_axes()?;
+            if security_axes.is_some_and(|axes| axes != observed_axes) {
+                return Err(ControlError::GenerationMismatch);
+            }
+            security_axes = Some(observed_axes);
+            condition_bytes = condition_bytes
+                .checked_add(readback.publication_guard_condition_bytes(limits)?)
+                .ok_or(ControlError::BudgetExceeded)?;
+        }
+        let [access_generation, shadow_generation, purge_generation] =
+            security_axes.ok_or(ControlError::GenerationMismatch)?;
+        if guards.access_generation != access_generation
+            || guards.shadow_generation != shadow_generation
+            || guards.purge_generation != purge_generation
+        {
+            return Err(ControlError::GenerationMismatch);
+        }
+        let condition_count = security.len().checked_mul(2)
+            .and_then(|count| count.checked_add(2))
+            .ok_or(ControlError::BudgetExceeded)?;
+        let allocation = condition_bytes
+            .checked_add(condition_count.checked_mul(core::mem::size_of::<ControlRecordCondition>())
+                .ok_or(ControlError::BudgetExceeded)?)
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(allocation))?;
+        check.reserve(Work::Process(condition_bytes))?;
+
+        let mut conditions = Vec::with_capacity(condition_count);
+        conditions.push(registry.publication_revision_condition(limits)?);
+        for readback in security {
+            conditions.extend(readback.publication_guard_conditions(limits)?);
+        }
+        conditions.sort_unstable_by(|left, right| left.key().cmp(right.key()));
+        if conditions.windows(2).any(|pair| pair[0].key() == pair[1].key()) {
+            return Err(ControlError::DuplicateMutationKey);
+        }
+
+        let mut next = previous;
+        next.guards = guards;
+        check.check(Point::ReadComplete)?;
+        Ok(Self { identity, operation_id, command_digest, expected_generation: checkpoint.generation(),
+            previous, next, conditions })
+    }
+
+    pub(in crate::persistent) fn command(
+        &self,
+        limits: JournalLimits,
+        check: &dyn Check,
+    ) -> Result<ConditionalControlMutation, ControlError> {
+        check.check(Point::Start)?;
+        if self.identity.owner_epoch != self.previous.guards.owner_epoch
+            || self.next.collection_generation_id != self.previous.collection_generation_id
+            || self.next.schema_identity_digest != self.previous.schema_identity_digest
+            || self.next.visible_epoch != self.previous.visible_epoch
+            || self.next.last_receipt != self.previous.last_receipt
+            || self.next.guards.owner_epoch != self.previous.guards.owner_epoch
+            || self.next.guards.profile_digest != self.previous.guards.profile_digest
+        {
+            return Err(ControlError::InvalidValue);
+        }
+        let condition_bytes = self.conditions.iter().try_fold(0_usize, |total, condition| {
+            let key_bytes = condition.key().as_bytes().len();
+            let value_bytes = condition.expected().map_or(0, ControlValue::len);
+            total.checked_add(key_bytes).and_then(|value| value.checked_add(value_bytes))
+                .ok_or(ControlError::BudgetExceeded)
+        })?;
+        let allocation = condition_bytes
+            .checked_add(self.conditions.len().checked_mul(core::mem::size_of::<ControlRecordCondition>())
+                .ok_or(ControlError::BudgetExceeded)?)
+            .and_then(|bytes| bytes.checked_add(256))
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(allocation))?;
+        check.reserve(Work::Process(condition_bytes))?;
+        let state_key = key(STATE, limits)?;
+        let mutation = ControlMutation::new(self.operation_id, self.command_digest, self.expected_generation,
+            vec![ControlWrite { key: state_key.clone(), value: codec::state(&self.next, limits)? }], Vec::new());
+        let command = ConditionalControlMutation::new(mutation,
+            std::iter::once(ControlRecordCondition::exact(state_key, codec::state(&self.previous, limits)?))
+                .chain(self.conditions.iter().cloned()).collect());
+        super::super::validate_mutation(command.mutation(), limits)?;
+        crate::conditions::validate_conditions(command.mutation(), command.conditions(), limits,
+            || check.check(Point::PlanRecord))?;
+        check.check(Point::Validated)?;
+        Ok(command)
+    }
+}
+
+/// Durable C02 receipt plus full checked post-state after a guard-image CAS.
+#[derive(Clone, Eq, PartialEq)]
+pub struct PublicationGuardImageReadbackV1 {
+    commit: ControlCommitReceipt,
+    checkpoint: crate::PublicationRecoveryCheckpoint,
+}
+
+impl PublicationGuardImageReadbackV1 {
+    /// Exact committed C02 transaction receipt.
+    #[must_use]
+    pub const fn commit(&self) -> &ControlCommitReceipt { &self.commit }
+
+    /// Complete verified publication checkpoint after the guard-image update.
+    #[must_use]
+    pub const fn checkpoint(&self) -> &crate::PublicationRecoveryCheckpoint { &self.checkpoint }
+}
+
+impl fmt::Debug for PublicationGuardImageReadbackV1 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PublicationGuardImageReadbackV1")
+            .field("commit_generation", &self.commit.after_generation)
+            .field("visible_epoch", &self.checkpoint.visibility().visible_epoch)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Exact source-specific shadow eligible for removal by this publication.
@@ -434,6 +630,51 @@ impl PersistentControlJournal {
             budget.check(Point::ReadComplete)?; Ok(state)
         })();
         result.map_err(|error| budget.failure(error, None))
+    }
+
+    pub(in crate::persistent) fn commit_publication_guard_image_checked(
+        &mut self,
+        request: &PublicationGuardImageRequestV1,
+        boundary: Boundary,
+        check: &dyn Check,
+    ) -> Result<PublicationGuardImageReadbackV1, ControlError> {
+        let result = (|| {
+            self.ensure_available()?;
+            check.check(Point::Start)?;
+            require_schema(self, check)?;
+            if request.identity != self.identity {
+                return Err(ControlError::IdentityMismatch);
+            }
+            let command = request.command(self.limits, check)?;
+            let commit = self.transact_conditionally_checked(command, boundary, check)?;
+            let expected_changed = [key(STATE, self.limits)?];
+            if commit.operation_id != request.operation_id { return Err(ControlError::StoreCorrupt); }
+            if commit.command_digest != request.command_digest { return Err(ControlError::StoreCorrupt); }
+            if commit.before_generation != request.expected_generation { return Err(ControlError::StoreCorrupt); }
+            if commit.before_generation.checked_add(1) != Some(commit.after_generation) {
+                return Err(ControlError::StoreCorrupt);
+            }
+            if commit.changed_keys != expected_changed { return Err(ControlError::StoreCorrupt); }
+            let checkpoint = match self.read_checkpoint_checked(check) {
+                Ok(Some(checkpoint)) => checkpoint,
+                Err(error) if is_corruption(error) => return Err(error),
+                Ok(None) | Err(_) => return Err(ControlError::CommitOutcomeUnknown),
+            };
+            if checkpoint.identity() != request.identity
+                || checkpoint.generation() != commit.after_generation
+                || checkpoint.visibility() != &request.next
+            {
+                return Err(ControlError::CommitOutcomeUnknown);
+            }
+            check.check(Point::ReadComplete)?;
+            Ok(PublicationGuardImageReadbackV1 { commit, checkpoint })
+        })();
+        if crate::has_visibility_schema(self.identity.schema_version)
+            && result.as_ref().err().is_some_and(|error| is_corruption(*error))
+        {
+            self.quarantined = true;
+        }
+        result
     }
 
     pub(in crate::persistent) fn commit_visibility_checked(&mut self, request: &VisibleEpochCommit, boundary: Boundary, check: &dyn Check)

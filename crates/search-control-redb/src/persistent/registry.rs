@@ -7,7 +7,7 @@ mod tests;
 mod transaction;
 
 use crate::{
-    ControlCommitReceipt, ControlError, ControlKey, ControlRecordClass, ControlValue,
+    ControlCommitReceipt, ControlError, ControlKey, ControlRecordClass, ControlRecordCondition, ControlValue,
     JournalIdentity, JournalLimits,
 };
 use search_contracts::{Blake3Digest32, OpaqueId};
@@ -305,6 +305,45 @@ impl RegistryReadSnapshot {
     pub const fn registry_revision(&self) -> u64 {
         self.registry_revision
     }
+
+    /// Exact condition for the C03 registry revision observed by this snapshot.
+    ///
+    /// The verified zero revision is represented by required absence. A nonzero
+    /// revision is compared as its complete typed row in the same C02 transaction.
+    /// This does not equate the registry revision with publication guard values.
+    ///
+    /// # Errors
+    /// Refuses keys or values outside the executing journal's limits.
+    pub(crate) fn publication_revision_condition(
+        &self,
+        limits: JournalLimits,
+    ) -> Result<ControlRecordCondition, ControlError> {
+        let key = ControlKey::new(REVISION.to_vec(), limits)?;
+        if self.registry_revision == 0 {
+            Ok(ControlRecordCondition::absent(key))
+        } else {
+            Ok(ControlRecordCondition::exact(
+                key,
+                codec::revision_value(self.registry_revision, limits)?,
+            ))
+        }
+    }
+
+    /// Canonical key/value bytes needed for the exact revision condition.
+    pub(crate) fn publication_revision_condition_bytes(
+        &self,
+        limits: JournalLimits,
+    ) -> Result<usize, ControlError> {
+        if REVISION.len() > limits.max_key_bytes {
+            return Err(ControlError::BudgetExceeded);
+        }
+        let value_bytes = if self.registry_revision == 0 { 0 } else { 16 };
+        if value_bytes > limits.max_value_bytes {
+            return Err(ControlError::BudgetExceeded);
+        }
+        REVISION.len().checked_add(value_bytes).ok_or(ControlError::BudgetExceeded)
+    }
+
     /// All finite current owner values from the same read transaction.
     #[must_use]
     pub fn states(&self) -> &[RegistryStoredState] {

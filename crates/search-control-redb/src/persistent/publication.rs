@@ -57,7 +57,8 @@ pub use preparation_input::{PreparationInputMetadataV1, PreparationInputReadback
     PreparationInputRecordV1, MAX_PREPARATION_INPUT_POLICY_BYTES,
     MAX_PREPARATION_INPUT_RECORD_BYTES, MAX_PREPARATION_INPUT_RESIDENCY_BYTES};
 pub(super) mod visibility;
-pub use visibility::{PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
+pub use visibility::{PublicationGuardImageReadbackV1, PublicationGuardImageRequestV1,
+    PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
 pub use visibility::PublicationSuccessor;
 pub use visibility::{PublicationProjectionSnapshot, PublicationRecoveryProjectionSnapshot};

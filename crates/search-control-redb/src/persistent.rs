@@ -49,6 +49,7 @@ pub use registry::{registry_operation_value_len, RegistryStateFamily, RegistrySt
     RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,
     RegistryOperationLookup, RegistryOperationObservation};
 pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
+    PublicationGuardImageReadbackV1, PublicationGuardImageRequestV1,
     PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
 pub use publication::PublicationSuccessor;

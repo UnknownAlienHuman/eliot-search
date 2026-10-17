@@ -39,6 +39,49 @@ pub(super) fn encode(value: &SecurityRestrictionMutation) -> Result<Vec<u8>, Con
     Ok(out.0)
 }
 
+pub(super) fn encoded_len(value: &SecurityRestrictionMutation) -> Result<usize, ControlError> {
+    value.validate()?;
+    let mut length = 160_usize;
+    length = add(length, text_len(value.operation_id.as_str())?)?;
+    length = add(length, 1)?;
+    if value.expected_policy.is_some() {
+        length = add(length, ACCESS_POLICY_RECORD_LEN)?;
+    }
+    length = add(length, 1)?;
+    if let Some(state) = &value.expected_state {
+        length = add(length, state_len(state)?)?;
+    }
+    length = add(length, state_len(&value.replacement)?)?;
+    length = add(length, 4)?;
+    for dependent in &value.dependents {
+        length = add(length, text_len(dependent.as_str())?)?;
+    }
+    if length > MAX_RESTRICTION_RECORD_BYTES {
+        return Err(ControlError::BudgetExceeded);
+    }
+    Ok(length)
+}
+
+fn state_len(state: &SecurityPolicyState) -> Result<usize, ControlError> {
+    let mut length = ACCESS_POLICY_RECORD_LEN;
+    length = add(length, text_len(state.security_domain_ref.as_str())?)?;
+    length = add(length, 32 + 1)?;
+    length = add(length, 4)?;
+    length = add(length, state.denied_memberships.len().checked_mul(16)
+        .ok_or(ControlError::BudgetExceeded)?)?;
+    length = add(length, 4)?;
+    add(length, state.purged_memberships.len().checked_mul(16)
+        .ok_or(ControlError::BudgetExceeded)?)
+}
+
+fn text_len(value: &str) -> Result<usize, ControlError> {
+    4_usize.checked_add(value.len()).ok_or(ControlError::BudgetExceeded)
+}
+
+fn add(left: usize, right: usize) -> Result<usize, ControlError> {
+    left.checked_add(right).ok_or(ControlError::BudgetExceeded)
+}
+
 pub(super) fn decode(bytes: &[u8]) -> Result<SecurityRestrictionMutation, ControlError> {
     if bytes.len() > MAX_RESTRICTION_RECORD_BYTES { return Err(ControlError::StoreCorrupt); }
     let mut input = Decoder { bytes, position: 0 };

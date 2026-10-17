@@ -11,9 +11,12 @@ use crate::{
     CommitRecoveryDecision, ControlCommitReceipt, ControlError,
     MigrationBootstrapFailure, MutationId,
     MigrationBootstrapWork as Work, PreparationInputReadbackV1, PreparationInputRecordV1,
-    PreparedArtifactSetReadbackV1, PreparedArtifactSetRecordV1, VisibleEpochCommit,
+    PreparedArtifactSetReadbackV1, PreparedArtifactSetRecordV1, PublicationGuardImageReadbackV1,
+    PublicationGuardImageRequestV1, PublicationRecoveryCheckpoint, RegistryReadSnapshot,
+    VisibleEpochCommit,
 };
-use search_contracts::{Blake3Digest32, OpaqueId, ReceiptRef};
+use crate::security_restriction::SecurityRestrictionReadback;
+use search_contracts::{Blake3Digest32, OpaqueId, PublicationGuards, ReceiptRef};
 use search_ports::{CancellationProbe, MutationIdentity};
 use redb::ReadableTable;
 use std::time::Instant;
@@ -38,6 +41,112 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
         self.journal
             .read_checkpoint_checked(&check)
             .map_err(|error| check.failure(error))
+    }
+
+    /// Prepares a source-backed guard-image CAS from same-journal C02/C03/C18
+    /// readbacks. Source and membership generations remain distinct values
+    /// supplied by their semantic owner; this method never aliases them to the
+    /// C02 journal generation or C03 registry revision.
+    ///
+    /// # Errors
+    /// Refuses unresolved publication work, foreign/stale readbacks, incomplete
+    /// security records, regressed guards, route changes, a receipt-bound shadow
+    /// change after visibility is nonzero, or exhausted context.
+    #[allow(clippy::too_many_arguments)] // Keeps each typed observation and original C02 identity explicit.
+    pub fn prepare_publication_guard_image_with_original_context<F, E>(
+        &self,
+        checkpoint: &PublicationRecoveryCheckpoint,
+        registry: &RegistryReadSnapshot,
+        security: &[SecurityRestrictionReadback],
+        guards: PublicationGuards,
+        operation_id: MutationId,
+        command_digest: Blake3Digest32,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<PublicationGuardImageRequestV1, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        PublicationGuardImageRequestV1::prepare(
+            checkpoint,
+            registry,
+            security,
+            guards,
+            operation_id,
+            command_digest,
+            self.journal.limits,
+            &check,
+        )
+        .map_err(|error| check.failure(error))
+    }
+
+    /// Atomically replaces only the current visibility guard image while the
+    /// exact C03 registry fence and all supplied C18 policy/restriction rows
+    /// remain unchanged. This is not a publication epoch or manifest update.
+    ///
+    /// # Errors
+    /// A stale source row, changed global generation, original-context refusal
+    /// or uncertain write never acknowledges the new image.
+    pub fn transact_publication_guard_image_with_original_context<F, E>(
+        &mut self,
+        request: &PublicationGuardImageRequestV1,
+        mutation: &MutationIdentity,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<PublicationGuardImageReadbackV1, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            require_identity(request.operation_id(), mutation)?;
+            self.journal.commit_publication_guard_image_checked(
+                request,
+                Boundary::Normal,
+                &check,
+            )
+        })();
+        self.finish_dispatch(result)
+            .map_err(|error| check.failure(error))
+    }
+
+    /// Reconciles the exact original guard-image mutation without dispatching
+    /// it again. The same private request must be retained across uncertainty.
+    ///
+    /// # Errors
+    /// Changed request identity, interrupted readback and partial/corrupt state
+    /// remain explicit recovery outcomes.
+    pub fn recover_publication_guard_image_with_original_context<F, E>(
+        &mut self,
+        request: &PublicationGuardImageRequestV1,
+        mutation: &MutationIdentity,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<CommitRecoveryDecision, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            require_identity(request.operation_id(), mutation)?;
+            let command = request.command(self.journal.limits, &check)?;
+            self.journal.recover_transaction_with_conditions_checked(
+                command.mutation(),
+                command.conditions(),
+                &check,
+            )
+        })();
+        self.finish_dispatch(result).map_err(|error| {
+            let error = if check.interrupted() {
+                ControlError::CommitOutcomeUnknown
+            } else {
+                error
+            };
+            check.failure(error)
+        })
     }
 
     /// Reads the existing intent head under the original cumulative allowance.

@@ -3,16 +3,22 @@ use super::super::{Unscoped, encode_value};
 use super::*;
 use crate::{
     ControlPortCommand, ControlSnapshotPublisher, RegistryMutationRequest, RegistryStateChange,
-    RegistryStateFamily, RegistryStateKey, control_mutation_identity,
+    RegistryStateFamily, RegistryStateKey, MigrationBootstrapWork, control_mutation_identity,
+};
+use crate::policy_codec::AccessPolicyRecord;
+use crate::security_restriction::{
+    MAX_RESTRICTION_DEPENDENTS, SecurityPolicyState,
 };
 use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, DataRootId, Epoch, InstallationIncarnationId, OpaqueId,
-    OpaqueRef, PublicationGuards, RequestId,
+    AccessPolicyRevision, Blake3Digest32, BoundedSet, CollectionGenerationId, DataRootId, Epoch,
+    InstallationIncarnationId, OpaqueId, OpaqueRef, PublicationGuards, PurgeFenceRevision,
+    RequestId, ShadowFenceRevision, SourceNamespaceId, SourceOwnerGeneration,
 };
 use search_ports::{ControlJournalPort, ControlSnapshotPort, PackageOpaque};
 use std::fs::{self, OpenOptions};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 const INIT: MutationId = MutationId([9; 32]);
@@ -126,6 +132,40 @@ fn request(
         LIMITS,
     )
     .unwrap()
+}
+
+fn guard_security_state() -> SecurityPolicyState {
+    SecurityPolicyState {
+        policy: AccessPolicyRecord {
+            namespace_id: SourceNamespaceId::from_bytes([31; 16]),
+            owner_generation: SourceOwnerGeneration::from_bytes([32; 32]),
+            policy_revision: AccessPolicyRevision::new(1),
+            live_deny_generation: 1,
+            shadow_fence_revision: ShadowFenceRevision::new(1),
+            purge_fence_revision: PurgeFenceRevision::new(1),
+            policy_digest: Blake3Digest32::from_bytes([33; 32]),
+        },
+        security_domain_ref: OpaqueRef::new("domain:guard-image-fixture").unwrap(),
+        snapshot_digest: Blake3Digest32::from_bytes([34; 32]),
+        denied_memberships: BoundedSet::empty(),
+        purged_memberships: BoundedSet::empty(),
+        fail_closed: false,
+    }
+}
+
+fn guard_security_owners() -> BoundedSet<OpaqueId, MAX_RESTRICTION_DEPENDENTS> {
+    BoundedSet::from_items([OpaqueId::new("owner:guard-image-fixture").unwrap()]).unwrap()
+}
+
+fn publication_guards(source: u64, membership: u64, access: u64) -> PublicationGuards {
+    PublicationGuards {
+        source_catalog_generation: source,
+        membership_generation: membership,
+        access_generation: access,
+        shadow_generation: 1,
+        purge_generation: 1,
+        ..visibility().guards
+    }
 }
 
 #[test]
@@ -632,4 +672,235 @@ fn operating_profile_adoption_lost_ack_requires_original_recovery_and_rejects_ta
     assert!(journal.read_snapshot().is_err());
     drop(journal);
     assert!(scratch.open().is_err());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // One end-to-end redb regression covers both source-row preconditions.
+fn publication_guard_image_joins_exact_registry_and_security_rows() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    journal
+        .initialize_operating_profile(
+            JournalProfileInitialization::Indexed(visibility()),
+            INIT,
+            DIGEST,
+            &context(),
+        )
+        .unwrap();
+
+    let first_registry = request("guard-registry:first", 1, 0, None, b"owner-state-one");
+    journal
+        .commit_registry_batch(&first_registry, &context())
+        .unwrap();
+    let namespace = guard_security_state().policy.namespace_id;
+    let initial_security = journal
+        .read_security_restriction(namespace, &context())
+        .unwrap();
+    let initial_security_mutation = initial_security
+        .initialize(
+            OpaqueId::new("guard-security:first").unwrap(),
+            DIGEST,
+            guard_security_state(),
+            guard_security_owners(),
+        )
+        .unwrap();
+    let initial_security_commit = journal
+        .commit_security_restriction(&initial_security_mutation, &context())
+        .unwrap();
+
+    let registry = journal.read_registry_snapshot(&context()).unwrap();
+    let security = journal
+        .read_security_restriction(namespace, &context())
+        .unwrap();
+    let checkpoint = journal
+        .read_publication_checkpoint(&context())
+        .unwrap()
+        .unwrap();
+    assert_eq!(registry.registry_revision(), 1);
+    assert_eq!(checkpoint.generation(), 3);
+
+    let work = |_unit: MigrationBootstrapWork| Ok::<(), ()>(());
+    let deadline = Instant::now() + Duration::from_secs(60);
+    {
+        let mut publisher = ControlSnapshotPublisher::new();
+        let mut bound = journal
+            .bind_control_port_with_original_context::<Cancel, _>(
+                &mut publisher,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        let first_request = bound
+            .prepare_publication_guard_image_with_original_context(
+                &checkpoint,
+                &registry,
+                std::slice::from_ref(&security),
+                publication_guards(17, 29, 1),
+                MutationId([71; 32]),
+                DIGEST,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        let first_identity = control_mutation_identity(first_request.operation_id()).unwrap();
+        let first_commit = bound
+            .transact_publication_guard_image_with_original_context(
+                &first_request,
+                &first_identity,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        assert_eq!(first_commit.commit().before_generation, 3);
+        assert_eq!(first_commit.commit().after_generation, 4);
+        assert_eq!(first_commit.checkpoint().visibility().visible_epoch, Epoch::new(0).unwrap());
+        assert_eq!(first_commit.checkpoint().visibility().last_receipt, None);
+        assert_eq!(first_commit.checkpoint().visibility().guards, publication_guards(17, 29, 1));
+    }
+
+    let second_registry = request(
+        "guard-registry:second",
+        4,
+        1,
+        Some(b"owner-state-one"),
+        b"owner-state-two",
+    );
+    journal
+        .commit_registry_batch(&second_registry, &context())
+        .unwrap();
+    let checkpoint_after_registry = journal
+        .read_publication_checkpoint(&context())
+        .unwrap()
+        .unwrap();
+    {
+        let mut publisher = ControlSnapshotPublisher::new();
+        let mut bound = journal
+            .bind_control_port_with_original_context::<Cancel, _>(
+                &mut publisher,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        let stale_registry_request = bound
+            .prepare_publication_guard_image_with_original_context(
+                &checkpoint_after_registry,
+                &registry,
+                std::slice::from_ref(&security),
+                publication_guards(18, 30, 1),
+                MutationId([72; 32]),
+                DIGEST,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        let stale_registry_identity =
+            control_mutation_identity(stale_registry_request.operation_id()).unwrap();
+        assert_eq!(
+            bound
+                .transact_publication_guard_image_with_original_context(
+                    &stale_registry_request,
+                    &stale_registry_identity,
+                    deadline,
+                    &work,
+                )
+                .unwrap_err()
+                .control,
+            ControlError::GenerationMismatch,
+        );
+    }
+
+    let current_security = journal
+        .read_security_restriction(namespace, &context())
+        .unwrap();
+    let mut replacement_security = guard_security_state();
+    replacement_security.policy.policy_revision = AccessPolicyRevision::new(2);
+    replacement_security.policy.live_deny_generation = 2;
+    replacement_security.snapshot_digest = Blake3Digest32::from_bytes([35; 32]);
+    let replacement_mutation = current_security
+        .prepare_restriction(
+            &initial_security_commit,
+            OpaqueId::new("guard-security:second").unwrap(),
+            Blake3Digest32::from_bytes([36; 32]),
+            replacement_security,
+            guard_security_owners(),
+        )
+        .unwrap();
+    let replacement_commit = journal
+        .commit_security_restriction(&replacement_mutation, &context())
+        .unwrap();
+    assert_eq!(replacement_commit.receipt().after_generation, 6);
+
+    let current_registry = journal.read_registry_snapshot(&context()).unwrap();
+    let current_security = journal
+        .read_security_restriction(namespace, &context())
+        .unwrap();
+    let checkpoint_after_security = journal
+        .read_publication_checkpoint(&context())
+        .unwrap()
+        .unwrap();
+    let final_checkpoint = {
+        let mut publisher = ControlSnapshotPublisher::new();
+        let mut bound = journal
+            .bind_control_port_with_original_context::<Cancel, _>(
+                &mut publisher,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        let stale_security_request = bound
+            .prepare_publication_guard_image_with_original_context(
+                &checkpoint_after_security,
+                &current_registry,
+                std::slice::from_ref(&security),
+                publication_guards(18, 30, 1),
+                MutationId([73; 32]),
+                DIGEST,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        let stale_security_identity =
+            control_mutation_identity(stale_security_request.operation_id()).unwrap();
+        assert_eq!(
+            bound
+                .transact_publication_guard_image_with_original_context(
+                    &stale_security_request,
+                    &stale_security_identity,
+                    deadline,
+                    &work,
+                )
+                .unwrap_err()
+                .control,
+            ControlError::GenerationMismatch,
+        );
+        let current_security_request = bound
+            .prepare_publication_guard_image_with_original_context(
+                &checkpoint_after_security,
+                &current_registry,
+                std::slice::from_ref(&current_security),
+                publication_guards(18, 30, 2),
+                MutationId([74; 32]),
+                DIGEST,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        let current_security_identity =
+            control_mutation_identity(current_security_request.operation_id()).unwrap();
+        let current_security_commit = bound
+            .transact_publication_guard_image_with_original_context(
+                &current_security_request,
+                &current_security_identity,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        assert_eq!(current_security_commit.commit().after_generation, 7);
+        bound
+            .read_publication_checkpoint_with_original_context(deadline, &work)
+            .unwrap()
+            .unwrap()
+    };
+    assert_eq!(final_checkpoint.generation(), 7);
+    assert_eq!(final_checkpoint.visibility().guards, publication_guards(18, 30, 2));
 }

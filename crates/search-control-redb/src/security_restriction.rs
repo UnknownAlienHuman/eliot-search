@@ -202,12 +202,98 @@ impl fmt::Debug for SecurityRestrictionReadback {
 }
 
 impl SecurityRestrictionReadback {
+    /// Exact installation/root/schema/owner identity of this coherent C18 read.
+    #[must_use]
+    pub const fn identity(&self) -> JournalIdentity { self.identity }
+
     /// Journal generation observed with both records.
     #[must_use]
     pub const fn generation(&self) -> u64 { self.generation }
     /// Stored original request for exact ledger recovery; not a completion receipt.
     #[must_use]
     pub const fn mutation(&self) -> Option<&SecurityRestrictionMutation> { self.mutation.as_ref() }
+
+    /// Exact current C18 policy and restriction rows for an atomic publication
+    /// guard-image comparison. The original typed readback must contain a full,
+    /// internally consistent restriction command; metadata-only policy rows do
+    /// not supply a complete guard source.
+    ///
+    /// # Errors
+    /// Refuses absent/inconsistent C18 state or active key/value bound failures.
+    pub(crate) fn publication_guard_conditions(
+        &self,
+        limits: JournalLimits,
+    ) -> Result<[ControlRecordCondition; 2], ControlError> {
+        let (policy, mutation) = self.publication_policy_and_mutation()?;
+        let policy_key = key_with_limits(POLICY_PREFIX, self.namespace, limits)?;
+        let restriction_key = key_with_limits(RESTRICTION_PREFIX, self.namespace, limits)?;
+        let encoded_mutation = codec::encode(mutation)?;
+        debug_assert_eq!(codec::encoded_len(mutation)?, encoded_mutation.len());
+        Ok([
+            ControlRecordCondition::exact(
+                policy_key,
+                ControlValue::new(
+                    ControlRecordClass::State,
+                    encode_access_policy(&policy),
+                    limits,
+                )?,
+            ),
+            ControlRecordCondition::exact(
+                restriction_key,
+                ControlValue::new(
+                    ControlRecordClass::Operation,
+                    encoded_mutation,
+                    limits,
+                )?,
+            ),
+        ])
+    }
+
+    /// Canonical key/value bytes needed to materialize this readback's two
+    /// exact guard conditions, calculated before either record is encoded.
+    pub(crate) fn publication_guard_condition_bytes(
+        &self,
+        limits: JournalLimits,
+    ) -> Result<usize, ControlError> {
+        let (_, mutation) = self.publication_policy_and_mutation()?;
+        let policy_key = POLICY_PREFIX.len().checked_add(16).ok_or(ControlError::BudgetExceeded)?;
+        let restriction_key = RESTRICTION_PREFIX.len().checked_add(16).ok_or(ControlError::BudgetExceeded)?;
+        let restriction_value = codec::encoded_len(mutation)?;
+        if policy_key > limits.max_key_bytes
+            || restriction_key > limits.max_key_bytes
+            || crate::policy_codec::ACCESS_POLICY_RECORD_LEN > limits.max_value_bytes
+            || restriction_value > limits.max_value_bytes
+        {
+            return Err(ControlError::BudgetExceeded);
+        }
+        policy_key.checked_add(restriction_key)
+            .and_then(|bytes| bytes.checked_add(crate::policy_codec::ACCESS_POLICY_RECORD_LEN))
+            .and_then(|bytes| bytes.checked_add(restriction_value))
+            .ok_or(ControlError::BudgetExceeded)
+    }
+
+    /// Access, shadow and purge axes decoded from the complete current C18 row.
+    pub(crate) fn publication_guard_axes(&self) -> Result<[u64; 3], ControlError> {
+        let (policy, _) = self.publication_policy_and_mutation()?;
+        Ok([
+            policy.live_deny_generation,
+            policy.shadow_fence_revision.get(),
+            policy.purge_fence_revision.get(),
+        ])
+    }
+
+    fn publication_policy_and_mutation(
+        &self,
+    ) -> Result<(AccessPolicyRecord, &SecurityRestrictionMutation), ControlError> {
+        let policy = self.policy.ok_or(ControlError::GenerationMismatch)?;
+        let mutation = self.mutation.as_ref().ok_or(ControlError::GenerationMismatch)?;
+        if mutation.identity != self.identity { return Err(ControlError::StoreCorrupt); }
+        if mutation.expected_generation >= self.generation { return Err(ControlError::StoreCorrupt); }
+        if mutation.replacement.policy != policy || policy.namespace_id != self.namespace {
+            return Err(ControlError::StoreCorrupt);
+        }
+        Ok((policy, mutation))
+    }
 
     /// Explicitly installs complete initial state, including for a metadata-only
     /// policy row. Caller must establish the sets from authoritative sources;
@@ -403,9 +489,17 @@ impl PersistentControlJournal {
 }
 
 fn key(prefix: &[u8], namespace: SourceNamespaceId) -> Result<ControlKey, ControlError> {
+    key_with_limits(prefix, namespace, JournalLimits::BASELINE)
+}
+
+fn key_with_limits(
+    prefix: &[u8],
+    namespace: SourceNamespaceId,
+    limits: JournalLimits,
+) -> Result<ControlKey, ControlError> {
     let mut bytes = prefix.to_vec();
     bytes.extend_from_slice(namespace.as_bytes());
-    ControlKey::new(bytes, JournalLimits::BASELINE)
+    ControlKey::new(bytes, limits)
 }
 
 fn policy_value(record: &AccessPolicyRecord) -> Result<ControlValue, ControlError> {

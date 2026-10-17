@@ -62,7 +62,8 @@ pub use conditions::{ConditionalControlMutation, ControlRecordCondition};
 pub use persistent::{ControlCallError, ControlInterruption, PersistentControlJournal,
     ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest,
     ControlStoreHealth, JournalHealthState, JournalWriteCounters, SnapshotHealthState,
-    PublicationIntentHead, PublicationIntentUpdate, PUBLICATION_INTENT_SCHEMA_VERSION,
+    PublicationIntentHead, PublicationIntentUpdate, PublicationGuardImageReadbackV1,
+    PublicationGuardImageRequestV1, PUBLICATION_INTENT_SCHEMA_VERSION,
     PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
 // Explicit export supersedes the unfenced publisher from the reference glob.
