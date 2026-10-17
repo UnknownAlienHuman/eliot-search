@@ -13,7 +13,9 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::time::Instant;
 
-use search_contracts::indexed::{NamedVectorValue, PointReadback, VectorName, VectorValue};
+use search_contracts::indexed::{
+    NamedVectorValue, PointPayload, PointReadback, VectorName, VectorValue,
+};
 use search_contracts::{
     Blake3Digest32, CanonicalDigestDomain, DigestInputLimit, OpaqueId, PublicationGuards,
     PublicationIntent, PublicationIntentId, PublicationIntentState, PublicationReceiptId,
@@ -41,6 +43,7 @@ use search_publication::{
 use search_qdrant_bridge::CollectionRoute as BridgeRoute;
 use search_qdrant_bridge::real::{
     BlockingRealQueryPlane, CanonicalPointInput, CanonicalRequestContext,
+    CanonicalValidityRestoreOutcome,
 };
 
 use crate::preparation_composition::{
@@ -64,6 +67,8 @@ pub(crate) enum AdapterError {
     ContextMismatch,
     InvalidBinding,
     ControlUnavailable,
+    /// No C02 membership-shadow writer is available for the Abandon phase.
+    AbandonmentUnavailable,
     PointEffectUnavailable,
     ReadbackUnknown,
 }
@@ -942,8 +947,7 @@ where
             return Ok(receipt);
         }
 
-        let expected_previous = predecessor_state(next).ok_or(AdapterError::InvalidBinding)?;
-        if previous.state != expected_previous {
+        if !is_allowed_intent_predecessor(previous.state, next) {
             return Err(AdapterError::InvalidBinding);
         }
         let update = PublicationIntentUpdate::advance(
@@ -1004,6 +1008,238 @@ where
                 })
             })
             .collect()
+    }
+
+    fn canonical_created_inputs(
+        &self,
+        command: &PublicationEffectCommand,
+    ) -> Result<Vec<CanonicalPointInput>, AdapterError> {
+        let create = &command.binding().difference.create;
+        let expected_ids = create
+            .iter()
+            .map(|entry| entry.point_id)
+            .collect::<Vec<_>>();
+        if expected_ids != command.required_absent_point_ids() {
+            return Err(AdapterError::InvalidBinding);
+        }
+
+        let prepared = self.c13.prepared;
+        let plan_points = prepared
+            .plan()
+            .points
+            .iter()
+            .map(|point| (point.point_id, point))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let planned_units = prepared
+            .vectors()
+            .iter()
+            .map(|unit| (unit.unit_id, unit))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        if plan_points.len() != prepared.plan().points.len()
+            || planned_units.len() != prepared.vectors().len()
+        {
+            return Err(AdapterError::InvalidBinding);
+        }
+
+        create
+            .iter()
+            .map(|entry| {
+                let point = plan_points
+                    .get(&entry.point_id)
+                    .ok_or(AdapterError::InvalidBinding)?;
+                let unit = planned_units
+                    .get(&point.identity.key().unit_id)
+                    .ok_or(AdapterError::InvalidBinding)?;
+                let payload = PointPayload::from_canonical_cbor(
+                    point.expected_readback.payload_cbor.as_slice(),
+                )
+                .map_err(|_| AdapterError::InvalidBinding)?;
+                if point.identity.point_id() != entry.point_id
+                    || payload
+                        .to_canonical_cbor()
+                        .map_err(|_| AdapterError::InvalidBinding)?
+                        != point.expected_readback.payload_cbor
+                    || payload
+                        .identity()
+                        .map_err(|_| AdapterError::InvalidBinding)?
+                        != point.expected_readback.payload_identity
+                    || payload.valid_from_epoch != command.binding().target_epoch
+                    || payload.valid_until_epoch_exclusive.is_some()
+                {
+                    return Err(AdapterError::InvalidBinding);
+                }
+                let vectors = unit
+                    .vectors
+                    .iter()
+                    .map(|vector| (vector.name.as_str().to_owned(), vector.value.clone()))
+                    .collect::<std::collections::BTreeMap<_, _>>();
+                if vectors.len() != unit.vectors.len()
+                    || vectors
+                        .keys()
+                        .ne(point.expected_readback.vector_digests.keys())
+                {
+                    return Err(AdapterError::InvalidBinding);
+                }
+                let vectors = vectors
+                    .iter()
+                    .map(|(name, value)| {
+                        Ok(NamedVectorValue {
+                            name: VectorName::new(name)
+                                .map_err(|_| AdapterError::InvalidBinding)?,
+                            value: value.clone(),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, AdapterError>>()?;
+                Ok(CanonicalPointInput {
+                    identity: point.identity.clone(),
+                    point: PointReadback { payload, vectors },
+                })
+            })
+            .collect()
+    }
+
+    fn compensate_points(
+        &mut self,
+        command: &PublicationEffectCommand,
+        context: &OperationContext<C>,
+    ) -> Result<(), AdapterError> {
+        let original_points = Self::canonical_inputs(command.points())?;
+        let created_points = self.canonical_created_inputs(command)?;
+        self.advance_intent(command, PublicationIntentState::Compensating, context)?;
+        if !original_points.is_empty() {
+            self.owner_checkpoint()?;
+            match self.plane.restore_indexed_validity_exact(
+                &self.route,
+                &original_points,
+                command.binding().target_epoch,
+                &self.context,
+            ) {
+                Ok(
+                    CanonicalValidityRestoreOutcome::MutationAcknowledged(_)
+                    | CanonicalValidityRestoreOutcome::AlreadyRestoredVerified(_),
+                ) => {}
+                Err(_) => return Err(AdapterError::ReadbackUnknown),
+            }
+        }
+
+        if created_points.is_empty() {
+            return Ok(());
+        }
+        let current = self
+            .plane
+            .readback_indexed_points_exact(&self.route, &created_points, &self.context)
+            .map_err(|_| AdapterError::ReadbackUnknown)?;
+        let expected_ids = command.required_absent_point_ids();
+        if current.missing_ids == expected_ids && current.points.is_empty() {
+            return Ok(());
+        }
+        if !current.missing_ids.is_empty() || current.points.len() != created_points.len() {
+            return Err(AdapterError::ReadbackUnknown);
+        }
+        self.owner_checkpoint()?;
+        let deleted = self
+            .plane
+            .delete_indexed_exact(&self.route, &created_points, &self.context)
+            .map_err(|_| AdapterError::ReadbackUnknown)?;
+        if deleted.absent_ids != expected_ids {
+            return Err(AdapterError::ReadbackUnknown);
+        }
+        Ok(())
+    }
+
+    fn read_compensation_effect(
+        &self,
+        command: &PublicationEffectCommand,
+        context: &OperationContext<C>,
+    ) -> Result<PublicationEffectReadback, AdapterError> {
+        self.check_context(context)?;
+        self.read_candidate_record()?;
+        let head = self.read_head()?;
+        let intent = head
+            .intent
+            .as_ref()
+            .ok_or(AdapterError::ControlUnavailable)?;
+        self.expected_c02_intent(command.binding(), intent)?;
+        if intent.state != PublicationIntentState::Compensating {
+            return Err(AdapterError::InvalidBinding);
+        }
+
+        let original_points = Self::canonical_inputs(command.points())?;
+        if !original_points.is_empty() {
+            match self.plane.readback_indexed_points_exact(
+                &self.route,
+                &original_points,
+                &self.context,
+            ) {
+                Ok(observed)
+                    if observed.missing_ids.is_empty()
+                        && observed.points.len() == original_points.len() => {}
+                _ => {
+                    return Ok(empty_observation(
+                        command.effect(),
+                        command.binding().clone(),
+                        PublicationEffectOutcome::Unknown,
+                    ));
+                }
+            }
+        }
+
+        let created_points = self.canonical_created_inputs(command)?;
+        let created_readback = if created_points.is_empty() {
+            search_qdrant_bridge::real::CanonicalMutationReadback {
+                points: Vec::new(),
+                missing_ids: Vec::new(),
+            }
+        } else {
+            match self.plane.readback_indexed_points_exact(
+                &self.route,
+                &created_points,
+                &self.context,
+            ) {
+                Ok(observed) => observed,
+                Err(_) => {
+                    return Ok(empty_observation(
+                        command.effect(),
+                        command.binding().clone(),
+                        PublicationEffectOutcome::Unknown,
+                    ));
+                }
+            }
+        };
+        let expected_missing = command.required_absent_point_ids();
+        if created_readback.missing_ids != expected_missing || !created_readback.points.is_empty() {
+            return Ok(empty_observation(
+                command.effect(),
+                command.binding().clone(),
+                PublicationEffectOutcome::Unknown,
+            ));
+        }
+        let (points, missing, unexpected, outcome) =
+            self.qdrant_readback(command, command.points())?;
+        if outcome != PublicationEffectOutcome::Applied
+            || !missing.is_empty()
+            || !unexpected.is_empty()
+        {
+            return Ok(empty_observation(
+                command.effect(),
+                command.binding().clone(),
+                PublicationEffectOutcome::Unknown,
+            ));
+        }
+        Ok(PublicationEffectReadback {
+            effect: command.effect(),
+            binding: command.binding().clone(),
+            outcome: PublicationEffectOutcome::Applied,
+            points,
+            missing_point_ids: created_readback.missing_ids,
+            unexpected_point_ids: unexpected,
+            intent: None,
+            control: None,
+            snapshot: None,
+            abandonment: None,
+            abort_request: None,
+            abort_binding: None,
+        })
     }
 
     fn qdrant_readback(
@@ -1383,6 +1619,7 @@ where
             PublicationEffectKind::StageNewPoints
             | PublicationEffectKind::CloseOldPoints
             | PublicationEffectKind::VerifyReadback => self.read_point_effect(command, context),
+            PublicationEffectKind::Compensate => self.read_compensation_effect(command, context),
             PublicationEffectKind::CommitVisibleEpoch => {
                 self.read_visibility_effect(command, context)
             }
@@ -1395,6 +1632,11 @@ where
             PublicationEffectKind::PublishAbortSnapshot => {
                 self.read_abort_snapshot_effect(command, context)
             }
+            PublicationEffectKind::Abandon => Ok(empty_observation(
+                command.effect(),
+                command.binding().clone(),
+                PublicationEffectOutcome::Unknown,
+            )),
             _ => Err(AdapterError::PointEffectUnavailable),
         }
     }
@@ -1898,12 +2140,14 @@ where
                 self.persist_or_reconcile_intent(command, context)?;
                 Ok(())
             }
+            PublicationEffectKind::Compensate => self.compensate_points(command, context),
             PublicationEffectKind::StageNewPoints => {
                 self.require_intent_phase(
                     command.binding(),
                     PublicationIntentState::IntentDurable,
                 )?;
                 let points = Self::canonical_inputs(command.points())?;
+                self.owner_checkpoint()?;
                 self.plane
                     .upsert_indexed_exact(&self.route, &points, &self.context)
                     .map_err(|_| AdapterError::ReadbackUnknown)?;
@@ -1916,6 +2160,7 @@ where
                     context,
                 )?;
                 let points = Self::canonical_inputs(command.original_points())?;
+                self.owner_checkpoint()?;
                 self.plane
                     .close_indexed_exact(
                         &self.route,
@@ -1943,8 +2188,9 @@ where
                 self.publish_abort_snapshot(command, context)?;
                 Ok(())
             }
-            // VerifyReadback is read-only. Compensation and abandonment
-            // use their own exact owner state machines and are not conflated here.
+            PublicationEffectKind::Abandon => Err(AdapterError::AbandonmentUnavailable),
+            // VerifyReadback is read-only. Abandonment requires the separate
+            // membership-wide fence owner and is not synthesized here.
             _ => Err(AdapterError::PointEffectUnavailable),
         }
     }
@@ -2580,6 +2826,7 @@ where
             Err(
                 AdapterError::ContextMismatch
                 | AdapterError::InvalidBinding
+                | AdapterError::AbandonmentUnavailable
                 | AdapterError::PointEffectUnavailable,
             ) => PublicationMutationAttempt::Rejected,
             Err(AdapterError::ControlUnavailable | AdapterError::ReadbackUnknown) => {
@@ -2650,6 +2897,22 @@ const fn predecessor_state(next: PublicationIntentState) -> Option<PublicationIn
             Some(PublicationIntentState::OldPointsClosedAcknowledged)
         }
         _ => None,
+    }
+}
+
+fn is_allowed_intent_predecessor(
+    previous: PublicationIntentState,
+    next: PublicationIntentState,
+) -> bool {
+    match next {
+        PublicationIntentState::Compensating => matches!(
+            previous,
+            PublicationIntentState::IntentDurable
+                | PublicationIntentState::NewPointsAcknowledged
+                | PublicationIntentState::OldPointsClosedAcknowledged
+                | PublicationIntentState::ReadbackVerified
+        ),
+        _ => matches!(predecessor_state(next), Some(expected) if expected == previous),
     }
 }
 
