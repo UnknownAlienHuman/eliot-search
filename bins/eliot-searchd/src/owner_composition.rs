@@ -24,6 +24,10 @@ pub(crate) use kernel::NativeProcessRootCustody;
 pub(crate) use kernel::{
     NativeArtifactSetWrite, NativeArtifactStoreAdapter, NativeArtifactStoreError,
 };
+#[cfg(feature = "wave3-index")]
+#[allow(clippy::redundant_pub_crate)] // The root owner facade is crate-private.
+#[allow(unused_imports)] // Consumed by the parent C18 caller integration.
+pub(crate) use kernel::NativePublishedProjectionRead;
 #[cfg(feature = "wave4-query")]
 pub(crate) use kernel::RetainedRevisionReadState;
 pub use kernel::{NativeSyncPreflightOperation, run_source_sync_preflight};

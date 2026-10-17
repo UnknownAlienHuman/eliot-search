@@ -400,7 +400,7 @@ mod retention;
 pub(in super::super) mod artifact_store;
 #[cfg(feature = "wave3-index")]
 #[path = "native_artifact_reader.rs"]
-mod artifact_reader;
+pub(in super::super) mod artifact_reader;
 #[path = "native_retained_reader.rs"]
 mod retained_reader;
 #[path = "native_dek_command.rs"]

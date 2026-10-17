@@ -166,7 +166,8 @@ impl NativeReopenedArtifactSet<'_, '_> {
 ///
 /// It is read data, not reusable permission; the original request's live checkpoint
 /// and current C18 authority remain required when consuming it.
-pub(super) struct NativePublishedProjectionRead<'snapshot, 'registry> {
+#[allow(clippy::redundant_pub_crate)] // Expose only through the crate-private owner facade.
+pub(crate) struct NativePublishedProjectionRead<'snapshot, 'registry> {
     snapshot: &'snapshot PublicationProjectionSnapshot,
     membership: ProjectionMembershipId,
     record: &'snapshot PreparedArtifactSetRecordV1,
@@ -180,58 +181,59 @@ pub(super) struct NativePublishedProjectionRead<'snapshot, 'registry> {
     set_graph: DerivedArtifactSetDescriptorV1,
 }
 
+#[allow(clippy::redundant_pub_crate)] // Keep every metadata accessor inside the crate.
 impl NativePublishedProjectionRead<'_, '_> {
-    pub(super) const fn snapshot(&self) -> &PublicationProjectionSnapshot {
+    pub(crate) const fn snapshot(&self) -> &PublicationProjectionSnapshot {
         self.snapshot
     }
 
-    pub(super) const fn membership(&self) -> ProjectionMembershipId {
+    pub(crate) const fn membership(&self) -> ProjectionMembershipId {
         self.membership
     }
 
-    pub(super) const fn record(&self) -> &PreparedArtifactSetRecordV1 {
+    pub(crate) const fn record(&self) -> &PreparedArtifactSetRecordV1 {
         self.record
     }
 
-    pub(super) const fn generation(&self) -> u64 {
+    pub(crate) const fn generation(&self) -> u64 {
         self.generation
     }
 
-    pub(super) const fn projection_membership(&self) -> &ProjectionMembershipRecord {
+    pub(crate) const fn projection_membership(&self) -> &ProjectionMembershipRecord {
         self.projection_membership
     }
 
-    pub(super) const fn source_identity(&self) -> &SourceIdentity {
+    pub(crate) const fn source_identity(&self) -> &SourceIdentity {
         &self.source_identity
     }
 
-    pub(super) const fn source_owner_generation(&self) -> SourceOwnerGeneration {
+    pub(crate) const fn source_owner_generation(&self) -> SourceOwnerGeneration {
         self.source_owner_generation
     }
 
-    pub(super) const fn source_registry_generation(&self) -> u64 {
+    pub(crate) const fn source_registry_generation(&self) -> u64 {
         self.source_registry_generation
     }
 
-    pub(super) const fn source_revision(&self) -> SourceRevisionRef {
+    pub(crate) const fn source_revision(&self) -> SourceRevisionRef {
         self.source_revision
     }
 
     /// Actual C02-selected C07 `SetManifest` reference.
-    pub(super) const fn set_reference(&self) -> &ObjectRef {
+    pub(crate) const fn set_reference(&self) -> &ObjectRef {
         &self.set_reference
     }
 
     /// Authenticated C07 graph header. Member bodies were not opened.
-    pub(super) const fn set_graph(&self) -> &DerivedArtifactSetDescriptorV1 {
+    pub(crate) const fn set_graph(&self) -> &DerivedArtifactSetDescriptorV1 {
         &self.set_graph
     }
 
-    pub(super) const fn projection_manifest_reference(&self) -> &ObjectRef {
+    pub(crate) const fn projection_manifest_reference(&self) -> &ObjectRef {
         &self.set_graph.members()[3]
     }
 
-    pub(super) const fn projection_manifest_descriptor(&self) -> &Descriptor {
+    pub(crate) const fn projection_manifest_descriptor(&self) -> &Descriptor {
         self.projection_manifest_reference().descriptor()
     }
 }
@@ -277,7 +279,12 @@ pub(super) fn read_published_projection_metadata_v1<'snapshot, 'registry>(
         source_registry_generation,
     ) = verify_current_projection_membership(registry, membership, expected_source, None)?;
     let metadata = record.metadata();
-    if &metadata.source_revision != expected_source {
+    let current_c03_binding = projection_membership.binding();
+    if &metadata.source_revision != expected_source
+        || metadata.source_revision.source_namespace_id != source_identity.source_namespace_id
+        || metadata.source_revision.source_id != source_identity.source_id
+        || metadata.representation_id != current_c03_binding.representation_id
+    {
         return Err(NativeArtifactReaderError::OwnerRefused);
     }
     let set_reference = ObjectRef::decode(&metadata.object_reference_canonical)
