@@ -27,8 +27,12 @@ use super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitRec
 
 mod codec;
 pub(in crate::persistent) mod prepared_artifacts;
+pub(in crate::persistent) mod preparation_input;
 pub use prepared_artifacts::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
     PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
+pub use preparation_input::{PreparationInputMetadataV1, PreparationInputReadbackV1,
+    PreparationInputRecordV1, MAX_PREPARATION_INPUT_POLICY_BYTES,
+    MAX_PREPARATION_INPUT_RECORD_BYTES, MAX_PREPARATION_INPUT_RESIDENCY_BYTES};
 pub(super) mod visibility;
 pub use visibility::{PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};

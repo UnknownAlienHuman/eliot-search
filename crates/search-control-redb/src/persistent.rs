@@ -54,6 +54,9 @@ pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATIO
 pub use publication::PublicationSuccessor;
 pub use publication::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
     PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
+pub use publication::{PreparationInputMetadataV1, PreparationInputReadbackV1,
+    PreparationInputRecordV1, MAX_PREPARATION_INPUT_POLICY_BYTES,
+    MAX_PREPARATION_INPUT_RECORD_BYTES, MAX_PREPARATION_INPUT_RESIDENCY_BYTES};
 pub use publication::PublicationProjectionSnapshot;
 pub use operation::{ControlCallError, ControlInterruption};
 pub use quarantine::{ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest};

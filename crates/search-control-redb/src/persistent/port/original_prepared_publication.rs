@@ -9,10 +9,10 @@ use super::{BoundControlJournal, ControlPortCommand, require_identity};
 use crate::persistent::publication::prepared_artifacts::reference_key;
 use crate::{
     CommitRecoveryDecision, ControlCommitReceipt, ControlError, MigrationBootstrapFailure,
-    MigrationBootstrapWork as Work, PreparedArtifactSetReadbackV1, PreparedArtifactSetRecordV1,
-    VisibleEpochCommit,
+    MigrationBootstrapWork as Work, PreparationInputReadbackV1, PreparationInputRecordV1,
+    PreparedArtifactSetReadbackV1, PreparedArtifactSetRecordV1, VisibleEpochCommit,
 };
-use search_contracts::ReceiptRef;
+use search_contracts::{OpaqueId, ReceiptRef};
 use search_ports::{CancellationProbe, MutationIdentity};
 use std::time::Instant;
 
@@ -51,6 +51,149 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
         self.journal
             .publish_snapshot_checked(receipt, self.publisher, &check)
             .map_err(|error| check.failure(error))
+    }
+
+    /// Reads the immutable input by its original Root operation before any ID redraw.
+    ///
+    /// A verified absence means the atomic C02 input transaction did not commit.
+    /// A returned row carries the original C02 mutation ID, generation and every
+    /// input needed to replay or recover the same operation.
+    ///
+    /// # Errors
+    /// Pending, corrupt, wrong-profile or interrupted reads return no result.
+    pub fn read_preparation_input_with_original_context<F, E>(
+        &self,
+        original_operation_id: &OpaqueId,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<Option<PreparationInputReadbackV1>, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            if !crate::has_visibility_schema(self.journal.identity.schema_version) {
+                return Err(ControlError::SchemaUnsupported);
+            }
+            super::super::operating_profile::require_indexed_checked(self.journal, &check)?;
+            let key_len = crate::persistent::publication::preparation_input::operation_key_len(
+                original_operation_id,
+            );
+            check.reserve(Work::Allocate(
+                key_len
+                    .checked_add(core::mem::size_of::<crate::ControlKey>())
+                    .ok_or(ControlError::BudgetExceeded)?,
+            ))?;
+            check.reserve(Work::Process(key_len))?;
+            let key = crate::persistent::publication::preparation_input::key_for_operation(
+                original_operation_id,
+                self.journal.limits,
+            )?;
+            let (identity, generation, values) =
+                self.journal.read_current_records_checked(&[&key], &check)?;
+            let value = values
+                .into_iter()
+                .next()
+                .ok_or(ControlError::StoreCorrupt)?;
+            let Some(value) = value else {
+                check.check(Point::ReadComplete)?;
+                return Ok(None);
+            };
+            let record = PreparationInputRecordV1::decode(
+                &value,
+                original_operation_id,
+                self.journal.limits,
+                &check,
+            )?;
+            if record.key(self.journal.limits)? != key {
+                return Err(ControlError::StoreCorrupt);
+            }
+            check.check(Point::ReadComplete)?;
+            Ok(Some(PreparationInputReadbackV1::new(
+                identity,
+                generation,
+                record,
+            )))
+        })();
+        result.map_err(|error| check.failure(error))
+    }
+
+    /// Commits the complete pre-effect input through the existing conditional redb journal.
+    ///
+    /// The exact operation-key absence check, global generation and C02 operation receipt
+    /// commit atomically. Call this before any C07 effect. Unknown outcomes require the
+    /// matching recovery method with the same record.
+    ///
+    /// # Errors
+    /// Conflicting inputs, changed generation, invalid profile or unknown commit outcome
+    /// remain explicit and fail closed.
+    pub fn transact_preparation_input_with_original_context<F, E>(
+        &mut self,
+        record: &PreparationInputRecordV1,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<ControlCommitReceipt, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            if !crate::has_visibility_schema(self.journal.identity.schema_version) {
+                return Err(ControlError::SchemaUnsupported);
+            }
+            super::super::operating_profile::require_indexed_checked(self.journal, &check)?;
+            let command = record.command(self.journal.limits, &check)?;
+            super::super::transaction::execute_publication(
+                self.journal,
+                &command,
+                Boundary::Normal,
+                &check,
+            )
+        })();
+        self.finish_dispatch(result)
+            .map_err(|error| check.failure(error))
+    }
+
+    /// Recovers the exact original pre-effect C02 input operation without replaying it.
+    ///
+    /// The retained record supplies the original C02 mutation ID, expected generation
+    /// and complete input bytes. A conflicting record never clears the operation fence.
+    ///
+    /// # Errors
+    /// Interrupted inspection remains outcome-unknown; changed inputs cannot recover success.
+    pub fn recover_preparation_input_with_original_context<F, E>(
+        &mut self,
+        record: &PreparationInputRecordV1,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<CommitRecoveryDecision, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            if !crate::has_visibility_schema(self.journal.identity.schema_version) {
+                return Err(ControlError::SchemaUnsupported);
+            }
+            super::super::operating_profile::require_indexed_checked(self.journal, &check)?;
+            let command = record.command(self.journal.limits, &check)?;
+            self.journal.recover_transaction_with_conditions_checked(
+                command.mutation(),
+                command.conditions(),
+                &check,
+            )
+        })();
+        self.finish_dispatch(result).map_err(|error| {
+            let error = if check.interrupted() {
+                ControlError::CommitOutcomeUnknown
+            } else {
+                error
+            };
+            check.failure(error)
+        })
     }
 
     /// Reads one exact versioned C02 set record from the actual journal.

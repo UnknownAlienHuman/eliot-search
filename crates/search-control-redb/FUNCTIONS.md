@@ -128,6 +128,27 @@ writes, retention-root qualification, Native/Qdrant/product proof or #260 closur
 is claimed. The local C07 `DERIVED_ARTIFACT_V1.md` and maintainer request define
 this slice; the remote issue body was not fetched under the no-remote boundary.
 
+## Pre-effect preparation input v1
+
+PreparationInputRecordV1 stores the original Root operation and complete
+SourceRevisionRef, actual typed SourceMembership (including workspace/corpus),
+Materialization, Representation, ProjectionMembership, and validated
+CollectionSchema, plus the full bounded canonical residency and policy metadata.
+C02 checks typed cross-links and canonical bounds; Root remains responsible for
+authenticating the registry/profile/policy observations. No source or vector bodies
+are accepted.
+
+The redb key is the exact original operation ID under a reserved versioned prefix.
+read_preparation_input_with_original_context is the first lookup before drawing
+a C02 mutation ID. A present row supplies the original mutation ID, expected
+generation and complete input for exact replay or recovery. A verified absent row
+means the atomic C02 input transaction did not commit. The typed transaction
+writes the row and operation receipt through the existing conditional redb
+engine before any C07 effect. Unknown outcomes require
+recover_preparation_input_with_original_context with the same record; changed
+input fails closed. This records C02 intent only and makes no C07 execution,
+source-authority or publication claim.
+
 ## Frozen schema-5 operating profile
 
 - `JournalOperatingProfile`: closed Direct / Indexed / MigrationInert observation.
