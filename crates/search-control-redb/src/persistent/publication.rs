@@ -8,6 +8,15 @@
 use core::fmt;
 use search_contracts::{Blake3Digest32, PublicationIntent, PublicationIntentState};
 use search_ports::{CancellationProbe, OperationContext};
+pub(in crate::persistent) fn read_intent_from_snapshot(
+    snapshot: &super::JournalReadSnapshot,
+    limits: JournalLimits,
+) -> Result<Option<PublicationIntent>, ControlError> {
+    snapshot
+        .get(&ControlKey::new(KEY.to_vec(), limits)?)
+        .map(codec::decode)
+        .transpose()
+}
 pub(super) fn require_registry_base(journal: &PersistentControlJournal, read: &super::ReadTransaction, limits: super::JournalLimits)
     -> Result<(), super::ControlError> {
     match super::operating_profile::read_mode(read, journal.identity, limits)? {
@@ -26,6 +35,15 @@ use super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitRec
     StoredOperation, is_corruption, map_storage_error, map_table_error};
 
 mod codec;
+pub(in crate::persistent) mod abort_finalization;
+pub(in crate::persistent) mod operation_binding;
+pub use abort_finalization::{
+    AbortResolutionMetadataV1, PublicationAbortFinalizationMetadataV1,
+    PublicationAbortFinalizationRecordV1,
+};
+pub use operation_binding::{
+    PublicationIntentBindingMetadataV1, PublicationIntentBindingRecordV1,
+};
 pub(in crate::persistent) mod prepared_artifacts;
 pub(in crate::persistent) mod preparation_input;
 pub use prepared_artifacts::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
@@ -62,6 +80,8 @@ pub struct PublicationIntentUpdate {
     previous: Option<PublicationIntent>,
     next: PublicationIntent,
     artifact_set: Option<PreparedArtifactSetRecordV1>,
+    original_binding: Option<Box<PublicationIntentBindingRecordV1>>,
+    abort_finalization: Option<Box<PublicationAbortFinalizationRecordV1>>,
 }
 
 impl fmt::Debug for PublicationIntentUpdate {
@@ -96,7 +116,7 @@ impl PublicationIntentUpdate {
         let next = search_domain::transition_publication(
             prepared, PublicationIntentState::IntentDurable,
         ).map_err(|_| ControlError::InvalidValue)?;
-        Ok(Self { operation_id, command_digest, expected_generation, previous: None, next, artifact_set: None })
+        Ok(Self { operation_id, command_digest, expected_generation, previous: None, next, artifact_set: None, original_binding: None, abort_finalization: None })
     }
 
     /// Records one existing domain transition while retaining all prepared fields.
@@ -124,7 +144,7 @@ impl PublicationIntentUpdate {
         { return Err(ControlError::InvalidValue); }
         let next = search_domain::transition_publication(&previous, state)
             .map_err(|_| ControlError::InvalidValue)?;
-        Ok(Self { operation_id, command_digest, expected_generation, previous: Some(previous), next, artifact_set: None })
+        Ok(Self { operation_id, command_digest, expected_generation, previous: Some(previous), next, artifact_set: None, original_binding: None, abort_finalization: None })
     }
 
     /// Attaches the explicit v1 C02 record named by the unchanged prepared reference.
@@ -140,6 +160,61 @@ impl PublicationIntentUpdate {
         Ok(self)
     }
 
+    /// Attaches the original finite operation/context metadata to the first intent transaction.
+    /// It is never reconstructed from a later abort attempt's recovery context.
+    /// # Errors
+    /// Refuses a non-initial intent or metadata that does not name the exact C02 command.
+    pub fn with_original_binding_v1(
+        mut self,
+        record: PublicationIntentBindingRecordV1,
+    ) -> Result<Self, ControlError> {
+        let metadata = record.metadata();
+        if self.original_binding.is_some() || self.previous.is_some() {
+            return Err(ControlError::OperationConflict);
+        }
+        if metadata.c02_mutation_id != self.operation_id {
+            return Err(ControlError::OperationConflict);
+        }
+        if metadata.c02_command_digest != self.command_digest {
+            return Err(ControlError::OperationConflict);
+        }
+        if metadata.expected_control_generation != self.expected_generation {
+            return Err(ControlError::OperationConflict);
+        }
+        if !record.matches_intent(&self.next) {
+            return Err(ControlError::OperationConflict);
+        }
+        self.original_binding = Some(Box::new(record));
+        Ok(self)
+    }
+
+    /// Atomically retains compact original abort metadata with the ABORTED intent.
+    /// Full bindings, manifests, diffs and points remain source-backed and are
+    /// rehydrated by Root from the retained C07/C13 records.
+    ///
+    /// # Errors
+    /// Refuses a non-aborted transition, mismatched C02 identity/generation,
+    /// changed intent identity/reference/guards, or duplicate attachment.
+    pub fn with_abort_finalization_v1(
+        mut self,
+        record: PublicationAbortFinalizationRecordV1,
+    ) -> Result<Self, ControlError> {
+        let metadata = record.metadata();
+        if self.abort_finalization.is_some()
+            || self.next.state != PublicationIntentState::Aborted
+            || metadata.c02_mutation_id != self.operation_id
+            || metadata.c02_command_digest != self.command_digest
+            || metadata.expected_control_generation != self.expected_generation
+            || metadata.publication_intent_id != self.next.publication_intent_id
+            || metadata.target_epoch != self.next.target_epoch
+            || metadata.original_guards != self.next.owner_source_membership_access_guards
+            || metadata.new_manifest_reference != self.next.prepared_manifest_ref
+        {
+            return Err(ControlError::OperationConflict);
+        }
+        self.abort_finalization = Some(Box::new(record));
+        Ok(self)
+    }
     /// Exact proposed durable value, including unchanged preparation bindings.
     #[must_use]
     pub const fn intent(&self) -> &PublicationIntent { &self.next }
@@ -147,15 +222,53 @@ impl PublicationIntentUpdate {
     pub(in crate::persistent) const fn port_operation_id(&self) -> MutationId { self.operation_id }
 
     pub(in crate::persistent) fn command(&self, limits: JournalLimits, check: &dyn Check) -> Result<ConditionalControlMutation, ControlError> {
+        if (self.next.state == PublicationIntentState::Aborted) != self.abort_finalization.is_some() {
+            return Err(ControlError::InvalidValue);
+        }
+        if self.original_binding.is_some() && self.previous.is_some() {
+            return Err(ControlError::InvalidValue);
+        }
         let key = ControlKey::new(KEY.to_vec(), limits)?;
         let expected = match &self.previous {
             Some(value) => ControlRecordCondition::exact(key.clone(), codec::encode(value, limits)?),
             None => ControlRecordCondition::absent(key.clone()),
         };
-        let mutation = ControlMutation::new(self.operation_id, self.command_digest,
-            self.expected_generation, vec![ControlWrite { key, value: codec::encode(&self.next, limits)? }], vec![]);
-        prepared_artifacts::attach(&self.next.prepared_manifest_ref, self.artifact_set.as_ref(),
-            self.previous.is_none(), limits, check, ConditionalControlMutation::new(mutation, vec![expected]))
+        let mut writes = vec![ControlWrite {
+            key,
+            value: codec::encode(&self.next, limits)?,
+        }];
+        let mut conditions = vec![expected];
+        if self.previous.is_none() {
+            let binding_key = operation_binding::key(limits)?;
+            conditions.push(ControlRecordCondition::absent(binding_key.clone()));
+            if let Some(binding) = &self.original_binding {
+                writes.push(ControlWrite {
+                    key: binding_key,
+                    value: binding.value(limits, check)?,
+                });
+            }
+        }
+        if let Some(abort) = &self.abort_finalization {
+            let abort_key = abort_finalization::key(limits)?;
+            let abort_value = abort.value(limits, check)?;
+            conditions.push(ControlRecordCondition::absent(abort_key.clone()));
+            writes.push(ControlWrite { key: abort_key, value: abort_value });
+        }
+        let mutation = ControlMutation::new(
+            self.operation_id,
+            self.command_digest,
+            self.expected_generation,
+            writes,
+            vec![],
+        );
+        prepared_artifacts::attach(
+            &self.next.prepared_manifest_ref,
+            self.artifact_set.as_ref(),
+            self.previous.is_none(),
+            limits,
+            check,
+            ConditionalControlMutation::new(mutation, conditions),
+        )
     }
 }
 
@@ -229,14 +342,14 @@ impl PersistentControlJournal {
         self.read_checkpoint_checked(&budget).map_err(|error| budget.failure(error, None))
     }
 
-    fn read_checkpoint_checked(&self, check: &dyn Check)
+    pub(super) fn read_checkpoint_checked(&self, check: &dyn Check)
         -> Result<Option<crate::PublicationRecoveryCheckpoint>, ControlError> {
         self.ensure_available()?;
         check.check(Point::Start)?;
         if !crate::has_visibility_schema(self.identity.schema_version) {
             return Err(ControlError::SchemaUnsupported);
         }
-        super::operating_profile::require_indexed(self)?;
+        super::operating_profile::require_indexed_checked(self, check)?;
         let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
         let snapshot = self.verify_from_checked(&read, check)?;
         // Reuse the existing relationship validator; all observations stay in
@@ -244,9 +357,35 @@ impl PersistentControlJournal {
         let visibility = visibility::validate_snapshot(&read, &snapshot, self.limits, check)?;
         let intent = snapshot.get(&ControlKey::new(KEY.to_vec(), self.limits)?)
             .map(codec::decode).transpose()?;
+        let original_binding =
+            operation_binding::read_snapshot(&snapshot, self.limits, check)?;
+        if original_binding.as_ref().is_some_and(|record| {
+            intent.as_ref().is_none_or(|intent| !record.matches_intent(intent))
+        }) {
+            return Err(ControlError::StoreCorrupt);
+        }
+        let abort_finalization =
+            abort_finalization::read_snapshot(&snapshot, self.limits, check)?;
+        if abort_finalization.as_ref().is_some_and(|record| {
+            intent.as_ref().is_none_or(|intent| !record.matches_intent(intent))
+                || original_binding.is_none()
+        }) {
+            return Err(ControlError::StoreCorrupt);
+        }
+        let publication_receipt = visibility
+            .as_ref()
+            .map(|state| visibility::read_checkpoint_receipt(&snapshot, state, self.limits, check))
+            .transpose()?
+            .flatten();
         check.check(Point::ReadComplete)?;
         Ok(visibility.map(|visibility| crate::PublicationRecoveryCheckpoint {
-            identity: snapshot.identity, generation: snapshot.generation, visibility, intent,
+            identity: snapshot.identity,
+            generation: snapshot.generation,
+            visibility,
+            intent,
+            original_binding,
+            abort_finalization,
+            publication_receipt,
         }))
     }
 
@@ -362,7 +501,8 @@ impl PersistentControlJournal {
 // The shared port routes these keys through typed publication commands only.
 // Reuse the owning modules' key definitions instead of a second reserved-key list.
 pub(super) fn port_reserved_key(key: &[u8]) -> bool {
-    key == KEY || visibility::port_reserved_key(key) || prepared_artifacts::reserved(key)
+    key == KEY || abort_finalization::reserved(key) || operation_binding::reserved(key)
+        || visibility::port_reserved_key(key) || prepared_artifacts::reserved(key)
 }
 
 pub(super) const fn unresolved(state: PublicationIntentState) -> bool {
@@ -372,17 +512,67 @@ pub(super) const fn unresolved(state: PublicationIntentState) -> bool {
         | PublicationIntentState::Reclaimable | PublicationIntentState::InvalidationOnlyCommitted)
 }
 
-pub(super) fn validate_record(key: &ControlKey, value: &ControlValue) -> Result<(), ControlError> {
-    if key.as_bytes() == KEY { codec::decode(value)?; }
+pub(super) fn validate_record(key: &ControlKey, value: &ControlValue, limits: JournalLimits, check: &dyn Check) -> Result<(), ControlError> {
+    if key.as_bytes() == KEY {
+        codec::decode(value)?;
+    } else if abort_finalization::reserved(key.as_bytes()) {
+        PublicationAbortFinalizationRecordV1::decode(value, limits, check)?;
+    } else if operation_binding::reserved(key.as_bytes()) {
+        PublicationIntentBindingRecordV1::decode(value, limits, check)?;
+    }
     Ok(())
 }
 
 pub(super) fn require_resolved(records: &[(ControlKey, ControlValue)]) -> Result<(), ControlError> {
     if let Ok(index) = records.binary_search_by(|(key, _)| key.as_bytes().cmp(KEY))
-        && unresolved(codec::decode(&records[index].1)?.state) { return Err(ControlError::SnapshotRebuildFailed); }
+        && unresolved(codec::decode(&records[index].1)?.state)
+    {
+        return Err(ControlError::SnapshotRebuildFailed);
+    }
     Ok(())
 }
 
+/// Allows an internal current-control snapshot after an exact abort commit while
+/// keeping the serving projection snapshot unresolved and unavailable.
+pub(super) fn require_abort_snapshot(
+    records: &[(ControlKey, ControlValue)],
+    limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<(), ControlError> {
+    let intent = records
+        .binary_search_by(|(key, _)| key.as_bytes().cmp(KEY))
+        .ok()
+        .map(|index| codec::decode(&records[index].1))
+        .transpose()?;
+    let original_binding_key = operation_binding::key(limits)?;
+    let original_binding = records
+        .binary_search_by(|(key, _)| key.as_bytes().cmp(original_binding_key.as_bytes()))
+        .ok()
+        .map(|index| PublicationIntentBindingRecordV1::decode(&records[index].1, limits, check))
+        .transpose()?;
+    let abort_key = abort_finalization::key(limits)?;
+    let abort = records
+        .binary_search_by(|(key, _)| key.as_bytes().cmp(abort_key.as_bytes()))
+        .ok()
+        .map(|index| PublicationAbortFinalizationRecordV1::decode(
+            &records[index].1,
+            limits,
+            check,
+        ))
+        .transpose()?;
+    match (intent.as_ref(), abort.as_ref()) {
+        (Some(intent), Some(record))
+            if intent.state == PublicationIntentState::Aborted
+                && record.matches_intent(intent)
+                && original_binding
+                    .as_ref()
+                    .is_some_and(|binding| binding.matches_intent(intent)) =>
+        {
+            Ok(())
+        }
+        _ => Err(ControlError::SnapshotRebuildFailed),
+    }
+}
 pub(super) fn verify_absence(
     read: &ReadTransaction, generation: u64, limits: JournalLimits,
     records: &[(ControlKey, ControlValue)], check: &dyn Check,

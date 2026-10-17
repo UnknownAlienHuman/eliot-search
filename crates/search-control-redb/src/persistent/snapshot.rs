@@ -68,6 +68,117 @@ impl PersistentControlJournal {
             .map_err(|error| budget.failure(error, None).for_recovery())
     }
 
+    /// Rebuilds only the current control snapshot after a retained exact abort commit.
+    /// The unresolved intent remains unavailable to publication projection snapshots.
+    ///
+    /// # Errors
+    /// Requires the exact retained abort operation, unchanged route/epoch/guards and
+    /// manifest reference, and a current journal generation equal to that commit.
+    pub fn recover_abort_snapshot_publication_with_context<C: CancellationProbe>(
+        &self,
+        publisher: &mut ControlSnapshotPublisher,
+        context: &OperationContext<C>,
+    ) -> Result<SnapshotPublishReceipt, ControlCallError> {
+        let budget = Budget::new(context);
+        self.recover_abort_publication_checked(publisher, &budget)
+            .map_err(|error| budget.failure(error, None).for_recovery())
+    }
+
+    pub(super) fn recover_abort_publication_checked(
+        &self,
+        publisher: &mut ControlSnapshotPublisher,
+        check: &dyn Check,
+    ) -> Result<SnapshotPublishReceipt, ControlError> {
+        publisher.begin_disk_publication(self.identity)?;
+        self.ensure_available()?;
+        check.check(Point::Start)?;
+        let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
+        let header = self.header_from_checked(&read, check)?;
+        publisher.observe_disk_generation(header.generation)?;
+        let snapshot = self.verify_from_checked(&read, check)?;
+        let abort = super::publication::abort_finalization::read_snapshot(
+            &snapshot,
+            self.limits,
+            check,
+        )?
+        .ok_or(ControlError::SnapshotPublicationFailed)?;
+        let metadata = abort.metadata();
+        let visibility = super::publication::visibility::validate_snapshot(
+            &read,
+            &snapshot,
+            self.limits,
+            check,
+        )?
+        .ok_or(ControlError::SnapshotPublicationFailed)?;
+        let intent = super::publication::read_intent_from_snapshot(&snapshot, self.limits)?
+            .ok_or(ControlError::StoreCorrupt)?;
+        let (manifests, _, _) = super::publication::visibility::read_recovery_references(
+            &snapshot,
+            self.limits,
+            check,
+        )?;
+        let expected_after = metadata
+            .expected_control_generation
+            .checked_add(1)
+            .ok_or(ControlError::GenerationExhausted)?;
+        if snapshot.generation != expected_after
+            || visibility.collection_generation_id != metadata.collection_generation_id
+            || visibility.schema_identity_digest != metadata.schema_identity_digest
+            || visibility.visible_epoch != metadata.previous_visible_epoch
+            || visibility.guards != metadata.current_guards
+            || intent.state != search_contracts::PublicationIntentState::Aborted
+            || intent.publication_intent_id != metadata.publication_intent_id
+            || intent.target_epoch != metadata.target_epoch
+            || intent.owner_source_membership_access_guards != metadata.original_guards
+            || intent.prepared_manifest_ref != metadata.new_manifest_reference
+            || manifests.get(&metadata.projection_membership_id)
+                != metadata.old_manifest_reference.as_ref()
+        {
+            return Err(ControlError::SnapshotPublicationFailed);
+        }
+        let operation = super::operation_from_checked(
+            &read,
+            metadata.c02_mutation_id,
+            &header,
+            self.limits,
+            check,
+        )?
+        .ok_or(ControlError::StoreCorrupt)?;
+        let receipt = operation.receipt;
+        if receipt.command_digest != metadata.c02_command_digest
+            || receipt.before_generation != metadata.expected_control_generation
+            || receipt.after_generation != snapshot.generation
+        {
+            return Err(ControlError::StoreCorrupt);
+        }
+        let state = self.rebuild_abort_snapshot_checked(snapshot, check)?;
+        publisher.publish_verified_disk_snapshot(
+            &receipt,
+            state,
+            || check.check(Point::BeforePublish),
+        )
+    }
+
+    fn rebuild_abort_snapshot_checked(
+        &self,
+        readback: JournalReadSnapshot,
+        check: &dyn Check,
+    ) -> Result<ControlSnapshot, ControlError> {
+        check.check(Point::SnapshotRebuild)?;
+        if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+            super::operating_profile::normal(
+                super::operating_profile::snapshot_mode(&readback, self.limits)?,
+            )?;
+        }
+        super::publication::require_abort_snapshot(
+            &readback.records,
+            self.limits,
+            check,
+        )?;
+        let snapshot = rebuild_control_snapshot(readback, self.identity, self.limits)?;
+        check.check(Point::SnapshotPrepared)?;
+        Ok(snapshot)
+    }
     pub(super) fn control_snapshot_checked(&self, check: &dyn Check) -> Result<ControlSnapshot, ControlError> {
         let readback = self.read_snapshot_checked(check)?;
         self.rebuild_snapshot_checked(readback, check)

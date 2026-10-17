@@ -239,6 +239,23 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
             .map_err(|error| failure(error, None))
     }
 
+    /// Reads the complete unresolved publication recovery checkpoint from this
+    /// journal, including current manifest/shadow references from the same
+    /// verified redb transaction. This is recovery input only; it does not
+    /// publish a serving snapshot or authorize a new publication.
+    ///
+    /// # Errors
+    /// Pending, corrupt, foreign, unsupported or interrupted state is not
+    /// returned as a partial checkpoint.
+    pub fn read_publication_checkpoint(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<Option<crate::PublicationRecoveryCheckpoint>, ControlPortError> {
+        self.journal
+            .read_publication_checkpoint(context)
+            .map_err(|error| failure(error, None))
+    }
+
     /// Actual limits of the executing borrowed journal.
     #[must_use]
     pub const fn limits(&self) -> crate::JournalLimits { self.journal.limits() }
@@ -347,6 +364,17 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
             .map_err(|error| failure(error, None))
     }
 
+    /// Publishes only the current control snapshot for an exact retained abort finalization.
+    /// The unresolved publication projection remains blocked.
+    ///
+    /// # Errors
+    /// Requires the original abort commit and unchanged route/epoch/guards/manifest reference.
+    pub fn recover_abort_snapshot(&mut self, context: &OperationContext<C>)
+        -> Result<SnapshotPublishReceipt, ControlPortError> {
+        self.journal
+            .recover_abort_snapshot_publication_with_context(self.publisher, context)
+            .map_err(|error| failure(error, None))
+    }
     fn validate_record_command(&self, command: &ConditionalControlMutation, check: &dyn Check)
         -> Result<(), ControlError> {
         let keys = validate_mutation(command.mutation(), self.journal.limits)?;

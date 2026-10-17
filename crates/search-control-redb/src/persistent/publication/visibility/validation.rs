@@ -63,6 +63,42 @@ pub(in crate::persistent) fn validate_record(key: &ControlKey, value: &ControlVa
     Ok(())
 }
 
+fn validate_abort_operation(
+    read: &ReadTransaction,
+    snapshot: &JournalReadSnapshot,
+    record: &super::super::abort_finalization::PublicationAbortFinalizationRecordV1,
+    limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<(), ControlError> {
+    let metadata = record.metadata();
+    let meta = read.open_table(META).map_err(map_table_error)?;
+    let header_bytes = meta
+        .get("header")
+        .map_err(|error| map_storage_error(&error))?
+        .ok_or(ControlError::StoreCorrupt)?;
+    check.reserve(crate::MigrationBootstrapWork::Read(header_bytes.value().len()))?;
+    check.reserve(crate::MigrationBootstrapWork::Process(header_bytes.value().len()))?;
+    let header = Header::decode(header_bytes.value(), snapshot.identity, limits)?;
+    let operation = super::super::super::operation_from_checked(
+        read,
+        metadata.c02_mutation_id,
+        &header,
+        limits,
+        check,
+    )?
+    .ok_or(ControlError::StoreCorrupt)?;
+    let receipt = operation.receipt;
+    let abort_key = super::super::abort_finalization::key(limits)?;
+    if receipt.command_digest != metadata.c02_command_digest
+        || receipt.before_generation != metadata.expected_control_generation
+        || receipt.before_generation.checked_add(1) != Some(receipt.after_generation)
+        || !receipt.changed_keys.contains(&abort_key)
+        || !receipt.changed_keys.contains(&key(super::super::KEY, limits)?)
+    {
+        return Err(ControlError::StoreCorrupt);
+    }
+    Ok(())
+}
 pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot: &JournalReadSnapshot,
     limits: JournalLimits, check: &dyn Check)
     -> Result<Option<PublicationVisibilityState>, ControlError> {
@@ -75,10 +111,27 @@ pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot:
     };
     if state.guards.owner_epoch > snapshot.identity.owner_epoch { return Err(ControlError::StoreCorrupt); }
     let intent = find(snapshot, super::super::KEY).map(intent_codec::decode).transpose()?;
+    let original_binding =
+        super::super::operation_binding::read_snapshot(snapshot, limits, check)?;
+    let abort_finalization =
+        super::super::abort_finalization::read_snapshot(snapshot, limits, check)?;
+    if original_binding.as_ref().is_some_and(|record| {
+        intent.as_ref().is_none_or(|intent| !record.matches_intent(intent))
+    }) || abort_finalization.is_some() && original_binding.is_none()
+    {
+        return Err(ControlError::StoreCorrupt);
+    }
+    if abort_finalization.as_ref().is_some_and(|record| {
+        intent.as_ref().is_none_or(|intent| !record.matches_intent(intent))
+    }) {
+        return Err(ControlError::StoreCorrupt);
+    }
     if let Some(intent) = &intent {
         super::super::prepared_artifacts::validate_reference(snapshot, &intent.prepared_manifest_ref, limits, check)?;
     }
-    let receipt = match state.last_receipt {
+    if let Some(record) = &abort_finalization {
+        validate_abort_operation(read, snapshot, record, limits, check)?;
+    }    let receipt = match state.last_receipt {
         None => None,
         Some(id) => {
             let receipt_key = id_key(RECEIPTS, id.as_bytes(), limits)?;

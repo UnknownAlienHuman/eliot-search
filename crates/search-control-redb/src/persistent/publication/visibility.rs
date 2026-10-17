@@ -7,6 +7,7 @@ use search_contracts::{Blake3Digest32, CollectionGenerationId, Epoch, NonZeroRev
 use search_ports::{CancellationProbe, OperationContext};
 use crate::{ConditionalControlMutation, ControlRecordCondition, ControlRecordClass, ControlValue, ControlWrite};
 use super::super::operation::{Budget, Check, Point};
+use crate::MigrationBootstrapWork as Work;
 use super::super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitReceipt,
     ControlError, ControlKey, ControlMutation, JournalLimits, JournalReadSnapshot, MutationId,
     PersistentControlJournal, ReadTransaction, is_corruption};
@@ -94,6 +95,97 @@ impl fmt::Debug for PublicationManifestChange {
             .field("publishes_manifest", &self.next_manifest.is_some())
             .field("removes_shadow", &self.matching_shadow.is_some()).finish()
     }
+}
+
+/// Reads the exact current manifest/shadow rows from a verified recovery
+/// snapshot. Unlike the serving projection snapshot, this intentionally keeps
+/// unresolved publication state visible so recovery can reconcile the original
+/// operation; it grants no serving or admission permission.
+pub(super) type RecoveryReferences = (
+    std::collections::BTreeMap<ProjectionMembershipId, ReceiptRef>,
+    std::collections::BTreeMap<ProjectionMembershipId, super::PreparedArtifactSetRecordV1>,
+    std::collections::BTreeMap<ProjectionMembershipId, PublicationSourceShadow>,
+);
+
+pub(in crate::persistent) fn read_recovery_references(
+    snapshot: &JournalReadSnapshot,
+    limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<RecoveryReferences, ControlError> {
+    let mut manifests = std::collections::BTreeMap::new();
+    let mut prepared_artifact_sets = std::collections::BTreeMap::new();
+    let mut shadows = std::collections::BTreeMap::new();
+    for (key, value) in &snapshot.records {
+        check.check(Point::ReadRecord)?;
+        let (suffix, manifest) = if let Some(id) = key.as_bytes().strip_prefix(MANIFESTS) {
+            (id, true)
+        } else if let Some(id) = key.as_bytes().strip_prefix(SHADOWS) {
+            (id, false)
+        } else {
+            continue;
+        };
+        let id = ProjectionMembershipId::from_bytes(
+            suffix.try_into().map_err(|_| ControlError::StoreCorrupt)?,
+        );
+        let allocation = value
+            .len()
+            .checked_mul(3)
+            .and_then(|n| n.checked_add(256))
+            .ok_or(ControlError::BudgetExceeded)?;
+        check.reserve(Work::Allocate(allocation))?;
+        check.reserve(Work::Process(
+            value
+                .len()
+                .checked_add(key.as_bytes().len())
+                .ok_or(ControlError::BudgetExceeded)?,
+        ))?;
+        let duplicate = if manifest {
+            let reference = codec::read_manifest(value)?;
+            if let Some(record) = super::prepared_artifacts::read_reference(
+                snapshot, &reference, limits, check,
+            )? && prepared_artifact_sets.insert(id, record).is_some() {
+                return Err(ControlError::StoreCorrupt);
+            }
+            manifests.insert(id, reference).is_some()
+        } else {
+            shadows.insert(id, codec::read_shadow(value)?).is_some()
+        };
+        if duplicate {
+            return Err(ControlError::StoreCorrupt);
+        }
+    }
+    Ok((manifests, prepared_artifact_sets, shadows))
+}
+
+/// Reads the exact current publication receipt named by the checkpoint's
+/// visibility record. It remains an observation; Root still reconciles the
+/// operation receipt and the complete route/guard/manifest state.
+pub(super) fn read_checkpoint_receipt(
+    snapshot: &JournalReadSnapshot,
+    visibility: &PublicationVisibilityState,
+    limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<Option<PublicationReceipt>, ControlError> {
+    let Some(id) = visibility.last_receipt else {
+        return Ok(None);
+    };
+    check.check(Point::ReadRecord)?;
+    check.reserve(Work::Allocate(RECEIPTS.len() + 16 + core::mem::size_of::<ControlKey>()))?;
+    let key = id_key(RECEIPTS, id.as_bytes(), limits)?;
+    let value = snapshot.get(&key).ok_or(ControlError::StoreCorrupt)?;
+    check.reserve(Work::Allocate(value.len()))?;
+    check.reserve(Work::Process(value.len()))?;
+    let bound = codec::read_receipt(value)?;
+    if bound.publication.publication_receipt_id != id
+        || bound.publication.target_epoch != visibility.visible_epoch
+        || bound.collection_generation_id != visibility.collection_generation_id
+        || bound.schema_identity_digest != visibility.schema_identity_digest
+        || bound.committed_shadow_generation != visibility.guards.shadow_generation
+    {
+        return Err(ControlError::StoreCorrupt);
+    }
+    check.check(Point::ReadComplete)?;
+    Ok(Some(bound.publication))
 }
 
 /// Input evidence already verified by the publication coordinator/index adapter.

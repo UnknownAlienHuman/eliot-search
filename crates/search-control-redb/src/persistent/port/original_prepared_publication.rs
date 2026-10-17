@@ -8,15 +8,38 @@ use super::super::{
 use super::{BoundControlJournal, ControlPortCommand, require_identity};
 use crate::persistent::publication::prepared_artifacts::reference_key;
 use crate::{
-    CommitRecoveryDecision, ControlCommitReceipt, ControlError, MigrationBootstrapFailure,
+    CommitRecoveryDecision, ControlCommitReceipt, ControlError,
+    MigrationBootstrapFailure, MutationId,
     MigrationBootstrapWork as Work, PreparationInputReadbackV1, PreparationInputRecordV1,
     PreparedArtifactSetReadbackV1, PreparedArtifactSetRecordV1, VisibleEpochCommit,
 };
-use search_contracts::{OpaqueId, ReceiptRef};
+use search_contracts::{Blake3Digest32, OpaqueId, ReceiptRef};
 use search_ports::{CancellationProbe, MutationIdentity};
+use redb::ReadableTable;
 use std::time::Instant;
 
 impl<C: CancellationProbe> BoundControlJournal<'_, C> {
+    /// Reads the complete C02 publication recovery checkpoint under the original
+    /// cumulative deadline/work allowance. This recovery-plane read may return
+    /// unresolved intent and is not a serving projection snapshot.
+    ///
+    /// # Errors
+    /// Pending, corrupt, foreign, unsupported or interrupted state is never
+    /// returned as a partial checkpoint.
+    pub fn read_publication_checkpoint_with_original_context<F, E>(
+        &self,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<Option<crate::PublicationRecoveryCheckpoint>, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        self.journal
+            .read_checkpoint_checked(&check)
+            .map_err(|error| check.failure(error))
+    }
+
     /// Reads the existing intent head under the original cumulative allowance.
     /// # Errors
     /// Partial, pending, corrupt or interrupted observations return no head.
@@ -32,6 +55,178 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
         self.journal
             .read_intent_checked(&check)
             .map_err(|error| check.failure(error))
+    }
+
+    /// Reads the actual operation receipt at the journal's current generation.
+    ///
+    /// Visibility CAS construction uses this as its exact predecessor even
+    /// when unrelated source/control transactions advanced the global journal
+    /// after the publication checkpoint. The bounded operation ledger retains
+    /// one receipt for every committed generation; no generation is inferred
+    /// from the publication intent.
+    ///
+    /// # Errors
+    /// An absent current-generation receipt, corrupt ledger, pending mutation,
+    /// unsupported schema or original-context refusal is not synthesized.
+    pub fn read_current_control_commit_with_original_context<F, E>(
+        &self,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<ControlCommitReceipt, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        self.read_control_commit_at_generation_inner(None, deadline, work)
+    }
+
+    /// Reads the exact operation receipt that committed one known journal
+    /// generation, even when later bounded control writes have advanced the
+    /// global header.
+    ///
+    /// # Errors
+    /// A generation without exactly one retained receipt is never synthesized.
+    pub fn read_control_commit_at_generation_with_original_context<F, E>(
+        &self,
+        generation: u64,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<ControlCommitReceipt, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        self.read_control_commit_at_generation_inner(Some(generation), deadline, work)
+    }
+
+    fn read_control_commit_at_generation_inner<F, E>(
+        &self,
+        requested_generation: Option<u64>,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<ControlCommitReceipt, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            self.journal.ensure_available()?;
+            if !crate::has_visibility_schema(self.journal.identity.schema_version) {
+                return Err(ControlError::SchemaUnsupported);
+            }
+            super::super::operating_profile::require_indexed_checked(self.journal, &check)?;
+            check.check(Point::ReadHeader)?;
+            let read = self
+                .journal
+                .database
+                .begin_read()
+                .map_err(|_| ControlError::StoreUnavailable)?;
+            let header = self.journal.header_from_checked(&read, &check)?;
+            let snapshot = self.journal.snapshot_from_checked(&read, &check)?;
+            let target_generation = requested_generation.unwrap_or(header.generation);
+            if target_generation == 0
+                || target_generation > header.generation
+                || snapshot.generation != header.generation
+            {
+                return Err(ControlError::StoreCorrupt);
+            }
+            let operations = read
+                .open_table(super::super::OPERATIONS)
+                .map_err(super::super::map_table_error)?;
+            let mut current = None;
+            for row in operations
+                .iter()
+                .map_err(|error| super::super::map_storage_error(&error))?
+            {
+                check.check(Point::ReadOperation)?;
+                let (id, bytes) = row.map_err(|error| super::super::map_storage_error(&error))?;
+                let id = MutationId(
+                    id.value()
+                        .try_into()
+                        .map_err(|_| ControlError::StoreCorrupt)?,
+                );
+                let operation = super::super::StoredOperation::decode_checked(
+                    bytes.value(),
+                    id,
+                    header.generation,
+                    self.journal.limits,
+                    &check,
+                )?;
+                if operation.receipt.after_generation == target_generation
+                    && current.replace(operation.receipt).is_some()
+                {
+                    return Err(ControlError::StoreCorrupt);
+                }
+            }
+            let receipt = current.ok_or(ControlError::StoreCorrupt)?;
+            check.check(Point::ReadComplete)?;
+            Ok(receipt)
+        })();
+        result.map_err(|error| check.failure(error))
+    }
+
+    /// Reads the actual retained receipt for one exact C02 operation identity.
+    ///
+    /// This is a ledger observation, not proof that the operation's semantic
+    /// state is still current. Callers must also read and compare the complete
+    /// owner state before using the receipt as a predecessor for another CAS.
+    /// `None` is returned only after a coherent, bounded read proves that the
+    /// operation identity has no retained receipt.
+    ///
+    /// # Errors
+    /// A digest mismatch, corrupt/pending journal, unsupported schema or
+    /// original-context refusal is never reported as absence.
+    pub fn read_publication_operation_receipt_with_original_context<F, E>(
+        &self,
+        operation_id: MutationId,
+        command_digest: Blake3Digest32,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<Option<ControlCommitReceipt>, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            self.journal.ensure_available()?;
+            if !crate::has_visibility_schema(self.journal.identity.schema_version) {
+                return Err(ControlError::SchemaUnsupported);
+            }
+            super::super::operating_profile::require_indexed_checked(self.journal, &check)?;
+            check.check(Point::ReadHeader)?;
+            let read = self
+                .journal
+                .database
+                .begin_read()
+                .map_err(|_| ControlError::StoreUnavailable)?;
+            let header = self.journal.header_from_checked(&read, &check)?;
+            // Validate the complete same-transaction journal snapshot before
+            // exposing an operation receipt as an observation.
+            self.journal.snapshot_from_checked(&read, &check)?;
+            let operation = super::super::operation_from_checked(
+                &read,
+                operation_id,
+                &header,
+                self.journal.limits,
+                &check,
+            )?;
+            let receipt = operation
+                .map(|operation| {
+                    let receipt = operation.receipt;
+                    if receipt.operation_id != operation_id
+                        || receipt.command_digest != command_digest
+                        || receipt.before_generation.checked_add(1)
+                            != Some(receipt.after_generation)
+                    {
+                        return Err(ControlError::OperationConflict);
+                    }
+                    Ok(receipt)
+                })
+                .transpose()?;
+            check.check(Point::ReadComplete)?;
+            Ok(receipt)
+        })();
+        result.map_err(|error| check.failure(error))
     }
 
     /// Publishes an actual committed snapshot through the existing checked publisher.

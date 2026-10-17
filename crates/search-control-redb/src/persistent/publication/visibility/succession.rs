@@ -24,6 +24,8 @@ pub struct PublicationSuccessor {
     visibility: PublicationVisibilityState,
     next: PublicationIntent,
     artifact_set: Option<super::super::PreparedArtifactSetRecordV1>,
+    original_binding: Option<Box<super::super::PublicationIntentBindingRecordV1>>,
+    previous_original_binding: Option<Box<super::super::PublicationIntentBindingRecordV1>>,
 }
 
 impl fmt::Debug for PublicationSuccessor {
@@ -68,7 +70,7 @@ impl PublicationSuccessor {
         let next = search_domain::transition_publication(
             prepared, PublicationIntentState::IntentDurable,
         ).map_err(|_| ControlError::InvalidValue)?;
-        Ok(Self { operation_id, command_digest, expected_generation, previous, visibility, next, artifact_set: None })
+        Ok(Self { operation_id, command_digest, expected_generation, previous, visibility, next, artifact_set: None, original_binding: None, previous_original_binding: None })
     }
 
     /// Atomically retains a v1 C02 set record with this new durable intent.
@@ -83,6 +85,39 @@ impl PublicationSuccessor {
         Ok(self)
     }
 
+    /// Replaces the finite original-binding sidecar with the new intent in the same CAS.
+    /// Root supplies the prior actual record from the coherent recovery checkpoint.
+    /// # Errors
+    /// Refuses metadata that does not bind the exact previous and next C02 intents.
+    pub fn with_original_binding_v1(
+        mut self,
+        next: super::super::PublicationIntentBindingRecordV1,
+        previous: super::super::PublicationIntentBindingRecordV1,
+    ) -> Result<Self, ControlError> {
+        let next_metadata = next.metadata();
+        if self.original_binding.is_some() || self.previous_original_binding.is_some() {
+            return Err(ControlError::OperationConflict);
+        }
+        if next_metadata.c02_mutation_id != self.operation_id {
+            return Err(ControlError::OperationConflict);
+        }
+        if next_metadata.c02_command_digest != self.command_digest {
+            return Err(ControlError::OperationConflict);
+        }
+        if next_metadata.expected_control_generation != self.expected_generation {
+            return Err(ControlError::OperationConflict);
+        }
+        if !next.matches_intent(&self.next) {
+            return Err(ControlError::OperationConflict);
+        }
+        if !previous.matches_intent(&self.previous) {
+            return Err(ControlError::OperationConflict);
+        }
+        self.original_binding = Some(Box::new(next));
+        self.previous_original_binding = Some(Box::new(previous));
+        Ok(self)
+    }
+
     /// Exact intent to be made durable, without advancing `VisibleEpoch`.
     #[must_use]
     pub const fn intent(&self) -> &PublicationIntent { &self.next }
@@ -91,13 +126,28 @@ impl PublicationSuccessor {
 
     pub(in crate::persistent) fn command(&self, limits: JournalLimits, check: &dyn Check) -> Result<ConditionalControlMutation, ControlError> {
         let intent_key = key(super::super::KEY, limits)?;
-        let writes = vec![ControlWrite {
+        let mut writes = vec![ControlWrite {
             key: intent_key.clone(), value: intent_codec::encode(&self.next, limits)?,
         }];
-        let conditions = vec![
+        let mut conditions = vec![
             ControlRecordCondition::exact(intent_key, intent_codec::encode(&self.previous, limits)?),
             ControlRecordCondition::exact(key(STATE, limits)?, codec::state(&self.visibility, limits)?),
         ];
+        let binding_key = super::super::operation_binding::key(limits)?;
+        match (&self.original_binding, &self.previous_original_binding) {
+            (Some(next), Some(previous)) => {
+                conditions.push(ControlRecordCondition::exact(
+                    binding_key.clone(),
+                    previous.value(limits, check)?,
+                ));
+                writes.push(ControlWrite {
+                    key: binding_key,
+                    value: next.value(limits, check)?,
+                });
+            }
+            (None, None) => conditions.push(ControlRecordCondition::absent(binding_key)),
+            _ => return Err(ControlError::InvalidValue),
+        }
         let command = ConditionalControlMutation::new(ControlMutation::new(
             self.operation_id, self.command_digest, self.expected_generation, writes, vec![],
         ), conditions);

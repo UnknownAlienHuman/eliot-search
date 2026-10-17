@@ -30,6 +30,11 @@ pub mod migration;
 pub use reference::*;
 pub use identity::*;
 pub use persistent::PublicationSuccessor;
+pub use persistent::{
+    AbortResolutionMetadataV1, PublicationAbortFinalizationMetadataV1,
+    PublicationAbortFinalizationRecordV1, PublicationIntentBindingMetadataV1,
+    PublicationIntentBindingRecordV1,
+};
 pub use persistent::{IndexedProfileAdoption, JournalOperatingProfile, JournalProfileInitialization};
 pub use persistent::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 pub use persistent::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
@@ -70,6 +75,9 @@ pub struct PublicationRecoveryCheckpoint {
     pub(crate) generation: u64,
     pub(crate) visibility: PublicationVisibilityState,
     pub(crate) intent: Option<search_contracts::PublicationIntent>,
+    pub(crate) original_binding: Option<PublicationIntentBindingRecordV1>,
+    pub(crate) abort_finalization: Option<PublicationAbortFinalizationRecordV1>,
+    pub(crate) publication_receipt: Option<search_contracts::PublicationReceipt>,
 }
 
 impl PublicationRecoveryCheckpoint {
@@ -85,6 +93,22 @@ impl PublicationRecoveryCheckpoint {
     /// Last retained intent, including unresolved and aborted work.
     #[must_use]
     pub const fn intent(&self) -> Option<&search_contracts::PublicationIntent> { self.intent.as_ref() }
+    /// Original abort request metadata retained in the same verified journal read.
+    /// Large source-backed bindings are intentionally absent and must be rehydrated.
+    #[must_use]
+    pub const fn abort_finalization(&self) -> Option<&PublicationAbortFinalizationRecordV1> {
+        self.abort_finalization.as_ref()
+    }
+    /// Original operation/context coordinates retained atomically with the intent.
+    #[must_use]
+    pub const fn original_binding(&self) -> Option<&PublicationIntentBindingRecordV1> {
+        self.original_binding.as_ref()
+    }
+    /// Actual latest publication receipt named by the same visibility record.
+    #[must_use]
+    pub const fn publication_receipt(&self) -> Option<&search_contracts::PublicationReceipt> {
+        self.publication_receipt.as_ref()
+    }
     /// Consumed floor from the retained intent, not guessed from `VisibleEpoch`.
     /// Intent absence is accepted only after checking its never-written history.
     #[must_use]
@@ -100,6 +124,8 @@ impl std::fmt::Debug for PublicationRecoveryCheckpoint {
             .field("visible_epoch", &self.visibility.visible_epoch)
             .field("last_reserved_epoch", &self.last_reserved_epoch())
             .field("intent_state", &self.intent.as_ref().map(|intent| intent.state))
+            .field("has_abort_finalization", &self.abort_finalization.is_some())
+            .field("has_original_binding", &self.original_binding.is_some())
             .finish_non_exhaustive()
     }
 }

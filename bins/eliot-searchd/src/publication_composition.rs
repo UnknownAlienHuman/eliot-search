@@ -15,4 +15,9 @@
 #[path = "publication_composition/kernel.rs"]
 mod kernel;
 
+#[cfg(feature = "wave3-index")]
+#[path = "publication_composition/canonical_control.rs"]
+pub(crate) mod canonical_control;
+
+#[allow(unused_imports)] // Retains the stable Root facade until the canonical publisher callsite cuts over.
 pub use kernel::*;

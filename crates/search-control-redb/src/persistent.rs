@@ -52,6 +52,11 @@ pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATIO
     PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
 pub use publication::PublicationSuccessor;
+pub use publication::{
+    AbortResolutionMetadataV1, PublicationAbortFinalizationMetadataV1,
+    PublicationAbortFinalizationRecordV1, PublicationIntentBindingMetadataV1,
+    PublicationIntentBindingRecordV1,
+};
 pub use publication::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
     PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
 pub use publication::{PreparationInputMetadataV1, PreparationInputReadbackV1,
@@ -331,7 +336,7 @@ impl PersistentControlJournal {
             check.reserve(MigrationBootstrapWork::Process(value.len()))?;
             registry::validate_record(self.identity.schema_version, &key, &value, self.limits)?;
             if crate::has_intent_schema(self.identity.schema_version) {
-                publication::validate_record(&key, &value)?;
+                publication::validate_record(&key, &value, self.limits, check)?;
             }
             total = total.checked_add(as_u64(value.len())?).ok_or(ControlError::StoreCorrupt)?;
             if total > as_u64(self.limits.max_total_value_bytes)? { return Err(ControlError::StoreCorrupt); }
