@@ -56,12 +56,31 @@ effect that consumes the secret inside this live callback, retaining any spawned
 custody if the callback refuses after an effect attempt. `with_secret` is the narrower callback for
 consumers that do not need the frame binding.
 
+`with_secret_live_window` additionally passes the observed and expiry ticks as
+`NonZeroU64` values only to that same live callback. They are descriptive lease
+metadata, never detached dispatch authority. The same issuer request coordinates,
+cancellation, absolute deadline and native TTL checks run before and after the
+callback; an external effect still needs a fresh guarded callback on this exact
+lease and issuer context at dispatch.
+
 The store cannot create, rotate or delete records. A missing or malformed selected record returns a
 content-free failure; it never searches other credentials, falls back to provider-pairing or
 revision-DEK purposes, or creates a replacement. Plaintext leaves the returned private lease only
 inside its bounded callback. This adapter does not establish artifact qualification, process
 readiness or runtime activation; daemon composition still must use the actual Root custody and the
 original operation context.
+
+`QdrantApiSecretProvisioner` is a separate, narrow first-create effect owner; the selected-secret
+`SecretStorePort` remains read-only. Root first writes the exact initial create intent to its already
+bound C02 journal. `prepare_initial` then confirms the exact Credential Manager slot is absent under
+a reference-scoped OS mutex, generates a fresh Qdrant-purpose key, protects it with the exact selected
+reference/version entropy, and returns only a non-clone prepared frame plus its digest. Before
+`dispatch_prepared`, Root atomically stores that digest and the dispatched state in the same C02
+inventory record. Dispatch performs at most one Credential Manager write and returns only after
+reading the exact frame back and opening it under the same current-user binding. Lost acknowledgments
+recover with `observe_exact`; the provisioner has no regenerate-if-missing path. Root may publish
+`current` only after that exact observation. A previously current or dispatched inventory whose
+backend target is absent or different remains refused.
 
 ## Derived-artifact exact key use
 

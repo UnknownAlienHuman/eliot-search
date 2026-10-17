@@ -39,7 +39,8 @@ pub use pairing::{
 
 mod qdrant;
 pub use qdrant::{
-    QdrantApiSecretLease, QdrantApiSecretPurpose, QdrantApiSecretReference,
+    PreparedQdrantApiSecret, QdrantApiSecretLease, QdrantApiSecretObservation,
+    QdrantApiSecretProvisioner, QdrantApiSecretPurpose, QdrantApiSecretReference,
     QdrantApiSecretStore, QdrantApiSecretStoreError,
 };
 

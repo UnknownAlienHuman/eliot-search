@@ -15,6 +15,7 @@ const CRED_TYPE_GENERIC: u32 = 1;
 const CRED_PERSIST_LOCAL_MACHINE: u32 = 2;
 const ERROR_NOT_FOUND: u32 = 1_168;
 const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
+const QDRANT_KEY_HEX: &[u8; 16] = b"0123456789abcdef";
 pub(super) const MAX_CREDENTIAL_BLOB_BYTES: usize = 5 * 512;
 const VAULT_MUTEX_NAME: &str = "ELIOT-Search-RevisionVault-v1";
 const VAULT_LOCK_WAIT_MILLIS: u32 = 5_000;
@@ -225,6 +226,52 @@ impl WindowsCredentialPlatform {
         blob: &mut ProviderCredentialBlob,
     ) -> Result<(), LegacyRevisionRootSecretError> {
         Self::write_credential(target, blob, "ELIOT Search Provider Pairing")
+    }
+
+    /// Writes one already-sealed Qdrant API credential through the same bounded
+    /// Credential Manager owner, with a Qdrant-specific Windows display name.
+    pub(super) fn write_qdrant_api_credential(
+        target: &[u16],
+        blob: &mut ProviderCredentialBlob,
+    ) -> Result<(), LegacyRevisionRootSecretError> {
+        Self::write_credential(target, blob, "ELIOT Search Qdrant API Key")
+    }
+
+    /// Generates a header-safe Qdrant API key from 32 fresh CSPRNG bytes.
+    /// The random buffer is cleared before the zeroizing plaintext owner returns.
+    pub(super) fn generate_qdrant_api_key(
+    ) -> Result<crate::SecretBytes, QdrantKeyGenerationError> {
+        let mut random = Box::new([0_u8; 32]);
+        // SAFETY: BCryptGenRandom writes exactly 32 bytes into this live buffer.
+        let status = unsafe {
+            bcrypt_gen_random(
+                null_mut(),
+                random.as_mut_ptr(),
+                32,
+                BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+            )
+        };
+        if status < 0 {
+            clear_bytes(random.as_mut_slice());
+            return Err(QdrantKeyGenerationError::RandomGenerationFailed(status));
+        }
+        if random.iter().all(|byte| *byte == 0) {
+            clear_bytes(random.as_mut_slice());
+            return Err(QdrantKeyGenerationError::AllZeroEntropy);
+        }
+
+        let mut encoded = Vec::new();
+        if encoded.try_reserve_exact(64).is_err() {
+            clear_bytes(random.as_mut_slice());
+            return Err(QdrantKeyGenerationError::AllocationRefused);
+        }
+        for byte in random.iter() {
+            encoded.push(QDRANT_KEY_HEX[usize::from(byte >> 4)]);
+            encoded.push(QDRANT_KEY_HEX[usize::from(byte & 0x0f)]);
+        }
+        clear_bytes(random.as_mut_slice());
+        // 64 lowercase hex bytes satisfy SecretBytes' accepted finite bounds.
+        crate::SecretBytes::new(encoded).map_err(|_| QdrantKeyGenerationError::InvalidOutput)
     }
 
     pub(super) fn write_revision_dek_credential<C: crate::RevisionDekContext>(
@@ -458,6 +505,14 @@ impl WindowsCredentialPlatform {
         Ok(secret)
     }
 
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum QdrantKeyGenerationError {
+    RandomGenerationFailed(i32),
+    AllZeroEntropy,
+    AllocationRefused,
+    InvalidOutput,
 }
 
 struct CredentialAllocation(*mut CredentialW);
