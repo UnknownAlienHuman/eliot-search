@@ -21,6 +21,9 @@ use search_contracts::{
     ReceiptRef, Sha256Digest32,
 };
 
+mod artifact_policy;
+pub use artifact_policy::admit_pinned_windows_artifact;
+
 pub mod containment;
 pub mod identity;
 pub mod launch;
@@ -164,7 +167,11 @@ pub struct ArtifactQualificationManifest {
     pub probe_manifest_digest: Blake3Digest32,
 }
 
-/// Exact qualified Qdrant artifact.
+/// Statically admitted Qdrant executable candidate for a launch plan.
+///
+/// This token does not prove a running process, executed capabilities or release
+/// qualification. Native launch performs actual executable preflight; the bridge
+/// separately owns live operational capability probing.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct QualifiedArtifact {
     candidate: ArtifactCandidate,

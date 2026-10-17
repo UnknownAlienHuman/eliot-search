@@ -62,6 +62,13 @@ fn status_health_readiness_retains_capture_after_file_corruption_and_removal() {
     let retained = effective_from_process(&arguments).expect("capture valid startup config");
     let fingerprint = retained.fingerprint();
     let original = current_readiness(&retained);
+    assert_eq!(original.fingerprint, fingerprint);
+    assert_ne!(
+        fingerprint,
+        crate::config_composition::build_effective_defaults()
+            .unwrap()
+            .fingerprint()
+    );
 
     std::fs::write(&file.0, b"[secrets\ninvalid-588-canary").unwrap();
     assert!(

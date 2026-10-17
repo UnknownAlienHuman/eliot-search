@@ -41,6 +41,14 @@ service:
 Product execution (loopback-only, API-key lease, ACL, Job Object, owner
 guard) belongs to `search-qdrant-supervisor` (T23), not to this document.
 
+For the compiled approved baseline, static artifact admission permits the owned
+process to start so that the bridge can execute its required operational probes.
+Exact executable checks still run before spawn. Indexed availability requires
+those real operational observations; a matching hash or version is insufficient.
+The qualification dossier and installed/release acceptance remain separate. Their
+unfinished status cannot make startup depend on a future benchmark or report
+(ADR 0006 and #333).
+
 ## Updates (manual pinned procedure, never automatic)
 
 Invariant 17 forbids automatic upgrade and silent provider switching. Every
@@ -57,9 +65,11 @@ versions, and never qualifies anything. After it:
 
 1. write the `VERSION.txt` receipt in the new version dir;
 2. re-run the smoke against the new dir;
-3. re-execute the W3 qualification order (`qualification/qdrant/`) —
-   product use of the new version is forbidden until `artifact.toml`
-   reaches `QUALIFIED` with fresh reviewer receipts;
+3. explicitly admit the new exact pin and license policy, then execute the
+   operational probes under the actual owner before enabling indexed use;
+   preserve the `qualification/qdrant/` dossier until independent qualification
+   and installed/release acceptance are complete. Neither a pin edit nor a
+   successful process start alone makes the new version qualified;
 4. remove the old version dir only after the new one is qualified
    (storage must be migrated or rebuilt per the migration receipt, never
    blindly reused across versions).
