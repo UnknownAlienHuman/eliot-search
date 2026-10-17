@@ -11,18 +11,18 @@ use std::collections::BTreeMap;
 
 use search_contracts::indexed::{VectorName, VectorRequirement, VectorValue};
 use search_contracts::{
-    AccessPartitionId, BoundedName, CollectionGenerationId, Epoch, InstallationIncarnationId,
-    Modality, ProjectionMembershipId, ProjectionProfileSetId, ScoringPartitionId,
-    SourceMembershipId, UnitId,
+    AccessPartitionId, Blake3ExactInputLimit, BoundedName, CollectionGenerationId, Epoch,
+    InstallationIncarnationId, Modality, ProjectionMembershipId, ProjectionProfileSetId,
+    ScoringPartitionId, SourceMembershipId, UnitId, blake3_exact_bytes,
 };
 use search_point_identity::s11::{DEFAULT_LIMITS, PointRole};
 use search_projection_planner::{
     LineageObservation, PlannedUnit, PlannedVector, PlanningScope, ProjectionBudget,
     ProjectionError, ProjectionMembershipBinding, ProjectionPlan, diff_manifests, plan_projection,
     require_single_membership, validate_membership_isolation, validate_scope_binding,
-    verify_manifest_reconstruction,
+    verified_projection_manifest_semantic_digest, verify_manifest_reconstruction,
 };
-use support::{ProfileId, verified_unit_set};
+use support::{Blake3Digest32, ProfileId, verified_unit_set};
 
 /// The one sparse lexical requirement accepted by every fixture profile.
 fn lexical_requirement() -> BTreeMap<String, VectorRequirement> {
@@ -493,6 +493,41 @@ fn manifest_reconstruction_proves_rebuilt_bytes_equal_the_plan() {
     swapped.entries.swap(0, 1);
     assert_eq!(
         verify_manifest_reconstruction(&swapped, &plan.points, &scope(), budget),
+        Err(ProjectionError::ManifestMismatch)
+    );
+}
+
+#[test]
+fn verified_manifest_semantic_digest_rejects_stale_fields_and_is_domain_separated() {
+    let text = "alpha\nbeta\ngamma\n";
+    let set = verified_unit_set(text);
+    let units = planned_units(text);
+    let requirements = lexical_requirement();
+    let budget = ProjectionBudget::BASELINE;
+    let scope = scope();
+    let plan = plan_projection(&set, &scope, &units, &requirements, budget).expect("plan");
+
+    let semantic =
+        verified_projection_manifest_semantic_digest(&plan.manifest, &plan.points, &scope, budget)
+            .expect("verified semantic digest");
+    let raw = blake3_exact_bytes(
+        &plan.manifest.canonical_bytes,
+        Blake3ExactInputLimit::new(plan.manifest.canonical_bytes.len()).expect("raw digest limit"),
+    )
+    .expect("raw body digest");
+    assert_ne!(semantic, raw);
+
+    let mut field_tampered = plan.manifest.clone();
+    field_tampered.entries[0].unit_digest = Blake3Digest32::from_bytes([0xee; 32]);
+    assert_eq!(
+        verified_projection_manifest_semantic_digest(&field_tampered, &plan.points, &scope, budget,),
+        Err(ProjectionError::ManifestMismatch)
+    );
+
+    let mut bytes_tampered = plan.manifest.clone();
+    bytes_tampered.canonical_bytes[0] ^= 1;
+    assert_eq!(
+        verified_projection_manifest_semantic_digest(&bytes_tampered, &plan.points, &scope, budget,),
         Err(ProjectionError::ManifestMismatch)
     );
 }

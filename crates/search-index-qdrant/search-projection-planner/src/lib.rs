@@ -51,8 +51,13 @@ pub use plan::{PlanningScope, plan_projection, validate_scope_binding};
 pub use point::validate_membership_isolation;
 pub use raw_code_profile::RawCodeProjectionProfileSetDescriptor;
 
-use search_contracts::ProjectionMembershipId;
 use search_contracts::indexed::CollectionSchema;
+use search_contracts::{
+    Blake3Digest32, CanonicalDigestDomain, DigestInputLimit, MAX_CANONICAL_BYTES,
+    ProjectionMembershipId, blake3_raw,
+};
+
+const MANIFEST_SEMANTIC_DIGEST_DOMAIN: &str = "eliot/raw/projection-manifest-semantic/v1";
 
 /// Requires exactly one membership where an array could alias point sets.
 pub fn require_single_membership(
@@ -84,6 +89,28 @@ pub fn verify_manifest_reconstruction(
     } else {
         Err(ProjectionError::ManifestMismatch)
     }
+}
+
+/// Returns C13's semantic digest only after the manifest exactly reconstructs
+/// from the caller's actual point specifications and scope.
+///
+/// The public manifest fields are mutable, so this verifies both entries and
+/// their frozen canonical bytes before hashing. The result uses C00's
+/// `eliot/raw/projection-manifest-semantic/v1` domain and is distinct from an
+/// unframed digest of the encoded body or from the profile-set identity.
+pub fn verified_projection_manifest_semantic_digest(
+    manifest: &ProjectionManifest,
+    points: &[PointSpec],
+    scope: &PlanningScope,
+    budget: ProjectionBudget,
+) -> Result<Blake3Digest32, ProjectionError> {
+    verify_manifest_reconstruction(manifest, points, scope, budget)?;
+    let domain = CanonicalDigestDomain::parse(MANIFEST_SEMANTIC_DIGEST_DOMAIN)
+        .map_err(|_| ProjectionError::InvalidManifest)?;
+    let limit =
+        DigestInputLimit::new(MAX_CANONICAL_BYTES).map_err(|_| ProjectionError::InvalidLimits)?;
+    blake3_raw(&domain, &manifest.canonical_bytes, limit)
+        .map_err(|_| ProjectionError::ManifestTooLarge)
 }
 
 /// Validates one qualified collection schema against one plan.
