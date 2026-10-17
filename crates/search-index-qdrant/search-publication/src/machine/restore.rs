@@ -147,11 +147,6 @@ impl PublicationCoordinator {
         if matches!(recorded_phase, PublicationPhase::Prepared) {
             return Err(PublicationError::RecoveryBlocked);
         }
-        if recorded_phase != PublicationPhase::Aborted
-            && intent.binding != *intent_command.binding()
-        {
-            return Err(PublicationError::OperationMismatch);
-        }
         transaction.durable_intent = Some(DurableIntent {
             transaction_id: transaction.prepared.transaction_id.clone(),
             target_epoch: transaction.target_epoch,
@@ -160,6 +155,8 @@ impl PublicationCoordinator {
             guards: transaction.prepared.guards,
             persist_operation_id: intent.binding.operation_id.clone(),
             request_id: intent.binding.request_id,
+            relative_deadline_ms: intent.binding.relative_deadline_ms,
+            budget_ref: intent.binding.budget_ref.clone(),
             control_generation: intent.control_generation,
             control_state_digest: intent.control_state_digest,
         });
@@ -713,6 +710,7 @@ fn exact_intent_for_restore(
     if intent.binding != expected_binding
         || observed.binding != intent.binding
         || intent.control_generation == 0
+        || intent.binding.relative_deadline_ms == 0
         || observed.abort_request.is_some() != observed.abort_binding.is_some()
         || (observed.abort_request.is_some() && intent.recorded_phase != PublicationPhase::Aborted)
     {

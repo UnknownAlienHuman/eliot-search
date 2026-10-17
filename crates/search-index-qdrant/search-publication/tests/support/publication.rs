@@ -524,6 +524,8 @@ pub struct PhasePort {
 
 #[derive(Clone, Default)]
 pub struct PhaseEffects {
+    /// Require the separately admitted current I/O context at actual dispatch.
+    pub required_io_context: Option<(RequestId, u64, OpaqueRef)>,
     /// Mutation identities observed by the effect side.
     pub effect_ids: Vec<OpaqueId>,
     /// Effect kinds observed by the synthetic effect side.
@@ -545,6 +547,10 @@ pub enum OptionalOverride<T> {
 
 #[derive(Clone, Default)]
 pub struct PhaseReadback {
+    /// Original durable context metadata expected on normal effect commands.
+    pub required_normal_context: Option<(RequestId, u64, OpaqueRef)>,
+    /// Separately admitted recovery context required at every actual port call.
+    pub required_io_context: Option<(RequestId, u64, OpaqueRef)>,
     /// One-shot untrusted observation override for mismatch/unknown cases.
     pub override_readback: Option<search_publication::PublicationEffectReadback>,
     /// Outcome returned by the next readback; defaults to Applied.
@@ -628,8 +634,13 @@ impl<C: CancellationProbe> PublicationEffectPort<C> for PhaseEffects {
         &mut self,
         command: &PublicationEffectCommand,
         identity: &MutationIdentity,
-        _: &OperationContext<C>,
+        context: &OperationContext<C>,
     ) -> PublicationMutationAttempt {
+        if let Some((request, deadline, budget)) = &self.required_io_context {
+            assert_eq!(context.request_id(), *request);
+            assert_eq!(context.relative_deadline_ms().get(), *deadline);
+            assert_eq!(context.budget_ref(), budget);
+        }
         self.effect_ids.push(identity.operation_id.clone());
         self.effect_kinds.push(command.effect());
         self.effect_bindings
@@ -649,8 +660,22 @@ impl<C: CancellationProbe> PublicationReadbackPort<C> for PhaseReadback {
     fn readback(
         &mut self,
         command: &PublicationEffectCommand,
-        _: &OperationContext<C>,
+        context: &OperationContext<C>,
     ) -> search_publication::PublicationEffectReadback {
+        if let Some((request, deadline, budget)) = &self.required_io_context {
+            assert_eq!(context.request_id(), *request);
+            assert_eq!(context.relative_deadline_ms().get(), *deadline);
+            assert_eq!(context.budget_ref(), budget);
+        }
+        // The first intent lookup knows only the stable operation key. Once its
+        // original binding is returned, every normal phase must keep that meaning.
+        if command.effect() != PublicationEffectKind::PersistIntent
+            && let Some((request, deadline, budget)) = &self.required_normal_context
+        {
+            assert_eq!(command.binding().request_id, *request);
+            assert_eq!(command.binding().relative_deadline_ms, *deadline);
+            assert_eq!(&command.binding().budget_ref, budget);
+        }
         self.readback_ids
             .push(command.binding().operation_id.clone());
         self.readback_kinds.push(command.effect());

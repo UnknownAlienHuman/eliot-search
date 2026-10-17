@@ -59,6 +59,8 @@ pub struct DurableIntent {
     pub(crate) guards: PublicationGuards,
     pub(crate) persist_operation_id: OpaqueId,
     pub(crate) request_id: RequestId,
+    pub(crate) relative_deadline_ms: u64,
+    pub(crate) budget_ref: OpaqueRef,
     pub(crate) control_generation: u64,
     pub(crate) control_state_digest: Blake3Digest32,
 }
@@ -83,6 +85,16 @@ impl DurableIntent {
     #[must_use]
     pub const fn request_id(&self) -> RequestId {
         self.request_id
+    }
+    /// Original effect identity metadata, never a renewed I/O allowance.
+    #[must_use]
+    pub const fn relative_deadline_ms(&self) -> u64 {
+        self.relative_deadline_ms
+    }
+    /// Original effect budget identity, separate from the current recovery context.
+    #[must_use]
+    pub const fn budget_ref(&self) -> &OpaqueRef {
+        &self.budget_ref
     }
     /// Reserved epoch retained by the intent.
     #[must_use]
@@ -625,6 +637,8 @@ impl PublicationCoordinator {
             guards: transaction.prepared.guards,
             persist_operation_id: command.binding.operation_id,
             request_id: command.binding.request_id,
+            relative_deadline_ms: command.binding.relative_deadline_ms,
+            budget_ref: command.binding.budget_ref,
             control_generation: intent.control_generation,
             control_state_digest: intent.control_state_digest,
         };
@@ -1359,11 +1373,24 @@ pub fn effect_command<C: CancellationProbe>(
     effect: PublicationEffectKind,
     context: &OperationContext<C>,
 ) -> Result<PublicationEffectCommand, PublicationError> {
+    // Retain the durable publication's original meaning across process restart.
+    // The actual context still owns every I/O/preflight call. Abort attempts have
+    // their own separately retained binding and must not inherit this identity.
+    let original = transaction.durable_intent.as_ref().filter(|_| {
+        !matches!(
+            effect,
+            PublicationEffectKind::CommitAbortFinalization
+                | PublicationEffectKind::PublishAbortSnapshot
+        )
+    });
     let binding = PublicationEffectBinding {
         transaction_id: transaction.prepared.transaction_id.clone(),
-        request_id: context.request_id(),
-        relative_deadline_ms: context.relative_deadline_ms().get(),
-        budget_ref: context.budget_ref().clone(),
+        request_id: original.map_or_else(|| context.request_id(), |intent| intent.request_id),
+        relative_deadline_ms: original.map_or_else(
+            || context.relative_deadline_ms().get(),
+            |intent| intent.relative_deadline_ms,
+        ),
+        budget_ref: original.map_or_else(|| context.budget_ref(), |intent| &intent.budget_ref).clone(),
         operation_id: operation_id(transaction, effect)?,
         prepared_input_digest: transaction.prepared.prepared_input_digest,
         scope: transaction.prepared.scope().clone(),

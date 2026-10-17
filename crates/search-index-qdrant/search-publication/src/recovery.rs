@@ -654,6 +654,8 @@ fn durable_intent(
         guards: prepared.guards,
         persist_operation_id: intent.binding.operation_id.clone(),
         request_id: intent.binding.request_id,
+        relative_deadline_ms: intent.binding.relative_deadline_ms,
+        budget_ref: intent.binding.budget_ref.clone(),
         control_generation: intent.control_generation,
         control_state_digest: intent.control_state_digest,
     }

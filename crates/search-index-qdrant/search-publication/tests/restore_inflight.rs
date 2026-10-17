@@ -198,6 +198,100 @@ fn restore(input: &RestoreScenario) -> (PublicationCoordinator, PublicationRecov
 }
 
 #[test]
+fn normal_restart_keeps_durable_a_binding_but_uses_fresh_b_for_all_io() {
+    use search_contracts::{OpaqueRef, RequestId};
+    use search_ports::{FakeCancellation, OperationContext};
+
+    let recovery = OperationContext::new(
+        RequestId::from_bytes([91; 16]),
+        17_000,
+        FakeCancellation::new(false),
+        OpaqueRef::new("budget:normal-restart-b").unwrap(),
+    ).unwrap();
+    let io_context = (
+        recovery.request_id(), recovery.relative_deadline_ms().get(), recovery.budget_ref().clone(),
+    );
+    for replacement in [false, true] {
+        for level in 0..=5 {
+            let mut scenario = input(level, replacement);
+            let binding = scenario.intent_binding.clone();
+            let original_context = (
+                binding.request_id, binding.relative_deadline_ms, binding.budget_ref.clone(),
+            );
+            assert_ne!(original_context.0, io_context.0);
+            assert_ne!(original_context.1, io_context.1);
+            assert_ne!(original_context.2, io_context.2);
+            scenario.readback_script.required_normal_context = Some(original_context.clone());
+            scenario.readback_script.required_io_context = Some(io_context.clone());
+            let (mut restored, decision) = scenario.restore_with_context(32, &recovery).unwrap();
+            assert_eq!(decision, if level >= 4 {
+                PublicationRecoveryDecision::PublishSnapshot
+            } else {
+                PublicationRecoveryDecision::Continue
+            });
+            let durable = restored.active().unwrap().durable_intent().unwrap();
+            assert_eq!(durable.request_id(), original_context.0);
+            assert_eq!(durable.relative_deadline_ms(), original_context.1);
+            assert_eq!(durable.budget_ref(), &original_context.2);
+            assert_eq!(durable.persist_operation_id(), &binding.operation_id);
+            if level == 0 {
+                let mut port = PhasePort::default();
+                port.effects.required_io_context = Some(io_context.clone());
+                port.readback.required_io_context = Some(io_context.clone());
+                port.readback.required_normal_context = Some(original_context.clone());
+                restored.stage_new_points(&mut port.effects, &mut port.readback, &recovery).unwrap();
+                let staged = &port.effects.effect_bindings[0].1;
+                assert_eq!(staged.request_id, original_context.0);
+                assert_eq!(staged.relative_deadline_ms, original_context.1);
+                assert_eq!(staged.budget_ref, original_context.2);
+                assert_eq!(staged.prepared_input_digest, binding.prepared_input_digest);
+            }
+        }
+    }
+}
+
+#[test]
+fn successor_recovery_keeps_a_for_compensation_and_b_for_its_abort_attempt() {
+    use search_contracts::{OpaqueRef, RequestId};
+    use search_ports::{FakeCancellation, OperationContext};
+
+    let recovery = OperationContext::new(
+        RequestId::from_bytes([92; 16]), 19_000, FakeCancellation::new(false),
+        OpaqueRef::new("budget:successor-recovery-b").unwrap(),
+    ).unwrap();
+    let io_context = (
+        recovery.request_id(), recovery.relative_deadline_ms().get(), recovery.budget_ref().clone(),
+    );
+    let mut scenario = input(3, true);
+    let binding = scenario.intent_binding.clone();
+    let original_context = (binding.request_id, binding.relative_deadline_ms, binding.budget_ref);
+    scenario.current_guards.owner_epoch = scenario.current_guards.owner_epoch.checked_next().unwrap();
+    scenario.readback_script.required_normal_context = Some(original_context.clone());
+    scenario.readback_script.required_io_context = Some(io_context.clone());
+    let (mut restored, decision) = scenario.restore_with_context(32, &recovery).unwrap();
+    assert_eq!(decision, PublicationRecoveryDecision::CompensateExact);
+    let mut port = PhasePort::default();
+    port.effects.required_io_context = Some(io_context.clone());
+    port.readback.required_io_context = Some(io_context.clone());
+    port.readback.required_normal_context = Some(original_context.clone());
+    restored.compensate_and_restore(&mut port.effects, &mut port.readback, &recovery).unwrap();
+    let compensation = &port.effects.effect_bindings[0].1;
+    assert_eq!(compensation.request_id, original_context.0);
+    let request = restored.prepare_abort_finalization(
+        id("successor-abort-b"), 40, scenario.current_guards,
+    ).unwrap();
+    assert_eq!(request.intent.request_id(), original_context.0);
+    assert_eq!(request.intent.relative_deadline_ms(), original_context.1);
+    assert_eq!(request.intent.budget_ref(), &original_context.2);
+    port.readback.required_normal_context = None;
+    restored.acknowledge_abort_commit(&mut port.effects, &mut port.readback, &recovery).unwrap();
+    let abort = &port.effects.effect_bindings[1].1;
+    assert_eq!(abort.request_id, io_context.0);
+    assert_eq!(abort.relative_deadline_ms, io_context.1);
+    assert_eq!(abort.budget_ref, io_context.2);
+}
+
+#[test]
 fn precommit_prefixes_restore_original_identity_and_advance_only_from_exact_readback() {
     for level in 0..=3 {
         let (original, _, _) = history(level, false);

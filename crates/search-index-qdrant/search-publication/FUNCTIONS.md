@@ -107,6 +107,18 @@ successful mutation acknowledgement is never a private proof.
 plain persisted fields for journal adapters; there is no inverse public proof
 constructor. This changes the typed port contract only, not a durable encoding.
 
+Normal restart also separates original durable effect meaning from the authorized
+recovery I/O operation. `PublicationIntentReadback.binding` must return the actual
+persisted request ID, relative deadline and budget reference together with the
+complete original scope/input binding. The owner retains those scalar fields in
+its private `DurableIntent`; subsequent normal phase commands preserve them.
+The separate `OperationContext` argument supplies current cancellation and I/O
+admission. Root must pass its newly authorized recovery context directly, never
+reconstruct an old context or renew the persisted relative deadline. Abort commit
+attempts retain their own independent binding, and abort snapshot I/O remains
+bound to the current recovery operation. No additional adapter input field or
+public proof constructor is needed.
+
 ## Required fixtures
 
 Full H11/S13 kill matrix; guard race; exact readback mismatch; skipped epoch non-reuse; snapshot
