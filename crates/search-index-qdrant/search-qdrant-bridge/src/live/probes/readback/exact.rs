@@ -167,19 +167,27 @@ fn named_sparse_vectors_match(expected: &Vectors, actual: &VectorsOutput) -> boo
         })
 }
 
+#[allow(deprecated)] // Decode the pinned legacy sparse wire fields without the SDK multivector converter.
 fn sparse_vector_bits_match(expected: &Vector, actual: &VectorOutput) -> bool {
     let Some(qdrant_vector::Vector::Sparse(expected)) = expected.vector.as_ref() else {
         return false;
     };
-    let qdrant_vector_output::Vector::Sparse(actual) = actual.clone().into_vector() else {
-        return false;
+    let (indices, values) = match actual.vector.as_ref() {
+        Some(qdrant_vector_output::Vector::Sparse(sparse)) => (&sparse.indices, &sparse.values),
+        None if actual.vectors_count.is_none() => {
+            let Some(indices) = actual.indices.as_ref() else {
+                return false;
+            };
+            (&indices.data, &actual.data)
+        }
+        _ => return false,
     };
-    expected.indices == actual.indices
-        && expected.values.len() == actual.values.len()
+    expected.indices == *indices
+        && expected.values.len() == values.len()
         && expected
             .values
             .iter()
-            .zip(&actual.values)
+            .zip(values)
             .all(|(expected, actual)| expected.to_bits() == actual.to_bits())
 }
 
@@ -187,6 +195,32 @@ fn sparse_vector_bits_match(expected: &Vector, actual: &VectorOutput) -> bool {
 mod tests {
     use super::*;
     use qdrant_client::qdrant::{NamedVectorsOutput, SparseVector};
+
+    #[test]
+    #[allow(deprecated)] // Exercise malformed legacy wire output directly.
+    fn malformed_multivector_output_is_refused_without_converter_panic() {
+        let expected = Vector {
+            vector: Some(qdrant_vector::Vector::Sparse(SparseVector {
+                indices: vec![1],
+                values: vec![1.0],
+            })),
+            ..Default::default()
+        };
+        for count in [0, 2, u32::MAX] {
+            let actual = VectorOutput {
+                data: vec![1.0],
+                vectors_count: Some(count),
+                ..Default::default()
+            };
+            assert!(!sparse_vector_bits_match(&expected, &actual));
+        }
+        let legacy_sparse = VectorOutput {
+            data: vec![1.0],
+            indices: Some(qdrant_client::qdrant::SparseIndices { data: vec![1] }),
+            ..Default::default()
+        };
+        assert!(sparse_vector_bits_match(&expected, &legacy_sparse));
+    }
 
     fn sparse_output(indices: Vec<u32>, values: Vec<f32>) -> VectorOutput {
         VectorOutput {
