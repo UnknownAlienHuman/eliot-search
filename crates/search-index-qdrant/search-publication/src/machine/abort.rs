@@ -2,9 +2,9 @@
 //! No method here executes a journal/index effect or authenticates a receipt producer.
 
 use super::{
-    Blake3Digest32, DurableIntent, Epoch, OpaqueId, PublicationCoordinator, PublicationEffectPort,
-    PublicationError, PublicationGuards, PublicationPhase, PublicationReadbackPort,
-    SnapshotPublishReceipt, effect_command,
+    Blake3Digest32, DurableIntent, Epoch, OpaqueId, PublicationCoordinator,
+    PublicationEffectBinding, PublicationEffectPort, PublicationError, PublicationGuards,
+    PublicationPhase, PublicationReadbackPort, SnapshotPublishReceipt, effect_command,
 };
 use crate::model::{PublicationEffectKind, PublicationEffectOutcome};
 use core::fmt;
@@ -109,9 +109,15 @@ impl fmt::Debug for AbortControlCommitObservation {
 #[derive(Default)]
 pub(super) struct AbortFinalizationProgress {
     pub(super) resolution: Option<AbortedPublicationResolution>,
-    request: Option<AbortFinalizationRequest>,
-    commit: Option<AbortControlCommitObservation>,
-    snapshot: Option<SnapshotPublishReceipt>,
+    pub(super) request: Option<AbortFinalizationRequest>,
+    pub(super) commit: Option<AbortControlCommitObservation>,
+    pub(super) snapshot: Option<SnapshotPublishReceipt>,
+    pub(super) retry_control: Option<crate::model::PublicationControlReadback>,
+    /// Original durable intent binding, retained for identity reconstruction only.
+    pub(super) intent_binding: Option<PublicationEffectBinding>,
+    /// Original abort CAS binding. Readback uses the current recovery context;
+    /// the historical binding remains attached to the exact mutation identity.
+    pub(super) commit_binding: Option<PublicationEffectBinding>,
 }
 
 impl fmt::Debug for AbortFinalizationProgress {
@@ -121,7 +127,10 @@ impl fmt::Debug for AbortFinalizationProgress {
             .field("prepared", &self.request.is_some())
             .field("committed", &self.commit.is_some())
             .field("snapshot_published", &self.snapshot.is_some())
-            .finish()
+            .field("has_commit_binding", &self.commit_binding.is_some())
+            .field("has_retry_control", &self.retry_control.is_some())
+            .field("has_intent_binding", &self.intent_binding.is_some())
+            .finish_non_exhaustive()
     }
 }
 
@@ -185,14 +194,62 @@ impl PublicationCoordinator {
                 .clone()
                 .ok_or(PublicationError::RecoveryBlocked)?,
         };
-        if let Some(previous) = &self.abort_finalization.request {
-            if previous != &request {
-                return Err(PublicationError::OperationMismatch);
+        crate::recovery::validate_abort_finalization_request(transaction, &request)?;
+        let previous = self.abort_finalization.request.clone();
+        if let Some(previous) = previous {
+            if previous != request {
+                let retry = self
+                    .abort_finalization
+                    .retry_control
+                    .ok_or(PublicationError::OperationMismatch)?;
+                if request.operation_id == previous.operation_id {
+                    return Err(PublicationError::OperationMismatch);
+                }
+                if expected_control_generation != retry.after_control_generation {
+                    return Err(PublicationError::ControlConflict);
+                }
+                if current_guards != retry.guards {
+                    return Err(PublicationError::GuardMismatch);
+                }
+                self.abort_finalization.commit = None;
+                self.abort_finalization.snapshot = None;
+                self.abort_finalization.commit_binding = None;
+                self.abort_finalization.request = Some(request.clone());
+                self.abort_finalization.retry_control = None;
             }
         } else {
+            if let Some(retry) = self.abort_finalization.retry_control {
+                if expected_control_generation != retry.after_control_generation {
+                    return Err(PublicationError::ControlConflict);
+                }
+                if current_guards != retry.guards {
+                    return Err(PublicationError::GuardMismatch);
+                }
+                self.abort_finalization.retry_control = None;
+            }
             self.abort_finalization.request = Some(request.clone());
         }
         Ok(request)
+    }
+
+    /// Prepares a new finalization only from the exact control state read back
+    /// after an authoritative `NotApplied`. Root supplies a fresh operation ID;
+    /// generation and guards come from the retained private readback.
+    /// # Errors
+    /// Refuses without a complete no-commit control observation.
+    pub fn prepare_abort_finalization_after_recovery(
+        &mut self,
+        operation_id: OpaqueId,
+    ) -> Result<AbortFinalizationRequest, PublicationError> {
+        let control = self
+            .abort_finalization
+            .retry_control
+            .ok_or(PublicationError::RecoveryBlocked)?;
+        self.prepare_abort_finalization(
+            operation_id,
+            control.after_control_generation,
+            control.guards,
+        )
     }
 
     /// Accepts exact durable finalization readback without releasing serialization.
@@ -201,6 +258,7 @@ impl PublicationCoordinator {
     /// # Errors
     /// Rejects changed request, route, epoch floor, guards, generation or conflicting
     /// repeat. Failure preserves all prior evidence and keeps the active slot occupied.
+    #[allow(clippy::too_many_lines)]
     pub fn acknowledge_abort_commit<C, E, R>(
         &mut self,
         effects: &mut E,
@@ -218,7 +276,36 @@ impl PublicationCoordinator {
             .request
             .clone()
             .ok_or(PublicationError::RecoveryBlocked)?;
-        let proof = {
+        if self.abort_finalization.commit.is_some() {
+            return Ok(());
+        }
+        if self.abort_finalization.retry_control.is_some() {
+            return Err(PublicationError::RecoveryBlocked);
+        }
+        let reusing_binding = self.abort_finalization.commit_binding.is_some();
+        let binding = if let Some(binding) = &self.abort_finalization.commit_binding {
+            binding.clone()
+        } else {
+            let transaction = self
+                .active
+                .as_ref()
+                .ok_or(PublicationError::InvalidTransition)?;
+            let mut command = effect_command(
+                transaction,
+                PublicationEffectKind::CommitAbortFinalization,
+                context,
+            )?;
+            command
+                .binding
+                .operation_id
+                .clone_from(&request.operation_id);
+            command.binding
+        };
+        self.abort_finalization.commit_binding = Some(binding.clone());
+        let intent_binding = reusing_binding
+            .then(|| self.abort_finalization.intent_binding.clone())
+            .flatten();
+        let (proof, not_applied_control) = {
             let transaction = self
                 .active
                 .as_mut()
@@ -230,36 +317,57 @@ impl PublicationCoordinator {
                 readback,
                 context,
                 PublicationEffectKind::CommitAbortFinalization,
+                Some(&binding),
+                intent_binding.as_ref(),
             )?;
             let control = observed.control.ok_or(PublicationError::ControlConflict)?;
-            if observed.outcome != PublicationEffectOutcome::Applied
-                || observed.abort_request.as_ref() != Some(&request)
+            if observed.abort_request.as_ref() != Some(&request)
                 || observed.binding.operation_id != request.operation_id
-                || control.before_visible_epoch != request.previous_visible_epoch
-                || control.after_visible_epoch != request.previous_visible_epoch
-                || control.last_reserved_epoch != request.intent.target_epoch
-                || control.before_control_generation != request.expected_control_generation
-                || control.before_control_generation.checked_add(1)
-                    != Some(control.after_control_generation)
-                || control.collection_generation_id != request.collection_generation_id
-                || control.previous_visible_manifest_digest != request.intent.old_manifest_digest
-                || control.visible_manifest_digest != request.intent.old_manifest_digest
+                || observed.abort_binding.as_ref() != Some(&binding)
+                || !observed.points.is_empty()
+                || !observed.missing_point_ids.is_empty()
+                || !observed.unexpected_point_ids.is_empty()
             {
-                return Err(PublicationError::ControlConflict);
+                return Err(PublicationError::OperationMismatch);
             }
-            if control.guards != request.current_guards {
-                return Err(PublicationError::GuardMismatch);
-            }
-            AbortControlCommitObservation {
-                request,
-                collection_generation_id: control.collection_generation_id,
-                visible_epoch: control.after_visible_epoch,
-                last_reserved_epoch: control.last_reserved_epoch,
-                observed_guards: control.guards,
-                control_generation: control.after_control_generation,
-                control_state_digest: control.control_state_digest,
+            if observed.outcome == PublicationEffectOutcome::NotApplied {
+                crate::recovery::validate_abort_control_readback(
+                    transaction,
+                    request.intent.control_generation(),
+                    Some(&request),
+                    &control,
+                    PublicationEffectOutcome::NotApplied,
+                )?;
+                transaction.pending_effect = None;
+                (None, Some(control))
+            } else {
+                if observed.outcome != PublicationEffectOutcome::Applied {
+                    return Err(PublicationError::ControlConflict);
+                }
+                crate::recovery::validate_abort_control_readback(
+                    transaction,
+                    request.intent.control_generation(),
+                    Some(&request),
+                    &control,
+                    PublicationEffectOutcome::Applied,
+                )?;
+                let proof = AbortControlCommitObservation {
+                    request,
+                    collection_generation_id: control.collection_generation_id,
+                    visible_epoch: control.after_visible_epoch,
+                    last_reserved_epoch: control.last_reserved_epoch,
+                    observed_guards: control.guards,
+                    control_generation: control.after_control_generation,
+                    control_state_digest: control.control_state_digest,
+                };
+                (Some(proof), None)
             }
         };
+        if let Some(control) = not_applied_control {
+            self.abort_finalization.retry_control = Some(control);
+            return Err(PublicationError::EffectNotObserved);
+        }
+        let proof = proof.ok_or(PublicationError::ControlConflict)?;
         if let Some(previous) = &self.abort_finalization.commit {
             if previous != &proof {
                 return Err(PublicationError::OperationMismatch);
@@ -311,6 +419,8 @@ impl PublicationCoordinator {
                 readback,
                 context,
                 PublicationEffectKind::PublishAbortSnapshot,
+                None,
+                None,
             )?;
             let snapshot = observed
                 .snapshot
@@ -368,6 +478,7 @@ impl PublicationCoordinator {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_abort_effect<C, E, R>(
     transaction: &mut super::PublicationTransaction,
     request: &AbortFinalizationRequest,
@@ -375,6 +486,8 @@ fn execute_abort_effect<C, E, R>(
     readback: &mut R,
     context: &OperationContext<C>,
     effect: PublicationEffectKind,
+    original_binding: Option<&PublicationEffectBinding>,
+    original_intent_binding: Option<&PublicationEffectBinding>,
 ) -> Result<crate::model::PublicationEffectReadback, PublicationError>
 where
     C: CancellationProbe,
@@ -401,6 +514,23 @@ where
             .binding
             .operation_id
             .clone_from(&request.operation_id);
+        if let Some(binding) = original_binding {
+            let mut expected = command.binding.clone();
+            let original_request_id_matches = if let Some(intent_binding) = original_intent_binding
+            {
+                expected.request_id = intent_binding.request_id;
+                expected.relative_deadline_ms = intent_binding.relative_deadline_ms;
+                expected.budget_ref.clone_from(&intent_binding.budget_ref);
+                binding.request_id == intent_binding.request_id
+                    && intent_binding.request_id == request.intent.request_id()
+            } else {
+                binding.request_id == context.request_id()
+            };
+            if !original_request_id_matches || binding != &expected {
+                return Err(PublicationError::OperationMismatch);
+            }
+            command.binding.clone_from(binding);
+        }
     }
     command.abort_request = Some(request.clone());
     if transaction.pending_effect.is_none() {
@@ -423,11 +553,7 @@ where
         return Err(PublicationError::OperationMismatch);
     }
     match observed.outcome {
-        PublicationEffectOutcome::Applied => {}
-        PublicationEffectOutcome::NotApplied => {
-            transaction.pending_effect = None;
-            return Err(PublicationError::EffectNotObserved);
-        }
+        PublicationEffectOutcome::Applied | PublicationEffectOutcome::NotApplied => {}
         PublicationEffectOutcome::Conflict => {
             return Err(PublicationError::ControlConflict);
         }

@@ -523,6 +523,8 @@ pub struct PhaseEffects {
     pub effect_ids: Vec<OpaqueId>,
     /// Effect kinds observed by the synthetic effect side.
     pub effect_kinds: Vec<PublicationEffectKind>,
+    /// Full bindings observed at synthetic effect dispatch.
+    pub effect_bindings: Vec<(PublicationEffectKind, PublicationEffectBinding)>,
     /// Optional cancellation triggered after one synthetic effect dispatch.
     pub cancel_after_apply: Option<(PublicationEffectKind, Arc<AtomicBool>)>,
 }
@@ -589,6 +591,8 @@ pub struct PhaseReadback {
     pub snapshot_process_id_override: Option<OpaqueId>,
     pub snapshot_digest_override: Option<c::Blake3Digest32>,
     pub abort_request_override: Option<search_publication::AbortFinalizationRequest>,
+    /// Original abort mutation binding returned from the durable control record.
+    pub abort_binding_override: Option<PublicationEffectBinding>,
     pub abandonment_override: Option<search_publication::PublicationAbandonReadback>,
     pub abandon_point_ids_override: Option<Vec<PointId128>>,
     pub abandon_memberships_override: Option<Vec<c::ProjectionMembershipId>>,
@@ -621,6 +625,8 @@ impl<C: CancellationProbe> PublicationEffectPort<C> for PhaseEffects {
     ) -> PublicationMutationAttempt {
         self.effect_ids.push(identity.operation_id.clone());
         self.effect_kinds.push(command.effect());
+        self.effect_bindings
+            .push((command.effect(), command.binding().clone()));
         if let Some((effect, cancelled)) = &self.cancel_after_apply
             && *effect == command.effect()
         {
@@ -647,15 +653,25 @@ impl<C: CancellationProbe> PublicationReadbackPort<C> for PhaseReadback {
         let outcome = self.outcome_for(command.effect());
         let points = readback_points(self, command, outcome);
         let missing_point_ids = missing_point_ids(command, &points);
+        let intent = intent_readback(self, command);
+        let is_abort_record = matches!(
+            command.effect(),
+            PublicationEffectKind::PersistIntent
+                | PublicationEffectKind::CommitAbortFinalization
+                | PublicationEffectKind::PublishAbortSnapshot
+        );
         let mut observation = search_publication::PublicationEffectReadback {
             effect: command.effect(),
-            binding: command.binding().clone(),
+            binding: intent.as_ref().map_or_else(
+                || command.binding().clone(),
+                |intent| intent.binding.clone(),
+            ),
             outcome,
             points,
             missing_point_ids,
             unexpected_point_ids: self.unexpected_ids(command.effect()),
             intent: if outcome == PublicationEffectOutcome::Applied {
-                intent_readback(self, command)
+                intent
             } else {
                 None
             },
@@ -663,10 +679,18 @@ impl<C: CancellationProbe> PublicationReadbackPort<C> for PhaseReadback {
                 .or_else(|| abort_control_readback(self, command)),
             snapshot: snapshot_readback(self, command, outcome),
             abandonment: abandonment_readback(self, command),
-            abort_request: self
-                .abort_request_override
-                .clone()
-                .or_else(|| command.abort_request().cloned()),
+            abort_request: if is_abort_record {
+                self.abort_request_override
+                    .clone()
+                    .or_else(|| command.abort_request().cloned())
+            } else {
+                None
+            },
+            abort_binding: match command.effect() {
+                PublicationEffectKind::PersistIntent => self.abort_binding_override.clone(),
+                PublicationEffectKind::CommitAbortFinalization => Some(command.binding().clone()),
+                _ => None,
+            },
         };
         apply_binding_overrides(self, command, &mut observation);
         observation
@@ -1557,6 +1581,14 @@ impl RestoreScenario {
         &self,
         max_points: usize,
     ) -> Result<(PublicationCoordinator, PublicationRecoveryDecision), PublicationError> {
+        self.restore_with_context(max_points, &operation_context())
+    }
+
+    pub fn restore_with_context<C: CancellationProbe>(
+        &self,
+        max_points: usize,
+        context: &OperationContext<C>,
+    ) -> Result<(PublicationCoordinator, PublicationRecoveryDecision), PublicationError> {
         let target = self.intent.target_epoch;
         let (old, new) = retargeted_tokens(&self.case, self.previous_visible_epoch, target);
         let visible = self.observation.control_visible_epoch;
@@ -1602,7 +1634,7 @@ impl RestoreScenario {
                 ..ProjectionBudget::BASELINE
             },
             &mut port.readback,
-            &operation_context(),
+            context,
         )
     }
 

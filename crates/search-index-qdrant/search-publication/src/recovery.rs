@@ -4,15 +4,110 @@ use search_ports::{CancellationProbe, OperationContext};
 
 use crate::PublicationPointExpectation;
 use crate::machine::{
-    DurableIntent, PublicationPhase, PublicationReadbackPort, PublicationTransaction,
-    point_readback_matches, readback_only, validate_control_generation_transition,
+    AbortFinalizationRequest, DurableIntent, PublicationPhase, PublicationReadbackPort,
+    PublicationTransaction, point_readback_matches, readback_only,
+    validate_control_generation_transition,
 };
 use crate::model::{
     ClosureReceipt, PublicationControlReadback, PublicationEffectKind, PublicationEffectOutcome,
-    PublicationEffectReadback, PublicationIntentReadback, PublicationSnapshotReadback,
-    ReadbackVerified, SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
+    PublicationEffectReadback, PublicationGuards, PublicationIntentReadback,
+    PublicationSnapshotReadback, ReadbackVerified, SnapshotPublishReceipt, StageReceipt,
+    VisibleCommitReceipt,
 };
 use crate::{PublicationError, PublicationRecoveryDecision};
+
+pub fn validate_abort_finalization_request(
+    transaction: &PublicationTransaction,
+    request: &AbortFinalizationRequest,
+) -> Result<(), PublicationError> {
+    let prepared = &transaction.prepared;
+    let intent = &request.intent;
+    let resolution_operation_id = match &request.resolution {
+        crate::machine::AbortedPublicationResolution::Compensated { operation_id, .. }
+        | crate::machine::AbortedPublicationResolution::Excluded { operation_id, .. } => {
+            operation_id
+        }
+    };
+    if request.operation_id == *intent.persist_operation_id()
+        || &request.operation_id == resolution_operation_id
+        || request.expected_control_generation == 0
+        || request.expected_control_generation.checked_add(1).is_none()
+        || request.collection_generation_id != prepared.scope().collection_generation_id
+        || request.previous_visible_epoch != transaction.previous_visible_epoch
+        || intent.transaction_id() != transaction.transaction_id()
+        || intent.target_epoch() != transaction.target_epoch
+        || intent.old_manifest_digest() != prepared.old_manifest_digest()
+        || intent.new_manifest_digest() != prepared.new_manifest_digest()
+        || intent.guards() != prepared.guards
+        || request.prepared_input_digest != prepared.prepared_input_digest()
+    {
+        return Err(PublicationError::OperationMismatch);
+    }
+    if !abort_guards_are_current_or_newer(request.current_guards, intent.guards()) {
+        return Err(PublicationError::GuardMismatch);
+    }
+    Ok(())
+}
+
+pub fn validate_abort_control_readback(
+    transaction: &PublicationTransaction,
+    intent_generation: u64,
+    request: Option<&AbortFinalizationRequest>,
+    control: &PublicationControlReadback,
+    outcome: PublicationEffectOutcome,
+) -> Result<(), PublicationError> {
+    if let Some(request) = request {
+        validate_abort_finalization_request(transaction, request)?;
+    }
+    let old_manifest = transaction.prepared.old_manifest_digest;
+    if control.before_visible_epoch != transaction.previous_visible_epoch
+        || control.after_visible_epoch != transaction.previous_visible_epoch
+        || control.last_reserved_epoch != transaction.target_epoch
+        || control.collection_generation_id != transaction.prepared.collection_generation_id
+        || control.previous_visible_manifest_digest != old_manifest
+        || control.visible_manifest_digest != old_manifest
+    {
+        return Err(PublicationError::ControlConflict);
+    }
+    if !abort_guards_are_current_or_newer(control.guards, transaction.prepared.guards) {
+        return Err(PublicationError::GuardMismatch);
+    }
+    match outcome {
+        PublicationEffectOutcome::Applied => {
+            let request = request.ok_or(PublicationError::ControlConflict)?;
+            if control.guards != request.current_guards
+                || control.before_control_generation != request.expected_control_generation
+                || control.before_control_generation.checked_add(1)
+                    != Some(control.after_control_generation)
+            {
+                return Err(PublicationError::ControlConflict);
+            }
+        }
+        PublicationEffectOutcome::NotApplied => {
+            if control.before_control_generation != control.after_control_generation
+                || control.before_control_generation < intent_generation
+            {
+                return Err(PublicationError::ControlConflict);
+            }
+        }
+        PublicationEffectOutcome::Conflict => return Err(PublicationError::ControlConflict),
+        PublicationEffectOutcome::Unknown => return Err(PublicationError::OutcomeUnknown),
+    }
+    validate_control_generation_transition(control, Some(intent_generation), outcome)
+}
+
+fn abort_guards_are_current_or_newer(
+    current: PublicationGuards,
+    original: PublicationGuards,
+) -> bool {
+    current.owner_epoch >= original.owner_epoch
+        && current.source_catalog_generation >= original.source_catalog_generation
+        && current.membership_generation >= original.membership_generation
+        && current.access_generation >= original.access_generation
+        && current.shadow_generation >= original.shadow_generation
+        && current.purge_generation >= original.purge_generation
+        && current.profile_digest == original.profile_digest
+}
 
 /// Reconcile a single active transaction without repeating any mutation.
 /// The effect port is deliberately absent: unknown outcomes require readback

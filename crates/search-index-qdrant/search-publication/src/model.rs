@@ -334,8 +334,11 @@ pub struct PublicationEffectReadback {
     pub snapshot: Option<PublicationSnapshotReadback>,
     /// Owner-established complete exclusion state for abandonment.
     pub abandonment: Option<PublicationAbandonReadback>,
-    /// Exact abort-finalization command observed in the control journal.
+    /// Exact abort-finalization command retained by the control owner.
     pub abort_request: Option<crate::machine::AbortFinalizationRequest>,
+    /// Original complete mutation binding for that command, retained separately
+    /// from the current recovery call's `OperationContext`.
+    pub abort_binding: Option<PublicationEffectBinding>,
 }
 
 fn vector_maps_equal(
@@ -512,6 +515,10 @@ pub enum PublicationRecoveryDecision {
     Continue,
     /// Control commit completed; publish/rebuild the immutable snapshot.
     PublishSnapshot,
+    /// Abort finalization committed; publish a fresh current-process abort snapshot.
+    PublishAbortSnapshot,
+    /// Exact no-commit control readback allows Root to prepare a fresh abort operation.
+    PrepareAbortFinalization,
     /// Remove/exclude staged IDs and restore exact old bounds using the complete plan.
     CompensateExact,
     /// Reserved for a separately verified complete invalidation-only protocol.

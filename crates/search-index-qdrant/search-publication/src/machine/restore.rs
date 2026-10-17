@@ -5,16 +5,18 @@ use search_projection_planner::ProjectionBudget;
 
 use crate::admission::{AdmissionPurpose, PublicationProposal, validate_prepared_generation};
 use crate::model::{
-    PublicationControlReadback, PublicationEffectKind, PublicationEffectOutcome,
-    PublicationEffectReadback, PublicationIntentReadback, PublicationPointExpectation,
+    PublicationControlReadback, PublicationEffectBinding, PublicationEffectKind,
+    PublicationEffectOutcome, PublicationEffectReadback, PublicationIntentReadback,
+    PublicationPointExpectation,
 };
 use crate::{PublicationError, PublicationRecoveryDecision};
 
 use super::{
+    AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution,
     ClosureReceipt, DurableIntent, PublicationCoordinator, PublicationEffectCommand,
     PublicationEffectPreparationOwners, PublicationPhase, PublicationReadbackPort,
     PublicationTransaction, ReadbackVerified, SnapshotPublishReceipt, StageReceipt,
-    VisibleCommitReceipt, point_readback_matches, readback_only,
+    VisibleCommitReceipt, effect_command, operation_id, point_readback_matches, readback_only,
     validate_control_generation_transition,
 };
 
@@ -130,16 +132,24 @@ impl PublicationCoordinator {
             .ok_or(PublicationError::RecoveryBlocked)?;
 
         // Read the durable record using its original stable operation ID.
-        let (intent_command, intent_observation) = readback_only(
-            transaction,
-            readback,
-            context,
-            PublicationEffectKind::PersistIntent,
-        )?;
-        let intent = exact_intent(&intent_command, intent_observation)?;
+        let intent_command =
+            effect_command(transaction, PublicationEffectKind::PersistIntent, context)?;
+        context
+            .preflight()
+            .map_err(|_| PublicationError::OperationContextInvalid)?;
+        let intent_observation = readback.readback(&intent_command, context);
+        context
+            .preflight()
+            .map_err(|_| PublicationError::OperationContextInvalid)?;
+        let intent = exact_intent_for_restore(&intent_command, &intent_observation)?;
         let recorded_phase = intent.recorded_phase;
         if matches!(recorded_phase, PublicationPhase::Prepared) {
             return Err(PublicationError::RecoveryBlocked);
+        }
+        if recorded_phase != PublicationPhase::Aborted
+            && intent.binding != *intent_command.binding()
+        {
+            return Err(PublicationError::OperationMismatch);
         }
         transaction.durable_intent = Some(DurableIntent {
             transaction_id: transaction.prepared.transaction_id.clone(),
@@ -153,6 +163,24 @@ impl PublicationCoordinator {
             control_state_digest: intent.control_state_digest,
         });
         transaction.phase = PublicationPhase::IntentDurable;
+
+        if recorded_phase == PublicationPhase::Aborted {
+            let (Some(request), Some(abort_binding)) = (
+                intent_observation.abort_request,
+                intent_observation.abort_binding,
+            ) else {
+                transaction.phase = PublicationPhase::PublicationBlocked;
+                return Ok((coordinator, PublicationRecoveryDecision::PublicationBlocked));
+            };
+            return restore_aborted(
+                coordinator,
+                readback,
+                context,
+                &intent.binding,
+                request,
+                abort_binding,
+            );
+        }
 
         let (stage_command, stage) = readback_only(
             transaction,
@@ -396,24 +424,297 @@ impl PublicationCoordinator {
     }
 }
 
-fn exact_intent(
-    command: &PublicationEffectCommand,
-    observed: PublicationEffectReadback,
-) -> Result<PublicationIntentReadback, PublicationError> {
-    if observed.effect != PublicationEffectKind::PersistIntent
-        || observed.outcome != PublicationEffectOutcome::Applied
-        || observed.binding != *command.binding()
+#[allow(clippy::too_many_lines)]
+fn restore_aborted<C, R>(
+    mut coordinator: PublicationCoordinator,
+    readback: &mut R,
+    context: &OperationContext<C>,
+    intent_binding: &PublicationEffectBinding,
+    request: AbortFinalizationRequest,
+    abort_binding: PublicationEffectBinding,
+) -> Result<(PublicationCoordinator, PublicationRecoveryDecision), PublicationError>
+where
+    C: CancellationProbe,
+    R: PublicationReadbackPort<C>,
+{
+    let transaction = coordinator
+        .active
+        .as_mut()
+        .ok_or(PublicationError::RecoveryBlocked)?;
+    crate::recovery::validate_abort_finalization_request(transaction, &request)?;
+    if transaction.durable_intent.as_ref() != Some(&request.intent) {
+        return Err(PublicationError::OperationMismatch);
+    }
+
+    validate_abort_resolution_readback(transaction, readback, context, intent_binding, &request)?;
+
+    let mut command = original_context_command(
+        transaction,
+        PublicationEffectKind::CommitAbortFinalization,
+        context,
+        intent_binding,
+        request.operation_id.clone(),
+    )?;
+    command.abort_request = Some(request.clone());
+    if command.binding != abort_binding {
+        return Err(PublicationError::OperationMismatch);
+    }
+    context
+        .preflight()
+        .map_err(|_| PublicationError::OperationContextInvalid)?;
+    let observed = readback.readback(&command, context);
+    context
+        .preflight()
+        .map_err(|_| PublicationError::OperationContextInvalid)?;
+    if observed.effect != PublicationEffectKind::CommitAbortFinalization
+        || observed.binding != abort_binding
+        || observed.abort_request.as_ref() != Some(&request)
+        || observed.abort_binding.as_ref() != Some(&abort_binding)
+        || observed.intent.is_some()
+        || observed.snapshot.is_some()
+        || observed.abandonment.is_some()
         || !observed.points.is_empty()
         || !observed.missing_point_ids.is_empty()
         || !observed.unexpected_point_ids.is_empty()
     {
-        return Err(PublicationError::RecoveryBlocked);
-    }
-    let intent = observed.intent.ok_or(PublicationError::RecoveryBlocked)?;
-    if intent.binding != *command.binding() || intent.control_generation == 0 {
         return Err(PublicationError::OperationMismatch);
     }
-    Ok(intent)
+    let control = observed.control.ok_or(PublicationError::ControlConflict)?;
+    let intent_generation = transaction
+        .durable_intent
+        .as_ref()
+        .ok_or(PublicationError::ControlConflict)?
+        .control_generation;
+    match observed.outcome {
+        PublicationEffectOutcome::Applied => {
+            crate::recovery::validate_abort_control_readback(
+                transaction,
+                intent_generation,
+                Some(&request),
+                &control,
+                PublicationEffectOutcome::Applied,
+            )?;
+            coordinator.visible_epoch = control.after_visible_epoch;
+            coordinator.last_reserved_epoch = control.last_reserved_epoch;
+            coordinator
+                .current_manifest
+                .clone_from(&transaction.prepared.old_manifest);
+            coordinator.current_manifest_digest = transaction.prepared.old_manifest_digest;
+            coordinator.abort_finalization.resolution = Some(request.resolution.clone());
+            coordinator.abort_finalization.request = Some(request.clone());
+            coordinator.abort_finalization.intent_binding = Some(intent_binding.clone());
+            coordinator.abort_finalization.commit_binding = Some(abort_binding);
+            coordinator.abort_finalization.commit = Some(AbortControlCommitObservation {
+                request,
+                collection_generation_id: control.collection_generation_id,
+                visible_epoch: control.after_visible_epoch,
+                last_reserved_epoch: control.last_reserved_epoch,
+                observed_guards: control.guards,
+                control_generation: control.after_control_generation,
+                control_state_digest: control.control_state_digest,
+            });
+            transaction.phase = PublicationPhase::Aborted;
+            transaction.pending_effect = None;
+            transaction.original_context =
+                Some(super::OperationContextBinding::from_context(context));
+            Ok((
+                coordinator,
+                PublicationRecoveryDecision::PublishAbortSnapshot,
+            ))
+        }
+        PublicationEffectOutcome::NotApplied => {
+            crate::recovery::validate_abort_control_readback(
+                transaction,
+                intent_generation,
+                Some(&request),
+                &control,
+                PublicationEffectOutcome::NotApplied,
+            )?;
+            coordinator.visible_epoch = control.after_visible_epoch;
+            coordinator.last_reserved_epoch = control.last_reserved_epoch;
+            coordinator
+                .current_manifest
+                .clone_from(&transaction.prepared.old_manifest);
+            coordinator.current_manifest_digest = transaction.prepared.old_manifest_digest;
+            coordinator.abort_finalization.resolution = Some(request.resolution.clone());
+            coordinator.abort_finalization.request = Some(request);
+            coordinator.abort_finalization.intent_binding = Some(intent_binding.clone());
+            coordinator.abort_finalization.commit_binding = Some(abort_binding);
+            coordinator.abort_finalization.retry_control = Some(control);
+            coordinator.abort_finalization.commit = None;
+            coordinator.abort_finalization.snapshot = None;
+            transaction.phase = PublicationPhase::Aborted;
+            transaction.pending_effect = None;
+            transaction.original_context =
+                Some(super::OperationContextBinding::from_context(context));
+            Ok((
+                coordinator,
+                PublicationRecoveryDecision::PrepareAbortFinalization,
+            ))
+        }
+        PublicationEffectOutcome::Conflict => Err(PublicationError::ControlConflict),
+        PublicationEffectOutcome::Unknown => Err(PublicationError::OutcomeUnknown),
+    }
+}
+
+fn validate_abort_resolution_readback<C, R>(
+    transaction: &PublicationTransaction,
+    readback: &mut R,
+    context: &OperationContext<C>,
+    intent_binding: &PublicationEffectBinding,
+    request: &AbortFinalizationRequest,
+) -> Result<(), PublicationError>
+where
+    C: CancellationProbe,
+    R: PublicationReadbackPort<C>,
+{
+    let (effect, resolution_operation_id) = match &request.resolution {
+        AbortedPublicationResolution::Compensated { operation_id, .. } => {
+            (PublicationEffectKind::Compensate, operation_id)
+        }
+        AbortedPublicationResolution::Excluded { operation_id, .. } => {
+            (PublicationEffectKind::Abandon, operation_id)
+        }
+    };
+    let expected_operation_id = operation_id(transaction, effect)?;
+    if resolution_operation_id != &expected_operation_id {
+        return Err(PublicationError::OperationMismatch);
+    }
+    let command = original_context_command(
+        transaction,
+        effect,
+        context,
+        intent_binding,
+        expected_operation_id,
+    )?;
+    context
+        .preflight()
+        .map_err(|_| PublicationError::OperationContextInvalid)?;
+    let observed = readback.readback(&command, context);
+    context
+        .preflight()
+        .map_err(|_| PublicationError::OperationContextInvalid)?;
+    if observed.points.len() > transaction.max_points
+        || observed.missing_point_ids.len() > transaction.max_points
+        || observed.unexpected_point_ids.len() > transaction.max_points
+    {
+        return Err(PublicationError::BudgetExceeded);
+    }
+    if observed.effect != effect
+        || observed.binding != command.binding
+        || observed.outcome != PublicationEffectOutcome::Applied
+        || !observed.unexpected_point_ids.is_empty()
+        || observed.intent.is_some()
+        || observed.control.is_some()
+        || observed.snapshot.is_some()
+        || observed.abort_request.is_some()
+        || observed.abort_binding.is_some()
+    {
+        return Err(PublicationError::RecoveryBlocked);
+    }
+    match &request.resolution {
+        AbortedPublicationResolution::Compensated {
+            restored_old_points,
+            ..
+        } => {
+            let expected_restore = !transaction.prepared.difference.retire.is_empty();
+            if *restored_old_points != expected_restore
+                || observed.abandonment.is_some()
+                || !point_readback_matches(&command.points, &observed.points)
+                || observed.missing_point_ids != command.required_absent_point_ids
+            {
+                return Err(PublicationError::CompensationIncomplete);
+            }
+        }
+        AbortedPublicationResolution::Excluded {
+            excluded_projection_memberships,
+            ..
+        } => {
+            let difference = &transaction.prepared.difference;
+            let mut point_ids = difference
+                .create
+                .iter()
+                .chain(&difference.retire)
+                .map(|entry| entry.point_id)
+                .collect::<Vec<_>>();
+            point_ids.sort_unstable();
+            let mut memberships = difference
+                .create
+                .iter()
+                .chain(&difference.retire)
+                .map(|entry| entry.projection_membership_id)
+                .collect::<Vec<_>>();
+            memberships.sort_unstable();
+            memberships.dedup();
+            let fence = observed
+                .abandonment
+                .as_ref()
+                .ok_or(PublicationError::AbandonFenceMissing)?;
+            if fence.binding != command.binding
+                || fence.excluded_point_ids != point_ids
+                || fence.excluded_projection_memberships != memberships
+                || excluded_projection_memberships != &memberships
+                || !observed.points.is_empty()
+                || !observed.missing_point_ids.is_empty()
+            {
+                return Err(PublicationError::AbandonFenceMissing);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn original_context_command<C: CancellationProbe>(
+    transaction: &PublicationTransaction,
+    effect: PublicationEffectKind,
+    context: &OperationContext<C>,
+    original_intent_binding: &PublicationEffectBinding,
+    operation_id: search_contracts::OpaqueId,
+) -> Result<PublicationEffectCommand, PublicationError> {
+    let mut command = effect_command(transaction, effect, context)?;
+    command.binding.request_id = original_intent_binding.request_id;
+    command.binding.relative_deadline_ms = original_intent_binding.relative_deadline_ms;
+    command
+        .binding
+        .budget_ref
+        .clone_from(&original_intent_binding.budget_ref);
+    command.binding.operation_id = operation_id;
+    Ok(command)
+}
+
+fn exact_intent_for_restore(
+    command: &PublicationEffectCommand,
+    observed: &PublicationEffectReadback,
+) -> Result<PublicationIntentReadback, PublicationError> {
+    if observed.effect != PublicationEffectKind::PersistIntent
+        || observed.outcome != PublicationEffectOutcome::Applied
+        || !observed.points.is_empty()
+        || !observed.missing_point_ids.is_empty()
+        || !observed.unexpected_point_ids.is_empty()
+        || observed.control.is_some()
+        || observed.snapshot.is_some()
+        || observed.abandonment.is_some()
+    {
+        return Err(PublicationError::RecoveryBlocked);
+    }
+    let intent = observed
+        .intent
+        .as_ref()
+        .ok_or(PublicationError::RecoveryBlocked)?;
+    let mut expected_binding = command.binding().clone();
+    expected_binding.request_id = intent.binding.request_id;
+    expected_binding.relative_deadline_ms = intent.binding.relative_deadline_ms;
+    expected_binding
+        .budget_ref
+        .clone_from(&intent.binding.budget_ref);
+    if intent.binding != expected_binding
+        || observed.binding != intent.binding
+        || intent.control_generation == 0
+        || observed.abort_request.is_some() != observed.abort_binding.is_some()
+    {
+        return Err(PublicationError::OperationMismatch);
+    }
+    Ok(intent.clone())
 }
 
 fn exact_points(
