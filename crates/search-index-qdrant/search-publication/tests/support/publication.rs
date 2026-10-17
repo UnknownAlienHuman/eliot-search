@@ -88,6 +88,7 @@ fn projection_plan(
     units: &VerifiedUnitSet,
     scope: &PlanningScope,
     schema: &CollectionSchema,
+    changed_vector_at: Option<usize>,
 ) -> ProjectionPlan {
     let requirement = VectorRequirement::Sparse {
         index_ceiling: 8,
@@ -96,7 +97,8 @@ fn projection_plan(
     let planned = units
         .units()
         .iter()
-        .map(|unit| PlannedUnit {
+        .enumerate()
+        .map(|(index, unit)| PlannedUnit {
             unit_id: unit.unit_id(),
             unit_kind: unit.occurrence().unit_kind,
             modality: c::Modality::Text,
@@ -109,7 +111,11 @@ fn projection_plan(
                 name: VectorName::new("lexical-sparse").expect("vector name"),
                 value: VectorValue::Sparse {
                     indices: vec![1, 4],
-                    values: vec![1.0, 2.0],
+                    values: if changed_vector_at == Some(index) {
+                        vec![2.0, 1.0]
+                    } else {
+                        vec![1.0, 2.0]
+                    },
                 },
             }],
         })
@@ -139,6 +145,7 @@ pub struct Fixture {
     sealed_plan: ProjectionPlan,
     sealed_scope: PlanningScope,
     retargetable: bool,
+    changed_vector_at: Option<usize>,
 }
 
 impl Fixture {
@@ -190,7 +197,7 @@ impl Fixture {
             &vectors,
         )
         .expect("C13 collection schema");
-        let mut plan = projection_plan(&units, &scope, &schema);
+        let mut plan = projection_plan(&units, &scope, &schema, None);
         if reject_as_empty {
             // Model an incomplete C13 product over a real nonempty C08/C09 set.
             // Canonical admission must reject this omission before creating a slot.
@@ -221,6 +228,7 @@ impl Fixture {
             sealed_plan,
             sealed_scope,
             retargetable: !reject_as_empty,
+            changed_vector_at: None,
         }
     }
 
@@ -234,10 +242,31 @@ impl Fixture {
         }
         let mut retargeted = self.clone();
         retargeted.scope.valid_from_epoch = valid_from;
-        retargeted.plan = projection_plan(&retargeted.units, &retargeted.scope, &retargeted.schema);
+        retargeted.plan = projection_plan(
+            &retargeted.units,
+            &retargeted.scope,
+            &retargeted.schema,
+            retargeted.changed_vector_at,
+        );
         retargeted.sealed_plan = retargeted.plan.clone();
         retargeted.sealed_scope = retargeted.scope.clone();
         retargeted
+    }
+
+    /// Replans one actual C13 point with a different vector while preserving
+    /// the same verified C08/C09 source, representation, and point address.
+    pub fn with_changed_vector_at(&self, unit_index: usize) -> Self {
+        assert!(unit_index < self.units.units().len());
+        let mut changed = self.clone();
+        changed.changed_vector_at = Some(unit_index);
+        changed.plan = projection_plan(
+            &changed.units,
+            &changed.scope,
+            &changed.schema,
+            changed.changed_vector_at,
+        );
+        changed.sealed_plan = changed.plan.clone();
+        changed
     }
 }
 

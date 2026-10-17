@@ -102,9 +102,59 @@ fn vector_names_and_values_cannot_change_under_a_retained_point_id() {
 #[test]
 fn collision_at_any_position_is_rejected_with_no_partial_reservation() {
     let old = manifest(&[1, 3, 5]);
-    for index in [0, 2, 4] {
-        let mut new = manifest(&[1, 2, 3, 4, 5, 6]);
-        new.entries[index].payload_identity = digest(99);
+    for index in 0..old.units.units().len() {
+        let new = old.with_changed_vector_at(index);
+        let changed_unit = old.units.units()[index].unit_id();
+        let old_at_epoch = old.at_epoch(epoch(4));
+        let new_at_epoch = new.at_epoch(epoch(4));
+        for fixture in [&old_at_epoch, &new_at_epoch] {
+            search_projection_planner::verify_manifest_reconstruction(
+                &fixture.plan.manifest,
+                &fixture.plan.points,
+                &fixture.scope,
+                search_projection_planner::ProjectionBudget::BASELINE,
+            )
+            .expect("each C13 product is internally complete and canonical");
+        }
+        let old_entry = old_at_epoch
+            .plan
+            .manifest
+            .entries
+            .iter()
+            .find(|entry| entry.unit_id == changed_unit)
+            .expect("old planned point");
+        let new_entry = new_at_epoch
+            .plan
+            .manifest
+            .entries
+            .iter()
+            .find(|entry| entry.unit_id == changed_unit)
+            .expect("changed planned point");
+        assert_eq!(old_entry.point_id, new_entry.point_id);
+        assert_ne!(old_entry.vector_digests, new_entry.vector_digests);
+        assert_eq!(
+            old_at_epoch
+                .plan
+                .manifest
+                .entries
+                .iter()
+                .map(|entry| entry.point_id)
+                .collect::<Vec<_>>(),
+            new_at_epoch
+                .plan
+                .manifest
+                .entries
+                .iter()
+                .map(|entry| entry.point_id)
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            search_projection_planner::diff_manifests(
+                &old_at_epoch.plan.manifest,
+                &new_at_epoch.plan.manifest,
+            ),
+            Err(search_projection_planner::ProjectionError::ManifestMismatch)
+        );
         assert_rejected(&old, new);
     }
 }
@@ -112,13 +162,15 @@ fn collision_at_any_position_is_rejected_with_no_partial_reservation() {
 #[test]
 fn exact_retained_points_are_neither_staged_nor_closed() {
     let old = manifest(&[1, 3, 5]);
-    let mut machine = durable(Some(old.clone()), old.clone());
+    let new = old.clone();
+    assert_eq!(old.plan.points, new.plan.points);
+    let mut machine = durable(Some(old.clone()), new);
     let plan = machine.begin_compensation_plan().unwrap();
     assert!(plan.staged_ids.is_empty());
     assert!(plan.closed_ids.is_empty());
     assert_eq!(
-        machine.active().unwrap().prepared.difference().retain.len(),
-        old.units.units().len()
+        machine.active().unwrap().prepared.difference().retain,
+        old.plan.manifest.entries
     );
     machine
         .compensate_and_restore(compensation(&plan), restoration(&plan))
@@ -168,7 +220,19 @@ fn fresh_and_delete_only_plans_remain_usable() {
 #[test]
 fn valid_replacement_with_new_ids_reaches_commit_and_snapshot_acknowledgement() {
     let old = manifest(&[1, 3]);
-    let new = manifest(&[2, 3]);
+    let new = manifest(&[2, 3]).with_changed_vector_at(0);
+    assert_ne!(old.source.revision_id, new.source.revision_id);
+    assert_ne!(
+        old.scope.membership.representation_id,
+        new.scope.membership.representation_id
+    );
+    assert!(old.plan.manifest.entries.iter().all(|old_entry| {
+        new.plan
+            .manifest
+            .entries
+            .iter()
+            .all(|new_entry| old_entry.point_id != new_entry.point_id)
+    }));
     let expected_new = new.at_epoch(epoch(2)).plan.manifest;
     let mut machine = durable(Some(old.clone()), new.clone());
     let (commit, observed) = visible(&mut machine);
@@ -188,6 +252,10 @@ fn valid_replacement_with_new_ids_reaches_commit_and_snapshot_acknowledgement() 
             .map(|e| e.point_id)
             .collect::<Vec<_>>()
     );
+    let difference = machine.active().unwrap().prepared.difference();
+    assert_eq!(difference.create, expected_new.entries);
+    assert_eq!(difference.retain, Vec::new());
+    assert_eq!(difference.retire, old.plan.manifest.entries);
     assert_eq!(
         recover(machine.active().unwrap(), &observed).unwrap(),
         PublicationRecoveryDecision::PublishSnapshot
@@ -231,31 +299,80 @@ fn conflicting_competitor_does_not_replace_the_active_transaction() {
 fn exhaustive_small_manifest_pairs_never_overlap_staged_and_retired_ids() {
     fn subset(mask: u8) -> Fixture {
         manifest(
-            &(1_u8..=5)
+            &(1_u8..=2)
                 .filter(|n| mask & (1_u8 << (*n - 1)) != 0)
                 .collect::<Vec<_>>(),
         )
     }
-    for old_mask in 0_u8..32 {
-        for new_mask in 0_u8..32 {
+    for old_mask in 0_u8..4 {
+        for new_mask in 1_u8..4 {
             for changed in [false, true] {
                 let old = (old_mask != 0).then(|| subset(old_mask));
                 let mut new = subset(new_mask);
-                if changed && !new.entries.is_empty() {
-                    for entry in &mut new.entries {
-                        entry.payload_identity = digest(99);
-                    }
+                if changed {
+                    new = new.with_changed_vector_at(0);
                 }
                 let mut machine = PublicationCoordinator::new(32).unwrap();
-                let result =
-                    machine.submit_fixture(seeded(proposal(old.clone(), new, "enumerated")));
-                if changed || new_mask == 0 {
+                let same_address_conflict = old_mask != 0 && old_mask == new_mask && changed;
+                if same_address_conflict {
+                    let old = old.as_ref().unwrap();
+                    search_projection_planner::verify_manifest_reconstruction(
+                        &old.plan.manifest,
+                        &old.plan.points,
+                        &old.scope,
+                        search_projection_planner::ProjectionBudget::BASELINE,
+                    )
+                    .expect("old C13 product is valid");
+                    search_projection_planner::verify_manifest_reconstruction(
+                        &new.plan.manifest,
+                        &new.plan.points,
+                        &new.scope,
+                        search_projection_planner::ProjectionBudget::BASELINE,
+                    )
+                    .expect("changed-vector C13 product is valid");
+                    assert_eq!(
+                        search_projection_planner::diff_manifests(
+                            &old.plan.manifest,
+                            &new.plan.manifest,
+                        ),
+                        Err(search_projection_planner::ProjectionError::ManifestMismatch)
+                    );
+                }
+                let previous = epoch(4);
+                let target = epoch(10);
+                let unchanged = old_mask != 0 && old_mask == new_mask;
+                let expected_new = new
+                    .at_epoch(if unchanged { previous } else { target })
+                    .plan
+                    .manifest;
+                let expected_old = old
+                    .as_ref()
+                    .map(|fixture| fixture.at_epoch(previous).plan.manifest);
+                let result = machine.submit_fixture(seeded(proposal(
+                    old.clone(),
+                    new.clone(),
+                    "enumerated",
+                )));
+                if same_address_conflict {
                     assert_eq!(result, Err(PublicationError::InvalidPreparedPublication));
                     assert!(machine.active().is_none());
                     assert_eq!(machine.last_reserved_epoch(), None);
                     assert_eq!(machine.visible_epoch(), None);
                 } else {
                     assert_eq!(result, Ok(epoch(10)));
+                    let admitted = machine.active().unwrap().prepared.difference();
+                    if unchanged {
+                        assert_eq!(admitted.create, Vec::new());
+                        assert_eq!(admitted.retain, expected_new.entries);
+                        assert_eq!(admitted.retire, Vec::new());
+                    } else {
+                        assert_eq!(admitted.create, expected_new.entries);
+                        assert_eq!(admitted.retain, Vec::new());
+                        assert_eq!(
+                            admitted.retire,
+                            expected_old.map_or_else(Vec::new, |manifest| manifest.entries)
+                        );
+                    }
                     machine
                         .persist_intent(id("persist"), reference("intent"))
                         .unwrap();

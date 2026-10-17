@@ -380,14 +380,13 @@ fn changed_content_with_a_distinct_id_still_requires_two_sided_compensation() {
 }
 
 #[test]
-fn overlapping_changed_and_deleted_diff_is_rejected_before_publication() {
-    let old = manifest(&[1, 2]);
-    let mut new = manifest(&[2]);
-    new.entries[0].payload_identity = digest(99);
+fn corrupted_old_canonical_manifest_is_rejected_before_publication() {
+    let mut old = manifest(&[1, 2]);
+    old.plan.manifest.canonical_bytes[0] ^= 1;
+    let new = manifest(&[2, 3]);
     let mut machine = PublicationCoordinator::new(32).unwrap();
-    let conflict = proposal(Some(old), new, "conflicting");
     assert_eq!(
-        machine.submit_fixture(conflict),
+        machine.submit_fixture(proposal(Some(old), new, "corrupted-old")),
         Err(PublicationError::InvalidPreparedPublication)
     );
     assert!(machine.active().is_none());

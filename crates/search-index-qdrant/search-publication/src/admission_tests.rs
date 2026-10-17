@@ -22,12 +22,64 @@ fn guards() -> PublicationGuards {
     }
 }
 
+fn c13_plan(
+    units: &VerifiedUnitSet,
+    scope: &PlanningScope,
+    schema: &CollectionSchema,
+    changed_vector_at: Option<usize>,
+) -> ProjectionPlan {
+    let requirement = VectorRequirement::Sparse {
+        index_ceiling: 8,
+        idf_enabled: true,
+    };
+    let vector_name = VectorName::new("lexical-sparse").unwrap();
+    let planned = units
+        .units()
+        .iter()
+        .enumerate()
+        .map(|(index, unit)| PlannedUnit {
+            unit_id: unit.unit_id(),
+            unit_kind: unit.occurrence().unit_kind,
+            modality: c::Modality::Text,
+            language_or_format: c::BoundedName::new("text").unwrap(),
+            entity_kind: None,
+            normalized_symbol_key: None,
+            unit_digest: unit.unit_content_digest(),
+            reference_digest: unit.reference_digest(),
+            vectors: vec![PlannedVector {
+                name: vector_name.clone(),
+                value: VectorValue::Sparse {
+                    indices: vec![1, 4],
+                    values: if changed_vector_at == Some(index) {
+                        vec![2.0, 1.0]
+                    } else {
+                        vec![1.0, 2.0]
+                    },
+                },
+            }],
+        })
+        .collect::<Vec<_>>();
+    let requirements = BTreeMap::from([("lexical-sparse".to_owned(), requirement)]);
+    let plan = plan_projection(
+        units,
+        scope,
+        &planned,
+        &requirements,
+        ProjectionBudget::BASELINE,
+    )
+    .unwrap();
+    planner::validate_schema(schema, &plan, ProjectionBudget::BASELINE).unwrap();
+    plan
+}
+
+#[derive(Clone)]
 struct Fixture {
     source: c::SourceRevisionRef,
     units: VerifiedUnitSet,
     plan: ProjectionPlan,
     scope: PlanningScope,
     schema: CollectionSchema,
+    changed_vector_at: Option<usize>,
 }
 impl Fixture {
     fn new(text: &str, revision: u8, from: i64) -> Self {
@@ -73,36 +125,7 @@ impl Fixture {
             &vectors,
         )
         .unwrap();
-        let planned = units
-            .units()
-            .iter()
-            .map(|unit| PlannedUnit {
-                unit_id: unit.unit_id(),
-                unit_kind: unit.occurrence().unit_kind,
-                modality: c::Modality::Text,
-                language_or_format: c::BoundedName::new("text").unwrap(),
-                entity_kind: None,
-                normalized_symbol_key: None,
-                unit_digest: unit.unit_content_digest(),
-                reference_digest: unit.reference_digest(),
-                vectors: vec![PlannedVector {
-                    name: vectors[0].name().clone(),
-                    value: VectorValue::Sparse {
-                        indices: vec![1, 4],
-                        values: vec![1.0, 2.0],
-                    },
-                }],
-            })
-            .collect::<Vec<_>>();
-        let requirements = BTreeMap::from([("lexical-sparse".to_owned(), requirement)]);
-        let plan = plan_projection(
-            &units,
-            &scope,
-            &planned,
-            &requirements,
-            ProjectionBudget::BASELINE,
-        )
-        .unwrap();
+        let plan = c13_plan(&units, &scope, &schema, None);
         let source = c::SourceRevisionRef {
             source_namespace_id: binding.source_namespace_id,
             source_id: binding.source_id,
@@ -116,7 +139,31 @@ impl Fixture {
             plan,
             scope,
             schema,
+            changed_vector_at: None,
         }
+    }
+
+    fn with_projection_membership(mut self, id: c::ProjectionMembershipId) -> Self {
+        self.scope.membership.projection_membership_id = id;
+        self.plan = c13_plan(
+            &self.units,
+            &self.scope,
+            &self.schema,
+            self.changed_vector_at,
+        );
+        self
+    }
+
+    fn with_changed_vector_at(mut self, unit_index: usize) -> Self {
+        assert!(unit_index < self.units.units().len());
+        self.changed_vector_at = Some(unit_index);
+        self.plan = c13_plan(
+            &self.units,
+            &self.scope,
+            &self.schema,
+            self.changed_vector_at,
+        );
+        self
     }
 }
 
@@ -223,6 +270,13 @@ fn proposal<'a>(old: Option<&'a Fixture>, new: &'a Fixture) -> PublicationPropos
     }
 }
 
+fn assert_uninitialized(coordinator: &PublicationCoordinator) {
+    assert!(coordinator.active().is_none());
+    assert_eq!(coordinator.visible_epoch(), None);
+    assert_eq!(coordinator.last_reserved_epoch(), None);
+    assert_eq!(coordinator.current_manifest(), None);
+}
+
 #[test]
 fn canonical_prepare_and_restore_recompute_the_same_frozen_input() {
     let new = Fixture::new("alpha\nbeta\ngamma\n", 3, 1);
@@ -308,19 +362,16 @@ fn canonical_invalid_input_never_consumes_the_slot_or_epoch() {
     fixture.plan.manifest.canonical_bytes[0] ^= 1;
     let context = snapshot(&fixture, None, 0, 0, PublicationMembershipState::Active);
     let mut coordinator = PublicationCoordinator::new(64).unwrap();
-    assert!(
-        coordinator
-            .submit(
-                &proposal(None, &fixture),
-                &mut owners(),
-                &context,
-                ProjectionBudget::BASELINE
-            )
-            .is_err()
+    assert_eq!(
+        coordinator.submit(
+            &proposal(None, &fixture),
+            &mut owners(),
+            &context,
+            ProjectionBudget::BASELINE
+        ),
+        Err(PublicationError::InvalidPreparedPublication)
     );
-    assert!(coordinator.active().is_none());
-    assert_eq!(coordinator.last_reserved_epoch(), None);
-    assert_eq!(coordinator.visible_epoch(), None);
+    assert_uninitialized(&coordinator);
     let mut fixture = Fixture::new("alpha\nbeta\ngamma\n", 3, 1);
     fixture.plan.points.pop();
     fixture.plan.manifest.entries.pop();
@@ -330,18 +381,16 @@ fn canonical_invalid_input_never_consumes_the_slot_or_epoch() {
             .as_slice()
             .to_vec();
     let context = snapshot(&fixture, None, 0, 0, PublicationMembershipState::Active);
-    assert!(
-        coordinator
-            .submit(
-                &proposal(None, &fixture),
-                &mut owners(),
-                &context,
-                ProjectionBudget::BASELINE
-            )
-            .is_err()
+    assert_eq!(
+        coordinator.submit(
+            &proposal(None, &fixture),
+            &mut owners(),
+            &context,
+            ProjectionBudget::BASELINE
+        ),
+        Err(PublicationError::InvalidPreparedPublication)
     );
-    assert!(coordinator.active().is_none());
-    assert_eq!(coordinator.last_reserved_epoch(), None);
+    assert_uninitialized(&coordinator);
 }
 
 #[test]
@@ -365,15 +414,15 @@ fn canonical_retirement_is_explicit_and_retained_bounds_are_unchanged() {
     assert!(retired.new_manifest().entries.is_empty());
     assert_eq!(retired.difference().retire.len(), old.units.units().len());
     let context = snapshot(&old, Some(&old), 1, 1, PublicationMembershipState::Active);
-    assert!(
+    assert_eq!(
         validate_prepared_generation(
             &mut owners(),
             &context,
             &retirement,
             AdmissionPurpose::Prepare,
             ProjectionBudget::BASELINE
-        )
-        .is_err()
+        ),
+        Err(PublicationError::InvalidPreparedPublication)
     );
     let unchanged = validate_prepared_generation(
         &mut owners(),
@@ -385,7 +434,7 @@ fn canonical_retirement_is_explicit_and_retained_bounds_are_unchanged() {
     .unwrap();
     assert!(unchanged.difference().create.is_empty());
     assert!(unchanged.difference().retire.is_empty());
-    assert_eq!(unchanged.difference().retain.len(), old.units.units().len());
+    assert_eq!(unchanged.difference().retain, old.plan.manifest.entries);
 }
 
 #[test]
@@ -407,16 +456,226 @@ fn canonical_replacement_checks_current_owner_after_validation() {
     let mut drift = owners();
     drift.drift = true;
     let mut coordinator = PublicationCoordinator::new(64).unwrap();
-    assert!(
-        coordinator
-            .submit(
-                &replacement,
-                &mut drift,
-                &context,
-                ProjectionBudget::BASELINE
-            )
-            .is_err()
+    assert_eq!(
+        coordinator.submit(
+            &replacement,
+            &mut drift,
+            &context,
+            ProjectionBudget::BASELINE
+        ),
+        Err(PublicationError::GuardMismatch)
     );
-    assert!(coordinator.active().is_none());
-    assert_eq!(coordinator.last_reserved_epoch(), None);
+    assert_uninitialized(&coordinator);
+}
+
+fn assert_old_manifest_corruption_is_rejected() {
+    let mut corrupted_old = Fixture::new("alpha\nbeta\ngamma\n", 3, 1);
+    let new = Fixture::new("delta\nepsilon\nzeta\n", 4, 2);
+    corrupted_old.plan.manifest.canonical_bytes[0] ^= 1;
+    let old_corruption_snapshot = snapshot(
+        &new,
+        Some(&corrupted_old),
+        1,
+        1,
+        PublicationMembershipState::Active,
+    );
+    let mut coordinator = PublicationCoordinator::new(64).unwrap();
+    assert_eq!(
+        coordinator.submit(
+            &proposal(Some(&corrupted_old), &new),
+            &mut owners(),
+            &old_corruption_snapshot,
+            ProjectionBudget::BASELINE
+        ),
+        Err(PublicationError::InvalidPreparedPublication)
+    );
+    assert_uninitialized(&coordinator);
+}
+
+fn assert_mixed_scope_is_rejected() {
+    let old = Fixture::new("alpha\nbeta\ngamma\n", 3, 1);
+    let new = Fixture::new("delta\nepsilon\nzeta\n", 4, 2);
+    let mixed_scope =
+        new.with_projection_membership(c::ProjectionMembershipId::from_bytes([99; 16]));
+    let mixed_snapshot = snapshot(
+        &mixed_scope,
+        Some(&old),
+        1,
+        1,
+        PublicationMembershipState::Active,
+    );
+    let mut coordinator = PublicationCoordinator::new(64).unwrap();
+    assert_eq!(
+        coordinator.submit(
+            &proposal(Some(&old), &mixed_scope),
+            &mut owners(),
+            &mixed_snapshot,
+            ProjectionBudget::BASELINE
+        ),
+        Err(PublicationError::InvalidPreparedPublication)
+    );
+    assert_uninitialized(&coordinator);
+}
+
+fn assert_foreign_unit_set_is_rejected() {
+    let foreign = Fixture::new("foreign\nsource\n", 9, 2);
+    let mut foreign_units = Fixture::new("delta\nepsilon\nzeta\n", 4, 2);
+    foreign_units.units = foreign.units;
+    let foreign_snapshot = snapshot(
+        &foreign_units,
+        None,
+        0,
+        0,
+        PublicationMembershipState::Active,
+    );
+    let mut coordinator = PublicationCoordinator::new(64).unwrap();
+    assert_eq!(
+        coordinator.submit(
+            &proposal(None, &foreign_units),
+            &mut owners(),
+            &foreign_snapshot,
+            ProjectionBudget::BASELINE
+        ),
+        Err(PublicationError::InvalidPreparedPublication)
+    );
+    assert_uninitialized(&coordinator);
+}
+
+fn assert_admission_budgets_precede_reservation() {
+    let bounded = Fixture::new("alpha\nbeta\ngamma\n", 5, 1);
+    let bounded_snapshot = snapshot(&bounded, None, 0, 0, PublicationMembershipState::Active);
+    for too_small in [
+        ProjectionBudget {
+            max_points: bounded.plan.points.len().saturating_sub(1),
+            ..ProjectionBudget::BASELINE
+        },
+        ProjectionBudget {
+            max_manifest_bytes: bounded
+                .plan
+                .manifest
+                .canonical_bytes
+                .len()
+                .saturating_sub(1),
+            ..ProjectionBudget::BASELINE
+        },
+    ] {
+        let mut coordinator = PublicationCoordinator::new(64).unwrap();
+        assert_eq!(
+            coordinator.submit(
+                &proposal(None, &bounded),
+                &mut owners(),
+                &bounded_snapshot,
+                too_small
+            ),
+            Err(PublicationError::BudgetExceeded)
+        );
+        assert_uninitialized(&coordinator);
+    }
+}
+
+fn assert_input_permutation_is_stable() {
+    let canonical = Fixture::new("alpha\nbeta\ngamma\n", 6, 1);
+    let mut permuted = Fixture::new("alpha\nbeta\ngamma\n", 6, 1);
+    permuted.plan.points.reverse();
+    let canonical_snapshot = snapshot(&canonical, None, 0, 0, PublicationMembershipState::Active);
+    let permuted_snapshot = snapshot(&permuted, None, 0, 0, PublicationMembershipState::Active);
+    let canonical_prepared = validate_prepared_generation(
+        &mut owners(),
+        &canonical_snapshot,
+        &proposal(None, &canonical),
+        AdmissionPurpose::Prepare,
+        ProjectionBudget::BASELINE,
+    )
+    .unwrap();
+    let permuted_prepared = validate_prepared_generation(
+        &mut owners(),
+        &permuted_snapshot,
+        &proposal(None, &permuted),
+        AdmissionPurpose::Prepare,
+        ProjectionBudget::BASELINE,
+    )
+    .unwrap();
+    assert_eq!(canonical_prepared, permuted_prepared);
+}
+
+#[test]
+fn canonical_admission_negatives_and_permutation_stability() {
+    assert_old_manifest_corruption_is_rejected();
+    assert_mixed_scope_is_rejected();
+    assert_foreign_unit_set_is_rejected();
+    assert_admission_budgets_precede_reservation();
+    assert_input_permutation_is_stable();
+}
+
+#[test]
+fn canonical_point_id_conflicts_and_disjoint_changes_use_real_c13_products() {
+    let original = Fixture::new("alpha\nbeta\ngamma\n", 7, 1);
+    let changed = original.clone().with_changed_vector_at(0);
+    for fixture in [&original, &changed] {
+        planner::verify_manifest_reconstruction(
+            &fixture.plan.manifest,
+            &fixture.plan.points,
+            &fixture.scope,
+            ProjectionBudget::BASELINE,
+        )
+        .expect("both C13 products reconstruct from their actual point specs");
+    }
+    assert_eq!(
+        planner::diff_manifests(&original.plan.manifest, &changed.plan.manifest),
+        Err(ProjectionError::ManifestMismatch)
+    );
+    let context = snapshot(
+        &changed,
+        Some(&original),
+        1,
+        1,
+        PublicationMembershipState::Active,
+    );
+    let mut coordinator = PublicationCoordinator::new(64).unwrap();
+    assert_eq!(
+        coordinator.submit(
+            &proposal(Some(&original), &changed),
+            &mut owners(),
+            &context,
+            ProjectionBudget::BASELINE
+        ),
+        Err(PublicationError::InvalidPreparedPublication)
+    );
+    assert_uninitialized(&coordinator);
+
+    let disjoint = Fixture::new("delta\nepsilon\nzeta\n", 8, 2).with_changed_vector_at(0);
+    assert_ne!(original.source.revision_id, disjoint.source.revision_id);
+    assert_ne!(
+        original.scope.membership.representation_id,
+        disjoint.scope.membership.representation_id
+    );
+    assert!(original.plan.manifest.entries.iter().all(|old_entry| {
+        disjoint
+            .plan
+            .manifest
+            .entries
+            .iter()
+            .all(|new_entry| old_entry.point_id != new_entry.point_id)
+    }));
+    let disjoint_context = snapshot(
+        &disjoint,
+        Some(&original),
+        1,
+        1,
+        PublicationMembershipState::Active,
+    );
+    let mut coordinator = PublicationCoordinator::new(64).unwrap();
+    assert_eq!(
+        coordinator.submit(
+            &proposal(Some(&original), &disjoint),
+            &mut owners(),
+            &disjoint_context,
+            ProjectionBudget::BASELINE
+        ),
+        Ok(epoch(2))
+    );
+    let difference = coordinator.active().unwrap().prepared.difference();
+    assert_eq!(difference.create, disjoint.plan.manifest.entries);
+    assert_eq!(difference.retain, Vec::new());
+    assert_eq!(difference.retire, original.plan.manifest.entries);
 }
