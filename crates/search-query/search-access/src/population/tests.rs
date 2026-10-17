@@ -350,6 +350,9 @@ fn authorized_x_cannot_substitute_y_and_another_allowed_partition() {
         .expect("valid owner inputs");
     assert_eq!(compiled.snapshot_fence(), &fixture.fence);
     assert_eq!(compiled.grant_fence().grant_id, fixture.grant.grant_id);
+    let original_rows = fixture.rows.values().map(|row|
+        (row.source_membership_id, row.clone())).collect::<BTreeMap<_, _>>();
+    assert_eq!(compiled.projection_memberships(), &original_rows);
     assert!(std::ptr::eq(
         compiled.population(),
         compiled.population().predicate()
@@ -362,6 +365,8 @@ fn authorized_x_cannot_substitute_y_and_another_allowed_partition() {
         ReceiptRef::new("manifest-Y").unwrap(),
     );
     fixture.rows = BTreeMap::from([(substituted.projection_membership_id, substituted)]);
+    // Caller mutation after compilation cannot substitute the retained owner links.
+    assert_eq!(compiled.projection_memberships(), &original_rows);
     assert!(matches!(
         fixture.compile(&mut owner, &issued),
         Err(AccessError::SnapshotStale)

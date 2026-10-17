@@ -89,6 +89,7 @@ pub trait CanonicalPopulationVerificationPort {
 /// Fields are private and only the owner-port compiler constructs this result.
 pub struct CompiledEligibilityPopulation {
     population: EligibilityPopulation,
+    projection_memberships: BTreeMap<SourceMembershipId, CanonicalProjectionMembership>,
     snapshot_fence: QuerySnapshotFence,
     grant_fence: GrantFence,
 }
@@ -98,6 +99,15 @@ impl CompiledEligibilityPopulation {
     #[must_use]
     pub const fn population(&self) -> &EligibilityPopulation {
         &self.population
+    }
+
+    /// Exact source/projection links independently resolved by the owner during
+    /// this compilation. Retrieval must not substitute a caller mapping later.
+    #[must_use]
+    pub const fn projection_memberships(
+        &self,
+    ) -> &BTreeMap<SourceMembershipId, CanonicalProjectionMembership> {
+        &self.projection_memberships
     }
 
     #[must_use]
@@ -186,10 +196,12 @@ pub fn compile_canonical_eligibility_population<
     }
 
     validate_live_restrictions(&scope.memberships.keys().copied().collect(), request)?;
-    let population = compile_population_memberships(&scope.memberships, request, owner, issued)?;
+    let (population, projection_memberships) =
+        compile_population_memberships(&scope.memberships, request, owner, issued)?;
     validate_issued_claims(owner, issued, request.grant)?;
     Ok(CompiledEligibilityPopulation {
         population,
+        projection_memberships,
         snapshot_fence: request.snapshot_fence.clone(),
         grant_fence: GrantFence {
             grant_id: request.grant.grant_id,
@@ -382,7 +394,7 @@ fn compile_population_memberships<O: CanonicalPopulationVerificationPort + ?Size
     request: &CanonicalEligibilityPopulationRequest<'_, impl Sized>,
     owner: &mut O,
     issued: &O::IssuedGrant,
-) -> Result<EligibilityPopulation, AccessError> {
+) -> Result<(EligibilityPopulation, BTreeMap<SourceMembershipId, CanonicalProjectionMembership>), AccessError> {
     if request.projection_memberships.len() > MAX_COLLECTION_ITEMS {
         return Err(AccessError::EligibilityPopulationTooLarge);
     }
@@ -414,6 +426,7 @@ fn compile_population_memberships<O: CanonicalPopulationVerificationPort + ?Size
     let mut unique_projection_ids = BTreeSet::new();
     let mut access_partition = None;
     let mut scoring_partition = None;
+    let mut verified_bindings = BTreeMap::new();
     for (source_id, binding) in authorized {
         if binding.membership_id != *source_id || !binding.active {
             return Err(AccessError::SnapshotStale);
@@ -426,6 +439,7 @@ fn compile_population_memberships<O: CanonicalPopulationVerificationPort + ?Size
         {
             return Err(AccessError::SnapshotStale);
         }
+        verified_bindings.insert(*source_id, current_binding);
         if owner_membership.installation_incarnation_id != *schema.installation_incarnation_id()
             || owner_membership.collection_generation_id != *schema.collection_generation_id()
             || owner_membership.projection_profile_set_id != *schema.projection_profile_set_id()
@@ -472,7 +486,7 @@ fn compile_population_memberships<O: CanonicalPopulationVerificationPort + ?Size
     population
         .validate_for_schema(schema)
         .map_err(|_| AccessError::RouteMismatch)?;
-    Ok(population)
+    Ok((population, verified_bindings))
 }
 
 #[cfg(test)]
