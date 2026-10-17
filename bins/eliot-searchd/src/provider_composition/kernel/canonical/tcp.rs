@@ -5,6 +5,9 @@ mod io;
 #[path = "tcp/handshake.rs"]
 mod handshake;
 #[cfg(feature = "wave4-query")]
+#[path = "tcp/evidence.rs"]
+mod evidence;
+#[cfg(feature = "wave4-query")]
 #[path = "tcp/serving.rs"]
 mod serving;
 
