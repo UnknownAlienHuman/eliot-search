@@ -329,6 +329,36 @@ pub(super) fn mode_value(
     Record::decode(value.ok_or(ControlError::SchemaMismatch)?, limits).map(|r| r.initial.mode())
 }
 
+// Schema-5 genesis/adoption installs exactly the first route. Its route revision
+// is one, independently of intervening journal writes or publication epochs.
+// A different generation/schema requires a separate route-switch protocol.
+pub(in crate::persistent) fn initial_route_revision(
+    snapshot: &JournalReadSnapshot,
+    visibility: &PublicationVisibilityState,
+    limits: JournalLimits,
+) -> Result<Option<search_contracts::CollectionRouteRevision>, ControlError> {
+    if snapshot.identity.schema_version != crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+        return Ok(None);
+    }
+    let initial = Record::decode(
+        snapshot.get(&ControlKey::new(KEY.to_vec(), limits)?)
+            .ok_or(ControlError::SchemaMismatch)?, limits,
+    )?.initial;
+    let seed = match initial {
+        JournalProfileInitialization::Indexed(seed) => seed,
+        JournalProfileInitialization::Direct => {
+            let Some(value) = snapshot.get(&ControlKey::new(adoption::KEY.to_vec(), limits)?) else {
+                return Ok(None);
+            };
+            adoption::IndexedProfileAdoption::decode(value, limits)?.initial_visibility()
+        }
+        JournalProfileInitialization::MigrationInert => return Ok(None),
+    };
+    Ok((seed.collection_generation_id == visibility.collection_generation_id
+        && seed.schema_identity_digest == visibility.schema_identity_digest)
+        .then_some(search_contracts::CollectionRouteRevision::new(1)))
+}
+
 pub(super) fn validate_snapshot(
     journal: &PersistentControlJournal,
     read: &ReadTransaction,

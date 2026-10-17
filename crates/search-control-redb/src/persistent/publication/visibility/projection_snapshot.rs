@@ -18,6 +18,7 @@ pub struct PublicationProjectionSnapshot {
     identity: JournalIdentity,
     generation: u64,
     visibility: PublicationVisibilityState,
+    initial_route_revision: Option<search_contracts::CollectionRouteRevision>,
     manifests: BTreeMap<ProjectionMembershipId, ReceiptRef>,
     prepared_artifact_sets: BTreeMap<ProjectionMembershipId, PreparedArtifactSetRecordV1>,
     shadows: BTreeMap<ProjectionMembershipId, PublicationSourceShadow>,
@@ -37,6 +38,16 @@ impl PublicationProjectionSnapshot {
     #[must_use]
     pub const fn visibility(&self) -> &PublicationVisibilityState {
         &self.visibility
+    }
+    /// Initial revision of this snapshot's matching schema-5 genesis/adoption route.
+    ///
+    /// Revision one applies only while the immutable initial generation and
+    /// schema still match this current snapshot.
+    /// Legacy or replaced routes return None and require their own route owner.
+    /// This technical coordinate does not qualify the physical Qdrant route.
+    #[must_use]
+    pub const fn initial_route_revision(&self) -> Option<search_contracts::CollectionRouteRevision> {
+        self.initial_route_revision
     }
     /// Current exact membership-to-manifest references; no point data is stored here.
     #[must_use]
@@ -114,6 +125,9 @@ impl PersistentControlJournal {
             return Err(ControlError::GenerationMismatch);
         }
         let mut manifests = BTreeMap::new();
+        let initial_route_revision = crate::persistent::operating_profile::initial_route_revision(
+            &snapshot, &visibility, self.limits,
+        )?;
         let mut prepared_artifact_sets = BTreeMap::new();
         let mut shadows = BTreeMap::new();
         for (key, value) in &snapshot.records {
@@ -163,6 +177,7 @@ impl PersistentControlJournal {
             identity: snapshot.identity,
             generation: snapshot.generation,
             visibility,
+            initial_route_revision,
             manifests,
             prepared_artifact_sets,
             shadows,

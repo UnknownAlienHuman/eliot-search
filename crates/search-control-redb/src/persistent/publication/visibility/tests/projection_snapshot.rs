@@ -31,6 +31,7 @@ fn projection_snapshot_is_coherent_read_only_and_refuses_unresolved_work() {
     assert_eq!(snapshot.identity(), journal.identity());
     assert_eq!(snapshot.generation(), commit.after_generation);
     assert_eq!(snapshot.visibility().visible_epoch.get(), 1);
+    assert_eq!(snapshot.initial_route_revision(), None);
     assert_eq!(
         snapshot.manifests().get(&member(1)),
         Some(&reference("new"))
@@ -74,6 +75,7 @@ fn projection_snapshot_schema5_uses_the_same_profile_and_original_allowance() {
             let snapshot = result.unwrap().unwrap();
             assert_eq!(snapshot.visibility(), &state());
             assert_eq!(snapshot.generation(), 1);
+            assert_eq!(snapshot.initial_route_revision().unwrap().get(), 1);
             assert!(snapshot.manifests().is_empty());
             assert!(snapshot.shadows().is_empty());
         } else {

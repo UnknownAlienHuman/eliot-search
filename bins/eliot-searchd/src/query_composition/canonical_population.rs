@@ -121,6 +121,13 @@ impl CanonicalPopulationSnapshot {
         if reads.len() > MAX_COLLECTION_ITEMS {
             return Err(AccessError::EligibilityPopulationTooLarge);
         }
+        let initial_route_revision = c02.initial_route_revision()
+            .ok_or(AccessError::RouteMismatch)?;
+        if route.collection_route_revision != initial_route_revision
+            || fence.collection_route_revision != initial_route_revision
+        {
+            return Err(AccessError::RouteMismatch);
+        }
         let mut snapshot = Self {
             c02_generation: c02.generation(),
             visibility: *c02.visibility(),

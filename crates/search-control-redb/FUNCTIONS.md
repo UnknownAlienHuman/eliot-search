@@ -176,6 +176,14 @@ guards before preparation; these technical APIs do not establish Qdrant readines
 MigrationInert adoption still refuses. Native v2 creation and source admission remain
 Root responsibilities; this package mints none of those authorities.
 
+`PublicationProjectionSnapshot::initial_route_revision` exposes revision one of
+the actual schema-5 route genesis/adoption, after verification in the same disk
+snapshot. Publication epochs and unrelated control generations do not change it.
+The immutable initial generation/schema must still match the current route;
+legacy or replaced routes return None and require their route-switch owner.
+Root must independently verify physical collection name/build/schema before use.
+This baseline coordinate creates no record, route cutover, readiness or grant.
+
 ## Concrete registry reservation (#269)
 
 - `RegistryMutationRequest::new`: finite owner-supplied metadata and exact before

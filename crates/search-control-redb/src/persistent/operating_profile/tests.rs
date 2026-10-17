@@ -565,6 +565,11 @@ fn operating_profile_adoption_preserves_genesis_and_sources_across_restart_and_r
     assert_eq!(prepared.expected_generation(), 2);
     let receipt = journal.adopt_indexed_profile(&prepared, &context()).unwrap();
     assert_eq!((receipt.before_generation, receipt.after_generation), (2, 3));
+    let observed = journal.read_projection_snapshot_checked(&Unscoped).unwrap().unwrap();
+    assert_eq!(observed.initial_route_revision().unwrap().get(), 1);
+    let mut foreign = *observed.visibility();
+    foreign.collection_generation_id = CollectionGenerationId::from_bytes([99; 16]);
+    assert_eq!(initial_route_revision(&journal.read_snapshot().unwrap(), &foreign, LIMITS).unwrap(), None);
     assert_eq!(journal.operating_profile(&context()).unwrap(), JournalOperatingProfile::Indexed);
     assert_eq!(journal.read_snapshot().unwrap().get(&profile_key), Some(&genesis));
     assert_eq!(journal.read_registry_snapshot(&context()).unwrap().states().len(), 2);
@@ -575,6 +580,7 @@ fn operating_profile_adoption_preserves_genesis_and_sources_across_restart_and_r
     drop(journal);
     let mut reopened = scratch.open().unwrap();
     assert_eq!(reopened.operating_profile(&context()).unwrap(), JournalOperatingProfile::Indexed);
+    assert_eq!(reopened.read_projection_snapshot_checked(&Unscoped).unwrap().unwrap().initial_route_revision().unwrap().get(), 1);
     assert_eq!(reopened.read_publication_visibility(&context()).unwrap(), Some(visibility()));
     let recovered = reopened.prepare_indexed_profile_adoption(visibility(), MutationId([61; 32]), DIGEST, &context()).unwrap();
     assert_eq!(recovered, prepared);
