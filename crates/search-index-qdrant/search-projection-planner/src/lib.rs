@@ -34,6 +34,7 @@
 mod diff;
 mod error;
 mod manifest;
+mod manifest_read;
 mod model;
 mod plan;
 mod point;
@@ -43,6 +44,7 @@ pub use diff::diff_manifests;
 pub use error::ProjectionError;
 // Canonical encoding is data only; publication still verifies source/scope/units.
 pub use manifest::manifest_canonical_bytes;
+pub use manifest_read::{decode_projection_manifest_data, validate_projection_manifest_metadata};
 pub use model::{
     ExpectedReadbackShape, LineageObservation, ManifestDiff, PlannedUnit, PlannedVector, PointSpec,
     ProjectionBudget, ProjectionManifest, ProjectionManifestEntry, ProjectionMembershipBinding,

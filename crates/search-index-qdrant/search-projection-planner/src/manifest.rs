@@ -15,7 +15,7 @@ use crate::error::ProjectionError;
 use crate::model::ProjectionManifestEntry;
 
 /// Frozen canonical value emitted inside the manifest preimage.
-const MANIFEST_VALUE: &str = "eliot-search/projection-manifest/v1";
+pub const MANIFEST_VALUE: &str = "eliot-search/projection-manifest/v1";
 
 /// One canonical bounded key.
 fn canonical_key(name: &str) -> Result<CanonicalKey, ProjectionError> {
