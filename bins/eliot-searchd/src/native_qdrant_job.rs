@@ -7,7 +7,9 @@
 
 use std::fs::File;
 
-use search_qdrant_supervisor::{ContainedLaunchError, LaunchPlan, SecretMaterial, SpawnedChild};
+use search_qdrant_supervisor::{
+    ContainedLaunchError, LaunchPlan, SecretLeaseEvidence, SecretMaterial, SpawnedChild,
+};
 
 use crate::native_file::{DirectoryIdentity, Observation, StorageSecurityContext};
 
@@ -60,21 +62,33 @@ impl<E> core::fmt::Debug for NativeQdrantJobError<E> {
 /// cumulative work allowance; bounded probe/connect waits are clipped to its
 /// absolute deadline. The returned child owns Job and directory pins through
 /// supervisor shutdown/recovery.
+///
+/// `live_secret_check` must borrow the same actual lease and issuing context
+/// used to construct `secret`. It validates the supplied binding metadata
+/// against that live lease on every original checkpoint. Historical ticks or
+/// copied metadata alone are insufficient. Root keeps the process outcome
+/// outside any outer secret callback that could discard it on a late refusal.
 pub fn spawn_qualified<C: StorageSecurityContext>(
     plan: &LaunchPlan,
     secret: &SecretMaterial,
     data_directory: &File,
     expected_current_user_digest: [u8; 32],
     context: &mut C,
+    live_secret_check: &mut impl FnMut(&SecretLeaseEvidence) -> Result<(), C::Error>,
 ) -> Result<SpawnedChild, ContainedLaunchError<NativeQdrantJobError<C::Error>>> {
     #[cfg(windows)]
     {
+        let mut guarded = LeaseCheckedContext {
+            native: context,
+            live_secret_check,
+            evidence: plan.secret_lease(),
+        };
         windows::spawn_qualified(
             plan,
             secret,
             data_directory,
             expected_current_user_digest,
-            context,
+            &mut guarded,
         )
     }
     #[cfg(not(windows))]
@@ -85,10 +99,41 @@ pub fn spawn_qualified<C: StorageSecurityContext>(
             data_directory,
             expected_current_user_digest,
             context,
+            live_secret_check,
         );
         Err(ContainedLaunchError::Port(
             NativeQdrantJobError::UnsupportedPlatform,
         ))
+    }
+}
+
+#[cfg(windows)]
+struct LeaseCheckedContext<'a, C, F> {
+    native: &'a mut C,
+    live_secret_check: &'a mut F,
+    evidence: &'a SecretLeaseEvidence,
+}
+
+#[cfg(windows)]
+impl<C, F> StorageSecurityContext for LeaseCheckedContext<'_, C, F>
+where
+    C: StorageSecurityContext,
+    F: FnMut(&SecretLeaseEvidence) -> Result<(), C::Error>,
+{
+    type Error = C::Error;
+
+    fn absolute_deadline(&self) -> std::time::Instant {
+        self.native.absolute_deadline()
+    }
+
+    fn checkpoint(&mut self) -> Result<(), Self::Error> {
+        self.native.checkpoint()?;
+        (self.live_secret_check)(self.evidence)?;
+        self.native.checkpoint()
+    }
+
+    fn charge(&mut self, work: crate::native_file::StorageSecurityWork) -> Result<(), Self::Error> {
+        self.native.charge(work)
     }
 }
 

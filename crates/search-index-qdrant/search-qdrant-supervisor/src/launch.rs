@@ -679,7 +679,14 @@ pub fn spawn_qualified_contained<P: ContainedSpawnPort>(
     let Some(pid) = NonZeroU32::new(child.id()) else {
         return Err(recovery_error(SupervisorError::StartFailed, child, custody));
     };
-    if child.try_wait().is_err() {
+    if let Err(error) = port.admit(ContainedLaunchWork::NativeCall) {
+        return Err(port_recovery_error(error, child, custody));
+    }
+    let observation_result = child.try_wait();
+    if let Err(error) = contained_checkpoint(port) {
+        return Err(port_recovery_error(error, child, custody));
+    }
+    if observation_result.is_err() {
         return Err(recovery_error(SupervisorError::StartFailed, child, custody));
     }
     let containment = ContainmentReport::windows_after_spawn(&observation);
@@ -912,6 +919,20 @@ fn recovery_error<E>(
 ) -> ContainedLaunchError<E> {
     ContainedLaunchError::RecoveryRequired {
         cause: ContainedLaunchFailureCause::Supervisor(cause),
+        recovery: SpawnRecovery {
+            child,
+            custody: Some(custody),
+        },
+    }
+}
+
+fn port_recovery_error<E>(
+    cause: E,
+    child: Child,
+    custody: Box<dyn ChildContainmentCustody>,
+) -> ContainedLaunchError<E> {
+    ContainedLaunchError::RecoveryRequired {
+        cause: ContainedLaunchFailureCause::Port(cause),
         recovery: SpawnRecovery {
             child,
             custody: Some(custody),
