@@ -42,6 +42,9 @@ pub use persistent::{BoundControlJournal, ControlPortCommand, ControlPortError,
 pub use persistent::PublicationProjectionSnapshot;
 pub use persistent::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
     PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
+pub use persistent::{PreparationInputMetadataV1, PreparationInputReadbackV1,
+    PreparationInputRecordV1, MAX_PREPARATION_INPUT_POLICY_BYTES,
+    MAX_PREPARATION_INPUT_RECORD_BYTES, MAX_PREPARATION_INPUT_RESIDENCY_BYTES};
 pub use persistent::{registry_operation_value_len, RegistryStateFamily, RegistryStateKey, RegistryStateChange,
     RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
     RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,

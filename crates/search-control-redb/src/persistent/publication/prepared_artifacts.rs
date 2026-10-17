@@ -264,7 +264,7 @@ impl PreparedArtifactSetReadbackV1 {
 }
 
 pub(in crate::persistent) fn reserved(key: &[u8]) -> bool {
-    key.starts_with(PREFIX)
+    key.starts_with(PREFIX) || super::preparation_input::reserved(key)
 }
 pub(in crate::persistent) fn is_reference(reference: &ReceiptRef) -> bool {
     reference.as_str().starts_with(REF_FAMILY)
@@ -383,7 +383,7 @@ pub(in crate::persistent) fn validate_records(
             return Err(ControlError::StoreCorrupt);
         }
     }
-    Ok(())
+    super::preparation_input::validate_records(snapshot, limits, check)
 }
 
 fn reserve(size: usize, check: &dyn Check) -> Result<(), ControlError> {
