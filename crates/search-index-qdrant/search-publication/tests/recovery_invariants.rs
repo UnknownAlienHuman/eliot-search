@@ -3,8 +3,8 @@
 
 use search_contracts::{
     AccessPartitionId, Blake3Digest32, CollectionGenerationId, Epoch, InstallationIncarnationId,
-    OpaqueId, OwnerEpoch, ProjectionMembershipId, ProjectionProfileSetId, ReceiptRef,
-    ScoringDocumentId, ScoringPartitionId, SourceMembershipId, UnitId,
+    OpaqueId, OwnerEpoch, ProjectionMembershipId, ProjectionProfileSetId, ScoringDocumentId,
+    ScoringPartitionId, SourceMembershipId, UnitId,
 };
 use search_point_identity::s11::PointId128;
 use search_publication::*;
@@ -25,9 +25,6 @@ mod identity_conflicts;
 
 fn id(name: &str) -> OpaqueId {
     OpaqueId::new(name).unwrap()
-}
-fn reference(name: &str) -> ReceiptRef {
-    ReceiptRef::new(format!("fixture:{name}")).unwrap()
 }
 fn epoch(value: i64) -> Epoch {
     Epoch::new(value).unwrap()
@@ -53,7 +50,7 @@ fn durable(old: Option<Fixture>, new: Fixture) -> PublicationCoordinator {
     publication_support::persist_intent(&mut machine, &mut PhasePort::default()).unwrap();
     machine
 }
-fn observation(machine: &PublicationCoordinator) -> PublicationRecoveryObservation {
+const fn observation(machine: &PublicationCoordinator) -> PublicationRecoveryObservation {
     publication_support::recovery_observation(machine)
 }
 fn recover(
@@ -276,7 +273,7 @@ fn incomplete_wrong_epoch_or_foreign_restoration_never_finishes_compensation() {
         match case {
             0 => {
                 port.readback.missing_point_ids_override =
-                    Some((PublicationEffectKind::Compensate, vec![point(9)]))
+                    Some((PublicationEffectKind::Compensate, vec![point(9)]));
             }
             1 => port
                 .readback
@@ -289,15 +286,15 @@ fn incomplete_wrong_epoch_or_foreign_restoration_never_finishes_compensation() {
             }
             3 => {
                 port.readback.binding_transaction_override =
-                    Some((PublicationEffectKind::Compensate, id("foreign")))
+                    Some((PublicationEffectKind::Compensate, id("foreign")));
             }
             4 => {
                 port.readback.binding_target_epoch_override =
-                    Some((PublicationEffectKind::Compensate, epoch(3)))
+                    Some((PublicationEffectKind::Compensate, epoch(3)));
             }
             _ => {
                 port.readback.binding_new_manifest_override =
-                    Some((PublicationEffectKind::Compensate, digest(99)))
+                    Some((PublicationEffectKind::Compensate, digest(99)));
             }
         }
         assert!(publication_support::compensate_and_restore(&mut machine, &mut port).is_err());

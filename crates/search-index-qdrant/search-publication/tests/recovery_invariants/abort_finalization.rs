@@ -17,8 +17,7 @@ fn request(machine: &mut PublicationCoordinator) -> AbortFinalizationRequest {
         .prepare_abort_finalization(id("finalize-1"), 40, guards())
         .unwrap()
 }
-fn complete(machine: &mut PublicationCoordinator, request: AbortFinalizationRequest) {
-    let _ = request;
+fn complete(machine: &mut PublicationCoordinator, _request: &AbortFinalizationRequest) {
     let mut port = PhasePort::default();
     abort_support::commit(machine, &mut port).unwrap();
     abort_support::snapshot(machine, &mut port).unwrap();
@@ -95,7 +94,7 @@ fn create_only_compensation_retains_absent_restoration_instead_of_inventing_evid
         prepared_input_digest,
         machine.active().unwrap().prepared().prepared_input_digest()
     );
-    complete(&mut machine, command);
+    complete(&mut machine, &command);
 }
 
 #[test]
@@ -113,7 +112,7 @@ fn complete_exclusion_keeps_its_exact_scope_evidence_and_requires_both_acknowled
         AbortedPublicationResolution::Excluded { excluded_projection_memberships, .. }
             if excluded_projection_memberships == &vec![ProjectionMembershipId::from_bytes([17; 16])]
     ));
-    complete(&mut machine, command);
+    complete(&mut machine, &command);
     assert_eq!(machine.visible_epoch(), Some(epoch(1)));
     assert_eq!(machine.current_manifest(), Some(old.manifest()));
 }
@@ -142,7 +141,7 @@ fn failed_or_missing_compensation_cannot_prepare_a_finalization_command() {
     assert!(machine.finalize_aborted().is_err());
     publication_support::compensate_and_restore(&mut machine, &mut PhasePort::default()).unwrap();
     let command = request(&mut machine);
-    complete(&mut machine, command);
+    complete(&mut machine, &command);
 }
 
 #[test]
@@ -191,7 +190,7 @@ fn invalid_request_inputs_fail_before_latching_and_do_not_burn_a_control_operati
             Err(expected)
         );
         let command = request(&mut machine);
-        complete(&mut machine, command);
+        complete(&mut machine, &command);
     }
 }
 
@@ -228,7 +227,7 @@ fn all_monotone_guard_regressions_are_rejected_without_replacing_prepared_guards
         let command = machine
             .prepare_abort_finalization(id("finalize-1"), 40, original)
             .unwrap();
-        complete(&mut machine, command);
+        complete(&mut machine, &command);
     }
 }
 
@@ -245,7 +244,7 @@ fn current_successor_guards_remain_separate_from_original_intent_guards() {
         .unwrap();
     assert_eq!(command.current_guards, current);
     assert_eq!(command.intent.guards(), guards());
-    complete(&mut machine, command);
+    complete(&mut machine, &command);
 }
 
 #[test]
@@ -308,7 +307,7 @@ fn changed_complete_request_cannot_be_acknowledged_under_the_latched_operation()
             }
             9 => {
                 port.readback.control_route_override =
-                    Some(CollectionGenerationId::from_bytes([9; 16]))
+                    Some(CollectionGenerationId::from_bytes([9; 16]));
             }
             10 => port.readback.control_after_epoch_override = Some(epoch(1)),
             _ => port.readback.control_generation_override = Some(40),
@@ -326,7 +325,7 @@ fn changed_complete_request_cannot_be_acknowledged_under_the_latched_operation()
             machine.finalize_aborted(),
             Err(PublicationError::RecoveryBlocked)
         );
-        complete(&mut machine, original);
+        complete(&mut machine, &original);
     }
 }
 
@@ -339,7 +338,7 @@ fn actual_route_visibility_floor_and_generation_must_match_the_durable_command()
         match case {
             0 => {
                 port.readback.control_route_override =
-                    Some(CollectionGenerationId::from_bytes([9; 16]))
+                    Some(CollectionGenerationId::from_bytes([9; 16]));
             }
             1 => port.readback.control_after_epoch_override = Some(epoch(1)),
             2 => port.readback.control_floor_override = Some(epoch(0)),
@@ -350,7 +349,7 @@ fn actual_route_visibility_floor_and_generation_must_match_the_durable_command()
             abort_support::commit(&mut machine, &mut port),
             Err(PublicationError::ControlConflict)
         );
-        complete(&mut machine, original);
+        complete(&mut machine, &original);
     }
 }
 
@@ -375,7 +374,7 @@ fn every_observed_guard_axis_is_checked_at_acknowledgement() {
             abort_support::commit(&mut machine, &mut port),
             Err(PublicationError::GuardMismatch)
         );
-        complete(&mut machine, original);
+        complete(&mut machine, &original);
     }
 }
 
@@ -410,7 +409,7 @@ fn stale_or_foreign_snapshots_keep_the_active_slot_occupied() {
             1 => port.readback.snapshot_generation_override = Some(40),
             _ => {
                 port.readback.snapshot_route_override =
-                    Some(CollectionGenerationId::from_bytes([9; 16]))
+                    Some(CollectionGenerationId::from_bytes([9; 16]));
             }
         }
         assert_eq!(
@@ -455,7 +454,7 @@ fn prior_finalization_acknowledgements_are_not_carried_into_the_next_aborted_ope
     let mut old_port = PhasePort::default();
     abort_support::commit(&mut machine, &mut old_port).unwrap();
     abort_support::snapshot(&mut machine, &mut old_port).unwrap();
-    complete(&mut machine, original.clone());
+    complete(&mut machine, &original);
     machine
         .submit_fixture(proposal(None, manifest(&[3]), "next-transaction"))
         .unwrap();
@@ -478,7 +477,7 @@ fn prior_finalization_acknowledgements_are_not_carried_into_the_next_aborted_ope
         abort_support::commit(&mut machine, &mut stale_port),
         Err(PublicationError::OperationMismatch)
     );
-    complete(&mut machine, next);
+    complete(&mut machine, &next);
     assert_eq!(machine.last_reserved_epoch(), Some(epoch(2)));
     assert_eq!(machine.visible_epoch(), Some(epoch(0)));
 }

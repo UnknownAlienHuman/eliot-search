@@ -25,9 +25,13 @@ fn assert_rejected(old: &Fixture, new: Fixture) {
     assert_eq!(machine.last_reserved_epoch(), None);
     assert_eq!(machine.current_manifest(), None);
     assert_eq!(
-        machine.persist_intent(id("must-not-persist"), reference("unused")),
+        publication_support::persist_intent(&mut machine, &mut PhasePort::default()),
         Err(PublicationError::InvalidTransition),
     );
+}
+
+fn publish_snapshot(machine: &mut PublicationCoordinator) {
+    publication_support::publish_control_snapshot(machine, &mut PhasePort::default()).unwrap();
 }
 
 #[test]
@@ -160,7 +164,7 @@ fn collision_at_any_position_is_rejected_with_no_partial_reservation() {
 }
 
 #[test]
-fn exact_retained_points_are_neither_staged_nor_closed() {
+fn fixture_migration_exact_retained_points_are_neither_staged_nor_closed() {
     let old = manifest(&[1, 3, 5]);
     let new = old.clone();
     assert_eq!(old.plan.points, new.plan.points);
@@ -169,18 +173,16 @@ fn exact_retained_points_are_neither_staged_nor_closed() {
     assert!(plan.staged_ids.is_empty());
     assert!(plan.closed_ids.is_empty());
     assert_eq!(
-        machine.active().unwrap().prepared.difference().retain,
+        machine.active().unwrap().prepared().difference().retain,
         old.plan.manifest.entries
     );
-    machine
-        .compensate_and_restore(compensation(&plan), restoration(&plan))
-        .unwrap();
+    publication_support::compensate_and_restore(&mut machine, &mut PhasePort::default()).unwrap();
 }
 
 #[test]
-fn fresh_and_delete_only_plans_remain_usable() {
+fn fixture_migration_fresh_and_delete_only_plans_remain_usable() {
     let mut fresh = durable(None, manifest(&[2]));
-    let (commit, observed) = visible(&mut fresh);
+    let (_, observed) = visible(&mut fresh);
     assert_eq!(
         observed.staged_ids,
         manifest(&[2])
@@ -190,7 +192,7 @@ fn fresh_and_delete_only_plans_remain_usable() {
             .collect::<Vec<_>>()
     );
     assert!(observed.closed_ids.is_empty());
-    fresh.publish_control_snapshot(snapshot(&commit)).unwrap();
+    publish_snapshot(&mut fresh);
     fresh.complete().unwrap();
 
     let old = manifest(&[2]);
@@ -201,10 +203,8 @@ fn fresh_and_delete_only_plans_remain_usable() {
             "retire",
         ))
         .unwrap();
-    retired
-        .persist_intent(id("persist-retire"), reference("intent-retire"))
-        .unwrap();
-    let (commit, observed) = visible(&mut retired);
+    publication_support::persist_intent(&mut retired, &mut PhasePort::default()).unwrap();
+    let (_, observed) = visible(&mut retired);
     assert!(observed.staged_ids.is_empty());
     assert_eq!(
         observed.closed_ids,
@@ -213,12 +213,12 @@ fn fresh_and_delete_only_plans_remain_usable() {
             .map(|entry| entry.point_id)
             .collect::<Vec<_>>()
     );
-    retired.publish_control_snapshot(snapshot(&commit)).unwrap();
+    publish_snapshot(&mut retired);
     retired.complete().unwrap();
 }
 
 #[test]
-fn valid_replacement_with_new_ids_reaches_commit_and_snapshot_acknowledgement() {
+fn fixture_migration_valid_replacement_reaches_commit_and_snapshot_acknowledgement() {
     let old = manifest(&[1, 3]);
     let new = manifest(&[2, 3]).with_changed_vector_at(0);
     assert_ne!(old.source.revision_id, new.source.revision_id);
@@ -235,7 +235,7 @@ fn valid_replacement_with_new_ids_reaches_commit_and_snapshot_acknowledgement() 
     }));
     let expected_new = new.at_epoch(epoch(2)).plan.manifest;
     let mut machine = durable(Some(old.clone()), new.clone());
-    let (commit, observed) = visible(&mut machine);
+    let (_, observed) = visible(&mut machine);
     assert_eq!(
         observed.staged_ids,
         new.entries
@@ -260,7 +260,7 @@ fn valid_replacement_with_new_ids_reaches_commit_and_snapshot_acknowledgement() 
         recover(machine.active().unwrap(), &observed).unwrap(),
         PublicationRecoveryDecision::PublishSnapshot
     );
-    machine.publish_control_snapshot(snapshot(&commit)).unwrap();
+    publish_snapshot(&mut machine);
     machine.complete().unwrap();
     assert_eq!(machine.current_manifest(), Some(&expected_new));
     assert_eq!(machine.visible_epoch(), Some(epoch(2)));
@@ -360,7 +360,7 @@ fn exhaustive_small_manifest_pairs_never_overlap_staged_and_retired_ids() {
                     assert_eq!(machine.visible_epoch(), None);
                 } else {
                     assert_eq!(result, Ok(epoch(10)));
-                    let admitted = machine.active().unwrap().prepared.difference();
+                    let admitted = machine.active().unwrap().prepared().difference();
                     if unchanged {
                         assert_eq!(admitted.create, Vec::new());
                         assert_eq!(admitted.retain, expected_new.entries);
@@ -373,8 +373,7 @@ fn exhaustive_small_manifest_pairs_never_overlap_staged_and_retired_ids() {
                             expected_old.map_or_else(Vec::new, |manifest| manifest.entries)
                         );
                     }
-                    machine
-                        .persist_intent(id("persist"), reference("intent"))
+                    publication_support::persist_intent(&mut machine, &mut PhasePort::default())
                         .unwrap();
                     let plan = machine.begin_compensation_plan().unwrap();
                     assert!(
@@ -389,55 +388,31 @@ fn exhaustive_small_manifest_pairs_never_overlap_staged_and_retired_ids() {
 }
 
 #[test]
-fn legacy_same_id_effects_cannot_authorize_forward_or_snapshot_recovery() {
-    let mut machine = durable(Some(manifest(&[1])), manifest(&[2]));
-    let (commit, mut seen) = visible(&mut machine);
-    machine.publish_control_snapshot(snapshot(&commit)).unwrap();
-    let mut legacy = machine.active().unwrap().clone();
-    // A synthetic already-recorded conflicting plan, not a new allowed submit.
-    let old_point = legacy.prepared.old_manifest().unwrap().entries[0].point_id;
-    legacy.stage_receipt.as_mut().unwrap().staged_ids = vec![old_point];
-    seen.staged_ids = vec![old_point];
-    let original = legacy.clone();
-    for phase in [
-        PublicationPhase::IntentDurable,
-        PublicationPhase::NewPointsAcknowledged,
-        PublicationPhase::OldPointsClosedAcknowledged,
-        PublicationPhase::ReadbackVerified,
-        PublicationPhase::ControlCommitted,
-        PublicationPhase::SnapshotPublished,
-        PublicationPhase::Compensating,
-        PublicationPhase::Aborted,
-        PublicationPhase::PublicationBlocked,
-    ] {
-        legacy.phase = phase;
-        for observed_epoch in [legacy.previous_visible_epoch, legacy.target_epoch] {
-            for snapshot_published in [false, true] {
-                seen.control_visible_epoch = observed_epoch;
-                seen.snapshot_published = snapshot_published;
-                let before = legacy.clone();
-                assert_eq!(
-                    recover(&legacy, &seen).unwrap(),
-                    PublicationRecoveryDecision::PublicationBlocked
-                );
-                assert_eq!(legacy, before);
-            }
-        }
-    }
-    legacy.phase = original.phase;
-    assert_eq!(legacy, original);
+fn fixture_migration_owner_readback_rejects_foreign_same_id_stage_point() {
+    let old = manifest(&[1]);
+    let machine = durable(Some(old.clone()), manifest(&[2]));
+    let transaction = machine.active().unwrap().clone();
+    let old_point = old.entries[0].point_id;
+    let mut readback = publication_support::recovery_port(&transaction, &observation(&machine));
+    readback
+        .unexpected_point_ids_by_effect
+        .push((PublicationEffectKind::StageNewPoints, vec![old_point]));
+    assert_eq!(
+        publication_support::recover_readback(&transaction, &mut readback).unwrap(),
+        PublicationRecoveryDecision::PublicationBlocked
+    );
 }
 
 #[test]
-fn legacy_collision_is_blocked_even_without_observed_effects() {
+fn fixture_migration_owner_readback_rejects_same_id_payload_change_during_recovery() {
     let mut machine = durable(Some(manifest(&[1])), manifest(&[2]));
-    let (_, mut seen) = visible(&mut machine);
-    let mut transaction = machine.active().unwrap().clone();
-    let old_point = transaction.prepared.old_manifest().unwrap().entries[0].point_id;
-    transaction.stage_receipt.as_mut().unwrap().staged_ids = vec![old_point];
-    seen.staged_ids = vec![old_point];
+    let (_, seen) = visible(&mut machine);
+    let transaction = machine.active().unwrap().clone();
+    let staged_point = transaction.prepared().difference().create[0].point_id;
+    let mut readback = publication_support::recovery_port(&transaction, &seen);
+    readback.corrupt_point_payload = Some((PublicationEffectKind::StageNewPoints, staged_point));
     assert_eq!(
-        recover(&transaction, &seen).unwrap(),
+        publication_support::recover_readback(&transaction, &mut readback).unwrap(),
         PublicationRecoveryDecision::PublicationBlocked
     );
 }

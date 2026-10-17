@@ -264,6 +264,24 @@ impl Fixture {
         retargeted.sealed_scope = retargeted.scope.clone();
         retargeted
     }
+
+    /// Replan the real C13 product while preserving the complete source and point address.
+    pub fn with_changed_vector_at(&self, unit_index: usize) -> Self {
+        let mut changed = self.clone();
+        changed.planned_vectors[unit_index].vectors[0].value = VectorValue::Sparse {
+            indices: vec![1, 4],
+            values: vec![2.0, 1.0],
+        };
+        changed.plan = projection_plan(
+            &changed.units,
+            &changed.scope,
+            &changed.schema,
+            &changed.planned_vectors,
+        );
+        changed.sealed_plan = changed.plan.clone();
+        changed.sealed_scope = changed.scope.clone();
+        changed
+    }
 }
 
 impl Deref for Fixture {

@@ -27,7 +27,7 @@ fn c13_plan(
     scope: &PlanningScope,
     schema: &CollectionSchema,
     changed_vector_at: Option<usize>,
-) -> ProjectionPlan {
+) -> (ProjectionPlan, Vec<PlannedUnit>) {
     let requirement = VectorRequirement::Sparse {
         index_ceiling: 8,
         idf_enabled: true,
@@ -69,13 +69,14 @@ fn c13_plan(
     )
     .unwrap();
     planner::validate_schema(schema, &plan, ProjectionBudget::BASELINE).unwrap();
-    plan
+    (plan, planned)
 }
 
 #[derive(Clone)]
 struct Fixture {
     source: c::SourceRevisionRef,
     units: VerifiedUnitSet,
+    planned: Vec<PlannedUnit>,
     plan: ProjectionPlan,
     scope: PlanningScope,
     schema: CollectionSchema,
@@ -125,7 +126,7 @@ impl Fixture {
             &vectors,
         )
         .unwrap();
-        let plan = c13_plan(&units, &scope, &schema, None);
+        let (plan, planned) = c13_plan(&units, &scope, &schema, None);
         let source = c::SourceRevisionRef {
             source_namespace_id: binding.source_namespace_id,
             source_id: binding.source_id,
@@ -136,6 +137,7 @@ impl Fixture {
         Self {
             source,
             units,
+            planned,
             plan,
             scope,
             schema,
@@ -145,7 +147,7 @@ impl Fixture {
 
     fn with_projection_membership(mut self, id: c::ProjectionMembershipId) -> Self {
         self.scope.membership.projection_membership_id = id;
-        self.plan = c13_plan(
+        (self.plan, self.planned) = c13_plan(
             &self.units,
             &self.scope,
             &self.schema,
@@ -157,7 +159,7 @@ impl Fixture {
     fn with_changed_vector_at(mut self, unit_index: usize) -> Self {
         assert!(unit_index < self.units.units().len());
         self.changed_vector_at = Some(unit_index);
-        self.plan = c13_plan(
+        (self.plan, self.planned) = c13_plan(
             &self.units,
             &self.scope,
             &self.schema,
@@ -240,6 +242,14 @@ impl PublicationAdmissionOwners for Owners {
         Ok(())
     }
 }
+impl PublicationEffectPreparationOwners for Owners {
+    fn planned_vectors<'a>(
+        &self,
+        token: &'a Self::Projection,
+    ) -> Result<Option<&'a [PlannedUnit]>, PublicationError> {
+        Ok(Some(&token.planned))
+    }
+}
 fn owners() -> Owners {
     Owners {
         observations: 0,
@@ -278,7 +288,7 @@ fn assert_uninitialized(coordinator: &PublicationCoordinator) {
 }
 
 #[test]
-fn canonical_prepare_and_restore_recompute_the_same_frozen_input() {
+fn fixture_migration_canonical_prepare_restore_and_submit_recompute_same_input() {
     let new = Fixture::new("alpha\nbeta\ngamma\n", 3, 1);
     let proposal = proposal(None, &new);
     let prepare = snapshot(&new, None, 0, 0, PublicationMembershipState::Active);
@@ -315,43 +325,9 @@ fn canonical_prepare_and_restore_recompute_the_same_frozen_input() {
         ),
         Ok(epoch(1))
     );
-    let intent = coordinator
-        .persist_intent(
-            c::OpaqueId::new("fixture-intent").unwrap(),
-            c::ReceiptRef::new("fixture-correlation").unwrap(),
-        )
-        .unwrap();
-    let input = PublicationRestoreInput {
-        prepared: proposal,
-        previous_visible_epoch: epoch(0),
-        last_reserved_epoch: epoch(1),
-        collection_generation_id: new.scope.membership.collection_generation_id,
-        current_guards: guards(),
-        phase: PublicationPhase::IntentDurable,
-        intent,
-        stage_receipt: None,
-        closure_receipt: None,
-        verified: None,
-        control_commit: None,
-        observation: PublicationRecoveryObservation {
-            intent_durable: true,
-            staged_ids: Vec::new(),
-            closed_ids: Vec::new(),
-            control_visible_epoch: epoch(0),
-            snapshot_published: false,
-            abandon_fence_durable: false,
-        },
-    };
-    let (restored, decision) = PublicationCoordinator::restore_inflight(
-        input,
-        &mut owners(),
-        &restore,
-        ProjectionBudget::BASELINE,
-    )
-    .unwrap();
-    assert_eq!(decision, PublicationRecoveryDecision::Continue);
+    let submitted = coordinator.active().unwrap().prepared();
     assert_eq!(
-        restored.active().unwrap().prepared.prepared_input_digest(),
+        submitted.prepared_input_digest(),
         normal.prepared_input_digest()
     );
 }
