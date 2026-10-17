@@ -1340,14 +1340,18 @@ dependencies = [
  "search-contracts",
  "search-domain",
  "search-ports",
+ "zeroize",
 ]
 
 [[package]]
 name = "search-os-secrets-windows"
 version = "0.0.0"
 dependencies = [
+ "blake3",
+ "search-contracts",
  "search-control-redb",
  "search-os-secrets",
+ "search-ports",
  "search-revision-crypto",
  "search-revision-store",
 ]

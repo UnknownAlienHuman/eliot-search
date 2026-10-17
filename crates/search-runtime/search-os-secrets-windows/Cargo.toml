@@ -16,10 +16,13 @@ default = []
 test-credential-cleanup = []
 
 [dependencies]
+search-contracts.workspace = true
+search-ports.workspace = true
 search-os-secrets.workspace = true
 search-control-redb.workspace = true
 search-revision-crypto = { path = "../search-revision-crypto" }
 search-revision-store.workspace = true
+blake3 = { workspace = true }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

@@ -48,8 +48,16 @@ Three production surfaces are available:
   `LegacyRevisionRootSecretRequirement`, and the two load functions;
 - short application secrets use `SecretBytes`, `ProtectionScope`, and
   `ProtectedSecret`;
+- the selected Qdrant API key uses read-only `QdrantApiSecretStore`, a fixed
+  Qdrant-purpose reference and finite `QdrantApiSecretLease`; no credential
+  provisioning or rotation is exposed by this adapter;
 - legacy DIRECT revision compatibility uses exact inner-envelope bytes and an
   already-derived 32-byte optional-entropy value.
+
+The Qdrant lease expires no later than the remaining issuer operation deadline
+and retains that operation's cancellation capability and request coordinates.
+Disclosure requires the original context identity to remain live; a fresh
+context cannot extend or replace it.
 
 The optional `test-credential-cleanup` feature adds one exact-namespace cleanup
 operation for native test harnesses. It serializes with production key creation,

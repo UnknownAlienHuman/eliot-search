@@ -80,6 +80,8 @@ unsafe extern "system" {
     fn release_mutex(handle: *mut c_void) -> i32;
     #[link_name = "CloseHandle"]
     fn close_handle(handle: *mut c_void) -> i32;
+    #[link_name = "GetTickCount64"]
+    fn get_tick_count64() -> u64;
 }
 
 #[link(name = "Bcrypt")]
@@ -94,6 +96,12 @@ unsafe extern "system" {
 }
 
 pub(super) struct WindowsCredentialPlatform;
+
+/// Process-local monotonic millisecond clock for finite Qdrant secret leases.
+pub(super) fn monotonic_millis() -> u64 {
+    // SAFETY: GetTickCount64 has no pointer arguments or mutable state.
+    unsafe { get_tick_count64() }
+}
 
 // Keep the material in one heap allocation across moves and callback unwinds.
 pub(super) struct RevisionDekKey {

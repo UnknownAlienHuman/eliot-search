@@ -23,13 +23,37 @@ through its fences and exact Current CAS/readback, and reconstructs it again for
 any later present-backend availability statement. Invocation epochs are not matched
 against the candidate's historical creator epoch.
 
-This leaf performs no RNG, credential write/delete, lease, encryption, TTL/grace/ref
+The revision-DEK selection leaf performs no RNG, credential write/delete, lease, encryption, TTL/grace/ref
 enforcement or whole-daemon activation. Protected readback is cleared by its existing
 owner on drop; no plaintext key leaves the existing unwrap validator.
 
 Pure fixtures exercise original-context refusal, unsupported platforms and exact
 policy/candidate mismatch without credential calls. Root owns compilation and Native
 qualification at the integrated source revision.
+
+## Qdrant API selected-secret lease
+
+`QdrantApiSecretStore<C>` implements the read-only `SecretStorePort` surface for the fixed
+`secret-purpose:qdrant-api-key/v1` purpose. Root supplies the selected opaque reference,
+installation ID/incarnation and the current user's independently observed SID-scope digest;
+`QdrantApiSecretReference::for_owner` binds those facts before the platform read. The adapter derives
+one exact Credential Manager target from that binding, reads it through the existing bounded
+`read_provider_credential` owner, validates the versioned `ELQDRT01` record and selection digest,
+then opens the protected payload through current-user DPAPI with Qdrant-only entropy. The exact
+versioned `SecretReference` is passed to Core's finite `SecretLease::issue_selected` lifecycle.
+The issued expiry is the earlier of the configured lease TTL and the remaining original operation
+allowance. The lease retains the issuer cancellation capability, request ID, budget reference and
+relative deadline; each disclosure requires those exact request coordinates and a live issuer
+deadline/cancellation state. A later context cannot extend or substitute that issuer authority.
+`QdrantApiSecretLease::launch_evidence` samples observed and expiry ticks from this same native
+monotonic clock and refuses a stale issuer before returning the non-secret supervisor binding.
+
+The store cannot create, rotate or delete records. A missing or malformed selected record returns a
+content-free failure; it never searches other credentials, falls back to provider-pairing or
+revision-DEK purposes, or creates a replacement. Plaintext leaves the returned private lease only
+inside its bounded callback. This adapter does not establish artifact qualification, process
+readiness or runtime activation; daemon composition still must use the actual Root custody and the
+original operation context.
 
 ## Derived-artifact exact key use
 

@@ -137,6 +137,14 @@ Creates a short-lived non-serializable lease capability for a daemon-owned adapt
 bounded by config/profile. A lease cannot be converted to plaintext by public API, serialized across a
 process boundary or reused after incarnation/generation change.
 
+### `SecretLease::issue_selected(reference, requested_binding, issued_at, expires_at, plaintext, limits)`
+
+Issues a finite lease after a platform owner has read one exact selected secret. It checks the selected
+reference binding, nonempty bounded plaintext and finite lease interval, then takes ownership of the
+bytes for zeroizing drop. It does not prove a durable catalog record, create or rotate a credential,
+or authorize a purpose by itself; the platform adapter must validate the exact purpose and OS readback
+before calling it.
+
 ### `rotate(reference, expected_binding, operation, deadline, cancel) -> Result<SecretRotationReceipt, SecretError>`
 
 Implements a crash-recoverable state machine:

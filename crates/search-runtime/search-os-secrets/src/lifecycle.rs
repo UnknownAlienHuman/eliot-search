@@ -25,6 +25,7 @@ use search_contracts::{
     OpaqueId, ReceiptRef,
 };
 use search_ports::{MonotonicInstant, MutationIdentity};
+use zeroize::Zeroizing;
 
 /// Conservative default finite limits for the secret catalog.
 pub const DEFAULT_SECRET_LIMITS: SecretLimits = SecretLimits {
@@ -854,12 +855,12 @@ fn verify_rotation_readback(
 /// Short-lived plaintext lease.
 ///
 /// The type is non-clone, redacts formatting, exposes bytes only to a callback,
-/// and overwrites its owned buffer on drop.
+/// and zeroizes its owned buffer on drop.
 pub struct SecretLease {
     reference: SecretReference,
     issued_at: MonotonicInstant,
     expires_at: MonotonicInstant,
-    plaintext: Vec<u8>,
+    plaintext: Zeroizing<Vec<u8>>,
 }
 
 impl SecretLease {
@@ -872,6 +873,9 @@ impl SecretLease {
         plaintext: Vec<u8>,
         limits: SecretLimits,
     ) -> Result<Self, SecretError> {
+        // Establish the zeroizing owner before any binding, lifecycle, size, or
+        // time-window refusal can return the caller-owned plaintext buffer.
+        let plaintext = Zeroizing::new(plaintext);
         if record.reference.binding() != requested_binding {
             return Err(SecretError::BindingMismatch);
         }
@@ -889,6 +893,41 @@ impl SecretLease {
         }
         Ok(Self {
             reference: record.reference.clone(),
+            issued_at,
+            expires_at,
+            plaintext,
+        })
+    }
+
+    /// Issues a finite lease after a platform owner has read and verified one
+    /// exact selected reference. This path is for non-catalog OS credentials;
+    /// it does not assert a durable `SecretRecord` or a mutation receipt.
+    pub fn issue_selected(
+        reference: SecretReference,
+        requested_binding: &SecretBinding,
+        issued_at: MonotonicInstant,
+        expires_at: MonotonicInstant,
+        plaintext: Vec<u8>,
+        limits: SecretLimits,
+    ) -> Result<Self, SecretError> {
+        // Selected OS records use the same early guard as catalog-backed
+        // records: every validation failure clears the owned plaintext copy.
+        let plaintext = Zeroizing::new(plaintext);
+        limits.validate()?;
+        if reference.binding() != requested_binding {
+            return Err(SecretError::BindingMismatch);
+        }
+        if plaintext.is_empty() {
+            return Err(SecretError::EmptySecret);
+        }
+        if plaintext.len() > limits.max_plaintext_lease_bytes {
+            return Err(SecretError::SecretTooLarge);
+        }
+        if expires_at <= issued_at {
+            return Err(SecretError::InvalidLeaseWindow);
+        }
+        Ok(Self {
+            reference,
             issued_at,
             expires_at,
             plaintext,
@@ -916,7 +955,7 @@ impl SecretLease {
         if !self.is_valid_at(now) {
             return Err(SecretError::InvalidLeaseWindow);
         }
-        Ok(use_secret(&self.plaintext))
+        Ok(use_secret(self.plaintext.as_slice()))
     }
 }
 
@@ -932,9 +971,9 @@ impl fmt::Debug for SecretLease {
     }
 }
 
-impl Drop for SecretLease {
-    fn drop(&mut self) {
-        self.plaintext.fill(0);
+impl search_ports::PackageOpaque for SecretLease {
+    fn owner_package(&self) -> &'static str {
+        "search-os-secrets"
     }
 }
 
@@ -1134,6 +1173,89 @@ mod tests {
         let debug = format!("{lease:?}");
         assert!(!debug.contains("top-secret"));
         assert!(debug.contains("<redacted>"));
+    }
+
+    #[test]
+    fn selected_platform_reference_issues_only_a_bound_finite_lease() {
+        let binding = binding();
+        let reference = SecretReference::new(
+            OpaqueId::new("secret://credential/qdrant").expect("stable reference"),
+            binding.clone(),
+            NonZeroRevision::new(7).expect("stored version"),
+        );
+        let lease = SecretLease::issue_selected(
+            reference.clone(),
+            &binding,
+            MonotonicInstant::from_ticks(20),
+            MonotonicInstant::from_ticks(50),
+            b"selected-qdrant-key".to_vec(),
+            DEFAULT_SECRET_LIMITS,
+        )
+        .expect("platform readback lease");
+
+        assert_eq!(lease.reference(), &reference);
+        assert!(lease.is_valid_at(MonotonicInstant::from_ticks(49)));
+        assert!(!lease.is_valid_at(MonotonicInstant::from_ticks(50)));
+        assert_eq!(
+            search_ports::PackageOpaque::owner_package(&lease),
+            "search-os-secrets"
+        );
+        assert_eq!(
+            lease
+                .with_secret(MonotonicInstant::from_ticks(21), |bytes| bytes.to_vec())
+                .expect("lease callback"),
+            b"selected-qdrant-key"
+        );
+    }
+
+    #[test]
+    fn selected_platform_lease_refusal_boundaries_remain_closed() {
+        let binding = binding();
+        let reference = SecretReference::new(
+            OpaqueId::new("secret://credential/qdrant").expect("stable reference"),
+            binding.clone(),
+            NonZeroRevision::new(7).expect("stored version"),
+        );
+        let foreign_binding = SecretBinding::new(
+            InstallationId::from_bytes([9; 16]),
+            binding.installation_incarnation_id(),
+            binding.user_scope_digest(),
+            binding.purpose().clone(),
+        );
+
+        assert!(matches!(
+            SecretLease::issue_selected(
+                reference.clone(),
+                &foreign_binding,
+                MonotonicInstant::from_ticks(1),
+                MonotonicInstant::from_ticks(2),
+                vec![1],
+                DEFAULT_SECRET_LIMITS,
+            ),
+            Err(SecretError::BindingMismatch)
+        ));
+        assert!(matches!(
+            SecretLease::issue_selected(
+                reference.clone(),
+                &binding,
+                MonotonicInstant::from_ticks(1),
+                MonotonicInstant::from_ticks(2),
+                Vec::new(),
+                DEFAULT_SECRET_LIMITS,
+            ),
+            Err(SecretError::EmptySecret)
+        ));
+        assert!(matches!(
+            SecretLease::issue_selected(
+                reference,
+                &binding,
+                MonotonicInstant::from_ticks(2),
+                MonotonicInstant::from_ticks(2),
+                vec![1],
+                DEFAULT_SECRET_LIMITS,
+            ),
+            Err(SecretError::InvalidLeaseWindow)
+        ));
     }
 
     #[test]

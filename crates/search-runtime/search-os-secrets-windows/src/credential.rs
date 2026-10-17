@@ -37,6 +37,12 @@ pub use pairing::{
     publish_provider_pairing_credential,
 };
 
+mod qdrant;
+pub use qdrant::{
+    QdrantApiSecretLease, QdrantApiSecretLeaseEvidence, QdrantApiSecretPurpose,
+    QdrantApiSecretReference, QdrantApiSecretStore, QdrantApiSecretStoreError,
+};
+
 mod revision_dek;
 pub use revision_dek::*;
 mod seal_open;
