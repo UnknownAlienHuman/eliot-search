@@ -8,11 +8,11 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use qdrant_client::qdrant::{
-    DeletePoints, GetPoints, NamedVectors as VendorNamedVectors, PointStruct, PointsIdsList,
-    PointsSelector, RetrievedPoint as VendorRetrievedPoint, SetPayloadPoints, UpsertPoints,
-    Vector as VendorVector, Vectors as VendorVectors, VectorsOutput as VendorVectorsOutput,
-    points_selector, vector_output as vendor_vector_output, vectors as vendor_vectors,
-    vectors_output as vendor_vectors_output,
+    DeletePayloadPoints, DeletePoints, GetPoints, NamedVectors as VendorNamedVectors, PointStruct,
+    PointsIdsList, PointsSelector, RetrievedPoint as VendorRetrievedPoint, SetPayloadPoints,
+    UpsertPoints, Vector as VendorVector, Vectors as VendorVectors,
+    VectorsOutput as VendorVectorsOutput, points_selector, vector_output as vendor_vector_output,
+    vectors as vendor_vectors, vectors_output as vendor_vectors_output,
 };
 use search_contracts::Epoch;
 use search_contracts::indexed::{
@@ -61,6 +61,21 @@ pub struct CanonicalMutationReadback {
 pub struct CanonicalDeleteReadback {
     /// Requested addresses confirmed absent after the acknowledged delete.
     pub absent_ids: Vec<search_point_identity::s11::PointId128>,
+}
+
+/// Exact result of restoring the original `valid_until_epoch_exclusive` bound.
+///
+/// `MutationAcknowledged` means one canonical unary returned a completed
+/// status and a subsequent full exact readback matched the original payload
+/// and vectors. `AlreadyRestoredVerified` means the full preflight readback
+/// already matched the original bounds, so no mutation was sent.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CanonicalValidityRestoreOutcome {
+    /// A single mutation was acknowledged and the restored points were read
+    /// back exactly.
+    MutationAcknowledged(CanonicalMutationReadback),
+    /// The original interval was already present and was verified by readback.
+    AlreadyRestoredVerified(CanonicalMutationReadback),
 }
 
 fn admission_for<'a>(
@@ -336,6 +351,47 @@ fn validate_close_epoch(
         }
     }
     Ok(())
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum ValidityRestoreAction {
+    AlreadyRestored,
+    Restore,
+}
+
+fn classify_validity_restore(
+    original: &PointReadback,
+    actual: &PointReadback,
+    close_attempt_until: Epoch,
+) -> Result<ValidityRestoreAction, BridgeError> {
+    if !point_readback_equal_for_close(original, actual) {
+        return Err(BridgeError::ExactReadbackMismatch);
+    }
+
+    canonical_epoch_bound(close_attempt_until.get())?;
+    let valid_from = original.payload.valid_from_epoch;
+    if close_attempt_until <= valid_from {
+        return Err(BridgeError::ExactReadbackMismatch);
+    }
+    if let Some(original_until) = original.payload.valid_until_epoch_exclusive {
+        canonical_epoch_bound(original_until.get())?;
+        if original_until <= valid_from {
+            return Err(BridgeError::ExactReadbackMismatch);
+        }
+    }
+    if let Some(actual_until) = actual.payload.valid_until_epoch_exclusive {
+        canonical_epoch_bound(actual_until.get())?;
+    }
+
+    let original_until = original.payload.valid_until_epoch_exclusive;
+    let actual_until = actual.payload.valid_until_epoch_exclusive;
+    if actual_until == original_until {
+        Ok(ValidityRestoreAction::AlreadyRestored)
+    } else if actual_until == Some(close_attempt_until) {
+        Ok(ValidityRestoreAction::Restore)
+    } else {
+        Err(BridgeError::ExactReadbackMismatch)
+    }
 }
 
 async fn fetch_full_readback(
@@ -634,6 +690,155 @@ impl RealDataPlane {
         Ok(actual)
     }
 
+    /// Restores the original upper validity bounds after one exact close
+    /// attempt. `original` must retain the complete pre-close S11 identity,
+    /// payload, and named vectors; `close_attempt_until` is the exact bound
+    /// written by that attempt. Current points must be either at that bound or
+    /// already at their original bound. A batch that needs mutation must share
+    /// one original upper bound so compensation remains one unary request.
+    ///
+    /// The original request context and this plane's qualified endpoint and
+    /// purpose-bound key lease are reused for preflight, mutation, and final
+    /// readback. An unknown unary result is returned as
+    /// `MutationOutcomeUnknown`; callers may later resolve it by invoking this
+    /// method again, which will only return `AlreadyRestoredVerified` after an
+    /// exact readback and will not replay an already-restored mutation.
+    pub async fn restore_indexed_validity_exact(
+        &mut self,
+        route: &CollectionRoute,
+        original: &[CanonicalPointInput],
+        close_attempt_until: Epoch,
+        context: &CanonicalRequestContext,
+    ) -> Result<CanonicalValidityRestoreOutcome, BridgeError> {
+        let admission = admission_for(self, route)?;
+        let ordered = ordered_inputs(route, admission, original, self.limits, context)?;
+        canonical_epoch_bound(close_attempt_until.get())?;
+
+        let preflight = fetch_full_readback(self, admission, &ordered, context).await?;
+        if !preflight.missing_ids.is_empty() {
+            return Err(BridgeError::PointNotFound);
+        }
+        let expected_by_id: BTreeMap<_, _> = ordered
+            .iter()
+            .map(|input| (input.identity.point_id(), *input))
+            .collect();
+        let mut ids_to_restore = Vec::new();
+        let mut restore_until: Option<Option<Epoch>> = None;
+        for actual in &preflight.points {
+            context.remaining()?;
+            let expected = expected_by_id
+                .get(&actual.address)
+                .ok_or(BridgeError::UnexpectedPoint)?;
+            match classify_validity_restore(&expected.point, &actual.point, close_attempt_until)? {
+                ValidityRestoreAction::AlreadyRestored => {}
+                ValidityRestoreAction::Restore => {
+                    let original_until = expected.point.payload.valid_until_epoch_exclusive;
+                    if restore_until.is_some_and(|existing| existing != original_until) {
+                        return Err(BridgeError::ExactReadbackMismatch);
+                    }
+                    restore_until = Some(original_until);
+                    ids_to_restore.push(actual.address);
+                }
+            }
+        }
+
+        let Some(original_until) = restore_until else {
+            context.remaining()?;
+            return Ok(CanonicalValidityRestoreOutcome::AlreadyRestoredVerified(
+                preflight,
+            ));
+        };
+        let vendor_ids = ids_to_restore
+            .iter()
+            .copied()
+            .map(canonical_vendor_point_id)
+            .collect::<Vec<_>>();
+        context.remaining()?;
+        self.authorize_dispatch()?;
+        let acknowledged = match original_until {
+            Some(until) => {
+                let mut payload = HashMap::new();
+                payload.insert(
+                    PayloadField::ValidUntilEpochExclusive.as_str().to_owned(),
+                    super::int_value(until.get()),
+                );
+                tokio::time::timeout(
+                    context.remaining()?,
+                    self.canonical_close_once(
+                        SetPayloadPoints {
+                            collection_name: admission.collection_name.clone(),
+                            wait: Some(true),
+                            payload,
+                            points_selector: Some(PointsSelector {
+                                points_selector_one_of: Some(
+                                    points_selector::PointsSelectorOneOf::Points(PointsIdsList {
+                                        ids: vendor_ids,
+                                    }),
+                                ),
+                            }),
+                            ordering: Some(super::strong_ordering()),
+                            ..Default::default()
+                        },
+                        context,
+                    ),
+                )
+                .await
+                .map_err(|_| BridgeError::MutationOutcomeUnknown)??
+            }
+            None => tokio::time::timeout(
+                context.remaining()?,
+                self.canonical_delete_payload_once(
+                    DeletePayloadPoints {
+                        collection_name: admission.collection_name.clone(),
+                        wait: Some(true),
+                        keys: vec![PayloadField::ValidUntilEpochExclusive.as_str().to_owned()],
+                        points_selector: Some(PointsSelector {
+                            points_selector_one_of: Some(
+                                points_selector::PointsSelectorOneOf::Points(PointsIdsList {
+                                    ids: vendor_ids,
+                                }),
+                            ),
+                        }),
+                        ordering: Some(super::strong_ordering()),
+                        ..Default::default()
+                    },
+                    context,
+                ),
+            )
+            .await
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)??,
+        };
+        if !acknowledged
+            .result
+            .as_ref()
+            .is_some_and(|result| super::update_completed(result.status))
+        {
+            return Err(BridgeError::MutationOutcomeUnknown);
+        }
+        context.remaining_after_dispatch()?;
+        self.authorize_dispatch()
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)?;
+
+        let actual = fetch_full_readback(self, admission, &ordered, context)
+            .await
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)?;
+        if !actual.missing_ids.is_empty()
+            || actual.points.iter().any(|actual_point| {
+                expected_by_id
+                    .get(&actual_point.address)
+                    .is_none_or(|expected| {
+                        !point_readback_equal_exact(&actual_point.point, &expected.point)
+                    })
+            })
+        {
+            return Err(BridgeError::MutationOutcomeUnknown);
+        }
+        context.remaining_after_dispatch()?;
+        Ok(CanonicalValidityRestoreOutcome::MutationAcknowledged(
+            actual,
+        ))
+    }
+
     /// Deletes only exact planned S11 IDs after full hidden-point preflight and
     /// reports success only when exact point-ID readback proves absence.
     pub async fn delete_indexed_exact(
@@ -866,6 +1071,51 @@ mod tests {
         assert_eq!(
             validate_close_epoch(&existing, requested),
             Err(BridgeError::ExactReadbackMismatch)
+        );
+    }
+
+    #[test]
+    fn validity_restore_accepts_only_original_or_attempted_interval() {
+        let (_, input) = sample_input();
+        let close_attempt_until = Epoch::new(4).expect("close attempt");
+        let mut closed = input.point.clone();
+        closed.payload.valid_until_epoch_exclusive = Some(close_attempt_until);
+        assert_eq!(
+            classify_validity_restore(&input.point, &closed, close_attempt_until),
+            Ok(ValidityRestoreAction::Restore)
+        );
+        assert_eq!(
+            classify_validity_restore(&input.point, &input.point, close_attempt_until),
+            Ok(ValidityRestoreAction::AlreadyRestored)
+        );
+
+        let mut foreign_bound = closed.clone();
+        foreign_bound.payload.valid_until_epoch_exclusive =
+            Some(Epoch::new(5).expect("foreign bound"));
+        assert_eq!(
+            classify_validity_restore(&input.point, &foreign_bound, close_attempt_until),
+            Err(BridgeError::ExactReadbackMismatch)
+        );
+
+        let mut changed_valid_from = closed;
+        changed_valid_from.payload.valid_from_epoch = Epoch::new(2).expect("changed start");
+        assert_eq!(
+            classify_validity_restore(&input.point, &changed_valid_from, close_attempt_until),
+            Err(BridgeError::ExactReadbackMismatch)
+        );
+
+        let mut original_with_bound = input.point.clone();
+        original_with_bound.payload.valid_until_epoch_exclusive =
+            Some(Epoch::new(2).expect("original bound"));
+        let mut attempt_with_bound = original_with_bound.clone();
+        attempt_with_bound.payload.valid_until_epoch_exclusive = Some(close_attempt_until);
+        assert_eq!(
+            classify_validity_restore(
+                &original_with_bound,
+                &attempt_with_bound,
+                close_attempt_until,
+            ),
+            Ok(ValidityRestoreAction::Restore)
         );
     }
 

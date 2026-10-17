@@ -44,6 +44,17 @@ Updates only the exact ID list. Broad-filter closure is absent from the correctn
 
 Deletes only exact IDs for ordinary reclaim/compensation. It does not create a security-purge receipt.
 
+### Canonical indexed-point validity restoration
+
+`RealDataPlane::restore_indexed_validity_exact(route, original, close_attempt_until, context)` restores
+the original upper validity bounds after one exact close attempt. It performs an unfiltered full S11
+payload/vector preflight, accepts only the original bound or that attempt's exact bound, and sends at
+most one direct generated Qdrant unary. A missing bound is restored by deleting the payload key; a
+present original bound is restored with `set_payload`. The original request context, endpoint, and
+purpose-bound key lease govern preflight, mutation, and exact final readback. An unknown RPC outcome
+returns `MutationOutcomeUnknown`; a later invocation can resolve an already-applied restore as
+`AlreadyRestoredVerified` without replaying the mutation.
+
 ### `readback_exact(ids, context) -> Result<BoundedPointReadback, BridgeError>`
 
 Returns exact identity/payload/vector digests and explicit missing/unexpected IDs.

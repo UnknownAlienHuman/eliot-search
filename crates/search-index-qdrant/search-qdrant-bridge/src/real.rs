@@ -226,7 +226,7 @@ pub use canonical::{
 mod canonical_mutation;
 pub use canonical_mutation::{
     CanonicalDeleteReadback, CanonicalMutationPointReadback, CanonicalMutationReadback,
-    CanonicalPointInput,
+    CanonicalPointInput, CanonicalValidityRestoreOutcome,
 };
 
 /// Real Qdrant data plane over the pinned client transport.

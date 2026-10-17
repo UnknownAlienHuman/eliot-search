@@ -2,7 +2,7 @@
 // ambiguous statuses. Canonical mutations use the SDK-generated unary services
 // directly: one invocation, then the durable owner resolves any unknown outcome.
 use qdrant_client::qdrant::{
-    CollectionOperationResponse as SingleCollectionReply,
+    CollectionOperationResponse as SingleCollectionReply, DeletePayloadPoints,
     PointsOperationResponse as SinglePointsReply, UpdateCollection,
     collections_client::CollectionsClient as SingleCollectionsClient,
     points_client::PointsClient as SinglePointsClient,
@@ -73,6 +73,21 @@ impl RealDataPlane {
             .points
             .clone()
             .set_payload(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(|_| BridgeError::MutationOutcomeUnknown)
+    }
+
+    async fn canonical_delete_payload_once(
+        &self,
+        message: DeletePayloadPoints,
+        context: &canonical::CanonicalRequestContext,
+    ) -> Result<SinglePointsReply, BridgeError> {
+        let request = self.canonical_rpc_request(message, context)?;
+        self.single_attempt
+            .points
+            .clone()
+            .delete_payload(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(|_| BridgeError::MutationOutcomeUnknown)
@@ -186,6 +201,23 @@ mod single_attempt_tests {
                 collection_name: "synthetic".to_owned(),
                 wait: Some(true),
                 ordering: Some(strong_ordering()),
+                ..Default::default()
+            })
+            .await
+            .expect_err("first ambiguous response must escape");
+        assert_eq!(error.code(), tonic::Code::Unavailable);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn generated_delete_payload_service_does_not_retry_an_ambiguous_status() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut client = SinglePointsClient::new(AppliedThenUnavailable(Arc::clone(&calls)));
+        let error = client
+            .delete_payload(DeletePayloadPoints {
+                collection_name: "synthetic".to_owned(),
+                wait: Some(true),
+                keys: vec!["valid_until_epoch_exclusive".to_owned()],
                 ..Default::default()
             })
             .await
