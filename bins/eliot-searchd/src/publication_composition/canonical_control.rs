@@ -1678,7 +1678,7 @@ where
             }
             let mut observation = empty_observation(
                 command.effect(),
-                binding.clone(),
+                original_binding.clone(),
                 PublicationEffectOutcome::Applied,
             );
             observation.intent = Some(PublicationIntentReadback {
