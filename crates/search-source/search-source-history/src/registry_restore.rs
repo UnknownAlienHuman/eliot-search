@@ -396,6 +396,7 @@ where
                 delta.after(),
                 operation.registry_revision_after(),
                 operation.encoding_profile(),
+                operation.state_encoding_profile(),
             )?;
             if delta.before().is_none() {
                 replay_counts[family_index(delta.key())] += 1;
@@ -414,6 +415,7 @@ where
     if replayed != current || replayed_profiles != state_encoding_profiles {
         return Err(RegistryError::SnapshotInvalid.into());
     }
+    validate_projection_partition_classes(&replayed)?;
     let mut roots = BTreeMap::new();
     let mut sources = BTreeMap::new();
     let mut memberships = BTreeMap::new();
@@ -662,11 +664,79 @@ fn validate_namespace_relationships(
     Ok(())
 }
 
+fn validate_projection_partition_classes(
+    states: &BTreeMap<RegistryStateKey, RegistryStateRecord>,
+) -> Result<(), RegistryError> {
+    let mut access_by_id: BTreeMap<search_contracts::AccessPartitionId, Option<&[u8]>> =
+        BTreeMap::new();
+    let mut access_by_meaning: BTreeMap<&[u8], search_contracts::AccessPartitionId> =
+        BTreeMap::new();
+    let mut scoring_by_id: BTreeMap<search_contracts::ScoringPartitionId, Option<&[u8]>> =
+        BTreeMap::new();
+    let mut scoring_by_meaning: BTreeMap<&[u8], search_contracts::ScoringPartitionId> =
+        BTreeMap::new();
+
+    for state in states.values() {
+        let RegistryStateRecord::ProjectionMembership(record) = state else {
+            continue;
+        };
+        let semantics = record.request().partition_semantics.as_ref();
+        validate_partition_class(
+            record.binding().access_partition_id,
+            semantics.map(search_source_records::projection_membership::ProjectionPartitionSemantics::access),
+            &mut access_by_id,
+            &mut access_by_meaning,
+        )?;
+        validate_partition_class(
+            record.binding().scoring_partition_id,
+            semantics.map(search_source_records::projection_membership::ProjectionPartitionSemantics::scoring),
+            &mut scoring_by_id,
+            &mut scoring_by_meaning,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_partition_class<'a, Id: Copy + Ord>(
+    id: Id,
+    meaning: Option<&'a [u8]>,
+    ids: &mut BTreeMap<Id, Option<&'a [u8]>>,
+    meanings: &mut BTreeMap<&'a [u8], Id>,
+) -> Result<(), RegistryError> {
+    let Some(meaning) = meaning else {
+        match ids.get(&id) {
+            Some(Some(_)) => return Err(RegistryError::ProjectionMembershipConflict),
+            Some(None) => return Ok(()),
+            None => {
+                ids.insert(id, None);
+                return Ok(());
+            }
+        }
+    };
+
+    match ids.get(&id) {
+        Some(Some(previous)) if *previous == meaning => {}
+        Some(_) => return Err(RegistryError::ProjectionMembershipConflict),
+        None => {
+            ids.insert(id, Some(meaning));
+        }
+    }
+    match meanings.get(meaning) {
+        Some(previous) if *previous == id => {}
+        Some(_) => return Err(RegistryError::ProjectionMembershipConflict),
+        None => {
+            meanings.insert(meaning, id);
+        }
+    }
+    Ok(())
+}
+
 fn check_transition(
     before: Option<&RegistryStateRecord>,
     after: &RegistryStateRecord,
     revision: u64,
     encoding_profile: &str,
+    state_encoding_profile: &str,
 ) -> Result<(), RegistryError> {
     if before == Some(after) {
         return Ok(());
@@ -689,8 +759,13 @@ fn check_transition(
         }
         (None, RegistryStateRecord::Generation { .. }) => true,
         (None, RegistryStateRecord::ProjectionMembership(binding)) => {
-            encoding_profile == "eliot.registry-batch.v6"
-                && binding.registry_revision() == revision
+            let semantics = binding.request().partition_semantics.as_ref();
+            let formats_match = match (encoding_profile, state_encoding_profile) {
+                ("eliot.registry-batch.v6", "eliot.registry-state.v6") => semantics.is_none(),
+                ("eliot.registry-batch.v7", "eliot.registry-state.v7") => semantics.is_some(),
+                _ => false,
+            };
+            formats_match && binding.registry_revision() == revision
         }
         (None, RegistryStateRecord::Namespace(namespace)) => {
             namespace.ownership.status == search_contracts::NamespaceOwnershipStatus::Active

@@ -411,7 +411,6 @@ mod dek_command;
 #[path = "native_dek_selection.rs"]
 mod dek_selection;
 #[cfg(feature = "wave3-index")]
-#[allow(dead_code)] // Parent owns the normal runtime invocation of this concrete preparation factory.
 #[path = "../../preparation_composition/native_preparation_factory.rs"]
 mod native_preparation_factory;
 #[path = "direct_registry_process_custody.rs"]

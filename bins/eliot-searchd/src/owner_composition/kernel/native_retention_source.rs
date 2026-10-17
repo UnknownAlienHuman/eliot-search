@@ -32,20 +32,25 @@ pub(super) struct RetentionSourceInput<'view, 'operation, 'owner> {
 impl RetentionSourceInput<'_, '_, '_> {
     /// Select and bind raw-code membership before any representation/projection
     /// is selected. No Source path/body or query grant is acquired by this hook.
-    #[allow(dead_code)] // The parent owns the ordinary preparation factory caller.
     pub(super) fn setup_raw_code_member(&self, journal: &mut PersistentControlJournal,
         publisher: &mut ControlSnapshotPublisher,
         config: &crate::config_composition::EffectiveDaemonConfig,
         profiles: &crate::registry_control::native_member_setup::NativeMemberProfiles<'_>,
+        profile: &search_source_history::prepare::SourceRevisionPresealProfile,
+        result: &search_source_history::revision::SourceRevisionMutationReadback,
     ) -> Result<search_source_registry::api::SourceMembershipReceiptV2, String> {
         use crate::registry_control::native_member_setup::{NativeMemberSetupInput, SelectedNativeMember};
         use search_control_redb::{ControlRecordClass, ControlRecordCondition, ControlValue, JournalLimits};
         let unavailable = || "NATIVE_MEMBER_RETAINED_SOURCE_REQUIRED".to_owned();
-        let result = self.existing.result.as_ref().ok_or_else(unavailable)?;
-        let profile = self.existing.profile.as_ref().ok_or_else(unavailable)?;
         if result.operation_id != self.command.operation || profile.operation_id != self.command.operation
             || result.source_namespace_id != self.source.identity().source_namespace_id
             || result.source_id != self.source.identity().source_id
+            || profile.source_namespace_id != result.source_namespace_id
+            || profile.source_id != result.source_id
+            || profile.revision_id != result.revision.revision_id
+            || profile.occurrence_sequence != result.revision.occurrence_sequence
+            || profile.content_digest != result.revision.content_digest
+            || profile.byte_length != result.revision.byte_length
         { return Err(unavailable()); }
         let expected = c::SourceRevisionRef { source_namespace_id: result.source_namespace_id,
             source_id: result.source_id, revision_id: result.revision.revision_id,

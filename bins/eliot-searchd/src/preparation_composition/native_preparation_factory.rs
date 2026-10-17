@@ -42,6 +42,9 @@ use search_projection_planner::{
 };
 use search_revision_store::{DomainBinding, residency_canonical_bytes};
 use search_runtime_owner::OwnerError;
+use search_source_history::{
+    prepare::SourceRevisionPresealProfile, revision::SourceRevisionMutationReadback,
+};
 use search_source_registry::{
     ProjectionMembershipBindRequest, RegistryChange, RegistryOperation,
     api::{ProjectionMembershipReceipt, bind_projection_membership, read_projection_membership},
@@ -712,12 +715,9 @@ fn bind_projection_exact(
 }
 
 struct PreparedSourceOwners {
-    product: MaterializationProduct,
-    units: VerifiedUnitSet,
     request: ValidatedMaterializationRequest,
     materialization: Materialization,
     representation: Representation,
-    residency_id: OpaqueId,
 }
 
 fn materialization_from_product(
@@ -770,20 +770,14 @@ fn prepare_retained_source_owners(
     publisher: &mut ControlSnapshotPublisher,
     config: &EffectiveDaemonConfig,
     profiles: &QualifiedNativeProfiles,
+    original_profile: &SourceRevisionPresealProfile,
+    original_result: &SourceRevisionMutationReadback,
     source_revision: &SourceRevisionRef,
     materialization_id: MaterializationId,
     representation_id: RepresentationId,
 ) -> Result<PreparedSourceOwners, &'static str> {
-    let result = input
-        .existing
-        .result
-        .as_ref()
-        .ok_or("NATIVE_PREPARATION_RETAINED_SOURCE_REQUIRED")?;
-    let profile = input
-        .existing
-        .profile
-        .as_ref()
-        .ok_or("NATIVE_PREPARATION_RETAINED_SOURCE_REQUIRED")?;
+    let result = original_result;
+    let profile = original_profile;
     let work = |unit| input.native.work(unit);
     let control = NativeRetentionControl::bind(
         journal,
@@ -967,12 +961,9 @@ fn prepare_retained_source_owners(
         .source_full_checkpoint()
         .map_err(|_| "NATIVE_PREPARATION_ORIGINAL_CONTEXT_REFUSED")?;
     Ok(PreparedSourceOwners {
-        product,
-        units: unit_set,
         request: validated,
         materialization,
         representation,
-        residency_id: metadata.storage_object_id().clone(),
     })
 }
 
@@ -982,23 +973,12 @@ fn prepare_retained_source_owners(
 )]
 pub(super) fn prepare_native_raw_code_artifacts(
     input: &RetentionSourceInput<'_, '_, '_>,
+    original_profile: &SourceRevisionPresealProfile,
+    original_result: &SourceRevisionMutationReadback,
     journal: &mut PersistentControlJournal,
     publisher: &mut ControlSnapshotPublisher,
     config: &EffectiveDaemonConfig,
-) -> Result<
-    crate::preparation_composition::native_artifact_store::NativeStoredArtifactSet,
-    &'static str,
-> {
-    let original_result = input
-        .existing
-        .result
-        .as_ref()
-        .ok_or("NATIVE_PREPARATION_RETAINED_SOURCE_REQUIRED")?;
-    let original_profile = input
-        .existing
-        .profile
-        .as_ref()
-        .ok_or("NATIVE_PREPARATION_RETAINED_SOURCE_REQUIRED")?;
+) -> Result<(), &'static str> {
     if original_result.operation_id != input.command.operation
         || original_profile.operation_id != input.command.operation
         || original_result.source_namespace_id != input.source.identity().source_namespace_id
@@ -1072,7 +1052,14 @@ pub(super) fn prepare_native_raw_code_artifacts(
         .map_err(|_| "NATIVE_PREPARATION_ACCESS_REFUSED")?;
 
     let member_receipt = input
-        .setup_raw_code_member(journal, publisher, config, &profiles.member_profiles())
+        .setup_raw_code_member(
+            journal,
+            publisher,
+            config,
+            &profiles.member_profiles(),
+            original_profile,
+            original_result,
+        )
         .map_err(|_| "NATIVE_PREPARATION_MEMBER_SETUP_REFUSED")?;
     if retained_preparation.as_ref().is_some_and(|readback| {
         readback.record().metadata().source_membership != member_receipt.member
@@ -1315,6 +1302,8 @@ pub(super) fn prepare_native_raw_code_artifacts(
         publisher,
         config,
         &profiles,
+        original_profile,
+        original_result,
         &source_revision,
         materialization_id,
         representation_id,
@@ -1385,14 +1374,83 @@ pub(super) fn prepare_native_raw_code_artifacts(
     {
         return Err("NATIVE_PREPARATION_PROJECTION_SHADOWED");
     }
-    if post_snapshot
+    let manifest_reference = post_snapshot
         .manifests()
-        .contains_key(&projection_membership.projection_membership_id)
-        || post_snapshot
-            .prepared_artifact_sets()
-            .contains_key(&projection_membership.projection_membership_id)
-    {
-        return Err("NATIVE_PREPARATION_PROJECTION_ALREADY_REFERENCED");
+        .get(&projection_membership.projection_membership_id);
+    let prepared_set = post_snapshot
+        .prepared_artifact_sets()
+        .get(&projection_membership.projection_membership_id);
+    match (manifest_reference, prepared_set) {
+        (None, None) => {}
+        (Some(reference), Some(record)) if reference == record.reference() => {
+            input
+                .native
+                .source_full_checkpoint()
+                .map_err(|_| "NATIVE_PREPARATION_ORIGINAL_CONTEXT_REFUSED")?;
+            input
+                .security
+                .checkpoint()
+                .map_err(|_| "NATIVE_PREPARATION_ACCESS_REFUSED")?;
+            if let Some(current_source) = input.current_source {
+                current_source().map_err(|_| "NATIVE_PREPARATION_SOURCE_FENCE_REFUSED")?;
+            }
+            let control = NativeRetentionControl::bind(
+                journal,
+                publisher,
+                input.source,
+                input.namespace,
+                input.root,
+                input.security,
+                input.deadline,
+                &work,
+            )
+            .map_err(|_| "NATIVE_PREPARATION_EXISTING_SOURCE_GUARD_REFUSED")?;
+            let retained_metadata = control
+                .load_committed_object(original_profile, original_result, input.native.context())
+                .map_err(|_| "NATIVE_PREPARATION_EXISTING_SOURCE_METADATA_REFUSED")?;
+            let existing_set = super::artifact_reader::read_published_projection_metadata_v1(
+                input.native,
+                &control,
+                &post_snapshot,
+                &registry,
+                projection_membership.projection_membership_id,
+                &source_revision,
+                &retained_metadata,
+                config,
+            )
+            .map_err(|_| "NATIVE_PREPARATION_EXISTING_SET_REFUSED")?;
+            let metadata = existing_set.record().metadata();
+            if metadata.operation_id != expected_preparation.metadata().original_operation_id
+                || metadata.source_revision != expected_preparation.metadata().source_revision
+                || metadata.materialization_id
+                    != expected_preparation
+                        .metadata()
+                        .materialization
+                        .materialization_id
+                || metadata.representation_id
+                    != expected_preparation
+                        .metadata()
+                        .representation
+                        .representation_id
+                || metadata.residency_canonical
+                    != expected_preparation.metadata().residency_canonical
+            {
+                return Err("NATIVE_PREPARATION_EXISTING_SET_MISMATCH");
+            }
+            input
+                .native
+                .source_full_checkpoint()
+                .map_err(|_| "NATIVE_PREPARATION_ORIGINAL_CONTEXT_REFUSED")?;
+            input
+                .security
+                .checkpoint()
+                .map_err(|_| "NATIVE_PREPARATION_ACCESS_REFUSED")?;
+            if let Some(current_source) = input.current_source {
+                current_source().map_err(|_| "NATIVE_PREPARATION_SOURCE_FENCE_REFUSED")?;
+            }
+            return Ok(());
+        }
+        _ => return Err("NATIVE_PREPARATION_PROJECTION_REFERENCE_CONFLICT"),
     }
 
     let scope = PlanningScope {
@@ -1458,7 +1516,7 @@ pub(super) fn prepare_native_raw_code_artifacts(
         max_artifact_bytes,
     };
     let expected_metadata = expected_preparation.metadata().clone();
-    let result = super::artifact_store::store_native_raw_code_artifacts(
+    super::artifact_store::store_native_raw_code_artifacts(
         input,
         journal,
         publisher,
@@ -1509,5 +1567,5 @@ pub(super) fn prepare_native_raw_code_artifacts(
             "NATIVE_PREPARATION_C07_STORE_REFUSED"
         }
     })?;
-    Ok(result)
+    Ok(())
 }

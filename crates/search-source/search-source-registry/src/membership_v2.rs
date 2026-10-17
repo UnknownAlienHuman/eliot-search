@@ -1571,4 +1571,275 @@ mod tests {
             Err(RegistryError::AdmissionReceiptMismatch)
         );
     }
+
+    #[test]
+    fn c03_v7_partition_history_restores_and_exact_replay_keeps_class_ids() {
+        use crate::projection_membership::ProjectionPartitionSemantics;
+        use crate::recovery::{
+            RegistryChange, RegistryOperation, RegistryRestoreOperation, RegistryRestoreState,
+            MAX_REGISTRY_RESTORE_BYTES,
+        };
+        use search_contracts as c;
+        use std::collections::BTreeMap;
+
+        fn canonical(value: &str) -> Vec<u8> {
+            c::to_canonical_cbor(&c::CanonicalValue::Text(
+                c::CanonicalText::new(value).expect("text"),
+            ))
+            .expect("canonical bytes")
+            .into_vec()
+        }
+
+        fn semantics() -> ProjectionPartitionSemantics {
+            ProjectionPartitionSemantics::new(
+                canonical("access:shared-read-v1"),
+                canonical("scoring:raw-code-v1"),
+            )
+            .expect("full class meanings")
+        }
+
+        fn request(
+            registry: &SourceRegistry,
+            member: &SourceMembership,
+            projection: u8,
+            representation: u8,
+            access_partition: u8,
+            scoring_partition: u8,
+            semantics: ProjectionPartitionSemantics,
+        ) -> crate::projection_membership::ProjectionMembershipBindRequest {
+            crate::projection_membership::ProjectionMembershipBindRequest {
+                binding: c::ProjectionMembership {
+                    projection_membership_id: c::ProjectionMembershipId::from_bytes([projection; 16]),
+                    source_membership_id: member.source_membership_id,
+                    representation_id: c::RepresentationId::from_bytes([representation; 16]),
+                    access_partition_id: c::AccessPartitionId::from_bytes([access_partition; 16]),
+                    scoring_partition_id: c::ScoringPartitionId::from_bytes([scoring_partition; 16]),
+                    projection_schema_id: ProfileId::new("profile:projection-v7-test")
+                        .expect("projection schema"),
+                },
+                expected_membership_revision: member.membership_revision,
+                expected_provenance: registry
+                    .permanent_membership(member.source_membership_id)
+                    .expect("permanent member")
+                    .provenance()
+                    .clone(),
+                partition_semantics: Some(semantics),
+            }
+        }
+
+        let mut fixture = make_fixture(RuleEffect::Allow);
+        let first_member = prepare(&fixture, "operation:membership-v7-first", &fixture.member);
+        commit_source_membership_v2(
+            &mut fixture.registry,
+            &first_member,
+            &mut fixture.port,
+            &fixture.context,
+        )
+        .expect("persist first permanent membership");
+
+        let mut second_member = fixture.member.clone();
+        second_member.source_membership_id = SourceMembershipId::from_bytes([60; 16]);
+        second_member.corpus_id = CorpusId::from_bytes([61; 16]);
+        second_member.workspace_id = WorkspaceId::from_bytes([62; 16]);
+        let second_prepared = prepare_source_membership_v2(
+            &fixture.registry,
+            &second_member,
+            fixture.root_id,
+            rev(1),
+            fixture.namespace_selection,
+            &fixture.owner,
+            fixture.source_revision,
+            &opaque("operation:membership-v7-second"),
+            digest(71),
+            &receipt("receipt:membership-v7-second"),
+            &fixture.context,
+        )
+        .expect("prepare second member");
+        commit_source_membership_v2(
+            &mut fixture.registry,
+            &second_prepared,
+            &mut fixture.port,
+            &fixture.context,
+        )
+        .expect("persist second permanent membership");
+
+        // The ordinary C03 adapter receives the already-qualified C08/C09/C11
+        // metadata and existing permanent member rows. Start a fresh C03 journal
+        // at revision zero so the rows below are the complete persisted v7 chain.
+        let mut c03_registry = fixture.registry.clone();
+        c03_registry.revision = 0;
+        c03_registry.operations.clear();
+        c03_registry.state_encoding_profiles.clear();
+        let mut c03_port = InMemoryRegistryJournal::new(100).expect("fresh C03 journal");
+
+        let shared_meaning = semantics();
+        let first_request = request(
+            &c03_registry,
+            &fixture.member,
+            70,
+            80,
+            68,
+            69,
+            shared_meaning.clone(),
+        );
+        let first_operation_id = opaque("operation:projection-v7-first");
+        let first_receipt = receipt("receipt:projection-v7-first");
+        let first = crate::projection_membership::bind_projection_membership(
+            &mut c03_registry,
+            first_request.clone(),
+            0,
+            RegistryOperation::new(first_operation_id.clone(), digest(70)),
+            &first_receipt,
+            &mut c03_port,
+            &fixture.context,
+        )
+        .expect("actual C03 v7 first bind");
+        assert!(!first.replayed);
+
+        let second_request = request(
+            &c03_registry,
+            &second_member,
+            72,
+            82,
+            68,
+            69,
+            shared_meaning.clone(),
+        );
+        let second_operation_id = opaque("operation:projection-v7-second");
+        let second_receipt = receipt("receipt:projection-v7-second");
+        let second = crate::projection_membership::bind_projection_membership(
+            &mut c03_registry,
+            second_request.clone(),
+            1,
+            RegistryOperation::new(second_operation_id.clone(), digest(72)),
+            &second_receipt,
+            &mut c03_port,
+            &fixture.context,
+        )
+        .expect("actual C03 v7 shared-class bind");
+        assert!(!second.replayed);
+
+        let mut history = c03_registry
+            .operations
+            .keys()
+            .filter_map(|id| {
+                c03_registry
+                    .committed_operation(id)
+                    .map(|operation| (id.clone(), operation.clone()))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(history.len(), c03_registry.operations.len());
+        history.sort_by_key(|(_, operation)| operation.registry_revision_after());
+        assert!(history.iter().all(|(_, operation)| {
+            operation.encoding_profile() == "eliot.registry-batch.v7"
+                && operation.state_encoding_profile() == "eliot.registry-state.v7"
+        }));
+
+        let mut latest = BTreeMap::new();
+        for (_, operation) in &history {
+            for delta in operation.deltas() {
+                latest.insert(
+                    delta.key().clone(),
+                    (
+                        delta.after().clone(),
+                        operation.state_encoding_profile(),
+                    ),
+                );
+            }
+        }
+        let state_bytes = latest
+            .into_iter()
+            .map(|(key, (state, profile))| {
+                (
+                    key.encode().expect("state key"),
+                    state.encode_with_profile(profile).expect("persisted state"),
+                )
+            })
+            .collect::<Vec<_>>();
+        let states = state_bytes
+            .iter()
+            .map(|(key, value)| RegistryRestoreState { key, value })
+            .collect::<Vec<_>>();
+        let operation_bytes = history
+            .iter()
+            .map(|(id, operation)| {
+                (id.clone(), operation.encode().expect("persisted operation"))
+            })
+            .collect::<Vec<_>>();
+        let operations = operation_bytes
+            .iter()
+            .map(|(id, value)| RegistryRestoreOperation {
+                operation_id: id,
+                value,
+            })
+            .collect::<Vec<_>>();
+
+        let parts = search_source_history::registry_restore::restore_registry_state(
+            2,
+            &states,
+            &operations,
+            DEFAULT_REGISTRY_LIMITS,
+            MAX_REGISTRY_RESTORE_BYTES,
+        )
+        .expect("fresh v7 history decode")
+        .into_parts();
+        assert_eq!(
+            parts.operations,
+            history.iter().map(|(_, operation)| operation.clone()).collect::<Vec<_>>()
+        );
+
+        // Rebuild the derived C03 binding map from the records proven equal to
+        // the freshly decoded persisted operation history.
+        let mut restored = c03_registry.clone();
+        restored.projection_memberships.clear();
+        restored.reverse_projection_memberships.clear();
+        restored.state_encoding_profiles = parts.state_encoding_profiles;
+        crate::recovery::projection_membership::restore_bindings(&mut restored)
+            .expect("fresh C03 binding-index restore");
+
+        let reusable =
+            crate::projection_membership::reusable_projection_partitions(&restored, &shared_meaning)
+                .expect("restored shared classes");
+        assert_eq!(reusable.access(), Some(c::AccessPartitionId::from_bytes([68; 16])));
+        assert_eq!(reusable.scoring(), Some(c::ScoringPartitionId::from_bytes([69; 16])));
+        for (member, expected) in [
+            (&fixture.member, &first_request),
+            (&second_member, &second_request),
+        ] {
+            let record = restored
+                .projection_membership_record(member.source_membership_id)
+                .expect("restored C03 binding");
+            assert_eq!(record.binding(), &expected.binding);
+            assert_eq!(
+                record.request().partition_semantics.as_ref(),
+                Some(&shared_meaning)
+            );
+        }
+
+        let original = restored
+            .committed_operation(&first_operation_id)
+            .expect("restored original C03 operation")
+            .replay_batch()
+            .expect("exact replay batch");
+        let [RegistryChange::BindProjectionMembership {
+            request: original_request,
+            receipt: original_receipt,
+        }] = original.changes.as_slice()
+        else {
+            panic!("one original C03 bind");
+        };
+        let replay = crate::projection_membership::bind_projection_membership(
+            &mut restored,
+            original_request.clone(),
+            original.expected_registry_revision,
+            original.operation.clone(),
+            original_receipt,
+            &mut c03_port,
+            &fixture.context,
+        )
+        .expect("same original C03 operation after restart");
+        assert!(replay.replayed);
+        assert_eq!(replay.binding, first.binding);
+        assert_eq!(restored.revision(), c03_registry.revision());
+    }
 }

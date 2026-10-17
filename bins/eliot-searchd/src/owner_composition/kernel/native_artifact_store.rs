@@ -1411,7 +1411,6 @@ fn derived_guard_keys(
     .map_err(|_| NativeArtifactStoreError::ControlRefused)
 }
 
-#[allow(dead_code)] // Parent-owned ordinary factory caller remains a separate cutover.
 pub(super) fn store_native_raw_code_artifacts(
     input: &RetentionSourceInput<'_, '_, '_>,
     journal: &mut PersistentControlJournal,

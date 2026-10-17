@@ -135,6 +135,17 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
                     input.root, input.security, input.deadline, &work).map_err(|error| error.to_string())?;
                 control.load_committed_object(&committed.profile, &committed.readback, input.native.context())
                     .map_err(|error| error.to_string())?;
+                drop(control);
+                #[cfg(feature = "wave3-index")]
+                super::native_preparation_factory::prepare_native_raw_code_artifacts(
+                    &input,
+                    profile,
+                    &committed.readback,
+                    journal,
+                    publisher,
+                    config,
+                )
+                .map_err(str::to_owned)?;
                 Ok(Some(output(&committed.readback, true, false)))
             },
             SourceRevisionPreparation::Pending(_) => Err("NATIVE_RETENTION_COMMIT_UNRESOLVED".into()),
@@ -258,6 +269,16 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
         input.existing.reservation_id, input.native.context()).map_err(|error| error.to_string())?;
     drop(control);
     published_metadata(journal, publisher, input.deadline, &work)?;
+    #[cfg(feature = "wave3-index")]
+    super::native_preparation_factory::prepare_native_raw_code_artifacts(
+        &input,
+        &profile,
+        &committed,
+        journal,
+        publisher,
+        config,
+    )
+    .map_err(str::to_owned)?;
     Ok(Some(output(&committed, false, true)))
 }
 

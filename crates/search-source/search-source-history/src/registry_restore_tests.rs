@@ -82,7 +82,8 @@ fn v6_projection_batch_profile_survives_history_replay() {
         &[RegistryRestoreOperation { operation_id: &operation_id, value: &operation_bytes }],
         DEFAULT_REGISTRY_LIMITS, MAX_REGISTRY_RESTORE_BYTES,
     ).unwrap().into_parts();
-    assert_eq!(restored.operations, vec![operation]);
+    assert_eq!(restored.operations, vec![operation.clone()]);
+    assert_eq!(restored.operations[0].encode().unwrap(), operation_bytes);
     assert_eq!(restored.state_encoding_profiles.get(&key), Some(&"eliot.registry-state.v6"));
 }
 
@@ -345,4 +346,211 @@ fn legacy_state_and_operation_keep_the_probe_after_their_entry_checkpoint() {
         if std::mem::replace(&mut entered, true) { Err(CheckpointFailureV2::DeadlineExceeded) } else { Ok(()) }
     });
     assert!(matches!(batch, Err(BatchCodecV4Error::Admission(search_source_admission::AdmissionError::BudgetExhausted))));
+}
+#[test]
+fn v7_projection_partition_classes_survive_full_history_restore_and_conflicts_refuse() {
+    use search_contracts as c;
+    use search_source_records::{
+        batch::{request_fingerprint, DecodedBatch, RegistryStateDelta, RegistryStateKey},
+        membership::PermanentMembershipProvenanceV2,
+        operation::{RegistryBatch, RegistryChange, RegistryOperation},
+        projection_membership::{
+            ProjectionMembershipBindRequest, ProjectionMembershipRecord, ProjectionPartitionSemantics,
+        },
+    };
+
+    fn canonical(value: &str) -> Vec<u8> {
+        c::to_canonical_cbor(&c::CanonicalValue::Text(
+            c::CanonicalText::new(value).expect("text"),
+        ))
+        .expect("canonical bytes")
+        .into_vec()
+    }
+
+    fn projection_operation(
+        index: u8,
+        before: u64,
+        access_id: u8,
+        scoring_id: u8,
+        access_meaning: &str,
+        scoring_meaning: &str,
+    ) -> (RegistryStateKey, RegistryStateRecord, DecodedBatch) {
+        let revision = NonZeroRevision::new(1).expect("revision");
+        let namespace = SourceNamespaceId::from_bytes([1; 16]);
+        let source = c::SourceId::from_bytes([index; 16]);
+        let identity = c::SourceIdentity {
+            source_namespace_id: namespace,
+            source_id: source,
+            identity_kind: c::SourceIdentityKind::NtfsFile,
+            stable_identity_components: c::OpaqueCanonicalBytes::from_validated(vec![index])
+                .expect("identity"),
+        };
+        let provenance = PermanentMembershipProvenanceV2::from_stored_parts(
+            identity,
+            revision,
+            RootBindingId::from_bytes([8; 16]),
+            revision,
+            namespace,
+            revision,
+            SourceOwnerGeneration::from_bytes([9; 32]),
+            b"policy".to_vec(),
+            b"admission".to_vec(),
+            revision,
+        )
+        .expect("provenance");
+        let receipt = ReceiptRef::new(format!("restore:v7:{index}")).expect("receipt");
+        let request = ProjectionMembershipBindRequest {
+            binding: c::ProjectionMembership {
+                projection_membership_id: c::ProjectionMembershipId::from_bytes([index + 20; 16]),
+                source_membership_id: c::SourceMembershipId::from_bytes([index + 30; 16]),
+                representation_id: c::RepresentationId::from_bytes([index + 40; 16]),
+                access_partition_id: c::AccessPartitionId::from_bytes([access_id; 16]),
+                scoring_partition_id: c::ScoringPartitionId::from_bytes([scoring_id; 16]),
+                projection_schema_id: c::ProfileId::new("restore-v7-schema").expect("schema"),
+            },
+            expected_membership_revision: c::MembershipRevision::new(1),
+            expected_provenance: provenance,
+            partition_semantics: Some(
+                ProjectionPartitionSemantics::new(
+                    canonical(access_meaning),
+                    canonical(scoring_meaning),
+                )
+                .expect("partition semantics"),
+            ),
+        };
+        let state = RegistryStateRecord::ProjectionMembership(
+            ProjectionMembershipRecord::from_observed_parts(
+                request.clone(),
+                before + 1,
+                receipt.clone(),
+            )
+            .expect("projection record"),
+        );
+        let key = state.key();
+        let operation_id = c::OpaqueId::new(format!("restore:v7:operation:{index}"))
+            .expect("operation id");
+        let mutation = Blake3Digest32::from_bytes([index + 60; 32]);
+        let batch = RegistryBatch {
+            expected_registry_revision: before,
+            operation: RegistryOperation::new(operation_id.clone(), mutation),
+            changes: vec![RegistryChange::BindProjectionMembership {
+                request,
+                receipt: receipt.clone(),
+            }],
+        };
+        let operation = DecodedBatch::from_observed_parts_v7(
+            search_source_records::error::RegistryJournalEntry::new(
+                operation_id,
+                mutation,
+                before,
+                before + 1,
+                JournalEntryKind::BatchApply,
+                receipt,
+            ),
+            request_fingerprint(&batch).expect("fingerprint"),
+            vec![RegistryStateDelta::new(key.clone(), None, state.clone()).expect("delta")],
+            batch.changes,
+            DEFAULT_REGISTRY_LIMITS,
+        )
+        .expect("v7 operation");
+        (key, state, operation)
+    }
+
+    fn restore_pair(
+        first: (&RegistryStateKey, &RegistryStateRecord, &DecodedBatch),
+        second: (&RegistryStateKey, &RegistryStateRecord, &DecodedBatch),
+    ) -> Result<super::registry_restore::ObservedRegistryHistory, RegistryError> {
+        let state_key_bytes = [
+            first.0.encode().expect("first state key"),
+            second.0.encode().expect("second state key"),
+        ];
+        let state_value_bytes = [
+            first.1.encode_with_profile("eliot.registry-state.v7").expect("first v7 state"),
+            second.1.encode_with_profile("eliot.registry-state.v7").expect("second v7 state"),
+        ];
+        let states = [
+            RegistryRestoreState {
+                key: &state_key_bytes[0],
+                value: &state_value_bytes[0],
+            },
+            RegistryRestoreState {
+                key: &state_key_bytes[1],
+                value: &state_value_bytes[1],
+            },
+        ];
+        let operation_bytes = [
+            first.2.encode().expect("first operation"),
+            second.2.encode().expect("second operation"),
+        ];
+        let operations = [
+            RegistryRestoreOperation {
+                operation_id: &first.2.entry().operation_id,
+                value: &operation_bytes[0],
+            },
+            RegistryRestoreOperation {
+                operation_id: &second.2.entry().operation_id,
+                value: &operation_bytes[1],
+            },
+        ];
+        restore_registry_state(
+            2,
+            &states,
+            &operations,
+            DEFAULT_REGISTRY_LIMITS,
+            MAX_REGISTRY_RESTORE_BYTES,
+        )
+    }
+
+    let first = projection_operation(1, 0, 6, 7, "access:read-v1", "scoring:code-v1");
+    let second = projection_operation(2, 1, 6, 7, "access:read-v1", "scoring:code-v1");
+    let restored = restore_pair(
+        (&first.0, &first.1, &first.2),
+        (&second.0, &second.1, &second.2),
+    )
+    .expect("shared canonical classes restore");
+    let parts = restored.into_parts();
+    assert_eq!(parts.operations.len(), 2);
+    for (state, expected_access, expected_scoring) in [
+        (&first.1, 6_u8, 7_u8),
+        (&second.1, 6_u8, 7_u8),
+    ] {
+        let RegistryStateRecord::ProjectionMembership(record) = state else {
+            panic!("projection state");
+        };
+        assert_eq!(
+            record.binding().access_partition_id,
+            c::AccessPartitionId::from_bytes([expected_access; 16])
+        );
+        assert_eq!(
+            record.binding().scoring_partition_id,
+            c::ScoringPartitionId::from_bytes([expected_scoring; 16])
+        );
+        assert_eq!(
+            parts
+                .state_encoding_profiles
+                .get(&RegistryStateKey::ProjectionMembership(record.binding().source_membership_id)),
+            Some(&"eliot.registry-state.v7")
+        );
+    }
+
+    for (second_access_id, second_access_meaning) in [
+        (6, "access:deny-v2"),
+        (8, "access:read-v1"),
+    ] {
+        let second = projection_operation(
+            2,
+            1,
+            second_access_id,
+            7,
+            second_access_meaning,
+            "scoring:code-v1",
+        );
+        assert!(matches!(
+            restore_pair(
+                (&first.0, &first.1, &first.2),
+                (&second.0, &second.1, &second.2),
+            ),
+            Err(RegistryError::ProjectionMembershipConflict)
+        ));
+    }
 }
