@@ -7,6 +7,15 @@ use search_control_redb::{self as db, BoundControlJournal, ConditionalControlMut
     ControlRecordCondition as Condition, ControlValue, ControlWrite, JournalLimits,
     MigrationBootstrapFailure, MigrationBootstrapWork as Work, MutationId,
     ScopedControlRecordsReadback};
+#[cfg(feature = "wave3-index")]
+use search_control_redb::{PublicationProjectionSnapshot, source_retention::{
+    DerivedArtifactObjectIntentReadback, DerivedArtifactReservationReadback,
+    DerivedArtifactScopeGuardKeysV1, RevisionUseUsageReadback,
+}};
+#[cfg(feature = "wave3-index")]
+use search_revision_store::{CipherSuite, EncryptionBinding, derived_artifact::{
+    DerivedArtifactObjectRefV1, DerivedArtifactStorageV1,
+}};
 use search_ports::{CancellationProbe, DisclosureClass, IdempotencyClass, MutationIdentity,
     OperationContext, Port, PortErrorKind, PortFailure, PortRetryability};
 use search_runtime_owner::OwnerError;
@@ -18,6 +27,8 @@ use search_source_history::{prepare::{SourceRevisionPreparePort, SourceRevisionP
     encode_source_revision_mutation_readback, encode_source_revision_record}};
 use search_source_registry::{api::NamespaceCutoverState, recovery::RegistryStateRecord,
     root::RootRecord, source::{RegisteredSource, SourceLifecycle}};
+#[cfg(feature = "wave3-index")]
+use crate::config_composition::EffectiveDaemonConfig;
 use super::super::read_child::fresh_root::RetentionSecurity;
 
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
@@ -163,6 +174,13 @@ pub(super) struct NativeRetentionControl<'journal, 'work, C: CancellationProbe> 
     object: Option<FinalObject>,
 }
 
+#[cfg(feature = "wave3-index")]
+pub(super) struct DerivedArtifactReadback {
+    pub(super) reservation: DerivedArtifactReservationReadback,
+    pub(super) intent: DerivedArtifactObjectIntentReadback,
+    pub(super) selected: super::retention::Selected,
+}
+
 struct FinalObject {
     id: c::OpaqueId,
     physical: c::ObjectResidencyKeyDigest,
@@ -177,6 +195,202 @@ impl<C: CancellationProbe> Port for NativeRetentionControl<'_, '_, C> {
 
 impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'work, C> {
     pub(super) const fn deadline(&self) -> Instant { self.deadline }
+
+    #[cfg(feature = "wave3-index")]
+    pub(super) fn read_publication_projection_snapshot(
+        &self,
+    ) -> Result<Option<PublicationProjectionSnapshot>, RetentionControlError> {
+        let work = |unit| (self.work)(unit);
+        self.port
+            .read_publication_projection_snapshot_with_original_context(self.deadline, &work)
+            .map_err(Into::into)
+    }
+
+    #[cfg(feature = "wave3-index")]
+    pub(super) fn verify_current_source(&self) -> Result<(), RetentionControlError> {
+        let keys = self.scope(&[])?;
+        let read = self.read(&keys)?;
+        self.require_source(&read)
+    }
+
+    /// Reads C07's exact late intent/reservation and actual selected Current
+    /// in one guarded C02 transaction. This grants no write or seal capability.
+    #[cfg(feature = "wave3-index")]
+    pub(super) fn read_derived_artifact_evidence(
+        &self,
+        reference: &DerivedArtifactObjectRefV1,
+        source_record: &c::SourceRevision,
+        expected_residency: &[u8],
+        expected_encryption: &EncryptionBinding,
+        config: &EffectiveDaemonConfig,
+    ) -> Result<DerivedArtifactReadback, RetentionControlError> {
+        let descriptor = reference.descriptor();
+        let source = descriptor.source();
+        if source.source_namespace_id != self.source_namespace_id
+            || source.source_id != self.source_id
+            || source_record.source_id != source.source_id
+            || source_record.revision_id != source.revision_id
+            || source_record.content_digest != source.content_digest
+            || source_record.byte_length != source.byte_length
+        {
+            return Err(ControlError::OperationConflict.into());
+        }
+        let (reservation_operation, _) = phase_id(
+            descriptor.operation_id(),
+            &format!("derived-seal-{}", descriptor.kind().as_str()),
+            self.work,
+        )?;
+        let guards = self.derived_artifact_scope_guard_keys(source)?;
+        let keys = db::source_retention::derived_artifact_object_intent_keys(
+            reservation_operation,
+            &guards,
+            LIMITS,
+        )?;
+        let keys = self.scope(&keys)?;
+        let read = self.read(&keys)?;
+        self.require_source(&read)?;
+        self.verify_derived_artifact_guards(&read, source_record, &guards)?;
+        let revision_keys = db::source_retention::revision_use_keys(LIMITS)?;
+        let selected = self.selected_from_read(&read, &revision_keys, config)?;
+        let reservation = DerivedArtifactReservationReadback::read(
+            &read,
+            reservation_operation,
+            LIMITS,
+        )?;
+        let intent = DerivedArtifactObjectIntentReadback::read(
+            &read,
+            reservation_operation,
+            LIMITS,
+        )?;
+        verify_derived_artifact_readback(
+            reference,
+            &reservation,
+            &intent,
+            &guards,
+            expected_residency,
+            expected_encryption,
+            &selected,
+        )?;
+        Ok(DerivedArtifactReadback { reservation, intent, selected })
+    }
+
+    #[cfg(feature = "wave3-index")]
+    fn derived_artifact_scope_guard_keys(
+        &self,
+        source: &c::SourceRevisionRef,
+    ) -> Result<DerivedArtifactScopeGuardKeysV1, RetentionControlError> {
+        // bind_for_serving fixes order to Source, Namespace, Root, Membership,
+        // then the current residency-policy and purge-fence predicates.
+        if self.guards.len() != 6 {
+            return Err(ControlError::OperationConflict.into());
+        }
+        let source_revision = source_revision_guard_key(
+            source.source_namespace_id,
+            source.source_id,
+            source.revision_id,
+            self.work,
+        )?;
+        DerivedArtifactScopeGuardKeysV1::new(
+            self.guards[2].key().clone(),
+            source_revision,
+            self.guards[1].key().clone(),
+            self.guards[4].key().clone(),
+            self.guards[5].key().clone(),
+        )
+        .map_err(Into::into)
+    }
+
+    #[cfg(feature = "wave3-index")]
+    fn verify_derived_artifact_guards(
+        &self,
+        read: &ScopedControlRecordsReadback,
+        source_record: &c::SourceRevision,
+        keys: &DerivedArtifactScopeGuardKeysV1,
+    ) -> Result<(), RetentionControlError> {
+        let source_revision = source_revision_guard_key(
+            self.source_namespace_id,
+            self.source_id,
+            source_record.revision_id,
+            self.work,
+        )?;
+        let value = ControlValue::new(
+            Class::Revision,
+            encode_source_revision_record(source_record)
+                .map_err(|_| ControlError::StoreCorrupt)?,
+            LIMITS,
+        )?;
+        let conditions = [
+            self.guards[2].clone(),
+            Condition::exact(source_revision, value),
+            self.guards[1].clone(),
+            self.guards[4].clone(),
+            self.guards[5].clone(),
+        ];
+        if [
+            keys.root_owner(),
+            keys.source_revision(),
+            keys.namespace_owner(),
+            keys.residency_policy(),
+            keys.purge_fence(),
+        ] != conditions.each_ref().map(Condition::key)
+        {
+            return Err(ControlError::OperationConflict.into());
+        }
+        super::artifact_store::verify_guard_values(&conditions, read)
+            .map_err(|_| ControlError::OperationConflict.into())
+    }
+
+    #[cfg(feature = "wave3-index")]
+    fn selected_from_read(
+        &self,
+        read: &ScopedControlRecordsReadback,
+        keys: &[ControlKey],
+        config: &EffectiveDaemonConfig,
+    ) -> Result<super::retention::Selected, RetentionControlError> {
+        self.charge(16 * 32768)?;
+        let state = |index: usize| -> Result<&ControlValue, RetentionControlError> {
+            read.get(&keys[index])
+                .filter(|value| value.class() == Class::State)
+                .ok_or_else(|| ControlError::StoreCorrupt.into())
+        };
+        let current = state(3)?.as_bytes().to_vec();
+        let search_os_secrets::RevisionDekSelectionRecord::Current(current_record) =
+            search_os_secrets::decode_revision_dek_selection_record(&current)
+                .map_err(|_| ControlError::StoreCorrupt)?
+        else {
+            return Err(ControlError::OperationConflict.into());
+        };
+        let search_os_secrets::RevisionDekRecord::Intent(intent) =
+            search_os_secrets::decode_revision_dek_record(state(1)?.as_bytes())
+                .map_err(|_| ControlError::StoreCorrupt)?
+        else {
+            return Err(ControlError::StoreCorrupt.into());
+        };
+        if current_record.intent().candidate().intent() != &intent
+            || current_record.intent().policy().backend() != config.secrets_settings().backend()
+            || current_record.intent().policy().secrets_section_digest()
+                != *search_os_secrets::section_digest(config.secrets_settings()).as_bytes()
+        {
+            return Err(ControlError::OperationConflict.into());
+        }
+        let preparation = intent.binding().protection_entropy();
+        let usage = RevisionUseUsageReadback::read(read, &preparation, LIMITS)?;
+        let encryption = EncryptionBinding {
+            key_reference: intent
+                .binding()
+                .key_reference()
+                .map_err(|_| ControlError::StoreCorrupt)?,
+            key_version: c::NonZeroRevision::new(intent.binding().key_version())
+                .map_err(|_| ControlError::StoreCorrupt)?,
+            cipher_suite: CipherSuite::AuthenticatedEncryptionV1,
+        };
+        Ok(super::retention::Selected {
+            current,
+            preparation,
+            claim: usage.residency_canonical().map(<[u8]>::to_vec),
+            encryption,
+        })
+    }
 
     #[allow(clippy::too_many_arguments)]
     pub(super) fn bind(journal: &'journal mut db::PersistentControlJournal,
@@ -713,4 +927,52 @@ impl<C: CancellationProbe> SourceRevisionControlPort for NativeRetentionControl<
         { return Err(ControlError::OperationConflict.into()); }
         self.commit_final(mutation)
     }
+}
+
+#[cfg(feature = "wave3-index")]
+fn verify_derived_artifact_readback(
+    reference: &DerivedArtifactObjectRefV1,
+    reservation: &DerivedArtifactReservationReadback,
+    intent: &DerivedArtifactObjectIntentReadback,
+    guards: &DerivedArtifactScopeGuardKeysV1,
+    expected_residency: &[u8],
+    expected_encryption: &EncryptionBinding,
+    selected: &super::retention::Selected,
+) -> Result<(), RetentionControlError> {
+    let descriptor = reference.descriptor();
+    let descriptor_canonical = descriptor.encode().map_err(|_| ControlError::StoreCorrupt)?;
+    let reference_canonical = reference.encode().map_err(|_| ControlError::StoreCorrupt)?;
+    let address = reference.address().map_err(|_| ControlError::StoreCorrupt)?.relative_path();
+    let expected_guards = [
+        guards.root_owner(),
+        guards.source_revision(),
+        guards.namespace_owner(),
+        guards.residency_policy(),
+        guards.purge_fence(),
+    ];
+    if reference.storage() != DerivedArtifactStorageV1::Aes256GcmEnvelope
+        || reservation.source_revision_ref() != descriptor.source()
+        || reservation.operation_id() != descriptor.operation_id()
+        || reservation.materialization_id() != descriptor.materialization_id()
+        || reservation.representation_id() != descriptor.representation_id()
+        || reservation.descriptor_canonical() != descriptor_canonical
+        || reservation.residency_canonical() != expected_residency
+        || reservation.selected_current_canonical() != selected.current
+        || &selected.encryption != expected_encryption
+        || selected.claim.as_deref().is_some_and(|claim| claim != expected_residency)
+        || reservation.plaintext_length() != descriptor.encoded_body_bytes()
+        || reservation.scope_guard_keys() != expected_guards
+        || !intent.binds(reservation)
+        || intent.operation_id() != descriptor.operation_id()
+        || intent.object_reference_canonical() != reference_canonical
+        || intent.address_bytes() != address.as_bytes()
+        || intent.stored_object_digest() != reference.stored_object_digest()
+        || intent.stored_object_length() != reference.stored_bytes()
+        || intent.counter() != reservation.counter()
+        || intent.authenticated_blocks() != reservation.authenticated_blocks()
+        || intent.plaintext_length() != descriptor.encoded_body_bytes()
+    {
+        return Err(ControlError::OperationConflict.into());
+    }
+    Ok(())
 }
