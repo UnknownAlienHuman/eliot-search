@@ -15,7 +15,7 @@ use search_contracts::{
     MAX_CANONICAL_BYTES, MAX_COLLECTION_ITEMS, Modality, ObservationFreshnessState,
     OverlayRevision, ProjectionMembershipId, ProjectionProfileSetId, PurgeFenceRevision,
     QuerySnapshotFence, ReceiptRef, RecipeIdV1, ScoringPartitionId, SearchReadGrantClaims,
-    ShadowFenceRevision, SourceMembershipId, SourceNamespaceId, blake3_exact_bytes,
+    ShadowFenceRevision, SourceMembershipId, SourceNamespaceId, SourceView, blake3_exact_bytes,
 };
 
 use crate::{
@@ -76,6 +76,8 @@ pub trait CanonicalPopulationVerificationPort {
     /// Independently resolve the current typed C03/manifest-owner binding under
     /// the exact original query fence. No candidate row or legacy opaque/digest
     /// alias is supplied to this read. Missing typed ownership fails closed.
+    /// A retained-revision view must match the actual frozen source revision;
+    /// its filesystem observation freshness is not proof of that match.
     fn current_projection_binding(
         &mut self,
         issued: &Self::IssuedGrant,
@@ -305,7 +307,13 @@ fn validate_snapshot_owners(
 ) -> Result<(), AccessError> {
     let fence = request.snapshot_fence;
     fence.validate().map_err(|_| AccessError::SnapshotStale)?;
-    if fence.observation_freshness.state != ObservationFreshnessState::CurrentConfirmed {
+    // S16.2 requires live observation continuity for current-workspace queries.
+    // An explicit immutable retained revision instead uses the owner's exact
+    // source/manifest binding. Keep its reported freshness unchanged rather
+    // than inventing a current-worktree observation for a historical source.
+    if fence.observation_freshness.state != ObservationFreshnessState::CurrentConfirmed
+        && !matches!(fence.source_view, SourceView::RetainedRevision(_))
+    {
         return Err(AccessError::SnapshotStale);
     }
     validate_snapshot_fingerprint(fence)?;

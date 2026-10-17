@@ -398,3 +398,34 @@ fn portfolio_revision_requires_presence_in_policy_grant_and_snapshot() {
         .compile(&mut fixture.owner(), &fixture.issuer())
         .expect("all portfolio fences present");
 }
+
+#[test]
+fn retained_revision_keeps_unknown_freshness_but_current_workspace_requires_observation() {
+    let mut fixture = Fixture::new();
+    fixture.fence.observation_freshness.state = ObservationFreshnessState::Unknown;
+    seal_snapshot(&mut fixture.fence);
+    let issued = fixture.issuer();
+    let mut owner = fixture.owner();
+    let compiled = fixture.compile(&mut owner, &issued).expect("exact frozen owner view");
+    assert_eq!(compiled.snapshot_fence().source_view, fixture.fence.source_view);
+    assert_eq!(compiled.snapshot_fence().observation_freshness.state,
+        ObservationFreshnessState::Unknown);
+    assert!(owner.binding_reads > 0);
+
+    // A self-consistent caller fence naming another retained revision is still
+    // refused by the original owner; Unknown is never a source identity proof.
+    fixture.fence.source_view = SourceView::RetainedRevision(SourceRevisionId::from_bytes([99; 16]));
+    seal_snapshot(&mut fixture.fence);
+    assert!(matches!(fixture.compile(&mut owner, &issued), Err(AccessError::SnapshotStale)));
+
+    let view = search_contracts::WorkspaceViewRevisionId::from_bytes([22; 16]);
+    fixture.fence.source_view = SourceView::WorkingTreeCurrent(search_contracts::WorkspaceViewSource {
+        workspace_instance_id: search_contracts::WorkspaceId::from_bytes([23; 16]),
+        workspace_view_revision_ref: view,
+    });
+    fixture.fence.workspace_view_revision_ref = Some(view);
+    seal_snapshot(&mut fixture.fence);
+    let mut current_owner = fixture.owner();
+    assert!(matches!(fixture.compile(&mut current_owner, &issued), Err(AccessError::SnapshotStale)));
+    assert_eq!(current_owner.binding_reads, 0);
+}
