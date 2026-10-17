@@ -257,7 +257,8 @@ pub(crate) fn verify_executable_identity_with_context<E>(
         .checked_add(max_probe_timeout)
         .unwrap_or(absolute_deadline);
     let probe_deadline = absolute_deadline.min(probe_cap);
-    let version = probe_version_with_context(&expectation.path, probe_deadline, admit)?;
+    let version =
+        probe_version_with_context(&expectation.path, probe_deadline, absolute_deadline, admit)?;
     if version != expectation.version {
         return Err(CheckedIdentityError::Supervisor(
             SupervisorError::ArtifactVersionMismatch,
@@ -314,11 +315,12 @@ fn probe_version(exe: &Path, timeout: Duration) -> Result<String, SupervisorErro
 
 fn probe_version_with_context<E>(
     exe: &Path,
-    deadline: Instant,
+    probe_deadline: Instant,
+    original_deadline: Instant,
     admit: &mut impl FnMut(ContainedLaunchWork) -> Result<(), E>,
 ) -> Result<String, CheckedIdentityError<E>> {
     admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
-    if Instant::now() >= deadline {
+    if Instant::now() >= probe_deadline {
         return Err(CheckedIdentityError::Supervisor(
             SupervisorError::ExecutableProbeFailed,
         ));
@@ -337,6 +339,7 @@ fn probe_version_with_context<E>(
         return Err(cleanup_probe_child(
             child,
             ContainedLaunchFailureCause::Port(error),
+            original_deadline,
         ));
     }
 
@@ -345,18 +348,21 @@ fn probe_version_with_context<E>(
             return Err(cleanup_probe_child(
                 child,
                 ContainedLaunchFailureCause::Port(error),
+                original_deadline,
             ));
         }
-        if Instant::now() >= deadline {
+        if Instant::now() >= probe_deadline {
             return Err(cleanup_probe_child(
                 child,
                 ContainedLaunchFailureCause::Supervisor(SupervisorError::ExecutableProbeFailed),
+                original_deadline,
             ));
         }
         if let Err(error) = admit(ContainedLaunchWork::NativeCall) {
             return Err(cleanup_probe_child(
                 child,
                 ContainedLaunchFailureCause::Port(error),
+                original_deadline,
             ));
         }
         let status = child.try_wait();
@@ -364,12 +370,14 @@ fn probe_version_with_context<E>(
             return Err(cleanup_probe_child(
                 child,
                 ContainedLaunchFailureCause::Port(error),
+                original_deadline,
             ));
         }
         let Ok(status) = status else {
             return Err(cleanup_probe_child(
                 child,
                 ContainedLaunchFailureCause::Supervisor(SupervisorError::ExecutableProbeFailed),
+                original_deadline,
             ));
         };
         if let Some(status) = status {
@@ -383,7 +391,7 @@ fn probe_version_with_context<E>(
             admit(ContainedLaunchWork::Checkpoint).map_err(CheckedIdentityError::Context)?;
             return Ok(version);
         }
-        let remaining = deadline.saturating_duration_since(Instant::now());
+        let remaining = probe_deadline.saturating_duration_since(Instant::now());
         std::thread::sleep(PROBE_POLL_INTERVAL.min(remaining));
     }
 }
@@ -391,10 +399,22 @@ fn probe_version_with_context<E>(
 fn cleanup_probe_child<E>(
     mut child: Child,
     cause: ContainedLaunchFailureCause<E>,
+    original_deadline: Instant,
 ) -> CheckedIdentityError<E> {
-    let cleanup_deadline = Instant::now()
-        .checked_add(PROBE_CLEANUP_TIMEOUT)
-        .unwrap_or_else(Instant::now);
+    let Some(cleanup_deadline) =
+        probe_cleanup_deadline(Instant::now(), original_deadline, PROBE_CLEANUP_TIMEOUT)
+    else {
+        return CheckedIdentityError::Recovery {
+            cause,
+            recovery: SpawnRecovery::uncontained_probe(child),
+        };
+    };
+    if Instant::now() >= cleanup_deadline {
+        return CheckedIdentityError::Recovery {
+            cause,
+            recovery: SpawnRecovery::uncontained_probe(child),
+        };
+    }
     match crate::owned::terminate_bounded(&mut child, cleanup_deadline) {
         Ok(_) => match cause {
             ContainedLaunchFailureCause::Port(error) => CheckedIdentityError::Context(error),
@@ -407,6 +427,19 @@ fn cleanup_probe_child<E>(
             recovery: SpawnRecovery::uncontained_probe(child),
         },
     }
+}
+
+fn probe_cleanup_deadline(
+    now: Instant,
+    original_deadline: Instant,
+    cap: Duration,
+) -> Option<Instant> {
+    if now >= original_deadline || cap.is_zero() {
+        return None;
+    }
+    let local_deadline = now.checked_add(cap).unwrap_or(original_deadline);
+    let cleanup_deadline = original_deadline.min(local_deadline);
+    (cleanup_deadline > now).then_some(cleanup_deadline)
 }
 
 fn read_version_probe_output<E>(
@@ -457,7 +490,7 @@ mod tests {
 
     use super::{
         CheckedIdentityError, ExecutableExpectation, QUALIFIED_EXE_BYTES, QUALIFIED_QDRANT_VERSION,
-        is_plausible_version, verify_executable_identity_with_context,
+        is_plausible_version, probe_cleanup_deadline, verify_executable_identity_with_context,
     };
     use crate::{ContainedLaunchWork, SupervisorError};
 
@@ -488,6 +521,26 @@ mod tests {
             ))
         ));
         assert_eq!(work, [ContainedLaunchWork::Checkpoint]);
+    }
+
+    #[test]
+    fn probe_cleanup_uses_only_remaining_original_budget_and_local_cap() {
+        let now = Instant::now();
+        let local_cap = Duration::from_secs(1);
+        let before_cap = now.checked_add(Duration::from_millis(250)).unwrap();
+        let after_cap = now.checked_add(Duration::from_secs(5)).unwrap();
+        let expired = now.checked_sub(Duration::from_millis(1)).unwrap();
+
+        assert_eq!(
+            probe_cleanup_deadline(now, before_cap, local_cap),
+            Some(before_cap)
+        );
+        assert_eq!(
+            probe_cleanup_deadline(now, after_cap, local_cap),
+            Some(now.checked_add(local_cap).unwrap())
+        );
+        assert_eq!(probe_cleanup_deadline(now, now, local_cap), None);
+        assert_eq!(probe_cleanup_deadline(now, expired, local_cap), None);
     }
 
     #[test]

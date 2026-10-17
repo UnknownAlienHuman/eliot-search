@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::fmt::Write as _;
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::mem::{size_of, zeroed};
+use std::mem::{offset_of, size_of, zeroed};
 use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 use std::os::windows::process::CommandExt;
@@ -33,7 +33,7 @@ use crate::native_file::{
 use super::{NativeQdrantJobError, original_suspend_count_is_single, record_thread_candidate};
 
 const CREATE_SUSPENDED: u32 = 0x0000_0004;
-const JOBOBJECT_BASIC_LIMIT_INFORMATION_CLASS: u32 = 2;
+const JOBOBJECT_EXTENDED_LIMIT_INFORMATION_CLASS: u32 = 9;
 const JOBOBJECT_BASIC_ACCOUNTING_INFORMATION_CLASS: u32 = 1;
 const JOB_OBJECT_LIMIT_BREAKAWAY_OK: u32 = 0x0000_0800;
 const JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK: u32 = 0x0000_1000;
@@ -50,7 +50,7 @@ const MAX_THREAD_SNAPSHOT_ENTRIES: usize = 65_536;
 const JOB_POLICY_DOMAIN: &[u8] = b"eliot-search/qdrant-job-policy/v1\0";
 const INVALID_HANDLE_VALUE: RawHandle = (-1_isize) as RawHandle;
 
-#[repr(C)]
+#[repr(C, align(8))]
 struct BasicLimitInformation {
     _per_process_user_time_limit: i64,
     _per_job_user_time_limit: i64,
@@ -61,6 +61,26 @@ struct BasicLimitInformation {
     _affinity: usize,
     _priority_class: u32,
     _scheduling_class: u32,
+}
+
+#[repr(C, align(8))]
+struct IoCounters {
+    _read_ops: u64,
+    _write_ops: u64,
+    _other_ops: u64,
+    _read_bytes: u64,
+    _write_bytes: u64,
+    _other_bytes: u64,
+}
+
+#[repr(C, align(8))]
+struct ExtendedLimitInformation {
+    basic_limit_information: BasicLimitInformation,
+    io_info: IoCounters,
+    _process_memory_limit: usize,
+    _job_memory_limit: usize,
+    _peak_process_memory_used: usize,
+    _peak_job_memory_used: usize,
 }
 
 #[repr(C, align(8))]
@@ -88,6 +108,15 @@ struct ThreadEntry32 {
 
 const _: () = {
     assert!(size_of::<BasicLimitInformation>() == if size_of::<usize>() == 8 { 64 } else { 48 });
+    assert!(size_of::<IoCounters>() == 48);
+    assert!(
+        size_of::<ExtendedLimitInformation>() == if size_of::<usize>() == 8 { 144 } else { 112 }
+    );
+    assert!(offset_of!(ExtendedLimitInformation, io_info) == size_of::<BasicLimitInformation>());
+    assert!(
+        offset_of!(ExtendedLimitInformation, _process_memory_limit)
+            == size_of::<BasicLimitInformation>() + size_of::<IoCounters>()
+    );
     assert!(size_of::<BasicAccountingInformation>() == 48);
     assert!(size_of::<ThreadEntry32>() == 28);
 };
@@ -537,18 +566,18 @@ fn create_job<C: StorageSecurityContext>(
     after_native(context)?;
     let handle = job.ok_or(NativeQdrantJobError::NativeOperationFailed)?;
 
-    let mut limits: BasicLimitInformation =
+    let mut limits: ExtendedLimitInformation =
         // SAFETY: every field is an integer and zero is a valid unset limit.
         unsafe { zeroed() };
-    limits.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    let length = u32::try_from(size_of::<BasicLimitInformation>())
+    limits.basic_limit_information.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    let length = u32::try_from(size_of::<ExtendedLimitInformation>())
         .map_err(|_| NativeQdrantJobError::NativeOperationFailed)?;
     before_native(context)?;
-    // SAFETY: `limits` is fully initialized and matches JobObjectBasicLimitInformation.
+    // SAFETY: `limits` is fully initialized and matches JobObjectExtendedLimitInformation.
     let configured = unsafe {
         SetInformationJobObject(
             handle.as_raw_handle(),
-            JOBOBJECT_BASIC_LIMIT_INFORMATION_CLASS,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
             (&raw const limits).cast(),
             length,
         )
@@ -558,7 +587,7 @@ fn create_job<C: StorageSecurityContext>(
         return Err(NativeQdrantJobError::NativeOperationFailed);
     }
 
-    let mut observed: BasicLimitInformation =
+    let mut observed: ExtendedLimitInformation =
         // SAFETY: integer-only SDK structure; zero initializes all output storage.
         unsafe { zeroed() };
     let mut returned = 0_u32;
@@ -567,7 +596,7 @@ fn create_job<C: StorageSecurityContext>(
     let queried = unsafe {
         QueryInformationJobObject(
             handle.as_raw_handle(),
-            JOBOBJECT_BASIC_LIMIT_INFORMATION_CLASS,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
             (&raw mut observed).cast(),
             length,
             &raw mut returned,
@@ -575,10 +604,10 @@ fn create_job<C: StorageSecurityContext>(
     };
     after_native(context)?;
     if queried == 0
-        || returned < length
-        || observed.limit_flags != JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-        || observed.limit_flags & JOB_OBJECT_LIMIT_BREAKAWAY_OK != 0
-        || observed.limit_flags & JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK != 0
+        || returned != length
+        || observed.basic_limit_information.limit_flags != JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        || observed.basic_limit_information.limit_flags & JOB_OBJECT_LIMIT_BREAKAWAY_OK != 0
+        || observed.basic_limit_information.limit_flags & JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK != 0
     {
         return Err(NativeQdrantJobError::NativeOperationFailed);
     }
