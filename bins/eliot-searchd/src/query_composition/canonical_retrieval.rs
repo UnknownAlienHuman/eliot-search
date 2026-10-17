@@ -2,9 +2,10 @@
 //!
 //! This module is intentionally a leaf under the existing query-composition
 //! owner. The caller passes the immutable leg ticket, its exact route/epoch
-//! pin, and the `EligibilityPopulation` borrowed from the owner-compiled C18
-//! result. One bridge request context and that same population are retained
-//! across filtered retrieval/IDF, exact point readback, and denominator count.
+//! pin, and the opaque owner-compiled C18 result. Its single
+//! `EligibilityPopulation` and owner-verified source/projection links are
+//! retained by reference. One bridge request context and that same population
+//! are retained across filtered retrieval/IDF, exact point readback, and count.
 //!
 //! Point identities come from a bounded resolver over the current committed
 //! projection manifest. A missing or mismatched identity fails the leg; no
@@ -16,8 +17,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use search_access::{LiveSecurityState, RequestSecurityFence};
-use search_contracts::indexed::{EligibilityPopulation, PointPayload, VectorName, VectorValue};
+use search_access::{CompiledEligibilityPopulation, LiveSecurityState, RequestSecurityFence};
+use search_contracts::indexed::{PointPayload, VectorName, VectorValue};
 use search_point_identity::s11::{PointId128, PointIdentity};
 use search_ports::CancellationProbe;
 use search_qdrant_bridge::real::{
@@ -26,8 +27,8 @@ use search_qdrant_bridge::real::{
 use search_qdrant_bridge::{BridgeError, CollectionRoute};
 use search_retrieval_executor::canonical::{
     CanonicalIndexedLegOutput, CanonicalIndexedPortError, CanonicalIndexedReadback,
-    CanonicalIndexedReadbackBatch, CanonicalIndexedRetrievalPort, CanonicalMembershipBinding,
-    CanonicalPointAddress, execute_canonical_indexed_leg,
+    CanonicalIndexedReadbackBatch, CanonicalIndexedRetrievalPort, CanonicalPointAddress,
+    execute_canonical_indexed_leg,
 };
 use search_retrieval_executor::{ExecuteError, LegPinSet, LegTicket};
 
@@ -49,23 +50,24 @@ pub struct VerifiedCanonicalPoint {
 /// This adapter owns no plan, filter, Qdrant request, source read, or durable
 /// query state. Its population and request context are single borrowed/shared
 /// values for the lifetime of one indexed leg.
-pub struct RealCanonicalIndexedPort<'plane, 'population, 'resolver> {
+pub struct RealCanonicalIndexedPort<'plane, 'compiled, 'resolver> {
     plane: &'plane BlockingRealQueryPlane,
     route: CollectionRoute,
-    population: &'population EligibilityPopulation,
+    compiled_population: &'compiled CompiledEligibilityPopulation,
     identities: &'resolver mut dyn CanonicalPointIdentityResolver,
     context: CanonicalRequestContext,
 }
 
-impl<'plane, 'population, 'resolver> RealCanonicalIndexedPort<'plane, 'population, 'resolver> {
+impl<'plane, 'compiled, 'resolver> RealCanonicalIndexedPort<'plane, 'compiled, 'resolver> {
     pub(crate) fn new(
         plane: &'plane BlockingRealQueryPlane,
         route: CollectionRoute,
-        population: &'population EligibilityPopulation,
+        compiled_population: &'compiled CompiledEligibilityPopulation,
         identities: &'resolver mut dyn CanonicalPointIdentityResolver,
         deadline: Instant,
         cancellation: Arc<dyn CancellationProbe + Send + Sync>,
     ) -> Result<Self, CanonicalIndexedPortError> {
+        let population = compiled_population.population();
         if route.generation != population.collection_generation_id() {
             return Err(CanonicalIndexedPortError::Failure);
         }
@@ -75,7 +77,7 @@ impl<'plane, 'population, 'resolver> RealCanonicalIndexedPort<'plane, 'populatio
         Ok(Self {
             plane,
             route,
-            population,
+            compiled_population,
             identities,
             context,
         })
@@ -85,8 +87,8 @@ impl<'plane, 'population, 'resolver> RealCanonicalIndexedPort<'plane, 'populatio
 impl CanonicalIndexedRetrievalPort for RealCanonicalIndexedPort<'_, '_, '_> {
     type Candidate = VerifiedCanonicalPoint;
 
-    fn population(&self) -> &EligibilityPopulation {
-        self.population
+    fn compiled_population(&self) -> &CompiledEligibilityPopulation {
+        self.compiled_population
     }
 
     fn query_and_readback(
@@ -96,11 +98,12 @@ impl CanonicalIndexedRetrievalPort for RealCanonicalIndexedPort<'_, '_, '_> {
         limit: usize,
     ) -> Result<CanonicalIndexedReadbackBatch<Self::Candidate>, CanonicalIndexedPortError> {
         self.context.check().map_err(map_context_error)?;
+        let population = self.compiled_population.population();
         let scored = self
             .plane
             .query_indexed(
                 &self.route,
-                self.population,
+                population,
                 vector_name,
                 query,
                 limit,
@@ -139,7 +142,12 @@ impl CanonicalIndexedRetrievalPort for RealCanonicalIndexedPort<'_, '_, '_> {
         self.context.check().map_err(map_context_error)?;
         let readback = self
             .plane
-            .readback_indexed_exact(&self.route, self.population, &expected, &self.context)
+            .readback_indexed_exact(
+                &self.route,
+                self.compiled_population.population(),
+                &expected,
+                &self.context,
+            )
             .map_err(map_bridge_error)?;
         let nominations = join_exact_readback(readback.points, &mut expected_by_address)?;
         let mut readback_missing_addresses = readback
@@ -171,9 +179,10 @@ impl CanonicalIndexedRetrievalPort for RealCanonicalIndexedPort<'_, '_, '_> {
 
     fn count_exact(&mut self) -> Result<u64, CanonicalIndexedPortError> {
         self.context.check().map_err(map_context_error)?;
+        let population = self.compiled_population.population();
         let count = self
             .plane
-            .count_indexed(&self.route, self.population, &self.context)
+            .count_indexed(&self.route, population, &self.context)
             .map_err(map_bridge_error)?;
         self.context.check().map_err(map_context_error)?;
         Ok(count)
@@ -240,13 +249,12 @@ const fn map_bridge_error(error: BridgeError) -> CanonicalIndexedPortError {
 
 /// Execute one exact pinned leg through real canonical Qdrant operations.
 #[allow(clippy::too_many_arguments)]
-pub fn execute_pinned_leg_canonical<'population>(
+pub fn execute_pinned_leg_canonical<'compiled>(
     plane: &BlockingRealQueryPlane,
     route: CollectionRoute,
     ticket: &LegTicket,
     pins: &LegPinSet,
-    population: &'population EligibilityPopulation,
-    membership_bindings: &[CanonicalMembershipBinding],
+    compiled_population: &'compiled CompiledEligibilityPopulation,
     identities: &mut dyn CanonicalPointIdentityResolver,
     vector_name: &VectorName,
     query: &VectorValue,
@@ -256,15 +264,20 @@ pub fn execute_pinned_leg_canonical<'population>(
     request_security: &RequestSecurityFence,
     live_before: &LiveSecurityState,
     live_after: &LiveSecurityState,
-) -> Result<CanonicalIndexedLegOutput<'population, VerifiedCanonicalPoint>, ExecuteError> {
-    let mut port =
-        RealCanonicalIndexedPort::new(plane, route, population, identities, deadline, cancellation)
-            .map_err(map_executor_port_error)?;
+) -> Result<CanonicalIndexedLegOutput<'compiled, VerifiedCanonicalPoint>, ExecuteError> {
+    let mut port = RealCanonicalIndexedPort::new(
+        plane,
+        route,
+        compiled_population,
+        identities,
+        deadline,
+        cancellation,
+    )
+    .map_err(map_executor_port_error)?;
     execute_canonical_indexed_leg(
         ticket,
         pins,
-        population,
-        membership_bindings,
+        compiled_population,
         vector_name,
         query,
         limit,

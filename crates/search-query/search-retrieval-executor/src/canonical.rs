@@ -10,7 +10,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use search_access::{
-    AccessCheckpoint, AccessError, LiveSecurityState, RequestSecurityFence, recheck_live_access,
+    AccessCheckpoint, AccessError, CanonicalProjectionMembership, CompiledEligibilityPopulation,
+    LiveSecurityState, RequestSecurityFence, recheck_live_access,
 };
 use search_contracts::indexed::{EligibilityPopulation, VectorName, VectorValue};
 use search_contracts::{
@@ -36,15 +37,6 @@ impl CanonicalPointAddress {
     pub const fn as_bytes(&self) -> &[u8; 16] {
         &self.0
     }
-}
-
-/// Typed link supplied by the current projection owner for one leg.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct CanonicalMembershipBinding {
-    /// Membership identity already present in the immutable leg ticket.
-    pub source_membership_id: SourceMembershipId,
-    /// Exact C00 projection membership identity from the projection owner.
-    pub projection_membership_id: ProjectionMembershipId,
 }
 
 /// One nomination whose canonical point payload was read back exactly.
@@ -104,16 +96,16 @@ pub enum CanonicalIndexedPortError {
 
 /// Vendor-neutral port bound to one exact population owner and request.
 ///
-/// Implementations bind one borrowed `EligibilityPopulation` and one shared
-/// request context at construction. Query (including filtered IDF), point
-/// readback, and exact count therefore cannot receive diverging filters or
-/// independently refreshed deadlines.
+/// Implementations bind one opaque owner compilation and one shared request
+/// context at construction. Query (including filtered IDF), point readback,
+/// and exact count therefore cannot receive diverging filters or independently
+/// refreshed deadlines.
 pub trait CanonicalIndexedRetrievalPort {
     /// Typed exact-readback product selected by the daemon adapter.
     type Candidate;
 
-    /// The one population value retained for the complete request leg.
-    fn population(&self) -> &EligibilityPopulation;
+    /// The opaque owner compilation retained for the complete request leg.
+    fn compiled_population(&self) -> &CompiledEligibilityPopulation;
 
     /// Bounded query followed by exact S11 identity and payload readback.
     fn query_and_readback(
@@ -131,11 +123,10 @@ pub trait CanonicalIndexedRetrievalPort {
 }
 
 /// Canonical indexed result with explicit point-readback gaps.
-#[derive(Clone, Debug, PartialEq)]
 pub struct CanonicalIndexedLegOutput<'population, Candidate> {
-    /// The same owner-compiled population used by the real adapter for every
-    /// query, readback, and count call. This scopes the raw scores.
-    pub population: &'population EligibilityPopulation,
+    /// The same opaque owner compilation used for each query, readback and
+    /// count call. It binds scores but is not a reusable permission.
+    pub compiled_population: &'population CompiledEligibilityPopulation,
     /// Existing immutable leg identity.
     pub leg_id: usize,
     /// Existing immutable leg kind.
@@ -154,17 +145,16 @@ pub struct CanonicalIndexedLegOutput<'population, Candidate> {
     pub completion: LegCompletion,
 }
 
-/// Execute one immutable ticket through its canonical typed population.
+/// Execute one immutable ticket through its opaque C18 compilation.
 ///
-/// The caller passes the population borrowed from the opaque C18 compilation
-/// result. The port must retain that same reference; the pointer check prevents
-/// a second equal-looking population from replacing the request owner.
+/// The port must retain the exact compilation reference; the pointer check
+/// prevents a second equal-looking owner result or caller mapping from taking
+/// its place.
 #[allow(clippy::too_many_arguments)]
 pub fn execute_canonical_indexed_leg<'population, P: CanonicalIndexedRetrievalPort>(
     ticket: &LegTicket,
     pins: &LegPinSet,
-    population: &'population EligibilityPopulation,
-    membership_bindings: &[CanonicalMembershipBinding],
+    compiled_population: &'population CompiledEligibilityPopulation,
     vector_name: &VectorName,
     query: &VectorValue,
     limit: usize,
@@ -183,9 +173,10 @@ pub fn execute_canonical_indexed_leg<'population, P: CanonicalIndexedRetrievalPo
     {
         return Err(ExecuteError::InvalidExecutionState);
     }
-    if !std::ptr::eq(population, port.population()) {
+    if !same_owner(compiled_population, port.compiled_population()) {
         return Err(ExecuteError::PopulationMismatch);
     }
+    let population = compiled_population.population();
     if safe_leg.route.collection_generation_id != population.collection_generation_id()
         || safe_leg.route.visible_epoch != population.visible_epoch()
         || safe_leg.eligibility_plans.is_empty()
@@ -207,8 +198,11 @@ pub fn execute_canonical_indexed_leg<'population, P: CanonicalIndexedRetrievalPo
     {
         return Err(ExecuteError::PopulationMismatch);
     }
-    let source_by_projection =
-        validate_membership_bindings(&safe_leg.memberships, population, membership_bindings)?;
+    let source_by_projection = validate_owner_memberships(
+        &safe_leg.memberships,
+        population,
+        compiled_population.projection_memberships(),
+    )?;
 
     let expected_route = RouteIdentity {
         collection_generation_id: safe_leg.route.collection_generation_id,
@@ -273,7 +267,7 @@ pub fn execute_canonical_indexed_leg<'population, P: CanonicalIndexedRetrievalPo
     );
 
     Ok(CanonicalIndexedLegOutput {
-        population,
+        compiled_population,
         leg_id: ticket.leg.leg_id(),
         leg_kind: ticket.leg.leg_kind(),
         memberships: safe_leg.memberships.clone(),
@@ -285,38 +279,44 @@ pub fn execute_canonical_indexed_leg<'population, P: CanonicalIndexedRetrievalPo
     })
 }
 
-fn validate_membership_bindings(
+fn same_owner<T>(expected: &T, actual: &T) -> bool {
+    std::ptr::eq(expected, actual)
+}
+
+fn validate_owner_memberships(
     ticket_memberships: &BTreeSet<SourceMembershipId>,
     population: &EligibilityPopulation,
-    bindings: &[CanonicalMembershipBinding],
+    owner_memberships: &BTreeMap<SourceMembershipId, CanonicalProjectionMembership>,
 ) -> Result<BTreeMap<ProjectionMembershipId, SourceMembershipId>, ExecuteError> {
     let population_memberships = population
         .allowed_projection_memberships()
         .into_iter()
         .collect::<BTreeSet<_>>();
     if population_memberships.is_empty()
-        || bindings.len() != population_memberships.len()
-        || bindings.len() != ticket_memberships.len()
+        || owner_memberships.len() != population_memberships.len()
+        || owner_memberships.len() != ticket_memberships.len()
     {
         return Err(ExecuteError::PopulationMismatch);
     }
     let mut source_by_projection = BTreeMap::new();
-    let mut sources = BTreeSet::new();
-    for binding in bindings {
+    for (source_membership_id, binding) in owner_memberships {
         if !ticket_memberships.contains(&binding.source_membership_id)
+            || binding.source_membership_id != *source_membership_id
             || !population_memberships.contains(&binding.projection_membership_id)
-            || !sources.insert(binding.source_membership_id)
+            || binding.installation_incarnation_id != population.installation_incarnation_id()
+            || binding.collection_generation_id != population.collection_generation_id()
+            || binding.access_partition_id != population.access_partition_id()
+            || binding.scoring_partition_id != population.scoring_partition_id()
+            || binding.projection_profile_set_id != *population.projection_profile_set_id()
             || source_by_projection
-                .insert(
-                    binding.projection_membership_id,
-                    binding.source_membership_id,
-                )
+                .insert(binding.projection_membership_id, *source_membership_id)
                 .is_some()
         {
             return Err(ExecuteError::PopulationMismatch);
         }
     }
-    if &sources != ticket_memberships
+    let source_memberships = owner_memberships.keys().copied().collect::<BTreeSet<_>>();
+    if &source_memberships != ticket_memberships
         || source_by_projection
             .keys()
             .copied()
@@ -420,10 +420,10 @@ const fn map_post_leg_error(error: AccessError) -> ExecuteError {
 #[cfg(test)]
 mod tests {
     use super::{
-        CanonicalMembershipBinding, CanonicalPointAddress, candidate_scope_completion,
-        validate_membership_bindings,
+        CanonicalPointAddress, candidate_scope_completion, same_owner, validate_owner_memberships,
     };
     use crate::LegCompletion;
+    use search_access::CanonicalProjectionMembership;
     use search_contracts::indexed::EligibilityPopulation;
     use search_contracts::{
         AccessPartitionId, CollectionGenerationId, Epoch, InstallationIncarnationId,
@@ -443,27 +443,37 @@ mod tests {
         .expect("population")
     }
 
+    fn owner_membership(
+        source_membership_id: SourceMembershipId,
+        projection_membership_id: ProjectionMembershipId,
+    ) -> CanonicalProjectionMembership {
+        CanonicalProjectionMembership {
+            source_membership_id,
+            installation_incarnation_id: InstallationIncarnationId::from_bytes([1; 16]),
+            collection_generation_id: CollectionGenerationId::from_bytes([2; 16]),
+            projection_membership_id,
+            access_partition_id: AccessPartitionId::from_bytes([3; 16]),
+            scoring_partition_id: ScoringPartitionId::from_bytes([4; 16]),
+            projection_profile_set_id: ProjectionProfileSetId::new("lexical_baseline_v1")
+                .expect("profile"),
+        }
+    }
+
     #[test]
     fn membership_binding_is_a_typed_bijection_for_the_ticket_and_population() {
         let source = SourceMembershipId::from_bytes([6; 16]);
         let projection = ProjectionMembershipId::from_bytes([7; 16]);
         let members = [source].into_iter().collect();
         let compiled = population(&[projection]);
-        let bindings = [CanonicalMembershipBinding {
-            source_membership_id: source,
-            projection_membership_id: projection,
-        }];
+        let owner_memberships = BTreeMap::from([(source, owner_membership(source, projection))]);
 
-        let map = validate_membership_bindings(&members, &compiled, &bindings)
-            .expect("exact typed binding");
+        let map = validate_owner_memberships(&members, &compiled, &owner_memberships)
+            .expect("exact owner-verified binding");
         assert_eq!(map.get(&projection), Some(&source));
 
         let wrong_projection = ProjectionMembershipId::from_bytes([8; 16]);
-        let wrong = [CanonicalMembershipBinding {
-            source_membership_id: source,
-            projection_membership_id: wrong_projection,
-        }];
-        assert!(validate_membership_bindings(&members, &compiled, &wrong).is_err());
+        let wrong = BTreeMap::from([(source, owner_membership(source, wrong_projection))]);
+        assert!(validate_owner_memberships(&members, &compiled, &wrong).is_err());
     }
 
     #[test]
@@ -472,7 +482,7 @@ mod tests {
         let first = population(&[projection]);
         let second = first.clone();
         assert_eq!(first, second);
-        assert!(!std::ptr::eq(&first, &second));
+        assert!(!same_owner(&first, &second));
     }
 
     #[test]
