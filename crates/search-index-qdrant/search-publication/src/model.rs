@@ -9,25 +9,53 @@ use search_projection_planner::ProjectionManifest;
 /// Shared publication guard value; this re-export preserves the existing import path.
 pub use search_contracts::PublicationGuards;
 
-/// Exact immutable publication input prepared before epoch reservation.
+/// Owner-validated immutable preparation, issued only by canonical admission.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PreparedPublication {
-    /// Stable transaction identity.
-    pub transaction_id: OpaqueId,
-    /// Exact target collection generation.
-    pub collection_generation_id: CollectionGenerationId,
-    /// Current exact manifest, when one is already visible.
-    pub old_manifest: Option<ProjectionManifest>,
-    /// Exact replacement manifest.
-    pub new_manifest: ProjectionManifest,
-    /// Digest of the old exact manifest, when present.
-    pub old_manifest_digest: Option<Blake3Digest32>,
-    /// Digest of the replacement exact manifest.
-    pub new_manifest_digest: Blake3Digest32,
-    /// Complete load-bearing guards.
-    pub guards: PublicationGuards,
-    /// Immutable receipt proving preparation inputs.
-    pub preparation_receipt: ReceiptRef,
+pub struct PreparedGeneration {
+    pub(crate) transaction_id: OpaqueId,
+    pub(crate) collection_generation_id: CollectionGenerationId,
+    pub(crate) target: crate::admission::PublicationTarget,
+    pub(crate) old_manifest: Option<ProjectionManifest>,
+    pub(crate) new_manifest: ProjectionManifest,
+    pub(crate) old_manifest_digest: Option<Blake3Digest32>,
+    pub(crate) new_manifest_digest: Blake3Digest32,
+    pub(crate) guards: PublicationGuards,
+    pub(crate) prepared_input_digest: Blake3Digest32,
+    pub(crate) difference: search_projection_planner::ManifestDiff,
+    pub(crate) observed: crate::admission::PublicationOwnerObservation,
+}
+
+impl PreparedGeneration {
+    /// Complete owner-bound target scope, including an explicit retirement scope.
+    #[must_use]
+    pub const fn scope(&self) -> &crate::admission::PublicationScope {
+        self.target.scope()
+    }
+    /// Whether this is a complete representation or a zero-entry retirement.
+    #[must_use]
+    pub const fn target(&self) -> &crate::admission::PublicationTarget {
+        &self.target
+    }
+    /// Exact immutable old manifest admitted through its owner token.
+    #[must_use]
+    pub const fn old_manifest(&self) -> Option<&ProjectionManifest> {
+        self.old_manifest.as_ref()
+    }
+    /// Exact canonical replacement; an empty value is an admitted retirement.
+    #[must_use]
+    pub const fn new_manifest(&self) -> &ProjectionManifest {
+        &self.new_manifest
+    }
+    /// Once-computed exact change set; later phases borrow it.
+    #[must_use]
+    pub const fn difference(&self) -> &search_projection_planner::ManifestDiff {
+        &self.difference
+    }
+    /// Canonical C00 digest over the actual full frozen inputs, not an I/O receipt.
+    #[must_use]
+    pub const fn prepared_input_digest(&self) -> Blake3Digest32 {
+        self.prepared_input_digest
+    }
 }
 
 /// Exact stage acknowledgement and readback.

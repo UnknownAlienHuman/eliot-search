@@ -11,11 +11,13 @@ pub use restore::PublicationRestoreInput;
 
 use search_contracts::{Blake3Digest32, Epoch, OpaqueId, ReceiptRef};
 use search_point_identity::s11::PointId128;
-use search_projection_planner::{ManifestDiff, ProjectionManifest, diff_manifests};
+use search_projection_planner::{ManifestDiff, ProjectionManifest, ProjectionBudget};
+use crate::admission::{AdmissionPurpose, PublicationAdmissionOwners, PublicationProposal,
+    PublicationScope, validate_prepared_generation};
 
 use crate::{
     AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt, ControlCommitObservation,
-    PreparedPublication, PublicationError, PublicationGuards, ReadbackVerified, RestorationReceipt,
+    PreparedGeneration, PublicationError, PublicationGuards, ReadbackVerified, RestorationReceipt,
     RetiredManifest, SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
 };
 
@@ -52,7 +54,7 @@ pub struct DurableIntent {
 /// Complete in-flight publication transaction.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicationTransaction {
-    pub prepared: PreparedPublication,
+    pub prepared: PreparedGeneration,
     /// The actual visible epoch before reservation, which may precede skipped epochs.
     pub previous_visible_epoch: Epoch,
     pub target_epoch: Epoch,
@@ -80,6 +82,8 @@ impl PublicationTransaction {
 /// composition owner. It is not another persistent ledger or ownership lease.
 #[derive(Debug)]
 pub struct PublicationCoordinator {
+    initialized: bool,
+    current_scope: Option<PublicationScope>,
     visible_epoch: Epoch,
     last_reserved_epoch: Epoch,
     current_manifest: Option<ProjectionManifest>,
@@ -90,34 +94,20 @@ pub struct PublicationCoordinator {
 }
 
 impl PublicationCoordinator {
-    /// Creates a coordinator from an explicitly resolved control checkpoint.
-    ///
-    /// `last_reserved_epoch` includes aborted/abandoned reservations and must
-    /// come from verified durable history, not be inferred from `VisibleEpoch`.
-    /// A caller must resolve any outstanding intent before using this constructor.
-    /// Initial empty history supplies zero for both epochs. These inputs are not
-    /// evidence of root ownership, successful recovery or a qualified backend.
-    pub fn new(
-        visible_epoch: Epoch,
-        last_reserved_epoch: Epoch,
-        current_manifest: Option<ProjectionManifest>,
-        current_manifest_digest: Option<Blake3Digest32>,
-        max_points: usize,
-    ) -> Result<Self, PublicationError> {
-        if max_points == 0
-            || last_reserved_epoch < visible_epoch
-            || current_manifest.is_some() != current_manifest_digest.is_some()
-        {
+    /// Creates an uninitialized transient coordinator with finite capacity only.
+    /// No caller epochs, manifests or digests become accepted state here.
+    /// `submit` obtains its initial state only after complete owner admission.
+    pub fn new(max_points: usize) -> Result<Self, PublicationError> {
+        if max_points == 0 {
             return Err(PublicationError::InvalidPreparedPublication);
         }
-        if let Some(manifest) = &current_manifest {
-            validate_manifest(manifest, max_points)?;
-        }
         Ok(Self {
-            visible_epoch,
-            last_reserved_epoch,
-            current_manifest,
-            current_manifest_digest,
+            initialized: false,
+            current_scope: None,
+            visible_epoch: Epoch::new(0).map_err(|_| PublicationError::ContractExhausted)?,
+            last_reserved_epoch: Epoch::new(0).map_err(|_| PublicationError::ContractExhausted)?,
+            current_manifest: None,
+            current_manifest_digest: None,
             active: None,
             abort_finalization: abort::AbortFinalizationProgress::default(),
             max_points,
@@ -125,14 +115,14 @@ impl PublicationCoordinator {
     }
 
     #[must_use]
-    pub const fn visible_epoch(&self) -> Epoch {
-        self.visible_epoch
+    pub const fn visible_epoch(&self) -> Option<Epoch> {
+        if self.initialized { Some(self.visible_epoch) } else { None }
     }
 
     /// Highest consumed reservation in this coordinator, including aborted work.
     #[must_use]
-    pub const fn last_reserved_epoch(&self) -> Epoch {
-        self.last_reserved_epoch
+    pub const fn last_reserved_epoch(&self) -> Option<Epoch> {
+        if self.initialized { Some(self.last_reserved_epoch) } else { None }
     }
 
     #[must_use]
@@ -150,29 +140,36 @@ impl PublicationCoordinator {
     /// A physical point ID shared with the current manifest must retain its full
     /// immutable entry. Changed entries need distinct identities from the point
     /// owner; the coordinator never invents replacement IDs or mutates manifests.
-    pub fn submit(&mut self, prepared: PreparedPublication) -> Result<Epoch, PublicationError> {
+    pub fn submit<P: PublicationAdmissionOwners + ?Sized>(&mut self,
+        proposal: &PublicationProposal<'_, P::Projection>, owners: &mut P,
+        snapshot: &P::Snapshot, mut budget: ProjectionBudget,
+    ) -> Result<Epoch, PublicationError> {
         if self.active.is_some() {
             return Err(PublicationError::PublicationBusy);
         }
-        validate_manifest(&prepared.new_manifest, self.max_points)?;
-        if let Some(old) = &prepared.old_manifest {
-            validate_manifest(old, self.max_points)?;
+        budget.max_points = budget.max_points.min(self.max_points);
+        let prepared = validate_prepared_generation(owners, snapshot, proposal,
+            AdmissionPurpose::Prepare, budget)?;
+        let observed = prepared.observed;
+        let observed_visible = observed.previous_visible_epoch;
+        if self.initialized && (observed_visible < self.visible_epoch
+            || observed.last_reserved_epoch < self.last_reserved_epoch
+            || self.current_scope.as_ref().is_some_and(|scope|
+                scope.collection_generation_id != prepared.scope().collection_generation_id)) {
+            return Err(PublicationError::ControlConflict);
         }
-        if prepared.old_manifest != self.current_manifest
-            || prepared.old_manifest_digest != self.current_manifest_digest
-        {
+        if self.initialized && self.current_scope.as_ref().is_some_and(|scope|
+            scope.projection_membership_id == prepared.scope().projection_membership_id)
+            && (prepared.old_manifest != self.current_manifest
+                || prepared.old_manifest_digest != self.current_manifest_digest) {
             return Err(PublicationError::InvalidPreparedPublication);
         }
-        if changed_point_id_is_reused(prepared.old_manifest.as_ref(), &prepared.new_manifest) {
-            // Upserting a changed value under an old physical ID would destroy
-            // the old epoch before commit. Closing that ID would also close the
-            // newly staged point. Reject before consuming an epoch or slot.
-            return Err(PublicationError::InvalidPreparedPublication);
-        }
-        let target_epoch = self
-            .last_reserved_epoch
-            .checked_next()
-            .map_err(|_| PublicationError::ContractExhausted)?;
+        let target_epoch = observed.target_epoch;
+        self.initialized = true;
+        self.current_scope = Some(prepared.scope().clone());
+        self.visible_epoch = observed.previous_visible_epoch;
+        self.current_manifest.clone_from(&prepared.old_manifest);
+        self.current_manifest_digest = prepared.old_manifest_digest;
         self.active = Some(PublicationTransaction {
             prepared,
             previous_visible_epoch: self.visible_epoch,
@@ -215,8 +212,8 @@ impl PublicationCoordinator {
     pub fn stage_new_points(&mut self, receipt: StageReceipt) -> Result<(), PublicationError> {
         let transaction = self.active_mut(PublicationPhase::IntentDurable)?;
         verify_transaction_identity(transaction, &receipt.transaction_id, receipt.target_epoch)?;
-        let expected = manifest_diff(transaction)?.create;
-        let expected_ids = entry_ids(&expected);
+        let expected = &manifest_diff(transaction).create;
+        let expected_ids = entry_ids(expected);
         if !receipt.missing_ids.is_empty()
             || !receipt.unexpected_ids.is_empty()
             || receipt.staged_ids != expected_ids
@@ -232,8 +229,8 @@ impl PublicationCoordinator {
     pub fn close_old_points(&mut self, receipt: ClosureReceipt) -> Result<(), PublicationError> {
         let transaction = self.active_mut(PublicationPhase::NewPointsAcknowledged)?;
         verify_transaction_identity(transaction, &receipt.transaction_id, receipt.target_epoch)?;
-        let expected = manifest_diff(transaction)?.retire;
-        let expected_ids = entry_ids(&expected);
+        let expected = &manifest_diff(transaction).retire;
+        let expected_ids = entry_ids(expected);
         if !receipt.missing_ids.is_empty()
             || !receipt.unexpected_ids.is_empty()
             || receipt.closed_ids != expected_ids
@@ -264,7 +261,7 @@ impl PublicationCoordinator {
         if stage.readback_digest != staged_digest || closure.readback_digest != closure_digest {
             return Err(PublicationError::StageReadbackMismatch);
         }
-        let has_retired = !manifest_diff(transaction)?.retire.is_empty();
+        let has_retired = !manifest_diff(transaction).retire.is_empty();
         if has_retired != retired_manifest_digest.is_some() {
             return Err(PublicationError::ClosureReadbackMismatch);
         }
@@ -343,7 +340,7 @@ impl PublicationCoordinator {
         publication_receipt: ReceiptRef,
     ) -> Result<Option<RetiredManifest>, PublicationError> {
         let transaction = self.active_at(PublicationPhase::SnapshotPublished)?;
-        let retired = manifest_diff(transaction)?.retire;
+        let retired = &manifest_diff(transaction).retire;
         if retired.is_empty() {
             return Ok(None);
         }
@@ -357,7 +354,7 @@ impl PublicationCoordinator {
         Ok(Some(RetiredManifest {
             collection_generation_id: transaction.prepared.collection_generation_id,
             retirement_epoch_exclusive: transaction.target_epoch,
-            point_ids: entry_ids(&retired),
+            point_ids: entry_ids(retired),
             manifest_digest,
             publication_receipt,
         }))
@@ -376,8 +373,13 @@ impl PublicationCoordinator {
             .active
             .take()
             .ok_or(PublicationError::InvalidTransition)?;
-        self.current_manifest = Some(transaction.prepared.new_manifest);
-        self.current_manifest_digest = Some(transaction.prepared.new_manifest_digest);
+        if matches!(transaction.prepared.target, crate::admission::PublicationTarget::Retirement(_)) {
+            self.current_manifest = None;
+            self.current_manifest_digest = None;
+        } else {
+            self.current_manifest = Some(transaction.prepared.new_manifest);
+            self.current_manifest_digest = Some(transaction.prepared.new_manifest_digest);
+        }
         Ok(receipt)
     }
 
@@ -398,7 +400,7 @@ impl PublicationCoordinator {
         ) {
             return Err(PublicationError::InvalidTransition);
         }
-        let difference = manifest_diff(transaction)?;
+        let difference = manifest_diff(transaction);
         let plan = CompensationPlan {
             transaction_id: transaction.prepared.transaction_id.clone(),
             target_epoch: transaction.target_epoch,
@@ -442,7 +444,7 @@ impl PublicationCoordinator {
         restoration: Option<RestorationReceipt>,
     ) -> Result<(), PublicationError> {
         let transaction = self.active_mut(PublicationPhase::Compensating)?;
-        let difference = manifest_diff(transaction)?;
+        let difference = manifest_diff(transaction);
         if receipt.transaction_id != transaction.prepared.transaction_id
             || receipt.target_epoch != transaction.target_epoch
             || !receipt.remaining_ids.is_empty()
@@ -485,7 +487,7 @@ impl PublicationCoordinator {
         ) {
             return Err(PublicationError::InvalidTransition);
         }
-        let difference = manifest_diff(transaction)?;
+        let difference = manifest_diff(transaction);
         let affected = difference.create.iter().chain(&difference.retire);
         let point_ids = affected
             .clone()
@@ -548,23 +550,6 @@ impl PublicationCoordinator {
     }
 }
 
-pub fn validate_manifest(
-    manifest: &ProjectionManifest,
-    max_points: usize,
-) -> Result<(), PublicationError> {
-    if manifest.canonical_bytes.is_empty() || manifest.entries.len() > max_points {
-        return Err(PublicationError::InvalidPreparedPublication);
-    }
-    if manifest
-        .entries
-        .windows(2)
-        .any(|pair| pair[0].point_id >= pair[1].point_id)
-    {
-        return Err(PublicationError::InvalidPreparedPublication);
-    }
-    Ok(())
-}
-
 /// Inputs must already have passed bounded, strictly sorted manifest validation.
 /// A merge walk uses no cloned manifests, maps, ID sets or additional allocation.
 /// Exact retained entries are allowed; even a digest-only change is not retained.
@@ -595,14 +580,8 @@ pub fn changed_point_id_is_reused(
     false
 }
 
-fn manifest_diff(transaction: &PublicationTransaction) -> Result<ManifestDiff, PublicationError> {
-    let empty = ProjectionManifest {
-        entries: Vec::new(),
-        canonical_bytes: b"eliot-search/empty-manifest/v1".to_vec(),
-    };
-    let old = transaction.prepared.old_manifest.as_ref().unwrap_or(&empty);
-    diff_manifests(old, &transaction.prepared.new_manifest)
-        .map_err(|_| PublicationError::InvalidPreparedPublication)
+const fn manifest_diff(transaction: &PublicationTransaction) -> &ManifestDiff {
+    &transaction.prepared.difference
 }
 
 fn entry_ids(entries: &[search_projection_planner::ProjectionManifestEntry]) -> Vec<PointId128> {
