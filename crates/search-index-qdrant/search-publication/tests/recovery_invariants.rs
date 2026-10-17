@@ -128,6 +128,38 @@ fn full_vector_readback_mismatch_blocks_stage_advancement() {
 }
 
 #[test]
+fn not_applied_with_partial_closure_cannot_redispatch_before_exact_recovery() {
+    let mut machine = durable(Some(manifest(&[1, 3])), manifest(&[2]));
+    let retired = &machine.active().unwrap().prepared().difference().retire;
+    assert!(retired.len() > 1);
+    let closed = retired[0].point_id;
+    let mut port = PhasePort::default();
+    publication_support::stage_new_points(&mut machine, &mut port).unwrap();
+    port.readback.closed_ids = Some(vec![closed]);
+    for _ in 0..2 {
+        port.readback.next_outcome = Some(PublicationEffectOutcome::NotApplied);
+        assert_eq!(
+            publication_support::close_old_points(&mut machine, &mut port),
+            Err(PublicationError::EffectNotObserved)
+        );
+    }
+    assert_eq!(
+        port.effects.effect_kinds,
+        vec![
+            PublicationEffectKind::StageNewPoints,
+            PublicationEffectKind::CloseOldPoints,
+        ]
+    );
+    assert_eq!(
+        machine
+            .recover(&mut port.readback, &publication_support::operation_context())
+            .unwrap(),
+        PublicationRecoveryDecision::CompensateExact
+    );
+    assert_eq!(port.effects.effect_kinds.len(), 2);
+}
+
+#[test]
 fn aborted_reservations_are_never_reused_and_do_not_advance_visibility() {
     let mut machine = PublicationCoordinator::new(32).unwrap();
     assert_eq!(machine.visible_epoch(), None);

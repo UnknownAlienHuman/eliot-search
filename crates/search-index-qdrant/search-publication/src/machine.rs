@@ -1476,7 +1476,8 @@ where
         // readback, not merely the port's disposition.
         PublicationEffectOutcome::Applied => {}
         PublicationEffectOutcome::NotApplied => {
-            transaction.pending_effect = None;
+            // A disposition cannot prove exact prestate. Keep the dispatched
+            // operation fenced until effect-specific recovery reconciles it.
             return Err(PublicationError::EffectNotObserved);
         }
         PublicationEffectOutcome::Conflict => {
