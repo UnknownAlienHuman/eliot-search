@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use search_access::{CompiledEligibilityPopulation, LiveSecurityState, RequestSecurityFence};
+use search_contracts::ProjectionMembershipId;
 use search_contracts::indexed::{PointPayload, VectorName, VectorValue};
 use search_point_identity::s11::{PointId128, PointIdentity};
 use search_ports::CancellationProbe;
@@ -32,10 +33,46 @@ use search_retrieval_executor::canonical::{
 };
 use search_retrieval_executor::{ExecuteError, LegPinSet, LegTicket};
 
+/// Projection membership observed in the canonical query payload.
+///
+/// This is an untrusted locator hint only. It can select an owner lookup after
+/// the adapter checks it against the opaque C18 population; it cannot authorize
+/// source I/O or supply any part of the expected S11 identity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UntrustedProjectionMembershipHint {
+    projection_membership_id: ProjectionMembershipId,
+}
+
+impl UntrustedProjectionMembershipHint {
+    fn from_payload_observation(payload: &PointPayload) -> Self {
+        Self {
+            projection_membership_id: payload.projection_membership_id,
+        }
+    }
+
+    /// The observed typed membership ID; callers must still validate scope.
+    #[must_use]
+    pub const fn projection_membership_id(self) -> ProjectionMembershipId {
+        self.projection_membership_id
+    }
+}
+
 /// Exact typed identity lookup backed by the current committed projection
 /// manifest. Implementations perform only bounded lookups for query hits.
+///
+/// Both inputs are untrusted. Reject a foreign projection hint before reading
+/// any C03/C02/C07 owner data, then use the in-scope projection hint only to
+/// select the current manifest. Do not use the address to select a manifest or
+/// source. Decode only the nominated manifest, derive the expected S11 identity
+/// from trusted manifest metadata, and compare its derived address with the
+/// query address. Never derive source identity or the expected key solely from
+/// the query payload observation.
 pub trait CanonicalPointIdentityResolver {
-    fn resolve(&mut self, address: PointId128) -> Result<PointIdentity, CanonicalIndexedPortError>;
+    fn resolve(
+        &mut self,
+        address: PointId128,
+        hint: UntrustedProjectionMembershipHint,
+    ) -> Result<PointIdentity, CanonicalIndexedPortError>;
 }
 
 /// Exact point data paired with the S11 identity that authorized its readback.
@@ -54,6 +91,7 @@ pub struct RealCanonicalIndexedPort<'plane, 'compiled, 'resolver> {
     plane: &'plane BlockingRealQueryPlane,
     route: CollectionRoute,
     compiled_population: &'compiled CompiledEligibilityPopulation,
+    allowed_projection_memberships: Vec<ProjectionMembershipId>,
     identities: &'resolver mut dyn CanonicalPointIdentityResolver,
     context: CanonicalRequestContext,
 }
@@ -74,10 +112,13 @@ impl<'plane, 'compiled, 'resolver> RealCanonicalIndexedPort<'plane, 'compiled, '
         let context = CanonicalRequestContext::with_deadline(deadline, cancellation)
             .map_err(map_context_error)?;
         context.check().map_err(map_context_error)?;
+        let allowed_projection_memberships = population.allowed_projection_memberships();
+        context.check().map_err(map_context_error)?;
         Ok(Self {
             plane,
             route,
             compiled_population,
+            allowed_projection_memberships,
             identities,
             context,
         })
@@ -128,7 +169,17 @@ impl CanonicalIndexedRetrievalPort for RealCanonicalIndexedPort<'_, '_, '_> {
         let mut expected_by_address = BTreeMap::new();
         let mut expected = Vec::with_capacity(scored.len());
         for candidate in &scored {
-            let identity = self.identities.resolve(candidate.address)?;
+            self.context.check().map_err(map_context_error)?;
+            let hint = UntrustedProjectionMembershipHint::from_payload_observation(
+                &candidate.payload_observation,
+            );
+            let identity = resolve_candidate_identity(
+                self.identities,
+                &self.allowed_projection_memberships,
+                candidate.address,
+                hint,
+            )?;
+            self.context.check().map_err(map_context_error)?;
             if identity.point_id() != candidate.address
                 || expected_by_address
                     .insert(candidate.address, (candidate.score, identity.clone()))
@@ -193,6 +244,21 @@ impl CanonicalIndexedRetrievalPort for RealCanonicalIndexedPort<'_, '_, '_> {
     }
 }
 
+fn resolve_candidate_identity(
+    identities: &mut dyn CanonicalPointIdentityResolver,
+    allowed_projection_memberships: &[ProjectionMembershipId],
+    address: PointId128,
+    hint: UntrustedProjectionMembershipHint,
+) -> Result<PointIdentity, CanonicalIndexedPortError> {
+    if allowed_projection_memberships
+        .binary_search(&hint.projection_membership_id())
+        .is_err()
+    {
+        return Err(CanonicalIndexedPortError::Failure);
+    }
+    identities.resolve(address, hint)
+}
+
 fn join_exact_readback(
     points: Vec<CanonicalPointReadback>,
     expected_by_address: &mut BTreeMap<PointId128, (f32, PointIdentity)>,
@@ -244,6 +310,57 @@ const fn map_bridge_error(error: BridgeError) -> CanonicalIndexedPortError {
         | BridgeError::StrictModeRequired => CanonicalIndexedPortError::Unavailable,
         BridgeError::Cancelled => CanonicalIndexedPortError::Cancelled,
         _ => CanonicalIndexedPortError::Failure,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        CanonicalPointIdentityResolver, UntrustedProjectionMembershipHint,
+        resolve_candidate_identity,
+    };
+    use search_contracts::ProjectionMembershipId;
+    use search_point_identity::s11::{PointId128, PointIdentity};
+    use search_retrieval_executor::canonical::CanonicalIndexedPortError;
+    use std::cell::Cell;
+
+    struct ResolverProbe {
+        calls: Cell<usize>,
+    }
+
+    impl CanonicalPointIdentityResolver for ResolverProbe {
+        fn resolve(
+            &mut self,
+            _address: PointId128,
+            _hint: UntrustedProjectionMembershipHint,
+        ) -> Result<PointIdentity, CanonicalIndexedPortError> {
+            self.calls.set(self.calls.get().saturating_add(1));
+            Err(CanonicalIndexedPortError::Failure)
+        }
+    }
+
+    #[test]
+    fn foreign_projection_hint_is_rejected_before_resolver_owner_reads() {
+        let in_scope = ProjectionMembershipId::from_bytes([0x11; 16]);
+        let foreign = ProjectionMembershipId::from_bytes([0x22; 16]);
+        let allowed = [in_scope];
+        let hint = UntrustedProjectionMembershipHint {
+            projection_membership_id: foreign,
+        };
+        let mut resolver = ResolverProbe {
+            calls: Cell::new(0),
+        };
+
+        assert!(matches!(
+            resolve_candidate_identity(
+                &mut resolver,
+                &allowed,
+                PointId128::from_bytes([0x33; 16]),
+                hint,
+            ),
+            Err(CanonicalIndexedPortError::Failure)
+        ));
+        assert_eq!(resolver.calls.get(), 0);
     }
 }
 

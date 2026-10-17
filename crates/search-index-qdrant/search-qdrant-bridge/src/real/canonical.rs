@@ -41,13 +41,17 @@ const META_GENERATION: &str = "eliot_search_collection_generation_id_v1";
 const META_PROFILE: &str = "eliot_search_projection_profile_set_id_v1";
 const META_ROUTE: &str = "eliot_search_full_route_v1";
 
-/// One untrusted Qdrant nomination. Its score and address are not evidence.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// One untrusted Qdrant nomination. Its score, address and payload observation
+/// are not identity or source evidence.
+#[derive(Clone, Debug, PartialEq)]
 pub struct CanonicalCandidate {
     /// Shared S11 point address; exact identity still requires readback.
     pub address: PointId128,
     /// Qdrant score for ranking only.
     pub score: f32,
+    /// Canonical typed metadata observed with the query result, usable only as
+    /// an untrusted locator hint before exact point readback.
+    pub payload_observation: IndexedPointPayload,
 }
 
 /// Exact typed S9.5 payload readback for one S11 address.
@@ -764,7 +768,7 @@ impl RealDataPlane {
                     ..Default::default()
                 }),
                 limit: Some(u64::try_from(limit).map_err(|_| BridgeError::QueryBudgetExceeded)?),
-                with_payload: Some(false.into()),
+                with_payload: Some(true.into()),
                 ..Default::default()
             }),
         )
@@ -790,6 +794,7 @@ impl RealDataPlane {
             candidates.push(CanonicalCandidate {
                 address: point_id,
                 score: scored.score,
+                payload_observation: decode_payload(&scored.payload)?,
             });
         }
         context.remaining()?;
