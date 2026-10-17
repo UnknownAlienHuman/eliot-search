@@ -449,4 +449,5 @@ mod original_records_targeted;
 mod original_operating_profile;
 mod original_binding;
 mod original_recovery_projection;
+mod original_abandonment;
 pub use original_records_targeted::ScopedControlRecordsReadback;

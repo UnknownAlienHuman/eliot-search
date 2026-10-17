@@ -35,6 +35,10 @@ pub use persistent::{
     PublicationAbortFinalizationRecordV1, PublicationIntentBindingMetadataV1,
     PublicationIntentBindingRecordV1,
 };
+pub use persistent::{
+    PublicationAbandonFenceMembershipV1, PublicationAbandonFenceReadbackV1,
+    PublicationAbandonFenceRecordV1, PublicationAbandonFenceRequestV1,
+};
 pub use persistent::{IndexedProfileAdoption, JournalOperatingProfile, JournalProfileInitialization};
 pub use persistent::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 pub use persistent::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
@@ -77,6 +81,7 @@ pub struct PublicationRecoveryCheckpoint {
     pub(crate) intent: Option<search_contracts::PublicationIntent>,
     pub(crate) original_binding: Option<PublicationIntentBindingRecordV1>,
     pub(crate) abort_finalization: Option<PublicationAbortFinalizationRecordV1>,
+    pub(crate) abandonment_fence: Option<PublicationAbandonFenceRecordV1>,
     pub(crate) publication_receipt: Option<search_contracts::PublicationReceipt>,
 }
 
@@ -98,6 +103,11 @@ impl PublicationRecoveryCheckpoint {
     #[must_use]
     pub const fn abort_finalization(&self) -> Option<&PublicationAbortFinalizationRecordV1> {
         self.abort_finalization.as_ref()
+    }
+    /// Actual retained membership exclusion fence, before or after final abort.
+    #[must_use]
+    pub const fn abandonment_fence(&self) -> Option<&PublicationAbandonFenceRecordV1> {
+        self.abandonment_fence.as_ref()
     }
     /// Original operation/context coordinates retained atomically with the intent.
     #[must_use]
@@ -125,6 +135,7 @@ impl std::fmt::Debug for PublicationRecoveryCheckpoint {
             .field("last_reserved_epoch", &self.last_reserved_epoch())
             .field("intent_state", &self.intent.as_ref().map(|intent| intent.state))
             .field("has_abort_finalization", &self.abort_finalization.is_some())
+            .field("has_abandonment_fence", &self.abandonment_fence.is_some())
             .field("has_original_binding", &self.original_binding.is_some())
             .finish_non_exhaustive()
     }

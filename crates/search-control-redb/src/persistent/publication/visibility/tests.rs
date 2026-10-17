@@ -15,6 +15,7 @@ mod succession;
 mod projection_snapshot;
 mod prepared_artifacts;
 mod preparation_input;
+mod abandonment;
 
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 static NEXT: AtomicU64 = AtomicU64::new(0);

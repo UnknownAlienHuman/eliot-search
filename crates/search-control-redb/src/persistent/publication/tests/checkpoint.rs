@@ -50,19 +50,22 @@ fn consumed_epoch_survives_restart_without_becoming_visible() {
 }
 
 #[test]
-fn aborted_state_keeps_consumed_epoch_and_cannot_clear_snapshot_admission_after_restart() {
+fn compensating_state_keeps_consumed_epoch_and_cannot_clear_snapshot_admission_after_restart() {
     let scratch = Scratch::new(); let mut journal = initialized(&scratch);
-    let mut update = first(); let mut receipt = persist(&mut journal, &update);
-    for (id, state) in [(2, PublicationIntentState::Compensating), (3, PublicationIntentState::Aborted)] {
-        update = advance(id, receipt.after_generation, update.intent(), state);
-        receipt = persist(&mut journal, &update);
-    }
+    let mut update = first(); let receipt = persist(&mut journal, &update);
+    update = advance(
+        2,
+        receipt.after_generation,
+        update.intent(),
+        PublicationIntentState::Compensating,
+    );
+    let _ = persist(&mut journal, &update);
     let identity = journal.identity(); drop(journal);
     let journal = PersistentControlJournal::open(scratch.file(), identity, LIMITS).unwrap();
     let checkpoint = journal.read_publication_checkpoint(&context(false)).unwrap().unwrap();
     assert_eq!(checkpoint.last_reserved_epoch().get(), 1);
     assert_eq!(checkpoint.visibility().visible_epoch.get(), 0);
-    assert_eq!(checkpoint.intent().unwrap().state, PublicationIntentState::Aborted);
+    assert_eq!(checkpoint.intent().unwrap().state, PublicationIntentState::Compensating);
     assert_eq!(journal.load_unresolved_publication(&context(false)).unwrap().as_ref(), checkpoint.intent());
     let mut publisher = crate::ControlSnapshotPublisher::new();
     assert_eq!(journal.recover_snapshot_publication(&mut publisher), Err(ControlError::SnapshotRebuildFailed));

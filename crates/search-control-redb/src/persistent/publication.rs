@@ -36,10 +36,15 @@ use super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitRec
 
 mod codec;
 pub(in crate::persistent) mod abort_finalization;
+pub(in crate::persistent) mod abandonment;
 pub(in crate::persistent) mod operation_binding;
 pub use abort_finalization::{
     AbortResolutionMetadataV1, PublicationAbortFinalizationMetadataV1,
     PublicationAbortFinalizationRecordV1,
+};
+pub use abandonment::{
+    PublicationAbandonFenceMembershipV1, PublicationAbandonFenceReadbackV1,
+    PublicationAbandonFenceRecordV1, PublicationAbandonFenceRequestV1,
 };
 pub use operation_binding::{
     PublicationIntentBindingMetadataV1, PublicationIntentBindingRecordV1,
@@ -209,6 +214,14 @@ impl PublicationIntentUpdate {
             || metadata.target_epoch != self.next.target_epoch
             || metadata.original_guards != self.next.owner_source_membership_access_guards
             || metadata.new_manifest_reference != self.next.prepared_manifest_ref
+            || match &metadata.resolution {
+                AbortResolutionMetadataV1::Compensated { .. } => {
+                    record.abandonment_fence().is_some()
+                }
+                AbortResolutionMetadataV1::Excluded { .. } => record
+                    .abandonment_fence()
+                    .is_none_or(|fence| !fence.matches_abort(metadata)),
+            }
         {
             return Err(ControlError::OperationConflict);
         }
@@ -251,7 +264,29 @@ impl PublicationIntentUpdate {
         if let Some(abort) = &self.abort_finalization {
             let abort_key = abort_finalization::key(limits)?;
             let abort_value = abort.value(limits, check)?;
-            conditions.push(ControlRecordCondition::absent(abort_key.clone()));
+            if let Some(fence) = abort.abandonment_fence() {
+                conditions.push(ControlRecordCondition::exact(
+                    abort_key.clone(),
+                    fence.value(limits, check)?,
+                ));
+                conditions.push(ControlRecordCondition::exact(
+                    ControlKey::new(visibility::STATE.to_vec(), limits)?,
+                    visibility::codec::state(fence.fenced_visibility(), limits)?,
+                ));
+                for (membership_id, _, _, fenced_shadow) in fence.memberships() {
+                    check.check(Point::PlanRecord)?;
+                    conditions.push(ControlRecordCondition::exact(
+                        visibility::id_key(
+                            visibility::SHADOWS,
+                            membership_id.as_bytes(),
+                            limits,
+                        )?,
+                        visibility::codec::shadow(&fenced_shadow, limits)?,
+                    ));
+                }
+            } else {
+                conditions.push(ControlRecordCondition::absent(abort_key.clone()));
+            }
             writes.push(ControlWrite { key: abort_key, value: abort_value });
         }
         let mutation = ControlMutation::new(
@@ -366,9 +401,16 @@ impl PersistentControlJournal {
         }
         let abort_finalization =
             abort_finalization::read_snapshot(&snapshot, self.limits, check)?;
+        let abandonment_fence = abandonment::read_snapshot(&snapshot, self.limits, check)?;
         if abort_finalization.as_ref().is_some_and(|record| {
             intent.as_ref().is_none_or(|intent| !record.matches_intent(intent))
                 || original_binding.is_none()
+        }) {
+            return Err(ControlError::StoreCorrupt);
+        }
+        if abandonment_fence.as_ref().is_some_and(|record| {
+            intent.as_ref().is_none_or(|intent| !record.matches_intent(intent))
+                || original_binding.as_ref() != Some(record.original_binding())
         }) {
             return Err(ControlError::StoreCorrupt);
         }
@@ -385,6 +427,7 @@ impl PersistentControlJournal {
             intent,
             original_binding,
             abort_finalization,
+            abandonment_fence,
             publication_receipt,
         }))
     }
@@ -478,6 +521,15 @@ impl PersistentControlJournal {
                 }
                 if crate::has_visibility_schema(self.identity.schema_version) {
                     let snapshot = self.snapshot_from_checked(&read, check)?;
+                    let pending_fence = abandonment::read_snapshot(&snapshot, self.limits, check)?;
+                    if !replay && pending_fence.as_ref().is_some_and(|fence| {
+                        update.next.state != PublicationIntentState::Aborted
+                            || update.abort_finalization.as_ref().is_none_or(|record| {
+                                record.abandonment_fence() != Some(fence)
+                            })
+                    }) {
+                        return Err(ControlError::OperationConflict);
+                    }
                     if !replay && update.previous.is_none() {
                         visibility::validate_initial_intent(&snapshot, &update.next, self.limits)?;
                     }
@@ -516,7 +568,7 @@ pub(super) fn validate_record(key: &ControlKey, value: &ControlValue, limits: Jo
     if key.as_bytes() == KEY {
         codec::decode(value)?;
     } else if abort_finalization::reserved(key.as_bytes()) {
-        PublicationAbortFinalizationRecordV1::decode(value, limits, check)?;
+        abandonment::validate_record(value, limits, check)?;
     } else if operation_binding::reserved(key.as_bytes()) {
         PublicationIntentBindingRecordV1::decode(value, limits, check)?;
     }

@@ -31,7 +31,7 @@ pub const PUBLICATION_VISIBILITY_SCHEMA_VERSION: u32 = 4;
 pub(in crate::persistent) const STATE: &[u8] = b"collection_route/visibility/v1";
 const RECEIPTS: &[u8] = b"publication_receipts/visible/v1/";
 const MANIFESTS: &[u8] = b"projection_memberships/manifest/v1/";
-const SHADOWS: &[u8] = b"shadow_fences/publication/v1/";
+pub(in crate::persistent) const SHADOWS: &[u8] = b"shadow_fences/publication/v1/";
 const RETIRED: &[u8] = b"publication_receipts/retired/v1/";
 
 pub(super) fn require_initialized(read: &ReadTransaction, limits: JournalLimits) -> Result<(), ControlError> {
@@ -438,7 +438,10 @@ impl PersistentControlJournal {
                 }
                 // Validate old/current typed relationships before allowing mutation.
                 // The common engine rechecks exact keys AND generation in its write transaction.
-                self.snapshot_from_checked(&read, check)?;
+                let snapshot = self.snapshot_from_checked(&read, check)?;
+                if super::abandonment::read_snapshot(&snapshot, self.limits, check)?.is_some() {
+                    return Err(ControlError::OperationConflict);
+                }
             }
             super::super::transaction::execute_publication(self, &command, boundary, check)
         })();
@@ -466,7 +469,7 @@ fn require_schema(journal: &PersistentControlJournal, check: &dyn Check) -> Resu
     else { Err(ControlError::SchemaUnsupported) }
 }
 fn key(bytes: &[u8], limits: JournalLimits) -> Result<ControlKey, ControlError> { ControlKey::new(bytes.to_vec(), limits) }
-fn id_key(prefix: &[u8], id: &[u8; 16], limits: JournalLimits) -> Result<ControlKey, ControlError> {
+pub(in crate::persistent) fn id_key(prefix: &[u8], id: &[u8; 16], limits: JournalLimits) -> Result<ControlKey, ControlError> {
     let mut bytes = prefix.to_vec(); bytes.extend_from_slice(id); key(&bytes, limits)
 }
 fn retired_key(receipt: PublicationReceiptId, member: ProjectionMembershipId, limits: JournalLimits)

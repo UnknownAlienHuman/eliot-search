@@ -8,6 +8,7 @@ use super::{
     Blake3Digest32, Check, ControlError, ControlKey, ControlRecordClass, ControlValue,
     JournalLimits, Point,
 };
+use super::abandonment::PublicationAbandonFenceRecordV1;
 use crate::persistent::bootstrap::OriginalCheck;
 use crate::{MigrationBootstrapFailure, MigrationBootstrapWork as Work, MutationId};
 use search_contracts::{
@@ -19,7 +20,8 @@ use std::time::Instant;
 
 const KEY: &[u8] = b"publication_intents/abort-finalization/v1";
 const MAGIC: &[u8; 8] = b"ELIPAB01";
-const MAX_RECORD_BYTES: usize = 8 * 1024;
+const MAGIC_WITH_FENCE: &[u8; 8] = b"ELIPAB02";
+const MAX_RECORD_BYTES: usize = 64 * 1024;
 
 /// Compact outcome metadata. Excluded memberships are rehydrated from the
 /// admitted manifest diff and owner readback; only their count and digest live
@@ -122,6 +124,7 @@ impl core::fmt::Debug for PublicationAbortFinalizationMetadataV1 {
 #[derive(Clone, Eq, PartialEq)]
 pub struct PublicationAbortFinalizationRecordV1 {
     metadata: PublicationAbortFinalizationMetadataV1,
+    abandonment_fence: Option<Box<PublicationAbandonFenceRecordV1>>,
     canonical: Vec<u8>,
 }
 
@@ -149,7 +152,33 @@ impl PublicationAbortFinalizationRecordV1 {
         let check = OriginalCheck::registry(deadline, work);
         let result = (|| {
             check.check(Point::Start)?;
-            let record = Self::prepare(metadata, limits, &check)?;
+            let record = Self::prepare(metadata, None, limits, &check)?;
+            check.check(Point::ReadComplete)?;
+            Ok(record)
+        })();
+        result.map_err(|error| check.failure(error))
+    }
+
+    /// Prepares an excluded finalization only when accompanied by the exact
+    /// retained C02 fence record returned by the owner readback.
+    ///
+    /// # Errors
+    /// Rejects mismatched operation, request, intent, route, guard or membership
+    /// metadata, oversized values, and any refusal from the original allowance.
+    pub fn prepare_with_abandonment_fence_v1<F, E>(
+        metadata: PublicationAbortFinalizationMetadataV1,
+        fence: PublicationAbandonFenceRecordV1,
+        limits: JournalLimits,
+        deadline: Instant,
+        work: &F,
+    ) -> Result<Self, MigrationBootstrapFailure<E>>
+    where
+        F: Fn(Work) -> Result<(), E>,
+    {
+        let check = OriginalCheck::registry(deadline, work);
+        let result = (|| {
+            check.check(Point::Start)?;
+            let record = Self::prepare(metadata, Some(fence), limits, &check)?;
             check.check(Point::ReadComplete)?;
             Ok(record)
         })();
@@ -160,6 +189,12 @@ impl PublicationAbortFinalizationRecordV1 {
     #[must_use]
     pub const fn metadata(&self) -> &PublicationAbortFinalizationMetadataV1 {
         &self.metadata
+    }
+
+    /// Exact C02 membership fence retained with an excluded abort, if any.
+    #[must_use]
+    pub fn abandonment_fence(&self) -> Option<&PublicationAbandonFenceRecordV1> {
+        self.abandonment_fence.as_deref()
     }
 
     pub(in crate::persistent) fn value(
@@ -199,17 +234,37 @@ impl PublicationAbortFinalizationRecordV1 {
         ))?;
         check.reserve(Work::Process(bytes.len()))?;
         let mut input = Input(bytes);
-        if &input.take::<8>()? != MAGIC {
+        let magic = input.take::<8>()?;
+        let has_fence = if &magic == MAGIC {
+            false
+        } else if &magic == MAGIC_WITH_FENCE {
+            true
+        } else {
             return Err(ControlError::StoreCorrupt);
-        }
+        };
         let metadata = decode_metadata(&mut input)?;
+        let abandonment_fence = if has_fence {
+            let length = usize::try_from(input.u32()?).map_err(|_| ControlError::StoreCorrupt)?;
+            let nested = input.take_vec(length)?;
+            let nested_value = ControlValue::new(ControlRecordClass::Operation, nested, limits)?;
+            Some(Box::new(PublicationAbandonFenceRecordV1::decode(
+                &nested_value,
+                limits,
+                check,
+            )?))
+        } else {
+            None
+        };
         if !input.is_empty() {
             return Err(ControlError::StoreCorrupt);
         }
         validate_metadata(&metadata).map_err(|_| ControlError::StoreCorrupt)?;
+        validate_fence_binding(&metadata, abandonment_fence.as_deref())
+            .map_err(|_| ControlError::StoreCorrupt)?;
         let canonical = bytes.to_vec();
         let record = Self {
             metadata,
+            abandonment_fence,
             canonical,
         };
         check.check(Point::ReadComplete)?;
@@ -227,20 +282,33 @@ impl PublicationAbortFinalizationRecordV1 {
 
     fn prepare(
         metadata: PublicationAbortFinalizationMetadataV1,
+        abandonment_fence: Option<PublicationAbandonFenceRecordV1>,
         limits: JournalLimits,
         check: &dyn Check,
     ) -> Result<Self, ControlError> {
         validate_metadata(&metadata)?;
+        validate_fence_binding(&metadata, abandonment_fence.as_ref())?;
         check.reserve(Work::Allocate(MAX_RECORD_BYTES))?;
         let mut canonical = Vec::with_capacity(MAX_RECORD_BYTES);
-        canonical.extend_from_slice(MAGIC);
+        canonical.extend_from_slice(if abandonment_fence.is_some() {
+            MAGIC_WITH_FENCE
+        } else {
+            MAGIC
+        });
         encode_metadata(&metadata, &mut canonical)?;
+        if let Some(fence) = &abandonment_fence {
+            let nested = fence.value(limits, check)?;
+            let length = u32::try_from(nested.len()).map_err(|_| ControlError::BudgetExceeded)?;
+            canonical.extend_from_slice(&length.to_be_bytes());
+            canonical.extend_from_slice(nested.as_bytes());
+        }
         if canonical.len() > MAX_RECORD_BYTES || canonical.len() > limits.max_value_bytes {
             return Err(ControlError::InvalidValue);
         }
         check.reserve(Work::Process(canonical.len()))?;
         Ok(Self {
             metadata,
+            abandonment_fence: abandonment_fence.map(Box::new),
             canonical,
         })
     }
@@ -259,10 +327,25 @@ pub(in crate::persistent) fn read_snapshot(
     limits: JournalLimits,
     check: &dyn Check,
 ) -> Result<Option<PublicationAbortFinalizationRecordV1>, ControlError> {
-    snapshot
-        .get(&key(limits)?)
-        .map(|value| PublicationAbortFinalizationRecordV1::decode(value, limits, check))
-        .transpose()
+    let Some(value) = snapshot.get(&key(limits)?) else {
+        return Ok(None);
+    };
+    if super::abandonment::is_fence_value(value) {
+        return Ok(None);
+    }
+    PublicationAbortFinalizationRecordV1::decode(value, limits, check).map(Some)
+}
+
+fn validate_fence_binding(
+    metadata: &PublicationAbortFinalizationMetadataV1,
+    fence: Option<&PublicationAbandonFenceRecordV1>,
+) -> Result<(), ControlError> {
+    match (&metadata.resolution, fence) {
+        (AbortResolutionMetadataV1::Compensated { .. }, None) => Ok(()),
+        (AbortResolutionMetadataV1::Excluded { .. }, Some(fence))
+            if fence.matches_abort(metadata) => Ok(()),
+        _ => Err(ControlError::OperationConflict),
+    }
 }
 fn validate_metadata(
     metadata: &PublicationAbortFinalizationMetadataV1,
@@ -564,6 +647,10 @@ impl Input<'_> {
         Ok(i64::from_be_bytes(self.take()?))
     }
 
+    fn u32(&mut self) -> Result<u32, ControlError> {
+        Ok(u32::from_be_bytes(self.take()?))
+    }
+
     fn text(&mut self, max: usize) -> Result<String, ControlError> {
         let length = usize::from(u16::from_be_bytes(self.take()?));
         if length == 0 || length > max {
@@ -595,6 +682,13 @@ impl Input<'_> {
             .ok_or(ControlError::StoreCorrupt)?;
         self.0 = tail;
         Ok(head)
+    }
+
+    fn take_vec(&mut self, length: usize) -> Result<Vec<u8>, ControlError> {
+        if length == 0 || length > MAX_RECORD_BYTES {
+            return Err(ControlError::StoreCorrupt);
+        }
+        Ok(self.take_bytes(length)?.to_vec())
     }
 
     const fn is_empty(&self) -> bool {

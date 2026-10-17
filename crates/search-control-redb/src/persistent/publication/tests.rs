@@ -280,14 +280,17 @@ fn successor_owner_can_replay_or_compensate_but_not_resume_stale_forward_progres
 }
 
 #[test]
-fn bare_aborted_record_retains_recovery_fence_and_cannot_be_replaced_as_an_empty_slot() {
+fn bare_aborted_transition_is_refused_without_exact_finalization_evidence() {
     let scratch = Scratch::new();
     let mut journal = scratch.create();
     let update = begin(); persist(&mut journal, &update);
     let abort = advance(2, 1, update.intent(), PublicationIntentState::Aborted);
-    persist(&mut journal, &abort);
-    assert_eq!(journal.load_unresolved_publication(&context(false)).unwrap().as_ref(), Some(abort.intent()));
-    assert_eq!(journal.read_publication_intent(&context(false)).unwrap().intent.as_ref(), Some(abort.intent()));
+    assert_eq!(
+        journal.persist_publication_intent(&abort, &context(false)).unwrap_err().control_error(),
+        ControlError::InvalidValue
+    );
+    assert_eq!(journal.load_unresolved_publication(&context(false)).unwrap().as_ref(), Some(update.intent()));
+    assert_eq!(journal.read_publication_intent(&context(false)).unwrap().intent.as_ref(), Some(update.intent()));
     assert_eq!(journal.control_snapshot(), Err(ControlError::SnapshotRebuildFailed));
     let next = PublicationIntentUpdate::begin(MutationId([3; 32]), Blake3Digest32::from_bytes([9; 32]), 2, &prepared()).unwrap();
     assert!(journal.persist_publication_intent(&next, &context(false)).is_err());

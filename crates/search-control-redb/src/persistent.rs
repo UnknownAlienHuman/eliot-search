@@ -57,6 +57,10 @@ pub use publication::{
     PublicationAbortFinalizationRecordV1, PublicationIntentBindingMetadataV1,
     PublicationIntentBindingRecordV1,
 };
+pub use publication::{
+    PublicationAbandonFenceMembershipV1, PublicationAbandonFenceReadbackV1,
+    PublicationAbandonFenceRecordV1, PublicationAbandonFenceRequestV1,
+};
 pub use publication::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
     PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
 pub use publication::{PreparationInputMetadataV1, PreparationInputReadbackV1,

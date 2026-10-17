@@ -117,12 +117,12 @@ pub(super) fn read_manifest(value: &ControlValue) -> Result<ReceiptRef, ControlE
     let mut input = Input::new(value, ControlRecordClass::Snapshot, *MANIFEST_MAGIC)?;
     let reference = input.reference()?; input.finish()?; Ok(reference)
 }
-pub(super) fn shadow(value: &PublicationSourceShadow, limits: JournalLimits) -> Result<ControlValue, ControlError> {
+pub(in crate::persistent) fn shadow(value: &PublicationSourceShadow, limits: JournalLimits) -> Result<ControlValue, ControlError> {
     let mut out = SHADOW_MAGIC.to_vec(); out.extend_from_slice(value.source_revision_id.as_bytes());
     out.extend_from_slice(&value.fence_revision.get().to_be_bytes());
     ControlValue::new(ControlRecordClass::State, out, limits)
 }
-pub(super) fn read_shadow(value: &ControlValue) -> Result<PublicationSourceShadow, ControlError> {
+pub(in crate::persistent) fn read_shadow(value: &ControlValue) -> Result<PublicationSourceShadow, ControlError> {
     let mut input = Input::new(value, ControlRecordClass::State, *SHADOW_MAGIC)?;
     let value = PublicationSourceShadow { source_revision_id: SourceRevisionId::from_bytes(input.take()?),
         fence_revision: NonZeroRevision::new(input.u64()?).map_err(|_| ControlError::StoreCorrupt)? };

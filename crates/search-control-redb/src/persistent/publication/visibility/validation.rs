@@ -126,48 +126,22 @@ pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot:
     }) {
         return Err(ControlError::StoreCorrupt);
     }
+    validate_retained_abandonment_fence(
+        read,
+        snapshot,
+        &state,
+        intent.as_ref(),
+        abort_finalization.as_ref(),
+        limits,
+        check,
+    )?;
     if let Some(intent) = &intent {
         super::super::prepared_artifacts::validate_reference(snapshot, &intent.prepared_manifest_ref, limits, check)?;
     }
     if let Some(record) = &abort_finalization {
         validate_abort_operation(read, snapshot, record, limits, check)?;
-    }    let receipt = match state.last_receipt {
-        None => None,
-        Some(id) => {
-            let receipt_key = id_key(RECEIPTS, id.as_bytes(), limits)?;
-            let value = snapshot.get(&receipt_key).ok_or(ControlError::StoreCorrupt)?;
-            let receipt = codec::read_receipt(value)?;
-            if receipt.publication.publication_receipt_id != id
-                || receipt.collection_generation_id != state.collection_generation_id
-                || receipt.schema_identity_digest != state.schema_identity_digest
-                || receipt.publication.target_epoch != state.visible_epoch
-                || receipt.publication.control_commit_revision.get() > snapshot.generation {
-                return Err(ControlError::StoreCorrupt);
-            }
-            // Tie the typed receipt to an actual committed operation in the same
-            // read transaction, not only to a caller-populated revision number.
-            let meta = read.open_table(META).map_err(map_table_error)?;
-            let header_bytes = meta.get("header").map_err(|error| map_storage_error(&error))?.ok_or(ControlError::StoreCorrupt)?;
-            check.reserve(crate::MigrationBootstrapWork::Read(header_bytes.value().len()))?;
-            check.reserve(crate::MigrationBootstrapWork::Process(header_bytes.value().len()))?;
-            let header = Header::decode(header_bytes.value(), snapshot.identity, limits)?;
-            let operation = super::super::super::operation_from_checked(read, receipt.operation_id, &header, limits, check)?
-                .ok_or(ControlError::StoreCorrupt)?;
-            if operation.receipt.after_generation != receipt.publication.control_commit_revision.get()
-                || !operation.receipt.changed_keys.contains(&receipt_key)
-                || !operation.receipt.changed_keys.contains(&key(STATE, limits)?)
-                || !operation.receipt.changed_keys.contains(&key(super::super::KEY, limits)?)
-                || receipt.intent.owner_source_membership_access_guards.profile_digest != state.guards.profile_digest {
-                return Err(ControlError::StoreCorrupt);
-            }
-            if receipt.publication.control_commit_revision.get() == snapshot.generation {
-                let mut expected_guards = receipt.intent.owner_source_membership_access_guards;
-                expected_guards.shadow_generation = receipt.committed_shadow_generation;
-                if state.guards != expected_guards { return Err(ControlError::StoreCorrupt); }
-            }
-            Some(receipt)
-        }
-    };
+    }
+    let receipt = validate_current_receipt(read, snapshot, &state, limits, check)?;
     match intent {
         None if state.visible_epoch.get() != 0 => return Err(ControlError::StoreCorrupt),
         Some(intent) if matches!(intent.state, PublicationIntentState::ControlCommitted | PublicationIntentState::Reclaimable) => {
@@ -208,6 +182,93 @@ pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot:
     }
     check.check(Point::ReadComplete)?;
     Ok(Some(state))
+}
+
+fn validate_current_receipt(
+    read: &ReadTransaction,
+    snapshot: &JournalReadSnapshot,
+    state: &PublicationVisibilityState,
+    limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<Option<codec::BoundReceipt>, ControlError> {
+    let Some(id) = state.last_receipt else {
+        return Ok(None);
+    };
+    let receipt_key = id_key(RECEIPTS, id.as_bytes(), limits)?;
+    let value = snapshot.get(&receipt_key).ok_or(ControlError::StoreCorrupt)?;
+    let receipt = codec::read_receipt(value)?;
+    if receipt.publication.publication_receipt_id != id
+        || receipt.collection_generation_id != state.collection_generation_id
+        || receipt.schema_identity_digest != state.schema_identity_digest
+        || receipt.publication.target_epoch != state.visible_epoch
+        || receipt.publication.control_commit_revision.get() > snapshot.generation
+    {
+        return Err(ControlError::StoreCorrupt);
+    }
+    // Bind the typed receipt to an actual committed operation in this same read.
+    let meta = read.open_table(META).map_err(map_table_error)?;
+    let header_bytes = meta
+        .get("header")
+        .map_err(|error| map_storage_error(&error))?
+        .ok_or(ControlError::StoreCorrupt)?;
+    check.reserve(crate::MigrationBootstrapWork::Read(header_bytes.value().len()))?;
+    check.reserve(crate::MigrationBootstrapWork::Process(header_bytes.value().len()))?;
+    let header = Header::decode(header_bytes.value(), snapshot.identity, limits)?;
+    let operation = super::super::super::operation_from_checked(
+        read,
+        receipt.operation_id,
+        &header,
+        limits,
+        check,
+    )?
+    .ok_or(ControlError::StoreCorrupt)?;
+    if operation.receipt.after_generation != receipt.publication.control_commit_revision.get()
+        || !operation.receipt.changed_keys.contains(&receipt_key)
+        || !operation.receipt.changed_keys.contains(&key(STATE, limits)?)
+        || !operation
+            .receipt
+            .changed_keys
+            .contains(&key(super::super::KEY, limits)?)
+        || receipt
+            .intent
+            .owner_source_membership_access_guards
+            .profile_digest
+            != state.guards.profile_digest
+    {
+        return Err(ControlError::StoreCorrupt);
+    }
+    if receipt.publication.control_commit_revision.get() == snapshot.generation {
+        let mut expected_guards = receipt.intent.owner_source_membership_access_guards;
+        expected_guards.shadow_generation = receipt.committed_shadow_generation;
+        if state.guards != expected_guards {
+            return Err(ControlError::StoreCorrupt);
+        }
+    }
+    Ok(Some(receipt))
+}
+
+fn validate_retained_abandonment_fence(
+    read: &ReadTransaction,
+    snapshot: &JournalReadSnapshot,
+    visibility: &PublicationVisibilityState,
+    intent: Option<&search_contracts::PublicationIntent>,
+    finalization: Option<&super::super::PublicationAbortFinalizationRecordV1>,
+    limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<(), ControlError> {
+    let Some(fence) = super::super::abandonment::read_snapshot(snapshot, limits, check)? else {
+        return Ok(());
+    };
+    super::super::abandonment::validate_retained_fence(
+        read,
+        snapshot,
+        visibility,
+        intent.ok_or(ControlError::StoreCorrupt)?,
+        finalization,
+        &fence,
+        limits,
+        check,
+    )
 }
 
 fn find<'a>(snapshot: &'a JournalReadSnapshot, key: &[u8]) -> Option<&'a ControlValue> {

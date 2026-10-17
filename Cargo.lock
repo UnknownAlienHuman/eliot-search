@@ -1232,6 +1232,7 @@ dependencies = [
 name = "search-control-redb"
 version = "0.0.0"
 dependencies = [
+ "blake3",
  "redb",
  "search-config",
  "search-contracts",
