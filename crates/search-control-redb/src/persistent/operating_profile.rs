@@ -254,10 +254,10 @@ impl PersistentControlJournal {
             .database
             .begin_read()
             .map_err(|_| ControlError::StoreUnavailable)?;
-        self.header_from(&read)?;
+        self.header_from_checked(&read, check)?;
         check.check(Point::ReadHeader)?;
         check.check(Point::ReadRecord)?;
-        read_mode(&read, self.identity, self.limits)
+        super::registry_mode_checked(&read, self.identity, self.limits, check)
     }
 
     pub(super) fn require_normal_profile(&self, check: &dyn Check) -> Result<(), ControlError> {
@@ -297,8 +297,12 @@ pub(super) fn read_mode(
 }
 
 pub(super) fn require_indexed(journal: &PersistentControlJournal) -> Result<(), ControlError> {
+    require_indexed_checked(journal, &super::Unscoped)
+}
+
+pub(super) fn require_indexed_checked(journal: &PersistentControlJournal, check: &dyn Check) -> Result<(), ControlError> {
     if journal.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION
-        && journal.profile_checked(&super::Unscoped)? != JournalOperatingProfile::Indexed
+        && journal.profile_checked(check)? != JournalOperatingProfile::Indexed
     {
         return Err(ControlError::MigrationUnverified);
     }
@@ -342,7 +346,7 @@ pub(super) fn validate_snapshot(
     if record.epoch > snapshot.identity.owner_epoch {
         return Err(ControlError::StoreCorrupt);
     }
-    let header = journal.header_from(read)?;
+    let header = journal.header_from_checked(read, check)?;
     check.check(Point::ReadOperation)?;
     let operation = operation_from_checked(read, record.operation, &header, journal.limits, check)?
         .ok_or(ControlError::StoreCorrupt)?;

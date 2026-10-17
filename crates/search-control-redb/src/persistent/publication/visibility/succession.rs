@@ -6,7 +6,7 @@ use super::{MutationId, Blake3Digest32, PublicationIntent, PublicationVisibility
     ControlWrite, intent_codec, ControlRecordCondition, STATE, codec, ControlMutation,
     PersistentControlJournal, CancellationProbe, OperationContext, ControlCommitReceipt,
     ControlCallError, Budget, Boundary, CommitRecoveryDecision, Check, Point, require_schema,
-    operation_from, RECEIPTS, is_corruption,
+    RECEIPTS, is_corruption,
     JournalReadSnapshot};
 use crate::ControlSnapshotPublisher;
 
@@ -23,6 +23,7 @@ pub struct PublicationSuccessor {
     previous: PublicationIntent,
     visibility: PublicationVisibilityState,
     next: PublicationIntent,
+    artifact_set: Option<super::super::PreparedArtifactSetRecordV1>,
 }
 
 impl fmt::Debug for PublicationSuccessor {
@@ -67,7 +68,19 @@ impl PublicationSuccessor {
         let next = search_domain::transition_publication(
             prepared, PublicationIntentState::IntentDurable,
         ).map_err(|_| ControlError::InvalidValue)?;
-        Ok(Self { operation_id, command_digest, expected_generation, previous, visibility, next })
+        Ok(Self { operation_id, command_digest, expected_generation, previous, visibility, next, artifact_set: None })
+    }
+
+    /// Atomically retains a v1 C02 set record with this new durable intent.
+    /// The existing prepared reference must already name the exact full record.
+    /// # Errors
+    /// Refuses reference substitution or duplicate attachment; grants no C07 proof.
+    pub fn with_prepared_artifact_set_v1(mut self, record: super::super::PreparedArtifactSetRecordV1) -> Result<Self, ControlError> {
+        if self.artifact_set.is_some() || self.next.prepared_manifest_ref != *record.reference() {
+            return Err(ControlError::OperationConflict);
+        }
+        self.artifact_set = Some(record);
+        Ok(self)
     }
 
     /// Exact intent to be made durable, without advancing `VisibleEpoch`.
@@ -76,7 +89,7 @@ impl PublicationSuccessor {
 
     pub(in crate::persistent) const fn port_operation_id(&self) -> MutationId { self.operation_id }
 
-    pub(in crate::persistent) fn command(&self, limits: JournalLimits) -> Result<ConditionalControlMutation, ControlError> {
+    pub(in crate::persistent) fn command(&self, limits: JournalLimits, check: &dyn Check) -> Result<ConditionalControlMutation, ControlError> {
         let intent_key = key(super::super::KEY, limits)?;
         let writes = vec![ControlWrite {
             key: intent_key.clone(), value: intent_codec::encode(&self.next, limits)?,
@@ -85,9 +98,11 @@ impl PublicationSuccessor {
             ControlRecordCondition::exact(intent_key, intent_codec::encode(&self.previous, limits)?),
             ControlRecordCondition::exact(key(STATE, limits)?, codec::state(&self.visibility, limits)?),
         ];
-        Ok(ConditionalControlMutation::new(ControlMutation::new(
+        let command = ConditionalControlMutation::new(ControlMutation::new(
             self.operation_id, self.command_digest, self.expected_generation, writes, vec![],
-        ), conditions))
+        ), conditions);
+        super::super::prepared_artifacts::attach(&self.next.prepared_manifest_ref, self.artifact_set.as_ref(),
+            true, limits, check, command)
     }
 }
 
@@ -128,8 +143,8 @@ impl PersistentControlJournal {
         let budget = Budget::new(context);
         let result = (|| {
             budget.check(Point::Start)?;
-            require_schema(self)?;
-            let command = request.command(self.limits)?;
+            require_schema(self, &budget)?;
+            let command = request.command(self.limits, &budget)?;
             self.recover_transaction_with_conditions_checked(
                 command.mutation(), command.conditions(), &budget,
             )
@@ -149,13 +164,13 @@ impl PersistentControlJournal {
         let result = (|| {
             self.ensure_available()?;
             check.check(Point::Start)?;
-            require_schema(self)?;
-            let command = request.command(self.limits)?;
+            require_schema(self, check)?;
+            let command = request.command(self.limits, check)?;
             check.check(Point::Validated)?;
             {
                 let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-                let header = self.header_from(&read)?;
-                let replay = operation_from(&read, request.operation_id, &header, self.limits)?.is_some();
+                let header = self.header_from_checked(&read, check)?;
+                let replay = super::super::super::operation_from_checked(&read, request.operation_id, &header, self.limits, check)?.is_some();
                 let snapshot = self.snapshot_from_checked(&read, check)?;
                 // Existing receipts remain replayable after later progress or
                 // owner handoff. The common engine checks the full fingerprint
@@ -179,7 +194,7 @@ impl PersistentControlJournal {
                     }
                 }
             }
-            self.transact_conditionally_checked(command, boundary, check)
+            super::super::super::transaction::execute_publication(self, &command, boundary, check)
         })();
         if crate::has_visibility_schema(self.identity.schema_version)
             && result.as_ref().err().is_some_and(|error| is_corruption(*error))
@@ -207,6 +222,7 @@ fn require_published_predecessor(
     }
     for (published, durable) in current.records.iter().zip(&snapshot.records) {
         check.check(Point::SnapshotRebuild)?;
+        check.reserve(crate::MigrationBootstrapWork::Process(published.0.as_bytes().len() + published.1.len()))?;
         if published != durable { return Err(ControlError::SnapshotPublicationFailed); }
     }
     check.check(Point::SnapshotPrepared)

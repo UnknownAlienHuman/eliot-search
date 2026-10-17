@@ -9,7 +9,9 @@ use crate::{ConditionalControlMutation, ControlRecordCondition, ControlRecordCla
 use super::super::operation::{Budget, Check, Point};
 use super::super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitReceipt,
     ControlError, ControlKey, ControlMutation, JournalLimits, JournalReadSnapshot, MutationId,
-    PersistentControlJournal, ReadTransaction, operation_from, is_corruption};
+    PersistentControlJournal, ReadTransaction, is_corruption};
+#[cfg(test)]
+use super::super::operation_from;
 use super::codec as intent_codec;
 
 pub(in crate::persistent) mod codec;
@@ -121,6 +123,7 @@ pub struct VisibleEpochCommit {
     previous: PublicationVisibilityState,
     receipt: PublicationReceipt,
     changes: Vec<PublicationManifestChange>,
+    artifact_set: Option<super::PreparedArtifactSetRecordV1>,
 }
 impl fmt::Debug for VisibleEpochCommit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -130,7 +133,8 @@ impl fmt::Debug for VisibleEpochCommit {
             .field("target_epoch", &self.intent.target_epoch)
             .field("previous", &self.previous)
             .field("receipt", &"<opaque>")
-            .field("changes", &self.changes.len()).finish()
+            .field("changes", &self.changes.len())
+            .field("artifact_set", &self.artifact_set.is_some()).finish()
     }
 }
 
@@ -154,9 +158,24 @@ impl VisibleEpochCommit {
             exact_retired_manifest_ref: readback.exact_retired_manifest_ref,
             readback_digest: readback.readback_digest,
             control_commit_revision: NonZeroRevision::new(after).map_err(|_| ControlError::InvalidValue)? };
-        let result = Self { operation_id, command_digest, prior_commit, intent, previous, receipt, changes };
+        let result = Self { operation_id, command_digest, prior_commit, intent, previous, receipt, changes, artifact_set: None };
         result.validate(JournalLimits::BASELINE)?;
         Ok(result)
+    }
+
+    /// Binds current manifest pointers to the actual v1 C02 record retained by the intent.
+    /// Every replacement must name that record; retirement-only changes retain their
+    /// existing references. The transaction compares the full persisted record bytes.
+    /// # Errors
+    /// Refuses a substituted reference, empty replacement set or duplicate attachment.
+    pub fn with_prepared_artifact_set_v1(mut self, record: super::PreparedArtifactSetRecordV1) -> Result<Self, ControlError> {
+        if self.artifact_set.is_some() || self.intent.prepared_manifest_ref != *record.reference()
+            || !self.changes.iter().any(|change| change.next_manifest.is_some())
+            || self.changes.iter().filter_map(|change| change.next_manifest.as_ref()).any(|reference| reference != record.reference()) {
+            return Err(ControlError::OperationConflict);
+        }
+        self.artifact_set = Some(record);
+        Ok(self)
     }
 
     pub(in crate::persistent) const fn port_operation_id(&self) -> MutationId { self.operation_id }
@@ -196,6 +215,9 @@ impl VisibleEpochCommit {
         ];
         let mut deletes = Vec::new();
         for change in &self.changes {
+            if self.artifact_set.is_none() && change.next_manifest.as_ref().is_some_and(super::prepared_artifacts::is_reference) {
+                return Err(ControlError::InvalidValue);
+            }
             check.check(Point::PlanRecord)?;
             let manifest_key = id_key(MANIFESTS, change.membership_id.as_bytes(), limits)?;
             conditions.push(match &change.previous_manifest {
@@ -221,7 +243,8 @@ impl VisibleEpochCommit {
         }
         let mutation = ControlMutation::new(self.operation_id, self.command_digest,
             self.prior_commit.after_generation, writes, deletes);
-        Ok(ConditionalControlMutation::new(mutation, conditions))
+        super::prepared_artifacts::attach(&self.intent.prepared_manifest_ref, self.artifact_set.as_ref(),
+            false, limits, check, ConditionalControlMutation::new(mutation, conditions))
     }
 }
 
@@ -242,7 +265,7 @@ impl PersistentControlJournal {
             if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
                 return Err(ControlError::MigrationUnverified);
             }
-            self.ensure_available()?; budget.check(Point::Start)?; require_schema(self)?;
+            self.ensure_available()?; budget.check(Point::Start)?; require_schema(self, &budget)?;
             if state.visible_epoch.get() != 0 || state.last_receipt.is_some()
                 || state.guards.owner_epoch != self.identity.owner_epoch { return Err(ControlError::InvalidValue); }
             let state_key = key(STATE, self.limits)?;
@@ -279,7 +302,7 @@ impl PersistentControlJournal {
     ) -> Result<CommitRecoveryDecision, ControlCallError> {
         let budget = Budget::new(context);
         let result = (|| {
-            budget.check(Point::Start)?; require_schema(self)?;
+            budget.check(Point::Start)?; require_schema(self, &budget)?;
             let command = request.command(self.limits, &budget)?;
             self.recover_transaction_with_conditions_checked(command.mutation(), command.conditions(), &budget)
         })();
@@ -296,7 +319,7 @@ impl PersistentControlJournal {
         -> Result<Option<PublicationVisibilityState>, ControlCallError> {
         let budget = Budget::new(context);
         let result = (|| {
-            require_schema(self)?;
+            require_schema(self, &budget)?;
             let snapshot = self.read_snapshot_checked(&budget)?;
             let state = snapshot.get(&key(STATE, self.limits)?)
                 .map(codec::read_state).transpose()?;
@@ -308,16 +331,16 @@ impl PersistentControlJournal {
     pub(in crate::persistent) fn commit_visibility_checked(&mut self, request: &VisibleEpochCommit, boundary: Boundary, check: &dyn Check)
         -> Result<ControlCommitReceipt, ControlError> {
         let result = (|| {
-            self.ensure_available()?; check.check(Point::Start)?; require_schema(self)?;
+            self.ensure_available()?; check.check(Point::Start)?; require_schema(self, check)?;
             let command = request.command(self.limits, check)?;
             check.check(Point::Validated)?;
             {
                 let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-                let header = self.header_from(&read)?;
-                let prior = operation_from(&read, request.prior_commit.operation_id, &header, self.limits)?
+                let header = self.header_from_checked(&read, check)?;
+                let prior = super::super::operation_from_checked(&read, request.prior_commit.operation_id, &header, self.limits, check)?
                     .ok_or(ControlError::OperationConflict)?;
                 if !same_commit(&prior.receipt, &request.prior_commit) { return Err(ControlError::OperationConflict); }
-                let replay = operation_from(&read, request.operation_id, &header, self.limits)?.is_some();
+                let replay = super::super::operation_from_checked(&read, request.operation_id, &header, self.limits, check)?.is_some();
                 if !replay && request.previous.guards.owner_epoch != self.identity.owner_epoch {
                     return Err(ControlError::GenerationMismatch);
                 }
@@ -325,7 +348,7 @@ impl PersistentControlJournal {
                 // The common engine rechecks exact keys AND generation in its write transaction.
                 self.snapshot_from_checked(&read, check)?;
             }
-            self.transact_conditionally_checked(command, boundary, check)
+            super::super::transaction::execute_publication(self, &command, boundary, check)
         })();
         if crate::has_visibility_schema(self.identity.schema_version)
             && result.as_ref().err().is_some_and(|error| is_corruption(*error)) { self.quarantined = true; }
@@ -344,9 +367,9 @@ pub(super) fn validate_initial_intent(snapshot: &JournalReadSnapshot, intent: &P
     Ok(())
 }
 
-fn require_schema(journal: &PersistentControlJournal) -> Result<(), ControlError> {
+fn require_schema(journal: &PersistentControlJournal, check: &dyn Check) -> Result<(), ControlError> {
     if crate::has_visibility_schema(journal.identity.schema_version) {
-        crate::persistent::operating_profile::require_indexed(journal)
+        crate::persistent::operating_profile::require_indexed_checked(journal, check)
     }
     else { Err(ControlError::SchemaUnsupported) }
 }

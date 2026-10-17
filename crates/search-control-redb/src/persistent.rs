@@ -52,6 +52,8 @@ pub use publication::{PublicationIntentHead, PublicationIntentUpdate, PUBLICATIO
     PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
 pub use publication::PublicationSuccessor;
+pub use publication::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
+    PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
 pub use publication::PublicationProjectionSnapshot;
 pub use operation::{ControlCallError, ControlInterruption};
 pub use quarantine::{ControlQuarantineReason, ControlQuarantineReceipt, ControlQuarantineRequest};
@@ -338,6 +340,7 @@ impl PersistentControlJournal {
         }
         check.check(Point::ReadComplete)?;
         let snapshot = JournalReadSnapshot { identity: self.identity, generation: header.generation, records };
+        publication::prepared_artifacts::validate_records(&snapshot, self.limits, check)?;
         registry::validate_snapshot(read, &snapshot, self.limits, check)?;
         if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
             operating_profile::validate_snapshot(self, read, &snapshot, check)?;

@@ -23,10 +23,12 @@ use super::operation::{Budget, Check, Point};
 use super::{Boundary, CommitRecoveryDecision, ControlCallError, ControlCommitReceipt,
     ControlError, ControlKey, ControlMutation, JournalIdentity, JournalLimits, MutationId,
     OPERATIONS, PersistentControlJournal, RECORDS, ReadTransaction, ReadableTable,
-    StoredOperation, decode_value, is_corruption, map_storage_error, map_table_error,
-    operation_from};
+    StoredOperation, is_corruption, map_storage_error, map_table_error};
 
 mod codec;
+pub(in crate::persistent) mod prepared_artifacts;
+pub use prepared_artifacts::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
+    PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
 pub(super) mod visibility;
 pub use visibility::{PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
@@ -55,6 +57,7 @@ pub struct PublicationIntentUpdate {
     expected_generation: u64,
     previous: Option<PublicationIntent>,
     next: PublicationIntent,
+    artifact_set: Option<PreparedArtifactSetRecordV1>,
 }
 
 impl fmt::Debug for PublicationIntentUpdate {
@@ -89,7 +92,7 @@ impl PublicationIntentUpdate {
         let next = search_domain::transition_publication(
             prepared, PublicationIntentState::IntentDurable,
         ).map_err(|_| ControlError::InvalidValue)?;
-        Ok(Self { operation_id, command_digest, expected_generation, previous: None, next })
+        Ok(Self { operation_id, command_digest, expected_generation, previous: None, next, artifact_set: None })
     }
 
     /// Records one existing domain transition while retaining all prepared fields.
@@ -117,7 +120,20 @@ impl PublicationIntentUpdate {
         { return Err(ControlError::InvalidValue); }
         let next = search_domain::transition_publication(&previous, state)
             .map_err(|_| ControlError::InvalidValue)?;
-        Ok(Self { operation_id, command_digest, expected_generation, previous: Some(previous), next })
+        Ok(Self { operation_id, command_digest, expected_generation, previous: Some(previous), next, artifact_set: None })
+    }
+
+    /// Attaches the explicit v1 C02 record named by the unchanged prepared reference.
+    /// Begin inserts it atomically with the intent; advance compares its full bytes.
+    /// Root must supply metadata verified against actual C07 I/O and current owners.
+    /// # Errors
+    /// A different reference or a second attachment is refused, never relabeled.
+    pub fn with_prepared_artifact_set_v1(mut self, record: PreparedArtifactSetRecordV1) -> Result<Self, ControlError> {
+        if self.artifact_set.is_some() || self.next.prepared_manifest_ref != *record.reference() {
+            return Err(ControlError::OperationConflict);
+        }
+        self.artifact_set = Some(record);
+        Ok(self)
     }
 
     /// Exact proposed durable value, including unchanged preparation bindings.
@@ -126,7 +142,7 @@ impl PublicationIntentUpdate {
 
     pub(in crate::persistent) const fn port_operation_id(&self) -> MutationId { self.operation_id }
 
-    pub(in crate::persistent) fn command(&self, limits: JournalLimits) -> Result<ConditionalControlMutation, ControlError> {
+    pub(in crate::persistent) fn command(&self, limits: JournalLimits, check: &dyn Check) -> Result<ConditionalControlMutation, ControlError> {
         let key = ControlKey::new(KEY.to_vec(), limits)?;
         let expected = match &self.previous {
             Some(value) => ControlRecordCondition::exact(key.clone(), codec::encode(value, limits)?),
@@ -134,7 +150,8 @@ impl PublicationIntentUpdate {
         };
         let mutation = ControlMutation::new(self.operation_id, self.command_digest,
             self.expected_generation, vec![ControlWrite { key, value: codec::encode(&self.next, limits)? }], vec![]);
-        Ok(ConditionalControlMutation::new(mutation, vec![expected]))
+        prepared_artifacts::attach(&self.next.prepared_manifest_ref, self.artifact_set.as_ref(),
+            self.previous.is_none(), limits, check, ConditionalControlMutation::new(mutation, vec![expected]))
     }
 }
 
@@ -255,8 +272,8 @@ impl PersistentControlJournal {
         let budget = Budget::new(context);
         let result = (|| {
             budget.check(Point::Start)?;
-            self.require_intent_schema()?;
-            let command = update.command(self.limits)?;
+            self.require_intent_schema(&budget)?;
+            let command = update.command(self.limits, &budget)?;
             self.recover_transaction_with_conditions_checked(command.mutation(), command.conditions(), &budget)
         })();
         result.map_err(|error| {
@@ -265,25 +282,25 @@ impl PersistentControlJournal {
         })
     }
 
-    fn require_intent_schema(&self) -> Result<(), ControlError> {
+    fn require_intent_schema(&self, check: &dyn Check) -> Result<(), ControlError> {
         if crate::has_intent_schema(self.identity.schema_version) {
-            super::operating_profile::require_indexed(self)
+            super::operating_profile::require_indexed_checked(self, check)
         }
         else { Err(ControlError::SchemaUnsupported) }
     }
 
-    fn read_intent_checked(&self, check: &dyn Check) -> Result<PublicationIntentHead, ControlError> {
+    pub(in crate::persistent) fn read_intent_checked(&self, check: &dyn Check) -> Result<PublicationIntentHead, ControlError> {
         self.ensure_available()?;
         check.check(Point::Start)?;
-        self.require_intent_schema()?;
+        self.require_intent_schema(check)?;
         let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-        let header = self.header_from(&read)?;
+        let header = self.header_from_checked(&read, check)?;
         check.check(Point::ReadHeader)?;
         if crate::has_visibility_schema(self.identity.schema_version) {
             self.snapshot_from_checked(&read, check)?;
         }
         let records = read.open_table(RECORDS).map_err(map_table_error)?;
-        let intent = if let Some(raw) = records.get(KEY).map_err(|error| map_storage_error(&error))? { Some(codec::decode(&decode_value(raw.value(), self.limits)?)?) } else {
+        let intent = if let Some(raw) = records.get(KEY).map_err(|error| map_storage_error(&error))? { Some(codec::decode(&super::decode_value_checked(raw.value(), self.limits, check)?)?) } else {
             verify_never_written(&read, header.generation, self.limits, check)?;
             None
         };
@@ -297,13 +314,16 @@ impl PersistentControlJournal {
         let result = (|| {
             self.ensure_available()?;
             check.check(Point::Start)?;
-            self.require_intent_schema()?;
-            let command = update.command(self.limits)?;
+            self.require_intent_schema(check)?;
+            if update.artifact_set.is_some() && !crate::has_visibility_schema(self.identity.schema_version) {
+                return Err(ControlError::SchemaUnsupported);
+            }
+            let command = update.command(self.limits, check)?;
             check.check(Point::Validated)?;
             {
                 let read = self.database.begin_read().map_err(|_| ControlError::StoreUnavailable)?;
-                let header = self.header_from(&read)?;
-                let replay = operation_from(&read, update.operation_id, &header, self.limits)?.is_some();
+                let header = self.header_from_checked(&read, check)?;
+                let replay = super::operation_from_checked(&read, update.operation_id, &header, self.limits, check)?.is_some();
                 // Do not reject an already committed old-owner request before
                 // the common replay engine verifies its exact fingerprint.
                 let prepared_owner = update.next.owner_source_membership_access_guards.owner_epoch;
@@ -321,11 +341,11 @@ impl PersistentControlJournal {
                 }
                 let table = read.open_table(RECORDS).map_err(map_table_error)?;
                 match table.get(KEY).map_err(|error| map_storage_error(&error))? {
-                    Some(raw) => { codec::decode(&decode_value(raw.value(), self.limits)?)?; }
+                    Some(raw) => { codec::decode(&super::decode_value_checked(raw.value(), self.limits, check)?)?; }
                     None => verify_never_written(&read, header.generation, self.limits, check)?,
                 }
             }
-            self.transact_conditionally_checked(command, boundary, check)
+            super::transaction::execute_publication(self, &command, boundary, check)
         })();
         if crate::has_intent_schema(self.identity.schema_version)
             && result.as_ref().err().is_some_and(|error| is_corruption(*error)) {
@@ -338,7 +358,7 @@ impl PersistentControlJournal {
 // The shared port routes these keys through typed publication commands only.
 // Reuse the owning modules' key definitions instead of a second reserved-key list.
 pub(super) fn port_reserved_key(key: &[u8]) -> bool {
-    key == KEY || visibility::port_reserved_key(key)
+    key == KEY || visibility::port_reserved_key(key) || prepared_artifacts::reserved(key)
 }
 
 pub(super) const fn unresolved(state: PublicationIntentState) -> bool {
@@ -379,7 +399,7 @@ fn verify_never_written(
         if count >= limits.max_operation_records { return Err(ControlError::StoreCorrupt); }
         let (id, bytes) = row.map_err(|error| map_storage_error(&error))?;
         let id = MutationId(id.value().try_into().map_err(|_| ControlError::StoreCorrupt)?);
-        let operation = StoredOperation::decode(bytes.value(), id, generation, limits)?;
+        let operation = StoredOperation::decode_checked(bytes.value(), id, generation, limits, check)?;
         if operation.receipt.changed_keys.iter().any(|key| key.as_bytes() == KEY) {
             return Err(ControlError::StoreCorrupt);
         }

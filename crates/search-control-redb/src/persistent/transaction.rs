@@ -80,7 +80,14 @@ pub(super) fn execute_revision_dek(journal: &mut PersistentControlJournal,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-enum Scope { General, Registry, Profile, RevisionDek, RevisionUse }
+enum Scope { General, Registry, Profile, RevisionDek, RevisionUse, Publication }
+
+pub(super) fn execute_publication(journal: &mut PersistentControlJournal,
+    command: &crate::ConditionalControlMutation, boundary: Boundary, check: &dyn Check,
+) -> Result<ControlCommitReceipt, ControlError> {
+    execute_scoped(journal, command.mutation(), command.conditions(), boundary, check, Scope::Publication)
+        .map(|(receipt, _)| receipt)
+}
 
 pub(super) fn execute_revision_use(journal: &mut PersistentControlJournal,
     command: &crate::ConditionalControlMutation, boundary: Boundary, check: &dyn Check,
@@ -231,6 +238,9 @@ fn validate_scope(journal: &PersistentControlJournal, read: &ReadTransaction, mu
         return Err(ControlError::SchemaUnsupported);
     }
     for key in changed_keys {
+        if super::publication::prepared_artifacts::reserved(key.as_bytes()) && scope != Scope::Publication {
+            return Err(ControlError::InvalidKey);
+        }
         if crate::source_retention::reserved(key.as_bytes()) != (scope == Scope::RevisionUse) {
             return Err(ControlError::InvalidKey);
         }

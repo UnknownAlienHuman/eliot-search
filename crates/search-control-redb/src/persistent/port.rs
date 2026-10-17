@@ -290,11 +290,11 @@ impl<C: CancellationProbe> BoundControlJournal<'_, C> {
                     &generated
                 }
                 ControlPortCommand::PublicationIntent(command) => {
-                    generated = command.command(self.journal.limits)?;
+                    generated = command.command(self.journal.limits, &budget)?;
                     &generated
                 }
                 ControlPortCommand::PublicationSuccessor(command) => {
-                    generated = command.command(self.journal.limits)?;
+                    generated = command.command(self.journal.limits, &budget)?;
                     &generated
                 }
             };
@@ -416,5 +416,6 @@ mod original_records;
 mod original_revision_use;
 mod original_derived_artifact_use;
 mod original_publication_snapshot;
+mod original_prepared_publication;
 mod original_records_targeted;
 pub use original_records_targeted::ScopedControlRecordsReadback;

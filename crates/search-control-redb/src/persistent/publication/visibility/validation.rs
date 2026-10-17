@@ -2,7 +2,7 @@
 use super::{Check, ControlError, ControlKey, ControlValue, JournalLimits, JournalReadSnapshot,
     MANIFESTS, PublicationIntentState,
     PublicationVisibilityState, Point, RECEIPTS, RETIRED, ReadTransaction, SHADOWS, STATE,
-    VisibleEpochCommit, codec, id_key, intent_codec, key, operation_from};
+    VisibleEpochCommit, codec, id_key, intent_codec, key};
 use std::collections::BTreeSet;
 use super::super::super::{Header, META, map_storage_error, map_table_error};
 
@@ -75,6 +75,9 @@ pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot:
     };
     if state.guards.owner_epoch > snapshot.identity.owner_epoch { return Err(ControlError::StoreCorrupt); }
     let intent = find(snapshot, super::super::KEY).map(intent_codec::decode).transpose()?;
+    if let Some(intent) = &intent {
+        super::super::prepared_artifacts::validate_reference(snapshot, &intent.prepared_manifest_ref, limits, check)?;
+    }
     let receipt = match state.last_receipt {
         None => None,
         Some(id) => {
@@ -92,8 +95,10 @@ pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot:
             // read transaction, not only to a caller-populated revision number.
             let meta = read.open_table(META).map_err(map_table_error)?;
             let header_bytes = meta.get("header").map_err(|error| map_storage_error(&error))?.ok_or(ControlError::StoreCorrupt)?;
+            check.reserve(crate::MigrationBootstrapWork::Read(header_bytes.value().len()))?;
+            check.reserve(crate::MigrationBootstrapWork::Process(header_bytes.value().len()))?;
             let header = Header::decode(header_bytes.value(), snapshot.identity, limits)?;
-            let operation = operation_from(read, receipt.operation_id, &header, limits)?
+            let operation = super::super::super::operation_from_checked(read, receipt.operation_id, &header, limits, check)?
                 .ok_or(ControlError::StoreCorrupt)?;
             if operation.receipt.after_generation != receipt.publication.control_commit_revision.get()
                 || !operation.receipt.changed_keys.contains(&receipt_key)
@@ -134,10 +139,14 @@ pub(in crate::persistent) fn validate_snapshot(read: &ReadTransaction, snapshot:
         check.check(Point::ReadRecord)?; validate_record(key, value)?;
         if key.as_bytes().starts_with(RECEIPTS) {
             let recorded = codec::read_receipt(value)?;
+            super::super::prepared_artifacts::validate_reference(snapshot, &recorded.intent.prepared_manifest_ref, limits, check)?;
             if recorded.publication.target_epoch > state.visible_epoch
                 || recorded.publication.control_commit_revision.get() > snapshot.generation {
                 return Err(ControlError::StoreCorrupt);
             }
+        }
+        if key.as_bytes().starts_with(MANIFESTS) || key.as_bytes().starts_with(RETIRED) {
+            super::super::prepared_artifacts::validate_reference(snapshot, &codec::read_manifest(value)?, limits, check)?;
         }
         if let Some(ids) = key.as_bytes().strip_prefix(RETIRED) {
             let id: [u8; 16] = ids[..16].try_into().map_err(|_| ControlError::StoreCorrupt)?;

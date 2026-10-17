@@ -72,6 +72,62 @@ coordinates, while the C07/Root verifier must compare the opaque descriptor/refe
 actual source/root/policy state. C02 does not parse the C07 codec or claim a stored-byte digest proves
 owner authenticity.
 
+## Prepared artifact-set reference v1 (#260 C02 link)
+
+`PreparedArtifactSetRecordV1::prepare_with_original_context` encodes bounded
+`PreparedArtifactSetMetadataV1`: original Root operation, full `SourceRevisionRef`,
+Root-issued materialization/representation IDs as data, complete opaque six-domain
+canonical bytes, complete opaque C07 set-object reference bytes, and actual stored
+set-object digest/length. C07 reference bytes are capped at 20 KiB, residency at
+8 KiB and the full C02 record at 48 KiB, within unchanged journal limits.
+Generic canonical framing is checked; no C07 codec, body or dependency is added.
+
+The reference is `c02:prepared-artifact-set:v1:<full-lowercase-digest>`, computed
+through C00 over the actual full canonical C02 record under the fixed domain
+`eliot/raw/c02-prepared-artifact-set-record/v1`. It names the immutable State row
+`publication_intents/prepared-artifact-set/v1/<digest>` in the existing records
+table. Preparing this candidate proves no persistence or C07 I/O. It is never a
+synthetic publication/write/read receipt, semantic digest or profile identity.
+
+The caller explicitly sets `PublicationIntent.prepared_manifest_ref` to that
+record's reference, then calls `with_prepared_artifact_set_v1(record)` on the
+existing `PublicationIntentUpdate` or `PublicationSuccessor`. First begin and
+successor insert the record with absence conditions in the same transaction as
+`INTENT_DURABLE`, before the caller may mutate Qdrant. Advance compares the exact
+record bytes. A present row is not overwritten by a different operation; exact
+original-command replay compares the complete existing request fingerprint.
+No reference is silently rewritten or interpreted as this profile by shape alone.
+
+`VisibleEpochCommit::with_prepared_artifact_set_v1(record)` requires every new
+membership manifest pointer in this publication to name the attached record.
+Retirement-only changes retain their original references. Full record bytes,
+existing intent, visibility, guards, previous pointers and matching shadows are
+atomic conditions of the existing VisibleEpoch transaction. One set per intent
+is supported; aggregation and membership/partition qualification remain Root work.
+The existing intent, visibility, receipt, current-manifest and retired-reference
+encodings are unchanged. The new record/API is explicitly v1 and opt-in on
+visibility schemas 4/5; no migration or second journal/map/catalogue is created.
+
+The original-context bound port exposes publication transact/recovery, visible
+commit/recovery, intent-head read, snapshot publication and
+`read_prepared_artifact_set_with_original_context`. All borrow the original
+absolute deadline and cumulative callback. The typed read returns actual journal
+identity/generation and exact record metadata from one point read. Record codec,
+hash and copy work are conservatively prepaid (16 times the fixed record ceiling
+for encoding, and 16 times stored length before decoding); these are logical
+admission bounds, not CPU/RSS measurements. Generic writers cannot touch the new
+record namespace. Disk verification/restart/snapshot reconstruction check full
+record hashes and reject dangling v1 intent, receipt, current or retired refs.
+
+The prior individual-object reservation and late object intent are not reused as
+this observation: they precede C07 filesystem publication and do not retain an
+actual verified set-object observation. Root must supply and compare the actual
+C07 write/read receipt, source/MatRep provenance, full residency and current
+owner/policy/purge state. This C02 record is technical evidence only; no query
+writes, retention-root qualification, Native/Qdrant/product proof or #260 closure
+is claimed. The local C07 `DERIVED_ARTIFACT_V1.md` and maintainer request define
+this slice; the remote issue body was not fetched under the no-remote boundary.
+
 ## Frozen schema-5 operating profile
 
 - `JournalOperatingProfile`: closed Direct / Indexed / MigrationInert observation.

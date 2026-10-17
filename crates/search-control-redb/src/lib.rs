@@ -40,6 +40,8 @@ pub use persistent::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBoo
 pub use persistent::{BoundControlJournal, ControlPortCommand, ControlPortError,
     ScopedControlRecordsReadback, control_mutation_identity};
 pub use persistent::PublicationProjectionSnapshot;
+pub use persistent::{PreparedArtifactSetMetadataV1, PreparedArtifactSetRecordV1,
+    PreparedArtifactSetReadbackV1, MAX_PREPARED_ARTIFACT_SET_REFERENCE_BYTES};
 pub use persistent::{registry_operation_value_len, RegistryStateFamily, RegistryStateKey, RegistryStateChange,
     RegistryMutationRequest, RegistryOperationEnvelope, RegistryStoredState,
     RegistryReadSnapshot, RegistryCommitReadback, RegistryTransactionReadback,
