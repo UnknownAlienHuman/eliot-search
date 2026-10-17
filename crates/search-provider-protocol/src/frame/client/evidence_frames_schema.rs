@@ -115,19 +115,23 @@ fn read_envelope(input: &mut Decoder<'_>, first: &mut bool) -> Result<EvidenceFr
 /// the decoded value reproduces the exact bytes.
 pub fn encode_evidence_frame(frame: &EvidenceFrameV2) -> Result<Vec<u8>> {
     let mut output = Encoder::new(MAX_EVIDENCE_FRAME_BYTES);
+    put_evidence_frame(frame, &mut output)?;
+    let bytes = output.finish()?;
+    FrameCodec::validate_payload(&bytes, DEFAULT_PROTOCOL_LIMITS)?;
+    Ok(bytes)
+}
+
+pub(super) fn put_evidence_frame(frame: &EvidenceFrameV2, output: &mut Encoder) -> Result<()> {
     output.open(b'{')?;
     let mut first = true;
     output.field(&mut first, "v")?;
-    EVIDENCE_FRAME_SCHEMA_VERSION.put(&mut output)?;
+    EVIDENCE_FRAME_SCHEMA_VERSION.put(output)?;
     output.field(&mut first, "frame")?;
     output.text(frame.kind().as_str())?;
     output.field(&mut first, "body")?;
     frame.validate().map_err(|_| ProtocolError::InvalidBody)?;
-    frame.put(&mut output)?;
-    output.close(b'}')?;
-    let bytes = output.finish()?;
-    FrameCodec::validate_payload(&bytes, DEFAULT_PROTOCOL_LIMITS)?;
-    Ok(bytes)
+    frame.put(output)?;
+    output.close(b'}')
 }
 
 /// Decodes one bounded progressive frame with its versioned envelope.
@@ -138,19 +142,29 @@ pub fn encode_evidence_frame(frame: &EvidenceFrameV2) -> Result<Vec<u8>> {
 /// so an alternate spelling cannot survive a round trip.
 pub fn decode_evidence_frame(bytes: &[u8]) -> Result<EvidenceFrameV2> {
     let mut input = open_frame(bytes)?;
+    let frame = get_evidence_frame_body(&mut input)?;
+    input.finish()?;
+    if encode_evidence_frame(&frame)?.as_slice() != bytes {
+        return Err(ProtocolError::InvalidBody);
+    }
+    Ok(frame)
+}
+
+pub(super) fn get_evidence_frame(input: &mut Decoder<'_>) -> Result<EvidenceFrameV2> {
+    input.open(b'{')?;
+    get_evidence_frame_body(input)
+}
+
+fn get_evidence_frame_body(input: &mut Decoder<'_>) -> Result<EvidenceFrameV2> {
     let mut first = true;
-    let declared = read_envelope(&mut input, &mut first)?;
+    let declared = read_envelope(input, &mut first)?;
     input.field(&mut first, "body")?;
-    let frame = EvidenceFrameV2::get(&mut input)?;
+    let frame = EvidenceFrameV2::get(input)?;
     if frame.kind() != declared {
         return Err(ProtocolError::InvalidBody);
     }
     input.close(b'}')?;
-    input.finish()?;
     frame.validate().map_err(|_| ProtocolError::InvalidBody)?;
-    if encode_evidence_frame(&frame)?.as_slice() != bytes {
-        return Err(ProtocolError::InvalidBody);
-    }
     Ok(frame)
 }
 

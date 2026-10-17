@@ -15,6 +15,11 @@ use crate::terminal::TerminalKind;
 use super::BoundSession;
 
 mod cancellation;
+mod evidence;
+
+use crate::frame::evidence_response_schema::{
+    EvidenceResponseBodyV2, EvidenceResponseEnvelopeV2,
+};
 
 /// Borrowed proof input for a complete typed frame, distinct from shell/grant
 /// transcripts. The adapter hashes the parts in order with its pairing key.
@@ -109,6 +114,25 @@ impl ProviderEventPreparationV1 {
             body,
         }
     }
+
+    /// Build the additive V2 evidence response envelope skeleton bound to this
+    /// attempted delivery.
+    ///
+    /// Only the body is supplied by the caller. The protocol validates the
+    /// encoded frame against this complete envelope before any output begins.
+    #[must_use]
+    pub fn envelope_v2(&self, body: EvidenceResponseBodyV2) -> EvidenceResponseEnvelopeV2 {
+        EvidenceResponseEnvelopeV2 {
+            protocol_major: self.protocol_version.major,
+            protocol_minor: self.protocol_version.minor,
+            installation_incarnation_id: self.installation_incarnation_id,
+            binding_id: self.binding_id,
+            connection_sequence: self.connection_sequence,
+            request_id: self.request_id,
+            event_sequence: self.event_sequence,
+            body,
+        }
+    }
 }
 
 /// One admitted typed recipe and its event cursor. It cannot be cloned or
@@ -138,6 +162,34 @@ struct AdmittedRequestCustody {
 pub struct AdmittedEvidenceProviderRequestV2 {
     envelope: crate::frame::EvidenceRequestEnvelopeV2,
     custody: AdmittedRequestCustody,
+    response: evidence::EvidenceResponseState,
+}
+
+/// Protocol-private prepared value accepted only after full-envelope readback.
+///
+/// A prepared output can never be constructed by a caller: the frame bytes are
+/// decoded with the existing server codec and required to equal the
+/// context-derived expected envelope, so an emitted frame cannot be forged.
+struct PreparedEvidenceDeliveryV2 {
+    envelope: EvidenceResponseEnvelopeV2,
+    frame: BoundedBytes<MAX_FRAME_BYTES>,
+}
+
+impl PreparedEvidenceDeliveryV2 {
+    fn validate(
+        context: &ProviderEventPreparationV1,
+        body: EvidenceResponseBodyV2,
+        frame: BoundedBytes<MAX_FRAME_BYTES>,
+    ) -> Result<Self, ProtocolError> {
+        let envelope = context.envelope_v2(body);
+        let decoded = ServerEnvelopeCodec::decode_evidence_response_v2(
+            frame.as_slice(), context.limits(), context.supported_versions(),
+        )?;
+        if decoded != envelope {
+            return Err(ProtocolError::InvalidBody);
+        }
+        Ok(Self { envelope, frame })
+    }
 }
 
 impl AdmittedProviderRequest {
@@ -312,6 +364,7 @@ impl BoundSession {
                 next_event: Some(1),
                 last_clock: now,
             },
+            response: evidence::EvidenceResponseState::default(),
         })
     }
 
@@ -385,10 +438,15 @@ impl BoundSession {
         {
             return Err(ProtocolError::AuthenticationFailed);
         }
+        let query_deadline_ms = match &envelope.recipe_request {
+            crate::frame::EvidenceRecipeRequestV2::RetrieveEvidence(value) => value.budgets.deadline_ms,
+            crate::frame::EvidenceRecipeRequestV2::OrientScope(value) => value.budgets.deadline_ms,
+        };
         let budget = envelope
             .relative_deadline_ms
             .unwrap_or(maximum_deadline_ms)
-            .min(maximum_deadline_ms);
+            .min(maximum_deadline_ms)
+            .min(query_deadline_ms);
         let deadline = started
             .get()
             .checked_add(budget)
@@ -448,7 +506,7 @@ impl BoundSession {
             .custody
             .next_event
             .ok_or(ProviderDeliveryError::Protocol(ProtocolError::DuplicateTerminal))?;
-        validate_event(request, &body, terminal, event)
+        validate_event(&request.body, &request.custody.guard, &body, terminal, event)
             .map_err(ProviderDeliveryError::Protocol)?;
         let mut initial_clock = Some(started);
         let mut delegated_clock = || match initial_clock.take() {
@@ -513,14 +571,44 @@ impl BoundSession {
         ) -> Result<(ProviderBodyV1, BoundedBytes<MAX_FRAME_BYTES>), P>,
         output: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<(), E>,
     ) -> Result<(), PreparedProviderDeliveryError<P, E>> {
-        use PreparedProviderDeliveryError::{AfterOutput, Output, Preparation, Protocol};
+        use PreparedProviderDeliveryError::{Preparation, Protocol};
+
+        let body = &request.body;
+        let guard = request.custody.guard.clone();
+        self.deliver_sequenced_provider_event(
+            &mut request.custody, clock,
+            |context| {
+                let (value, frame) = prepare(context).map_err(Preparation)?;
+                let prepared = PreparedProviderDeliveryV1::validate(context, value, frame)
+                    .map_err(Protocol)?;
+                validate_event(body, &guard, &prepared.envelope.body, terminal, context.event_sequence)
+                    .map_err(Protocol)?;
+                Ok(CheckedProviderEvent {
+                    progress: match prepared.envelope.body {
+                        ProviderBodyV1::Progress(progress) => Some(progress),
+                        _ => None,
+                    },
+                    terminal, frame: prepared.frame,
+                })
+            }, output,
+        )
+    }
+
+    // One sequence, active-guard, deadline, progress and terminal commit owner
+    // for both wire generations. Typed validation is completed before output.
+    fn deliver_sequenced_provider_event<P, E>(
+        &mut self,
+        request: &mut AdmittedRequestCustody,
+        clock: &mut impl FnMut() -> Result<MonotonicMillis, ProtocolError>,
+        prepare: impl FnOnce(&ProviderEventPreparationV1)
+            -> Result<CheckedProviderEvent, PreparedProviderDeliveryError<P, E>>,
+        output: impl FnOnce(&ProviderFrameTranscript<'_>) -> Result<(), E>,
+    ) -> Result<(), PreparedProviderDeliveryError<P, E>> {
+        use PreparedProviderDeliveryError::{AfterOutput, Output, Protocol};
 
         let started = clock().map_err(Protocol)?;
-        self.validate_provider_guard(&request.custody, started).map_err(Protocol)?;
-        let event = request.custody.next_event.ok_or(Protocol(ProtocolError::DuplicateTerminal))?;
-        let next_event = if terminal.is_some() { None } else {
-            Some(event.checked_add(1).ok_or(Protocol(ProtocolError::SequenceExhausted))?)
-        };
+        self.validate_provider_guard(request, started).map_err(Protocol)?;
+        let event = request.next_event.ok_or(Protocol(ProtocolError::DuplicateTerminal))?;
         let mut sequence = self.session.sequences().provider();
         let assigned = sequence.next_expected().ok_or(Protocol(ProtocolError::SequenceExhausted))?;
         SequenceTracker::require_accepted(sequence.observe(assigned)).map_err(Protocol)?;
@@ -528,19 +616,20 @@ impl BoundSession {
             protocol_version: self.binding.version(),
             installation_incarnation_id: self.binding.incarnation(),
             binding_id: self.binding.binding_id(),
-            request_id: *request.custody.guard.request_id(),
+            request_id: *request.guard.request_id(),
             event_sequence: event,
             connection_sequence: assigned,
             limits: self.limits,
         };
-        let (body, frame) = prepare(&context).map_err(Preparation)?;
-        let prepared = PreparedProviderDeliveryV1::validate(&context, body, frame)
-            .map_err(Protocol)?;
-        validate_event(request, &prepared.envelope.body, terminal, event).map_err(Protocol)?;
+        let prepared = prepare(&context)?;
+        let terminal = prepared.terminal;
+        let next_event = if terminal.is_some() { None } else {
+            Some(event.checked_add(1).ok_or(Protocol(ProtocolError::SequenceExhausted))?)
+        };
 
-        let mut progress_guard = self.guards.get(request.custody.guard.request_id())
+        let mut progress_guard = self.guards.get(request.guard.request_id())
             .ok_or(Protocol(ProtocolError::InvalidSessionTransition))?.clone();
-        if let ProviderBodyV1::Progress(progress) = &prepared.envelope.body {
+        if let Some(progress) = &prepared.progress {
             progress_guard.advance_progress(
                 u64::from(progress.bounded_counts.total_planned_legs),
                 u64::from(progress.bounded_counts.completed_legs), self.limits,
@@ -550,8 +639,8 @@ impl BoundSession {
 
         let before_output = clock().map_err(Protocol)?;
         if before_output < started { return Err(Protocol(ProtocolError::DeadlineExpired)); }
-        self.validate_provider_guard(&request.custody, before_output).map_err(Protocol)?;
-        if terminal.is_none() && request.custody.guard.is_cancelled() {
+        self.validate_provider_guard(request, before_output).map_err(Protocol)?;
+        if terminal.is_none() && request.guard.is_cancelled() {
             return Err(Protocol(ProtocolError::InvalidSessionTransition));
         }
         let transcript = ProviderFrameTranscript::response(
@@ -562,26 +651,26 @@ impl BoundSession {
         let deliver = || {
             output(&transcript).map_err(Output)?;
             let after = clock().map_err(AfterOutput)?;
-            if after < before_output || request.custody.guard.is_expired(after) {
+            if after < before_output || request.guard.is_expired(after) {
                 return Err(AfterOutput(ProtocolError::DeadlineExpired));
             }
             finished_at = Some(after);
             Ok(())
         };
         if let Some(kind) = terminal {
-            pending.session.prepare_request_terminal(request.custody.guard.request_id(), kind)
+            pending.session.prepare_request_terminal(request.guard.request_id(), kind)
                 .map_err(Protocol)?.deliver(|_| deliver())?;
         } else {
             deliver()?;
-            *pending.session.guards.get_mut(request.custody.guard.request_id())
+            *pending.session.guards.get_mut(request.guard.request_id())
                 .expect("retained progress guard under exclusive session borrow") = progress_guard;
         }
         // This exact next sequence was previewed before output; exclusive
         // borrowing prevents admission, disconnect or another emission here.
         pending.session.session.accept_provider_sequence(assigned)
             .expect("provider sequence reserved under exclusive session borrow");
-        request.custody.next_event = next_event;
-        request.custody.last_clock = finished_at.expect("successful output sampled the clock");
+        request.next_event = next_event;
+        request.last_clock = finished_at.expect("successful output sampled the clock");
         pending.committed = true;
         Ok(())
     }
@@ -622,7 +711,8 @@ impl BoundSession {
 }
 
 fn validate_event(
-    request: &AdmittedProviderRequest,
+    request: &RequestBody,
+    guard: &RequestGuard,
     body: &ProviderBodyV1,
     terminal: Option<TerminalKind>,
     event: u64,
@@ -631,14 +721,20 @@ fn validate_event(
         (ProviderBodyV1::Progress(value), None) if value.event_sequence == event => Ok(()),
         (ProviderBodyV1::Result(value), Some(TerminalKind::Success | TerminalKind::Partial))
             if value.event_sequence == event
-                && value.result.recipe_id() == request.body.recipe_request.recipe => Ok(()),
+                && value.result.recipe_id() == request.recipe_request.recipe => Ok(()),
         (ProviderBodyV1::Error(_), Some(TerminalKind::Failed)) => Ok(()),
         (ProviderBodyV1::Cancelled(value), Some(TerminalKind::Cancelled))
             if value.terminal
-                && &value.target_request_id == request.custody.guard.request_id()
-                && request.custody.guard.is_cancelled() => Ok(()),
+                && &value.target_request_id == guard.request_id()
+                && guard.is_cancelled() => Ok(()),
         _ => Err(ProtocolError::InvalidBody),
     }
+}
+
+struct CheckedProviderEvent {
+    frame: BoundedBytes<MAX_FRAME_BYTES>,
+    progress: Option<search_contracts::ProgressBody>,
+    terminal: Option<TerminalKind>,
 }
 
 struct PendingOutput<'a> {

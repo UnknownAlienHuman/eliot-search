@@ -19,6 +19,7 @@
 mod grant;
 pub mod evidence_schema;
 pub mod evidence_frames_schema;
+pub mod evidence_response_schema;
 mod primitives;
 mod recipe;
 mod response;

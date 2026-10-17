@@ -1,5 +1,7 @@
 use std::cell::RefCell;
 
+mod evidence_v2;
+
 use search_contracts::protocol::{HelloBody, PeerRole};
 use search_contracts::evidence::{
     EvidenceHints, EvidenceIntent, PublicScopeSelector, RecipeIdV2, RetrieveEvidenceRequestV2,

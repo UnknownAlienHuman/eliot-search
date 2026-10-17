@@ -125,6 +125,36 @@ applies; successful output commits the provider sequence, request event cursor a
 the same order as `deliver_provider_event`. The existing `deliver_provider_event` API delegates to
 this path using the existing encoder, so P00 wire bytes and the separate MAC record are unchanged.
 
+### Additive V2 evidence output
+
+`AdmittedEvidenceProviderRequestV2` retains its original `BoundSession` guard.
+`deliver_evidence_provider_event_prepared_v2` previews the existing provider and
+request event sequences, validates the typed `response_v2` envelope against the
+exact prepared bytes, and uses the same output/terminal commit owner as V1.
+`deliver_evidence_provider_event_v2` supplies the canonical encoder. Its closed
+body contains an existing evidence frame, V2 recipe result, V1 progress, error
+or cancelled body; the eleven V1 recipe encodings are unchanged.
+
+Frame headers must match the admitted request/profile/event. Results must match
+its recipe, immutable scope, source view and installation. Accepted/snapshot,
+contiguous batches and their final markers are checked before output. A recipe
+result remains nonterminal; `finish_evidence_provider_request_v2` emits the sole
+typed terminal. Terminal classification is derived from the body.
+
+Each response is at most 1 MiB including framing. At most 4,096 events are
+allowed, further bounded by the accepted declared frame budget, including one
+reserved terminal event. Nonterminal framed bytes cumulatively consume the
+request's `max_materialized_result_bytes`; one separately bounded content-free
+terminal remains available on exhaustion. The original deadline is the minimum
+of transport, server and request query budgets and never renews.
+
+Authenticated `cancel_provider_request` controls use the same sequence/replay
+ledger and guard for V1 and V2 targets. `finish_evidence_provider_cancelled_v2`
+emits the target's sole cancelled acknowledgement only after its real guard is
+cancelled. Cancel acknowledgement is distinct from the control response. A
+failed output or late clock closes the existing connection, without claiming
+terminal success. Live issuer/grant/access checks remain daemon-owned.
+
 ### `cancel_request(connection, target_request_id) -> CancelOutcome`
 
 Idempotently marks cancellation and releases the request's in-flight slot.

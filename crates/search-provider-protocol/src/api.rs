@@ -30,6 +30,7 @@ pub use crate::config::{DEFAULT_PROTOCOL_LIMITS, FRAME_PREFIX_BYTES, ProtocolLim
 pub use crate::endpoint_name::{NATIVE_ENDPOINT_NAME_BYTES, NativeEndpointNameV1};
 pub use crate::error::ProtocolError;
 pub use crate::frame::{
+    EvidenceResponseBodyV2, EvidenceResponseEnvelopeV2, EVIDENCE_RESPONSE_SCHEMA_VERSION,
     ClientEnvelopeCodec, FrameCodec, ServerEnvelopeCodec, TypedRecordBuffer,
     TypedTransportProfileV1,
     decode_frame, encode_frame,

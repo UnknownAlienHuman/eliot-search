@@ -30,6 +30,11 @@ pub use client::evidence_frames_schema::{
     decode_evidence_frame, encode_evidence_frame, evidence_frame_order, peek_evidence_frame,
     EVIDENCE_FRAME_SCHEMA_VERSION,
 };
+pub use client::evidence_response_schema::{
+    decode_evidence_response_body, encode_evidence_response_body,
+    EvidenceResponseBodyV2, EvidenceResponseEnvelopeV2, EVIDENCE_RESPONSE_SCHEMA_VERSION,
+};
+pub(crate) use client::evidence_response_schema;
 pub(crate) use client::{
     decode_grant_response_schema, decode_grant_response_schema_v2,
     encode_grant_response_schema, encode_grant_response_schema_v2,
