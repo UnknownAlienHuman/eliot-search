@@ -6,6 +6,8 @@
 
 #[path = "source_v2_rebind.rs"]
 mod rebind;
+#[path = "native_member_setup.rs"]
+mod native_member_setup;
 
 use super::*;
 use search_contracts::{

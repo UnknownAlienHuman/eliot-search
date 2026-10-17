@@ -33,6 +33,12 @@ pub struct RootSourceScope {
 }
 
 impl<C: CancellationProbe> RegistryJournal<'_, C> {
+    #[cfg(test)]
+    pub(crate) fn scope_test_assignment(&mut self, registry: &SourceRegistry, root: &RootRecord,
+        context: &OperationContext<C>, assigned: RootSourceScope,
+    ) -> Result<RootSourceScope, RegistryPortError> {
+        self.source_scope_with(registry, root, context, &mut || Ok(()), |_, _| Ok(assigned))
+    }
     /// Select exactly one scope for this registered Root. The original Root
     /// registration operation, not a per-file operation, owns this setup.
     pub(crate) fn ensure_source_scope(

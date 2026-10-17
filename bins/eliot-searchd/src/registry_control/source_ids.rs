@@ -9,7 +9,8 @@ use std::marker::PhantomData;
 use std::time::Instant;
 
 use search_contracts::{
-    CorpusId, OpaqueId, SourceId, SourceMembershipId, SourceNamespaceId, WorkspaceId,
+    AccessPolicyBindingId, CorpusId, OpaqueId, ResidencyPolicyBindingId, SourceId,
+    SourceMembershipId, SourceNamespaceId, WorkspaceId,
 };
 use search_control_redb::MigrationBootstrapWork;
 use search_ports::{
@@ -134,12 +135,27 @@ impl<'a, C: CancellationProbe> SourceIdentityIdsV2<'a, C> {
 
     /// Supplies C03's caller-assigned member ID. Selected policy/profile owners
     /// must still supply every semantic field before a membership can be admitted.
-    #[allow(dead_code)] // The selected membership policy/profile producer is not yet wired.
     pub(crate) fn fresh_source_membership_id(
         &self,
         context: &OperationContext<C>,
     ) -> Result<SourceMembershipId, SourceIdentityIdError> {
         mint_fresh_id(self.deadline, self.work, context).map(SourceMembershipId::from_bytes)
+    }
+
+    /// Assigns the identity of a selected access-policy binding, never a domain ID.
+    pub(crate) fn fresh_access_policy_binding_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<AccessPolicyBindingId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(AccessPolicyBindingId::from_bytes)
+    }
+
+    /// Assigns the identity of a complete selected six-domain residency binding.
+    pub(crate) fn fresh_residency_policy_binding_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<ResidencyPolicyBindingId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(ResidencyPolicyBindingId::from_bytes)
     }
 }
 
@@ -311,6 +327,14 @@ mod tests {
         ));
         assert!(matches!(
             adapter.fresh_source_membership_id(&context(true)),
+            Err(SourceIdentityIdError::Context(_))
+        ));
+        assert!(matches!(
+            adapter.fresh_access_policy_binding_id(&context(true)),
+            Err(SourceIdentityIdError::Context(_))
+        ));
+        assert!(matches!(
+            adapter.fresh_residency_policy_binding_id(&context(true)),
             Err(SourceIdentityIdError::Context(_))
         ));
         assert!(!called.get());

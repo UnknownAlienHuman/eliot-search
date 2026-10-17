@@ -588,7 +588,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
     pub(super) fn load_committed_object(&self, profile: &SourceRevisionPresealProfile,
         committed: &SourceRevisionMutationReadback, context: &OperationContext<C>,
     ) -> Result<search_revision_store::PersistedSelectedObjectMetadata, RetentionControlError> {
-        self.load_object(profile, committed, context, false).map(|(metadata, _)| metadata)
+        self.load_object(profile, committed, context, false).map(|(metadata, _, _)| metadata)
     }
 
     /// Resolve the complete durable join from an exact source reference. This
@@ -598,6 +598,15 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         context: &OperationContext<C>,
     ) -> Result<(search_revision_store::PersistedSelectedObjectMetadata,
         db::source_retention::SealReservationReadback), RetentionControlError> {
+        self.load_member_setup_source(expected, context).map(|(metadata, seal, _)| (metadata, seal))
+    }
+
+    /// Exact already-verified C07/C28 link plus its complete current C02 guards.
+    /// This reads technical metadata only; it never opens a Source locator.
+    pub(super) fn load_member_setup_source(&self, expected: &c::SourceRevisionRef,
+        context: &OperationContext<C>,
+    ) -> Result<(search_revision_store::PersistedSelectedObjectMetadata,
+        db::source_retention::SealReservationReadback, ScopedControlRecordsReadback), RetentionControlError> {
         self.contextual(context)?;
         if expected.source_namespace_id != self.source_namespace_id || expected.source_id != self.source_id {
             return Err(ControlError::OperationConflict.into());
@@ -620,15 +629,15 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
             .ok_or(ControlError::StoreCorrupt)?;
         let committed = self.load_source_revision_operation(operation, context)?
             .ok_or(ControlError::StoreCorrupt)?;
-        let (verified, seal) = self.load_object(&profile, &committed, context, true)?;
+        let (verified, seal, guards) = self.load_object(&profile, &committed, context, true)?;
         if verified != metadata { return Err(ControlError::StoreCorrupt.into()); }
-        Ok((verified, seal))
+        Ok((verified, seal, guards))
     }
 
     fn load_object(&self, profile: &SourceRevisionPresealProfile,
         committed: &SourceRevisionMutationReadback, context: &OperationContext<C>, require_active: bool,
     ) -> Result<(search_revision_store::PersistedSelectedObjectMetadata,
-        db::source_retention::SealReservationReadback), RetentionControlError> {
+        db::source_retention::SealReservationReadback, ScopedControlRecordsReadback), RetentionControlError> {
         self.contextual(context)?;
         self.charge(32 * MAX_METADATA)?;
         let object_id = search_revision_store::selected_object_storage_id(committed.revision.object_residency_key_digest)
@@ -685,7 +694,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
             || !matches!(cause.cause, search_retention::source_retention::SourceRetentionCause::UntilExplicitRelease)
             || (require_active && cause.state != search_retention::source_retention::SourceRetentionState::Active)
         { return Err(ControlError::StoreCorrupt.into()); }
-        Ok((metadata, seal))
+        Ok((metadata, seal, read))
     }
 
     /// Called only after the Native C07 publication/decrypt/source checks.

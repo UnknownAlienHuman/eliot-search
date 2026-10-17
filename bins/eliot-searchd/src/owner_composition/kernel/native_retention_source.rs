@@ -29,6 +29,82 @@ pub(super) struct RetentionSourceInput<'view, 'operation, 'owner> {
     pub(super) deadline: Instant,
 }
 
+impl RetentionSourceInput<'_, '_, '_> {
+    /// Select and bind raw-code membership before any representation/projection
+    /// is selected. No Source path/body or query grant is acquired by this hook.
+    #[allow(dead_code)] // The parent owns the ordinary preparation factory caller.
+    pub(super) fn setup_raw_code_member(&self, journal: &mut PersistentControlJournal,
+        publisher: &mut ControlSnapshotPublisher,
+        config: &crate::config_composition::EffectiveDaemonConfig,
+        profiles: &crate::registry_control::native_member_setup::NativeMemberProfiles<'_>,
+    ) -> Result<search_source_registry::api::SourceMembershipReceiptV2, String> {
+        use crate::registry_control::native_member_setup::{NativeMemberSetupInput, SelectedNativeMember};
+        use search_control_redb::{ControlRecordClass, ControlRecordCondition, ControlValue, JournalLimits};
+        let unavailable = || "NATIVE_MEMBER_RETAINED_SOURCE_REQUIRED".to_owned();
+        let result = self.existing.result.as_ref().ok_or_else(unavailable)?;
+        let profile = self.existing.profile.as_ref().ok_or_else(unavailable)?;
+        if result.operation_id != self.command.operation || profile.operation_id != self.command.operation
+            || result.source_namespace_id != self.source.identity().source_namespace_id
+            || result.source_id != self.source.identity().source_id
+        { return Err(unavailable()); }
+        let expected = c::SourceRevisionRef { source_namespace_id: result.source_namespace_id,
+            source_id: result.source_id, revision_id: result.revision.revision_id,
+            content_digest: result.revision.content_digest, byte_length: result.revision.byte_length };
+        let first = RefCell::new(None);
+        let mut checkpoint = || {
+            let check = self.native.source_full_checkpoint().map_err(|error| error.to_string())
+                .and_then(|()| self.security.checkpoint().map_err(|error| error.to_string()))
+                .and_then(|()| self.current_source.map_or(Ok(()), |check| check()));
+            check.map_err(|error| {
+                if first.borrow().is_none() { *first.borrow_mut() = Some(error); }
+                search_runtime_owner::OwnerError::OwnerOperationConflict
+            })
+        };
+        let work = |unit| self.native.work(unit);
+        let mut port = original_port(journal, publisher, self.deadline, &work)?;
+        let mut registry = port.restore(self.native.context()).map_err(|_| unavailable())?.into_registry();
+        let scope = port.ensure_source_scope(&registry, self.root, self.native.context(), &mut checkpoint);
+        if let Some(error) = first.borrow_mut().take() { return Err(error); }
+        let scope = scope.map_err(|_| unavailable())?;
+        drop(port);
+        let selected = super::retention::selected(self, journal, publisher, config)?;
+        let control = retention_control::NativeRetentionControl::bind(journal, publisher,
+            self.source, self.namespace, self.root, self.security, self.deadline, &work)
+            .map_err(|error| error.to_string())?;
+        let (metadata, _, source_read) = control.load_member_setup_source(&expected, self.native.context())
+            .map_err(|error| error.to_string())?;
+        drop(control);
+        // Reuse the real semantic owner to compare all six complete domain
+        // bodies against current Root security and selected DEK. No UUID draw.
+        let domains = self.native.retention_domains(self.root, self.namespace, self.security,
+            &selected.current, Some(profile.residency_closure.as_slice()), self.deadline)
+            .map_err(|error| error.to_string())?;
+        if metadata.domain_bindings() != &domains || metadata.encryption() != &selected.encryption
+            || metadata.operation_id() != &self.command.operation
+            || selected.claim.as_deref().is_some_and(|claim| claim != profile.residency_closure.as_slice())
+        { return Err(unavailable()); }
+        for unit in [Work::Allocate(16 * 65536), Work::Process(16 * 65536)] {
+            work(unit).map_err(|error| error.code().to_owned())?;
+        }
+        let selected_member = SelectedNativeMember::from_owners(profiles, self.source,
+            self.namespace, self.security.policy_body(), &domains).map_err(|_| unavailable())?;
+        let current_key = search_control_redb::source_retention::revision_use_keys(JournalLimits::BASELINE)
+            .map_err(|_| unavailable())?[3].clone();
+        let current = ControlValue::new(ControlRecordClass::State, selected.current, JournalLimits::BASELINE)
+            .map_err(|_| unavailable())?;
+        let input = NativeMemberSetupInput { root: self.root, namespace: self.namespace,
+            source: self.source, scope, selected: &selected_member, operation: &self.command.operation,
+            source_read: &source_read, selected_current: ControlRecordCondition::exact(current_key, current) };
+        let mut port = original_port(journal, publisher, self.deadline, &work)?;
+        let committed = port.ensure_native_member(&mut registry, &input, self.native.context(), &mut checkpoint);
+        if let Some(error) = first.into_inner() { return Err(error); }
+        let committed = committed.map_err(|_| "NATIVE_MEMBER_SETUP_REFUSED")?;
+        drop(port);
+        super::command::published_metadata(journal, publisher, self.deadline, &work)?;
+        Ok(committed)
+    }
+}
+
 impl DirectRegistryOwner {
     /// The consumer first resolves retained state without a source body. It may
     /// request one fresh acquisition only when that resolution permits it.
