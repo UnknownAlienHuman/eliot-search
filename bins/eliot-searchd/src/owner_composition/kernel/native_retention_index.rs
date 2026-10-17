@@ -93,7 +93,9 @@ impl DirectRegistryOwner {
         match result {
             Ok(()) => Ok(()),
             Err(mut failure) => {
-                failure.report_checked(writer);
+                failure
+                    .report_checked(writer)
+                    .map_err(|error| error.code().to_owned())?;
                 Err(failure.code().to_owned())
             }
         }

@@ -85,9 +85,9 @@ impl NativeIndexedRunFailure {
     pub(super) fn code(&self) -> &str {
         &self.code
     }
-    pub(super) fn report_checked(&mut self, writer: &mut impl Write) {
+    pub(super) fn report_checked(&mut self, writer: &mut impl Write) -> Result<(), OwnerError> {
         let Some(retained) = &mut self.retained else {
-            return;
+            return Ok(());
         };
         let attempt = self
             .probe
@@ -110,7 +110,7 @@ impl NativeIndexedRunFailure {
             eliot_searchd::diagnostics::sanitize_code(&self.code),
             pid.map_or_else(|| "null".to_owned(), |pid| pid.to_string())
         );
-        let _checked_output = retained.custody.owner.owner.emit(writer, &line);
+        retained.custody.owner.owner.emit(writer, &line)
     }
 }
 
