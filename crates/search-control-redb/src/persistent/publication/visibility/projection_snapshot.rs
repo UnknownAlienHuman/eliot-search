@@ -2,7 +2,7 @@
 
 use super::{
     Check, ControlError, MANIFESTS, PersistentControlJournal, Point, PublicationSourceShadow,
-    PublicationVisibilityState, SHADOWS, codec, require_schema,
+    PublicationVisibilityState, SHADOWS, codec,
 };
 use crate::{JournalIdentity, MigrationBootstrapWork as Work};
 use search_contracts::{ProjectionMembershipId, ReceiptRef};
@@ -66,12 +66,25 @@ impl PersistentControlJournal {
     ) -> Result<Option<PublicationProjectionSnapshot>, ControlError> {
         self.ensure_available()?;
         check.check(Point::Start)?;
-        require_schema(self)?;
+        if !crate::has_visibility_schema(self.identity.schema_version) {
+            return Err(ControlError::SchemaUnsupported);
+        }
         let read = self
             .database
             .begin_read()
             .map_err(|_| ControlError::StoreUnavailable)?;
         let snapshot = self.verify_from_checked(&read, check)?;
+        if self.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+            // Decode the profile from this verified snapshot. The legacy
+            // require_indexed helper opens an unscoped second transaction.
+            check.reserve(Work::Allocate(self.limits.max_value_bytes))?;
+            check.reserve(Work::Process(self.limits.max_value_bytes))?;
+            if crate::persistent::operating_profile::snapshot_mode(&snapshot, self.limits)?
+                != crate::JournalOperatingProfile::Indexed
+            {
+                return Err(ControlError::MigrationUnverified);
+            }
+        }
         // verify_from_checked already validates visibility and its receipt ledger
         // in this transaction. Decode that same value without a second scan.
         let visibility = if let Ok(index) = snapshot

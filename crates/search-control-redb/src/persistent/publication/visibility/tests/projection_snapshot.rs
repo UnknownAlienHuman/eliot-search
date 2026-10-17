@@ -2,6 +2,7 @@
 use super::*;
 use crate::MigrationBootstrapWork;
 use crate::persistent::bootstrap::OriginalCheck;
+use std::cell::Cell;
 use std::time::{Duration, Instant};
 
 #[test]
@@ -47,4 +48,51 @@ fn projection_snapshot_is_coherent_read_only_and_refuses_unresolved_work() {
         journal.read_projection_snapshot_checked(&StopAt(Point::ReadComplete)),
         Err(ControlError::ReadCancelled)
     );
+}
+
+#[test]
+fn projection_snapshot_schema5_uses_the_same_profile_and_original_allowance() {
+    for indexed in [false, true] {
+        let scratch = Scratch::new();
+        let mut journal = scratch.empty(crate::REGISTRY_JOURNAL_SCHEMA_VERSION);
+        let profile = if indexed {
+            crate::JournalProfileInitialization::Indexed(state())
+        } else {
+            crate::JournalProfileInitialization::Direct
+        };
+        journal
+            .initialize_operating_profile(profile, MutationId([1; 32]), digest(), &context(false))
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let work = |_: MigrationBootstrapWork| Ok::<(), ()>(());
+        let check = OriginalCheck::registry(deadline, &work);
+        let before = scratch.bytes();
+        let writes = journal.committed_writes();
+        let result = journal.read_projection_snapshot_checked(&check);
+        if indexed {
+            let snapshot = result.unwrap().unwrap();
+            assert_eq!(snapshot.visibility(), &state());
+            assert_eq!(snapshot.generation(), 1);
+            assert!(snapshot.manifests().is_empty());
+            assert!(snapshot.shadows().is_empty());
+        } else {
+            assert_eq!(result, Err(ControlError::MigrationUnverified));
+        }
+        assert_eq!(journal.committed_writes(), writes);
+        assert_eq!(scratch.bytes(), before);
+        // Refuse the explicit profile decoding allowance. A legacy unscoped
+        // profile preflight would not pass through this original callback.
+        let refused = Cell::new(false);
+        let work = |work| {
+            if work == MigrationBootstrapWork::Allocate(LIMITS.max_value_bytes) {
+                refused.set(true);
+                Err(())
+            } else {
+                Ok(())
+            }
+        };
+        let check = OriginalCheck::registry(deadline, &work);
+        assert!(journal.read_projection_snapshot_checked(&check).is_err());
+        assert!(refused.get());
+    }
 }
