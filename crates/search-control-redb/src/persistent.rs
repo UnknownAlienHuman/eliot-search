@@ -33,7 +33,7 @@ mod bootstrap;
 pub mod original_seam;
 mod operating_profile;
 
-pub use operating_profile::{JournalOperatingProfile, JournalProfileInitialization};
+pub use operating_profile::{IndexedProfileAdoption, JournalOperatingProfile, JournalProfileInitialization};
 
 pub use bootstrap::{MigrationBootstrap, MigrationBootstrapBinding, MigrationBootstrapFailure,
     MigrationBootstrapIdentity, MigrationBootstrapIdentityProfile, MigrationBootstrapOutput,
@@ -470,10 +470,13 @@ fn registry_mode_checked(read: &ReadTransaction, identity: JournalIdentity, limi
     check: &dyn Check,
 ) -> Result<JournalOperatingProfile, ControlError> {
     let table = read.open_table(RECORDS).map_err(map_table_error)?;
-    let raw = table.get(operating_profile::KEY).map_err(|e| map_storage_error(&e))?.ok_or(ControlError::SchemaMismatch)?;
-    check.reserve(MigrationBootstrapWork::Read(raw.value().len().checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
-    check.reserve(MigrationBootstrapWork::Allocate(raw.value().len().checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
-    check.reserve(MigrationBootstrapWork::Process(raw.value().len()))?;
+    for key in [operating_profile::KEY, operating_profile::adoption::KEY] {
+        if let Some(raw) = table.get(key).map_err(|e| map_storage_error(&e))? {
+            check.reserve(MigrationBootstrapWork::Read(raw.value().len().checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
+            check.reserve(MigrationBootstrapWork::Allocate(raw.value().len().checked_mul(2).ok_or(ControlError::BudgetExceeded)?))?;
+            check.reserve(MigrationBootstrapWork::Process(raw.value().len()))?;
+        } else if key == operating_profile::KEY { return Err(ControlError::SchemaMismatch); }
+    }
     operating_profile::read_mode(read, identity, limits)
 }
 

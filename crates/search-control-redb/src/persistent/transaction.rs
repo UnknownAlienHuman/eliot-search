@@ -253,8 +253,10 @@ fn validate_scope(journal: &PersistentControlJournal, read: &ReadTransaction, mu
             return Err(ControlError::InvalidKey);
         }
         if journal.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION
-            && ((key.as_bytes() == super::operating_profile::KEY && scope != Scope::Profile)
+            && (((key.as_bytes() == super::operating_profile::KEY
+                    || key.as_bytes() == super::operating_profile::adoption::KEY) && scope != Scope::Profile)
                 || (scope == Scope::Profile && key.as_bytes() != super::operating_profile::KEY
+                    && key.as_bytes() != super::operating_profile::adoption::KEY
                     && key.as_bytes() != super::publication::visibility::STATE)) {
             return Err(ControlError::InvalidKey);
         }
