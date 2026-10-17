@@ -446,6 +446,32 @@ fn replacement_abort_attempt_binding_survives_repeat_ack_and_crash_restore() {
 }
 
 #[test]
+fn abort_finalization_pair_on_another_durable_phase_is_rejected() {
+    for phase in [
+        PublicationPhase::Prepared,
+        PublicationPhase::IntentDurable,
+        PublicationPhase::NewPointsAcknowledged,
+        PublicationPhase::OldPointsClosedAcknowledged,
+        PublicationPhase::ReadbackVerified,
+        PublicationPhase::ControlCommitted,
+        PublicationPhase::SnapshotPublished,
+        PublicationPhase::Compensating,
+        PublicationPhase::PublicationBlocked,
+    ] {
+        let (mut scenario, _, _) = aborted_scenario(PublicationEffectOutcome::Applied);
+        scenario.phase = phase;
+        scenario.readback_script.recorded_phase = Some(phase);
+        assert!(
+            matches!(
+                scenario.restore_with_context(32, &fresh_recovery_context()),
+                Err(PublicationError::OperationMismatch)
+            ),
+            "abort finalization must not be ignored at {phase:?}"
+        );
+    }
+}
+
+#[test]
 fn conflicting_durable_abort_binding_fails_closed_before_snapshot_publication() {
     let (mut scenario, _, _) = aborted_scenario(PublicationEffectOutcome::Applied);
     let mut bad_binding = scenario

@@ -701,6 +701,7 @@ fn exact_intent_for_restore(
         || observed.binding != intent.binding
         || intent.control_generation == 0
         || observed.abort_request.is_some() != observed.abort_binding.is_some()
+        || (observed.abort_request.is_some() && intent.recorded_phase != PublicationPhase::Aborted)
     {
         return Err(PublicationError::OperationMismatch);
     }
