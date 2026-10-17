@@ -1,29 +1,36 @@
-// qdrant-client 1.19.0 with_points_client/with_collections_client retry some
-// ambiguous statuses. Canonical mutations use the SDK-generated unary services
-// directly: one invocation, then the durable owner resolves any unknown outcome.
+// qdrant-client 1.19.0 high-level points/collections helpers set
+// max_decoding_message_size(usize::MAX) and retry some reads/writes.
+// Probes and canonical mutations use generated unary services directly.
 use qdrant_client::qdrant::{
     CollectionOperationResponse as SingleCollectionReply, DeletePayloadPoints,
     PointsOperationResponse as SinglePointsReply, UpdateCollection,
     collections_client::CollectionsClient as SingleCollectionsClient,
     points_client::PointsClient as SinglePointsClient,
 };
-use tonic::transport::{Channel as SingleMutationChannel, Endpoint as SingleMutationEndpoint};
+use tonic::transport::{Channel as SingleAttemptChannel, Endpoint as SingleAttemptEndpoint};
+
+const MAX_SINGLE_ATTEMPT_DECODED_MESSAGE_BYTES: usize = 512 * 1024;
 
 struct SingleAttemptTransport {
-    points: SinglePointsClient<SingleMutationChannel>,
-    collections: SingleCollectionsClient<SingleMutationChannel>,
+    points: SinglePointsClient<SingleAttemptChannel>,
+    collections: SingleCollectionsClient<SingleAttemptChannel>,
+    health: qdrant_client::qdrant::qdrant_client::QdrantClient<SingleAttemptChannel>,
 }
 
 impl SingleAttemptTransport {
     fn new(endpoint: &LiveEndpoint) -> Result<Self, BridgeError> {
-        let channel = SingleMutationEndpoint::from_shared(endpoint.grpc_url())
+        let channel = SingleAttemptEndpoint::from_shared(endpoint.grpc_url())
             .map_err(|_| BridgeError::TransportFailed)?
             .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(10))
             .connect_lazy();
         Ok(Self {
-            points: SinglePointsClient::new(channel.clone()),
-            collections: SingleCollectionsClient::new(channel),
+            points: SinglePointsClient::new(channel.clone())
+                .max_decoding_message_size(MAX_SINGLE_ATTEMPT_DECODED_MESSAGE_BYTES),
+            collections: SingleCollectionsClient::new(channel.clone())
+                .max_decoding_message_size(MAX_SINGLE_ATTEMPT_DECODED_MESSAGE_BYTES),
+            health: qdrant_client::qdrant::qdrant_client::QdrantClient::new(channel)
+                .max_decoding_message_size(MAX_SINGLE_ATTEMPT_DECODED_MESSAGE_BYTES),
         })
     }
 }
@@ -192,6 +199,20 @@ mod single_attempt_tests {
         }
     }
 
+    #[tokio::test]
+    async fn generated_read_service_does_not_retry_an_ambiguous_status() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut client = SinglePointsClient::new(AppliedThenUnavailable(Arc::clone(&calls)));
+        let error = client
+            .get(GetPoints {
+                collection_name: "synthetic".to_owned(),
+                ..Default::default()
+            })
+            .await
+            .expect_err("first transient read status must escape");
+        assert_eq!(error.code(), tonic::Code::Unavailable);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
     #[tokio::test]
     async fn generated_mutation_service_does_not_retry_an_ambiguous_status() {
         let calls = Arc::new(AtomicUsize::new(0));

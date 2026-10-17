@@ -3,13 +3,13 @@
 use std::collections::HashMap;
 
 use qdrant_client::qdrant::{
-    PointId, PointStruct, UpdateStatus, Value, Vector, Vectors, WriteOrdering,
-    WriteOrderingType, point_id, value, vectors,
+    PointId, PointStruct, UpdateStatus, Value, Vector, Vectors, WriteOrdering, WriteOrderingType,
+    point_id, value, vectors,
 };
 
 use super::spec::{
-    ACCESS_A, FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNINDEXED,
-    FIELD_UNTIL, VECTOR_CODE, VECTOR_TEXT,
+    ACCESS_A, EPOCH_MAX, EPOCH_MIN, FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNINDEXED,
+    FIELD_UNTIL, TENANT_A, UUID_POINT, VECTOR_CODE, VECTOR_TEXT,
 };
 
 pub(in crate::live) const fn strong_ordering() -> WriteOrdering {
@@ -30,10 +30,7 @@ pub(in crate::live) fn string_value(value: &str) -> Value {
     }
 }
 
-pub(in crate::live) fn sparse_named(
-    code: Vec<(u32, f32)>,
-    text: Vec<(u32, f32)>,
-) -> Vectors {
+pub(in crate::live) fn sparse_named(code: Vec<(u32, f32)>, text: Vec<(u32, f32)>) -> Vectors {
     let (code_idx, code_val): (Vec<u32>, Vec<f32>) = code.into_iter().unzip();
     let (text_idx, text_val): (Vec<u32>, Vec<f32>) = text.into_iter().unzip();
     let mut map = HashMap::new();
@@ -75,6 +72,39 @@ pub(in crate::live) fn point(
     }
 }
 
+pub(in crate::live) fn probe_fixture_points() -> Vec<PointStruct> {
+    let mut uuid_payload = HashMap::new();
+    uuid_payload.insert(FIELD_TENANT.to_owned(), string_value(TENANT_A));
+    uuid_payload.insert(FIELD_ACCESS.to_owned(), string_value(ACCESS_A));
+    uuid_payload.insert(FIELD_FROM.to_owned(), int_value(10));
+    uuid_payload.insert(FIELD_UNINDEXED.to_owned(), string_value("code_unit"));
+    vec![
+        point(
+            1,
+            TENANT_A,
+            10,
+            None,
+            vec![(0, 1.0), (1, 1.0)],
+            vec![(100, 1.0)],
+        ),
+        point(2, TENANT_A, 10, Some(50), vec![(0, 1.0)], vec![(100, 1.0)]),
+        point(
+            9,
+            TENANT_A,
+            EPOCH_MIN,
+            Some(EPOCH_MAX),
+            vec![(0, 1.0), (2, 1.0)],
+            vec![(100, 1.0)],
+        ),
+        PointStruct {
+            id: Some(PointId {
+                point_id_options: Some(point_id::PointIdOptions::Uuid(UUID_POINT.to_owned())),
+            }),
+            payload: uuid_payload,
+            vectors: Some(sparse_named(vec![(1, 1.0)], vec![(101, 1.0)])),
+        },
+    ]
+}
 pub(in crate::live) const fn num_point_id(id: u64) -> PointId {
     PointId {
         point_id_options: Some(point_id::PointIdOptions::Num(id)),
@@ -90,6 +120,5 @@ pub(in crate::live) fn snapshot_id(id: Option<&PointId>) -> String {
 }
 
 pub(in crate::live) fn update_completed(status: i32) -> bool {
-    UpdateStatus::try_from(status)
-        .is_ok_and(|parsed| parsed == UpdateStatus::Completed)
+    UpdateStatus::try_from(status).is_ok_and(|parsed| parsed == UpdateStatus::Completed)
 }

@@ -10,10 +10,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use qdrant_client::Qdrant;
 use qdrant_client::qdrant::{
-    CollectionOperationResponse, CountPoints, CountResponse, CreateCollection,
-    CreateFieldIndexCollection, DeleteCollection, DeletePoints, GetCollectionInfoResponse,
-    GetPoints, GetResponse, HealthCheckReply, PointsOperationResponse, QueryPoints, QueryResponse,
-    UpsertPoints,
+    CollectionExistsRequest, CollectionOperationResponse, CountPoints, CountResponse,
+    CreateCollection, CreateFieldIndexCollection, DeleteCollection, DeletePoints,
+    GetCollectionInfoRequest, GetCollectionInfoResponse, GetPoints, GetResponse, HealthCheckReply,
+    HealthCheckRequest, ListCollectionsRequest, PointsOperationResponse, QueryPoints,
+    QueryResponse, UpsertPoints,
 };
 use search_contracts::OpaqueId;
 use sha2::{Digest, Sha256};
@@ -23,12 +24,18 @@ use crate::live::LiveEndpoint;
 use crate::qualified::QualifiedGate;
 use crate::{BridgeError, BridgeLimits, QdrantApiKeyLease, QdrantConnectionBinding};
 
-use super::{CanonicalRequestContext, RealDataPlane, SingleAttemptTransport, canonical};
+use super::{
+    CanonicalRequestContext, MAX_SINGLE_ATTEMPT_DECODED_MESSAGE_BYTES, RealDataPlane,
+    SingleAttemptTransport, canonical,
+};
 
 type ProbeReadFuture<'a, T> =
-    Pin<Box<dyn Future<Output = Result<T, qdrant_client::QdrantError>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<Response<T>, Status>> + Send + 'a>>;
 
-const MAX_PROBE_RPC_CALLS: usize = 128;
+const MAX_PROBE_RPC_CALLS: usize = 64;
+/// Each issued RPC reserves one full decoder slot from this shared total.
+/// This bounds aggregate response decoding without trusting SDK retries or headers.
+const MAX_PROBE_DECODE_RESERVATION_BYTES: usize = 24 * 1024 * 1024;
 static NEXT_PROBE_ATTEMPT: AtomicU64 = AtomicU64::new(1);
 
 /// Opaque identity of one fresh temporary capability-probe collection.
@@ -157,6 +164,7 @@ struct MutationLedger {
 /// Vendor calls and collection lifecycle remain private. All probes share the
 /// same original request context and the same finite RPC-work allowance.
 pub struct LiveProbeClient {
+    // Retained for the real-plane handoff; probe RPCs use generated clients below.
     client: Qdrant,
     single_attempt: SingleAttemptTransport,
     auth_lease: QdrantApiKeyLease,
@@ -164,6 +172,7 @@ pub struct LiveProbeClient {
     limits: BridgeLimits,
     attempt: QdrantProbeAttemptId,
     rpc_calls: AtomicUsize,
+    response_decode_bytes_reserved: AtomicUsize,
     collection_owned: AtomicBool,
     mutations: Mutex<MutationLedger>,
 }
@@ -211,6 +220,7 @@ impl LiveProbeClient {
             limits,
             attempt,
             rpc_calls: AtomicUsize::new(0),
+            response_decode_bytes_reserved: AtomicUsize::new(0),
             collection_owned: AtomicBool::new(false),
             mutations: Mutex::new(MutationLedger {
                 next: 1,
@@ -234,19 +244,29 @@ impl LiveProbeClient {
     }
 
     pub(crate) async fn health_check(&self) -> Result<HealthCheckReply, BridgeError> {
-        self.read_rpc(Box::pin(self.client.health_check())).await
+        let request = self.rpc_request(HealthCheckRequest::default())?;
+        let mut client = self.single_attempt.health.clone();
+        self.read_rpc(Box::pin(client.health_check(request))).await
     }
 
     pub(crate) async fn verify_list_collections_access(&self) -> Result<(), BridgeError> {
-        self.read_rpc(Box::pin(self.client.list_collections()))
-            .await?;
+        let request = self.rpc_request(ListCollectionsRequest::default())?;
+        let mut client = self.single_attempt.collections.clone();
+        self.read_rpc(Box::pin(client.list(request))).await?;
         Ok(())
     }
 
     pub(crate) async fn collection_exists(&self, name: &str) -> Result<bool, BridgeError> {
         self.require_attempt_collection(name)?;
-        self.read_rpc(Box::pin(self.client.collection_exists(name.to_owned())))
-            .await
+        let request = self.rpc_request(CollectionExistsRequest {
+            collection_name: name.to_owned(),
+        })?;
+        let mut client = self.single_attempt.collections.clone();
+        self.read_rpc(Box::pin(client.collection_exists(request)))
+            .await?
+            .result
+            .map(|result| result.exists)
+            .ok_or(BridgeError::MalformedResponse)
     }
 
     pub(crate) async fn collection_info(
@@ -254,26 +274,33 @@ impl LiveProbeClient {
         name: &str,
     ) -> Result<GetCollectionInfoResponse, BridgeError> {
         self.require_attempt_collection(name)?;
-        self.read_rpc(Box::pin(self.client.collection_info(name.to_owned())))
-            .await
+        let request = self.rpc_request(GetCollectionInfoRequest {
+            collection_name: name.to_owned(),
+        })?;
+        let mut client = self.single_attempt.collections.clone();
+        self.read_rpc(Box::pin(client.get(request))).await
     }
 
-    pub(crate) async fn count(&self, request: CountPoints) -> Result<CountResponse, BridgeError> {
-        self.require_attempt_collection(&request.collection_name)?;
-        self.read_rpc(Box::pin(self.client.count(request))).await
+    pub(crate) async fn count(&self, message: CountPoints) -> Result<CountResponse, BridgeError> {
+        self.require_attempt_collection(&message.collection_name)?;
+        let request = self.rpc_request(message)?;
+        let mut client = self.single_attempt.points.clone();
+        self.read_rpc(Box::pin(client.count(request))).await
     }
 
-    pub(crate) async fn get_points(&self, request: GetPoints) -> Result<GetResponse, BridgeError> {
-        self.require_attempt_collection(&request.collection_name)?;
-        self.read_rpc(Box::pin(self.client.get_points(request)))
-            .await
+    pub(crate) async fn get_points(&self, message: GetPoints) -> Result<GetResponse, BridgeError> {
+        self.require_attempt_collection(&message.collection_name)?;
+        let request = self.rpc_request(message)?;
+        let mut client = self.single_attempt.points.clone();
+        self.read_rpc(Box::pin(client.get(request))).await
     }
 
-    pub(crate) async fn query(&self, request: QueryPoints) -> Result<QueryResponse, BridgeError> {
-        self.require_attempt_collection(&request.collection_name)?;
-        self.read_rpc(Box::pin(self.client.query(request))).await
+    pub(crate) async fn query(&self, message: QueryPoints) -> Result<QueryResponse, BridgeError> {
+        self.require_attempt_collection(&message.collection_name)?;
+        let request = self.rpc_request(message)?;
+        let mut client = self.single_attempt.points.clone();
+        self.read_rpc(Box::pin(client.query(request))).await
     }
-
     pub(crate) async fn create_collection(
         &self,
         request: CreateCollection,
@@ -462,6 +489,9 @@ impl LiveProbeClient {
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |calls| {
                 (calls < MAX_PROBE_RPC_CALLS).then_some(calls + 1)
             })
+            .map_err(|_| BridgeError::QueryBudgetExceeded)?;
+        self.response_decode_bytes_reserved
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, next_decode_reservation)
             .map(|_| ())
             .map_err(|_| BridgeError::QueryBudgetExceeded)
     }
@@ -470,13 +500,15 @@ impl LiveProbeClient {
         self.reserve_rpc()?;
         self.auth_lease.validate()?;
         let remaining = self.context.remaining()?;
-        let result = tokio::time::timeout(remaining, call)
+        let response = tokio::time::timeout(remaining, call)
             .await
             .map_err(|_| BridgeError::TransportFailed)?
-            .map_err(super::map_read_error)?;
+            .map_err(|status| {
+                super::map_read_error(qdrant_client::QdrantError::ResponseError { status })
+            })?;
         self.context.check()?;
         self.auth_lease.validate()?;
-        Ok(result)
+        Ok(response.into_inner())
     }
 
     fn rpc_request<T>(&self, message: T) -> Result<Request<T>, BridgeError> {
@@ -624,6 +656,10 @@ impl LiveProbeClient {
     }
 }
 
+fn next_decode_reservation(used: usize) -> Option<usize> {
+    let next = used.checked_add(MAX_SINGLE_ATTEMPT_DECODED_MESSAGE_BYTES)?;
+    (next <= MAX_PROBE_DECODE_RESERVATION_BYTES).then_some(next)
+}
 fn probe_attempt_id(
     supervisor: QdrantConnectionBinding,
 ) -> Result<QdrantProbeAttemptId, BridgeError> {
@@ -693,11 +729,19 @@ const fn validate_probe_handoff(
 }
 
 fn map_create_status(status: Status) -> BridgeError {
-    super::map_create_error(qdrant_client::QdrantError::ResponseError { status })
+    if status.code() == tonic::Code::ResourceExhausted {
+        BridgeError::MutationOutcomeUnknown
+    } else {
+        super::map_create_error(qdrant_client::QdrantError::ResponseError { status })
+    }
 }
 
 fn map_mutation_status(status: Status) -> BridgeError {
-    super::map_mutation_error(qdrant_client::QdrantError::ResponseError { status })
+    if status.code() == tonic::Code::ResourceExhausted {
+        BridgeError::MutationOutcomeUnknown
+    } else {
+        super::map_mutation_error(qdrant_client::QdrantError::ResponseError { status })
+    }
 }
 
 fn is_strict_filter_rejection(status: &Status) -> bool {
@@ -711,6 +755,31 @@ fn is_strict_filter_rejection(status: &Status) -> bool {
 mod tests {
     use super::*;
 
+    #[test]
+    fn oversized_mutation_response_preserves_unknown_outcome() {
+        let status = Status::resource_exhausted("bounded generated response decoder limit");
+        assert_eq!(
+            map_create_status(status.clone()),
+            BridgeError::MutationOutcomeUnknown
+        );
+        assert_eq!(
+            map_mutation_status(status),
+            BridgeError::MutationOutcomeUnknown
+        );
+    }
+    #[test]
+    fn shared_decode_budget_reserves_each_rpc_before_dispatch() {
+        let last_slot =
+            MAX_PROBE_DECODE_RESERVATION_BYTES - MAX_SINGLE_ATTEMPT_DECODED_MESSAGE_BYTES;
+        assert_eq!(
+            next_decode_reservation(last_slot),
+            Some(MAX_PROBE_DECODE_RESERVATION_BYTES)
+        );
+        assert_eq!(
+            next_decode_reservation(MAX_PROBE_DECODE_RESERVATION_BYTES),
+            None
+        );
+    }
     #[test]
     fn preexisting_attempt_collection_is_refused() {
         assert_eq!(

@@ -89,4 +89,4 @@ floors.
 
 Disposable full capability suite; strict unindexed retrieve/update rejection; payload indexes before
 ingest; signed-i64/missing-field filter; filtered-IDF noninterference; wait/strong/readback; exact
-delete; timeout unknown-outcome recovery; vendor-type API guard; no process lifecycle duplication.
+delete; timeout unknown-outcome recovery; vendor-type API guard; no process lifecycle duplication. Operational startup probes use generated one-attempt RPCs with a finite per-message decode cap and a shared worst-case response-byte reservation. Exact fixture readback compares the complete payload, named-vector set, sparse indices and float bits; any mismatch blocks the executed gate.

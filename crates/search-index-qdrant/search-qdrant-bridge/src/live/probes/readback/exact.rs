@@ -1,14 +1,18 @@
 //! Exact count/readback, missing-ID and exact-delete qualification probe.
 
+use std::collections::HashMap;
+
 use qdrant_client::qdrant::{
-    CountPoints, DeletePoints, GetPoints, PointId, PointsIdsList, PointsSelector, point_id,
-    points_selector, value,
+    CountPoints, DeletePoints, GetPoints, PointId, PointStruct, PointsIdsList, PointsSelector,
+    RetrievedPoint, Vector, VectorOutput, Vectors, VectorsOutput, point_id, points_selector,
+    vector as qdrant_vector, vector_output as qdrant_vector_output, vectors as qdrant_vectors,
+    vectors_output as qdrant_vectors_output,
 };
 
 use super::super::super::LiveError;
 use super::super::super::fixtures::{
-    FIELD_FROM, FIELD_TENANT, TENANT_A, UUID_POINT, base_filter, num_point_id, snapshot_id,
-    strong_ordering, update_completed,
+    UUID_POINT, VECTOR_CODE, VECTOR_TEXT, base_filter, num_point_id, probe_fixture_points,
+    snapshot_id, strong_ordering, update_completed,
 };
 use super::super::super::suite::Suite;
 
@@ -43,19 +47,20 @@ pub(in crate::live) async fn probe_count_and_readback(
         })
         .await
         .map_err(|_| LiveError::TransportFailed)?;
+    let expected_by_id: HashMap<String, PointStruct> = probe_fixture_points()
+        .into_iter()
+        .map(|point| (snapshot_id(point.id.as_ref()), point))
+        .collect();
     let mut found: Vec<String> = readback
         .result
         .iter()
         .map(|point| snapshot_id(point.id.as_ref()))
         .collect();
     found.sort();
-    let payload_ok = readback.result.iter().all(|point| {
-        point.payload.get(FIELD_TENANT).is_some_and(|tenant| {
-            tenant.kind == Some(value::Kind::StringValue(TENANT_A.to_owned()))
-        }) && point
-            .payload
-            .get(FIELD_FROM)
-            .is_some_and(|from| matches!(from.kind, Some(value::Kind::IntegerValue(_))))
+    let full_fixture_ok = readback.result.iter().all(|point| {
+        expected_by_id
+            .get(&snapshot_id(point.id.as_ref()))
+            .is_some_and(|expected| fixture_point_readback_matches(point, expected))
     });
     let unknown = suite
         .client
@@ -70,13 +75,13 @@ pub(in crate::live) async fn probe_count_and_readback(
         .map_err(|_| LiveError::TransportFailed)?;
     let passed = count.result.as_ref().map(|result| result.count) == Some(4)
         && found == ["1", "2", "550e8400-e29b-41d4-a716-446655440000", "9"]
-        && payload_ok
+        && full_fixture_ok
         && unknown.result.is_empty();
     suite.record(
         "exact_count_and_readback",
         passed,
         format!(
-            "count={:?} ids={found:?} unknown_empty={}",
+            "count={:?} ids={found:?} full_fixture={full_fixture_ok} unknown_empty={}",
             count.result.as_ref().map(|result| result.count),
             unknown.result.is_empty()
         ),
@@ -128,4 +133,136 @@ pub(in crate::live) async fn probe_count_and_readback(
         });
     }
     Ok(())
+}
+
+fn fixture_point_readback_matches(actual: &RetrievedPoint, expected: &PointStruct) -> bool {
+    actual.id == expected.id
+        && actual.payload == expected.payload
+        && expected
+            .vectors
+            .as_ref()
+            .zip(actual.vectors.as_ref())
+            .is_some_and(|(expected, actual)| named_sparse_vectors_match(expected, actual))
+}
+
+fn named_sparse_vectors_match(expected: &Vectors, actual: &VectorsOutput) -> bool {
+    let Some(qdrant_vectors::VectorsOptions::Vectors(expected)) = expected.vectors_options.as_ref()
+    else {
+        return false;
+    };
+    let Some(qdrant_vectors_output::VectorsOptions::Vectors(actual)) =
+        actual.vectors_options.as_ref()
+    else {
+        return false;
+    };
+    expected.vectors.len() == 2
+        && actual.vectors.len() == expected.vectors.len()
+        && expected.vectors.contains_key(VECTOR_CODE)
+        && expected.vectors.contains_key(VECTOR_TEXT)
+        && expected.vectors.iter().all(|(name, expected)| {
+            actual
+                .vectors
+                .get(name)
+                .is_some_and(|actual| sparse_vector_bits_match(expected, actual))
+        })
+}
+
+fn sparse_vector_bits_match(expected: &Vector, actual: &VectorOutput) -> bool {
+    let Some(qdrant_vector::Vector::Sparse(expected)) = expected.vector.as_ref() else {
+        return false;
+    };
+    let qdrant_vector_output::Vector::Sparse(actual) = actual.clone().into_vector() else {
+        return false;
+    };
+    expected.indices == actual.indices
+        && expected.values.len() == actual.values.len()
+        && expected
+            .values
+            .iter()
+            .zip(&actual.values)
+            .all(|(expected, actual)| expected.to_bits() == actual.to_bits())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use qdrant_client::qdrant::{NamedVectorsOutput, SparseVector};
+
+    fn sparse_output(indices: Vec<u32>, values: Vec<f32>) -> VectorOutput {
+        VectorOutput {
+            vector: Some(qdrant_vector_output::Vector::Sparse(SparseVector {
+                indices,
+                values,
+            })),
+            ..Default::default()
+        }
+    }
+
+    fn named_output(code: VectorOutput, text: Option<VectorOutput>) -> VectorsOutput {
+        let mut vectors = HashMap::new();
+        vectors.insert(VECTOR_CODE.to_owned(), code);
+        if let Some(text) = text {
+            vectors.insert(VECTOR_TEXT.to_owned(), text);
+        }
+        VectorsOutput {
+            vectors_options: Some(qdrant_vectors_output::VectorsOptions::Vectors(
+                NamedVectorsOutput { vectors },
+            )),
+        }
+    }
+
+    #[test]
+    fn complete_fixture_readback_rejects_missing_payload_or_named_vector() {
+        let expected = probe_fixture_points()
+            .into_iter()
+            .next()
+            .expect("first fixture point");
+        let mut actual = RetrievedPoint {
+            id: expected.id.clone(),
+            payload: expected.payload.clone(),
+            vectors: Some(named_output(
+                sparse_output(vec![0, 1], vec![1.0, 1.0]),
+                Some(sparse_output(vec![100], vec![1.0])),
+            )),
+            ..Default::default()
+        };
+        assert!(fixture_point_readback_matches(&actual, &expected));
+
+        actual
+            .payload
+            .remove(crate::live::fixtures::FIELD_UNINDEXED);
+        assert!(!fixture_point_readback_matches(&actual, &expected));
+
+        actual.payload = expected.payload.clone();
+        actual.vectors = Some(named_output(
+            sparse_output(vec![0, 1], vec![1.0, 1.0]),
+            None,
+        ));
+        assert!(!fixture_point_readback_matches(&actual, &expected));
+    }
+    #[test]
+    fn exact_fixture_vectors_require_names_indices_and_float_bits() {
+        let expected =
+            crate::live::fixtures::sparse_named(vec![(1, 0.0), (3, 1.0)], vec![(101, 2.0)]);
+        let exact = named_output(
+            sparse_output(vec![1, 3], vec![0.0, 1.0]),
+            Some(sparse_output(vec![101], vec![2.0])),
+        );
+        assert!(named_sparse_vectors_match(&expected, &exact));
+
+        let missing_text = named_output(sparse_output(vec![1, 3], vec![0.0, 1.0]), None);
+        assert!(!named_sparse_vectors_match(&expected, &missing_text));
+
+        let wrong_indices = named_output(
+            sparse_output(vec![1, 4], vec![0.0, 1.0]),
+            Some(sparse_output(vec![101], vec![2.0])),
+        );
+        assert!(!named_sparse_vectors_match(&expected, &wrong_indices));
+
+        let wrong_float_bits = named_output(
+            sparse_output(vec![1, 3], vec![-0.0, 1.0]),
+            Some(sparse_output(vec![101], vec![2.0])),
+        );
+        assert!(!named_sparse_vectors_match(&expected, &wrong_float_bits));
+    }
 }

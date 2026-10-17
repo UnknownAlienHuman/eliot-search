@@ -1,49 +1,16 @@
 //! Wait=true, strong-ordering ingest and immediate exact readback probe.
 
-use std::collections::HashMap;
-
-use qdrant_client::qdrant::{GetPoints, PointId, PointStruct, UpsertPoints, point_id, value};
+use qdrant_client::qdrant::{GetPoints, PointId, UpsertPoints, point_id, value};
 
 use super::super::super::LiveError;
 use super::super::super::fixtures::{
-    ACCESS_A, EPOCH_MAX, EPOCH_MIN, FIELD_ACCESS, FIELD_FROM, FIELD_TENANT, FIELD_UNINDEXED,
-    TENANT_A, UUID_POINT, int_value, num_point_id, point, sparse_named, string_value,
-    strong_ordering, update_completed,
+    FIELD_TENANT, TENANT_A, UUID_POINT, num_point_id, probe_fixture_points, strong_ordering,
+    update_completed,
 };
 use super::super::super::suite::Suite;
 
 pub(in crate::live) async fn probe_ingest_batch_a(suite: &mut Suite<'_>) -> Result<(), LiveError> {
-    let mut uuid_payload = HashMap::new();
-    uuid_payload.insert(FIELD_TENANT.to_owned(), string_value(TENANT_A));
-    uuid_payload.insert(FIELD_ACCESS.to_owned(), string_value(ACCESS_A));
-    uuid_payload.insert(FIELD_FROM.to_owned(), int_value(10));
-    uuid_payload.insert(FIELD_UNINDEXED.to_owned(), string_value("code_unit"));
-    let points = vec![
-        point(
-            1,
-            TENANT_A,
-            10,
-            None,
-            vec![(0, 1.0), (1, 1.0)],
-            vec![(100, 1.0)],
-        ),
-        point(2, TENANT_A, 10, Some(50), vec![(0, 1.0)], vec![(100, 1.0)]),
-        point(
-            9,
-            TENANT_A,
-            EPOCH_MIN,
-            Some(EPOCH_MAX),
-            vec![(0, 1.0), (2, 1.0)],
-            vec![(100, 1.0)],
-        ),
-        PointStruct {
-            id: Some(PointId {
-                point_id_options: Some(point_id::PointIdOptions::Uuid(UUID_POINT.to_owned())),
-            }),
-            payload: uuid_payload,
-            vectors: Some(sparse_named(vec![(1, 1.0)], vec![(101, 1.0)])),
-        },
-    ];
+    let points = probe_fixture_points();
     let response = suite
         .client
         .upsert_points(UpsertPoints {
