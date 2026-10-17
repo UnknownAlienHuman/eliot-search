@@ -18,8 +18,9 @@ mod fixtures;
 
 pub use encoding::{
     AcceptedCodeIdentifiersProfile, CodeEncodingError, CodeIdentifierEncoding,
-    accept_code_identifiers_profile, encode_code_document, encode_code_document_with_checkpoint,
-    encode_code_query, validate_code_identifiers_pair,
+    CodeProfileQualificationError, accept_code_identifiers_profile, encode_code_document,
+    encode_code_document_with_checkpoint, encode_code_query, qualify_code_identifiers_profile,
+    validate_code_identifiers_pair,
 };
 
 /// A closed distinction between retained legacy behavior and the new code profile.
@@ -255,7 +256,9 @@ impl CodeIdentifierLimits {
 
 /// Owner-produced immutable profile with exact artifact and fixture-definition identities.
 ///
-/// Fixture definitions and identity matching are not executed qualification.
+/// The identities bind frozen definitions; [`qualify_code_identifiers_profile`]
+/// executes those definitions and their expected outputs before issuing an
+/// accepted runtime profile.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodeIdentifiersProfile {
     id: OpaqueId,
