@@ -190,7 +190,7 @@ impl LiveProbeClient {
         let attempt = probe_attempt_id(supervisor)
             .map_err(|error| OperationalProbeFailure::new(error, None, None))?;
         let fail = |error| OperationalProbeFailure::new(error, Some(attempt.clone()), None);
-        if rpc_timeout.is_zero() || rpc_timeout > Duration::from_secs(60) {
+        if rpc_timeout.is_zero() || rpc_timeout > Duration::from_secs(600) {
             return Err(fail(BridgeError::QueryBudgetExceeded));
         }
         let limits = limits.validate().map_err(fail)?;
@@ -250,9 +250,26 @@ impl LiveProbeClient {
     }
 
     pub(crate) async fn health_check(&self) -> Result<HealthCheckReply, BridgeError> {
-        let request = self.rpc_request(HealthCheckRequest::default())?;
-        let mut client = self.single_attempt.health.clone();
-        self.read_rpc(Box::pin(client.health_check(request))).await
+        // A newly resumed owned child can precede its listener. Retry only this
+        // read, before any probe mutation, with the SAME attempt, absolute
+        // deadline and shared RPC/response budget. Each actual attempt goes
+        // through read_rpc; SDK mutation retries remain disabled.
+        let mut backoff = Duration::from_millis(50);
+        for attempt in 0..8 {
+            let request = self.rpc_request(HealthCheckRequest::default())?;
+            let mut client = self.single_attempt.health.clone();
+            match self.read_rpc(Box::pin(client.health_check(request))).await {
+                Err(BridgeError::TransportFailed) if attempt < 7 => {
+                    let remaining = self.context.remaining()?;
+                    self.auth_lease.validate()?;
+                    tokio::time::sleep(backoff.min(remaining)).await;
+                    self.context.check()?;
+                    backoff = backoff.saturating_mul(2).min(Duration::from_millis(250));
+                }
+                result => return result,
+            }
+        }
+        Err(BridgeError::TransportFailed)
     }
 
     pub(crate) async fn verify_list_collections_access(&self) -> Result<(), BridgeError> {

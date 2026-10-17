@@ -12,11 +12,14 @@ use search_qdrant_bridge::{
     real::{BlockingRealQueryPlane, CanonicalRequestContext},
 };
 use search_qdrant_supervisor::{
-    ContainmentEvidence, LaunchPlan, LoopbackEndpoint, LoopbackHost, OwnedChild, ProcessConfig,
-    QdrantOwnerFence, SecretLeaseEvidence, SecretMaterial, validate_process_config,
+    ContainedLaunchError, ContainmentEvidence, LaunchPlan, LoopbackEndpoint, LoopbackHost,
+    OwnedChild, ProcessConfig, QdrantOwnerFence, SecretLeaseEvidence, SecretMaterial,
+    SpawnRecovery, validate_process_config,
 };
 use search_runtime_owner::OwnerError;
 use std::{
+    fs::File,
+    io::Write,
     num::{NonZeroU16, NonZeroU32, NonZeroU64},
     sync::{Arc, Mutex},
     time::{Duration, Instant},
@@ -33,12 +36,81 @@ const SHUTDOWN_TIMEOUT_MS: u64 = 5_000;
 pub(super) struct StartupSecret {
     pub(super) lease: QdrantApiSecretLease<FreshRootCancellation>,
     pub(super) context: OperationContext<FreshRootCancellation>,
+    pub(super) observation: search_os_secrets_windows::QdrantApiSecretObservation,
 }
 
 struct LiveRoot(Arc<std::sync::atomic::AtomicBool>);
 impl Drop for LiveRoot {
     fn drop(&mut self) {
         self.0.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
+enum RetainedChild {
+    Running(Arc<Mutex<OwnedChild>>),
+    SpawnUnknown(SpawnRecovery),
+}
+
+// Child/Job custody drops before the executable pin and the Root exclusions.
+struct FailedRuntime {
+    _live: Option<LiveRoot>,
+    child: RetainedChild,
+    _artifact: File,
+    custody: NativeProcessRootCustody,
+}
+
+/// Post-spawn failures retain exact process/Root custody and probe identities
+/// until the ordinary caller has handled its checked diagnostic and exits.
+pub(super) struct NativeIndexedRunFailure {
+    code: String,
+    probe: Option<search_qdrant_bridge::real::OperationalProbeFailure>,
+    retained: Option<Box<FailedRuntime>>,
+}
+
+impl From<String> for NativeIndexedRunFailure {
+    fn from(code: String) -> Self {
+        Self {
+            code,
+            probe: None,
+            retained: None,
+        }
+    }
+}
+impl From<&str> for NativeIndexedRunFailure {
+    fn from(code: &str) -> Self {
+        code.to_owned().into()
+    }
+}
+impl NativeIndexedRunFailure {
+    pub(super) fn code(&self) -> &str {
+        &self.code
+    }
+    pub(super) fn report_checked(&mut self, writer: &mut impl Write) {
+        let Some(retained) = &mut self.retained else {
+            return;
+        };
+        let attempt = self
+            .probe
+            .as_ref()
+            .and_then(|failure| failure.attempt())
+            .map_or("", |attempt| attempt.id().as_str());
+        let mutation = self
+            .probe
+            .as_ref()
+            .and_then(|failure| failure.unknown_mutation())
+            .map_or("", |mutation| mutation.id().as_str());
+        let pid = match &retained.child {
+            RetainedChild::Running(child) => child.lock().ok().map(|child| child.pid().get()),
+            RetainedChild::SpawnUnknown(child) => Some(child.pid()),
+        };
+        // Probe IDs are generated bounded ASCII identities. No endpoint, path,
+        // key, source content or native/vendor error text is rendered.
+        let line = format!(
+            "{{\"error\":\"{}\",\"probe_attempt\":\"{attempt}\",\"probe_mutation\":\"{mutation}\",\"retained_child_pid\":{},\"ready\":false}}",
+            eliot_searchd::diagnostics::sanitize_code(&self.code),
+            pid.map_or_else(|| "null".to_owned(), |pid| pid.to_string())
+        );
+        let _checked_output = retained.custody.owner.owner.emit(writer, &line);
     }
 }
 
@@ -76,31 +148,38 @@ impl QdrantApiKeyLeaseProvider for ProcessLease {
         if child.pid() != binding.process_id()
             || child
                 .containment_observation()
-                .and_then(|value| value.process_creation_marker())
+                .and_then(search_qdrant_supervisor::ContainmentObservation::process_creation_marker)
                 != Some(binding.creation_marker())
             || child.verified().sha256().as_bytes() != binding.artifact_digest().as_bytes()
             || !child.is_running()
         {
             return Err(BridgeError::SupervisorReceiptMismatch);
         }
+        drop(child);
         self.selected
             .lease
-            .with_secret_live_window(&self.selected.context, |bytes, reference, _, _, expires| {
-                if reference != self.selected.lease.reference()
-                    || expires != binding.secret_expires_at_tick()
-                    || reference.binding().installation_incarnation_id()
-                        != binding.installation_incarnation_id()
-                {
-                    return Err(BridgeError::AuthenticationInvalid);
-                }
-                callback(bytes)
-            })
+            .with_secret_live_window(
+                &self.selected.context,
+                |bytes, reference, frame, _, expires| {
+                    if reference != self.selected.lease.reference()
+                        || frame != self.selected.observation.frame_digest()
+                        || reference.version() != self.selected.observation.version()
+                        || expires != binding.secret_expires_at_tick()
+                        || reference.binding().installation_incarnation_id()
+                            != binding.installation_incarnation_id()
+                    {
+                        return Err(BridgeError::AuthenticationInvalid);
+                    }
+                    callback(bytes)
+                },
+            )
             .map_err(|_| BridgeError::AuthenticationLeaseExpired)?
     }
 }
 
 /// Runs one finite indexed command through the actual contained process and
 /// operational bridge. It never reopens Root or advances its owner epoch.
+#[allow(clippy::too_many_lines)] // One explicit lifetime for Root, lease, Child/Job, plane, and failure custody.
 pub(super) fn with_owned_indexed<T>(
     owner: DirectRegistryOwner,
     config: &EffectiveDaemonConfig,
@@ -113,9 +192,12 @@ pub(super) fn with_owned_indexed<T>(
         &mut BlockingRealQueryPlane,
         &QualifiedNativeProfiles,
     ) -> Result<T, String>,
-) -> Result<T, String> {
+) -> Result<T, NativeIndexedRunFailure> {
     let startup_started = Instant::now();
     let settings = config.native_qdrant_settings();
+    if settings.health_timeout_ms == 0 || settings.health_timeout_ms > 600_000 {
+        return Err("NATIVE_QDRANT_HEALTH_TIMEOUT_INVALID".into());
+    }
     if !settings.enabled || config.selected_profile().as_str() != "lexical" {
         return Err("NATIVE_INDEXED_PROFILE_REQUIRED".into());
     }
@@ -185,12 +267,17 @@ pub(super) fn with_owned_indexed<T>(
         .lease
         .with_secret_live_window(
             &selected.context,
-            |bytes, reference, _, observed, expires| {
+            |bytes, reference, frame, observed, expires| {
                 if reference.binding().installation_id() != facts.installation
                     || reference.binding().installation_incarnation_id() != facts.incarnation
                     || reference.binding().user_scope_digest().as_bytes() != &user
-                    || settings.api_secret_ref.as_ref().map(|value| value.as_str())
+                    || settings
+                        .api_secret_ref
+                        .as_ref()
+                        .map(search_config::SecretReference::as_str)
                         != Some(reference.id().as_str())
+                    || frame != selected.observation.frame_digest()
+                    || reference.version() != selected.observation.version()
                 {
                     return Err("NATIVE_QDRANT_SECRET_ROOT_MISMATCH");
                 }
@@ -229,7 +316,7 @@ pub(super) fn with_owned_indexed<T>(
                     evidence,
                     observed,
                 )
-                .map_err(|error| error.code())?;
+                .map_err(search_qdrant_supervisor::SupervisorError::code)?;
                 let remaining = startup_deadline
                     .checked_duration_since(Instant::now())
                     .ok_or("NATIVE_QDRANT_DEADLINE_EXPIRED")?;
@@ -261,9 +348,9 @@ pub(super) fn with_owned_indexed<T>(
                     ContainmentEvidence::windows_containment_required(),
                     observed,
                 )
-                .map_err(|error| error.code())?;
-                let material =
-                    SecretMaterial::from_bytes(bytes.to_vec()).map_err(|error| error.code())?;
+                .map_err(search_qdrant_supervisor::SupervisorError::code)?;
+                let material = SecretMaterial::from_bytes(bytes.to_vec())
+                    .map_err(search_qdrant_supervisor::SupervisorError::code)?;
                 Ok::<_, &'static str>((plan, material))
             },
         )
@@ -275,8 +362,10 @@ pub(super) fn with_owned_indexed<T>(
     let mut lease_check = |expected: &SecretLeaseEvidence| {
         selected
             .lease
-            .with_secret_live_window(&selected.context, |_, reference, _, _, expires| {
+            .with_secret_live_window(&selected.context, |_, reference, frame, _, expires| {
                 if reference == selected.lease.reference()
+                    && frame == selected.observation.frame_digest()
+                    && reference.version() == selected.observation.version()
                     && *expected == expected_lease
                     && expires == expected_lease.expires_at_tick
                 {
@@ -287,44 +376,103 @@ pub(super) fn with_owned_indexed<T>(
             })
             .map_err(|_| OwnerError::OwnerDeadlineInvalid)?
     };
-    let spawned = custody
-        .spawn_qdrant_child(&plan, &material, &directory, user, &mut lease_check)
-        .map_err(|_| "NATIVE_QDRANT_STARTUP_REFUSED".to_owned())?;
+    let spawned =
+        match custody.spawn_qdrant_child(&plan, &material, &directory, user, &mut lease_check) {
+            Ok(spawned) => spawned,
+            Err(ContainedLaunchError::RecoveryRequired { mut recovery, .. }) => {
+                let cleanup_deadline = Instant::now()
+                    .checked_add(Duration::from_millis(SHUTDOWN_TIMEOUT_MS))
+                    .unwrap_or(deadline)
+                    .min(deadline);
+                let code = if recovery.terminate_bounded(cleanup_deadline).is_ok() {
+                    "NATIVE_QDRANT_STARTUP_REFUSED"
+                } else {
+                    "NATIVE_QDRANT_SHUTDOWN_UNKNOWN"
+                };
+                return Err(NativeIndexedRunFailure {
+                    code: code.to_owned(),
+                    probe: None,
+                    retained: Some(Box::new(FailedRuntime {
+                        _live: None,
+                        child: RetainedChild::SpawnUnknown(recovery),
+                        _artifact: artifact_pin,
+                        custody,
+                    })),
+                });
+            }
+            Err(_) => return Err("NATIVE_QDRANT_STARTUP_REFUSED".into()),
+        };
     drop(material);
     let child = Arc::new(Mutex::new(OwnedChild::from(spawned)));
     let live = LiveRoot(Arc::new(std::sync::atomic::AtomicBool::new(true)));
-    let binding = connection_binding(&plan, &child)?;
-    let provider = ProcessLease {
-        selected,
-        child: Arc::clone(&child),
-        live_root: Arc::clone(&live.0),
-        binding,
-    };
-    let endpoint = LiveEndpoint::loopback("127.0.0.1", http, grpc)
-        .map_err(|_| "NATIVE_QDRANT_ENDPOINT_INVALID")?;
-    let context = CanonicalRequestContext::with_deadline(startup_deadline, Arc::new(cancellation))
-        .map_err(|error| error.code().to_owned())?;
-    let (mut plane, _report) = BlockingRealQueryPlane::connect_and_probe(
-        &endpoint,
-        binding,
-        QdrantApiKeyLease::new(binding, provider),
-        context,
-        BridgeLimits::BASELINE,
-        Duration::from_millis(settings.health_timeout_ms),
-    )
-    .map_err(|error| error.error().code().to_owned())?;
-    let result = consume(&mut custody, &mut plane, &profiles);
-    drop(plane);
+    let mut probe_failure = None;
+    // Every post-spawn failure joins the same bounded cleanup path. The scope
+    // drops the plane and its SDK credential copy before process termination.
+    let result = (|| -> Result<T, String> {
+        let binding = connection_binding(&plan, &child)?;
+        let provider = ProcessLease {
+            selected,
+            child: Arc::clone(&child),
+            live_root: Arc::clone(&live.0),
+            binding,
+        };
+        let endpoint = LiveEndpoint::loopback("127.0.0.1", http, grpc)
+            .map_err(|_| "NATIVE_QDRANT_ENDPOINT_INVALID")?;
+        let context =
+            CanonicalRequestContext::with_deadline(startup_deadline, Arc::new(cancellation))
+                .map_err(|error| error.code().to_owned())?;
+        let (mut plane, _report) = match BlockingRealQueryPlane::connect_and_probe(
+            &endpoint,
+            binding,
+            QdrantApiKeyLease::new(binding, provider),
+            context,
+            BridgeLimits::BASELINE,
+            Duration::from_millis(settings.health_timeout_ms),
+        ) {
+            Ok(value) => value,
+            Err(failure) => {
+                let code = failure.error().code().to_owned();
+                probe_failure = Some(failure);
+                return Err(code);
+            }
+        };
+        consume(&mut custody, &mut plane, &profiles)
+    })();
+    let cleanup_deadline = Instant::now()
+        .checked_add(Duration::from_millis(SHUTDOWN_TIMEOUT_MS))
+        .unwrap_or(deadline)
+        .min(deadline);
     let stopped = child
         .lock()
-        .map_err(|_| "NATIVE_QDRANT_CUSTODY_POISONED")?
-        .terminate_bounded(deadline)
-        .map_err(|_| "NATIVE_QDRANT_SHUTDOWN_UNKNOWN");
+        .map_err(|_| "NATIVE_QDRANT_CUSTODY_POISONED".to_owned())
+        .and_then(|mut child| {
+            child
+                .terminate_bounded(cleanup_deadline)
+                .map(|_| ())
+                .map_err(|_| "NATIVE_QDRANT_SHUTDOWN_UNKNOWN".to_owned())
+        });
+    let value = match (result, stopped) {
+        (Ok(value), Ok(())) => value,
+        (result, stopped) => {
+            let code = stopped
+                .err()
+                .or_else(|| result.err())
+                .unwrap_or_else(|| "NATIVE_QDRANT_OPERATION_REFUSED".to_owned());
+            return Err(NativeIndexedRunFailure {
+                code,
+                probe: probe_failure,
+                retained: Some(Box::new(FailedRuntime {
+                    _live: Some(live),
+                    child: RetainedChild::Running(child),
+                    _artifact: artifact_pin,
+                    custody,
+                })),
+            });
+        }
+    };
     drop(live);
     drop(child);
     drop((directory, artifact_pin));
-    stopped?;
-    let value = result?;
     custody
         .owner
         .finish()
@@ -372,7 +520,7 @@ fn connection_binding(
     let child = child.lock().map_err(|_| "NATIVE_QDRANT_CUSTODY_POISONED")?;
     let creation = child
         .containment_observation()
-        .and_then(|value| value.process_creation_marker())
+        .and_then(search_qdrant_supervisor::ContainmentObservation::process_creation_marker)
         .ok_or("NATIVE_QDRANT_CREATION_IDENTITY_MISSING")?;
     let owner = plan.owner_fence();
     let secret = plan.secret_lease();

@@ -22,6 +22,7 @@ const RAW_CODE_PROFILE_SET_PREFIX: &str = "raw-code-c13-v1-";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RawCodeProjectionProfileSetDescriptor {
     profile_set_id: ProjectionProfileSetId,
+    identity_digest: Blake3Digest32,
     code_profile_id: OpaqueId,
     code_profile_revision: NonZeroRevision,
     code_profile_fingerprint: Blake3Digest32,
@@ -100,6 +101,7 @@ impl RawCodeProjectionProfileSetDescriptor {
 
         Ok(Self {
             profile_set_id,
+            identity_digest: digest,
             code_profile_id,
             code_profile_revision,
             code_profile_fingerprint,
@@ -116,6 +118,13 @@ impl RawCodeProjectionProfileSetDescriptor {
     #[must_use]
     pub const fn profile_set_id(&self) -> &ProjectionProfileSetId {
         &self.profile_set_id
+    }
+
+    /// Full canonical descriptor digest computed by this owner before rendering
+    /// the profile-set identifier. This is data, not profile qualification.
+    #[must_use]
+    pub const fn identity_digest(&self) -> Blake3Digest32 {
+        self.identity_digest
     }
 
     /// C11 profile ID bound by this descriptor.

@@ -415,14 +415,17 @@ mod dek_selection;
 mod native_preparation_factory;
 #[path = "direct_registry_process_custody.rs"]
 mod process_custody;
-#[cfg(feature = "wave3-index")]
+#[cfg(all(windows, feature = "wave3-index"))]
 #[path = "native_index_runtime.rs"]
 mod indexed_runtime;
 #[cfg(feature = "wave3-index")]
 #[path = "native_retention_publication.rs"]
 mod retention_publication;
+#[cfg(feature = "wave3-index")]
+#[path = "native_retention_index.rs"]
+mod retention_index;
 pub(crate) use process_custody::NativeProcessRootCustody;
-#[cfg(windows)]
+#[cfg(all(windows, feature = "wave3-index"))]
 #[path = "native_qdrant_secret.rs"]
 mod native_qdrant_secret;
 #[cfg(feature = "wave4-query")]

@@ -22,6 +22,7 @@ use crate::{
 pub(super) struct IndexedRetention<'a> {
     pub(super) plane: &'a mut BlockingRealQueryPlane,
     pub(super) route: CollectionRoute,
+    pub(super) profile_digest: search_contracts::Blake3Digest32,
 }
 
 impl IndexedRetention<'_> {
@@ -40,6 +41,14 @@ impl IndexedRetention<'_> {
             .security
             .checkpoint()
             .map_err(|error| error.to_string())?;
+        // C03 member/projection preparation may have advanced after startup's
+        // admission. Refresh from actual owner rows before the C16 snapshot.
+        super::retention_index::refresh_guard_image(
+            input,
+            journal,
+            publisher,
+            self.profile_digest,
+        )?;
         if self.route.generation
             != stored
                 .prepared()

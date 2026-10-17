@@ -116,7 +116,14 @@ fn capture_candidate(
     } else {
         None
     };
-    config::build_effective(document, None, None, "direct", "direct")
+    let profile = document.as_ref().and_then(search_config::ConfigDocument::requested_profile)
+        .map_or("direct", |profile| profile.as_str()).to_owned();
+    if !matches!(profile.as_str(), "direct" | "lexical")
+        || (profile == "lexical" && !cfg!(all(windows, feature = "wave3-index")))
+    {
+        return Err("REVISION_DEK_SELECTION_PROFILE_UNAVAILABLE".into());
+    }
+    config::build_effective(document, None, None, &profile, &profile)
         .map_err(|_| "REVISION_DEK_SELECTION_CONFIG_INVALID".into())
 }
 

@@ -18,7 +18,7 @@ const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
 const FILE_SHARE_READ: u32 = 1;
 /// A directory qualified as a child of this exact retained Root.
-pub(crate) struct NativeQdrantDataDirectory {
+pub(in super::super) struct NativeQdrantDataDirectory {
     directory: QualifiedDirectory,
     root_identity: search_control_redb::JournalIdentity,
     identity_digest: search_contracts::Blake3Digest32,
@@ -96,7 +96,7 @@ impl NativeProcessRootCustody {
     /// Creates or verifies Qdrant's owner-private data directory under this
     /// exact retained Root, then returns a qualified same-handle directory pin.
     /// The supervisor's contained-spawn owner must consume this exact handle.
-    pub(crate) fn prepare_qdrant_data_directory(
+    pub(in super::super) fn prepare_qdrant_data_directory(
         &mut self,
     ) -> Result<(NativeQdrantDataDirectory, PathBuf, [u8; 32]), OwnerError> {
         let root_identity = self.journal_identity();
@@ -177,14 +177,17 @@ impl NativeProcessRootCustody {
         if acl.semantic_fingerprint() != root_owner.semantic_fingerprint() {
             return Err(OwnerError::OwnerStorageAclUnqualified);
         }
-        meter.borrow_mut().charge(StorageSecurityWork::Process(64))?;
+        meter
+            .borrow_mut()
+            .charge(StorageSecurityWork::Process(64))?;
         let mut identity_hash = blake3::Hasher::new();
         identity_hash.update(b"eliot-search/native-qdrant-directory/v1\0");
         identity_hash.update(&identity.volume_serial.to_be_bytes());
         identity_hash.update(&identity.file_index.to_be_bytes());
         identity_hash.update(&identity.creation_time.to_be_bytes());
-        let identity_digest = search_contracts::Blake3Digest32::from_bytes(*identity_hash.finalize().as_bytes());
-        drop(meter);
+        let identity_digest =
+            search_contracts::Blake3Digest32::from_bytes(*identity_hash.finalize().as_bytes());
+        let _ = meter.into_inner();
         root.verify()?;
         direct
             .control
@@ -203,7 +206,7 @@ impl NativeProcessRootCustody {
     /// Consumes the actual owner-private directory pin through the existing
     /// native Qdrant Job producer. No PID lookup or alternate process path is
     /// available from this custody.
-    pub(crate) fn spawn_qdrant_child(
+    pub(in super::super) fn spawn_qdrant_child(
         &mut self,
         plan: &LaunchPlan,
         secret: &SecretMaterial,

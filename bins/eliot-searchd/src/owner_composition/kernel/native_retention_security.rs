@@ -32,6 +32,7 @@ pub(crate) struct RetentionSecurity {
     conditions: [ControlRecordCondition; 2],
     policy_body: Vec<u8>,
     user: [u8; 32],
+    policy: AccessPolicyRecord,
 }
 
 impl RetentionSecurity {
@@ -42,6 +43,19 @@ impl RetentionSecurity {
     pub(crate) fn conditions(&self) -> &[ControlRecordCondition; 2] { &self.conditions }
     pub(crate) fn policy_body(&self) -> &[u8] { &self.policy_body }
     pub(crate) const fn user_scope(&self) -> [u8; 32] { self.user }
+    /// Current C18 values from the exact confirmed durable policy read above.
+    /// Callers still bind the original security conditions in the committing CAS.
+    pub(crate) fn publication_guards(&self, owner: c::OwnerEpoch, catalog_revision: u64,
+        profile_digest: c::Blake3Digest32,
+    ) -> Result<c::PublicationGuards, NativeSecurityError> {
+        self.checkpoint()?;
+        Ok(c::PublicationGuards { owner_epoch: owner,
+            source_catalog_generation: catalog_revision,
+            membership_generation: catalog_revision,
+            access_generation: self.policy.live_deny_generation,
+            shadow_generation: self.policy.shadow_fence_revision.get(),
+            purge_generation: self.policy.purge_fence_revision.get(), profile_digest })
+    }
 }
 
 impl FreshRootContext<'_, '_> {
@@ -175,7 +189,7 @@ impl FreshRootContext<'_, '_> {
         let domain = NativeSecurityDomain::restore_direct_with_original_context(binding.clone(),
             journal, publisher, &mut owners, self.context(), deadline, &work)?;
         self.source_full_checkpoint().map_err(native_error)?;
-        let security = RetentionSecurity { domain, conditions, policy_body, user,
+        let security = RetentionSecurity { domain, conditions, policy_body, user, policy: state.policy.clone(),
             fence: RequestSecurityFence { planned_generation: generation, memberships: BTreeSet::new() } };
         security.checkpoint()?;
         Ok(security)

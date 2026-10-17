@@ -87,6 +87,9 @@ pub struct QualifiedNativeProfiles {
 }
 
 impl QualifiedNativeProfiles {
+    pub(crate) const fn profile_digest(&self) -> Blake3Digest32 {
+        self.profile_set.identity_digest()
+    }
     fn qualify<F>(
         deadline: Instant,
         cancelled: &AtomicBool,

@@ -148,6 +148,12 @@ pub(super) fn run(
     if let Some(selection) = selection { return owner.execute_revision_dek_selection(&selection, writer); }
     let hints = hints.ok_or("DIRECT_CONFIG_VARIANT_UNAVAILABLE")?;
     if let Some(retention) = retention {
+        #[cfg(all(windows, feature = "wave3-index"))]
+        if effective.as_ref().is_some_and(|config| config.selected_profile().as_str() == "lexical") {
+            return owner.execute_retention_lexical(&hints, Path::new(&selected[2]),
+                policy.as_ref().ok_or("NATIVE_RETENTION_POLICY_REQUIRED")?, &retention,
+                effective.as_ref().ok_or("NATIVE_RETENTION_CONFIGURATION_REQUIRED")?, writer);
+        }
         return owner.execute_retention(&hints, Path::new(&selected[2]), policy.as_ref().ok_or("NATIVE_RETENTION_POLICY_REQUIRED")?,
             &retention, effective.as_ref().ok_or("NATIVE_RETENTION_CONFIGURATION_REQUIRED")?, writer);
     }
@@ -465,6 +471,9 @@ fn capture_configuration(
     if requested != "direct"
         && (!matches!(command, "--retain-source-v2" | "--serve-data-root") || requested != "lexical")
     {
+        return Err("DIRECT_CONFIG_PROFILE_UNAVAILABLE".into());
+    }
+    if requested == "lexical" && !cfg!(all(windows, feature = "wave3-index")) {
         return Err("DIRECT_CONFIG_PROFILE_UNAVAILABLE".into());
     }
     let effective = config::build_effective(file, None, None, &requested, &requested)
