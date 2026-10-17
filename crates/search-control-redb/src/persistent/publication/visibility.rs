@@ -15,6 +15,8 @@ use super::codec as intent_codec;
 pub(in crate::persistent) mod codec;
 mod validation;
 mod succession;
+mod projection_snapshot;
+pub use projection_snapshot::PublicationProjectionSnapshot;
 pub use succession::PublicationSuccessor;
 #[cfg(test)]
 mod tests;

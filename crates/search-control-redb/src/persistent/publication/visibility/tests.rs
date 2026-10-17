@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 mod succession;
+mod projection_snapshot;
 
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 static NEXT: AtomicU64 = AtomicU64::new(0);

@@ -452,3 +452,20 @@ source counts and all twelve family status arrays; it grants no semantic candida
 normal journal, serving, restart or cleanup authority. Old four/seven-table profiles
 remain separately admitted. Original work/deadline/cancellation applies to every
 buffer/decoder/hash/read/write phase. Native execution remains #215.
+
+## Coherent current projection references
+
+`BoundControlJournal::read_publication_projection_snapshot_with_original_context`
+returns a privately constructed `PublicationProjectionSnapshot` from one verified
+redb read transaction: journal identity/generation, committed visibility, current
+projection-membership manifest references and source-specific shadows. It reuses
+the existing record codecs and receipt-ledger verification, rejects unresolved
+publication work and mismatched owner guards, and borrows the original deadline
+and work callback. It creates no records, durable query job or second store.
+
+The returned references are immutable technical observations. Root must reopen
+and verify the exact C07 manifests and join actual C03 membership and C18 live
+authorization before compiling retrieval/IDF/count populations. The snapshot
+itself does not authorize access or prove Qdrant/source availability. Existing
+recovery checkpoints still retain unresolved work for recovery; their semantics
+and all persisted profiles remain unchanged.

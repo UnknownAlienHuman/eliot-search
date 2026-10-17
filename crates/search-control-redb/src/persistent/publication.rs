@@ -31,6 +31,7 @@ pub(super) mod visibility;
 pub use visibility::{PublicationManifestChange, PublicationReadbackEvidence, PublicationSourceShadow,
     PublicationVisibilityState, VisibleEpochCommit, PUBLICATION_VISIBILITY_SCHEMA_VERSION};
 pub use visibility::PublicationSuccessor;
+pub use visibility::PublicationProjectionSnapshot;
 #[cfg(test)]
 mod tests;
 
