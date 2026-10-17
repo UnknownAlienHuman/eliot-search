@@ -49,10 +49,12 @@ allowance. The lease retains the issuer cancellation capability, request ID, bud
 relative deadline; each disclosure requires those exact request coordinates and a live issuer
 deadline/cancellation state. A later context cannot extend or substitute that issuer authority.
 There is no detached launch-evidence value: a historical copied tick cannot authorize process launch.
-`QdrantApiSecretLease::with_secret` checks the issuer coordinates and the native monotonic TTL both
-before and after the callback. Daemon composition must perform the effect that consumes the secret
-inside this live callback and retain any spawned-child recovery custody if the callback refuses after
-an effect attempt.
+`QdrantApiSecretLease::with_secret_live` checks the issuer coordinates and native monotonic TTL both
+before and after the callback; it passes the exact `SecretReference` and encoded-frame digest only
+inside that callback. Daemon composition must compare its C02 current-frame digest and perform the
+effect that consumes the secret inside this live callback, retaining any spawned-child recovery
+custody if the callback refuses after an effect attempt. `with_secret` is the narrower callback for
+consumers that do not need the frame binding.
 
 The store cannot create, rotate or delete records. A missing or malformed selected record returns a
 content-free failure; it never searches other credentials, falls back to provider-pairing or

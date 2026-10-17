@@ -61,7 +61,8 @@ lease window before and after the callback; a fresh context cannot extend or
 replace either bound. The credential record's version is included in Qdrant-only
 DPAPI entropy while its Credential Manager locator stays stable, so a changed
 header version cannot reuse the old protected payload. No detached launch
-evidence is exposed; callers must consume the lease callback at dispatch.
+evidence is exposed; `with_secret_live` supplies the exact frame digest only
+inside the callback so Root can compare its C02 inventory and dispatch there.
 
 The optional `test-credential-cleanup` feature adds one exact-namespace cleanup
 operation for native test harnesses. It serializes with production key creation,

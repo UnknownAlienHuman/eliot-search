@@ -204,6 +204,7 @@ pub struct QdrantApiSecretLease<C: CancellationProbe + Clone> {
     issuer_cancellation: C,
     issuer_deadline: Instant,
     expires_at_tick: u64,
+    encoded_frame_digest: Blake3Digest32,
     issuer_request_id: RequestId,
     issuer_budget_ref: OpaqueRef,
     issuer_relative_deadline_ms: u64,
@@ -224,6 +225,18 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
         &self,
         context: &OperationContext<impl CancellationProbe>,
         consume: impl FnOnce(&[u8]) -> T,
+    ) -> Result<T, QdrantApiSecretStoreError> {
+        self.with_secret_live(context, |bytes, _, _| consume(bytes))
+    }
+
+    /// Exposes the selected bytes, exact versioned reference and encoded-frame
+    /// digest only inside one live callback. Use this at the external-effect
+    /// boundary when the Root inventory must match the backend frame. Neither
+    /// the lease expiry tick nor detached launch evidence is returned.
+    pub fn with_secret_live<T>(
+        &self,
+        context: &OperationContext<impl CancellationProbe>,
+        consume: impl FnOnce(&[u8], &SecretReference, Blake3Digest32) -> T,
     ) -> Result<T, QdrantApiSecretStoreError> {
         context
             .preflight()
@@ -250,7 +263,9 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
         let now = MonotonicInstant::from_ticks(observed_before.get());
         let result = self
             .lease
-            .with_secret(now, consume)
+            .with_secret(now, |bytes| {
+                consume(bytes, self.lease.reference(), self.encoded_frame_digest)
+            })
             .map_err(QdrantApiSecretStoreError::LeaseRejected)?;
 
         // The issuer can remain live after the shorter Qdrant lease TTL. Check
@@ -389,7 +404,8 @@ impl<C: CancellationProbe + Clone> SecretStorePort for QdrantApiSecretStore<C> {
                 .filter(|remaining| !remaining.is_zero())
         };
         #[cfg(windows)]
-        let (protected, version) = load_selected_windows(secret_ref, &remaining)?;
+        let (protected, version, encoded_frame_digest) =
+            load_selected_windows(secret_ref, &remaining)?;
         #[cfg(not(windows))]
         return Err(QdrantApiSecretStoreError::UnsupportedPlatform);
         if remaining().is_none() {
@@ -435,6 +451,7 @@ impl<C: CancellationProbe + Clone> SecretStorePort for QdrantApiSecretStore<C> {
             issuer_cancellation,
             issuer_deadline,
             expires_at_tick: expires.ticks(),
+            encoded_frame_digest,
             issuer_request_id,
             issuer_budget_ref,
             issuer_relative_deadline_ms,
@@ -464,7 +481,7 @@ impl<C: CancellationProbe + Clone> SecretStorePort for QdrantApiSecretStore<C> {
 fn load_selected_windows(
     selected: &QdrantApiSecretReference,
     remaining: &impl Fn() -> Option<Duration>,
-) -> Result<(ProtectedSecret, u64), QdrantApiSecretStoreError> {
+) -> Result<(ProtectedSecret, u64, Blake3Digest32), QdrantApiSecretStoreError> {
     use super::windows::WindowsCredentialPlatform;
 
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
@@ -475,10 +492,11 @@ fn load_selected_windows(
     if remaining().is_none() {
         return Err(QdrantApiSecretStoreError::ContextRefused);
     }
+    let encoded_frame_digest = encoded_credential_frame_digest(record.as_slice());
     let (version, protected_version, protected_bytes) = decode_record(record.as_slice(), &locator)?;
     let protected = ProtectedSecret::from_bytes(protected_version, protected_bytes)
         .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
-    Ok((protected, version))
+    Ok((protected, version, encoded_frame_digest))
 }
 
 #[cfg(windows)]
@@ -513,6 +531,10 @@ fn selection_digest(selected: &QdrantApiSecretReference) -> [u8; 32] {
     update_field(&mut hasher, selected.binding.user_scope_digest().as_bytes());
     update_field(&mut hasher, selected.binding.purpose().as_str().as_bytes());
     *hasher.finalize().as_bytes()
+}
+
+fn encoded_credential_frame_digest(frame: &[u8]) -> Blake3Digest32 {
+    Blake3Digest32::from_bytes(*blake3::hash(frame).as_bytes())
 }
 
 fn update_field(hasher: &mut blake3::Hasher, value: &[u8]) {
@@ -645,7 +667,8 @@ mod tests {
     use super::{
         QDRANT_API_SECRET_PURPOSE_ID, QDRANT_CREDENTIAL_FIXED_BYTES, QDRANT_CREDENTIAL_MAGIC,
         QdrantApiSecretReference, QdrantApiSecretStoreError, decode_record,
-        issuer_context_allows_use, lease_window_is_live, selection_digest,
+        encoded_credential_frame_digest, issuer_context_allows_use, lease_window_is_live,
+        selection_digest,
         versioned_protection_purpose,
     };
 
@@ -762,6 +785,10 @@ mod tests {
 
         assert_eq!(selection_digest(&selected), locator);
         assert_eq!(observed_version, version_eight.get());
+        assert_ne!(
+            encoded_credential_frame_digest(&frame),
+            encoded_credential_frame_digest(&changed_header),
+        );
         assert_ne!(exact_purpose, changed_header_purpose);
         assert!(exact_purpose.ends_with("/version/7"));
         assert!(changed_header_purpose.ends_with("/version/8"));
