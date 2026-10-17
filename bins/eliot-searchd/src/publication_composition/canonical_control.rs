@@ -46,7 +46,7 @@ use search_qdrant_bridge::real::{
     CanonicalValidityRestoreOutcome,
 };
 
-use crate::owner_composition::NativeReopenedArtifactSet;
+use crate::owner_composition::{NativeRecoveryArtifactSet, NativeReopenedArtifactSet};
 use crate::preparation_composition::{
     artifact_payloads::PreparedRawCodeArtifacts, native_artifact_store::NativeStoredArtifactSet,
 };
@@ -174,6 +174,16 @@ impl<'a> CanonicalPublicationArtifacts<'a> {
     /// Borrows source-backed C13 outputs after the C07 set and its members were
     /// reopened and verified by their existing owner.
     pub(crate) const fn from_reopened(value: &'a NativeReopenedArtifactSet<'_, '_>) -> Self {
+        Self {
+            prepared: value.prepared(),
+            record: value.record(),
+            object_ref: value.c07_observation().object_ref(),
+        }
+    }
+
+    /// Borrows actual recovery-only C07 reads without converting unresolved
+    /// metadata into a serving snapshot or claiming current visibility.
+    pub(crate) const fn from_recovered(value: &'a NativeRecoveryArtifactSet<'_>) -> Self {
         Self {
             prepared: value.prepared(),
             record: value.record(),
