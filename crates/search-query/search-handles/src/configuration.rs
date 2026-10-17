@@ -88,7 +88,7 @@ fn field(name: &str, default: Value) -> Result<ConfigFieldDescriptor, ConfigErro
         "durable_unsaved_allowed" => (
             Kind::Boolean,
             BOUNDS,
-            vec![Source::File],
+            vec![],
             false,
             SecurityFloor::Fixed,
             Action::Reject,

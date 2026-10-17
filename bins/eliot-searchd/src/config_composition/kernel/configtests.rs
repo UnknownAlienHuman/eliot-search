@@ -77,7 +77,7 @@ fn selected_handles_config_comes_from_owner_and_marks_restrictive_changes() {
     );
 
     let file = capture_file_document(
-        b"schema_version = 2\nprofile = \"direct\"\n[handles]\nephemeral_ttl_ms = 300000\nmax_ephemeral_per_binding = 64\nmax_durable_per_binding = 32\nmax_expansion_bytes = 524288\ndurable_unsaved_allowed = false\n",
+        b"schema_version = 2\nprofile = \"direct\"\n[handles]\nephemeral_ttl_ms = 300000\nmax_ephemeral_per_binding = 64\nmax_durable_per_binding = 32\nmax_expansion_bytes = 524288\n",
         "handles-selection",
     )
     .unwrap();
@@ -153,6 +153,13 @@ fn handles_config_rejects_invalid_bounds_and_non_file_sources() {
     )
     .unwrap();
     assert!(build_effective(Some(unsaved_enabled), None, None, "direct", "direct").is_err());
+
+    // The contract forbids overriding the fixed field even with its default.
+    let unsaved_explicit_default = capture_file_document(
+        b"schema_version = 2\nprofile = \"direct\"\n[handles]\ndurable_unsaved_allowed = false\n",
+        "handles-unsaved-explicit-default",
+    ).unwrap();
+    assert!(build_effective(Some(unsaved_explicit_default), None, None, "direct", "direct").is_err());
 
     assert!(
         super::super::capture_environment_document(&[(
