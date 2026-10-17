@@ -551,3 +551,79 @@ fn operating_profile_codec_original_join_and_old_schema_semantics() {
     .unwrap();
     assert_eq!(old.verify().unwrap().generation, 2);
 }
+
+#[test]
+fn operating_profile_adoption_preserves_genesis_and_sources_across_restart_and_replay() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    journal.initialize_operating_profile(JournalProfileInitialization::Direct, INIT, DIGEST, &context()).unwrap();
+    journal.commit_registry_batch(&request("before-adoption", 1, 0, None, b"A"), &context()).unwrap();
+    let before = journal.read_snapshot().unwrap();
+    let profile_key = ControlKey::new(KEY.to_vec(), LIMITS).unwrap();
+    let genesis = before.get(&profile_key).unwrap().clone();
+    let prepared = journal.prepare_indexed_profile_adoption(visibility(), MutationId([61; 32]), DIGEST, &context()).unwrap();
+    assert_eq!(prepared.expected_generation(), 2);
+    let receipt = journal.adopt_indexed_profile(&prepared, &context()).unwrap();
+    assert_eq!((receipt.before_generation, receipt.after_generation), (2, 3));
+    assert_eq!(journal.operating_profile(&context()).unwrap(), JournalOperatingProfile::Indexed);
+    assert_eq!(journal.read_snapshot().unwrap().get(&profile_key), Some(&genesis));
+    assert_eq!(journal.read_registry_snapshot(&context()).unwrap().states().len(), 2);
+    let writes = journal.committed_writes();
+    assert!(journal.adopt_indexed_profile(&prepared, &context()).unwrap().replayed);
+    assert_eq!(journal.committed_writes(), writes);
+    journal.commit_registry_batch(&request("after-adoption", 3, 1, Some(b"A"), b"B"), &context()).unwrap();
+    drop(journal);
+    let mut reopened = scratch.open().unwrap();
+    assert_eq!(reopened.operating_profile(&context()).unwrap(), JournalOperatingProfile::Indexed);
+    assert_eq!(reopened.read_publication_visibility(&context()).unwrap(), Some(visibility()));
+    let recovered = reopened.prepare_indexed_profile_adoption(visibility(), MutationId([61; 32]), DIGEST, &context()).unwrap();
+    assert_eq!(recovered, prepared);
+    assert!(reopened.adopt_indexed_profile(&recovered, &context()).unwrap().replayed);
+    assert_eq!(reopened.read_snapshot().unwrap().get(&profile_key), Some(&genesis));
+}
+
+#[test]
+fn operating_profile_adoption_stale_or_substituted_inputs_and_generic_mutation_refuse() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    journal.initialize_operating_profile(JournalProfileInitialization::Direct, INIT, DIGEST, &context()).unwrap();
+    let prepared = journal.prepare_indexed_profile_adoption(visibility(), MutationId([62; 32]), DIGEST, &context()).unwrap();
+    journal.commit_registry_batch(&request("intervening", 1, 0, None, b"A"), &context()).unwrap();
+    assert_eq!(journal.adopt_indexed_profile(&prepared, &context()).unwrap_err().control_error(), ControlError::TransactionConflict);
+    let prepared = journal.prepare_indexed_profile_adoption(visibility(), MutationId([62; 32]), DIGEST, &context()).unwrap();
+    let forbidden = ControlMutation::new(MutationId([63; 32]), DIGEST, 2, vec![ControlWrite {
+        key: ControlKey::new(adoption::KEY.to_vec(), LIMITS).unwrap(),
+        value: ControlValue::new(ControlRecordClass::State, b"forbidden".to_vec(), LIMITS).unwrap(),
+    }], vec![]);
+    assert_eq!(journal.transact(&forbidden).unwrap_err(), ControlError::InvalidKey);
+    journal.adopt_indexed_profile(&prepared, &context()).unwrap();
+    let mut substituted = visibility();
+    substituted.collection_generation_id = CollectionGenerationId::from_bytes([64; 16]);
+    assert_eq!(journal.prepare_indexed_profile_adoption(substituted, MutationId([62; 32]), DIGEST, &context()).unwrap_err().control_error(), ControlError::OperationConflict);
+    assert_eq!(journal.read_publication_visibility(&context()).unwrap(), Some(visibility()));
+}
+
+#[test]
+fn operating_profile_adoption_lost_ack_requires_original_recovery_and_rejects_tampered_record() {
+    let scratch = Scratch::new();
+    let mut journal = scratch.create(5);
+    journal.initialize_operating_profile(JournalProfileInitialization::Direct, INIT, DIGEST, &context()).unwrap();
+    let prepared = journal.prepare_indexed_profile_adoption(visibility(), MutationId([65; 32]), DIGEST, &context()).unwrap();
+    assert_eq!(journal.adopt_indexed_checked(&prepared, Boundary::LostAcknowledgement, &Unscoped).unwrap_err(), ControlError::CommitOutcomeUnknown);
+    assert!(journal.operating_profile(&context()).is_err());
+    assert!(matches!(journal.recover_indexed_profile_adoption(&prepared, &context()).unwrap(), CommitRecoveryDecision::Committed(_)));
+    assert_eq!(journal.operating_profile(&context()).unwrap(), JournalOperatingProfile::Indexed);
+    let write = journal.database.begin_write().unwrap();
+    {
+        let mut records = write.open_table(RECORDS).unwrap();
+        let key = ControlKey::new(adoption::KEY.to_vec(), LIMITS).unwrap();
+        let mut bytes = journal.read_snapshot().unwrap().get(&key).unwrap().as_bytes().to_vec();
+        bytes[40] ^= 1;
+        let forged = ControlValue::new(ControlRecordClass::State, bytes, LIMITS).unwrap();
+        records.insert(adoption::KEY, encode_value(&forged).as_slice()).unwrap();
+    }
+    write.commit().unwrap();
+    assert!(journal.read_snapshot().is_err());
+    drop(journal);
+    assert!(scratch.open().is_err());
+}

@@ -29,7 +29,7 @@ pub mod migration;
 pub use reference::*;
 pub use identity::*;
 pub use persistent::PublicationSuccessor;
-pub use persistent::{JournalOperatingProfile, JournalProfileInitialization};
+pub use persistent::{IndexedProfileAdoption, JournalOperatingProfile, JournalProfileInitialization};
 pub use persistent::{OwnerBoundSourceStage, OwnerSourceMappingReadback, OwnerSourceMappedReceipt};
 pub use persistent::{OwnerInventoryStage, OwnerInventoryReadback, OwnerInventoryMappedReceipt};
 pub use persistent::{OwnerContentStage, OwnerContentReadback, OwnerContentMappedReceipt};

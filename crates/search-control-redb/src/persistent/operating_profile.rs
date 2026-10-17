@@ -17,6 +17,8 @@ use search_ports::{CancellationProbe, OperationContext};
 
 pub(super) const KEY: &[u8] = b"eliot.control.operating-profile.v1";
 const MAGIC: &[u8; 8] = b"ELJPRO01";
+pub(in crate::persistent) mod adoption;
+pub use adoption::IndexedProfileAdoption;
 
 /// Closed technical operating mode; it grants no native, source or query authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -254,10 +256,10 @@ impl PersistentControlJournal {
             .database
             .begin_read()
             .map_err(|_| ControlError::StoreUnavailable)?;
-        self.header_from(&read)?;
+        self.header_from_checked(&read, check)?;
         check.check(Point::ReadHeader)?;
         check.check(Point::ReadRecord)?;
-        read_mode(&read, self.identity, self.limits)
+        super::registry_mode_checked(&read, self.identity, self.limits, check)
     }
 
     pub(super) fn require_normal_profile(&self, check: &dyn Check) -> Result<(), ControlError> {
@@ -289,16 +291,19 @@ pub(super) fn read_mode(
         .get(KEY)
         .map_err(|e| map_storage_error(&e))?
         .ok_or(ControlError::SchemaMismatch)?;
-    Ok(
-        Record::decode(&decode_value(value.value(), limits)?, limits)?
-            .initial
-            .mode(),
-    )
+    let initial = Record::decode(&decode_value(value.value(), limits)?, limits)?.initial.mode();
+    let adoption = table.get(adoption::KEY).map_err(|e| map_storage_error(&e))?
+        .map(|v| decode_value(v.value(), limits)).transpose()?;
+    adoption::effective(initial, adoption.as_ref(), limits)
 }
 
 pub(super) fn require_indexed(journal: &PersistentControlJournal) -> Result<(), ControlError> {
+    require_indexed_checked(journal, &super::Unscoped)
+}
+
+pub(super) fn require_indexed_checked(journal: &PersistentControlJournal, check: &dyn Check) -> Result<(), ControlError> {
     if journal.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION
-        && journal.profile_checked(&super::Unscoped)? != JournalOperatingProfile::Indexed
+        && journal.profile_checked(check)? != JournalOperatingProfile::Indexed
     {
         return Err(ControlError::MigrationUnverified);
     }
@@ -310,11 +315,11 @@ pub(super) fn snapshot_mode(
     limits: JournalLimits,
 ) -> Result<JournalOperatingProfile, ControlError> {
     let key = ControlKey::new(KEY.to_vec(), limits)?;
-    Record::decode(
+    let initial = Record::decode(
         snapshot.get(&key).ok_or(ControlError::SchemaMismatch)?,
         limits,
-    )
-    .map(|r| r.initial.mode())
+    )?.initial.mode();
+    adoption::effective(initial, snapshot.get(&ControlKey::new(adoption::KEY.to_vec(), limits)?), limits)
 }
 
 pub(super) fn mode_value(
@@ -342,7 +347,7 @@ pub(super) fn validate_snapshot(
     if record.epoch > snapshot.identity.owner_epoch {
         return Err(ControlError::StoreCorrupt);
     }
-    let header = journal.header_from(read)?;
+    let header = journal.header_from_checked(read, check)?;
     check.check(Point::ReadOperation)?;
     let operation = operation_from_checked(read, record.operation, &header, journal.limits, check)?
         .ok_or(ControlError::StoreCorrupt)?;
@@ -384,7 +389,8 @@ pub(super) fn validate_snapshot(
         &keys,
         check,
     )?;
-    match record.initial.mode() {
+    adoption::validate(journal, read, snapshot, check)?;
+    match snapshot_mode(snapshot, journal.limits)? {
         JournalOperatingProfile::Indexed => {
             super::publication::visibility::validate_snapshot(
                 read,
