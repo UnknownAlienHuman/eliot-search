@@ -104,17 +104,6 @@ impl DirectRegistryOwner {
                 "{{\"event\":\"native_source\",\"admitted\":false,\"reason\":\"{}\",\"ready\":false,\"source_body_serving\":false}}",
                 error.source_refusal_code()) }),
         };
-        let first_scope_refusal = RefCell::new(None);
-        let scope = port.ensure_source_scope(&registry, acquired.root(), native.context(), &mut || {
-            acquired.check_current(&registry).map_err(|error| {
-                let code = if error.is_cancelled() { search_runtime_owner::OwnerError::OwnerCancelledBeforeMutation }
-                    else { search_runtime_owner::OwnerError::OwnerOperationConflict };
-                if first_scope_refusal.borrow().is_none() { *first_scope_refusal.borrow_mut() = Some(error); }
-                code
-            })
-        });
-        if let Some(error) = first_scope_refusal.into_inner() { return Err(error.to_string()); }
-        let _scope = scope.map_err(|_| "NATIVE_SOURCE_SCOPE_SETUP_REFUSED")?;
         let request = SourceAdmissionRequestV2 {
             expected_registry_revision: registry.revision(), root_binding_id: root_id,
             expected_root_revision: acquired.root().record_revision, namespace, owner,
@@ -141,6 +130,19 @@ pub(super) fn commit_native_admission(
     port: &mut crate::registry_control::RegistryJournal<'_, super::super::read_child::fresh_root::FreshRootCancellation>,
     mut held_source: impl FnMut(&SourceRegistry) -> Result<(), String>,
 ) -> Result<search_source_registry::source::AdmittedSourceReceipt, String> {
+    // Both metadata admission and the actual retention command enter here.
+    // Initialize logical scope once under their same held-Source checkpoint;
+    // putting this only in the metadata CLI would leave retention unbound.
+    let root = registry.root(request.root_binding_id).map_err(|_| "NATIVE_SOURCE_ROOT_UNAVAILABLE")?;
+    let first_scope_refusal = RefCell::new(None);
+    let scope = port.ensure_source_scope(registry, root, native.context(), &mut || {
+        held_source(registry).map_err(|error| {
+            if first_scope_refusal.borrow().is_none() { *first_scope_refusal.borrow_mut() = Some(error); }
+            search_runtime_owner::OwnerError::OwnerOperationConflict
+        })
+    });
+    if let Some(error) = first_scope_refusal.into_inner() { return Err(error); }
+    let _scope = scope.map_err(|_| "NATIVE_SOURCE_SCOPE_SETUP_REFUSED")?;
     let first_refusal = RefCell::new(None);
     let mut probe = || native.source_checkpoint().map_err(|error| {
         let cancelled = error.is_cancelled();
