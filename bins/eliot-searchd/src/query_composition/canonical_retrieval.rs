@@ -355,7 +355,7 @@ mod tests {
             resolve_candidate_identity(
                 &mut resolver,
                 &allowed,
-                PointId128::from_bytes([0x33; 16]),
+                PointId128::from_stored_bytes([0x33; 16]),
                 hint,
             ),
             Err(CanonicalIndexedPortError::Failure)
