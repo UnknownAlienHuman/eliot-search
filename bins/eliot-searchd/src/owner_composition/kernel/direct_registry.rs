@@ -431,6 +431,9 @@ pub(crate) use query_population::NativePopulationInput;
 pub(crate) use retained_reader::RetainedRevisionReadState;
 #[cfg(feature = "wave3-index")]
 pub use native_preparation_factory::QualifiedNativeProfiles;
+#[cfg(feature = "wave3-index")]
+#[path = "native_index_bootstrap.rs"]
+pub(super) mod index_bootstrap;
 pub use command::maybe_run;
 
 #[cfg(all(test, windows))]
