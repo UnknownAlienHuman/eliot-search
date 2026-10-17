@@ -448,17 +448,9 @@ where
 
     validate_abort_resolution_readback(transaction, readback, context, intent_binding, &request)?;
 
-    let mut command = original_context_command(
-        transaction,
-        PublicationEffectKind::CommitAbortFinalization,
-        context,
-        intent_binding,
-        request.operation_id.clone(),
-    )?;
+    let mut command =
+        super::abort::abort_commit_command(transaction, &request, &abort_binding, context)?;
     command.abort_request = Some(request.clone());
-    if command.binding != abort_binding {
-        return Err(PublicationError::OperationMismatch);
-    }
     context
         .preflight()
         .map_err(|_| PublicationError::OperationContextInvalid)?;
@@ -502,7 +494,6 @@ where
             coordinator.current_manifest_digest = transaction.prepared.old_manifest_digest;
             coordinator.abort_finalization.resolution = Some(request.resolution.clone());
             coordinator.abort_finalization.request = Some(request.clone());
-            coordinator.abort_finalization.intent_binding = Some(intent_binding.clone());
             coordinator.abort_finalization.commit_binding = Some(abort_binding);
             coordinator.abort_finalization.commit = Some(AbortControlCommitObservation {
                 request,
@@ -538,7 +529,6 @@ where
             coordinator.current_manifest_digest = transaction.prepared.old_manifest_digest;
             coordinator.abort_finalization.resolution = Some(request.resolution.clone());
             coordinator.abort_finalization.request = Some(request);
-            coordinator.abort_finalization.intent_binding = Some(intent_binding.clone());
             coordinator.abort_finalization.commit_binding = Some(abort_binding);
             coordinator.abort_finalization.retry_control = Some(control);
             coordinator.abort_finalization.commit = None;

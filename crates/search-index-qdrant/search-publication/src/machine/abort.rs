@@ -113,10 +113,8 @@ pub(super) struct AbortFinalizationProgress {
     pub(super) commit: Option<AbortControlCommitObservation>,
     pub(super) snapshot: Option<SnapshotPublishReceipt>,
     pub(super) retry_control: Option<crate::model::PublicationControlReadback>,
-    /// Original durable intent binding, retained for identity reconstruction only.
-    pub(super) intent_binding: Option<PublicationEffectBinding>,
-    /// Original abort CAS binding. Readback uses the current recovery context;
-    /// the historical binding remains attached to the exact mutation identity.
+    /// Exact binding for the current abort-finalization attempt. It is independent
+    /// of the original intent binding and survives readback/recovery for this attempt.
     pub(super) commit_binding: Option<PublicationEffectBinding>,
 }
 
@@ -129,7 +127,6 @@ impl fmt::Debug for AbortFinalizationProgress {
             .field("snapshot_published", &self.snapshot.is_some())
             .field("has_commit_binding", &self.commit_binding.is_some())
             .field("has_retry_control", &self.retry_control.is_some())
-            .field("has_intent_binding", &self.intent_binding.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -280,7 +277,6 @@ impl PublicationCoordinator {
         if self.abort_finalization.retry_control.is_some() {
             return Err(PublicationError::RecoveryBlocked);
         }
-        let reusing_binding = self.abort_finalization.commit_binding.is_some();
         let binding = if let Some(binding) = &self.abort_finalization.commit_binding {
             binding.clone()
         } else {
@@ -315,9 +311,6 @@ impl PublicationCoordinator {
             // fenced until the complete original observation matches again.
             transaction.pending_effect = Some(PublicationEffectKind::CommitAbortFinalization);
         }
-        let intent_binding = reusing_binding
-            .then(|| self.abort_finalization.intent_binding.clone())
-            .flatten();
         let (proof, not_applied_control) = {
             let transaction = self
                 .active
@@ -331,7 +324,6 @@ impl PublicationCoordinator {
                 context,
                 PublicationEffectKind::CommitAbortFinalization,
                 Some(&binding),
-                intent_binding.as_ref(),
             )?;
             let control = observed.control.ok_or(PublicationError::ControlConflict)?;
             if observed.abort_request.as_ref() != Some(&request)
@@ -450,7 +442,6 @@ impl PublicationCoordinator {
                 context,
                 PublicationEffectKind::PublishAbortSnapshot,
                 None,
-                None,
             )?;
             let snapshot = observed
                 .snapshot
@@ -529,6 +520,34 @@ impl PublicationCoordinator {
     }
 }
 
+/// Rebuild an abort effect from its durable per-attempt binding.
+///
+/// The current context supplies cancellation/deadline checks and the port call;
+/// the retained attempt binding supplies this mutation's request/deadline/budget
+/// identity. Stable transaction and request coordinates must still match exactly.
+pub(super) fn abort_commit_command<C: CancellationProbe>(
+    transaction: &super::PublicationTransaction,
+    request: &AbortFinalizationRequest,
+    attempt_binding: &PublicationEffectBinding,
+    context: &OperationContext<C>,
+) -> Result<super::PublicationEffectCommand, PublicationError> {
+    let mut command = effect_command(
+        transaction,
+        PublicationEffectKind::CommitAbortFinalization,
+        context,
+    )?;
+    let mut expected = command.binding.clone();
+    expected.request_id = attempt_binding.request_id;
+    expected.relative_deadline_ms = attempt_binding.relative_deadline_ms;
+    expected.budget_ref.clone_from(&attempt_binding.budget_ref);
+    expected.operation_id.clone_from(&request.operation_id);
+    if &expected != attempt_binding {
+        return Err(PublicationError::OperationMismatch);
+    }
+    command.binding.clone_from(attempt_binding);
+    Ok(command)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn execute_abort_effect<C, E, R>(
     transaction: &mut super::PublicationTransaction,
@@ -537,8 +556,7 @@ fn execute_abort_effect<C, E, R>(
     readback: &mut R,
     context: &OperationContext<C>,
     effect: PublicationEffectKind,
-    original_binding: Option<&PublicationEffectBinding>,
-    original_intent_binding: Option<&PublicationEffectBinding>,
+    attempt_binding: Option<&PublicationEffectBinding>,
 ) -> Result<crate::model::PublicationEffectReadback, PublicationError>
 where
     C: CancellationProbe,
@@ -559,30 +577,15 @@ where
     {
         return Err(PublicationError::OutcomeUnknown);
     }
-    let mut command = effect_command(transaction, effect, context)?;
-    if effect == PublicationEffectKind::CommitAbortFinalization {
-        command
-            .binding
-            .operation_id
-            .clone_from(&request.operation_id);
-        if let Some(binding) = original_binding {
-            let mut expected = command.binding.clone();
-            let original_request_id_matches = if let Some(intent_binding) = original_intent_binding
-            {
-                expected.request_id = intent_binding.request_id;
-                expected.relative_deadline_ms = intent_binding.relative_deadline_ms;
-                expected.budget_ref.clone_from(&intent_binding.budget_ref);
-                binding.request_id == intent_binding.request_id
-                    && intent_binding.request_id == request.intent.request_id()
-            } else {
-                binding.request_id == context.request_id()
-            };
-            if !original_request_id_matches || binding != &expected {
-                return Err(PublicationError::OperationMismatch);
-            }
-            command.binding.clone_from(binding);
+    let mut command = match (effect, attempt_binding) {
+        (PublicationEffectKind::CommitAbortFinalization, Some(binding)) => {
+            abort_commit_command(transaction, request, binding, context)?
         }
-    }
+        (PublicationEffectKind::CommitAbortFinalization, None) | (_, Some(_)) => {
+            return Err(PublicationError::OperationMismatch);
+        }
+        (_, None) => effect_command(transaction, effect, context)?,
+    };
     command.abort_request = Some(request.clone());
     if transaction.pending_effect.is_none() {
         let identity = MutationIdentity::new(

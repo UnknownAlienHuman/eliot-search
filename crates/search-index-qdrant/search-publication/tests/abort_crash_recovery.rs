@@ -37,6 +37,20 @@ fn fresh_recovery_context() -> OperationContext<FakeCancellation> {
     .unwrap()
 }
 
+fn distinct_context(
+    request: u8,
+    relative_deadline_ms: u64,
+    budget: &str,
+) -> OperationContext<FakeCancellation> {
+    OperationContext::new(
+        RequestId::from_bytes([request; 16]),
+        relative_deadline_ms,
+        FakeCancellation::new(false),
+        OpaqueRef::new(budget).unwrap(),
+    )
+    .unwrap()
+}
+
 fn aborted_scenario(
     commit_outcome: PublicationEffectOutcome,
 ) -> (
@@ -273,6 +287,162 @@ fn exact_not_applied_readback_readdresses_only_from_fresh_owner_generation_and_g
         vec![PublicationEffectKind::CommitAbortFinalization]
     );
     assert_eq!(current_process.effects.effect_ids, vec![retry.operation_id]);
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "Keep the A/B/C abort-attempt restart trace in one focused owner case"
+)]
+fn replacement_abort_attempt_binding_survives_repeat_ack_and_crash_restore() {
+    let intent_context = publication_support::operation_context();
+    let attempt_context = distinct_context(92, 35_000, "budget:abort-attempt-b");
+    let restart_context = distinct_context(93, 75_000, "budget:abort-recovery-c");
+    assert_ne!(intent_context.request_id(), attempt_context.request_id());
+    assert_ne!(
+        intent_context.relative_deadline_ms(),
+        attempt_context.relative_deadline_ms()
+    );
+    assert_ne!(intent_context.budget_ref(), attempt_context.budget_ref());
+    assert_ne!(attempt_context.request_id(), restart_context.request_id());
+    assert_ne!(
+        attempt_context.relative_deadline_ms(),
+        restart_context.relative_deadline_ms()
+    );
+    assert_ne!(attempt_context.budget_ref(), restart_context.budget_ref());
+
+    let (scenario_a, original_request, original_binding) =
+        aborted_scenario(PublicationEffectOutcome::NotApplied);
+    assert_eq!(
+        original_request.intent.request_id(),
+        intent_context.request_id()
+    );
+    assert_eq!(original_binding.request_id, intent_context.request_id());
+    assert_eq!(
+        original_binding.relative_deadline_ms,
+        intent_context.relative_deadline_ms().get()
+    );
+    assert_eq!(original_binding.budget_ref, *intent_context.budget_ref());
+
+    let (mut after_not_applied, decision) = scenario_a
+        .restore_with_context(32, &attempt_context)
+        .unwrap();
+    assert_eq!(
+        decision,
+        PublicationRecoveryDecision::PrepareAbortFinalization
+    );
+    let replacement = after_not_applied
+        .prepare_abort_finalization_after_recovery(id("abort-commit-attempt-b"))
+        .unwrap();
+    assert_ne!(replacement.operation_id, original_request.operation_id);
+    assert_eq!(replacement.intent.request_id(), intent_context.request_id());
+    assert_eq!(replacement.expected_control_generation, 55);
+
+    let mut attempt_b = PhasePort::default();
+    after_not_applied
+        .acknowledge_abort_commit(
+            &mut attempt_b.effects,
+            &mut attempt_b.readback,
+            &attempt_context,
+        )
+        .unwrap();
+    let attempt_binding = attempt_b
+        .effects
+        .effect_bindings
+        .iter()
+        .find_map(|(effect, binding)| {
+            (*effect == PublicationEffectKind::CommitAbortFinalization).then(|| binding.clone())
+        })
+        .unwrap();
+    assert_eq!(attempt_binding.operation_id, replacement.operation_id);
+    assert_eq!(attempt_binding.request_id, attempt_context.request_id());
+    assert_eq!(
+        attempt_binding.relative_deadline_ms,
+        attempt_context.relative_deadline_ms().get()
+    );
+    assert_eq!(attempt_binding.budget_ref, *attempt_context.budget_ref());
+    assert_ne!(attempt_binding.request_id, original_binding.request_id);
+    assert_ne!(
+        attempt_binding.relative_deadline_ms,
+        original_binding.relative_deadline_ms
+    );
+    assert_ne!(attempt_binding.budget_ref, original_binding.budget_ref);
+    assert_eq!(
+        attempt_b.effects.effect_kinds,
+        vec![PublicationEffectKind::CommitAbortFinalization]
+    );
+
+    after_not_applied
+        .acknowledge_abort_commit(
+            &mut attempt_b.effects,
+            &mut attempt_b.readback,
+            &attempt_context,
+        )
+        .unwrap();
+    assert_eq!(
+        attempt_b.effects.effect_kinds,
+        vec![PublicationEffectKind::CommitAbortFinalization]
+    );
+
+    let mut scenario_b = scenario_a;
+    scenario_b.current_guards = replacement.current_guards;
+    scenario_b.readback_script.abort_request_override = Some(replacement.clone());
+    scenario_b.readback_script.abort_binding_override = Some(attempt_binding);
+    scenario_b
+        .readback_script
+        .control_before_generation_override = Some(replacement.expected_control_generation);
+    scenario_b.readback_script.control_generation_override = Some(
+        replacement
+            .expected_control_generation
+            .checked_add(1)
+            .unwrap(),
+    );
+    scenario_b.readback_script.control_guards_override = Some(replacement.current_guards);
+    scenario_b
+        .readback_script
+        .outcomes
+        .retain(|(effect, _)| *effect != PublicationEffectKind::CommitAbortFinalization);
+    scenario_b.readback_script.outcomes.push((
+        PublicationEffectKind::CommitAbortFinalization,
+        PublicationEffectOutcome::Applied,
+    ));
+
+    let (mut after_crash, decision) = scenario_b
+        .restore_with_context(32, &restart_context)
+        .unwrap();
+    assert_eq!(decision, PublicationRecoveryDecision::PublishAbortSnapshot);
+    assert_eq!(
+        after_crash.active().unwrap().phase(),
+        PublicationPhase::Aborted
+    );
+
+    let mut restart_readback = PhasePort::default();
+    after_crash
+        .acknowledge_abort_commit(
+            &mut restart_readback.effects,
+            &mut restart_readback.readback,
+            &restart_context,
+        )
+        .unwrap();
+    assert!(restart_readback.effects.effect_kinds.is_empty());
+    assert_eq!(
+        restart_readback.readback.readback_ids,
+        vec![replacement.operation_id]
+    );
+
+    let mut process_c = PhasePort::default();
+    after_crash
+        .publish_abort_snapshot(
+            &mut process_c.effects,
+            &mut process_c.readback,
+            &restart_context,
+        )
+        .unwrap();
+    assert_eq!(
+        process_c.effects.effect_kinds,
+        vec![PublicationEffectKind::PublishAbortSnapshot]
+    );
+    after_crash.finalize_aborted().unwrap();
 }
 
 #[test]

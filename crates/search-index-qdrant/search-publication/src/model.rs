@@ -184,11 +184,12 @@ pub enum PublicationEffectOutcome {
 pub struct PublicationEffectBinding {
     /// Original immutable publication operation.
     pub transaction_id: OpaqueId,
-    /// Request identity from the retained original `OperationContext`.
+    /// Request identity bound to this exact effect attempt; an abort retry can
+    /// differ from the immutable publication intent's request identity.
     pub request_id: RequestId,
-    /// Original finite relative deadline supplied with the request.
+    /// Finite relative deadline bound to this exact effect attempt.
     pub relative_deadline_ms: u64,
-    /// Original opaque budget reference supplied with the request.
+    /// Opaque budget reference bound to this exact effect attempt.
     pub budget_ref: OpaqueRef,
     /// Stable phase-specific mutation identity; unknown outcomes never switch it.
     pub operation_id: OpaqueId,
@@ -336,8 +337,8 @@ pub struct PublicationEffectReadback {
     pub abandonment: Option<PublicationAbandonReadback>,
     /// Exact abort-finalization command retained by the control owner.
     pub abort_request: Option<crate::machine::AbortFinalizationRequest>,
-    /// Original complete mutation binding for that command, retained separately
-    /// from the current recovery call's `OperationContext`.
+    /// Complete durable binding for this abort-finalization attempt, retained
+    /// separately from both the original intent binding and recovery call context.
     pub abort_binding: Option<PublicationEffectBinding>,
 }
 
