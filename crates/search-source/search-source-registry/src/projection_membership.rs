@@ -3,14 +3,73 @@
 use super::{RegistryBatch, RegistryChange, RegistryOperation, SourceRegistry, batch};
 use crate::error::{RegistryControlPort, RegistryError, cancelled_before_commit};
 use search_contracts::{
-    OpaqueId, ProjectionMembership, ProjectionMembershipId, ReceiptRef, SourceMembershipId,
+    AccessPartitionId, OpaqueId, ProjectionMembership, ProjectionMembershipId, ReceiptRef,
+    ScoringPartitionId, SourceMembershipId,
 };
 use search_ports::{CancellationProbe, OperationContext};
 use std::collections::BTreeMap;
 
 pub use search_source_records::projection_membership::{
-    ProjectionMembershipBindRequest, ProjectionMembershipRecord,
+    ProjectionMembershipBindRequest, ProjectionMembershipRecord, ProjectionPartitionSemantics,
 };
+
+/// Existing partition IDs whose complete canonical meaning matches one new C03 request.
+///
+/// Missing classes require Root's qualified entropy owner to allocate an ID
+/// after original-operation recovery and before the C02 preparation record is
+/// committed. This read result is metadata only and grants no authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReusableProjectionPartitions {
+    access: Option<AccessPartitionId>,
+    scoring: Option<ScoringPartitionId>,
+}
+
+impl ReusableProjectionPartitions {
+    /// Existing access class with byte-identical canonical meaning.
+    #[must_use]
+    pub const fn access(&self) -> Option<AccessPartitionId> {
+        self.access
+    }
+
+    /// Existing scoring class with byte-identical canonical meaning.
+    #[must_use]
+    pub const fn scoring(&self) -> Option<ScoringPartitionId> {
+        self.scoring
+    }
+}
+
+/// Resolve shared partition classes by exact canonical meaning from retained C03 rows.
+///
+/// The caller resolves its original C03 operation before invoking this method
+/// and performs any missing typed-ID draw only after this exact scan. Historical
+/// rows without class semantics cannot prove equality and are skipped.
+pub fn reusable_projection_partitions(
+    registry: &SourceRegistry,
+    semantics: &ProjectionPartitionSemantics,
+) -> Result<ReusableProjectionPartitions, RegistryError> {
+    let mut access = None;
+    let mut scoring = None;
+    for record in registry.projection_memberships.values() {
+        let Some(existing) = &record.request().partition_semantics else {
+            continue;
+        };
+        if existing.access() == semantics.access() {
+            let id = record.binding().access_partition_id;
+            if access.is_some_and(|prior| prior != id) {
+                return Err(RegistryError::ProjectionMembershipConflict);
+            }
+            access = Some(id);
+        }
+        if existing.scoring() == semantics.scoring() {
+            let id = record.binding().scoring_partition_id;
+            if scoring.is_some_and(|prior| prior != id) {
+                return Err(RegistryError::ProjectionMembershipConflict);
+            }
+            scoring = Some(id);
+        }
+    }
+    Ok(ReusableProjectionPartitions { access, scoring })
+}
 
 /// Original complete request retained across an unknown outcome or retry.
 #[derive(Clone, Debug)]
@@ -235,6 +294,28 @@ pub(super) fn stage_bind(
     if registry.projection_memberships.len() >= registry.limits.max_memberships {
         return Err(RegistryError::CapacityExceeded);
     }
+    if let Some(semantics) = &request.partition_semantics {
+        for existing in registry.projection_memberships.values() {
+            let old = existing.request().partition_semantics.as_ref();
+            let binding = existing.binding();
+            let access_same_id = binding.access_partition_id == request.binding.access_partition_id;
+            let scoring_same_id =
+                binding.scoring_partition_id == request.binding.scoring_partition_id;
+            match old {
+                Some(old) => {
+                    if (old.access() == semantics.access()) != access_same_id
+                        || (old.scoring() == semantics.scoring()) != scoring_same_id
+                    {
+                        return Err(RegistryError::ProjectionMembershipConflict);
+                    }
+                }
+                None if access_same_id || scoring_same_id => {
+                    return Err(RegistryError::ProjectionMembershipConflict);
+                }
+                None => {}
+            }
+        }
+    }
     ProjectionMembershipRecord::from_observed_parts(
         request.clone(),
         after_revision,
@@ -270,21 +351,38 @@ pub(super) fn prepare_batch(
     let state = batch::RegistryStateRecord::ProjectionMembership(stage_bind(
         registry, input, after, receipt,
     )?);
-    let record = batch::DecodedBatch::from_observed_parts_v6(
-        crate::RegistryJournalEntry::new(
-            request.operation.operation_id().clone(),
-            request.operation.mutation_digest(),
-            registry.revision,
-            after,
-            crate::JournalEntryKind::BatchApply,
-            receipt.clone(),
-        ),
-        batch::request_fingerprint(request)?,
-        vec![batch::RegistryStateDelta::new(state.key(), None, state)?],
-        request.changes.clone(),
-        registry.limits,
-    )?;
-    batch::prepare_v6_record(registry, record)
+    let entry = crate::RegistryJournalEntry::new(
+        request.operation.operation_id().clone(),
+        request.operation.mutation_digest(),
+        registry.revision,
+        after,
+        crate::JournalEntryKind::BatchApply,
+        receipt.clone(),
+    );
+    let fingerprint = batch::request_fingerprint(request)?;
+    let delta = batch::RegistryStateDelta::new(state.key(), None, state)?;
+    let record = if input.partition_semantics.is_some() {
+        batch::DecodedBatch::from_observed_parts_v7(
+            entry,
+            fingerprint,
+            vec![delta],
+            request.changes.clone(),
+            registry.limits,
+        )?
+    } else {
+        batch::DecodedBatch::from_observed_parts_v6(
+            entry,
+            fingerprint,
+            vec![delta],
+            request.changes.clone(),
+            registry.limits,
+        )?
+    };
+    if input.partition_semantics.is_some() {
+        batch::prepare_v7_record(registry, record)
+    } else {
+        batch::prepare_v6_record(registry, record)
+    }
 }
 
 pub(super) fn validate_install(
@@ -379,5 +477,107 @@ impl SourceRegistry {
             .get(&id)
             .copied()
             .ok_or(RegistryError::ProjectionMembershipNotFound)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{error::DEFAULT_REGISTRY_LIMITS, membership::PermanentMembershipProvenanceV2};
+    use search_contracts as c;
+
+    fn canonical(label: &str) -> Vec<u8> {
+        c::to_canonical_cbor(&c::CanonicalValue::Text(c::CanonicalText::new(label).unwrap()))
+            .unwrap()
+            .into_vec()
+    }
+
+    fn semantics(access: &str, scoring: &str) -> ProjectionPartitionSemantics {
+        ProjectionPartitionSemantics::new(canonical(access), canonical(scoring)).unwrap()
+    }
+
+    fn record(
+        source: u8,
+        projection: u8,
+        representation: u8,
+        access_partition: u8,
+        scoring_partition: u8,
+        semantics: ProjectionPartitionSemantics,
+    ) -> ProjectionMembershipRecord {
+        let namespace = c::SourceNamespaceId::from_bytes([1; 16]);
+        let identity = c::SourceIdentity {
+            source_namespace_id: namespace,
+            source_id: c::SourceId::from_bytes([source; 16]),
+            identity_kind: c::SourceIdentityKind::NtfsFile,
+            stable_identity_components: c::OpaqueCanonicalBytes::from_validated(vec![source])
+                .unwrap(),
+        };
+        let revision = c::NonZeroRevision::new(1).unwrap();
+        let provenance = PermanentMembershipProvenanceV2::from_stored_parts(
+            identity.clone(),
+            revision,
+            c::RootBindingId::from_bytes([3; 16]),
+            revision,
+            namespace,
+            revision,
+            c::SourceOwnerGeneration::from_bytes([4; 32]),
+            b"policy".to_vec(),
+            b"admission".to_vec(),
+            revision,
+        )
+        .unwrap();
+        let source_membership_id = c::SourceMembershipId::from_bytes([source; 16]);
+        let request = ProjectionMembershipBindRequest {
+            binding: c::ProjectionMembership {
+                projection_membership_id: c::ProjectionMembershipId::from_bytes([projection; 16]),
+                source_membership_id,
+                representation_id: c::RepresentationId::from_bytes([representation; 16]),
+                access_partition_id: c::AccessPartitionId::from_bytes([access_partition; 16]),
+                scoring_partition_id: c::ScoringPartitionId::from_bytes([scoring_partition; 16]),
+                projection_schema_id: c::ProfileId::new("test-projection-schema").unwrap(),
+            },
+            expected_membership_revision: c::MembershipRevision::new(1),
+            expected_provenance: provenance,
+            partition_semantics: Some(semantics),
+        };
+        ProjectionMembershipRecord::from_observed_parts(
+            request,
+            1,
+            c::ReceiptRef::new(format!("receipt:{source}")).unwrap(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn partition_reuse_is_full_semantic_and_conflicting_ids_refuse() {
+        let baseline = semantics("access:read-v1", "scoring:code-v1");
+        let mut registry = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).unwrap();
+        for (source, projection) in [(11, 21), (12, 22)] {
+            let record = record(source, projection, source + 20, 7, 8, baseline.clone());
+            registry
+                .projection_memberships
+                .insert(record.binding().source_membership_id, record);
+        }
+
+        let reused = reusable_projection_partitions(&registry, &baseline).unwrap();
+        assert_eq!(reused.access(), Some(c::AccessPartitionId::from_bytes([7; 16])));
+        assert_eq!(reused.scoring(), Some(c::ScoringPartitionId::from_bytes([8; 16])));
+
+        let changed_access = semantics("access:deny-v2", "scoring:code-v1");
+        let changed = reusable_projection_partitions(&registry, &changed_access).unwrap();
+        assert_eq!(changed.access(), None);
+        assert_eq!(changed.scoring(), Some(c::ScoringPartitionId::from_bytes([8; 16])));
+
+        let mut conflicting = SourceRegistry::new(DEFAULT_REGISTRY_LIMITS).unwrap();
+        for (source, projection, access_partition) in [(11, 21, 7), (12, 22, 9)] {
+            let record = record(source, projection, source + 20, access_partition, 8, baseline.clone());
+            conflicting
+                .projection_memberships
+                .insert(record.binding().source_membership_id, record);
+        }
+        assert!(matches!(
+            reusable_projection_partitions(&conflicting, &baseline),
+            Err(RegistryError::ProjectionMembershipConflict)
+        ));
     }
 }

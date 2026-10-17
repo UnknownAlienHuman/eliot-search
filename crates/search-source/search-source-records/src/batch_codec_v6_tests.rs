@@ -1,5 +1,7 @@
 use super::*;
-use crate::projection_membership::{ProjectionMembershipBindRequest, ProjectionMembershipRecord};
+use crate::projection_membership::{
+    ProjectionMembershipBindRequest, ProjectionMembershipRecord, ProjectionPartitionSemantics,
+};
 
 #[test]
 fn projection_v6_retains_actual_ids_and_refuses_conflicting_record_or_transition() {
@@ -38,6 +40,7 @@ fn projection_v6_retains_actual_ids_and_refuses_conflicting_record_or_transition
         },
         expected_membership_revision: c::MembershipRevision::new(1),
         expected_provenance: provenance,
+        partition_semantics: None,
     };
     let receipt = ReceiptRef::new("receipt:projection:v6").unwrap();
     let state = RegistryStateRecord::ProjectionMembership(
@@ -119,5 +122,64 @@ fn projection_v6_retains_actual_ids_and_refuses_conflicting_record_or_transition
             crate::error::DEFAULT_REGISTRY_LIMITS
         )
         .is_err()
+    );
+
+    let canonical = |value: &str| {
+        let value = c::CanonicalValue::Array(
+            c::BoundedList::new(vec![c::CanonicalValue::Text(
+                c::CanonicalText::new(value).unwrap(),
+            )])
+            .unwrap(),
+        );
+        c::to_canonical_cbor(&value).unwrap().into_vec()
+    };
+    let mut qualified_request = request;
+    qualified_request.partition_semantics = Some(
+        ProjectionPartitionSemantics::new(
+            canonical("access-policy:read-v1"),
+            canonical("scoring:code-identifiers-v1"),
+        )
+        .unwrap(),
+    );
+    let qualified_receipt = ReceiptRef::new("receipt:projection:v7").unwrap();
+    let qualified_state = RegistryStateRecord::ProjectionMembership(
+        ProjectionMembershipRecord::from_observed_parts(
+            qualified_request.clone(),
+            4,
+            qualified_receipt.clone(),
+        )
+        .unwrap(),
+    );
+    let qualified_batch = RegistryBatch {
+        expected_registry_revision: 3,
+        operation: crate::operation::RegistryOperation::new(
+            OpaqueId::new("projection:qualified-operation").unwrap(),
+            Blake3Digest32::from_stored_bytes([12; 32]),
+        ),
+        changes: vec![RegistryChange::BindProjectionMembership {
+            request: qualified_request,
+            receipt: qualified_receipt.clone(),
+        }],
+    };
+    let qualified_entry = RegistryJournalEntry::new(
+        qualified_batch.operation.operation_id().clone(),
+        qualified_batch.operation.mutation_digest(),
+        3,
+        4,
+        JournalEntryKind::BatchApply,
+        qualified_receipt,
+    );
+    let qualified_record = DecodedBatch::from_observed_parts_v7(
+        qualified_entry,
+        request_fingerprint(&qualified_batch).unwrap(),
+        vec![RegistryStateDelta::new(qualified_state.key(), None, qualified_state).unwrap()],
+        qualified_batch.changes.clone(),
+        crate::error::DEFAULT_REGISTRY_LIMITS,
+    )
+    .unwrap();
+    let qualified_encoded = qualified_record.encode().unwrap();
+    assert_eq!(
+        decode_batch_record(&qualified_encoded, crate::error::DEFAULT_REGISTRY_LIMITS).unwrap(),
+        qualified_record
     );
 }

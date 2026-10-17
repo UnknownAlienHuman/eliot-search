@@ -5,19 +5,20 @@
 //! revision-guarded durable mutations. Every durable mutation persists its
 //! content-free receipt through the vendor-neutral [`crate::error::RegistryControlPort`].
 
+pub use crate::projection_membership::{
+    PreparedProjectionMembership, ProjectionMembershipBindRequest, ProjectionMembershipReceipt,
+    ProjectionMembershipRecord, ProjectionPartitionSemantics, ReusableProjectionPartitions,
+    bind_projection_membership, commit_projection_membership, prepare_projection_membership,
+    read_projection_membership, reusable_projection_partitions,
+};
 pub use crate::recovery::source_namespace_v2::{
-    NativeNamespaceRequestV2, NativeNamespacePreparationV2, PreparedNativeNamespaceV2,
-    CommittedNativeNamespaceV2, prepare_native_namespace_v2, commit_native_namespace_v2,
+    CommittedNativeNamespaceV2, NativeNamespacePreparationV2, NativeNamespaceRequestV2,
+    PreparedNativeNamespaceV2, commit_native_namespace_v2, prepare_native_namespace_v2,
 };
 pub use crate::recovery::source_v2::{
     PreparedSourceAdmissionV2, SourceAdmissionPreparationV2, SourceAdmissionRecoveryV2,
     SourceAdmissionV2Error, commit_source_admission_v2, prepare_source_admission_v2,
     recover_source_admission_v2,
-};
-pub use crate::projection_membership::{
-    PreparedProjectionMembership, ProjectionMembershipBindRequest, ProjectionMembershipReceipt,
-    ProjectionMembershipRecord, bind_projection_membership, commit_projection_membership,
-    prepare_projection_membership, read_projection_membership,
 };
 pub use crate::recovery::{
     PreparedSourceMembershipV2, SourceMembershipReceiptV2, commit_source_membership_v2,

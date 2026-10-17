@@ -9,10 +9,11 @@ use std::marker::PhantomData;
 use std::time::Instant;
 
 use search_contracts::{
-    AccessPolicyBindingId, CorpusId, OpaqueId, ResidencyPolicyBindingId, SourceId,
-    SourceMembershipId, SourceNamespaceId, WorkspaceId,
+    AccessPartitionId, AccessPolicyBindingId, CorpusId, MaterializationId, OpaqueId,
+    ProjectionMembershipId, RepresentationId, ResidencyPolicyBindingId, ScoringPartitionId,
+    SourceId, SourceMembershipId, SourceNamespaceId, WorkspaceId,
 };
-use search_control_redb::MigrationBootstrapWork;
+use search_control_redb::{MigrationBootstrapWork, MutationId};
 use search_ports::{
     CancellationProbe, ContextReason, DisclosureClass, OperationContext, Port, PortError,
     PortErrorKind, PortFailure, PortRetryability,
@@ -131,6 +132,73 @@ impl<'a, C: CancellationProbe> SourceIdentityIdsV2<'a, C> {
         context: &OperationContext<C>,
     ) -> Result<CorpusId, SourceIdentityIdError> {
         mint_fresh_id(self.deadline, self.work, context).map(CorpusId::from_bytes)
+    }
+
+    /// Allocates the distinct C00 materialization identity from qualified entropy.
+    pub(crate) fn fresh_materialization_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<MaterializationId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(MaterializationId::from_bytes)
+    }
+
+    /// Allocates the distinct C00 representation identity from qualified entropy.
+    pub(crate) fn fresh_representation_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<RepresentationId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(RepresentationId::from_bytes)
+    }
+
+    /// Allocates the distinct C03 projection-membership identity from qualified entropy.
+    pub(crate) fn fresh_projection_membership_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<ProjectionMembershipId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(ProjectionMembershipId::from_bytes)
+    }
+
+    /// Allocates a new access partition only when the Root semantic owner has no equal class.
+    pub(crate) fn fresh_access_partition_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<AccessPartitionId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(AccessPartitionId::from_bytes)
+    }
+
+    /// Allocates a new scoring partition only when the Root semantic owner has no equal class.
+    pub(crate) fn fresh_scoring_partition_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<ScoringPartitionId, SourceIdentityIdError> {
+        mint_fresh_id(self.deadline, self.work, context).map(ScoringPartitionId::from_bytes)
+    }
+
+    /// Allocates the exact C02 transaction identity from the qualified entropy owner.
+    pub(crate) fn fresh_preparation_mutation_id(
+        &self,
+        context: &OperationContext<C>,
+    ) -> Result<MutationId, SourceIdentityIdError> {
+        context
+            .preflight()
+            .map_err(SourceIdentityIdError::Context)?;
+        if Instant::now() >= self.deadline {
+            return Err(SourceIdentityIdError::Deadline);
+        }
+        (self.work)(MigrationBootstrapWork::Checkpoint).map_err(SourceIdentityIdError::Owner)?;
+        (self.work)(MigrationBootstrapWork::Allocate(32)).map_err(SourceIdentityIdError::Owner)?;
+        (self.work)(MigrationBootstrapWork::Read(32)).map_err(SourceIdentityIdError::Owner)?;
+        let mut bytes = [0_u8; 32];
+        crate::qualified_entropy::fill_qualified_entropy(&mut bytes)
+            .map_err(|_| SourceIdentityIdError::EntropyRefused)?;
+        (self.work)(MigrationBootstrapWork::Process(32)).map_err(SourceIdentityIdError::Owner)?;
+        if Instant::now() >= self.deadline {
+            return Err(SourceIdentityIdError::Deadline);
+        }
+        context
+            .preflight()
+            .map_err(SourceIdentityIdError::Context)?;
+        Ok(MutationId(bytes))
     }
 
     /// Supplies C03's caller-assigned member ID. Selected policy/profile owners

@@ -34,10 +34,19 @@ rechecks the active C03 owner relationships. `projection_membership_record` and
 registry snapshot v3-v6 schemas/digests do not commit projection coordinates;
 consumers must use this exact typed read seam, not infer a projection binding
 from a snapshot digest. Root genuine entropy, C07 source revision and C08/C09
-representation qualification, C18 partition meaning/currentness, and projection
-schema/profile acceptance remain upstream obligations. No record is a grant.
+representation qualification, C18 partition currentness, and projection
+schema/profile acceptance remain separate obligations. No record is a grant.
 
-The v6 batch/state and v3 key profiles are append-only additions. All old
+New v7 first binds retain canonical access and scoring class meanings beside the
+typed partition IDs. `reusable_projection_partitions` scans those existing C03
+rows and returns IDs only for byte-identical canonical meanings; source IDs,
+membership IDs, operation IDs and nonces are excluded from class semantics.
+The atomic bind refuses one meaning with multiple IDs or one ID with different
+meanings. Historical v6 rows have no class meaning and cannot prove reuse.
+These records define partition equivalence; they do not authorize query access
+or assert current C18 policy state.
+
+The v7 batch/state and v3 key profiles are append-only additions. All old
 encoders and digest formulas are retained. A new operation cannot overwrite an
 existing row, including a change of representation/schema/access/scoring IDs.
 Exact follow-up: define a `ProjectionMembership` expected-old transition

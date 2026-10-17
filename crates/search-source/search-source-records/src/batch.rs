@@ -18,6 +18,8 @@ const BATCH_PROFILE_V5: &str = "eliot.registry-batch.v5";
 const STATE_PROFILE_V5: &str = "eliot.registry-state.v5";
 const BATCH_PROFILE_V6: &str = "eliot.registry-batch.v6";
 const STATE_PROFILE_V6: &str = "eliot.registry-state.v6";
+const BATCH_PROFILE_V7: &str = "eliot.registry-batch.v7";
+const STATE_PROFILE_V7: &str = "eliot.registry-state.v7";
 
 #[path = "batch_codec.rs"]
 mod codec;
@@ -105,7 +107,11 @@ pub enum RegistryStateRecord {
 impl RegistryStateRecord {
     /// Stable owner bytes for one complete technical state value.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        if matches!(self, Self::ProjectionMembership(_)) {
+        if matches!(self, Self::ProjectionMembership(record)
+            if record.request().partition_semantics.is_some())
+        {
+            codec::encode_state_v7(self)
+        } else if matches!(self, Self::ProjectionMembership(_)) {
             codec::encode_state_v6(self)
         } else if matches!(self, Self::Membership(record) if record.is_permanent_v2()) {
             codec::encode_state_v5(self)
@@ -124,10 +130,13 @@ impl RegistryStateRecord {
                 | codec::STATE_PROFILE_V4
                 | STATE_PROFILE_V5
                 | STATE_PROFILE_V6
+                | STATE_PROFILE_V7
         ) {
             return Err(RegistryError::SnapshotInvalid);
         }
-        if profile == STATE_PROFILE_V6 {
+        if profile == STATE_PROFILE_V7 {
+            codec::encode_state_v7(self)
+        } else if profile == STATE_PROFILE_V6 {
             codec::encode_state_v6(self)
         } else if profile == STATE_PROFILE_V5 {
             if matches!(self, Self::Membership(record) if record.is_permanent_v2()) {
@@ -147,7 +156,9 @@ impl RegistryStateRecord {
             Self::Root(root) => RegistryStateKey::Root(root.root_binding_id),
             Self::Source(v) => RegistryStateKey::Source(v.identity().clone()),
             Self::Membership(v) => RegistryStateKey::Membership(v.key().clone()),
-            Self::ProjectionMembership(v) => RegistryStateKey::ProjectionMembership(v.binding().source_membership_id),
+            Self::ProjectionMembership(v) => {
+                RegistryStateKey::ProjectionMembership(v.binding().source_membership_id)
+            }
             Self::Generation { corpus, .. } => RegistryStateKey::Generation(corpus.clone()),
             Self::Namespace(state) => {
                 RegistryStateKey::Namespace(state.ownership.source_namespace_id)
@@ -391,12 +402,46 @@ impl DecodedBatch {
         original_changes: Vec<RegistryChange>,
         limits: RegistryLimits,
     ) -> Result<Self, RegistryError> {
-        let observed = Self { encoding_profile: BATCH_PROFILE_V6,
-            state_encoding_profile: STATE_PROFILE_V6, entry, request_fingerprint,
-            change_count: 1, deltas, original_changes: Some(original_changes) };
+        let observed = Self {
+            encoding_profile: BATCH_PROFILE_V6,
+            state_encoding_profile: STATE_PROFILE_V6,
+            entry,
+            request_fingerprint,
+            change_count: 1,
+            deltas,
+            original_changes: Some(original_changes),
+        };
         let encoded = codec::encode_batch_record_v6(&observed)?;
         let restored = codec::decode_batch_record(&encoded, limits)?;
-        if restored != observed { return Err(RegistryError::SnapshotInvalid); }
+        if restored != observed {
+            return Err(RegistryError::SnapshotInvalid);
+        }
+        Ok(restored)
+    }
+
+    /// Constructs and exactly rehydrates a first-bind record with canonical
+    /// shared access/scoring class meanings.
+    pub fn from_observed_parts_v7(
+        entry: RegistryJournalEntry,
+        request_fingerprint: Blake3Digest32,
+        deltas: Vec<RegistryStateDelta>,
+        original_changes: Vec<RegistryChange>,
+        limits: RegistryLimits,
+    ) -> Result<Self, RegistryError> {
+        let observed = Self {
+            encoding_profile: BATCH_PROFILE_V7,
+            state_encoding_profile: STATE_PROFILE_V7,
+            entry,
+            request_fingerprint,
+            change_count: 1,
+            deltas,
+            original_changes: Some(original_changes),
+        };
+        let encoded = codec::encode_batch_record_v7(&observed)?;
+        let restored = codec::decode_batch_record(&encoded, limits)?;
+        if restored != observed {
+            return Err(RegistryError::SnapshotInvalid);
+        }
         Ok(restored)
     }
     /// Exact closed wire profile retained by decoding; never a currentness grant.
@@ -450,7 +495,9 @@ impl DecodedBatch {
     }
     /// Stable canonical record for the operation row.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        if self.encoding_profile == BATCH_PROFILE_V6 {
+        if self.encoding_profile == BATCH_PROFILE_V7 {
+            codec::encode_batch_record_v7(self)
+        } else if self.encoding_profile == BATCH_PROFILE_V6 {
             codec::encode_batch_record_v6(self)
         } else if self.encoding_profile == BATCH_PROFILE_V5 {
             codec::encode_batch_record_v5(self)

@@ -170,7 +170,10 @@ pub(super) fn prepare_observed(
     batch: &RegistryBatch,
     observed: &DecodedBatch,
 ) -> Result<PreparedBatch, RegistryError> {
-    if observed.encoding_profile() == "eliot.registry-batch.v6" {
+    if matches!(
+        observed.encoding_profile(),
+        "eliot.registry-batch.v6" | "eliot.registry-batch.v7"
+    ) {
         return super::projection_membership::prepare_batch(registry, batch, &observed.entry().receipt);
     }
     prepare_profiled(
@@ -556,6 +559,41 @@ pub(super) fn prepare_v6_record(
         })
     }).collect::<Result<Vec<_>, RegistryError>>()?;
     Ok(PreparedBatch { encoded: record.encode()?, record, states })
+}
+
+pub(super) fn prepare_v7_record(
+    registry: &SourceRegistry,
+    record: DecodedBatch,
+) -> Result<PreparedBatch, RegistryError> {
+    if record.encoding_profile() != "eliot.registry-batch.v7"
+        || record.state_encoding_profile() != "eliot.registry-state.v7"
+        || record.expected_registry_revision() != registry.revision
+    {
+        return Err(RegistryError::RegistryRevisionConflict);
+    }
+    validate_install(registry, &record)?;
+    let states = record
+        .deltas()
+        .iter()
+        .map(|delta| {
+            Ok(PreparedStateDelta {
+                key: delta.key().clone(),
+                key_bytes: delta.key().encode()?,
+                before_bytes: delta
+                    .before()
+                    .map(|before| encode_existing_state(registry, before))
+                    .transpose()?,
+                after_bytes: delta
+                    .after()
+                    .encode_with_profile(record.state_encoding_profile())?,
+            })
+        })
+        .collect::<Result<Vec<_>, RegistryError>>()?;
+    Ok(PreparedBatch {
+        encoded: record.encode()?,
+        record,
+        states,
+    })
 }
 
 pub(super) fn prepare_v4_record(

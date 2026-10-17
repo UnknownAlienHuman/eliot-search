@@ -66,6 +66,9 @@ impl NativeArtifactCompositionError {
 pub fn prepare_and_store(
     adapter: &mut NativeArtifactStoreAdapter<'_, '_, '_, '_, '_>,
     producer: &RawCodeArtifactProducerInput<'_>,
+    before_publish: impl FnOnce(
+        &PreparedRawCodeArtifacts,
+    ) -> Result<(), NativeArtifactCompositionError>,
 ) -> Result<NativeStoredArtifactSet, NativeArtifactCompositionError> {
     let source = *adapter.source_revision();
     let operation = adapter.operation_id().clone();
@@ -87,6 +90,7 @@ pub fn prepare_and_store(
     adapter
         .verify_prepared(&prepared)
         .map_err(NativeArtifactCompositionError::Native)?;
+    before_publish(&prepared)?;
 
     let artifacts = prepared.artifacts();
     let first = adapter

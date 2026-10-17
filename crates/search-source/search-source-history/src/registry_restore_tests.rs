@@ -53,6 +53,7 @@ fn v6_projection_batch_profile_survives_history_replay() {
             identity.source_namespace_id, rev(1), SourceOwnerGeneration::from_bytes([9; 32]),
             b"policy-observation".to_vec(), b"admission-observation".to_vec(), rev(1),
         ).unwrap(),
+        partition_semantics: None,
     };
     let operation_id = OpaqueId::new("history-v6-operation").unwrap();
     let receipt = ReceiptRef::new("history-v6-correlation").unwrap();

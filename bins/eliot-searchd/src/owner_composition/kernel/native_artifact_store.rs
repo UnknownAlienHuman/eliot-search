@@ -1418,11 +1418,18 @@ pub(super) fn store_native_raw_code_artifacts(
     publisher: &mut ControlSnapshotPublisher,
     config: &EffectiveDaemonConfig,
     producer: &RawCodeArtifactProducerInput<'_>,
+    before_publish: impl FnOnce(
+        &crate::preparation_composition::artifact_payloads::PreparedRawCodeArtifacts,
+    ) -> Result<(), crate::preparation_composition::native_artifact_store::NativeArtifactCompositionError>,
 ) -> Result<
     crate::preparation_composition::native_artifact_store::NativeStoredArtifactSet,
     crate::preparation_composition::native_artifact_store::NativeArtifactCompositionError,
 > {
     let mut adapter = NativeArtifactStoreAdapter::open(input, journal, publisher, config, producer)
         .map_err(crate::preparation_composition::native_artifact_store::NativeArtifactCompositionError::Native)?;
-    crate::preparation_composition::native_artifact_store::prepare_and_store(&mut adapter, producer)
+    crate::preparation_composition::native_artifact_store::prepare_and_store(
+        &mut adapter,
+        producer,
+        before_publish,
+    )
 }

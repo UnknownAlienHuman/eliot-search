@@ -37,12 +37,13 @@ pub mod membership;
 pub mod portfolio;
 pub use search_source_records::portfolio_history;
 pub mod recovery;
-pub use recovery::projection_membership;
 pub use projection_membership::{
     PreparedProjectionMembership, ProjectionMembershipBindRequest, ProjectionMembershipReceipt,
-    ProjectionMembershipRecord, bind_projection_membership, commit_projection_membership,
-    prepare_projection_membership, read_projection_membership,
+    ProjectionMembershipRecord, ProjectionPartitionSemantics, ReusableProjectionPartitions,
+    bind_projection_membership, commit_projection_membership, prepare_projection_membership,
+    read_projection_membership, reusable_projection_partitions,
 };
+pub use recovery::projection_membership;
 pub use search_source_history::revision;
 pub mod root;
 pub use search_source_records::root_currentness;

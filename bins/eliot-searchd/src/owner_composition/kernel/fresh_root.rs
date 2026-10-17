@@ -429,6 +429,12 @@ impl<'operation, 'owner> FreshRootContext<'operation, 'owner> {
         original.deadline == deadline
             && std::ptr::eq(Arc::as_ptr(&original.flag), cancellation)
     }
+    /// Borrow the exact flag owned by the original invocation for bounded pure
+    /// producers whose accepted API requires an atomic cancellation reference.
+    /// The borrow neither clones nor resets cancellation state.
+    pub(crate) fn original_cancellation_flag(&self) -> &AtomicBool {
+        self.context.cancellation().flag.as_ref()
+    }
     pub fn work(
         &self,
         work: search_control_redb::MigrationBootstrapWork,
