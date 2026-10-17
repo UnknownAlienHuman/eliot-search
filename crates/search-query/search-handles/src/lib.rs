@@ -534,6 +534,20 @@ impl HandleStore {
         self.records.is_empty()
     }
 
+    /// Starts a bounded batch whose newly minted retained-source handles are
+    /// removed exactly if their output has not possibly been dispatched.
+    ///
+    /// The guard exclusively borrows this store but holds no lock. The actual
+    /// provider emitter must consume it and preserve it only after its transport
+    /// reports `Output`, `AfterOutput`, or success.
+    pub const fn begin_pending_mints(&mut self) -> PendingHandleMints<'_> {
+        PendingHandleMints {
+            store: self,
+            identities: Vec::new(),
+            preserve: false,
+        }
+    }
+
     /// Mints a memory-only unsaved-buffer handle. Retained-source targets must
     /// use `mint_ephemeral_retained_source`, which requires a source-owner guard.
     /// `source_membership_id` must be resolved by the authenticated buffer owner;
@@ -573,6 +587,7 @@ impl HandleStore {
             token_digest,
             None,
         )
+        .map(|(handle, _)| handle)
     }
 
     /// Mints a retained-source handle only while the exact source owner holds a
@@ -593,6 +608,40 @@ impl HandleStore {
         crypto: &mut C,
         cancelled: bool,
     ) -> Result<SearchSourceHandle, HandleError>
+    where
+        C: HandleCryptoPort,
+        P: RetainedSourceProtectionPort,
+    {
+        self.mint_ephemeral_retained_source_with_identity(
+            target,
+            source_membership_id,
+            representation_id,
+            unit_id,
+            binding_id,
+            grant_id,
+            owner_epoch,
+            disclosure_ceiling,
+            protection,
+            crypto,
+            cancelled,
+        )
+        .map(|(handle, _)| handle)
+    }
+
+    fn mint_ephemeral_retained_source_with_identity<C, P>(
+        &mut self,
+        target: RetainedSourceTarget,
+        source_membership_id: SourceMembershipId,
+        representation_id: RepresentationId,
+        unit_id: UnitId,
+        binding_id: BindingId,
+        grant_id: GrantId,
+        owner_epoch: OwnerEpoch,
+        disclosure_ceiling: DisclosureCeiling,
+        protection: &mut P,
+        crypto: &mut C,
+        cancelled: bool,
+    ) -> Result<(SearchSourceHandle, PendingMintIdentity), HandleError>
     where
         C: HandleCryptoPort,
         P: RetainedSourceProtectionPort,
@@ -640,7 +689,7 @@ impl HandleStore {
         material: MintMaterial,
         token_digest: HandleTokenDigest,
         source_protection: Option<Box<dyn RetainedSourceProtectionGuard>>,
-    ) -> Result<SearchSourceHandle, HandleError> {
+    ) -> Result<(SearchSourceHandle, PendingMintIdentity), HandleError> {
         if Instant::now() >= material.monotonic_deadline {
             return Err(HandleError::HandleExpired);
         }
@@ -683,15 +732,40 @@ impl HandleStore {
             monotonic_deadline: Some(material.monotonic_deadline),
             source_protection,
         };
-        self.by_id.insert(material.handle_id, token_digest);
-        self.records.insert(token_digest, stored);
-        Ok(SearchSourceHandle {
+        let identity = PendingMintIdentity {
             handle_id: material.handle_id,
             handle_revision,
-            handle_class: HandleClass::Ephemeral,
-            expires_at: Some(material.expires_at),
-            opaque_token: material.opaque_token,
-        })
+            token_digest,
+        };
+        self.by_id.insert(material.handle_id, token_digest);
+        self.records.insert(token_digest, stored);
+        Ok((
+            SearchSourceHandle {
+                handle_id: material.handle_id,
+                handle_revision,
+                handle_class: HandleClass::Ephemeral,
+                expires_at: Some(material.expires_at),
+                opaque_token: material.opaque_token,
+            },
+            identity,
+        ))
+    }
+
+    fn remove_pending_mint(&mut self, identity: PendingMintIdentity) {
+        let has_exact_id_slot = self.by_id.get(&identity.handle_id) == Some(&identity.token_digest);
+        let has_exact_digest_slot =
+            self.records
+                .get(&identity.token_digest)
+                .is_some_and(|record| {
+                    record.class() == HandleClass::Ephemeral
+                        && record.handle_id() == identity.handle_id
+                        && record.handle_revision() == identity.handle_revision
+                        && record.token_digest() == identity.token_digest
+                });
+        if has_exact_id_slot && has_exact_digest_slot {
+            drop(self.records.remove(&identity.token_digest));
+            self.by_id.remove(&identity.handle_id);
+        }
     }
 
     /// Resolves the public bearer token inside this store, reauthorizes twice,
@@ -985,6 +1059,98 @@ impl HandleStore {
             Err(HandleError::QuotaExceeded)
         } else {
             Ok(())
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct PendingMintIdentity {
+    handle_id: HandleId,
+    handle_revision: NonZeroRevision,
+    token_digest: HandleTokenDigest,
+}
+
+/// Linear rollback owner for one output candidate batch.
+///
+/// Only successful retained-source inserts enter this private identity list.
+/// Dropping the batch before possible output removes each exact original map
+/// pair and drops its source pin. No root crypto, deadline authority, or caller
+/// generation is needed during cleanup.
+#[must_use = "pending retained-source mints must reach the actual output boundary"]
+pub struct PendingHandleMints<'a> {
+    store: &'a mut HandleStore,
+    identities: Vec<PendingMintIdentity>,
+    preserve: bool,
+}
+
+impl fmt::Debug for PendingHandleMints<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PendingHandleMints")
+            .field("count", &self.identities.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl PendingHandleMints<'_> {
+    /// Mints through the canonical store and records the owner-issued rollback
+    /// identity before returning the public handle to its candidate producer.
+    #[allow(clippy::too_many_arguments)]
+    pub fn mint_ephemeral_retained_source<C, P>(
+        &mut self,
+        target: RetainedSourceTarget,
+        source_membership_id: SourceMembershipId,
+        representation_id: RepresentationId,
+        unit_id: UnitId,
+        binding_id: BindingId,
+        grant_id: GrantId,
+        owner_epoch: OwnerEpoch,
+        disclosure_ceiling: DisclosureCeiling,
+        protection: &mut P,
+        crypto: &mut C,
+        cancelled: bool,
+    ) -> Result<SearchSourceHandle, HandleError>
+    where
+        C: HandleCryptoPort,
+        P: RetainedSourceProtectionPort,
+    {
+        // Reserve before insertion so allocation failure cannot strand an
+        // untracked handle. The store quota bounds the batch's maximum length.
+        self.identities
+            .try_reserve(1)
+            .map_err(|_| HandleError::QuotaExceeded)?;
+        let (handle, identity) = self.store.mint_ephemeral_retained_source_with_identity(
+            target,
+            source_membership_id,
+            representation_id,
+            unit_id,
+            binding_id,
+            grant_id,
+            owner_epoch,
+            disclosure_ceiling,
+            protection,
+            crypto,
+            cancelled,
+        )?;
+        self.identities.push(identity);
+        Ok(handle)
+    }
+
+    /// Keeps the minted records once the actual provider output callback may
+    /// have delivered bytes. The emitter calls this only for its typed
+    /// `Output`, `AfterOutput`, or success outcomes; all other paths drop-roll
+    /// back automatically.
+    pub fn preserve_after_possible_delivery(mut self) {
+        self.preserve = true;
+    }
+}
+
+impl Drop for PendingHandleMints<'_> {
+    fn drop(&mut self) {
+        if !self.preserve {
+            for identity in self.identities.drain(..).rev() {
+                self.store.remove_pending_mint(identity);
+            }
         }
     }
 }

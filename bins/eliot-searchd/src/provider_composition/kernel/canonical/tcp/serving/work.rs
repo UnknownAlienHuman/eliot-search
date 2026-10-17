@@ -10,6 +10,7 @@ use search_result_projector::{
     CandidateProjectionInput, CandidateSetEnvelope, ProjectionBudget, ProjectionError,
     project_candidate_set,
 };
+use search_handles::PendingHandleMints;
 use search_provider_protocol::{
     AdmittedProviderRequest, BindingContext, FRAME_PREFIX_BYTES, MonotonicMillis,
     PreparedProviderDeliveryError, ProtocolLimits, ProviderEventPreparationV1,
@@ -395,6 +396,7 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         inputs: Vec<CandidateProjectionInput>,
         projection_budget: ProjectionBudget,
         terminal: TerminalKind,
+        pending_mints: PendingHandleMints<'_>,
     ) -> Result<(), CanonicalServingError> {
         if self.failed || self.emitted_terminal.is_some() {
             self.failed = true;
@@ -430,6 +432,7 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         let request = &mut self.request;
         let transport = &mut self.transport;
         let validate_output = &mut self.authority.validate_output;
+        let mut pending_mints = Some(pending_mints);
         domain.with_live_checkpoint(
             fence,
             AccessCheckpoint::BeforeResultEmission,
@@ -502,6 +505,11 @@ impl CanonicalWorkOutput<'_, '_, '_> {
                         Ok((body, frame))
                     },
                 );
+                if prepared_delivery_may_have_been_attempted(&delivery) {
+                    if let Some(pending) = pending_mints.take() {
+                        pending.preserve_after_possible_delivery();
+                    }
+                }
                 match delivery {
                     Ok(()) => Ok(()),
                     Err(PreparedProviderDeliveryError::Protocol(error)) => {
@@ -524,6 +532,42 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         self.emitted_terminal = Some(true);
         self.failed = false;
         Ok(())
+    }
+}
+
+fn prepared_delivery_may_have_been_attempted<P, E>(
+    delivery: &Result<(), PreparedProviderDeliveryError<P, E>>,
+) -> bool {
+    matches!(
+        delivery,
+        Ok(())
+            | Err(PreparedProviderDeliveryError::Output(_)
+                | PreparedProviderDeliveryError::AfterOutput(_))
+    )
+}
+
+#[cfg(test)]
+mod pending_mint_delivery_tests {
+    use super::prepared_delivery_may_have_been_attempted;
+    use search_provider_protocol::{PreparedProviderDeliveryError, ProtocolError};
+
+    #[test]
+    fn only_possible_or_completed_output_preserves_pending_mints() {
+        let protocol: Result<(), PreparedProviderDeliveryError<&str, ()>> =
+            Err(PreparedProviderDeliveryError::Protocol(ProtocolError::InvalidLimits));
+        let preparation: Result<(), PreparedProviderDeliveryError<&str, ()>> =
+            Err(PreparedProviderDeliveryError::Preparation("encode"));
+        let output: Result<(), PreparedProviderDeliveryError<&str, ()>> =
+            Err(PreparedProviderDeliveryError::Output(()));
+        let after_output: Result<(), PreparedProviderDeliveryError<&str, ()>> =
+            Err(PreparedProviderDeliveryError::AfterOutput(ProtocolError::InvalidLimits));
+        let delivered: Result<(), PreparedProviderDeliveryError<&str, ()>> = Ok(());
+
+        assert!(!prepared_delivery_may_have_been_attempted(&protocol));
+        assert!(!prepared_delivery_may_have_been_attempted(&preparation));
+        assert!(prepared_delivery_may_have_been_attempted(&output));
+        assert!(prepared_delivery_may_have_been_attempted(&after_output));
+        assert!(prepared_delivery_may_have_been_attempted(&delivered));
     }
 }
 

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use search_contracts::{
     AssuranceClass, BindingId, Blake3Digest32, Blake3ExactInputLimit, BoundedSet,
     BufferRangeAnchor, BufferSnapshotId, DisclosureCeiling, GrantId, HandleId, HandleTokenDigest,
-    MAX_BLAKE3_EXACT_BYTES, MAX_SET_ITEMS, NativeAnchor, ObjectResidencyKeyDigest,
+    MAX_BLAKE3_EXACT_BYTES, MAX_SET_ITEMS, NativeAnchor, NonZeroRevision, ObjectResidencyKeyDigest,
     OpaqueHandleToken, OwnerEpoch, PositionEncoding, ProfileId, RepresentationId,
     SearchSourceHandle, SearchSourceHandleRecord, SourceId, SourceMembershipId, SourceNamespaceId,
     SourceOwnerGeneration, SourceRevisionId, SourceRevisionRef, SourceView, TextBytesAnchor,
@@ -19,7 +19,8 @@ use crate::{
     EphemeralHandleTarget, HandleAuthorizationCheckpoint, HandleAuthorizationPhase,
     HandleDeliveryError, HandleError, HandleExpansionPermit, HandleInvalidationScope, HandlePolicy,
     HandleReadback, HandleReadbackPort, HandleReauthorizationPort, HandleStore, MintMaterial,
-    RetainedSourceProtectionGuard, RetainedSourceProtectionPort, RetainedSourceTarget,
+    PendingMintIdentity, RetainedSourceProtectionGuard, RetainedSourceProtectionPort,
+    RetainedSourceTarget,
     UnsavedBufferTarget, target_excerpt_digest,
 };
 
@@ -795,4 +796,144 @@ fn retained_target_range_token_and_invalidation_are_store_owned() {
         buffer_readback.last_maximum_bytes, None,
         "revoked buffer tokens fail before readback"
     );
+}
+
+#[test]
+fn dropping_pending_mints_removes_both_indexes_and_releases_the_source_pin() {
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut protection = TestProtection {
+        available: true,
+        wrong_deadline: false,
+        drops: Arc::clone(&drops),
+    };
+    let mut crypto = TestCrypto { next: 0 };
+    let mut store = HandleStore::new(HandlePolicy::BASELINE).unwrap();
+    let (binding_id, grant_id, owner_epoch, disclosure_ceiling) = binding();
+
+    let mut pending = store.begin_pending_mints();
+    pending
+        .mint_ephemeral_retained_source(
+            target(),
+            SourceMembershipId::from_bytes([9; 16]),
+            RepresentationId::from_bytes([10; 16]),
+            UnitId::from_bytes([11; 16]),
+            binding_id,
+            grant_id,
+            owner_epoch,
+            disclosure_ceiling,
+            &mut protection,
+            &mut crypto,
+            false,
+        )
+        .unwrap();
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+
+    drop(pending);
+
+    assert!(store.is_empty());
+    assert!(store.by_id.is_empty());
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn pending_mint_rollback_requires_the_exact_id_revision_and_token_digest() {
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut protection = TestProtection {
+        available: true,
+        wrong_deadline: false,
+        drops: Arc::clone(&drops),
+    };
+    let mut crypto = TestCrypto { next: 0 };
+    let mut store = HandleStore::new(HandlePolicy::BASELINE).unwrap();
+    let (binding_id, grant_id, owner_epoch, disclosure_ceiling) = binding();
+    let handle = store
+        .mint_ephemeral_retained_source(
+            target(),
+            SourceMembershipId::from_bytes([9; 16]),
+            RepresentationId::from_bytes([10; 16]),
+            UnitId::from_bytes([11; 16]),
+            binding_id,
+            grant_id,
+            owner_epoch,
+            disclosure_ceiling,
+            &mut protection,
+            &mut crypto,
+            false,
+        )
+        .unwrap();
+    let digest = TestCrypto::digest(&handle.opaque_token);
+    let wrong_digest = TestCrypto::digest(&OpaqueHandleToken::new(&[0xee; 32]).unwrap());
+    let wrong_id = HandleId::from_bytes([0xee; 16]);
+    let wrong_revision = NonZeroRevision::new(2).unwrap();
+
+    for identity in [
+        PendingMintIdentity {
+            handle_id: wrong_id,
+            handle_revision: handle.handle_revision,
+            token_digest: digest,
+        },
+        PendingMintIdentity {
+            handle_id: handle.handle_id,
+            handle_revision: wrong_revision,
+            token_digest: digest,
+        },
+        PendingMintIdentity {
+            handle_id: handle.handle_id,
+            handle_revision: handle.handle_revision,
+            token_digest: wrong_digest,
+        },
+    ] {
+        store.remove_pending_mint(identity);
+        assert_eq!(store.len(), 1);
+        assert_eq!(store.by_id.get(&handle.handle_id), Some(&digest));
+        assert!(store.records.contains_key(&digest));
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+    }
+
+    store.remove_pending_mint(PendingMintIdentity {
+        handle_id: handle.handle_id,
+        handle_revision: handle.handle_revision,
+        token_digest: digest,
+    });
+    assert!(store.is_empty());
+    assert!(store.by_id.is_empty());
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn pending_mints_are_preserved_after_possible_delivery() {
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut protection = TestProtection {
+        available: true,
+        wrong_deadline: false,
+        drops: Arc::clone(&drops),
+    };
+    let mut crypto = TestCrypto { next: 0 };
+    let mut store = HandleStore::new(HandlePolicy::BASELINE).unwrap();
+    let (binding_id, grant_id, owner_epoch, disclosure_ceiling) = binding();
+
+    let mut pending = store.begin_pending_mints();
+    pending
+        .mint_ephemeral_retained_source(
+            target(),
+            SourceMembershipId::from_bytes([9; 16]),
+            RepresentationId::from_bytes([10; 16]),
+            UnitId::from_bytes([11; 16]),
+            binding_id,
+            grant_id,
+            owner_epoch,
+            disclosure_ceiling,
+            &mut protection,
+            &mut crypto,
+            false,
+        )
+        .unwrap();
+
+    pending.preserve_after_possible_delivery();
+
+    assert_eq!(store.len(), 1);
+    assert_eq!(store.by_id.len(), 1);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    drop(store);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
 }

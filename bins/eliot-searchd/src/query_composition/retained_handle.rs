@@ -10,7 +10,7 @@ use search_contracts::{
     SourceView, UtcTimestamp,
 };
 use search_handles::{
-    HandleCryptoPort, HandleError, HandleStore, MintMaterial, RetainedSourceProtectionGuard,
+    HandleCryptoPort, HandleError, MintMaterial, PendingHandleMints, RetainedSourceProtectionGuard,
     RetainedSourceProtectionPort, RetainedSourceTarget,
 };
 use search_ports::PackageOpaque;
@@ -191,7 +191,7 @@ pub(super) fn mint_retained_candidate_handle(
     registry: &search_source_registry::SourceRegistry,
     output: &mut CanonicalWorkOutput<'_, '_, '_>,
     admission: &StandalonePreRetrievalAdmission,
-    store: &mut HandleStore,
+    pending_mints: &mut PendingHandleMints<'_>,
     candidate: &ValidatedSearchCandidate,
     prepared: &PreparedRawCodeArtifacts,
     clock: &mut SystemGrantClock,
@@ -262,7 +262,7 @@ pub(super) fn mint_retained_candidate_handle(
         material: Some(material),
     };
     let claims = &output.request().grant;
-    store
+    pending_mints
         .mint_ephemeral_retained_source(
             target,
             source.source_membership_id(),
