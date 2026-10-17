@@ -59,6 +59,41 @@ fn end() -> Instant {
 }
 
 #[test]
+fn original_binding_refuses_before_profile_io_and_charges_success_without_writes() {
+    let scratch = Scratch::new();
+    let mut journal = direct(&scratch);
+    let mut publisher = ControlSnapshotPublisher::new();
+    let writes = journal.committed_writes();
+    let calls = Cell::new(0_u64);
+    let work = |_| {
+        calls.set(calls.get() + 1);
+        Ok::<(), &str>(())
+    };
+    let Err(expired) = journal
+        .bind_control_port_with_original_context::<Cancel, _>(&mut publisher, Instant::now(), &work)
+    else { panic!("expired bind must refuse before profile read") };
+    assert_eq!(expired.control, ControlError::BudgetExceeded);
+    assert_eq!(calls.get(), 0);
+    let Err(refused) = journal
+        .bind_control_port_with_original_context::<Cancel, _>(
+            &mut publisher, end(), &|_| Err("original-bind-refused"))
+    else { panic!("original callback must refuse before profile read") };
+    assert_eq!(refused.control, ControlError::ReadCancelled);
+    assert_eq!(refused.first_context, Some("original-bind-refused"));
+    let deadline = end();
+    let mode = {
+        let port = journal
+            .bind_control_port_with_original_context::<Cancel, _>(&mut publisher, deadline, &work)
+            .expect("bind using original allowance");
+        assert!(calls.get() > 1, "profile validation must charge original work");
+        port.read_operating_profile_with_original_context(deadline, &work)
+            .expect("same original context reads the actual mode")
+    };
+    assert_eq!(mode, crate::JournalOperatingProfile::Direct);
+    assert_eq!(journal.committed_writes(), writes);
+}
+
+#[test]
 fn original_records_commit_all_six_values_once_without_advancing_source_registry_revision() {
     let scratch = Scratch::new();
     let mut journal = direct(&scratch);

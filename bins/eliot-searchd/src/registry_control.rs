@@ -67,6 +67,7 @@ impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
         self.pending.is_some() || self.original_uncertain
     }
     /// The enclosing native owner keeps its verified journal/root alive.
+    #[cfg(test)]
     pub(crate) fn bind(
         journal: &'journal mut PersistentControlJournal,
         publisher: &'journal mut ControlSnapshotPublisher,
@@ -104,9 +105,31 @@ impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
             search_control_redb::MigrationBootstrapWork,
         ) -> Result<(), search_runtime_owner::OwnerError>,
     ) -> Result<Self, RegistryPortError> {
-        let mut result = Self::bind(journal, publisher, expected, limits)?;
-        result.original = Some((deadline, work));
-        Ok(result)
+        Self::bind_with_original_context(journal, publisher, expected, limits, deadline, work)
+    }
+
+    fn bind_with_original_context(
+        journal: &'journal mut PersistentControlJournal,
+        publisher: &'journal mut ControlSnapshotPublisher,
+        expected: JournalIdentity,
+        limits: RegistryLimits,
+        deadline: std::time::Instant,
+        work: OriginalNativeWork<'journal>,
+    ) -> Result<Self, RegistryPortError> {
+        limits.validate().map_err(owner_failure)?;
+        if journal.identity() != expected || journal.requires_recovery() {
+            return Err(owner_failure(RegistryError::MutationOutcomeUnknown));
+        }
+        let journal = journal
+            .bind_control_port_with_original_context::<C, _>(publisher, deadline, work)
+            .map_err(|error| original_inputs_failure(
+                original_inputs::OriginalInputsError::OriginalControl(error), None))?;
+        Ok(Self {
+            original: Some((deadline, work)), original_v4: None, journal,
+            identity: expected, registry_limits: limits, pending: None,
+            original_pending: None, original_uncertain: false,
+            cancellation: core::marker::PhantomData,
+        })
     }
 
     /// Binds normal v4 readback to the actual caller platform/capabilities and
@@ -123,8 +146,8 @@ impl<'journal, C: CancellationProbe> RegistryJournal<'journal, C> {
         platform: SectionPlatform,
         capabilities: AcceptedCapabilities,
     ) -> Result<Self, RegistryPortError> {
-        let mut result = Self::bind(journal, publisher, expected, limits)?;
-        result.original = Some((deadline, work));
+        let mut result = Self::bind_with_original_context(
+            journal, publisher, expected, limits, deadline, work)?;
         result.original_v4 = Some(v4_readback::OriginalV4Context {
             deadline,
             work,

@@ -23,7 +23,7 @@ use super::super::super::direct_policy_v2::CapturedPolicyV2;
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 
 #[cfg(feature = "wave3-index")]
-fn indexed_preparation_selected(
+const fn indexed_preparation_selected(
     profile: db::JournalOperatingProfile,
 ) -> Result<bool, &'static str> {
     match profile {
@@ -53,7 +53,9 @@ pub(super) fn selected(input: &RetentionSourceInput<'_, '_, '_>, journal: &mut P
     reserve(input, 16 * 32768)?;
     let keys = db::source_retention::revision_use_keys(LIMITS).map_err(|error| error.code().to_owned())?;
     let work = |unit| input.native.work(unit);
-    let port = shared::bind(journal, publisher, input.native.context())?;
+    let port = journal
+        .bind_control_port_with_original_context::<super::super::read_child::fresh_root::FreshRootCancellation, _>(publisher, input.deadline, &work)
+        .map_err(|error| error.control.code().to_owned())?;
     let read = port.read_control_keys_with_original_context(&keys, input.deadline, &work)
         .map_err(|error| error.control.code().to_owned())?;
     let get = |index| read.get(&keys[index]).filter(|value| value.class() == ControlRecordClass::State)
@@ -136,8 +138,8 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
     let indexed_preparation = {
         let work = |unit| input.native.work(unit);
         let port = journal
-            .bind_control_port::<super::super::read_child::fresh_root::FreshRootCancellation>(publisher)
-            .map_err(|error| error.code().to_owned())?;
+            .bind_control_port_with_original_context::<super::super::read_child::fresh_root::FreshRootCancellation, _>(publisher, input.deadline, &work)
+            .map_err(|error| error.control.code().to_owned())?;
         let profile = port
             .read_operating_profile_with_original_context(input.deadline, &work)
             .map_err(|error| error.control.code().to_owned())?;
@@ -228,7 +230,9 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
         let Some(body) = input.body else { return Ok(None); };
         if body.len() as u64 != profile.byte_length { return Err("NATIVE_RETENTION_SOURCE_LENGTH_CHANGED".into()); }
         if let Some(check) = input.current_source { check()?; }
-        let mut port = shared::bind(journal, publisher, input.native.context())?;
+        let mut port = journal
+            .bind_control_port_with_original_context::<super::super::read_child::fresh_root::FreshRootCancellation, _>(publisher, input.deadline, &work)
+            .map_err(|error| error.control.code().to_owned())?;
         let keys = db::source_retention::revision_use_reservation_keys(input.existing.reservation_id, LIMITS)
             .map_err(|error| error.code().to_owned())?;
         let read = port.read_control_keys_with_original_context(&keys, input.deadline, &work)
@@ -254,7 +258,9 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
         let (binding, metadata) = object_metadata(&input, &profile, domains, encrypted,
             crypto.nonce().to_vec(), selection.encryption.clone())?;
         let encoded_metadata = metadata.encode().map_err(|_| "NATIVE_RETENTION_OBJECT_METADATA_INVALID")?;
-        let mut port = shared::bind(journal, publisher, input.native.context())?;
+        let mut port = journal
+            .bind_control_port_with_original_context::<super::super::read_child::fresh_root::FreshRootCancellation, _>(publisher, input.deadline, &work)
+            .map_err(|error| error.control.code().to_owned())?;
         let keys = db::source_retention::object_publication_intent_keys(input.existing.reservation_id, LIMITS)
             .map_err(|error| error.code().to_owned())?;
         let read = port.read_control_keys_with_original_context(&keys, input.deadline, &work)

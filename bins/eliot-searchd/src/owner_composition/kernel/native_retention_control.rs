@@ -99,7 +99,7 @@ pub(super) fn lookup_before_source<C: CancellationProbe>(journal: &mut db::Persi
     let reservation_key = db::source_retention::revision_seal_reservation_key(reservation_id, LIMITS)?;
     let object_key = db::source_retention::object_publication_intent_key(reservation_id, LIMITS)?;
     let keys = [profile_key.clone(), result_key.clone(), reservation_key.clone(), object_key.clone()];
-    let port = journal.bind_control_port::<C>(publisher)?;
+    let port = journal.bind_control_port_with_original_context::<C, _>(publisher, deadline, work)?;
     let callback = |unit| work(unit);
     let read = port.read_control_keys_with_original_context(&keys, deadline, &callback)?;
     for unit in [Work::Allocate(16 * MAX_METADATA), Work::Process(16 * MAX_METADATA)] {
@@ -508,7 +508,7 @@ impl<'journal, 'work, C: CancellationProbe> NativeRetentionControl<'journal, 'wo
         let byte_length = source.binding().content_bytes();
         let stability_receipt_ref = source.binding().observation_receipt().clone();
         let source_id = source.identity().source_id;
-        let port = journal.bind_control_port(publisher)?;
+        let port = journal.bind_control_port_with_original_context(publisher, deadline, work)?;
         let adapter = Self { port, source_namespace_id, source_id, source_state, content_digest, byte_length, stability_receipt_ref, guards, deadline, work, object: None };
         let keys = adapter.guards.iter().map(|guard| guard.key().clone()).collect::<Vec<_>>();
         let read = adapter.read(&keys)?;

@@ -77,7 +77,11 @@ impl<'call, 'view, 'operation, 'root, 'product, 'snapshot, 'registry>
         checkpoint(input)?;
         let work = |unit| input.native.work(unit);
         let projection = journal
-            .bind_control_port::<FreshRootCancellation>(publisher)
+            .bind_control_port_with_original_context::<FreshRootCancellation, _>(
+                publisher,
+                input.deadline,
+                &work,
+            )
             .map_err(|_| Error::ControlConflict)?
             .read_publication_projection_snapshot_with_original_context(input.deadline, &work)
             .map_err(|_| Error::ControlConflict)?
@@ -88,7 +92,11 @@ impl<'call, 'view, 'operation, 'root, 'product, 'snapshot, 'registry>
             .map_err(|_| Error::GuardMismatch)?
             .into_registry();
         let port = journal
-            .bind_control_port::<FreshRootCancellation>(publisher)
+            .bind_control_port_with_original_context::<FreshRootCancellation, _>(
+                publisher,
+                input.deadline,
+                &work,
+            )
             .map_err(|_| Error::ControlConflict)?;
         let intent = port
             .read_publication_intent_with_original_context(input.deadline, &work)

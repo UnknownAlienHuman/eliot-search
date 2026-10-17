@@ -367,7 +367,7 @@ fn read_c02_state(
     let identity = journal.identity();
     let work = |unit| input.native.work(unit);
     let control = journal
-        .bind_control_port::<super::super::read_child::fresh_root::FreshRootCancellation>(publisher)
+        .bind_control_port_with_original_context::<super::super::read_child::fresh_root::FreshRootCancellation, _>(publisher, input.deadline, &work)
         .map_err(|_| "NATIVE_PREPARATION_C02_BIND_REFUSED")?;
     let preparation = control
         .read_preparation_input_with_original_context(
@@ -394,7 +394,7 @@ fn commit_c02_input(
 ) -> Result<(), &'static str> {
     let work = |unit| input.native.work(unit);
     let mut control = journal
-        .bind_control_port::<super::super::read_child::fresh_root::FreshRootCancellation>(publisher)
+        .bind_control_port_with_original_context::<super::super::read_child::fresh_root::FreshRootCancellation, _>(publisher, input.deadline, &work)
         .map_err(|_| "NATIVE_PREPARATION_C02_BIND_REFUSED")?;
     match control.transact_preparation_input_with_original_context(record, input.deadline, &work) {
         Ok(_) => {}
