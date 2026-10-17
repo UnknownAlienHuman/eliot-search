@@ -298,6 +298,8 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         }
         let issued = self.authority.standalone_grant.as_ref()
             .ok_or(CanonicalServingError::InvalidConfiguration)?;
+        issued.verify_current_claims(&self.request.body().grant)
+            .map_err(CanonicalServingError::GrantRefused)?;
         if !issued.template().source_read_permission {
             return Err(CanonicalServingError::GrantRefused(
                 crate::access_composition::GrantUseError::RequestDenied,

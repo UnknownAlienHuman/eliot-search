@@ -85,6 +85,21 @@ impl VerifiedStandaloneGrant<'_> {
     pub(crate) const fn template(&self) -> &StandaloneGrantTemplate { &self.record.template }
 
     pub(crate) const fn effective_ttl_ms(&self) -> u64 { self.record.material.effective_ttl_ms }
+
+    /// Recheck the exact retained issuance during this borrowed owner turn.
+    /// This issues no new token/window and accepts no caller freshness value.
+    pub(crate) fn verify_current_claims(
+        &self,
+        claims: &SearchReadGrantClaims,
+    ) -> Result<(), GrantUseError> {
+        if crate::provider_composition::monotonic_millis() >= self.valid_until {
+            return Err(GrantUseError::Expired);
+        }
+        if !matches_issued(self.record, claims) {
+            return Err(GrantUseError::InvalidGrant);
+        }
+        Ok(())
+    }
 }
 
 impl<E, T: GrantValidationClock> BoundedStandaloneGrantIssuer<E, T> {
