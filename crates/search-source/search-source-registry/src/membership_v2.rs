@@ -1605,7 +1605,7 @@ mod tests {
             representation: u8,
             access_partition: u8,
             scoring_partition: u8,
-            semantics: ProjectionPartitionSemantics,
+            semantics: Option<ProjectionPartitionSemantics>,
         ) -> crate::projection_membership::ProjectionMembershipBindRequest {
             crate::projection_membership::ProjectionMembershipBindRequest {
                 binding: c::ProjectionMembership {
@@ -1623,8 +1623,37 @@ mod tests {
                     .expect("permanent member")
                     .provenance()
                     .clone(),
-                partition_semantics: Some(semantics),
+                partition_semantics: semantics,
             }
+        }
+
+        fn persist_member(
+            fixture: &Fixture,
+            registry: &mut SourceRegistry,
+            port: &mut InMemoryRegistryJournal<FakeCancellation>,
+            suffix: u8,
+        ) -> SourceMembership {
+            let mut member = fixture.member.clone();
+            member.source_membership_id = SourceMembershipId::from_bytes([suffix; 16]);
+            member.corpus_id = CorpusId::from_bytes([suffix.wrapping_add(1); 16]);
+            member.workspace_id = WorkspaceId::from_bytes([suffix.wrapping_add(2); 16]);
+            let prepared = prepare_source_membership_v2(
+                registry,
+                &member,
+                fixture.root_id,
+                rev(1),
+                fixture.namespace_selection,
+                &fixture.owner,
+                fixture.source_revision,
+                &opaque(&format!("operation:partition-class-member:{suffix}")),
+                digest(suffix),
+                &receipt(&format!("receipt:partition-class-member:{suffix}")),
+                &fixture.context,
+            )
+            .expect("prepare class consistency member");
+            commit_source_membership_v2(registry, &prepared, port, &fixture.context)
+                .expect("persist class consistency member");
+            member
         }
 
         let mut fixture = make_fixture(RuleEffect::Allow);
@@ -1680,7 +1709,7 @@ mod tests {
             80,
             68,
             69,
-            shared_meaning.clone(),
+            Some(shared_meaning.clone()),
         );
         let first_operation_id = opaque("operation:projection-v7-first");
         let first_receipt = receipt("receipt:projection-v7-first");
@@ -1703,7 +1732,7 @@ mod tests {
             82,
             68,
             69,
-            shared_meaning.clone(),
+            Some(shared_meaning.clone()),
         );
         let second_operation_id = opaque("operation:projection-v7-second");
         let second_receipt = receipt("receipt:projection-v7-second");
@@ -1841,5 +1870,119 @@ mod tests {
         assert!(replay.replayed);
         assert_eq!(replay.binding, first.binding);
         assert_eq!(restored.revision(), c03_registry.revision());
+        let third_member = persist_member(&fixture, &mut c03_registry, &mut c03_port, 63);
+        let refused_legacy_request = request(
+            &c03_registry,
+            &third_member,
+            73,
+            83,
+            68,
+            69,
+            None,
+        );
+        let refused_legacy_id = opaque("operation:legacy-none-reuses-v7-class");
+        let refused_legacy_revision = c03_registry.revision();
+        assert_eq!(
+            crate::projection_membership::bind_projection_membership(
+                &mut c03_registry,
+                refused_legacy_request,
+                refused_legacy_revision,
+                RegistryOperation::new(refused_legacy_id.clone(), digest(73)),
+                &receipt("receipt:legacy-none-reuses-v7-class"),
+                &mut c03_port,
+                &fixture.context,
+            ),
+            Err(RegistryError::ProjectionMembershipConflict)
+        );
+        assert_eq!(c03_registry.revision(), refused_legacy_revision);
+        assert!(c03_registry.committed_operation(&refused_legacy_id).is_none());
+        assert!(matches!(
+            c03_port
+                .load_batch(&refused_legacy_id, &fixture.context)
+                .expect("read refused v6 operation"),
+            crate::recovery::RegistryBatchLookup::Absent { revision }
+                if revision == refused_legacy_revision
+        ));
+
+        let legacy_first = request(&c03_registry, &third_member, 74, 84, 88, 89, None);
+        let legacy_first_id = opaque("operation:legacy-none-first");
+        let legacy_first_receipt = receipt("receipt:legacy-none-first");
+        let legacy_first_revision = c03_registry.revision();
+        let legacy_first_result = crate::projection_membership::bind_projection_membership(
+            &mut c03_registry,
+            legacy_first,
+            legacy_first_revision,
+            RegistryOperation::new(legacy_first_id.clone(), digest(74)),
+            &legacy_first_receipt,
+            &mut c03_port,
+            &fixture.context,
+        )
+        .expect("legacy v6 class assignment");
+        assert!(!legacy_first_result.replayed);
+        assert_eq!(
+            c03_registry
+                .committed_operation(&legacy_first_id)
+                .expect("legacy committed history")
+                .encoding_profile(),
+            "eliot.registry-batch.v6"
+        );
+
+        let fourth_member = persist_member(&fixture, &mut c03_registry, &mut c03_port, 66);
+        let legacy_second = request(&c03_registry, &fourth_member, 75, 85, 88, 89, None);
+        let legacy_second_receipt = receipt("receipt:legacy-none-second");
+        let legacy_second_revision = c03_registry.revision();
+        let legacy_second_result = crate::projection_membership::bind_projection_membership(
+            &mut c03_registry,
+            legacy_second,
+            legacy_second_revision,
+            RegistryOperation::new(
+                opaque("operation:legacy-none-second"),
+                digest(75),
+            ),
+            &legacy_second_receipt,
+            &mut c03_port,
+            &fixture.context,
+        )
+        .expect("v6 None/None class reuse remains compatible");
+        assert!(!legacy_second_result.replayed);
+
+        let fifth_member = persist_member(&fixture, &mut c03_registry, &mut c03_port, 69);
+        let new_meaning = ProjectionPartitionSemantics::new(
+            canonical("access:new-v2"),
+            canonical("scoring:new-v2"),
+        )
+        .expect("new v7 meaning");
+        let refused_v7_request = request(
+            &c03_registry,
+            &fifth_member,
+            76,
+            86,
+            88,
+            89,
+            Some(new_meaning),
+        );
+        let refused_v7_id = opaque("operation:v7-some-reuses-v6-class");
+        let refused_v7_revision = c03_registry.revision();
+        assert_eq!(
+            crate::projection_membership::bind_projection_membership(
+                &mut c03_registry,
+                refused_v7_request,
+                refused_v7_revision,
+                RegistryOperation::new(refused_v7_id.clone(), digest(76)),
+                &receipt("receipt:v7-some-reuses-v6-class"),
+                &mut c03_port,
+                &fixture.context,
+            ),
+            Err(RegistryError::ProjectionMembershipConflict)
+        );
+        assert_eq!(c03_registry.revision(), refused_v7_revision);
+        assert!(c03_registry.committed_operation(&refused_v7_id).is_none());
+        assert!(matches!(
+            c03_port
+                .load_batch(&refused_v7_id, &fixture.context)
+                .expect("read refused v7 operation"),
+            crate::recovery::RegistryBatchLookup::Absent { revision }
+                if revision == refused_v7_revision
+        ));
     }
 }

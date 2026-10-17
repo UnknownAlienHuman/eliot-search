@@ -8,6 +8,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use crate::preparation_composition::artifact_payloads::RawCodeArtifactProducerInput;
+use crate::preparation_composition::native_artifact_store::NativeStoredArtifactSet;
 use search_contracts::indexed::{
     CollectionSchema, MAX_STORED_VECTOR_VALUES, NamedVectorRequirement, VectorName,
     VectorRequirement,
@@ -971,6 +972,8 @@ fn prepare_retained_source_owners(
     clippy::too_many_lines,
     reason = "Keep owner qualification, C02 intent, C03 first-bind and C07 effects in their required order"
 )]
+/// Returns the actual C07 write/readback on fresh or recovered preparation.
+/// Returns `None` only after an already-visible set was read back and matched.
 pub(super) fn prepare_native_raw_code_artifacts(
     input: &RetentionSourceInput<'_, '_, '_>,
     original_profile: &SourceRevisionPresealProfile,
@@ -978,7 +981,7 @@ pub(super) fn prepare_native_raw_code_artifacts(
     journal: &mut PersistentControlJournal,
     publisher: &mut ControlSnapshotPublisher,
     config: &EffectiveDaemonConfig,
-) -> Result<(), &'static str> {
+) -> Result<Option<NativeStoredArtifactSet>, &'static str> {
     if original_result.operation_id != input.command.operation
         || original_profile.operation_id != input.command.operation
         || original_result.source_namespace_id != input.source.identity().source_namespace_id
@@ -1448,7 +1451,7 @@ pub(super) fn prepare_native_raw_code_artifacts(
             if let Some(current_source) = input.current_source {
                 current_source().map_err(|_| "NATIVE_PREPARATION_SOURCE_FENCE_REFUSED")?;
             }
-            return Ok(());
+            return Ok(None);
         }
         _ => return Err("NATIVE_PREPARATION_PROJECTION_REFERENCE_CONFLICT"),
     }
@@ -1516,7 +1519,7 @@ pub(super) fn prepare_native_raw_code_artifacts(
         max_artifact_bytes,
     };
     let expected_metadata = expected_preparation.metadata().clone();
-    super::artifact_store::store_native_raw_code_artifacts(
+    let stored = super::artifact_store::store_native_raw_code_artifacts(
         input,
         journal,
         publisher,
@@ -1567,5 +1570,5 @@ pub(super) fn prepare_native_raw_code_artifacts(
             "NATIVE_PREPARATION_C07_STORE_REFUSED"
         }
     })?;
-    Ok(())
+    Ok(Some(stored))
 }

@@ -22,6 +22,17 @@ use super::super::super::direct_policy_v2::CapturedPolicyV2;
 
 const LIMITS: JournalLimits = JournalLimits::BASELINE;
 
+#[cfg(feature = "wave3-index")]
+fn indexed_preparation_selected(
+    profile: db::JournalOperatingProfile,
+) -> Result<bool, &'static str> {
+    match profile {
+        db::JournalOperatingProfile::Direct => Ok(false),
+        db::JournalOperatingProfile::Indexed => Ok(true),
+        db::JournalOperatingProfile::MigrationInert => Err("NATIVE_RETENTION_PROFILE_INERT"),
+    }
+}
+
 pub(super) struct Selected {
     pub(super) current: Vec<u8>,
     pub(super) preparation: Vec<u8>,
@@ -119,6 +130,15 @@ fn output(record: &search_source_history::revision::SourceRevisionMutationReadba
 pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &mut PersistentControlJournal,
     publisher: &mut ControlSnapshotPublisher, config: &EffectiveDaemonConfig,
 ) -> Result<Option<DirectOutput>, String> {
+    // The durable operating profile selects retention behavior. Direct mode
+    // completes source retention without entering the indexed C02/C07 path.
+    #[cfg(feature = "wave3-index")]
+    let indexed_preparation = indexed_preparation_selected(
+        journal
+            .operating_profile(input.native.context())
+            .map_err(|_| "NATIVE_RETENTION_PROFILE_READ_REFUSED")?,
+    )
+    .map_err(str::to_owned)?;
     input.security.checkpoint().map_err(|error| error.to_string())?;
     // Resolve a completed operation from its immutable original before reading
     // mutable Current/key policy. This is historical metadata, not key use or
@@ -137,15 +157,17 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
                     .map_err(|error| error.to_string())?;
                 drop(control);
                 #[cfg(feature = "wave3-index")]
-                super::native_preparation_factory::prepare_native_raw_code_artifacts(
-                    &input,
-                    profile,
-                    &committed.readback,
-                    journal,
-                    publisher,
-                    config,
-                )
-                .map_err(str::to_owned)?;
+                if indexed_preparation {
+                    let _stored = super::native_preparation_factory::prepare_native_raw_code_artifacts(
+                        &input,
+                        profile,
+                        &committed.readback,
+                        journal,
+                        publisher,
+                        config,
+                    )
+                    .map_err(str::to_owned)?;
+                }
                 Ok(Some(output(&committed.readback, true, false)))
             },
             SourceRevisionPreparation::Pending(_) => Err("NATIVE_RETENTION_COMMIT_UNRESOLVED".into()),
@@ -270,15 +292,17 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
     drop(control);
     published_metadata(journal, publisher, input.deadline, &work)?;
     #[cfg(feature = "wave3-index")]
-    super::native_preparation_factory::prepare_native_raw_code_artifacts(
-        &input,
-        &profile,
-        &committed,
-        journal,
-        publisher,
-        config,
-    )
-    .map_err(str::to_owned)?;
+    if indexed_preparation {
+        let _stored = super::native_preparation_factory::prepare_native_raw_code_artifacts(
+            &input,
+            &profile,
+            &committed,
+            journal,
+            publisher,
+            config,
+        )
+        .map_err(str::to_owned)?;
+    }
     Ok(Some(output(&committed, false, true)))
 }
 
@@ -309,5 +333,27 @@ impl DirectRegistryOwner {
         let result = self.with_retention_source(hints, path, policy, command,
             |input, journal, publisher| consume_source(input, journal, publisher, config));
         self.complete_output(result, writer)
+    }
+}
+
+#[cfg(all(test, feature = "wave3-index"))]
+mod profile_selection_tests {
+    use super::indexed_preparation_selected;
+    use search_control_redb::JournalOperatingProfile;
+
+    #[test]
+    fn direct_retention_skips_index_and_inert_refuses_without_fallback() {
+        assert_eq!(
+            indexed_preparation_selected(JournalOperatingProfile::Direct),
+            Ok(false)
+        );
+        assert_eq!(
+            indexed_preparation_selected(JournalOperatingProfile::Indexed),
+            Ok(true)
+        );
+        assert_eq!(
+            indexed_preparation_selected(JournalOperatingProfile::MigrationInert),
+            Err("NATIVE_RETENTION_PROFILE_INERT")
+        );
     }
 }

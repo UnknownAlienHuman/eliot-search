@@ -272,6 +272,17 @@ fn validate_target(
     Ok(())
 }
 
+fn partition_class_conflicts(
+    previous: Option<&[u8]>,
+    candidate: Option<&[u8]>,
+    ids_match: bool,
+) -> bool {
+    match (previous, candidate) {
+        (Some(previous), Some(candidate)) => (previous == candidate) != ids_match,
+        (Some(_), None) | (None, Some(_)) => ids_match,
+        (None, None) => false,
+    }
+}
 pub(super) fn stage_bind(
     registry: &SourceRegistry,
     request: &ProjectionMembershipBindRequest,
@@ -294,26 +305,23 @@ pub(super) fn stage_bind(
     if registry.projection_memberships.len() >= registry.limits.max_memberships {
         return Err(RegistryError::CapacityExceeded);
     }
-    if let Some(semantics) = &request.partition_semantics {
-        for existing in registry.projection_memberships.values() {
-            let old = existing.request().partition_semantics.as_ref();
-            let binding = existing.binding();
-            let access_same_id = binding.access_partition_id == request.binding.access_partition_id;
-            let scoring_same_id =
-                binding.scoring_partition_id == request.binding.scoring_partition_id;
-            match old {
-                Some(old) => {
-                    if (old.access() == semantics.access()) != access_same_id
-                        || (old.scoring() == semantics.scoring()) != scoring_same_id
-                    {
-                        return Err(RegistryError::ProjectionMembershipConflict);
-                    }
-                }
-                None if access_same_id || scoring_same_id => {
-                    return Err(RegistryError::ProjectionMembershipConflict);
-                }
-                None => {}
-            }
+    let candidate = request.partition_semantics.as_ref();
+    for existing in registry.projection_memberships.values() {
+        let previous = existing.request().partition_semantics.as_ref();
+        let binding = existing.binding();
+        let access_same_id = binding.access_partition_id == request.binding.access_partition_id;
+        let scoring_same_id =
+            binding.scoring_partition_id == request.binding.scoring_partition_id;
+        if partition_class_conflicts(
+            previous.map(ProjectionPartitionSemantics::access),
+            candidate.map(ProjectionPartitionSemantics::access),
+            access_same_id,
+        ) || partition_class_conflicts(
+            previous.map(ProjectionPartitionSemantics::scoring),
+            candidate.map(ProjectionPartitionSemantics::scoring),
+            scoring_same_id,
+        ) {
+            return Err(RegistryError::ProjectionMembershipConflict);
         }
     }
     ProjectionMembershipRecord::from_observed_parts(
