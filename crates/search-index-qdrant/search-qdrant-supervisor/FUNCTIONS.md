@@ -8,10 +8,24 @@ telemetry or receipts.
 
 ## Artifact and configuration operations
 
-### `qualify_artifact(candidate, manifest, platform) -> Result<QualifiedArtifact, SupervisorError>`
+### `admit_pinned_windows_artifact(file_identity_digest, sha256, bytes)`
 
-Verifies local file identity, SHA-256, exact version/build identity, executable architecture, source/
-license receipt and accepted qualification manifest. It never downloads or upgrades an artifact.
+Matches the actual enclosing owner's bounded file observation against the compiled
+Qdrant 1.19.0 Windows x64 byte pin and approved Apache-2.0 license policy. The
+artifact identity profile is executable SHA-256; a separate canonical BLAKE3
+admission digest binds the file observation and complete static policy. No local
+qualification file, future benchmark or caller-created receipt authorizes this
+path. The function is pure and does not measure its inputs. Native launch still
+checks actual bytes/version before spawn. Operational capability and release
+qualification require their separate real evidence.
+
+### `qualify_artifact(candidate, manifest, qualification_digest) -> Result<QualifiedArtifact, SupervisorError>`
+
+Matches supplied candidate SHA-256, artifact identity, version/build and architecture against
+the supplied manifest. This pure compatibility matcher does not measure a file or resolve the
+manifest's source/license/probe references. Native launch performs executable measurement and
+version preflight; live capabilities and release qualification need their own executed evidence.
+It never downloads or upgrades an artifact.
 
 ### `validate_process_config(config, owner, artifact, secret_lease) -> Result<QualifiedProcessConfig, SupervisorError>`
 
