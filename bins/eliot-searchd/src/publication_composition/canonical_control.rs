@@ -46,6 +46,7 @@ use search_qdrant_bridge::real::{
     CanonicalValidityRestoreOutcome,
 };
 
+use crate::owner_composition::NativeReopenedArtifactSet;
 use crate::preparation_composition::{
     artifact_payloads::PreparedRawCodeArtifacts, native_artifact_store::NativeStoredArtifactSet,
 };
@@ -63,7 +64,7 @@ const ABORT_MEMBERSHIPS_DOMAIN: &str = "eliot/raw/search-publication-abort-membe
 const MAX_DIGEST_INPUT: usize = 4 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum AdapterError {
+pub enum AdapterError {
     ContextMismatch,
     InvalidBinding,
     ControlUnavailable,
@@ -92,6 +93,7 @@ impl ContextBinding {
 
 struct VerifiedPoints {
     binding: PublicationEffectBinding,
+    visibility_operation_id: Option<OpaqueId>,
     readback_digest: Blake3Digest32,
     new_manifest_ref: ReceiptRef,
     retired_manifest_ref: ReceiptRef,
@@ -139,7 +141,7 @@ where
 /// two borrowed views because the model deliberately keeps effect and readback
 /// ports separate; the `RefCell` serializes those synchronous calls without
 /// creating another owner or durable map.
-pub(crate) struct CanonicalPublicationPorts<'a, C, F, E>
+pub struct CanonicalPublicationPorts<'a, C, F, E>
 where
     C: CancellationProbe + Clone,
     F: Fn(MigrationBootstrapWork) -> Result<(), E>,
@@ -149,12 +151,11 @@ where
 
 /// Borrowed, source-backed C13 data needed by publication effects.
 ///
-/// `from_parts` borrows the prepared-generation output, matching C02 reference,
-/// and C07 object reference supplied by the Root owner. A restore consumer can
-/// pass these parts from its reopened C07/C02 record. The adapter rechecks their
-/// identities; the view itself is not publication proof.
+/// Constructors borrow only actual owner-issued C07 write or complete reopen
+/// output. Ordinary metadata, decoded references and pure preparation alone
+/// cannot construct this view. The adapter still rechecks current identities.
 #[derive(Clone, Copy)]
-pub(crate) struct CanonicalPublicationArtifacts<'a> {
+pub struct CanonicalPublicationArtifacts<'a> {
     prepared: &'a PreparedRawCodeArtifacts,
     record: &'a PreparedArtifactSetRecordV1,
     object_ref: &'a search_revision_store::derived_artifact::DerivedArtifactObjectRefV1,
@@ -162,30 +163,26 @@ pub(crate) struct CanonicalPublicationArtifacts<'a> {
 
 impl<'a> CanonicalPublicationArtifacts<'a> {
     /// Borrows the exact outputs of the normal C07 set-write path.
-    pub(crate) fn from_stored(value: &'a NativeStoredArtifactSet) -> Self {
-        Self::from_parts(
-            value.prepared(),
-            value.c02_candidate(),
-            value.c07_write().object_ref(),
-        )
+    pub(crate) const fn from_stored(value: &'a NativeStoredArtifactSet) -> Self {
+        Self {
+            prepared: value.prepared(),
+            record: value.c02_candidate(),
+            object_ref: value.c07_write().object_ref(),
+        }
     }
 
     /// Borrows source-backed C13 outputs after the C07 set and its members were
     /// reopened and verified by their existing owner.
-    pub(crate) const fn from_parts(
-        prepared: &'a PreparedRawCodeArtifacts,
-        record: &'a PreparedArtifactSetRecordV1,
-        object_ref: &'a search_revision_store::derived_artifact::DerivedArtifactObjectRefV1,
-    ) -> Self {
+    pub(crate) const fn from_reopened(value: &'a NativeReopenedArtifactSet<'_, '_>) -> Self {
         Self {
-            prepared,
-            record,
-            object_ref,
+            prepared: value.prepared(),
+            record: value.record(),
+            object_ref: value.c07_observation().object_ref(),
         }
     }
 }
 
-pub(crate) struct CanonicalPublicationEffectPort<'ports, 'io, C, F, E>
+pub struct CanonicalPublicationEffectPort<'ports, 'io, C, F, E>
 where
     C: CancellationProbe + Clone,
     F: Fn(MigrationBootstrapWork) -> Result<(), E>,
@@ -193,7 +190,7 @@ where
     io: &'ports RefCell<CanonicalPublicationIo<'io, C, F, E>>,
 }
 
-pub(crate) struct CanonicalPublicationReadbackPort<'ports, 'io, C, F, E>
+pub struct CanonicalPublicationReadbackPort<'ports, 'io, C, F, E>
 where
     C: CancellationProbe + Clone,
     F: Fn(MigrationBootstrapWork) -> Result<(), E>,
@@ -394,15 +391,15 @@ where
     fn c02_intent(
         &self,
         binding: &PublicationEffectBinding,
-    ) -> Result<PublicationIntent, AdapterError> {
+    ) -> PublicationIntent {
         let candidate = self.c13.record;
-        Ok(PublicationIntent {
+        PublicationIntent {
             publication_intent_id: self.publication_intent_id,
             target_epoch: binding.target_epoch,
             prepared_manifest_ref: candidate.reference().clone(),
             owner_source_membership_access_guards: binding.guards,
             state: PublicationIntentState::Prepared,
-        })
+        }
     }
 
     fn original_binding_record(
@@ -439,10 +436,18 @@ where
         binding: &PublicationEffectBinding,
         phase: &str,
     ) -> Result<MutationId, AdapterError> {
+        Self::c02_mutation_id_for_operation(binding, &binding.operation_id, phase)
+    }
+
+    fn c02_mutation_id_for_operation(
+        binding: &PublicationEffectBinding,
+        operation: &OpaqueId,
+        phase: &str,
+    ) -> Result<MutationId, AdapterError> {
         let digest = digest_parts(
             OPERATION_DOMAIN,
             &[
-                binding.operation_id.as_str().as_bytes(),
+                operation.as_str().as_bytes(),
                 binding.transaction_id.as_str().as_bytes(),
                 phase.as_bytes(),
             ],
@@ -647,7 +652,7 @@ where
         binding: &PublicationEffectBinding,
         actual: &PublicationIntent,
     ) -> Result<(), AdapterError> {
-        let prepared = self.c02_intent(binding)?;
+        let prepared = self.c02_intent(binding);
         if actual.publication_intent_id != prepared.publication_intent_id
             || actual.target_epoch != prepared.target_epoch
             || actual.prepared_manifest_ref != prepared.prepared_manifest_ref
@@ -750,12 +755,11 @@ where
     ) -> Result<ControlCommitReceipt, AdapterError> {
         self.check_context(context)?;
         self.validate_c13(command.binding())?;
-        self.read_candidate_record()?;
 
         let binding = command.binding();
         let phase = "intent-durable";
         let operation_id = Self::c02_mutation_id(binding, phase)?;
-        let prepared = self.c02_intent(binding)?;
+        let prepared = self.c02_intent(binding);
         let head = self.read_head()?;
         let checkpoint = self.read_checkpoint(context)?;
         let digest_binding = if checkpoint
@@ -1322,10 +1326,10 @@ where
             && missing.len() == expected.len()
             && unexpected.is_empty();
         let close_not_applied = close_not_applied && all_match && missing.is_empty();
-        let outcome = if all_match && missing.is_empty() && unexpected.is_empty() {
-            PublicationEffectOutcome::Applied
-        } else if stage_not_applied || close_not_applied {
+        let outcome = if stage_not_applied || close_not_applied {
             PublicationEffectOutcome::NotApplied
+        } else if all_match && missing.is_empty() && unexpected.is_empty() {
+            PublicationEffectOutcome::Applied
         } else {
             PublicationEffectOutcome::Conflict
         };
@@ -1370,7 +1374,7 @@ where
         let verified = self
             .verified_points
             .as_ref()
-            .filter(|verified| verified.binding == *command.binding())
+            .filter(|verified| same_transaction_inputs(&verified.binding, command.binding()))
             .ok_or(AdapterError::ReadbackUnknown)?;
         let binding = command.binding();
         let checkpoint = self.read_checkpoint(context)?;
@@ -1542,6 +1546,7 @@ where
     fn read_visible_commit(
         &self,
         binding: &PublicationEffectBinding,
+        visibility_operation: &OpaqueId,
         checkpoint: &search_control_redb::PublicationRecoveryCheckpoint,
         verified: &VerifiedPoints,
     ) -> Result<ControlCommitReceipt, AdapterError> {
@@ -1577,9 +1582,11 @@ where
         {
             return Err(AdapterError::InvalidBinding);
         }
-        let operation_id = Self::c02_mutation_id(binding, "visible-epoch")?;
-        let command_digest = visibility_command_digest(
+        let operation_id =
+            Self::c02_mutation_id_for_operation(binding, visibility_operation, "visible-epoch")?;
+        let command_digest = visibility_command_digest_for_operation(
             binding,
+            visibility_operation,
             self.publication_receipt_id,
             verified.readback_digest,
         )?;
@@ -1637,7 +1644,6 @@ where
                 command.binding().clone(),
                 PublicationEffectOutcome::Unknown,
             )),
-            _ => Err(AdapterError::PointEffectUnavailable),
         }
     }
 
@@ -1866,6 +1872,7 @@ where
             };
             self.verified_points = Some(VerifiedPoints {
                 binding: command.binding().clone(),
+                visibility_operation_id: None,
                 readback_digest,
                 new_manifest_ref: self.c13.record.reference().clone(),
                 retired_manifest_ref,
@@ -1896,7 +1903,7 @@ where
         let Some(verified) = self
             .verified_points
             .as_ref()
-            .filter(|verified| verified.binding == *command.binding())
+            .filter(|verified| same_transaction_inputs(&verified.binding, command.binding()))
         else {
             return Ok(empty_observation(
                 command.effect(),
@@ -1967,8 +1974,13 @@ where
             && intent.state == PublicationIntentState::ControlCommitted
             && manifest_matches
         {
-            self.read_visible_commit(command.binding(), &checkpoint, verified)
-                .ok()
+            self.read_visible_commit(
+                command.binding(),
+                &command.binding().operation_id,
+                &checkpoint,
+                verified,
+            )
+            .ok()
         } else {
             None
         };
@@ -2045,6 +2057,10 @@ where
             PublicationEffectOutcome::Applied,
         );
         observation.control = Some(control);
+        self.verified_points
+            .as_mut()
+            .ok_or(AdapterError::ReadbackUnknown)?
+            .visibility_operation_id = Some(command.binding().operation_id.clone());
         Ok(observation)
     }
 
@@ -2058,7 +2074,7 @@ where
         let Some(verified) = self
             .verified_points
             .as_ref()
-            .filter(|verified| verified.binding == *command.binding())
+            .filter(|verified| same_transaction_inputs(&verified.binding, command.binding()))
         else {
             return Ok(empty_observation(
                 command.effect(),
@@ -2066,11 +2082,30 @@ where
                 PublicationEffectOutcome::Unknown,
             ));
         };
-        let commit = self.read_visible_commit(command.binding(), &checkpoint, verified)?;
-        let snapshot = self
-            .control
-            .current_snapshot()
-            .map_err(|_| AdapterError::ControlUnavailable)?;
+        let visibility_operation = verified
+            .visibility_operation_id
+            .as_ref()
+            .ok_or(AdapterError::ReadbackUnknown)?;
+        let commit = self.read_visible_commit(
+            command.binding(),
+            visibility_operation,
+            &checkpoint,
+            verified,
+        )?;
+        let snapshot = match self.control.current_snapshot() {
+            Ok(snapshot) => snapshot,
+            Err(error)
+                if *error.reason()
+                    == search_control_redb::ControlError::SnapshotPublicationFailed =>
+            {
+                return Ok(empty_observation(
+                    command.effect(),
+                    command.binding().clone(),
+                    PublicationEffectOutcome::NotApplied,
+                ));
+            }
+            Err(_) => return Err(AdapterError::ControlUnavailable),
+        };
         let expected_manifest = if command.binding().new_manifest.entries.is_empty()
             && !command.binding().difference.retire.is_empty()
         {
@@ -2191,7 +2226,7 @@ where
             PublicationEffectKind::Abandon => Err(AdapterError::AbandonmentUnavailable),
             // VerifyReadback is read-only. Abandonment requires the separate
             // membership-wide fence owner and is not synthesized here.
-            _ => Err(AdapterError::PointEffectUnavailable),
+            PublicationEffectKind::VerifyReadback => Err(AdapterError::PointEffectUnavailable),
         }
     }
 
@@ -2779,23 +2814,21 @@ where
         let verified = self
             .verified_points
             .as_ref()
-            .filter(|verified| verified.binding == *command.binding())
+            .filter(|verified| same_transaction_inputs(&verified.binding, command.binding()))
             .ok_or(AdapterError::ReadbackUnknown)?;
-        let receipt = self.read_visible_commit(command.binding(), &checkpoint, verified)?;
-        let current = self
-            .control
-            .current_snapshot()
+        let visibility_operation = verified
+            .visibility_operation_id
+            .as_ref()
+            .ok_or(AdapterError::ReadbackUnknown)?;
+        let receipt = self.read_visible_commit(
+            command.binding(),
+            visibility_operation,
+            &checkpoint,
+            verified,
+        )?;
+        self.control
+            .publish_committed_snapshot_with_original_context(&receipt, self.deadline, self.work)
             .map_err(|_| AdapterError::ControlUnavailable)?;
-        if current.generation != receipt.after_generation {
-            let _ = self
-                .control
-                .publish_committed_snapshot_with_original_context(
-                    &receipt,
-                    self.deadline,
-                    self.work,
-                );
-            let _ = self.control.recover_snapshot(context);
-        }
         let current = self
             .control
             .current_snapshot()
@@ -3277,16 +3310,49 @@ fn visibility_command_digest(
     publication_receipt_id: PublicationReceiptId,
     readback_digest: Blake3Digest32,
 ) -> Result<Blake3Digest32, AdapterError> {
+    visibility_command_digest_for_operation(
+        binding,
+        &binding.operation_id,
+        publication_receipt_id,
+        readback_digest,
+    )
+}
+
+fn visibility_command_digest_for_operation(
+    binding: &PublicationEffectBinding,
+    visibility_operation: &OpaqueId,
+    publication_receipt_id: PublicationReceiptId,
+    readback_digest: Blake3Digest32,
+) -> Result<Blake3Digest32, AdapterError> {
     digest_parts(
         COMMAND_DOMAIN,
         &[
             binding.prepared_input_digest.as_bytes(),
-            binding.operation_id.as_str().as_bytes(),
+            visibility_operation.as_str().as_bytes(),
             publication_receipt_id.as_bytes(),
             b"visible-epoch",
             readback_digest.as_bytes(),
         ],
     )
+}
+
+/// Cross-phase evidence keeps every frozen input while using distinct actual phase identities.
+fn same_transaction_inputs(a: &PublicationEffectBinding, b: &PublicationEffectBinding) -> bool {
+    a.transaction_id == b.transaction_id
+        && a.request_id == b.request_id
+        && a.relative_deadline_ms == b.relative_deadline_ms
+        && a.budget_ref == b.budget_ref
+        && a.prepared_input_digest == b.prepared_input_digest
+        && a.scope == b.scope
+        && a.target_epoch == b.target_epoch
+        && a.previous_visible_epoch == b.previous_visible_epoch
+        && a.last_reserved_epoch == b.last_reserved_epoch
+        && a.old_manifest_digest == b.old_manifest_digest
+        && a.old_manifest == b.old_manifest
+        && a.new_manifest_digest == b.new_manifest_digest
+        && a.new_manifest == b.new_manifest
+        && a.difference == b.difference
+        && a.guards == b.guards
 }
 
 fn intent_digest(intent: &PublicationIntent) -> Result<Blake3Digest32, AdapterError> {

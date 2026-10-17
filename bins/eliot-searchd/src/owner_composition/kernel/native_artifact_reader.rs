@@ -98,7 +98,8 @@ impl NativeArtifactReaderError {
 /// Full C08/C09/C13 reconstruction for a nominated source candidate or recovery check.
 /// It is not the ordinary pre-Qdrant C18 metadata input. The C02 record and C03
 /// membership are borrowed snapshots; this data is not reusable permission.
-pub(super) struct NativeReopenedArtifactSet<'snapshot, 'registry> {
+#[allow(clippy::redundant_pub_crate)] // Opaque read output is exported only by the Root facade.
+pub(crate) struct NativeReopenedArtifactSet<'snapshot, 'registry> {
     snapshot: &'snapshot PublicationProjectionSnapshot,
     membership: ProjectionMembershipId,
     record: &'snapshot PreparedArtifactSetRecordV1,
@@ -121,7 +122,7 @@ impl NativeReopenedArtifactSet<'_, '_> {
         self.membership
     }
 
-    pub(super) const fn record(&self) -> &PreparedArtifactSetRecordV1 {
+    pub(crate) const fn record(&self) -> &PreparedArtifactSetRecordV1 {
         self.record
     }
 
@@ -150,12 +151,12 @@ impl NativeReopenedArtifactSet<'_, '_> {
     }
 
     /// Exact C07 stored-byte read observation; it contains no opened plaintext.
-    pub(super) const fn c07_observation(&self) -> &DerivedArtifactReadReceiptV1<Vec<u8>> {
+    pub(crate) const fn c07_observation(&self) -> &DerivedArtifactReadReceiptV1<Vec<u8>> {
         &self.read
     }
 
     /// Owner outputs reconstructed and verified against all four stored members.
-    pub(super) const fn prepared(&self) -> &PreparedRawCodeArtifacts {
+    pub(crate) const fn prepared(&self) -> &PreparedRawCodeArtifacts {
         &self.prepared
     }
 }

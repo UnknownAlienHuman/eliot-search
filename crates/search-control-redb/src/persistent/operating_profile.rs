@@ -297,10 +297,6 @@ pub(super) fn read_mode(
     adoption::effective(initial, adoption.as_ref(), limits)
 }
 
-pub(super) fn require_indexed(journal: &PersistentControlJournal) -> Result<(), ControlError> {
-    require_indexed_checked(journal, &super::Unscoped)
-}
-
 pub(super) fn require_indexed_checked(journal: &PersistentControlJournal, check: &dyn Check) -> Result<(), ControlError> {
     if journal.identity.schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION
         && journal.profile_checked(check)? != JournalOperatingProfile::Indexed

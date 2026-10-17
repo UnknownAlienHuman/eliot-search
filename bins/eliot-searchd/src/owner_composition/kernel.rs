@@ -63,6 +63,9 @@ pub(crate) use native_admission::direct_registry::artifact_store::{
 #[cfg(feature = "wave3-index")]
 #[allow(clippy::redundant_pub_crate)] // The owner facade is intentionally crate-private.
 pub(crate) use native_admission::direct_registry::artifact_reader::NativePublishedProjectionRead;
+#[cfg(feature = "wave3-index")]
+#[allow(clippy::redundant_pub_crate)] // Root facade exposes the opaque owner read product only.
+pub(crate) use native_admission::direct_registry::artifact_reader::NativeReopenedArtifactSet;
 #[cfg(feature = "wave4-query")]
 pub(crate) use native_admission::direct_registry::RetainedRevisionReadState;
 pub use native_admission::{NativeSyncPreflightOperation, run_source_sync_preflight};
