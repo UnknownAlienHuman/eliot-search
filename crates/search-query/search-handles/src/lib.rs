@@ -21,6 +21,7 @@ pub use invalidation::{
 
 use core::fmt;
 use std::collections::BTreeMap;
+use std::time::Instant;
 
 use search_contracts::lifecycle::{
     EphemeralSourceHandleRecord, LifecycleRecordStatus, SearchSourceHandleRecord,
@@ -171,6 +172,7 @@ struct StoredHandle {
     owner_epoch: OwnerEpoch,
     disclosure_ceiling: DisclosureCeiling,
     invalidation_generation: u64,
+    monotonic_deadline: Option<Instant>,
     source_protection: Option<Box<dyn RetainedSourceProtectionGuard>>,
 }
 
@@ -240,7 +242,25 @@ impl StoredHandle {
         self.invalidation_generation = generation;
         if status != LifecycleRecordStatus::Active {
             self.source_protection = None;
+            self.monotonic_deadline = None;
         }
+    }
+
+    fn expired_at(&self, now: Instant) -> bool {
+        self.monotonic_deadline
+            .is_none_or(|deadline| now >= deadline)
+    }
+
+    fn require_unexpired(&mut self, now: Instant) -> Result<(), HandleError> {
+        if self.expired_at(now) {
+            self.set_revision_status(
+                self.handle_revision(),
+                LifecycleRecordStatus::Expired,
+                self.invalidation_generation,
+            );
+            return Err(HandleError::HandleExpired);
+        }
+        Ok(())
     }
 
     pub(crate) const fn target(&self) -> Option<&EphemeralHandleTarget> {
@@ -307,6 +327,8 @@ pub struct MintMaterial {
     pub token_digest: HandleTokenDigest,
     pub created_at: UtcTimestamp,
     pub expires_at: UtcTimestamp,
+    /// Process-local expiry captured from the original mint window; never serialized.
+    pub monotonic_deadline: Instant,
 }
 
 impl fmt::Debug for MintMaterial {
@@ -316,9 +338,8 @@ impl fmt::Debug for MintMaterial {
             .field("handle_id", &self.handle_id)
             .field("opaque_token", &"<redacted>")
             .field("token_digest", &self.token_digest)
-            .field("created_at", &self.created_at)
-            .field("expires_at", &self.expires_at)
-            .finish()
+            .field("lifetime", &"<redacted>")
+            .finish_non_exhaustive()
     }
 }
 
@@ -336,6 +357,8 @@ pub trait HandleCryptoPort {
 pub trait RetainedSourceProtectionGuard: PackageOpaque {
     fn target(&self) -> &RetainedSourceTarget;
     fn expires_at(&self) -> &UtcTimestamp;
+    /// The exact process-local deadline supplied to `protect`.
+    fn monotonic_deadline(&self) -> Instant;
     fn revalidate_current(&self) -> Result<(), HandleError>;
 }
 
@@ -348,6 +371,7 @@ pub trait RetainedSourceProtectionPort: PackageOpaque {
         &mut self,
         target: &RetainedSourceTarget,
         handle_expires_at: &UtcTimestamp,
+        handle_monotonic_deadline: Instant,
     ) -> Result<Self::Guard, HandleError>;
 }
 
@@ -360,8 +384,6 @@ pub enum HandleAuthorizationPhase {
 
 /// Opaque current C18 authorization checkpoint held through its operation.
 pub trait HandleAuthorizationCheckpoint: PackageOpaque {
-    fn now(&self) -> &UtcTimestamp;
-
     fn revalidate(
         &self,
         record: &SearchSourceHandleRecord,
@@ -577,8 +599,12 @@ impl HandleStore {
         validate_retained_target(&target)?;
         self.enforce_quota(HandleClass::Ephemeral)?;
         let (material, token_digest) = verified_mint_material(crypto)?;
-        let guard = protection.protect(&target, &material.expires_at)?;
-        if guard.target() != &target || guard.expires_at() < &material.expires_at {
+        let guard =
+            protection.protect(&target, &material.expires_at, material.monotonic_deadline)?;
+        if guard.target() != &target
+            || guard.expires_at() < &material.expires_at
+            || guard.monotonic_deadline() != material.monotonic_deadline
+        {
             return Err(HandleError::SourceProtectionMismatch);
         }
         guard.revalidate_current()?;
@@ -611,6 +637,9 @@ impl HandleStore {
         token_digest: HandleTokenDigest,
         source_protection: Option<Box<dyn RetainedSourceProtectionGuard>>,
     ) -> Result<SearchSourceHandle, HandleError> {
+        if Instant::now() >= material.monotonic_deadline {
+            return Err(HandleError::HandleExpired);
+        }
         if material.expires_at <= material.created_at
             || self.records.contains_key(&token_digest)
             || self.by_id.contains_key(&material.handle_id)
@@ -647,6 +676,7 @@ impl HandleStore {
             owner_epoch,
             disclosure_ceiling,
             invalidation_generation: 0,
+            monotonic_deadline: Some(material.monotonic_deadline),
             source_protection,
         };
         self.by_id.insert(material.handle_id, token_digest);
@@ -680,6 +710,35 @@ impl HandleStore {
         P: HandleReadbackPort,
         F: FnOnce(&HandleExpansion) -> Result<T, E>,
     {
+        self.expand_with_clock(
+            handle,
+            requested_max_bytes,
+            crypto,
+            authorization,
+            readback,
+            deliver,
+            Instant::now,
+        )
+    }
+
+    // The clock seam is private: public callers never supply time authority.
+    fn expand_with_clock<C, A, P, F, T, E, N>(
+        &mut self,
+        handle: &SearchSourceHandle,
+        requested_max_bytes: u64,
+        crypto: &C,
+        authorization: &mut A,
+        readback: &mut P,
+        deliver: F,
+        mut now: N,
+    ) -> Result<T, HandleDeliveryError<E>>
+    where
+        C: HandleCryptoPort,
+        A: HandleReauthorizationPort,
+        P: HandleReadbackPort,
+        F: FnOnce(&HandleExpansion) -> Result<T, E>,
+        N: FnMut() -> Instant,
+    {
         let token_digest = crypto
             .token_digest(&handle.opaque_token)
             .map_err(|_| HandleDeliveryError::Handle(HandleError::HandleNotFound))?;
@@ -710,6 +769,9 @@ impl HandleStore {
                 return Err(HandleDeliveryError::Handle(HandleError::HandleExpired));
             }
         }
+        stored
+            .require_unexpired(now())
+            .map_err(HandleDeliveryError::Handle)?;
         let target = stored.target().cloned().ok_or(HandleDeliveryError::Handle(
             HandleError::RetainedRevisionRequired,
         ))?;
@@ -751,12 +813,9 @@ impl HandleStore {
                 stored.disclosure_ceiling,
             )
             .map_err(HandleDeliveryError::Handle)?;
-        if stored
-            .expires_at()
-            .is_some_and(|expiry| expiry <= before_read.now())
-        {
-            return Err(HandleDeliveryError::Handle(HandleError::HandleExpired));
-        }
+        stored
+            .require_unexpired(now())
+            .map_err(HandleDeliveryError::Handle)?;
         if let Some(guard) = &stored.source_protection {
             guard
                 .revalidate_current()
@@ -767,6 +826,9 @@ impl HandleStore {
             ));
         }
         drop(before_read);
+        stored
+            .require_unexpired(now())
+            .map_err(HandleDeliveryError::Handle)?;
 
         let (readback_value, owner_observation) = readback
             .read_exact(&permit)
@@ -820,12 +882,9 @@ impl HandleStore {
                 stored.disclosure_ceiling,
             )
             .map_err(HandleDeliveryError::Handle)?;
-        if stored
-            .expires_at()
-            .is_some_and(|expiry| expiry <= before_output.now())
-        {
-            return Err(HandleDeliveryError::Handle(HandleError::HandleExpired));
-        }
+        stored
+            .require_unexpired(now())
+            .map_err(HandleDeliveryError::Handle)?;
         if let Some(guard) = &stored.source_protection {
             guard
                 .revalidate_current()
@@ -835,6 +894,9 @@ impl HandleStore {
                 HandleError::SourceProtectionUnavailable,
             ));
         }
+        stored
+            .require_unexpired(now())
+            .map_err(HandleDeliveryError::Handle)?;
         let output = deliver(&expansion).map_err(HandleDeliveryError::Output);
         drop(before_output);
         output
@@ -867,14 +929,18 @@ impl HandleStore {
         })
     }
 
-    /// Expires a bounded deterministic slice at the owner-supplied trusted time.
-    pub fn expire(&mut self, now: &UtcTimestamp) -> ExpiryReceipt {
+    /// Expires a bounded deterministic slice using the actual process clock.
+    /// UTC wire timestamps never authorize a longer process-local lifetime.
+    pub fn expire(&mut self) -> ExpiryReceipt {
+        self.expire_at(Instant::now())
+    }
+
+    fn expire_at(&mut self, now: Instant) -> ExpiryReceipt {
         let candidates = self
             .records
             .iter()
             .filter(|(_, record)| {
-                record.status() == LifecycleRecordStatus::Active
-                    && record.expires_at().is_some_and(|expiry| expiry <= now)
+                record.status() == LifecycleRecordStatus::Active && record.expired_at(now)
             })
             .map(|(digest, _)| *digest)
             .take(self.policy.max_expire_batch)
@@ -891,8 +957,7 @@ impl HandleStore {
             }
         }
         let more_expired = self.records.values().any(|record| {
-            record.status() == LifecycleRecordStatus::Active
-                && record.expires_at().is_some_and(|expiry| expiry <= now)
+            record.status() == LifecycleRecordStatus::Active && record.expired_at(now)
         });
         ExpiryReceipt {
             expired,
@@ -928,6 +993,9 @@ fn verified_mint_material<C: HandleCryptoPort>(
         .map_err(|_| HandleError::TokenInvalid)?;
     if material.expires_at <= material.created_at {
         return Err(HandleError::InvalidPolicy);
+    }
+    if Instant::now() >= material.monotonic_deadline {
+        return Err(HandleError::HandleExpired);
     }
     let computed = crypto
         .token_digest(&material.opaque_token)

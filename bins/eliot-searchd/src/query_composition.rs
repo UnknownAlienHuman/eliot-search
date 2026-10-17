@@ -56,6 +56,8 @@
 
 #![forbid(unsafe_code)]
 
+#[path = "query_composition/handle_crypto.rs"]
+pub(in crate::query_composition) mod handle_crypto;
 pub(crate) mod registry;
 pub(crate) mod service;
 pub(crate) mod native_source_readback;

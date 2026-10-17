@@ -9,8 +9,11 @@ the returned `SearchSourceHandle` and the transient crypto result. `RetainedSour
 public target or record shape.
 
 Package-private supplemental fields retain the source-membership invalidation key, representation/unit
-identity, owner epoch, disclosure ceiling, and a process-local source-protection guard that C00's
-ephemeral target does not carry. They are never accepted back as caller authority.
+identity, owner epoch, disclosure ceiling, an exact process-local monotonic deadline, and a
+source-protection guard that C00's ephemeral target does not carry. The deadline is supplied in
+`MintMaterial` by the trusted crypto producer from its original mint-window `Instant` and selected
+validated TTL. It is never serialized into C00 or reconstructed from UTC or the query work deadline.
+These fields are never accepted back as caller authority.
 
 ## Minting
 
@@ -24,7 +27,10 @@ buffer snapshot. A retained-source variant fails closed here; the C00 unsaved ta
 ### `mint_ephemeral_retained_source(target, source_membership_id, representation_id, unit_id, binding_id, grant_id, owner_epoch, disclosure_ceiling, protection, crypto, cancelled)`
 
 Mints a memory-only retained-source handle only after the supplied source owner returns an opaque guard
-for the exact C00 target, with protection lasting through the minted expiry. The store recomputes the
+for the exact C00 target, with protection lasting through the minted expiry. Its `protect` call is
+`protect(target, handle_expires_at: &UtcTimestamp, handle_monotonic_deadline: Instant)`; the returned
+guard must echo that exact `Instant` through `monotonic_deadline()`. UTC fields remain for wire
+interoperability, and may not replace the process-local bound. The store recomputes the
 token digest through `HandleCryptoPort` and rejects provider material whose digest does not match its
 plaintext token. No source-protection implementation is included here; callers without the C17 owner
 guard cannot mint this handle class. Durable mint remains unavailable until its real source-retention
@@ -48,15 +54,23 @@ compares it to the C00 target. A wider policy/request ceiling does not reject a 
 Delivery runs while the store borrow and fresh output checkpoint remain live. No caller-provided
 record, validation context, digest, or permit can authorize expansion.
 
+The owner observes `Instant::now()` itself before source readback and output, including after the
+authorization/protection callbacks. An elapsed or missing process deadline marks the record Expired,
+drops the source guard and deadline, and refuses further I/O/delivery. The authorization checkpoint
+supplies revalidation only; it supplies no caller-selected UTC clock. Public expansion has no clock
+injection seam.
+
 The parent daemon must implement the authorization and readback ports using current C18 checks and the
 exact C07/root source owner. It must also provide the C17 protection guard used at mint. Those adapters
 are outside this package scope.
 
 ## Lifecycle
 
-`invalidate` and `expire` update the canonical C00 record status and drop any in-memory protection
-guard. Their receipts describe local handle-state progress only; they do not claim completion of an
-external source-retention cleanup.
+`invalidate` and `expire()` update the canonical C00 record status and drop any in-memory protection
+guard and monotonic deadline. `expire()` observes the actual process clock and accepts no UTC value.
+Their receipts describe local handle-state progress only; they do not claim completion of an external
+source-retention cleanup. Normal Root caller selection of the current handles config and restrictive
+live-config invalidation remain separate daemon integration work.
 
 Invalidation and expiry remain batch-bounded. Token lookup and the handle-ID index stay synchronized.
 Terminal-record ceilings and compaction remain #282 work; this patch does not close that lifecycle gate.

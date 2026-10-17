@@ -1,14 +1,15 @@
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
+use std::time::{Duration, Instant};
 
 use search_contracts::{
     AssuranceClass, BindingId, Blake3Digest32, Blake3ExactInputLimit, BoundedSet,
     BufferRangeAnchor, BufferSnapshotId, DisclosureCeiling, GrantId, HandleId, HandleTokenDigest,
     MAX_BLAKE3_EXACT_BYTES, MAX_SET_ITEMS, NativeAnchor, ObjectResidencyKeyDigest,
     OpaqueHandleToken, OwnerEpoch, PositionEncoding, ProfileId, RepresentationId,
-    SearchSourceHandleRecord, SourceId, SourceMembershipId, SourceNamespaceId,
+    SearchSourceHandle, SearchSourceHandleRecord, SourceId, SourceMembershipId, SourceNamespaceId,
     SourceOwnerGeneration, SourceRevisionId, SourceRevisionRef, SourceView, TextBytesAnchor,
     UnitId, UtcTimestamp, WorkspaceId, WorkspaceViewRevisionId, blake3_exact_bytes,
 };
@@ -114,6 +115,7 @@ impl crate::HandleCryptoPort for TestCrypto {
             opaque_token,
             created_at: timestamp("2026-10-16T10:00:00.000000Z"),
             expires_at: timestamp("2026-10-16T10:05:00.000000Z"),
+            monotonic_deadline: Instant::now() + Duration::from_secs(300),
         })
     }
 
@@ -122,11 +124,17 @@ impl crate::HandleCryptoPort for TestCrypto {
     }
 }
 
-#[derive(Debug)]
 struct TestGuard {
     target: RetainedSourceTarget,
     expires_at: UtcTimestamp,
+    monotonic_deadline: Instant,
     drops: Arc<AtomicUsize>,
+}
+
+impl std::fmt::Debug for TestGuard {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("TestGuard(<redacted>)")
+    }
 }
 
 impl Drop for TestGuard {
@@ -150,6 +158,10 @@ impl RetainedSourceProtectionGuard for TestGuard {
         &self.expires_at
     }
 
+    fn monotonic_deadline(&self) -> Instant {
+        self.monotonic_deadline
+    }
+
     fn revalidate_current(&self) -> Result<(), HandleError> {
         Ok(())
     }
@@ -158,6 +170,7 @@ impl RetainedSourceProtectionGuard for TestGuard {
 #[derive(Debug)]
 struct TestProtection {
     available: bool,
+    wrong_deadline: bool,
     drops: Arc<AtomicUsize>,
 }
 
@@ -174,6 +187,7 @@ impl RetainedSourceProtectionPort for TestProtection {
         &mut self,
         target: &RetainedSourceTarget,
         handle_expires_at: &UtcTimestamp,
+        handle_monotonic_deadline: Instant,
     ) -> Result<Self::Guard, HandleError> {
         if !self.available {
             return Err(HandleError::SourceProtectionUnavailable);
@@ -181,13 +195,18 @@ impl RetainedSourceProtectionPort for TestProtection {
         Ok(TestGuard {
             target: target.clone(),
             expires_at: handle_expires_at.clone(),
+            monotonic_deadline: if self.wrong_deadline {
+                handle_monotonic_deadline + Duration::from_millis(1)
+            } else {
+                handle_monotonic_deadline
+            },
             drops: Arc::clone(&self.drops),
         })
     }
 }
 
 #[derive(Debug)]
-struct TestCheckpoint(UtcTimestamp);
+struct TestCheckpoint;
 
 impl PackageOpaque for TestCheckpoint {
     fn owner_package(&self) -> &'static str {
@@ -196,10 +215,6 @@ impl PackageOpaque for TestCheckpoint {
 }
 
 impl HandleAuthorizationCheckpoint for TestCheckpoint {
-    fn now(&self) -> &UtcTimestamp {
-        &self.0
-    }
-
     fn revalidate(
         &self,
         record: &SearchSourceHandleRecord,
@@ -247,7 +262,7 @@ impl HandleReauthorizationPort for TestAuthorization {
         _disclosure_ceiling: DisclosureCeiling,
         _phase: HandleAuthorizationPhase,
     ) -> Result<Self::Checkpoint, HandleError> {
-        Ok(TestCheckpoint(timestamp("2026-10-16T10:01:00.000000Z")))
+        Ok(TestCheckpoint)
     }
 }
 
@@ -264,6 +279,218 @@ struct TestReadback {
     target: EphemeralHandleTarget,
     reads: usize,
     last_maximum_bytes: Option<u64>,
+}
+
+struct MonotonicFixture {
+    store: HandleStore,
+    handle: Result<SearchSourceHandle, HandleError>,
+    crypto: TestCrypto,
+    drops: Arc<AtomicUsize>,
+}
+
+fn monotonic_fixture(wrong_deadline: bool) -> MonotonicFixture {
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut protection = TestProtection {
+        available: true,
+        wrong_deadline,
+        drops: Arc::clone(&drops),
+    };
+    let mut crypto = TestCrypto { next: 0 };
+    let mut store = HandleStore::new(HandlePolicy::BASELINE).unwrap();
+    let (binding, grant, epoch, disclosure) = binding();
+    let handle = store.mint_ephemeral_retained_source(
+        target(),
+        SourceMembershipId::from_bytes([9; 16]),
+        RepresentationId::from_bytes([10; 16]),
+        UnitId::from_bytes([11; 16]),
+        binding,
+        grant,
+        epoch,
+        disclosure,
+        &mut protection,
+        &mut crypto,
+        false,
+    );
+    MonotonicFixture {
+        store,
+        handle,
+        crypto,
+        drops,
+    }
+}
+
+fn retained_readback() -> TestReadback {
+    TestReadback {
+        target: EphemeralHandleTarget::RetainedSource(target()),
+        reads: 0,
+        last_maximum_bytes: None,
+    }
+}
+
+#[test]
+fn monotonic_expired_token_never_calls_readback_or_output() {
+    let MonotonicFixture {
+        mut store,
+        handle,
+        crypto,
+        drops,
+    } = monotonic_fixture(false);
+    let handle = handle.unwrap();
+    let stored = store.records.values_mut().next().unwrap();
+    // Simulate elapsed process time after idle; canonical UTC is unchanged.
+    stored.monotonic_deadline = Instant::now().checked_sub(Duration::from_secs(1));
+    let mut readback = retained_readback();
+    let mut delivered = false;
+    let result = store.expand(
+        &handle,
+        4,
+        &crypto,
+        &mut TestAuthorization,
+        &mut readback,
+        |_| {
+            delivered = true;
+            Ok::<(), ()>(())
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(HandleDeliveryError::Handle(HandleError::HandleExpired))
+    ));
+    assert_eq!(readback.reads, 0);
+    assert!(!delivered);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+    let stored = store.records.values().next().unwrap();
+    assert_eq!(
+        stored.status(),
+        search_contracts::LifecycleRecordStatus::Expired
+    );
+    assert!(stored.monotonic_deadline.is_none());
+    assert!(stored.source_protection.is_none());
+}
+
+struct ExpireAtOutput {
+    observed: Arc<Mutex<Instant>>,
+    deadline: Instant,
+}
+
+impl std::fmt::Debug for ExpireAtOutput {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("ExpireAtOutput(<redacted>)")
+    }
+}
+
+impl PackageOpaque for ExpireAtOutput {
+    fn owner_package(&self) -> &'static str {
+        "search-handles-test"
+    }
+}
+
+impl HandleReauthorizationPort for ExpireAtOutput {
+    type Checkpoint = TestCheckpoint;
+
+    fn checkpoint(
+        &mut self,
+        _record: &SearchSourceHandleRecord,
+        _membership: Option<SourceMembershipId>,
+        _representation: Option<RepresentationId>,
+        _unit: Option<UnitId>,
+        _epoch: OwnerEpoch,
+        _disclosure: DisclosureCeiling,
+        phase: HandleAuthorizationPhase,
+    ) -> Result<TestCheckpoint, HandleError> {
+        if phase == HandleAuthorizationPhase::BeforeOutput {
+            *self.observed.lock().unwrap() = self.deadline;
+        }
+        Ok(TestCheckpoint)
+    }
+}
+
+#[test]
+fn monotonic_expiry_before_output_releases_guard_without_delivery() {
+    let MonotonicFixture {
+        mut store,
+        handle,
+        crypto,
+        drops,
+    } = monotonic_fixture(false);
+    let handle = handle.unwrap();
+    let deadline = store
+        .records
+        .values()
+        .next()
+        .unwrap()
+        .monotonic_deadline
+        .unwrap();
+    let observed = Arc::new(Mutex::new(Instant::now()));
+    let mut authorization = ExpireAtOutput {
+        observed: Arc::clone(&observed),
+        deadline,
+    };
+    let mut readback = retained_readback();
+    let mut delivered = false;
+    // Only this owner-private test seam accepts observations; public expand uses Instant::now.
+    let result = store.expand_with_clock(
+        &handle,
+        4,
+        &crypto,
+        &mut authorization,
+        &mut readback,
+        |_| {
+            delivered = true;
+            Ok::<(), ()>(())
+        },
+        || *observed.lock().unwrap(),
+    );
+    assert!(matches!(
+        result,
+        Err(HandleDeliveryError::Handle(HandleError::HandleExpired))
+    ));
+    assert_eq!(readback.reads, 1);
+    assert!(!delivered);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+    assert!(
+        store
+            .records
+            .values()
+            .next()
+            .unwrap()
+            .monotonic_deadline
+            .is_none()
+    );
+}
+
+#[test]
+fn monotonic_expire_releases_deadline_and_guard_must_echo_exact_deadline() {
+    let MonotonicFixture {
+        mut store, drops, ..
+    } = monotonic_fixture(false);
+    store
+        .records
+        .values_mut()
+        .next()
+        .unwrap()
+        .monotonic_deadline = Instant::now().checked_sub(Duration::from_secs(1));
+    let expired = store.expire();
+    assert_eq!(expired.expired, 1);
+    assert!(!expired.more_expired);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+    assert!(
+        store
+            .records
+            .values()
+            .next()
+            .unwrap()
+            .monotonic_deadline
+            .is_none()
+    );
+
+    let mismatch = monotonic_fixture(true);
+    assert!(matches!(
+        mismatch.handle,
+        Err(HandleError::SourceProtectionMismatch)
+    ));
+    assert!(mismatch.store.is_empty());
+    assert_eq!(mismatch.drops.load(Ordering::SeqCst), 1);
 }
 
 impl HandleReadbackPort for TestReadback {
@@ -309,6 +536,7 @@ fn retained_target_range_token_and_invalidation_are_store_owned() {
     let drops = Arc::new(AtomicUsize::new(0));
     let mut protection = TestProtection {
         available: false,
+        wrong_deadline: false,
         drops: Arc::clone(&drops),
     };
     let mut crypto = TestCrypto { next: 0 };
