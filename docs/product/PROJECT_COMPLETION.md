@@ -2,7 +2,7 @@
 
 **Historical audit base:** `1a6d17d073c5f6d1fe50f21082439f1965d24ef8`. **Accepted source checkpoint (2026-10-10):** `7068bbdbb923762529368878481f74d7a29fe029`. **Coordinator:** [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352). **Topology:** one integration manager, one writer worktree, 5–10 read/research/review subagents. **Product acceptance:** not established by this document.
 
-This map describes the whole-project obligation and dependency graph. The live writer queue belongs to #352, the launch gate and the exact ready issue under [EXECUTION_PROTOCOL](EXECUTION_PROTOCOL.md); dated next-task wording is not scheduling authority. The map does not replace Architecture Part I, accepted ADRs, package contracts, detailed issue semantics or actual execution evidence. No runtime consumes this document.
+This map describes the whole-project obligation and dependency graph. The live writer queue belongs to the current maintainer handoff, #352 and the exact active issue/PR under [EXECUTION_PROTOCOL](EXECUTION_PROTOCOL.md); dated next-task wording is not scheduling authority. The map does not replace Architecture Part I, accepted ADRs, package contracts, detailed issue semantics or actual execution evidence. No runtime consumes this document.
 
 ## 1. Start and stop rules
 
@@ -10,7 +10,7 @@ Read [root instructions](../../AGENTS.md), [architecture entrypoint](../architec
 
 Delivered source: #317/#318 tooling prerequisite; #237/#319 canonical foundation; #253/#322 casefold research; #258/#323 indexed contracts; #250/#326 Cargo metadata; #256/#338 stateless S11; #339/#340 Windows Cargo prefix handling; #327/#341 Rustls security repair; #257/#342 UnitSet v3. Do not repeat them. Scoped source/compiler/fixture evidence is not whole-product qualification. #253 completed a decision, not #254's tokenizer.
 
-**Current source programme: #235.core; select its next bounded ready child through #352.** Do not repeat #256/#257, interrupt an active manager, reset its worktree or silently change its accepted base. A docs-only merge does not invalidate source evidence, but each successor records newly fetched main. #324 remains a validator rerun obligation; the delivered #327 repair does not qualify the whole dependency/release graph.
+**Dated programme snapshot: the #235.core sequence below predates current main.** Current 2026-10-17 source verification and remaining boundaries are in the [audit review](../audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md); #352 retains the actual manager handoff and #598 work. Do not repeat #256/#257, interrupt an active manager, reset its worktree or silently change its accepted base. A docs-only merge does not invalidate source evidence, but each successor records newly fetched main. #324 remains a validator rerun obligation; the delivered #327 repair does not qualify the whole dependency/release graph.
 
 Recent bounded deliveries: #363/PR #364 is pure root-open policy only; #366/PR #368 repairs existing CLI cancellation bounds; #365/PR #369 removes raw typed diagnostic payloads; #370/PR #371 requires trusted installation before product-grant I/O; #372/PR #374 preserves the resolver's original absolute setup deadline. The reusable client crate and duplicate CLI engine deletion are still absent. #373 owns the unresolved attachment/expectation contract; #375 owns conservative remote-outcome propagation. These follow-ups are not automatically ready slices.
 
@@ -22,7 +22,7 @@ The manager alone changes manifests/Cargo.lock and integrates. Subagents return 
 
 ## 2. Stage semantics: remove false dependency cycles
 
-The table below is an executable completion DAG. `N.phase` is a phase of existing issue/PR N, **not a new GitHub issue**. Prerequisites mean required artifacts/interfaces for that phase, not that every optional consumer must already exist. `-` means no unmet predecessor inside this map; root/package rules still apply.
+The table below is a long-range obligation DAG, not a current-ready task list. Some recorded outputs have since landed; verify current source before scheduling. `N.phase` is a phase of existing issue/PR N, **not a new GitHub issue**. Prerequisites mean required artifacts/interfaces for that phase, not that every optional consumer must already exist. `-` means no unmet predecessor inside this map; root/package rules still apply.
 
 - **Configured** means requested configuration parsed and accepted.
 - **Operational** means constructed current owners, profiles and readbacks can perform the operation.
@@ -79,12 +79,12 @@ Columns are stable: stage, prerequisites, owning implementation area, exact exit
 | 332 | 235.core,266,194,308 | CLI; daemon provider/listener/entry | One native endpoint, invocation parser and JSON edge; remove old product fallback |
 | 120.native | 266,327 | search-qdrant-supervisor | Exact owned child/Job/native identity and finite lifecycle; auth wired by 310 |
 | 310 | 307,308,332,120.native | Secret consumer integration | Separate provider/Qdrant purpose-bound selected leases |
-| 259 | 256,257,258 | search-projection-planner | Planner consumes verified UnitSet, one S11 and schema; no caller completeness |
-| 260 | 259 | search-publication | Same internally recomputing prepared-generation validator for submit/recovery |
+| 259 | 256,257,258 delivered | search-projection-planner; actual admission consumers | S11/UnitSet planner and #519 lookup repair present; retain actual owner input/profile/lineage integration obligations |
+| 260 | canonical admission delivered in PR #605 | search-publication | Shared submit/restore admission present; active empty UnitSet remains unsupported; actual journal/effects remain #261/#263 |
 | 261 | 260,269,331 | Publication/control/store adapters | Durable intent, exact effects/readback, guarded current pointer and crash recovery |
-| 262 | 256,258,327 | search-qdrant-bridge | Private vendor codec/schema/route; one eligible population; no duplicated identity |
+| 262 | 256,258,327 delivered | search-qdrant-bridge | Shared identity/schema/eligibility and exact route adoption still pending; split bounded static changes before #263 live effects |
 | 263 | 261,262,272,310 | Live Qdrant/owner composition | Real generation writes/readback/scoped retrieval/IDF under one operation deadline |
-| 329 | 259,262 | Identity consumers and old exports | Delete legacy registry/FNV minting/callers after consumers compile against S11 |
+| 329 | actual remaining legacy imports | search-point-identity and immediate consumers | Planner/publication already use S11; remove root legacy exports/fixtures after caller census; bridge wrapper is separate #262 work |
 | 300 | 237,258 | search-epoch-pins | Owner-issued route/epoch/time pins; cannot be forged by callers |
 | 282 | 237,300 | search-handles | Canonical bounded ranges, identity and invalidation model |
 | 283 | 237 | search-continuation | Exact IDs, times and limits |
@@ -166,7 +166,7 @@ After Wave 2, choose the first unfinished stage whose dependencies are actually 
 
 Shared changes are serialized: contracts first; control schema before consumers; typed clients before adapters; fact model before producers; worker ABI before parser workers; run formats before runner/verifier; restore ports before key migration. Cross-package edits are limited to a named interface/caller cutover. A phase requiring other files gets an explicit instruction addendum, not blanket permission.
 
-Compatibility rule: do not remove a still-imported public API under a package-only PASS. Inventory all immediate reverse consumers. #256 introduces S11 without promoting old identities; #329 removes old callers only after #259/#262. Old data can have a named read-only decoder/rebuild path; it cannot silently mint new identities or serve as new-profile fallback.
+Compatibility rule: do not remove a still-imported public API under a package-only PASS. Inventory all immediate reverse consumers. #256 introduces S11 without promoting old identities; #329 retires the old API with its last actual callers, without waiting for unrelated #262 closure. Retain a read-only decoder/rebuild path only for an identified stored format and reader; it cannot silently mint new identities or serve as new-profile fallback.
 
 Config digest rule: existing SHA256(legacy bytes) is not SHA256(domain || NUL || bytes). #238 may add only the reviewed bounded exact-byte SHA helper in the existing shared owner, using the same donor. Preserve old vectors or issue explicit version/rebuild. No second codec, crypto crate or generic receipt system.
 

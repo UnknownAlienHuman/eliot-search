@@ -2,7 +2,7 @@
 
 **Authority:** root `AGENTS.md`, Architecture Part I, accepted ADRs, the exact source issue, process issue #350 and programme issue #352.
 **Applies to:** all remaining implementation, migration, integration, qualification and release work.
-**Topology:** one manager, one writer worktree, one dependency/`Cargo.lock` integrator, 5–10 bounded read/research/review subagents.
+**Topology:** one manager, one writer worktree, one dependency/`Cargo.lock` integrator, bounded read/research/review subagents as needed.
 
 This protocol fixes an execution defect, not a product invariant. Previous instructions prevented conflicting writers but did not stop one valid source task from absorbing every newly discovered concern. The result was expanding draft PRs, repeated scope amendments, blocked independent work and review that never reached a stable final SHA.
 
@@ -14,10 +14,10 @@ The sources of truth have different jobs:
 
 1. Architecture Part I, ADRs and package contracts define product semantics.
 2. `PROJECT_COMPLETION.md` is the long-range obligation/dependency graph. Its dated “next task”, base SHA or local stage wording is not the live writer queue.
-3. Programme issue #352 and `docs/audit/AGENT_LAUNCH_GATE_2026-10-09.md` define the current writer sequence.
+3. The current maintainer handoff, programme issue #352 and the exact active issue/PR define the writer sequence. Dated launch gates and exception matrices are historical snapshots.
 4. The exact active issue/PR and current source define the current slice.
 
-When the long-range map is stale, follow #352, the launch gate and current merged artifacts; update the map separately. Never repeat delivered work because a dated map row still looks active.
+When a map or issue opening body is stale, preserve the active manager/WIP and verify its prerequisite artifacts on current main. Refresh the stale status instead of repeating delivered work. The 2026-10-17 audit verification is evidence, not an additional launch gate.
 
 ---
 
@@ -43,7 +43,7 @@ Evidence or qualification against exact immutable candidate bytes. A gate does n
 
 **Do not create new programme, tracking or gate pull requests. Open pull requests are merge candidates.**
 
-PROCESS/DOCS PRs are source-free: no product source, manifests, lockfile or workflows. Any source-changing PR is a SLICE regardless of its label and must be the sole active source PR. After #351, no further process/documentation programme PR opens until three bounded source slices merge, unless a verified B0 contradiction prevents source work.
+PROCESS/DOCS PRs are source-free: no product source, manifests, lockfile or workflows. Any source-changing PR is a SLICE regardless of its label and must be the sole active source PR. Requested documentation/audit corrections use a bounded PROCESS/DOCS change; no obsolete source-merge quota applies.
 
 ---
 
@@ -92,6 +92,8 @@ One slice owns:
 - one primary package or one cohesive daemon composition owner;
 - at most two narrowly named adapter families;
 - only direct reverse consumers required to compile and cut over the result.
+
+This explicit closure supersedes generic package-only prohibitions for those named consumers. Audit-wide cleanup, all legacy deletion and default-feature activation are not implicit additions to it. Remove the implementation being replaced in this slice; unrelated remnants keep a concrete later deletion owner.
 
 A glob such as `bins/eliot-searchd/src/**` is not a useful slice boundary.
 
@@ -207,7 +209,7 @@ When a threshold is exceeded:
 5. create each successor from the newly merged `main`, never as a stacked PR;
 6. obtain review on every final exact head.
 
-A review-budget exception requires written justification accepted before additional source changes. A broad issue does not itself justify a broad PR.
+A review-budget exception requires written justification accepted before additional source changes. A broad issue does not itself justify a broad PR. Existing package size debt does not block a bounded shrinking change or justify moving code into forwarding crates.
 
 ---
 
@@ -241,7 +243,7 @@ A broad programme issue remains open after a coherent source slice merges. The n
 
 ## 7. Subagent assignments
 
-Use only roles relevant to the active slice.
+Use only roles relevant to the active slice; no minimum subagent count is a launch prerequisite.
 
 | Role | Required output |
 |---|---|
@@ -334,32 +336,14 @@ Do not create replacement tracking PRs.
 
 ---
 
-## 11. Immediate #266 / #344 application
+## 11. Historical #266 / #344 case
 
-PR #344 exceeded every default split trigger: 119 changed files, more than 11,000 additions and several owner families. Process issues #349/#350 control its disposition.
+PR #344 is a closed, unmerged donor at 6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce.
+Preserve its history and unrelated work. Its old #351 → #354 → #235.core sequence is not today's queue.
 
-PR #344 is closed unmerged and frozen at `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`. Preserve branch, history and uncommitted work separately; add no commits to that donor.
-
-Merge #351 first, then open only a dependency-ready child of #354 from that new `main`. The preferred split is the typed root-admission API first, followed by explicit initialization with its reviewed DirectStore dependency closure and normal existing-only caller cutover. #354 is not ready until its issue names the executable closure and correct production gates.
-
-#355, #356 and #358 are PROGRAM/serial sequence parents, not source-branch authorization. Create the first exact child before coding; each successor starts only after its predecessor merges. Required fixtures and source seams stay in the slice that owns their behavior; there is no later proof tranche that retroactively makes earlier code safe. Execution remains deferred as specified in section 8.
-
-Catalog evidence/observation #357 and deep DIRECT/migration propagation remain separately schedulable. Do not put these behind the provider-core start without a demonstrated API dependency.
-
-These remain separate unless a concrete B0 dependency is proved:
-
-```text
-#343 redb read-only inspection
-#345 control-artifact unknown-outcome staging retention
-#346 all-target fixture compilation debt
-#347 native original-object unlink and late cleanup
-#348 original request → durable effect reconciliation
-#360 exact partial-initialization reconciliation/abandon
-```
-
-Unsafe or unsupported recovery/cleanup remains unavailable and fail-closed. It need not be falsely completed to merge safe admission.
-
-After the minimum typed root-admission API and required normal callers are on `main`, `#235.core` may begin from the new `main`. It does not wait for complete #266 programme closure.
+Use current source and #352 to find the still-missing consumer. Do not restart delivered root admission,
+initialization, provider or digest work. Unsupported recovery/cleanup may remain unavailable and
+fail-closed while an independent coherent slice merges. Programme closure is not an API dependency.
 
 ---
 
