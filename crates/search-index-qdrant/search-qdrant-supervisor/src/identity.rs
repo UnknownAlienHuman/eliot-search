@@ -477,7 +477,7 @@ mod tests {
         };
         let result = verify_executable_identity_with_context(
             &expectation,
-            Instant::now() - Duration::from_millis(1),
+            Instant::now().checked_sub(Duration::from_millis(1)).expect("fixture deadline"),
             Duration::from_secs(30),
             &mut admit,
         );
