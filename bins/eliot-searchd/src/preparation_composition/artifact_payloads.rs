@@ -205,7 +205,7 @@ fn owner_profiles(
         c::NonZeroRevision::new(value).map_err(|_| RawArtifactPreparationError::ProfileMismatch)
     };
     let materializer_profile = DerivedOwnerProfileV1 {
-        id: c::ProfileId::new(input.materializer.name())
+        id: c::ProfileId::new(input.materializer.id().to_string())
             .map_err(|_| RawArtifactPreparationError::ProfileMismatch)?,
         revision: nonzero(input.materializer.revision())?,
         identity_digest: c::Blake3Digest32::from_bytes(*input.materializer.id().as_bytes()),
