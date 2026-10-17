@@ -1,259 +1,117 @@
-# ELIOT Search: complete implementation and release map
+# ELIOT Search: remaining product outcomes
 
-**Historical audit base:** `1a6d17d073c5f6d1fe50f21082439f1965d24ef8`. **Accepted source checkpoint (2026-10-10):** `7068bbdbb923762529368878481f74d7a29fe029`. **Coordinator:** [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352). **Topology:** one integration manager, one writer worktree, 5–10 read/research/review subagents. **Product acceptance:** not established by this document.
+**Source checkpoint:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`, reviewed 2026-10-17.
+This map preserves obligations, not a ready-task queue or product PASS. Current maintainer handoff,
+[#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352), the actual active issue/PR and
+source determine the next slice under [EXECUTION_PROTOCOL](EXECUTION_PROTOCOL.md).
+Preserve [#598](https://github.com/UnknownAlienHuman/eliot-search/issues/598) and its manager/WIP.
 
-This map describes the whole-project obligation and dependency graph. The live writer queue belongs to the current maintainer handoff, #352 and the exact active issue/PR under [EXECUTION_PROTOCOL](EXECUTION_PROTOCOL.md); dated next-task wording is not scheduling authority. The map does not replace Architecture Part I, accepted ADRs, package contracts, detailed issue semantics or actual execution evidence. No runtime consumes this document.
+Part I and accepted ADRs define semantics. A required predecessor means its concrete API/artifact,
+not closure of its whole programme. Source-complete, integrated and qualified are different outcomes.
+The [previous detailed map](https://github.com/UnknownAlienHuman/eliot-search/blob/927265d1dd71f3d355131f38ac73365e6558a77e/docs/product/PROJECT_COMPLETION.md)
+preserves historical issue transfers and phase numbering; its old queue and status are superseded here.
 
-## 1. Start and stop rules
+## 1. Reuse delivered source
 
-Read [root instructions](../../AGENTS.md), [architecture entrypoint](../architecture/README.md), [ADR 0005](../adr/0005-standalone-search-product-and-controller-boundary.md), [ADR 0006](../adr/0006-agent-analysis-framework-product-scope.md), this map, the exact issue, nearest package AGENTS/FUNCTIONS, then current code. [Package status](PACKAGE_STATUS.toml) describes packages; this map describes work. Neither grants source/access authority to runtime.
-
-Delivered source: #317/#318 tooling prerequisite; #237/#319 canonical foundation; #253/#322 casefold research; #258/#323 indexed contracts; #250/#326 Cargo metadata; #256/#338 stateless S11; #339/#340 Windows Cargo prefix handling; #327/#341 Rustls security repair; #257/#342 UnitSet v3. Do not repeat them. Scoped source/compiler/fixture evidence is not whole-product qualification. #253 completed a decision, not #254's tokenizer.
-
-**Dated programme snapshot: the #235.core sequence below predates current main.** Current 2026-10-17 source verification and remaining boundaries are in the [audit review](../audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md); #352 retains the actual manager handoff and #598 work. Do not repeat #256/#257, interrupt an active manager, reset its worktree or silently change its accepted base. A docs-only merge does not invalidate source evidence, but each successor records newly fetched main. #324 remains a validator rerun obligation; the delivered #327 repair does not qualify the whole dependency/release graph.
-
-Recent bounded deliveries: #363/PR #364 is pure root-open policy only; #366/PR #368 repairs existing CLI cancellation bounds; #365/PR #369 removes raw typed diagnostic payloads; #370/PR #371 requires trusted installation before product-grant I/O; #372/PR #374 preserves the resolver's original absolute setup deadline. The reusable client crate and duplicate CLI engine deletion are still absent. #373 owns the unresolved attachment/expectation contract; #375 owns conservative remote-outcome propagation. These follow-ups are not automatically ready slices.
-
-#266/#354/#355 retain native capability, initialization and caller obligations; #332 retains actual native attachment/cutover and legacy deletion. The CLI typed core currently has no runtime-owner dependency; the daemon does. Do not wait for the whole #266 programme to extract #235.core, and do not count the pure policy slice as native admission. Latest source heads `901d14b` and `a228251` passed production check and canonical guard; strict Clippy retains 44 unchanged diagnostics under #367, with zero additions. Their nine focused cases are authored NOT_RUN, with test-graph compilation/execution and integrated/native/installed qualification deferred.
-
-For each source slice: inspect actual callers, implement a coherent change, compile affected packages and immediate reverse consumers, run strict Clippy, retain the exact output, review, then merge. Broad installed/native/scale tests stay in final qualification; tiny causal checks are allowed when necessary. No workflow-trigger proliferation. No global formatting or speculative framework work.
-
-The manager alone changes manifests/Cargo.lock and integrates. Subagents return concrete paths/symbols, evidence, proposed changes and blockers; they do not write shared state. Reviews are independent of the subagent that proposed the change. A review label is not execution evidence.
-
-## 2. Stage semantics: remove false dependency cycles
-
-The table below is a long-range obligation DAG, not a current-ready task list. Some recorded outputs have since landed; verify current source before scheduling. `N.phase` is a phase of existing issue/PR N, **not a new GitHub issue**. Prerequisites mean required artifacts/interfaces for that phase, not that every optional consumer must already exist. `-` means no unmet predecessor inside this map; root/package rules still apply.
-
-- **Configured** means requested configuration parsed and accepted.
-- **Operational** means constructed current owners, profiles and readbacks can perform the operation.
-- **ReleaseQualified** means an exact immutable candidate passed independent external acceptance.
-
-The product must be operational before its installed qualification can run. Product startup cannot depend on its own future benchmark/report. Evaluation/attestation tools must not become product dependencies.
-
-Similarly: packaging-tool implementation precedes a candidate; a candidate precedes installed runs; verification of those runs precedes release. A candidate is allowed to be unqualified. No rebuild or signing mutation after final accepted runs.
-
-Models and integration are separate: #235.core can be extracted while preserving existing external assembly; #332 replaces that assembly. #277.schema is usable before #277.live. #234.build implements the verifier; #234.review uses it after runs. Pure retention ports can exist before restore, but destructive release is forbidden until complete root/reference inventories include every live producer.
-
-## 3. Whole-project task DAG
-
-Columns are stable: stage, prerequisites, owning implementation area, exact exit artifact/result. Existing detailed issues contain fixtures and local APIs; this table removes orchestration ambiguity. All numeric references resolve to this repository. `integration` is an aggregate checkpoint, not a new executor or database.
-
-| Stage | Prerequisites | Owner / source entrypoint | Exit result |
-|---|---|---|---|
-| 237 | - | search-contracts; merged #319 | Bounded canonical bytes and real digest APIs; retained exceptions explicit |
-| 253 | - | Research; merged #322 | Exact full-fold decision and goldens, not production tokenization |
-| 258 | 237 | search-contracts; merged #323 | One indexed payload/index/eligibility/epoch contract |
-| 250 | 237 | xtask; merged #326 | Bounded Cargo graph/status tool |
-| 324 | 250 | Existing xtask validator | Rerun on fixed docs; retain actual outcome, never edit predicate to pass |
-| 327 | - | Manager dependency lane; merged #341 | Accepted patched dependency and transitive/advisory record; full release graph still qualified separately |
-| 256 | 237,258 | search-point-identity; merged #338 | New stateless S11 source delivered; old required callers preserved unchanged until 329 |
-| 257 | 237,258 | search-unitizer; merged #342 | UnitSet v3 source delivered; integrated preparation remains 331 |
-| 266 | 237 | search-runtime-owner; daemon owner_composition | Distinct inspect/mutate/init/recovery capabilities; no create-on-read |
-| 235.core | 237 | New search-provider-client; current typed CLI source | Hardening #365/#366/#370/#372 delivered; single reusable session engine, #373/#375, second consumer and duplicate deletion remain; no new TCP/token fallback; external assembly unchanged until 332 |
-| 238 | 237 | search-config | Maintained TOML; bounded typed conversion; honest v1/v2 digest migration |
-| 241 | 237 | search-source-admission | Every field effective; explicit GlobSet profile; safety deny dominates |
-| 246 | 237 | search-exact/literal | Mature matcher; existing overlap/chunk/ASCII semantics preserved |
-| 252 | 237 | search-lexical | Internally identified XID+NFC code profile and original source ranges |
-| 251 | 250 | xtask source lint | syn AST replaces pseudo-parser; compiler-required cases remain explicit |
-| 214 | 250,251 | Residual controller tooling | Remove historical issuance/lease runtime; preserve useful source validators |
-| 315 | 237 | Daemon sha256 and actual callers | Shared algorithm execution, exact legacy framing classified |
-| 316 | 237 | Materializer digest/profile helpers | Shared compute; representation rebuild for changed identity bytes |
-| 239 | 266 | Watch adapter and currentness hint boundary | Bounded events; all detail loss opens gaps; no watcher-issued currentness |
-| 267 | 266,241 | search-safe-reader; native adapter | RootRecord/final-handle/location/live-security proof, not parent-path hints |
-| 268 | 266 | Control migration; search-control-redb | Complete accounted legacy inventory and verified staged target |
-| 269 | 268 | Redb/daemon control composition | Atomic sole-authority cutover; no dual write or fallback |
-| 307 | 237,269 | search-os-secrets | Durable purpose/selection/candidate/retiring model and finite leases |
-| 308 | 307,266 | search-os-secrets-windows | Real current-user backend effects, readbacks, unknown-outcome recovery |
-| 309 | 307,308 | Revision crypto boundary | Key-reference-bound AEAD, nonce/lifetime policy, authenticated readback |
-| 330 | 266,269,309 | search-revision-store | Real residency-bound immutable storage and bounded reference inventory |
-| 331 | 257,316,330,269 | Materializer/unitizer; daemon preparation_store | One persisted verified representation/maps/UnitSet bundle; no zero-success fallback |
-| 270 | 241,267,269,330 | Source ingestion/identity/registry | Pre-admit before bytes, one identity index, bounded staging and durable commit |
-| 271 | 239,267,269,270 | search-source-reconcile; workspace composition | Immutable coherent/partial SourceView after final all-root revalidation |
-| 272 | 269,271 | Source registry/corpus/portfolio owner | Append-only revisions, guarded aliases, exact authorized population |
-| 129 | 267 | Git source adapter | Read-only patched Git plumbing, bounded pack/delta, no network/checkout |
-| 333 | 238,266,269 | Daemon config_composition and control snapshot | Durable applied config, operational readiness without release-report dependency |
-| 213.schema | 258 | Existing public contract owners | Preserve eleven v1 recipes; freeze retrieve_evidence@1/orient_scope@1 |
-| 287 | 213.schema,258 | search-access | Grants bound to requested scope, budget and disclosure ceilings |
-| 288 | 287,272,258 | search-access | Non-forgeable scoped route and eligibility plan |
-| 194 | 269,272,287 | Redb binding/grant records and pairing producer | One durable coherent binding/grant-policy snapshot; no daemon invented authority |
-| 332 | 235.core,266,194,308 | CLI; daemon provider/listener/entry | One native endpoint, invocation parser and JSON edge; remove old product fallback |
-| 120.native | 266,327 | search-qdrant-supervisor | Exact owned child/Job/native identity and finite lifecycle; auth wired by 310 |
-| 310 | 307,308,332,120.native | Secret consumer integration | Separate provider/Qdrant purpose-bound selected leases |
-| 259 | 256,257,258 delivered | search-projection-planner; actual admission consumers | S11/UnitSet planner and #519 lookup repair present; retain actual owner input/profile/lineage integration obligations |
-| 260 | canonical admission delivered in PR #605 | search-publication | Shared submit/restore admission present; active empty UnitSet remains unsupported; actual journal/effects remain #261/#263 |
-| 261 | 260,269,331 | Publication/control/store adapters | Durable intent, exact effects/readback, guarded current pointer and crash recovery |
-| 262 | 256,258,327 delivered | search-qdrant-bridge | Shared identity/schema/eligibility and exact route adoption still pending; split bounded static changes before #263 live effects |
-| 263 | 261,262,272,310 | Live Qdrant/owner composition | Real generation writes/readback/scoped retrieval/IDF under one operation deadline |
-| 329 | actual remaining legacy imports | search-point-identity and immediate consumers | Planner/publication already use S11; remove root legacy exports/fixtures after caller census; bridge wrapper is separate #262 work |
-| 300 | 237,258 | search-epoch-pins | Owner-issued route/epoch/time pins; cannot be forged by callers |
-| 282 | 237,300 | search-handles | Canonical bounded ranges, identity and invalidation model |
-| 283 | 237 | search-continuation | Exact IDs, times and limits |
-| 284 | 283,300 | search-continuation | Real pin lifecycle and expiry |
-| 285 | 284 | search-continuation | Atomic emission, terminal cleanup and restart recovery |
-| 274 | 288,194,333 | Access integration | Owner-issued live security checkpoints and restrictive revalidation |
-| 275 | 282,274,330 | Handle integration | Exact retained-range expansion with current authorization |
-| 276 | 285,274,275 | Paging integration | One continuation authority; no caller cursor or legacy catalogue bypass |
-| 247 | 246 | search-exact | Bounded multi-literal profile through mature automata |
-| 248 | 247 | search-exact | Explicit finite-automata regex profile; no backtracking fallback |
-| 249 | 248,272,267,275 | Exact executor/readback | Frozen denominator and complete-negative proof; missing/denied/gap not absence |
-| 254 | 252,253 | search-lexical | Exact versioned prose profile, full fold/range maps and query/document parity |
-| 223 | 257,331 | search-code-enricher/profile registry | Pinned Tree-sitter syntax facts; retire custom parser only after caller cutover |
-| 224 | 223 | Precise fact importer | Streaming SCIP producer artifact reconciled to exact retained source |
-| 225 | 223 | Optional symbol provider | Pinned Ctags sidecar; heuristic assurance only |
-| 236 | 223 | Optional finding importer | One bounded SARIF importer; CodeQL/Semgrep providers do not invent identities |
-| 278 | 237,213.schema | Ranking core | Closed leg/profile table, checked exact arithmetic, stable complete tie order |
-| 290 | 288,278,213.schema | search-query-planner | Opaque plan with complete finite work budget |
-| 291 | 290 | search-retrieval-executor | Shared request budget and one terminal outcome per leg |
-| 293 | 288,263,330,331 | search-candidate-validator | Validate actual readback bytes/source/profile, never caller digest equality alone |
-| 294 | 278,293,275 | search-result-projector | Validated ranked cards, truthful coverage, bounded output |
-| 296 | 272,223,293 | search-subject-resolver | Owner-derived resolution ladder with explicit ambiguity/coverage |
-| 297 | 272,293 | search-comparator | Verified portfolio/candidate/lineage observations |
-| 298 | 297,296,278 | search-comparator | Derived comparison matrix/reading/coverage; no caller verdict |
-| 232 | 296,278,223 | Orientation composition | Deterministic Aider-inspired bounded map with exact source handles |
-| 277.schema | 213.schema,258 | Capability contract | One closed recipe descriptor and availability vocabulary |
-| 277.live | 277.schema,333,249,263,274,275,276 | Runtime capability composition | Actual owner-derived registry; optional profiles individually absent/unavailable |
-| 279 | 290,291,293,294,277.live | Daemon query composition | One served live query path, not a parallel handler tree |
-| 280 | 279,332 | Provider recipe host | Existing eleven v1 recipes routed through canonical owners |
-| 281 | 280,232,298 | Provider evidence/orientation host | Two new versioned recipes, no find_text overloading |
-| 226.markdown | 257,331 | Materializer/unitizer | Inert pulldown-cmark source events, verified range maps and complete UnitSet |
-| 226.jats | 226.markdown | Same owners | quick-xml/JATS, no entity/network execution; decoded text explicitly mapped |
-| 227 | 266,331,308 | Document worker/supervisor | Generic bounded isolated runtime validated first with a synthetic worker |
-| 216.html | 227 | Isolated document adapter | Selected Tika HTML parser, inert content and honest mapped coordinates |
-| 216.latex | 223,331 | Structural profile | Pinned tree-sitter-latex, inert syntax; no TeX execution/include expansion |
-| 216.pdf | 227 | Isolated PDF adapter | One accepted LiteParse/PDFium or named PDFBox fallback, no silent OCR |
-| 216.scholar | 227 | Scholarly document adapter | Pinned GROBID, TEI/page/bbox reconciliation and bibliography observations |
-| 216.office | 227 | Office adapter | Docling DOCX/XLSX/PPTX separately identified; macros/resources never executed |
-| 216.legacy | 227 | Legacy-format adapter | Explicit Tika parser allowlist, no broad discovery/external-command activation |
-| 216.ocr | 227 | OCR adapter | OCRmyPDF/Tesseract, pinned language packs; lossy region-bound text |
-| 228 | 269,272,330 | Connector core | Bounded checkpoint/events/tombstones/retry/gaps committed with retained observations |
-| 229 | 228 | OpenAlex adapter | Exact snapshot records, no latest/title identity |
-| 230 | 228 | Semantic Scholar adapter | Pinned release; distinguish paper/corpus identifiers |
-| 231 | 228,308,327 | Crossref/OpenCitations adapters | Origin-locked APIs, bounded retries/deadline; contradictory observations retained |
-| 301 | 269,300 | search-retention | Durable leases and journaled lifecycle without capacity leak |
-| 302 | 301,330,331,261 | Retention/CAS inventory | Closed reachability roots, bounded preview and exact sweep plan |
-| 303 | 300,261,263,329 | Indexed reclaim | Committed-publication and pin-permit-bound exact retired-point reclaim |
-| 304 | 269,274 | Purge core | Restrictive barrier/tombstone state first; typed evidence, no caller completion |
-| 305 | 304,302,303,275,276,279 | Purge integration | All live source/index/query/handle planes narrow before deletion |
-| 243 | 302,330,331 | Backup container | Verified OCI layout; hostile tar.zst only transport; complete raw manifests |
-| 244 | 243,266,269,308,330,305 | Restore coordinator | Same-owner/same-key fresh quarantined root, exact readback and guarded cutover |
-| 245 | 244,307,309 | Migration coordinator | Per-object decrypt/verify/re-encrypt, full reference rewrite, old copies retained |
-| 134.release | 302,303,305,243,244,245 | Existing retention owner | Delete/release only after every live/backup/restore/key root is registered and rechecked |
-| 233 | 237 | Pure search-eval formats | Immutable corpus/query/qrels/results/coverage/run model, deterministic metrics |
-| 234.build | 233 | Tooling verifier | Subject/predicate/reviewer rules; signature is not semantic truth |
-| 240.build | 233,234.build,235.core | Installed runner tooling | Bounded native process/raw timing/inventory/disclosure collector, no product dependency |
-| 139.inventory | 223,224,225,236,216.html,216.latex,216.pdf,216.scholar,216.office,216.legacy,216.ocr,229,230,231 | Optional/profile programme | Every profile marked implemented/disabled/not-shipped; unresolved is not complete |
-| 264 | 281,129,254,226.jats,329,305,310,331,332,333 | Integration gate | Real fresh-generation product, restart/unknown outcome/access/exact-readback evidence |
-| 119.live | 263,120.native | Qdrant qualification | Exact server/client/config/schema/IDF/native binding accepted; no floating artifact |
-| 220 | 258,256,257 | Normative documentation | Preserve old Part-I bytes/hash; issue reviewed amendments with new version/hash |
-| 242.tool | 237 | Packaging tools only | Offline current-user package generator/cache/SBOM, no provisioning in installer |
-| 242.candidate | 242.tool,264,119.live,245,134.release,220,324,327 | Package composition | Frozen closed signed candidate, licenses/SBOM/guide; not yet release-qualified |
-| 215.plan | 233,242.candidate | Qualification plan | Exact corpus/queries/cases/resources/SLOs frozen before measured results |
-| 215.run | 215.plan,240.build,242.candidate | Installed qualification | M1/W1/P1/P2/I1/R1/N1 plus every shipped profile tier; failures stay in denominator |
-| 234.review | 234.build,215.run | Independent evidence reviewer | Reopen/recompute exact subjects; no author-written approved Boolean |
-| 137.review | 234.review | Whole-product review | Review functionality/resources/security/disclosure and retained failures |
-| 140.publish | 137.review,242.candidate,214 | Release programme | Explicit human publication of the exact tested bytes and operator guide |
-| 130 | 235.core,332,274,275,276,279 | Optional LSP/overlay | Full-sync memory-only adapter; all overlay TTL/snapshot/recovery/reauth findings fixed |
-| 219 | 235.core,281,332 | Optional MCP adapter | Dated tools-only leaf; no raw filesystem/Qdrant, independent source authority or model loop |
-| 215.adapters | 130,219,240.build,234.build | Optional A1 acceptance | Separate exact shipped adapter candidate and independent acceptance; never inherit core PASS |
-
-Rows for optional profiles are work through their existing programme, not permission to ship them unqualified. #139.inventory can run per profile early; an unavailable profile remains unfinished. A **core release** need not wait for all optional rows, but must declare each not-shipped profile. Claiming **the entire backlog complete** requires all selected optional phases and their acceptance. No baseline obligation from ADR 0006 may be dropped silently.
-
-## 4. Work ordering and package seams
-
-Remaining serialized Wave-2 order: 235.core → 238 → 241 → 246 → 252 → 226 Markdown → 226 JATS, through exact ready children from successively merged main. #256/#257 are delivered; #266 residuals retain their own ready slices and are not blanket prerequisites for the independent CLI typed core. The table's preparation/store prerequisites for **integrated completion** do not require redoing model/profile source work. In particular, #226 parser/profile code can be prepared after #257; its real persistence/query acceptance waits for #331. Record source-complete versus integrated instead of holding an impossible all-in-one PR.
-
-After Wave 2, choose the first unfinished stage whose dependencies are actually delivered. Prefer closing a working vertical over building every optional adapter. Recommended progression: root/control → secrets/storage → ingestion/currentness/scopes → publication/vendor → access/handles/exact/query → profiles/connectors → lifecycle → installed candidate/qualification/release.
-
-Shared changes are serialized: contracts first; control schema before consumers; typed clients before adapters; fact model before producers; worker ABI before parser workers; run formats before runner/verifier; restore ports before key migration. Cross-package edits are limited to a named interface/caller cutover. A phase requiring other files gets an explicit instruction addendum, not blanket permission.
-
-Compatibility rule: do not remove a still-imported public API under a package-only PASS. Inventory all immediate reverse consumers. #256 introduces S11 without promoting old identities; #329 retires the old API with its last actual callers, without waiting for unrelated #262 closure. Retain a read-only decoder/rebuild path only for an identified stored format and reader; it cannot silently mint new identities or serve as new-profile fallback.
-
-Config digest rule: existing SHA256(legacy bytes) is not SHA256(domain || NUL || bytes). #238 may add only the reviewed bounded exact-byte SHA helper in the existing shared owner, using the same donor. Preserve old vectors or issue explicit version/rebuild. No second codec, crypto crate or generic receipt system.
-
-## 5. Donor reuse contracts
-
-A link is a reading entrypoint, not a claim that its moving HEAD is qualified. Use the existing exact accepted lock/profile when valid; otherwise verify an exact release, checksum, license, MSRV, normal/build dependencies, feature closure and advisories **once for that adoption**, then record the decision. Do not repeatedly research the entire ecosystem or downgrade/upgrade unrelated pins. Context7 summaries do not override exact release source.
-
-| Owner/tasks | Mature donor / primary documentation | What to reuse; what remains local |
-|---|---|---|
-| 237,315,316,238 | [BLAKE3](https://github.com/BLAKE3-team/BLAKE3), [RustCrypto hashes](https://github.com/RustCrypto/hashes), [RFC8949](https://www.rfc-editor.org/rfc/rfc8949.html) | Algorithms only; keep accepted length-first canonical bytes and owner schemas |
-| 238,333 | [TOML](https://github.com/toml-rs/toml), [Serde](https://serde.rs/) | Grammar/typed visitor; ELIOT owns precedence/secrets/apply, not a new config framework |
-| 332,235 | [lexopt](https://github.com/blyxxyz/lexopt), [serde_json](https://docs.rs/serde_json/), [Windows pipe security](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights) | One parser/serializer/native adapter; trusted binding/auth/session stay local |
-| 241 | [globset](https://github.com/BurntSushi/ripgrep/tree/master/crates/globset) | Explicit matcher settings and relative bytes; no walker/root authority |
-| 246,247,248 | [memchr](https://github.com/BurntSushi/memchr), [Aho-Corasick](https://github.com/BurntSushi/aho-corasick), [regex](https://github.com/rust-lang/regex) | Matching engines; ELIOT keeps overlap/chunk/range/budget/exhaustiveness proof |
-| 250,251 | [Cargo metadata](https://doc.rust-lang.org/cargo/commands/cargo-metadata.html), [cargo_metadata](https://github.com/oli-obk/cargo_metadata), [syn](https://github.com/dtolnay/syn) | Official dependency/AST facts, bounded subprocess; no pseudo-compiler |
-| 252,253,254 | [UAX31](https://www.unicode.org/reports/tr31/), [UAX15](https://www.unicode.org/reports/tr15/), [UCD](https://www.unicode.org/ucd/) | Pinned data/normalization/folding; exact source mapping and profile identities |
-| 129 | [gitoxide](https://github.com/GitoxideLabs/gitoxide) | Patched read-only object/pack/ref plumbing; no clone/fetch/checkout/credential/hooks |
-| 223,224,225,236 | [Tree-sitter](https://tree-sitter.github.io/tree-sitter/), [SCIP](https://github.com/sourcegraph/scip), [Ctags](https://docs.ctags.io/), [SARIF](https://docs.oasis-open.org/sarif/sarif/v2.1.0/) | Parsers/protocols; no hand-written language indexers or second graph authority |
-| 259–263 | [Qdrant](https://qdrant.tech/documentation/), [Lucene](https://lucene.apache.org/core/) | Existing vendor index and commit invariants; ELIOT source/manifest/access remain authoritative |
-| 232,278 | [Aider map](https://aider.chat/docs/repomap.html), [Vespa phases](https://docs.vespa.ai/en/phased-ranking.html) | Bounded orientation and phased ranking; exact deterministic arithmetic, no runtime framework |
-| 226,216 | [pulldown-cmark](https://docs.rs/pulldown-cmark/), [quick-xml](https://docs.rs/quick-xml/), [JATS](https://jats.nlm.nih.gov/) | Inert parser events, checked raw spans; no invented parser features/automatic exactness |
-| 227,216.* | [Tika](https://tika.apache.org/), [GROBID](https://grobid.readthedocs.io/), [Docling](https://docling-project.github.io/docling/), [OCRmyPDF](https://ocrmypdf.readthedocs.io/) | Isolated per-profile parsing; no universal in-process hostile parser or runtime download |
-| 228–231 | [Zotero sync](https://www.zotero.org/support/dev/web_api/v3/syncing), [Onyx](https://github.com/onyx-dot-app/onyx), [OpenAlex](https://docs.openalex.org/), [Semantic Scholar](https://www.semanticscholar.org/product/api), [Crossref](https://www.crossref.org/documentation/retrieve-metadata/rest-api/), [OpenCitations](https://opencitations.net/) | Checkpoints/raw observations/snapshots; never remote title or citation edge as source truth |
-| 301–305,243–245 | [Nix manual](https://nix.dev/manual/nix/stable/), [OCI image spec](https://github.com/opencontainers/image-spec) | Reachability and container format; all deletion/key/cutover authority stays in ELIOT |
-| 233,234,240,215 | [Anserini](https://github.com/castorini/anserini), [Pyserini](https://github.com/castorini/pyserini), [BEIR](https://github.com/beir-cellar/beir), [in-toto](https://github.com/in-toto/attestation), [DSSE](https://github.com/secure-systems-lab/dsse) | Reproducible artifacts/envelopes; actual effects and independent verdicts remain separated |
-| 242,140 | [cargo-packager](https://github.com/crabnebula-dev/cargo-packager), [CycloneDX Rust](https://github.com/CycloneDX/cyclonedx-rust-cargo) | Offline generator/SBOM; installer copies program files only, product provisions state |
-| 130,219 | [LSP](https://microsoft.github.io/language-server-protocol/), [MCP](https://modelcontextprotocol.io/specification/) | Exact dated protocol leaves over shared client; no second planner or database |
-
-## 6. Completion criteria by vertical
-
-**Source truth:** every normal path enters one typed root capability. Read-only inspection creates nothing. Pre-admission precedes reading; final native handles and current barriers are checked. Redb is sole technical authority. Immutable storage and preparation reopen and verify exact bytes; watcher quietness is not currentness.
-
-**Indexed retrieval:** new S11, UnitSet, payload/schema and generation agree; retrieval/IDF/count/validation share the exact population. Submit and recovery use the same validator. Unknown effects remain recoverable. Qdrant is rebuilt from retained authoritative artifacts, not used to discover source truth.
-
-**Useful public product:** real standalone CLI/provider supports the preserved eleven recipes and the two new versioned recipes. Exact scans prove only their frozen denominator. Candidate validation precedes citations and stable ranking. Handle/continuation expansion reauthorizes and cannot widen the original range. Orientation/comparison are source-backed navigation, not agent verdicts.
-
-**Lifecycle:** retirement/restrictive purge changes visibility before reclamation. Leases, pins, operations, backups, restores, rollback copies and key generations appear in a complete bounded reachability graph. Absence/count/path/receipt alone never authorizes deletion. Same-key restore and new-key migration are separate recoverable transitions; old last copies/keys survive until exact owner release.
-
-**Release:** normal startup has no Memory OS/controller dependency. Candidate installs as a standard Windows user offline, explicitly provisions state, uses actual named pipe/Qdrant/secret owners, and survives the documented restart/upgrade/recovery/uninstall paths. Optional profiles are individually declared. Exact signed bytes tested are exact bytes published after independent evidence review and explicit human publication.
-
-## 7. Programme PR disposition and obligation transfer
-
-Open programme/checklist PRs are not code branches. Keep their history but route work here:
-
-| Historical programme / tracking | Executable owner or gate |
+| Existing result | Remaining boundary |
 |---|---|
-| 97 | This map; coordinator never merges its historical branch |
-| 99,102,103,114 | 266,269,332,279,264; delete old entrypoints only after callers cut over |
-| 109 | 238 then 333; 277 consumes operational observations |
-| 111 | 330; crypto 309; inventory 302; restore consumers 244/245 |
-| 112,113 | 316,257,331; profiles 226/227/216 |
-| 115 | 307–310; no second daemon secret selector |
-| 116 | 235.core then 194/308/332; no extraction/native circular gate |
-| 119,120 | 120.native/119.live; exact artifact/process evidence, not another bridge |
-| 121,123,124,127,186,190 | 256–264 and 329; old 200/207/209/210 snapshots are source donors only |
-| 130 | Optional LSP and actual overlay core/integration findings; no scope promotion |
-| 132 | 223/224; 225/236 optional, separate assurance |
-| 134,135,136 | 300–305,243–245,134.release; ports first, destructive acceptance last |
-| 137,140,185 | 233/234/240/242/215 and final independent review/publication |
-| 139 | Exact optional/shipped inventory, per-profile acceptance, default closure |
-| 184,189,193 | Measured responsibility cleanup after owner cutovers, not cosmetic new topology |
-| 187,191 | 250 delivered; 251 and bounded guard remain; compiler is semantic authority |
-| 205,220 | Shared epoch delivered in 258; normative amendment and live boundaries still verified |
-| 213,218,221 | 213.schema/280/281; 272; 278/232/279 respectively |
+| #237/#319 canonical hashing; #258/#323 indexed contracts | Reuse existing `search-contracts` APIs. Remaining producer migrations do not justify another codec/hash owner. |
+| #256/#338 S11; #257/#342 complete UnitSet | Preserve their implementations; retire actual root legacy identity callers under #329. Preparation/persistence is a separate integration boundary. |
+| #259/#519 planner and lookup repair | Complete real input/profile/lineage integration; do not port the same algorithm again. |
+| #260 / PR #605 submit/restore canonical admission | Active empty UnitSet remains unsupported. Actual journal/effects/readback remain #261/#263. |
+| Reusable provider client | [`search-provider-client`](../../crates/search-provider-client/) exists; [CLI imports](../../bins/eliot-search/src/provider_client.rs) already use it. Residual old line/TCP facade and native attachment are #332, not a reason to recreate the client. |
+| #253 / PR #322 Unicode fold decision | Production prose folding remains #254. The decision is no longer pending. |
+| Existing lexical/document library adapters; PR #608 operation budgets | Consume their exact profiles and real preparation callers. Source presence is not corpus/daemon qualification. |
+| PR #609 static Qdrant artifact admission | Exact live/native server/client/schema/IDF qualification remains distinct. |
 
-Close a programme only after each preserved obligation is delivered, explicitly superseded by an accepted contract, or explicitly deferred/not-shipped. Never close it merely because a child issue exists. Old source donors remain closed; do not resurrect their architecture or dependency pins.
+The [verified audit](../audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) contains source anchors and
+corrections. Dated F01–F154 findings in the [master audit](../audit/ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md)
+and specialized audits retain their obligations until an actual source result or explicit disposition
+resolves them; a closed planning issue alone does not.
 
-## 8. Manager and subagent operating packet
+## 2. Complete the existing owners
 
-Use 5–10 subagents by combining these roles when fewer are needed: (1) scope/contracts/callers; (2) donor/source/license/features; (3) exact identity/migration; (4) native/bounds/cancellation; (5) access/currentness; (6) integration/deletion/reverse consumers; (7) focused fixture/evidence review; (8) independent final review. No new full-project research phase for every task.
+Rows are outcome groups, not single PRs or all-or-nothing predecessor gates. Select one missing
+state/effect transition with its actual inputs, immediate consumers and compatibility boundary.
 
-Each assignment is one question or one narrow code region. Return: exact source SHA; paths/symbols; primary citations; proposed patch outline; preserved semantics; migration/deletion obligations; blockers. Unknown means unknown, not another self-issued digest. The manager makes decisions and integrates; subagents never resolve Cargo.lock or merge.
+| Boundary / existing work | Required result and consolidation |
+|---|---|
+| Root/control/config: #266/#267/#268/#269/#238/#333 | One typed native installation/root authority; inspect creates nothing. Apply durable config and one guarded control state. Preserve actual admitted handles/security observations; retire each old writer only at its real cutover. |
+| Secrets and encrypted storage: #307–#310/#330/#598 | Purpose/selection/candidate/retiring keys, finite leases, native effects/readback and key-bound AEAD. Continue admitted held body → protected immutable object → durable occurrence/head/residency/retention link → exact reopen. No second daemon selector or caller-shaped receipt. |
+| Preparation/ingestion/currentness: #331/#270/#271/#272/#239/#241 | Materialization/maps/UnitSet persist as one verified bundle; pre-admission precedes bytes. Revalidate all roots for a coherent/partial SourceView and explicit immutable corpus/portfolio population. Watcher quietness is not currentness. |
+| Git source: #129/#335 | Bounded, no-execute local object acquisition through a pinned read-only adapter over admitted storage. Current loose-object validation is not a pack/ref backend. Complete missing behavior without importing a whole Git runtime. |
+| Publication/vendor: #261/#262/#263/#329/#120/#310 | Consume shared S11/payload/eligibility contracts; delete bridge copies. Durable intent → exact Qdrant effect/readback → guarded redb VisibleEpoch/route; alias movement is not the commit point. Reconcile unknown outcomes, never blindly replay. |
+| Access/bindings: #194/#287/#288/#274 | One durable binding/grant snapshot and owner-issued scoped plan; live restrictive revalidation. Same eligibility governs retrieval, IDF, denominator, statistics and validation; no post-filter-only access. |
+| Exact ranges/paging: #246–#249/#275/#276/#282–#285/#300 | Existing matching engines plus exact frozen denominator. Handles reauthorize retained ranges; continuations own finite pins, expiry and atomic emission/terminal cleanup. Missing/denied/gap is not absence. |
+| Query/ranking/result: #278/#290/#291/#293/#294/#279 | One finite work budget, actual retrieval and retained-source validation; deterministic exact arithmetic/ties, explicit leg outcomes, truthful coverage and bounded cards. Remove parallel handler trees when real consumers cut over. |
+| Public client/recipes: #235/#332/#277/#280/#281/#213 | One native endpoint, parser, serializer and reusable session owner. Serve the eleven stable v1 recipes and separately versioned `retrieve_evidence@1`/`orient_scope@1`. Runtime capability state derives from actual owners, never configuration or a badge. |
+| Analysis: #296–#298/#232/#223/#224 | Source-backed resolution, ambiguity, comparison, independent lineage and recommended reading. Reuse Tree-sitter syntax/SCIP facts where qualified; heuristic orientation never becomes exact evidence or a task verdict. |
+| Lexical/document profiles: #252/#254/#226/#227/#216 | Exact pinned Unicode and raw-coordinate mappings; query/document parity. Existing Markdown/XML event adapters feed shared preparation. Isolated workers provide separately qualified document profiles, not a universal hostile in-process parser. |
+| External observations: #228–#231 | Bounded connector checkpoints, gaps, tombstones, retries and immutable raw observations committed with retained identity. Remote title, latest alias or citation edge is not source truth. |
+| Lifecycle: #301–#305/#243–#245/#134 | Restrict visibility before reclaim. Complete bounded reachability across live data, pins, leases, operations, backups, restores, rollback copies and key generations. Same-key restore and new-key migration are separate recoverable transitions; retain last copies/keys until exact owner release. |
+| Tooling/deletion: #189/#214/#315/#316/#329/#525 | Delete obsolete implementations and repeated metadata after consumer census. Preserve real product guards and byte profiles; do not replace a tooling catalogue with a new controller framework. |
+| Evaluation/release: #233/#234/#240/#242/#264/#119/#215/#137/#140 | Frozen installed candidate, exact integration and qualification evidence, independent review and explicit human publication of the same bytes. Tooling/verifier source may precede product integration; their results cannot be fabricated in advance. |
 
-One task report records: base/head SHA; owned changed files; dependencies/features; old APIs deleted or legacy read-only with owner; canonical bytes/profile effects; minimum locked check and strict Clippy including immediate reverse consumers; fixtures written and honestly executed/not-run; remaining integration gate. Use existing typed owners and errors rather than adding a new abstraction per concern.
+Shared APIs precede their consumers; real integration precedes qualification. Configured means parsed
+and accepted, operational means actual owners can perform the operation, release-qualified means exact
+candidate evidence passed. Startup must not require its own future evaluation report. DIRECT remains
+usable under Qdrant failure. Normal startup/ingestion/recovery never requires Memory OS or a controller.
 
-If code already exists, continue or replace it: never implement a second package from stale scaffold text. If an accepted donor cannot satisfy a requirement, document the exact failure and choose only the named fallback from that issue. Two failed approaches require a short causal audit, not repetitive retries. A genuinely missing shared API is assigned to its existing owner before downstream code, not recreated privately.
+## 3. Reduce before adding another mechanism
 
-## 9. Qualification and end-of-project checklist
+Use the [measured reduction map](../audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md#7-measured-reduction-work)
+and [reuse index](../audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) to choose an actual deletion or
+replacement. Start with obsolete daemon harness owners, copied identity/schema/hash code and generated
+repository metadata. No arbitrary package-count target or cosmetic split qualifies as progress.
 
-#215 freezes exact source/artifacts/config/scope/population/profiles/cases/SLOs before measured results. Required baseline lanes: M1 installed product; W1 root/watcher/currentness; P1 deterministic retrieval; P2 complete exact proof; I1 publication/lifecycle; R1 total resources; N1 10,000-query no-write/disclosure. Every shipped document/code/research/adapter profile adds D1/C1/S1/A1 as applicable.
+A selected reduction slice records the old entry/target, callers, replacement owner, byte disposition,
+minimal retained regression cases and net added/deleted code by category. New integration may add code;
+state what it enables and which old path it removes. Do not maintain both implementations indefinitely.
+Do not promise a sub-100,000-line product before production/test/legacy ownership is measured correctly.
 
-Preserve FAIL/PARTIAL/UNAVAILABLE/NOT_RUN cases. Retain raw cumulative counters/times, exact native process identities, owner inventories, public results/coverage/handles, fault transitions and canary surfaces. Histograms/signatures/status booleans do not replace their subjects. Product repairs create new candidate/run identities; qualification does not modify source or lower the same plan.
+## 4. Preserve optional scope explicitly
 
-Before release: complete current profile inventory; completed migration/removal ledger; no current imports of old FNV/point/client/catalog paths; current normative version/hash and operator guide; reproducible locked/offline build inputs; closed SBOM/licenses and non-Cargo artifacts; standard-user install/provision/restart/upgrade/uninstall; backup and last-copy/key protection; independent verification; final signed subject digest; explicit publication authorization.
+[ADR 0006](../adr/0006-agent-analysis-framework-product-scope.md) remains the product mission. Optional
+work is not erased by shortening this map, and no optional profile becomes a baseline dependency by
+being mentioned here. #139 records each as implemented, disabled or not shipped; no unresolved status
+counts as complete. Each shipped profile adds its own exact artifact/data/features and acceptance.
 
-## 10. Audit limits and maintenance
+| Profile group | Existing owners and intended mechanism |
+|---|---|
+| Code facts | #223 Tree-sitter syntax; #224 SCIP precise imports; #225 Ctags heuristic symbols; #236 one SARIF importer for qualified finding providers. No second graph/index authority. |
+| Documents | #226 Markdown/JATS; #216 HTML/Tika, inert LaTeX syntax, named PDF parser, scholarly GROBID, Office/Docling, explicit legacy parser allowlist, OCRmyPDF/Tesseract and pinned language packs. #227 owns isolated worker bounds. No macro/resource/TeX execution or silent OCR. Exact source/loss/native-coordinate maps remain required. |
+| Research corpora | #228 connector core; #229 OpenAlex snapshots; #230 Semantic Scholar releases; #231 bounded Crossref/OpenCitations observations. Preserve contradictions, exact record identity and corpus versions. |
+| Client depth | #130 memory-only LSP/overlay with TTL/snapshot/reauthorization; #219 dated tools-only MCP leaf over the shared client. Neither owns another planner/database or inherits core acceptance. |
+| Semantic depth | Optional embeddings/rerank under [accepted profiles](../optional/README.md); model artifacts and limits are separately qualified. Deterministic lexical/code baseline requires no LLM. |
 
-This pass reconciles the complete execution programme against inspected current source, delivered PR evidence and detailed existing findings. It is not a new line-by-line proof of the entire repository, donor ecosystem or absence of bugs. Previously reported scope checks are not rerun here. No Rust, Cargo, lockfile, workflow or product feature is changed by this documentation cutover.
+Directions are not floating dependency approvals. Exact donor choices and rejected alternatives remain
+in existing issues/specialized records; use the accepted pin when still valid and verify a new adoption
+once. Do not reopen completed donor research or introduce every optional framework up front.
 
-The existing technical audit and specialized files retain F01–F154 obligations; a closed planning issue does not resolve a code finding. Maintain the finding-to-owner links and delivery evidence. Update only affected rows after source merges; do not append contradictory schedule comments indefinitely. Resolve interface/phase conflicts against higher-level contracts; use #352 and the exact ready issue for live scheduling. Continue #235.core through bounded serial children; this map is not a new gate requiring another general audit.
+## 5. Qualification and release
+
+After complete integration, #264 exercises a fresh generation through retained source, preparation,
+publication, Qdrant readback, access-scoped retrieval/IDF, exact source validation, bounded public output
+and restart/unknown-outcome recovery. #119 qualifies the exact server/client/config/schema/native
+binding. Build features, static artifact admission and successful compilation do not establish either.
+
+#215 freezes candidate bytes, sources/artifacts/config, population, profiles, cases, resources and SLOs
+before measured results. Baseline lanes remain M1 installed product, W1 root/watcher/currentness,
+P1 deterministic retrieval, P2 complete exact proof, I1 publication/lifecycle, R1 total resources and
+N1 10,000-query no-write/disclosure. Every shipped document/code/research/adapter tier adds D1/C1/S1/A1.
+Preserve FAIL/PARTIAL/UNAVAILABLE/NOT_RUN in the denominator and retain raw evidence/identities/counters.
+Signatures, histograms and author-written approved booleans do not replace exact subjects.
+
+Release requires current migration/removal dispositions, no active imports of replaced legacy APIs,
+reviewed normative version/hash and operator guide, reproducible locked/offline inputs, complete SBOM/
+licenses/non-Cargo artifacts and standard-user Windows install/provision/restart/upgrade/uninstall.
+Include backup/last-copy/key protections. Independent reviewers reopen/recompute exact evidence. Fixes
+create a new candidate/run; never alter expectations or rebuild/sign different bytes after accepted runs.
+Publication requires explicit human authorization for the exact tested signed subject.
+
+## Maintenance
+
+Update affected rows after source merges; use the current issue body for slice details and scheduling.
+Do not append another launch packet, duplicate execution rules, impose a subagent quota or require a
+new full-repository audit before every task. Historical evidence remains in Git and specialized audits.
+This document does not assert compilation, native execution, live-Qdrant results or product acceptance.

@@ -1,5 +1,11 @@
 # Wave 2 donor acceptance register — 2026-10-09
 
+> **Historical evidence.** The dated source, checksum and feature records below are preserved; their
+> coding base, queue and not-yet-delivered statements are not current instructions. Use the
+> [reuse index](DONOR_VERIFICATION_REGISTER_2026-10-09.md) and actual source for present adoption status.
+> In particular, shared S11/UnitSet/contracts, reusable client and #253 casefold research now exist.
+> Read only the record needed for the selected donor; this archive is not a launch prerequisite.
+
 **Preparation base:** `5d0435a55db8120d629d14d5167db6d737ea90c2`  
 **Coding base:** exact post-`#237` main, to be published by `#97`  
 **Purpose:** freeze mechanisms and reject unsuitable defaults before one manager changes manifests or `Cargo.lock`.  

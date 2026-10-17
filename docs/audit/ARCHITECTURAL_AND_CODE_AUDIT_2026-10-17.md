@@ -30,6 +30,9 @@ Rust files. No compile, Clippy, test, Windows or live-Qdrant execution is claime
 |---|---:|---|
 | Cargo workspace members | 52 | 47 library-area packages, four binary-area packages, xtask |
 | Tracked Rust files / physical lines | 1,593 / 393,383 | Includes comments, blank lines, tests and harnesses |
+| Test-named Rust paths outside xtask | 359 / 101,276 | Filename-based inventory, not proof that all content is test-only |
+| xtask Rust files / physical lines | 123 / 23,823 | Mixed product guards, historical maps and helpers |
+| Remaining Rust files / physical lines | 1,111 / 268,284 | Includes inline tests, harnesses, comments and blank lines; not production LOC |
 | Daemon Rust files / physical lines | 604 / 122,212 | Not a production-only LOC measurement |
 | Digest ledger | 3,572,618 bytes / 72,002 lines | 5,960 classified sites, not 72,002 defects |
 | Ledger phases | 4,708 accepted; 1,252 migration/removal | Includes legitimate algorithms, opaque uses, codecs and test vectors |
@@ -41,6 +44,10 @@ Cargo.toml. GitHub counts use repository-scoped issue search with is:pr and is:i
 the search responses reported incomplete_results=false. Counts are a dated inventory, not performance
 evidence. Gemini's approximately 82.6k daemon LOC used an unspecified counting method and is not
 directly comparable to the physical-line count above.
+The three Rust categories above are disjoint: xtask first, then paths with a `tests` component or a
+stem `test`/`tests`, starting `test_` or ending `_tests`, then the remainder. Do not infer that the
+product itself contains 393k lines or that removing tests has simplified it. See the
+[measured reduction work](#7-measured-reduction-work) for actual candidate boundaries.
 
 ## 2. Verified findings and corrections
 
@@ -162,7 +169,7 @@ The remaining integration is composed from these existing owners:
 | Feature/startup cutover | Daemon integration under the existing programme | Connect baseline callers, remove obsolete facades, then make the required indexed capability set available in the normal build. DIRECT remains usable while Qdrant is unavailable; build features do not assert readiness. |
 | Agent recipes | #213, #281 | Versioned free-text retrieval/orientation. Preserve existing v1 semantics; no raw Qdrant surface. |
 | Qualification | #215/#264 and named owners | Integrated Windows/Qdrant/restart/fault/scale/installed evidence after the complete implementation exists. |
-| Controller cleanup | #214 | Remove controller-only commands/metadata and their consumers. Preserve product validators; this cleanup does not block independent product implementation. |
+| Tooling cleanup | #214/#525 | Current xtask has no ticket/lease issuer commands. Remove historical policy/derived-output coupling and repeated ledger hashes with their consumers; preserve real product validators. Independent product work is not blocked on this cleanup. |
 
 These integration rows are programme boundaries, not single mergeable tasks. A selected slice names one
 state/effect transition, exact existing inputs, immediate consumers, persisted-byte disposition and
@@ -188,3 +195,88 @@ force a shrinking slice to repair an entire package.
 Finish with one independent review of the final source head, checking actual callers, removed duplicates
 and the stated compatibility boundary. No audit, ledger, label, mock result or successful compile
 establishes product readiness.
+
+## 7. Measured reduction work
+
+Counts below are source inventory at the same c8e38b6 baseline, not committed code deletion. Reduction
+means an obsolete mechanism and its last consumers disappear; splitting files or moving them to a new
+crate is not reduction. Preserve unique regression obligations with their actual owner. This preparation
+changes documentation only and does not claim a sub-100k production implementation.
+
+### Daemon harnesses: 52 files / 7,894 lines in three disjoint groups
+
+[Cargo.toml](../../bins/eliot-searchd/Cargo.toml#L21) declares the old main and six sealed CLIs as test
+targets. They are distinct from the current `entry.rs` product binary. Existing [#189](https://github.com/UnknownAlienHuman/eliot-search/issues/189)
+can own bounded deletion slices after target/module/caller census:
+
+| Group | Exact current inventory | Removal boundary |
+|---|---:|---|
+| Old snapshot/lexical/control prototype: `main.rs`, `control_store.rs` + directory, `lexical/`, `snapshot.rs` + directory | 16 files / 3,657 lines | Retire the old Cargo main harness and its local postings/two-file control persistence together. Current control authority remains search-control-redb. This is prototype retirement, not a production search-backend swap. |
+| Six `src/bin/eliot-search-sealed-{authority,catalog,direct,recover,store,transaction}.rs` frontends | 6 files / 1,593 lines | Remove their six Cargo test targets and private entrypoints after identifying any retained fixture obligations. |
+| Harness operations: `sealed_access.rs` + directory, `sealed_access_codec.rs`, `sealed_catalog.rs` + directory, `sealed_exact.rs`, `sealed_recovery.rs` + directory, `sealed_file_reader.rs` | 30 files / 2,644 lines | Follow the frontend removal; remove only modules whose last consumers were those targets. Catalog binding/rejection and recovery-report bounds have existing tests requiring an explicit retain-or-retire disposition. |
+
+The old main's `self_test()` covers token/hex helpers, not a qualified indexed search spine. The sealed
+[catalog tests](../../bins/eliot-searchd/src/sealed_catalog/kernel/tests.rs) cover binding bytes,
+malformed identity before storage and receipt fields; [recovery tests](../../bins/eliot-searchd/src/sealed_recovery/kernel/tests.rs)
+cover issue codes and bounded fail-closed reports. Retain the smallest cases only if those contracts
+survive the harness. Do not keep whole obsolete implementations merely to host their tests, and do not
+delete useful tests solely to improve a line count. Net removal may be less than the gross inventory.
+
+**Excluded live/shared code:** [entry.rs](../../bins/eliot-searchd/src/entry.rs#L25) maps
+`secure_direct_store.rs` to `direct_store` and the old `direct_store.rs` to `plaintext_direct_store`.
+Revision/catalog/store portions remain reachable through secure storage, preparation, handles and
+migration. `sealed_digest`, `sealed_owner_epoch`, `sealed_root_identity`, `sealed_root_lock`,
+`sealed_store`, `sealed_transaction` and `sealed_transaction_guard` have current consumers. Names,
+`allow(dead_code)` and cfg(test) on one helper do not authorize deleting these families or #598 work.
+
+### Tooling: remove derived state only after separating its consumers
+
+Current [xtask dispatch](../../xtask/src/command.rs) contains validation/generation commands, not the
+`agent_drafts`/ticket/lease issuer modules still described in the old #214 opening body. The remaining
+opportunity is unnecessary policy and stored derived output, not deletion of all 23,823 xtask lines.
+
+| Inventory | Size | Concrete disposition |
+|---|---:|---|
+| Architecture coverage, coverage graph and package-map source families | 49 files / 9,090 Rust lines | Mixed candidate area under #214; retain actual product invariants while removing duplicate historical policy and generated-map requirements. This is not 9,090 proven removable lines. |
+| Entire `swarm/coverage` subtree | 205 TOML files / 152,921 lines / 5,146,354 bytes | Mixed reviewed inputs and generated outputs, not a deletion set. Architecture/capability/invariant/port/schema/recipe/delivery registries are loaded as validator inputs. They are not product source or 152,921 product defects. |
+| Generated `swarm/coverage/package-maps/**` subset | 180 TOML files / 78,804 lines / 2,588,784 bytes | Concrete generator-owned output. Stop requiring committed maps before deleting them; change generator/validator/manual workflow consumers together. Preserve required source registries or explicitly redesign their loader/validation contract. |
+| Qdrant, canonical-digest and integration-bootstrap source families | 35 files / 7,728 Rust lines | Preserve their real vendor/dependency/hash/toolchain/layout checks. Narrow individual checks only with evidence, never bulk-delete xtask. |
+| Cargo metadata adapter plus package status | 4 files / 2,214 Rust lines | Mixed shared dependency. Qdrant validation calls both [Cargo inventory and package-status validation](../../xtask/src/qdrant_boundary.rs#L125); separate actual Cargo/vendor enforcement from historical status policy first. |
+| Accepted-evidence utilities | 3 files / 881 Rust lines | Actual consumer census required; do not call the entire family controller-only by its name. |
+
+The Rust rows describe disjoint selected xtask families, not its complete total; the package-map data
+row is a subset of the 205-file inventory. [Architecture loader](../../xtask/src/architecture_coverage/load.rs#L31)
+and [package-map loader](../../xtask/src/package_maps/load.rs#L168) read reviewed inputs; the
+[generator's write boundary](../../xtask/src/package_maps/generator/io.rs#L98) owns map outputs.
+Other generated indexes/manifest fields can also participate in loading; identify those roles before
+removal instead of treating everything under `swarm/coverage` as regenerable. Preserve needed CLI/common
+helpers. [Package-map workflow](../../.github/workflows/package-map-coverage-v2.yml) and
+[refactor-boundary workflow](../../.github/workflows/refactor-boundaries.yml) must change with their
+derived-output contract; keep workflows manual-only. #214 must not create a replacement registry or
+take over #525's separately bounded canonical ledger schema change.
+
+### Ledger: remove repeated file hashes without weakening classification
+
+[The current ledger](../../xtask/canonical-digest-ledger.json) repeats a full-file `source_sha256` at
+each of 5,960 sites across 833 distinct paths: 5,127 repeated hash placements. A measured in-memory
+normalization to one `source_files[path]` hash map, retaining every other field and two-space JSON
+indentation, reduces 3,572,618 to 3,140,984 bytes: **431,634 bytes (12.08%)**. No ledger edit or guard
+execution was performed. #525 owns the actual schema/validator migration and its compatibility checks.
+
+Preserve exact site identity/count/context/signals, duplicate-key rejection, file-change detection,
+offline operation and compiler-required classification. GitHub issue state is not build authority.
+Removing stale OPEN/CLOSED status checks does not remove source classification or migration obligations.
+
+### Reuse and consolidation
+
+Three copied SHA-256 files total 685 lines; replace algorithm execution through the shared owner while
+preserving framing (#315/#316 and separate worker/supervisor slices). S11, indexed contracts and the
+reusable provider client already exist: #329/#262/#332 retire remaining copies rather than recreate
+them. Markdown/XML/Unicode/redb already use mature libraries; their domain adapters are not duplicate
+parser/database engines. Git's missing backend is completion work, not invented deletion credit.
+Exact sources and limits are in the [donor index](DONOR_VERIFICATION_REGISTER_2026-10-09.md).
+
+No new crate or generic API is justified by these counts alone. First remove the old state/codec/entry
+owner. Consolidate surviving modules only where they share one real effect and have no independent
+security, dependency or lifecycle boundary. Report achieved net changes and remaining callers in the
+existing issue/PR; do not introduce a new LOC gate or documentation programme.

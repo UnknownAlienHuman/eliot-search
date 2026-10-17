@@ -1,71 +1,34 @@
 # Documentation map
 
-| Directory | Contents |
+ELIOT Search is a standalone analysis/retrieval framework. Qdrant owns indexed retrieval; Search owns
+source truth, preparation, access, publication, exact verification and bounded agent navigation.
+[ADR 0005](adr/0005-standalone-search-product-and-controller-boundary.md) defines the controller boundary;
+[ADR 0006](adr/0006-agent-analysis-framework-product-scope.md) defines product scope.
+
+## Read for the task at hand
+
+| Need | Read |
 |---|---|
-| `architecture/` | Architecture entry point and normative Architecture 8.4 Part I. |
-| `product/` | Product mission and agent-analysis behavior derived from the architecture. |
-| `adr/` | Accepted product, implementation and boundary decisions. |
-| `contracts/p00/` | Bounded field-level contract projection, recipes, reasons and ports. |
-| `config/` | Product configuration contracts and section ownership. |
-| `current/` | Current-workspace, observation and overlay contracts. |
-| `client/` | Standalone client and optional provider-edge contracts. |
-| `evaluation/` | Product, quality, scale and release evaluation contracts. |
-| `optional/` | Disabled-by-default optional depth profiles. |
-| `handoff/` | Historical/package planning notes; not implementation authority. |
-| `audit/` | Dated observations; they accept and authorize nothing. |
-| `execution/` | Historical run records and diagnostics; not product architecture. |
-| `generated/` | Generated product schemas/descriptors after their owning contracts are accepted. |
+| Begin a source change | [Root instructions](../AGENTS.md), [execution protocol](product/EXECUTION_PROTOCOL.md), exact current issue and nearest package `AGENTS.md`/`FUNCTIONS.md`. |
+| Resolve product semantics | [Architecture entrypoint](architecture/README.md), relevant Part I sections, accepted [ADRs](adr/) and owning contract. |
+| Reduce or replace code | [Verified audit and reduction map](audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md), [reuse index](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md), actual callers. |
+| Find remaining outcomes | [Product completion map](product/PROJECT_COMPLETION.md); current handoff/#352 determine scheduling. |
+| Understand agent experience | [Agent analysis framework](product/AGENT_ANALYSIS_FRAMEWORK.md). |
+| Change wire/config/currentness | [Contracts](contracts/p00/), [configuration](config/), [current workspace](current/), [client](client/). |
+| Qualify shipped behavior | [Evaluation](evaluation/), [optional profiles](optional/), repository-root [qualification inputs](../qualification/). |
+| Recover historical rationale | [Audit index](audit/README.md), `handoff/`, `execution/` and frozen Git history; read only the relevant record. |
 
-## Product entry points
+Part I, accepted ADRs and public contracts define semantics. Current compiled source establishes what
+exists, not qualification. Maintainer instructions and the actual issue/PR govern scope. Part II,
+`swarm/**`, old launch packets and dated source maps are history, not a permission system or queue.
+Do not require the full master and every historical packet for each change.
 
-Read in this order:
+Maintain one owner for each rule. Update an existing contract/issue instead of appending another plan.
+A dated observation must identify its base; current-state corrections belong in the current entrypoint.
+Old source/feature status and copied dependencies must be checked before assigning work.
 
-1. [`architecture/README.md`](architecture/README.md) — how to read the combined master;
-2. Architecture Part I in `architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`;
-3. [`adr/0005-standalone-search-product-and-controller-boundary.md`](adr/0005-standalone-search-product-and-controller-boundary.md);
-4. [`adr/0006-agent-analysis-framework-product-scope.md`](adr/0006-agent-analysis-framework-product-scope.md);
-5. [`product/AGENT_ANALYSIS_FRAMEWORK.md`](product/AGENT_ANALYSIS_FRAMEWORK.md);
-6. the nearest accepted contract/package instructions and current product issue/PR.
+## Qualification boundary
 
-Architecture Part I defines the source/Qdrant/query/evidence system. ADR 0005 defines the external
-controller boundary. ADR 0006 clarifies that the product is an agent-oriented large-corpus analysis
-framework, not merely a path/symbol locator.
-
-## Authority
-
-Use this order:
-
-1. Architecture **Part I**;
-2. accepted product ADRs;
-3. accepted public product contracts;
-4. nearest package instructions and current issue/PR;
-5. compiled source/dependency reality;
-6. historical planning material.
-
-Part II (`Codex Handoff 2.7`) inside the master is historical scaffolding. Its P00 sequencing and old
-repository-control assumptions do not authorize or block current product work.
-
-`swarm/**`, `docs/handoff/**` and `docs/execution/**` do not authorize or block implementation. In
-particular, `swarm/launch-state.toml`, ticket drafts and lease records are legacy/advisory coordination
-metadata, not a current permission system.
-
-## Standalone boundary
-
-ELIOT Search is independently installable and runnable. ELIOT Memory OS and ELIOT Swarm Controller are
-external consumers/controllers, not Search runtime dependencies. Search integration with ELIOT remains a
-typed leaf adapter over the same standalone state and query owners.
-
-## Analysis boundary
-
-Qdrant is the sole indexed retrieval backend. Search adds safe source preparation, lexical/structural
-projections, explicit multi-repository portfolios, query planning, deterministic fusion, source-backed
-validation, exact proof, provenance, coverage and compact navigation for agents.
-
-Heuristic retrieval identifies likely evidence and where to inspect or grep next. It never replaces exact
-source readback or complete-denominator verification.
-
-## Qualification
-
-External-artifact and product-evidence inputs live under repository-root `qualification/`. A packet or
-captured diagnostic is not a passing receipt. Capabilities remain disabled until the exact accepted probes
-run at the exact product revision and receive independent review.
+Configured, operational and release-qualified are different states. A packet or captured diagnostic is
+not a passing receipt. Exact native/Qdrant/recovery/scale/installed evidence and independent review are
+required for the capability/profile being shipped; source presence or compilation does not supply it.

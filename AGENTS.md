@@ -1,287 +1,129 @@
 # ELIOT Search repository instructions
 
-## Product identity
+## Product and authority
 
-ELIOT Search is a **standalone Qdrant-backed analysis and retrieval framework for agents and human operators**. The implementation target is Architecture 8.4: safe local source preparation, indexed candidate retrieval, exact verification and source-backed navigation across large repositories, multi-repository portfolios and qualified document/research corpora.
+ELIOT Search is a standalone, Qdrant-backed analysis and retrieval framework for agents and human
+operators. It admits local sources, retains immutable revisions, prepares lexical/structural projections,
+retrieves candidates, verifies exact source evidence and returns bounded navigation across repositories,
+portfolios and qualified document corpora. No model is required in the hot path.
 
-The supported product starts and operates without ELIOT Memory OS, a Governor, swarm controller, agent roles, assignment tickets or writer leases.
+Maintainer instructions determine the authorized task and working method. For product semantics use:
 
-### Qdrant is the only indexed retrieval substrate
+1. Part I of [Architecture 8.4](docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md);
+2. accepted ADRs, especially [0005](docs/adr/0005-standalone-search-product-and-controller-boundary.md)
+   and [0006](docs/adr/0006-agent-analysis-framework-product-scope.md);
+3. accepted public contracts, provider schemas and qualification contracts;
+4. nearest package `AGENTS.md`, `FUNCTIONS.md` and owned documentation.
 
-Use Qdrant for sparse/optional dense vectors, payload indexes, filtered retrieval, filtered IDF, count/scroll and exact point readback. Do not implement a second production search engine, inverted index, vector store or query database.
+Compiled source shows what exists, not whether it meets those contracts. Current maintainer handoff,
+[#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352), the actual active issue/PR and
+merged source establish the writer queue. Refresh stale issue bodies instead of repeating delivered work.
+Preserve the active manager and its WIP; do not reset or replace its branch from a dated map.
 
-### Search owns
+Part II, P00 scheduling, `swarm/**`, old launch packets, ticket/lease records and dated audits are
+historical/advisory material. They cannot grant or block implementation authority. Search neither embeds
+nor requires Memory OS, a Governor, swarm controller, tasks, scheduling, mailboxes, assignment leases,
+review acceptance or finish authority. ELIOT integration is a leaf adapter over the standalone owners.
 
-- source admission, identity, immutable revisions and no-execute acquisition;
-- materialization, unitization, coordinate maps and structural enrichment;
-- deterministic document/query lexical encoding and separately qualified semantic profiles;
-- projection manifests, collision-safe point identity, publication and rebuild;
-- workspace/corpus/portfolio scope, repository lineage and currentness;
-- exact, keyword, structural, sparse lexical and optional semantic query planning;
-- access-scoped retrieval, deterministic fusion, candidate validation and exact source readback;
-- corpus orientation, recommended reading, provenance, coverage and exact verification;
-- standalone daemon/CLI and optional typed provider adapters.
+## Read only the relevant context
 
-### Search does not own
+Before editing, read this file, the [execution protocol](docs/product/EXECUTION_PROTOCOL.md), the exact
+current issue, nearest package instructions and the relevant Part I/contract sections. Use the
+[documentation map](docs/README.md) to find them; do not reload the entire master or every dated packet
+for each slice. Consult these only when relevant:
 
-- Tasks, WorkScopes, Attempts or canonical task history;
-- General Manager/Governor state, agent scheduling or native harness lifecycle;
-- mailboxes, steer/goal routing, model loops or subagent observation;
-- generic assignment-ticket issuance, writer leases, approval/signature profiles;
-- review acceptance, finish authority or cross-project orchestration.
+- [Verified audit and measured reduction candidates](docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md).
+- [Existing donor/reuse index](docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md).
+- [Long-range product obligations](docs/product/PROJECT_COMPLETION.md).
 
-Those responsibilities belong to `eliot-swarm-controller` and, after integration, `eliot-memory-os`. Search may be called by those systems; it does not embed or reimplement them.
+None is an additional launch gate. A maintainer request or an exact ready issue plus the sole active
+writer is sufficient authorization; an audit-wide closure is not a prerequisite for a coherent change.
 
-## Product behavior
+## Refactor by removing duplicate ownership
 
-The intended workflow is:
+1. **Reuse the existing owner and donor.** Cryptographic algorithms belong to `search-contracts` and
+   accepted `blake3`/`sha2` dependencies; canonical CBOR belongs to its existing closed codec. Preserve
+   the exact algorithm, raw/framed bytes, field order, bounds and profile. Homemade FNV/SplitMix/XOR
+   semantic digests and fixture constants cannot mint production evidence. S12.2's qualified sparse
+   token-to-bucket mapping is distinct from a cryptographic fingerprint.
+2. **Cut over and delete together.** Name the state/effect owner, its immediate consumers, the replaced
+   API/path and compatibility disposition. Remove the old writer/fallback with its last callers. A
+   retained reader needs a concrete stored format, caller and deletion owner. Never rehash stored IDs
+   in place or delete `sealed_*`, snapshots or plaintext readers by wildcard.
+3. **Complete actual callers.** A dead facade or enabled feature is not integration. Bind required
+   composition to real admission, native identity, security observations and effects before activation.
+   A diagnostic file's parent is not an admitted root. Fixed Permitted/barrier/profile/vault values
+   cannot substitute for observations. Remove unused synthetic wrappers; keep real fixtures test-only.
+4. **Reduce mechanisms before rearranging files.** Delete obsolete prototypes, duplicated codecs,
+   field tables and orchestration before considering package moves. Cargo boundaries need a real
+   independent state/effect, security, dependency, replacement or lifecycle boundary. A capability cell
+   is not automatically a crate. Do not create forwarding crates, a generic framework or a second
+   implementation to meet a file/line quota; see [ADR 0001](docs/adr/0001-capability-cell-crate-decomposition.md).
+5. **Measure the result honestly.** Report added/deleted code, remaining callers and retained fixtures
+   for a reduction slice. File moves, minification, generated output and test deletion do not establish
+   reduced product complexity. Existing size debt does not block a bounded shrinking change.
+6. **Keep one record for each decision.** Update the existing issue, owner contract or document and
+   remove contradictory scheduling text. Do not add new exemption/ledger/coverage machinery. Repair
+   actual producers and remove resolved exemptions through the existing guard; unrelated classified
+   sites in a touched file remain separate work. Preserve useful product validators while removing
+   historical tooling under #214/#525.
 
-```text
-orient a bounded scope
-→ retrieve likely evidence
-→ inspect entities/relations
-→ compare repositories or documents
-→ verify important claims through exact scans
-→ expand exact source-backed handles
-```
+## Working method
 
-Heuristic retrieval proposes candidates only. Sparse lexical, structural, keyword, optional dense and rerank branches preserve assurance and coverage. Exact retained-source readback is mandatory before citations. A complete negative claim requires an exact frozen denominator and never follows from top-k saturation.
+One manager owns one source worktree/PR and integrates manifests and `Cargo.lock`. Subagents are
+read/research/review only, assigned narrow questions as useful; there is no minimum team size. An
+explicit owner-and-immediate-consumer cutover supersedes generic package-only restrictions for those
+named paths. Other package prohibitions still apply.
 
-Agent results should minimize context use: compact ranked cards, exact handles, recommended reading, explicit ambiguity/coverage/freshness and bounded suggestions for the next exact `grep`, regex, symbol or structural check. Search provides evidence and navigation, not a task verdict.
+Use the [execution protocol](docs/product/EXECUTION_PROTOCOL.md) for ready fields, scope freeze by the
+second source commit, B0/F1/F2/D/Q triage, review budgets and final-head review. Implement the product
+change first. Run only the declared production check, strict Clippy and affected source guards; defer
+test/native/fault/scale execution until the complete integrated implementation. Compilation is not
+qualification. Record commands and outcomes exactly; never claim an unperformed run.
 
-The v1 contract lacks general free-text retrieval and first-class orientation. Do not fake them by overloading `find_text@1` or exposing raw Qdrant queries; use the versioned work tracked by #213.
-
-## Authority order
-
-Current maintainer instructions determine the authorized task and workflow; repository instructions
-cannot override that request. For product semantics, resolve conflicts using:
-
-1. Part I of docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md;
-2. accepted ADRs, especially ADR 0005 and ADR 0006;
-3. accepted public contracts, provider schemas and product qualification contracts;
-4. nearest package AGENTS.md, FUNCTIONS.md and package-owned documentation.
-
-Current compiled source establishes what has been implemented, not whether it satisfies the contract.
-Dated audits, issue opening bodies and source maps are evidence to verify against the current code.
-The [Gemini audit verification](docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) records corrected
-findings and bounded refactoring candidates; it is not another architecture or a mandatory launch gate.
-
-Part II and P00/ticket/lease material are historical scaffolding. They cannot authorize or block
-current product work. swarm/launch-state.toml, context manifests, leases, submissions, reviews and
-handoffs are repository history, not runtime inputs or implementation authority.
-
-A maintainer request or an exact ready issue plus the sole active writer worktree is sufficient
-authorization. Preserve the current manager's work and check the actual source queue before opening
-a successor. Only one source branch/PR may be active; successors start from newly merged main.
-Do not build controller machinery inside Search; residual controller tooling is removal work under #214.
-
-## Refactoring rules
-
-1. **Use the existing cryptographic owner and exact contracted profile.** Reuse search-contracts
-   digest/CBOR APIs and accepted blake3/sha2 dependencies. Semantic identities cannot use homemade
-   FNV/SplitMix/XOR digests or fixture constants. Preserve raw versus framed bytes and SHA-256 versus
-   BLAKE3; identity changes require an explicit profile/migration disposition. S12.2's qualified sparse
-   token-to-bucket mapping is distinct from a cryptographic fingerprint. Zero-initialized working
-   buffers and explicit test vectors are not fabricated production evidence.
-2. **Repair producers, not the exemption process.** Add no migration/removal exemptions or new
-   ledger/coverage machinery. Reclassify the actual replacement through the existing guard and remove
-   resolved exemptions. A touched crate does not require repairing every unrelated ledger site;
-   accepted algorithms, wire readers and useful test cases remain classified accurately.
-3. **Cut over the selected implementation and delete the replaced path together.** An explicit
-   owner plus its immediate reverse consumers is authorized even where a package's generic instructions
-   say package-only. Do not leave a second product writer/fallback. Unrelated legacy code is a separate
-   deletion slice; retained format readers need a concrete format, caller and deletion owner. Never
-   rehash stored IDs in place or delete every sealed/snapshot module by wildcard.
-4. **Integrate real callers.** A required baseline composition must reach the actual owner/effect;
-   a new dead facade is not delivery. Change full-baseline/default features at a named integration
-   boundary, after caller wiring. Compilation does not grant readiness. DIRECT must remain available
-   under Qdrant failure; optional model/document workers remain separately qualified. Do not activate
-   test compositions merely to satisfy an “every module reachable” rule.
-5. **Use actual admission and effect evidence.** Registered-source operations require the retained
-   admitted root, native identity and live security state. A caller-selected diagnostic file's parent
-   is not that authority. No fixed Permitted/barrier/profile/vault evidence may stand in for an owner
-   observation. Remove unused synthetic wrappers; keep actual FakeGuards/build_test_export fixtures
-   behind test configuration.
-
-## Queue authority and project maps
-
-These sources have different jobs:
-
-1. Architecture/ADRs/package contracts define product semantics.
-2. docs/product/EXECUTION_PROTOCOL.md defines bounded repository execution.
-3. The current maintainer handoff, programme issue #352, exact active issue/PR and merged source define
-   the live writer queue. Refresh their actual state; an old opening body or BLOCKED title is not proof
-   that a prerequisite is missing.
-4. docs/product/PROJECT_COMPLETION.md is the long-range obligation graph. Dated launch gates,
-   Wave-2 packets and exception matrices are historical snapshots, not additional scheduling authority.
-
-When a snapshot is stale, preserve the active manager/WIP and verify the necessary API/artifact on
-current main. Update the stale status instead of repeating delivered work. Neither an audit phase
-nor whole-programme closure is a prerequisite for an independently coherent owner slice.
-
-## One-manager integration exceptions
-
-Current process and reference maps:
-
-- docs/product/EXECUTION_PROTOCOL.md — bounded source slices, finding triage, review and serial merges;
-- docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md — verified source findings and refactoring cards;
-- docs/audit/WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md and WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md
-  — historical path/consumer evidence, applied only when still relevant to the exact current slice;
-- docs/product/PROJECT_COMPLETION.md — long-range implementation-to-release obligations.
-
-Rules:
-
-1. one manager, one writer worktree and one `Cargo.lock` integrator;
-2. a slice may touch a primary owner plus its immediate reverse consumers when cutting over and deleting a broken legacy API, fake digest or unwired daemon adapter;
-3. subagents are read/research/review only;
-4. all unlisted package prohibitions remain in force;
-5. an exception cannot create a second authority, temporary public facade or product-reachable fallback;
-6. every source slice records Definition of Ready fields and publishes `SCOPE_FROZEN` no later than its second source commit;
-7. after freeze, findings are classified `B0`, `F1`, `F2`, `D` or `Q`; only an exact same-slice compile/safety B0 may remain in the PR;
-8. work outside the frozen row becomes a follow-up or a **serial** split: merge tranche 1, publish the new `main`, then create tranche 2 from that new `main`; no stacked source PRs;
-9. open PRs are merge candidates; programme/tracking/gate coordination lives in issues/docs, not permanent PRs.
-
-## Work-item classes
-
-```text
-PROGRAM    broad capability tracker; issue/docs only, never a code branch
-SLICE      one causal source result delivered by one mergeable PR
-FOLLOW-UP  separately owned defect found outside the frozen slice
-GATE       evidence/qualification against exact candidate bytes
-```
-
-Programme closure is not a source-merge prerequisite. A programme may remain open after a coherent slice merges.
-
-## Scope freeze and review budget
-
-Publish `SCOPE_FROZEN` by the second source commit with:
-
-```text
-base/head SHA
-primary owner and state/effect
-allowed production paths and narrow adapters
-public/private API delta
-immediate reverse consumers
-persisted profile disposition
-legacy deletion owner
-minimum source gates
-out-of-scope owners
-```
-
-Default split triggers:
-
-```text
-primary owners:              1 (or owner + immediate reverse consumers when deleting legacy/fake APIs)
-narrow adapter families:     <= 2
-changed production files:    <= 30
-changed production lines:    <= 2,500
-persisted migrations:        <= 1
-cross-owner cutovers:        <= 1
-```
-
-These triggers do not permit omitted correctness. Crossing one means split sequentially or record a justified reviewed exception. Existing package size debt does not block a bounded shrinking slice or require a new crate merely to evade a line limit.
-
-Finding taxonomy:
-
-- `B0`: without the fix, the frozen result does not compile for a declared consumer, mints false authority, corrupts data, widens access/disclosure or enables an unsafe path that cannot remain unavailable/fail-closed;
-- `F1`: same-owner follow-up;
-- `F2`: adjacent-owner follow-up;
-- `D`: unchanged baseline harness/lint/topology debt;
-- `Q`: native/live/scale/release qualification.
-
-A B0 claim names exact path, symbol, caller and causal chain. “Related to the programme” is not sufficient.
-
-## Required working method
-
-1. Read the relevant Architecture Part I sections, this file, `EXECUTION_PROTOCOL.md`, nearest package instructions and the exact current issue. Consult the audit for the boundary being changed.
-2. Record exact base SHA, owner, paths, reverse consumers, non-goals, persisted-byte disposition, deletion boundary and minimum gates.
-3. Use one writer worktree created from the current `origin/main`.
-4. Freeze scope by the second source commit.
-5. Fix product code first; do not replace implementation with planning/evidence prose or exemption-ledger entries.
-6. Keep behavior in its actual owner. Cross-package composition belongs in a reviewed integration slice.
-7. Reuse Qdrant through `search-qdrant-bridge`; do not build a parallel index.
-8. Run the smallest meaningful gates:
-
-   ```text
-   cargo +1.98.0 check --locked -p <changed-owner> --all-features
-   cargo +1.98.0 clippy --locked -p <changed-owner> --all-features -- -D warnings
-   ```
-
-   Select production targets (`--lib`/`--bin` as applicable) and the declared immediate consumers. For daemon wiring, check normal defaults and the required `full-baseline` profile; `--all-features` also enables `legacy-loopback-harness` and is not the normal product configuration. Test/native/fault execution remains deferred to the completed integrated implementation.
-9. Reuse recorded unrelated baseline debt. If a production gate fails, compare its relevant base/candidate diagnostics once. New candidate production diagnostics block.
-10. Obtain a formal review bound to the exact final head, with no unresolved B0/P1 and explicit F1/F2/D/Q dispositions. A load-bearing commit expires earlier review. In a single-owner repository, a formal COMMENT review may record the independent reviewer result and manager disposition; self-approval is not required.
-11. Merge the coherent source slice when declared gates pass. Create the successor branch only from the newly merged `main`.
-12. Never claim execution not performed at the exact revision.
-13. Keep Actions manual-only; do not add push/PR triggers just to obtain a build.
-14. Do not commit local paths, credentials, API keys, source contents or unredacted logs.
-15. Keep the PR body as the current status record; do not post a long progress comment after every commit.
-
-Read-only research for the next non-overlapping slice may run while the current PR is in final review, but no successor source branch/PR is opened before merge.
-
-PROCESS/DOCS PRs change no product source, manifests, lockfile or workflows. Any source-changing PR is a SLICE and obeys the sole-source-PR rule regardless of label.
+Successors start from newly merged `main`; no stacked source PRs or overlapping writers. Read-only
+successor research may overlap final review. PROCESS/DOCS changes contain no product source, manifests,
+lockfile or workflows. Keep Actions manual-only. Keep the PR body current instead of posting progress
+comments after every commit. Do not commit local paths, credentials, source captures or unredacted logs.
 
 ## Product invariants
 
-- Qdrant is the only indexed/search database. No SQLite/FTS, Tantivy, Lucene, local postings database or alternate production search engine.
-- redb stores bounded technical control state, never a second searchable corpus.
-- Qdrant payload is projection metadata, never source evidence. Candidates require authoritative exact source/revision readback and validation.
-- Retrieval, filtered IDF population, exact denominator, count, scroll, facets, grouping, clusters, recommend/discover and response validation use one eligibility base filter. Denied data cannot influence permitted candidate visibility, ranking, statistics, counts, facets, groups, clusters, recommendations, suggestions or traces.
-- Paths are locators, not identities. File/native identity, source identity, revision identity, representation identity and projection identity remain distinct.
-- Immutable revisions and manifests are never rewritten in place. Publication is generation/epoch safe.
-- Unknown external mutation outcome is not success and is not blindly replayed.
-- Restrictive access/purge/shadow changes fail closed across retrieval, handles and continuations.
-- Multi-repository portfolios are explicit immutable scopes; forks/mirrors/copies collapse by lineage and cannot masquerade as independent evidence.
-- Raw scores from different access/scoring populations are not directly comparable; cross-leg fusion is deterministic and versioned.
-- Query admission is read-only and creates no ordinary durable query job or second query-state store.
-- The standalone daemon/CLI and ELIOT adapter share one underlying state and query authority.
-- Optional model/document workers remain disabled until independently qualified and are not required for the first lexical/code baseline.
-- Vendor Qdrant types stay inside `search-qdrant-bridge`; public boundaries use Eliot-owned types.
-- Search never executes indexed source code, document macros or remote resources.
-- An LLM is not required in the Search hot path. A consuming agent may interpret typed results but cannot replace source validation, exact proof or coverage accounting.
+- Qdrant is the sole indexed retrieval backend: sparse/optional dense vectors, payload indexes,
+  filtered retrieval/IDF, count/scroll and point readback. No second production search/index database.
+- redb owns bounded technical control state, never a second searchable corpus.
+- Qdrant payload is projection metadata. Citations require authoritative exact source/revision readback.
+  Heuristics propose candidates; a complete negative claim requires an exact frozen denominator.
+- Retrieval, IDF population, denominator, count/scroll, facets/groups/clusters, recommend/discover and
+  validation share one eligibility base filter. Denied data cannot influence permitted ranking,
+  visibility, statistics, suggestions or traces. Post-filtering alone does not enforce this boundary.
+- Paths are locators. Native file, source, revision, representation and projection identities remain
+  distinct. Immutable revisions/manifests are never rewritten in place.
+- Publication is generation/epoch safe. Guarded control-state publication, not an alias change alone,
+  establishes the visible route. Unknown external outcomes are neither success nor blindly replayable.
+- Restrictive deny/purge/shadow changes fail closed across retrieval, handles and continuations.
+- Portfolios are explicit immutable scopes. Forks/mirrors/copies collapse by lineage; they cannot
+  masquerade as independent evidence. Cross-population raw scores are not directly comparable;
+  fusion is deterministic and versioned.
+- Query admission is read-only: no ordinary durable query job or second query-state store.
+- Standalone daemon/CLI and optional ELIOT adapter share one state/query authority. DIRECT stays usable
+  under Qdrant failure. Build features do not imply operational readiness or release qualification.
+- Vendor Qdrant types stay inside `search-qdrant-bridge`; public ports use Eliot-owned types.
+- Search never executes indexed code, document macros or remote resources. Optional model/document
+  workers remain disabled until separately qualified; lexical/code baseline does not require them.
+- Preserve the eleven v1 recipes. Free-text retrieval/orientation use the versioned #213 extension,
+  never overloaded `find_text@1` or a raw Qdrant interface.
+- Large repositories/portfolios require bounded legs, budgets, progressive output and measured #215
+  qualification. Document profiles share existing source/map/query owners and require #216 evidence.
+- Destructive lifecycle actions require complete bounded reachability and actual owner release across
+  live data, pins, operations, backup/restore, rollback copies and keys; a count or receipt is insufficient.
 
-## Large-corpus and document requirements
+## Evidence and external writes
 
-Large repositories and repository portfolios are first-class workloads, not optional demos. Implementation remains bounded through partitioned legs, progressive output, deterministic fusion, per-source/per-lineage caps and explicit query budgets. Scale claims require the measured qualification in #215.
+Exact candidate qualification must cover native Windows identity/containment/secrets/pipes, real Qdrant
+artifact/schema/query/restart behavior, source-to-validated-result integration, access/unknown-outcome/
+recovery, scale/resources and every shipped document or adapter profile. Installed evidence precedes
+release. Source presence, mock success, issue status, signatures and review badges cannot replace it.
 
-Raw text, source code and Git are the first baseline. Research/document support reuses the same source, materialization, projection, validation and exact-coordinate owners. PDF/HTML/Markdown/LaTeX/Office/OCR profiles require separate qualification under #216; unsupported formats remain explicit.
-
-## Standalone and ELIOT integration
-
-Standalone operation is the baseline, not a fallback. The daemon owns its installation/root/process and serves the public local client contract without any external controller.
-
-ELIOT integration is a leaf translation layer over accepted provider protocols. Search returns bounded candidate/result records, coverage, freshness, assurance, reason codes and opaque handles. It does not receive canonical ELIOT credentials, task authority, Context Compiler admission or finish authority.
-
-No Search configuration option may make ELIOT Memory OS or `eliot-swarm-controller` mandatory for normal startup, ingestion, indexing, search, rebuild or recovery.
-
-## Repository metadata boundary
-
-Static package maps and ownership crosswalks may help avoid overlapping edits. They cannot issue authority or block work. Do not extend the active tree with generic:
-
-- assignment/lease event state machines;
-- context materialization for agent prompts;
-- approval/signature/profile registries;
-- task/attempt/mailbox/scheduler records;
-- orchestrator credentials or actor roles;
-- controller qualification suites;
-- large captures proving only repository-control tooling.
-
-Reusable controller work belongs in `UnknownAlienHuman/eliot-swarm-controller`. Canonical ELIOT task and memory authority belongs in `UnknownAlienHuman/eliot-memory-os`.
-
-## Evidence and acceptance
-
-Compilation is necessary but not product qualification. Product claims require exact named evidence:
-
-- real Qdrant artifact/client/schema/query/restart probes for indexed capability;
-- native Windows identity, containment, secrets and named-pipe evidence;
-- real source → durable state → Qdrant → validated result for the product spine;
-- agent retrieval/orientation fixtures with source-backed recommended reading and exact checks;
-- multi-repository scale, quality and resource evidence;
-- document coordinate/citation evidence for enabled materializers;
-- restart/recovery, deny, unknown-outcome and rebuild cases;
-- installed baseline evidence before release.
-
-Planning records, ticket status, source presence, mock/oracle success, signatures and review badges cannot substitute for those gates.
-
-## GitHub connector use
-
-Before concluding GitHub is read-only, load the full unfiltered GitHub catalog, confirm `permissions.push == true`, and use API write actions. A harmless unattached blob may be used as a write probe. Do not infer capabilities from a filtered list or missing local Git credentials.
+Before concluding the GitHub connector is read-only, inspect its full catalog, repository
+`permissions.push` and available API writes. An unattached blob may be a harmless write probe. Missing
+local Git credentials or a filtered tool list does not establish read-only access.

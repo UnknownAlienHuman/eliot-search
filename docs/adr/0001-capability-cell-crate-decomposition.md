@@ -1,51 +1,48 @@
-# ADR 0001 — Capability-cell crate decomposition for agent-swarm implementation
+# ADR 0001 — Capability boundaries and Cargo packaging
 
 - **Status:** accepted
-- **Date:** 2026-08-28
+- **Date:** 2026-08-28; packaging clarification 2026-10-17
 - **Scope:** implementation packaging only
 - **Architecture:** ELIOT Search 8.4, especially S5, S31 and H1
 
 ## Context
 
-The initial repository grouped C03–C07 into `search-source`, C13–C17 into
-`search-index-qdrant`, and C18–C27 into `search-query`. Those groupings are useful architecture
-families, but they are too broad for the required execution model:
+Architecture capability families describe ownership. A Cargo package is useful when it isolates a real
+state/effect, security, dependency, replacement, failure, test or lifecycle boundary. S31 calls its crate
+list recommended focused crates; it does not require one crate per capability cell, type or agent.
 
-- one writer agent owns one crate;
-- an agent should not repeatedly load the 145 KB master document;
-- each package should target fewer than 10,000 hand-written Rust lines;
-- independent security, failure and replacement boundaries should be reviewable in isolation.
-
-Architecture S31 calls its crate list “recommended focused crates” and states that a capability cell
-becomes a separate crate when it has a real dependency, replacement, test or context boundary.
-Every cell selected here has at least one such boundary.
+The original one-agent/one-crate and 7,500/10,000-line targets were review heuristics. Applied as quotas,
+they encourage forwarding packages and file splitting without removing duplicated behavior. Current
+execution uses one source writer and narrow read/research/review subagents.
 
 ## Decision
 
-1. Preserve C00–C30 ownership and every Architecture 8.4 invariant unchanged.
-2. Treat `search-runtime`, `search-source`, `search-prep`, `search-index-qdrant` and `search-query`
-   as organizational capability families, not Cargo packages.
-3. Create one Cargo package for each capability cell with a real independent boundary.
-4. Keep `search-domain` as a small shared pure invariant kernel; it owns no external capability.
-5. Split C30 into a generic provider-protocol package and optional ELIOT/Research leaf adapters
-   because their dependencies and replacement lifecycles differ.
-6. Keep public ports vendor-neutral. Composition happens in `eliot-searchd`, not in forwarding crates.
-7. Target `src/` below 7,500 lines and require a split review before 10,000 total hand-written Rust
-   lines in a package.
+1. Preserve C00–C30 ownership and every Architecture 8.4 product invariant.
+2. Treat `search-runtime`, `search-source`, `search-prep`, `search-index-qdrant` and `search-query` as
+   organizational families. Package boundaries follow demonstrated independence, not the cell count.
+3. Keep `search-domain` a small pure invariant kernel. Keep optional provider/ELIOT/Research leaves
+   separate where their dependencies and lifecycle differ. Public ports remain vendor-neutral;
+   composition belongs to the actual daemon owner, never forwarding crates.
+4. Remove obsolete implementations and duplicate state/codecs before splitting or merging packages.
+   Consolidation is valid when the remaining code has one actual owner and no independent boundary;
+   inventory contracts, consumers, features and persisted bytes first. No arbitrary crate-count target.
+5. Review growing modules/packages for mixed responsibilities. The former 7,500/10,000-line targets
+   are signals, not gates against a bounded shrinking slice and not a requirement to create more crates.
+6. Store relevant package guidance once and link its normative source. Do not copy the architecture
+   or execution protocol into every agent packet.
 
 ## Consequences
 
-- Swarm tasks have bounded context and non-overlapping write ownership.
-- `search-query` and `search-source` no longer become mega-crates.
-- Cargo has more packages, but compilation, testing and review can be parallelized by capability.
-- Cross-capability contract changes become explicit requests instead of opportunistic edits.
-- The Architecture 8.4 embedded body and SHA-256 remain unchanged because capability ownership,
-  topology, protocols and invariants are not modified.
+Smaller owned mechanisms and explicit consumers matter more than file count. Cross-owner cutovers use
+one bounded manager slice under [EXECUTION_PROTOCOL](../product/EXECUTION_PROTOCOL.md). A package move
+alone does not count as code reduction or completed integration.
+
+This clarification changes packaging guidance only. Capability semantics, topology obligations,
+protocols and the embedded Architecture Part I body/hash are unchanged.
+[Original accepted packaging record](https://github.com/UnknownAlienHuman/eliot-search/blob/927265d1dd71f3d355131f38ac73365e6558a77e/docs/adr/0001-capability-cell-crate-decomposition.md).
 
 ## Rejected alternatives
 
-- **Keep ten broad crates:** conflicts with one-agent/one-crate and likely exceeds the line target.
-- **Create forwarding facade crates:** explicitly forbidden; they add no causal owner or test seam.
-- **Create crate-per-type:** rejected; packages are capability boundaries, not namespace wrappers.
-- **Duplicate architecture prose per agent:** rejected; per-package instructions contain only the
-  relevant normative slice.
+- Crate-per-type/agent, forwarding facades or new public wrappers without an independent owner.
+- One undifferentiated package that erases genuine security, dependency or replacement boundaries.
+- File shuffling, minification or duplicate per-agent prose presented as simplification.

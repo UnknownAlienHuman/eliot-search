@@ -1,193 +1,20 @@
-# Wave 2 single-manager execution packet — current revision
+# Wave 2 single-manager packet — historical pointer
 
-**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
-**Live writer queue:** programme issue #352 and [launch gate](AGENT_LAUNCH_GATE_2026-10-09.md).
-**Long-range obligations:** [PROJECT_COMPLETION.md](../product/PROJECT_COMPLETION.md).
-**Mandatory process:** [EXECUTION_PROTOCOL.md](../product/EXECUTION_PROTOCOL.md).
-**Exact package exceptions:** [WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md](WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md).
+The old packet used base `de07c2214097a596066d6afac308394d9b4bcd62` and repeated a
+#351 → #354 → #235.core / Wave-2 train. It is no longer a current task list or launch gate.
+[Preserved packet and its evidence](https://github.com/UnknownAlienHuman/eliot-search/blob/927265d1dd71f3d355131f38ac73365e6558a77e/docs/audit/WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md).
 
-`PROJECT_COMPLETION.md` is not the live next-task queue. Its dated “next task”, base SHA and local stage text are subordinate to #352, the launch gate, current merged artifacts and the exact active issue.
+Use the existing records for their distinct purposes:
 
-This packet supplies remaining Wave-2 source order and reusable subagent assignments. Every implementation is a bounded mergeable `SLICE`; no PR grows until an entire programme closes.
-
-## 1. Delivered; do not repeat
-
-| Task | PR | Actual delivery |
-|---|---:|---|
-| #317 | #318 | Existing xtask source-gate repairs |
-| #237 | #319 | Bounded canonical encoder, real digest helpers, stored/compute distinction and source guard |
-| #253 | #322 | Unicode 18 full-fold decision/goldens; no tokenizer |
-| #258 | #323 | Shared indexed payload/schema/eligibility/epoch contract |
-| #250 | #326 | Bounded Cargo metadata and package-status validation |
-| #256 | #338 | Stateless S11 identity; legacy retirement remains #329 |
-| #339 | #340 | Windows Cargo path-prefix handling in Qdrant tooling |
-| #327 | #341 | Rustls 0.23.45 repair; live acceptance remains later |
-| #257 | #342 | Source-verified UnitSet v3; durable integration remains #331 |
-
-These are scoped source deliveries, not installed product acceptance.
-
-## 2. Current writer slice
-
-The current programme is #266. PR #344 is closed unmerged and frozen at `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`; it is a read-only donor, not an active writer. Source-free PR #351 must merge before the first dependency-ready #354 child opens. #355/#356/#358 are PROGRAM parents; each requires an exact executable child before coding.
-
-Before more source work:
-
-```text
-preserve frozen donor and merge #351
-→ freeze ready child/extraction manifest against new main
-→ classify remaining findings
-→ select only the first dependency-safe tranche
-→ open/review/merge that tranche
-→ publish new main SHA
-→ create the successor branch from new main
-```
-
-Never open stacked source PRs.
-
-Separate owners unless an exact `B0` dependency is proved:
-
-```text
-#343 redb read-only inspection
-#345 record-artifact unknown-publication staging retention
-#346 all-target fixture compilation debt
-#347 native original-object unlink/late cleanup
-#348 original request → durable effect reconciliation
-```
-
-Unsupported recovery/cleanup remains unavailable and fail-closed.
-
-After the minimum typed root API and required normal callers merge, start `#235.core` from the resulting `main`. Do not wait for complete #266 programme, harness, cleanup, redb inspection or qualification closure.
-
-## 3. Remaining Wave-2 writer train
-
-```text
-#266 bounded serial tranches
-→ #235.core typed provider client
-→ #238 maintained TOML and honest v1/v2 digest migration
-→ #241 bounded GlobSet admission
-→ #246 mature literal matcher cutover
-→ #252 XID + NFC code identifiers
-→ #226 Markdown
-→ #226 JATS
-```
-
-Other whole-project stages follow the long-range map only after their actual prerequisites are merged. Do not restart delivered tasks.
-
-## 4. Definition of Ready
-
-Before code, record:
-
-```text
-exact base SHA
-primary owner/state/effect
-allowed production paths
-at most two narrow adapter families
-immediate reverse consumers
-persisted-byte/profile disposition
-legacy replacement/deletion owner
-minimum production check/Clippy/static guards
-deferred test inventory and qualification owner
-known baseline failures
-non-goals and adjacent owners
-```
-
-Publish `SCOPE_FROZEN` no later than the second source commit. Findings become `B0`, `F1`, `F2`, `D` or `Q`; they do not automatically widen the PR.
-
-Default split triggers:
-
-```text
-> 30 changed production files
-> 2,500 changed production lines
-> 1 primary owner
-> 2 adapter families
-> 1 persisted migration
-> 1 cross-owner cutover
-```
-
-Crossing a trigger means stop feature work, choose tranche 1, merge it, then create tranche 2 from the newly merged `main`. No stacked PRs.
-
-## 5. Reusable subagent assignments
-
-| Role | Return artifact |
+| Question | Current entrypoint |
 |---|---|
-| Authority/caller | owner, allowed paths, reverse consumers, duplicate paths; each finding classified B0/F1/F2/D/Q |
-| Donor/supply-chain | exact version/checksum/license/MSRV/features/advisories; any gap classified B0/F1/F2/D/Q |
-| Compatibility/deletion | byte disposition, rebuild/migration rule, deletion owner; findings classified B0/F1/F2/D/Q |
-| Recovery/security | each finding classified exactly B0/F1/F2/D/Q, or `NO_FINDING` |
-| Bounds/allocation | each finding classified exactly B0/F1/F2/D/Q, or `NO_FINDING` |
-| Focused fixtures | smallest causal cases; uncovered gaps classified B0/F1/F2/D/Q |
-| Diff/API | API delta and scope escape; each finding classified B0/F1/F2/D/Q |
-| Final exact-head | B0 blockers, nonblocking F1/F2/D/Q, or scoped `APPROVE_SOURCE` |
+| What may change, and how is it reviewed? | [Root instructions](../../AGENTS.md) and [EXECUTION_PROTOCOL](../product/EXECUTION_PROTOCOL.md). |
+| Which writer is active? | Current maintainer handoff, [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352), actual issue/PR and merged source. Preserve #598 and its WIP. |
+| Which product result remains? | [PROJECT_COMPLETION](../product/PROJECT_COMPLETION.md). |
+| Which duplicate can be removed? | [Verified source/reduction map](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md). |
+| Which donor/code is already available? | [Reuse index](DONOR_VERIFICATION_REGISTER_2026-10-09.md) and [indexed donor map](INDEXED_SPINE_PORT_MAP_2026-10-09.md). |
+| Where is historical path evidence? | [Exception matrix](WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md) and [donor archive](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md), verified against actual callers when relevant. |
 
-Classification meanings:
-
-```text
-B0 same-slice compile/safety blocker
-F1 same-owner follow-up
-F2 adjacent-owner follow-up
-D  unchanged baseline debt
-Q  qualification-only requirement
-```
-
-If an assignment finds nothing, return `NO_FINDING`. Never collapse F1/F2 into generic `FOLLOW_UP`; never convert D/Q into B0.
-
-Rules:
-
-- one pre-code pass and one final exact-head pass;
-- no repeated full-repository audit after each commit;
-- no subagent-created scope amendment or merge authority;
-- consolidate duplicate findings without changing their five-way disposition;
-- a load-bearing commit expires prior review;
-- the manager independently verifies critical claims.
-
-Read-only research for the next non-overlapping slice may run during final review, but no successor branch/PR is opened before current merge.
-
-## 6. Source gates
-
-For every tranche:
-
-```text
-locked Rust 1.98 check for changed owners
-immediate reverse-consumer compilation for public APIs
-strict Clippy for the same production closure
-affected source guards
-deferred integrated test inventory
-```
-
-Production targets only (`--lib`/`--bins` as applicable). Do not run all-target/runtime/native/fault suites as source merge gates. Specify tests with their owning slice and execute them during integrated qualification. Tiny diagnostic runs are debugging only. Reuse recorded broad baseline debt; compare relevant failing production diagnostics once. New candidate production diagnostics block.
-
-Do not repair the entire all-target graph inside an unrelated branch. Full workspace, native Windows, live Qdrant, fault, scale and release evidence remain late gates.
-
-## 7. PR and merge discipline
-
-One writer and one active source PR are mandatory. The PR body is the current status record; do not post a long progress comment after every commit.
-
-Before merge, require formal review bound to the final SHA, no unresolved B0/P1 and explicit remaining dispositions. A formal COMMENT may record independent reviewer evidence and manager disposition in a single-owner repository; self-approval is not required. A badge alone is insufficient.
-
-A programme issue may remain open after a slice merges. The next independent owner begins once its actual artifact is on `main`, not when every prior follow-up is closed.
-
-Open PR means merge candidate. Historical programme/tracking/gate packet PRs are closed after current owner links are preserved. Do not create new coordinator PRs.
-
-## 8. Donor and compatibility rules retained
-
-- `search-contracts` remains the sole canonical/digest owner.
-- Exact-byte SHA compatibility is distinct from domain-separated `sha256_raw`.
-- Existing S11 legacy callers remain legacy until #259/#262 and deletion owner #329.
-- UnitSet v2 cannot masquerade as v3; durable preparation remains #331.
-- Parser/matcher/Unicode/Git/document donors stay behind narrow adapters and exact profile identities.
-- Markdown/JATS consume delivered UnitSet types, not a second document catalogue.
-- Qdrant remains the sole indexed substrate; vendor types stay private.
-
-## 9. Stop conditions
-
-Stop the affected slice and route a follow-up when:
-
-- work belongs to another owner;
-- a second authority/catalogue/journal/parser/client would be created;
-- persisted bytes would be reinterpreted without versioned migration;
-- a package-only change would break a declared consumer;
-- donor source contradicts the assumed API/profile;
-- broad baseline debt is being repaired merely to obtain a green aggregate command;
-- qualification work is being pulled into source implementation.
-
-Do not stop the whole project. Merge the coherent fail-closed result, preserve the follow-up and continue from the new accepted base.
+No packet issues an assignment, introduces another writer or requires repeating completed source work.
+A package exception is an explicit owner-plus-immediate-consumer cutover, not permission for a broad
+rewrite. A dated source head is never a reason to reset the active manager's worktree.
