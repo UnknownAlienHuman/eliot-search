@@ -24,13 +24,16 @@ use search_provider_protocol::{AdmittedProviderRequest, BindingContext, Monotoni
 use crate::access_composition::{
     AuthoritativeGrantPolicy, NativeSecurityDomain, StandaloneAdmissionRequest,
     StandaloneGrantTemplate, StandaloneMembershipSecuritySnapshot,
-    StandalonePreRetrievalAdmission, StandaloneScopeResolver,
+    StandalonePreRetrievalAdmission, StandaloneScopeResolver, VerifiedStandaloneGrant,
     compile_standalone_pre_retrieval_for_profile,
 };
 use crate::provider_composition::{
     CanonicalRecipeHost, CanonicalRecipeTask, CanonicalServingAuthority,
     CanonicalServingError, CanonicalWorkBudget, CanonicalWorkOutput, monotonic_millis,
 };
+
+#[path = "canonical_population.rs"]
+pub mod canonical_population;
 
 /// One live authority borrow supplied under the owner's actual mutation lock.
 ///
@@ -46,6 +49,8 @@ pub(crate) struct CanonicalQueryAuthority<'a> {
     pub planned_policy: NamespacePolicyFence,
     pub authoritative_policy: AuthoritativePolicyState,
     pub route: IndexedRouteFence,
+    pub visibility: &'a search_control_redb::PublicationVisibilityState,
+    pub canonical_population: Option<&'a canonical_population::CanonicalPopulationSnapshot>,
     pub live: &'a LiveSecurityState,
     pub overlap_proof: Option<&'a OverlapFreeRouteProof>,
     pub max_legs: usize,
@@ -155,6 +160,7 @@ where
         })
     }
 
+    #[allow(clippy::too_many_lines)] // Keep current C18 and admission wiring under one live borrow.
     fn with_current_authority<R>(
         &mut self,
         binding: &BindingContext,
@@ -178,6 +184,8 @@ where
                     planned_policy,
                     authoritative_policy,
                     route,
+                    visibility,
+                    canonical_population,
                     live,
                     overlap_proof,
                     max_legs,
@@ -219,6 +227,31 @@ where
                 if !exact_live {
                     return Err(CanonicalServingError::Access(AccessError::SnapshotStale));
                 }
+                let population_requested_scope = resolved.clone();
+                let mut compile_canonical_population = |body: &RequestBody,
+                                                        issued: &VerifiedStandaloneGrant<'_>,
+                                                        admission: &StandalonePreRetrievalAdmission| {
+                    let metadata = canonical_population.ok_or(AccessError::SnapshotStale)?;
+                    canonical_population::compile_current_population(
+                        metadata,
+                        &canonical_population::CanonicalPopulationLiveAuthority::borrow_current(
+                            policy,
+                            access,
+                            membership_security,
+                            sources,
+                            &planned_policy,
+                            &authoritative_policy,
+                            route,
+                            visibility,
+                            live,
+                            domain,
+                        ),
+                        body,
+                        issued,
+                        admission,
+                        &population_requested_scope,
+                    )
+                };
                 let request_deadline = request
                     .guard()
                     .deadline()
@@ -255,6 +288,11 @@ where
                     standalone_policy: Some(policy),
                     standalone_grant: None,
                     standalone_admission: Some(&mut compile_admission),
+                    standalone_population: if canonical_population.is_some() {
+                        Some(&mut compile_canonical_population)
+                    } else {
+                        None
+                    },
                     standalone_sources: Some(sources),
                     domain,
                     fence: &fence,
@@ -279,6 +317,8 @@ impl<T: CanonicalAdmittedRecipeTask> CanonicalRecipeTask for AuthorityBoundRecip
             .admission
             .as_ref()
             .ok_or(CanonicalServingError::InvalidCompletion)?;
+        output.compile_canonical_population(admission)?;
+        let _ = output.require_canonical_population()?;
         self.inner.poll_authorized(admission, output, budget)
     }
 

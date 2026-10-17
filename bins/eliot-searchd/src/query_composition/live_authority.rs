@@ -30,6 +30,7 @@ use crate::access_composition::{
 use crate::provider_composition::{CanonicalServingError, monotonic_millis};
 use crate::query_serving_composition::{
     CanonicalQueryAuthority, CanonicalQueryAuthorityOwner,
+    canonical_population::{CanonicalPopulationLiveAuthority, CanonicalPopulationSnapshot},
 };
 
 /// One complete current authority image accepted by the native query host.
@@ -47,7 +48,9 @@ pub(crate) struct LiveNativeQuerySnapshot {
     planned_policy: NamespacePolicyFence,
     authoritative_policy: AuthoritativePolicyState,
     route: IndexedRouteFence,
+    publication_visibility: PublicationVisibilityState,
     publication_guards: PublicationGuards,
+    canonical_population: Option<CanonicalPopulationSnapshot>,
     live: LiveSecurityState,
     overlap_proof: Option<OverlapFreeRouteProof>,
     max_legs: usize,
@@ -116,13 +119,29 @@ impl LiveNativeQuerySnapshot {
             planned_policy,
             authoritative_policy,
             route,
+            publication_visibility: visibility,
             publication_guards,
+            canonical_population: None,
             live,
             overlap_proof,
             max_legs,
         };
         snapshot.validate_bundle()?;
         Ok(snapshot)
+    }
+
+    /// Install rows captured from the actual C02/C03/C07 metadata reads before
+    /// this complete authority bundle becomes query-visible.
+    pub(crate) fn with_canonical_population(
+        mut self,
+        population: CanonicalPopulationSnapshot,
+    ) -> Result<Self, AccessError> {
+        if self.canonical_population.is_some() {
+            return Err(AccessError::SnapshotStale);
+        }
+        self.canonical_population = Some(population);
+        self.validate_bundle()?;
+        Ok(self)
     }
 
     fn validate_bundle(&self) -> Result<(), AccessError> {
@@ -223,6 +242,26 @@ impl LiveNativeQuerySnapshot {
                 return Err(AccessError::OverlapProofMissing);
             }
         }
+        self.validate_canonical_population()?;
+        Ok(())
+    }
+
+    fn validate_canonical_population(&self) -> Result<(), AccessError> {
+        if let Some(population) = &self.canonical_population {
+            let current = CanonicalPopulationLiveAuthority::borrow_current(
+                &self.policy,
+                &self.access,
+                &self.membership_security,
+                &self.sources,
+                &self.planned_policy,
+                &self.authoritative_policy,
+                self.route,
+                &self.publication_visibility,
+                &self.live,
+                &self.domain,
+            );
+            population.validate_live(&current)?;
+        }
         Ok(())
     }
 
@@ -300,6 +339,13 @@ impl LiveNativeQuerySnapshot {
                 && next.route != self.route)
         {
             return Err(AccessError::RouteMismatch);
+        }
+        if let (Some(previous), Some(current)) =
+            (&self.canonical_population, &next.canonical_population)
+            && (current.generation() < previous.generation()
+                || (current.generation() == previous.generation() && current != previous))
+        {
+            return Err(AccessError::SnapshotStale);
         }
         // An overlap proof is positive authority to combine memberships in one
         // scoring/IDF population. Adding or replacing that authority must be
@@ -474,7 +520,9 @@ where
             planned_policy,
             authoritative_policy,
             route,
+            publication_visibility,
             publication_guards: _,
+            canonical_population,
             live,
             overlap_proof,
             max_legs,
@@ -488,6 +536,8 @@ where
             planned_policy: *planned_policy,
             authoritative_policy: *authoritative_policy,
             route: *route,
+            visibility: publication_visibility,
+            canonical_population: canonical_population.as_ref(),
             live,
             overlap_proof: overlap_proof.as_ref(),
             max_legs: *max_legs,

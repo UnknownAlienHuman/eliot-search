@@ -201,7 +201,7 @@ impl<H: CanonicalRecipeHost> CanonicalServingOwner<H> {
                 // cannot repeatedly spend every quantum before the task runs.
                 let budget = work_budget(budget.deadline(), quantum_ms)?;
                 let mut output = CanonicalWorkOutput { transport, request, authority, budget,
-                    emitted_terminal: None, failed: false };
+                    emitted_terminal: None, failed: false, canonical_population: None };
                 let result = task.poll(&mut output, budget)?;
                 if output.failed { return Err(CanonicalServingError::InvalidCompletion); }
                 let after = monotonic_millis();
