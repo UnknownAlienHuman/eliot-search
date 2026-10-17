@@ -8,9 +8,9 @@ use search_access::{
 use search_contracts::evidence::{PublicScopeSelector, RetrieveEvidenceRequestV2};
 use search_contracts::{
     Blake3Digest32, BoundedBytes, BoundedList, CanonicalDigestDomain, CanonicalText,
-    CanonicalValue, ContractError, DigestInputLimit, MAX_CANONICAL_BYTES, MAX_COLLECTION_ITEMS,
-    NonZeroRevision, OpaqueId, ProfileId, QueryExecutionBudget, QuerySnapshotFence, RequestId,
-    blake3_canonical, blake3_canonical_array,
+    CanonicalValue, ContractError, DigestInputLimit, LegKind, MAX_CANONICAL_BYTES,
+    MAX_COLLECTION_ITEMS, NonZeroRevision, OpaqueId, PlanId, ProfileId, QueryExecutionBudget,
+    QuerySnapshotFence, RequestId, blake3_canonical, blake3_canonical_array,
 };
 use search_lexical::{
     AcceptedCodeIdentifiersProfile, CodeIdentifierLimits, LexicalInput, SparseLimits, SparseVector,
@@ -48,6 +48,18 @@ pub struct EvidenceLexicalLegV2 {
 }
 
 impl EvidenceLexicalLegV2 {
+    /// Stable zero-based position of the sole C22 leg.
+    #[must_use]
+    pub const fn leg_id(&self) -> usize {
+        0
+    }
+
+    /// The only leg kind emitted by this lexical-only compiler.
+    #[must_use]
+    pub const fn leg_kind(&self) -> LegKind {
+        LegKind::Lexical
+    }
+
     /// Existing planner allocation for this one bounded leg.
     #[must_use]
     pub const fn budget(&self) -> &LegBudget {
@@ -97,6 +109,7 @@ impl EvidencePlanIdentityV2 {
 /// filtered IDF and denominator work. This plan creates no access permit and
 /// cannot outlive the C18 owner callback when that callback owns the borrow.
 pub struct CompiledEvidencePlanV2<'a> {
+    plan_id: PlanId,
     request_id: RequestId,
     request: &'a RetrieveEvidenceRequestV2,
     population: &'a CompiledEligibilityPopulation,
@@ -108,6 +121,12 @@ pub struct CompiledEvidencePlanV2<'a> {
 }
 
 impl CompiledEvidencePlanV2<'_> {
+    /// Root-generated identity for this plan instance; never derived from its fingerprint.
+    #[must_use]
+    pub const fn plan_id(&self) -> PlanId {
+        self.plan_id
+    }
+
     /// Original request ID supplied by the live Root callback's admitted guard.
     #[must_use]
     pub const fn request_id(&self) -> RequestId {
@@ -118,6 +137,12 @@ impl CompiledEvidencePlanV2<'_> {
     #[must_use]
     pub const fn request(&self) -> &RetrieveEvidenceRequestV2 {
         self.request
+    }
+
+    /// Exact original bounded budget from the admitted V2 request.
+    #[must_use]
+    pub const fn budget(&self) -> QueryExecutionBudget {
+        self.request.budgets
     }
 
     /// Opaque owner-compiled C18 proof; no replacement or translated filter is made.
@@ -161,14 +186,29 @@ impl CompiledEvidencePlanV2<'_> {
     pub const fn identity(&self) -> EvidencePlanIdentityV2 {
         self.identity
     }
+
+    /// Existing retrieval-executor digest representation for the C23 ticket adapter.
+    #[must_use]
+    pub const fn compiled_plan_digest(&self) -> crate::CompiledPlanDigest {
+        crate::CompiledPlanDigest(*self.identity.0.as_bytes())
+    }
+
+    /// Exact memberships selected and verified by the same C18 callback.
+    #[must_use]
+    pub const fn memberships(
+        &self,
+    ) -> &std::collections::BTreeSet<search_contracts::SourceMembershipId> {
+        &self.scope.memberships
+    }
 }
 
 /// Compile one actual `retrieve_evidence@1` request into a finite lexical plan.
 ///
-/// `request_id`, `population`, `scope` and `request_fence` must be passed from
+/// `plan_id` is minted by the Root caller. `request_id`, `population`, `scope`
+/// and `request_fence` must be passed from
 /// the same `LiveNativeQueryAuthorityOwner::with_retrieve_evidence_population`
-/// callback. The ID is ordinary request data; authority comes only from the
-/// opaque C18 result and the callback's still-held Root/issuer lifetimes.
+/// callback. IDs and request fields are ordinary data; authority comes only
+/// from the opaque C18 result and the callback's still-held Root/issuer lifetimes.
 ///
 /// The caller supplies the accepted C11 profile captured by the same current
 /// Root runtime that produced the C18 population. The planner runs the existing
@@ -181,6 +221,7 @@ impl CompiledEvidencePlanV2<'_> {
 /// Refuses mismatched scope, fence, snapshot, C00 filter, profile or budgets.
 #[allow(clippy::too_many_arguments)]
 pub fn compile_retrieve_evidence_v2<'a>(
+    plan_id: PlanId,
     request_id: RequestId,
     request: &'a RetrieveEvidenceRequestV2,
     population: &'a CompiledEligibilityPopulation,
@@ -197,10 +238,9 @@ pub fn compile_retrieve_evidence_v2<'a>(
     let lexical_profile_id = ProfileId::new(lexical_profile.profile().id().as_str())
         .map_err(|_| PlanError::EvidenceProfileMismatch)?;
     let snapshot_profiles = &population.snapshot_fence().lexical_profile_ids;
-    if !snapshot_profiles.is_empty()
-        && !snapshot_profiles
-            .iter()
-            .any(|profile| profile == &lexical_profile_id)
+    if !snapshot_profiles
+        .iter()
+        .any(|profile| profile == &lexical_profile_id)
     {
         return Err(PlanError::EvidenceProfileMismatch);
     }
@@ -250,6 +290,7 @@ pub fn compile_retrieve_evidence_v2<'a>(
     )?);
 
     Ok(CompiledEvidencePlanV2 {
+        plan_id,
         request_id,
         request,
         population,

@@ -414,8 +414,10 @@ fn v2_plan_uses_real_c18_output_and_refuses_scope_fence_remap() {
         memberships: fixture.scope.memberships.clone(),
     };
     let profile = accepted_profile();
+    let plan_id = search_contracts::PlanId::from_bytes([21; 16]);
     let request_id = search_contracts::RequestId::from_bytes([20; 16]);
     let plan = compile_retrieve_evidence_v2(
+        plan_id,
         request_id,
         &fixture.request,
         &compiled,
@@ -425,7 +427,14 @@ fn v2_plan_uses_real_c18_output_and_refuses_scope_fence_remap() {
     )
     .expect("C22 lexical plan");
 
+    assert_eq!(plan.plan_id(), plan_id);
     assert_eq!(plan.request_id(), request_id);
+    assert_eq!(plan.budget(), fixture.request.budgets);
+    assert_eq!(plan.memberships(), &fixture.scope.memberships);
+    assert_eq!(
+        plan.compiled_plan_digest().as_bytes(),
+        plan.identity().digest().as_bytes()
+    );
     assert!(std::ptr::eq(plan.population(), compiled.population()));
     assert_eq!(
         plan.population().allowed_projection_memberships(),
@@ -434,6 +443,11 @@ fn v2_plan_uses_real_c18_output_and_refuses_scope_fence_remap() {
     assert_eq!(
         plan.lexical_leg().budget().max_candidates(),
         fixture.request.budgets.max_prefetch_candidates_per_leg
+    );
+    assert_eq!(plan.lexical_leg().leg_id(), 0);
+    assert_eq!(
+        plan.lexical_leg().leg_kind(),
+        search_contracts::LegKind::Lexical
     );
     assert_eq!(
         plan.omitted_capabilities(),
@@ -448,6 +462,7 @@ fn v2_plan_uses_real_c18_output_and_refuses_scope_fence_remap() {
     );
     assert_ne!(*plan.lexical_leg().vector_fingerprint(), [0; 32]);
     let replayed = compile_retrieve_evidence_v2(
+        plan_id,
         request_id,
         &fixture.request,
         &compiled,
@@ -464,6 +479,7 @@ fn v2_plan_uses_real_c18_output_and_refuses_scope_fence_remap() {
     };
     assert_eq!(
         compile_retrieve_evidence_v2(
+            plan_id,
             request_id,
             &fixture.request,
             &compiled,

@@ -56,6 +56,7 @@ compiled plans unless a stronger accepted reconfiguration action is required.
 
 `compile_retrieve_evidence_v2` consumes the typed request, original request ID, opaque
 `CompiledEligibilityPopulation`, and the exact resolved scope/security fence from one live Root callback.
+Root supplies the fresh `PlanId`; the deterministic content fingerprint remains separate from it.
 It rejects scope/fence or C00/projection-map mismatches, fingerprints the full bounded request and
 compiled owner data, runs the existing C11 query encoder, and allocates one lexical leg through the
 existing finite budget allocator. It reports structural and semantic/dense branches as omitted. The
