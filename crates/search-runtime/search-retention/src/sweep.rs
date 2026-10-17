@@ -131,23 +131,58 @@ impl SweepLimits {
 
 /// Fresh active-pin protection snapshot captured for one sweep.
 ///
-/// Query, continuation, route and epoch pins are transient; the caller
-/// captures them atomically with the control generation. A stale or
+/// Query, continuation, route, epoch, and source pins are transient. The
+/// original-context Root fence port and process-local source-pin registry
+/// capture them around separate control/publication generations. A stale or
 /// mismatched snapshot fails closed and never authorizes deletion.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct PinEvidence {
     /// Exact pinned Search-owned object IDs.
-    pub pinned_ids: BTreeSet<OpaqueId>,
+    pub(crate) pinned_ids: BTreeSet<OpaqueId>,
     /// Pin-snapshot generation (monotone per capture).
-    pub pin_generation: u64,
-    /// Caller-supplied capture time (opaque wall clock, not a decision TTL).
-    pub capture_time_ms: u64,
-    /// False means the snapshot is stale, mismatched or unknown.
-    pub fresh: bool,
+    pub(crate) pin_generation: u64,
+    /// Root-observed capture time (opaque wall clock, not a decision TTL).
+    pub(crate) capture_time_ms: u64,
+    /// Set only after the original-context root fence and pin-generation checks.
+    pub(crate) fresh: bool,
     /// Control generation the pins were captured against.
-    pub control_generation: u64,
+    pub(crate) control_generation: u64,
     /// Publication generation the pins were captured against.
-    pub publication_generation: u64,
+    pub(crate) publication_generation: u64,
+    /// Same process-local registry that atomically produced `pinned_ids`.
+    pub(crate) source_pin_registry: crate::source_pins::SourcePinRegistry,
+}
+
+impl PinEvidence {
+    /// Exact pinned object identities captured for one sweep.
+    #[must_use]
+    pub const fn pinned_ids(&self) -> &BTreeSet<OpaqueId> {
+        &self.pinned_ids
+    }
+
+    /// Monotone source-pin registry generation captured with the IDs.
+    #[must_use]
+    pub const fn pin_generation(&self) -> u64 {
+        self.pin_generation
+    }
+
+    /// Opaque root-owner capture timestamp; never used as a TTL clock.
+    #[must_use]
+    pub const fn capture_time_ms(&self) -> u64 {
+        self.capture_time_ms
+    }
+
+    /// Control generation observed at both sides of capture.
+    #[must_use]
+    pub const fn control_generation(&self) -> u64 {
+        self.control_generation
+    }
+
+    /// Publication generation observed at both sides of capture.
+    #[must_use]
+    pub const fn publication_generation(&self) -> u64 {
+        self.publication_generation
+    }
 }
 
 /// Frozen protection set: roots plus pinned, leased and tombstoned objects.
@@ -341,6 +376,8 @@ pub fn collect_protection(
     if !pins.fresh {
         return Err(RetentionError::PinProtectionUnknown);
     }
+    pins.source_pin_registry
+        .validate_generation(pins.pin_generation)?;
     if pins.pinned_ids.len() > limits.max_objects
         || tombstoned_ids.len() > limits.max_objects
         || leased_ids.len() > limits.max_objects

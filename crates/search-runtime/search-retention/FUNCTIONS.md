@@ -46,6 +46,27 @@ restore_quarantine_manifest
 Active query/continuation/route/epoch pins are transient protection inputs captured for each sweep. A
 missing required root provider makes the sweep generation incomplete and blocks deletion.
 
+## Process-local exact source pins
+
+`SourcePinRegistry` owns bounded RAII pins for exact C07 object IDs. `pin(target, monotonic_deadline)`
+stores the Root-verified source revision and residency binding unchanged with the original process-local
+`Instant`. The returned non-Clone `OwnedSourcePinGuard` validates only that exact registration and its
+monotonic expiry; it grants no read/access authority and holds no Root/request borrow. Drop releases only
+its exact pin. `revoke_source_revision` and `revoke_source` remove matching pins before a purge/reclaim
+capture; registry poison or generation overflow blocks evidence capture.
+
+`capture_pin_evidence(root_port, original_context)` calls the actual Root fence observation port before
+and after one atomic source-pin snapshot, using the same original context. It keeps control and publication
+generations separate, requires both observations to agree, requires non-source pin IDs to agree, and
+rechecks the source pin generation before returning the existing `PinEvidence` shape. The collector
+accepts only this owner-created evidence; callers cannot set a `fresh` boolean or mutate the captured ID
+set. The parent Root adapter remains responsible for supplying the verified C07 link target, implementing
+the fence port under native custody, enumerating durable roots, and recapturing evidence before later
+sweep phases. **PENDING in the parent Root owner:** implement the actual observation port and C07 link
+producer, adapt `OwnedSourcePinGuard` to the frozen handle guard while echoing the same `Instant`, and
+enumerate/project C28 durable roots into S28 collection. This package does not claim that integration or
+native qualification is complete.
+
 ## `validate_retention_policy`
 
 ```text

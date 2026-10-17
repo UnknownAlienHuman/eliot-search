@@ -7,13 +7,65 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use search_contracts::{Blake3Digest32, ObjectResidencyKeyDigest, OpaqueId};
+use search_contracts::{Blake3Digest32, ObjectResidencyKeyDigest, OpaqueId, OpaqueRef, RequestId};
+use search_ports::{
+    CancellationProbe, ContextReason, DisclosureClass, OperationContext, PackageOpaque, Port,
+    PortError, PortErrorKind, PortRetryability,
+};
 use search_retention::sweep::{
     CasAdmin, CasAdminError, CasDeleteAck, CasReadback, PinEvidence, RetentionRootKind,
     SweepLimits, begin_sweep, collect_protection, complete_sweep, execute_sweep_batch,
     mark_reachable, plan_sweep,
 };
+use search_retention::source_pins::{
+    RootFenceObservation, RootFenceObservationPort, SourcePinRegistry,
+};
 use search_retention::{RetainedObjectKind, RetentionError, RetentionOperation};
+
+#[derive(Debug)]
+struct TestCancellation;
+
+impl PackageOpaque for TestCancellation {
+    fn owner_package(&self) -> &'static str {
+        "search-retention-tests"
+    }
+}
+
+impl CancellationProbe for TestCancellation {
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+}
+
+struct TestFencePort {
+    observations: Vec<RootFenceObservation>,
+    next: usize,
+}
+
+impl Port for TestFencePort {
+    type Error = PortError<ContextReason>;
+    type Cancellation = TestCancellation;
+}
+
+impl RootFenceObservationPort for TestFencePort {
+    fn observe_root_fence(
+        &mut self,
+        context: &OperationContext<Self::Cancellation>,
+    ) -> Result<RootFenceObservation, Self::Error> {
+        context.preflight()?;
+        let observation = self.observations.get(self.next).cloned().ok_or_else(|| {
+            PortError::new(
+                PortErrorKind::DependencyUnavailable,
+                PortRetryability::Never,
+                DisclosureClass::Private,
+                ContextReason::Cancelled,
+                None,
+            )
+        })?;
+        self.next += 1;
+        Ok(observation)
+    }
+}
 
 fn oid(tag: &str) -> OpaqueId {
     OpaqueId::new(tag).expect("fixture id is valid")
@@ -43,15 +95,51 @@ fn root(id: &str, generation: u64) -> search_retention::sweep::DurableRoot {
     }
 }
 
-fn pins(ids: &[&str], generation: u64, control_generation: u64) -> PinEvidence {
-    PinEvidence {
-        pinned_ids: ids.iter().map(|s| oid(s)).collect(),
-        pin_generation: generation,
-        capture_time_ms: 1_000,
-        fresh: true,
+fn pins(ids: &[&str], _generation: u64, control_generation: u64) -> PinEvidence {
+    capture_pins(
+        ids,
         control_generation,
-        publication_generation: 7,
-    }
+        control_generation,
+        7,
+        7,
+    )
+    .expect("stable root fence captures pin evidence")
+}
+
+fn capture_pins(
+    ids: &[&str],
+    before_control: u64,
+    after_control: u64,
+    before_publication: u64,
+    after_publication: u64,
+) -> Result<PinEvidence, RetentionError> {
+    let additional_pinned_ids: BTreeSet<OpaqueId> = ids.iter().map(|id| oid(id)).collect();
+    let registry = SourcePinRegistry::new(limits())?;
+    let mut root = TestFencePort {
+        observations: vec![
+            RootFenceObservation::new(
+                before_control,
+                before_publication,
+                1_000,
+                additional_pinned_ids.clone(),
+            ),
+            RootFenceObservation::new(
+                after_control,
+                after_publication,
+                1_001,
+                additional_pinned_ids,
+            ),
+        ],
+        next: 0,
+    };
+    let context = OperationContext::new(
+        RequestId::from_bytes([0x41; 16]),
+        60_000,
+        TestCancellation,
+        OpaqueRef::new("retention-test-budget").expect("test budget"),
+    )
+    .expect("test context");
+    registry.capture_pin_evidence(&mut root, &context)
 }
 
 fn graph(pairs: &[(&str, &[&str])]) -> BTreeMap<OpaqueId, Vec<OpaqueId>> {
@@ -206,12 +294,8 @@ fn missing_roots_block_sweep() {
 
 #[test]
 fn stale_pin_snapshot_blocks_sweep() {
-    let roots = vec![root("cas:A", 3)];
-    let mut pin_ev = pins(&[], 11, 3);
-    pin_ev.fresh = false;
-    let err = collect_protection(roots, &pin_ev, &BTreeSet::new(), &BTreeSet::new(), limits())
-        .expect_err("stale pins must fail closed");
-    assert_eq!(err, RetentionError::PinProtectionUnknown);
+    let error = capture_pins(&[], 3, 3, 7, 8).expect_err("stale pins fail during capture");
+    assert_eq!(error, RetentionError::RootGenerationChanged);
 }
 
 #[test]

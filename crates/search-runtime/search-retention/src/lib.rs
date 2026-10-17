@@ -31,6 +31,12 @@ use search_contracts::{
 /// owning adapters; this module only decides.
 pub mod sweep;
 
+/// Process-local exact source-object pins for ephemeral retained-source handles.
+///
+/// Pins are an in-memory reclamation input only. They do not authorize source
+/// reads, replace durable retention roots, or survive process restart.
+pub mod source_pins;
+
 /// Security purge barriers across storage and result planes.
 ///
 /// Deny fences commit before any deletion; the purge lifecycle stays separate
@@ -64,6 +70,8 @@ pub enum RetentionError {
     LeaseNotFound,
     /// Lease is expired, revoked, or released.
     LeaseInactive,
+    /// Exact source-object pin expired, was revoked, or is no longer registered.
+    SourcePinInactive,
     /// Lease renewal does not advance expiry.
     LeaseRegression,
     /// Finite lease/tombstone/operation capacity was exceeded.
@@ -148,6 +156,7 @@ impl RetentionError {
             Self::LeaseConflict => "RETENTION_LEASE_CONFLICT",
             Self::LeaseNotFound => "RETENTION_LEASE_NOT_FOUND",
             Self::LeaseInactive => "RETENTION_LEASE_INACTIVE",
+            Self::SourcePinInactive => "SOURCE_PIN_INACTIVE",
             Self::LeaseRegression => "RETENTION_LEASE_REGRESSION",
             Self::CapacityExceeded => "RETENTION_CAPACITY_EXCEEDED",
             Self::OperationConflict => "RETENTION_OPERATION_CONFLICT",
