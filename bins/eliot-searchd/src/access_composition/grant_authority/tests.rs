@@ -400,6 +400,7 @@ fn evidence_admission_requires_exact_issued_recipe_and_cancels_denied_slot() {
             current_policy.clone(),
             current_policy.clone(),
             current_policy.clone(),
+            current_policy.clone(),
         ],
         Rc::clone(&policy_calls),
     );
@@ -415,7 +416,7 @@ fn evidence_admission_requires_exact_issued_recipe_and_cancels_denied_slot() {
         )]),
         requested_access_partitions: set([AccessPartitionId::from_bytes([30; 16])]),
         requested_modalities: set([Modality::Code]),
-        requested_evidence_recipes: set([RecipeIdV2::RetrieveEvidence]),
+        requested_evidence_recipes: set([RecipeIdV2::RetrieveEvidence, RecipeIdV2::OrientScope]),
         requested_budget_class: profile("interactive"),
         requested_sensitivity_ceiling: SensitivityClass::Project,
         requested_disclosure_ceiling: DisclosureCeiling::LocalOnly,
@@ -467,7 +468,7 @@ fn evidence_admission_requires_exact_issued_recipe_and_cancels_denied_slot() {
 
     let accepted_id = RequestId::from_bytes([0x72; 16]);
     let accepted_frame = ClientEnvelopeCodec::encode_evidence_request_v2(
-        &evidence_envelope(accepted_id, 2, claims, RecipeIdV2::RetrieveEvidence),
+        &evidence_envelope(accepted_id, 2, claims.clone(), RecipeIdV2::RetrieveEvidence),
         DEFAULT_PROTOCOL_LIMITS,
         versions,
     )
@@ -492,6 +493,40 @@ fn evidence_admission_requires_exact_issued_recipe_and_cancels_denied_slot() {
     );
     assert_eq!(
         session.complete_request(&accepted_id, TerminalKind::Cancelled),
+        Ok(search_provider_protocol::RequestStatus::Cancelled)
+    );
+
+    let orientation_id = RequestId::from_bytes([0x73; 16]);
+    let orientation_frame = ClientEnvelopeCodec::encode_evidence_request_v2(
+        &evidence_envelope(orientation_id, 3, claims, RecipeIdV2::OrientScope),
+        DEFAULT_PROTOCOL_LIMITS,
+        versions,
+    )
+    .expect("exact issued orientation request");
+    let mut orientation_clock = || Ok(crate::provider_composition::monotonic_millis());
+    let orientation = authority
+        .admit_evidence_request_v2(
+            &mut session,
+            orientation_frame.as_slice(),
+            &proof,
+            30_000,
+            &mut orientation_clock,
+            |_| Ok(proof),
+        )
+        .expect("exact issued orientation recipe admitted");
+    assert_eq!(orientation.guard().request_id(), &orientation_id);
+    assert_eq!(
+        orientation.envelope().recipe_request.recipe_id(),
+        RecipeIdV2::OrientScope
+    );
+    assert_eq!(policy_calls.get(), 5);
+    assert_eq!(session.in_flight_len(), 1);
+    assert_eq!(
+        session.cancel(&orientation_id),
+        CancelOutcome::Cancelled { terminal: false }
+    );
+    assert_eq!(
+        session.complete_request(&orientation_id, TerminalKind::Cancelled),
         Ok(search_provider_protocol::RequestStatus::Cancelled)
     );
 }
