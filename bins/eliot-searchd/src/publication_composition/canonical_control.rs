@@ -33,12 +33,12 @@ use search_control_redb::{
 };
 use search_ports::{CancellationProbe, ControlSnapshotPort, MutationIdentity, OperationContext};
 use search_publication::{
-    AbortFinalizationRequest, AbortedPublicationResolution, PublicationControlReadback,
-    PublicationEffectBinding, PublicationEffectCommand, PublicationEffectKind,
-    PublicationEffectOutcome, PublicationEffectPort, PublicationEffectReadback,
-    PublicationIntentReadback, PublicationMutationAttempt, PublicationPhase,
-    PublicationPointExpectation, PublicationPointReadback, PublicationReadbackPort,
-    PublicationSnapshotReadback,
+    AbortFinalizationReadback, AbortFinalizationRequest, AbortedPublicationResolution,
+    PublicationControlReadback, PublicationEffectBinding, PublicationEffectCommand,
+    PublicationEffectKind, PublicationEffectOutcome, PublicationEffectPort,
+    PublicationEffectReadback, PublicationIntentReadback, PublicationMutationAttempt,
+    PublicationPhase, PublicationPointExpectation, PublicationPointReadback,
+    PublicationReadbackPort, PublicationSnapshotReadback,
 };
 use search_qdrant_bridge::CollectionRoute as BridgeRoute;
 use search_qdrant_bridge::real::{
@@ -388,10 +388,7 @@ where
         Ok(())
     }
 
-    fn c02_intent(
-        &self,
-        binding: &PublicationEffectBinding,
-    ) -> PublicationIntent {
+    fn c02_intent(&self, binding: &PublicationEffectBinding) -> PublicationIntent {
         let candidate = self.c13.record;
         PublicationIntent {
             publication_intent_id: self.publication_intent_id,
@@ -733,6 +730,9 @@ where
         original_intent.state = PublicationIntentState::IntentDurable;
         if original_metadata.original_operation_id != *request.intent.persist_operation_id()
             || original_metadata.original_request_id != request.intent.request_id()
+            || original_metadata.original_relative_deadline_ms
+                != request.intent.relative_deadline_ms()
+            || &original_metadata.original_budget_ref != request.intent.budget_ref()
             || request.intent.control_generation() != receipt.after_generation
             || request.intent.control_state_digest() != intent_digest(&original_intent)?
             || request.intent.transaction_id() != &original_binding.transaction_id
@@ -1810,10 +1810,9 @@ where
             control_generation: metadata.original_control_generation,
             control_state_digest: metadata.original_control_state_digest,
         });
-        // A restart PersistIntent readback has no typed AbortFinalizationRequest
-        // in its command. Keep this absent until the model exposes an untrusted
-        // persisted-request observation API; never fabricate its private DurableIntent.
-        observation.abort_request = command.abort_request().cloned();
+        // Return only persisted data. C16 joins it to its independently validated
+        // private durable intent and verifies resolution/readback before proof.
+        observation.abort_request = Some(persisted_abort_readback(metadata, binding)?);
         observation.abort_binding = Some(abort_binding);
         Ok(observation)
     }
@@ -2668,7 +2667,7 @@ where
         };
         let mut observation = empty_observation(command.effect(), binding.clone(), outcome);
         observation.control = Some(control);
-        observation.abort_request = Some(request.clone());
+        observation.abort_request = Some(AbortFinalizationReadback::from(request));
         observation.abort_binding = Some(abort_binding);
         Ok(observation)
     }
@@ -2783,7 +2782,7 @@ where
             visible_manifest_digest: request.intent.old_manifest_digest(),
             snapshot_digest,
         });
-        observation.abort_request = Some(request.clone());
+        observation.abort_request = Some(AbortFinalizationReadback::from(request));
         observation.abort_binding = Some(abort_binding);
         Ok(observation)
     }
@@ -3142,6 +3141,42 @@ fn abort_resolution_metadata(
             ))
         }
     }
+}
+
+fn persisted_abort_readback(
+    metadata: &PublicationAbortFinalizationMetadataV1,
+    binding: &PublicationEffectBinding,
+) -> Result<AbortFinalizationReadback, AdapterError> {
+    let resolution = match &metadata.resolution {
+        AbortResolutionMetadataV1::Compensated {
+            restored_old_points,
+        } => AbortedPublicationResolution::Compensated {
+            operation_id: metadata.resolution_operation_id.clone(),
+            restored_old_points: *restored_old_points,
+        },
+        AbortResolutionMetadataV1::Excluded { .. } => {
+            // One admitted publication owns exactly this projection membership.
+            // Reconstruct its complete set and independently compare the retained
+            // count/digest; a matching count alone is never sufficient.
+            AbortedPublicationResolution::Excluded {
+                operation_id: metadata.resolution_operation_id.clone(),
+                excluded_projection_memberships: vec![binding.scope.projection_membership_id],
+            }
+        }
+    };
+    let (operation, observed_resolution) = abort_resolution_metadata(&resolution)?;
+    if operation != metadata.resolution_operation_id || observed_resolution != metadata.resolution {
+        return Err(AdapterError::InvalidBinding);
+    }
+    Ok(AbortFinalizationReadback {
+        operation_id: metadata.abort_operation_id.clone(),
+        expected_control_generation: metadata.expected_control_generation,
+        collection_generation_id: metadata.collection_generation_id,
+        previous_visible_epoch: metadata.previous_visible_epoch,
+        current_guards: metadata.current_guards,
+        prepared_input_digest: metadata.prepared_input_digest,
+        resolution,
+    })
 }
 
 fn abort_resolution_digest(
