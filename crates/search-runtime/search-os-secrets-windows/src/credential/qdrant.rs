@@ -949,6 +949,38 @@ fn observe_selected_windows(
     Ok(observation)
 }
 
+#[cfg(all(feature = "test-credential-cleanup", windows))]
+pub(super) struct QdrantCredentialCleanupCoordinates {
+    pub(super) target: Vec<u16>,
+    pub(super) mutex_target: Vec<u16>,
+}
+
+#[cfg(all(feature = "test-credential-cleanup", windows))]
+pub(super) fn credential_cleanup_coordinates<C: LegacyRevisionDpapiContext>(
+    selected: &QdrantApiSecretReference,
+    context: &mut C,
+) -> Result<QdrantCredentialCleanupCoordinates, QdrantApiSecretStoreError> {
+    validate_selected_reference(selected)?;
+    reserve_qdrant_target(context, true, selected)?;
+    reserve_qdrant_lock(context)?;
+    let locator = selection_digest(selected);
+    Ok(QdrantCredentialCleanupCoordinates {
+        target: credential_target(&locator),
+        mutex_target: credential_mutex_target(&locator),
+    })
+}
+
+#[cfg(all(feature = "test-credential-cleanup", windows))]
+pub(super) fn observe_credential_cleanup_frame<C: LegacyRevisionDpapiContext>(
+    selected: &QdrantApiSecretReference,
+    frame: &super::windows::ProviderCredentialBlob,
+    context: &mut C,
+    remaining: &mut dyn FnMut() -> Option<Duration>,
+) -> Result<QdrantApiSecretObservation, QdrantApiSecretStoreError> {
+    reserve_frame_decode(context, frame.as_slice().len())?;
+    observation_from_frame(selected, frame, context, remaining)
+}
+
 #[cfg(windows)]
 fn prepare_initial_windows(
     selected: &QdrantApiSecretReference,
@@ -1467,6 +1499,10 @@ mod tests {
         encoded_credential_frame_digest, issuer_context_allows_use, lease_window_is_live,
         selection_digest, versioned_protection_purpose,
     };
+    #[cfg(all(feature = "test-credential-cleanup", windows))]
+    use super::{
+        QdrantApiSecretObservation, credential_target,
+    };
 
     #[derive(Clone, Debug)]
     struct TestCancellation(Arc<AtomicBool>);
@@ -1559,6 +1595,54 @@ mod tests {
             decode_record(&exact[..QDRANT_CREDENTIAL_FIXED_BYTES - 1], &digest),
             Err(QdrantApiSecretStoreError::CredentialRecordInvalid)
         );
+    }
+
+    #[cfg(all(feature = "test-credential-cleanup", windows))]
+    #[test]
+    fn cleanup_requires_full_observation_and_exact_selection_target() {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+
+        let selected_ref = selected("secret://credential/qdrant", 0x41);
+        let expected = QdrantApiSecretObservation {
+            selected: selected_ref.clone(),
+            version: NonZeroRevision::new(7).expect("nonzero version"),
+            frame_digest: Blake3Digest32::from_bytes([0x73; 32]),
+        };
+        let changed_reference = QdrantApiSecretObservation {
+            selected: QdrantApiSecretReference::for_owner(
+                OpaqueId::new("secret://credential/other").expect("stable reference"),
+                InstallationId::from_bytes([0x32; 16]),
+                InstallationIncarnationId::from_bytes([0x42; 16]),
+                Blake3Digest32::from_bytes([0x53; 32]),
+            )
+            .expect("foreign Root/user binding"),
+            ..expected.clone()
+        };
+        let changed_version = QdrantApiSecretObservation {
+            version: NonZeroRevision::new(8).expect("nonzero version"),
+            ..expected.clone()
+        };
+        let changed_frame = QdrantApiSecretObservation {
+            frame_digest: Blake3Digest32::from_bytes([0x74; 32]),
+            ..expected.clone()
+        };
+
+        let same_observation = expected.clone();
+        assert_eq!(expected, same_observation);
+        assert_ne!(expected, changed_reference);
+        assert_ne!(expected, changed_version);
+        assert_ne!(expected, changed_frame);
+
+        let locator = selection_digest(&selected_ref);
+        let target = credential_target(&locator);
+        let actual = String::from_utf16(&target[..target.len() - 1]).expect("UTF-16 target");
+        let mut expected_target = String::from("ELIOT Search/qdrant-api-secret/v1/");
+        for byte in locator {
+            expected_target.push(char::from(HEX[usize::from(byte >> 4)]));
+            expected_target.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+        assert_eq!(actual, expected_target);
+        assert_eq!(target.last(), Some(&0));
     }
 
     #[test]

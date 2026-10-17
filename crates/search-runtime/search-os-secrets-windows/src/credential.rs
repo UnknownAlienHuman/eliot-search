@@ -44,6 +44,13 @@ pub use qdrant::{
     QdrantApiSecretStore, QdrantApiSecretStoreError,
 };
 
+#[cfg(feature = "test-credential-cleanup")]
+mod test_qdrant_credential_cleanup;
+#[cfg(feature = "test-credential-cleanup")]
+pub use test_qdrant_credential_cleanup::{
+    QdrantApiSecretCleanupError, delete_observed_qdrant_api_secret_for_test,
+};
+
 mod revision_dek;
 pub use revision_dek::*;
 mod seal_open;
