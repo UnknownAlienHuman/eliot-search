@@ -1,6 +1,8 @@
 # Function contract — `search-query-planner`
 
-**Status:** W4/P08 logical contract; no plan implementation exists yet.
+**Status:** V1 planning source exists; C22 now provides the bounded lexical `retrieve_evidence@1`
+producer over the owner-compiled C18 population. Canonical ranking/fusion, other recipe families and
+installed product qualification remain separate work.
 
 The planner is server-owned. Clients supply one versioned recipe request and bounded preferences, never
 Qdrant collections, filters, point IDs, raw execution graphs or authority predicates.
@@ -49,6 +51,15 @@ Planning after captured inputs is pure, deterministic and retry-safe. Cancellati
 returns no executable partial plan. No I/O, mutable registry, pin, scheduler or vendor client is owned.
 Configuration implements `config/sections/query.md`; changed budget/profile settings affect only newly
 compiled plans unless a stronger accepted reconfiguration action is required.
+
+### V2 lexical evidence producer (#213)
+
+`compile_retrieve_evidence_v2` consumes the typed request, original request ID, opaque
+`CompiledEligibilityPopulation`, and the exact resolved scope/security fence from one live Root callback.
+It rejects scope/fence or C00/projection-map mismatches, fingerprints the full bounded request and
+compiled owner data, runs the existing C11 query encoder, and allocates one lexical leg through the
+existing finite budget allocator. It reports structural and semantic/dense branches as omitted. The
+plan borrows the C18 result and creates no authorization permit or replacement eligibility filter.
 
 ## Required fixtures
 

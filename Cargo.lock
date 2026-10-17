@@ -1471,6 +1471,7 @@ dependencies = [
  "search-config",
  "search-contracts",
  "search-domain",
+ "search-lexical",
  "search-ports",
 ]
 

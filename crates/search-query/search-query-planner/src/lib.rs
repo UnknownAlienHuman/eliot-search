@@ -28,6 +28,12 @@ use search_contracts::{
     StateDependency, StateDependencyKind, blake3_canonical, blake3_exact_bytes,
 };
 
+mod evidence_v2;
+pub use evidence_v2::{
+    CompiledEvidencePlanV2, EvidenceLexicalLegV2, EvidenceOmittedCapabilityV2,
+    EvidencePlanIdentityV2, compile_retrieve_evidence_v2,
+};
+
 /// Closed query-planning failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum PlanError {
@@ -50,6 +56,9 @@ pub enum PlanError {
     ScopeFenceMismatch,
     ScopeMismatch,
     PlanFingerprintMismatch,
+    EvidenceAdmissionMismatch,
+    EvidenceProfileMismatch,
+    QueryEncodingFailed,
 }
 
 impl PlanError {
@@ -76,6 +85,9 @@ impl PlanError {
             Self::ScopeFenceMismatch => "PLAN_SCOPE_FENCE_MISMATCH",
             Self::ScopeMismatch => "PLAN_SCOPE_MISMATCH",
             Self::PlanFingerprintMismatch => "PLAN_FINGERPRINT_MISMATCH",
+            Self::EvidenceAdmissionMismatch => "PLAN_EVIDENCE_ADMISSION_MISMATCH",
+            Self::EvidenceProfileMismatch => "PLAN_EVIDENCE_PROFILE_MISMATCH",
+            Self::QueryEncodingFailed => "PLAN_QUERY_ENCODING_FAILED",
         }
     }
 }

@@ -16,6 +16,7 @@ search-domain.workspace = true
 search-ports.workspace = true
 search-config.workspace = true
 search-access.workspace = true
+search-lexical.workspace = true
 
 [lints]
 workspace = true
