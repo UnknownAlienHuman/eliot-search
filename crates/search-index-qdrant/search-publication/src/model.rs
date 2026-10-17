@@ -341,7 +341,7 @@ pub struct PublicationEffectReadback {
     pub abort_binding: Option<PublicationEffectBinding>,
 }
 
-fn vector_maps_equal(
+pub fn vector_maps_equal(
     left: &std::collections::BTreeMap<String, VectorValue>,
     right: &std::collections::BTreeMap<String, VectorValue>,
 ) -> bool {

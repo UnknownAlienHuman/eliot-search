@@ -1548,7 +1548,7 @@ pub fn point_readback_matches(
                 && expected.payload.validate().is_ok()
                 && observed.payload.validate().is_ok()
                 && expected.payload.identity().ok() == observed.payload.identity().ok()
-                && expected.vectors == observed.vectors
+                && crate::model::vector_maps_equal(&expected.vectors, &observed.vectors)
         })
 }
 

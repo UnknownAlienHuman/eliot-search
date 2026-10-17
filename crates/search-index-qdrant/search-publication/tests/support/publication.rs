@@ -267,10 +267,15 @@ impl Fixture {
 
     /// Replan the real C13 product while preserving the complete source and point address.
     pub fn with_changed_vector_at(&self, unit_index: usize) -> Self {
+        self.with_sparse_values_at(unit_index, vec![2.0, 1.0])
+    }
+
+    /// Rebuilds a complete real C13 product for exact vector-byte proof cases.
+    pub fn with_sparse_values_at(&self, unit_index: usize, values: Vec<f32>) -> Self {
         let mut changed = self.clone();
         changed.planned_vectors[unit_index].vectors[0].value = VectorValue::Sparse {
             indices: vec![1, 4],
-            values: vec![2.0, 1.0],
+            values,
         };
         changed.plan = projection_plan(
             &changed.units,
