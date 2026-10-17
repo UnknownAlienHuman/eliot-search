@@ -8,7 +8,8 @@ use search_contracts::{
     self as c, ProjectionMembershipId, SourceIdentity, SourceOwnerGeneration, SourceRevisionRef,
 };
 use search_control_redb::{
-    MigrationBootstrapWork as Work, PreparedArtifactSetRecordV1, PublicationProjectionSnapshot,
+    MigrationBootstrapWork as Work, PreparedArtifactSetReadbackV1, PreparedArtifactSetRecordV1,
+    PublicationProjectionSnapshot, PublicationRecoveryProjectionSnapshot,
 };
 use search_os_secrets_windows::{self as os, LegacyRevisionDpapiWork};
 use search_revision_crypto::SelectedPlaintextV2;
@@ -101,8 +102,12 @@ impl NativeArtifactReaderError {
 #[allow(clippy::redundant_pub_crate)] // Opaque read output is exported only by the Root facade.
 pub(crate) struct NativeReopenedArtifactSet<'snapshot, 'registry> {
     snapshot: &'snapshot PublicationProjectionSnapshot,
+    contents: ReopenedArtifactContents<'snapshot, 'registry>,
+}
+
+struct ReopenedArtifactContents<'record, 'registry> {
     membership: ProjectionMembershipId,
-    record: &'snapshot PreparedArtifactSetRecordV1,
+    record: &'record PreparedArtifactSetRecordV1,
     generation: u64,
     projection_membership: &'registry ProjectionMembershipRecord,
     source_identity: SourceIdentity,
@@ -113,41 +118,67 @@ pub(crate) struct NativeReopenedArtifactSet<'snapshot, 'registry> {
     prepared: PreparedRawCodeArtifacts,
 }
 
+/// Recovered C07/C13 data tied to one actual recovery snapshot and its exact C02 readback.
+/// This output is technical reconstruction only: it grants no publication, source,
+/// retention, visibility, query, or recovery permission.
+#[allow(clippy::redundant_pub_crate)] // Opaque read output is exported only by the Root facade.
+pub(crate) struct NativeRecoveryArtifactSet<'readback> {
+    readback: &'readback PreparedArtifactSetReadbackV1,
+    read: DerivedArtifactReadReceiptV1<Vec<u8>>,
+    prepared: PreparedRawCodeArtifacts,
+}
+
 impl NativeReopenedArtifactSet<'_, '_> {
     pub(super) const fn snapshot(&self) -> &PublicationProjectionSnapshot {
         self.snapshot
     }
 
     pub(super) const fn membership(&self) -> ProjectionMembershipId {
-        self.membership
+        self.contents.membership
     }
 
     pub(crate) const fn record(&self) -> &PreparedArtifactSetRecordV1 {
-        self.record
+        self.contents.record
     }
 
     pub(super) const fn generation(&self) -> u64 {
-        self.generation
+        self.contents.generation
     }
 
     pub(super) const fn projection_membership(&self) -> &ProjectionMembershipRecord {
-        self.projection_membership
+        self.contents.projection_membership
     }
 
     pub(super) const fn source_identity(&self) -> &SourceIdentity {
-        &self.source_identity
+        &self.contents.source_identity
     }
 
     pub(super) const fn source_owner_generation(&self) -> SourceOwnerGeneration {
-        self.source_owner_generation
+        self.contents.source_owner_generation
     }
 
     pub(super) const fn source_registry_generation(&self) -> u64 {
-        self.source_registry_generation
+        self.contents.source_registry_generation
     }
 
     pub(super) const fn source_revision(&self) -> SourceRevisionRef {
-        self.source_revision
+        self.contents.source_revision
+    }
+
+    /// Exact C07 stored-byte read observation; it contains no opened plaintext.
+    pub(crate) const fn c07_observation(&self) -> &DerivedArtifactReadReceiptV1<Vec<u8>> {
+        &self.contents.read
+    }
+
+    /// Owner outputs reconstructed and verified against all four stored members.
+    pub(crate) const fn prepared(&self) -> &PreparedRawCodeArtifacts {
+        &self.contents.prepared
+    }
+}
+
+impl NativeRecoveryArtifactSet<'_> {
+    pub(crate) const fn record(&self) -> &PreparedArtifactSetRecordV1 {
+        self.readback.record()
     }
 
     /// Exact C07 stored-byte read observation; it contains no opened plaintext.
@@ -155,7 +186,7 @@ impl NativeReopenedArtifactSet<'_, '_> {
         &self.read
     }
 
-    /// Owner outputs reconstructed and verified against all four stored members.
+    /// C08/C09/C13 outputs reconstructed against the exact retained C07 set.
     pub(crate) const fn prepared(&self) -> &PreparedRawCodeArtifacts {
         &self.prepared
     }
@@ -519,6 +550,130 @@ pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
     if record.reference() != pointer {
         return Err(NativeArtifactReaderError::CurrentSetUnavailable);
     }
+    let contents = reopen_prepared_artifact_contents(
+        native,
+        control,
+        registry,
+        membership,
+        record,
+        snapshot.generation(),
+        expected_source,
+        retained_source,
+        retained_metadata,
+        producer,
+        config,
+        || Ok(()),
+        || require_same_projection_snapshot(control, snapshot),
+    )?;
+    Ok(NativeReopenedArtifactSet { snapshot, contents })
+}
+
+/// Recovery-only C07 reopen. The unresolved intent and actual versioned record
+/// readback remain distinct from the serving snapshot and must share its exact
+/// C02 identity/generation and `prepared_manifest_ref`.
+#[allow(clippy::too_many_arguments)] // Keep original owner inputs explicit.
+#[allow(clippy::too_many_lines)] // Preserve ordered before/read/after C07 verification.
+pub(in crate::owner_composition::kernel) fn reopen_recovery_prepared_artifact_set_v1<
+    'snapshot,
+    'readback,
+    'registry,
+>(
+    native: &FreshRootContext<'_, '_>,
+    control: &NativeRetentionControl<'_, '_, FreshRootCancellation>,
+    snapshot: &'snapshot PublicationRecoveryProjectionSnapshot,
+    readback: &'readback PreparedArtifactSetReadbackV1,
+    registry: &'registry SourceRegistry,
+    retained_source: &SelectedPlaintextV2,
+    retained_metadata: &search_revision_store::PersistedSelectedObjectMetadata,
+    producer: &RawCodeArtifactProducerInput<'_>,
+    config: &EffectiveDaemonConfig,
+) -> Result<NativeRecoveryArtifactSet<'readback>, &'static str> {
+    native
+        .source_full_checkpoint()
+        .map_err(|_| NativeArtifactReaderError::OwnerRefused.code())?;
+    control
+        .verify_current_source()
+        .map_err(|_| NativeArtifactReaderError::ControlRefused.code())?;
+    require_same_recovery_projection_snapshot(control, snapshot, readback)
+        .map_err(|error| error.code())?;
+
+    let intent = snapshot
+        .intent()
+        .ok_or(NativeArtifactReaderError::CurrentSetUnavailable.code())?;
+    if matches!(
+        intent.state,
+        c::PublicationIntentState::ControlCommitted
+            | c::PublicationIntentState::Reclaimable
+            | c::PublicationIntentState::InvalidationOnlyCommitted
+    ) {
+        return Err(NativeArtifactReaderError::CurrentSetUnavailable.code());
+    }
+    let record = readback.record();
+    if record.reference() != &intent.prepared_manifest_ref {
+        return Err(NativeArtifactReaderError::CurrentSetChanged.code());
+    }
+    let schema_identity = producer
+        .schema
+        .identity()
+        .map_err(|_| NativeArtifactReaderError::OwnerRefused.code())?;
+    // Recovery may pair a historical visible epoch with a newer journal header;
+    // bind the current route/schema identity without treating epochs as authority.
+    if snapshot.identity().installation_incarnation_id
+        != *producer.schema.installation_incarnation_id()
+        || snapshot.visibility().collection_generation_id
+            != *producer.schema.collection_generation_id()
+        || snapshot.visibility().schema_identity_digest != *schema_identity.as_digest()
+    {
+        return Err(NativeArtifactReaderError::OwnerRefused.code());
+    }
+
+    let membership = producer.scope.membership.projection_membership_id;
+    let expected_source = record.metadata().source_revision;
+    let contents = reopen_prepared_artifact_contents(
+        native,
+        control,
+        registry,
+        membership,
+        record,
+        snapshot.generation(),
+        &expected_source,
+        retained_source,
+        retained_metadata,
+        producer,
+        config,
+        || require_same_recovery_projection_snapshot(control, snapshot, readback),
+        || require_same_recovery_projection_snapshot(control, snapshot, readback),
+    )
+    .map_err(|error| error.code())?;
+    let ReopenedArtifactContents { read, prepared, .. } = contents;
+    Ok(NativeRecoveryArtifactSet {
+        readback,
+        read,
+        prepared,
+    })
+}
+
+#[allow(clippy::too_many_arguments)] // Preserve independently sourced owner checks.
+#[allow(clippy::too_many_lines)] // Keep the original-context C07 proof in one path.
+fn reopen_prepared_artifact_contents<'record, 'registry, Before, After>(
+    native: &FreshRootContext<'_, '_>,
+    control: &NativeRetentionControl<'_, '_, FreshRootCancellation>,
+    registry: &'registry SourceRegistry,
+    membership: ProjectionMembershipId,
+    record: &'record PreparedArtifactSetRecordV1,
+    generation: u64,
+    expected_source: &SourceRevisionRef,
+    retained_source: &SelectedPlaintextV2,
+    retained_metadata: &search_revision_store::PersistedSelectedObjectMetadata,
+    producer: &RawCodeArtifactProducerInput<'_>,
+    config: &EffectiveDaemonConfig,
+    before_read_check: Before,
+    after_read_check: After,
+) -> Result<ReopenedArtifactContents<'record, 'registry>, NativeArtifactReaderError>
+where
+    Before: Fn() -> Result<(), NativeArtifactReaderError>,
+    After: Fn() -> Result<(), NativeArtifactReaderError>,
+{
     if producer.scope.membership.projection_membership_id != membership {
         return Err(NativeArtifactReaderError::OwnerRefused);
     }
@@ -665,6 +820,8 @@ pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
         return Err(NativeArtifactReaderError::OwnerRefused);
     }
 
+    // Recovery must still name the exact C02 intent/readback immediately before C07 opens.
+    before_read_check()?;
     let mut verifier = NativeArtifactReadVerifier {
         native,
         control,
@@ -694,7 +851,7 @@ pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
     control
         .verify_current_source()
         .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
-    require_same_projection_snapshot(control, snapshot)?;
+    after_read_check()?;
     let (source_metadata_after, source_seal_after) = control
         .load_retained_revision(expected_source, native.context())
         .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
@@ -737,11 +894,10 @@ pub(super) fn reopen_prepared_artifact_set_v1<'snapshot, 'registry>(
         return Err(NativeArtifactReaderError::CurrentSetChanged);
     }
 
-    Ok(NativeReopenedArtifactSet {
-        snapshot,
+    Ok(ReopenedArtifactContents {
         membership,
         record,
-        generation: snapshot.generation(),
+        generation,
         projection_membership,
         source_identity,
         source_owner_generation,
@@ -858,6 +1014,32 @@ fn require_same_projection_snapshot(
     // The expected view came from a complete verified read of this exact journal.
     // Its monotone generation plus the source guard set detects any intervening
     // transaction without re-reading every other source's projection metadata.
+    if identity != expected.identity() || generation != expected.generation() {
+        return Err(NativeArtifactReaderError::CurrentSetChanged);
+    }
+    Ok(())
+}
+
+fn require_same_recovery_projection_snapshot(
+    control: &NativeRetentionControl<'_, '_, FreshRootCancellation>,
+    expected: &PublicationRecoveryProjectionSnapshot,
+    readback: &PreparedArtifactSetReadbackV1,
+) -> Result<(), NativeArtifactReaderError> {
+    let intent = expected
+        .intent()
+        .ok_or(NativeArtifactReaderError::CurrentSetUnavailable)?;
+    if readback.identity() != expected.identity()
+        || readback.generation() != expected.generation()
+        || readback.record().reference() != &intent.prepared_manifest_ref
+    {
+        return Err(NativeArtifactReaderError::CurrentSetChanged);
+    }
+    let (identity, generation) = control
+        .projection_metadata_checkpoint()
+        .map_err(|_| NativeArtifactReaderError::ControlRefused)?;
+    // The full recovery projection and intent-keyed record were independently read
+    // from C02, then joined only by the same actual identity/generation and ref.
+    // Never reinterpret this recovery snapshot as a serving projection snapshot.
     if identity != expected.identity() || generation != expected.generation() {
         return Err(NativeArtifactReaderError::CurrentSetChanged);
     }

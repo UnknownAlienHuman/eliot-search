@@ -37,6 +37,12 @@ pub(crate) use kernel::NativePublishedProjectionRead;
 #[cfg(feature = "wave3-index")]
 #[allow(clippy::redundant_pub_crate)] // This facade remains crate-private.
 pub(crate) use kernel::NativeReopenedArtifactSet;
+#[cfg(feature = "wave3-index")]
+#[allow(clippy::redundant_pub_crate)]
+// Parent publication composition borrows this opaque result.
+#[allow(unused_imports)]
+// The parent will consume this in CanonicalPublicationArtifacts::from_recovered.
+pub(crate) use kernel::NativeRecoveryArtifactSet;
 #[cfg(feature = "wave4-query")]
 pub(crate) use kernel::RetainedRevisionReadState;
 pub use kernel::{NativeSyncPreflightOperation, run_source_sync_preflight};
