@@ -42,11 +42,14 @@ pub(super) struct InitialQdrantSecretCreateIntent {
 }
 
 impl InitialQdrantSecretCreateIntent {
-    /// Binds the one-shot producer call to the actual C02 setup operation ID.
-    pub(super) fn new(operation_id: MutationId) -> Result<Self, &'static str> {
-        let operation = db::control_mutation_identity(operation_id)
-            .map_err(|_| "QDRANT_SECRET_SETUP_OPERATION_INVALID")?;
-        Self::from_mutation_identity(operation)
+    /// Binds setup to the stable operation ID of the explicit mutating command.
+    pub(super) fn new(original_operation: &OpaqueId) -> Self {
+        Self {
+            operation: MutationIdentity::new(
+                original_operation.clone(),
+                IdempotencyClass::RetrySameIdentity,
+            ),
+        }
     }
 
     /// Retains an already constructed exact mutation identity from config apply.
@@ -469,6 +472,34 @@ impl NativeProcessRootCustody {
         )?;
         self.provision_initial_qdrant_api_secret(selected_config_ref, &setup)?;
         self.lease_current_qdrant_api_secret(selected_config_ref, lease_ttl_ms)
+    }
+
+    /// Ensures the configured Qdrant credential for this explicit mutating
+    /// command. Initial creation is allowed only when C02 confirms that no
+    /// inventory has ever bound this selected reference.
+    pub(super) fn ensure_qdrant_api_secret_for_command(
+        &mut self,
+        config: &crate::config_composition::EffectiveDaemonConfig,
+        original_operation: &OpaqueId,
+    ) -> Result<QdrantStartupSecret, &'static str> {
+        let settings = config.native_qdrant_settings();
+        if !settings.enabled {
+            return Err("NATIVE_QDRANT_DISABLED");
+        }
+        let selected = settings
+            .api_secret_ref
+            .as_ref()
+            .ok_or("QDRANT_SECRET_REFERENCE_MISSING")?;
+        let lease_ttl_ms = config.secrets_settings().lease_ttl_ms();
+        match self.lease_current_qdrant_api_secret(selected, lease_ttl_ms) {
+            Ok(secret) => Ok(secret),
+            Err("QDRANT_SECRET_INVENTORY_MISSING") => {
+                let setup = InitialQdrantSecretCreateIntent::new(original_operation);
+                self.provision_initial_qdrant_api_secret(selected, &setup)?;
+                self.lease_current_qdrant_api_secret(selected, lease_ttl_ms)
+            }
+            Err(reason) => Err(reason),
+        }
     }
 }
 
