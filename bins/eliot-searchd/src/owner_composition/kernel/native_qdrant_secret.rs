@@ -26,7 +26,7 @@ use search_os_secrets_windows::{
     self as os, QdrantApiSecretLease, QdrantApiSecretObservation, QdrantApiSecretProvisioner,
     QdrantApiSecretPurpose, QdrantApiSecretReference, QdrantApiSecretStore,
 };
-use search_ports::{IdempotencyClass, MutationIdentity, OperationContext, SecretStorePort};
+use search_ports::{IdempotencyClass, MutationIdentity, OperationContext};
 use search_runtime_owner::OwnerError;
 use std::{
     fmt,
@@ -176,7 +176,23 @@ impl NativeProcessRootCustody {
         {
             return Err("QDRANT_SECRET_ROOT_BINDING_MISMATCH");
         }
-        let user_scope = observe_current_user(&native, native.original_deadline())?;
+        let deadline = native.original_deadline();
+        let poll = || native.work(Work::Checkpoint);
+        let native_work = |unit| match unit {
+            os::LegacyRevisionDpapiWork::NativeCall => native.revision_dek_native_attempt(),
+            os::LegacyRevisionDpapiWork::Allocate(bytes) => native.work(Work::Allocate(bytes)),
+            os::LegacyRevisionDpapiWork::Process(bytes) => native.work(Work::Process(bytes)),
+        };
+        let open = || native.work(Work::Open);
+        let clear = |bytes| native.revision_dek_account_native_clear(bytes);
+        let mut effect_context = NativeContext {
+            deadline,
+            poll: &poll,
+            work: &native_work,
+            open: &open,
+            clear: &clear,
+        };
+        let user_scope = observe_current_user(&mut effect_context)?;
         native
             .source_full_checkpoint()
             .map_err(|_| "QDRANT_SECRET_ROOT_CHECKPOINT_REFUSED")?;
@@ -184,7 +200,6 @@ impl NativeProcessRootCustody {
             selected_reference(selected, facts.installation, facts.incarnation, user_scope)?;
         let binding = inventory_binding(journal_identity, facts.creator_epoch.get(), &selected)?;
         let operation_digest = original_operation_digest(&binding, &setup.operation)?;
-        let deadline = native.original_deadline();
         let work = |unit| native.work(unit);
         let mut port = bind(control, &native, deadline, &work)?;
         let key = inventory_key(&binding)?;
@@ -196,18 +211,25 @@ impl NativeProcessRootCustody {
             match record.stage {
                 InventoryStage::Current => {
                     return QdrantApiSecretProvisioner
-                        .observe_exact(
+                        .observe_exact_with_context(
                             &selected,
                             record.version,
                             record
                                 .frame_digest
                                 .ok_or("QDRANT_SECRET_INVENTORY_FRAME_MISSING")?,
+                            &mut effect_context,
                             &mut || remaining(&native, deadline),
                         )
                         .map_err(os::QdrantApiSecretStoreError::code);
                 }
                 InventoryStage::Dispatched => {
-                    let observed = observe_dispatched(&native, deadline, &selected, &record)?;
+                    let observed = observe_dispatched(
+                        &native,
+                        deadline,
+                        &selected,
+                        &record,
+                        &mut effect_context,
+                    )?;
                     let operation = identity_from_record(&record)?;
                     return finish_current(
                         &mut port,
@@ -228,7 +250,9 @@ impl NativeProcessRootCustody {
             // An existing OS slot without this Root's exact initial intent
             // is not adopted or overwritten.
             if QdrantApiSecretProvisioner
-                .observe_selected(&selected, &mut || remaining(&native, deadline))
+                .observe_selected_with_context(&selected, &mut effect_context, &mut || {
+                    remaining(&native, deadline)
+                })
                 .map_err(|error| match error {
                     os::QdrantApiSecretStoreError::SecretNotFound => "QDRANT_SECRET_NOT_FOUND",
                     other => other.code(),
@@ -276,7 +300,7 @@ impl NativeProcessRootCustody {
 
         let mut remaining = || remaining(&native, deadline);
         let prepared = QdrantApiSecretProvisioner
-            .prepare_initial(&selected, &mut remaining)
+            .prepare_initial_with_context(&selected, &mut effect_context, &mut remaining)
             .map_err(os::QdrantApiSecretStoreError::code)?;
         if prepared.selected() != &selected || prepared.version() != record.version {
             return Err("QDRANT_SECRET_PREPARED_BINDING_MISMATCH");
@@ -312,11 +336,12 @@ impl NativeProcessRootCustody {
         }
 
         let observed = QdrantApiSecretProvisioner
-            .dispatch_prepared(
+            .dispatch_prepared_with_context(
                 prepared,
                 dispatching
                     .frame_digest
                     .ok_or("QDRANT_SECRET_INVENTORY_FRAME_MISSING")?,
+                &mut effect_context,
                 &mut remaining,
             )
             .map_err(os::QdrantApiSecretStoreError::code)?;
@@ -374,7 +399,23 @@ impl NativeProcessRootCustody {
             {
                 return Err("QDRANT_SECRET_ROOT_BINDING_MISMATCH");
             }
-            let user_scope = observe_current_user(&native, native.original_deadline())?;
+            let deadline = native.original_deadline();
+            let poll = || native.work(Work::Checkpoint);
+            let native_work = |unit| match unit {
+                os::LegacyRevisionDpapiWork::NativeCall => native.revision_dek_native_attempt(),
+                os::LegacyRevisionDpapiWork::Allocate(bytes) => native.work(Work::Allocate(bytes)),
+                os::LegacyRevisionDpapiWork::Process(bytes) => native.work(Work::Process(bytes)),
+            };
+            let open = || native.work(Work::Open);
+            let clear = |bytes| native.revision_dek_account_native_clear(bytes);
+            let mut effect_context = NativeContext {
+                deadline,
+                poll: &poll,
+                work: &native_work,
+                open: &open,
+                clear: &clear,
+            };
+            let user_scope = observe_current_user(&mut effect_context)?;
             native
                 .source_full_checkpoint()
                 .map_err(|_| "QDRANT_SECRET_ROOT_CHECKPOINT_REFUSED")?;
@@ -386,7 +427,6 @@ impl NativeProcessRootCustody {
             )?;
             let binding =
                 inventory_binding(journal_identity, facts.creator_epoch.get(), &selected)?;
-            let deadline = native.original_deadline();
             let work = |unit| native.work(unit);
             let mut port = bind(control, &native, deadline, &work)?;
             let key = inventory_key(&binding)?;
@@ -403,7 +443,13 @@ impl NativeProcessRootCustody {
                 Some(original_operation)
             } else {
                 if record.stage == InventoryStage::Dispatched {
-                    let observed = observe_dispatched(&native, deadline, &selected, &record)?;
+                    let observed = observe_dispatched(
+                        &native,
+                        deadline,
+                        &selected,
+                        &record,
+                        &mut effect_context,
+                    )?;
                     finish_current(
                         &mut port,
                         &native,
@@ -429,16 +475,25 @@ impl NativeProcessRootCustody {
                     .frame_digest
                     .ok_or("QDRANT_SECRET_INVENTORY_FRAME_MISSING")?;
                 let observation = QdrantApiSecretProvisioner
-                    .observe_exact(&selected, record.version, expected_digest, &mut || {
-                        remaining(&native, deadline)
-                    })
+                    .observe_exact_with_context(
+                        &selected,
+                        record.version,
+                        expected_digest,
+                        &mut effect_context,
+                        &mut || remaining(&native, deadline),
+                    )
                     .map_err(os::QdrantApiSecretStoreError::code)?;
 
                 let context = remaining_operation_context(&native, deadline)?;
                 let store = QdrantApiSecretStore::<FreshRootCancellation>::new(lease_ttl_ms)
                     .map_err(os::QdrantApiSecretStoreError::code)?;
                 let lease = store
-                    .lease_secret(&selected, &QdrantApiSecretPurpose::new(), &context)
+                    .lease_secret_with_context(
+                        &selected,
+                        &QdrantApiSecretPurpose::new(),
+                        &context,
+                        &mut effect_context,
+                    )
                     .map_err(os::QdrantApiSecretStoreError::code)?;
                 lease
                     .with_secret_live_window(
@@ -894,6 +949,7 @@ fn observe_dispatched(
     deadline: Instant,
     selected: &QdrantApiSecretReference,
     record: &InventoryRecord,
+    context: &mut NativeContext<'_>,
 ) -> Result<QdrantApiSecretObservation, &'static str> {
     if record.stage != InventoryStage::Dispatched {
         return Err("QDRANT_SECRET_INVENTORY_STATE_INVALID");
@@ -902,7 +958,7 @@ fn observe_dispatched(
         .frame_digest
         .ok_or("QDRANT_SECRET_INVENTORY_FRAME_MISSING")?;
     QdrantApiSecretProvisioner
-        .observe_exact(selected, record.version, digest, &mut || {
+        .observe_exact_with_context(selected, record.version, digest, context, &mut || {
             remaining(native, deadline)
         })
         .map_err(|error| match error {
@@ -1013,26 +1069,8 @@ fn remaining_operation_context(
     .map_err(|_| "QDRANT_SECRET_CONTEXT_INVALID")
 }
 
-fn observe_current_user(
-    native: &FreshRootContext<'_, '_>,
-    deadline: Instant,
-) -> Result<Blake3Digest32, &'static str> {
-    let poll = || native.work(Work::Checkpoint);
-    let native_work = |unit| match unit {
-        os::LegacyRevisionDpapiWork::NativeCall => native.revision_dek_native_attempt(),
-        os::LegacyRevisionDpapiWork::Allocate(bytes) => native.work(Work::Allocate(bytes)),
-        os::LegacyRevisionDpapiWork::Process(bytes) => native.work(Work::Process(bytes)),
-    };
-    let open = || native.work(Work::Open);
-    let clear = |bytes| native.revision_dek_account_native_clear(bytes);
-    let mut context = NativeContext {
-        deadline,
-        poll: &poll,
-        work: &native_work,
-        open: &open,
-        clear: &clear,
-    };
-    let observed = os::observe_revision_user(&mut context).map_err(|error| error.code())?;
+fn observe_current_user(context: &mut NativeContext<'_>) -> Result<Blake3Digest32, &'static str> {
+    let observed = os::observe_revision_user(context).map_err(|error| error.code())?;
     Ok(Blake3Digest32::from_bytes(observed.user_scope_digest()))
 }
 

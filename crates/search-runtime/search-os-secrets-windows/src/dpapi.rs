@@ -1,9 +1,6 @@
 //! Native DPAPI execution and allocation ownership.
 
-use super::{
-    DpapiError, LegacyRevisionDpapiError, ProtectedSecret, ProtectionScope,
-    SecretBytes,
-};
+use super::{DpapiError, LegacyRevisionDpapiError, ProtectedSecret, ProtectionScope, SecretBytes};
 use crate::RevisionDekContext;
 
 /// Protects a short secret for the current Windows user and exact authority scope.
@@ -131,6 +128,48 @@ pub fn unprotect_legacy_revision_current_user_with_context<C: LegacyRevisionDpap
     #[cfg(not(windows))]
     {
         let _ = (input, entropy);
+        context::stage(context, || {
+            Err(LegacyRevisionDpapiError::UnsupportedPlatform)
+        })
+        .map_err(Into::into)
+    }
+}
+
+/// Protects one bounded short secret under its caller-selected scope while
+/// charging native work to the original invocation context.
+pub(crate) fn protect_short_secret_with_context<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    input: &[u8],
+    scope: &ProtectionScope,
+) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+    #[cfg(windows)]
+    {
+        windows::short_secret_with_context(context, input, scope.as_entropy(), true)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (input, scope);
+        context::stage(context, || {
+            Err(LegacyRevisionDpapiError::UnsupportedPlatform)
+        })
+        .map_err(Into::into)
+    }
+}
+
+/// Decrypts one bounded short secret under its caller-selected scope while
+/// charging native work to the original invocation context.
+pub(crate) fn unprotect_short_secret_with_context<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    input: &[u8],
+    scope: &ProtectionScope,
+) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+    #[cfg(windows)]
+    {
+        windows::short_secret_with_context(context, input, scope.as_entropy(), false)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (input, scope);
         context::stage(context, || {
             Err(LegacyRevisionDpapiError::UnsupportedPlatform)
         })
@@ -516,10 +555,53 @@ mod windows {
             context,
             input,
             entropy,
-            if protecting { 32 } else { search_os_secrets::REVISION_DEK_MAX_PROTECTED_BYTES },
+            if protecting {
+                32
+            } else {
+                search_os_secrets::REVISION_DEK_MAX_PROTECTED_BYTES
+            },
             // The existing short-secret ceiling admits bounded cleanup of an
             // unexpected plaintext shape; the candidate owner still requires 32.
-            if protecting { search_os_secrets::REVISION_DEK_MAX_PROTECTED_BYTES } else { MAX_SECRET_BYTES },
+            if protecting {
+                search_os_secrets::REVISION_DEK_MAX_PROTECTED_BYTES
+            } else {
+                MAX_SECRET_BYTES
+            },
+            protecting,
+            true,
+        )
+        .map_err(|error| error.map_object(|e| map_legacy_error(e, protecting)).into())
+    }
+
+    pub(super) fn short_secret_with_context<C: LegacyRevisionDpapiContext>(
+        context: &mut C,
+        input: &[u8],
+        entropy: &[u8],
+        protecting: bool,
+    ) -> ContextualLegacyRevisionDpapiResult<Vec<u8>, C::Error> {
+        let maximum_input = if protecting {
+            MAX_SECRET_BYTES
+        } else {
+            MAX_PROTECTED_BYTES
+        };
+        if input.len() <= maximum_input
+            && let Err(error) = context::charge::<C, RawDpapiError>(
+                context,
+                crate::LegacyRevisionDpapiWork::Process(input.len()),
+            )
+        {
+            return Err(error.map_object(|e| map_legacy_error(e, protecting)).into());
+        }
+        run_bytes(
+            context,
+            input,
+            entropy,
+            maximum_input,
+            if protecting {
+                MAX_PROTECTED_BYTES
+            } else {
+                MAX_SECRET_BYTES
+            },
             protecting,
             true,
         )

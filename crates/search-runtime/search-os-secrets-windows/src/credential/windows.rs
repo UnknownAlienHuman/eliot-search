@@ -5,8 +5,7 @@ use core::ptr::{null_mut, write_volatile};
 use core::time::Duration;
 
 use super::{
-    LEGACY_REVISION_ROOT_SECRET_BYTES,
-    LegacyRevisionRootSecret, LegacyRevisionRootSecretError,
+    LEGACY_REVISION_ROOT_SECRET_BYTES, LegacyRevisionRootSecret, LegacyRevisionRootSecretError,
     RootSecretPlatform,
 };
 use crate::model::clear_bytes;
@@ -98,6 +97,31 @@ unsafe extern "system" {
 
 pub(super) struct WindowsCredentialPlatform;
 
+pub(super) enum CredentialWorkError<E> {
+    Context(E),
+    Credential,
+    KeyGeneration,
+}
+
+fn reserve_credential_work<C: crate::LegacyRevisionDpapiContext>(
+    context: &mut C,
+    work: crate::LegacyRevisionDpapiWork,
+) -> Result<(), C::Error> {
+    context.checkpoint()?;
+    context.charge(work)?;
+    context.checkpoint()
+}
+
+fn reserve_credential_native_calls<C: crate::LegacyRevisionDpapiContext>(
+    context: &mut C,
+    count: usize,
+) -> Result<(), C::Error> {
+    for _ in 0..count {
+        reserve_credential_work(context, crate::LegacyRevisionDpapiWork::NativeCall)?;
+    }
+    Ok(())
+}
+
 /// Process-local monotonic millisecond clock for finite Qdrant secret leases.
 pub(super) fn monotonic_millis() -> u64 {
     // SAFETY: GetTickCount64 has no pointer arguments or mutable state.
@@ -111,14 +135,19 @@ pub(super) struct RevisionDekKey {
     cleared: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 impl RevisionDekKey {
-    pub(super) fn bytes(&self) -> &[u8; 32] { &self.bytes }
+    pub(super) fn bytes(&self) -> &[u8; 32] {
+        &self.bytes
+    }
 }
 impl Drop for RevisionDekKey {
     fn drop(&mut self) {
         clear_bytes(self.bytes.as_mut_slice());
         #[cfg(test)]
         if let Some(witness) = &self.cleared {
-            witness.store(self.bytes.iter().all(|byte| *byte == 0), std::sync::atomic::Ordering::Release);
+            witness.store(
+                self.bytes.iter().all(|byte| *byte == 0),
+                std::sync::atomic::Ordering::Release,
+            );
         }
     }
 }
@@ -127,15 +156,24 @@ impl Drop for RevisionDekKey {
 mod revision_dek_key_tests {
     #[test]
     fn raw_dek_owner_clears_on_callback_unwind() {
-        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
         let witness = Arc::new(AtomicBool::new(false));
-        let owned = super::RevisionDekKey { bytes: Box::new([7; 32]), cleared: Some(Arc::clone(&witness)) };
+        let owned = super::RevisionDekKey {
+            bytes: Box::new([7; 32]),
+            cleared: Some(Arc::clone(&witness)),
+        };
         let outcome = std::panic::catch_unwind(|| {
             let _owned = owned;
             panic!("DEK callback fixture");
         });
         assert!(outcome.is_err());
-        assert!(witness.load(Ordering::Acquire), "owned DEK was not cleared on unwind");
+        assert!(
+            witness.load(Ordering::Acquire),
+            "owned DEK was not cleared on unwind"
+        );
     }
 }
 
@@ -150,13 +188,19 @@ impl ProviderCredentialBlob {
         Ok(Self(bytes))
     }
 
-    pub(super) fn as_slice(&self) -> &[u8] { &self.0 }
+    pub(super) fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
 
-    fn as_mut_slice(&mut self) -> &mut [u8] { &mut self.0 }
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.0
+    }
 }
 
 impl Drop for ProviderCredentialBlob {
-    fn drop(&mut self) { clear_bytes(&mut self.0); }
+    fn drop(&mut self) {
+        clear_bytes(&mut self.0);
+    }
 }
 
 impl WindowsCredentialPlatform {
@@ -173,9 +217,8 @@ impl WindowsCredentialPlatform {
         let mut pointer = null_mut::<CredentialW>();
         // SAFETY: `target` is NUL-terminated and `pointer` is initialized for
         // one CredReadW output allocation.
-        let success = unsafe {
-            cred_read_w(target.as_ptr(), CRED_TYPE_GENERIC, 0, &raw mut pointer)
-        };
+        let success =
+            unsafe { cred_read_w(target.as_ptr(), CRED_TYPE_GENERIC, 0, &raw mut pointer) };
         if success == 0 {
             // SAFETY: captured immediately after the failed credential call.
             let error = unsafe { get_last_error() };
@@ -205,19 +248,110 @@ impl WindowsCredentialPlatform {
             return Err(LegacyRevisionRootSecretError::CredentialReadbackInvalid);
         }
         let mut bytes = Vec::new();
-        bytes.try_reserve_exact(size)
+        bytes
+            .try_reserve_exact(size)
             .map_err(|_| LegacyRevisionRootSecretError::CredentialReadbackInvalid)?;
         bytes.resize(size, 0);
         // SAFETY: the validated credential blob is live for exactly `size` bytes.
         unsafe {
-            core::ptr::copy_nonoverlapping(
-                credential.credential_blob,
-                bytes.as_mut_ptr(),
-                size,
-            );
+            core::ptr::copy_nonoverlapping(credential.credential_blob, bytes.as_mut_ptr(), size);
         }
         drop(allocation);
         ProviderCredentialBlob::new(bytes).map(Some)
+    }
+
+    /// Reads one bounded provider frame while reserving caller work before
+    /// `CredRead`, exact-sized copy allocation, and processing. Native output is
+    /// always cleared and freed, including sticky-context refusal.
+    pub(super) fn read_provider_credential_with_context<C: crate::LegacyRevisionDpapiContext>(
+        target: &[u16],
+        context: &mut C,
+    ) -> Result<Option<ProviderCredentialBlob>, CredentialWorkError<C::Error>> {
+        reserve_credential_native_calls(context, 3).map_err(CredentialWorkError::Context)?;
+        let mut pointer = null_mut::<CredentialW>();
+        // SAFETY: `target` is NUL-terminated and `pointer` is initialized for
+        // one CredReadW output allocation.
+        let success =
+            unsafe { cred_read_w(target.as_ptr(), CRED_TYPE_GENERIC, 0, &raw mut pointer) };
+        if success == 0 {
+            // Capture GetLastError before any context callback can overwrite it.
+            let error = unsafe { get_last_error() };
+            context.checkpoint().map_err(CredentialWorkError::Context)?;
+            return if error == ERROR_NOT_FOUND {
+                Ok(None)
+            } else {
+                Err(CredentialWorkError::Credential)
+            };
+        }
+        if pointer.is_null() {
+            context.checkpoint().map_err(CredentialWorkError::Context)?;
+            return Err(CredentialWorkError::Credential);
+        }
+        let mut allocation = CredentialAllocation(pointer);
+        if let Err(error) = context.checkpoint() {
+            let _ = allocation.release_with_context(context);
+            return Err(CredentialWorkError::Context(error));
+        }
+        // SAFETY: successful CredReadW returned one live CredentialW owned by
+        // `allocation` until the explicit release below.
+        let credential = unsafe { &*allocation.0 };
+        // Windows targets have at least 32-bit usize, so every DWORD fits.
+        let size = credential.credential_blob_size as usize;
+        let valid = credential.credential_type == CRED_TYPE_GENERIC
+            && credential.persist == CRED_PERSIST_LOCAL_MACHINE
+            && size != 0
+            && size <= MAX_CREDENTIAL_BLOB_BYTES
+            && !credential.credential_blob.is_null();
+        if !valid {
+            let cleanup = allocation.release_with_context(context);
+            if let Err(error) = cleanup {
+                return Err(CredentialWorkError::Context(error));
+            }
+            return Err(CredentialWorkError::Credential);
+        }
+        if let Err(error) =
+            reserve_credential_work(context, crate::LegacyRevisionDpapiWork::Allocate(size))
+        {
+            let _ = allocation.release_with_context(context);
+            return Err(CredentialWorkError::Context(error));
+        }
+        if let Err(error) =
+            reserve_credential_work(context, crate::LegacyRevisionDpapiWork::Process(size))
+        {
+            let _ = allocation.release_with_context(context);
+            return Err(CredentialWorkError::Context(error));
+        }
+        let mut bytes = Vec::new();
+        if bytes.try_reserve_exact(size).is_err() {
+            let cleanup = allocation.release_with_context(context);
+            if let Err(error) = cleanup {
+                return Err(CredentialWorkError::Context(error));
+            }
+            return Err(CredentialWorkError::Credential);
+        }
+        bytes.resize(size, 0);
+        // SAFETY: the validated credential blob is live for exactly `size` bytes.
+        unsafe {
+            core::ptr::copy_nonoverlapping(credential.credential_blob, bytes.as_mut_ptr(), size);
+        }
+        let blob = match ProviderCredentialBlob::new(bytes) {
+            Ok(blob) => blob,
+            Err(error) => {
+                let cleanup = allocation.release_with_context(context);
+                if let Err(context_error) = cleanup {
+                    return Err(CredentialWorkError::Context(context_error));
+                }
+                let _ = error;
+                return Err(CredentialWorkError::Credential);
+            }
+        };
+        let release = allocation.release_with_context(context);
+        if let Err(error) = release {
+            drop(blob);
+            return Err(CredentialWorkError::Context(error));
+        }
+        context.checkpoint().map_err(CredentialWorkError::Context)?;
+        Ok(Some(blob))
     }
 
     /// Writes one already-versioned provider record through the existing owner.
@@ -237,10 +371,46 @@ impl WindowsCredentialPlatform {
         Self::write_credential(target, blob, "ELIOT Search Qdrant API Key")
     }
 
-    /// Generates a header-safe Qdrant API key from 32 fresh CSPRNG bytes.
-    /// The random buffer is cleared before the zeroizing plaintext owner returns.
-    pub(super) fn generate_qdrant_api_key(
-    ) -> Result<crate::SecretBytes, QdrantKeyGenerationError> {
+    /// Writes one already-sealed Qdrant credential after reserving its exact
+    /// local copies and both `CredWrite`/possible `GetLastError` native calls.
+    pub(super) fn write_qdrant_api_credential_with_context<C: crate::LegacyRevisionDpapiContext>(
+        target: &[u16],
+        blob: &mut ProviderCredentialBlob,
+        context: &mut C,
+    ) -> Result<(), CredentialWorkError<C::Error>> {
+        const DISPLAY_NAME: &str = "ELIOT Search Qdrant API Key";
+        let allocated = target
+            .len()
+            .checked_add(DISPLAY_NAME.encode_utf16().count().saturating_add(1))
+            .and_then(|units| units.checked_mul(2))
+            .ok_or(CredentialWorkError::Credential)?;
+        reserve_credential_work(context, crate::LegacyRevisionDpapiWork::Allocate(allocated))
+            .map_err(CredentialWorkError::Context)?;
+        reserve_credential_work(
+            context,
+            crate::LegacyRevisionDpapiWork::Process(
+                allocated.saturating_add(blob.as_slice().len()),
+            ),
+        )
+        .map_err(CredentialWorkError::Context)?;
+        reserve_credential_native_calls(context, 2).map_err(CredentialWorkError::Context)?;
+        let result = Self::write_qdrant_api_credential(target, blob);
+        context.checkpoint().map_err(CredentialWorkError::Context)?;
+        result.map_err(|_| CredentialWorkError::Credential)
+    }
+
+    /// Generates one API key with caller-funded native RNG, bounded buffers,
+    /// encoding, validation and clear work.
+    pub(super) fn generate_qdrant_api_key_with_context<C: crate::LegacyRevisionDpapiContext>(
+        context: &mut C,
+    ) -> Result<crate::SecretBytes, CredentialWorkError<C::Error>> {
+        reserve_credential_work(context, crate::LegacyRevisionDpapiWork::Allocate(32))
+            .map_err(CredentialWorkError::Context)?;
+        // Reserve cleanup before generating sensitive bytes so refusal cannot
+        // leave an uncharged clear path.
+        reserve_credential_work(context, crate::LegacyRevisionDpapiWork::Process(32))
+            .map_err(CredentialWorkError::Context)?;
+        reserve_credential_native_calls(context, 1).map_err(CredentialWorkError::Context)?;
         let mut random = Box::new([0_u8; 32]);
         // SAFETY: BCryptGenRandom writes exactly 32 bytes into this live buffer.
         let status = unsafe {
@@ -251,27 +421,51 @@ impl WindowsCredentialPlatform {
                 BCRYPT_USE_SYSTEM_PREFERRED_RNG,
             )
         };
+        if let Err(error) = context.checkpoint() {
+            clear_bytes(random.as_mut_slice());
+            return Err(CredentialWorkError::Context(error));
+        }
         if status < 0 {
             clear_bytes(random.as_mut_slice());
-            return Err(QdrantKeyGenerationError::RandomGenerationFailed(status));
+            return Err(CredentialWorkError::KeyGeneration);
+        }
+        if let Err(error) =
+            reserve_credential_work(context, crate::LegacyRevisionDpapiWork::Process(32))
+        {
+            clear_bytes(random.as_mut_slice());
+            return Err(CredentialWorkError::Context(error));
         }
         if random.iter().all(|byte| *byte == 0) {
             clear_bytes(random.as_mut_slice());
-            return Err(QdrantKeyGenerationError::AllZeroEntropy);
+            return Err(CredentialWorkError::KeyGeneration);
         }
-
+        if let Err(error) =
+            reserve_credential_work(context, crate::LegacyRevisionDpapiWork::Allocate(64))
+        {
+            clear_bytes(random.as_mut_slice());
+            return Err(CredentialWorkError::Context(error));
+        }
+        if let Err(error) = reserve_credential_work(
+            context,
+            crate::LegacyRevisionDpapiWork::Process(32 + 64 + 32 + 64 + 64),
+        ) {
+            clear_bytes(random.as_mut_slice());
+            return Err(CredentialWorkError::Context(error));
+        }
         let mut encoded = Vec::new();
         if encoded.try_reserve_exact(64).is_err() {
             clear_bytes(random.as_mut_slice());
-            return Err(QdrantKeyGenerationError::AllocationRefused);
+            return Err(CredentialWorkError::KeyGeneration);
         }
         for byte in random.iter() {
             encoded.push(QDRANT_KEY_HEX[usize::from(byte >> 4)]);
             encoded.push(QDRANT_KEY_HEX[usize::from(byte & 0x0f)]);
         }
         clear_bytes(random.as_mut_slice());
-        // 64 lowercase hex bytes satisfy SecretBytes' accepted finite bounds.
-        crate::SecretBytes::new(encoded).map_err(|_| QdrantKeyGenerationError::InvalidOutput)
+        let secret =
+            crate::SecretBytes::new(encoded).map_err(|_| CredentialWorkError::KeyGeneration)?;
+        context.checkpoint().map_err(CredentialWorkError::Context)?;
+        Ok(secret)
     }
 
     pub(super) fn write_revision_dek_credential<C: crate::RevisionDekContext>(
@@ -280,13 +474,22 @@ impl WindowsCredentialPlatform {
         context: &mut C,
     ) -> Result<(), crate::RevisionDekError<C::Error>> {
         let name = "ELIOT Search Revision DEK Candidate";
-        let bytes = target.len().checked_add(name.encode_utf16().count() + 1)
-            .and_then(|units| units.checked_mul(2)).ok_or(crate::RevisionDekError::RecordTooLarge)?;
-        context.charge(crate::LegacyRevisionDpapiWork::Allocate(bytes)).map_err(crate::RevisionDekError::Context)?;
-        context.charge(crate::LegacyRevisionDpapiWork::Process(bytes)).map_err(crate::RevisionDekError::Context)?;
+        let bytes = target
+            .len()
+            .checked_add(name.encode_utf16().count() + 1)
+            .and_then(|units| units.checked_mul(2))
+            .ok_or(crate::RevisionDekError::RecordTooLarge)?;
+        context
+            .charge(crate::LegacyRevisionDpapiWork::Allocate(bytes))
+            .map_err(crate::RevisionDekError::Context)?;
+        context
+            .charge(crate::LegacyRevisionDpapiWork::Process(bytes))
+            .map_err(crate::RevisionDekError::Context)?;
         // Error capture is prepaid before the actual write; no callback may
         // intervene between CredWriteW failure and its GetLastError capture.
-        context.charge(crate::LegacyRevisionDpapiWork::NativeCall).map_err(crate::RevisionDekError::Context)?;
+        context
+            .charge(crate::LegacyRevisionDpapiWork::NativeCall)
+            .map_err(crate::RevisionDekError::Context)?;
         Self::write_credential(target, blob, name).map_err(crate::RevisionDekError::Credential)
     }
 
@@ -306,7 +509,10 @@ impl WindowsCredentialPlatform {
             credential_type: CRED_TYPE_GENERIC,
             target_name: target.as_mut_ptr(),
             comment: null_mut(),
-            last_written: FileTime { low_date_time: 0, high_date_time: 0 },
+            last_written: FileTime {
+                low_date_time: 0,
+                high_date_time: 0,
+            },
             credential_blob_size: u32::try_from(size)
                 .map_err(|_| LegacyRevisionRootSecretError::CredentialTooLarge)?,
             credential_blob: blob.as_mut_slice().as_mut_ptr(),
@@ -337,14 +543,8 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
         let mut pointer = null_mut::<CredentialW>();
         // SAFETY: `target` is NUL-terminated and `pointer` is initialized for
         // one CredReadW output allocation.
-        let success = unsafe {
-            cred_read_w(
-                target.as_ptr(),
-                CRED_TYPE_GENERIC,
-                0,
-                &raw mut pointer,
-            )
-        };
+        let success =
+            unsafe { cred_read_w(target.as_ptr(), CRED_TYPE_GENERIC, 0, &raw mut pointer) };
         if success == 0 {
             // SAFETY: GetLastError has no preconditions and is captured
             // immediately after the failed credential call.
@@ -356,26 +556,21 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
             };
         }
         if pointer.is_null() {
-            return Err(
-                LegacyRevisionRootSecretError::CredentialReadbackInvalid,
-            );
+            return Err(LegacyRevisionRootSecretError::CredentialReadbackInvalid);
         }
 
         let allocation = CredentialAllocation(pointer);
         // SAFETY: successful CredReadW returned one live CredentialW owned by
         // `allocation` until this scope ends.
         let credential = unsafe { &*allocation.0 };
-        let size = usize::try_from(credential.credential_blob_size).map_err(
-            |_| LegacyRevisionRootSecretError::CredentialReadbackInvalid,
-        )?;
+        let size = usize::try_from(credential.credential_blob_size)
+            .map_err(|_| LegacyRevisionRootSecretError::CredentialReadbackInvalid)?;
         if credential.credential_type != CRED_TYPE_GENERIC
             || credential.persist != CRED_PERSIST_LOCAL_MACHINE
             || size != LEGACY_REVISION_ROOT_SECRET_BYTES
             || credential.credential_blob.is_null()
         {
-            return Err(
-                LegacyRevisionRootSecretError::CredentialReadbackInvalid,
-            );
+            return Err(LegacyRevisionRootSecretError::CredentialReadbackInvalid);
         }
         let mut secret = [0_u8; LEGACY_REVISION_ROOT_SECRET_BYTES];
         // SAFETY: the validated credential blob is live for exactly 32 bytes.
@@ -406,10 +601,8 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
                 low_date_time: 0,
                 high_date_time: 0,
             },
-            credential_blob_size: u32::try_from(
-                LEGACY_REVISION_ROOT_SECRET_BYTES,
-            )
-            .map_err(|_| LegacyRevisionRootSecretError::CredentialTooLarge)?,
+            credential_blob_size: u32::try_from(LEGACY_REVISION_ROOT_SECRET_BYTES)
+                .map_err(|_| LegacyRevisionRootSecretError::CredentialTooLarge)?,
             credential_blob: secret.expose_secret_mut().as_mut_ptr(),
             persist: CRED_PERSIST_LOCAL_MACHINE,
             attribute_count: 0,
@@ -425,9 +618,7 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
             let error = unsafe { get_last_error() };
             #[cfg(feature = "test-credential-cleanup")]
             super::qualification_trace("write-error", i64::from(error));
-            return Err(
-                LegacyRevisionRootSecretError::CredentialWriteFailed(error),
-            );
+            return Err(LegacyRevisionRootSecretError::CredentialWriteFailed(error));
         }
         #[cfg(feature = "test-credential-cleanup")]
         super::qualification_trace("write-success", 0);
@@ -454,9 +645,9 @@ impl RootSecretPlatform for WindowsCredentialPlatform {
             #[cfg(feature = "test-credential-cleanup")]
             super::qualification_trace("rng-error", i64::from(status));
             clear_bytes(&mut secret);
-            return Err(
-                LegacyRevisionRootSecretError::RandomGenerationFailed(status),
-            );
+            return Err(LegacyRevisionRootSecretError::RandomGenerationFailed(
+                status,
+            ));
         }
         Ok(LegacyRevisionRootSecret::from_bytes(secret))
     }
@@ -480,9 +671,17 @@ impl WindowsCredentialPlatform {
         context
             .charge(crate::LegacyRevisionDpapiWork::NativeCall)
             .map_err(crate::RevisionDekError::Context)?;
-        context.charge(crate::LegacyRevisionDpapiWork::Process(32)).map_err(crate::RevisionDekError::Context)?;
-        context.charge(crate::LegacyRevisionDpapiWork::Allocate(32)).map_err(crate::RevisionDekError::Context)?;
-        let mut secret = RevisionDekKey { bytes: Box::new([0; 32]), #[cfg(test)] cleared: None };
+        context
+            .charge(crate::LegacyRevisionDpapiWork::Process(32))
+            .map_err(crate::RevisionDekError::Context)?;
+        context
+            .charge(crate::LegacyRevisionDpapiWork::Allocate(32))
+            .map_err(crate::RevisionDekError::Context)?;
+        let mut secret = RevisionDekKey {
+            bytes: Box::new([0; 32]),
+            #[cfg(test)]
+            cleared: None,
+        };
         // SAFETY: the fixed buffer is live and writable for exactly 32 bytes.
         let status = unsafe {
             bcrypt_gen_random(
@@ -504,18 +703,43 @@ impl WindowsCredentialPlatform {
         }
         Ok(secret)
     }
-
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum QdrantKeyGenerationError {
-    RandomGenerationFailed(i32),
-    AllZeroEntropy,
-    AllocationRefused,
-    InvalidOutput,
 }
 
 struct CredentialAllocation(*mut CredentialW);
+
+impl CredentialAllocation {
+    fn release_with_context<C: crate::LegacyRevisionDpapiContext>(
+        &mut self,
+        context: &mut C,
+    ) -> Result<(), C::Error> {
+        if self.0.is_null() {
+            return Ok(());
+        }
+        // SAFETY: this owner retains the one live CredentialW returned by
+        // CredReadW until CredFree below.
+        unsafe {
+            let credential = &mut *self.0;
+            let size = usize::try_from(credential.credential_blob_size).unwrap_or(0);
+            let clear_len =
+                if !credential.credential_blob.is_null() && size <= MAX_CREDENTIAL_BLOB_BYTES {
+                    size
+                } else {
+                    0
+                };
+            let accounted = context.account_native_clear(clear_len);
+            if clear_len > 0 {
+                for offset in 0..clear_len {
+                    write_volatile(credential.credential_blob.add(offset), 0);
+                }
+                core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+            }
+            // CredFree was reserved before the original CredRead dispatch.
+            cred_free(self.0.cast());
+            self.0 = null_mut();
+            accounted
+        }
+    }
+}
 
 impl Drop for CredentialAllocation {
     fn drop(&mut self) {
@@ -532,9 +756,7 @@ impl Drop for CredentialAllocation {
                 for offset in 0..size {
                     write_volatile(credential.credential_blob.add(offset), 0);
                 }
-                core::sync::atomic::compiler_fence(
-                    core::sync::atomic::Ordering::SeqCst,
-                );
+                core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
             }
             cred_free(self.0.cast());
         }
@@ -552,8 +774,11 @@ impl WindowsVaultLock {
     // Shared native handle owner. Pairing uses its own exact global name and
     // short caller-budgeted waits; legacy revision timing/name stay unchanged.
     pub(super) fn acquire_named(name: &[u16], wait_ms: u32) -> Result<Option<Self>, ()> {
-        if name.is_empty() || name.len() > 260 || name.last() != Some(&0)
-            || name[..name.len() - 1].contains(&0) || wait_ms == u32::MAX
+        if name.is_empty()
+            || name.len() > 260
+            || name.last() != Some(&0)
+            || name[..name.len() - 1].contains(&0)
+            || wait_ms == u32::MAX
         {
             return Err(());
         }
@@ -579,7 +804,11 @@ impl WindowsVaultLock {
         unsafe {
             close_handle(handle);
         }
-        if status == WAIT_TIMEOUT { Ok(None) } else { Err(()) }
+        if status == WAIT_TIMEOUT {
+            Ok(None)
+        } else {
+            Err(())
+        }
     }
 }
 

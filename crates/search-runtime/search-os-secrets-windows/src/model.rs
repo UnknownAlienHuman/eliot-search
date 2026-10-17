@@ -86,18 +86,12 @@ impl LegacyRevisionDpapiError {
     #[must_use]
     pub const fn code(self) -> &'static str {
         match self {
-            Self::UnsupportedPlatform => {
-                "DPAPI_LEGACY_REVISION_UNSUPPORTED_PLATFORM"
-            }
+            Self::UnsupportedPlatform => "DPAPI_LEGACY_REVISION_UNSUPPORTED_PLATFORM",
             Self::InputTooLarge => "DPAPI_LEGACY_REVISION_INPUT_TOO_LARGE",
             Self::OutputTooLarge => "DPAPI_LEGACY_REVISION_OUTPUT_TOO_LARGE",
-            Self::InvalidPlatformOutput => {
-                "DPAPI_LEGACY_REVISION_OUTPUT_INVALID"
-            }
+            Self::InvalidPlatformOutput => "DPAPI_LEGACY_REVISION_OUTPUT_INVALID",
             Self::ProtectFailed(_) => "DPAPI_LEGACY_REVISION_PROTECT_FAILED",
-            Self::UnprotectFailed(_) => {
-                "DPAPI_LEGACY_REVISION_UNPROTECT_FAILED"
-            }
+            Self::UnprotectFailed(_) => "DPAPI_LEGACY_REVISION_UNPROTECT_FAILED",
         }
     }
 }
@@ -143,8 +137,7 @@ impl ProtectionScope {
         for field in fields {
             validate_scope_field(field)?;
             let bytes = field.as_bytes();
-            let length =
-                u32::try_from(bytes.len()).map_err(|_| DpapiError::LengthOverflow)?;
+            let length = u32::try_from(bytes.len()).map_err(|_| DpapiError::LengthOverflow)?;
             encoded.extend_from_slice(&length.to_be_bytes());
             encoded.extend_from_slice(bytes);
         }
@@ -184,8 +177,11 @@ pub struct SecretBytes {
 
 impl SecretBytes {
     /// Takes ownership of finite non-empty plaintext.
-    pub fn new(bytes: Vec<u8>) -> Result<Self, DpapiError> {
-        validate_secret(&bytes)?;
+    pub fn new(mut bytes: Vec<u8>) -> Result<Self, DpapiError> {
+        if let Err(error) = validate_secret(&bytes) {
+            clear_bytes(&mut bytes);
+            return Err(error);
+        }
         Ok(Self { bytes })
     }
 

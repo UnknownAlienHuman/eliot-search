@@ -8,7 +8,10 @@
 use core::{convert::Infallible, fmt, marker::PhantomData, num::NonZeroU64, time::Duration};
 use std::time::Instant;
 
-use crate::{ProtectedSecret, ProtectionScope, SecretBytes, unprotect_current_user};
+use crate::{
+    ContextualLegacyRevisionDpapiError, LegacyRevisionDpapiContext, LegacyRevisionDpapiWork,
+    ProtectedSecret, ProtectionScope, SecretBytes,
+};
 use search_contracts::{
     Blake3Digest32, InstallationId, InstallationIncarnationId, NonZeroRevision, OpaqueId,
     OpaqueRef, RequestId,
@@ -32,6 +35,94 @@ const QDRANT_CREDENTIAL_MUTEX_PREFIX: &str = "Global\\ELIOT-Search-QdrantApiSecr
 const QDRANT_CREDENTIAL_FIXED_BYTES: usize = 8 + 8 + 32 + 2 + 4;
 const MIN_LEASE_TTL_MS: u64 = 1_000;
 const MAX_LEASE_TTL_MS: u64 = 300_000;
+
+struct UnmeteredQdrantContext;
+
+impl LegacyRevisionDpapiContext for UnmeteredQdrantContext {
+    type Error = Infallible;
+
+    fn checkpoint(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn charge(&mut self, _: LegacyRevisionDpapiWork) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    fn account_native_clear(&mut self, _: usize) -> Result<(), Self::Error> {
+        Ok(())
+    }
+}
+
+fn contextual_checkpoint<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+) -> Result<(), QdrantApiSecretStoreError> {
+    context
+        .checkpoint()
+        .map_err(|_| QdrantApiSecretStoreError::ContextRefused)
+}
+
+fn charge_contextual<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    work: LegacyRevisionDpapiWork,
+) -> Result<(), QdrantApiSecretStoreError> {
+    contextual_checkpoint(context)?;
+    context
+        .charge(work)
+        .map_err(|_| QdrantApiSecretStoreError::ContextRefused)?;
+    contextual_checkpoint(context)
+}
+
+fn reserve_native_calls<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    count: usize,
+) -> Result<(), QdrantApiSecretStoreError> {
+    for _ in 0..count {
+        charge_contextual(context, LegacyRevisionDpapiWork::NativeCall)?;
+    }
+    Ok(())
+}
+
+fn contextual_dpapi_error<E>(
+    error: &ContextualLegacyRevisionDpapiError<E>,
+) -> QdrantApiSecretStoreError {
+    match error {
+        ContextualLegacyRevisionDpapiError::Context(_)
+        | ContextualLegacyRevisionDpapiError::NativeAndContext { .. }
+        | ContextualLegacyRevisionDpapiError::AllocationAndContext { .. } => {
+            QdrantApiSecretStoreError::ContextRefused
+        }
+        ContextualLegacyRevisionDpapiError::Native(_)
+        | ContextualLegacyRevisionDpapiError::Allocation(_) => {
+            QdrantApiSecretStoreError::ProtectionFailed
+        }
+    }
+}
+
+#[cfg(windows)]
+fn reserve_qdrant_lock<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+) -> Result<(), QdrantApiSecretStoreError> {
+    // CreateMutex/possible GetLastError/Wait and the eventual release/close (or
+    // failure close) are charged before the lock owner's native boundary.
+    reserve_native_calls(context, 4)
+}
+
+#[cfg(windows)]
+fn contextual_credential_error<E>(
+    error: &super::windows::CredentialWorkError<E>,
+    credential_failure: QdrantApiSecretStoreError,
+) -> QdrantApiSecretStoreError {
+    match error {
+        super::windows::CredentialWorkError::Context(_) => {
+            QdrantApiSecretStoreError::ContextRefused
+        }
+        super::windows::CredentialWorkError::Credential => credential_failure,
+        super::windows::CredentialWorkError::KeyGeneration => {
+            QdrantApiSecretStoreError::CredentialGenerationFailed
+        }
+    }
+}
 
 /// Closed Qdrant API-key purpose. Callers cannot substitute a provider or
 /// revision-key purpose through the selected-secret port.
@@ -282,13 +373,7 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
     pub fn with_secret_live_window<T>(
         &self,
         context: &OperationContext<impl CancellationProbe>,
-        consume: impl FnOnce(
-            &[u8],
-            &SecretReference,
-            Blake3Digest32,
-            NonZeroU64,
-            NonZeroU64,
-        ) -> T,
+        consume: impl FnOnce(&[u8], &SecretReference, Blake3Digest32, NonZeroU64, NonZeroU64) -> T,
     ) -> Result<T, QdrantApiSecretStoreError> {
         context
             .preflight()
@@ -309,7 +394,8 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
             self.issuer_relative_deadline_ms,
             context,
             Instant::now(),
-        ) || !lease_window_is_live(observed_before, expires_at_tick) {
+        ) || !lease_window_is_live(observed_before, expires_at_tick)
+        {
             return Err(QdrantApiSecretStoreError::ContextRefused);
         }
         let now = MonotonicInstant::from_ticks(observed_before.get());
@@ -346,7 +432,8 @@ impl<C: CancellationProbe + Clone> QdrantApiSecretLease<C> {
             self.issuer_relative_deadline_ms,
             context,
             Instant::now(),
-        ) || !lease_window_is_live(observed_after, expires_at_tick) {
+        ) || !lease_window_is_live(observed_after, expires_at_tick)
+        {
             return Err(QdrantApiSecretStoreError::ContextRefused);
         }
         Ok(result)
@@ -491,13 +578,24 @@ impl QdrantApiSecretProvisioner {
         selected: &QdrantApiSecretReference,
         remaining: &mut dyn FnMut() -> Option<Duration>,
     ) -> Result<Option<QdrantApiSecretObservation>, QdrantApiSecretStoreError> {
+        self.observe_selected_with_context(selected, &mut UnmeteredQdrantContext, remaining)
+    }
+
+    /// Reads and validates one selected target using the caller's original
+    /// deadline, cancellation and cumulative native-work accounting context.
+    pub fn observe_selected_with_context<C: LegacyRevisionDpapiContext>(
+        &self,
+        selected: &QdrantApiSecretReference,
+        context: &mut C,
+        remaining: &mut dyn FnMut() -> Option<Duration>,
+    ) -> Result<Option<QdrantApiSecretObservation>, QdrantApiSecretStoreError> {
         #[cfg(windows)]
         {
-            observe_selected_windows(selected, remaining)
+            observe_selected_windows(selected, context, remaining)
         }
         #[cfg(not(windows))]
         {
-            let _ = (selected, remaining);
+            let _ = (selected, context, remaining);
             Err(QdrantApiSecretStoreError::UnsupportedPlatform)
         }
     }
@@ -511,8 +609,27 @@ impl QdrantApiSecretProvisioner {
         frame_digest: Blake3Digest32,
         remaining: &mut dyn FnMut() -> Option<Duration>,
     ) -> Result<QdrantApiSecretObservation, QdrantApiSecretStoreError> {
+        self.observe_exact_with_context(
+            selected,
+            version,
+            frame_digest,
+            &mut UnmeteredQdrantContext,
+            remaining,
+        )
+    }
+
+    /// Requires exact selected backend bytes while charging work to the
+    /// caller's original native operation context.
+    pub fn observe_exact_with_context<C: LegacyRevisionDpapiContext>(
+        &self,
+        selected: &QdrantApiSecretReference,
+        version: NonZeroRevision,
+        frame_digest: Blake3Digest32,
+        context: &mut C,
+        remaining: &mut dyn FnMut() -> Option<Duration>,
+    ) -> Result<QdrantApiSecretObservation, QdrantApiSecretStoreError> {
         let observed = self
-            .observe_selected(selected, remaining)?
+            .observe_selected_with_context(selected, context, remaining)?
             .ok_or(QdrantApiSecretStoreError::SecretNotFound)?;
         if observed.version != version || observed.frame_digest != frame_digest {
             return Err(QdrantApiSecretStoreError::CredentialFrameMismatch);
@@ -527,13 +644,24 @@ impl QdrantApiSecretProvisioner {
         selected: &QdrantApiSecretReference,
         remaining: &mut dyn FnMut() -> Option<Duration>,
     ) -> Result<PreparedQdrantApiSecret, QdrantApiSecretStoreError> {
+        self.prepare_initial_with_context(selected, &mut UnmeteredQdrantContext, remaining)
+    }
+
+    /// Prepares the exact initial frame while charging RNG, DPAPI and
+    /// allocation work to the original native operation context.
+    pub fn prepare_initial_with_context<C: LegacyRevisionDpapiContext>(
+        &self,
+        selected: &QdrantApiSecretReference,
+        context: &mut C,
+        remaining: &mut dyn FnMut() -> Option<Duration>,
+    ) -> Result<PreparedQdrantApiSecret, QdrantApiSecretStoreError> {
         #[cfg(windows)]
         {
-            prepare_initial_windows(selected, remaining)
+            prepare_initial_windows(selected, context, remaining)
         }
         #[cfg(not(windows))]
         {
-            let _ = (selected, remaining);
+            let _ = (selected, context, remaining);
             Err(QdrantApiSecretStoreError::UnsupportedPlatform)
         }
     }
@@ -547,16 +675,33 @@ impl QdrantApiSecretProvisioner {
         expected_frame_digest: Blake3Digest32,
         remaining: &mut dyn FnMut() -> Option<Duration>,
     ) -> Result<QdrantApiSecretObservation, QdrantApiSecretStoreError> {
+        self.dispatch_prepared_with_context(
+            prepared,
+            expected_frame_digest,
+            &mut UnmeteredQdrantContext,
+            remaining,
+        )
+    }
+
+    /// Dispatches and resolves one exact credential frame using the original
+    /// native operation context for every native effect and copy.
+    pub fn dispatch_prepared_with_context<C: LegacyRevisionDpapiContext>(
+        &self,
+        prepared: PreparedQdrantApiSecret,
+        expected_frame_digest: Blake3Digest32,
+        context: &mut C,
+        remaining: &mut dyn FnMut() -> Option<Duration>,
+    ) -> Result<QdrantApiSecretObservation, QdrantApiSecretStoreError> {
         if prepared.frame_digest != expected_frame_digest {
             return Err(QdrantApiSecretStoreError::CredentialFrameMismatch);
         }
         #[cfg(windows)]
         {
-            dispatch_prepared_windows(prepared, remaining)
+            dispatch_prepared_windows(prepared, context, remaining)
         }
         #[cfg(not(windows))]
         {
-            let _ = (prepared, remaining);
+            let _ = (prepared, context, remaining);
             Err(QdrantApiSecretStoreError::UnsupportedPlatform)
         }
     }
@@ -580,6 +725,110 @@ impl<C> QdrantApiSecretStore<C> {
             lease_ttl_ms,
             limits: DEFAULT_SECRET_LIMITS,
             cancellation: PhantomData,
+        })
+    }
+
+    /// Reads and opens the selected credential using both the secret-store
+    /// operation context and the caller's original cumulative native-work
+    /// context. Production Root composition must use this entrypoint.
+    pub fn lease_secret_with_context<N: LegacyRevisionDpapiContext>(
+        &self,
+        secret_ref: &QdrantApiSecretReference,
+        purpose: &QdrantApiSecretPurpose,
+        context: &OperationContext<C>,
+        native: &mut N,
+    ) -> Result<QdrantApiSecretLease<C>, QdrantApiSecretStoreError>
+    where
+        C: CancellationProbe + Clone,
+    {
+        if *purpose != QdrantApiSecretPurpose::new()
+            || secret_ref.binding.purpose().as_str() != QDRANT_API_SECRET_PURPOSE_ID
+        {
+            return Err(QdrantApiSecretStoreError::InvalidReference);
+        }
+        context
+            .preflight()
+            .map_err(|_| QdrantApiSecretStoreError::ContextRefused)?;
+        contextual_checkpoint(native)?;
+        let started = Instant::now();
+        let deadline = Duration::from_millis(context.relative_deadline_ms().get());
+        let issuer_deadline = started
+            .checked_add(deadline)
+            .ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+        let issuer_cancellation = context.cancellation().clone();
+        let issuer_request_id = context.request_id();
+        let issuer_budget_ref = context.budget_ref().clone();
+        let issuer_relative_deadline_ms = context.relative_deadline_ms().get();
+        let remaining = || {
+            if issuer_cancellation.is_cancelled() {
+                return None;
+            }
+            issuer_deadline
+                .checked_duration_since(Instant::now())
+                .filter(|remaining| !remaining.is_zero())
+        };
+        #[cfg(windows)]
+        let (protected, version, encoded_frame_digest) =
+            load_selected_windows(secret_ref, &remaining, native)?;
+        #[cfg(not(windows))]
+        return Err(QdrantApiSecretStoreError::UnsupportedPlatform);
+        if remaining().is_none() {
+            return Err(QdrantApiSecretStoreError::ContextRefused);
+        }
+        contextual_checkpoint(native)?;
+        reserve_native_calls(native, 1)?;
+        #[cfg(windows)]
+        let issued = monotonic_now();
+        #[cfg(not(windows))]
+        let issued = monotonic_now()?;
+        let issuer_remaining = remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+        let issuer_remaining_ms = u64::try_from(issuer_remaining.as_millis()).unwrap_or(u64::MAX);
+        let lease_ttl_ms = self.lease_ttl_ms.min(issuer_remaining_ms);
+        if lease_ttl_ms == 0 {
+            return Err(QdrantApiSecretStoreError::ContextRefused);
+        }
+        let expires = issued
+            .ticks()
+            .checked_add(lease_ttl_ms)
+            .map(MonotonicInstant::from_ticks)
+            .ok_or(QdrantApiSecretStoreError::InvalidLeasePolicy)?;
+        let version = NonZeroRevision::new(version)
+            .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
+        let plaintext = unprotect_selected_with_context(&protected, secret_ref, version, native)?;
+        let plaintext_len = plaintext.len();
+        charge_contextual(native, LegacyRevisionDpapiWork::Allocate(plaintext_len))?;
+        charge_contextual(native, LegacyRevisionDpapiWork::Process(plaintext_len))?;
+        let mut lease_bytes = Vec::new();
+        lease_bytes
+            .try_reserve_exact(plaintext_len)
+            .map_err(|_| QdrantApiSecretStoreError::ContextRefused)?;
+        lease_bytes.extend_from_slice(plaintext.expose_secret());
+        drop(plaintext);
+        contextual_checkpoint(native)?;
+        let selected = SecretReference::new(
+            secret_ref.stable_reference.clone(),
+            secret_ref.binding.clone(),
+            version,
+        );
+        let lease = SecretLease::issue_selected(
+            selected,
+            &secret_ref.binding,
+            issued,
+            expires,
+            lease_bytes,
+            self.limits,
+        )
+        .map_err(QdrantApiSecretStoreError::LeaseRejected)?;
+        contextual_checkpoint(native)?;
+        Ok(QdrantApiSecretLease {
+            lease,
+            issuer_cancellation,
+            issuer_deadline,
+            expires_at_tick: expires.ticks(),
+            encoded_frame_digest,
+            issuer_request_id,
+            issuer_budget_ref,
+            issuer_relative_deadline_ms,
         })
     }
 }
@@ -612,84 +861,7 @@ impl<C: CancellationProbe + Clone> SecretStorePort for QdrantApiSecretStore<C> {
         purpose: &Self::Purpose,
         context: &OperationContext<Self::Cancellation>,
     ) -> Result<Self::SecretLease, Self::Error> {
-        if *purpose != QdrantApiSecretPurpose::new()
-            || secret_ref.binding.purpose().as_str() != QDRANT_API_SECRET_PURPOSE_ID
-        {
-            return Err(QdrantApiSecretStoreError::InvalidReference);
-        }
-        context
-            .preflight()
-            .map_err(|_| QdrantApiSecretStoreError::ContextRefused)?;
-        let started = Instant::now();
-        let deadline = Duration::from_millis(context.relative_deadline_ms().get());
-        let issuer_deadline = started
-            .checked_add(deadline)
-            .ok_or(QdrantApiSecretStoreError::ContextRefused)?;
-        let issuer_cancellation = context.cancellation().clone();
-        let issuer_request_id = context.request_id();
-        let issuer_budget_ref = context.budget_ref().clone();
-        let issuer_relative_deadline_ms = context.relative_deadline_ms().get();
-        let remaining = || {
-            if issuer_cancellation.is_cancelled() {
-                return None;
-            }
-            issuer_deadline
-                .checked_duration_since(Instant::now())
-                .filter(|remaining| !remaining.is_zero())
-        };
-        #[cfg(windows)]
-        let (protected, version, encoded_frame_digest) =
-            load_selected_windows(secret_ref, &remaining)?;
-        #[cfg(not(windows))]
-        return Err(QdrantApiSecretStoreError::UnsupportedPlatform);
-        if remaining().is_none() {
-            return Err(QdrantApiSecretStoreError::ContextRefused);
-        }
-        #[cfg(windows)]
-        let issued = monotonic_now();
-        #[cfg(not(windows))]
-        let issued = monotonic_now()?;
-        let issuer_remaining = remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
-        let issuer_remaining_ms = u64::try_from(issuer_remaining.as_millis()).unwrap_or(u64::MAX);
-        let lease_ttl_ms = self.lease_ttl_ms.min(issuer_remaining_ms);
-        if lease_ttl_ms == 0 {
-            return Err(QdrantApiSecretStoreError::ContextRefused);
-        }
-        let expires = issued
-            .ticks()
-            .checked_add(lease_ttl_ms)
-            .map(MonotonicInstant::from_ticks)
-            .ok_or(QdrantApiSecretStoreError::InvalidLeasePolicy)?;
-        let version = NonZeroRevision::new(version)
-            .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
-        let plaintext = unprotect_selected(&protected, secret_ref, version)?;
-        if remaining().is_none() {
-            return Err(QdrantApiSecretStoreError::ContextRefused);
-        }
-        let selected = SecretReference::new(
-            secret_ref.stable_reference.clone(),
-            secret_ref.binding.clone(),
-            version,
-        );
-        let lease = SecretLease::issue_selected(
-            selected,
-            &secret_ref.binding,
-            issued,
-            expires,
-            plaintext.expose_secret().to_vec(),
-            self.limits,
-        )
-        .map_err(QdrantApiSecretStoreError::LeaseRejected)?;
-        Ok(QdrantApiSecretLease {
-            lease,
-            issuer_cancellation,
-            issuer_deadline,
-            expires_at_tick: expires.ticks(),
-            encoded_frame_digest,
-            issuer_request_id,
-            issuer_budget_ref,
-            issuer_relative_deadline_ms,
-        })
+        self.lease_secret_with_context(secret_ref, purpose, context, &mut UnmeteredQdrantContext)
     }
 
     fn rotate_secret(
@@ -715,17 +887,22 @@ impl<C: CancellationProbe + Clone> SecretStorePort for QdrantApiSecretStore<C> {
 fn load_selected_windows(
     selected: &QdrantApiSecretReference,
     remaining: &impl Fn() -> Option<Duration>,
+    context: &mut impl LegacyRevisionDpapiContext,
 ) -> Result<(ProtectedSecret, u64, Blake3Digest32), QdrantApiSecretStoreError> {
     use super::windows::WindowsCredentialPlatform;
 
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    reserve_qdrant_target(context, false, selected)?;
     let locator = selection_digest(selected);
-    let record = WindowsCredentialPlatform::read_provider_credential(&credential_target(&locator))
-        .map_err(|_| QdrantApiSecretStoreError::CredentialReadFailed)?
-        .ok_or(QdrantApiSecretStoreError::SecretNotFound)?;
-    if remaining().is_none() {
-        return Err(QdrantApiSecretStoreError::ContextRefused);
-    }
+    let target = credential_target(&locator);
+    let record = WindowsCredentialPlatform::read_provider_credential_with_context(&target, context)
+        .map_err(|error| {
+            contextual_credential_error(&error, QdrantApiSecretStoreError::CredentialReadFailed)
+        })?;
+    remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    contextual_checkpoint(context)?;
+    let record = record.ok_or(QdrantApiSecretStoreError::SecretNotFound)?;
+    reserve_frame_decode(context, record.as_slice().len())?;
     let encoded_frame_digest = encoded_credential_frame_digest(record.as_slice());
     let (version, protected_version, protected_bytes) = decode_record(record.as_slice(), &locator)?;
     let protected = ProtectedSecret::from_bytes(protected_version, protected_bytes)
@@ -736,26 +913,37 @@ fn load_selected_windows(
 #[cfg(windows)]
 fn observe_selected_windows(
     selected: &QdrantApiSecretReference,
+    context: &mut impl LegacyRevisionDpapiContext,
     remaining: &mut dyn FnMut() -> Option<Duration>,
 ) -> Result<Option<QdrantApiSecretObservation>, QdrantApiSecretStoreError> {
     use super::windows::{WindowsCredentialPlatform, WindowsVaultLock};
 
     validate_selected_reference(selected)?;
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    reserve_qdrant_target(context, true, selected)?;
     let locator = selection_digest(selected);
     let target = credential_target(&locator);
     let lock_name = credential_mutex_target(&locator);
     let wait_ms = remaining_lock_wait(remaining)?;
+    reserve_qdrant_lock(context)?;
     let lock = WindowsVaultLock::acquire_named(&lock_name, wait_ms)
         .map_err(|()| QdrantApiSecretStoreError::CredentialLockUnavailable)?
         .ok_or(QdrantApiSecretStoreError::CredentialLockUnavailable)?;
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
-    let observed = WindowsCredentialPlatform::read_provider_credential(&target)
-        .map_err(|_| QdrantApiSecretStoreError::CredentialReadFailed)?;
+    contextual_checkpoint(context)?;
+    let observed =
+        WindowsCredentialPlatform::read_provider_credential_with_context(&target, context)
+            .map_err(|error| {
+                contextual_credential_error(&error, QdrantApiSecretStoreError::CredentialReadFailed)
+            })?;
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    contextual_checkpoint(context)?;
     let observation = observed
         .as_ref()
-        .map(|frame| observation_from_frame(selected, frame, remaining))
+        .map(|frame| {
+            reserve_frame_decode(context, frame.as_slice().len())?;
+            observation_from_frame(selected, frame, context, remaining)
+        })
         .transpose()?;
     drop(lock);
     Ok(observation)
@@ -764,41 +952,67 @@ fn observe_selected_windows(
 #[cfg(windows)]
 fn prepare_initial_windows(
     selected: &QdrantApiSecretReference,
+    context: &mut impl LegacyRevisionDpapiContext,
     remaining: &mut dyn FnMut() -> Option<Duration>,
 ) -> Result<PreparedQdrantApiSecret, QdrantApiSecretStoreError> {
     use super::windows::{WindowsCredentialPlatform, WindowsVaultLock};
 
     validate_selected_reference(selected)?;
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    reserve_qdrant_target(context, true, selected)?;
     let locator = selection_digest(selected);
     let target = credential_target(&locator);
     let lock_name = credential_mutex_target(&locator);
     let wait_ms = remaining_lock_wait(remaining)?;
+    reserve_qdrant_lock(context)?;
     let lock = WindowsVaultLock::acquire_named(&lock_name, wait_ms)
         .map_err(|()| QdrantApiSecretStoreError::CredentialLockUnavailable)?
         .ok_or(QdrantApiSecretStoreError::CredentialLockUnavailable)?;
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
-    if WindowsCredentialPlatform::read_provider_credential(&target)
-        .map_err(|_| QdrantApiSecretStoreError::CredentialReadFailed)?
-        .is_some()
-    {
+    contextual_checkpoint(context)?;
+    let existing =
+        WindowsCredentialPlatform::read_provider_credential_with_context(&target, context)
+            .map_err(|error| {
+                contextual_credential_error(&error, QdrantApiSecretStoreError::CredentialReadFailed)
+            })?;
+    remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    contextual_checkpoint(context)?;
+    if existing.is_some() {
         return Err(QdrantApiSecretStoreError::CredentialAlreadyExists);
     }
-    remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
 
-    let version = NonZeroRevision::new(1)
-        .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
-    let plaintext = WindowsCredentialPlatform::generate_qdrant_api_key()
-        .map_err(|_| QdrantApiSecretStoreError::CredentialGenerationFailed)?;
+    let version =
+        NonZeroRevision::new(1).map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
+    let plaintext = WindowsCredentialPlatform::generate_qdrant_api_key_with_context(context)
+        .map_err(|error| {
+            contextual_credential_error(
+                &error,
+                QdrantApiSecretStoreError::CredentialGenerationFailed,
+            )
+        })?;
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    contextual_checkpoint(context)?;
+    reserve_protection_scope(context, version)?;
     let scope = protection_scope(selected, version)?;
-    let protected = crate::protect_current_user(&plaintext, &scope)
+    let protected_bytes =
+        crate::protect_short_secret_with_context(context, plaintext.expose_secret(), &scope)
+            .map_err(|error| contextual_dpapi_error(&error))?;
+    let protected = ProtectedSecret::from_bytes(crate::PROTECTED_SECRET_VERSION, protected_bytes)
         .map_err(|_| QdrantApiSecretStoreError::ProtectionFailed)?;
     drop(plaintext);
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    let total_len = QDRANT_CREDENTIAL_FIXED_BYTES
+        .checked_add(protected.len())
+        .ok_or(QdrantApiSecretStoreError::CredentialRecordInvalid)?;
+    charge_contextual(context, LegacyRevisionDpapiWork::Allocate(total_len))?;
+    charge_contextual(
+        context,
+        LegacyRevisionDpapiWork::Process(total_len.saturating_mul(2)),
+    )?;
     let frame = encode_initial_frame(selected, version, &protected)?;
     let frame_digest = encoded_credential_frame_digest(frame.as_slice());
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    contextual_checkpoint(context)?;
 
     Ok(PreparedQdrantApiSecret {
         selected: selected.clone(),
@@ -815,6 +1029,7 @@ fn prepare_initial_windows(
 #[cfg(windows)]
 fn dispatch_prepared_windows(
     prepared: PreparedQdrantApiSecret,
+    context: &mut impl LegacyRevisionDpapiContext,
     remaining: &mut dyn FnMut() -> Option<Duration>,
 ) -> Result<QdrantApiSecretObservation, QdrantApiSecretStoreError> {
     use super::windows::WindowsCredentialPlatform;
@@ -833,16 +1048,21 @@ fn dispatch_prepared_windows(
     let expected_len = frame.as_slice().len();
 
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
-    let observed = WindowsCredentialPlatform::read_provider_credential(&target)
-        .map_err(|_| QdrantApiSecretStoreError::CredentialReadFailed)?;
+    let observed =
+        WindowsCredentialPlatform::read_provider_credential_with_context(&target, context)
+            .map_err(|error| {
+                contextual_credential_error(&error, QdrantApiSecretStoreError::CredentialReadFailed)
+            })?;
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    contextual_checkpoint(context)?;
     if let Some(observed) = observed {
+        reserve_frame_decode(context, observed.as_slice().len())?;
         if observed.as_slice().len() != expected_len
             || encoded_credential_frame_digest(observed.as_slice()) != frame_digest
         {
             return Err(QdrantApiSecretStoreError::CredentialAlreadyExists);
         }
-        let observation = observation_from_frame(&selected, &observed, remaining)?;
+        let observation = observation_from_frame(&selected, &observed, context, remaining)?;
         if observation.version != version {
             return Err(QdrantApiSecretStoreError::CredentialAlreadyExists);
         }
@@ -851,18 +1071,40 @@ fn dispatch_prepared_windows(
 
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
     // Even an error is treated as a possible write; readback below resolves it.
-    let _write = WindowsCredentialPlatform::write_qdrant_api_credential(&target, &mut frame);
+    match WindowsCredentialPlatform::write_qdrant_api_credential_with_context(
+        &target, &mut frame, context,
+    ) {
+        Err(super::windows::CredentialWorkError::Credential) | Ok(()) => {}
+        Err(
+            super::windows::CredentialWorkError::Context(_)
+            | super::windows::CredentialWorkError::KeyGeneration,
+        ) => {
+            return Err(QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown);
+        }
+    }
     remaining().ok_or(QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
-    let observed = WindowsCredentialPlatform::read_provider_credential(&target)
-        .map_err(|_| QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?
-        .ok_or(QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
+    contextual_checkpoint(context)
+        .map_err(|_| QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
+    let observed =
+        WindowsCredentialPlatform::read_provider_credential_with_context(&target, context)
+            .map_err(|error| {
+                contextual_credential_error(
+                    &error,
+                    QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown,
+                )
+            })?;
     remaining().ok_or(QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
+    contextual_checkpoint(context)
+        .map_err(|_| QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
+    let observed = observed.ok_or(QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
+    reserve_frame_decode(context, observed.as_slice().len())
+        .map_err(|_| QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
     if observed.as_slice().len() != expected_len
         || encoded_credential_frame_digest(observed.as_slice()) != frame_digest
     {
         return Err(QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown);
     }
-    let readback = observation_from_frame(&selected, &observed, remaining)
+    let readback = observation_from_frame(&selected, &observed, context, remaining)
         .map_err(|_| QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown)?;
     if readback.version != version || readback.frame_digest != frame_digest {
         return Err(QdrantApiSecretStoreError::CredentialWriteOutcomeUnknown);
@@ -876,9 +1118,11 @@ fn dispatch_prepared_windows(
 fn observation_from_frame(
     selected: &QdrantApiSecretReference,
     frame: &super::windows::ProviderCredentialBlob,
+    context: &mut impl LegacyRevisionDpapiContext,
     remaining: &mut dyn FnMut() -> Option<Duration>,
 ) -> Result<QdrantApiSecretObservation, QdrantApiSecretStoreError> {
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
+    contextual_checkpoint(context)?;
     let locator = selection_digest(selected);
     let frame_digest = encoded_credential_frame_digest(frame.as_slice());
     let (raw_version, protected_version, protected_bytes) =
@@ -887,7 +1131,7 @@ fn observation_from_frame(
         .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
     let protected = ProtectedSecret::from_bytes(protected_version, protected_bytes)
         .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
-    let plaintext = unprotect_selected(&protected, selected, version)?;
+    let plaintext = unprotect_selected_with_context(&protected, selected, version, context)?;
     remaining().ok_or(QdrantApiSecretStoreError::ContextRefused)?;
     drop(plaintext);
     Ok(QdrantApiSecretObservation {
@@ -895,6 +1139,101 @@ fn observation_from_frame(
         version,
         frame_digest,
     })
+}
+
+#[cfg(windows)]
+fn reserve_qdrant_target<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    with_lock: bool,
+    selected: &QdrantApiSecretReference,
+) -> Result<(), QdrantApiSecretStoreError> {
+    let target_units = QDRANT_CREDENTIAL_TARGET_PREFIX
+        .len()
+        .saturating_add(64)
+        .saturating_add(1);
+    let lock_units = QDRANT_CREDENTIAL_MUTEX_PREFIX
+        .len()
+        .saturating_add(64)
+        .saturating_add(1);
+    let target_bytes = target_units.saturating_mul(2);
+    let lock_bytes = if with_lock {
+        lock_units.saturating_mul(2)
+    } else {
+        0
+    };
+    let string_capacity = target_units.saturating_add(if with_lock { lock_units } else { 0 });
+    charge_contextual(
+        context,
+        LegacyRevisionDpapiWork::Allocate(
+            target_bytes
+                .saturating_add(lock_bytes)
+                .saturating_add(string_capacity),
+        ),
+    )?;
+    let selection_bytes = selected
+        .stable_reference
+        .as_str()
+        .len()
+        .saturating_add(selected.binding.purpose().as_str().len())
+        .saturating_add(96);
+    charge_contextual(
+        context,
+        LegacyRevisionDpapiWork::Process(
+            selection_bytes
+                .saturating_add(target_bytes)
+                .saturating_add(lock_bytes),
+        ),
+    )
+}
+
+#[cfg(windows)]
+fn reserve_frame_decode<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    frame_bytes: usize,
+) -> Result<(), QdrantApiSecretStoreError> {
+    charge_contextual(context, LegacyRevisionDpapiWork::Allocate(frame_bytes))?;
+    charge_contextual(
+        context,
+        LegacyRevisionDpapiWork::Process(frame_bytes.saturating_mul(2)),
+    )
+}
+
+#[cfg(windows)]
+fn reserve_protection_scope<C: LegacyRevisionDpapiContext>(
+    context: &mut C,
+    version: NonZeroRevision,
+) -> Result<(), QdrantApiSecretStoreError> {
+    let mut digits = 1_usize;
+    let mut value = version.get();
+    while value >= 10 {
+        value /= 10;
+        digits = digits.saturating_add(1);
+    }
+    let purpose_bytes = QDRANT_API_SECRET_PURPOSE_ID
+        .len()
+        .saturating_add(1 + 64 + "/version/".len() + digits);
+    let component_bytes = 64_usize
+        .saturating_add(32)
+        .saturating_add(32)
+        .saturating_add(purpose_bytes);
+    let scope_bytes = "eliot-search.dpapi.scope.v1"
+        .len()
+        .saturating_add(component_bytes)
+        .saturating_add(5 * core::mem::size_of::<u32>());
+    charge_contextual(
+        context,
+        LegacyRevisionDpapiWork::Allocate(
+            64_usize
+                .saturating_add(32)
+                .saturating_add(32)
+                .saturating_add(purpose_bytes)
+                .saturating_add(scope_bytes.saturating_mul(2)),
+        ),
+    )?;
+    charge_contextual(
+        context,
+        LegacyRevisionDpapiWork::Process(component_bytes.saturating_add(scope_bytes)),
+    )
 }
 
 #[cfg(windows)]
@@ -909,7 +1248,8 @@ fn encode_initial_frame(
         .checked_add(protected.len())
         .ok_or(QdrantApiSecretStoreError::CredentialRecordInvalid)?;
     let mut bytes = Vec::new();
-    bytes.try_reserve_exact(total_len)
+    bytes
+        .try_reserve_exact(total_len)
         .map_err(|_| QdrantApiSecretStoreError::CredentialRecordInvalid)?;
     bytes.extend_from_slice(QDRANT_CREDENTIAL_MAGIC);
     bytes.extend_from_slice(&version.get().to_be_bytes());
@@ -950,21 +1290,33 @@ fn credential_mutex_target(locator: &[u8; 32]) -> Vec<u16> {
 }
 
 #[cfg(windows)]
-fn unprotect_selected(
+fn unprotect_selected_with_context(
     protected: &ProtectedSecret,
     selected: &QdrantApiSecretReference,
     version: NonZeroRevision,
+    context: &mut impl LegacyRevisionDpapiContext,
 ) -> Result<SecretBytes, QdrantApiSecretStoreError> {
+    reserve_protection_scope(context, version)?;
     let scope = protection_scope(selected, version)?;
-    unprotect_current_user(protected, &scope)
-        .map_err(|_| QdrantApiSecretStoreError::ProtectionFailed)
+    let mut plaintext =
+        crate::unprotect_short_secret_with_context(context, protected.as_bytes(), &scope)
+            .map_err(|error| contextual_dpapi_error(&error))?;
+    if let Err(error) = charge_contextual(
+        context,
+        LegacyRevisionDpapiWork::Process(plaintext.len().saturating_mul(2)),
+    ) {
+        crate::model::clear_bytes(&mut plaintext);
+        return Err(error);
+    }
+    SecretBytes::new(plaintext).map_err(|_| QdrantApiSecretStoreError::ProtectionFailed)
 }
 
 #[cfg(not(windows))]
-fn unprotect_selected(
+fn unprotect_selected_with_context(
     _protected: &ProtectedSecret,
     _selected: &QdrantApiSecretReference,
     _version: NonZeroRevision,
+    _context: &mut impl LegacyRevisionDpapiContext,
 ) -> Result<SecretBytes, QdrantApiSecretStoreError> {
     Err(QdrantApiSecretStoreError::UnsupportedPlatform)
 }
@@ -1118,8 +1470,7 @@ mod tests {
         QDRANT_API_SECRET_PURPOSE_ID, QDRANT_CREDENTIAL_FIXED_BYTES, QDRANT_CREDENTIAL_MAGIC,
         QdrantApiSecretReference, QdrantApiSecretStoreError, decode_record,
         encoded_credential_frame_digest, issuer_context_allows_use, lease_window_is_live,
-        selection_digest,
-        versioned_protection_purpose,
+        selection_digest, versioned_protection_purpose,
     };
 
     #[derive(Clone, Debug)]
@@ -1302,8 +1653,7 @@ mod tests {
     fn secret_use_rechecks_ttl_after_callback_even_when_issuer_remains_live() {
         let cancellation = TestCancellation(Arc::new(AtomicBool::new(false)));
         let issuer = context(7, "budget:qdrant-startup", cancellation.clone());
-        let issuer_deadline =
-            std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let issuer_deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         let expires = NonZeroU64::new(1_000).expect("nonzero expiry");
         let live_after_callback = NonZeroU64::new(999).expect("nonzero tick");
         let expired_after_callback = NonZeroU64::new(1_000).expect("expiry tick");
