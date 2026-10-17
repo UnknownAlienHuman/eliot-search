@@ -335,8 +335,8 @@ pub struct PublicationEffectReadback {
     pub snapshot: Option<PublicationSnapshotReadback>,
     /// Owner-established complete exclusion state for abandonment.
     pub abandonment: Option<PublicationAbandonReadback>,
-    /// Exact abort-finalization command retained by the control owner.
-    pub abort_request: Option<crate::machine::AbortFinalizationRequest>,
+    /// Untrusted persisted abort fields, without a private durable-intent proof.
+    pub abort_request: Option<crate::machine::AbortFinalizationReadback>,
     /// Complete durable binding for this abort-finalization attempt, retained
     /// separately from both the original intent binding and recovery call context.
     pub abort_binding: Option<PublicationEffectBinding>,

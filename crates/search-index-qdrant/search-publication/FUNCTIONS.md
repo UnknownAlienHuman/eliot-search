@@ -84,6 +84,29 @@ The package fixtures exercise pure phase/recovery behavior with synthetic ports.
 Actual journal restart, lost-acknowledgement and Native/Qdrant qualification require
 the integrated real adapters; fixture success does not establish those results.
 
+### Persisted abort readback boundary
+
+`PublicationEffectReadback.abort_request` is
+`Option<AbortFinalizationReadback>`, ordinary untrusted data that an external
+adapter can reconstruct after restart. Its public fields are `operation_id`,
+`expected_control_generation`, `collection_generation_id`,
+`previous_visible_epoch`, `current_guards`, `prepared_input_digest` and
+`resolution`. `abort_binding` separately retains the complete original abort
+attempt binding, including its request/deadline/budget identity.
+
+The adapter never constructs `DurableIntent`. Restore first re-admits the original
+proposal and validates the exact intent readback and durable binding. The owner
+then reconstructs its internal `AbortFinalizationRequest` with that same validated
+intent. Existing phase, full binding, original input, guard, generation and
+visibility checks remain mandatory. Complete independent compensation-point or
+membership-exclusion readback precedes abort-commit proof, and a fresh process
+snapshot must still be published before final release. A raw record, digest or
+successful mutation acknowledgement is never a private proof.
+
+`AbortFinalizationReadback::from(&AbortFinalizationRequest)` extracts only the
+plain persisted fields for journal adapters; there is no inverse public proof
+constructor. This changes the typed port contract only, not a durable encoding.
+
 ## Required fixtures
 
 Full H11/S13 kill matrix; guard race; exact readback mismatch; skipped epoch non-reuse; snapshot

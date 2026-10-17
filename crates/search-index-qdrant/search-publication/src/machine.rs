@@ -5,7 +5,8 @@ use std::fmt::Write as _;
 mod abort;
 mod restore;
 pub use abort::{
-    AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution,
+    AbortControlCommitObservation, AbortFinalizationReadback, AbortFinalizationRequest,
+    AbortedPublicationResolution,
 };
 pub use restore::PublicationRestoreInput;
 

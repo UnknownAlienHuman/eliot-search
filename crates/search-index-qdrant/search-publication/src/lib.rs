@@ -21,7 +21,8 @@ pub use admission::{
 
 pub use error::PublicationError;
 pub use machine::{
-    AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution,
+    AbortControlCommitObservation, AbortFinalizationReadback, AbortFinalizationRequest,
+    AbortedPublicationResolution,
     DEFAULT_MAX_PUBLICATION_POINTS, DurableIntent, PublicationCoordinator,
     PublicationEffectCommand, PublicationEffectPort, PublicationEffectPreparationOwners,
     PublicationMutationAttempt, PublicationPhase, PublicationReadbackPort, PublicationRestoreInput,

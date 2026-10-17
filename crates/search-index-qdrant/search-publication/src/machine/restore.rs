@@ -12,7 +12,8 @@ use crate::model::{
 use crate::{PublicationError, PublicationRecoveryDecision};
 
 use super::{
-    AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution,
+    AbortControlCommitObservation, AbortFinalizationReadback, AbortFinalizationRequest,
+    AbortedPublicationResolution,
     ClosureReceipt, DurableIntent, PublicationCoordinator, PublicationEffectCommand,
     PublicationEffectPreparationOwners, PublicationPhase, PublicationReadbackPort,
     PublicationTransaction, ReadbackVerified, SnapshotPublishReceipt, StageReceipt,
@@ -430,7 +431,7 @@ fn restore_aborted<C, R>(
     readback: &mut R,
     context: &OperationContext<C>,
     intent_binding: &PublicationEffectBinding,
-    request: AbortFinalizationRequest,
+    persisted: AbortFinalizationReadback,
     abort_binding: PublicationEffectBinding,
 ) -> Result<(PublicationCoordinator, PublicationRecoveryDecision), PublicationError>
 where
@@ -441,10 +442,22 @@ where
         .active
         .as_mut()
         .ok_or(PublicationError::RecoveryBlocked)?;
+    // The external adapter supplies only data. Rebuild the command with the exact
+    // original intent already validated above; never ask it to mint private proof.
+    let request = AbortFinalizationRequest {
+        operation_id: persisted.operation_id,
+        expected_control_generation: persisted.expected_control_generation,
+        collection_generation_id: persisted.collection_generation_id,
+        previous_visible_epoch: persisted.previous_visible_epoch,
+        current_guards: persisted.current_guards,
+        prepared_input_digest: persisted.prepared_input_digest,
+        resolution: persisted.resolution,
+        intent: transaction
+            .durable_intent
+            .clone()
+            .ok_or(PublicationError::RecoveryBlocked)?,
+    };
     crate::recovery::validate_abort_finalization_request(transaction, &request)?;
-    if transaction.durable_intent.as_ref() != Some(&request.intent) {
-        return Err(PublicationError::OperationMismatch);
-    }
 
     validate_abort_resolution_readback(transaction, readback, context, intent_binding, &request)?;
 
@@ -460,7 +473,7 @@ where
         .map_err(|_| PublicationError::OperationContextInvalid)?;
     if observed.effect != PublicationEffectKind::CommitAbortFinalization
         || observed.binding != abort_binding
-        || observed.abort_request.as_ref() != Some(&request)
+        || observed.abort_request.as_ref() != Some(&AbortFinalizationReadback::from(&request))
         || observed.abort_binding.as_ref() != Some(&abort_binding)
         || observed.intent.is_some()
         || observed.snapshot.is_some()

@@ -76,6 +76,55 @@ impl fmt::Debug for AbortFinalizationRequest {
     }
 }
 
+/// Untrusted persisted abort fields returned by an external control adapter.
+///
+/// This record contains no private durable-intent proof. During restart the owner
+/// joins it to the independently validated original intent, then verifies the
+/// complete attempt binding, resolution and control state before retaining proof.
+#[derive(Clone, Eq, PartialEq)]
+pub struct AbortFinalizationReadback {
+    /// Stable abort-finalization operation, distinct from intent and resolution.
+    pub operation_id: OpaqueId,
+    /// Actual generation expected by the original abort compare-and-swap.
+    pub expected_control_generation: u64,
+    /// Exact collection generation recorded by the abort operation.
+    pub collection_generation_id: CollectionGenerationId,
+    /// Prior visibility that the abort operation must preserve.
+    pub previous_visible_epoch: Epoch,
+    /// Guards checked by the abort operation, separate from original intent guards.
+    pub current_guards: PublicationGuards,
+    /// Complete original immutable preparation identity.
+    pub prepared_input_digest: Blake3Digest32,
+    /// Untrusted resolution description; complete independent readback is required.
+    pub resolution: AbortedPublicationResolution,
+}
+
+impl From<&AbortFinalizationRequest> for AbortFinalizationReadback {
+    fn from(request: &AbortFinalizationRequest) -> Self {
+        Self {
+            operation_id: request.operation_id.clone(),
+            expected_control_generation: request.expected_control_generation,
+            collection_generation_id: request.collection_generation_id,
+            previous_visible_epoch: request.previous_visible_epoch,
+            current_guards: request.current_guards,
+            prepared_input_digest: request.prepared_input_digest,
+            resolution: request.resolution.clone(),
+        }
+    }
+}
+
+impl fmt::Debug for AbortFinalizationReadback {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AbortFinalizationReadback")
+            .field(
+                "expected_control_generation",
+                &self.expected_control_generation,
+            )
+            .field("resolution", &self.resolution)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Exact authoritative journal readback, supplied by the owning adapter.
 ///
 /// These fields cannot prove I/O occurred: composition must verify the producer
@@ -326,7 +375,7 @@ impl PublicationCoordinator {
                 Some(&binding),
             )?;
             let control = observed.control.ok_or(PublicationError::ControlConflict)?;
-            if observed.abort_request.as_ref() != Some(&request)
+            if observed.abort_request.as_ref() != Some(&AbortFinalizationReadback::from(&request))
                 || observed.binding.operation_id != request.operation_id
                 || observed.abort_binding.as_ref() != Some(&binding)
                 || !observed.points.is_empty()
@@ -447,7 +496,8 @@ impl PublicationCoordinator {
                 .snapshot
                 .ok_or(PublicationError::SnapshotPublicationFailed)?;
             if observed.outcome != PublicationEffectOutcome::Applied
-                || observed.abort_request.as_ref() != Some(&commit.request)
+                || observed.abort_request.as_ref()
+                    != Some(&AbortFinalizationReadback::from(&commit.request))
                 || snapshot.visible_epoch != commit.visible_epoch
                 || snapshot.control_generation != commit.control_generation
                 || snapshot.guards != commit.request.current_guards
@@ -602,7 +652,7 @@ where
     let observed = readback.readback(&command, context);
     if observed.effect != effect
         || observed.binding != command.binding
-        || observed.abort_request.as_ref() != Some(request)
+        || observed.abort_request.as_ref() != Some(&AbortFinalizationReadback::from(request))
     {
         return Err(PublicationError::OperationMismatch);
     }

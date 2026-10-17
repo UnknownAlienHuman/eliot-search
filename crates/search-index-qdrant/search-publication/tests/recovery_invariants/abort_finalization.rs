@@ -268,37 +268,37 @@ fn changed_complete_request_cannot_be_acknowledged_under_the_latched_operation()
             0 => {
                 let mut wrong = original.clone();
                 wrong.operation_id = id("foreign");
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             1 => {
                 let mut wrong = original.clone();
                 wrong.expected_control_generation += 1;
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             2 => {
                 let mut wrong = original.clone();
                 wrong.collection_generation_id = CollectionGenerationId::from_bytes([99; 16]);
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             3 => {
                 let mut wrong = original.clone();
                 wrong.previous_visible_epoch = epoch(3);
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             4 => {
                 let mut wrong = original.clone();
                 wrong.current_guards.access_generation += 1;
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             5 => {
                 let mut wrong = original.clone();
                 wrong.prepared_input_digest = digest(99);
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             6 => {
                 let mut wrong = original.clone();
                 wrong.prepared_input_digest = digest(98);
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             7 => {
                 let mut wrong = original.clone();
@@ -306,7 +306,7 @@ fn changed_complete_request_cannot_be_acknowledged_under_the_latched_operation()
                     operation_id: id("other-compensation"),
                     restored_old_points: false,
                 };
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             8 => {
                 let mut wrong = original.clone();
@@ -314,7 +314,7 @@ fn changed_complete_request_cannot_be_acknowledged_under_the_latched_operation()
                     operation_id: id("other-exclusion"),
                     excluded_projection_memberships: Vec::new(),
                 };
-                port.readback.abort_request_override = Some(wrong);
+                port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&wrong));
             }
             9 => {
                 port.readback.control_route_override =
@@ -529,13 +529,13 @@ fn prior_finalization_acknowledgements_are_not_carried_into_the_next_aborted_ope
         Err(PublicationError::RecoveryBlocked)
     );
     let mut stale_port = PhasePort::default();
-    stale_port.readback.abort_request_override = Some(original.clone());
+    stale_port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&original));
     assert!(abort_support::commit(&mut machine, &mut stale_port).is_err());
     let next = machine
         .prepare_abort_finalization(id("finalize-2"), 50, guards())
         .unwrap();
     let mut stale_port = PhasePort::default();
-    stale_port.readback.abort_request_override = Some(original);
+    stale_port.readback.abort_request_override = Some(AbortFinalizationReadback::from(&original));
     assert_eq!(
         abort_support::commit(&mut machine, &mut stale_port),
         Err(PublicationError::OperationMismatch)

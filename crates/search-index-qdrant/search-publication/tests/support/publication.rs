@@ -597,7 +597,7 @@ pub struct PhaseReadback {
     pub snapshot_manifest_override: OptionalOverride<Option<c::Blake3Digest32>>,
     pub snapshot_process_id_override: Option<OpaqueId>,
     pub snapshot_digest_override: Option<c::Blake3Digest32>,
-    pub abort_request_override: Option<search_publication::AbortFinalizationRequest>,
+    pub abort_request_override: Option<search_publication::AbortFinalizationReadback>,
     /// Original abort mutation binding returned from the durable control record.
     pub abort_binding_override: Option<PublicationEffectBinding>,
     pub abandonment_override: Option<search_publication::PublicationAbandonReadback>,
@@ -692,7 +692,9 @@ impl<C: CancellationProbe> PublicationReadbackPort<C> for PhaseReadback {
             abort_request: if is_abort_record {
                 self.abort_request_override
                     .clone()
-                    .or_else(|| command.abort_request().cloned())
+                    .or_else(|| {
+                        command.abort_request().map(search_publication::AbortFinalizationReadback::from)
+                    })
             } else {
                 None
             },

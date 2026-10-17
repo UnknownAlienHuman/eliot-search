@@ -196,7 +196,7 @@ fn restore_scenario(
         readback_script: publication_support::PhaseReadback::default(),
     };
     scenario.readback_script.recorded_phase = Some(PublicationPhase::Aborted);
-    scenario.readback_script.abort_request_override = Some(request.clone());
+    scenario.readback_script.abort_request_override = Some(AbortFinalizationReadback::from(request));
     scenario.readback_script.abort_binding_override = Some(abort_binding.clone());
     scenario.readback_script.outcomes.push((
         PublicationEffectKind::CommitAbortFinalization,
@@ -208,6 +208,52 @@ fn restore_scenario(
         scenario.readback_script.control_guards_override = Some(current_guards);
     }
     (scenario, abort_binding)
+}
+
+#[test]
+fn external_adapter_restart_uses_only_plain_abort_data_and_a_fresh_snapshot() {
+    let (mut scenario, private_request, abort_binding) =
+        aborted_scenario(PublicationEffectOutcome::Applied);
+    // Simulate losing every process-local request/proof. Only ordinary durable
+    // observations may cross into this external adapter's new incarnation.
+    drop(private_request);
+    let resolution = scenario
+        .readback_script
+        .abort_request_override
+        .take()
+        .unwrap()
+        .resolution;
+    let persisted = AbortFinalizationReadback {
+        operation_id: id("abort-commit-original"),
+        expected_control_generation: 42,
+        collection_generation_id: scenario.collection_generation_id,
+        previous_visible_epoch: scenario.previous_visible_epoch,
+        current_guards: scenario.current_guards,
+        prepared_input_digest: abort_binding.prepared_input_digest,
+        resolution,
+    };
+    scenario.readback_script.abort_request_override = Some(persisted.clone());
+    let context = fresh_recovery_context();
+    let (mut restored, decision) = scenario.restore_with_context(32, &context).unwrap();
+    assert_eq!(decision, PublicationRecoveryDecision::PublishAbortSnapshot);
+    assert_eq!(restored.visible_epoch(), Some(epoch(1)));
+    assert_eq!(restored.last_reserved_epoch(), Some(epoch(2)));
+    assert_eq!(
+        restored.finalize_aborted(),
+        Err(PublicationError::SnapshotPublicationFailed)
+    );
+
+    let mut process = PhasePort::default();
+    process.readback.abort_request_override = Some(persisted);
+    restored
+        .publish_abort_snapshot(&mut process.effects, &mut process.readback, &context)
+        .unwrap();
+    assert_eq!(
+        process.effects.effect_kinds,
+        vec![PublicationEffectKind::PublishAbortSnapshot]
+    );
+    restored.finalize_aborted().unwrap();
+    assert!(restored.active().is_none());
 }
 
 #[test]
@@ -386,7 +432,7 @@ fn replacement_abort_attempt_binding_survives_repeat_ack_and_crash_restore() {
 
     let mut scenario_b = scenario_a;
     scenario_b.current_guards = replacement.current_guards;
-    scenario_b.readback_script.abort_request_override = Some(replacement.clone());
+    scenario_b.readback_script.abort_request_override = Some(AbortFinalizationReadback::from(&replacement));
     scenario_b.readback_script.abort_binding_override = Some(attempt_binding);
     scenario_b
         .readback_script
@@ -544,7 +590,7 @@ fn changed_excluded_membership_readback_blocks_abort_commit_rehydration() {
         operation_id,
         excluded_projection_memberships: vec![ProjectionMembershipId::from_bytes([0xfe; 16])],
     };
-    scenario.readback_script.abort_request_override = Some(request);
+    scenario.readback_script.abort_request_override = Some(AbortFinalizationReadback::from(&request));
     assert!(matches!(
         scenario.restore_with_context(32, &fresh_recovery_context()),
         Err(PublicationError::AbandonFenceMissing)
