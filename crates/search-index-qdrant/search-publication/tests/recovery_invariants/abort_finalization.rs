@@ -55,7 +55,7 @@ fn compensation_alone_cannot_release_the_slot_and_commit_alone_is_not_snapshot_p
         Err(PublicationError::SnapshotPublicationFailed)
     );
     assert_eq!(
-        machine.submit(prepared(Some(manifest(&[1])), manifest(&[3]), "early")),
+        machine.submit_fixture(proposal(Some(manifest(&[1])), manifest(&[3]), "early")),
         Err(PublicationError::PublicationBusy)
     );
     assert_eq!(
@@ -68,14 +68,14 @@ fn compensation_alone_cannot_release_the_slot_and_commit_alone_is_not_snapshot_p
         .publish_abort_snapshot(abort_support::snapshot(&observed))
         .unwrap();
     machine.finalize_aborted().unwrap();
-    assert_eq!(machine.visible_epoch(), epoch(0));
-    assert_eq!(machine.last_reserved_epoch(), epoch(1));
-    assert_eq!(machine.current_manifest(), Some(&manifest(&[1])));
+    assert_eq!(machine.visible_epoch(), Some(epoch(1)));
+    assert_eq!(machine.last_reserved_epoch(), Some(epoch(2)));
+    assert_eq!(machine.current_manifest(), Some(manifest(&[1]).manifest()));
     assert_eq!(
         machine
-            .submit(prepared(Some(manifest(&[1])), manifest(&[3]), "next"))
+            .submit_fixture(proposal(Some(manifest(&[1])), manifest(&[3]), "next"))
             .unwrap(),
-        epoch(2)
+        epoch(3)
     );
 }
 
@@ -94,20 +94,34 @@ fn create_only_compensation_retains_absent_restoration_instead_of_inventing_evid
         command.intent,
         machine.active().unwrap().durable_intent.clone().unwrap()
     );
-    assert_eq!(command.preparation_receipt, reference("preparation"));
+    let prepared_input_digest: Blake3Digest32 = command.prepared_input_digest;
+    assert_eq!(
+        prepared_input_digest,
+        machine.active().unwrap().prepared.prepared_input_digest()
+    );
     complete(&mut machine, command);
 }
 
 #[test]
 fn complete_exclusion_keeps_its_exact_scope_evidence_and_requires_both_acknowledgements() {
-    let mut machine = durable(Some(manifest(&[1])), manifest(&[2]));
+    let old = manifest(&[1]);
+    let new = manifest(&[2]);
+    let mut machine = durable(Some(old.clone()), new);
+    let difference = machine.active().unwrap().prepared.difference();
+    let affected_ids = difference
+        .create
+        .iter()
+        .chain(&difference.retire)
+        .map(|entry| entry.point_id)
+        .collect::<BTreeSet<_>>();
     let fence = AbandonFence {
         transaction_id: id("tx-1"),
-        target_epoch: epoch(1),
-        excluded_point_ids: [point(1), point(2)].into_iter().collect(),
-        excluded_projection_memberships: [ProjectionMembershipId::from_bytes([1; 16]), ProjectionMembershipId::from_bytes([2; 16])]
-            .into_iter()
-            .collect(),
+        target_epoch: epoch(2),
+        excluded_point_ids: affected_ids,
+        excluded_projection_memberships: std::iter::once(ProjectionMembershipId::from_bytes(
+            [17; 16],
+        ))
+        .collect(),
         excluded_scope_digest: digest(8),
         exclusion_receipt: reference("complete-exclusion"),
     };
@@ -125,8 +139,8 @@ fn complete_exclusion_keeps_its_exact_scope_evidence_and_requires_both_acknowled
         }
     );
     complete(&mut machine, command);
-    assert_eq!(machine.visible_epoch(), epoch(0));
-    assert_eq!(machine.current_manifest(), Some(&manifest(&[1])));
+    assert_eq!(machine.visible_epoch(), Some(epoch(1)));
+    assert_eq!(machine.current_manifest(), Some(old.manifest()));
 }
 
 #[test]
@@ -210,11 +224,11 @@ fn invalid_request_inputs_fail_before_latching_and_do_not_burn_a_control_operati
 fn all_monotone_guard_regressions_are_rejected_without_replacing_prepared_guards() {
     for axis in 0..6 {
         let mut machine = if axis == 0 {
-            let mut owner_input = prepared(None, manifest(&[2]), "tx-1");
-            owner_input.guards.owner_epoch = OwnerEpoch::new(2).unwrap();
-            let mut higher =
-                PublicationCoordinator::new(epoch(0), epoch(0), None, None, 32).unwrap();
-            higher.submit(owner_input).unwrap();
+            let mut owner_input = proposal(None, manifest(&[2]), "tx-1");
+            owner_input.original_guards.owner_epoch = OwnerEpoch::new(8).unwrap();
+            owner_input.current_guards = owner_input.original_guards;
+            let mut higher = PublicationCoordinator::new(32).unwrap();
+            higher.submit_fixture(owner_input).unwrap();
             higher
                 .persist_intent(id("persist-1"), reference("intent"))
                 .unwrap();
@@ -237,7 +251,13 @@ fn all_monotone_guard_regressions_are_rejected_without_replacing_prepared_guards
             machine.prepare_abort_finalization(id("finalize-1"), 40, current),
             Err(PublicationError::GuardMismatch)
         );
-        let original = machine.active().unwrap().prepared.guards;
+        let original = machine
+            .active()
+            .unwrap()
+            .durable_intent
+            .as_ref()
+            .unwrap()
+            .guards;
         let command = machine
             .prepare_abort_finalization(id("finalize-1"), 40, original)
             .unwrap();
@@ -249,7 +269,7 @@ fn all_monotone_guard_regressions_are_rejected_without_replacing_prepared_guards
 fn current_successor_guards_remain_separate_from_original_intent_guards() {
     let mut machine = compensated(true);
     let mut current = guards();
-    current.owner_epoch = OwnerEpoch::new(2).unwrap();
+    current.owner_epoch = OwnerEpoch::new(8).unwrap();
     current.access_generation += 1;
     current.purge_generation += 1;
     current.profile_digest = digest(99);
@@ -271,13 +291,13 @@ fn changed_complete_request_cannot_be_acknowledged_under_the_latched_operation()
             0 => observed.request.operation_id = id("foreign"),
             1 => observed.request.expected_control_generation += 1,
             2 => observed.request.intent.transaction_id = id("foreign"),
-            3 => observed.request.intent.target_epoch = epoch(2),
+            3 => observed.request.intent.target_epoch = epoch(3),
             4 => observed.request.intent.persist_operation_id = id("foreign"),
             5 => observed.request.intent.intent_receipt = reference("foreign"),
-            6 => observed.request.intent.new_manifest_digest = digest(99),
+            6 => observed.request.prepared_input_digest = digest(99),
             7 => observed.request.intent.old_manifest_digest = None,
             8 => observed.request.intent.guards.shadow_generation += 1,
-            9 => observed.request.preparation_receipt = reference("foreign"),
+            9 => observed.request.prepared_input_digest = digest(98),
             10 => {
                 observed.request.resolution = AbortedPublicationResolution::Compensated {
                     removal_readback: reference("removed"),
@@ -429,7 +449,7 @@ fn prior_finalization_acknowledgements_are_not_carried_into_the_next_aborted_ope
     let old_commit = abort_support::commit(original.clone());
     complete(&mut machine, original);
     machine
-        .submit(prepared(None, manifest(&[3]), "next-transaction"))
+        .submit_fixture(proposal(None, manifest(&[3]), "next-transaction"))
         .unwrap();
     machine
         .persist_intent(id("persist-2"), reference("intent-2"))
@@ -453,8 +473,8 @@ fn prior_finalization_acknowledgements_are_not_carried_into_the_next_aborted_ope
         Err(PublicationError::OperationMismatch)
     );
     complete(&mut machine, next);
-    assert_eq!(machine.last_reserved_epoch(), epoch(2));
-    assert_eq!(machine.visible_epoch(), epoch(0));
+    assert_eq!(machine.last_reserved_epoch(), Some(epoch(2)));
+    assert_eq!(machine.visible_epoch(), Some(epoch(0)));
 }
 
 #[test]

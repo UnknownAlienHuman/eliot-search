@@ -6,8 +6,8 @@ C15 owns actual Qdrant effects. No method in this package performs those effects
 
 ## Canonical admission (#260)
 
-SCOPE_FROZEN: base f1ac1058; primary owner `search-publication`; narrow reverse
-adapter is C13 canonical encoding/digest access. `search-unitizer` is the explicit
+The primary owner is `search-publication`; the narrow C13 adapter exposes
+canonical encoding/digest access. `search-unitizer` is the explicit
 internal dependency needed to consume its opaque complete `VerifiedUnitSet`.
 No concrete control, object-store, platform or Qdrant dependency is introduced.
 The source/manifest/UnitSet/profile/currentness owners remain separate producers.
@@ -65,9 +65,10 @@ journal-prefix readback and Native/Qdrant execution remain #261/Root work.
 
 The canonical focused fixtures build real C08 and C09 products over an exact
 in-memory revision and a C13 plan. Their owner ports are test-only observations;
-they qualify neither storage, current policy nor Qdrant execution. The previous
-public-constructor phase fixtures under `tests/` must be migrated to the new
-admission API; they are not silently accepted through a compatibility facade.
+they qualify neither storage, current policy nor Qdrant execution. The existing
+recovery, abort and restore fixtures under `tests/` use the same admission API.
+Their collision cases rebuild valid C13 products before checking immutable
+point conflicts; malformed manifests are tested separately.
 
 There was no product caller of the removed boundary. Root producer/normal
 consumer wiring, full submit/restore qualification and installed/scale evidence
