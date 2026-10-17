@@ -18,10 +18,14 @@ pub use serving::{
 use std::task::Poll;
 use std::time::Duration;
 
-use search_contracts::{MessageKind, ProtocolRange, ProviderBodyV1, SearchReadGrantClaims};
+use search_contracts::{
+    BoundedBytes, MAX_FRAME_BYTES, MessageKind, ProtocolRange, ProviderBodyV1,
+    SearchReadGrantClaims,
+};
 use search_provider_protocol::{
     AdmittedProviderRequest, BoundSession, ClientEnvelopeCodec, FrameCodec,
-    ProtocolError, ProviderDeliveryError, ProviderFrameTranscript, TerminalKind,
+    PreparedProviderDeliveryError, ProtocolError, ProviderDeliveryError,
+    ProviderEventPreparationV1, ProviderFrameTranscript, TerminalKind,
     decode_standalone_grant_envelope, verify_proof,
 };
 
@@ -396,6 +400,48 @@ impl CanonicalTcpConnection {
                 io.write_record(frame, proof, limits, deadline, probe)
             }).map_err(CanonicalTcpError::from)
         })
+    }
+
+    /// Deliver a prepared provider frame through the existing key/MAC writer.
+    ///
+    /// The session owns event and connection sequence previews and validates
+    /// the complete typed envelope before this adapter authenticates its exact
+    /// length-prefixed bytes. The caller's preparation runs while this
+    /// connection operation is exclusively borrowed.
+    fn deliver_event_prepared_before<P>(
+        &mut self,
+        request: &mut AdmittedProviderRequest,
+        terminal: Option<TerminalKind>,
+        authority_deadline: Option<search_provider_protocol::MonotonicMillis>,
+        prepare: impl FnOnce(
+            &ProviderEventPreparationV1,
+        ) -> Result<(ProviderBodyV1, BoundedBytes<MAX_FRAME_BYTES>), P>,
+    ) -> Result<(), PreparedProviderDeliveryError<P, CanonicalTcpError>> {
+        let mut operation = Operation { state: &mut self.state, completed: false };
+        let result = (|| {
+            let state = operation.state.as_mut()
+                .ok_or(PreparedProviderDeliveryError::Output(CanonicalTcpError::Closed))?;
+            let deadline = request.guard().deadline()
+                .ok_or(PreparedProviderDeliveryError::Protocol(ProtocolError::InvalidLimits))?;
+            let deadline = authority_deadline.map_or(deadline, |authority| authority.min(deadline));
+            let cancellation = request.guard().cancellation();
+            let probe = terminal.is_none().then_some(&cancellation);
+            let (connection, io) = (&mut state.connection, &mut state.io);
+            let limits = connection.limits;
+            let (session, key) = (&mut connection.session, &connection.key);
+            session.deliver_provider_event_prepared(
+                request,
+                terminal,
+                &mut || Ok(monotonic_millis()),
+                prepare,
+                |transcript| {
+                    let proof = keyed_frame_proof(key, transcript);
+                    io.write_record(transcript.frame(), &proof, limits, deadline, probe)
+                },
+            )
+        })();
+        operation.completed = result.is_ok();
+        result
     }
 
     /// Read-only state for live authorization composition; None after teardown.

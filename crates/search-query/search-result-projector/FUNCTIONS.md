@@ -31,6 +31,11 @@ is non-cloneable and has private fields. Its `result()`, `omissions()` and `seri
 methods are read-only views; callers cannot replace the bytes checked by the projector. Emit those
 exact bytes instead of serializing the typed result again.
 
+For canonical provider-frame emission, `max_serialized_output_bytes` counts the complete
+`ServerEnvelopeCodec` frame, including its four-byte little-endian length prefix. The separately
+carried outer MAC record is excluded from this C26 byte count and remains bounded by the existing
+typed transport profile.
+
 The result receipt binds data only and grants no output authority. Root performs its fresh C18 check at
 the actual frame boundary before emission.
 

@@ -1,9 +1,19 @@
 //! Explicit native authority and cooperative recipe ownership; no allow-all host.
 
 use search_access::{AccessCheckpoint, AccessError, RequestSecurityFence};
-use search_contracts::{ProviderBodyV1, RecipeIdV1, RequestBody, SourceIdentity, SourceMembershipId, SourceRevisionRef};
+use search_contracts::{
+    BoundedBytes, MAX_FRAME_BYTES, ProviderBodyV1, RecipeBodyV1, RecipeIdV1,
+    RecipeResultV1, RequestBody, ResultBody, SearchCandidateSet, SourceIdentity,
+    SourceMembershipId, SourceRevisionRef,
+};
+use search_result_projector::{
+    CandidateProjectionInput, CandidateSetEnvelope, ProjectionBudget, ProjectionError,
+    project_candidate_set,
+};
 use search_provider_protocol::{
-    AdmittedProviderRequest, BindingContext, MonotonicMillis, RequestGuard, TerminalKind,
+    AdmittedProviderRequest, BindingContext, FRAME_PREFIX_BYTES, MonotonicMillis,
+    PreparedProviderDeliveryError, ProtocolLimits, ProviderEventPreparationV1,
+    RequestGuard, ServerEnvelopeCodec, TerminalKind,
 };
 use std::task::Poll;
 
@@ -11,7 +21,7 @@ use crate::access_composition::{
     AuthoritativeGrantPolicy, NativeSecurityDomain, StandaloneGrantTemplate,
     StandalonePreRetrievalAdmission, VerifiedStandaloneGrant,
 };
-use super::{CanonicalServingError, CanonicalTcpConnection, monotonic_millis};
+use super::{CanonicalServingError, CanonicalTcpConnection, CanonicalTcpError, monotonic_millis};
 
 /// One owner-issued work turn with separate lifetime and scheduling bounds.
 ///
@@ -361,6 +371,181 @@ impl CanonicalWorkOutput<'_, '_, '_> {
         self.failed = false;
         Ok(())
     }
+
+    /// Project and emit a C26 candidate set as its exact prepared provider frame.
+    ///
+    /// The caller supplies C24-validated source-backed inputs with already
+    /// minted public handles. Only the C00 `Locate` and `FindText` result
+    /// families can carry `SearchCandidateSet`; all other request recipes fail
+    /// closed. Projection, full-frame encoding, typed output validation and
+    /// prepared protocol delivery remain inside the current C18 live checkpoint.
+    pub fn emit_projected_candidate_set(
+        &mut self,
+        envelope: CandidateSetEnvelope,
+        inputs: Vec<CandidateProjectionInput>,
+        projection_budget: ProjectionBudget,
+        terminal: TerminalKind,
+    ) -> Result<(), CanonicalServingError> {
+        if self.failed || self.emitted_terminal.is_some() {
+            self.failed = true;
+            return Err(CanonicalServingError::InvalidCompletion);
+        }
+        self.failed = true;
+        self.budget.check()?;
+        if !matches!(terminal, TerminalKind::Success | TerminalKind::Partial) {
+            return Err(CanonicalServingError::InvalidCompletion);
+        }
+
+        let request_id = *self.request.guard().request_id();
+        let request_body = self.request.body();
+        if envelope.request_id != request_id
+            || envelope.request_id != request_body.recipe_request.request_id
+        {
+            return Err(CanonicalServingError::InvalidCompletion);
+        }
+        let recipe = match (
+            request_body.recipe_request.recipe,
+            &request_body.recipe_request.body,
+        ) {
+            (RecipeIdV1::Locate, RecipeBodyV1::Locate(_)) => RecipeIdV1::Locate,
+            (RecipeIdV1::FindText, RecipeBodyV1::FindText(_)) => RecipeIdV1::FindText,
+            _ => return Err(CanonicalServingError::InvalidCompletion),
+        };
+
+        let domain = self.authority.domain;
+        let fence = self.authority.fence;
+        let valid_until = self.authority.valid_until;
+        let budget = self.budget;
+        let request_snapshot = self.request.body().clone();
+        let request = &mut self.request;
+        let transport = &mut self.transport;
+        let validate_output = &mut self.authority.validate_output;
+        domain.with_live_checkpoint(
+            fence,
+            AccessCheckpoint::BeforeResultEmission,
+            |_| {
+                budget.check()?;
+                let delivery = transport.deliver_event_prepared_before(
+                    request,
+                    Some(terminal),
+                    Some(valid_until),
+                    |context: &ProviderEventPreparationV1| {
+                        budget.check()?;
+                        let mut encoded_body = None;
+                        let projected = project_candidate_set(
+                            envelope,
+                            inputs,
+                            projection_budget,
+                            |candidate_set, byte_ceiling| {
+                                let body = candidate_set_body(
+                                    recipe,
+                                    context.event_sequence(),
+                                    candidate_set.clone(),
+                                )
+                                .ok_or(ProjectionError::OutputEncodingFailed)?;
+                                let frame_limits = frame_limits_with_ceiling(
+                                    context.limits(),
+                                    byte_ceiling,
+                                )?;
+                                let provider_envelope = context.envelope(body.clone());
+                                let frame = ServerEnvelopeCodec::encode(
+                                    &provider_envelope,
+                                    frame_limits,
+                                    context.supported_versions(),
+                                )
+                                .map_err(|error| match error {
+                                    search_provider_protocol::ProtocolError::FrameTooLarge => {
+                                        ProjectionError::SerializedOutputBudgetExceeded
+                                    }
+                                    _ => ProjectionError::OutputEncodingFailed,
+                                })?;
+                                if frame.len() > byte_ceiling {
+                                    return Err(ProjectionError::SerializedOutputBudgetExceeded);
+                                }
+                                encoded_body = Some(body);
+                                Ok(frame)
+                            },
+                        )
+                        .map_err(|error| CanonicalServingError::Backend(error.code()))?;
+
+                        budget.check()?;
+                        let body = candidate_set_body(
+                            recipe,
+                            context.event_sequence(),
+                            projected.result().clone(),
+                        )
+                        .ok_or(CanonicalServingError::InvalidCompletion)?;
+                        if encoded_body.as_ref() != Some(&body) {
+                            return Err(CanonicalServingError::InvalidCompletion);
+                        }
+                        validate_output(&request_snapshot, &body)
+                            .map_err(CanonicalServingError::Access)?;
+                        budget.check()?;
+                        let frame = BoundedBytes::<MAX_FRAME_BYTES>::new(
+                            projected.serialized_output_bytes().to_vec(),
+                        )
+                        .map_err(|_| {
+                            CanonicalServingError::Backend(
+                                ProjectionError::SerializedOutputBudgetExceeded.code(),
+                            )
+                        })?;
+                        Ok((body, frame))
+                    },
+                );
+                match delivery {
+                    Ok(()) => Ok(()),
+                    Err(PreparedProviderDeliveryError::Protocol(error)) => {
+                        Err(CanonicalServingError::Transport(CanonicalTcpError::Protocol(error)))
+                    }
+                    Err(PreparedProviderDeliveryError::Preparation(error)) => Err(error),
+                    Err(PreparedProviderDeliveryError::Output(error)) => {
+                        Err(CanonicalServingError::Transport(error))
+                    }
+                    Err(PreparedProviderDeliveryError::AfterOutput(error)) => {
+                        Err(CanonicalServingError::Transport(
+                            CanonicalTcpError::AfterOutput(error),
+                        ))
+                    }
+                }
+            },
+        )
+        .map_err(CanonicalServingError::Access)??;
+
+        self.emitted_terminal = Some(true);
+        self.failed = false;
+        Ok(())
+    }
+}
+
+fn candidate_set_body(
+    recipe: RecipeIdV1,
+    event_sequence: u64,
+    candidate_set: SearchCandidateSet,
+) -> Option<ProviderBodyV1> {
+    let result = match recipe {
+        RecipeIdV1::Locate => RecipeResultV1::Locate(candidate_set),
+        RecipeIdV1::FindText => RecipeResultV1::FindText(candidate_set),
+        _ => return None,
+    };
+    Some(ProviderBodyV1::Result(ResultBody { event_sequence, result }))
+}
+
+fn frame_limits_with_ceiling(
+    limits: ProtocolLimits,
+    byte_ceiling: usize,
+) -> Result<ProtocolLimits, ProjectionError> {
+    let max_frame_bytes = byte_ceiling.min(limits.max_frame_bytes);
+    if max_frame_bytes <= FRAME_PREFIX_BYTES {
+        return Err(ProjectionError::SerializedOutputBudgetExceeded);
+    }
+    let max_body_bytes = limits.max_body_bytes.min(max_frame_bytes - FRAME_PREFIX_BYTES);
+    ProtocolLimits {
+        max_frame_bytes,
+        max_body_bytes,
+        ..limits
+    }
+    .validate()
+    .map_err(|_| ProjectionError::SerializedOutputBudgetExceeded)
 }
 
 // The binding comparison and backend dispatch are one boundary: no source work
