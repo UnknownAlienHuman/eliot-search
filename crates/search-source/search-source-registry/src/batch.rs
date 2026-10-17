@@ -80,6 +80,11 @@ impl PreparedStateDelta {
 
 fn state(registry: &SourceRegistry, key: &RegistryStateKey) -> Option<RegistryStateRecord> {
     match key {
+        RegistryStateKey::ProjectionMembership(id) => registry
+            .projection_memberships
+            .get(id)
+            .cloned()
+            .map(RegistryStateRecord::ProjectionMembership),
         RegistryStateKey::Root(root) => registry
             .roots
             .get(root)
@@ -129,6 +134,11 @@ pub(super) fn prepare(
     batch: &RegistryBatch,
     receipt: &ReceiptRef,
 ) -> Result<PreparedBatch, RegistryError> {
+    if batch.changes.iter().any(|change| {
+        matches!(change, RegistryChange::BindProjectionMembership { .. })
+    }) {
+        return super::projection_membership::prepare_batch(registry, batch, receipt);
+    }
     let permanent_membership = batch.changes.iter().any(|change| {
         matches!(
             change,
@@ -160,6 +170,9 @@ pub(super) fn prepare_observed(
     batch: &RegistryBatch,
     observed: &DecodedBatch,
 ) -> Result<PreparedBatch, RegistryError> {
+    if observed.encoding_profile() == "eliot.registry-batch.v6" {
+        return super::projection_membership::prepare_batch(registry, batch, &observed.entry().receipt);
+    }
     prepare_profiled(
         registry,
         batch,
@@ -341,6 +354,9 @@ fn prepare_profiled(
             Some(RegistryStateRecord::Namespace(namespace)) => {
                 namespaces.insert(namespace.ownership.source_namespace_id, namespace);
             }
+            Some(RegistryStateRecord::ProjectionMembership(_)) => {
+                return Err(RegistryError::SnapshotInvalid);
+            }
             None => {}
         }
     }
@@ -420,6 +436,7 @@ fn prepare_profiled(
     let mut deltas = Vec::with_capacity(keys.len());
     for key in keys {
         let after = match &key {
+            RegistryStateKey::ProjectionMembership(_) => return Err(RegistryError::SnapshotInvalid),
             RegistryStateKey::Root(root) => roots.get(root).cloned().map(RegistryStateRecord::Root),
             RegistryStateKey::Source(k) => sources.get(k).cloned().map(RegistryStateRecord::Source),
             RegistryStateKey::Membership(k) => memberships
@@ -516,8 +533,31 @@ fn encode_existing_state(
     state.encode_with_profile(profile)
 }
 
-// Only semantic producer modules inside this owner may mint a prepared v4 mutation.
+// Only semantic producer modules inside this owner may mint a prepared mutation.
 // A DecodedBatch from public metadata APIs is never a mutation permit by itself.
+pub(super) fn prepare_v6_record(
+    registry: &SourceRegistry,
+    record: DecodedBatch,
+) -> Result<PreparedBatch, RegistryError> {
+    if record.encoding_profile() != "eliot.registry-batch.v6"
+        || record.state_encoding_profile() != "eliot.registry-state.v6"
+        || record.expected_registry_revision() != registry.revision
+    {
+        return Err(RegistryError::RegistryRevisionConflict);
+    }
+    validate_install(registry, &record)?;
+    let states = record.deltas().iter().map(|delta| {
+        Ok(PreparedStateDelta {
+            key: delta.key().clone(),
+            key_bytes: delta.key().encode()?,
+            before_bytes: delta.before()
+                .map(|before| encode_existing_state(registry, before)).transpose()?,
+            after_bytes: delta.after().encode_with_profile(record.state_encoding_profile())?,
+        })
+    }).collect::<Result<Vec<_>, RegistryError>>()?;
+    Ok(PreparedBatch { encoded: record.encode()?, record, states })
+}
+
 pub(super) fn prepare_v4_record(
     registry: &SourceRegistry,
     record: DecodedBatch,
@@ -557,6 +597,9 @@ pub(super) fn validate_install(
     registry: &SourceRegistry,
     record: &DecodedBatch,
 ) -> Result<(), RegistryError> {
+    if record.encoding_profile() == "eliot.registry-batch.v6" {
+        super::projection_membership::validate_install(registry, record)?;
+    }
     let existing = registry.operations.get(&record.entry().operation_id);
     if existing.is_some_and(|operation| operation.digest() != record.entry().mutation_digest) {
         return Err(RegistryError::OperationConflict);
@@ -657,6 +700,13 @@ fn install_validated(registry: &mut SourceRegistry, record: &DecodedBatch) {
                 .state_encoding_profiles
                 .insert(delta.key().clone(), record.state_encoding_profile());
             match delta.after() {
+                RegistryStateRecord::ProjectionMembership(value) => {
+                    let binding = value.binding();
+                    registry.reverse_projection_memberships.insert(
+                        binding.projection_membership_id, binding.source_membership_id);
+                    registry.projection_memberships.insert(
+                        binding.source_membership_id, value.clone());
+                }
                 RegistryStateRecord::Root(root) => {
                     registry.roots.insert(root.root_binding_id, root.clone());
                 }

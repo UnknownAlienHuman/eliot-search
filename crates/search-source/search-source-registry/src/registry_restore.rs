@@ -44,13 +44,15 @@ pub fn restore_registry_state(
         max_total_bytes,
     )?;
     let parts = observed.into_parts();
-    let registry = SourceRegistry {
+    let mut registry = SourceRegistry {
         limits: parts.limits,
         revision: parts.revision,
         roots: parts.roots,
         sources: parts.sources,
         memberships: parts.memberships,
         reverse_memberships: parts.reverse_memberships,
+        projection_memberships: BTreeMap::new(),
+        reverse_projection_memberships: BTreeMap::new(),
         portfolios: BTreeMap::new(),
         portfolio_history: crate::portfolio_history::PortfolioHistory::new(),
         namespaces: parts.namespaces,
@@ -69,6 +71,7 @@ pub fn restore_registry_state(
         identity_cache_v2: None,
         state_encoding_profiles: parts.state_encoding_profiles,
     };
+    super::projection_membership::restore_bindings(&mut registry)?;
     Ok(ObservedRegistryRestore { registry })
 }
 
@@ -97,13 +100,15 @@ where
         original_probe,
     )?;
     let parts = observed.into_parts();
-    let registry = SourceRegistry {
+    let mut registry = SourceRegistry {
         limits: parts.limits,
         revision: parts.revision,
         roots: parts.roots,
         sources: parts.sources,
         memberships: parts.memberships,
         reverse_memberships: parts.reverse_memberships,
+        projection_memberships: BTreeMap::new(),
+        reverse_projection_memberships: BTreeMap::new(),
         portfolios: BTreeMap::new(),
         portfolio_history: crate::portfolio_history::PortfolioHistory::new(),
         namespaces: parts.namespaces,
@@ -122,5 +127,6 @@ where
         identity_cache_v2: None,
         state_encoding_profiles: parts.state_encoding_profiles,
     };
+    super::projection_membership::restore_bindings(&mut registry)?;
     Ok(ObservedRegistryRestore { registry })
 }

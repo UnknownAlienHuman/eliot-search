@@ -149,7 +149,7 @@ fn read_member(value: V) -> Result<SourceMembership, RegistryError> {
     })
 }
 
-fn provenance_value(value: &PermanentMembershipProvenanceV2) -> Result<V, RegistryError> {
+pub(super) fn provenance_value(value: &PermanentMembershipProvenanceV2) -> Result<V, RegistryError> {
     object(vec![
         ("source_identity", identity(value.source_identity())?),
         ("source_revision", V::U64(value.source_revision().get())),
@@ -179,7 +179,7 @@ fn provenance_value(value: &PermanentMembershipProvenanceV2) -> Result<V, Regist
     ])
 }
 
-fn read_provenance(value: V) -> Result<PermanentMembershipProvenanceV2, RegistryError> {
+pub(super) fn read_provenance(value: V) -> Result<PermanentMembershipProvenanceV2, RegistryError> {
     let mut fields = open(value)?;
     let source_identity = read_identity(take(&mut fields, "source_identity")?)?;
     let source_revision = revision(take(&mut fields, "source_revision")?)?;

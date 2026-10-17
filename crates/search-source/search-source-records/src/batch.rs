@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 
 const BATCH_PROFILE_V5: &str = "eliot.registry-batch.v5";
 const STATE_PROFILE_V5: &str = "eliot.registry-state.v5";
+const BATCH_PROFILE_V6: &str = "eliot.registry-batch.v6";
+const STATE_PROFILE_V6: &str = "eliot.registry-state.v6";
 
 #[path = "batch_codec.rs"]
 mod codec;
@@ -60,6 +62,8 @@ pub enum RegistryStateKey {
     Generation(OpaqueId),
     /// Source namespace ownership key.
     Namespace(search_contracts::SourceNamespaceId),
+    /// First projection binding, addressed by the genuine source membership UUID.
+    ProjectionMembership(search_contracts::SourceMembershipId),
 }
 
 /// Closed owner state family, independent of adapter storage prefixes.
@@ -69,7 +73,7 @@ pub enum RegistryStateFamily {
     Root,
     /// Complete registered source metadata.
     Source,
-    /// Complete source/corpus membership metadata.
+    /// Complete source/corpus membership or projection-binding metadata.
     Membership,
     /// Active corpus generation.
     Generation,
@@ -95,11 +99,15 @@ pub enum RegistryStateRecord {
     },
     /// Namespace ownership and retained permanent-v2 metadata.
     Namespace(crate::namespace::NamespaceCutoverState),
+    /// Exact retained C00 projection binding and its C03 predecessor observations.
+    ProjectionMembership(crate::projection_membership::ProjectionMembershipRecord),
 }
 impl RegistryStateRecord {
     /// Stable owner bytes for one complete technical state value.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        if matches!(self, Self::Membership(record) if record.is_permanent_v2()) {
+        if matches!(self, Self::ProjectionMembership(_)) {
+            codec::encode_state_v6(self)
+        } else if matches!(self, Self::Membership(record) if record.is_permanent_v2()) {
             codec::encode_state_v5(self)
         } else if matches!(self, Self::Namespace(_)) {
             codec::encode_state_v4(self)
@@ -107,7 +115,7 @@ impl RegistryStateRecord {
             codec::encode_state(self)
         }
     }
-    /// Encodes in the explicitly retained closed historical format.
+    /// Encodes in the explicitly selected closed format.
     pub fn encode_with_profile(&self, profile: &str) -> Result<Vec<u8>, RegistryError> {
         if !matches!(
             profile,
@@ -115,10 +123,13 @@ impl RegistryStateRecord {
                 | "eliot.registry-state.v3"
                 | codec::STATE_PROFILE_V4
                 | STATE_PROFILE_V5
+                | STATE_PROFILE_V6
         ) {
             return Err(RegistryError::SnapshotInvalid);
         }
-        if profile == STATE_PROFILE_V5 {
+        if profile == STATE_PROFILE_V6 {
+            codec::encode_state_v6(self)
+        } else if profile == STATE_PROFILE_V5 {
             if matches!(self, Self::Membership(record) if record.is_permanent_v2()) {
                 codec::encode_state_v5(self)
             } else {
@@ -136,6 +147,7 @@ impl RegistryStateRecord {
             Self::Root(root) => RegistryStateKey::Root(root.root_binding_id),
             Self::Source(v) => RegistryStateKey::Source(v.identity().clone()),
             Self::Membership(v) => RegistryStateKey::Membership(v.key().clone()),
+            Self::ProjectionMembership(v) => RegistryStateKey::ProjectionMembership(v.binding().source_membership_id),
             Self::Generation { corpus, .. } => RegistryStateKey::Generation(corpus.clone()),
             Self::Namespace(state) => {
                 RegistryStateKey::Namespace(state.ownership.source_namespace_id)
@@ -172,13 +184,16 @@ impl RegistryStateKey {
             Self::Root(_) => RegistryStateFamily::Root,
             Self::Source(_) => RegistryStateFamily::Source,
             Self::Membership(_) => RegistryStateFamily::Membership,
+            Self::ProjectionMembership(_) => RegistryStateFamily::Membership,
             Self::Generation(_) => RegistryStateFamily::Generation,
             Self::Namespace(_) => RegistryStateFamily::Namespace,
         }
     }
     /// Family-qualified canonical technical key; no string-built locator identity.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        if matches!(self, Self::Namespace(_)) {
+        if matches!(self, Self::ProjectionMembership(_)) {
+            codec::encode_key_v6(self)
+        } else if matches!(self, Self::Namespace(_)) {
             codec::encode_key_v4(self)
         } else {
             codec::encode_key(self)
@@ -188,7 +203,7 @@ impl RegistryStateKey {
 
 /// Decode the complete canonical owner key, refusing unknown fields or families.
 pub fn decode_registry_state_key(bytes: &[u8]) -> Result<RegistryStateKey, RegistryError> {
-    codec::decode_key(bytes)
+    codec::decode_key_v6(bytes)
 }
 
 /// Decode the explicit v4 namespace key profile.
@@ -367,6 +382,23 @@ impl DecodedBatch {
         }
         Ok(restored)
     }
+
+    /// Constructs and exactly rehydrates the closed first-projection-bind profile.
+    pub fn from_observed_parts_v6(
+        entry: RegistryJournalEntry,
+        request_fingerprint: Blake3Digest32,
+        deltas: Vec<RegistryStateDelta>,
+        original_changes: Vec<RegistryChange>,
+        limits: RegistryLimits,
+    ) -> Result<Self, RegistryError> {
+        let observed = Self { encoding_profile: BATCH_PROFILE_V6,
+            state_encoding_profile: STATE_PROFILE_V6, entry, request_fingerprint,
+            change_count: 1, deltas, original_changes: Some(original_changes) };
+        let encoded = codec::encode_batch_record_v6(&observed)?;
+        let restored = codec::decode_batch_record(&encoded, limits)?;
+        if restored != observed { return Err(RegistryError::SnapshotInvalid); }
+        Ok(restored)
+    }
     /// Exact closed wire profile retained by decoding; never a currentness grant.
     pub const fn encoding_profile(&self) -> &'static str {
         self.encoding_profile
@@ -397,7 +429,7 @@ impl DecodedBatch {
     pub fn deltas(&self) -> &[RegistryStateDelta] {
         &self.deltas
     }
-    /// Exact original business inputs retained by the V5 membership profile.
+    /// Exact original inputs retained by the v5 membership or v6 binding profile.
     pub fn original_changes(&self) -> Option<&[RegistryChange]> {
         self.original_changes.as_deref()
     }
@@ -418,7 +450,9 @@ impl DecodedBatch {
     }
     /// Stable canonical record for the operation row.
     pub fn encode(&self) -> Result<Vec<u8>, RegistryError> {
-        if self.encoding_profile == BATCH_PROFILE_V5 {
+        if self.encoding_profile == BATCH_PROFILE_V6 {
+            codec::encode_batch_record_v6(self)
+        } else if self.encoding_profile == BATCH_PROFILE_V5 {
             codec::encode_batch_record_v5(self)
         } else if self.encoding_profile == codec::BATCH_PROFILE_V4 {
             codec::encode_batch_record_v4(self)

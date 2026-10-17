@@ -8,6 +8,54 @@ vendor-neutral control port and never reimplements those semantics.
 
 ## Global rules
 
+### Projection first bind (C03 / #259 input)
+
+`prepare_projection_membership`, `commit_projection_membership` and
+`bind_projection_membership` preserve the original upstream C00 IDs and schema
+coordinate. The bind request includes the exact permanent-member revision and
+complete `PermanentMembershipProvenanceV2`; the caller also supplies the expected
+registry revision. `active_source_membership_v2` validates active permanent
+membership, source, Root, namespace, admission references and generations.
+The existing C02 atomic batch compares the registry revision and requires the
+new membership-keyed projection row absent, with immutable operation/state
+readback before memory installation. The reverse index rejects a projection
+UUID already assigned to another source membership. Binding count is bounded
+by `max_memberships`.
+
+`bind_projection_membership` resolves the original operation before first-bind
+collision checks and compares the full original request before replay. Reuse
+the original expected revision, operation, receipt and actual projection UUID
+after an unknown outcome. Historical replay acknowledges the original result;
+it does not restore obsolete state or issue access authority.
+
+`read_projection_membership` requires an exact current registry revision and
+rechecks the active C03 owner relationships. `projection_membership_record` and
+`projection_source_membership` expose retained observed metadata only. Existing
+registry snapshot v3-v6 schemas/digests do not commit projection coordinates;
+consumers must use this exact typed read seam, not infer a projection binding
+from a snapshot digest. Root genuine entropy, C07 source revision and C08/C09
+representation qualification, C18 partition meaning/currentness, and projection
+schema/profile acceptance remain upstream obligations. No record is a grant.
+
+The v6 batch/state and v3 key profiles are append-only additions. All old
+encoders and digest formulas are retained. A new operation cannot overwrite an
+existing row, including a change of representation/schema/access/scoring IDs.
+Exact follow-up: define a `ProjectionMembership` expected-old transition
+contract naming the complete predecessor tuple, source/member/owner fences,
+successor coordinates and coordinated publication/invalidation before adding
+any rebind API. S7.5/S8 do not currently supply that transition contract.
+
+Parent integration prerequisite outside this owner scope:
+`search-source-history/src/registry_restore.rs` must handle the new record/key
+in extraction, family counts, counter checks and first-insert transition
+validation, retaining the existing complete-history/current-row equality
+check. Bound the extra family by `max_memberships`; accept v6 insertion only,
+and refuse replacement. C03 reconstructs and validates its projection maps
+from those validated immutable operations, so no new history-parts fields are
+required. The parent also owns daemon exhaustive arms and actual Root/C13/C18
+consumer wiring. Until those reverse consumers are integrated, source presence
+does not establish a usable daemon or full-history restore baseline.
+
 `DecodedBatch::encoding_profile` retains the exact validated wire profile.
 `state_encoding_profile` likewise retains the operation's immutable state format.
 Observed restoration compares each actual state format with complete operation

@@ -497,6 +497,7 @@ pub fn encode_batch_record_v4(value: &DecodedBatch) -> Result<Vec<u8>, RegistryE
 
 pub(super) fn state_value_v4(value: &RegistryStateRecord) -> Result<V, RegistryError> {
     match value {
+        RegistryStateRecord::ProjectionMembership(_) => Err(bad()),
         RegistryStateRecord::Root(_)
         | RegistryStateRecord::Membership(_)
         | RegistryStateRecord::Generation { .. } => super::state_value(value),

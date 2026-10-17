@@ -64,6 +64,13 @@ pub struct NamespaceCutover {
 /// One source-registry change inside an atomic batch.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RegistryChange {
+    /// First-bind upstream projection coordinates under current C03 owner fences.
+    BindProjectionMembership {
+        /// Actual upstream IDs and exact permanent-member predecessor observations.
+        request: crate::projection_membership::ProjectionMembershipBindRequest,
+        /// Original content-free durability receipt.
+        receipt: ReceiptRef,
+    },
     /// Register a complete root record, with no implicit source admission.
     RegisterRoot {
         /// Original root registration request, including owner/policy receipt references.
@@ -245,6 +252,11 @@ impl RegistryBatch {
         let limits = limits.validate()?;
         if self.changes.is_empty() || self.changes.len() > limits.max_batch_changes {
             return Err(RegistryError::BatchSizeInvalid);
+        }
+        if self.changes.iter().any(|change| matches!(change, RegistryChange::BindProjectionMembership { .. })) {
+            let [RegistryChange::BindProjectionMembership { request, .. }] = self.changes.as_slice()
+                else { return Err(RegistryError::BatchSizeInvalid); };
+            request.validate_shape()?;
         }
         let mut sources = BTreeSet::new();
         let mut roots = BTreeSet::new();

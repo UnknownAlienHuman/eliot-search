@@ -154,6 +154,12 @@ pub enum RegistryError {
     MembershipConflict,
     /// Membership generation does not match the expected revision.
     MembershipGenerationMismatch,
+    /// A projection binding does not exist for this source membership.
+    ProjectionMembershipNotFound,
+    /// An existing binding cannot be silently rebound to different coordinates.
+    ProjectionMembershipConflict,
+    /// A projection UUID already belongs to a different source membership.
+    ProjectionMembershipIdCollision,
     /// Reference portfolio scope is empty without explicit permission.
     ReferenceScopeEmpty,
     /// Reference portfolio revision is invalid.
@@ -228,6 +234,9 @@ impl RegistryError {
             Self::AdmissionReceiptMismatch => "ADMISSION_RECEIPT_MISMATCH",
             Self::MembershipConflict => "MEMBERSHIP_CONFLICT",
             Self::MembershipGenerationMismatch => "MEMBERSHIP_GENERATION_MISMATCH",
+            Self::ProjectionMembershipNotFound => "PROJECTION_MEMBERSHIP_NOT_FOUND",
+            Self::ProjectionMembershipConflict => "PROJECTION_MEMBERSHIP_CONFLICT",
+            Self::ProjectionMembershipIdCollision => "PROJECTION_MEMBERSHIP_ID_COLLISION",
             Self::ReferenceScopeEmpty => "REFERENCE_SCOPE_EMPTY",
             Self::ReferencePortfolioInvalid => "REFERENCE_PORTFOLIO_INVALID",
             Self::SourceViewAmbiguous => "SOURCE_VIEW_AMBIGUOUS",

@@ -26,6 +26,9 @@ pub use v4::{
 
 #[path = "batch_codec_v5.rs"]
 mod v5;
+#[path = "batch_codec_v6.rs"]
+mod v6;
+pub(super) use v6::{encode_state_v6, encode_key_v6, decode_key_v6, encode_batch_record_v6};
 pub(super) use v5::{BATCH_PROFILE_V5, STATE_PROFILE_V5};
 pub(super) use v5::{
     decode_batch_record_v5, decode_state_v5, encode_batch_record_v5, encode_state_v5,
@@ -392,7 +395,7 @@ pub(super) fn state_value(v: &RegistryStateRecord) -> Result<V, RegistryError> {
             ("corpus", text(corpus.as_str())?),
             ("generation", V::U64(generation.get())),
         ]),
-        RegistryStateRecord::Namespace(_) => Err(bad()),
+        RegistryStateRecord::Namespace(_) | RegistryStateRecord::ProjectionMembership(_) => Err(bad()),
     }
 }
 fn legacy_error(error: BatchCodecV4Error) -> RegistryError {
@@ -554,7 +557,11 @@ pub(super) fn decode_state_profiled_with_original_probe(
 ) -> Result<(RegistryStateRecord, &'static str), BatchCodecV4Error> {
     probe().map_err(checkpoint_error)?;
     let mut marker = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
-    if string(take(&mut marker, "profile")?)? == STATE_PROFILE_V5 {
+    let marker_profile = string(take(&mut marker, "profile")?)?;
+    if marker_profile == v6::STATE_PROFILE_V6 {
+        return v6::decode_state_v6(bytes).map(|state| (state, v6::STATE_PROFILE_V6)).map_err(Into::into);
+    }
+    if marker_profile == STATE_PROFILE_V5 {
         return v5::decode_state_v5(bytes, probe).map(|state| (state, STATE_PROFILE_V5));
     }
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
@@ -617,7 +624,7 @@ fn key_value(k: &RegistryStateKey) -> Result<V, RegistryError> {
             ("family", text("generation")?),
             ("corpus", text(v.as_str())?),
         ]),
-        RegistryStateKey::Namespace(_) => Err(bad()),
+        RegistryStateKey::Namespace(_) | RegistryStateKey::ProjectionMembership(_) => Err(bad()),
     }
 }
 fn read_key(v: V) -> Result<RegistryStateKey, RegistryError> {
@@ -695,7 +702,11 @@ pub fn decode_batch_record_with_original_probe(
     probe().map_err(checkpoint_error)?;
     limits.validate()?;
     let mut marker = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
-    if string(take(&mut marker, "profile")?)? == BATCH_PROFILE_V5 {
+    let marker_profile = string(take(&mut marker, "profile")?)?;
+    if marker_profile == v6::BATCH_PROFILE_V6 {
+        return v6::decode_batch_record_v6(bytes, limits, probe);
+    }
+    if marker_profile == BATCH_PROFILE_V5 {
         return v5::decode_batch_record_v5(bytes, limits, probe);
     }
     let mut o = open(c::parse_canonical_cbor(bytes).map_err(|_| bad())?)?;
@@ -883,6 +894,7 @@ fn change_value(change: &RegistryChange) -> Result<V, RegistryError> {
             ("receipt", text(v.receipt.as_str())?),
         ]),
         RegistryChange::BindPermanentMembershipV2 { .. }
+        | RegistryChange::BindProjectionMembership { .. }
         | RegistryChange::TransitionPermanentMembershipV2 { .. } => Err(bad()),
         RegistryChange::RetireMembership {
             key,
@@ -914,6 +926,9 @@ fn change_value(change: &RegistryChange) -> Result<V, RegistryError> {
     }
 }
 pub(super) fn request_fingerprint(batch: &RegistryBatch) -> Result<Blake3Digest32, RegistryError> {
+    if batch.changes.iter().any(|change| matches!(change, RegistryChange::BindProjectionMembership { .. })) {
+        return v6::request_fingerprint_v6(batch);
+    }
     if batch.changes.iter().any(|change| {
         matches!(
             change,
@@ -983,3 +998,7 @@ mod tests {
 #[cfg(test)]
 #[path = "batch_codec_v5_tests.rs"]
 mod v5_tests;
+
+#[cfg(test)]
+#[path = "batch_codec_v6_tests.rs"]
+mod v6_tests;

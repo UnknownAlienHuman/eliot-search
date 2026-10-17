@@ -14,6 +14,11 @@ pub use crate::recovery::source_v2::{
     SourceAdmissionV2Error, commit_source_admission_v2, prepare_source_admission_v2,
     recover_source_admission_v2,
 };
+pub use crate::projection_membership::{
+    PreparedProjectionMembership, ProjectionMembershipBindRequest, ProjectionMembershipReceipt,
+    ProjectionMembershipRecord, bind_projection_membership, commit_projection_membership,
+    prepare_projection_membership, read_projection_membership,
+};
 pub use crate::recovery::{
     PreparedSourceMembershipV2, SourceMembershipReceiptV2, commit_source_membership_v2,
     prepare_source_membership_transition_v2, prepare_source_membership_v2,

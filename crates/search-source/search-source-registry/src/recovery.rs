@@ -30,6 +30,8 @@ use crate::source::{AdmissionBindingProof, RegisteredSource, SourceLifecycle};
 mod batch;
 #[path = "membership_v2.rs"]
 mod membership_v2;
+#[path = "projection_membership.rs"]
+pub mod projection_membership;
 #[path = "source_v2.rs"]
 pub mod source_v2;
 #[path = "source_namespace_v2.rs"]
@@ -76,6 +78,12 @@ pub struct SourceRegistry {
     sources: BTreeMap<SourceIdentity, RegisteredSource>,
     memberships: BTreeMap<MembershipKey, MembershipRecord>,
     reverse_memberships: BTreeMap<search_contracts::SourceMembershipId, MembershipKey>,
+    projection_memberships: BTreeMap<
+        search_contracts::SourceMembershipId,
+        projection_membership::ProjectionMembershipRecord,
+    >,
+    reverse_projection_memberships:
+        BTreeMap<search_contracts::ProjectionMembershipId, search_contracts::SourceMembershipId>,
     portfolios: BTreeMap<ReferencePortfolioId, ReferencePortfolioRecord>,
     portfolio_history: PortfolioHistory,
     namespaces: BTreeMap<search_contracts::SourceNamespaceId, NamespaceCutoverState>,
@@ -122,6 +130,8 @@ impl SourceRegistry {
             sources: BTreeMap::new(),
             memberships: BTreeMap::new(),
             reverse_memberships: BTreeMap::new(),
+            projection_memberships: BTreeMap::new(),
+            reverse_projection_memberships: BTreeMap::new(),
             portfolios: BTreeMap::new(),
             portfolio_history: PortfolioHistory::new(),
             namespaces: BTreeMap::new(),
@@ -804,6 +814,7 @@ fn apply_change(
             memberships,
         ),
         RegistryChange::BindPermanentMembershipV2 { .. }
+        | RegistryChange::BindProjectionMembership { .. }
         | RegistryChange::TransitionPermanentMembershipV2 { .. } => {
             Err(RegistryError::SnapshotInvalid)
         }
