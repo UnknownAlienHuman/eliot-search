@@ -170,6 +170,7 @@ pub struct LiveProbeClient {
     auth_lease: QdrantApiKeyLease,
     context: CanonicalRequestContext,
     limits: BridgeLimits,
+    rpc_timeout: Duration,
     attempt: QdrantProbeAttemptId,
     rpc_calls: AtomicUsize,
     response_decode_bytes_reserved: AtomicUsize,
@@ -184,10 +185,14 @@ impl LiveProbeClient {
         auth_lease: QdrantApiKeyLease,
         context: CanonicalRequestContext,
         limits: BridgeLimits,
+        rpc_timeout: Duration,
     ) -> Result<Self, OperationalProbeFailure> {
         let attempt = probe_attempt_id(supervisor)
             .map_err(|error| OperationalProbeFailure::new(error, None, None))?;
         let fail = |error| OperationalProbeFailure::new(error, Some(attempt.clone()), None);
+        if rpc_timeout.is_zero() || rpc_timeout > Duration::from_secs(60) {
+            return Err(fail(BridgeError::QueryBudgetExceeded));
+        }
         let limits = limits.validate().map_err(fail)?;
         auth_lease.validate_binding(supervisor).map_err(fail)?;
         if !supervisor.matches_live_endpoint(endpoint) {
@@ -218,6 +223,7 @@ impl LiveProbeClient {
             auth_lease,
             context,
             limits,
+            rpc_timeout,
             attempt,
             rpc_calls: AtomicUsize::new(0),
             response_decode_bytes_reserved: AtomicUsize::new(0),
@@ -499,7 +505,7 @@ impl LiveProbeClient {
     async fn read_rpc<T>(&self, call: ProbeReadFuture<'_, T>) -> Result<T, BridgeError> {
         self.reserve_rpc()?;
         self.auth_lease.validate()?;
-        let remaining = self.context.remaining()?;
+        let remaining = self.context.remaining()?.min(self.rpc_timeout);
         let response = tokio::time::timeout(remaining, call)
             .await
             .map_err(|_| BridgeError::TransportFailed)?
@@ -521,7 +527,7 @@ impl LiveProbeClient {
             request.metadata_mut().insert("api-key", value);
             Ok(())
         })?;
-        request.set_timeout(remaining.min(Duration::from_secs(10)));
+        request.set_timeout(remaining.min(self.rpc_timeout));
         Ok(request)
     }
 
@@ -553,7 +559,7 @@ impl LiveProbeClient {
             return Err(error);
         }
         let remaining = match self.context.remaining() {
-            Ok(remaining) => remaining,
+            Ok(remaining) => remaining.min(self.rpc_timeout),
             Err(error) => {
                 if !self.clear_pending_mutation(&mutation) {
                     return Err(BridgeError::MutationOutcomeUnknown);

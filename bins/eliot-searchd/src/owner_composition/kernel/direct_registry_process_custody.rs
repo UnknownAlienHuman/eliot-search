@@ -75,3 +75,7 @@ impl NativeProcessRootCustody {
         )
     }
 }
+
+#[cfg(feature = "wave3-index")]
+#[path = "native_index_custody.rs"]
+mod indexed;

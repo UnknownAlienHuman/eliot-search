@@ -107,6 +107,7 @@ pub async fn run_qualification_suite(
         server.fixture_api_key_lease(),
         context,
         BridgeLimits::BASELINE,
+        std::time::Duration::from_secs(10),
     )
     .map_err(|failure| LiveError::Bridge(failure.error()))?;
     run_live_probe_suite(&client)

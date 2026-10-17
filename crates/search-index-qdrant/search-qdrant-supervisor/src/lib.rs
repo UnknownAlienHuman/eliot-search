@@ -292,7 +292,7 @@ pub fn validate_process_config(
     if !config.single_node {
         return Err(SupervisorError::MultiNodeTopologyDenied);
     }
-    if config.max_restarts_per_window == 0 || config.max_restarts_per_window > 100 {
+    if config.max_restarts_per_window > 100 {
         return Err(SupervisorError::InvalidProcessConfig);
     }
     if secret.installation_incarnation_id != config.owner_fence.installation_incarnation_id

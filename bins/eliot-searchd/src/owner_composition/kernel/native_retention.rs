@@ -132,6 +132,21 @@ fn output(record: &search_source_history::revision::SourceRevisionMutationReadba
 pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &mut PersistentControlJournal,
     publisher: &mut ControlSnapshotPublisher, config: &EffectiveDaemonConfig,
 ) -> Result<Option<DirectOutput>, String> {
+    consume_source_inner(input, journal, publisher, config, #[cfg(feature = "wave3-index")] None)
+}
+
+#[cfg(feature = "wave3-index")]
+pub(super) fn consume_source_indexed(input: RetentionSourceInput<'_, '_, '_>, journal: &mut PersistentControlJournal,
+    publisher: &mut ControlSnapshotPublisher, config: &EffectiveDaemonConfig,
+    indexed: &mut super::retention_publication::IndexedRetention<'_>,
+) -> Result<Option<DirectOutput>, String> {
+    consume_source_inner(input, journal, publisher, config, Some(indexed))
+}
+
+fn consume_source_inner(input: RetentionSourceInput<'_, '_, '_>, journal: &mut PersistentControlJournal,
+    publisher: &mut ControlSnapshotPublisher, config: &EffectiveDaemonConfig,
+    #[cfg(feature = "wave3-index")] mut indexed: Option<&mut super::retention_publication::IndexedRetention<'_>>,
+) -> Result<Option<DirectOutput>, String> {
     // The durable operating profile selects retention behavior. Direct mode
     // completes source retention without entering the indexed C02/C07 path.
     #[cfg(feature = "wave3-index")]
@@ -145,6 +160,10 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
             .map_err(|error| error.control.code().to_owned())?;
         indexed_preparation_selected(profile).map_err(str::to_owned)?
     };
+    #[cfg(feature = "wave3-index")]
+    if indexed_preparation != indexed.is_some() {
+        return Err("NATIVE_RETENTION_INDEX_RUNTIME_PROFILE_MISMATCH".into());
+    }
     input.security.checkpoint().map_err(|error| error.to_string())?;
     // Resolve a completed operation from its immutable original before reading
     // mutable Current/key policy. This is historical metadata, not key use or
@@ -164,15 +183,8 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
                 drop(control);
                 #[cfg(feature = "wave3-index")]
                 if indexed_preparation {
-                    let _stored = super::native_preparation_factory::prepare_native_raw_code_artifacts(
-                        &input,
-                        profile,
-                        &committed.readback,
-                        journal,
-                        publisher,
-                        config,
-                    )
-                    .map_err(str::to_owned)?;
+                    prepare_and_publish(&input, profile, &committed.readback, journal, publisher,
+                        config, indexed.as_deref_mut().ok_or("NATIVE_RETENTION_INDEX_RUNTIME_REQUIRED")?)?;
                 }
                 Ok(Some(output(&committed.readback, true, false)))
             },
@@ -192,6 +204,11 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
     let work = |unit| input.native.work(unit);
     let prepared = prepare_occurrence(&input, journal, publisher, residency.clone(), observed_at)?;
     if let SourceRevisionPreparation::Committed(committed) = prepared {
+        #[cfg(feature = "wave3-index")]
+        if indexed_preparation {
+            prepare_and_publish(&input, &committed.profile, &committed.readback, journal, publisher,
+                config, indexed.as_deref_mut().ok_or("NATIVE_RETENTION_INDEX_RUNTIME_REQUIRED")?)?;
+        }
         return Ok(Some(output(&committed.readback, true, false)));
     }
     let SourceRevisionPreparation::Pending(prepared) = prepared else { unreachable!() };
@@ -303,17 +320,24 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
     published_metadata(journal, publisher, input.deadline, &work)?;
     #[cfg(feature = "wave3-index")]
     if indexed_preparation {
-        let _stored = super::native_preparation_factory::prepare_native_raw_code_artifacts(
-            &input,
-            &profile,
-            &committed,
-            journal,
-            publisher,
-            config,
-        )
-        .map_err(str::to_owned)?;
+        prepare_and_publish(&input, &profile, &committed, journal, publisher, config,
+            indexed.as_deref_mut().ok_or("NATIVE_RETENTION_INDEX_RUNTIME_REQUIRED")?)?;
     }
     Ok(Some(output(&committed, false, true)))
+}
+
+#[cfg(feature = "wave3-index")]
+fn prepare_and_publish(input: &RetentionSourceInput<'_, '_, '_>, profile: &SourceRevisionPresealProfile,
+    committed: &search_source_history::revision::SourceRevisionMutationReadback,
+    journal: &mut PersistentControlJournal, publisher: &mut ControlSnapshotPublisher,
+    config: &EffectiveDaemonConfig, indexed: &mut super::retention_publication::IndexedRetention<'_>,
+) -> Result<(), String> {
+    if let Some(stored) = super::native_preparation_factory::prepare_native_raw_code_artifacts(
+        input, profile, committed, journal, publisher, config,
+    ).map_err(str::to_owned)? {
+        indexed.publish_new(input, &stored, journal, publisher)?;
+    }
+    Ok(())
 }
 
 fn prepare_occurrence(input: &RetentionSourceInput<'_, '_, '_>, journal: &mut PersistentControlJournal,

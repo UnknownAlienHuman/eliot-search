@@ -61,6 +61,7 @@ impl BlockingRealQueryPlane {
         auth_lease: QdrantApiKeyLease,
         context: CanonicalRequestContext,
         limits: BridgeLimits,
+        probe_rpc_timeout: std::time::Duration,
     ) -> Result<(Self, LiveSuiteReport), OperationalProbeFailure> {
         ensure_synchronous_context().map_err(OperationalProbeFailure::before_attempt)?;
         let runtime = Builder::new_multi_thread()
@@ -69,7 +70,14 @@ impl BlockingRealQueryPlane {
             .enable_all()
             .build()
             .map_err(|_| OperationalProbeFailure::before_attempt(BridgeError::TransportFailed))?;
-        let client = LiveProbeClient::connect(endpoint, supervisor, auth_lease, context, limits)?;
+        let client = LiveProbeClient::connect(
+            endpoint,
+            supervisor,
+            auth_lease,
+            context,
+            limits,
+            probe_rpc_timeout,
+        )?;
         let completed = runtime.block_on(run_live_probe_suite(&client))?;
         let Ok(gate) = QualifiedGate::admit_executed(&completed.executed) else {
             return Err(client.failure(BridgeError::CapabilityReceiptMismatch));

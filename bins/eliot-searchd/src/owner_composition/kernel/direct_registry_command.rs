@@ -85,7 +85,7 @@ pub(super) fn run(
     if selected.len() != expected || !cli.overrides.is_empty() {
         return Err("DIRECT_INPUT_UNAVAILABLE".into());
     }
-    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2" | "--prepare-revision-dek-v1" | "--select-revision-dek-v1") {
+    let mode = if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2" | "--prepare-revision-dek-v1" | "--select-revision-dek-v1" | "--serve-data-root") {
         DataRootOpenMode::OpenExistingMutating
     } else {
         DataRootOpenMode::InspectExistingReadOnly
@@ -445,12 +445,14 @@ fn capture_configuration(
         // The secrets section's equality digest includes source provenance.
         // Retention must use the same canonical file source as Current selection.
         // Existing root-only commands keep their frozen capture profile.
-        let source_label = if command == "--retain-source-v2" { "config-file" } else { "direct-root-locators" };
+        let indexed_command = matches!(command, "--retain-source-v2" | "--serve-data-root");
+        let source_label = if indexed_command { "config-file" } else { "direct-root-locators" };
         let document = config::capture_file_document(&bytes, source_label)
             .map_err(|_| "DIRECT_CONFIG_INVALID")?;
         if document
             .declared_sections()
-            .any(|v| v.as_str() != "source_root_locators" && !(command == "--retain-source-v2" && v.as_str() == "secrets"))
+            .any(|v| v.as_str() != "source_root_locators"
+                && !(indexed_command && matches!(v.as_str(), "secrets" | "qdrant_process" | "handles")))
         {
             return Err("DIRECT_CONFIG_VARIANT_UNAVAILABLE".into());
         }
@@ -458,7 +460,14 @@ fn capture_configuration(
     } else {
         None
     };
-    let effective = config::build_effective(file, None, None, "direct", "direct")
+    let requested = file.as_ref().and_then(search_config::ConfigDocument::requested_profile)
+        .map_or("direct", |profile| profile.as_str()).to_owned();
+    if requested != "direct"
+        && (!matches!(command, "--retain-source-v2" | "--serve-data-root") || requested != "lexical")
+    {
+        return Err("DIRECT_CONFIG_PROFILE_UNAVAILABLE".into());
+    }
+    let effective = config::build_effective(file, None, None, &requested, &requested)
         .map_err(|_| "DIRECT_CONFIG_INVALID")?;
     let hints = RootLocatorHints::from_config(&effective)?;
     if matches!(command, "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2") {
@@ -466,7 +475,7 @@ fn capture_configuration(
     }
     if !matches!(
         command,
-        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2" | "--prepare-revision-dek-v1" | "--source-roots" | "--health-data-root" | "--verify-root"
+        "--register-source-root" | "--register-source-root-v2" | "--admit-source-v2" | "--retain-source-v2" | "--prepare-revision-dek-v1" | "--source-roots" | "--health-data-root" | "--verify-root" | "--serve-data-root"
     ) {
         return Err("DIRECT_CONSUMER_UNAVAILABLE".into());
     }

@@ -18,14 +18,14 @@ use super::{
 
 // The mutable original meter is borrowed, never replaced or reset. Leaf cleanup
 // may still account an actual native clear after ordinary work has refused.
-struct OriginalContext<'a> {
+pub(super) struct OriginalContext<'a> {
     request: &'a NativeRootRequest,
     work: &'a mut NativeWork,
     first: Option<OwnerError>,
 }
 
 impl<'a> OriginalContext<'a> {
-    const fn new(request: &'a NativeRootRequest, work: &'a mut NativeWork) -> Self {
+    pub(super) const fn new(request: &'a NativeRootRequest, work: &'a mut NativeWork) -> Self {
         Self {
             request,
             work,
@@ -72,7 +72,11 @@ impl<'a> OriginalContext<'a> {
         self.remember(result)
     }
 
-    fn finish<T, E>(&mut self, result: Result<T, E>, refusal: OwnerError) -> Result<T, OwnerError> {
+    pub(super) fn finish<T, E>(
+        &mut self,
+        result: Result<T, E>,
+        refusal: OwnerError,
+    ) -> Result<T, OwnerError> {
         match result {
             Ok(value) => {
                 self.checkpoint()?;
@@ -220,6 +224,16 @@ pub(super) struct StorageAclSnapshot {
 }
 
 impl StorageAclSnapshot {
+    /// Actual root owner/DACL observation captured with the held Native pins.
+    /// The caller must first revalidate this snapshot through `verify`.
+    pub(super) fn root_owner_observation(
+        &self,
+    ) -> Result<&eliot_searchd::native_file::StorageAclObservation, OwnerError> {
+        self.observations
+            .first()
+            .ok_or(OwnerError::OwnerStorageAclUnqualified)
+    }
+
     pub(super) fn current_user_scope(
         &self,
         request: &NativeRootRequest,

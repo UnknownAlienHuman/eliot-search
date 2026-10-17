@@ -415,6 +415,12 @@ mod dek_selection;
 mod native_preparation_factory;
 #[path = "direct_registry_process_custody.rs"]
 mod process_custody;
+#[cfg(feature = "wave3-index")]
+#[path = "native_index_runtime.rs"]
+mod indexed_runtime;
+#[cfg(feature = "wave3-index")]
+#[path = "native_retention_publication.rs"]
+mod retention_publication;
 pub(crate) use process_custody::NativeProcessRootCustody;
 #[cfg(feature = "wave4-query")]
 #[path = "native_query_population.rs"]
