@@ -689,7 +689,7 @@ fn check_transition(
         }
         (None, RegistryStateRecord::Generation { .. }) => true,
         (None, RegistryStateRecord::ProjectionMembership(binding)) => {
-            encoding_profile == "eliot.registry-state.v6"
+            encoding_profile == "eliot.registry-batch.v6"
                 && binding.registry_revision() == revision
         }
         (None, RegistryStateRecord::Namespace(namespace)) => {

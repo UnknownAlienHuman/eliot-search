@@ -20,6 +20,71 @@ use std::sync::Arc;
 
 struct NoopResolver;
 
+#[test]
+fn v6_projection_batch_profile_survives_history_replay() {
+    use search_contracts as c;
+    use search_source_records::{
+        batch::request_fingerprint,
+        membership::PermanentMembershipProvenanceV2,
+        operation::{RegistryBatch, RegistryChange, RegistryOperation},
+        projection_membership::{ProjectionMembershipBindRequest, ProjectionMembershipRecord},
+    };
+    let rev = |value| NonZeroRevision::new(value).unwrap();
+    let identity = c::SourceIdentity {
+        source_namespace_id: SourceNamespaceId::from_bytes([1; 16]),
+        source_id: c::SourceId::from_bytes([2; 16]),
+        identity_kind: c::SourceIdentityKind::NtfsFile,
+        stable_identity_components: c::OpaqueCanonicalBytes::from_validated(b"history-v6".to_vec()).unwrap(),
+    };
+    // Synthetic technical observations only. C03 separately requires the real
+    // active member/source/root/namespace before this can become usable state.
+    let request = ProjectionMembershipBindRequest {
+        binding: c::ProjectionMembership {
+            projection_membership_id: c::ProjectionMembershipId::from_bytes([3; 16]),
+            source_membership_id: c::SourceMembershipId::from_bytes([4; 16]),
+            representation_id: c::RepresentationId::from_bytes([5; 16]),
+            access_partition_id: c::AccessPartitionId::from_bytes([6; 16]),
+            scoring_partition_id: c::ScoringPartitionId::from_bytes([7; 16]),
+            projection_schema_id: c::ProfileId::new("history-v6-profile").unwrap(),
+        },
+        expected_membership_revision: c::MembershipRevision::new(1),
+        expected_provenance: PermanentMembershipProvenanceV2::from_stored_parts(
+            identity.clone(), rev(1), RootBindingId::from_bytes([8; 16]), rev(1),
+            identity.source_namespace_id, rev(1), SourceOwnerGeneration::from_bytes([9; 32]),
+            b"policy-observation".to_vec(), b"admission-observation".to_vec(), rev(1),
+        ).unwrap(),
+    };
+    let operation_id = OpaqueId::new("history-v6-operation").unwrap();
+    let receipt = ReceiptRef::new("history-v6-correlation").unwrap();
+    let mutation = Blake3Digest32::from_bytes([10; 32]);
+    let state = RegistryStateRecord::ProjectionMembership(
+        ProjectionMembershipRecord::from_observed_parts(request.clone(), 1, receipt.clone()).unwrap(),
+    );
+    let key = state.key();
+    let batch = RegistryBatch {
+        expected_registry_revision: 0,
+        operation: RegistryOperation::new(operation_id.clone(), mutation),
+        changes: vec![RegistryChange::BindProjectionMembership { request, receipt: receipt.clone() }],
+    };
+    let operation = DecodedBatch::from_observed_parts_v6(
+        search_source_records::error::RegistryJournalEntry::new(operation_id.clone(), mutation,
+            0, 1, JournalEntryKind::BatchApply, receipt),
+        request_fingerprint(&batch).unwrap(),
+        vec![RegistryStateDelta::new(key.clone(), None, state.clone()).unwrap()],
+        batch.changes, DEFAULT_REGISTRY_LIMITS,
+    ).unwrap();
+    let key_bytes = key.encode().unwrap();
+    let state_bytes = state.encode().unwrap();
+    let operation_bytes = operation.encode().unwrap();
+    let restored = restore_registry_state(1,
+        &[RegistryRestoreState { key: &key_bytes, value: &state_bytes }],
+        &[RegistryRestoreOperation { operation_id: &operation_id, value: &operation_bytes }],
+        DEFAULT_REGISTRY_LIMITS, MAX_REGISTRY_RESTORE_BYTES,
+    ).unwrap().into_parts();
+    assert_eq!(restored.operations, vec![operation]);
+    assert_eq!(restored.state_encoding_profiles.get(&key), Some(&"eliot.registry-state.v6"));
+}
+
 impl OriginalInputResolver for NoopResolver {
     fn resolve_policy(
         &mut self,
