@@ -42,6 +42,8 @@ mod validate;
 
 pub use diff::diff_manifests;
 pub use error::ProjectionError;
+// Canonical encoding is data only; publication still verifies source/scope/units.
+pub use manifest::manifest_canonical_bytes;
 pub use model::{
     ExpectedReadbackShape, LineageObservation, ManifestDiff, PlannedUnit, PlannedVector, PointSpec,
     ProjectionBudget, ProjectionManifest, ProjectionManifestEntry, ProjectionMembershipBinding,
@@ -105,6 +107,24 @@ pub fn verified_projection_manifest_semantic_digest(
     budget: ProjectionBudget,
 ) -> Result<Blake3Digest32, ProjectionError> {
     verify_manifest_reconstruction(manifest, points, scope, budget)?;
+    manifest_semantic_digest(manifest)
+}
+
+/// Recomputes canonical manifest bytes before issuing their C13 semantic digest.
+///
+/// This establishes encoded-data consistency, not source/scope qualification;
+/// publication must independently establish the complete `UnitSet` and owner scope.
+pub fn canonical_projection_manifest_semantic_digest(
+    manifest: &ProjectionManifest,
+    budget: ProjectionBudget,
+) -> Result<Blake3Digest32, ProjectionError> {
+    if manifest_canonical_bytes(manifest, budget)?.as_slice() != manifest.canonical_bytes {
+        return Err(ProjectionError::ManifestMismatch);
+    }
+    manifest_semantic_digest(manifest)
+}
+
+fn manifest_semantic_digest(manifest: &ProjectionManifest) -> Result<Blake3Digest32, ProjectionError> {
     let domain = CanonicalDigestDomain::parse(MANIFEST_SEMANTIC_DIGEST_DOMAIN)
         .map_err(|_| ProjectionError::InvalidManifest)?;
     let limit =

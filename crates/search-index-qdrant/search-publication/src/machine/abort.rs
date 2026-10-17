@@ -56,7 +56,7 @@ pub struct AbortFinalizationRequest {
     /// Original transaction, consumed target, manifest digests and durable operation binding.
     pub intent: DurableIntent,
     /// Original immutable preparation reference.
-    pub preparation_receipt: ReceiptRef,
+    pub prepared_input_digest: Blake3Digest32,
     /// Actual outcome references, captured only after successful coordinator validation.
     pub resolution: AbortedPublicationResolution,
 }
@@ -177,7 +177,7 @@ impl PublicationCoordinator {
             collection_generation_id: transaction.prepared.collection_generation_id,
             previous_visible_epoch: transaction.previous_visible_epoch,
             intent: intent.clone(),
-            preparation_receipt: transaction.prepared.preparation_receipt.clone(),
+            prepared_input_digest: transaction.prepared.prepared_input_digest,
             resolution: self
                 .abort_finalization
                 .resolution

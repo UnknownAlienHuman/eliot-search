@@ -4,12 +4,14 @@
 use core::fmt;
 
 use search_contracts::CollectionGenerationId;
+use search_projection_planner::ProjectionBudget;
+use crate::admission::{AdmissionPurpose, PublicationAdmissionOwners, PublicationProposal,
+    validate_prepared_generation};
 
 use super::{
-    ClosureReceipt, ControlCommitObservation, DurableIntent, Epoch, PreparedPublication,
+    ClosureReceipt, ControlCommitObservation, DurableIntent, Epoch, PreparedGeneration,
     PublicationCoordinator, PublicationError, PublicationGuards, PublicationPhase,
     PublicationTransaction, ReadbackVerified, StageReceipt, changed_point_id_is_reused,
-    validate_manifest,
 };
 use crate::{PublicationRecoveryDecision, PublicationRecoveryObservation, recover};
 
@@ -23,9 +25,9 @@ use crate::{PublicationRecoveryDecision, PublicationRecoveryObservation, recover
 ///
 /// Snapshot acknowledgement is intentionally absent: a receipt from the previous
 /// process cannot authorize admission in the restored process.
-pub struct PublicationRestoreInput {
+pub struct PublicationRestoreInput<T> {
     /// Exact original preparation, including both immutable manifests.
-    pub prepared: PreparedPublication,
+    pub prepared: T,
     /// Authoritatively retained visible epoch immediately before this reservation.
     pub previous_visible_epoch: Epoch,
     /// Highest durable reservation; single-flight recovery requires the target itself.
@@ -50,13 +52,23 @@ pub struct PublicationRestoreInput {
     pub observation: PublicationRecoveryObservation,
 }
 
-impl fmt::Debug for PublicationRestoreInput {
+impl<T> fmt::Debug for PublicationRestoreInput<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PublicationRestoreInput")
             .field("phase", &self.phase)
             .field("previous_visible_epoch", &self.previous_visible_epoch)
             .field("last_reserved_epoch", &self.last_reserved_epoch)
             .finish_non_exhaustive()
+    }
+}
+
+impl<T> PublicationRestoreInput<T> {
+    fn with_admitted<U>(self, prepared: U) -> PublicationRestoreInput<U> {
+        PublicationRestoreInput { prepared, previous_visible_epoch: self.previous_visible_epoch,
+            last_reserved_epoch: self.last_reserved_epoch, collection_generation_id: self.collection_generation_id,
+            current_guards: self.current_guards, phase: self.phase, intent: self.intent,
+            stage_receipt: self.stage_receipt, closure_receipt: self.closure_receipt,
+            verified: self.verified, control_commit: self.control_commit, observation: self.observation }
     }
 }
 
@@ -80,10 +92,14 @@ impl PublicationCoordinator {
     /// invalid manifests, changed reuse of a physical point ID, stale owner,
     /// inconsistent epochs, oversized lists and prior-process snapshot claims.
     /// A rejected input never returns a partially usable coordinator.
-    pub fn restore_inflight(
-        input: PublicationRestoreInput,
-        max_points: usize,
+    pub fn restore_inflight<P: PublicationAdmissionOwners + ?Sized>(
+        input: PublicationRestoreInput<PublicationProposal<'_, P::Projection>>,
+        owners: &mut P, snapshot: &P::Snapshot, budget: ProjectionBudget,
     ) -> Result<(Self, PublicationRecoveryDecision), PublicationError> {
+        let prepared = validate_prepared_generation(owners, snapshot, &input.prepared,
+            AdmissionPurpose::Restore, budget)?;
+        let input = input.with_admitted(prepared);
+        let max_points = budget.max_points;
         validate_input(&input, max_points)?;
         let phase = input.phase;
         let guards_changed = input.current_guards != input.prepared.guards;
@@ -91,6 +107,8 @@ impl PublicationCoordinator {
         // Populate the original reservation directly. Lowering the floor and
         // calling submit would misuse a fresh-reservation operation for recovery.
         let mut coordinator = Self {
+            initialized: true,
+            current_scope: Some(input.prepared.scope().clone()),
             visible_epoch: input.previous_visible_epoch,
             last_reserved_epoch: input.last_reserved_epoch,
             current_manifest: input.prepared.old_manifest.clone(),
@@ -170,17 +188,13 @@ impl PublicationCoordinator {
 }
 
 fn validate_input(
-    input: &PublicationRestoreInput,
+    input: &PublicationRestoreInput<PreparedGeneration>,
     max_points: usize,
 ) -> Result<(), PublicationError> {
     if max_points == 0
         || input.prepared.old_manifest.is_some() != input.prepared.old_manifest_digest.is_some()
     {
         return Err(PublicationError::InvalidPreparedPublication);
-    }
-    validate_manifest(&input.prepared.new_manifest, max_points)?;
-    if let Some(old) = &input.prepared.old_manifest {
-        validate_manifest(old, max_points)?;
     }
     if changed_point_id_is_reused(
         input.prepared.old_manifest.as_ref(),
@@ -195,6 +209,14 @@ fn validate_input(
         || input.intent.guards != input.prepared.guards
     {
         return Err(PublicationError::OperationMismatch);
+    }
+    let observed = input.prepared.observed;
+    if input.current_guards != observed.current_guards
+        || input.previous_visible_epoch != observed.previous_visible_epoch
+        || input.last_reserved_epoch != observed.last_reserved_epoch
+        || input.intent.target_epoch != observed.target_epoch
+        || input.observation.control_visible_epoch != observed.current_visible_epoch {
+        return Err(PublicationError::ControlConflict);
     }
     if input.current_guards.owner_epoch < input.intent.guards.owner_epoch {
         return Err(PublicationError::GuardMismatch);
