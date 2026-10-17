@@ -401,6 +401,9 @@ pub(in super::super) mod artifact_store;
 #[cfg(feature = "wave3-index")]
 #[path = "native_artifact_reader.rs"]
 pub(in super::super) mod artifact_reader;
+#[cfg(feature = "wave3-index")]
+#[path = "native_publication_admission.rs"]
+mod publication_admission;
 #[path = "native_retained_reader.rs"]
 mod retained_reader;
 #[path = "native_dek_command.rs"]
