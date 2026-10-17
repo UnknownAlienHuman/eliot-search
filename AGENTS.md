@@ -53,57 +53,81 @@ The v1 contract lacks general free-text retrieval and first-class orientation. D
 
 ## Authority order
 
-Resolve conflicts in this order:
+Current maintainer instructions determine the authorized task and workflow; repository instructions
+cannot override that request. For product semantics, resolve conflicts using:
 
-1. Part I of `docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`;
+1. Part I of docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md;
 2. accepted ADRs, especially ADR 0005 and ADR 0006;
 3. accepted public contracts, provider schemas and product qualification contracts;
-4. `docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md` (mandatory remediation of verified code/security/spine defects);
-5. nearest package `AGENTS.md`, `FUNCTIONS.md` and package-owned documentation;
-6. current maintainer request, exact issue/PR and dependency contract;
-7. Cargo manifests and compiled source reality;
-8. historical material under `swarm/**`, `docs/handoff/**`, `docs/execution/**` and Architecture Part II.
+4. nearest package AGENTS.md, FUNCTIONS.md and package-owned documentation.
 
-Part II and P00/ticket/lease material are historical scaffolding. They cannot authorize or block current product work. `swarm/launch-state.toml`, ticket drafts, context manifests, leases, submissions, reviews and handoffs are repository history, not runtime inputs or implementation authority.
+Current compiled source establishes what has been implemented, not whether it satisfies the contract.
+Dated audits, issue opening bodies and source maps are evidence to verify against the current code.
+The [Gemini audit verification](docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) records corrected
+findings and bounded refactoring candidates; it is not another architecture or a mandatory launch gate.
 
-A maintainer request or exact ready issue plus the sole active writer worktree is sufficient authorization, subject to the live queue. Only one source branch/PR may be active; each successor starts from newly merged `main`. Do not build controller machinery inside Search. Residual controller tooling is removal work under #214.
+Part II and P00/ticket/lease material are historical scaffolding. They cannot authorize or block
+current product work. swarm/launch-state.toml, context manifests, leases, submissions, reviews and
+handoffs are repository history, not runtime inputs or implementation authority.
 
-## Mandatory anti-slop and code-quality rules (2026-10-17 audit mandate)
+A maintainer request or an exact ready issue plus the sole active writer worktree is sufficient
+authorization. Preserve the current manager's work and check the actual source queue before opening
+a successor. Only one source branch/PR may be active; successors start from newly merged main.
+Do not build controller machinery inside Search; residual controller tooling is removal work under #214.
 
-Read `docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md` before starting any slice. All agents must enforce these rules without exception:
+## Refactoring rules
 
-1. **No fake cryptography or synthetic digests:**
-   Never implement custom FNV-1a (`0xcbf2_9ce4_8422_2325`), SplitMix64, XOR-folding or hand-rolled SHA-256 (`0x428a_2f98`). Never wrap non-BLAKE3 output or repeated byte constants (`[0_u8; 32]`, `[0xA5; 32]`, `[0xA1; 32]`, `[0x6c; 32]`) into `Blake3Digest32`. Add `blake3.workspace = true` (or `sha2.workspace = true`) to the package's `Cargo.toml` and compute real domain-separated cryptographic digests with length-prefixed fields or canonical CBOR (`search_contracts::canonical::to_canonical_cbor`).
-2. **Never grow `xtask/canonical-digest-ledger.json` or `swarm/coverage/**`:**
-   Adding new exemptions to `xtask/canonical-digest-ledger.json` or building new `xtask` AST/coverage police to excuse unfinished code is forbidden. Fix the fake digest/receipt in the owning crate and delete its ledger exemptions.
-3. **Cut over and delete legacy duplicates in the same slice:**
-   Do not leave broken legacy types or prototypes (such as the 16-byte FNV `PointIdentityDigest([u8; 16])` and `ProjectionKind` point key in `search-point-identity`, the in-memory `bins/eliot-searchd/src/lexical/` index, `src/snapshot/`, `src/sealed_*`, `src/main.rs`, or `src/bin/eliot-search-sealed-*.rs`) sitting beside their replacements. Cross-package slices that update a crate and its immediate reverse consumers to **delete** the broken implementation are explicitly authorized and required.
-4. **No dead-code facades or unwired daemon modules:**
-   Do not land new `#[allow(dead_code)]` composition modules in `bins/eliot-searchd`. `bins/eliot-searchd` must enable `full-baseline` by default and wire `src/entry.rs::main()` through the real Architecture 8.4 spine (`search-source-admission` / `search-safe-reader` → `search-materializer` / `search-unitizer` → `search-control-redb` → `search-projection-planner` / `search-point-identity` / `search-qdrant-bridge` / `search-publication` → `search-access` / `search-query-planner` / `search-retrieval-executor` / `search-candidate-validator` → `search-provider-protocol`).
-5. **No tautological security guards or production test fixtures:**
-   Never pass `path.parent()` as `admitted_root` to `safe_reader_adapter`. Never hardcode `ReadSecurityDisposition::Permitted`, barrier revision `1`, or `[0xA5; 32]` vault receipts in production code. Never silently downgrade Windows root/handle identity to path bytes without explicit downgraded identity classification. Keep `Fake*` structs (`FakeGuards`) and `build_test_*` helpers strictly inside `#[cfg(test)]` or `tests/`.
+1. **Use the existing cryptographic owner and exact contracted profile.** Reuse search-contracts
+   digest/CBOR APIs and accepted blake3/sha2 dependencies. Semantic identities cannot use homemade
+   FNV/SplitMix/XOR digests or fixture constants. Preserve raw versus framed bytes and SHA-256 versus
+   BLAKE3; identity changes require an explicit profile/migration disposition. S12.2's qualified sparse
+   token-to-bucket mapping is distinct from a cryptographic fingerprint. Zero-initialized working
+   buffers and explicit test vectors are not fabricated production evidence.
+2. **Repair producers, not the exemption process.** Add no migration/removal exemptions or new
+   ledger/coverage machinery. Reclassify the actual replacement through the existing guard and remove
+   resolved exemptions. A touched crate does not require repairing every unrelated ledger site;
+   accepted algorithms, wire readers and useful test cases remain classified accurately.
+3. **Cut over the selected implementation and delete the replaced path together.** An explicit
+   owner plus its immediate reverse consumers is authorized even where a package's generic instructions
+   say package-only. Do not leave a second product writer/fallback. Unrelated legacy code is a separate
+   deletion slice; retained format readers need a concrete format, caller and deletion owner. Never
+   rehash stored IDs in place or delete every sealed/snapshot module by wildcard.
+4. **Integrate real callers.** A required baseline composition must reach the actual owner/effect;
+   a new dead facade is not delivery. Change full-baseline/default features at a named integration
+   boundary, after caller wiring. Compilation does not grant readiness. DIRECT must remain available
+   under Qdrant failure; optional model/document workers remain separately qualified. Do not activate
+   test compositions merely to satisfy an “every module reachable” rule.
+5. **Use actual admission and effect evidence.** Registered-source operations require the retained
+   admitted root, native identity and live security state. A caller-selected diagnostic file's parent
+   is not that authority. No fixed Permitted/barrier/profile/vault evidence may stand in for an owner
+   observation. Remove unused synthetic wrappers; keep actual FakeGuards/build_test_export fixtures
+   behind test configuration.
 
 ## Queue authority and project maps
 
 These sources have different jobs:
 
 1. Architecture/ADRs/package contracts define product semantics.
-2. `docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md` defines the mandatory code-repair and spine-wiring priorities.
-3. `docs/product/EXECUTION_PROTOCOL.md` defines repository execution.
-4. Programme issue #352, `docs/audit/AGENT_LAUNCH_GATE_2026-10-09.md`, the exact active issue/PR and current merged source define the **live writer queue**.
-5. `docs/product/PROJECT_COMPLETION.md` is the long-range obligation/dependency graph. Its dated “next task”, base SHA or local stage wording is not live scheduling authority.
+2. docs/product/EXECUTION_PROTOCOL.md defines bounded repository execution.
+3. The current maintainer handoff, programme issue #352, exact active issue/PR and merged source define
+   the live writer queue. Refresh their actual state; an old opening body or BLOCKED title is not proof
+   that a prerequisite is missing.
+4. docs/product/PROJECT_COMPLETION.md is the long-range obligation graph. Dated launch gates,
+   Wave-2 packets and exception matrices are historical snapshots, not additional scheduling authority.
 
-When the completion map is stale, follow #352, the 2026-10-17 audit remediation phases, merged artifacts and the exact issue; update the map separately. Never repeat delivered work because an old row remains present.
+When a snapshot is stale, preserve the active manager/WIP and verify the necessary API/artifact on
+current main. Update the stale status instead of repeating delivered work. Neither an audit phase
+nor whole-programme closure is a prerequisite for an independently coherent owner slice.
 
 ## One-manager integration exceptions
 
-Current process/addenda:
+Current process and reference maps:
 
-- `docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md` — mandatory removal of fake digests, legacy duplicates, security bypasses and unwired daemon modules;
-- `docs/product/EXECUTION_PROTOCOL.md` — bounded source slices, finding triage, review budgets and serial merge discipline;
-- `docs/audit/WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md` — remaining Wave-2 order and subagent roles;
-- `docs/audit/WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md` — exact issue/path exceptions;
-- `docs/product/PROJECT_COMPLETION.md` — long-range implementation-to-release graph only.
+- docs/product/EXECUTION_PROTOCOL.md — bounded source slices, finding triage, review and serial merges;
+- docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md — verified source findings and refactoring cards;
+- docs/audit/WAVE2_SINGLE_MANAGER_PACKET_2026-10-09.md and WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md
+  — historical path/consumer evidence, applied only when still relevant to the exact current slice;
+- docs/product/PROJECT_COMPLETION.md — long-range implementation-to-release obligations.
 
 Rules:
 
@@ -155,7 +179,7 @@ persisted migrations:        <= 1
 cross-owner cutovers:        <= 1
 ```
 
-These triggers do not permit omitted correctness. Crossing one means stop and split sequentially or obtain a reviewed exception before additional source changes.
+These triggers do not permit omitted correctness. Crossing one means split sequentially or record a justified reviewed exception. Existing package size debt does not block a bounded shrinking slice or require a new crate merely to evade a line limit.
 
 Finding taxonomy:
 
@@ -169,7 +193,7 @@ A B0 claim names exact path, symbol, caller and causal chain. “Related to the 
 
 ## Required working method
 
-1. Read Architecture Part I, this file, `docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md`, `EXECUTION_PROTOCOL.md`, nearest package instructions and the exact issue.
+1. Read the relevant Architecture Part I sections, this file, `EXECUTION_PROTOCOL.md`, nearest package instructions and the exact current issue. Consult the audit for the boundary being changed.
 2. Record exact base SHA, owner, paths, reverse consumers, non-goals, persisted-byte disposition, deletion boundary and minimum gates.
 3. Use one writer worktree created from the current `origin/main`.
 4. Freeze scope by the second source commit.
@@ -183,7 +207,7 @@ A B0 claim names exact path, symbol, caller and causal chain. “Related to the 
    cargo +1.98.0 clippy --locked -p <changed-owner> --all-features -- -D warnings
    ```
 
-   Select production targets (`--lib`/`--bins` as applicable), including immediate reverse consumers and `eliot-searchd --all-features` when daemon wiring is touched.
+   Select production targets (`--lib`/`--bin` as applicable) and the declared immediate consumers. For daemon wiring, check normal defaults and the required `full-baseline` profile; `--all-features` also enables `legacy-loopback-harness` and is not the normal product configuration. Test/native/fault execution remains deferred to the completed integrated implementation.
 9. Reuse recorded unrelated baseline debt. If a production gate fails, compare its relevant base/candidate diagnostics once. New candidate production diagnostics block.
 10. Obtain a formal review bound to the exact final head, with no unresolved B0/P1 and explicit F1/F2/D/Q dispositions. A load-bearing commit expires earlier review. In a single-owner repository, a formal COMMENT review may record the independent reviewer result and manager disposition; self-approval is not required.
 11. Merge the coherent source slice when declared gates pass. Create the successor branch only from the newly merged `main`.

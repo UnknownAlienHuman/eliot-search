@@ -1,7 +1,9 @@
-# Wave 2 package-instruction exception matrix — current revision
+# Wave 2 package-instruction exception matrix — historical path map
 
-**Authority:** root `AGENTS.md`, exact source issue, [bounded execution protocol](../product/EXECUTION_PROTOCOL.md), programme issue #352 and this matrix.
-**Current source base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
+**Recorded base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
+**Applicability:** historical owner/path evidence. Current maintainer instructions, root AGENTS, the exact current slice and [bounded execution protocol](../product/EXECUTION_PROTOCOL.md) govern work. This matrix does not impose an old queue or missing-prerequisite claim.
+
+See the [2026-10-17 verification](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md): planner/publication already consume S11. For #329, prove actual remaining legacy imports rather than waiting on unrelated #262 bridge work.
 
 One manager owns commits, root dependency pins and `Cargo.lock`. An exception permits one frozen source slice; it does not authorize an entire issue/programme in one PR.
 
@@ -23,31 +25,22 @@ One manager owns commits, root dependency pins and `Cargo.lock`. An exception pe
 | #226.markdown | materializer + unitizer | Markdown pin/lockfile/profile fixtures after required preparation interface | JATS/PDF/rendering; new UnitSet/document catalogue |
 | #226.jats | same owners after Markdown merges | XML pin/lockfile/JATS fixtures | Markdown rewrite; dynamic XML tree; external entities |
 | #446 JATS UnitSet | existing `search-unitizer` only | named borrowed JATS ingress, eight new module/fixture paths, additive lib exports, owning docs and exact ledger rows; no dependencies | materializer/parser/consumer/store changes; new catalogue/admission authority; fixture execution or product qualification |
-| #329 after #259/#262 | point-identity legacy retirement | migrated planner/bridge imports; exact daemon projection caller/fixtures; ledger/docs | new schema/transport/general daemon rewrite; qualification claim |
+| #329 after actual legacy caller census | point-identity legacy retirement | remaining legacy imports/fixtures; S11 consumers already on main; resolved ledger rows/docs | redoing planner/publication; treating bridge's separate QdrantPointId wrapper as a legacy root import; new schema/transport/general daemon rewrite |
 
 Rows name ownership envelopes. The exact issue and `SCOPE_FROZEN` block narrow them further. All unlisted nearest-package prohibitions remain effective.
 
 ## Live queue and long-range graph
 
-Programme issue #352 and the launch gate define the live writer sequence. `PROJECT_COMPLETION.md` is the long-range obligation graph; stale “next task” or base text inside it is not current scheduling authority.
+The current maintainer handoff, programme issue #352, active issue/PR and merged source define the live writer sequence. The launch gate is historical; PROJECT_COMPLETION is an obligation graph. No dated next-task/base text is current scheduling authority.
 
-## Current serial merge train
+## Historical serial merge train
 
-```text
-#351 process merge
-→ first dependency-ready #354 child from new main
-→ exact initialization/caller-cutover children from successive main
-→ minimum typed root API and required normal callers available
-→ #235.core
-→ #238 → #241 → #246 → #252
-→ #226 Markdown → #226 JATS
-```
+The former #351/#354/#235.core train is historical and must not be replayed. Preserve PR #344 as the
+closed donor at 6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce. Research only the missing current consumer.
 
-PR #344 is closed unmerged and frozen at `6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`. No commits are added to the donor. No source successor opens before #351 merges. Each child requires an extraction manifest and starts only from newly merged `main`; read-only research may proceed without a source branch.
-
-Every slice includes its required fixture/source seams and specifies their deferred integrated qualification inventory. There is no separate later proof tranche required to establish an earlier slice's own source boundary. Source gates are production check/strict Clippy/static guards; no all-target, runtime, native or fault test merge gate.
-
-`#235.core` requires only the minimum root API it actually consumes. It does not wait for every #266 follow-up, harness, cleanup, redb inspection or final qualification item.
+Each selected source slice starts from current accepted main after the previous source merge.
+Source gates are production check/Clippy and affected guards. Qualification runs after integrated
+implementation; no helper-only “proof tranche” substitutes for the slice's actual consumer.
 
 ## #266 follow-up boundary
 

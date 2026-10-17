@@ -9,9 +9,9 @@
 **Aligned English donor SHA-256:** `9ee370c46834c5f68771bae2848781e3695cf0acc912814b9862cfdb94b5fcdb`.  
 **Supersedes:** every separate Search architecture, handoff, audit, patch, validation, and release-manifest file produced before this master.  
 **Architecture section SHA-256:** `ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c`  
-**Codex entry point:** Part II, P00 only.
+**Implementation entry point:** root `AGENTS.md`, the architecture README, relevant Part I sections and current package/issue contracts. Part II's P00-only sequence is historical.
 
-This file is intentionally self-contained. Codex and reviewers MUST NOT require a second Search Markdown document. Upstream product documentation and optional client-system architecture remain evidence and compatibility inputs, not additional Search contract files.
+Part I contains the standalone product architecture. Accepted ADRs and package contracts refine its implementation; upstream client-system documents remain optional compatibility inputs. The embedded Part I body and its recorded SHA-256 are unchanged by this entrypoint correction.
 
 ## Contents
 

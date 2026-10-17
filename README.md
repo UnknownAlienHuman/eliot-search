@@ -163,22 +163,22 @@ Key entrypoints:
 
 ## Build
 
-Use the pinned toolchain and locked dependencies:
+Use the pinned Rust 1.98 toolchain and locked dependencies. During implementation, select the changed
+production owner and its immediate consumers:
 
-```powershell
-cargo +1.98.0 check --workspace --all-targets --all-features --locked
-cargo +1.98.0 clippy --workspace --all-targets --all-features --locked -- -D warnings
-```
+~~~powershell
+cargo +1.98.0 check --locked -p <library-owner> --lib --all-features
+cargo +1.98.0 clippy --locked -p <library-owner> --lib --all-features -- -D warnings
+~~~
 
-During implementation, run the smallest applicable package gate first:
+For the daemon, select its binary and required feature set. The current default is wave1-shell;
+full-baseline includes the indexed dependency graph. Neither compilation nor a feature switch proves
+runtime integration or readiness. --all-features also enables the obsolete legacy-loopback-harness
+and is not the normal product configuration.
 
-```powershell
-cargo +1.98.0 check --locked -p <package> --all-features
-cargo +1.98.0 clippy --locked -p <package> --all-features -- -D warnings
-```
-
-Full product/process tests are performed after the implementation spine is complete, with focused tests
-added earlier where a change needs immediate causal proof.
+Full workspace, tests, Windows/live-Qdrant and product qualification run after the integrated
+implementation is complete. See [execution protocol](docs/product/EXECUTION_PROTOCOL.md) and the
+[verified audit/refactoring cards](docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md).
 
 ## Running
 
