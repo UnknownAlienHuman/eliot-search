@@ -107,6 +107,14 @@ pub struct QdrantConnectionBinding {
 }
 
 impl QdrantConnectionBinding {
+    /// Only a fresh lease window may differ. Process, Root, endpoint, artifact,
+    /// purpose and the complete versioned secret identity remain exact.
+    pub(crate) fn permits_lease_refresh(self, next: Self) -> bool {
+        let mut same_window = self;
+        same_window.secret_expires_at_tick = next.secret_expires_at_tick;
+        same_window == next
+    }
+
     /// Creates a content-free binding from the exact supervisor identity,
     /// endpoint plan and API-key lease fields.
     ///

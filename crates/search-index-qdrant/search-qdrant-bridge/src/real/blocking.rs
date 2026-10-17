@@ -46,6 +46,55 @@ pub struct BlockingRealQueryPlane {
 }
 
 impl BlockingRealQueryPlane {
+    /// Replaces an expired request lease with a current lease for the exact
+    /// same owned process and immutable key version. Root supplies the newly
+    /// admitted request's context and live OS-backed lease provider. Existing
+    /// schema/probe admission is retained only for that unchanged process.
+    pub fn refresh_auth_lease(
+        &mut self,
+        supervisor: QdrantConnectionBinding,
+        auth_lease: QdrantApiKeyLease,
+        context: &CanonicalRequestContext,
+    ) -> Result<(), BridgeError> {
+        ensure_synchronous_context()?;
+        context.check()?;
+        if !self
+            .plane
+            .auth_lease
+            .binding()
+            .permits_lease_refresh(supervisor)
+        {
+            return Err(BridgeError::SupervisorReceiptMismatch);
+        }
+        auth_lease.validate_binding(supervisor)?;
+        let identity = supervisor.endpoint();
+        let host = match identity.host() {
+            crate::QdrantLoopbackHost::Ipv4 => "127.0.0.1",
+            crate::QdrantLoopbackHost::Ipv6 => "::1",
+        };
+        let endpoint =
+            LiveEndpoint::loopback(host, identity.http_port().get(), identity.grpc_port().get())
+                .map_err(|_| BridgeError::EndpointNotLoopback)?;
+        let mut client = None;
+        auth_lease.with_secret(|key| {
+            client = Some(
+                qdrant_client::Qdrant::from_url(&endpoint.grpc_url())
+                    .api_key(key)
+                    .timeout(std::time::Duration::from_secs(10))
+                    .connect_timeout(std::time::Duration::from_secs(5))
+                    .skip_compatibility_check()
+                    .build()
+                    .map_err(|_| BridgeError::TransportFailed)?,
+            );
+            Ok(())
+        })?;
+        context.check()?;
+        auth_lease.validate()?;
+        self.plane.client = client.ok_or(BridgeError::AuthenticationInvalid)?;
+        self.plane.auth_lease = auth_lease;
+        Ok(())
+    }
+
     /// Establishes an operational plane only after the bridge has executed and
     /// read back all mandatory probes on the already-supervised endpoint.
     ///
