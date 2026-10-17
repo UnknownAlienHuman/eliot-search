@@ -35,6 +35,7 @@ fn projection_snapshot_is_coherent_read_only_and_refuses_unresolved_work() {
         snapshot.manifests().get(&member(1)),
         Some(&reference("new"))
     );
+    assert!(snapshot.prepared_artifact_sets().is_empty());
     assert!(!snapshot.shadows().contains_key(&member(1)));
     assert_eq!(snapshot.shadows().get(&member(2)), Some(&shadow(2)));
     assert_eq!(

@@ -335,8 +335,18 @@ pub(in crate::persistent) fn validate_reference(
     limits: JournalLimits,
     check: &dyn Check,
 ) -> Result<(), ControlError> {
+    read_reference(snapshot, reference, limits, check).map(|_| ())
+}
+
+/// Resolve existing full metadata from this exact verified read transaction.
+pub(in crate::persistent) fn read_reference(
+    snapshot: &JournalReadSnapshot,
+    reference: &ReceiptRef,
+    limits: JournalLimits,
+    check: &dyn Check,
+) -> Result<Option<PreparedArtifactSetRecordV1>, ControlError> {
     if !is_reference(reference) {
-        return Ok(());
+        return Ok(None);
     }
     let key = reference_key(reference, limits).map_err(|_| ControlError::StoreCorrupt)?;
     let record = PreparedArtifactSetRecordV1::decode(
@@ -347,7 +357,7 @@ pub(in crate::persistent) fn validate_reference(
     if record.reference() != reference {
         return Err(ControlError::StoreCorrupt);
     }
-    Ok(())
+    Ok(Some(record))
 }
 
 pub(in crate::persistent) fn validate_records(

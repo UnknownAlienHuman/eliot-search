@@ -233,6 +233,8 @@ fn prepared_artifact_set_redb_canary() {
         snapshot.manifests().get(&member(1)),
         Some(record.reference())
     );
+    assert_eq!(snapshot.prepared_artifact_sets().get(&member(1)), Some(&record));
+    assert_eq!(snapshot.prepared_artifact_sets().len(), 1);
     // The successor retains a new actual record before any new visible-map change.
     let next_record = PreparedArtifactSetRecordV1::prepare_with_original_context(
         metadata(50),
@@ -275,6 +277,8 @@ fn prepared_artifact_set_redb_canary() {
             .metadata(),
         &metadata(50)
     );
+    // Preparing a successor cannot rewrite the already selected immutable image.
+    assert_eq!(snapshot.prepared_artifact_sets().get(&member(1)), Some(&record));
     let mut intent = successor.intent().clone();
     for (id, phase) in [
         (8, PublicationIntentState::NewPointsAcknowledged),

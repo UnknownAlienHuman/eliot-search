@@ -4,7 +4,7 @@ use super::{
     Check, ControlError, MANIFESTS, PersistentControlJournal, Point, PublicationSourceShadow,
     PublicationVisibilityState, SHADOWS, codec,
 };
-use crate::{JournalIdentity, MigrationBootstrapWork as Work};
+use crate::{JournalIdentity, MigrationBootstrapWork as Work, PreparedArtifactSetRecordV1};
 use search_contracts::{ProjectionMembershipId, ReceiptRef};
 use std::collections::BTreeMap;
 
@@ -19,6 +19,7 @@ pub struct PublicationProjectionSnapshot {
     generation: u64,
     visibility: PublicationVisibilityState,
     manifests: BTreeMap<ProjectionMembershipId, ReceiptRef>,
+    prepared_artifact_sets: BTreeMap<ProjectionMembershipId, PreparedArtifactSetRecordV1>,
     shadows: BTreeMap<ProjectionMembershipId, PublicationSourceShadow>,
 }
 impl PublicationProjectionSnapshot {
@@ -42,6 +43,15 @@ impl PublicationProjectionSnapshot {
     pub const fn manifests(&self) -> &BTreeMap<ProjectionMembershipId, ReceiptRef> {
         &self.manifests
     }
+    /// Full existing v1 records selected by the current manifest pointers in
+    /// this same disk transaction. Legacy references have no v1 entry. Root
+    /// must still verify each exact C07 object and its source/current policies.
+    #[must_use]
+    pub const fn prepared_artifact_sets(
+        &self,
+    ) -> &BTreeMap<ProjectionMembershipId, PreparedArtifactSetRecordV1> {
+        &self.prepared_artifact_sets
+    }
     /// Source-specific shadows retained by the same committed snapshot.
     #[must_use]
     pub const fn shadows(&self) -> &BTreeMap<ProjectionMembershipId, PublicationSourceShadow> {
@@ -54,6 +64,7 @@ impl core::fmt::Debug for PublicationProjectionSnapshot {
             .field("generation", &self.generation)
             .field("visible_epoch", &self.visibility.visible_epoch)
             .field("manifest_count", &self.manifests.len())
+            .field("prepared_artifact_set_count", &self.prepared_artifact_sets.len())
             .field("shadow_count", &self.shadows.len())
             .finish_non_exhaustive()
     }
@@ -103,6 +114,7 @@ impl PersistentControlJournal {
             return Err(ControlError::GenerationMismatch);
         }
         let mut manifests = BTreeMap::new();
+        let mut prepared_artifact_sets = BTreeMap::new();
         let mut shadows = BTreeMap::new();
         for (key, value) in &snapshot.records {
             check.check(Point::ReadRecord)?;
@@ -129,7 +141,16 @@ impl PersistentControlJournal {
                     .ok_or(ControlError::BudgetExceeded)?,
             ))?;
             let duplicate = if manifest {
-                manifests.insert(id, codec::read_manifest(value)?).is_some()
+                let reference = codec::read_manifest(value)?;
+                if let Some(record) = super::super::prepared_artifacts::read_reference(
+                    &snapshot, &reference, self.limits, check,
+                )? {
+                    check.reserve(Work::Allocate(256))?;
+                    if prepared_artifact_sets.insert(id, record).is_some() {
+                        return Err(ControlError::StoreCorrupt);
+                    }
+                }
+                manifests.insert(id, reference).is_some()
             } else {
                 shadows.insert(id, codec::read_shadow(value)?).is_some()
             };
@@ -143,6 +164,7 @@ impl PersistentControlJournal {
             generation: snapshot.generation,
             visibility,
             manifests,
+            prepared_artifact_sets,
             shadows,
         }))
     }
