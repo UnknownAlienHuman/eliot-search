@@ -30,7 +30,7 @@ use search_projection_planner::{
 use search_unitizer::{UnitDescriptor, V3RepresentationKind, VerifiedUnitSet};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum CodeProjectionError {
+pub enum CodeProjectionError {
     ContextMismatch,
     BudgetExceeded,
     Cancelled,
@@ -121,7 +121,7 @@ fn verified_vector<'encoding>(
     Ok(vector)
 }
 
-fn projection_profile_set(
+pub(super) fn projection_profile_set(
     product: &MaterializationProduct,
     units: &VerifiedUnitSet,
     scope: &PlanningScope,

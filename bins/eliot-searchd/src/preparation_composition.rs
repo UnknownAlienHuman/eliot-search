@@ -26,6 +26,11 @@ pub(crate) mod raw_v2;
 #[path = "preparation_composition/code_projection.rs"]
 mod code_projection;
 
+#[cfg(feature = "wave3-index")]
+#[allow(dead_code)]
+#[path = "preparation_composition/artifact_payloads.rs"]
+pub mod artifact_payloads;
+
 /// Shared argument validation runs before a service command arms its mutation fence.
 pub fn validate_revision(revision: &str) -> Result<(), String> {
     if sha256::decode_digest(revision).is_none() {
