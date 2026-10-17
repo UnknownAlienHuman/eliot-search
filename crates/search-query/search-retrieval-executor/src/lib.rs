@@ -36,6 +36,9 @@ use search_query_planner::{
 /// nomination-only admission/scheduling/fusion core.
 pub mod indexed;
 
+/// Canonical S10.3 population execution without legacy digest predicates.
+pub mod canonical;
+
 /// Closed execution failure.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ExecuteError {

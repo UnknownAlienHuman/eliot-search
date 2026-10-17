@@ -24,6 +24,7 @@ use search_point_identity::s11::{
     CollisionDecision, ObservedPointIdentity, PointId128, PointIdentity, PointIdentityLimits,
     ProjectionPointKey, compare_existing_identity, derive_point_identity,
 };
+use search_ports::CancellationProbe;
 
 #[cfg(test)]
 use search_contracts::{
@@ -103,6 +104,34 @@ impl CanonicalRequestContext {
                 operation,
             }),
         })
+    }
+
+    /// Starts one request context at the caller's original absolute deadline.
+    ///
+    /// Every clone shares this exact deadline and cancellation observer, so a
+    /// multi-operation query cannot refresh its budget between query,
+    /// readback, and count.
+    pub fn with_deadline(
+        deadline: Instant,
+        cancellation: Arc<dyn CancellationProbe + Send + Sync>,
+    ) -> Result<Self, BridgeError> {
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or(BridgeError::TransportFailed)?;
+        let operation = OpContext::with_cancellation_probe(remaining, cancellation);
+        operation.check()?;
+        Ok(Self {
+            inner: Arc::new(CanonicalRequestBudget {
+                deadline,
+                operation,
+            }),
+        })
+    }
+
+    /// Checks the shared cancellation observer and original absolute deadline.
+    pub fn check(&self) -> Result<(), BridgeError> {
+        self.remaining().map(|_| ())
     }
 
     pub(super) fn remaining(&self) -> Result<std::time::Duration, BridgeError> {
