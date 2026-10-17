@@ -422,6 +422,9 @@ mod indexed_runtime;
 #[path = "native_retention_publication.rs"]
 mod retention_publication;
 pub(crate) use process_custody::NativeProcessRootCustody;
+#[cfg(windows)]
+#[path = "native_qdrant_secret.rs"]
+mod native_qdrant_secret;
 #[cfg(feature = "wave4-query")]
 #[path = "native_query_population.rs"]
 mod query_population;
