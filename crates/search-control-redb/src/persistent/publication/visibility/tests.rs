@@ -12,7 +12,7 @@ use search_contracts::{AccessPolicyRevision, BoundedSet, DataRootId, Installatio
     OpaqueId, OpaqueRef, OwnerEpoch, PublicationIntentId, PurgeFenceRevision, RequestId,
     ShadowFenceRevision, SourceNamespaceId, SourceOwnerGeneration};
 use search_ports::PackageOpaque;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::PathBuf;
@@ -477,15 +477,135 @@ fn interruption_after_durable_commit_recovers_without_reapplying_old_shadows() {
 }
 
 #[test]
-#[allow(clippy::too_many_lines)] // One finite C01/C03/C18/C02 guard-refresh integration case.
-fn guard_image_refreshes_old_owner_epoch_after_c01_handoff_and_preserves_receipt() {
+#[allow(clippy::too_many_lines)] // One finite guard-refresh, receipt-preservation and abandonment case.
+fn publication_guard_image_regression_refresh_then_abandonment_preserves_receipt() {
+    use std::time::{Duration, Instant};
+
+    let mut case = guard_image_refresh_case();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let work = |_unit: crate::MigrationBootstrapWork| Ok::<(), ()>(());
+    let mutation_identity = control_mutation_identity(case.request.operation_id()).unwrap();
+    let readback = {
+        let mut bound = case
+            .journal
+            .bind_control_port_with_original_context::<Cancel, _>(
+                &mut case.publisher,
+                deadline,
+                &work,
+            )
+            .unwrap();
+        bound
+            .transact_publication_guard_image_with_original_context(
+                &case.request,
+                &mutation_identity,
+                deadline,
+                &work,
+            )
+            .unwrap()
+    };
+    let committed = readback.checkpoint();
+    assert_eq!(
+        committed.generation(),
+        case.request.expected_generation() + 1
+    );
+    assert_eq!(committed.identity(), case.next_identity);
+    assert_eq!(
+        committed.visibility().guards.owner_epoch,
+        case.next_identity.owner_epoch
+    );
+    assert_eq!(
+        committed.visibility().visible_epoch,
+        case.before.visible_epoch
+    );
+    assert_eq!(committed.visibility().last_receipt, Some(case.old_receipt));
+    assert_eq!(
+        committed.visibility().collection_generation_id,
+        case.before.collection_generation_id
+    );
+    assert_eq!(
+        committed.visibility().schema_identity_digest,
+        case.before.schema_identity_digest
+    );
+    assert_eq!(committed.visibility().guards.source_catalog_generation, 17);
+    assert_eq!(committed.visibility().guards.membership_generation, 29);
+
+    case.journal
+        .recover_snapshot_publication(&mut case.publisher)
+        .unwrap()
+        .unwrap();
+    let previous_visibility = case
+        .journal
+        .read_publication_visibility(&context(false))
+        .unwrap()
+        .unwrap();
+    let intent =
+        abandonment::durable_next_intent(&mut case.journal, &case.publisher, previous_visibility);
+    let fence_request = crate::PublicationAbandonFenceRequestV1::new(
+        OpaqueId::new("operation:guard-image-abandon").unwrap(),
+        MutationId([92; 32]),
+        digest(),
+        case.journal.verify().unwrap().generation,
+        RequestId::from_bytes([93; 16]),
+        60_000,
+        OpaqueRef::new("budget:guard-image-abandon").unwrap(),
+        intent,
+        previous_visibility,
+        vec![crate::PublicationAbandonFenceMembershipV1 {
+            membership_id: member(2),
+            source_revision_id: SourceRevisionId::from_bytes([22; 16]),
+            previous_shadow: Some(shadow(10)),
+        }],
+    )
+    .unwrap();
+    case.journal
+        .abandon_publication_checked(
+            &fence_request,
+            super::super::super::Boundary::Normal,
+            &Unscoped,
+        )
+        .unwrap();
+    let fenced = case
+        .journal
+        .read_checkpoint_checked(&Unscoped)
+        .unwrap()
+        .unwrap();
+    assert_eq!(fenced.visibility().last_receipt, Some(case.old_receipt));
+    assert_eq!(
+        fenced.publication_receipt().unwrap().publication_receipt_id,
+        case.old_receipt
+    );
+    assert_eq!(
+        fenced.visibility().guards.shadow_generation,
+        previous_visibility.guards.shadow_generation + 1
+    );
+    assert_eq!(
+        fenced.abandonment_fence().unwrap().previous_visibility(),
+        &previous_visibility
+    );
+}
+
+struct GuardImageRefreshCase {
+    journal: PersistentControlJournal,
+    publisher: ControlSnapshotPublisher,
+    request: PublicationGuardImageRequestV1,
+    before: PublicationVisibilityState,
+    next_identity: JournalIdentity,
+    old_receipt: PublicationReceiptId,
+    _scratch: Scratch,
+}
+
+fn guard_image_refresh_case() -> GuardImageRefreshCase {
     use std::time::{Duration, Instant};
 
     let scratch = Scratch::new();
     let old_epoch = OwnerEpoch::new(3).unwrap();
     let current_epoch = OwnerEpoch::new(4).unwrap();
-    let (mut journal, visibility_request) = scratch
-        .ready_for_owner_with_schema(crate::REGISTRY_JOURNAL_SCHEMA_VERSION, old_epoch);
+    let (mut journal, visibility_request) =
+        abandonment::ready_with_original_binding_for_owner(
+            &scratch,
+            crate::REGISTRY_JOURNAL_SCHEMA_VERSION,
+            old_epoch,
+        );
     apply(&mut journal, &visibility_request).unwrap();
     let old_visibility = journal.read_publication_checkpoint(&context(false)).unwrap().unwrap();
     let old_receipt = old_visibility.visibility().last_receipt.unwrap();
@@ -545,36 +665,110 @@ fn guard_image_refreshes_old_owner_epoch_after_c01_handoff_and_preserves_receipt
     let deadline = Instant::now() + Duration::from_secs(30);
     let work = |_unit: crate::MigrationBootstrapWork| Ok::<(), ()>(());
     let mut publisher = ControlSnapshotPublisher::new();
-    let mut bound = journal
-        .bind_control_port_with_original_context::<Cancel, _>(&mut publisher, deadline, &work)
+    let request = {
+        let bound = journal
+            .bind_control_port_with_original_context::<Cancel, _>(&mut publisher, deadline, &work)
+            .unwrap();
+        bound
+            .prepare_publication_guard_image_with_original_context(
+                &checkpoint,
+                &registry,
+                std::slice::from_ref(&security),
+                next_guards,
+                MutationId([91; 32]),
+                digest(),
+                deadline,
+                &work,
+            )
+            .unwrap()
+    };
+    GuardImageRefreshCase {
+        journal,
+        publisher,
+        request,
+        before: previous,
+        next_identity,
+        old_receipt,
+        _scratch: scratch,
+    }
+}
+
+#[test]
+fn publication_guard_image_regression_late_refusal_is_unknown_with_context_cause() {
+    use std::time::{Duration, Instant};
+
+    let mut baseline = guard_image_refresh_case();
+    let baseline_checkpoints = Cell::new(0_usize);
+    let count_checkpoints = |_: crate::MigrationBootstrapWork| {
+        baseline_checkpoints.set(baseline_checkpoints.get() + 1);
+        Ok::<(), &'static str>(())
+    };
+    let identity = control_mutation_identity(baseline.request.operation_id()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    {
+        let mut bound = baseline
+            .journal
+            .bind_control_port_with_original_context::<Cancel, _>(
+                &mut baseline.publisher,
+                deadline,
+                &count_checkpoints,
+            )
+            .unwrap();
+        bound
+            .transact_publication_guard_image_with_original_context(
+                &baseline.request,
+                &identity,
+                deadline,
+                &count_checkpoints,
+            )
+            .unwrap();
+    }
+    let refuse_on = baseline_checkpoints.get();
+    assert!(refuse_on > 0);
+
+    let mut target = guard_image_refresh_case();
+    let observed_checkpoints = Cell::new(0_usize);
+    let refusal = "late guard-image context refusal";
+    let refuse_at_final_check = |_: crate::MigrationBootstrapWork| {
+        let current = observed_checkpoints.get() + 1;
+        observed_checkpoints.set(current);
+        if current == refuse_on {
+            Err(refusal)
+        } else {
+            Ok(())
+        }
+    };
+    let identity = control_mutation_identity(target.request.operation_id()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let error = {
+        let mut bound = target
+            .journal
+            .bind_control_port_with_original_context::<Cancel, _>(
+                &mut target.publisher,
+                deadline,
+                &refuse_at_final_check,
+            )
+            .unwrap();
+        bound
+            .transact_publication_guard_image_with_original_context(
+                &target.request,
+                &identity,
+                deadline,
+                &refuse_at_final_check,
+            )
+            .unwrap_err()
+    };
+    assert_eq!(error.control, ControlError::CommitOutcomeUnknown);
+    assert_eq!(error.first_context, Some(refusal));
+    assert_eq!(observed_checkpoints.get(), refuse_on);
+    let checkpoint = target
+        .journal
+        .read_checkpoint_checked(&Unscoped)
+        .unwrap()
         .unwrap();
-    let request = bound.prepare_publication_guard_image_with_original_context(
-        &checkpoint,
-        &registry,
-        std::slice::from_ref(&security),
-        next_guards,
-        MutationId([91; 32]),
-        digest(),
-        deadline,
-        &work,
-    ).unwrap();
-    let mutation_identity = control_mutation_identity(request.operation_id()).unwrap();
-    let readback = bound
-        .transact_publication_guard_image_with_original_context(
-            &request,
-            &mutation_identity,
-            deadline,
-            &work,
-        )
-        .unwrap();
-    let committed = readback.checkpoint();
-    assert_eq!(committed.generation(), request.expected_generation() + 1);
-    assert_eq!(committed.identity(), next_identity);
-    assert_eq!(committed.visibility().guards.owner_epoch, next_identity.owner_epoch);
-    assert_eq!(committed.visibility().visible_epoch, previous.visible_epoch);
-    assert_eq!(committed.visibility().last_receipt, Some(old_receipt));
-    assert_eq!(committed.visibility().collection_generation_id, previous.collection_generation_id);
-    assert_eq!(committed.visibility().schema_identity_digest, previous.schema_identity_digest);
-    assert_eq!(committed.visibility().guards.source_catalog_generation, 17);
-    assert_eq!(committed.visibility().guards.membership_generation, 29);
+    assert_eq!(
+        checkpoint.generation(),
+        target.request.expected_generation() + 1
+    );
+    assert_eq!(checkpoint.visibility(), target.request.next_visibility());
 }

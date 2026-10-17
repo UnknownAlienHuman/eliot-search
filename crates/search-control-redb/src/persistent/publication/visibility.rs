@@ -385,7 +385,7 @@ pub(super) fn read_checkpoint_receipt(
                     && previous.schema_identity_digest == bound.schema_identity_digest
                     && previous.visible_epoch == bound.publication.target_epoch
                     && previous.last_receipt == Some(id)
-                    && previous.guards == receipt_guards
+                    && guard_image_preserves_receipt_binding(receipt_guards, previous.guards)
                     && fence.fenced_visibility() == visibility
                     && bound.committed_shadow_generation.checked_add(1)
                         == Some(visibility.guards.shadow_generation)
@@ -400,6 +400,21 @@ pub(super) fn read_checkpoint_receipt(
     }
     check.check(Point::ReadComplete)?;
     Ok(Some(bound.publication))
+}
+
+fn guard_image_preserves_receipt_binding(
+    receipt: PublicationGuards,
+    refreshed: PublicationGuards,
+) -> bool {
+    // A validated guard-image CAS may advance only these monotone axes.
+    // Profile identity and the receipt-bound shadow generation stay exact.
+    refreshed.owner_epoch >= receipt.owner_epoch
+        && refreshed.source_catalog_generation >= receipt.source_catalog_generation
+        && refreshed.membership_generation >= receipt.membership_generation
+        && refreshed.access_generation >= receipt.access_generation
+        && refreshed.shadow_generation == receipt.shadow_generation
+        && refreshed.purge_generation >= receipt.purge_generation
+        && refreshed.profile_digest == receipt.profile_digest
 }
 
 /// Input evidence already verified by the publication coordinator/index adapter.
@@ -668,7 +683,14 @@ impl PersistentControlJournal {
             {
                 return Err(ControlError::CommitOutcomeUnknown);
             }
-            check.check(Point::ReadComplete)?;
+            if let Err(error) = check.check(Point::ReadComplete) {
+                return Err(match error {
+                    ControlError::ReadCancelled | ControlError::BudgetExceeded => {
+                        ControlError::CommitOutcomeUnknown
+                    }
+                    other => other,
+                });
+            }
             Ok(PublicationGuardImageReadbackV1 { commit, checkpoint })
         })();
         if crate::has_visibility_schema(self.identity.schema_version)

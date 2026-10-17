@@ -5,15 +5,24 @@ use crate::{
     PublicationAbortFinalizationMetadataV1, PublicationAbortFinalizationRecordV1,
     PublicationIntentBindingMetadataV1, PublicationIntentBindingRecordV1,
 };
-use search_contracts::{OpaqueId, OpaqueRef, PublicationReceiptId, RequestId, SourceRevisionId};
+use search_contracts::{
+    OpaqueId, OpaqueRef, OwnerEpoch, PublicationReceiptId, RequestId, SourceRevisionId,
+};
 use std::time::{Duration, Instant};
 
 fn durable_intent(journal: &mut PersistentControlJournal) -> PublicationIntent {
+    durable_intent_with_guards(journal, state().guards)
+}
+
+fn durable_intent_with_guards(
+    journal: &mut PersistentControlJournal,
+    guards: PublicationGuards,
+) -> PublicationIntent {
     let prepared = PublicationIntent {
         publication_intent_id: PublicationIntentId::from_bytes([33; 16]),
         target_epoch: Epoch::new(1).unwrap(),
         prepared_manifest_ref: reference("abandon-prepared-manifest"),
-        owner_source_membership_access_guards: state().guards,
+        owner_source_membership_access_guards: guards,
         state: PublicationIntentState::Prepared,
     };
     let original_operation_id = OpaqueId::new("operation:original-publication").unwrap();
@@ -270,12 +279,49 @@ fn abandonment_fence_unknown_reopens_replays_conflicts_and_is_retained_by_abort(
 fn ready_with_original_binding(
     scratch: &Scratch,
 ) -> (PersistentControlJournal, VisibleEpochCommit) {
-    let mut journal = scratch.empty(PUBLICATION_VISIBILITY_SCHEMA_VERSION);
-    journal
-        .initialize_publication_visibility(state(), MutationId([1; 32]), digest(), &context(false))
-        .unwrap();
+    ready_with_original_binding_for_state(scratch, PUBLICATION_VISIBILITY_SCHEMA_VERSION, state())
+}
+
+pub(super) fn ready_with_original_binding_for_owner(
+    scratch: &Scratch,
+    schema_version: u32,
+    owner_epoch: OwnerEpoch,
+) -> (PersistentControlJournal, VisibleEpochCommit) {
+    let mut initial = state();
+    initial.guards.owner_epoch = owner_epoch;
+    ready_with_original_binding_for_state(scratch, schema_version, initial)
+}
+
+fn ready_with_original_binding_for_state(
+    scratch: &Scratch,
+    schema_version: u32,
+    initial: PublicationVisibilityState,
+) -> (PersistentControlJournal, VisibleEpochCommit) {
+    let mut journal = scratch.empty_with_identity(identity_at_owner(
+        schema_version,
+        initial.guards.owner_epoch,
+    ));
+    if schema_version == crate::REGISTRY_JOURNAL_SCHEMA_VERSION {
+        journal
+            .initialize_operating_profile(
+                crate::JournalProfileInitialization::Indexed(initial),
+                MutationId([1; 32]),
+                digest(),
+                &context(false),
+            )
+            .unwrap();
+    } else {
+        journal
+            .initialize_publication_visibility(
+                initial,
+                MutationId([1; 32]),
+                digest(),
+                &context(false),
+            )
+            .unwrap();
+    }
     insert_previous_shadows(&mut journal);
-    let mut intent = durable_intent(&mut journal);
+    let mut intent = durable_intent_with_guards(&mut journal, initial.guards);
     let mut prior = None;
     for (id, phase) in [
         (34, PublicationIntentState::NewPointsAcknowledged),
@@ -302,7 +348,7 @@ fn ready_with_original_binding(
         digest(),
         prior.unwrap(),
         intent,
-        state(),
+        initial,
         PublicationReceiptId::from_bytes([7; 16]),
         PublicationReadbackEvidence {
             exact_new_manifest_ref: reference("new-points"),
@@ -320,7 +366,7 @@ fn ready_with_original_binding(
     (journal, publication)
 }
 
-fn durable_next_intent(
+pub(super) fn durable_next_intent(
     journal: &mut PersistentControlJournal,
     publisher: &ControlSnapshotPublisher,
     previous_visibility: PublicationVisibilityState,
