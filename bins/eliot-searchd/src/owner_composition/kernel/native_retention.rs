@@ -133,12 +133,16 @@ pub(super) fn consume_source(input: RetentionSourceInput<'_, '_, '_>, journal: &
     // The durable operating profile selects retention behavior. Direct mode
     // completes source retention without entering the indexed C02/C07 path.
     #[cfg(feature = "wave3-index")]
-    let indexed_preparation = indexed_preparation_selected(
-        journal
-            .operating_profile(input.native.context())
-            .map_err(|_| "NATIVE_RETENTION_PROFILE_READ_REFUSED")?,
-    )
-    .map_err(str::to_owned)?;
+    let indexed_preparation = {
+        let work = |unit| input.native.work(unit);
+        let port = journal
+            .bind_control_port::<super::super::read_child::fresh_root::FreshRootCancellation>(publisher)
+            .map_err(|error| error.code().to_owned())?;
+        let profile = port
+            .read_operating_profile_with_original_context(input.deadline, &work)
+            .map_err(|error| error.control.code().to_owned())?;
+        indexed_preparation_selected(profile).map_err(str::to_owned)?
+    };
     input.security.checkpoint().map_err(|error| error.to_string())?;
     // Resolve a completed operation from its immutable original before reading
     // mutable Current/key policy. This is historical metadata, not key use or

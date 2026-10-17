@@ -418,4 +418,5 @@ mod original_derived_artifact_use;
 mod original_publication_snapshot;
 mod original_prepared_publication;
 mod original_records_targeted;
+mod original_operating_profile;
 pub use original_records_targeted::ScopedControlRecordsReadback;
