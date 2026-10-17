@@ -1,5 +1,5 @@
-//! Coordinator regressions. All IDs/digests/receipts are synthetic fixtures;
-//! these tests exercise pure decisions, not redb, Qdrant, or process recovery.
+//! Canonical C08/C09/C13 inputs exercise pure publication decisions. Receipt,
+//! journal and snapshot values remain synthetic phase observations, not I/O proof.
 
 use search_contracts::{
     AccessPartitionId, Blake3Digest32, CollectionGenerationId, Epoch, InstallationIncarnationId,
@@ -7,9 +7,12 @@ use search_contracts::{
     ScoringDocumentId, ScoringPartitionId, SourceMembershipId, UnitId,
 };
 use search_point_identity::s11::PointId128;
-use search_projection_planner::{ProjectionManifest, ProjectionManifestEntry, diff_manifests};
 use search_publication::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
+
+#[path = "support/publication.rs"]
+mod publication_support;
+use publication_support::{Fixture, PublicationCase, SubmitFixture, projection_fixture};
 
 #[path = "recovery_invariants/abort_finalization.rs"]
 mod abort_finalization;
@@ -34,71 +37,17 @@ const fn point(value: u8) -> PointId128 {
     PointId128::from_stored_bytes([value; 16])
 }
 fn guards() -> PublicationGuards {
-    PublicationGuards {
-        owner_epoch: OwnerEpoch::new(1).unwrap(),
-        source_catalog_generation: 1,
-        membership_generation: 2,
-        access_generation: 3,
-        shadow_generation: 4,
-        purge_generation: 5,
-        profile_digest: digest(6),
-    }
+    publication_support::guards()
 }
-fn manifest(points: &[u8]) -> ProjectionManifest {
-    let entries = points
-        .iter()
-        .copied()
-        .map(|n| ProjectionManifestEntry {
-            point_id: point(n),
-            point_identity_digest_256: digest(n.wrapping_add(10)),
-            source_membership_id: SourceMembershipId::from_bytes([7; 16]),
-            projection_membership_id: ProjectionMembershipId::from_bytes([n; 16]),
-            unit_id: UnitId::from_bytes([n; 16]),
-            collection_generation_id: CollectionGenerationId::from_bytes([1; 16]),
-            installation_incarnation_id: InstallationIncarnationId::from_bytes([1; 16]),
-            access_partition_id: AccessPartitionId::from_bytes([1; 16]),
-            scoring_partition_id: ScoringPartitionId::from_bytes([1; 16]),
-            scoring_document_id: ScoringDocumentId::from_bytes([n; 16]),
-            projection_profile_set_id: ProjectionProfileSetId::new("lexical-sparse-v1").unwrap(),
-            unit_digest: digest(n),
-            reference_digest: digest(n),
-            payload_identity: digest(n),
-            vector_digests: BTreeMap::new(),
-        })
-        .collect();
-    // Opaque bytes for a pure-state fixture; no CAS or hash verification claim.
-    ProjectionManifest {
-        entries,
-        canonical_bytes: b"fixture:manifest".to_vec(),
-    }
+fn manifest(points: &[u8]) -> Fixture {
+    projection_fixture(points)
 }
-fn prepared(
-    old: Option<ProjectionManifest>,
-    new: ProjectionManifest,
-    name: &str,
-) -> PreparedPublication {
-    let old_manifest_digest = old.as_ref().map(|_| digest(1));
-    PreparedPublication {
-        transaction_id: id(name),
-        collection_generation_id: CollectionGenerationId::from_bytes([1; 16]),
-        old_manifest: old,
-        new_manifest: new,
-        old_manifest_digest,
-        new_manifest_digest: digest(2),
-        guards: guards(),
-        preparation_receipt: reference("preparation"),
-    }
+fn proposal(old: Option<Fixture>, new: Fixture, name: &str) -> PublicationCase {
+    publication_support::proposal(old, new, name)
 }
-fn durable(old: Option<ProjectionManifest>, new: ProjectionManifest) -> PublicationCoordinator {
-    let mut machine = PublicationCoordinator::new(
-        epoch(0),
-        epoch(0),
-        old.clone(),
-        old.as_ref().map(|_| digest(1)),
-        32,
-    )
-    .unwrap();
-    machine.submit(prepared(old, new, "tx-1")).unwrap();
+fn durable(old: Option<Fixture>, new: Fixture) -> PublicationCoordinator {
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    machine.submit_fixture(proposal(old, new, "tx-1")).unwrap();
     machine
         .persist_intent(id("persist-1"), reference("intent"))
         .unwrap();
@@ -137,12 +86,7 @@ fn visible(
     machine: &mut PublicationCoordinator,
 ) -> (VisibleCommitReceipt, PublicationRecoveryObservation) {
     let transaction = machine.active().unwrap().clone();
-    let empty = manifest(&[]);
-    let difference = diff_manifests(
-        transaction.prepared.old_manifest.as_ref().unwrap_or(&empty),
-        &transaction.prepared.new_manifest,
-    )
-    .unwrap();
+    let difference = transaction.prepared.difference();
     let mut staged = difference
         .create
         .iter()
@@ -155,7 +99,7 @@ fn visible(
         .map(|entry| entry.point_id)
         .collect::<Vec<_>>();
     closed.sort();
-    let tx = transaction.prepared.transaction_id;
+    let tx = transaction.transaction_id().clone();
     machine
         .stage_new_points(StageReceipt {
             transaction_id: tx.clone(),
@@ -193,7 +137,7 @@ fn visible(
         .commit_visible_epoch(ControlCommitObservation {
             before_visible_epoch: transaction.previous_visible_epoch,
             after_visible_epoch: transaction.target_epoch,
-            observed_guards: transaction.prepared.guards,
+            observed_guards: transaction.durable_intent.as_ref().unwrap().guards,
             control_generation: 9,
             control_state_digest: digest(6),
         })
@@ -219,11 +163,13 @@ fn snapshot(commit: &VisibleCommitReceipt) -> SnapshotPublishReceipt {
 
 #[test]
 fn aborted_reservations_are_never_reused_and_do_not_advance_visibility() {
-    let mut machine = PublicationCoordinator::new(epoch(0), epoch(0), None, None, 32).unwrap();
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    assert_eq!(machine.visible_epoch(), None);
+    assert_eq!(machine.last_reserved_epoch(), None);
     for expected in 1..=4 {
         assert_eq!(
             machine
-                .submit(prepared(None, manifest(&[2]), &format!("tx-{expected}")))
+                .submit_fixture(proposal(None, manifest(&[2]), &format!("tx-{expected}")))
                 .unwrap(),
             epoch(expected)
         );
@@ -238,8 +184,8 @@ fn aborted_reservations_are_never_reused_and_do_not_advance_visibility() {
         );
         abort_support::acknowledge(&mut machine);
         machine.finalize_aborted().unwrap();
-        assert_eq!(machine.visible_epoch(), epoch(0));
-        assert_eq!(machine.last_reserved_epoch(), epoch(expected));
+        assert_eq!(machine.visible_epoch(), Some(epoch(0)));
+        assert_eq!(machine.last_reserved_epoch(), Some(epoch(expected)));
         assert!(machine.active().is_none());
         assert!(machine.current_manifest().is_none());
     }
@@ -247,61 +193,87 @@ fn aborted_reservations_are_never_reused_and_do_not_advance_visibility() {
 
 #[test]
 fn reconstruction_requires_the_explicit_resolved_reservation_floor() {
-    let mut machine = PublicationCoordinator::new(epoch(4), epoch(9), None, None, 32).unwrap();
-    assert_eq!(
-        machine
-            .submit(prepared(None, manifest(&[]), "resumed"))
-            .unwrap(),
-        epoch(10)
-    );
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    let mut resumed = proposal(None, manifest(&[2]), "resumed");
+    resumed.seed = publication_support::OwnerSeed {
+        previous_visible: epoch(4),
+        current_visible: epoch(4),
+        last_reserved: epoch(9),
+    };
+    assert_eq!(machine.submit_fixture(resumed).unwrap(), epoch(10));
     assert_eq!(machine.active().unwrap().previous_visible_epoch, epoch(4));
-    assert_eq!(machine.visible_epoch(), epoch(4));
+    assert_eq!(machine.visible_epoch(), Some(epoch(4)));
+
+    let mut inconsistent = proposal(None, manifest(&[3]), "inconsistent-floor");
+    inconsistent.seed.previous_visible = epoch(4);
+    inconsistent.seed.current_visible = epoch(4);
+    inconsistent.seed.last_reserved = epoch(3);
+    let mut uninitialized = PublicationCoordinator::new(32).unwrap();
     assert_eq!(
-        PublicationCoordinator::new(epoch(4), epoch(3), None, None, 32).unwrap_err(),
-        PublicationError::InvalidPreparedPublication
+        uninitialized.submit_fixture(inconsistent),
+        Err(PublicationError::EpochMismatch)
     );
+    assert_eq!(uninitialized.visible_epoch(), None);
+    assert_eq!(uninitialized.last_reserved_epoch(), None);
 }
 
 #[test]
 fn exhausted_floor_does_not_wrap_or_consume_an_active_slot() {
-    let mut machine =
-        PublicationCoordinator::new(epoch(0), epoch(search_contracts::MAX_QDRANT_EPOCH), None, None, 32).unwrap();
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    let mut overflowing = proposal(None, manifest(&[2]), "overflow");
+    overflowing.seed.last_reserved = epoch(search_contracts::MAX_QDRANT_EPOCH);
     assert_eq!(
-        machine.submit(prepared(None, manifest(&[]), "overflow")),
+        machine.submit_fixture(overflowing),
         Err(PublicationError::ContractExhausted)
     );
     assert!(machine.active().is_none());
-    assert_eq!(machine.visible_epoch(), epoch(0));
-    assert_eq!(machine.last_reserved_epoch(), epoch(search_contracts::MAX_QDRANT_EPOCH));
+    assert_eq!(machine.visible_epoch(), None);
+    assert_eq!(machine.last_reserved_epoch(), None);
 }
 
 #[test]
 fn invalid_and_competing_submissions_cannot_change_the_reservation_floor() {
-    let mut machine = PublicationCoordinator::new(epoch(0), epoch(3), None, None, 32).unwrap();
-    assert!(
-        machine
-            .submit(prepared(Some(manifest(&[1])), manifest(&[2]), "wrong-old"))
-            .is_err()
-    );
-    assert_eq!(machine.last_reserved_epoch(), epoch(3));
-    machine
-        .submit(prepared(None, manifest(&[2]), "first"))
-        .unwrap();
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    let mut wrong_old = proposal(Some(manifest(&[1])), manifest(&[2]), "wrong-old");
+    wrong_old.expected_manifest_override = publication_support::ManifestExpectation::Exact(None);
+    wrong_old.seed.last_reserved = epoch(3);
     assert_eq!(
-        machine.submit(prepared(None, manifest(&[3]), "competitor")),
+        machine.submit_fixture(wrong_old),
+        Err(PublicationError::ControlConflict)
+    );
+    assert_eq!(machine.visible_epoch(), None);
+    assert_eq!(machine.last_reserved_epoch(), None);
+    let mut first = proposal(None, manifest(&[2]), "first");
+    first.seed.last_reserved = epoch(3);
+    machine.submit_fixture(first).unwrap();
+    assert_eq!(
+        machine.submit_fixture(proposal(None, manifest(&[3]), "competitor")),
         Err(PublicationError::PublicationBusy)
     );
-    assert_eq!(machine.last_reserved_epoch(), epoch(4));
+    assert_eq!(machine.last_reserved_epoch(), Some(epoch(4)));
     assert_eq!(machine.active().unwrap().transaction_id(), &id("first"));
 }
 
 #[test]
 fn compensation_requires_restoration_of_every_old_closed_point() {
     let old = manifest(&[1]);
-    let mut machine = durable(Some(old.clone()), manifest(&[2]));
+    let new = manifest(&[2]);
+    let mut machine = durable(Some(old.clone()), new.clone());
     let plan = machine.begin_compensation_plan().unwrap();
-    assert_eq!(plan.staged_ids, vec![point(2)]);
-    assert_eq!(plan.closed_ids, vec![point(1)]);
+    assert_eq!(
+        plan.staged_ids,
+        new.entries
+            .iter()
+            .map(|entry| entry.point_id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        plan.closed_ids,
+        old.entries
+            .iter()
+            .map(|entry| entry.point_id)
+            .collect::<Vec<_>>()
+    );
     assert_eq!(machine.begin_compensation_plan().unwrap(), plan);
     assert_eq!(
         machine.compensate_exact(compensation(&plan)),
@@ -320,13 +292,13 @@ fn compensation_requires_restoration_of_every_old_closed_point() {
         .unwrap();
     abort_support::acknowledge(&mut machine);
     machine.finalize_aborted().unwrap();
-    assert_eq!(machine.current_manifest(), Some(&old));
-    assert_eq!(machine.visible_epoch(), epoch(0));
+    assert_eq!(machine.current_manifest(), Some(old.manifest()));
+    assert_eq!(machine.visible_epoch(), Some(epoch(1)));
     assert_eq!(
         machine
-            .submit(prepared(Some(old), manifest(&[3]), "next"))
+            .submit_fixture(proposal(Some(old), manifest(&[3]), "next"))
             .unwrap(),
-        epoch(2)
+        epoch(3)
     );
 }
 
@@ -341,7 +313,7 @@ fn incomplete_wrong_epoch_or_foreign_restoration_never_finishes_compensation() {
             1 => restore.restored_ids.clear(),
             2 => restore.restored_ids.push(point(1)),
             3 => restore.restored_ids = vec![point(9)],
-            4 => restore.target_epoch = epoch(2),
+            4 => restore.target_epoch = epoch(3),
             _ => restore.transaction_id = id("foreign"),
         }
         assert_eq!(
@@ -381,12 +353,23 @@ fn compensation_receipt_is_bound_to_its_reservation_not_just_transaction_name() 
 #[test]
 fn changed_content_with_a_distinct_id_still_requires_two_sided_compensation() {
     let old = manifest(&[1]);
-    let mut new = manifest(&[2]);
-    new.entries[0].payload_identity = digest(99);
-    let mut machine = durable(Some(old), new);
+    let new = manifest(&[2]);
+    let mut machine = durable(Some(old.clone()), new.clone());
     let plan = machine.begin_compensation_plan().unwrap();
-    assert_eq!(plan.staged_ids, vec![point(2)]);
-    assert_eq!(plan.closed_ids, vec![point(1)]);
+    assert_eq!(
+        plan.staged_ids,
+        new.entries
+            .iter()
+            .map(|entry| entry.point_id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        plan.closed_ids,
+        old.entries
+            .iter()
+            .map(|entry| entry.point_id)
+            .collect::<Vec<_>>()
+    );
     assert_eq!(
         machine.compensate_exact(compensation(&plan)),
         Err(PublicationError::CompensationIncomplete)
@@ -401,26 +384,33 @@ fn overlapping_changed_and_deleted_diff_is_rejected_before_publication() {
     let old = manifest(&[1, 2]);
     let mut new = manifest(&[2]);
     new.entries[0].payload_identity = digest(99);
-    assert_eq!(diff_manifests(&old, &new), Err(search_projection_planner::ProjectionError::ManifestMismatch));
-    let mut machine =
-        PublicationCoordinator::new(epoch(0), epoch(0), Some(old.clone()), Some(digest(1)), 32)
-            .unwrap();
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    let conflict = proposal(Some(old), new, "conflicting");
     assert_eq!(
-        machine.submit(prepared(Some(old.clone()), new, "conflicting")),
+        machine.submit_fixture(conflict),
         Err(PublicationError::InvalidPreparedPublication)
     );
     assert!(machine.active().is_none());
-    assert_eq!(machine.last_reserved_epoch(), epoch(0));
-    assert_eq!(machine.current_manifest(), Some(&old));
+    assert_eq!(machine.last_reserved_epoch(), None);
+    assert_eq!(machine.current_manifest(), None);
 }
 
 #[test]
 fn point_only_or_incomplete_membership_fence_cannot_abandon() {
     let mut machine = durable(Some(manifest(&[1])), manifest(&[2]));
+    let active = machine.active().unwrap();
+    let affected_ids = active
+        .prepared
+        .difference()
+        .create
+        .iter()
+        .chain(&active.prepared.difference().retire)
+        .map(|entry| entry.point_id)
+        .collect::<BTreeSet<_>>();
     let mut fence = AbandonFence {
         transaction_id: id("tx-1"),
-        target_epoch: epoch(1),
-        excluded_point_ids: [point(1), point(2)].into_iter().collect(),
+        target_epoch: epoch(2),
+        excluded_point_ids: affected_ids,
         excluded_projection_memberships: BTreeSet::new(),
         excluded_scope_digest: digest(8),
         exclusion_receipt: reference("exclusion"),
@@ -438,17 +428,20 @@ fn point_only_or_incomplete_membership_fence_cannot_abandon() {
     );
     fence
         .excluded_projection_memberships
-        .insert(ProjectionMembershipId::from_bytes([2; 16]));
+        .insert(ProjectionMembershipId::from_bytes([17; 16]));
+    fence
+        .excluded_projection_memberships
+        .remove(&ProjectionMembershipId::from_bytes([1; 16]));
     machine.abandon(&fence).unwrap();
     abort_support::acknowledge(&mut machine);
     machine.finalize_aborted().unwrap();
-    assert_eq!(machine.last_reserved_epoch(), epoch(1));
-    assert_eq!(machine.visible_epoch(), epoch(0));
+    assert_eq!(machine.last_reserved_epoch(), Some(epoch(2)));
+    assert_eq!(machine.visible_epoch(), Some(epoch(1)));
     assert_eq!(
         machine
-            .submit(prepared(Some(manifest(&[1])), manifest(&[3]), "next"))
+            .submit_fixture(proposal(Some(manifest(&[1])), manifest(&[3]), "next"))
             .unwrap(),
-        epoch(2)
+        epoch(3)
     );
 }
 
@@ -456,7 +449,8 @@ fn point_only_or_incomplete_membership_fence_cannot_abandon() {
 fn closed_only_recovery_selects_compensation_not_optimistic_continue() {
     let machine = durable(Some(manifest(&[1])), manifest(&[2]));
     let mut seen = observation(&machine);
-    seen.closed_ids.push(point(1));
+    seen.closed_ids
+        .push(machine.active().unwrap().prepared.difference().retire[0].point_id);
     assert_eq!(
         recover(machine.active().unwrap(), &seen).unwrap(),
         PublicationRecoveryDecision::CompensateExact
@@ -465,10 +459,12 @@ fn closed_only_recovery_selects_compensation_not_optimistic_continue() {
 
 #[test]
 fn unrelated_visible_epoch_including_a_skipped_epoch_blocks_recovery() {
-    let mut machine = PublicationCoordinator::new(epoch(4), epoch(9), None, None, 32).unwrap();
-    machine
-        .submit(prepared(None, manifest(&[2]), "resume"))
-        .unwrap();
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    let mut resume = proposal(None, manifest(&[2]), "resume");
+    resume.seed.previous_visible = epoch(4);
+    resume.seed.current_visible = epoch(4);
+    resume.seed.last_reserved = epoch(9);
+    machine.submit_fixture(resume).unwrap();
     machine
         .persist_intent(id("persist-resume"), reference("intent"))
         .unwrap();
@@ -627,7 +623,8 @@ fn committed_phase_with_old_visibility_is_a_contradiction() {
 fn compensation_phase_cannot_be_mistaken_for_forward_staging() {
     let mut machine = durable(None, manifest(&[2]));
     let mut seen = observation(&machine);
-    seen.staged_ids.push(point(2));
+    seen.staged_ids
+        .push(machine.active().unwrap().prepared.difference().create[0].point_id);
     let plan = machine.begin_compensation_plan().unwrap();
     assert_eq!(
         recover(machine.active().unwrap(), &seen).unwrap(),
@@ -643,9 +640,9 @@ fn compensation_phase_cannot_be_mistaken_for_forward_staging() {
 
 #[test]
 fn prepared_without_effects_can_continue_but_unexplained_effects_cannot() {
-    let mut machine = PublicationCoordinator::new(epoch(0), epoch(0), None, None, 32).unwrap();
+    let mut machine = PublicationCoordinator::new(32).unwrap();
     machine
-        .submit(prepared(None, manifest(&[2]), "prepared"))
+        .submit_fixture(proposal(None, manifest(&[2]), "prepared"))
         .unwrap();
     let mut seen = observation(&machine);
     assert_eq!(
@@ -665,9 +662,12 @@ fn completed_normal_publication_keeps_the_epoch_floor_aligned() {
     let (commit, _) = visible(&mut machine);
     machine.publish_control_snapshot(snapshot(&commit)).unwrap();
     machine.complete().unwrap();
-    assert_eq!(machine.visible_epoch(), epoch(1));
-    assert_eq!(machine.last_reserved_epoch(), epoch(1));
-    let mut next = prepared(machine.current_manifest().cloned(), manifest(&[3]), "tx-2");
-    next.old_manifest_digest = Some(digest(2));
-    assert_eq!(machine.submit(next).unwrap(), epoch(2));
+    assert_eq!(machine.visible_epoch(), Some(epoch(1)));
+    assert_eq!(machine.last_reserved_epoch(), Some(epoch(1)));
+    assert_eq!(
+        machine
+            .submit_fixture(proposal(Some(manifest(&[2])), manifest(&[3]), "tx-2"))
+            .unwrap(),
+        epoch(2)
+    );
 }

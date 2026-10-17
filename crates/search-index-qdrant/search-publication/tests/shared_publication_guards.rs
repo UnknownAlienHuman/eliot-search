@@ -36,6 +36,9 @@ fn old_and_new_imports_are_identical_without_conversion() {
 #[test]
 fn coordinator_intent_exposes_the_same_complete_shared_value() {
     // These synthetic values test the shape only; no durable write is claimed.
+    let coordinator = search_publication::PublicationCoordinator::new(32).unwrap();
+    assert_eq!(coordinator.visible_epoch(), None);
+    assert_eq!(coordinator.last_reserved_epoch(), None);
     let expected = guards();
     let intent = DurableIntent {
         transaction_id: OpaqueId::new("publication-fixture").unwrap(),
