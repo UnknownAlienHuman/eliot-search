@@ -27,7 +27,6 @@ fn projection_snapshot_is_coherent_read_only_and_refuses_unresolved_work() {
         .read_publication_projection_snapshot_with_original_context(deadline, &work)
         .unwrap()
         .unwrap();
-    drop(port);
     assert_eq!(snapshot.identity(), journal.identity());
     assert_eq!(snapshot.generation(), commit.after_generation);
     assert_eq!(snapshot.visibility().visible_epoch.get(), 1);

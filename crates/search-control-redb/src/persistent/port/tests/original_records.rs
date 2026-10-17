@@ -360,7 +360,6 @@ fn revision_dek_operation_lookup_is_read_only_and_never_treats_refusal_as_absenc
     assert_eq!(bound.revision_dek_operation_exists_with_original_context(MutationId([91; 32]), deadline, &|_| Err("lookup-refusal")).unwrap_err().first_context, Some("lookup-refusal"));
     assert_eq!(bound.revision_dek_operation_exists_with_original_context(MutationId([91; 32]), Instant::now(), &work).unwrap_err().control, ControlError::BudgetExceeded);
     assert_eq!(bound.read_control_snapshot_with_original_context(deadline, &work).unwrap(), before);
-    drop(bound);
     // Same row count, malformed operation bytes: never relabel corruption absent.
     let write = journal.database.begin_write().unwrap();
     {

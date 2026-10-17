@@ -30,7 +30,7 @@ pub(super) fn fixture_digest(bytes: &[u8]) -> Blake3Digest32 {
     let mut output = [0_u8; 32];
     for (index, byte) in bytes.iter().enumerate() {
         let slot = index % 32;
-        output[slot] = output[slot].wrapping_mul(17).wrapping_add(*byte).wrapping_add(slot as u8);
+        output[slot] = output[slot].wrapping_mul(17).wrapping_add(*byte).wrapping_add(u8::try_from(slot).expect("slot is less than 32"));
     }
     Blake3Digest32::from_bytes(output)
 }

@@ -359,7 +359,7 @@ mod tests {
                 &fixture.0,
                 "other.redb",
                 TestPlatform,
-                Instant::now() - Duration::from_millis(1),
+                Instant::now().checked_sub(Duration::from_millis(1)).expect("representable expired fixture deadline"),
             ),
             Err(SourceImportOutputLockError::DeadlineExceeded)
         ));

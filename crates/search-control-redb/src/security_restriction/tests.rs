@@ -171,7 +171,7 @@ fn noncanonical_sets_flags_utf8_and_counts_never_decode() {
     assert!(codec::decode(&flag).is_err());
     let text = b"operation:one";
     let location = encoded.windows(text.len()).position(|bytes| bytes == text).unwrap();
-    let mut utf8 = encoded.clone(); utf8[location] = 0xff;
+    let mut utf8 = encoded; utf8[location] = 0xff;
     assert!(codec::decode(&utf8).is_err());
     assert!(codec::decode(&vec![0; MAX_RESTRICTION_RECORD_BYTES + 1]).is_err());
 }

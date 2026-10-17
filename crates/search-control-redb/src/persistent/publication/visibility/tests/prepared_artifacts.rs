@@ -48,6 +48,7 @@ fn prepared(
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "Keep the coherent real-journal publication and refusal sequence together")]
 fn prepared_artifact_set_redb_canary() {
     let scratch = Scratch::new();
     let mut journal = scratch.empty(crate::REGISTRY_JOURNAL_SCHEMA_VERSION);
@@ -327,7 +328,6 @@ fn prepared_artifact_set_redb_canary() {
     .unwrap()
     .with_prepared_artifact_set_v1(next_record.clone())
     .unwrap();
-    drop(bound);
     // A real guard/generation change between preparation and commit must refuse.
     let mut denied = *snapshot.visibility();
     denied.guards.purge_generation += 1;
@@ -351,7 +351,6 @@ fn prepared_artifact_set_redb_canary() {
             .control,
         ControlError::TransactionConflict
     );
-    drop(bound);
     let persisted = journal.verify().unwrap();
     assert_eq!(
         codec::read_state(persisted.get(&key(STATE, LIMITS).unwrap()).unwrap())

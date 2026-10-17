@@ -1,5 +1,5 @@
-//! Real file/handle and offset proofs. TestPlatform's injected identity and
-//! directory durability are component seams, not NativeCtx qualification.
+//! Real file/handle and offset proofs. `TestPlatform`'s injected identity and
+//! directory durability are component seams, not `NativeCtx` qualification.
 
 use super::*;
 use std::cell::Cell;
@@ -222,7 +222,7 @@ fn borrowed_rows_refusal_is_sticky_and_unknown_publication_never_gets_cursor() {
         ));
     }
     assert_unknown(
-        publication.publish_once_using(deadline(), |_, _| Err(io::Error::other("unknown"))),
+        &publication.publish_once_using(deadline(), |_, _| Err(io::Error::other("unknown"))),
     );
     assert!(matches!(
         publication.begin_borrowed_rows_with_context(deadline(), &INERT),

@@ -241,7 +241,7 @@ fn receipt_confirmation_checks_identity_keys_and_exact_generations() {
         }
         assert_eq!(observed.confirm_commit(&changed), Err(ControlError::OperationConflict));
     }
-    let mut foreign = receipt.clone();
+    let mut foreign = receipt;
     foreign.mutation.identity.data_root_id = DataRootId::from_bytes([99; 16]);
     assert_eq!(observed.confirm_commit(&foreign), Err(ControlError::IdentityMismatch));
 }

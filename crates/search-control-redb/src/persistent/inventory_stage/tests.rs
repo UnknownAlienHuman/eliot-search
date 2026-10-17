@@ -9,6 +9,7 @@ use crate::migration::{
     SourceImportRecordArtifact, SourceImportRow,
 };
 
+#[expect(clippy::unnecessary_wraps, reason = "Match the injected fallible checkpoint callback contract")]
 fn okay(_: Work) -> Result<(), ()> {
     Ok(())
 }

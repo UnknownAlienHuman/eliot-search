@@ -127,12 +127,12 @@ impl SourceImportOutputArtifactPlatform for TestPlatform {
 impl SourceImportRecordArtifactPlatform for TestPlatform {
     fn sync_record_artifact_directory(&self, _path: &Path) -> Result<(), Self::Error> {
         self.syncs.fetch_add(1, Ordering::SeqCst);
-        if let Some(path) = self
+        let replacement = self
             .replace_on_sync
             .lock()
             .expect("sync replacement")
-            .take()
-        {
+            .take();
+        if let Some(path) = replacement {
             self.set_identity(&path, 2);
         }
         if self.sync_fail.load(Ordering::SeqCst) {
@@ -292,13 +292,13 @@ fn contextual_artifact_last_prelink_refusal_cannot_dispatch_or_retry() {
             Ok(())
         }
     });
-    assert_unknown(failure);
+    assert_unknown(&failure);
     assert!(!fixture.0.join("artifact.source-map.v1").exists());
     assert_eq!(
         operation.disposition(),
         SourceImportRecordArtifactPublicationDisposition::RetainedUnknown
     );
-    assert_unknown(operation.publish_once(deadline()));
+    assert_unknown(&operation.publish_once(deadline()));
     assert!(!fixture.0.join("artifact.source-map.v1").exists());
 }
 
@@ -307,7 +307,7 @@ fn contextual_artifact_postlink_refusal_retains_both_locators() {
     let fixture = Fixture::new();
     let mut operation = prepared(&fixture, TestPlatform::new());
     let staging = operation.staging_name().to_owned();
-    assert_unknown(operation.publish_once_with_context(deadline(), &|_| {
+    assert_unknown(&operation.publish_once_with_context(deadline(), &|_| {
         if fixture.0.join("artifact.source-map.v1").exists() {
             Err(ControlError::ReadCancelled)
         } else {
@@ -320,7 +320,7 @@ fn contextual_artifact_postlink_refusal_retains_both_locators() {
         operation.disposition(),
         SourceImportRecordArtifactPublicationDisposition::RetainedUnknown
     );
-    assert_unknown(operation.publish_once(deadline()));
+    assert_unknown(&operation.publish_once(deadline()));
 }
 
 #[test]
@@ -380,7 +380,7 @@ fn contextual_artifact_reuse_outcome_survives_postlink_refusal() {
     )
     .unwrap();
     let admitted = Cell::new(false);
-    assert_unknown(operation.publish_once_with_context(deadline(), &|work| {
+    assert_unknown(&operation.publish_once_with_context(deadline(), &|work| {
         if matches!(work, Work::Write(0)) {
             admitted.set(true);
             Ok(())
@@ -657,7 +657,7 @@ fn verified_rows_mutation_truncation_surplus_and_identity_drift_never_complete()
 }
 
 fn assert_unknown(
-    result: Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<io::Error>>,
+    result: &Result<SourceImportPublishedRecordArtifact, SourceImportRecordArtifactError<io::Error>>,
 ) {
     assert!(matches!(
         result,
@@ -670,7 +670,7 @@ fn unclassified_link_error_retains_original_and_never_dispatches_twice() {
     let fixture = Fixture::new();
     let mut operation = prepared(&fixture, TestPlatform::new());
     let dispatches = AtomicU64::new(0);
-    assert_unknown(operation.publish_once_using(deadline(), |_, _| {
+    assert_unknown(&operation.publish_once_using(deadline(), |_, _| {
         dispatches.fetch_add(1, Ordering::SeqCst);
         Err(io::Error::other("unknown link effect"))
     }));
@@ -684,11 +684,11 @@ fn unclassified_link_error_retains_original_and_never_dispatches_twice() {
         operation.staging_name(),
         OsStr::new(".source-map.retained.tmp")
     );
-    assert_unknown(operation.publish_once_using(deadline(), |_, _| {
+    assert_unknown(&operation.publish_once_using(deadline(), |_, _| {
         dispatches.fetch_add(1, Ordering::SeqCst);
         panic!("second dispatch")
     }));
-    assert_unknown(operation.resolve_same_process(deadline()));
+    assert_unknown(&operation.resolve_same_process(deadline()));
     assert_eq!(dispatches.load(Ordering::SeqCst), 1);
     drop(operation);
     assert_eq!(
@@ -711,7 +711,7 @@ fn possible_link_effect_resolves_only_with_original_handle_sync_and_readback() {
         .original_file;
     assert_eq!(original.metadata().expect("held original").len(), 6);
     assert_unknown(
-        operation.publish_once_using(deadline(), |stage, final_path| {
+        &operation.publish_once_using(deadline(), |stage, final_path| {
             fs::hard_link(stage, final_path)?;
             Err(io::Error::other("effect completed, outcome unknown"))
         }),
@@ -747,8 +747,8 @@ fn link_success_sync_refusal_is_unknown_and_retains_both_objects() {
     let platform = TestPlatform::new();
     let mut operation = prepared(&fixture, platform.clone());
     platform.sync_fail.store(true, Ordering::SeqCst);
-    assert_unknown(operation.publish_once(deadline()));
-    assert_unknown(operation.resolve_same_process(deadline()));
+    assert_unknown(&operation.publish_once(deadline()));
+    assert_unknown(&operation.resolve_same_process(deadline()));
     assert_eq!(
         operation.disposition(),
         SourceImportRecordArtifactPublicationDisposition::RetainedUnknown
@@ -781,7 +781,7 @@ fn post_dispatch_readback_and_identity_refusals_retain_unknown() {
         } else {
             platform.final_fail.store(true, Ordering::SeqCst);
         }
-        assert_unknown(operation.publish_once(deadline()));
+        assert_unknown(&operation.publish_once(deadline()));
         drop(operation);
         assert!(fixture.0.join(".source-map.retained.tmp").exists());
         assert!(fixture.0.join("artifact.source-map.v1").exists());
@@ -794,7 +794,7 @@ fn late_deadline_after_dispatch_is_retained_unknown() {
     let mut operation = prepared(&fixture, TestPlatform::new());
     let expired_after_dispatch = Instant::now() + Duration::from_millis(20);
     assert_unknown(
-        operation.publish_once_using(expired_after_dispatch, |stage, final_path| {
+        &operation.publish_once_using(expired_after_dispatch, |stage, final_path| {
             fs::hard_link(stage, final_path)?;
             std::thread::sleep(expired_after_dispatch.saturating_duration_since(Instant::now()));
             Ok(())
@@ -812,7 +812,7 @@ fn equal_byte_replacements_cannot_complete_original_operation() {
         let platform = TestPlatform::new();
         let mut operation = prepared(&fixture, platform.clone());
         assert_unknown(
-            operation.publish_once_using(deadline(), |stage, final_path| {
+            &operation.publish_once_using(deadline(), |stage, final_path| {
                 fs::hard_link(stage, final_path)?;
                 Err(io::Error::other("unknown"))
             }),
@@ -825,7 +825,7 @@ fn equal_byte_replacements_cannot_complete_original_operation() {
             operation.classify_current(deadline()).state(),
             SourceImportRecordArtifactCurrentState::Replaced
         );
-        assert_unknown(operation.resolve_same_process(deadline()));
+        assert_unknown(&operation.resolve_same_process(deadline()));
         drop(operation);
         assert_eq!(
             fs::read(fixture.0.join(".source-map.retained.tmp")).expect("stage"),
@@ -905,7 +905,7 @@ fn lost_proof_never_mints_restart_success_or_cleanup() {
     let mut operation = prepared(&fixture, platform.clone());
     let chain = *operation.chain();
     assert_unknown(
-        operation.publish_once_using(deadline(), |stage, final_path| {
+        &operation.publish_once_using(deadline(), |stage, final_path| {
             fs::hard_link(stage, final_path)?;
             Err(io::Error::other("unknown"))
         }),
@@ -955,7 +955,7 @@ fn consuming_publish_sync_failure_drops_only_handles() {
     replay.compare(b"alpha\n", deadline()).expect("compare");
     platform.sync_fail.store(true, Ordering::SeqCst);
     assert_unknown(
-        replay
+        &replay
             .finish(deadline())
             .expect("verified")
             .publish("artifact.source-map.v1", deadline()),

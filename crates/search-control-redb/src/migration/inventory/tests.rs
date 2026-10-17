@@ -207,10 +207,10 @@ fn expected_source_event() -> String {
         repeated_hex(2, 16),
         "00",
         repeated_hex(0, 16),
-        format!("{:016x}", 1),
-        format!("{:016x}", 1),
-        format!("{:016x}", 1),
-        format!("{:016x}", 3),
+        format_args!("{:016x}", 1),
+        format_args!("{:016x}", 1),
+        format_args!("{:016x}", 1),
+        format_args!("{:016x}", 3),
         "0301",
         repeated_hex(4, 32),
         repeated_hex(5, 32),
@@ -247,6 +247,7 @@ fn finish_absent_families(encoder: &mut LegacyInventoryEncoder) {
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "Keep the complete frozen inventory profile byte comparison together")]
 fn profile_golden_covers_header_source_event_all_statuses_terminals_and_footer() {
     let statuses = [
         LegacyInventoryStatus::Present,
@@ -480,22 +481,22 @@ fn row_and_byte_caps_are_finite_and_never_truncate() {
         encoded_bytes: expected_header().len() as u64 + 32,
         ..LegacyInventoryLimits::BASELINE
     };
-    let mut encoder = LegacyInventoryEncoder::new(byte_limited).expect("header-sized byte cap");
-    let header = encoder
+    let mut limited = LegacyInventoryEncoder::new(byte_limited).expect("header-sized byte cap");
+    let header = limited
         .header(binding())
         .expect("header fits inside byte cap");
-    assert!(header.len() < byte_limited.encoded_bytes as usize);
-    let before = encoder.summary;
+    assert!(header.len() < usize::try_from(byte_limited.encoded_bytes).expect("small fixture limit"));
+    let before = limited.summary;
     assert_eq!(
         item(
-            &mut encoder,
+            &mut limited,
             LegacyInventoryFamily::Owner,
             LegacyInventoryStatus::Present
         ),
         Err(LegacyInventoryError::Limit)
     );
-    assert_eq!(encoder.summary, before, "byte rejection changed accounting");
-    assert_eq!(encoder.finish(), Err(LegacyInventoryError::Accounting));
+    assert_eq!(limited.summary, before, "byte rejection changed accounting");
+    assert_eq!(limited.finish(), Err(LegacyInventoryError::Accounting));
 }
 
 #[test]

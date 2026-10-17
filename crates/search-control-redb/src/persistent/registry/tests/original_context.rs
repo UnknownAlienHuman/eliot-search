@@ -111,7 +111,7 @@ fn registry_original_context_expired_deadline_and_first_refusal_cannot_be_absenc
         calls.set(calls.get() + 1);
         Ok::<_, &str>(())
     };
-    let expired = Instant::now() - Duration::from_secs(1);
+    let expired = Instant::now().checked_sub(Duration::from_secs(1)).expect("representable expired fixture deadline");
     let error = journal
         .lookup_registry_operation_with_original_context(
             &OpaqueId::new("absent").unwrap(),

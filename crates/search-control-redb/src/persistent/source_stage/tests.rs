@@ -6,6 +6,7 @@ use crate::persistent::PersistentControlJournal;
 use search_contracts::{Sha256Digest32, SourceId, SourceRevisionId};
 use std::sync::atomic::Ordering;
 
+#[expect(clippy::unnecessary_wraps, reason = "Match the injected fallible checkpoint callback contract")]
 fn okay(_: MigrationBootstrapWork) -> Result<(), ()> { Ok(()) }
 
 pub(super) fn rows() -> Vec<SourceImportRow> {
@@ -81,9 +82,7 @@ fn exact_source_rows_share_original_database_and_legacy_readers_reject_profile()
     let identity = reader.owner.bootstrap.journal.identity;
     let binding = reader.owner.binding;
     let read = reader.owner.bootstrap.journal.database.begin_read().unwrap();
-    use redb::TableHandle;
-    let names = read.list_tables().unwrap().map(|table| table.name().to_owned()).collect::<Vec<_>>();
-    assert_eq!(names.len(), 7);
+    assert_eq!(read.list_tables().unwrap().count(), 7);
     assert_eq!(std::fs::read_dir(&scratch.0).unwrap().filter_map(Result::ok)
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "redb")).count(), 1);
     assert!(crate::persistent::verify_tables(&read, &crate::persistent::TableProfile::ControlOnly).is_err());

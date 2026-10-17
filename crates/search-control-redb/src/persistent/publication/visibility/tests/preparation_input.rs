@@ -114,6 +114,7 @@ fn metadata(schema: &CollectionSchema, policy_value: u64) -> PreparationInputMet
 }
 
 #[test]
+#[expect(clippy::too_many_lines, reason = "Keep the original-operation commit, unknown outcome and reopen sequence together")]
 fn preparation_input_is_operation_keyed_durable_and_exactly_recoverable() {
     let scratch = Scratch::new();
     let schema = collection_schema();
@@ -191,7 +192,6 @@ fn preparation_input_is_operation_keyed_durable_and_exactly_recoverable() {
         .publish_committed_snapshot_with_original_context(&receipt, deadline, &work)
         .expect("publish the actual recovered journal snapshot");
 
-    drop(bound);
     drop(publisher);
     drop(journal);
 
