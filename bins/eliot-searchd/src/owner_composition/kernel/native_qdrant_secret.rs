@@ -42,16 +42,6 @@ pub(super) struct InitialQdrantSecretCreateIntent {
 }
 
 impl InitialQdrantSecretCreateIntent {
-    /// Binds setup to the stable operation ID of the explicit mutating command.
-    pub(super) fn new(original_operation: &OpaqueId) -> Self {
-        Self {
-            operation: MutationIdentity::new(
-                original_operation.clone(),
-                IdempotencyClass::RetrySameIdentity,
-            ),
-        }
-    }
-
     /// Retains an already constructed exact mutation identity from config apply.
     pub(super) fn from_mutation_identity(
         operation: MutationIdentity,
@@ -549,7 +539,11 @@ impl NativeProcessRootCustody {
         match self.lease_current_qdrant_api_secret(selected, lease_ttl_ms) {
             Ok(secret) => Ok(secret),
             Err("QDRANT_SECRET_INVENTORY_MISSING") => {
-                let setup = InitialQdrantSecretCreateIntent::new(original_operation);
+                let operation = MutationIdentity::new(
+                    original_operation.clone(),
+                    IdempotencyClass::RetrySameIdentity,
+                );
+                let setup = InitialQdrantSecretCreateIntent::from_mutation_identity(operation)?;
                 self.provision_initial_qdrant_api_secret(selected, &setup)?;
                 self.lease_current_qdrant_api_secret(selected, lease_ttl_ms)
             }
