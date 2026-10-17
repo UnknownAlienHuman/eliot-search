@@ -14,10 +14,16 @@
 )]
 
 mod barrier;
+mod population;
 
 pub use barrier::{
     DurableSecurityRestriction, MAX_SECURITY_DEPENDENTS, SecurityDependentReceipt,
     SecurityMutationBarrier, SecurityMutationEffects, SecurityMutationReceipt, SecurityRestriction,
+};
+pub use population::{
+    CanonicalEligibilityPopulationRequest, CanonicalEligibilitySecuritySnapshot,
+    CanonicalPopulationVerificationPort, CanonicalProjectionMembership,
+    CompiledEligibilityPopulation, compile_canonical_eligibility_population,
 };
 
 use core::fmt;
@@ -55,7 +61,10 @@ pub enum AccessError {
     SecurityFailClosed,
     LiveRevocation,
     LivePurge,
+    LiveShadowed,
     SecurityFenceStale,
+    EligibilityPopulationTooLarge,
+    EligibilityPopulationIncoherent,
     ContaminatedExecution,
     NamespaceUnknown,
     OwnerMismatch,
@@ -92,7 +101,10 @@ impl AccessError {
             Self::SecurityFailClosed => "ACCESS_SECURITY_FAIL_CLOSED",
             Self::LiveRevocation => "ACCESS_LIVE_REVOKED",
             Self::LivePurge => "ACCESS_LIVE_PURGED",
+            Self::LiveShadowed => "ACCESS_LIVE_SHADOWED",
             Self::SecurityFenceStale => "ACCESS_SECURITY_FENCE_STALE",
+            Self::EligibilityPopulationTooLarge => "ACCESS_ELIGIBILITY_POPULATION_TOO_LARGE",
+            Self::EligibilityPopulationIncoherent => "ACCESS_ELIGIBILITY_POPULATION_INCOHERENT",
             Self::ContaminatedExecution => "ACCESS_EXECUTION_CONTAMINATED",
             Self::NamespaceUnknown => "ACCESS_NAMESPACE_UNKNOWN",
             Self::OwnerMismatch => "ACCESS_OWNER_MISMATCH",
