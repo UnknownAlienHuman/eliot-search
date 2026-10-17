@@ -72,6 +72,8 @@ pub enum RetentionError {
     LeaseInactive,
     /// Exact source-object pin expired, was revoked, or is no longer registered.
     SourcePinInactive,
+    /// A destructive sweep batch currently excludes new source-pin admission.
+    SourcePinAdmissionClosed,
     /// Lease renewal does not advance expiry.
     LeaseRegression,
     /// Finite lease/tombstone/operation capacity was exceeded.
@@ -157,6 +159,7 @@ impl RetentionError {
             Self::LeaseNotFound => "RETENTION_LEASE_NOT_FOUND",
             Self::LeaseInactive => "RETENTION_LEASE_INACTIVE",
             Self::SourcePinInactive => "SOURCE_PIN_INACTIVE",
+            Self::SourcePinAdmissionClosed => "SOURCE_PIN_ADMISSION_CLOSED",
             Self::LeaseRegression => "RETENTION_LEASE_REGRESSION",
             Self::CapacityExceeded => "RETENTION_CAPACITY_EXCEEDED",
             Self::OperationConflict => "RETENTION_OPERATION_CONFLICT",

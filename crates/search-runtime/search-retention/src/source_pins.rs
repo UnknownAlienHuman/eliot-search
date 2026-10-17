@@ -14,8 +14,8 @@ use search_contracts::{
 };
 use search_ports::{OperationContext, PackageOpaque, Port};
 
-use crate::sweep::{PinEvidence, SweepLimits};
 use crate::RetentionError;
+use crate::sweep::{PinEvidence, SweepLimits};
 
 /// Exact C07 source object identity and its verified source/residency binding.
 ///
@@ -140,6 +140,7 @@ struct RegistryState {
     next_pin_id: u64,
     pin_generation: u64,
     pins: BTreeMap<u64, PinRecord>,
+    sweep_admission_active: bool,
     poisoned: bool,
 }
 
@@ -167,6 +168,14 @@ impl fmt::Debug for SourcePinRegistry {
     }
 }
 
+impl PartialEq for SourcePinRegistry {
+    fn eq(&self, other: &Self) -> bool {
+        self.max_pins == other.max_pins && Arc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl Eq for SourcePinRegistry {}
+
 impl SourcePinRegistry {
     /// Creates an empty registry under the S28 and bounded-set ceilings.
     pub fn new(limits: SweepLimits) -> Result<Self, RetentionError> {
@@ -177,6 +186,7 @@ impl SourcePinRegistry {
                 next_pin_id: 1,
                 pin_generation: 1,
                 pins: BTreeMap::new(),
+                sweep_admission_active: false,
                 poisoned: false,
             })),
         })
@@ -196,7 +206,14 @@ impl SourcePinRegistry {
         }
 
         let mut state = self.lock_state()?;
-        prune_expired(&mut state, Instant::now())?;
+        if state.sweep_admission_active {
+            return Err(RetentionError::SourcePinAdmissionClosed);
+        }
+        let now = Instant::now();
+        if !deadline_is_live(monotonic_deadline, now) {
+            return Err(RetentionError::SourcePinInactive);
+        }
+        prune_expired(&mut state, now)?;
         if state.pins.len() >= self.max_pins {
             return Err(RetentionError::CapacityExceeded);
         }
@@ -223,6 +240,43 @@ impl SourcePinRegistry {
             target,
             monotonic_deadline,
             released: false,
+        })
+    }
+
+    /// Atomically validates the captured generation and excludes new pins
+    /// until the exact sweep batch and its readback finish.
+    pub(crate) fn acquire_sweep_admission(
+        &self,
+        expected_generation: u64,
+        captured_pinned_ids: &BTreeSet<OpaqueId>,
+    ) -> Result<SourcePinSweepAdmission, RetentionError> {
+        let mut state = self.lock_state()?;
+        if state.sweep_admission_active {
+            return Err(RetentionError::SourcePinAdmissionClosed);
+        }
+        prune_expired(&mut state, Instant::now())?;
+        if state.pin_generation != expected_generation {
+            return Err(RetentionError::RootGenerationChanged);
+        }
+        if state.pins.len() > self.max_pins {
+            return Err(RetentionError::CapacityExceeded);
+        }
+        if captured_pinned_ids.len() > self.max_pins {
+            return Err(RetentionError::CapacityExceeded);
+        }
+        if state
+            .pins
+            .values()
+            .any(|record| !captured_pinned_ids.contains(&record.target.object_id))
+        {
+            return Err(RetentionError::PinProtectionUnknown);
+        }
+        state.sweep_admission_active = true;
+        drop(state);
+
+        Ok(SourcePinSweepAdmission {
+            inner: Arc::clone(&self.inner),
+            active: true,
         })
     }
 
@@ -369,6 +423,31 @@ impl SourcePinRegistry {
 struct SourcePinSnapshot {
     pinned_ids: BTreeSet<OpaqueId>,
     pin_generation: u64,
+}
+
+/// Process-local exclusion held across one exact destructive sweep batch.
+/// The registry mutex is never held while the object-admin port runs.
+#[must_use = "the admission guard must stay alive through the sweep batch"]
+pub(crate) struct SourcePinSweepAdmission {
+    inner: Arc<Mutex<RegistryState>>,
+    active: bool,
+}
+
+impl Drop for SourcePinSweepAdmission {
+    fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
+        self.active = false;
+        let Ok(mut state) = self.inner.lock() else {
+            return;
+        };
+        if state.sweep_admission_active {
+            state.sweep_admission_active = false;
+        } else {
+            state.poisoned = true;
+        }
+    }
 }
 
 /// Owned exact pin retained by an ephemeral source handle.

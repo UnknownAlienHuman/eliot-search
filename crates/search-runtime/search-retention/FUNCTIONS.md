@@ -180,6 +180,12 @@ Before dispatch revalidates sweep intent, control/purge/legal-hold generation an
 snapshot as required by policy. Deletes exact object IDs only, then verifies absence or the store's
 accepted deletion state.
 
+The process-local source-pin registry atomically compares the captured pin generation and closes new
+pin admission before `delete_exact`. It refuses a pin if admission closes first; if the pin acquires the
+registry first, its generation change refuses the sweep. The owned admission guard spans delete and exact
+readback, releases on every return path, and never holds the registry mutex across a port callback.
+Root control, publication and purge fences remain separate.
+
 Cancellation before dispatch is clean. Timeout/cancellation/disconnect after dispatch becomes
 `SWEEP_DELETE_OUTCOME_UNKNOWN`; exact readback classifies complete, none-applied, partial or conflicting
 state. A different exact ID set cannot reuse the operation identity.

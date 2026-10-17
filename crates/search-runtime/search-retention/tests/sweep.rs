@@ -466,13 +466,7 @@ fn preview_apply_restart_is_idempotent() {
 
 #[test]
 fn ambiguous_delete_with_residual_is_unknown_not_success() {
-    let (_protection, _intent, _mark, plan) = full_sweep_fixture();
-    let protection = {
-        let roots = vec![root("cas:A", 3)];
-        let pin_ev = pins(&["cas:H"], 11, 3);
-        collect_protection(roots, &pin_ev, &BTreeSet::new(), &BTreeSet::new(), limits())
-            .expect("protection")
-    };
+    let (protection, _intent, _mark, plan) = full_sweep_fixture();
     // Simulate transport failure where the object remains: outcome unknown.
     let mut cas = StuckCas;
     let batch = &plan.batches[0];

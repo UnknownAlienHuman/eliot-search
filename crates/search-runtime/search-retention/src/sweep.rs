@@ -204,6 +204,8 @@ pub struct ProtectionSet {
     pub publication_generation: u64,
     /// Binding digest over the exact frozen set.
     pub protection_digest: Blake3Digest32,
+    /// Process-local registry that atomically captured the source-pin set.
+    pub(crate) source_pin_registry: crate::source_pins::SourcePinRegistry,
 }
 
 /// Durably recorded sweep intent binding operation to protection.
@@ -270,6 +272,8 @@ pub struct SweepPlan {
     pub pin_generation: u64,
     /// Bound publication generation.
     pub publication_generation: u64,
+    /// Process-local registry that must fence exact batch execution.
+    source_pin_registry: crate::source_pins::SourcePinRegistry,
 }
 
 /// Immutable exact mutation identity for one batch execution.
@@ -420,6 +424,7 @@ pub fn collect_protection(
         pin_generation: pins.pin_generation,
         publication_generation: pins.publication_generation,
         protection_digest,
+        source_pin_registry: pins.source_pin_registry.clone(),
     })
 }
 
@@ -633,13 +638,17 @@ pub fn plan_sweep(
         control_generation: intent.control_generation,
         pin_generation: intent.pin_generation,
         publication_generation: intent.publication_generation,
+        source_pin_registry: protection.source_pin_registry.clone(),
     })
 }
 
 /// Executes one exact batch.
 ///
 /// Revalidates generations and fresh protection, deletes exact IDs only,
-/// then proves absence through readback.
+/// atomically closes source-pin admission for this registry and batch, then
+/// proves absence through readback. The registry mutex is not held during CAS
+/// callbacks; RAII reopens admission on every return path. Root control,
+/// publication, and purge fences remain separate checks.
 ///
 /// A new root, hold, pin or publication generation invalidates the sweep
 /// instead of being ignored. Timeout or disconnect after dispatch becomes
@@ -668,6 +677,12 @@ pub fn execute_sweep_batch(
     if current.pin_generation != plan.pin_generation {
         return Err(RetentionError::RootGenerationChanged);
     }
+    if current.source_pin_registry != plan.source_pin_registry {
+        return Err(RetentionError::RootGenerationChanged);
+    }
+    let _pin_admission = plan
+        .source_pin_registry
+        .acquire_sweep_admission(plan.pin_generation, &current.pinned_ids)?;
     for id in &batch.object_ids {
         if current.pinned_ids.contains(id)
             || current.leased_ids.contains(id)
