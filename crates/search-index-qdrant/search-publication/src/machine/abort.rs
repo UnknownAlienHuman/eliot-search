@@ -276,9 +276,7 @@ impl PublicationCoordinator {
             .request
             .clone()
             .ok_or(PublicationError::RecoveryBlocked)?;
-        if self.abort_finalization.commit.is_some() {
-            return Ok(());
-        }
+        let accepted_commit = self.abort_finalization.commit.clone();
         if self.abort_finalization.retry_control.is_some() {
             return Err(PublicationError::RecoveryBlocked);
         }
@@ -302,6 +300,21 @@ impl PublicationCoordinator {
             command.binding
         };
         self.abort_finalization.commit_binding = Some(binding.clone());
+        if accepted_commit.is_some() {
+            let transaction = self
+                .active
+                .as_mut()
+                .ok_or(PublicationError::InvalidTransition)?;
+            if transaction
+                .pending_effect
+                .is_some_and(|pending| pending != PublicationEffectKind::CommitAbortFinalization)
+            {
+                return Err(PublicationError::OutcomeUnknown);
+            }
+            // Reconcile an accepted commit by readback only. Keep the slot
+            // fenced until the complete original observation matches again.
+            transaction.pending_effect = Some(PublicationEffectKind::CommitAbortFinalization);
+        }
         let intent_binding = reusing_binding
             .then(|| self.abort_finalization.intent_binding.clone())
             .flatten();
@@ -331,6 +344,9 @@ impl PublicationCoordinator {
                 return Err(PublicationError::OperationMismatch);
             }
             if observed.outcome == PublicationEffectOutcome::NotApplied {
+                if accepted_commit.is_some() {
+                    return Err(PublicationError::OperationMismatch);
+                }
                 crate::recovery::validate_abort_control_readback(
                     transaction,
                     request.intent.control_generation(),
@@ -368,6 +384,20 @@ impl PublicationCoordinator {
             return Err(PublicationError::EffectNotObserved);
         }
         let proof = proof.ok_or(PublicationError::ControlConflict)?;
+        if let Some(previous) = &accepted_commit {
+            if previous != &proof {
+                self.active
+                    .as_mut()
+                    .ok_or(PublicationError::InvalidTransition)?
+                    .pending_effect = Some(PublicationEffectKind::CommitAbortFinalization);
+                return Err(PublicationError::OperationMismatch);
+            }
+            self.active
+                .as_mut()
+                .ok_or(PublicationError::InvalidTransition)?
+                .pending_effect = None;
+            return Ok(());
+        }
         if let Some(previous) = &self.abort_finalization.commit {
             if previous != &proof {
                 return Err(PublicationError::OperationMismatch);
@@ -465,7 +495,28 @@ impl PublicationCoordinator {
     /// A phase label or compensation/exclusion receipt alone is insufficient.
     /// Missing acknowledgements retain the active slot and all resolution evidence.
     pub fn finalize_aborted(&mut self) -> Result<(), PublicationError> {
-        self.active_at(PublicationPhase::Aborted)?;
+        let transaction = self.active_at(PublicationPhase::Aborted)?;
+        if let Some(pending) = transaction.pending_effect {
+            match pending {
+                PublicationEffectKind::CommitAbortFinalization
+                    if self.abort_finalization.commit.is_some() =>
+                {
+                    return Err(PublicationError::OutcomeUnknown);
+                }
+                PublicationEffectKind::CommitAbortFinalization => {
+                    return Err(PublicationError::RecoveryBlocked);
+                }
+                PublicationEffectKind::PublishAbortSnapshot
+                    if self.abort_finalization.snapshot.is_some() => {}
+                PublicationEffectKind::PublishAbortSnapshot => {
+                    return Err(PublicationError::SnapshotPublicationFailed);
+                }
+                _ => return Err(PublicationError::OutcomeUnknown),
+            }
+        }
+        if self.abort_finalization.retry_control.is_some() {
+            return Err(PublicationError::RecoveryBlocked);
+        }
         if self.abort_finalization.commit.is_none() {
             return Err(PublicationError::RecoveryBlocked);
         }

@@ -75,8 +75,10 @@ pub fn validate_abort_control_readback(
     match outcome {
         PublicationEffectOutcome::Applied => {
             let request = request.ok_or(PublicationError::ControlConflict)?;
-            if control.guards != request.current_guards
-                || control.before_control_generation != request.expected_control_generation
+            if control.guards != request.current_guards {
+                return Err(PublicationError::GuardMismatch);
+            }
+            if control.before_control_generation != request.expected_control_generation
                 || control.before_control_generation.checked_add(1)
                     != Some(control.after_control_generation)
             {
@@ -106,7 +108,6 @@ fn abort_guards_are_current_or_newer(
         && current.access_generation >= original.access_generation
         && current.shadow_generation >= original.shadow_generation
         && current.purge_generation >= original.purge_generation
-        && current.profile_digest == original.profile_digest
 }
 
 /// Reconcile a single active transaction without repeating any mutation.

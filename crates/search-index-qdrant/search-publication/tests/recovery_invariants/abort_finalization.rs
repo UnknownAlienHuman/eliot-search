@@ -398,10 +398,25 @@ fn a_conflicting_repeat_cannot_replace_an_already_accepted_commit() {
     let _original = request(&mut machine);
     let mut port = PhasePort::default();
     abort_support::commit(&mut machine, &mut port).unwrap();
+    let original_commit_dispatches = port
+        .effects
+        .effect_kinds
+        .iter()
+        .filter(|effect| **effect == PublicationEffectKind::CommitAbortFinalization)
+        .count();
+    assert_eq!(original_commit_dispatches, 1);
     port.readback.control_state_digest_override = Some(digest(99));
     assert_eq!(
         abort_support::commit(&mut machine, &mut port),
         Err(PublicationError::OperationMismatch)
+    );
+    assert_eq!(
+        port.effects
+            .effect_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::CommitAbortFinalization)
+            .count(),
+        original_commit_dispatches
     );
     port.readback.control_state_digest_override = None;
     // A conflicting repeat retains the original unresolved operation. A fresh
@@ -410,8 +425,35 @@ fn a_conflicting_repeat_cannot_replace_an_already_accepted_commit() {
         abort_support::snapshot(&mut machine, &mut port),
         Err(PublicationError::OutcomeUnknown)
     );
+    assert_eq!(
+        port.effects
+            .effect_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::CommitAbortFinalization)
+            .count(),
+        original_commit_dispatches
+    );
     abort_support::commit(&mut machine, &mut port).unwrap();
+    assert_eq!(
+        port.effects
+            .effect_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::CommitAbortFinalization)
+            .count(),
+        original_commit_dispatches
+    );
     abort_support::snapshot(&mut machine, &mut port).unwrap();
+    port.readback.control_state_digest_override = Some(digest(99));
+    assert_eq!(
+        abort_support::commit(&mut machine, &mut port),
+        Err(PublicationError::OperationMismatch)
+    );
+    assert_eq!(
+        machine.finalize_aborted(),
+        Err(PublicationError::OutcomeUnknown)
+    );
+    port.readback.control_state_digest_override = None;
+    abort_support::commit(&mut machine, &mut port).unwrap();
     machine.finalize_aborted().unwrap();
 }
 

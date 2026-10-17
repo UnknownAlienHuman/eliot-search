@@ -548,6 +548,8 @@ pub struct PhaseReadback {
     pub recorded_phase: Option<search_publication::PublicationPhase>,
     /// Original durable binding returned by the synthetic intent journal.
     pub intent_binding_override: Option<PublicationEffectBinding>,
+    /// Exact owner binding echoed at top level for an intent restore readback.
+    pub intent_effect_binding_override: Option<PublicationEffectBinding>,
     /// Persistent per-phase readback outcomes for recovery fixtures.
     pub outcomes: Vec<(PublicationEffectKind, PublicationEffectOutcome)>,
     /// Partial stage readback used to exercise compensation classification.
@@ -662,10 +664,13 @@ impl<C: CancellationProbe> PublicationReadbackPort<C> for PhaseReadback {
         );
         let mut observation = search_publication::PublicationEffectReadback {
             effect: command.effect(),
-            binding: intent.as_ref().map_or_else(
-                || command.binding().clone(),
-                |intent| intent.binding.clone(),
-            ),
+            binding: if command.effect() == PublicationEffectKind::PersistIntent {
+                self.intent_effect_binding_override
+                    .clone()
+                    .unwrap_or_else(|| command.binding().clone())
+            } else {
+                command.binding().clone()
+            },
             outcome,
             points,
             missing_point_ids,
@@ -1625,6 +1630,9 @@ impl RestoreScenario {
             readback: self.readback_script.clone(),
         };
         self.configure_readback(&mut port, old.as_ref(), &new, target);
+        if port.readback.intent_effect_binding_override.is_none() {
+            port.readback.intent_effect_binding_override = Some(self.intent_binding.clone());
+        }
         PublicationCoordinator::restore_inflight(
             &input,
             &mut owners,

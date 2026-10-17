@@ -111,6 +111,25 @@ fn aborted_scenario_with_resolution(
         }
     }
 
+    let (scenario, abort_binding) = restore_scenario(
+        case,
+        &coordinator,
+        &original_port,
+        &request,
+        current_guards,
+        commit_outcome,
+    );
+    (scenario, request, abort_binding)
+}
+
+fn restore_scenario(
+    case: PublicationCase,
+    coordinator: &PublicationCoordinator,
+    original_port: &PhasePort,
+    request: &AbortFinalizationRequest,
+    current_guards: PublicationGuards,
+    commit_outcome: PublicationEffectOutcome,
+) -> (RestoreScenario, PublicationEffectBinding) {
     let transaction = coordinator.active().unwrap();
     let durable = transaction.durable_intent().unwrap();
     let intent_binding = original_port
@@ -174,7 +193,7 @@ fn aborted_scenario_with_resolution(
         scenario.readback_script.control_generation_override = Some(55);
         scenario.readback_script.control_guards_override = Some(current_guards);
     }
-    (scenario, request, abort_binding)
+    (scenario, abort_binding)
 }
 
 #[test]
