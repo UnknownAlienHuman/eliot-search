@@ -67,11 +67,14 @@ impl UntrustedProjectionMembershipHint {
 /// from trusted manifest metadata, and compare its derived address with the
 /// query address. Never derive source identity or the expected key solely from
 /// the query payload observation.
+/// The complete observation is untrusted reconstruction input only; the reader
+/// verifies reconstructed bytes against committed C07 before returning identity.
 pub trait CanonicalPointIdentityResolver {
     fn resolve(
         &mut self,
         address: PointId128,
         hint: UntrustedProjectionMembershipHint,
+        observation: &PointPayload,
     ) -> Result<PointIdentity, CanonicalIndexedPortError>;
 }
 
@@ -178,6 +181,7 @@ impl CanonicalIndexedRetrievalPort for RealCanonicalIndexedPort<'_, '_, '_> {
                 &self.allowed_projection_memberships,
                 candidate.address,
                 hint,
+                &candidate.payload_observation,
             )?;
             self.context.check().map_err(map_context_error)?;
             if identity.point_id() != candidate.address
@@ -249,6 +253,7 @@ fn resolve_candidate_identity(
     allowed_projection_memberships: &[ProjectionMembershipId],
     address: PointId128,
     hint: UntrustedProjectionMembershipHint,
+    observation: &PointPayload,
 ) -> Result<PointIdentity, CanonicalIndexedPortError> {
     if allowed_projection_memberships
         .binary_search(&hint.projection_membership_id())
@@ -256,7 +261,7 @@ fn resolve_candidate_identity(
     {
         return Err(CanonicalIndexedPortError::Failure);
     }
-    identities.resolve(address, hint)
+    identities.resolve(address, hint, observation)
 }
 
 fn join_exact_readback(
@@ -333,6 +338,7 @@ mod tests {
             &mut self,
             _address: PointId128,
             _hint: UntrustedProjectionMembershipHint,
+            _observation: &search_contracts::indexed::PointPayload,
         ) -> Result<PointIdentity, CanonicalIndexedPortError> {
             self.calls.set(self.calls.get().saturating_add(1));
             Err(CanonicalIndexedPortError::Failure)
@@ -340,7 +346,8 @@ mod tests {
     }
 
     #[test]
-    fn foreign_projection_hint_is_rejected_before_resolver_owner_reads() {
+    fn foreign_projection_hint_is_rejected_before_resolver_owner_reads() -> Result<(), Box<dyn std::error::Error>> {
+        use search_contracts::{self as c, indexed::PointPayload};
         let in_scope = ProjectionMembershipId::from_bytes([0x11; 16]);
         let foreign = ProjectionMembershipId::from_bytes([0x22; 16]);
         let allowed = [in_scope];
@@ -350,6 +357,16 @@ mod tests {
         let mut resolver = ResolverProbe {
             calls: Cell::new(0),
         };
+        let observation = PointPayload::new(
+            c::InstallationIncarnationId::from_bytes([1; 16]),
+            c::CollectionGenerationId::from_bytes([2; 16]), foreign,
+            c::AccessPartitionId::from_bytes([3; 16]), c::ScoringPartitionId::from_bytes([4; 16]),
+            c::SourceId::from_bytes([5; 16]), c::SourceRevisionId::from_bytes([6; 16]),
+            c::RepresentationId::from_bytes([7; 16]), c::UnitId::from_bytes([8; 16]),
+            c::Blake3Digest32::from_bytes([9; 32]), c::ScoringDocumentId::from_bytes([10; 16]),
+            c::ProjectionProfileSetId::new("denied-probe")?, c::UnitKind::Section, c::Modality::Code,
+            c::BoundedName::new("code")?, None, None, None, c::Epoch::new(1)?, None,
+        );
 
         assert!(matches!(
             resolve_candidate_identity(
@@ -357,10 +374,12 @@ mod tests {
                 &allowed,
                 PointId128::from_stored_bytes([0x33; 16]),
                 hint,
+                &observation,
             ),
             Err(CanonicalIndexedPortError::Failure)
         ));
         assert_eq!(resolver.calls.get(), 0);
+        Ok(())
     }
 }
 

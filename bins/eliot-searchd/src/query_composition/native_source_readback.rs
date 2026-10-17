@@ -2,6 +2,10 @@
 //! Source bytes and residency metadata come from the same guarded C02/C07 reopen.
 //! The caller retains one read state across the entire admitted request.
 
+#[path = "native_v2_validation.rs"]
+mod evidence;
+pub(super) use evidence::validate_evidence_raw_v3;
+
 use search_candidate_validator::{
     CandidateAssurance, CandidateNomination, ExactRevisionReadbackRequest, RevisionReadbackPort,
     SourceReadback, ValidationContext, ValidationOutcome, validate_raw_v3_full_unit_v1,

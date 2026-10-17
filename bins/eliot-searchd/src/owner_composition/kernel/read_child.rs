@@ -7,7 +7,7 @@ use std::time::Instant;
 #[cfg(feature = "wave4-query")]
 use crate::provider_composition::{CanonicalWorkBudget, monotonic_millis};
 #[cfg(feature = "wave4-query")]
-use search_provider_protocol::{AdmittedProviderRequest, MonotonicMillis};
+use search_provider_protocol::{AdmittedProviderRequest, MonotonicMillis, RequestGuard};
 #[cfg(feature = "wave4-query")]
 use search_provider_protocol::request::RequestCancellation;
 #[cfg(feature = "wave4-query")]
@@ -54,8 +54,13 @@ impl NativeRequestReadState {
     pub(super) fn new(owner: &NativeRootCapability, admitted: &AdmittedProviderRequest,
         original_budget: CanonicalWorkBudget,
     ) -> Result<Self, OwnerError> {
+        Self::from_guard(owner, admitted.guard(), original_budget)
+    }
+
+    pub(super) fn from_guard(owner: &NativeRootCapability, guard: &RequestGuard,
+        original_budget: CanonicalWorkBudget,
+    ) -> Result<Self, OwnerError> {
         original_budget.check().map_err(|_| OwnerError::OwnerDeadlineInvalid)?;
-        let guard = admitted.guard();
         let monotonic_deadline = guard.deadline().ok_or(OwnerError::OwnerDeadlineInvalid)?
             .min(original_budget.deadline());
         let anchor = Instant::now();
@@ -101,6 +106,19 @@ pub(super) fn with_direct_read_operation<T>(
     current_budget: CanonicalWorkBudget,
     callback: impl for<'operation, 'root> FnOnce(&'operation mut NativeReadOperation<'root>) -> T,
 ) -> Result<T, OwnerError> {
+    with_guarded_read_operation(owner, admitted.guard(), state, current_budget, callback)
+}
+
+/// The V1 and V2 admissions share the same opaque session guard and native meter.
+/// Only the live issuer/source boundary may call this operation.
+#[cfg(feature = "wave4-query")]
+pub(super) fn with_guarded_read_operation<T>(
+    owner: &mut NativeRootCapability,
+    guard: &RequestGuard,
+    state: &mut NativeRequestReadState,
+    current_budget: CanonicalWorkBudget,
+    callback: impl for<'operation, 'root> FnOnce(&'operation mut NativeReadOperation<'root>) -> T,
+) -> Result<T, OwnerError> {
     if owner.pins.direct.is_none()
         || !owner.mutation
         || owner.record.lifecycle != LifecycleState::Active
@@ -112,7 +130,7 @@ pub(super) fn with_direct_read_operation<T>(
     }
     if state.owner_record != owner.record.record_digest { return Err(OwnerError::OwnerGuardMismatch); }
     current_budget.check().map_err(|_| OwnerError::OwnerDeadlineInvalid)?;
-    state.check(admitted.guard().request_id(), &admitted.guard().cancellation(), current_budget.deadline())?;
+    state.check(guard.request_id(), &guard.cancellation(), current_budget.deadline())?;
     let context = state.context.take().ok_or(OwnerError::OwnerInvalidTransition)?;
     let mut frame = RestoreOnDrop {
         value: NativeReadOperation { owner, context: Some(context), output_attempted: false,

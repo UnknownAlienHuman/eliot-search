@@ -129,6 +129,10 @@ pub(crate) struct NativeRecoveryArtifactSet<'readback> {
 }
 
 impl NativeReopenedArtifactSet<'_, '_> {
+    pub(crate) fn into_prepared(self) -> PreparedRawCodeArtifacts {
+        self.contents.prepared
+    }
+
     pub(super) const fn snapshot(&self) -> &PublicationProjectionSnapshot {
         self.snapshot
     }

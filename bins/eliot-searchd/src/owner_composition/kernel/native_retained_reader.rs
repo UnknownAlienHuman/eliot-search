@@ -14,12 +14,17 @@ use super::dek_command::NativeContext;
 use super::retention_control::NativeRetentionControl;
 use crate::config_composition::EffectiveDaemonConfig;
 
+#[cfg(feature = "wave4-query")]
+#[path = "native_v2_retained_read.rs"]
+mod evidence;
+
 /// The canonical request retains this cumulative native meter between reads.
 #[cfg(feature = "wave4-query")]
 #[derive(Default)]
 pub(crate) struct RetainedRevisionReadState {
     native: Option<super::super::read_child::NativeRequestReadState>,
     remaining_source_bytes: u64,
+    projection_snapshot: Option<search_control_redb::PublicationProjectionSnapshot>,
 }
 
 #[cfg(feature = "wave4-query")]
@@ -29,6 +34,7 @@ impl RetainedRevisionReadState {
         Self {
             native: None,
             remaining_source_bytes: max_source_read_bytes,
+            projection_snapshot: None,
         }
     }
 

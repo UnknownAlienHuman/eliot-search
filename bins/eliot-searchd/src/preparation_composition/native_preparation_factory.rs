@@ -73,6 +73,10 @@ const RAW_CODE_SCHEMA_PROFILE_ID: &str = "raw-code-projection-schema-v1";
 const RAW_CODE_VECTOR_NAME: &str = "lex_code_v1";
 const RAW_CODE_INDEX_CEILING: u32 = 1_048_576;
 const C09_FIXTURE_SOURCE: &[u8] = b"fn main() {}\n";
+
+#[cfg(feature = "wave4-query")]
+#[path = "native_v2_reopen.rs"]
+mod evidence_reopen;
 const C09_FIXTURE_DEFINITION: &[u8] =
     b"native-raw-code-unitizer-v3:fixture=fn main() {}\n;utf8-exact;units=1;span=0..input-len;omitted=0;exact-byte-anchor;verified-manifest";
 

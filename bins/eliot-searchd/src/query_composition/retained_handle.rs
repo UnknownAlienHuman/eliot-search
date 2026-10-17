@@ -1,6 +1,10 @@
 //! Retained-source handle composition over the actual C07 link and C28 pin owner.
 //! Neither the pin nor the bearer token grants source-read permission.
 
+#[path = "native_v2_handle.rs"]
+mod evidence;
+pub(super) use evidence::mint_evidence_candidate_handle;
+
 use std::fmt;
 use std::time::Instant;
 

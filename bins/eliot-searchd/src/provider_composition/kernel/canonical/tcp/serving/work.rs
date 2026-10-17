@@ -49,7 +49,7 @@ pub struct CanonicalWorkBudget {
 }
 
 impl CanonicalWorkBudget {
-    pub(super) fn new(
+    pub(crate) fn new(
         deadline: MonotonicMillis,
         quantum_ms: u64,
     ) -> Result<Self, CanonicalServingError> {

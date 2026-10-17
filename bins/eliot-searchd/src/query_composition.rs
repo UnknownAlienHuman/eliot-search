@@ -63,6 +63,7 @@ pub(crate) mod service;
 pub(crate) mod native_source_readback;
 mod retained_handle;
 pub(crate) mod canonical_retrieval;
+pub mod native_v2;
 mod nomination_source;
 #[cfg(test)]
 #[path = "query_composition/real_port_tests.rs"]

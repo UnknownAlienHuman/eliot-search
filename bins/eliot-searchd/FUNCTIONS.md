@@ -1,5 +1,18 @@
 # Function contract — `eliot-searchd`
 
+`query_composition::native_v2::handler::poll_native_evidence_v2` consumes actual
+V2 requests from the existing paired local stream. Its injected C22 compiler
+runs inside the existing C18/issuer lock with the original admitted V2 request;
+Root checks the complete selected memberships, request ID and original global
+budget before canonical execution. One original guard, absolute lifetime and
+cumulative retained-read meter span Qdrant, nominated-only C07 reconstruction,
+C24 exact source validation, C28 protection and C26 prepared V2 delivery.
+The runtime supplies its existing plane, route, custody, registry, qualified
+profiles, epoch pins, handle store and clock. No listener or second authority
+is created. Unsupported shapes and missing source-backed results refuse;
+candidate-scope coverage never proves absence. Runtime startup/C22 construction
+and native product qualification remain separate integration obligations.
+
 Fresh DIRECT initialization creates one fixed schema-5 `control/control.redb`
 under retained Native root/parent/database custody. Normal Root registration and
 listing use this same journal, publisher and atomic semantic registry protocol.

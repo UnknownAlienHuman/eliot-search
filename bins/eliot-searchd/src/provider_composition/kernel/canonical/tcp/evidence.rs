@@ -17,6 +17,37 @@ use search_provider_protocol::{
 use super::{CanonicalTcpConnection, CanonicalTcpError, io, keyed_frame_proof, monotonic_millis};
 
 impl CanonicalTcpConnection {
+    /// C26 prepares the exact V2 frame inside the session's sequence preview.
+    /// Typed output/after-output errors preserve pending handles on uncertain I/O.
+    pub(crate) fn deliver_evidence_prepared_before_v2<P>(
+        &mut self,
+        request: &mut AdmittedEvidenceProviderRequestV2,
+        valid_until: MonotonicMillis,
+        prepare: impl FnOnce(&search_provider_protocol::ProviderEventPreparationV1)
+            -> Result<(EvidenceResponseBodyV2, search_contracts::BoundedBytes<{search_contracts::MAX_FRAME_BYTES}>), P>,
+    ) -> Result<(), search_provider_protocol::PreparedProviderDeliveryError<P, CanonicalTcpError>> {
+        use search_provider_protocol::PreparedProviderDeliveryError as Error;
+        let mut operation = super::Operation { state: &mut self.state, completed: false };
+        let result = (|| {
+            let state = operation.state.as_mut().ok_or(Error::Output(CanonicalTcpError::Closed))?;
+            let guard = request.guard().clone();
+            let deadline = guard.deadline().ok_or(Error::Protocol(ProtocolError::InvalidLimits))?
+                .min(valid_until);
+            if monotonic_millis() >= deadline { return Err(Error::Output(CanonicalTcpError::DeadlineExpired)); }
+            let cancellation = guard.cancellation();
+            let (connection, io) = (&mut state.connection, &mut state.io);
+            let limits = connection.limits;
+            let (session, key) = (&mut connection.session, &connection.key);
+            session.deliver_evidence_provider_event_prepared_v2(request,
+                &mut || Ok(monotonic_millis()), prepare, |transcript| {
+                    let proof = keyed_frame_proof(key, transcript);
+                    io.write_record(transcript.frame(), &proof, limits, deadline, Some(&cancellation))
+                })
+        })();
+        operation.completed = result.is_ok();
+        result
+    }
+
     /// Poll one V2 request or an authenticated common cancel on the retained stream.
     ///
     /// The pre-prefix deadline, partial record, MAC, sequence, replay state and
