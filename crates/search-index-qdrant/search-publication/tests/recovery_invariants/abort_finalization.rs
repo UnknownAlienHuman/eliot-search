@@ -175,16 +175,27 @@ fn exact_retries_are_nonmutating_but_operation_generation_and_guard_changes_do_n
 
 #[test]
 fn invalid_request_inputs_fail_before_latching_and_do_not_burn_a_control_operation() {
-    for (op, generation, expected) in [
-        (id("persist-1"), 40, PublicationError::OperationMismatch),
-        (id("finalize-1"), 0, PublicationError::ControlConflict),
-        (
-            id("finalize-1"),
-            u64::MAX,
-            PublicationError::ContractExhausted,
-        ),
-    ] {
+    for case in 0..3 {
         let mut machine = compensated(false);
+        let (op, generation, expected) = match case {
+            0 => (
+                machine
+                    .active()
+                    .unwrap()
+                    .durable_intent()
+                    .unwrap()
+                    .persist_operation_id()
+                    .clone(),
+                40,
+                PublicationError::OperationMismatch,
+            ),
+            1 => (id("finalize-1"), 0, PublicationError::ControlConflict),
+            _ => (
+                id("finalize-1"),
+                u64::MAX,
+                PublicationError::ContractExhausted,
+            ),
+        };
         assert_eq!(
             machine.prepare_abort_finalization(op, generation, guards()),
             Err(expected)
@@ -309,7 +320,10 @@ fn changed_complete_request_cannot_be_acknowledged_under_the_latched_operation()
                 port.readback.control_route_override =
                     Some(CollectionGenerationId::from_bytes([9; 16]));
             }
-            10 => port.readback.control_after_epoch_override = Some(epoch(1)),
+            10 => {
+                port.readback.control_after_epoch_override =
+                    Some(original.previous_visible_epoch.checked_next().unwrap());
+            }
             _ => port.readback.control_generation_override = Some(40),
         }
         assert_eq!(
@@ -390,6 +404,13 @@ fn a_conflicting_repeat_cannot_replace_an_already_accepted_commit() {
         Err(PublicationError::OperationMismatch)
     );
     port.readback.control_state_digest_override = None;
+    // A conflicting repeat retains the original unresolved operation. A fresh
+    // exact readback must reconcile it before the snapshot effect is enabled.
+    assert_eq!(
+        abort_support::snapshot(&mut machine, &mut port),
+        Err(PublicationError::OutcomeUnknown)
+    );
+    abort_support::commit(&mut machine, &mut port).unwrap();
     abort_support::snapshot(&mut machine, &mut port).unwrap();
     machine.finalize_aborted().unwrap();
 }

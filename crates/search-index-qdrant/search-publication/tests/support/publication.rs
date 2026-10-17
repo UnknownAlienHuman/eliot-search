@@ -654,7 +654,11 @@ impl<C: CancellationProbe> PublicationReadbackPort<C> for PhaseReadback {
             points,
             missing_point_ids,
             unexpected_point_ids: self.unexpected_ids(command.effect()),
-            intent: intent_readback(self, command),
+            intent: if outcome == PublicationEffectOutcome::Applied {
+                intent_readback(self, command)
+            } else {
+                None
+            },
             control: control_readback(self, command, outcome)
                 .or_else(|| abort_control_readback(self, command)),
             snapshot: snapshot_readback(self, command, outcome),
@@ -676,6 +680,7 @@ impl PhaseReadback {
             .or_else(|| {
                 self.outcomes
                     .iter()
+                    .rev()
                     .find_map(|(candidate, outcome)| (*candidate == effect).then_some(*outcome))
             })
             .unwrap_or(PublicationEffectOutcome::Applied)
@@ -684,6 +689,7 @@ impl PhaseReadback {
     fn unexpected_ids(&self, effect: PublicationEffectKind) -> Vec<PointId128> {
         self.unexpected_point_ids_by_effect
             .iter()
+            .rev()
             .find_map(|(candidate, ids)| (*candidate == effect).then_some(ids.clone()))
             .unwrap_or_else(|| self.unexpected_point_ids.clone())
     }
@@ -925,9 +931,15 @@ fn abort_control_readback(
         .expect("abort command carries latched request");
     Some(search_publication::PublicationControlReadback {
         before_visible_epoch: request.previous_visible_epoch,
-        after_visible_epoch: request.previous_visible_epoch,
-        last_reserved_epoch: request.intent.target_epoch(),
-        guards: request.current_guards,
+        after_visible_epoch: readback
+            .control_after_epoch_override
+            .unwrap_or(request.previous_visible_epoch),
+        last_reserved_epoch: readback
+            .control_floor_override
+            .unwrap_or_else(|| request.intent.target_epoch()),
+        guards: readback
+            .control_guards_override
+            .unwrap_or(request.current_guards),
         before_control_generation: readback
             .control_before_generation_override
             .unwrap_or(request.expected_control_generation),
@@ -937,7 +949,9 @@ fn abort_control_readback(
         control_state_digest: readback
             .control_state_digest_override
             .unwrap_or(c::Blake3Digest32::from_bytes([32; 32])),
-        collection_generation_id: request.collection_generation_id,
+        collection_generation_id: readback
+            .control_route_override
+            .unwrap_or(request.collection_generation_id),
         previous_visible_manifest_digest: request.intent.old_manifest_digest(),
         visible_manifest_digest: request.intent.old_manifest_digest(),
     })
@@ -1284,10 +1298,12 @@ pub fn recovery_port(
         staged_ids: Some(observed.staged_ids.clone()),
         closed_ids: Some(observed.closed_ids.clone()),
         control_visible_epoch: Some(observed.control_visible_epoch),
-        missing_point_ids_override: Some((
-            PublicationEffectKind::StageNewPoints,
-            observed.missing_point_ids.clone(),
-        )),
+        missing_point_ids_override: (!observed.missing_point_ids.is_empty()).then(|| {
+            (
+                PublicationEffectKind::StageNewPoints,
+                observed.missing_point_ids.clone(),
+            )
+        }),
         unexpected_point_ids_by_effect: vec![
             (PublicationEffectKind::StageNewPoints, stage_unexpected),
             (PublicationEffectKind::CloseOldPoints, closure_unexpected),

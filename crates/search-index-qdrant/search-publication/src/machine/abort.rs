@@ -238,7 +238,6 @@ impl PublicationCoordinator {
                 || control.before_visible_epoch != request.previous_visible_epoch
                 || control.after_visible_epoch != request.previous_visible_epoch
                 || control.last_reserved_epoch != request.intent.target_epoch
-                || control.guards != request.current_guards
                 || control.before_control_generation != request.expected_control_generation
                 || control.before_control_generation.checked_add(1)
                     != Some(control.after_control_generation)
@@ -247,6 +246,9 @@ impl PublicationCoordinator {
                 || control.visible_manifest_digest != request.intent.old_manifest_digest
             {
                 return Err(PublicationError::ControlConflict);
+            }
+            if control.guards != request.current_guards {
+                return Err(PublicationError::GuardMismatch);
             }
             AbortControlCommitObservation {
                 request,
