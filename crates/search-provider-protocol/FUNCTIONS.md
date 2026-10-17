@@ -141,6 +141,12 @@ contiguous batches and their final markers are checked before output. A recipe
 result remains nonterminal; `finish_evidence_provider_request_v2` emits the sole
 typed terminal. Terminal classification is derived from the body.
 
+The existing cursor retains the snapshot's denominator kind/requested legs and
+the final recipe result's coverage. Results and terminals preserve that original
+denominator; a terminal also preserves the emitted final result coverage. The
+shared terminal contract requires all requested executions and no gaps only for
+Success. Partial/Failure may still omit executions; cancellation is unchanged.
+
 Each response is at most 1 MiB including framing. At most 4,096 events are
 allowed, further bounded by the accepted declared frame budget, including one
 reserved terminal event. Nonterminal framed bytes cumulatively consume the

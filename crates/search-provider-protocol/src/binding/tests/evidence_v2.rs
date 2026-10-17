@@ -405,13 +405,10 @@ fn cumulative_and_declared_budgets_preserve_cancel_terminal_capacity() {
         .expect("cancel terminal");
 }
 
-#[test]
-fn result_recipe_scope_and_source_view_remain_bound_to_admitted_request() {
+fn result_for(
+    request: &AdmittedEvidenceProviderRequestV2,
+) -> search_contracts::evidence::RetrieveEvidenceResultV2 {
     use search_contracts::*;
-    let mut session = bound_session();
-    let mut request = admitted(&mut session, 65_536);
-    emit(&mut session, &mut request, accepted(4)).expect("accepted");
-    emit(&mut session, &mut request, snapshot(2)).expect("snapshot");
     let crate::frame::EvidenceRecipeRequestV2::RetrieveEvidence(input) =
         &request.envelope().recipe_request
     else {
@@ -448,7 +445,7 @@ fn result_recipe_scope_and_source_view_remain_bound_to_admitted_request() {
         },
         result_fingerprint: Blake3Digest32::from_stored_bytes([1; 32]),
     };
-    let result = search_contracts::evidence::RetrieveEvidenceResultV2 {
+    search_contracts::evidence::RetrieveEvidenceResultV2 {
         request_id: *request_id(),
         plan_id: PlanId::from_bytes([1; 16]),
         plan_fingerprint: PlanFingerprint::from_bytes([1; 32]),
@@ -459,7 +456,17 @@ fn result_recipe_scope_and_source_view_remain_bound_to_admitted_request() {
         suggested_exact_checks: BoundedList::empty(),
         coverage: coverage(),
         continuation: None,
-    };
+    }
+}
+
+#[test]
+fn result_recipe_scope_and_source_view_remain_bound_to_admitted_request() {
+    use search_contracts::*;
+    let mut session = bound_session();
+    let mut request = admitted(&mut session, 65_536);
+    emit(&mut session, &mut request, accepted(4)).expect("accepted");
+    emit(&mut session, &mut request, snapshot(2)).expect("snapshot");
+    let result = result_for(&request);
     let body = |result| {
         Body::Result(crate::frame::EvidenceRecipeResultV2::RetrieveEvidence(
             result,
@@ -510,6 +517,129 @@ fn result_recipe_scope_and_source_view_remain_bound_to_admitted_request() {
             |_| Ok::<_, ()>(()),
         )
         .expect("sole terminal releases slot");
+}
+
+#[test]
+fn terminal_retains_denominator_and_final_coverage_before_output_or_release() {
+    use search_contracts::*;
+    for (kind, gap) in [
+        (Some(EvidenceTerminalKind::Partial), false),
+        (Some(EvidenceTerminalKind::Failure), false),
+        (Some(EvidenceTerminalKind::Success), false),
+        (Some(EvidenceTerminalKind::Partial), true),
+        (None, false),
+    ] {
+        let mut session = bound_session();
+        let mut request = admitted(&mut session, 65_536);
+        emit(&mut session, &mut request, accepted(4)).expect("accepted");
+        let mut original = coverage();
+        original.requested_legs = BoundedList::new(vec![LegDescriptor {
+            leg_ref: OpaqueId::new("L").expect("leg"),
+            leg_kind: LegKind::Lexical,
+            scoring_partition_ref: None,
+            profile_id: ProfileId::new("lexical-v1").expect("profile"),
+        }])
+        .expect("original requested denominator");
+        let mut declared = snapshot(2);
+        let Body::Frame(EvidenceFrameV2::CoverageSnapshot(value)) = &mut declared else {
+            unreachable!()
+        };
+        value.coverage = original.clone();
+        emit(&mut session, &mut request, declared).expect("snapshot with requested L");
+
+        let completed = LegExecutionSummary {
+            leg_ref: OpaqueId::new("L").expect("leg"),
+            state: LegExecutionState::Completed,
+            nominated_count: 0,
+            validated_count: 0,
+            reason_codes: BoundedSet::empty(),
+            receipt_ref: ReceiptRef::new("fixture-only").expect("receipt"),
+        };
+        let mut final_coverage = original;
+        if kind == Some(EvidenceTerminalKind::Success) || gap {
+            final_coverage.executed_legs =
+                BoundedList::new(vec![completed.clone()]).expect("completed L");
+        }
+        if gap {
+            final_coverage.omitted_or_failed_legs = BoundedList::new(vec![CoverageGap {
+                gap_ref: OpaqueId::new("known-gap").expect("gap"),
+                kind: CoverageGapKind::FailedLeg,
+                affected_scope_refs: BoundedList::empty(),
+                reason_codes: BoundedSet::empty(),
+                retryability: Retryability::Never,
+            }])
+            .expect("known final gap");
+        }
+        let mut result = result_for(&request);
+        result.coverage = final_coverage.clone();
+        emit(
+            &mut session,
+            &mut request,
+            Body::Result(crate::frame::EvidenceRecipeResultV2::RetrieveEvidence(
+                result,
+            )),
+        )
+        .expect("final result, with incomplete work retained when present");
+
+        let mut forgeries = vec![terminal(4)]; // Locally valid empty Success: the reported P2.
+        let mut replaced = terminal(4);
+        replaced.coverage = final_coverage.clone();
+        replaced.coverage.executed_legs =
+            BoundedList::new(vec![completed]).expect("synthesized completion");
+        replaced.coverage.omitted_or_failed_legs = BoundedList::empty();
+        if kind != Some(EvidenceTerminalKind::Success) {
+            forgeries.push(replaced.clone());
+        }
+        replaced.coverage.denominator_kind = CoverageDenominatorKind::CompleteScope;
+        forgeries.push(replaced);
+        for forged in forgeries {
+            forged
+                .validate()
+                .expect("individually valid terminal cannot prove exchange consistency");
+            let mut wrote = false;
+            let refused = session.finish_evidence_provider_request_v2(
+                &mut request,
+                forged,
+                &mut || Ok(MonotonicMillis::new(11)),
+                |_| {
+                    wrote = true;
+                    Ok::<_, ()>(())
+                },
+            );
+            assert!(!wrote, "contradictory coverage reached terminal output");
+            assert!(matches!(
+                refused,
+                Err(ProviderDeliveryError::Protocol(ProtocolError::InvalidBody))
+            ));
+            assert_eq!(request.next_event_sequence(), Some(4));
+            assert_eq!(session.in_flight_len(), 1);
+            assert!(session.is_active());
+        }
+        if let Some(kind) = kind {
+            let mut consistent = terminal(4);
+            consistent.terminal = kind;
+            consistent.coverage = final_coverage;
+            session
+                .finish_evidence_provider_request_v2(
+                    &mut request,
+                    consistent,
+                    &mut || Ok(MonotonicMillis::new(11)),
+                    |_| Ok::<_, ()>(()),
+                )
+                .expect("consistent Success, or legal Partial/Failure with missing executions");
+        } else {
+            session.cancel(request_id());
+            session
+                .finish_evidence_provider_cancelled_v2(
+                    &mut request,
+                    &mut || Ok(MonotonicMillis::new(11)),
+                    |_| Ok::<_, ()>(()),
+                )
+                .expect("cancel still works");
+        }
+        assert_eq!(request.next_event_sequence(), None);
+        assert_eq!(session.in_flight_len(), 0);
+    }
 }
 
 #[test]

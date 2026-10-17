@@ -4,7 +4,10 @@ use search_contracts::evidence::RecipeIdV2;
 use search_contracts::evidence_frames::{
     EvidenceFrameV2, EvidenceTerminalFrame, MAX_EVIDENCE_EXCHANGE_FRAMES,
 };
-use search_contracts::{BoundedBytes, CancelledBody, MAX_FRAME_BYTES};
+use search_contracts::{
+    BoundedBytes, BoundedList, CancelledBody, Coverage, CoverageDenominatorKind, LegDescriptor,
+    MAX_FRAME_BYTES, MAX_LIST_ITEMS,
+};
 
 use super::{
     AdmittedEvidenceProviderRequestV2, BoundSession, CheckedProviderEvent, EvidenceResponseBodyV2,
@@ -20,8 +23,11 @@ pub(super) struct EvidenceResponseState {
     frames: usize,
     bytes: u64,
     declared_frames: Option<usize>,
-    snapshot: bool,
-    result: bool,
+    snapshot: Option<(
+        CoverageDenominatorKind,
+        BoundedList<LegDescriptor, MAX_LIST_ITEMS>,
+    )>,
+    result: Option<Coverage>,
     batches: [(u64, bool, bool); 3],
     tail: Option<usize>,
 }
@@ -71,11 +77,14 @@ impl EvidenceResponseState {
                         }
                         self.declared_frames = Some(count);
                     }
-                    EvidenceFrameV2::CoverageSnapshot(_) => {
-                        if self.declared_frames.is_none() || self.snapshot {
+                    EvidenceFrameV2::CoverageSnapshot(value) => {
+                        if self.declared_frames.is_none() || self.snapshot.is_some() {
                             return Err(ProtocolError::InvalidBody);
                         }
-                        self.snapshot = true;
+                        self.snapshot = Some((
+                            value.coverage.denominator_kind,
+                            value.coverage.requested_legs.clone(),
+                        ));
                     }
                     EvidenceFrameV2::CardBatch(value) => {
                         if request.recipe_request.recipe_id() != RecipeIdV2::RetrieveEvidence {
@@ -110,12 +119,25 @@ impl EvidenceResponseState {
                             progressive,
                         )?;
                     }
-                    EvidenceFrameV2::Terminal(_) => {
-                        if !self.snapshot
+                    EvidenceFrameV2::Terminal(value) => {
+                        if self.snapshot.is_none()
                             || self.batches.iter().any(|(_, last, seen)| *seen && !last)
                             || (!progressive
-                                && !self.result
+                                && self.result.is_none()
                                 && terminal != Some(super::TerminalKind::Failed))
+                        {
+                            return Err(ProtocolError::InvalidBody);
+                        }
+                        self.validate_denominator(&value.coverage)?;
+                        // A final result is already emitted evidence. Terminal
+                        // validation cannot replace its incomplete work or gaps.
+                        // The shared terminal contract still permits missing
+                        // executions for Partial/Failure; only Success requires
+                        // every requested leg completed without gaps.
+                        if self
+                            .result
+                            .as_ref()
+                            .is_some_and(|coverage| coverage != &value.coverage)
                         {
                             return Err(ProtocolError::InvalidBody);
                         }
@@ -123,25 +145,26 @@ impl EvidenceResponseState {
                 }
             }
             EvidenceResponseBodyV2::Result(result) => {
-                if !self.snapshot
-                    || self.result
+                if self.snapshot.is_none()
+                    || self.result.is_some()
                     || result.recipe_id() != request.recipe_request.recipe_id()
                     || self.batches.iter().any(|(_, last, seen)| *seen && !last)
                 {
                     return Err(ProtocolError::InvalidBody);
                 }
-                let (resolved, fence) = match result {
+                let (resolved, fence, coverage) = match result {
                     EvidenceRecipeResultV2::RetrieveEvidence(value) => {
-                        (&value.resolved_scope, &value.result_fence)
+                        (&value.resolved_scope, &value.result_fence, &value.coverage)
                     }
                     EvidenceRecipeResultV2::OrientScope(value) => {
-                        (&value.resolved_scope, &value.result_fence)
+                        (&value.resolved_scope, &value.result_fence, &value.coverage)
                     }
                 };
                 if resolved != scope || &fence.planned_snapshot.source_view != source_view {
                     return Err(ProtocolError::InvalidBody);
                 }
-                self.result = true;
+                self.validate_denominator(coverage)?;
+                self.result = Some(coverage.clone());
             }
             EvidenceResponseBodyV2::Progress(_) => {
                 if self.declared_frames.is_none() {
@@ -179,6 +202,16 @@ impl EvidenceResponseState {
         Ok(())
     }
 
+    fn validate_denominator(&self, coverage: &Coverage) -> Result<(), ProtocolError> {
+        let Some((kind, requested)) = &self.snapshot else {
+            return Err(ProtocolError::InvalidBody);
+        };
+        if *kind != coverage.denominator_kind || requested != &coverage.requested_legs {
+            return Err(ProtocolError::InvalidBody);
+        }
+        Ok(())
+    }
+
     fn batch(
         &mut self,
         kind: usize,
@@ -188,8 +221,8 @@ impl EvidenceResponseState {
         progressive: bool,
     ) -> Result<(), ProtocolError> {
         if !progressive
-            || !self.snapshot
-            || self.result
+            || self.snapshot.is_none()
+            || self.result.is_some()
             || self
                 .tail
                 .is_some_and(|tail| tail != kind && !self.batches[tail].1)
