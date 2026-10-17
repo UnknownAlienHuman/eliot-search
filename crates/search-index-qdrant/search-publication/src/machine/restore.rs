@@ -1,283 +1,525 @@
-//! Rebuild the sole active coordinator slot from already verified recovery inputs.
-//! This module performs no port call, reservation, durable write or index mutation.
+//! Owner-readback hydration for the original publication operation.
 
-use core::fmt;
-
-use search_contracts::CollectionGenerationId;
+use search_ports::{CancellationProbe, OperationContext};
 use search_projection_planner::ProjectionBudget;
-use crate::admission::{AdmissionPurpose, PublicationAdmissionOwners, PublicationProposal,
-    validate_prepared_generation};
+
+use crate::admission::{AdmissionPurpose, PublicationProposal, validate_prepared_generation};
+use crate::model::{
+    PublicationControlReadback, PublicationEffectKind, PublicationEffectOutcome,
+    PublicationEffectReadback, PublicationIntentReadback, PublicationPointExpectation,
+};
+use crate::{PublicationError, PublicationRecoveryDecision};
 
 use super::{
-    ClosureReceipt, ControlCommitObservation, DurableIntent, Epoch, PreparedGeneration,
-    PublicationCoordinator, PublicationError, PublicationGuards, PublicationPhase,
-    PublicationTransaction, ReadbackVerified, StageReceipt, changed_point_id_is_reused,
+    ClosureReceipt, DurableIntent, PublicationCoordinator, PublicationEffectCommand,
+    PublicationEffectPreparationOwners, PublicationPhase, PublicationReadbackPort,
+    PublicationTransaction, ReadbackVerified, SnapshotPublishReceipt, StageReceipt,
+    VisibleCommitReceipt, point_readback_matches, readback_only,
 };
-use crate::{PublicationRecoveryDecision, PublicationRecoveryObservation, recover};
 
-/// Complete transient input supplied by the recovery composition owner.
-///
-/// Read the journal checkpoint, retained preparation and bound index readback
-/// under the live owner/recovery barrier. Verify their original IDs, manifest
-/// bytes/digests, receipt references and collection route before constructing this
-/// value. These public fields cannot authenticate a producer or an arbitrary
-/// reference. This is not a new persisted checkpoint format or an ownership lease.
-///
-/// Snapshot acknowledgement is intentionally absent: a receipt from the previous
-/// process cannot authorize admission in the restored process.
+/// Restore request contains only the original canonical proposal. Durable
+/// phase labels and all effect evidence are read back through owner ports.
 pub struct PublicationRestoreInput<T> {
-    /// Exact original preparation, including both immutable manifests.
+    /// Original immutable preparation token request; canonical admission runs again.
     pub prepared: T,
-    /// Authoritatively retained visible epoch immediately before this reservation.
-    pub previous_visible_epoch: Epoch,
-    /// Highest durable reservation; single-flight recovery requires the target itself.
-    pub last_reserved_epoch: Epoch,
-    /// Current route from the same authoritative control observation.
-    pub collection_generation_id: CollectionGenerationId,
-    /// Current live owner/source/membership/access/shadow/purge/profile guards.
-    pub current_guards: PublicationGuards,
-    /// Last recorded phase, not inferred from point counts or collection presence.
-    pub phase: PublicationPhase,
-    /// Exact retained intent and its original operation/receipt identities.
-    pub intent: DurableIntent,
-    /// Recorded stage acknowledgement, present only for the corresponding phase prefix.
-    pub stage_receipt: Option<StageReceipt>,
-    /// Recorded closure acknowledgement; never present without its stage predecessor.
-    pub closure_receipt: Option<ClosureReceipt>,
-    /// Recorded combined readback; its complete binding is revalidated.
-    pub verified: Option<ReadbackVerified>,
-    /// Actual verified control-commit observation, not reconstructed from a phase label.
-    pub control_commit: Option<ControlCommitObservation>,
-    /// Fresh transaction-bound recovery readback. `snapshot_published` must be false.
-    pub observation: PublicationRecoveryObservation,
-}
-
-impl<T> fmt::Debug for PublicationRestoreInput<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PublicationRestoreInput")
-            .field("phase", &self.phase)
-            .field("previous_visible_epoch", &self.previous_visible_epoch)
-            .field("last_reserved_epoch", &self.last_reserved_epoch)
-            .finish_non_exhaustive()
-    }
 }
 
 impl<T> PublicationRestoreInput<T> {
-    fn with_admitted<U>(self, prepared: U) -> PublicationRestoreInput<U> {
-        PublicationRestoreInput { prepared, previous_visible_epoch: self.previous_visible_epoch,
-            last_reserved_epoch: self.last_reserved_epoch, collection_generation_id: self.collection_generation_id,
-            current_guards: self.current_guards, phase: self.phase, intent: self.intent,
-            stage_receipt: self.stage_receipt, closure_receipt: self.closure_receipt,
-            verified: self.verified, control_commit: self.control_commit, observation: self.observation }
+    /// Wraps the original proposal without accepting phase or proof claims.
+    #[must_use]
+    pub const fn new(prepared: T) -> Self {
+        Self { prepared }
     }
 }
 
 impl PublicationCoordinator {
-    /// Restores one in-flight transaction without calling `submit` or allocating
-    /// another epoch. Returns the existing recovery decision and a non-Clone
-    /// coordinator whose active slot remains occupied, including when blocked.
-    ///
-    /// Existing pure stage/closure/readback/commit validators rebuild the accepted
-    /// receipt prefix; no external operation is re-executed. Recovery then checks
-    /// fresh observed effects. Incomplete effects or changed pre-commit guards
-    /// put the slot in `COMPENSATING`, preventing forward commit. Bare `ABORTED` and
-    /// blocked records remain `PUBLICATION_BLOCKED`, not an empty ready coordinator.
-    ///
-    /// Prior `SNAPSHOT_PUBLISHED` becomes `CONTROL_COMMITTED` and requires a new
-    /// current-process acknowledgement. Live restriction checks remain mandatory
-    /// at actual publication/admission; this pure result grants no index access.
-    ///
-    /// # Errors
-    /// Rejects missing/out-of-order receipt prefixes, foreign intent or route,
-    /// invalid manifests, changed reuse of a physical point ID, stale owner,
-    /// inconsistent epochs, oversized lists and prior-process snapshot claims.
-    /// A rejected input never returns a partially usable coordinator.
-    pub fn restore_inflight<P: PublicationAdmissionOwners + ?Sized>(
-        input: PublicationRestoreInput<PublicationProposal<'_, P::Projection>>,
-        owners: &mut P, snapshot: &P::Snapshot, budget: ProjectionBudget,
-    ) -> Result<(Self, PublicationRecoveryDecision), PublicationError> {
-        let prepared = validate_prepared_generation(owners, snapshot, &input.prepared,
-            AdmissionPurpose::Restore, budget)?;
-        let input = input.with_admitted(prepared);
-        let max_points = budget.max_points;
-        validate_input(&input, max_points)?;
-        let phase = input.phase;
-        let guards_changed = input.current_guards != input.prepared.guards;
-        let target_epoch = input.intent.target_epoch;
-        // Populate the original reservation directly. Lowering the floor and
-        // calling submit would misuse a fresh-reservation operation for recovery.
+    /// Re-admits the original proposal and rebuilds its verified phase from
+    /// exact owner readbacks. No effect is executed during hydration.
+    #[allow(clippy::too_many_lines)]
+    pub fn restore_inflight<P, C, R>(
+        input: &PublicationRestoreInput<PublicationProposal<'_, P::Projection>>,
+        owners: &mut P,
+        snapshot: &P::Snapshot,
+        budget: ProjectionBudget,
+        readback: &mut R,
+        context: &OperationContext<C>,
+    ) -> Result<(Self, PublicationRecoveryDecision), PublicationError>
+    where
+        P: PublicationEffectPreparationOwners + ?Sized,
+        C: CancellationProbe,
+        R: PublicationReadbackPort<C>,
+    {
+        let prepared = validate_prepared_generation(
+            owners,
+            snapshot,
+            &input.prepared,
+            AdmissionPurpose::Restore,
+            budget,
+        )?;
+        let max_points = budget
+            .validate()
+            .map_err(|_| PublicationError::BudgetExceeded)?
+            .max_points;
+        let expected_points =
+            super::expected_point_sets(owners, &input.prepared, &prepared, budget)?;
+        let observed = prepared.observed;
+        if observed.current_guards.owner_epoch < prepared.guards.owner_epoch
+            || observed.current_guards.source_catalog_generation
+                < prepared.guards.source_catalog_generation
+            || observed.current_guards.membership_generation < prepared.guards.membership_generation
+            || observed.current_guards.access_generation < prepared.guards.access_generation
+            || observed.current_guards.shadow_generation < prepared.guards.shadow_generation
+            || observed.current_guards.purge_generation < prepared.guards.purge_generation
+        {
+            return Err(PublicationError::GuardMismatch);
+        }
+        if observed.target_epoch <= observed.previous_visible_epoch
+            || observed.last_reserved_epoch != observed.target_epoch
+        {
+            return Err(PublicationError::EpochMismatch);
+        }
+        let committed = observed.current_visible_epoch == observed.target_epoch;
+        let current_manifest = if committed {
+            (!matches!(
+                prepared.target,
+                crate::admission::PublicationTarget::Retirement(_)
+            ))
+            .then(|| prepared.new_manifest.clone())
+        } else {
+            prepared.old_manifest.clone()
+        };
+        let current_manifest_digest = if committed {
+            (!matches!(
+                prepared.target,
+                crate::admission::PublicationTarget::Retirement(_)
+            ))
+            .then_some(prepared.new_manifest_digest)
+        } else {
+            prepared.old_manifest_digest
+        };
         let mut coordinator = Self {
             initialized: true,
-            current_scope: Some(input.prepared.scope().clone()),
-            visible_epoch: input.previous_visible_epoch,
-            last_reserved_epoch: input.last_reserved_epoch,
-            current_manifest: input.prepared.old_manifest.clone(),
-            current_manifest_digest: input.prepared.old_manifest_digest,
+            current_scope: Some(prepared.scope().clone()),
+            visible_epoch: observed.current_visible_epoch,
+            last_reserved_epoch: observed.last_reserved_epoch,
+            current_manifest,
+            current_manifest_digest,
             active: Some(PublicationTransaction {
-                prepared: input.prepared,
-                previous_visible_epoch: input.previous_visible_epoch,
-                target_epoch,
-                phase: PublicationPhase::IntentDurable,
-                durable_intent: Some(input.intent),
+                prepared,
+                previous_visible_epoch: observed.previous_visible_epoch,
+                target_epoch: observed.target_epoch,
+                phase: PublicationPhase::Prepared,
+                durable_intent: None,
                 stage_receipt: None,
                 closure_receipt: None,
                 verified: None,
                 visible_commit: None,
                 snapshot_receipt: None,
+                expected_points: Some(expected_points),
+                pending_effect: None,
+                original_context: None,
                 max_points,
             }),
             abort_finalization: super::abort::AbortFinalizationProgress::default(),
             max_points,
         };
-        if let Some(stage) = input.stage_receipt {
-            coordinator.stage_new_points(stage)?;
-        }
-        if let Some(closure) = input.closure_receipt {
-            coordinator.close_old_points(closure)?;
-        }
-        if let Some(verified) = input.verified {
-            let reconstructed = coordinator.verify_readback(
-                verified.staged_readback_digest,
-                verified.closure_readback_digest,
-                verified.retired_manifest_digest,
-            )?;
-            if reconstructed != verified {
-                return Err(PublicationError::RecoveryBlocked);
-            }
-        }
-        if let Some(commit) = input.control_commit {
-            coordinator.commit_visible_epoch(commit)?;
-        }
-        if coordinator.visible_epoch != input.observation.control_visible_epoch {
-            return Err(PublicationError::ControlConflict);
-        }
-        let active = coordinator
+        let transaction = coordinator
             .active
             .as_mut()
             .ok_or(PublicationError::RecoveryBlocked)?;
-        match phase {
-            PublicationPhase::Aborted | PublicationPhase::PublicationBlocked => {
-                active.phase = PublicationPhase::PublicationBlocked;
-            }
-            PublicationPhase::Compensating => active.phase = PublicationPhase::Compensating,
-            _ if active.visible_commit.is_none() && guards_changed => {
-                // A successor owner may compensate the original epoch; it must
-                // not silently replace old guards and continue forward staging.
-                active.phase = PublicationPhase::Compensating;
-            }
-            _ => {}
+
+        // Read the durable record using its original stable operation ID.
+        let (intent_command, intent_observation) = readback_only(
+            transaction,
+            readback,
+            context,
+            PublicationEffectKind::PersistIntent,
+        )?;
+        let intent = exact_intent(&intent_command, intent_observation)?;
+        let recorded_phase = intent.recorded_phase;
+        if matches!(recorded_phase, PublicationPhase::Prepared) {
+            return Err(PublicationError::RecoveryBlocked);
         }
-        let decision = recover(active, &input.observation)?;
-        match decision {
-            PublicationRecoveryDecision::CompensateExact => {
-                active.phase = PublicationPhase::Compensating;
+        transaction.durable_intent = Some(DurableIntent {
+            transaction_id: transaction.prepared.transaction_id.clone(),
+            target_epoch: transaction.target_epoch,
+            old_manifest_digest: transaction.prepared.old_manifest_digest,
+            new_manifest_digest: transaction.prepared.new_manifest_digest,
+            guards: transaction.prepared.guards,
+            persist_operation_id: intent.binding.operation_id.clone(),
+            request_id: intent.binding.request_id,
+            control_generation: intent.control_generation,
+            control_state_digest: intent.control_state_digest,
+        });
+        transaction.phase = PublicationPhase::IntentDurable;
+
+        let (stage_command, stage) = readback_only(
+            transaction,
+            readback,
+            context,
+            PublicationEffectKind::StageNewPoints,
+        )?;
+        let mut stage_not_applied = false;
+        let mut compensation_required = false;
+        match stage.outcome {
+            PublicationEffectOutcome::Applied => {
+                exact_points(&stage_command, &stage)?;
+                transaction.stage_receipt = Some(StageReceipt {
+                    transaction_id: transaction.prepared.transaction_id.clone(),
+                    target_epoch: transaction.target_epoch,
+                    points: stage.points,
+                });
+                transaction.phase = PublicationPhase::NewPointsAcknowledged;
             }
-            PublicationRecoveryDecision::PublicationBlocked => {
-                active.phase = PublicationPhase::PublicationBlocked;
+            PublicationEffectOutcome::NotApplied => {
+                exact_absence(&stage_command, &stage)?;
+                stage_not_applied = true;
             }
-            PublicationRecoveryDecision::CommitInvalidationOnly => {
-                // Hydration cannot grant the still-separate invalidation protocol.
-                active.phase = PublicationPhase::PublicationBlocked;
+            _ => return Err(PublicationError::RecoveryBlocked),
+        }
+
+        let (closure_command, closure) = readback_only(
+            transaction,
+            readback,
+            context,
+            PublicationEffectKind::CloseOldPoints,
+        )?;
+        match closure.outcome {
+            PublicationEffectOutcome::Applied => {
+                if transaction.stage_receipt.is_none() {
+                    if transaction.prepared.difference.retire.is_empty() {
+                        return Err(PublicationError::RecoveryBlocked);
+                    }
+                    exact_points(&closure_command, &closure)?;
+                    transaction.closure_receipt = Some(ClosureReceipt {
+                        transaction_id: transaction.prepared.transaction_id.clone(),
+                        target_epoch: transaction.target_epoch,
+                        points: closure.points,
+                    });
+                    transaction.phase = PublicationPhase::OldPointsClosedAcknowledged;
+                    compensation_required = true;
+                } else {
+                    exact_points(&closure_command, &closure)?;
+                    transaction.closure_receipt = Some(ClosureReceipt {
+                        transaction_id: transaction.prepared.transaction_id.clone(),
+                        target_epoch: transaction.target_epoch,
+                        points: closure.points,
+                    });
+                    transaction.phase = PublicationPhase::OldPointsClosedAcknowledged;
+                }
+            }
+            PublicationEffectOutcome::NotApplied => {
+                exact_original_points(&closure_command, &closure)?;
+                if phase_at_or_after(
+                    recorded_phase,
+                    PublicationPhase::OldPointsClosedAcknowledged,
+                ) {
+                    return Err(PublicationError::RecoveryBlocked);
+                }
+            }
+            _ => return Err(PublicationError::RecoveryBlocked),
+        }
+
+        if stage_not_applied
+            && !compensation_required
+            && phase_at_or_after(recorded_phase, PublicationPhase::NewPointsAcknowledged)
+        {
+            return Err(PublicationError::RecoveryBlocked);
+        }
+
+        if transaction.closure_receipt.is_some() {
+            let (verify_command, verified) = readback_only(
+                transaction,
+                readback,
+                context,
+                PublicationEffectKind::VerifyReadback,
+            )?;
+            match verified.outcome {
+                PublicationEffectOutcome::Applied => {
+                    exact_points(&verify_command, &verified)?;
+                    let retired = (!transaction.prepared.difference.retire.is_empty())
+                        .then_some(transaction.prepared.old_manifest_digest)
+                        .flatten();
+                    if !transaction.prepared.difference.retire.is_empty() && retired.is_none() {
+                        return Err(PublicationError::RecoveryBlocked);
+                    }
+                    transaction.verified = Some(ReadbackVerified {
+                        transaction_id: transaction.prepared.transaction_id.clone(),
+                        target_epoch: transaction.target_epoch,
+                        new_manifest_digest: transaction.prepared.new_manifest_digest,
+                        retired_manifest_digest: retired,
+                    });
+                    transaction.phase = PublicationPhase::ReadbackVerified;
+                }
+                PublicationEffectOutcome::NotApplied
+                    if phase_at_or_after(recorded_phase, PublicationPhase::ReadbackVerified)
+                        && !compensation_required =>
+                {
+                    return Err(PublicationError::RecoveryBlocked);
+                }
+                PublicationEffectOutcome::NotApplied => {}
+                _ => return Err(PublicationError::RecoveryBlocked),
+            }
+        } else if phase_at_or_after(recorded_phase, PublicationPhase::ReadbackVerified) {
+            return Err(PublicationError::RecoveryBlocked);
+        }
+
+        // This fresh exact control readback accepts the lost-CAS-ack case even
+        // when the durable phase still says ReadbackVerified.
+        let (commit_command, commit_readback) = readback_only(
+            transaction,
+            readback,
+            context,
+            PublicationEffectKind::CommitVisibleEpoch,
+        )?;
+        let control = commit_readback
+            .control
+            .ok_or(PublicationError::ControlConflict)?;
+        let intent_generation = transaction
+            .durable_intent
+            .as_ref()
+            .ok_or(PublicationError::ControlConflict)?
+            .control_generation;
+        validate_control(
+            transaction,
+            &commit_command,
+            &control,
+            intent_generation,
+            commit_readback.outcome,
+        )?;
+        let committed_now = commit_readback.outcome == PublicationEffectOutcome::Applied;
+        if committed_now && compensation_required {
+            return Err(PublicationError::RecoveryBlocked);
+        }
+        if matches!(
+            recorded_phase,
+            PublicationPhase::Aborted | PublicationPhase::PublicationBlocked
+        ) {
+            transaction.phase = PublicationPhase::PublicationBlocked;
+            return Ok((coordinator, PublicationRecoveryDecision::PublicationBlocked));
+        }
+        if matches!(recorded_phase, PublicationPhase::Compensating) && !committed_now {
+            transaction.phase = PublicationPhase::Compensating;
+            return Ok((coordinator, PublicationRecoveryDecision::CompensateExact));
+        }
+        if committed_now {
+            if transaction.verified.is_none() {
+                return Err(PublicationError::RecoveryBlocked);
+            }
+            let verified = transaction
+                .verified
+                .as_ref()
+                .ok_or(PublicationError::RecoveryBlocked)?;
+            transaction.visible_commit = Some(VisibleCommitReceipt {
+                transaction_id: transaction.prepared.transaction_id.clone(),
+                visible_epoch: transaction.target_epoch,
+                visible_manifest_digest: transaction.prepared.new_manifest_digest,
+                retired_manifest_digest: verified.retired_manifest_digest,
+                control_generation: control.control_generation,
+                control_state_digest: control.control_state_digest,
+            });
+            transaction.phase = PublicationPhase::ControlCommitted;
+            coordinator.visible_epoch = transaction.target_epoch;
+        }
+
+        if !committed_now {
+            if phase_at_or_after(recorded_phase, PublicationPhase::ControlCommitted) {
+                return Err(PublicationError::RecoveryBlocked);
+            }
+            if observed.current_guards != transaction.prepared.guards
+                || compensation_required
+                || matches!(recorded_phase, PublicationPhase::Compensating)
+            {
+                transaction.phase = PublicationPhase::Compensating;
+                return Ok((coordinator, PublicationRecoveryDecision::CompensateExact));
+            }
+            if matches!(
+                recorded_phase,
+                PublicationPhase::Aborted | PublicationPhase::PublicationBlocked
+            ) {
+                transaction.phase = PublicationPhase::PublicationBlocked;
                 return Ok((coordinator, PublicationRecoveryDecision::PublicationBlocked));
             }
-            PublicationRecoveryDecision::Continue
-            | PublicationRecoveryDecision::PublishSnapshot => {}
+            return Ok((coordinator, PublicationRecoveryDecision::Continue));
         }
-        Ok((coordinator, decision))
+
+        // A previous-process snapshot label is not proof; query this process's port.
+        let (snapshot_command, snapshot_readback) = readback_only(
+            transaction,
+            readback,
+            context,
+            PublicationEffectKind::PublishControlSnapshot,
+        )?;
+        match snapshot_readback.outcome {
+            PublicationEffectOutcome::Applied => {
+                let snapshot = snapshot_readback
+                    .snapshot
+                    .ok_or(PublicationError::SnapshotPublicationFailed)?;
+                let commit = transaction
+                    .visible_commit
+                    .as_ref()
+                    .ok_or(PublicationError::ControlConflict)?;
+                let expected_manifest = if matches!(
+                    transaction.prepared.target,
+                    crate::admission::PublicationTarget::Retirement(_)
+                ) {
+                    None
+                } else {
+                    Some(transaction.prepared.new_manifest_digest)
+                };
+                if snapshot_readback.binding != *snapshot_command.binding()
+                    || snapshot.visible_epoch != commit.visible_epoch
+                    || snapshot.control_generation != commit.control_generation
+                    || snapshot.guards != transaction.prepared.guards
+                    || snapshot.collection_generation_id
+                        != transaction.prepared.collection_generation_id
+                    || snapshot.visible_manifest_digest != expected_manifest
+                {
+                    return Err(PublicationError::SnapshotPublicationFailed);
+                }
+                transaction.snapshot_receipt = Some(SnapshotPublishReceipt {
+                    transaction_id: transaction.prepared.transaction_id.clone(),
+                    visible_epoch: snapshot.visible_epoch,
+                    control_generation: snapshot.control_generation,
+                    process_snapshot_id: snapshot.process_snapshot_id,
+                    snapshot_digest: snapshot.snapshot_digest,
+                });
+                transaction.phase = PublicationPhase::SnapshotPublished;
+                Ok((coordinator, PublicationRecoveryDecision::Continue))
+            }
+            PublicationEffectOutcome::NotApplied => {
+                Ok((coordinator, PublicationRecoveryDecision::PublishSnapshot))
+            }
+            _ => Err(PublicationError::OutcomeUnknown),
+        }
     }
 }
 
-fn validate_input(
-    input: &PublicationRestoreInput<PreparedGeneration>,
-    max_points: usize,
-) -> Result<(), PublicationError> {
-    if max_points == 0
-        || input.prepared.old_manifest.is_some() != input.prepared.old_manifest_digest.is_some()
+fn exact_intent(
+    command: &PublicationEffectCommand,
+    observed: PublicationEffectReadback,
+) -> Result<PublicationIntentReadback, PublicationError> {
+    if observed.effect != PublicationEffectKind::PersistIntent
+        || observed.outcome != PublicationEffectOutcome::Applied
+        || observed.binding != *command.binding()
+        || !observed.points.is_empty()
+        || !observed.missing_point_ids.is_empty()
+        || !observed.unexpected_point_ids.is_empty()
     {
-        return Err(PublicationError::InvalidPreparedPublication);
-    }
-    if changed_point_id_is_reused(
-        input.prepared.old_manifest.as_ref(),
-        &input.prepared.new_manifest,
-    ) {
-        return Err(PublicationError::InvalidPreparedPublication);
-    }
-    if input.collection_generation_id != input.prepared.collection_generation_id
-        || input.intent.transaction_id != input.prepared.transaction_id
-        || input.intent.old_manifest_digest != input.prepared.old_manifest_digest
-        || input.intent.new_manifest_digest != input.prepared.new_manifest_digest
-        || input.intent.guards != input.prepared.guards
-    {
-        return Err(PublicationError::OperationMismatch);
-    }
-    let observed = input.prepared.observed;
-    if input.current_guards != observed.current_guards
-        || input.previous_visible_epoch != observed.previous_visible_epoch
-        || input.last_reserved_epoch != observed.last_reserved_epoch
-        || input.intent.target_epoch != observed.target_epoch
-        || input.observation.control_visible_epoch != observed.current_visible_epoch {
-        return Err(PublicationError::ControlConflict);
-    }
-    if input.current_guards.owner_epoch < input.intent.guards.owner_epoch {
-        return Err(PublicationError::GuardMismatch);
-    }
-    if input.last_reserved_epoch != input.intent.target_epoch
-        || input.intent.target_epoch <= input.previous_visible_epoch
-    {
-        return Err(PublicationError::EpochMismatch);
-    }
-    if !input.observation.intent_durable || input.observation.snapshot_published {
         return Err(PublicationError::RecoveryBlocked);
     }
-    let lengths = [
-        input.observation.staged_ids.len(),
-        input.observation.closed_ids.len(),
-        input
-            .stage_receipt
-            .as_ref()
-            .map_or(0, |r| r.staged_ids.len()),
-        input
-            .stage_receipt
-            .as_ref()
-            .map_or(0, |r| r.missing_ids.len()),
-        input
-            .stage_receipt
-            .as_ref()
-            .map_or(0, |r| r.unexpected_ids.len()),
-        input
-            .closure_receipt
-            .as_ref()
-            .map_or(0, |r| r.closed_ids.len()),
-        input
-            .closure_receipt
-            .as_ref()
-            .map_or(0, |r| r.missing_ids.len()),
-        input
-            .closure_receipt
-            .as_ref()
-            .map_or(0, |r| r.unexpected_ids.len()),
-    ];
-    if lengths.into_iter().any(|length| length > max_points) {
-        return Err(PublicationError::BudgetExceeded);
+    let intent = observed.intent.ok_or(PublicationError::RecoveryBlocked)?;
+    if intent.binding != *command.binding() || intent.control_generation == 0 {
+        return Err(PublicationError::OperationMismatch);
     }
-    // A recorded phase has one complete, ordered receipt prefix. Observed but
-    // not acknowledged effects belong in `observation`, not invented receipts.
-    let mask = u8::from(input.stage_receipt.is_some())
-        | (u8::from(input.closure_receipt.is_some()) << 1)
-        | (u8::from(input.verified.is_some()) << 2)
-        | (u8::from(input.control_commit.is_some()) << 3);
-    let valid = match input.phase {
-        PublicationPhase::Prepared => false,
-        PublicationPhase::IntentDurable => mask == 0,
-        PublicationPhase::NewPointsAcknowledged => mask == 1,
-        PublicationPhase::OldPointsClosedAcknowledged => mask == 3,
-        PublicationPhase::ReadbackVerified => mask == 7,
-        PublicationPhase::ControlCommitted | PublicationPhase::SnapshotPublished => mask == 15,
-        PublicationPhase::Compensating | PublicationPhase::Aborted => matches!(mask, 0 | 1 | 3 | 7),
-        PublicationPhase::PublicationBlocked => matches!(mask, 0 | 1 | 3 | 7 | 15),
-    };
-    if !valid {
+    Ok(intent)
+}
+
+fn exact_points(
+    command: &PublicationEffectCommand,
+    observed: &PublicationEffectReadback,
+) -> Result<(), PublicationError> {
+    if observed.binding != *command.binding()
+        || !observed.missing_point_ids.is_empty()
+        || !observed.unexpected_point_ids.is_empty()
+        || !point_readback_matches(command.points(), &observed.points)
+    {
         return Err(PublicationError::RecoveryBlocked);
     }
     Ok(())
+}
+
+fn exact_absence(
+    command: &PublicationEffectCommand,
+    observed: &PublicationEffectReadback,
+) -> Result<(), PublicationError> {
+    let expected_ids = command
+        .points()
+        .iter()
+        .map(PublicationPointExpectation::point_id)
+        .collect::<Vec<_>>();
+    if observed.binding != *command.binding()
+        || !observed.points.is_empty()
+        || observed.missing_point_ids != expected_ids
+        || !observed.unexpected_point_ids.is_empty()
+    {
+        return Err(PublicationError::RecoveryBlocked);
+    }
+    Ok(())
+}
+
+fn exact_original_points(
+    command: &PublicationEffectCommand,
+    observed: &PublicationEffectReadback,
+) -> Result<(), PublicationError> {
+    if observed.binding != *command.binding()
+        || !observed.missing_point_ids.is_empty()
+        || !observed.unexpected_point_ids.is_empty()
+        || !point_readback_matches(command.original_points(), &observed.points)
+    {
+        return Err(PublicationError::RecoveryBlocked);
+    }
+    Ok(())
+}
+
+fn validate_control(
+    transaction: &PublicationTransaction,
+    command: &PublicationEffectCommand,
+    control: &PublicationControlReadback,
+    intent_generation: u64,
+    outcome: PublicationEffectOutcome,
+) -> Result<(), PublicationError> {
+    let committed = outcome == PublicationEffectOutcome::Applied;
+    let expected_manifest = if matches!(
+        transaction.prepared.target,
+        crate::admission::PublicationTarget::Retirement(_)
+    ) {
+        None
+    } else {
+        Some(transaction.prepared.new_manifest_digest)
+    };
+    let expected_current_manifest = if committed {
+        expected_manifest
+    } else {
+        transaction.prepared.old_manifest_digest
+    };
+    let expected_visible = if committed {
+        transaction.target_epoch
+    } else {
+        transaction.previous_visible_epoch
+    };
+    let expected_guards = if committed {
+        transaction.prepared.guards
+    } else {
+        transaction.prepared.observed.current_guards
+    };
+    if command.effect() != PublicationEffectKind::CommitVisibleEpoch
+        || control.before_visible_epoch != transaction.previous_visible_epoch
+        || control.after_visible_epoch != expected_visible
+        || control.last_reserved_epoch != transaction.target_epoch
+        || control.guards != expected_guards
+        || control.collection_generation_id != transaction.prepared.collection_generation_id
+        || control.previous_visible_manifest_digest != transaction.prepared.old_manifest_digest
+        || control.visible_manifest_digest != expected_current_manifest
+    {
+        return Err(PublicationError::ControlConflict);
+    }
+    if committed && intent_generation.checked_add(1) != Some(control.control_generation) {
+        return Err(PublicationError::ControlConflict);
+    }
+    Ok(())
+}
+
+fn phase_at_or_after(phase: PublicationPhase, threshold: PublicationPhase) -> bool {
+    use PublicationPhase as P;
+    let rank = |phase| match phase {
+        P::Prepared | P::Compensating | P::Aborted | P::PublicationBlocked => 0,
+        P::IntentDurable => 1,
+        P::NewPointsAcknowledged => 2,
+        P::OldPointsClosedAcknowledged => 3,
+        P::ReadbackVerified => 4,
+        P::ControlCommitted => 5,
+        P::SnapshotPublished => 6,
+    };
+    rank(phase) >= rank(threshold)
 }

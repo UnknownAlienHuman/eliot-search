@@ -9,12 +9,21 @@
 use core::fmt;
 use std::fmt::Write as _;
 use std::ops::{Deref, DerefMut};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use search_contracts::{
-    self as c, Epoch, OpaqueId, ReceiptRef, SourceRevisionRef,
+    self as c, Epoch, OpaqueId, OpaqueRef, ReceiptRef, RequestId, SourceRevisionRef,
     indexed::{
         CollectionSchema, NamedVectorRequirement, VectorName, VectorRequirement, VectorValue,
     },
+};
+use search_point_identity::s11::PointId128;
+use search_ports::{
+    CancellationProbe, FakeCancellation, IdempotencyClass, MutationIdentity, OperationContext,
+    PackageOpaque,
 };
 use search_projection_planner::{
     LineageObservation, PlannedUnit, PlannedVector, PlanningScope, ProjectionBudget,
@@ -23,8 +32,11 @@ use search_projection_planner::{
 };
 use search_publication::{
     AdmissionPurpose, AdmissionWork, ProjectionEvidence, ProjectionUpdate,
-    PublicationAdmissionOwners, PublicationCoordinator, PublicationError,
-    PublicationMembershipState, PublicationOwnerObservation, PublicationProposal,
+    PublicationAdmissionOwners, PublicationCoordinator, PublicationEffectBinding,
+    PublicationEffectCommand, PublicationEffectKind, PublicationEffectOutcome,
+    PublicationEffectPort, PublicationEffectPreparationOwners, PublicationError,
+    PublicationMembershipState, PublicationMutationAttempt, PublicationOwnerObservation,
+    PublicationPointReadback, PublicationProposal, PublicationReadbackPort,
     PublicationRecoveryDecision, PublicationRestoreInput, PublicationScope,
 };
 use search_unitizer::{
@@ -84,21 +96,11 @@ fn unitizer_descriptor() -> V3UnitizerProfileDescriptor {
     }
 }
 
-fn projection_plan(
-    units: &VerifiedUnitSet,
-    scope: &PlanningScope,
-    schema: &CollectionSchema,
-    changed_vector_at: Option<usize>,
-) -> ProjectionPlan {
-    let requirement = VectorRequirement::Sparse {
-        index_ceiling: 8,
-        idf_enabled: true,
-    };
-    let planned = units
+fn planned_units(units: &VerifiedUnitSet) -> Vec<PlannedUnit> {
+    units
         .units()
         .iter()
-        .enumerate()
-        .map(|(index, unit)| PlannedUnit {
+        .map(|unit| PlannedUnit {
             unit_id: unit.unit_id(),
             unit_kind: unit.occurrence().unit_kind,
             modality: c::Modality::Text,
@@ -111,20 +113,28 @@ fn projection_plan(
                 name: VectorName::new("lexical-sparse").expect("vector name"),
                 value: VectorValue::Sparse {
                     indices: vec![1, 4],
-                    values: if changed_vector_at == Some(index) {
-                        vec![2.0, 1.0]
-                    } else {
-                        vec![1.0, 2.0]
-                    },
+                    values: vec![1.0, 2.0],
                 },
             }],
         })
-        .collect::<Vec<_>>();
+        .collect()
+}
+
+fn projection_plan(
+    units: &VerifiedUnitSet,
+    scope: &PlanningScope,
+    schema: &CollectionSchema,
+    planned: &[PlannedUnit],
+) -> ProjectionPlan {
+    let requirement = VectorRequirement::Sparse {
+        index_ceiling: 8,
+        idf_enabled: true,
+    };
     let requirements = [("lexical-sparse".to_owned(), requirement)].into();
     let plan = plan_projection(
         units,
         scope,
-        &planned,
+        planned,
         &requirements,
         ProjectionBudget::BASELINE,
     )
@@ -134,7 +144,7 @@ fn projection_plan(
     plan
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Fixture {
     pub source: SourceRevisionRef,
     owner_source: SourceRevisionRef,
@@ -142,10 +152,10 @@ pub struct Fixture {
     pub plan: ProjectionPlan,
     pub scope: PlanningScope,
     pub schema: CollectionSchema,
+    planned_vectors: Vec<PlannedUnit>,
     sealed_plan: ProjectionPlan,
     sealed_scope: PlanningScope,
     retargetable: bool,
-    changed_vector_at: Option<usize>,
 }
 
 impl Fixture {
@@ -197,7 +207,8 @@ impl Fixture {
             &vectors,
         )
         .expect("C13 collection schema");
-        let mut plan = projection_plan(&units, &scope, &schema, None);
+        let planned_vectors = planned_units(&units);
+        let mut plan = projection_plan(&units, &scope, &schema, &planned_vectors);
         if reject_as_empty {
             // Model an incomplete C13 product over a real nonempty C08/C09 set.
             // Canonical admission must reject this omission before creating a slot.
@@ -225,10 +236,10 @@ impl Fixture {
             plan,
             scope,
             schema,
+            planned_vectors,
             sealed_plan,
             sealed_scope,
             retargetable: !reject_as_empty,
-            changed_vector_at: None,
         }
     }
 
@@ -246,27 +257,11 @@ impl Fixture {
             &retargeted.units,
             &retargeted.scope,
             &retargeted.schema,
-            retargeted.changed_vector_at,
+            &retargeted.planned_vectors,
         );
         retargeted.sealed_plan = retargeted.plan.clone();
         retargeted.sealed_scope = retargeted.scope.clone();
         retargeted
-    }
-
-    /// Replans one actual C13 point with a different vector while preserving
-    /// the same verified C08/C09 source, representation, and point address.
-    pub fn with_changed_vector_at(&self, unit_index: usize) -> Self {
-        assert!(unit_index < self.units.units().len());
-        let mut changed = self.clone();
-        changed.changed_vector_at = Some(unit_index);
-        changed.plan = projection_plan(
-            &changed.units,
-            &changed.scope,
-            &changed.schema,
-            changed.changed_vector_at,
-        );
-        changed.sealed_plan = changed.plan.clone();
-        changed
     }
 }
 
@@ -484,6 +479,775 @@ impl PublicationAdmissionOwners for Owners {
     }
 }
 
+impl PublicationEffectPreparationOwners for Owners {
+    fn planned_vectors<'a>(
+        &self,
+        token: &'a Fixture,
+    ) -> Result<Option<&'a [PlannedUnit]>, PublicationError> {
+        Ok(Some(&token.planned_vectors))
+    }
+}
+
+/// Synthetic phase port for pure model tests. It returns complete typed point
+/// observations and deliberately makes no Native, redb, Qdrant or crash-proof claim.
+#[derive(Clone, Default)]
+pub struct PhasePort {
+    /// Mutation side of the synthetic split port.
+    pub effects: PhaseEffects,
+    /// Independent observation side of the synthetic split port.
+    pub readback: PhaseReadback,
+}
+
+#[derive(Clone, Default)]
+pub struct PhaseEffects {
+    /// Mutation identities observed by the effect side.
+    pub effect_ids: Vec<OpaqueId>,
+    /// Effect kinds observed by the synthetic effect side.
+    pub effect_kinds: Vec<PublicationEffectKind>,
+    /// Optional cancellation triggered after one synthetic effect dispatch.
+    pub cancel_after_apply: Option<(PublicationEffectKind, Arc<AtomicBool>)>,
+}
+
+#[derive(Clone, Default)]
+pub struct PhaseReadback {
+    /// One-shot untrusted observation override for mismatch/unknown cases.
+    pub override_readback: Option<search_publication::PublicationEffectReadback>,
+    /// Outcome returned by the next readback; defaults to Applied.
+    pub next_outcome: Option<PublicationEffectOutcome>,
+    /// Durable phase returned by the synthetic intent journal readback.
+    pub recorded_phase: Option<search_publication::PublicationPhase>,
+    /// Original durable binding returned by the synthetic intent journal.
+    pub intent_binding_override: Option<PublicationEffectBinding>,
+    /// Persistent per-phase readback outcomes for recovery fixtures.
+    pub outcomes: Vec<(PublicationEffectKind, PublicationEffectOutcome)>,
+    /// Partial stage readback used to exercise compensation classification.
+    pub staged_ids: Option<Vec<PointId128>>,
+    /// Partial closure readback used to exercise compensation classification.
+    pub closed_ids: Option<Vec<PointId128>>,
+    /// Duplicate/foreign IDs injected into the untrusted readback response.
+    pub unexpected_point_ids: Vec<PointId128>,
+    /// Per-effect duplicate/foreign IDs for independent restore cases.
+    pub unexpected_point_ids_by_effect: Vec<(PublicationEffectKind, Vec<PointId128>)>,
+    /// Optional actual current visibility for stale/unrelated epoch scenarios.
+    pub control_visible_epoch: Option<Epoch>,
+    /// Corruption knobs for tests of full nested owner-record comparison.
+    pub intent_operation_id_override: Option<OpaqueId>,
+    pub intent_target_epoch_override: Option<Epoch>,
+    pub intent_guards_override: Option<c::PublicationGuards>,
+    pub intent_transaction_id_override: Option<OpaqueId>,
+    pub intent_old_manifest_digest_override: Option<Option<c::Blake3Digest32>>,
+    pub intent_new_manifest_digest_override: Option<c::Blake3Digest32>,
+    pub intent_route_generation_override: Option<c::CollectionGenerationId>,
+    pub intent_schema_identity_override: Option<c::Blake3Digest32>,
+    pub intent_request_id_override: Option<RequestId>,
+    /// Context metadata returned by an untrusted durable-intent readback.
+    pub intent_deadline_override: Option<u64>,
+    /// Context metadata returned by an untrusted durable-intent readback.
+    pub intent_budget_ref_override: Option<OpaqueRef>,
+    pub control_generation_override: Option<u64>,
+    pub control_state_digest_override: Option<c::Blake3Digest32>,
+    pub snapshot_generation_override: Option<u64>,
+    pub control_guards_override: Option<c::PublicationGuards>,
+    pub control_after_epoch_override: Option<Epoch>,
+    pub control_route_override: Option<c::CollectionGenerationId>,
+    pub control_floor_override: Option<Epoch>,
+    pub snapshot_visible_epoch_override: Option<Epoch>,
+    pub snapshot_guards_override: Option<c::PublicationGuards>,
+    pub snapshot_route_override: Option<c::CollectionGenerationId>,
+    pub snapshot_manifest_override: Option<Option<c::Blake3Digest32>>,
+    pub snapshot_process_id_override: Option<OpaqueId>,
+    pub snapshot_digest_override: Option<c::Blake3Digest32>,
+    pub abort_request_override: Option<search_publication::AbortFinalizationRequest>,
+    pub abandonment_override: Option<search_publication::PublicationAbandonReadback>,
+    pub abandon_point_ids_override: Option<Vec<PointId128>>,
+    pub abandon_memberships_override: Option<Vec<c::ProjectionMembershipId>>,
+    pub missing_point_ids_override: Option<(PublicationEffectKind, Vec<PointId128>)>,
+    pub binding_transaction_override: Option<(PublicationEffectKind, OpaqueId)>,
+    pub binding_target_epoch_override: Option<(PublicationEffectKind, Epoch)>,
+    pub binding_new_manifest_override: Option<(PublicationEffectKind, c::Blake3Digest32)>,
+    pub binding_old_manifest_override: Option<(PublicationEffectKind, Option<c::Blake3Digest32>)>,
+    pub binding_schema_identity_override: Option<(PublicationEffectKind, c::Blake3Digest32)>,
+    pub binding_request_id_override: Option<(PublicationEffectKind, RequestId)>,
+    pub binding_difference_override: Option<(
+        PublicationEffectKind,
+        search_projection_planner::ManifestDiff,
+    )>,
+    pub corrupt_point_payload: Option<(PublicationEffectKind, PointId128)>,
+    pub corrupt_vector: Option<(PublicationEffectKind, PointId128)>,
+    pub corrupt_point_interval: Option<(PublicationEffectKind, PointId128)>,
+    /// Mutation identities observed by the readback side.
+    pub readback_ids: Vec<OpaqueId>,
+    /// Effect kinds observed by the readback side.
+    pub readback_kinds: Vec<PublicationEffectKind>,
+}
+
+impl<C: CancellationProbe> PublicationEffectPort<C> for PhaseEffects {
+    fn apply(
+        &mut self,
+        command: &PublicationEffectCommand,
+        identity: &MutationIdentity,
+        _: &OperationContext<C>,
+    ) -> PublicationMutationAttempt {
+        self.effect_ids.push(identity.operation_id.clone());
+        self.effect_kinds.push(command.effect());
+        if let Some((effect, cancelled)) = &self.cancel_after_apply {
+            if *effect == command.effect() {
+                cancelled.store(true, Ordering::SeqCst);
+            }
+        }
+        assert_eq!(identity.operation_id, command.binding().operation_id);
+        assert_eq!(identity.idempotency, IdempotencyClass::RetrySameIdentity);
+        PublicationMutationAttempt::Acknowledged
+    }
+}
+
+impl<C: CancellationProbe> PublicationReadbackPort<C> for PhaseReadback {
+    fn readback(
+        &mut self,
+        command: &PublicationEffectCommand,
+        _: &OperationContext<C>,
+    ) -> search_publication::PublicationEffectReadback {
+        self.readback_ids
+            .push(command.binding().operation_id.clone());
+        self.readback_kinds.push(command.effect());
+        if let Some(observation) = self.override_readback.take() {
+            return observation;
+        }
+        let outcome = self
+            .next_outcome
+            .take()
+            .or_else(|| {
+                self.outcomes
+                    .iter()
+                    .find_map(|(effect, outcome)| (*effect == command.effect()).then_some(*outcome))
+            })
+            .unwrap_or(PublicationEffectOutcome::Applied);
+        let mut points = match (command.effect(), outcome) {
+            (PublicationEffectKind::CloseOldPoints, PublicationEffectOutcome::NotApplied) => {
+                command
+                    .original_points()
+                    .iter()
+                    .map(point_readback)
+                    .collect()
+            }
+            (PublicationEffectKind::StageNewPoints, PublicationEffectOutcome::NotApplied) => {
+                Vec::new()
+            }
+            (
+                PublicationEffectKind::PersistIntent
+                | PublicationEffectKind::CommitVisibleEpoch
+                | PublicationEffectKind::PublishControlSnapshot,
+                _,
+            ) => Vec::new(),
+            _ => command.points().iter().map(point_readback).collect(),
+        };
+        if command.effect() == PublicationEffectKind::StageNewPoints {
+            if let Some(ids) = &self.staged_ids {
+                points = command
+                    .points()
+                    .iter()
+                    .filter(|point| ids.contains(&point.point_id()))
+                    .map(point_readback)
+                    .collect();
+            }
+        }
+        if command.effect() == PublicationEffectKind::CloseOldPoints {
+            if let Some(ids) = &self.closed_ids {
+                let closed = command
+                    .points()
+                    .iter()
+                    .filter(|point| ids.contains(&point.point_id()))
+                    .map(point_readback);
+                let original = command
+                    .original_points()
+                    .iter()
+                    .filter(|point| !ids.contains(&point.point_id()))
+                    .map(point_readback);
+                points = closed.chain(original).collect();
+                points.sort_by_key(|point| point.point_id);
+            }
+        }
+        if let Some((effect, point_id)) = self.corrupt_point_payload
+            && effect == command.effect()
+            && let Some(point) = points.iter_mut().find(|point| point.point_id == point_id)
+        {
+            point.payload.unit_id = c::UnitId::from_bytes([0xfe; 16]);
+        }
+        if let Some((effect, point_id)) = self.corrupt_vector
+            && effect == command.effect()
+            && let Some(point) = points.iter_mut().find(|point| point.point_id == point_id)
+            && let Some(vector) = point.vectors.values_mut().next()
+        {
+            match vector {
+                VectorValue::Dense(values) => {
+                    if let Some(value) = values.first_mut() {
+                        *value += 1.0;
+                    }
+                }
+                VectorValue::Sparse { values, .. } => {
+                    if let Some(value) = values.first_mut() {
+                        *value += 1.0;
+                    }
+                }
+            }
+        }
+        if let Some((effect, point_id)) = self.corrupt_point_interval
+            && effect == command.effect()
+            && let Some(point) = points.iter_mut().find(|point| point.point_id == point_id)
+        {
+            point.payload.valid_until_epoch_exclusive = Some(
+                Epoch::new(command.binding().target_epoch.get() + 1)
+                    .expect("synthetic point interval remains valid"),
+            );
+        }
+        let point_ids = points
+            .iter()
+            .map(|point| point.point_id)
+            .collect::<Vec<_>>();
+        let missing_point_ids = if command.effect() == PublicationEffectKind::StageNewPoints {
+            command
+                .points()
+                .iter()
+                .map(|point| point.point_id())
+                .filter(|id| !point_ids.contains(id))
+                .collect()
+        } else if command.effect() == PublicationEffectKind::Compensate {
+            command.required_absent_point_ids().to_vec()
+        } else {
+            Vec::new()
+        };
+        let intent = (command.effect() == PublicationEffectKind::PersistIntent).then(|| {
+            let mut binding = self
+                .intent_binding_override
+                .clone()
+                .unwrap_or_else(|| command.binding().clone());
+            if let Some(operation_id) = &self.intent_operation_id_override {
+                binding.operation_id.clone_from(operation_id);
+            }
+            if let Some(target_epoch) = self.intent_target_epoch_override {
+                binding.target_epoch = target_epoch;
+            }
+            if let Some(guards) = self.intent_guards_override {
+                binding.guards = guards;
+            }
+            if let Some(transaction_id) = &self.intent_transaction_id_override {
+                binding.transaction_id.clone_from(transaction_id);
+            }
+            if let Some(digest) = self.intent_old_manifest_digest_override {
+                binding.old_manifest_digest = digest;
+            }
+            if let Some(digest) = self.intent_new_manifest_digest_override {
+                binding.new_manifest_digest = digest;
+            }
+            if let Some(route) = self.intent_route_generation_override {
+                binding.scope.collection_generation_id = route;
+            }
+            if let Some(schema_identity) = self.intent_schema_identity_override {
+                binding.scope.schema_identity = schema_identity;
+            }
+            if let Some(request_id) = self.intent_request_id_override {
+                binding.request_id = request_id;
+            }
+            if let Some(deadline) = self.intent_deadline_override {
+                binding.relative_deadline_ms = deadline;
+            }
+            if let Some(budget_ref) = &self.intent_budget_ref_override {
+                binding.budget_ref.clone_from(budget_ref);
+            }
+            search_publication::PublicationIntentReadback {
+                binding,
+                recorded_phase: self
+                    .recorded_phase
+                    .unwrap_or(search_publication::PublicationPhase::IntentDurable),
+                control_generation: 8,
+                control_state_digest: c::Blake3Digest32::from_bytes([31; 32]),
+            }
+        });
+        let control = (command.effect() == PublicationEffectKind::CommitVisibleEpoch).then(|| {
+            let after_visible_epoch = self.control_visible_epoch.unwrap_or_else(|| {
+                if outcome == PublicationEffectOutcome::Applied {
+                    command.binding().target_epoch
+                } else {
+                    command.binding().previous_visible_epoch
+                }
+            });
+            let committed = after_visible_epoch == command.binding().target_epoch;
+            let visible_manifest_digest = if committed {
+                (!command.binding().new_manifest.entries.is_empty())
+                    .then_some(command.binding().new_manifest_digest)
+            } else {
+                command.binding().old_manifest_digest
+            };
+            search_publication::PublicationControlReadback {
+                before_visible_epoch: command.binding().previous_visible_epoch,
+                after_visible_epoch: self
+                    .control_after_epoch_override
+                    .unwrap_or(after_visible_epoch),
+                last_reserved_epoch: self
+                    .control_floor_override
+                    .unwrap_or(command.binding().last_reserved_epoch),
+                guards: self.control_guards_override.unwrap_or(if committed {
+                    command.binding().guards
+                } else {
+                    command.current_guards()
+                }),
+                control_generation: self.control_generation_override.unwrap_or(if committed {
+                    9
+                } else {
+                    8
+                }),
+                control_state_digest: self
+                    .control_state_digest_override
+                    .unwrap_or(c::Blake3Digest32::from_bytes([32; 32])),
+                collection_generation_id: self
+                    .control_route_override
+                    .unwrap_or(command.binding().scope.collection_generation_id),
+                previous_visible_manifest_digest: command.binding().old_manifest_digest,
+                visible_manifest_digest,
+            }
+        });
+        let abort_control = (command.effect() == PublicationEffectKind::CommitAbortFinalization)
+            .then(|| {
+                let request = command
+                    .abort_request()
+                    .expect("abort command carries latched request");
+                search_publication::PublicationControlReadback {
+                    before_visible_epoch: request.previous_visible_epoch,
+                    after_visible_epoch: request.previous_visible_epoch,
+                    last_reserved_epoch: request.intent.target_epoch(),
+                    guards: request.current_guards,
+                    control_generation: self
+                        .control_generation_override
+                        .unwrap_or(request.expected_control_generation + 1),
+                    control_state_digest: self
+                        .control_state_digest_override
+                        .unwrap_or(c::Blake3Digest32::from_bytes([32; 32])),
+                    collection_generation_id: request.collection_generation_id,
+                    previous_visible_manifest_digest: request.intent.old_manifest_digest(),
+                    visible_manifest_digest: request.intent.old_manifest_digest(),
+                }
+            });
+        let snapshot = ((command.effect() == PublicationEffectKind::PublishControlSnapshot
+            || command.effect() == PublicationEffectKind::PublishAbortSnapshot)
+            && outcome == PublicationEffectOutcome::Applied)
+            .then(|| {
+                let abort_request = command.abort_request();
+                search_publication::PublicationSnapshotReadback {
+                    process_snapshot_id: self
+                        .snapshot_process_id_override
+                        .clone()
+                        .unwrap_or_else(|| OpaqueId::new("fixture-current-process").unwrap()),
+                    visible_epoch: self.snapshot_visible_epoch_override.unwrap_or_else(|| {
+                        abort_request.map_or(command.binding().target_epoch, |request| {
+                            request.previous_visible_epoch
+                        })
+                    }),
+                    control_generation: self.snapshot_generation_override.unwrap_or_else(|| {
+                        abort_request.map_or(9, |request| request.expected_control_generation + 1)
+                    }),
+                    guards: self.snapshot_guards_override.unwrap_or_else(|| {
+                        abort_request
+                            .map_or(command.binding().guards, |request| request.current_guards)
+                    }),
+                    collection_generation_id: self.snapshot_route_override.unwrap_or_else(|| {
+                        abort_request.map_or(
+                            command.binding().scope.collection_generation_id,
+                            |request| request.collection_generation_id,
+                        )
+                    }),
+                    visible_manifest_digest: self.snapshot_manifest_override.unwrap_or_else(|| {
+                        abort_request.map_or_else(
+                            || {
+                                if command.binding().new_manifest.entries.is_empty() {
+                                    None
+                                } else {
+                                    Some(command.binding().new_manifest_digest)
+                                }
+                            },
+                            |request| request.intent.old_manifest_digest(),
+                        )
+                    }),
+                    snapshot_digest: self
+                        .snapshot_digest_override
+                        .unwrap_or(c::Blake3Digest32::from_bytes([33; 32])),
+                }
+            });
+        let abandonment = (command.effect() == PublicationEffectKind::Abandon).then(|| {
+            let mut point_ids = command
+                .binding()
+                .difference
+                .create
+                .iter()
+                .chain(&command.binding().difference.retire)
+                .map(|entry| entry.point_id)
+                .collect::<Vec<_>>();
+            point_ids.sort_unstable();
+            let mut memberships = command
+                .binding()
+                .difference
+                .create
+                .iter()
+                .chain(&command.binding().difference.retire)
+                .map(|entry| entry.projection_membership_id)
+                .collect::<Vec<_>>();
+            memberships.sort_unstable();
+            memberships.dedup();
+            search_publication::PublicationAbandonReadback {
+                binding: command.binding().clone(),
+                excluded_point_ids: self.abandon_point_ids_override.clone().unwrap_or(point_ids),
+                excluded_projection_memberships: self
+                    .abandon_memberships_override
+                    .clone()
+                    .unwrap_or(memberships),
+            }
+        });
+        let control = control.or(abort_control);
+        let mut observation = search_publication::PublicationEffectReadback {
+            effect: command.effect(),
+            binding: command.binding().clone(),
+            outcome,
+            points,
+            missing_point_ids,
+            unexpected_point_ids: self
+                .unexpected_point_ids_by_effect
+                .iter()
+                .find_map(|(effect, ids)| (*effect == command.effect()).then_some(ids.clone()))
+                .unwrap_or_else(|| self.unexpected_point_ids.clone()),
+            intent,
+            control,
+            snapshot,
+            abandonment: self.abandonment_override.clone().or(abandonment),
+            abort_request: self
+                .abort_request_override
+                .clone()
+                .or_else(|| command.abort_request().cloned()),
+        };
+        if let Some((effect, transaction_id)) = &self.binding_transaction_override
+            && *effect == command.effect()
+        {
+            observation
+                .binding
+                .transaction_id
+                .clone_from(transaction_id);
+        }
+        if let Some((effect, target_epoch)) = self.binding_target_epoch_override
+            && effect == command.effect()
+        {
+            observation.binding.target_epoch = target_epoch;
+        }
+        if let Some((effect, digest)) = self.binding_new_manifest_override
+            && effect == command.effect()
+        {
+            observation.binding.new_manifest_digest = digest;
+        }
+        if let Some((effect, digest)) = self.binding_old_manifest_override
+            && effect == command.effect()
+        {
+            observation.binding.old_manifest_digest = digest;
+        }
+        if let Some((effect, schema_identity)) = self.binding_schema_identity_override
+            && effect == command.effect()
+        {
+            observation.binding.scope.schema_identity = schema_identity;
+        }
+        if let Some((effect, request_id)) = self.binding_request_id_override
+            && effect == command.effect()
+        {
+            observation.binding.request_id = request_id;
+        }
+        if let Some((effect, difference)) = &self.binding_difference_override
+            && *effect == command.effect()
+        {
+            observation.binding.difference.clone_from(difference);
+        }
+        if let Some((effect, missing)) = &self.missing_point_ids_override
+            && *effect == command.effect()
+        {
+            observation.missing_point_ids.clone_from(missing);
+        }
+        observation
+    }
+}
+
+fn point_readback(
+    point: &search_publication::PublicationPointExpectation,
+) -> PublicationPointReadback {
+    PublicationPointReadback {
+        point_id: point.point_id(),
+        identity: point.identity().clone(),
+        payload: point.payload().clone(),
+        vectors: point.vectors().clone(),
+    }
+}
+
+pub fn operation_context() -> OperationContext<FakeCancellation> {
+    operation_context_with(FakeCancellation::new(false))
+}
+
+pub fn operation_context_with<C: CancellationProbe>(cancellation: C) -> OperationContext<C> {
+    OperationContext::new(
+        RequestId::from_bytes([51; 16]),
+        60_000,
+        cancellation,
+        OpaqueRef::new("budget:publication-fixture").expect("budget reference"),
+    )
+    .expect("finite original context")
+}
+
+/// Shared cancellation state used to interrupt a synthetic effect call.
+#[derive(Clone, Debug)]
+pub struct SharedCancellation {
+    cancelled: Arc<AtomicBool>,
+}
+
+impl SharedCancellation {
+    /// Creates the shared test cancellation state.
+    pub fn new(cancelled: bool) -> Self {
+        Self {
+            cancelled: Arc::new(AtomicBool::new(cancelled)),
+        }
+    }
+
+    /// Shares the flag with a synthetic effect port.
+    pub fn shared_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.cancelled)
+    }
+}
+
+impl PackageOpaque for SharedCancellation {
+    fn owner_package(&self) -> &'static str {
+        "search-publication-test-fixture"
+    }
+}
+
+impl CancellationProbe for SharedCancellation {
+    fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+}
+
+pub fn persist_intent(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<search_publication::DurableIntent, PublicationError> {
+    machine.persist_intent(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn stage_new_points(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<(), PublicationError> {
+    machine.stage_new_points(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn close_old_points(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<(), PublicationError> {
+    machine.close_old_points(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn verify_readback(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<search_publication::ReadbackVerified, PublicationError> {
+    machine.verify_readback(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn commit_visible_epoch(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<search_publication::VisibleCommitReceipt, PublicationError> {
+    machine.commit_visible_epoch(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn publish_control_snapshot(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<(), PublicationError> {
+    machine.publish_control_snapshot(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn compensate_exact(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<(), PublicationError> {
+    machine.compensate_exact(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn compensate_and_restore(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<(), PublicationError> {
+    machine.compensate_and_restore(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn abandon(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<(), PublicationError> {
+    machine.abandon(&mut port.effects, &mut port.readback, &operation_context())
+}
+
+pub fn recover(
+    machine: &mut PublicationCoordinator,
+    port: &mut PhasePort,
+) -> Result<PublicationRecoveryDecision, PublicationError> {
+    machine.recover(&mut port.readback, &operation_context())
+}
+
+/// Test-only shorthand used to script exact phase observations; production APIs
+/// accept only full point/control/snapshot readbacks returned by owner ports.
+#[derive(Clone, Debug)]
+pub struct PublicationRecoveryObservation {
+    pub intent_durable: bool,
+    pub staged_ids: Vec<PointId128>,
+    pub closed_ids: Vec<PointId128>,
+    pub control_visible_epoch: Epoch,
+    pub snapshot_published: bool,
+    pub abandon_fence_durable: bool,
+    pub missing_point_ids: Vec<PointId128>,
+    pub unexpected_point_ids: Vec<PointId128>,
+}
+
+pub fn recovery_observation(machine: &PublicationCoordinator) -> PublicationRecoveryObservation {
+    let tx = machine.active().expect("active fixture transaction");
+    PublicationRecoveryObservation {
+        intent_durable: tx.durable_intent().is_some(),
+        staged_ids: Vec::new(),
+        closed_ids: Vec::new(),
+        control_visible_epoch: tx.previous_visible_epoch(),
+        snapshot_published: false,
+        abandon_fence_durable: false,
+        missing_point_ids: Vec::new(),
+        unexpected_point_ids: Vec::new(),
+    }
+}
+
+pub fn recover_observation(
+    transaction: &search_publication::PublicationTransaction,
+    observed: &PublicationRecoveryObservation,
+) -> Result<PublicationRecoveryDecision, PublicationError> {
+    let mut port = recovery_port(transaction, observed);
+    recover_readback(transaction, &mut port)
+}
+
+pub fn recovery_port(
+    transaction: &search_publication::PublicationTransaction,
+    observed: &PublicationRecoveryObservation,
+) -> PhaseReadback {
+    let difference = transaction.prepared().difference();
+    let staged = difference
+        .create
+        .iter()
+        .map(|entry| entry.point_id)
+        .collect::<Vec<_>>();
+    let closed = difference
+        .retire
+        .iter()
+        .map(|entry| entry.point_id)
+        .collect::<Vec<_>>();
+    let stage_full = observed.staged_ids == staged;
+    let close_full = observed.closed_ids == closed;
+    let mut port = PhaseReadback::default();
+    port.recorded_phase = Some(transaction.phase());
+    port.staged_ids = Some(observed.staged_ids.clone());
+    port.closed_ids = Some(observed.closed_ids.clone());
+    port.control_visible_epoch = Some(observed.control_visible_epoch);
+    port.missing_point_ids_override = Some((
+        PublicationEffectKind::StageNewPoints,
+        observed.missing_point_ids.clone(),
+    ));
+    port.unexpected_point_ids_by_effect.push((
+        PublicationEffectKind::StageNewPoints,
+        observed.unexpected_point_ids.clone(),
+    ));
+    let mut expected_stage = staged.clone();
+    expected_stage.sort_unstable();
+    let mut sorted_stage = observed.staged_ids.clone();
+    sorted_stage.sort_unstable();
+    if sorted_stage != observed.staged_ids
+        || sorted_stage.iter().any(|id| !expected_stage.contains(id))
+    {
+        port.unexpected_point_ids = sorted_stage
+            .iter()
+            .copied()
+            .filter(|id| !expected_stage.contains(id))
+            .chain(
+                sorted_stage
+                    .windows(2)
+                    .filter_map(|pair| (pair[0] == pair[1]).then_some(pair[0])),
+            )
+            .collect();
+    }
+    port.outcomes = vec![
+        (
+            PublicationEffectKind::PersistIntent,
+            if observed.intent_durable {
+                PublicationEffectOutcome::Applied
+            } else {
+                PublicationEffectOutcome::NotApplied
+            },
+        ),
+        (
+            PublicationEffectKind::StageNewPoints,
+            if stage_full {
+                PublicationEffectOutcome::Applied
+            } else if observed.staged_ids.is_empty() {
+                PublicationEffectOutcome::NotApplied
+            } else {
+                PublicationEffectOutcome::Applied
+            },
+        ),
+        (
+            PublicationEffectKind::CloseOldPoints,
+            if close_full {
+                PublicationEffectOutcome::Applied
+            } else if observed.closed_ids.is_empty() {
+                PublicationEffectOutcome::NotApplied
+            } else {
+                PublicationEffectOutcome::Applied
+            },
+        ),
+        (
+            PublicationEffectKind::VerifyReadback,
+            if stage_full && close_full {
+                PublicationEffectOutcome::Applied
+            } else {
+                PublicationEffectOutcome::NotApplied
+            },
+        ),
+        (
+            PublicationEffectKind::CommitVisibleEpoch,
+            if observed.abandon_fence_durable {
+                PublicationEffectOutcome::Conflict
+            } else if observed.control_visible_epoch == transaction.target_epoch() {
+                PublicationEffectOutcome::Applied
+            } else if observed.control_visible_epoch == transaction.previous_visible_epoch() {
+                PublicationEffectOutcome::NotApplied
+            } else {
+                PublicationEffectOutcome::Conflict
+            },
+        ),
+        (
+            PublicationEffectKind::PublishControlSnapshot,
+            if observed.snapshot_published {
+                PublicationEffectOutcome::Applied
+            } else {
+                PublicationEffectOutcome::NotApplied
+            },
+        ),
+    ];
+    port
+}
+
+pub fn recover_readback(
+    transaction: &search_publication::PublicationTransaction,
+    port: &mut PhaseReadback,
+) -> Result<PublicationRecoveryDecision, PublicationError> {
+    search_publication::recover(transaction, port, &operation_context())
+}
+
 fn retargeted_tokens(
     case: &PublicationCase,
     previous: Epoch,
@@ -541,7 +1305,7 @@ impl SubmitFixture for PublicationCoordinator {
             observations: 0,
             drift_after_first: case.drift_after_first_observation,
         };
-        Self::submit(
+        Self::submit_with_effect_preparation(
             self,
             &proposal,
             &mut owners,
@@ -549,6 +1313,55 @@ impl SubmitFixture for PublicationCoordinator {
             ProjectionBudget::BASELINE,
         )
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyntheticIntent {
+    pub transaction_id: OpaqueId,
+    pub target_epoch: Epoch,
+    pub old_manifest_digest: Option<c::Blake3Digest32>,
+    pub new_manifest_digest: c::Blake3Digest32,
+    pub guards: c::PublicationGuards,
+    pub persist_operation_id: OpaqueId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyntheticStageReceipt {
+    pub transaction_id: OpaqueId,
+    pub target_epoch: Epoch,
+    pub staged_ids: Vec<PointId128>,
+    pub missing_ids: Vec<PointId128>,
+    pub unexpected_ids: Vec<PointId128>,
+    pub readback_digest: c::Blake3Digest32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyntheticClosureReceipt {
+    pub transaction_id: OpaqueId,
+    pub target_epoch: Epoch,
+    pub closed_ids: Vec<PointId128>,
+    pub missing_ids: Vec<PointId128>,
+    pub unexpected_ids: Vec<PointId128>,
+    pub readback_digest: c::Blake3Digest32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SyntheticVerified {
+    pub transaction_id: OpaqueId,
+    pub target_epoch: Epoch,
+    pub staged_readback_digest: c::Blake3Digest32,
+    pub closure_readback_digest: c::Blake3Digest32,
+    pub new_manifest_digest: c::Blake3Digest32,
+    pub retired_manifest_digest: Option<c::Blake3Digest32>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SyntheticControlCommit {
+    pub before_visible_epoch: Epoch,
+    pub after_visible_epoch: Epoch,
+    pub observed_guards: c::PublicationGuards,
+    pub control_generation: u64,
+    pub control_state_digest: c::Blake3Digest32,
 }
 
 #[derive(Clone)]
@@ -559,12 +1372,16 @@ pub struct RestoreScenario {
     pub collection_generation_id: c::CollectionGenerationId,
     pub current_guards: c::PublicationGuards,
     pub phase: search_publication::PublicationPhase,
-    pub intent: search_publication::DurableIntent,
-    pub stage_receipt: Option<search_publication::StageReceipt>,
-    pub closure_receipt: Option<search_publication::ClosureReceipt>,
-    pub verified: Option<search_publication::ReadbackVerified>,
-    pub control_commit: Option<search_publication::ControlCommitObservation>,
-    pub observation: search_publication::PublicationRecoveryObservation,
+    pub intent: SyntheticIntent,
+    /// Full original intent binding returned by the synthetic owner port.
+    pub intent_binding: PublicationEffectBinding,
+    pub stage_receipt: Option<SyntheticStageReceipt>,
+    pub closure_receipt: Option<SyntheticClosureReceipt>,
+    pub verified: Option<SyntheticVerified>,
+    pub control_commit: Option<SyntheticControlCommit>,
+    pub observation: PublicationRecoveryObservation,
+    /// Optional test-only owner readback mutations for adversarial cases.
+    pub readback_script: PhaseReadback,
 }
 
 impl fmt::Debug for RestoreScenario {
@@ -574,10 +1391,10 @@ impl fmt::Debug for RestoreScenario {
             .field("previous_visible_epoch", &self.previous_visible_epoch)
             .field("last_reserved_epoch", &self.last_reserved_epoch)
             .field("phase", &self.phase)
-            .field("has_stage_receipt", &self.stage_receipt.is_some())
-            .field("has_closure_receipt", &self.closure_receipt.is_some())
-            .field("has_verified_readback", &self.verified.is_some())
-            .field("has_control_commit", &self.control_commit.is_some())
+            .field("has_stage_observation", &self.stage_receipt.is_some())
+            .field("has_closure_observation", &self.closure_receipt.is_some())
+            .field("has_verified_observation", &self.verified.is_some())
+            .field("has_control_observation", &self.control_commit.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -589,7 +1406,8 @@ impl RestoreScenario {
     ) -> Result<(PublicationCoordinator, PublicationRecoveryDecision), PublicationError> {
         let target = self.intent.target_epoch;
         let (old, new) = retargeted_tokens(&self.case, self.previous_visible_epoch, target);
-        let expected_manifest = if self.observation.control_visible_epoch == target {
+        let visible = self.observation.control_visible_epoch;
+        let expected_manifest = if visible == target {
             (!self.case.retirement).then(|| new.plan.manifest.clone())
         } else {
             old.as_ref().map(|fixture| fixture.plan.manifest.clone())
@@ -597,7 +1415,7 @@ impl RestoreScenario {
         let snapshot = owner_snapshot(
             &self.case,
             self.previous_visible_epoch,
-            self.observation.control_visible_epoch,
+            visible,
             self.last_reserved_epoch,
             expected_manifest,
             self.current_guards,
@@ -612,32 +1430,410 @@ impl RestoreScenario {
             old: old.as_ref(),
             update,
         };
-        let input = PublicationRestoreInput {
-            prepared: proposal,
-            previous_visible_epoch: self.previous_visible_epoch,
-            last_reserved_epoch: self.last_reserved_epoch,
-            collection_generation_id: self.collection_generation_id,
-            current_guards: self.current_guards,
-            phase: self.phase,
-            intent: self.intent.clone(),
-            stage_receipt: self.stage_receipt.clone(),
-            closure_receipt: self.closure_receipt.clone(),
-            verified: self.verified.clone(),
-            control_commit: self.control_commit,
-            observation: self.observation.clone(),
-        };
+        let input = PublicationRestoreInput::new(proposal);
         let mut owners = Owners {
             observations: 0,
             drift_after_first: self.case.drift_after_first_observation,
         };
+        let mut port = PhasePort {
+            effects: PhaseEffects::default(),
+            readback: self.readback_script.clone(),
+        };
+        let mut retained_binding = self.intent_binding.clone();
+        retained_binding
+            .transaction_id
+            .clone_from(&self.intent.transaction_id);
+        retained_binding
+            .operation_id
+            .clone_from(&self.intent.persist_operation_id);
+        retained_binding.target_epoch = self.intent.target_epoch;
+        retained_binding.old_manifest_digest = self.intent.old_manifest_digest;
+        retained_binding.new_manifest_digest = self.intent.new_manifest_digest;
+        retained_binding.guards = self.intent.guards;
+        if port.readback.intent_binding_override.is_none() {
+            port.readback.intent_binding_override = Some(retained_binding);
+        }
+        let old_ids = old.as_ref().map_or_else(Vec::new, |old| {
+            old.plan
+                .manifest
+                .entries
+                .iter()
+                .map(|entry| entry.point_id)
+                .collect::<Vec<_>>()
+        });
+        let new_ids = if self.case.retirement {
+            Vec::new()
+        } else {
+            new.plan
+                .manifest
+                .entries
+                .iter()
+                .map(|entry| entry.point_id)
+                .collect::<Vec<_>>()
+        };
+        let expected_stage = new_ids
+            .iter()
+            .copied()
+            .filter(|id| !old_ids.contains(id))
+            .collect::<Vec<_>>();
+        let expected_closed = old_ids
+            .iter()
+            .copied()
+            .filter(|id| !new_ids.contains(id))
+            .collect::<Vec<_>>();
+        if port.readback.recorded_phase.is_none() {
+            port.readback.recorded_phase = Some(self.phase);
+        }
+        if port.readback.staged_ids.is_none() {
+            port.readback.staged_ids = Some(self.observation.staged_ids.clone());
+        }
+        if port.readback.closed_ids.is_none() {
+            port.readback.closed_ids = Some(self.observation.closed_ids.clone());
+        }
+        port.readback.control_visible_epoch = Some(self.observation.control_visible_epoch);
+        if !port
+            .readback
+            .unexpected_point_ids_by_effect
+            .iter()
+            .any(|(effect, _)| *effect == PublicationEffectKind::StageNewPoints)
+        {
+            let mut ids = self.observation.staged_ids.clone();
+            ids.sort_unstable();
+            let unexpected = ids
+                .iter()
+                .copied()
+                .filter(|id| !expected_stage.contains(id))
+                .chain(
+                    ids.windows(2)
+                        .filter_map(|pair| (pair[0] == pair[1]).then_some(pair[0])),
+                )
+                .collect::<Vec<_>>();
+            if !unexpected.is_empty() {
+                port.readback
+                    .unexpected_point_ids_by_effect
+                    .push((PublicationEffectKind::StageNewPoints, unexpected));
+            }
+        }
+        if !port
+            .readback
+            .unexpected_point_ids_by_effect
+            .iter()
+            .any(|(effect, _)| *effect == PublicationEffectKind::CloseOldPoints)
+        {
+            let mut ids = self.observation.closed_ids.clone();
+            ids.sort_unstable();
+            let unexpected = ids
+                .iter()
+                .copied()
+                .filter(|id| !expected_closed.contains(id))
+                .chain(
+                    ids.windows(2)
+                        .filter_map(|pair| (pair[0] == pair[1]).then_some(pair[0])),
+                )
+                .collect::<Vec<_>>();
+            if !unexpected.is_empty() {
+                port.readback
+                    .unexpected_point_ids_by_effect
+                    .push((PublicationEffectKind::CloseOldPoints, unexpected));
+            }
+        }
+        let stage_full = self.observation.staged_ids == expected_stage;
+        let closure_full = self.observation.closed_ids == expected_closed;
+        let scripted_outcomes = port.readback.outcomes.clone();
+        port.readback.outcomes = vec![
+            (
+                PublicationEffectKind::PersistIntent,
+                if self.observation.intent_durable {
+                    PublicationEffectOutcome::Applied
+                } else {
+                    PublicationEffectOutcome::NotApplied
+                },
+            ),
+            (
+                PublicationEffectKind::StageNewPoints,
+                if stage_full || !self.observation.staged_ids.is_empty() {
+                    PublicationEffectOutcome::Applied
+                } else {
+                    PublicationEffectOutcome::NotApplied
+                },
+            ),
+            (
+                PublicationEffectKind::CloseOldPoints,
+                if closure_full && stage_full || !self.observation.closed_ids.is_empty() {
+                    PublicationEffectOutcome::Applied
+                } else {
+                    PublicationEffectOutcome::NotApplied
+                },
+            ),
+            (
+                PublicationEffectKind::VerifyReadback,
+                if stage_full && closure_full {
+                    PublicationEffectOutcome::Applied
+                } else {
+                    PublicationEffectOutcome::NotApplied
+                },
+            ),
+            (
+                PublicationEffectKind::CommitVisibleEpoch,
+                if self.observation.control_visible_epoch == target {
+                    PublicationEffectOutcome::Applied
+                } else if self.observation.control_visible_epoch == self.previous_visible_epoch {
+                    PublicationEffectOutcome::NotApplied
+                } else {
+                    PublicationEffectOutcome::Conflict
+                },
+            ),
+            // Every restore requires a new current-process snapshot publication.
+            (
+                PublicationEffectKind::PublishControlSnapshot,
+                PublicationEffectOutcome::NotApplied,
+            ),
+        ];
+        for (effect, outcome) in scripted_outcomes {
+            if let Some(existing) = port
+                .readback
+                .outcomes
+                .iter_mut()
+                .find(|(current, _)| *current == effect)
+            {
+                existing.1 = outcome;
+            } else {
+                port.readback.outcomes.push((effect, outcome));
+            }
+        }
+        if port.readback.intent_operation_id_override.is_none() {
+            port.readback.intent_operation_id_override =
+                Some(self.intent.persist_operation_id.clone());
+        }
+        if port.readback.intent_transaction_id_override.is_none() {
+            port.readback.intent_transaction_id_override = Some(self.intent.transaction_id.clone());
+        }
+        if port.readback.intent_target_epoch_override.is_none() {
+            port.readback.intent_target_epoch_override = Some(self.intent.target_epoch);
+        }
+        if port.readback.intent_old_manifest_digest_override.is_none() {
+            port.readback.intent_old_manifest_digest_override =
+                Some(self.intent.old_manifest_digest);
+        }
+        if port.readback.intent_new_manifest_digest_override.is_none() {
+            port.readback.intent_new_manifest_digest_override =
+                Some(self.intent.new_manifest_digest);
+        }
+        if port.readback.intent_guards_override.is_none() {
+            port.readback.intent_guards_override = Some(self.intent.guards);
+        }
+        if port.readback.intent_route_generation_override.is_none()
+            && self.collection_generation_id != new.scope.membership.collection_generation_id
+        {
+            port.readback.intent_route_generation_override = Some(self.collection_generation_id);
+        }
+        if let Some(stage) = &self.stage_receipt {
+            if stage.transaction_id != self.case.transaction_id
+                && port.readback.binding_transaction_override.is_none()
+            {
+                port.readback.binding_transaction_override = Some((
+                    PublicationEffectKind::StageNewPoints,
+                    stage.transaction_id.clone(),
+                ));
+            }
+            if stage.target_epoch != target && port.readback.binding_target_epoch_override.is_none()
+            {
+                port.readback.binding_target_epoch_override =
+                    Some((PublicationEffectKind::StageNewPoints, stage.target_epoch));
+            }
+            if !stage.unexpected_ids.is_empty()
+                && port.readback.unexpected_point_ids_by_effect.is_empty()
+            {
+                port.readback.unexpected_point_ids_by_effect.push((
+                    PublicationEffectKind::StageNewPoints,
+                    stage.unexpected_ids.clone(),
+                ));
+            }
+            if !stage.missing_ids.is_empty() && port.readback.missing_point_ids_override.is_none() {
+                port.readback.missing_point_ids_override = Some((
+                    PublicationEffectKind::StageNewPoints,
+                    stage.missing_ids.clone(),
+                ));
+            }
+            if stage
+                .staged_ids
+                .iter()
+                .any(|id| !expected_stage.contains(id))
+            {
+                port.readback.unexpected_point_ids_by_effect.push((
+                    PublicationEffectKind::StageNewPoints,
+                    stage
+                        .staged_ids
+                        .iter()
+                        .copied()
+                        .filter(|id| !expected_stage.contains(id))
+                        .collect(),
+                ));
+            }
+            let missing_from_stage = expected_stage
+                .iter()
+                .copied()
+                .filter(|id| !stage.staged_ids.contains(id))
+                .collect::<Vec<_>>();
+            if !missing_from_stage.is_empty() && port.readback.missing_point_ids_override.is_none()
+            {
+                port.readback.missing_point_ids_override =
+                    Some((PublicationEffectKind::StageNewPoints, missing_from_stage));
+            }
+            if stage.readback_digest != c::Blake3Digest32::from_bytes([3; 32])
+                && port.readback.corrupt_vector.is_none()
+            {
+                if let Some(id) = expected_stage.first() {
+                    port.readback.corrupt_vector =
+                        Some((PublicationEffectKind::StageNewPoints, *id));
+                }
+            }
+        }
+        if let Some(closure) = &self.closure_receipt {
+            if closure.transaction_id != self.case.transaction_id
+                && port.readback.binding_transaction_override.is_none()
+            {
+                port.readback.binding_transaction_override = Some((
+                    PublicationEffectKind::CloseOldPoints,
+                    closure.transaction_id.clone(),
+                ));
+            }
+            if closure.target_epoch != target
+                && port.readback.binding_target_epoch_override.is_none()
+            {
+                port.readback.binding_target_epoch_override =
+                    Some((PublicationEffectKind::CloseOldPoints, closure.target_epoch));
+            }
+            if !closure.unexpected_ids.is_empty()
+                && port.readback.unexpected_point_ids_by_effect.is_empty()
+            {
+                port.readback.unexpected_point_ids_by_effect.push((
+                    PublicationEffectKind::CloseOldPoints,
+                    closure.unexpected_ids.clone(),
+                ));
+            }
+            if !closure.missing_ids.is_empty() && port.readback.missing_point_ids_override.is_none()
+            {
+                port.readback.missing_point_ids_override = Some((
+                    PublicationEffectKind::CloseOldPoints,
+                    closure.missing_ids.clone(),
+                ));
+            }
+            if closure
+                .closed_ids
+                .iter()
+                .any(|id| !expected_closed.contains(id))
+            {
+                port.readback.unexpected_point_ids_by_effect.push((
+                    PublicationEffectKind::CloseOldPoints,
+                    closure
+                        .closed_ids
+                        .iter()
+                        .copied()
+                        .filter(|id| !expected_closed.contains(id))
+                        .collect(),
+                ));
+            }
+            let missing_from_closure = expected_closed
+                .iter()
+                .copied()
+                .filter(|id| !closure.closed_ids.contains(id))
+                .collect::<Vec<_>>();
+            if !missing_from_closure.is_empty()
+                && port.readback.missing_point_ids_override.is_none()
+            {
+                port.readback.missing_point_ids_override =
+                    Some((PublicationEffectKind::CloseOldPoints, missing_from_closure));
+            }
+            if closure.readback_digest != c::Blake3Digest32::from_bytes([4; 32])
+                && port.readback.corrupt_point_payload.is_none()
+            {
+                if let Some(id) = expected_closed.first() {
+                    port.readback.corrupt_point_payload =
+                        Some((PublicationEffectKind::CloseOldPoints, *id));
+                }
+            }
+        }
+        if let Some(verified) = &self.verified {
+            if verified.transaction_id != self.case.transaction_id
+                && port.readback.binding_transaction_override.is_none()
+            {
+                port.readback.binding_transaction_override = Some((
+                    PublicationEffectKind::VerifyReadback,
+                    verified.transaction_id.clone(),
+                ));
+            }
+            if verified.target_epoch != target
+                && port.readback.binding_target_epoch_override.is_none()
+            {
+                port.readback.binding_target_epoch_override =
+                    Some((PublicationEffectKind::VerifyReadback, verified.target_epoch));
+            }
+            if verified.new_manifest_digest != self.intent.new_manifest_digest
+                && port.readback.binding_new_manifest_override.is_none()
+            {
+                port.readback.binding_new_manifest_override = Some((
+                    PublicationEffectKind::VerifyReadback,
+                    verified.new_manifest_digest,
+                ));
+            }
+            if verified.staged_readback_digest != c::Blake3Digest32::from_bytes([3; 32])
+                && port.readback.corrupt_vector.is_none()
+            {
+                if let Some(id) = expected_stage.first() {
+                    port.readback.corrupt_vector =
+                        Some((PublicationEffectKind::VerifyReadback, *id));
+                }
+            }
+            if verified.closure_readback_digest != c::Blake3Digest32::from_bytes([4; 32])
+                && port.readback.corrupt_point_payload.is_none()
+            {
+                if let Some(id) = expected_closed.first() {
+                    port.readback.corrupt_point_payload =
+                        Some((PublicationEffectKind::VerifyReadback, *id));
+                }
+            }
+            if verified.retired_manifest_digest != self.intent.old_manifest_digest
+                && port.readback.binding_old_manifest_override.is_none()
+            {
+                port.readback.binding_old_manifest_override = Some((
+                    PublicationEffectKind::VerifyReadback,
+                    verified.retired_manifest_digest,
+                ));
+            }
+        }
+        if !self.observation.unexpected_point_ids.is_empty()
+            && port.readback.unexpected_point_ids_by_effect.is_empty()
+        {
+            port.readback.unexpected_point_ids_by_effect.extend([
+                (
+                    PublicationEffectKind::StageNewPoints,
+                    self.observation.unexpected_point_ids.clone(),
+                ),
+                (
+                    PublicationEffectKind::CloseOldPoints,
+                    self.observation.unexpected_point_ids.clone(),
+                ),
+            ]);
+        }
+        if !self.observation.missing_point_ids.is_empty()
+            && port.readback.missing_point_ids_override.is_none()
+        {
+            port.readback.missing_point_ids_override = Some((
+                PublicationEffectKind::StageNewPoints,
+                self.observation.missing_point_ids.clone(),
+            ));
+        }
         PublicationCoordinator::restore_inflight(
-            input,
+            &input,
             &mut owners,
             &snapshot,
             ProjectionBudget {
                 max_points,
                 ..ProjectionBudget::BASELINE
             },
+            &mut port.readback,
+            &operation_context(),
         )
     }
 }

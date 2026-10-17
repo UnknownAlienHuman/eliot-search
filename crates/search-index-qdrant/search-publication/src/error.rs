@@ -29,6 +29,10 @@ pub enum PublicationError {
     SnapshotPublicationFailed,
     /// External mutation outcome is unresolved.
     OutcomeUnknown,
+    /// Exact readback proves that the requested effect did not apply.
+    EffectNotObserved,
+    /// Original operation context is malformed or already cancelled.
+    OperationContextInvalid,
     /// Exact compensation is incomplete.
     CompensationIncomplete,
     /// Abandonment lacks a complete exclusion fence.
@@ -58,6 +62,8 @@ impl PublicationError {
             Self::ControlConflict => "PUBLICATION_CONTROL_CONFLICT",
             Self::SnapshotPublicationFailed => "PUBLICATION_SNAPSHOT_FAILED",
             Self::OutcomeUnknown => "PUBLICATION_OUTCOME_UNKNOWN",
+            Self::EffectNotObserved => "PUBLICATION_EFFECT_NOT_OBSERVED",
+            Self::OperationContextInvalid => "PUBLICATION_OPERATION_CONTEXT_INVALID",
             Self::CompensationIncomplete => "PUBLICATION_COMPENSATION_INCOMPLETE",
             Self::AbandonFenceMissing => "PUBLICATION_ABANDON_FENCE_MISSING",
             Self::RecoveryBlocked => "PUBLICATION_RECOVERY_BLOCKED",

@@ -2,11 +2,14 @@
 //! No method here executes a journal/index effect or authenticates a receipt producer.
 
 use super::{
-    Blake3Digest32, DurableIntent, Epoch, OpaqueId, PublicationCoordinator, PublicationError,
-    PublicationGuards, PublicationPhase, ReceiptRef, SnapshotPublishReceipt,
+    Blake3Digest32, DurableIntent, Epoch, OpaqueId, PublicationCoordinator, PublicationEffectPort,
+    PublicationError, PublicationGuards, PublicationPhase, PublicationReadbackPort,
+    SnapshotPublishReceipt, effect_command,
 };
+use crate::model::{PublicationEffectKind, PublicationEffectOutcome};
 use core::fmt;
 use search_contracts::CollectionGenerationId;
+use search_ports::{CancellationProbe, IdempotencyClass, MutationIdentity, OperationContext};
 
 /// Verified outcome references retained after the exact point/membership checks.
 /// Large point sets stay in the original immutable manifests, not this control input.
@@ -14,17 +17,17 @@ use search_contracts::CollectionGenerationId;
 pub enum AbortedPublicationResolution {
     /// Both sides were verified; restoration is absent only when no old points required it.
     Compensated {
-        /// Exact staged-point removal/exclusion readback.
-        removal_readback: ReceiptRef,
-        /// Exact old-state restoration readback, when supplied.
-        restoration_readback: Option<ReceiptRef>,
+        /// Stable owner effect identity whose complete readback was validated.
+        operation_id: OpaqueId,
+        /// Whether old closed points were restored as part of the same plan.
+        restored_old_points: bool,
     },
     /// Complete affected memberships were fenced before retrieval and IDF.
     Excluded {
-        /// Durable effective exclusion receipt supplied by the access/control owner.
-        exclusion_receipt: ReceiptRef,
-        /// Exact excluded scope digest supplied by that owner.
-        scope_digest: Blake3Digest32,
+        /// Stable owner effect identity whose complete readback was validated.
+        operation_id: OpaqueId,
+        /// Complete excluded memberships read back from the access/control owner.
+        excluded_projection_memberships: Vec<search_contracts::ProjectionMembershipId>,
     },
 }
 impl fmt::Debug for AbortedPublicationResolution {
@@ -80,21 +83,19 @@ impl fmt::Debug for AbortFinalizationRequest {
 #[derive(Clone, Eq, PartialEq)]
 pub struct AbortControlCommitObservation {
     /// Complete command actually committed; compared to the coordinator's latched input.
-    pub request: AbortFinalizationRequest,
+    pub(crate) request: AbortFinalizationRequest,
     /// Observed route after commit.
-    pub collection_generation_id: CollectionGenerationId,
+    pub(crate) collection_generation_id: CollectionGenerationId,
     /// Observed visible epoch, which must not advance during an abort.
-    pub visible_epoch: Epoch,
+    pub(crate) visible_epoch: Epoch,
     /// Observed consumed reservation floor, which must retain the aborted target.
-    pub last_reserved_epoch: Epoch,
+    pub(crate) last_reserved_epoch: Epoch,
     /// Guards actually observed by the commit, not echoed preparation values.
-    pub observed_guards: PublicationGuards,
+    pub(crate) observed_guards: PublicationGuards,
     /// Exact new control generation.
-    pub control_generation: u64,
+    pub(crate) control_generation: u64,
     /// Producer-computed digest of the committed control state.
-    pub control_state_digest: Blake3Digest32,
-    /// Immutable readback-verified finalization receipt.
-    pub commit_receipt: ReceiptRef,
+    pub(crate) control_state_digest: Blake3Digest32,
 }
 impl fmt::Debug for AbortControlCommitObservation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -200,42 +201,76 @@ impl PublicationCoordinator {
     /// # Errors
     /// Rejects changed request, route, epoch floor, guards, generation or conflicting
     /// repeat. Failure preserves all prior evidence and keeps the active slot occupied.
-    pub fn acknowledge_abort_commit(
+    pub fn acknowledge_abort_commit<C, E, R>(
         &mut self,
-        observed: AbortControlCommitObservation,
-    ) -> Result<(), PublicationError> {
+        effects: &mut E,
+        readback: &mut R,
+        context: &OperationContext<C>,
+    ) -> Result<(), PublicationError>
+    where
+        C: CancellationProbe,
+        E: PublicationEffectPort<C>,
+        R: PublicationReadbackPort<C>,
+    {
         self.active_at(PublicationPhase::Aborted)?;
         let request = self
             .abort_finalization
             .request
-            .as_ref()
+            .clone()
             .ok_or(PublicationError::RecoveryBlocked)?;
-        if &observed.request != request {
-            return Err(PublicationError::OperationMismatch);
-        }
-        let route_matches = observed.collection_generation_id == request.collection_generation_id;
-        let observed_visible = observed.visible_epoch;
-        let coordinator_visible = self.visible_epoch;
-        let latched_previous = request.previous_visible_epoch;
-        let visible_matches =
-            observed_visible == coordinator_visible && observed_visible == latched_previous;
-        let reservation_matches = observed.last_reserved_epoch == self.last_reserved_epoch
-            && observed.last_reserved_epoch == request.intent.target_epoch;
-        let generation_matches =
-            request.expected_control_generation.checked_add(1) == Some(observed.control_generation);
-        if !route_matches || !visible_matches || !reservation_matches || !generation_matches {
-            return Err(PublicationError::ControlConflict);
-        }
-        if observed.observed_guards != request.current_guards {
-            return Err(PublicationError::GuardMismatch);
-        }
+        let proof = {
+            let transaction = self
+                .active
+                .as_mut()
+                .ok_or(PublicationError::InvalidTransition)?;
+            let observed = execute_abort_effect(
+                transaction,
+                &request,
+                effects,
+                readback,
+                context,
+                PublicationEffectKind::CommitAbortFinalization,
+            )?;
+            let control = observed.control.ok_or(PublicationError::ControlConflict)?;
+            if observed.outcome != PublicationEffectOutcome::Applied
+                || observed.abort_request.as_ref() != Some(&request)
+                || observed.binding.operation_id != request.operation_id
+                || control.before_visible_epoch != request.previous_visible_epoch
+                || control.after_visible_epoch != request.previous_visible_epoch
+                || control.last_reserved_epoch != request.intent.target_epoch
+                || control.guards != request.current_guards
+                || control.control_generation
+                    != request
+                        .expected_control_generation
+                        .checked_add(1)
+                        .ok_or(PublicationError::ContractExhausted)?
+                || control.collection_generation_id != request.collection_generation_id
+                || control.previous_visible_manifest_digest != request.intent.old_manifest_digest
+                || control.visible_manifest_digest != request.intent.old_manifest_digest
+            {
+                return Err(PublicationError::ControlConflict);
+            }
+            AbortControlCommitObservation {
+                request,
+                collection_generation_id: control.collection_generation_id,
+                visible_epoch: control.after_visible_epoch,
+                last_reserved_epoch: control.last_reserved_epoch,
+                observed_guards: control.guards,
+                control_generation: control.control_generation,
+                control_state_digest: control.control_state_digest,
+            }
+        };
         if let Some(previous) = &self.abort_finalization.commit {
-            if previous != &observed {
+            if previous != &proof {
                 return Err(PublicationError::OperationMismatch);
             }
         } else {
-            self.abort_finalization.commit = Some(observed);
+            self.abort_finalization.commit = Some(proof);
         }
+        self.active
+            .as_mut()
+            .ok_or(PublicationError::InvalidTransition)?
+            .pending_effect = None;
         Ok(())
     }
 
@@ -246,22 +281,58 @@ impl PublicationCoordinator {
     /// # Errors
     /// Missing commit, wrong transaction/visibility/generation or a conflicting
     /// snapshot receipt leaves admission blocked and retains the active operation.
-    pub fn publish_abort_snapshot(
+    pub fn publish_abort_snapshot<C, E, R>(
         &mut self,
-        receipt: SnapshotPublishReceipt,
-    ) -> Result<(), PublicationError> {
+        effects: &mut E,
+        readback: &mut R,
+        context: &OperationContext<C>,
+    ) -> Result<(), PublicationError>
+    where
+        C: CancellationProbe,
+        E: PublicationEffectPort<C>,
+        R: PublicationReadbackPort<C>,
+    {
         self.active_at(PublicationPhase::Aborted)?;
         let commit = self
             .abort_finalization
             .commit
             .as_ref()
-            .ok_or(PublicationError::RecoveryBlocked)?;
-        if receipt.transaction_id != commit.request.intent.transaction_id
-            || receipt.visible_epoch != commit.visible_epoch
-            || receipt.control_generation != commit.control_generation
-        {
-            return Err(PublicationError::SnapshotPublicationFailed);
-        }
+            .ok_or(PublicationError::RecoveryBlocked)?
+            .clone();
+        let receipt = {
+            let transaction = self
+                .active
+                .as_mut()
+                .ok_or(PublicationError::InvalidTransition)?;
+            let observed = execute_abort_effect(
+                transaction,
+                &commit.request,
+                effects,
+                readback,
+                context,
+                PublicationEffectKind::PublishAbortSnapshot,
+            )?;
+            let snapshot = observed
+                .snapshot
+                .ok_or(PublicationError::SnapshotPublicationFailed)?;
+            if observed.outcome != PublicationEffectOutcome::Applied
+                || observed.abort_request.as_ref() != Some(&commit.request)
+                || snapshot.visible_epoch != commit.visible_epoch
+                || snapshot.control_generation != commit.control_generation
+                || snapshot.guards != commit.request.current_guards
+                || snapshot.collection_generation_id != commit.collection_generation_id
+                || snapshot.visible_manifest_digest != commit.request.intent.old_manifest_digest
+            {
+                return Err(PublicationError::SnapshotPublicationFailed);
+            }
+            SnapshotPublishReceipt {
+                transaction_id: commit.request.intent.transaction_id.clone(),
+                visible_epoch: snapshot.visible_epoch,
+                control_generation: snapshot.control_generation,
+                process_snapshot_id: snapshot.process_snapshot_id,
+                snapshot_digest: snapshot.snapshot_digest,
+            }
+        };
         if let Some(previous) = &self.abort_finalization.snapshot {
             if previous != &receipt {
                 return Err(PublicationError::SnapshotPublicationFailed);
@@ -269,6 +340,10 @@ impl PublicationCoordinator {
         } else {
             self.abort_finalization.snapshot = Some(receipt);
         }
+        self.active
+            .as_mut()
+            .ok_or(PublicationError::InvalidTransition)?
+            .pending_effect = None;
         Ok(())
     }
 
@@ -291,4 +366,75 @@ impl PublicationCoordinator {
         self.abort_finalization = AbortFinalizationProgress::default();
         Ok(())
     }
+}
+
+fn execute_abort_effect<C, E, R>(
+    transaction: &mut super::PublicationTransaction,
+    request: &AbortFinalizationRequest,
+    effects: &mut E,
+    readback: &mut R,
+    context: &OperationContext<C>,
+    effect: PublicationEffectKind,
+) -> Result<crate::model::PublicationEffectReadback, PublicationError>
+where
+    C: CancellationProbe,
+    E: PublicationEffectPort<C>,
+    R: PublicationReadbackPort<C>,
+{
+    context
+        .preflight()
+        .map_err(|_| PublicationError::OperationContextInvalid)?;
+    if transaction.original_context.as_ref()
+        != Some(&super::OperationContextBinding::from_context(context))
+    {
+        return Err(PublicationError::OperationMismatch);
+    }
+    if transaction
+        .pending_effect
+        .is_some_and(|pending| pending != effect)
+    {
+        return Err(PublicationError::OutcomeUnknown);
+    }
+    let mut command = effect_command(transaction, effect, context)?;
+    if effect == PublicationEffectKind::CommitAbortFinalization {
+        command
+            .binding
+            .operation_id
+            .clone_from(&request.operation_id);
+    }
+    command.abort_request = Some(request.clone());
+    if transaction.pending_effect.is_none() {
+        let identity = MutationIdentity::new(
+            command.binding.operation_id.clone(),
+            IdempotencyClass::RetrySameIdentity,
+        );
+        // Keep an interrupted abort mutation unresolved until exact readback.
+        transaction.pending_effect = Some(effect);
+        let _attempt = effects.apply(&command, &identity, context);
+    }
+    context
+        .preflight()
+        .map_err(|_| PublicationError::OperationContextInvalid)?;
+    let observed = readback.readback(&command, context);
+    if observed.effect != effect
+        || observed.binding != command.binding
+        || observed.abort_request.as_ref() != Some(request)
+    {
+        return Err(PublicationError::OperationMismatch);
+    }
+    match observed.outcome {
+        PublicationEffectOutcome::Applied => {}
+        PublicationEffectOutcome::NotApplied => {
+            transaction.pending_effect = None;
+            return Err(PublicationError::EffectNotObserved);
+        }
+        PublicationEffectOutcome::Conflict => {
+            return Err(PublicationError::ControlConflict);
+        }
+        PublicationEffectOutcome::Unknown => {
+            transaction.pending_effect = Some(effect);
+            return Err(PublicationError::OutcomeUnknown);
+        }
+    }
+    Ok(observed)
 }

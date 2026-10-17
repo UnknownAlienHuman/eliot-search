@@ -7,26 +7,32 @@
 #![forbid(unsafe_code)]
 #![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
 
+mod admission;
 mod error;
 mod machine;
 mod model;
 mod recovery;
-mod admission;
 
-pub use admission::{AdmissionPurpose, AdmissionWork, ProjectionEvidence, ProjectionUpdate,
+pub use admission::{
+    AdmissionPurpose, AdmissionWork, ProjectionEvidence, ProjectionUpdate,
     PublicationAdmissionOwners, PublicationMembershipState, PublicationOwnerObservation,
-    PublicationProposal, PublicationScope, PublicationTarget, validate_prepared_generation};
+    PublicationProposal, PublicationScope, PublicationTarget, validate_prepared_generation,
+};
 
 pub use error::PublicationError;
 pub use machine::{
     AbortControlCommitObservation, AbortFinalizationRequest, AbortedPublicationResolution,
-    DEFAULT_MAX_PUBLICATION_POINTS, DurableIntent, PublicationCoordinator, PublicationPhase,
-    PublicationRestoreInput, PublicationTransaction,
+    DEFAULT_MAX_PUBLICATION_POINTS, DurableIntent, PublicationCoordinator,
+    PublicationEffectCommand, PublicationEffectPort, PublicationEffectPreparationOwners,
+    PublicationMutationAttempt, PublicationPhase, PublicationReadbackPort, PublicationRestoreInput,
+    PublicationTransaction,
 };
 pub use model::{
-    AbandonFence, ClosureReceipt, CompensationPlan, CompensationReceipt, ControlCommitObservation,
-    PreparedGeneration, PublicationGuards, PublicationRecoveryDecision,
-    PublicationRecoveryObservation, ReadbackVerified, RestorationReceipt, RetiredManifest,
+    ClosureReceipt, CompensationPlan, PreparedGeneration, PublicationAbandonReadback,
+    PublicationControlReadback, PublicationEffectBinding, PublicationEffectKind,
+    PublicationEffectOutcome, PublicationEffectReadback, PublicationGuards,
+    PublicationIntentReadback, PublicationPointExpectation, PublicationPointReadback,
+    PublicationRecoveryDecision, PublicationSnapshotReadback, ReadbackVerified, RetiredManifest,
     SnapshotPublishReceipt, StageReceipt, VisibleCommitReceipt,
 };
 pub use recovery::recover;

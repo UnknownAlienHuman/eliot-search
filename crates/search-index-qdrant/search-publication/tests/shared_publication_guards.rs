@@ -1,7 +1,7 @@
 //! The legacy coordinator import is the shared type itself, not a conversion.
 
-use search_contracts::{Blake3Digest32, OpaqueId, OwnerEpoch, ReceiptRef};
-use search_publication::{DurableIntent, PublicationGuards};
+use search_contracts::{Blake3Digest32, OwnerEpoch};
+use search_publication::PublicationGuards;
 
 const fn for_coordinator(value: search_contracts::PublicationGuards) -> PublicationGuards {
     value
@@ -35,20 +35,16 @@ fn old_and_new_imports_are_identical_without_conversion() {
 
 #[test]
 fn coordinator_intent_exposes_the_same_complete_shared_value() {
-    // These synthetic values test the shape only; no durable write is claimed.
-    let coordinator = search_publication::PublicationCoordinator::new(32).unwrap();
+    #[path = "support/publication.rs"]
+    mod publication_support;
+    use publication_support::{PhasePort, SubmitFixture, manifest_fixture, proposal};
+    let mut coordinator = search_publication::PublicationCoordinator::new(32).unwrap();
     assert_eq!(coordinator.visible_epoch(), None);
-    assert_eq!(coordinator.last_reserved_epoch(), None);
+    let case = proposal(None, manifest_fixture(&[3]), "publication-fixture");
+    coordinator.submit_fixture(case).unwrap();
     let expected = guards();
-    let intent = DurableIntent {
-        transaction_id: OpaqueId::new("publication-fixture").unwrap(),
-        target_epoch: search_contracts::Epoch::new(37).unwrap(),
-        old_manifest_digest: None,
-        new_manifest_digest: Blake3Digest32::from_bytes([41; 32]),
-        guards: for_coordinator(expected),
-        persist_operation_id: OpaqueId::new("persist-fixture").unwrap(),
-        intent_receipt: ReceiptRef::new("receipt:intent-fixture").unwrap(),
-    };
-    let observed: search_contracts::PublicationGuards = intent.guards;
+    let mut port = PhasePort::default();
+    let intent = publication_support::persist_intent(&mut coordinator, &mut port).unwrap();
+    let observed: search_contracts::PublicationGuards = intent.guards();
     assert_eq!(observed, expected);
 }

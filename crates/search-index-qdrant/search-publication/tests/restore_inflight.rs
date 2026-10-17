@@ -1,17 +1,16 @@
 //! C08/C09/C13 inputs are real library products; phase receipts are synthetic
 //! observations and prove no journal, Qdrant, native ownership, or crash behavior.
 
-use search_contracts::{
-    Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, OwnerEpoch, ReceiptRef,
-};
+use search_contracts::{Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId, OwnerEpoch};
 use search_point_identity::s11::PointId128;
 use search_publication::*;
 
 #[path = "support/publication.rs"]
 mod publication_support;
 use publication_support::{
-    Fixture, PublicationCase, RestoreScenario, SubmitFixture, projection_fixture,
-    projection_fixture_at,
+    Fixture, PhasePort, PublicationCase, PublicationRecoveryObservation, RestoreScenario,
+    SubmitFixture, SyntheticClosureReceipt, SyntheticControlCommit, SyntheticIntent,
+    SyntheticStageReceipt, SyntheticVerified, projection_fixture, projection_fixture_at,
 };
 
 #[path = "support/abort_finalization.rs"]
@@ -26,9 +25,6 @@ fn epoch(value: i64) -> Epoch {
 const fn digest(value: u8) -> Blake3Digest32 {
     Blake3Digest32::from_bytes([value; 32])
 }
-fn reference(value: &str) -> ReceiptRef {
-    ReceiptRef::new(format!("fixture:{value}")).unwrap()
-}
 const fn point(value: u8) -> PointId128 {
     PointId128::from_stored_bytes([value; 16])
 }
@@ -41,22 +37,13 @@ fn manifest(points: &[u8]) -> Fixture {
 fn proposal(old: Option<Fixture>, new: Fixture, name: &str) -> PublicationCase {
     publication_support::proposal(old, new, name)
 }
-fn snapshot(commit: &VisibleCommitReceipt) -> SnapshotPublishReceipt {
-    SnapshotPublishReceipt {
-        transaction_id: commit.transaction_id.clone(),
-        visible_epoch: commit.visible_epoch,
-        control_generation: commit.control_generation,
-        snapshot_digest: commit.control_state_digest,
-    }
-}
-
 /// Produce a canonical preparation and synthetic phase-observation prefix.
 fn history(
     level: u8,
     replacement: bool,
 ) -> (
     PublicationCoordinator,
-    Option<ControlCommitObservation>,
+    Option<SyntheticControlCommit>,
     PublicationCase,
 ) {
     let old = replacement.then(|| manifest(&[1]));
@@ -70,14 +57,9 @@ fn history(
     };
     let mut machine = PublicationCoordinator::new(32).unwrap();
     machine.submit_fixture(case.clone()).unwrap();
-    machine
-        .persist_intent(
-            id("original-intent-operation"),
-            reference("original-intent"),
-        )
-        .unwrap();
+    publication_support::persist_intent(&mut machine, &mut PhasePort::default()).unwrap();
     let transaction = machine.active().unwrap().clone();
-    let difference = transaction.prepared.difference();
+    let difference = transaction.prepared().difference();
     let mut staged = difference
         .create
         .iter()
@@ -90,90 +72,125 @@ fn history(
         .collect::<Vec<_>>();
     staged.sort();
     closed.sort();
+    let mut port = PhasePort::default();
     if level >= 1 {
-        machine
-            .stage_new_points(StageReceipt {
-                transaction_id: transaction.transaction_id().clone(),
-                target_epoch: transaction.target_epoch,
-                staged_ids: staged,
-                missing_ids: vec![],
-                unexpected_ids: vec![],
-                readback_digest: digest(3),
-                mutation_receipt: reference("original-stage"),
-            })
-            .unwrap();
+        publication_support::stage_new_points(&mut machine, &mut port).unwrap();
     }
     if level >= 2 {
-        machine
-            .close_old_points(ClosureReceipt {
-                transaction_id: transaction.transaction_id().clone(),
-                target_epoch: transaction.target_epoch,
-                closed_ids: closed.clone(),
-                missing_ids: vec![],
-                unexpected_ids: vec![],
-                readback_digest: digest(4),
-                mutation_receipt: reference("original-closure"),
-            })
-            .unwrap();
+        publication_support::close_old_points(&mut machine, &mut port).unwrap();
     }
     if level >= 3 {
-        machine
-            .verify_readback(
-                digest(3),
-                digest(4),
-                (!closed.is_empty()).then(|| digest(5)),
-            )
-            .unwrap();
+        publication_support::verify_readback(&mut machine, &mut port).unwrap();
     }
-    let mut observation = None;
-    if level >= 4 {
-        let commit = ControlCommitObservation {
+    let control = if level >= 4 {
+        publication_support::commit_visible_epoch(&mut machine, &mut port).unwrap();
+        Some(SyntheticControlCommit {
             before_visible_epoch: previous,
-            after_visible_epoch: transaction.target_epoch,
+            after_visible_epoch: transaction.target_epoch(),
             observed_guards: guards(),
-            control_generation: 31,
-            control_state_digest: digest(6),
-        };
-        let receipt = machine.commit_visible_epoch(commit).unwrap();
-        observation = Some(commit);
-        if level >= 5 {
-            machine
-                .publish_control_snapshot(snapshot(&receipt))
-                .unwrap();
-        }
+            control_generation: 9,
+            control_state_digest: digest(32),
+        })
+    } else {
+        None
+    };
+    if level >= 5 {
+        publication_support::publish_control_snapshot(&mut machine, &mut port).unwrap();
     }
-    (machine, observation, case)
+    let _ = (staged, closed);
+    (machine, control, case)
 }
 
 fn input(level: u8, replacement: bool) -> RestoreScenario {
     let (machine, commit, case) = history(level, replacement);
     let transaction = machine.active().unwrap();
+    let difference = transaction.prepared().difference();
+    let durable = transaction.durable_intent().unwrap();
+    let stage_ids = difference
+        .create
+        .iter()
+        .map(|entry| entry.point_id)
+        .collect::<Vec<_>>();
+    let closed_ids = difference
+        .retire
+        .iter()
+        .map(|entry| entry.point_id)
+        .collect::<Vec<_>>();
+    let intent = SyntheticIntent {
+        transaction_id: durable.transaction_id().clone(),
+        target_epoch: durable.target_epoch(),
+        old_manifest_digest: durable.old_manifest_digest(),
+        new_manifest_digest: durable.new_manifest_digest(),
+        guards: durable.guards(),
+        persist_operation_id: durable.persist_operation_id().clone(),
+    };
+    let context = publication_support::operation_context();
+    let prepared = transaction.prepared();
+    let intent_binding = PublicationEffectBinding {
+        transaction_id: durable.transaction_id().clone(),
+        request_id: context.request_id(),
+        relative_deadline_ms: context.relative_deadline_ms().get(),
+        budget_ref: context.budget_ref().clone(),
+        operation_id: durable.persist_operation_id().clone(),
+        prepared_input_digest: prepared.prepared_input_digest(),
+        scope: prepared.scope().clone(),
+        target_epoch: transaction.target_epoch(),
+        previous_visible_epoch: transaction.previous_visible_epoch(),
+        last_reserved_epoch: machine.last_reserved_epoch().unwrap(),
+        old_manifest_digest: prepared.old_manifest_digest(),
+        old_manifest: prepared.old_manifest().cloned(),
+        new_manifest_digest: prepared.new_manifest_digest(),
+        new_manifest: prepared.new_manifest().clone(),
+        difference: prepared.difference().clone(),
+        guards: prepared.guards(),
+    };
     RestoreScenario {
         case,
-        previous_visible_epoch: transaction.previous_visible_epoch,
+        previous_visible_epoch: transaction.previous_visible_epoch(),
         last_reserved_epoch: machine.last_reserved_epoch().unwrap(),
-        collection_generation_id: transaction.prepared.scope().collection_generation_id,
+        collection_generation_id: transaction.prepared().scope().collection_generation_id,
         current_guards: guards(),
-        phase: transaction.phase,
-        intent: transaction.durable_intent.clone().unwrap(),
-        stage_receipt: transaction.stage_receipt.clone(),
-        closure_receipt: transaction.closure_receipt.clone(),
-        verified: transaction.verified.clone(),
+        phase: transaction.phase(),
+        intent,
+        intent_binding,
+        stage_receipt: (level >= 1).then(|| SyntheticStageReceipt {
+            transaction_id: transaction.transaction_id().clone(),
+            target_epoch: transaction.target_epoch(),
+            staged_ids: stage_ids.clone(),
+            missing_ids: vec![],
+            unexpected_ids: vec![],
+            readback_digest: digest(3),
+        }),
+        closure_receipt: (level >= 2).then(|| SyntheticClosureReceipt {
+            transaction_id: transaction.transaction_id().clone(),
+            target_epoch: transaction.target_epoch(),
+            closed_ids: closed_ids.clone(),
+            missing_ids: vec![],
+            unexpected_ids: vec![],
+            readback_digest: digest(4),
+        }),
+        verified: (level >= 3).then(|| SyntheticVerified {
+            transaction_id: transaction.transaction_id().clone(),
+            target_epoch: transaction.target_epoch(),
+            staged_readback_digest: digest(3),
+            closure_readback_digest: digest(4),
+            new_manifest_digest: transaction.prepared().new_manifest_digest(),
+            retired_manifest_digest: (!closed_ids.is_empty())
+                .then_some(durable.old_manifest_digest())
+                .flatten(),
+        }),
         control_commit: commit,
         observation: PublicationRecoveryObservation {
             intent_durable: true,
-            staged_ids: transaction
-                .stage_receipt
-                .as_ref()
-                .map_or_else(Vec::new, |r| r.staged_ids.clone()),
-            closed_ids: transaction
-                .closure_receipt
-                .as_ref()
-                .map_or_else(Vec::new, |r| r.closed_ids.clone()),
+            staged_ids: if level >= 1 { stage_ids } else { Vec::new() },
+            closed_ids: if level >= 2 { closed_ids } else { Vec::new() },
             control_visible_epoch: machine.visible_epoch().unwrap(),
             snapshot_published: false,
             abandon_fence_durable: false,
+            missing_point_ids: Vec::new(),
+            unexpected_point_ids: Vec::new(),
         },
+        readback_script: Default::default(),
     }
 }
 fn restore(input: &RestoreScenario) -> (PublicationCoordinator, PublicationRecoveryDecision) {
@@ -181,7 +198,7 @@ fn restore(input: &RestoreScenario) -> (PublicationCoordinator, PublicationRecov
 }
 
 #[test]
-fn all_precommit_prefixes_restore_the_original_slot_and_original_operation_ids() {
+fn precommit_prefixes_restore_original_identity_and_advance_only_from_exact_readback() {
     for level in 0..=3 {
         let (original, _, _) = history(level, false);
         let expected = original.active().unwrap();
@@ -190,19 +207,25 @@ fn all_precommit_prefixes_restore_the_original_slot_and_original_operation_ids()
         assert_eq!(decision, PublicationRecoveryDecision::Continue);
         assert_eq!(actual.transaction_id(), expected.transaction_id());
         assert_eq!(
-            actual.previous_visible_epoch,
-            expected.previous_visible_epoch
+            actual.previous_visible_epoch(),
+            expected.previous_visible_epoch()
         );
-        assert_eq!(actual.target_epoch, expected.target_epoch);
+        assert_eq!(actual.target_epoch(), expected.target_epoch());
         assert_eq!(
-            actual.prepared.prepared_input_digest(),
-            expected.prepared.prepared_input_digest()
+            actual.prepared().prepared_input_digest(),
+            expected.prepared().prepared_input_digest()
         );
-        assert_eq!(actual.phase, expected.phase);
-        assert_eq!(actual.durable_intent, expected.durable_intent);
-        assert_eq!(actual.stage_receipt, expected.stage_receipt);
-        assert_eq!(actual.closure_receipt, expected.closure_receipt);
-        assert_eq!(actual.verified, expected.verified);
+        assert_eq!(actual.durable_intent(), expected.durable_intent());
+        if level == 0 {
+            assert_eq!(actual.phase(), PublicationPhase::IntentDurable);
+            assert!(actual.stage_receipt().is_none());
+            assert!(actual.verified().is_none());
+        } else {
+            assert_eq!(actual.phase(), PublicationPhase::ReadbackVerified);
+            assert!(actual.stage_receipt().is_some());
+            assert!(actual.closure_receipt().is_some());
+            assert!(actual.verified().is_some());
+        }
         assert_eq!(restored.visible_epoch(), Some(epoch(0)));
         assert_eq!(restored.last_reserved_epoch(), Some(epoch(1)));
         assert_eq!(
@@ -217,21 +240,14 @@ fn all_precommit_prefixes_restore_the_original_slot_and_original_operation_ids()
 fn restored_verified_transaction_can_finish_through_the_existing_commit_and_snapshot_path() {
     let expected = projection_fixture_at(&[2], epoch(1)).plan.manifest;
     let (mut restored, _) = restore(&input(3, false));
-    let commit = restored
-        .commit_visible_epoch(ControlCommitObservation {
-            before_visible_epoch: epoch(0),
-            after_visible_epoch: epoch(1),
-            observed_guards: guards(),
-            control_generation: 31,
-            control_state_digest: digest(6),
-        })
-        .unwrap();
+    let commit =
+        publication_support::commit_visible_epoch(&mut restored, &mut PhasePort::default())
+            .unwrap();
     assert_eq!(
         restored.complete(),
         Err(PublicationError::InvalidTransition)
     );
-    restored
-        .publish_control_snapshot(snapshot(&commit))
+    publication_support::publish_control_snapshot(&mut restored, &mut PhasePort::default())
         .unwrap();
     assert_eq!(restored.complete().unwrap(), commit);
     assert_eq!(restored.current_manifest(), Some(&expected));
@@ -244,17 +260,15 @@ fn both_committed_phases_need_a_new_current_process_snapshot_acknowledgement() {
         let (mut restored, decision) = restore(&input(level, false));
         assert_eq!(decision, PublicationRecoveryDecision::PublishSnapshot);
         assert_eq!(
-            restored.active().unwrap().phase,
+            restored.active().unwrap().phase(),
             PublicationPhase::ControlCommitted
         );
-        assert!(restored.active().unwrap().snapshot_receipt.is_none());
+        assert!(restored.active().unwrap().snapshot_receipt().is_none());
         assert_eq!(
             restored.complete(),
             Err(PublicationError::InvalidTransition)
         );
-        let commit = restored.active().unwrap().visible_commit.clone().unwrap();
-        restored
-            .publish_control_snapshot(snapshot(&commit))
+        publication_support::publish_control_snapshot(&mut restored, &mut PhasePort::default())
             .unwrap();
         restored.complete().unwrap();
         assert_eq!(restored.visible_epoch(), Some(epoch(1)));
@@ -263,13 +277,278 @@ fn both_committed_phases_need_a_new_current_process_snapshot_acknowledgement() {
 }
 
 #[test]
-fn a_previous_process_snapshot_flag_is_not_accepted_as_fresh_evidence() {
+fn lost_visibility_ack_is_reconciled_from_the_original_readback_verified_prefix() {
+    let mut request = input(3, false);
+    request.phase = PublicationPhase::ReadbackVerified;
+    request.control_commit = None; // The durable prefix is truthful; the CAS reply was lost.
+    request.observation.control_visible_epoch = epoch(1);
+    let (restored, decision) = restore(&request);
+    assert_eq!(decision, PublicationRecoveryDecision::PublishSnapshot);
+    assert_eq!(restored.visible_epoch(), Some(epoch(1)));
+    let transaction = restored.active().unwrap();
+    assert_eq!(transaction.phase(), PublicationPhase::ControlCommitted);
+    assert!(transaction.visible_commit().is_some());
+}
+
+#[test]
+fn unknown_stage_is_read_back_under_the_same_id_without_a_second_mutation() {
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    machine
+        .submit_fixture(proposal(None, manifest(&[2]), "unknown-stage"))
+        .unwrap();
+    let mut port = PhasePort::default();
+    publication_support::persist_intent(&mut machine, &mut port).unwrap();
+    port.readback.next_outcome = Some(PublicationEffectOutcome::Unknown);
+    assert_eq!(
+        publication_support::stage_new_points(&mut machine, &mut port),
+        Err(PublicationError::OutcomeUnknown)
+    );
+    let original_id = port.effects.effect_ids.last().unwrap().clone();
+    port.readback.outcomes.push((
+        PublicationEffectKind::CloseOldPoints,
+        PublicationEffectOutcome::NotApplied,
+    ));
+    assert_eq!(
+        machine
+            .recover(
+                &mut port.readback,
+                &publication_support::operation_context()
+            )
+            .unwrap(),
+        PublicationRecoveryDecision::Continue
+    );
+    assert_eq!(
+        port.effects
+            .effect_ids
+            .iter()
+            .filter(|id| **id == original_id)
+            .count(),
+        1
+    );
+    assert_eq!(
+        machine.active().unwrap().phase(),
+        PublicationPhase::NewPointsAcknowledged
+    );
+    assert_eq!(
+        port.readback
+            .readback_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::StageNewPoints)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn cancellation_after_effect_dispatch_requires_readback_before_retry() {
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    machine
+        .submit_fixture(proposal(None, manifest(&[2]), "cancel-after-dispatch"))
+        .unwrap();
+    let cancellation = publication_support::SharedCancellation::new(false);
+    let context = publication_support::operation_context_with(cancellation.clone());
+    let mut port = PhasePort::default();
+    machine
+        .persist_intent(&mut port.effects, &mut port.readback, &context)
+        .unwrap();
+
+    port.effects.cancel_after_apply = Some((
+        PublicationEffectKind::StageNewPoints,
+        cancellation.shared_flag(),
+    ));
+    assert_eq!(
+        machine.stage_new_points(&mut port.effects, &mut port.readback, &context),
+        Err(PublicationError::OperationContextInvalid)
+    );
+    assert_eq!(
+        port.effects
+            .effect_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::StageNewPoints)
+            .count(),
+        1
+    );
+
+    let recovery_context = publication_support::operation_context_with(
+        publication_support::SharedCancellation::new(false),
+    );
+    machine
+        .stage_new_points(&mut port.effects, &mut port.readback, &recovery_context)
+        .unwrap();
+    assert_eq!(
+        port.effects
+            .effect_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::StageNewPoints)
+            .count(),
+        1
+    );
+    assert_eq!(
+        port.readback
+            .readback_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::StageNewPoints)
+            .count(),
+        1
+    );
+    assert_eq!(
+        machine.active().unwrap().phase(),
+        PublicationPhase::NewPointsAcknowledged
+    );
+}
+
+#[test]
+fn readback_compares_full_vectors_not_only_c13_vector_digests() {
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    machine
+        .submit_fixture(proposal(None, manifest(&[2]), "vector-mismatch"))
+        .unwrap();
+    let point_id = machine.active().unwrap().prepared().difference().create[0].point_id;
+    let mut port = PhasePort::default();
+    publication_support::persist_intent(&mut machine, &mut port).unwrap();
+    port.readback.corrupt_vector = Some((PublicationEffectKind::StageNewPoints, point_id));
+    assert_eq!(
+        publication_support::stage_new_points(&mut machine, &mut port),
+        Err(PublicationError::StageReadbackMismatch)
+    );
+    assert_eq!(
+        machine.active().unwrap().phase(),
+        PublicationPhase::PublicationBlocked
+    );
+}
+
+#[test]
+fn readback_compares_the_full_validity_interval() {
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    machine
+        .submit_fixture(proposal(None, manifest(&[2]), "interval-mismatch"))
+        .unwrap();
+    let point_id = machine.active().unwrap().prepared().difference().create[0].point_id;
+    let mut port = PhasePort::default();
+    publication_support::persist_intent(&mut machine, &mut port).unwrap();
+    port.readback.corrupt_point_interval = Some((PublicationEffectKind::StageNewPoints, point_id));
+    assert_eq!(
+        publication_support::stage_new_points(&mut machine, &mut port),
+        Err(PublicationError::StageReadbackMismatch)
+    );
+    assert_eq!(
+        machine.active().unwrap().phase(),
+        PublicationPhase::PublicationBlocked
+    );
+}
+
+#[test]
+fn compensation_membership_fence_and_abort_commit_require_owner_readback() {
+    let mut compensating = PublicationCoordinator::new(32).unwrap();
+    compensating
+        .submit_fixture(proposal(Some(manifest(&[1])), manifest(&[2]), "compensate"))
+        .unwrap();
+    publication_support::persist_intent(&mut compensating, &mut PhasePort::default()).unwrap();
+    compensating.begin_compensation_plan().unwrap();
+    let mut incomplete = PhasePort::default();
+    incomplete.readback.missing_point_ids_override =
+        Some((PublicationEffectKind::Compensate, Vec::new()));
+    assert_eq!(
+        publication_support::compensate_and_restore(&mut compensating, &mut incomplete),
+        Err(PublicationError::CompensationIncomplete)
+    );
+    publication_support::compensate_and_restore(&mut compensating, &mut PhasePort::default())
+        .unwrap();
+    assert_eq!(
+        compensating.active().unwrap().phase(),
+        PublicationPhase::Aborted
+    );
+    abort_support::acknowledge(&mut compensating);
+    compensating.finalize_aborted().unwrap();
+
+    let mut fenced = PublicationCoordinator::new(32).unwrap();
+    fenced
+        .submit_fixture(proposal(Some(manifest(&[1])), manifest(&[2]), "abandon"))
+        .unwrap();
+    publication_support::persist_intent(&mut fenced, &mut PhasePort::default()).unwrap();
+    let mut incomplete_fence = PhasePort::default();
+    incomplete_fence.readback.abandon_memberships_override = Some(Vec::new());
+    assert_eq!(
+        publication_support::abandon(&mut fenced, &mut incomplete_fence),
+        Err(PublicationError::AbandonFenceMissing)
+    );
+    publication_support::abandon(&mut fenced, &mut PhasePort::default()).unwrap();
+    abort_support::acknowledge(&mut fenced);
+    fenced.finalize_aborted().unwrap();
+}
+
+#[test]
+fn cancellation_after_abort_dispatch_requires_readback_before_retry() {
+    let mut machine = PublicationCoordinator::new(32).unwrap();
+    machine
+        .submit_fixture(proposal(
+            Some(manifest(&[1])),
+            manifest(&[2]),
+            "abort-cancel",
+        ))
+        .unwrap();
+    publication_support::persist_intent(&mut machine, &mut PhasePort::default()).unwrap();
+    machine.begin_compensation_plan().unwrap();
+    publication_support::compensate_and_restore(&mut machine, &mut PhasePort::default()).unwrap();
+
+    let target = machine.active().unwrap().target_epoch().get();
+    let request_id = id(&format!("fixture:abort-cancel-{target}"));
+    let current_guards = machine.active().unwrap().durable_intent().unwrap().guards();
+    machine
+        .prepare_abort_finalization(
+            request_id,
+            100 + u64::try_from(target).unwrap(),
+            current_guards,
+        )
+        .unwrap();
+
+    let cancellation = publication_support::SharedCancellation::new(false);
+    let context = publication_support::operation_context_with(cancellation.clone());
+    let mut port = PhasePort::default();
+    port.effects.cancel_after_apply = Some((
+        PublicationEffectKind::CommitAbortFinalization,
+        cancellation.shared_flag(),
+    ));
+    assert_eq!(
+        machine.acknowledge_abort_commit(&mut port.effects, &mut port.readback, &context),
+        Err(PublicationError::OperationContextInvalid)
+    );
+
+    let recovery_context = publication_support::operation_context_with(
+        publication_support::SharedCancellation::new(false),
+    );
+    machine
+        .acknowledge_abort_commit(&mut port.effects, &mut port.readback, &recovery_context)
+        .unwrap();
+    assert_eq!(
+        port.effects
+            .effect_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::CommitAbortFinalization)
+            .count(),
+        1
+    );
+    assert_eq!(
+        port.readback
+            .readback_kinds
+            .iter()
+            .filter(|effect| **effect == PublicationEffectKind::CommitAbortFinalization)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn a_previous_process_snapshot_flag_requires_a_fresh_snapshot_effect() {
     let mut request = input(5, false);
     request.observation.snapshot_published = true;
+    let (restored, decision) = request.restore(32).unwrap();
+    assert_eq!(decision, PublicationRecoveryDecision::PublishSnapshot);
     assert_eq!(
-        request.restore(32).unwrap_err(),
-        PublicationError::RecoveryBlocked
+        restored.active().unwrap().phase(),
+        PublicationPhase::ControlCommitted
     );
+    assert!(restored.active().unwrap().snapshot_receipt().is_none());
 }
 
 #[test]
@@ -279,7 +558,7 @@ fn partial_effects_restore_two_sided_compensation_and_preserve_consumed_gaps() {
     let (mut restored, decision) = restore(&request);
     assert_eq!(decision, PublicationRecoveryDecision::CompensateExact);
     assert_eq!(
-        restored.active().unwrap().phase,
+        restored.active().unwrap().phase(),
         PublicationPhase::Compensating
     );
     assert_eq!(restored.visible_epoch(), Some(epoch(4)));
@@ -301,29 +580,11 @@ fn partial_effects_restore_two_sided_compensation_and_preserve_consumed_gaps() {
             .map(|entry| entry.point_id)
             .collect::<Vec<_>>()
     );
-    let removed = CompensationReceipt {
-        transaction_id: plan.transaction_id.clone(),
-        target_epoch: plan.target_epoch,
-        compensated_ids: plan.staged_ids.clone(),
-        remaining_ids: vec![],
-        readback_receipt: reference("removed"),
-    };
     assert_eq!(
-        restored.compensate_exact(removed.clone()),
+        publication_support::compensate_exact(&mut restored, &mut PhasePort::default()),
         Err(PublicationError::CompensationIncomplete)
     );
-    restored
-        .compensate_and_restore(
-            removed,
-            RestorationReceipt {
-                transaction_id: plan.transaction_id,
-                target_epoch: plan.target_epoch,
-                restored_ids: plan.closed_ids,
-                remaining_ids: vec![],
-                readback_receipt: reference("restored"),
-            },
-        )
-        .unwrap();
+    publication_support::compensate_and_restore(&mut restored, &mut PhasePort::default()).unwrap();
     assert_eq!(
         restored.finalize_aborted(),
         Err(PublicationError::RecoveryBlocked)
@@ -354,27 +615,20 @@ fn every_changed_live_guard_prevents_restored_forward_commit() {
         let (mut restored, decision) = restore(&request);
         assert_eq!(decision, PublicationRecoveryDecision::CompensateExact);
         assert_eq!(
-            restored.active().unwrap().phase,
+            restored.active().unwrap().phase(),
             PublicationPhase::Compensating
         );
         assert_eq!(
             restored
                 .active()
                 .unwrap()
-                .durable_intent
-                .as_ref()
+                .durable_intent()
                 .unwrap()
-                .guards,
+                .guards(),
             guards()
         );
         assert_eq!(
-            restored.commit_visible_epoch(ControlCommitObservation {
-                before_visible_epoch: epoch(0),
-                after_visible_epoch: epoch(1),
-                observed_guards: guards(),
-                control_generation: 31,
-                control_state_digest: digest(6),
-            }),
+            publication_support::commit_visible_epoch(&mut restored, &mut PhasePort::default()),
             Err(PublicationError::InvalidTransition)
         );
     }
@@ -389,7 +643,8 @@ fn an_older_owner_or_foreign_collection_cannot_hydrate_the_transaction() {
         PublicationError::GuardMismatch
     );
     let mut route = input(0, false);
-    route.collection_generation_id = CollectionGenerationId::from_bytes([2; 16]);
+    route.readback_script.intent_route_generation_override =
+        Some(CollectionGenerationId::from_bytes([2; 16]));
     assert_eq!(
         route.restore(32).unwrap_err(),
         PublicationError::OperationMismatch
@@ -418,7 +673,7 @@ fn unresolved_target_must_equal_the_consumed_floor_not_visible_plus_one() {
         );
     }
     let (restored, _) = restore(&input(0, true));
-    assert_eq!(restored.active().unwrap().target_epoch, epoch(9));
+    assert_eq!(restored.active().unwrap().target_epoch(), epoch(9));
     assert_eq!(restored.last_reserved_epoch(), Some(epoch(9)));
     let mut inverted = input(0, true);
     inverted.previous_visible_epoch = epoch(9);
@@ -427,7 +682,7 @@ fn unresolved_target_must_equal_the_consumed_floor_not_visible_plus_one() {
 
 #[test]
 fn missing_or_foreign_intent_bindings_return_no_coordinator() {
-    for case in 0..6 {
+    for case in 0..11 {
         let mut request = input(0, false);
         match case {
             0 => request.observation.intent_durable = false,
@@ -435,14 +690,28 @@ fn missing_or_foreign_intent_bindings_return_no_coordinator() {
             2 => request.intent.new_manifest_digest = digest(99),
             3 => request.intent.old_manifest_digest = Some(digest(99)),
             4 => request.intent.guards.access_generation += 1,
-            _ => request.phase = PublicationPhase::Prepared,
+            5 => request.phase = PublicationPhase::Prepared,
+            6 => request.readback_script.intent_deadline_override = Some(59_999),
+            7 => {
+                request.readback_script.intent_budget_ref_override =
+                    Some(search_contracts::OpaqueRef::new("budget:foreign").unwrap());
+            }
+            8 => {
+                request.readback_script.intent_route_generation_override =
+                    Some(CollectionGenerationId::from_bytes([2; 16]))
+            }
+            9 => request.readback_script.intent_schema_identity_override = Some(digest(99)),
+            _ => {
+                request.readback_script.intent_request_id_override =
+                    Some(search_contracts::RequestId::from_bytes([88; 16]));
+            }
         }
         assert!(request.restore(32).is_err());
     }
 }
 
 #[test]
-fn only_the_recorded_phases_complete_receipt_prefix_is_accepted() {
+fn complete_owner_readback_advances_even_when_the_recorded_prefix_is_older() {
     let phases = [
         PublicationPhase::IntentDurable,
         PublicationPhase::NewPointsAcknowledged,
@@ -451,67 +720,93 @@ fn only_the_recorded_phases_complete_receipt_prefix_is_accepted() {
         PublicationPhase::ControlCommitted,
         PublicationPhase::SnapshotPublished,
     ];
-    for (phase, valid_mask) in phases.into_iter().zip([0, 1, 3, 7, 15, 15]) {
-        for mask in 0..16 {
-            if mask == valid_mask {
-                continue;
-            }
-            let mut request = input(4, false);
-            request.phase = phase;
-            if mask & 1 == 0 {
-                request.stage_receipt = None;
-            }
-            if mask & 2 == 0 {
-                request.closure_receipt = None;
-            }
-            if mask & 4 == 0 {
-                request.verified = None;
-            }
-            if mask & 8 == 0 {
-                request.control_commit = None;
-            }
-            assert_eq!(
-                request.restore(32).unwrap_err(),
-                PublicationError::RecoveryBlocked
-            );
-        }
+    for phase in phases {
+        let mut request = input(4, false);
+        request.phase = phase;
+        request.stage_receipt = None;
+        request.closure_receipt = None;
+        request.verified = None;
+        request.control_commit = None;
+        let (restored, decision) = request.restore(32).unwrap();
+        assert_eq!(decision, PublicationRecoveryDecision::PublishSnapshot);
+        assert_eq!(restored.visible_epoch(), Some(epoch(1)));
+        assert_eq!(
+            restored.active().unwrap().phase(),
+            PublicationPhase::ControlCommitted
+        );
     }
 }
 
 #[test]
 fn receipt_ids_epochs_and_combined_digests_are_revalidated_by_the_existing_transitions() {
-    for case in 0..12 {
+    for case in 0..15 {
         let mut request = input(4, true);
+        let stage_id = request.case.new.plan.manifest.entries[0].point_id;
+        let closure_id = request.case.old.as_ref().unwrap().plan.manifest.entries[0].point_id;
         match case {
-            0 => request.stage_receipt.as_mut().unwrap().transaction_id = id("foreign"),
-            1 => request.stage_receipt.as_mut().unwrap().target_epoch = epoch(8),
-            2 => request
-                .stage_receipt
-                .as_mut()
-                .unwrap()
-                .staged_ids
-                .push(point(2)),
-            3 => request.closure_receipt.as_mut().unwrap().closed_ids.clear(),
-            4 => request
-                .closure_receipt
-                .as_mut()
-                .unwrap()
-                .unexpected_ids
-                .push(point(9)),
-            5 => request.verified.as_mut().unwrap().staged_readback_digest = digest(99),
-            6 => request.verified.as_mut().unwrap().transaction_id = id("foreign"),
-            7 => request.verified.as_mut().unwrap().new_manifest_digest = digest(99),
-            8 => request.verified.as_mut().unwrap().retired_manifest_digest = None,
-            9 => request.control_commit.as_mut().unwrap().control_generation = 0,
-            10 => {
-                request
-                    .control_commit
-                    .as_mut()
-                    .unwrap()
-                    .observed_guards
-                    .purge_generation += 1;
+            0 => {
+                request.readback_script.binding_transaction_override =
+                    Some((PublicationEffectKind::StageNewPoints, id("foreign")))
             }
-            _ => request.control_commit.as_mut().unwrap().after_visible_epoch = epoch(10),
+            1 => {
+                request.readback_script.binding_target_epoch_override =
+                    Some((PublicationEffectKind::StageNewPoints, epoch(8)))
+            }
+            2 => request
+                .readback_script
+                .unexpected_point_ids_by_effect
+                .push((PublicationEffectKind::StageNewPoints, vec![point(2)])),
+            3 => {
+                request.readback_script.missing_point_ids_override =
+                    Some((PublicationEffectKind::CloseOldPoints, vec![closure_id]))
+            }
+            4 => request
+                .readback_script
+                .unexpected_point_ids_by_effect
+                .push((PublicationEffectKind::CloseOldPoints, vec![point(9)])),
+            5 => {
+                request.readback_script.corrupt_vector =
+                    Some((PublicationEffectKind::VerifyReadback, stage_id))
+            }
+            6 => {
+                request.readback_script.binding_transaction_override =
+                    Some((PublicationEffectKind::VerifyReadback, id("foreign")))
+            }
+            7 => {
+                request.readback_script.binding_new_manifest_override =
+                    Some((PublicationEffectKind::VerifyReadback, digest(99)))
+            }
+            8 => {
+                request.readback_script.binding_old_manifest_override =
+                    Some((PublicationEffectKind::VerifyReadback, None))
+            }
+            9 => request.readback_script.control_generation_override = Some(0),
+            10 => {
+                let mut wrong = guards();
+                wrong.purge_generation += 1;
+                request.readback_script.control_guards_override = Some(wrong);
+            }
+            11 => request.readback_script.control_after_epoch_override = Some(epoch(10)),
+            12 => {
+                request.readback_script.binding_schema_identity_override =
+                    Some((PublicationEffectKind::StageNewPoints, digest(99)));
+            }
+            13 => {
+                request.readback_script.binding_request_id_override = Some((
+                    PublicationEffectKind::StageNewPoints,
+                    search_contracts::RequestId::from_bytes([88; 16]),
+                ));
+            }
+            _ => {
+                request.readback_script.binding_difference_override = Some((
+                    PublicationEffectKind::StageNewPoints,
+                    search_projection_planner::ManifestDiff {
+                        create: Vec::new(),
+                        retain: Vec::new(),
+                        retire: Vec::new(),
+                    },
+                ));
+            }
         }
         assert!(request.restore(32).is_err());
     }
@@ -522,12 +817,27 @@ fn fresh_control_visibility_must_match_the_validated_committed_or_precommit_stat
     for (level, wrong_epoch) in [(0, 1), (3, 1), (4, 0), (4, 2)] {
         let mut request = input(level, false);
         request.observation.control_visible_epoch = epoch(wrong_epoch);
-        let expected = if wrong_epoch == 2 {
-            PublicationError::EpochMismatch
-        } else {
-            PublicationError::ControlConflict
-        };
-        assert_eq!(request.restore(32).unwrap_err(), expected);
+        match (level, wrong_epoch) {
+            (3, 1) => {
+                // Original durable phase is ReadbackVerified, but the exact
+                // current control readback proves the original CAS committed.
+                let (restored, decision) = request.restore(32).unwrap();
+                assert_eq!(decision, PublicationRecoveryDecision::PublishSnapshot);
+                assert_eq!(restored.visible_epoch(), Some(epoch(1)));
+            }
+            (0, 1) => assert_eq!(
+                request.restore(32).unwrap_err(),
+                PublicationError::RecoveryBlocked
+            ),
+            (4, 0) => assert_eq!(
+                request.restore(32).unwrap_err(),
+                PublicationError::RecoveryBlocked
+            ),
+            _ => assert_eq!(
+                request.restore(32).unwrap_err(),
+                PublicationError::EpochMismatch
+            ),
+        }
     }
 }
 
@@ -542,7 +852,7 @@ fn restored_aborted_and_blocked_records_keep_the_active_slot_unavailable() {
         let (mut restored, decision) = restore(&request);
         assert_eq!(decision, PublicationRecoveryDecision::PublicationBlocked);
         assert_eq!(
-            restored.active().unwrap().phase,
+            restored.active().unwrap().phase(),
             PublicationPhase::PublicationBlocked
         );
         assert!(restored.finalize_aborted().is_err());
@@ -562,7 +872,7 @@ fn recorded_compensating_never_returns_to_forward_progress_even_when_all_ids_are
     let (mut restored, decision) = restore(&request);
     assert_eq!(decision, PublicationRecoveryDecision::CompensateExact);
     assert_eq!(
-        restored.active().unwrap().phase,
+        restored.active().unwrap().phase(),
         PublicationPhase::Compensating
     );
     assert_eq!(
@@ -624,21 +934,19 @@ fn finite_point_limits_cover_receipts_and_observations_before_reconstruction() {
 }
 
 #[test]
-fn unverifiable_fences_and_incomplete_committed_readback_return_a_blocked_not_ready_slot() {
-    for case in 0..2 {
-        let mut request = input(4, true);
-        if case == 0 {
-            request.observation.abandon_fence_durable = true;
-        } else {
-            request.observation.staged_ids.clear();
-        }
-        let (mut restored, decision) = restore(&request);
-        assert_eq!(decision, PublicationRecoveryDecision::PublicationBlocked);
-        assert!(restored.active().is_some());
-        assert!(restored.complete().is_err());
-        assert!(restored.begin_compensation_plan().is_err());
-        assert_eq!(restored.visible_epoch(), Some(epoch(9)));
-    }
+fn a_boolean_fence_does_not_replace_exact_effect_readback() {
+    let mut request = input(4, true);
+    request.observation.abandon_fence_durable = true;
+    let (restored, decision) = restore(&request);
+    assert_eq!(decision, PublicationRecoveryDecision::PublishSnapshot);
+    assert_eq!(restored.visible_epoch(), Some(epoch(9)));
+
+    let mut incomplete = input(4, true);
+    incomplete.observation.staged_ids.clear();
+    assert_eq!(
+        incomplete.restore(32).unwrap_err(),
+        PublicationError::RecoveryBlocked
+    );
 }
 
 #[test]
