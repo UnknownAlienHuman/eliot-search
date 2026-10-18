@@ -6,7 +6,7 @@ Organizational directory, not a Cargo package.
 
 - [`search-runtime-owner/`](search-runtime-owner/) owns one process/data-root owner epoch and its real
   acquire, drain and release effects.
-- [`search-os-secrets/`](../search-runtime/search-os-secrets/) owns optional OS-bound secret references.
+- [`search-os-secrets/`](search-os-secrets/) owns optional OS-bound secret references.
 - The daemon composes runtime owners with source, control, publication and query behavior.
 
 [`search-retention/`](search-retention/) is a legacy W7 lifecycle implementation. Its generic leases,
