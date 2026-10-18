@@ -1,42 +1,30 @@
 # Agent contract — search-qdrant-bridge
 
-Own only `crates/search-index-qdrant/search-qdrant-bridge/`. Do not edit another
-package, root workspace, shared contracts or architecture. Missing fields use
-the contract-change process.
+Own the Qdrant data-plane adapter. Follow [root rules](../../../AGENTS.md) and the
+[execution protocol](../../../docs/product/EXECUTION_PROTOCOL.md); a named immediate consumer may
+change with a replaced public API. Missing shared fields go to the existing contract owner.
 
-The bounded packet is `swarm/assignments/search-qdrant-bridge.md`.
+## Ownership and reuse
 
-## Ownership
+- Consume shared S9.5 payload/schema/eligibility/epoch contracts and `search-point-identity::s11`.
+- Keep vendor schema/value/filter conversion, exact acknowledged mutations and readback private.
+- Bind actual operations to the exact admitted generation, profile, artifact and settings.
+- Use [FUNCTIONS.md](FUNCTIONS.md) for the old-to-shared payload and identity disposition under #262.
 
-- Qdrant schema/capability/data-plane translation
-- strict filters and exact acknowledged mutations/readback
-- private vendor types
-- adapter-local handling of vendor API/protobuf changes
+Do not own process/ACL/Job Object lifecycle, secret storage, access/recipe policy, durable publication
+or result authority. Do not expose vendor types, auto-download/upgrade, or add silent fallback.
+An SDK rename alone must not force daemon/query/control semantic changes.
 
-## Forbidden ownership
+## Dependency and verification boundary
 
-- executable/process/ACL/Job Object lifecycle or secret storage
-- recipe/access/publication/result semantics
-- vendor types in public ports
-- automatic downloads, upgrades, version ranges or silent fallback
-- requiring daemon/query/publication/control changes for an SDK rename
+`qdrant-client` is the private exact workspace pin, with `default-features = false`.
+The daemon supplies the qualified endpoint and bounded auth lease. Preserve the
+[adapter boundary](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md) and its affected source guard:
 
-## Dependencies
-
-Public behavior uses Eliot-owned contracts. `qdrant-client` is a private
-workspace-pinned dependency inherited only by this package; the daemon supplies
-a qualified endpoint/auth lease. Keep `default-features = false` in the root
-workspace pin and run:
-
-```powershell
+```text
 cargo run --locked -p xtask -- validate qdrant-boundary --json
 ```
 
-See
-[`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
-
-## Size
-
-Target `src/` ≤ 7,000 lines; split review before 8,500 total; hard stop at
-10,000 hand-written Rust lines. Split vendor transport by operation family
-instead of growing `real.rs` or `live.rs`.
+The root protocol selects production checks and defers test/live execution until integration.
+Review mixed responsibilities and delete replaced tables/codecs; a line count does not justify a new
+crate, public facade or a file split with identical ownership.

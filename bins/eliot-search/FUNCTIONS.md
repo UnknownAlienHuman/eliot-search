@@ -1,174 +1,83 @@
 # Function contract — `eliot-search`
 
-**Status:** thin standalone generic-client contract; no implementation exists yet.
+The CLI owns invocation capture, local connection assembly, request construction, bounded presentation
+and exit status. `search-provider-client` owns the protocol/session engine. The source already exists;
+the supported native provider path and installed qualification remain incomplete.
 
-The CLI owns argument parsing, protocol session, rendering and exit status. It never opens redb, Search
-CAS, Qdrant or the OS secret store.
+## Current source and missing linkage
 
-## `parse_command`
+Verified at `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`; refresh the actual caller census before editing.
 
-```text
-parse_command(argv, environment, limits) -> Result<CliCommand, CliError>
-```
+| Boundary | Delivered code / remaining caller |
+|---|---|
+| Default dispatch | [entry.rs](src/entry.rs) uses public/DIRECT dispatch. [app.rs](src/app.rs) rejects old address/token-file provider commands before its old parser. `legacy-loopback-harness` is off by default; its presence is not a live product fallback. |
+| Typed session | [search-provider-client](../../crates/search-provider-client/) already owns the extracted session, framing, correlation and cancellation engine (#235/PR #383). CLI has API consumers; the missing result is the supported native command connection, not another extraction. |
+| Trusted input | [NativeLocalRegistration](src/native_local_registered.rs) needs installation/incarnation, binding, peer digest, pairing generation, proof ref and optional capability digest from an independently trusted installation/configuration owner. Its constructor/resolver have only fixture callers; no product input producer is connected. |
+| Client connection | `resolve_registered_local` selects the exact credential locator and retains the original deadline. [open_resolved_windows](src/provider_client/local.rs) consumes that handoff through the existing Windows `NativeLocalConnection` and `TypedProviderSession::open_native`; it has no caller. |
+| Daemon listener | [StandaloneLocalOwner::bind](../eliot-searchd/src/access_composition/native_binding_listener/local.rs) accepts a platform factory, but has no concrete listener implementation/caller. Its server-side durable registration expectation is not a client registration source. |
 
-Parses one closed command family:
+The [existing Credential Manager adapter](src/native_credentials.rs) reads only the canonical
+purpose-bound pairing locator. Possession of a key, a pipe name, an endpoint file or peer-asserted
+installation coordinates cannot grant authority. Preserve mutual pairing and daemon-side current
+binding/grant validation. Do not use the legacy `runtime/native-endpoint.v1` TCP descriptor as trusted
+client installation input.
 
-- capability/status;
-- pair/unpair/list-bindings where server policy permits;
-- one of the exact eleven P00 recipes;
-- cancel a live request;
-- expand a source/continuation handle through `expand_handle@1`;
-- bounded doctor request exposed by accepted server capability.
+[#332](https://github.com/UnknownAlienHuman/eliot-search/issues/332) owns named input/listener/command
+cutovers. Reuse these owners and establish the actual producer/consumer before deleting the replaced
+path. A feature flip or another unused constructor cannot close that integration.
 
-Unknown/unversioned recipes, raw vendor filters, collection/point IDs and direct store paths fail.
-Sensitive values cannot be supplied as plaintext command arguments where the protocol requires opaque
-proof/ref handling.
+## Invocation and operation contract
 
-## `connect_and_authenticate`
+Capture `args_os()` and relevant environment once, retain non-UTF-8 path values and pass a closed
+invocation/config-source snapshot. Unknown/unversioned recipes, raw vendor filters, collection/point
+IDs and direct store paths fail. Sensitive proof/credential values do not enter plaintext argv.
 
-```text
-connect_and_authenticate(endpoint, local_identity, pairing_input, protocol_range, deadline)
-  -> Result<CliSession, CliError>
-```
+These are behavior roles, not mandatory new wrapper functions:
 
-Connects to the per-installation local provider transport, completes mutual hello/pairing/binding and
-stores only bounded session state. Pipe ACL/local user alone is not treated as authentication.
+| Role | Required behavior |
+|---|---|
+| Parse/build | Closed capability/status, permitted binding administration, eleven v1 recipes, cancel, `expand_handle@1` and capability-admitted doctor commands. Any free-text/orientation extension remains separately versioned under #213. Validate request/descriptor consistency and explicit scope/view/budget before sending. |
+| Connect/authenticate | Assemble one local transport and delegate pairing/framing/session state to the existing client. One setup deadline covers resolution, credential lookup, connect and pairing; each operation has its own absolute deadline. Phases do not renew either budget. ACL/local-user identity alone is insufficient. |
+| Capabilities/grants | Binding-filtered descriptors are bounded planning/UI data, never authority. Request a standalone grant from the daemon, which intersects current policy. The CLI cannot mint/sign/edit claims, widen membership/ceiling, infer hidden counts or bypass per-request validation. |
+| Run/cancel | Use the existing typed request lifecycle, monotonic progress and one terminal result/error/cancellation. Cancellation is idempotent; acknowledge it only as the protocol permits. Disconnect or timeout cannot claim rollback of a possible server mutation. |
+| Expand | Send an opaque handle/continuation through its recipe with normal grant/limits/lifecycle. Do not decode token contents, cache a permit or silently refresh expiry. |
+| Close | Stop new requests, cancel bounded local work where possible and close the owned transport. Clean up a child only if this invocation created it, with bounded kill/wait and explicit unknown cleanup. Daemon shutdown requires an explicit authenticated server command. |
 
-The CLI never reads daemon credentials or constructs a Search grant.
+## Output, exits and privacy
 
-## `fetch_capabilities`
+Human and JSON/NDJSON output preserve request/plan IDs, material ambiguity, denominator kind,
+freshness, assurance, degraded reasons, gaps and handle/continuation expiry. Never relabel
+`candidate_scope` or `unknown` as `complete_scope`. External JSON uses closed serialized output
+structures, bounded escaped records and one physical line per NDJSON record; it does not replace
+canonical binary provider frames or redefine canonical identity bytes.
 
-```text
-fetch_capabilities(session, refresh_policy, deadline)
-  -> Result<SearchProviderCapabilityDescriptor, CliError>
-```
+Keep the closed exit distinctions `SUCCESS`, `PARTIAL_OR_DEGRADED`, `USAGE_ERROR`,
+`AUTHENTICATION_OR_BINDING_FAILED`, `UNAUTHORIZED_OR_SCOPE_EMPTY`, `PROTOCOL_ERROR`,
+`DEPENDENCY_UNAVAILABLE`, `REQUEST_CANCELLED`, `REQUEST_FAILED` and `SNAPSHOT_EXPIRED`.
+Material partial/degraded results never become silent success; any explicitly permitted
+successful-with-warning contract retains a non-zero machine status field.
 
-Returns the binding-filtered descriptor. Cached data is planning/UI state only and does not bypass
-per-request validation. Hidden memberships/names/counts are not inferred or displayed.
+Preserve typed usage/unsupported-command, daemon-unavailable, pairing-required, revoked-binding,
+version-mismatch, unavailable-capability, partial/cancelled/expired and output-limit failures.
+Presentation/progress may be local; standalone grant TTL is only a requested ceiling. Redact secrets,
+pairing proofs, handles, query/source content and private errors. Help/status on an uninitialized
+installation creates nothing. No direct redb/CAS/Qdrant access or arbitrary credential target.
 
-## `build_recipe_request`
+## Removal boundary and evidence
 
-```text
-build_recipe_request(command, descriptor, explicit_scope, source_view, budget_class)
-  -> Result<SearchRecipeRequest, CliError>
-```
+The obsolete `provider_client/core.rs`, its four implementation submodules and `endpoint_client.rs`
+are a six-file / 1,638-physical-line candidate. `remote_client.rs` and `app/indexed.rs` add 393 lines
+of separate harness entry paths: eight files / 2,031 physical lines in total, counted as newline bytes.
+These disjoint counts include comments/blank lines and are not achieved net production deletion.
 
-Builds the exact P00 tagged request. It cannot mint/sign a grant, widen scope, invent a recipe or encode
-Qdrant fields. Unsupported capability returns a typed local error before sending.
+Remove each last caller and dispose of its still-relevant fixtures in the same bounded cutover.
+A harness-only deletion may proceed once the census proves its supported callers are already absent;
+it need not wait for every native capability in #332.
+Mixed `provider_client.rs` retains typed re-exports/local assembly; mixed `app/core.rs` retains DIRECT
+commands. Neither is a whole-file deletion candidate. Native bootstrap/registration code is not
+obsolete solely because it is currently disconnected.
 
-## `request_standalone_grant`
-
-```text
-request_standalone_grant(session, requested_scope, requested_ceiling, deadline)
-  -> Result<SearchReadGrantClaims, CliError>
-```
-
-Sends a bounded grant request to the daemon. The daemon intersects authoritative policy and mints the
-grant. CLI treats the grant as opaque bounded claims and never edits memberships/ceilings/signature.
-
-## `run_request`
-
-```text
-run_request(session, grant, request, renderer, cancel_source)
-  -> Result<CliTerminalOutcome, CliError>
-```
-
-Validates request/descriptor consistency, sends one protocol request, enforces progress ordering and
-accepts exactly one terminal result/error/cancelled event. Disconnect/cancel releases local resources;
-server mutation uncertainty remains a typed server outcome.
-
-## `cancel_request`
-
-```text
-cancel_request(session, request_id, deadline) -> Result<CancelOutcome, CliError>
-```
-
-Idempotent. Acknowledges `cancelled` only according to protocol semantics and never claims rollback of a
-possibly committed mutation.
-
-## `expand_handle`
-
-```text
-expand_handle(session, grant, handle, expansion, max_bytes, output)
-  -> Result<CliTerminalOutcome, CliError>
-```
-
-Builds `expand_handle@1` and uses normal request lifecycle. CLI does not decode token contents, cache an
-authorization permit or silently refresh an expired continuation.
-
-## `render_result`
-
-```text
-render_result(result, mode, disclosure) -> Result<RenderedOutput, CliError>
-```
-
-Human and JSON modes preserve request/plan IDs, material ambiguity, coverage denominator kind,
-freshness, assurance, degraded reasons, gaps and continuation/handle expiry metadata.
-
-Human formatting may summarize but cannot hide a material gap or relabel `candidate_scope`/
-`unknown` as `complete_scope`. JSON is canonical provider result plus bounded CLI metadata.
-
-## `map_exit_status`
-
-```text
-map_exit_status(outcome) -> CliExitStatus
-```
-
-Closed statuses distinguish:
-
-```text
-SUCCESS
-PARTIAL_OR_DEGRADED
-USAGE_ERROR
-AUTHENTICATION_OR_BINDING_FAILED
-UNAUTHORIZED_OR_SCOPE_EMPTY
-PROTOCOL_ERROR
-DEPENDENCY_UNAVAILABLE
-REQUEST_CANCELLED
-REQUEST_FAILED
-SNAPSHOT_EXPIRED
-```
-
-Material partial/degraded outcomes do not map to success unless a specific command contract explicitly
-classifies the outcome as successful-with-warning and preserves a non-zero machine status field.
-
-## `close_session`
-
-```text
-close_session(session, reason) -> CliDisconnectReceipt
-```
-
-Stops new requests, sends bounded cancellations where possible and closes local transport. It owns no
-durable handle deletion or daemon shutdown unless an explicit authenticated server command is invoked.
-
-## Configuration semantics
-
-Presentation/progress fields may apply locally. Direct store access and partial-success exit-zero are
-locked false. Standalone grant TTL is a daemon policy request ceiling, not client authority.
-
-## Typed failures
-
-- `CLI_USAGE_ERROR`
-- `CLI_COMMAND_NOT_SUPPORTED`
-- `DAEMON_UNAVAILABLE`
-- `PAIRING_REQUIRED`
-- `BINDING_REVOKED`
-- `PROTOCOL_VERSION_MISMATCH`
-- `CAPABILITY_NOT_AVAILABLE`
-- `REQUEST_PARTIAL_OR_DEGRADED`
-- `REQUEST_CANCELLED`
-- `SNAPSHOT_EXPIRED`
-- `CLI_OUTPUT_LIMIT_EXCEEDED`
-
-## Required tests
-
-- dependency guard: no redb/CAS/Qdrant/secret-store dependency;
-- exact eleven-recipe and command closure;
-- raw vendor filter/store path rejected;
-- mutual pairing beyond ACL;
-- CLI cannot mint/edit grant or widen scope;
-- progress/terminal sequencing and cancel/disconnect;
-- partial/degraded/ambiguity/coverage rendering and exit statuses;
-- handle token remains opaque and expansion uses recipe;
-- secret/pairing/handle/query/source redaction;
-- managed/standalone owner conflict displayed without bypass.
+Retain causal argument-order/`--`/non-UTF-8, JSON escaping/limits, pairing/binding/grant, protocol
+sequencing, slow-peer/cancel/EOF, child-cleanup, disclosure/partial-exit and opaque-handle cases.
+The [execution protocol](../../docs/product/EXECUTION_PROTOCOL.md#4-implement-then-verify-the-production-closure)
+selects the changed production targets; test/native/installed evidence follows integrated code.

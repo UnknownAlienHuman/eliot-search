@@ -1,24 +1,15 @@
 # eliot-search
 
-**Status:** `SOURCE_PRESENT`; canonical client extraction and supported product CLI integration remain incomplete and unqualified. See [central package status](../../docs/product/PACKAGE_STATUS.toml). Current owners: #235 → #116.
+The standalone CLI owns invocation, local connection assembly and bounded output. Supported DIRECT
+commands exist. The reusable typed client was delivered under #235/PR #383; #332 connects trusted
+registration, the native listener/client and supported commands. Source delivery is not installed
+qualification. See the [current linkage and deletion map](FUNCTIONS.md#current-source-and-missing-linkage).
 
-Expose standalone commands strictly through the generic provider protocol.
+Protocol/session behavior belongs to `search-provider-client`. Use the existing Windows transport and
+purpose-bound credential owner; do not create another engine. The CLI has no direct redb/CAS/Qdrant,
+access-policy or grant-minting authority. Preserve explicit partial/degraded results and disclosure bounds.
 
-## Owns
-
-- argument parsing
-- local binding/bootstrap UX
-- request construction
-- bounded result rendering
-- doctor command transport
-
-## Must not own
-
-- opening redb, CAS or Qdrant
-- reimplementing query/access logic
-- minting unbounded grants
-- rendering hidden raw payloads
-
-- **Delivery:** W1 shell, commands added by owning packages
-- **Soft source-line target:** 4,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+`legacy-loopback-harness` is disabled by default and unavailable as a product fallback. Its old engine
+and harness callers are removal candidates after the named cutover; mixed DIRECT dispatch remains.
+[AGENTS.md](AGENTS.md) defines package ownership; [FUNCTIONS.md](FUNCTIONS.md) records command,
+output, lifecycle and deferred evidence obligations.

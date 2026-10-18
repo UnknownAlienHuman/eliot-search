@@ -1,9 +1,10 @@
 # eliot-searchd
 
-**Composition binary — sole owner of Search stores, local Qdrant process and provider server.**
+**Composition root for Search stores, local Qdrant process and provider server.**
 
-**Status:** partial DIRECT composition exists. Primary redb control, canonical durable preparation,
-real Qdrant and full provider integration remain unfinished and unqualified.
+**Status:** DIRECT control/root registration and bounded native source-admission commands are wired.
+Their exact limits and non-serving outcomes are in [FUNCTIONS.md](FUNCTIONS.md). Retained-revision,
+indexed source-to-result and supported native provider integration remain incomplete and unqualified.
 
 ## Owns
 
@@ -20,9 +21,8 @@ real Qdrant and full provider integration remain unfinished and unqualified.
 - reverse adapter edges into query/lifecycle packages
 - hidden fallback or client canonical writes
 
-- **Delivery wave:** W1 shell, integrated progressively through W9
-- **Soft source-line target:** 6,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Use [AGENTS.md](AGENTS.md) for ownership and the current execution rules; historical waves/line targets
+are not readiness or package-splitting gates.
 
 ## DIRECT proxy child bounds
 

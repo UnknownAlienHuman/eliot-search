@@ -1,6 +1,6 @@
 # ELIOT Search — Gemini audit verification and refactoring preparation
 
-**Verification date:** 2026-10-17. **Source baseline:** c8e38b6fc9829f1cd38070773b1b3e5b21de18ad,
+**Verification dates:** 2026-10-17–18. **Source baseline:** c8e38b6fc9829f1cd38070773b1b3e5b21de18ad,
 the Gemini documentation commit over 239c572348dc6491f97de65464e889d41e25da80 (PR #609).
 [Original Gemini report](https://github.com/UnknownAlienHuman/eliot-search/blob/c8e38b6fc9829f1cd38070773b1b3e5b21de18ad/docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md).
 
@@ -128,8 +128,8 @@ Definition of Ready. A whole row/issue is split again if it exceeds the existing
 | Card / existing issue | Owner and bounded change | Required input / deletion boundary |
 |---|---|---|
 | R1 / #329 | search-point-identity: remove root legacy digest/key/registry APIs and their obsolete fixture imports; keep s11. | Current planner/publication already use s11. Census all callers; freeze the existing legacy encoded-key bytes as a test vector and preserve S11 rejection without the legacy producer. Retain a decoder only for an identified stored format and reader. No dual hashing, point relabeling or new identity implementation. |
-| R2 / #262 | search-qdrant-bridge: adopt s11 PointId128 throughout the existing bridge identity API and necessary immediate consumer call sites. | Shared S11 is present. Delete QdrantPointId instead of adding a second public facade. Preserve private UUID conversion and full identity validation. Daemon query_composition.rs is an explicit reverse-consumer candidate, not permission for daemon-wide work. |
-| R3 / #262 | search-qdrant-bridge: replace copied payload/schema/eligibility/epoch representation with search-contracts::indexed and private vendor conversion. | #258 is present; consume its exact 19-index baseline/types and integer-range boundary. Delete replaced field tables; do not introduce a second codec owner or change persisted generation semantics implicitly. |
+| R2 / #262 | search-qdrant-bridge: adopt s11 PointId128 throughout the existing bridge identity API and necessary immediate consumer call sites. | Shared S11 is present. Delete QdrantPointId instead of adding a second public facade. Keep private vendor conversion and full S11 key/profile validation; numeric vendor IDs cannot be silently padded into S11 addresses. See the [shared cutover contract](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#shared-payload-and-identity-cutover). Daemon query_composition.rs is a known immediate consumer, not a daemon-wide scope. |
+| R3 / #262 | search-qdrant-bridge: replace copied payload/schema/eligibility/epoch representation with search-contracts::indexed and private vendor conversion. | #258 is present. Consume the planner's exact shared payload CBOR, the 19-index baseline and integer range. Old revision/ordinal/digest fields are not aliases; remove vector_digest_* payload extensions and use separate manifest evidence. Retain private vendor conversion; no silent persisted reclassification. |
 | R4 / #262, then #263 | search-qdrant-bridge: bind operation dispatch to exact admitted generation/schema/artifact observations. | R2/R3 APIs; current control/supervisor observations. A process-local cache is not durable replay authority. Static admission and actual live verification remain distinguishable. Live effect wiring is a separate #263 slice. |
 | R5 / #288 | search-access: replace derive_predicate_digest with one bounded canonical semantic preimage and real BLAKE3. | Inventory every EligibilityPlanDigest consumer/cache before fixing the profile. Keep request admission read-only. No registry, daemon or query-engine rewrite. |
 | R6 / #316 | Existing shared hash owner plus the named materializer consumer: complete the bounded exact-stream BLAKE3 migration. | Preserve the accepted exact-byte profile and operation budget; do not buffer an entire large object or create another generic hashing framework. |
@@ -228,6 +228,23 @@ Revision/catalog/store portions remain reachable through secure storage, prepara
 migration. `sealed_digest`, `sealed_owner_epoch`, `sealed_root_identity`, `sealed_root_lock`,
 `sealed_store`, `sealed_transaction` and `sealed_transaction_guard` have current consumers. Names,
 `allow(dead_code)` and cfg(test) on one helper do not authorize deleting these families or #598 work.
+
+### CLI: existing client plus 2,031 lines of legacy candidates
+
+The [CLI linkage map](../../bins/eliot-search/FUNCTIONS.md#current-source-and-missing-linkage) separates
+delivered #235 session/native connection owners from absent product registration input, daemon listener
+and supported native command callers. Default dispatch already rejects old endpoint commands;
+`legacy-loopback-harness` is not the normal provider path. #332 owns the actual cutover.
+
+| Disjoint candidate group | Exact current inventory | Removal boundary |
+|---|---:|---|
+| `provider_client/core.rs`, `core/exchange.rs`, `core/exchange/cancellation.rs`, `core/response.rs`, `core/transport.rs`, `endpoint_client.rs` | 6 files / 1,638 lines | Replace the remaining old endpoint-engine callers with the existing typed owner; remove the engine and adapter with their last callers and explicit fixture disposition. |
+| `remote_client.rs`, `app/indexed.rs` | 2 files / 393 lines | Retire these explicit legacy harness command entries when their last useful cases have a retained owner or an explicit retirement decision. |
+
+These are physical source lines including comments/blank lines, not achieved net production deletion.
+Mixed `provider_client.rs` retains typed exports/local assembly; mixed `app/core.rs` retains supported
+DIRECT commands. Disconnected native registration/bootstrap is missing integration, not automatic
+deletion credit. No second client, blanket DIRECT removal or invented trusted-registration shortcut.
 
 ### Tooling: remove derived state only after separating its consumers
 

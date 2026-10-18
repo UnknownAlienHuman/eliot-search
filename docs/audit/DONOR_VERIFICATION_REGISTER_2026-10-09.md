@@ -1,6 +1,6 @@
 # Donor and reuse index
 
-**Refreshed:** 2026-10-17 against source `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
+**Refreshed:** 2026-10-18 against source `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 This index distinguishes existing mechanisms, actual replacement opportunities and unselected candidates.
 It is static source research, not Rust/native/live-Qdrant qualification or a dependency upgrade proposal.
 Use [root rules](../../AGENTS.md) and the [execution protocol](../product/EXECUTION_PROTOCOL.md).
@@ -19,7 +19,8 @@ before inventing a wrapper or importing a framework. A lockfile entry alone does
 | `unicode-ident =1.0.26`, `unicode-normalization =0.1.25` | Already used by [search-lexical](../../crates/search-lexical/Cargo.toml). XID18 and NFC17 profiles/range maps remain explicit. Do not plan deletion of a nonexistent custom XID/NFC engine. Normalization is not full case folding. |
 | `pulldown-cmark =0.13.1`, `quick-xml =0.42.0` | Already used by [Markdown](../../crates/search-prep/search-materializer/src/markdown/parse.rs) and [JATS](../../crates/search-prep/search-materializer/src/jats/parse.rs). They supply parsing events; local raw-span, bounds, cancellation and DTD/PI rejection remain product duties. No duplicate CommonMark/XML engine was established. |
 | `redb =2.6.3` | Already used by [search-control-redb](../../crates/search-control-redb/Cargo.toml). Tables, journal conditions and migrations are application responsibilities. Remove the obsolete daemon `control_store` with its harness; do not merge unrelated encrypted-object and control-journal transaction protocols merely because both have receipts. |
-| Reusable provider client and indexed owners | Existing Eliot source is the first donor: [client](../../crates/search-provider-client/), S11, UnitSet, planner and publication admission. Use the [indexed donor disposition](INDEXED_SPINE_PORT_MAP_2026-10-09.md); do not reimport closed stacks or recreate delivered crates. |
+| Reusable provider client and native Windows owners | [Typed client](../../crates/search-provider-client/), [Windows connection](../../crates/search-runtime/search-provider-transport-windows/) and [purpose-bound credential adapter](../../bins/eliot-search/src/native_credentials.rs) exist. #332 must connect trusted registration, the concrete daemon listener and supported commands. [Current linkage/deletion map](../../bins/eliot-search/FUNCTIONS.md); an unused constructor is not integration. Do not re-extract the engine or reopen transport-library selection without a demonstrated missing capability. |
+| S11 / indexed owner output | Existing planner/publication use S11. #262 consumes the planner's shared payload CBOR and separate vector evidence; old bridge revision/ordinal/digest fields are not rename-compatible S9.5 inputs. [Exact bridge disposition](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#shared-payload-and-identity-cutover). Preserve private vendor conversion. The [indexed donor map](INDEXED_SPINE_PORT_MAP_2026-10-09.md) prevents reimporting already delivered stacks. |
 
 Exact workspace pins/features live in [Cargo.toml](../../Cargo.toml) and checksums in
 [Cargo.lock](../../Cargo.lock). Existing crypto acceptance/provenance is retained in

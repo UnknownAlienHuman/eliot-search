@@ -1,79 +1,91 @@
 # Function contract — `search-qdrant-bridge`
 
-**Status:** W3/P05 data-plane contract; no server/client pair is accepted yet.
+**Source state:** oracle and real/vendor transport exist at `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`,
+but the bridge still exposes its local point/payload/schema types. #262 adopts the delivered shared
+S9.5/S11 contracts. PR #609's static artifact/configuration admission is not live pair qualification;
+actual consumer effects and live evidence remain #263/#264.
 
-Vendor types remain private. Every public operation consumes/returns Search contract or port-support
-types and binds an accepted `QdrantCapabilityReceipt`.
+Public operations use Eliot-owned contracts and ports. Vendor types stay private. This file records
+the required behavior and the concrete mismatch; its operation names do not require another facade.
 
-## Connection and admission
+## Shared payload and identity cutover
 
-### `connect(endpoint, auth_lease, supervisor_receipt) -> Result<QdrantBridge, BridgeError>`
+The [old payload](src/mutation.rs) has nine fields; the shared
+[S9.5 PointPayload](../../search-contracts/src/indexed/payload.rs) has 20 closed fields and a
+19-index baseline. It is not a rename-compatible representation:
 
-Requires exact supervisor process identity, installation incarnation, loopback endpoint and bounded
-secret lease. It never discovers or starts a process.
+| Old bridge input | Shared disposition |
+|---|---|
+| `projection_membership_id`, validity epochs | Preserve the actual coordinate/interval through the shared typed validators. Published points require `valid_from >= 1` and optional `valid_until > valid_from`; absent is not null. |
+| `access_partition_digest` | Not a UUID `AccessPartitionId`; do not truncate or reinterpret the digest. |
+| `source_revision: u64`, `unit_ordinal: u64` | Not `SourceRevisionId` or `UnitId`. Obtain exact identities from the prepared owner output. |
+| `source_membership_id`, `payload_digest` | Absent from S9.5. Shared `PointPayload::identity()` computes its internal identity from the closed canonical payload. |
+| `identity_digest` | Only proven full S11 identity may become `point_identity_digest_256`; matching width/name is insufficient. |
+| Missing installation/generation/source/representation/scoring/profile/kind/modality/language and optional metadata | Consume the exact shared payload already produced by the planner. Do not invent defaults, infer missing coordinates from an address, or expand the closed field set. |
 
-### `probe_capabilities(disposable_route, probe_manifest, context) -> Result<QdrantCapabilityReceipt, BridgeError>`
+[PointSpec.expected_readback.payload_cbor](../search-projection-planner/src/model.rs) already carries
+the shared payload bytes; `PointPayload::from_canonical_cbor` restores and validates them. The planner's
+payload builder is private and need not become another public adapter API. Use shared payload/index/
+vector/eligibility constants and validators, retaining only private Qdrant value conversion.
 
-Executes every probe in `qualification/qdrant/probes.toml`: build/auth identity, one shard, signed-i64
-range behavior, missing upper bound under `must_not`, sparse IDF, independent `idf.corpus`, strict mode,
-payload indexes, `wait=true`, strong ordering, exact count/readback and named sparse vectors.
-Any missing probe rejects indexed admission.
+The old [EligibilityFilter](src/query.rs) carries an access digest and source-membership strings.
+Compile the owner's validated shared [EligibilityPopulation](../../search-contracts/src/indexed/eligibility.rs)
+through its getters: incarnation/generation, access/scoring partitions, profile, visible epoch and
+allowed projection memberships. Preserve its pre-applied restrictive fences. Source memberships are
+not projection memberships, and an access digest is not a partition UUID; the immediate consumer must
+supply the actual population. The bridge translates predicates and does not derive access policy.
 
-### `create_candidate_collection(schema, context) -> Result<CollectionCreateReceipt, BridgeError>`
+The current [encoder](src/real/codec/payload.rs) writes extra `vector_digest_{name}` payload fields,
+and [vector decoder](src/real/codec/vectors.rs) requires them. Remove that extension with its readers:
+S9.5 excludes vector digests. Expected digests already live in the planner's `ExpectedReadbackShape`
+and `ProjectionManifestEntry`; shared `PointReadback` carries actual typed named-vector values.
+Validate actual readback against that existing expected evidence at the named consumer. Do not trust
+a payload-stored digest as proof of returned vector values or add fields to avoid the owner cutover.
 
-Creates one new opaque physical generation only. It creates mandatory payload indexes before ingest,
-then enables the exact strict-mode restrictions and verifies the resulting schema digest.
+Use `search_point_identity::s11::PointId128` for the address and its existing parse/display behavior.
+[bridge_point_id](src/real/identity/point.rs) currently zero-pads Qdrant numeric IDs into 128 bits.
+That is a legacy conversion, not an S11 UUID identity path: new S11 admission rejects numeric IDs.
+Retain a legacy decoder only for an identified stored format/reader, separately from new point creation.
+Preserve all 128 address bits, with no UUID version/variant rewriting.
 
-### `verify_collection_schema(route, expected) -> Result<SchemaReceipt, BridgeError>`
+Full S11 readback requires the 256-bit digest and all eight independent key coordinates. The payload
+alone lacks key schema/role; `CollectionSchema` does not yet bind a separate S11 identity-profile
+descriptor. The named generation/manifest/publication consumer must supply that exact binding as
+specified in [S11_PROFILE.md](../search-point-identity/S11_PROFILE.md). Do not infer it from generation
+UUID, address or copied digest. Use the existing S11 comparator; remove the local identity rule.
 
-Reads back topology, named vectors, payload indexes, strict-mode limits and schema identity. Version
-strings alone are insufficient.
+## Operation contract
 
-## Exact mutation operations
+| Operation | Required behavior |
+|---|---|
+| Connect/probe | Consume exact supervisor process/incarnation/endpoint identity and a bounded auth lease; never discover/start the process. Require the executed capability evidence for the selected exact pair/profile before live route admission. |
+| Create/verify collection | Create one opaque non-admitted physical generation, every mandatory shared payload index, exact vector/strict/settings profile, then read back schema/settings/metadata before admission. Version strings alone prove no schema identity. |
+| Upsert | Exact point IDs, full identity/collision checks, bounded canonical input, `wait=true`, strong ordering and exact readback. Same mutation identity/input is idempotent; changed input conflicts. Durable operation authority belongs to publication/control, not a process-local map. |
+| Close/delete | Operate only on the exact bounded ID list. Close uses the shared exclusive epoch boundary. Broad-filter closure/deletion is absent from the correctness API; ordinary delete does not produce a security-purge receipt. |
+| Readback | Return exact address/identity coordinates, closed S9.5 payload and actual named vectors, with explicit missing/unexpected IDs. Keep manifest-held expected vector digests separate from Qdrant payload metadata. |
+| Query/count/scroll | Compile the accepted closed eligibility AST privately. Retrieval and `idf.corpus` use the same canonical base plan; unsupported/unindexed filters fail rather than scan. Results are bounded nominations, never source evidence. |
 
-### `upsert_exact(batch, mutation, context) -> Result<MutationReceipt, BridgeError>`
+Each admitted operation binds exact physical name, generation, schema/profile, qualified artifact/pair,
+settings and required route revision/incarnation. A truncated generated name or reconstructed local cache
+is not durable authority. The enabled sparse/dense profile must match what the adapter actually serves.
 
-Uses explicit point IDs, `wait=true` and strong ordering. Same mutation identity plus same canonical
-batch is idempotent. Same identity plus different input is rejected.
+Epochs remain shared validated integers in `0..=2^53`; point validity has the stricter interval rule
+above. Cast only at the private Qdrant range boundary; no float round-trip acceptance or logical floats.
+Keep payload scalar types and missing upper-bound semantics exact.
 
-### `close_exact(ids, valid_until_epoch, mutation, context) -> Result<MutationReceipt, BridgeError>`
+## Outcomes, configuration and evidence
 
-Updates only the exact ID list. Broad-filter closure is absent from the correctness API.
+Check cancellation before dispatch and between bounded pages/batches. After a mutation or collection
+creation may have committed, report unknown outcome and resolve through the same operation identity
+and exact owner/readback; cancellation/timeout is not rollback. Failures remain stable and content-free.
 
-### `delete_exact(ids, mutation, context) -> Result<MutationReceipt, BridgeError>`
+[Qdrant settings](../../../config/sections/qdrant_data.md) may vary batch/time limits only within the
+admitted profile. Strict mode, wait-for-mutations and strong ordering remain correctness floors.
 
-Deletes only exact IDs for ordinary reclaim/compensation. It does not create a security-purge receipt.
-
-### `readback_exact(ids, context) -> Result<BoundedPointReadback, BridgeError>`
-
-Returns exact identity/payload/vector digests and explicit missing/unexpected IDs.
-
-### `count_exact(filter, context) -> Result<ExactCount, BridgeError>`
-
-Permitted only for the closed accepted filter AST and indexed fields.
-
-## Query operations
-
-### `query_filtered(request, context) -> Result<BoundedCandidateStream, BridgeError>`
-
-Compiles the accepted vendor-neutral eligibility AST privately. Retrieval and `idf.corpus` receive the
-same canonical base eligibility plan; unindexed or capability-unsupported filters fail rather than
-scan. Results are bounded nominations, never evidence.
-
-## Timeout, cancellation and recovery
-
-Cancellation is checked before dispatch and between bounded pages/batches. A timeout after a mutation
-may have committed; callers receive `OUTCOME_UNKNOWN` and must resolve through exact readback and the
-same mutation identity. The bridge never converts timeout into a definite rollback claim.
-
-## Configuration operations
-
-Implements `config/sections/qdrant_data.md`. Transport batch/time settings may change live only within
-accepted capability limits. Strict mode, wait-for-mutations and strong ordering are fixed correctness
-floors.
-
-## Required fixtures
-
-Disposable full capability suite; strict unindexed retrieve/update rejection; payload indexes before
-ingest; signed-i64/missing-field filter; filtered-IDF noninterference; wait/strong/readback; exact
-delete; timeout unknown-outcome recovery; vendor-type API guard; no process lifecycle duplication.
+Keep the [probe manifest](../../../qualification/qdrant/probes.toml) as the capability inventory:
+exact build/auth, topology/index/schema/strict readback, signed range/missing-field behavior, filtered
+IDF/independent corpus, named vectors, wait/strong/exact CRUD and unknown-outcome recovery.
+Add the causal shared-payload closure, UUID/numeric-ID distinction, full S11 collision/profile,
+exact route/restart admission and vector-readback cases to the existing owner fixtures.
+The [execution protocol](../../../docs/product/EXECUTION_PROTOCOL.md#4-implement-then-verify-the-production-closure)
+selects production checks/guards and defers test/live execution until integrated implementation.

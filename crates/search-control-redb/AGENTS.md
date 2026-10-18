@@ -1,112 +1,48 @@
 # Agent contract — search-control-redb
 
-You own only `crates/search-control-redb/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
-
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S6.2, S13, S14.1, S28, H5, P02.
-
-## Mission
-
-Persist only bounded technical control state and publish immutable snapshots for read-only hot paths.
+Own bounded technical control persistence. Use [root instructions](../../AGENTS.md) and the
+[execution protocol](../../docs/product/EXECUTION_PROTOCOL.md) for a named owner/consumer cutover.
+Missing semantic inputs go to the existing source, publication, runtime or secret owner.
 
 ## Ownership
 
-- journal schema and migrations
-- publication intents/receipts and route metadata
-- source/control references, cursors and fences
-- atomic Arc<ControlSnapshot> publication
-- corruption quarantine records and write counters
-- inactive source-import schema, output lifecycle and exact readback state machines
-- canonical bounded source-import record chains and content-manifest metadata rows
-- immutable source-import record artifact staging, second-pass comparison, no-clobber publication and cleanup
-- canonical control-cutover marker readback, temporary write, publication classification and exact verification
-- canonical staged-plan, cutover-commit, verified-rollback and read-only cutover-status projections
+- Journal schemas, conditional transactions, exact operation replay/recovery, route metadata,
+  immutable control snapshots, quarantine records and write counters.
+- Inactive source-import schema, bounded record chains, content-manifest metadata, immutable
+  artifact staging/readback/publication and explicit retained/unknown cleanup disposition.
+- Exact cutover marker classification and byte-stable staged-plan/commit/rollback/status projections.
 
-## Forbidden ownership
+Concrete redb and accepted dependencies remain private; [Cargo.toml](Cargo.toml) is the actual graph.
+Use the pinned database, not another local persistence engine. [README.md](README.md) and
+[FUNCTIONS.md](FUNCTIONS.md) retain current schema/profile, transaction and artifact contracts.
 
-- source bodies or extracted text
-- postings, vectors or term statistics
-- ranked candidate/query history storage
-- reverse-engineering currentness from orphaned Qdrant data
-- retained-byte acquisition, source decryption/protection or content hashing from bodies
-- daemon data-root ownership, quarantine policy decisions or serve-path rerouting
+## Authority boundaries
 
-## Allowed dependencies
+Never store source bodies, extracted text, postings, vectors, term statistics or query/ranked history.
+Do not infer currentness from orphaned Qdrant data. Retained-byte reads, source decryption/protection
+and body hashing remain in their owners. The source adapter supplies verified digests and lengths to
+the bounded content-manifest encoder; no source bytes enter control records.
 
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
+Temporary-name entropy/time and native identity are injected observations, not authority. This package
+classifies exact marker/publication state; the daemon decides quarantine under its root owner.
+Receipt/status rendering consumes verified technical observations. It cannot authorize cutover,
+invent source truth, switch a serving path or turn uncertain cleanup into success.
+Preserve typed `CONTROL_STORE_CORRUPT`, `RESTORE_PENDING_REVALIDATION` and
+`CONTROL_ROUTE_MISMATCH` semantics, content-free errors and private vendor types.
 
-## Required logical surface
+## Evidence inventory
 
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
+Preserve these cases with their owning behavior; this is not a command list for every source slice.
 
-- `ControlJournal::open(config) -> Result<Journal, JournalError>`
-- `Journal::migrate(target_schema) -> Result<MigrationReceipt, JournalError>`
-- `Journal::read_snapshot() -> Arc<ControlSnapshot>`
-- `Journal::transaction(command) -> Result<ControlCommit, JournalError>`
-- `Journal::quarantine(reason) -> Result<QuarantineReceipt, JournalError>`
-- `Journal::write_counters() -> JournalWriteCounters`
-- `SourceImportRecordChain::push(row) -> Result<(), SourceImportRecordChainError>`
-- `SourceContentManifestEncoder::{header_row, object_row, finish}`
-- `SourceImportRecordArtifact::{create, push, freeze}`
-- `SourceImportRecordReadback::{compare, finish}`
-- `SourceImportVerifiedRecordArtifact::publish`
-- `inspect_source_import_record_artifact`
-- `resolve_control_cutover_marker`
-- `publish_control_cutover_marker`
-- `SourceMigrationStagedPlan::render_json`
-- `ControlCutoverStatusProjection::render_json`
-- `render_control_cutover_committed_receipt`
-- `render_control_cutover_rollback_receipt`
+| Contract | Causal evidence |
+|---|---|
+| Journal/profile | Required table/schema set; deterministic migration/replay; committed-only reopen; mismatched incarnation/route refusal; forbidden corpus payload rejection. |
+| Hot admission | Immutable snapshots and zero durable writes, including the existing 10,000-admission case. |
+| Record/content artifacts | Frozen chain/header/object/end bytes; ordering/count/byte overflow; changed second replay or native identity refusal; no clobber of an existing final locator. |
+| Cutover markers | Exact replay only; different valid state never overwritten; missing/corrupt/unknown readback remain distinct and fail closed. |
+| Projections | Byte-exact minimized staged-plan/cutover/status output; no duplicate daemon projection schema. |
 
-The content-manifest encoder accepts only bounded identities, digests and lengths.
-The source adapter remains responsible for reading exact retained bytes and supplying
-the verified BLAKE3 digest; source bytes never enter this package. Temporary-name
-entropy/time and native file identity are injected observations, never authority.
-The package classifies marker state and publication outcomes; the daemon decides
-whether a corrupt result must arm quarantine under the current root owner.
-Receipt/status projections consume already verified technical observations and never
-authorize cutover, infer source truth, or switch a serving path.
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `CONTROL_STORE_CORRUPT`, `RESTORE_PENDING_REVALIDATION`, `CONTROL_ROUTE_MISMATCH`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `required_table_set_matches H5.1`
-- `migration fixtures are deterministic and idempotent`
-- `source import record-chain known answers remain frozen`
-- `source-content header/object/end rows remain byte exact`
-- `source-content accounting rejects order, count and byte overflow`
-- `immutable record artifact rejects changed second replay, changed identity and conflicting final state`
-- `immutable record artifact never overwrites an existing final locator`
-- `cutover marker exact replay is idempotent and different valid state is never overwritten`
-- `cutover marker missing/corrupt/readback states remain distinct and fail closed`
-- `staged-plan, cutover and status projections remain byte exact and content minimized`
-- `daemon composition contains no duplicate migration projection schema`
-- `power_loss_reopen_preserves committed control state only`
-- `hot_query_does_not_mutate_redb after 10,000 admissions`
-- `mismatched incarnation or collection route quarantines`
-- `forbidden corpus payload cannot be serialized into journal records`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W1 / P02**
-- Soft `src/` target: **8,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Use the root production check/Clippy and deferred test/qualification rules. A broad historical command
+in an adjacent handoff is evidence of that run, not a new source gate. Report actual reductions and
+remaining consumers. Line counts are review signals; they do not require another database wrapper,
+forwarding package, unrelated cleanup or a new fixture framework.

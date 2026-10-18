@@ -1,58 +1,30 @@
 # Agent contract — eliot-search
 
-You own only `bins/eliot-search/`. This is a composition or worker package, not a place to reimplement
-capability logic. Do not edit library packages, the root workspace, shared fixtures or architecture.
-Traceability only: S1.2, S33, H11.6, P01, P07, P14.
+The CLI owns invocation, connection assembly and presentation in `bins/eliot-search/`.
+Use [root instructions](../../AGENTS.md) and the
+[execution protocol](../../docs/product/EXECUTION_PROTOCOL.md) for named immediate-consumer cutovers.
 
-## Mission
+## Ownership and reuse
 
-Expose standalone commands strictly through the generic provider protocol.
+- Capture arguments/configuration once; preserve non-UTF-8 paths and build a closed invocation.
+- Assemble one local connection from independently trusted installation/binding coordinates.
+- Use `search-provider-client` for pairing/session/framing/correlation/cancellation semantics.
+- Build canonical recipe/grant requests; render bounded human or JSON/NDJSON output and truthful exits.
+- Reuse the existing Windows transport and purpose-bound Credential Manager owners through their
+  narrow APIs. The CLI does not implement secret storage or choose arbitrary credential targets.
 
-## Ownership
+The actual dependency graph is in [Cargo.toml](Cargo.toml): contracts, ports, config, provider protocol
+and typed client, plus the existing target-specific transport/secret adapters. Reuse those owners;
+new external dependencies/pins require the existing manager review. No second client engine.
 
-- argument parsing
-- local binding/bootstrap UX
-- request construction
-- bounded result rendering
-- doctor command transport
+## Boundaries
 
-## Forbidden ownership
+Never open redb, revision CAS or Qdrant, implement query/access policy, mint or widen a grant,
+decode opaque handles, expose hidden payloads, or use pipe reachability as authentication.
+Do not enable `legacy-loopback-harness` for product startup or add TCP/endpoint-file/token-file fallback.
+Native input/listener/command linkage and deletion candidates are in [FUNCTIONS.md](FUNCTIONS.md);
+[#332](https://github.com/UnknownAlienHuman/eliot-search/issues/332) owns the remaining cutover.
+Preserve supported DIRECT commands while replacing their named connection/dispatch edges.
 
-- opening redb, CAS or Qdrant
-- reimplementing query/access logic
-- minting unbounded grants
-- rendering hidden raw payloads
-
-## Allowed dependencies
-
-`search-contracts`, `search-provider-protocol`. Do not add a storage, index, model, parser or client implementation outside this declared
-graph. New external artifacts require an ADR, exact version/digest, license proof and qualification.
-
-## Integration milestones
-
-- P01: daemon connection and health
-- P03-P12: thin recipe/doctor commands
-- P14: final protocol negotiation and flow control
-
-## Test seams and exit evidence
-
-- `binary dependency graph has no store/index crates`
-- `all commands use ProviderEnvelope`
-- `result rendering obeys disclosure/byte limits`
-- `disconnect/cancel is idempotent`
-
-Record exact command output and degraded behavior. Do not claim a Windows, Qdrant or provider proof that
-was not executed.
-
-## Size and split guard
-
-- Delivery wave: **W1 shell, commands added by owning packages**
-- Soft `src/` target: **4,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Keep `main` and command wiring thin; behavior belongs to the owning library package.
-
-## Definition of done
-
-The binary only composes accepted package contracts, has no reverse storage/authority path, enforces
-bounded lifecycle and cancellation, and supplies a reproducible handoff using
-`swarm/PACKAGE_HANDOFF_TEMPLATE.md`. Compilation alone is insufficient.
+Use the root production checks and deferred evidence rules. Count removed mechanisms and remaining
+callers; splitting files or adding forwarding crates to satisfy a line target is not progress.
