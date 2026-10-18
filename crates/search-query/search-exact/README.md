@@ -1,48 +1,71 @@
-# search-exact
+# search-exact — one authoritative scan
 
-An explicit exact scan evaluates a stated predicate over a stated set of retained source revisions.
-Its result says what matched, what was actually scanned and why anything remained unread. Follow the
-[architecture](../../../docs/architecture/README.md) and
-[implementation](../../../docs/implementation/README.md).
+An exact request evaluates one explicit predicate over one explicit immutable source inventory. It reports
+matches, what was actually scanned and why anything remained unread. Ranked Qdrant results never supply
+this completeness claim.
 
 ## Current source
 
-[literal.rs](src/literal.rs) implements `scan_chunks` with the private Aho-Corasick 1.1.5 contiguous
-NFA. It handles borrowed UTF-8 chunks, overlapping byte ranges, ASCII-only case folding and truncation
-at the first extra match. Daemon source callers exist in
-[DIRECT layout scanning](../../../bins/eliot-searchd/src/direct_preparation/layout.rs) and
-[development scanning](../../../bins/eliot-searchd/src/development/kernel/scan.rs).
+- [`literal.rs`](src/literal.rs), about 9 KiB, contains the useful Aho-Corasick single-literal matcher and
+  has real daemon DIRECT callers.
+- [`proof.rs`](src/proof.rs), about 64 KiB, builds caller-shaped plans, supplied inventory/readback records,
+  reports, checkpoints and a second literal matcher. Its scan API has package-test callers and receives all
+  source bytes in a preallocated `Vec<ExactItemReadback>`.
+- [`spine.rs`](src/spine.rs), about 9 KiB, adds another pure denominator/completeness representation.
 
-[proof.rs](src/proof.rs) implements plans, supplied inventory/readback processing, reports and
-checkpoints. Its scan entry point currently has test callers, not a connected authoritative inventory
-reader. It also contains a second literal matcher: `find_literal` compares each possible byte window.
-In ASCII-insensitive mode it rejects any non-ASCII input; `literal::scan_chunks` accepts Unicode text
-while folding only ASCII. A label saying the predicates agree does not remove this difference.
+The proof/spine machinery does not enumerate the source owner, reopen revisions or hash returned bytes. It
+therefore cannot turn matching fields into authoritative completeness.
 
-`execute_exact_scan` takes `Vec<ExactItemReadback>`, with every supplied item's bytes already allocated.
-Its later item/byte budget cannot bound the memory used to capture that vector.
-[FUNCTIONS.md](FUNCTIONS.md) separates these actual APIs from the integration work.
+## Target request
 
-## One exact path
+```text
+ExactRequest
+  resolved scope
+  pinned PublishedView
+  literal or selected regex predicate
+  case/encoding semantics
+  finite source/item/input/match/output limits
+  one absolute deadline
+```
 
-Use one donor matcher core and one loop over the frozen source inventory. Compile a literal matcher
-once, preserve state across chunks of one source, and reset it between source revisions. Reuse the
-existing Aho machinery; remove `proof::find_literal` and its conflicting semantics with the last caller.
-Keep raw-byte and decoded-text modes explicit instead of casting arbitrary bytes to UTF-8.
+The daemon derives an ordered immutable inventory from the pinned view. For each item it opens the exact
+retained revision, verifies actual bytes/length/identity, scans one bounded source or chunk stream, emits
+bounded `EvidenceCard` matches and releases the buffer before advancing.
 
-Resolve the selected inventory through the existing source owner, then reopen and verify each retained
-revision as it is scanned. Bound reads before allocation and release each source before advancing.
-Preserve actual source/range checks and selected restricted-client policy. Replace supplied trust
-booleans, per-record proof receipts and the preloaded readback vector; no additional storage or durable
-verification-job platform is needed for an interactive scan.
+Compile the predicate once per request. Keep matcher state across chunks of one source and reset it between
+sources. Use the same Aho core for literal callers; remove `proof::find_literal` and its conflicting
+non-ASCII semantics. Raw-byte and decoded-text modes remain explicit.
 
-Report complete-with-matches, complete-no-match, incomplete or invalidated execution. Matches remain
-useful in an incomplete result, but finding one does not certify that every match was returned.
-A complete negative requires a complete inventory, the exact requested revisions, successful predicate
-execution on every item and no unaccounted omission. Cancellation, limits, unsupported input or missing
-revisions remain explicit. A result for a retained historical inventory does not prove a current-tree
-claim after that tree changes.
+No client-visible compile/execute plan split, `PlanExecutionPermit`, denominator proof, checkpoint digest,
+receipt chain or durable exact job is needed. Cancellation/restart returns a truthful incomplete result;
+the caller may repeat the scan.
 
-Ranked candidates, an empty SCIP/LSP lookup and lexical/semantic similarity do not prove source-wide
-absence. Regex or syntax checks are selected extensions with concrete semantics and actual producers;
-none establishes the absence of an arbitrary equivalent implementation.
+## Completeness
+
+Terminal status is one of:
+
+```text
+complete_with_matches
+complete_no_match
+incomplete(matches + gaps)
+invalid_request
+```
+
+Complete requires every item in the pinned inventory to be evaluated on the specified retained revision.
+Missing bytes, unsupported encoding, source failure, byte/item/match limit, cancellation or deadline makes
+the result incomplete. Matches remain useful but are never promoted to complete coverage.
+
+The exact handler applies the already resolved local/restricted-client scope. It does not construct grants,
+purge fences, handles or another source inventory. Optional paging/expansion uses the same `QueryWindow` as
+ranked search.
+
+## Optional predicates
+
+Single literal is the baseline. Multi-literal is added only for an actual caller that benefits from one
+combined scan; the Aho donor already supports it and no separate profile programme is required.
+
+A selected regex uses one pinned `regex-automata` configuration with explicit syntax/Unicode/case and
+compile/search ceilings. If safe cross-chunk semantics are not implemented, require one already bounded
+contiguous source buffer; do not claim streaming or add a second fallback engine.
+
+[FUNCTIONS.md](FUNCTIONS.md) maps the removal sequence. [AGENTS.md](AGENTS.md) governs implementation.
