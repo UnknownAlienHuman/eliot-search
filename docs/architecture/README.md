@@ -45,6 +45,11 @@ mark-and-sweep or restore platform.
 Paging or bounded expansion may use one short-lived query window derived from the pinned view. That window
 is not a second authority, durable history or bearer-security system and may expire on disconnect/restart.
 
+**Connected handlers define availability.** The application can perform an operation when its real handler
+and dependencies are constructed. A capability name, registry revision, descriptor digest or qualification
+receipt does not make an absent handler work. Optional client advertisement is derived from connected
+handlers and is never request authorization.
+
 **Local by default.** The baseline serves the owning OS account and explicitly selected sources.
 It neither executes indexed material nor silently broadens the corpus. Restricted clients, remote
 adapters and encrypted storage are separate needs with real consumers, not universal prerequisites.

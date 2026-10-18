@@ -1,78 +1,57 @@
 # search-contracts
 
-Shared types and small validation/encoding functions used by real producers and consumers.
-Read the [implementation guide](../../docs/implementation/README.md#4-simplify-and-connect-the-query)
-for the application path and the [package instructions](AGENTS.md) for changes here.
+Shared types and small validation/encoding functions used by real producers and consumers. This package
+is not a catalogue of every planned capability.
 
-## Existing code and the useful contract
+## Current request/result replacement
 
-[evidence.rs](src/evidence.rs) already contains `RetrieveEvidenceRequestV2`,
-`OrientScopeRequestV2` and their result/card structures. [lib.rs](src/lib.rs) exposes shared source,
-revision, scope, coordinate, budget and indexed types. Their presence does not establish a connected
-handler or working retrieval.
+The repository currently carries eleven `RecipeIdV1` request/result families, V2 evidence/orientation
+forms, public `SearchTaskPlan`, source/continuation handles and capability descriptors. Most are consumed
+by codecs, fixtures or disconnected host scaffolding rather than one working search path.
 
-Keep the data needed by that handler:
+Replace them with one current typed local family used by CLI, daemon and optional restricted adapters:
 
-| Data | Purpose |
-|---|---|
-| Selected source scope, question and requested result kind | Say what to search and what the caller wants to understand. |
-| Published source view and actual profile | Use one coherent revision/index interpretation. Resolve authoritative values in the application. |
-| Finite request/output limits and cancellation/deadline inputs | Bound useful work; ordinary retrieval does not require a full-scan budget. |
-| Source/content-revision identity, location/range and excerpt | Reopen and verify the source behind a result. Source-record revision is not content revision. |
-| Freshness, unsupported/missing-input gaps and optional continuation | Explain limits of the result and allow bounded further reading. |
+```text
+SearchRequest      scope, query, retrieval options, limits
+ExactRequest       scope, literal/regex predicate, completeness limits
+ContinueRequest    query-window locator, page size
+ExpandRequest      window-item locator, bounded expansion
+OrientRequest      optional focus/dimensions
+CompareRequest     optional selected subjects/axes
 
-Change the real request/result model and its decoder, planner, handler and encoder together.
-The current V1 and V2 families can be replaced by one local format. Their old names, eleven-recipe
-registry, fixture bytes and delivery-wave status do not require compatibility or a third family.
+EvidenceCard       source/revision/representation/range, excerpt, rank/freshness/gaps
+SearchResponse     cards, truthful coverage/gaps, optional next-window locator
+```
 
-Remove mandatory plan IDs/fingerprints, result fingerprints, ranking traces, hashed group IDs and durable
-handles where no selected consumer needs them. Ordinary top-k results are non-exhaustive; exact counts
-and absence claims belong to an explicitly requested exact check. Keep the actual scope/revision/range
-connection rather than filling obsolete constructors with synthetic domains, grants or digests.
+The first implementation needs `Search`, `Exact`, `Continue` and `Expand`. Optional types exist only with
+real handlers. `compile_exact_scan` plus `execute_exact_scan` collapses into one server-owned exact
+operation. `expand_handle` becomes window-item expansion. Corpus profile/delta and provenance do not need
+frozen public IDs before their actual data owners and callers exist.
 
-## Serialization
+Change decoder, planner, daemon handler, result encoder and clients together. Do not add a third V3 family,
+legacy adapters or synthetic values for removed grants/fingerprints/handles.
 
-[canonical.rs](src/canonical.rs) implements the current closed `CanonicalValue` and JSON/CBOR codecs.
-That implementation is existing code, not a requirement to route every local record through a custom
-canonical value tree.
+## Useful shared data
 
-Use typed Serde serialization for ordinary request/result/event records when implementing the new
-exchange. Add direct dependencies to the existing owners. This crate's [Cargo.toml](Cargo.toml)
-currently declares only `blake3` and `sha2`; transitive entries in Cargo.lock do not mean Serde is
-integrated here. Bound the incoming frame before decoding and use meaningful semantic size checks.
-Do not introduce another DTO/codec package merely to avoid changing real consumers.
+Keep source/revision identity, source coordinates, selected scope, actual limits, indexed payloads and
+results that consumers use. Runtime I/O and mutable state belong to concrete owners.
 
-An identity or profile that actually depends on canonical bytes needs a specified encoding. Other
-records do not. Old golden bytes are not a compatibility promise: remove retired encoders and their
-exclusive fixtures with the format. A new format may reject an old root before writes, leaving it
-intact; no legacy decoder, profile migration or export prerequisite follows from a byte change.
-Never reinterpret existing stored bytes under a new identity.
+Ordinary retrieval needs no exact-scan budget, plan fingerprint, proof chain, ranking trace, capability
+credential or durable handle. Retain actual revision/range/snippet, freshness and gaps. A source-record
+revision is not a content revision.
 
-## Hashes with a concrete purpose
+## Serialization and hashes
 
-[digest.rs](src/digest.rs) provides shared real BLAKE3/SHA-256 computation. The existing API distinguishes
-domain-framed canonical/raw input from unframed exact bytes:
+Use typed Serde serialization for ordinary request/result/event records. Bound the frame before decoding
+and bound encoded output. A canonical encoding is needed only for an identity/profile that genuinely
+uses its bytes. Old recipe/wire golden bytes are not a compatibility promise.
 
-- `blake3_canonical` / `sha256_canonical` hash the selected canonical encoding.
-- `blake3_raw` / `sha256_raw` hash exact payload bytes with domain framing.
-- `blake3_exact_bytes` computes standard unframed BLAKE3 for actual source bytes.
-- `blake3_canonical_array` and its usage variant stream finite rows where a retained artifact actually
-  needs that identity.
-
-Use these owners where content identity or integrity is required. Decode-only digest wrappers and
-matching digest fields do not prove that bytes were hashed. Verify actual source/artifact bytes in
-their owner. Do not assign hashes to every local request, configuration, plan or state transition.
-
-Retain useful algorithm/preimage vectors and bounded streaming tests for functions still used.
-Delete unused hash producers with their consumers. Per-site ledgers, source-file hashes, issue-state
-classifications and an unchanged golden catalogue are not integration requirements.
+Use shared BLAKE3/SHA-256 only for real content/artifact identity or integrity. Matching caller digest
+fields does not prove that bytes were read or hashed. Do not hash ordinary requests, plans, capability
+reports or state transitions merely to make them appear authoritative.
 
 ## Ownership and verification
 
 Contract code performs no filesystem, process, network, redb or Qdrant I/O and owns no mutable runtime
-state. Shared types earn their place through real consumers; future capability names do not need
-records, registries or a lifecycle model here.
-
-Compile changed production owners and consumers, then check actual request/result behavior, size
-bounds, exact byte identity and truthful partial results. W0/G0 gates, P00/Wave-1 freezes, mandatory
-contract-change issues and source-line quotas no longer govern this replacement.
+state. Shared types earn their place through real consumers. Compile changed producers/consumers and test
+useful size bounds, exact source identity and truthful partial results through the connected application.

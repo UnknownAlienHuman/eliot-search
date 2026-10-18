@@ -1,23 +1,24 @@
-# Query planning
+# Working on search-query-planner
 
-Use the [implementation guide](../../../docs/implementation/README.md#4-simplify-and-connect-the-query).
-This owner turns a resolved scope, pinned published view, actual retrieval profile, query and finite
-limits into the operations the query needs. Keep it pure and call it directly.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and
+[query cutover](../README.md#direct-operations-not-a-recipe-operating-system).
 
-`compile_canonical_plan` currently requires a caller-created task plan, grant and several fingerprints.
-Remove these requirements from trusted-local planning with their consumers. Do not create synthetic
-proofs or a second planner to get around the old API. Restricted-client checks belong at their actual
-admission boundary.
+Do not preserve caller-created `CapabilitySet`, `SearchTaskPlan`, grants, dependency graphs, plan IDs or
+fingerprints. Change the request, planner, executor and daemon consumers together. Connected services and
+the pinned view are the actual input authority.
 
-Reuse the existing lexical encoders. Ordinary sparse retrieval needs encoding, bounded retrieval,
-source validation and results; exact scanning is requested separately. No mandatory exact denominator,
-proof job or persistent plan is needed for top-k.
+Keep only nontrivial pure selection:
 
-Keep useful leg/fusion logic for real selected modes. All legs use the same resolved scope and pinned
-view. A request's profile name is not proof that published vectors used that profile.
-Vendor/database calls remain in the adapter/composition.
+- choose implemented branches requested by the current typed request;
+- keep one resolved scope and published view;
+- split only incompatible physical routes/profiles;
+- assign finite work limits under one absolute deadline;
+- preserve deterministic operation/fusion order.
 
-Change immediate request/executor consumers with the planner. There is no automatic contract-change
-issue, crate-only edit restriction, line quota or frozen fingerprint compatibility requirement.
-Check real ordering, scope/profile consistency, bounds and cancellation; no source-shape test can
-substitute for the connected query.
+If the baseline lexical path is one direct Qdrant call, inline it rather than manufacturing a one-leg plan.
+Optional branches stay unsupported until their real handlers exist. Do not add a capability registry,
+canonical descriptor, qualification credential or V3 request family.
+
+Verify the connected query and truthful unsupported behavior. Planner fixtures and frozen plan hashes are
+not product completion.

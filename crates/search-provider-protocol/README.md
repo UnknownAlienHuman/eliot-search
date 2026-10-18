@@ -1,37 +1,50 @@
 # search-provider-protocol
 
-Framing, typed request/result encoding and request lifecycle for the CLI and local daemon.
-This package performs no socket, pipe, filesystem, database or secret-store I/O.
+Bounded typed request/result framing for the CLI and daemon. This package performs no source, database,
+Qdrant or secret-store I/O.
 
-Use the [implementation guide](../../docs/implementation/README.md#4-simplify-and-connect-the-query)
-for the single local exchange and [FUNCTIONS.md](FUNCTIONS.md) for current mechanisms.
+## Target local exchange
 
-## What exists
+Use one current request/result family from `search-contracts` over owned child stdio or an owner-only
+local pipe:
 
-- [FrameCodec](src/frame.rs) validates length-prefixed JSON; [TypedRecordBuffer](src/frame/transport.rs)
-  assembles a bounded record.
-- [Client/server codecs](src/frame/client.rs) encode the existing V1 typed messages.
-  [Evidence schemas](src/frame/client/evidence_schema.rs) and progressive evidence frames also exist.
-- [BoundSession](src/binding.rs), request guards and terminal/cancellation code implement the current
-  paired, authenticated session. Pairing/grant transcripts and endpoint descriptors are implemented too.
+```text
+length-prefixed bounded frame
+→ typed request ID + Search | Exact | Continue | Expand | optional Orient/Compare
+→ progress only when useful
+→ one terminal SearchResponse or typed error
+```
 
-Existing CLI native-client and daemon provider modules consume parts of this API. The public
-[stdio client](../../bins/eliot-search/src/public_client.rs) still uses its own tab/hex exchange and
-substring event parsing. The daemon V1 recipe registry does not serve the delivered V2 evidence
-requests. A codec or session constructor alone is not a connected search endpoint.
+Reuse frame-length rejection, correlation, cancellation, finite in-flight work and terminal cleanup.
+Replace the CLI's tab/hex protocol, substring event parsing, manual JSON grammar and parallel V1/V2 codecs
+with Serde `from_slice` / bounded serialization in the existing owners.
 
-## Refactoring target
+## Handler availability
 
-Use one bounded typed exchange through owned child stdio, or an owner-only local pipe when needed.
-Reuse framing, correlation, cancellation and terminal behavior. Change decoder, dispatch, handler and
-result encoding together, removing the replaced tab/hex, loopback and parallel V1/V2 forms.
+The local CLI calls constructed handlers directly and needs no capability handshake. An unsupported
+operation returns a typed error. For a selected restricted-client profile, advertisement is derived from
+the actual handler table and may include request versions and limits. It is informational; real session
+credentials and delegated scope are checked independently on each request.
 
-Use Serde/serde_json in the existing owners for the new wire. Remove mandatory canonical re-encoding,
-body MACs, paired hello and grants from trusted-local constructors with their callers. Do not create
-fake credentials to pass an old constructor. A selected restricted-client profile retains real
-credential verification, replay checks and delegated scope enforcement.
+Do not preserve `SearchProviderCapabilityDescriptor` as a permission credential, `CapabilityRegistryRevision`,
+eleven-recipe parity tables, qualification receipts or canonical descriptor digests. No handler exists
+because a descriptor says it does.
 
-Bound incoming frames before allocation and typed decoding; bound outgoing records, queued work and
-in-flight requests. Keep clear malformed/version errors and cleanup on EOF/cancellation. Capability
-reporting describes connected handlers. Source truth, access policy and backend operations stay with
-their application owners. See [AGENTS.md](AGENTS.md).
+## Current source to simplify
+
+- `FrameCodec` and `TypedRecordBuffer` provide useful bounded framing.
+- request guards/in-flight state provide useful correlation/cancellation.
+- V1 recipe codecs freeze eleven request/result families.
+- V2 evidence codecs form a parallel endpoint.
+- pairing, grants, body MACs and replay transcripts belong only to selected restricted clients.
+- daemon `CanonicalRecipeRegistry` / `CanonicalQueryHost` / registered-service composition have no real
+  registered recipe-handler implementations in public main.
+
+Change protocol, dispatch, handler and client together. Delete superseded recipe/capability/session layers
+from the trusted-local path rather than fabricating credentials for them.
+
+## Verification
+
+Check prefix/size rejection before allocation, partial reads/EOF, typed decode, request correlation,
+cancellation, output bounds, one terminal result and unsupported-handler errors through the actual
+client/daemon connection. Restricted-client credential/replay tests run only for that profile.

@@ -9,6 +9,7 @@ code and current locations, not permanent product boundaries.
 ```text
 request + scope + limits
 → pin current PublishedView
+→ select real constructed operations
 → Qdrant / exact / selected overlay retrieval
 → preserve final rank
 → resolve ViewManifestEntry
@@ -18,9 +19,43 @@ request + scope + limits
 → optionally retain one QueryWindow for another page or bounded expansion
 ```
 
-`EvidenceCard` carries the source/revision/representation, location/range, short excerpt, rank/freshness
-and useful gaps. It does not require a separately minted source capability. `WindowItemRef` is only an
-opaque `(window, item)` locator for a result already selected under the window's pinned view.
+`EvidenceCard` carries source/revision/representation, location/range, short excerpt, rank/freshness and
+useful gaps. It does not require a separately minted source capability. `WindowItemRef` is only an opaque
+`(window, item)` locator for evidence already selected under the window's pinned view.
+
+## Direct operations, not a recipe operating system
+
+The current contracts freeze eleven `RecipeIdV1` values, a caller-created `SearchTaskPlan`, capability
+booleans, dependency/fingerprint records and a capability descriptor. Daemon query composition adds a
+handler registry, projected descriptor, authority/grant host and service wrapper. Public-main search found
+no implementation of `RegisteredAdmittedRecipeHandler` outside the registry definition, and
+`compile_canonical_plan` has fixture callers only.
+
+Replace that scaffolding with one current typed request family and direct dispatch to constructed handlers:
+
+```text
+Search    scope + query + retrieval options + limits
+Exact     scope + literal/regex predicate + completeness limits
+Continue  query_window + requested page size
+Expand    window_item + bounded neighboring range/metadata request
+Orient    optional source-guide dimensions/focus
+Compare   optional selected subjects/axes
+```
+
+`Search` is the first connected mode. `Exact` is one server-owned operation, not public compile-plan then
+execute-plan recipes. `Continue` and `Expand` use the same `QueryWindow`. `Orient` and `Compare` exist only
+when their concrete prepared-fact/source handlers are implemented. Corpus profile/delta and provenance do
+not need permanent recipe IDs before a product caller and data owner exist.
+
+For the local CLI, a command calls the handler directly; an unsupported operation returns a typed
+unsupported error. No capability handshake is needed. A selected restricted-client adapter may advertise
+request versions, limits and the actual handler set, but advertisement is derived information and does not
+replace session authorization or scope enforcement.
+
+The planner may remain as a small pure helper for real multi-branch search. It accepts private references
+to constructed services, the resolved scope, pinned view, query and limits. It does not accept a public
+`CapabilitySet`, grant transcript, `SearchTaskPlan`, dependency graph or plan fingerprint. If lexical
+search is one direct call, do not preserve a planner crate merely to manufacture a one-leg plan.
 
 ## One query window
 
@@ -31,8 +66,8 @@ The current public daemon uses two stores for one response:
 - [`ResultHandleCatalog`](../../bins/eliot-searchd/src/result_handles/kernel/catalog.rs) creates another
   record and random token for every emitted match.
 
-The next-page path then recomputes a whole-catalog source fence and rebuilds the source map before reading
-the page. This work is independent of page size and duplicates facts already fixed by a published view.
+The next-page path recomputes a whole-catalog source fence and rebuilds the source map before reading the
+page. This work is independent of page size and duplicates facts fixed by a published view.
 
 Replace both with one application-owned `QueryWindow`:
 
@@ -49,11 +84,11 @@ QueryWindow
 ```
 
 Keep the daemon's useful `PreparedPage::deliver` rule: select the next slice, prepare the response and
-advance the cursor only after the complete output write succeeds. A partial frame closes the session and
-drops the uncommitted preparation; it does not need a remote acknowledgement protocol or durable journal.
+advance the cursor only after complete output succeeds. A partial frame closes the session and drops the
+uncommitted preparation; it needs no remote acknowledgement protocol or durable journal.
 
-Read and validate only the page being emitted. Preserve upstream fused order. A final page may remove the
-cursor, but the window remains until expiry while an issued `WindowItemRef` still needs its view/excerpt.
+Read and validate only the emitted page. Preserve upstream fused order. A final page may remove the cursor,
+but the window remains until expiry while an issued `WindowItemRef` still needs its view/excerpt.
 Completion, expiry, disconnect or cancellation removes the record and releases its view guard. Restart
 invalidates all windows; the caller repeats the query.
 
@@ -65,30 +100,29 @@ that optional profile a mandatory cryptographic handle system for local CLI pagi
 
 | Existing code | Keep | Remove or change |
 |---|---|---|
-| [access](search-access/) | Real selected scope and any actual restricted-client rule. | Mandatory grants/proof graphs for the owning local client. |
-| [query planner](search-query-planner/) | Query/profile/limit selection. | Externally manufactured task plans and fingerprints. |
+| [query planner](search-query-planner/) | Useful selection/order/budget logic for real branches. | `CapabilitySet`, `SearchTaskPlan`, dependency/fingerprint proof and frozen recipe support tables. |
+| daemon query composition | Real scope/published-view acquisition and eventual backend calls. | `CanonicalRecipeRegistry`, projected capability/authority ceremony and host layers without handlers. |
+| provider protocol | Bounded framing, correlation, cancellation and one terminal result. | V1 recipe registry, paired local grants/MACs and duplicate V2 endpoint. |
 | [retrieval executor](search-retrieval-executor/) | Real backend calls and contribution merge. | Raw-score reordering across populations and unconditional exact counts. |
 | [candidate validator](search-candidate-validator/) | Manifest lookup and actual retained-byte/range verification. | Digest-field equality presented as byte validation. |
 | [result projector](search-result-projector/) | Shape selected verified evidence into bounded cards/gaps. | Handle-oriented metadata, lifecycle ownership and re-sorting final rank. |
 | [continuation](search-continuation/) | Offset/page preparation ideas only. | Shared lifecycle/security/durable-replan platform after callers move. |
 | [handles](search-handles/) | Effective range/read limits and useful readback checks only. | Independent handle store, durable handle profile and terminal history. |
-| [exact](search-exact/) | Explicit bounded source scan with truthful coverage. | Corpus-sized preload and duplicate per-offset matching. |
+| [exact](search-exact/) | Explicit bounded source scan with truthful coverage. | Public compile/execute plan split, corpus preload and duplicate per-offset matching. |
 
-Change `SearchSourceHandle` / `ContinuationHandle` result fields in `search-contracts`, recipes, evidence
-frames, ports, provider codecs and actual callers in the same cutover. Do not leave forwarding wrappers
-that keep the old stores alive. The replacement contract is `EvidenceCard` plus optional next-window and
-item locator; exact names can follow the existing V2 evidence model, but there is one current family.
+Change recipe/request/result, planner, provider codec, dispatch and actual callers in one cutover. Do not
+leave forwarding wrappers that keep old stores/registries alive or introduce a V3 family.
 
 ## Verification
 
 Verify the integrated caller, not package shape:
 
-- page 1 and page N preserve the executor's final order;
-- only selected-page source ranges are read;
-- an unrelated source update does not rescan or invalidate a pinned old view;
+- local `search` dispatch reaches the connected BM25 handler without capability credentials;
+- unsupported optional operations are absent or return typed unsupported, not a weaker fallback;
+- page 1 and page N preserve final order and read only selected-page ranges;
 - old evidence remains readable while its view guard is alive;
 - complete output advances once; partial output advances zero times;
 - expansion cannot leave the selected item/view and obeys byte/deadline limits;
 - terminal/expired windows disappear and capacity is reusable;
 - restart invalidates ephemeral windows without recovery records;
-- no second handle/continuation database remains in the product path.
+- no second handle/continuation database, recipe registry or capability authority remains in the product path.
