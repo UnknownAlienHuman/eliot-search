@@ -29,10 +29,10 @@ observations remain separate facts.
 | Location / symbols | Current behavior |
 |---|---|
 | [markdown_unitset/build.rs](src/markdown_unitset/build.rs): `MarkdownUnitizationSource`, `unitize_markdown` | Accepts a product plus revision-read port, invokes `verify_markdown`, builds raw v3 and creates structural/inline observations. |
-| [markdown_unitset/codec.rs](src/markdown_unitset/codec.rs), [decode.rs](src/markdown_unitset/codec/decode.rs) | Implements `canonicalize_markdown_unit_manifest` / `decode_markdown_unit_manifest` for the current v4 envelope. |
+| [markdown_unitset/codec.rs](src/markdown_unitset/codec.rs), [decode.rs](src/markdown_unitset/decode.rs) | Implements `canonicalize_markdown_unit_manifest` / `decode_markdown_unit_manifest` for the current v4 envelope. |
 | [markdown_unitset/build.rs](src/markdown_unitset/build.rs): `verify_markdown_unit_manifest` | Reconstructs the expected set and compares the whole supplied manifest. |
 | [jats_unitset/build.rs](src/jats_unitset/build.rs): `JatsUnitizationSource`, `unitize_jats` | Invokes `verify_jats`, builds raw v3 and adds the existing complete subset observations. |
-| [jats_unitset/codec.rs](src/jats_unitset/codec.rs), [decode.rs](src/jats_unitset/codec/decode.rs) | Implements `canonicalize_jats_unit_manifest` / `decode_jats_unit_manifest` for the current v5 envelope. |
+| [jats_unitset/codec.rs](src/jats_unitset/codec.rs), [decode.rs](src/jats_unitset/decode.rs) | Implements `canonicalize_jats_unit_manifest` / `decode_jats_unit_manifest` for the current v5 envelope. |
 | [jats_unitset/build.rs](src/jats_unitset/build.rs): `verify_jats_unit_manifest` | Reconstructs and compares the expected set. |
 
 The current source inputs carry a `RevisionReadPort` because owning materializer verification reruns
