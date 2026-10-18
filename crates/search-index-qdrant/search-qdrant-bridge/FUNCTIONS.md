@@ -106,13 +106,31 @@ authoritative point.
 Use the vendor's narrower operations through this same bridge:
 
 - `update_vectors` adds or replaces only the named vectors supplied and leaves the others intact;
-- `set_payload` changes only the selected payload fields;
+- `delete_vectors` removes selected obsolete named vectors without replacing the point;
+- `set_payload` merges the supplied fields and leaves unspecified payload fields intact;
+- `delete_payload` removes selected obsolete payload keys;
+- `overwrite_payload` replaces the complete authoritative payload while preserving vectors;
 - full upsert replaces the complete point after assembling every required vector and payload field.
 
+A closed Eliot payload should normally use `overwrite_payload`, or an explicit set/delete sequence,
+when the complete authoritative field set changes. `set_payload` alone can leave stale retired fields
+and therefore is not a full payload replacement.
+
 The sole publisher serializes dependent changes and performs exact readback of the affected names/fields.
-Do not create a second migration or vector-backfill service. A selected semantic model can backfill its
-named vector with `update_vectors` under the normal pending/visible publication. Failure or timeout after
-dispatch remains an unresolved external effect for that publication.
+Do not create a second migration or vector-backfill service. Failure or timeout after dispatch remains
+an unresolved external effect for that publication.
+
+Adding a named-vector schema to an existing collection does not populate that vector on existing points.
+Queries using it will omit those points until values are written. The simple default for an incompatible
+new model/vector profile is a new physical collection generation: populate it completely, verify it,
+then switch the published view while old readers remain pinned to the old generation.
+
+An in-place named-vector backfill is an explicit scale optimization, not the baseline. When selected,
+one publication operation must create the schema, dual-write new/changed points, account for deletes and
+retirements during the backfill, update bounded point pages, verify the intended population has the new
+vector and only then switch the published profile. A `has_vector` filter can measure or expose a stated
+incomplete subset; it must not silently present partial coverage as the normal complete view. Deleting
+the old vector waits for the published switch and old-view pins.
 
 Keep citation/source coordinates in the versioned published manifest. A reusable retrieval point may be
 retained across source revisions only when its immutable retrieval/filter identity remains valid; each
@@ -120,7 +138,8 @@ pinned view still maps it to the exact revision/range that supplied its evidence
 view's source meaning in place merely to save a point write, and do not force a new point solely because
 an unrelated absolute byte offset shifted.
 
-Pinned SDK source: [`UpsertPoints`, `UpdatePointVectors`, `PointVectors` and `SetPayloadPoints`](https://github.com/qdrant/rust-client/blob/7c838035ae7b9455636dcaca918a55b7d7ca638f/proto/points.proto).
+Pinned SDK source: [`UpsertPoints`, `UpdatePointVectors`, `DeletePointVectors`, `SetPayloadPoints`,
+`DeletePayloadPoints` and the `OverwritePayload` RPC](https://github.com/qdrant/rust-client/blob/7c838035ae7b9455636dcaca918a55b7d7ca638f/proto/points_service.proto).
 
 ## Operation contract
 
@@ -128,7 +147,7 @@ Pinned SDK source: [`UpsertPoints`, `UpdatePointVectors`, `PointVectors` and `Se
 |---|---|
 | Connect/probe | Use the configured endpoint and its actual credentials, and check the capabilities/schema the selected path needs. Process startup belongs to the supervisor. No auth-lease or qualification-report protocol is required by every local connection. |
 | Create/verify collection | Create the selected physical generation with the named vectors and filter/group indexes actually used. Read back those chosen settings and schema. Reuse the shared schema owner; do not manufacture 19 indexes or exact profile credentials to satisfy the old adapter. |
-| Upsert/update | Bind the actual source/unit identity, submit bounded complete-point or narrow vector/payload input and await `wait=true` completion. Full upsert supplies the complete authoritative point; partial named-vector/payload changes use their dedicated operation. Verify the relevant stored result and resolve uncertain effects through publication/control, not a second bridge operation journal. |
+| Upsert/update | Bind the actual source/unit identity, submit bounded complete-point or narrow vector/payload input and await `wait=true` completion. Full upsert supplies the complete authoritative point; partial named-vector changes use vector operations; payload merge/delete/overwrite semantics are explicit. Verify the relevant stored result and resolve uncertain effects through publication/control, not a second bridge operation journal. |
 | Close/delete | Operate only on the exact bounded ID list. Close uses the shared exclusive epoch boundary. Broad-filter closure/deletion is absent from the correctness API; ordinary delete does not produce a security-purge receipt. |
 | Readback | Return exact address/identity coordinates, closed S9.5 payload and actual named vectors, with explicit missing/unexpected IDs. Keep manifest-held expected vector digests separate from Qdrant payload metadata. |
 | Query/count/scroll | Translate the resolved scope privately as above. Ordinary top-k does not require exact count; a requested count uses that scope. Enforce actual request limits and installed schema constraints. Results are bounded nominations; evidence comes from retained source. |
