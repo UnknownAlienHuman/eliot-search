@@ -9,6 +9,10 @@ The bridge owns schema/capability probes, strict indexed filters, exact mutation
 error mapping. Process/ACL/Job Object lifecycle belongs to the supervisor; secret storage, access,
 publication and result authority remain in their owners. No automatic upgrade, download or fallback.
 
+The [current architecture](../../../docs/architecture/README.md) retires mandatory test-report tokens
+from connection and the exact count from ordinary top-k. Keep actual endpoint/auth/schema checks and
+source validation. `BlockingRealQueryPlane` already has one reused Tokio runtime per instance.
+
 ## Implemented transport and fixture boundaries
 
 - The T22 disposable-server harness owns only qualification process setup, exact artifact measurement,
@@ -32,13 +36,14 @@ private Qdrant value conversion and exact readback remain necessary.
 
 ## Verification boundary
 
-Keep the [adapter boundary](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md) and its targeted guard:
+The [adapter boundary](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md) retains Cargo/API behavior
+checks and retires the custom source analyser. The old diagnostic command is:
 
 ```text
 cargo run --locked -p xtask -- validate qdrant-boundary --json
 ```
 
-Existing module-ownership fixtures under `tests/` and the disposable capability suite are evidence
-inventory. The [execution protocol](../../../docs/product/EXECUTION_PROTOCOL.md) selects source gates
+Source-shape/module-name assertions are retirement candidates; the disposable suite's actual behavior
+cases remain useful evidence. The [execution protocol](../../../docs/product/EXECUTION_PROTOCOL.md) selects source gates
 and defers test/live execution until the integrated candidate. [AGENTS.md](AGENTS.md) owns package
 guidance; historical waves and line targets do not require another wrapper or file split.

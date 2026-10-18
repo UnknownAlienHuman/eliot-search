@@ -1,17 +1,17 @@
 # ELIOT Search 8.4 — Standalone Architecture, Implementation Handoff, and Audit
-## Single authoritative implementation master for the Search repository
+## Historical architecture and implementation material
 
 **Status:** implementation candidate; runtime, performance, security execution, migration, and product acceptance remain unproven.  
 **Scope:** ELIOT Search only: standalone local-data preparation and retrieval, plus optional client adapters. Online research, client memory, task control, and canonical knowledge remain outside this repository.  
-**Repository authority:** this file is normative for the ELIOT Search repository. No external ELIOT document is required to build or test the standalone core.  
+**Current authority:** [the local-baseline architecture](README.md) supersedes the baseline requirements listed in its §8. This 8.4 master is historical design/reference material; it cannot reinstate retired obligations.
 **ELIOT compatibility baseline:** English final Architecture/Implementation pair dated 2026-08-28 (`M1 c6932eaf26935e752eefb4de591afc91ea1a7180be5a8ff0005554b8029bac1a`, `M2 7805bf238fe91819aba50d7e13aa86a8b977561195dbb98aa979f986e2fab063`). The optional adapter profile in S32.3 incorporates the required boundary directly.  
 **Original donor SHA-256:** `684315a0b4ce9da007c83180ae60bee62715d488e6f588b64940cb2f5a70b4e4`.  
 **Aligned English donor SHA-256:** `9ee370c46834c5f68771bae2848781e3695cf0acc912814b9862cfdb94b5fcdb`.  
-**Supersedes:** every separate Search architecture, handoff, audit, patch, validation, and release-manifest file produced before this master.  
-**Architecture section SHA-256:** `ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c`  
-**Implementation entry point:** root `AGENTS.md`, the architecture README, relevant Part I sections and current package/issue contracts. Part II's P00-only sequence is historical.
+**Historical scope:** this master consolidated the earlier Search architecture/handoff/audits. Current maintainer decisions and the local-baseline architecture take precedence.
+**Historical embedded section SHA-256:** `ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c`
+**Implementation entry point:** root `AGENTS.md`, [current architecture](README.md), actual caller/owner source and the current manager handoff. Part II's P00-only sequence is historical.
 
-Part I contains the standalone product architecture. Accepted ADRs and package contracts refine its implementation; upstream client-system documents remain optional compatibility inputs. The embedded Part I body and its recorded SHA-256 are unchanged by this entrypoint correction.
+Part I preserves the 8.4 design for reference. Its six-domain storage, mandatory security/compatibility machinery and implementation-wide qualification assumptions are no longer automatic local-baseline requirements. Read the current decision before applying an old MUST or package contract. The recorded hash identifies historical text; it is not an implementation or approval gate.
 
 ## Contents
 
@@ -22,7 +22,7 @@ Part I contains the standalone product architecture. Accepted ADRs and package c
 
 ---
 
-# Part I — Architecture
+# Part I — Historical Architecture 8.4
 
 <!-- BEGIN EMBEDDED ARCHITECTURE -->
 # ELIOT Search Architecture 8.4

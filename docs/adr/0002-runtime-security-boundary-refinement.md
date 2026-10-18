@@ -1,12 +1,17 @@
 # ADR 0002 — Refine runtime, security and lifecycle ownership before implementation
 
-- **Status:** accepted
+- **Status:** historical packaging decision; superseded for the local baseline on 2026-10-18
 - **Date:** 2026-08-29
 - **Scope:** implementation packaging and dependency direction only
 - **Architecture:** ELIOT Search 8.4, especially S5, S16.6, S26-S28, S31, H4, H8, H12-H16
 - **Supersedes:** no architecture decision; refines ADR 0001
 
-## Context
+The [current architecture](../architecture/README.md) removes crate-per-capability/agent obligations and
+makes generic secret lifecycle, durable handles and restricted-client machinery optional. The packages
+below exist; this record does not require keeping every package/state machine or recreating one after
+its last real consumer disappears. Preserve actual OS/vendor boundaries and source truth.
+
+## Historical context
 
 The first one-agent-per-crate scaffold mapped C00-C30 but left five load-bearing owners absent or
 hidden inside packages with different security, platform or lifecycle seams:
@@ -20,7 +25,7 @@ hidden inside packages with different security, platform or lifecycle seams:
 Several query/lifecycle packages also depended directly on concrete redb/Qdrant/revision adapters,
 contradicting the vendor-neutral port boundary.
 
-## Decision
+## Historical decision
 
 Add five focused support packages:
 
@@ -43,7 +48,7 @@ Refine existing owners:
 The workspace becomes 39 library packages plus 4 binaries. Architecture 8.4 and its embedded SHA-256
 remain unchanged because product authority, wire semantics and storage topology are unchanged.
 
-## Consequences
+## Historical consequences
 
 - One agent owns each missing security/failure state.
 - Qdrant Windows containment can be tested independently from vendor RPC semantics.
@@ -52,7 +57,7 @@ remain unchanged because product authority, wire semantics and storage topology 
 - Handle expansion/revocation has one state owner.
 - Concrete adapters are composed only by `eliot-searchd`.
 
-## Explicit non-splits
+## Historical non-splits
 
 `search-publication`, `search-exact`, `search-retention` and the baseline `search-safe-reader` remain
 unified while each has one causal owner. Their assignments contain mandatory split triggers before the

@@ -1,9 +1,9 @@
 # ADR 0001 — Capability boundaries and Cargo packaging
 
 - **Status:** accepted
-- **Date:** 2026-08-28; packaging clarification 2026-10-17
+- **Date:** 2026-08-28; packaging/local-baseline revision 2026-10-18
 - **Scope:** implementation packaging only
-- **Architecture:** ELIOT Search 8.4, especially S5, S31 and H1
+- **Architecture:** [current local baseline](../architecture/README.md); 8.4 S5/S31/H1 are historical rationale
 
 ## Context
 
@@ -17,12 +17,13 @@ execution uses one source writer and narrow read/research/review subagents.
 
 ## Decision
 
-1. Preserve C00–C30 ownership and every Architecture 8.4 product invariant.
+1. Implement the current local responsibilities. C00–C30 does not require thirty owners or preservation
+   of requirements retired by the local-baseline architecture.
 2. Treat `search-runtime`, `search-source`, `search-prep`, `search-index-qdrant` and `search-query` as
    organizational families. Package boundaries follow demonstrated independence, not the cell count.
 3. Keep `search-domain` a small pure invariant kernel. Keep optional provider/ELIOT/Research leaves
-   separate where their dependencies and lifecycle differ. Public ports remain vendor-neutral;
-   composition belongs to the actual daemon owner, never forwarding crates.
+   separate where their dependencies and lifecycle differ. Keep vendor types in their effect adapter; pure transformations need no generic port framework.
+   Composition belongs to the actual application, never forwarding crates.
 4. Remove obsolete implementations and duplicate state/codecs before splitting or merging packages.
    Consolidation is valid when the remaining code has one actual owner and no independent boundary;
    inventory contracts, consumers, features and persisted bytes first. No arbitrary crate-count target.
@@ -37,8 +38,8 @@ Smaller owned mechanisms and explicit consumers matter more than file count. Cro
 one bounded manager slice under [EXECUTION_PROTOCOL](../product/EXECUTION_PROTOCOL.md). A package move
 alone does not count as code reduction or completed integration.
 
-This clarification changes packaging guidance only. Capability semantics, topology obligations,
-protocols and the embedded Architecture Part I body/hash are unchanged.
+The 2026-10-18 architecture additionally retires baseline mechanisms; this packaging ADR cannot preserve
+an unused owner on the strength of the old capability table.
 [Original accepted packaging record](https://github.com/UnknownAlienHuman/eliot-search/blob/927265d1dd71f3d355131f38ac73365e6558a77e/docs/adr/0001-capability-cell-crate-decomposition.md).
 
 ## Rejected alternatives

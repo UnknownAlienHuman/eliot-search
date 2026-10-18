@@ -3,7 +3,12 @@
 - **Status:** accepted
 - **Date:** 2026-08-29
 - **Scope:** P00 implementation projection and package ownership
-- **Architecture:** ELIOT Search 8.4 Part I is normative; Part II handoff is subordinate
+- **Current architecture:** [local-baseline decisions](../architecture/README.md) supersede the older mandatory domain, port and process requirements below.
+
+This ADR records the original contract/port ownership split. Reuse its delivered types where useful;
+it does not require a trait, canonical digest or conformance catalogue for every function. The current
+architecture governs removal of obsolete contracts and their producers/consumers together. Its decisions
+also replace the old accepted-handoff/API-digest prerequisites in the consequences section.
 
 ## Context
 

@@ -18,13 +18,15 @@ An SDK rename alone must not force daemon/query/control semantic changes.
 ## Dependency and verification boundary
 
 `qdrant-client` is the private exact workspace pin, with `default-features = false`.
-The daemon supplies the qualified endpoint and bounded auth lease. Preserve the
-[adapter boundary](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md) and its affected source guard:
+The daemon supplies the actual endpoint and credential. The
+[adapter boundary](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md) keeps Cargo/API checks but retires
+partial source analysis and old status coupling. The existing diagnostic command is:
 
 ```text
 cargo run --locked -p xtask -- validate qdrant-boundary --json
 ```
 
-The root protocol selects production checks and defers test/live execution until integration.
+That diagnostic's historical package-status/source-shape requirements are not merge gates. The root
+protocol selects actual production checks and relevant behavior tests after integration.
 Review mixed responsibilities and delete replaced tables/codecs; a line count does not justify a new
 crate, public facade or a file split with identical ownership.

@@ -1,140 +1,79 @@
-# Bounded implementation protocol
+# Implementation and review
 
-Maintainer instructions govern the task. [Root instructions](../../AGENTS.md) and Architecture Part I
-preserve product boundaries. Current handoff, [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352),
-the actual issue/PR and current source determine work readiness; dated maps do not override them.
-One manager writes and integrates. Subagents provide narrow read/research/review results.
+Maintainer instructions and the [current architecture](../architecture/README.md) govern the work.
+[#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) and the actual handoff identify the
+active manager. Preserve that manager's worktree/private WIP. One writer integrates code and dependency
+changes; subagents provide narrow research/review. Dated issue trains do not restart old branches.
 
-## 1. Work items and readiness
+## 1. Choose a useful result
 
-| Class | Result |
-|---|---|
-| PROGRAM | Capability obligations in an issue/document; no implementation branch. |
-| SLICE | One causal source result in one mergeable PR. |
-| FOLLOW-UP | An out-of-scope defect with owner, path/symbol, consequence and dependency. |
-| GATE | Evidence against exact candidate bytes; source fixes produce a new candidate. |
+Start with a real command, caller or concrete obsolete mechanism. Read its owner and immediate consumers.
+Explain in the existing issue/PR what will work, what is removed, what persisted data is affected and
+what verification resolves the actual risk. A prescribed form or approval to research is unnecessary.
 
-Programme closure is not a source-merge prerequisite. Required APIs/artifacts must actually exist.
-PROCESS/DOCS PRs contain no product source, manifests, lockfile or workflows; any source-changing PR is
-a SLICE regardless of label. Open PRs are merge candidates, never permanent tracking packets.
+An owner and its callers may change together when that completes and deletes an old path. Do not split
+necessary integration into unused facade PRs to meet a line/file quota. Split unrelated capabilities
+when they can ship independently. Finish a coherent change before opening a dependent source successor;
+do not displace the existing manager with overlapping writers.
 
-Before source edits, record once in the issue or PR body:
+## 2. Remove obligations as well as code
 
-```text
-class: SLICE
-base_sha / branch:
-primary_owner / state_or_effect:
-allowed_production_paths / narrow_adapters:
-immediate_reverse_consumers:
-non_goals:
-donor_or_spec_sources:
-persisted_profile_decision:
-replacement_or_deletion_boundary:
-minimum_check / minimum_clippy / affected_guards:
-deferred_test_cases / qualification_owner:
-known_baseline_failures:
-```
+General migration/rollback, six-domain residency, mandatory encryption, delegated local clients, durable
+handles and qualification-as-runtime-admission must not enter every implementation by inertia. Apply the
+current architecture decision, not a new exemption.
 
-Name a real owner and exact paths, not `bins/eliot-searchd/src/**`. One owner plus its immediate consumers
-may be changed together to cut over and remove a replaced implementation. This explicit closure
-supersedes generic package-only restrictions for those paths. It does not include unrelated legacy
-cleanup, new caller families or blanket feature activation.
+For stored data, say whether existing bytes remain readable or require a fresh format/generation.
+Rebuild derived projections; preserve original/sole retained bytes, keys and user configuration. An old
+format without a real retained-data/external consumer needs no online migration framework. Never silently
+reinterpret identities or erase old roots. Record a specific export need when it exists.
 
-For persisted bytes, digests, schema or generation changes, choose **BYTE_COMPATIBLE**,
-**VERSIONED_REBUILD**, **LEGACY_DECODE_ONLY** or **UNSUPPORTED_REQUIRES_MIGRATION** before coding.
-A retained decoder names the format, actual reader and deletion owner; it cannot mint new identities.
+Use the [reuse index](../audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) and actual upstream code. Reuse
+existing dependencies; inspect version/API/features when adopting a new one. A donor's mechanism does
+not require copying its application. Replace the mechanism and remove its last old consumers.
 
-For donor extraction, add the exact donor head, selected paths/commits, excluded changes, transitive
-symbols/callers and a reviewed extraction diff against current main. Old donor PRs are evidence, not
-merge bases. Use the [reuse index](../audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md); verify only the
-release/profile being adopted. Preserve required fixtures with their owning behavior.
+## 3. Implement and review behavior
 
-## 2. Freeze and review budget
+Complete the selected path before expanding optional capabilities. Review the integrated diff for
+incorrect results, data loss, missing callers and duplication. Add related work only when the result
+would otherwise be wrong; put independent remaining work in the existing issue.
 
-Publish `SCOPE_FROZEN` no later than the second source commit: ready fields above, exact base/head,
-public/private API delta, retained legacy/deletion owner and out-of-scope owners. A later comment cannot
-silently add another schema, lifecycle, recovery owner or caller family.
+There is no second-commit `SCOPE_FROZEN` ceremony, mandatory triage alphabet, review round count, prescribed
+subagent count or self-submitted formal GitHub review requirement. Get independent review when it helps
+resolve the change. New load-bearing code needs review; unchanged bytes need no fresh ritual. A security
+badge is not a product test or a reason to manufacture more infrastructure.
 
-Default split triggers are one primary owner, at most two narrow adapter families, 30 changed production
-files, 2,500 changed production lines, one persisted migration and one cross-owner cutover. Report
-fixtures/goldens/generated records separately. These are review triggers, not permission to omit
-correctness. Existing package size debt does not require forwarding crates or unrelated cleanup.
+## 4. Implement then verify the production closure
 
-If the result exceeds that budget, stop adding scope and either record a reviewed justification before
-further changes or define dependency-safe serial tranches. Open only the first source PR. Merge it,
-publish new main, then create its successor from that main. No stacked source PRs. A necessary scope
-change can instead return to the last frozen head and redefine the slice before continuing. After two
-proposed expansions, split/defer rather than adding another continuation.
-
-## 3. Finding triage
-
-| Class | Disposition |
-|---|---|
-| B0 | Direct same-slice correctness/safety blocker: declared caller does not compile, false authority, data corruption, access/disclosure widening, or an unsafe path that cannot remain unavailable/fail-closed. Name exact path, symbol, caller and causal chain inside the frozen closure. |
-| F1 | Same-owner follow-up; frozen result remains correct while affected behavior is unavailable, legacy-only or fail-closed. |
-| F2 | Adjacent owner, integration phase or other capability; assign there, do not absorb it by default. |
-| D | Unchanged baseline harness/lint/topology debt, with no new diagnostic/caller break/behavior regression. |
-| Q | Native/live-Qdrant/fault/scale/installed/release evidence; route to #215/#264 or the named gate. |
-
-Only a causal B0 inside the declared closure and review budget can enter a frozen slice. “Related to the
-programme” is insufficient. New candidate production failures cannot hide behind an old failing aggregate.
-Each subagent preserves these five dispositions or returns `NO_FINDING`; consolidate duplicates.
-
-## 4. Implement, then verify the production closure
-
-1. Preserve the active manager/WIP. Start the selected source branch from current `origin/main`.
-2. Use one pre-code pass of relevant research, with no mandatory subagent count or repeated whole-repo
-   audit. Manager independently checks load-bearing source claims and alone edits manifests/lockfile.
-3. Implement the real owner/caller result first. Delete the replaced API/writer/fallback with its last
-   consumers; preserve identified legacy readers. No dead facade, fake observation or exemption growth.
-4. Check the changed production owner and immediate consumers; run strict Clippy and affected guards.
-5. Review the integrated diff once, routing unrelated findings through the table above.
-6. Obtain independent review bound to the final head; merge the coherent slice after its declared gates.
-   Every successor starts from newly merged main. Read-only successor research may overlap final review.
-
-For library owners the usual commands are:
+Use pinned Rust 1.98, locked dependencies and actual production targets. Usually:
 
 ```text
-cargo +1.98.0 check --locked -p <owner> --lib --all-features
-cargo +1.98.0 clippy --locked -p <owner> --lib --all-features -- -D warnings
+cargo +1.98.0 check --locked -p <owner> --lib
+cargo +1.98.0 clippy --locked -p <owner> --lib -- -D warnings
 ```
 
-Select actual production targets and declared consumers. For daemon wiring, check its normal defaults
-and required `full-baseline` binary profile explicitly: `--all-features` also enables
-`legacy-loopback-harness` and is not the normal product configuration. Do not use broad `--all-targets`
-or full-workspace/test graphs as source gates.
+Select affected binaries/features and immediate consumers as needed. Daemon `--all-features` also
+enables old harnesses; it does not describe the supported application. The wave ladder is slated for
+removal. Do not make optional lifecycle/proofs baseline dependencies through `full-baseline`. Check
+still-supported features when relevant, not every historical combination.
 
-Reuse recorded baseline debt under #346/#189. If a production gate fails, compare relevant base and
-candidate diagnostics once. New production diagnostics block; identical unrelated debt is D. Do not
-repair a broken historical harness merely to turn an aggregate command green.
+After implementation, run focused behavior cases that can falsify its result. For integrated search:
+real indexing/retrieval/readback, update/restart/index loss, cancellation and scope exclusion. Record
+unexecuted native/Qdrant/scale cases honestly. A diagnostic run may explain a defect; broad repeated
+suites do not compensate for missing integration.
 
-Record the smallest causal unit/integration/native/crash/fault/resource cases in the deferred inventory.
-Compile and execute tests after the complete integrated implementation, against its exact candidate.
-A small diagnostic run to understand a defect is debugging evidence, not a merge PASS. Qualification
-failures return to their source owner and a new candidate; do not weaken expectations after results.
+If a relevant check fails, compare base and candidate once to determine whether the change caused it.
+Do not hide new failures in old warning totals or expand shrinking work into unrelated lint cleanup.
+Source-shape/token/file-size tests, source-hash ledgers, issue snapshots and committed coverage maps are
+no longer merge gates. Preserve actual byte/identity/output behavior and real dependency/unsafe-code
+checks; retire checks that only enforce the old layout/process.
 
-For reduction work, report added/deleted production code, fixtures, generated output and remaining
-callers separately. Moves and tiny forwarding modules do not count as eliminated behavior. A reused
-library removes only the mechanism it actually replaces; profile, access and lifecycle owners remain.
+## 5. Report what changed
 
-## 5. Review, reporting and closure
+Keep the existing PR body current: behavior delivered, mechanism removed, data disposition, meaningful
+commands/outcomes and remaining limitations. Counts support reduction claims; they cannot replace caller
+analysis. No parallel status registry, waiver, evidence ledger or progress comment is required.
 
-The PR body is the single current status record: frozen scope; exact base/head; changed owners/paths;
-delivered result; deleted/retained legacy; F1/F2/D/Q owners; exact commands/exits; candidate-versus-base
-diagnostics; deferred cases and evidence limits. Update at stable checkpoints, not a long comment per
-commit. Never claim execution at a revision where it did not occur.
-
-Before merge, a formal GitHub review must target the final head with no unresolved B0/P1 and explicit
-other dispositions. A load-bearing commit expires earlier review. In a single-owner repository, a
-formal COMMENT submission may record independent reviewer evidence and manager disposition; it is not
-self-approval or an independent reviewer identity by itself. A security badge alone is insufficient.
-
-Close an implementation issue when its declared source result is merged and residual obligations have
-current owners. A programme can remain open across those deliveries. Historical tracking/gate PRs stay
-closed after their useful obligations are preserved in issues/docs; never branch from them or create a
-replacement tracking PR. In particular, closed unmerged #344 is a donor at
-`6d698eafa573e7a8a5eb9dca6ce17ae7878c3bce`; its old #351 → #354 → #235.core train is not today's queue.
-
-Keep Actions manual-only and do not commit local paths, credentials, source captures or unredacted logs.
-Compilation, source presence, mock results and issue/review status do not establish runtime acceptance.
-Exact native/Qdrant/recovery/scale/installed qualification and explicit publication remain separate.
+Close implementation issues when their real result is delivered. Programmes may remain open for useful
+remaining capabilities; optional work is not a prerequisite merely because an issue exists. Keep this
+documentation preparation separate from the active source PR and Actions manual-only. Release/external
+publication remain explicit actions. Never describe compilation or a mock as runtime success.

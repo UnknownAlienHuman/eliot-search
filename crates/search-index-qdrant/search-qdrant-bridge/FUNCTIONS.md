@@ -8,6 +8,12 @@ actual consumer effects and live evidence remain #263/#264.
 Public operations use Eliot-owned contracts and ports. Vendor types stay private. This file records
 the required behavior and the concrete mismatch; its operation names do not require another facade.
 
+**Target simplification:** the [current local architecture](../../../docs/architecture/README.md) removes
+executed qualification reports from runtime connection prerequisites and exact counts from ordinary
+top-k. Change the current API and its callers rather than supplying fabricated `QualifiedGate` receipts.
+`real::blocking::BlockingRealQueryPlane` already owns a reusable Tokio runtime; use it. The shared
+payload/S11 mapping below describes actual existing types, not a mandate for another compatibility layer.
+
 ## Shared payload and identity cutover
 
 The [old payload](src/mutation.rs) has nine fields; the shared
@@ -58,14 +64,14 @@ UUID, address or copied digest. Use the existing S11 comparator; remove the loca
 
 | Operation | Required behavior |
 |---|---|
-| Connect/probe | Consume exact supervisor process/incarnation/endpoint identity and a bounded auth lease; never discover/start the process. Require the executed capability evidence for the selected exact pair/profile before live route admission. |
+| Connect/probe | Consume exact supervisor process/incarnation/endpoint identity and a bounded auth lease; never discover/start the process. Check actual installed/connected server capabilities and schema; executed qualification reports belong to evaluation/release, not runtime credentials. |
 | Create/verify collection | Create one opaque non-admitted physical generation, every mandatory shared payload index, exact vector/strict/settings profile, then read back schema/settings/metadata before admission. Version strings alone prove no schema identity. |
 | Upsert | Exact point IDs, full identity/collision checks, bounded canonical input, `wait=true`, strong ordering and exact readback. Same mutation identity/input is idempotent; changed input conflicts. Durable operation authority belongs to publication/control, not a process-local map. |
 | Close/delete | Operate only on the exact bounded ID list. Close uses the shared exclusive epoch boundary. Broad-filter closure/deletion is absent from the correctness API; ordinary delete does not produce a security-purge receipt. |
 | Readback | Return exact address/identity coordinates, closed S9.5 payload and actual named vectors, with explicit missing/unexpected IDs. Keep manifest-held expected vector digests separate from Qdrant payload metadata. |
-| Query/count/scroll | Compile the accepted closed eligibility AST privately. Retrieval and `idf.corpus` use the same canonical base plan; unsupported/unindexed filters fail rather than scan. Results are bounded nominations, never source evidence. |
+| Query/count/scroll | Compile the accepted closed eligibility AST privately. Retrieval and `idf.corpus` use the same canonical base plan; unsupported/unindexed filters fail rather than scan. Ordinary top-k does not require exact count. Requested counts use the same scope. Results are bounded nominations, never source evidence. |
 
-Each admitted operation binds exact physical name, generation, schema/profile, qualified artifact/pair,
+Each admitted operation binds the actual physical name, generation, schema/profile, connected artifact/pair,
 settings and required route revision/incarnation. A truncated generated name or reconstructed local cache
 is not durable authority. The enabled sparse/dense profile must match what the adapter actually serves.
 

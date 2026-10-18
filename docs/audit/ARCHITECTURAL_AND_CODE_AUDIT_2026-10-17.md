@@ -1,28 +1,32 @@
-# ELIOT Search — Gemini audit verification and refactoring preparation
+# ELIOT Search — architecture, code and donor audit
 
 **Verification dates:** 2026-10-17–18. **Source baseline:** c8e38b6fc9829f1cd38070773b1b3e5b21de18ad,
 the Gemini documentation commit over 239c572348dc6491f97de65464e889d41e25da80 (PR #609).
 [Original Gemini report](https://github.com/UnknownAlienHuman/eliot-search/blob/c8e38b6fc9829f1cd38070773b1b3e5b21de18ad/docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md).
 
 This revision verifies and corrects that report; it does not assert that its proposed repairs have landed.
-Architecture 8.4 Part I and accepted ADRs define product semantics. This document is source evidence and
-a bounded work map, not a second architecture, a launch prerequisite or the live writer queue.
+The [current local architecture](../architecture/README.md) now replaces the baseline obligations that
+caused unnecessary migration, security and process machinery. This document records source evidence and
+reduction decisions; it does not assign another writer or claim that the code has been changed.
 Use [EXECUTION_PROTOCOL](../product/EXECUTION_PROTOCOL.md) for implementation and
 [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) for the current manager handoff.
 
 ## 1. Result and review scope
 
-The main problem is incomplete composition of existing owners into a working indexed product.
-The repository has real source-admission, canonical hashing, S11 identity, planner and publication
-admission implementations. It also retains obsolete implementations, noncryptographic semantic
-fingerprints and disconnected daemon compositions. Reimplementing the delivered owners would add
-another parallel implementation.
+The main problem is architectural: a single-user search tool was made dependent on a much broader
+ownership, migration, key-lifecycle and evidence platform before its indexed query path worked.
+Incomplete composition and duplicated mechanisms are consequences of that scope. The earlier preparation
+preserved too many requirements and concentrated on small wrappers/documentation. This pass changes
+those requirements and names the actual mechanisms to retire.
 
 Reviewed: Part I, all ADR files (including the two differently scoped ADR 0003 files), root/package
 instructions and execution maps; Cargo targets/features; daemon dispatch and relevant source-reader
 paths; canonical/S11/planner/publication/bridge boundaries; the audit's digest sites; and current
 #259/#260/#262/#329/#352/#598 context. This is a targeted static review, not a line-by-line review of all
-Rust files. No compile, Clippy, test, Windows or live-Qdrant execution is claimed by this preparation.
+Rust files. This pass also traces migration/restore, local root admission, revision encryption and key
+selection, actual query/transport reachability, operation budgets and source-shaped tooling. Upstream
+ripgrep, Tantivy, Qdrant client, Serde and Tokio source was read for concrete alternatives.
+No compile, Clippy, test, Windows or live-Qdrant execution is claimed by this preparation.
 
 ### Measured size at the source baseline
 
@@ -56,6 +60,7 @@ Paths and line anchors below refer to the source baseline, not an assumed future
 | Area | What the code actually establishes | Refactoring consequence |
 |---|---|---|
 | Daemon spine | [Cargo targets/features](../../bins/eliot-searchd/Cargo.toml#L17) select entry.rs and default wave1-shell. [Entry dispatch](../../bins/eliot-searchd/src/entry.rs#L106) serves DIRECT/config/provider paths; the indexed compositions are not connected into source → Qdrant → validated result. | Complete concrete composition. Changing a feature default only changes compilation; it is not runtime wiring or readiness. |
+| Already delivered query mechanisms | [BlockingRealQueryPlane](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/blocking.rs) owns one reused Tokio runtime; [evidence types](../../crates/search-contracts/src/evidence.rs) and [provider schema](../../crates/search-provider-protocol/src/frame/client/evidence_schema.rs) implement #213. | The older docs/comments calling these absent are wrong. #213 is closed; connect serving rather than repeat a contract/runtime implementation. |
 | Local lexical index | [Legacy main](../../bins/eliot-searchd/src/main.rs#L5) owns [local postings](../../bins/eliot-searchd/src/lexical/mod.rs#L53). Cargo declares that source and six sealed CLI sources as test harness targets, not production binaries. | Remove obsolete harness implementations after mapping their shared modules and useful regression cases. Do not describe this as a demonstrated live production fallback. |
 | Semantic fingerprints | [Eligibility digest](../../crates/search-query/search-access/src/lib.rs#L918) uses four noncryptographic lanes; related sites remain in eval, reclaimer, lexical fingerprints, retention and source records/views. | Replace each semantic producer in its owner, with an explicit preimage/profile and consumer disposition. Do not bundle all owners into one PR. |
 | Eligibility collision example | The function returns EligibilityPlanDigest, not Blake3Digest32. Its inputs are membership/projection IDs, partition digests, route/epoch and security generations; the audit's collection_alias/namespace/partition string example does not describe this function. | The noncryptographic algorithm is confirmed. The audit's quoted trivial multi-field collision is not a demonstrated valid-input exploit. |
@@ -68,7 +73,7 @@ Paths and line anchors below refer to the source baseline, not an assumed future
 | Synthetic deletion receipt | [confirm_absent_delete](../../bins/eliot-searchd/src/secret_composition/kernel/revocation.rs#L75) checks actual absence, then creates constant A5 evidence. No entry/secure-command/owner caller of this composer was found. | Compiled but disconnected composition debt. Delete it or bind evidence to the real effect/operation before activation. Do not claim the current daemon executed the fabricated receipt. |
 | Fixtures/profile fallback | [FakeGuards](../../bins/eliot-searchd/src/publication_composition/kernel/guards.rs#L40), [build_test_export](../../bins/eliot-searchd/src/restore_composition/kernel/fixture.rs#L12) and the [zero-profile wrapper](../../bins/eliot-searchd/src/access_composition/grant_authority/admission.rs#L110) remain in composition source. Query serving uses the explicit for_profile variant; no production call to the zero-profile wrapper was found. | Remove unused wrappers or test-gate true fixtures; require real profile observations before activating a consumer. Presence in src alone is not runtime reachability. |
 | Handwritten SHA-256 | Three sha256.rs implementations remain in daemon, document worker and Qdrant supervisor. Their APIs/protocols explicitly require SHA-256. | Reuse the accepted hashing owner/sha2 while preserving exact bytes. Replacing SHA-256 with BLAKE3, or adding framing to raw hashes, would corrupt compatibility. |
-| Ledger | The ledger records 5,960 classified sites, including 1,770 test-vector entries. It is not a list consisting entirely of fake hashes. | Remove resolved migration/removal entries with their source change. Preserve valid product checks; do not grow exemptions or require every unrelated site to be repaired whenever a file is touched. |
+| Ledger | The ledger records 5,960 classified sites, including 1,770 test-vector entries. It is not a list consisting entirely of fake hashes. | Retire the exhaustive per-site ledger/issue-state gate. Keep concrete hash/identity behavior tests and actual dependency checks; see §7. |
 
 ### Digest repair boundaries
 
@@ -82,6 +87,11 @@ sparse bucket mapping, not a cryptographic identity. S12.2 permits measured term
 SparseFingerprint must not silently change term indexes or reinterpret previously built vectors.
 A new term mapping needs its own qualified profile/generation.
 
+Before repairing a hash producer, determine whether its plan/receipt/cache should exist at all. Delete
+unused evidence plumbing with its consumers. Recompute transient state or rebuild projections after an
+intentional format change; an unshipped legacy format does not automatically deserve a migration engine.
+The following rows describe existing bytes and real risks, not a mandate to preserve every old profile.
+
 The remaining owner map is #288 (eligibility), #233 (evaluation), #303 (index reclaim), #252
 (lexical fingerprints), #302 (retention), #270 (source admission/view) and #272 (membership).
 These are existing obligations, not newly issued source tasks. Persisted consumers must be identified
@@ -93,108 +103,97 @@ before choosing preserve-bytes versus new-profile migration.
 | [Reclaim plan](../../crates/search-index-qdrant/search-index-reclaimer/src/plan.rs#L107) | ReclaimPlanDigest is carried by receipts/checkpoints. Old work must be explicitly invalidated/replanned or migrated; an equal new field name is not replay compatibility. |
 | [Sparse fingerprint](../../crates/search-lexical/src/sparse/fingerprint.rs#L13) | SparseFingerprint is separate from token indexes. Profile/evidence equality changes even if vectors remain numerically unchanged. |
 | [Retention marks](../../crates/search-runtime/search-retention/src/sweep.rs#L774) | Protection/mark digests fence deletion. Resolve outstanding sweep intent/mark generations safely before switching profiles. |
-| [Membership ID](../../crates/search-source/search-source-records/src/membership.rs#L215) | A 64-bit FNV value plus its complement becomes a SourceMembershipId; the stored batch decoder recomputes this legacy formula. In-place rehashing would break journal/reverse-index identity. Require a versioned key/reader migration. |
+| [Membership ID](../../crates/search-source/search-source-records/src/membership.rs#L215) | A 64-bit FNV value plus its complement becomes a SourceMembershipId; the stored batch decoder recomputes this legacy formula. In-place rehashing would break journal/reverse-index identity. Use a new format/root or a specific retained-data import; do not automatically require online migration. |
 | [Workspace view ID](../../crates/search-source/search-source-registry/src/view.rs#L223) | Derived currentness token. Verify external cursor/reference retention before treating it as purely transient. |
 
-## 3. Why the current instructions can reproduce the problem
+## 3. What the previous preparation got wrong
 
-These are causal risks supported by the instruction/code mismatch, not a claim that crate count alone
-caused the defects.
+- **It treated 8.4 Part I as untouchable.** S0/S2 exclude an authority service and multi-user tenancy,
+  while S6.3/S7.2.1 impose six-domain residency and bilateral source-owner transfer. Protecting that
+  whole requirement set was not a prerequisite for safe local search.
+- **It optimized the bureaucracy.** Compressing repeated ledger hashes by 12% keeps the unnecessary
+  per-site catalogue. The useful question is whether the gate catches a real behavior defect at all.
+- **It preserved compatibility by default.** Migration staging has no serving cutover, yet its receipts,
+  inventories and rollback forms became a programme of their own. The workspace version is `0.0.0` and
+  the [GitHub release list](https://github.com/UnknownAlienHuman/eliot-search/releases) was empty when
+  checked. This does not prove there are no user installations; it provides no evidence of a released
+  compatibility promise either. Preserve actual user data and make the pre-release format policy explicit.
+- **It missed delivered source.** #213 types/provider schemas and the blocking Qdrant runtime exist.
+  Docs saying they still need creating were stale. The actual gap is the real end-to-end caller.
+- **It kept review structure as an implementation target.** A one-owner quota, scope freeze, formal
+  review record and source-layout assertion can all be satisfied while query composition stays dead.
+  The new programme asks for useful behavior and deletion, with verification of concrete risks.
 
-- **Source presence substitutes for integration:** a pure owner can be complete while its real caller is
-  absent. New facades and constructor-shaped proof do not complete that missing caller.
-- **Historical issue bodies restart delivered work:** at review start, #259/#260 described old defects
-  despite the planner port and PR #605. A blanket dependency on issue closure hides available APIs.
-- **Unbounded cleanup contradicts bounded delivery:** “fix every exemption in a touched crate,” “delete
-  every legacy family,” and “wire every module” turn a local repair into a multi-owner rewrite.
-- **Old scheduling text competes with actual source:** the 10/09 launch/matrix and completion snapshots
-  predate the present branch. They cannot restart #351/#354 or override the existing #598 manager.
-- **The audit overstates evidence:** harness code, dormant composition, live diagnostics and admitted
-  production paths need different treatment. Otherwise agents fix the wrong surface.
-- **Micro-packaging became a delivery proxy:** Part I S5/S31 permits real capability boundaries, not a
-  crate per type or forwarding facade. Remove duplicate state, codecs and obsolete paths first.
-  Consolidation needs a demonstrated shared owner/dependency boundary, not an arbitrary crate-count target.
+The [current architecture](../architecture/README.md#8-requirements-retired-from-the-local-baseline)
+records the decisions. They are not exceptions requiring a new waiver or another audit registry.
 
-Do not weaken source truth, live deny/purge, unknown-outcome handling, one Qdrant backend, bounded
-control storage or native identity to make a slice appear finished.
+## 4. Mechanisms to retire or simplify
 
-## 4. Small source slices using existing issues
+Counts are tracked physical newline counts at c8e38b6, not production LOC or promised net deletions.
+Inline tests/comments/blank lines remain included. Areas overlap; do not sum them as a deletion total.
 
-These are preparation cards, not a new mandatory train. #352 still coordinates one source writer;
-#598 retains its current work and unpublished WIP. No source branch is assigned by this report.
-For each selected card, verify the current main and immediate callers, then record the existing
-Definition of Ready. A whole row/issue is split again if it exceeds the existing review budget.
-
-| Card / existing issue | Owner and bounded change | Required input / deletion boundary |
+| Mechanism and source evidence | Actual state / cost | Decision for local search |
 |---|---|---|
-| R1 / #329 | search-point-identity: remove root legacy digest/key/registry APIs and their obsolete fixture imports; keep s11. | Current planner/publication already use s11. Census all callers; freeze the existing legacy encoded-key bytes as a test vector and preserve S11 rejection without the legacy producer. Retain a decoder only for an identified stored format and reader. No dual hashing, point relabeling or new identity implementation. |
-| R2 / #262 | search-qdrant-bridge: adopt s11 PointId128 throughout the existing bridge identity API and necessary immediate consumer call sites. | Shared S11 is present. Delete QdrantPointId instead of adding a second public facade. Keep private vendor conversion and full S11 key/profile validation; numeric vendor IDs cannot be silently padded into S11 addresses. See the [shared cutover contract](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#shared-payload-and-identity-cutover). Daemon query_composition.rs is a known immediate consumer, not a daemon-wide scope. |
-| R3 / #262 | search-qdrant-bridge: replace copied payload/schema/eligibility/epoch representation with search-contracts::indexed and private vendor conversion. | #258 is present. Consume the planner's exact shared payload CBOR, the 19-index baseline and integer range. Old revision/ordinal/digest fields are not aliases; remove vector_digest_* payload extensions and use separate manifest evidence. Retain private vendor conversion; no silent persisted reclassification. |
-| R4 / #262, then #263 | search-qdrant-bridge: bind operation dispatch to exact admitted generation/schema/artifact observations. | R2/R3 APIs; current control/supervisor observations. A process-local cache is not durable replay authority. Static admission and actual live verification remain distinguishable. Live effect wiring is a separate #263 slice. |
-| R5 / #288 | search-access: replace derive_predicate_digest with one bounded canonical semantic preimage and real BLAKE3. | Inventory every EligibilityPlanDigest consumer/cache before fixing the profile. Keep request admission read-only. No registry, daemon or query-engine rewrite. |
-| R6 / #316 | Existing shared hash owner plus the named materializer consumer: complete the bounded exact-stream BLAKE3 migration. | Preserve the accepted exact-byte profile and operation budget; do not buffer an entire large object or create another generic hashing framework. |
-| R7 / #315 | Daemon SHA-256 and its exact callers: consume the shared bounded stream owner, preserving RAW/PARTS_V1 framing. | R6's stream mechanism as specified by the existing issue. Document-worker and supervisor replacements are separate owner slices. No blanket algorithm change. |
-| R8 / #274 | Daemon access composition: delete the unused compile_standalone_pre_retrieval zero-profile wrapper and its re-export; migrate its remaining test callers to explicit profile inputs. | query_composition/serving.rs already uses compile_standalone_pre_retrieval_for_profile. Preserve that path and its live checks. No new profile issuer, query rewrite or production test constant. |
+| [Daemon migration](../../bins/eliot-searchd/src/source_migration_command.rs), [cutover](../../bins/eliot-searchd/src/control_migration_cutover/operation.rs), [redb migration](../../crates/search-control-redb/src/migration/mod.rs) | Daemon `src` families: 33 files / 12,182 lines; redb migration: 31 / 10,976. Combined **64 / 23,158**, including 5,247 lines in 16 test-named files. Commands stage inactive artifacts. Cutover is uncalled and explicitly defers serving reroute; rollback is not a working reversal of an adopted store. | Retire general staging/cutover/rollback. Use fresh-format rebuild; a specific non-destructive export only for actual retained data. Preserve source originals, sole revision copies, configuration and keys. |
+| [Revision crypto](../../crates/search-runtime/search-revision-crypto/src/lib.rs), [DEK selection](../../crates/search-runtime/search-os-secrets/src/revision_selection.rs), [active storage](../../bins/eliot-searchd/src/secure_direct_store/kernel/lifecycle.rs) | Active DIRECT storage uses RevisionProtector/Windows DPAPI. AES-GCM crate: 521 lines, no Rust import/dependency from a consumer. Five DEK candidate/selection/Windows/daemon files: **2,449 lines**. They publish/select metadata; no call connects the selected DEK to that AEAD crate. C07's [contract](../../crates/search-source/search-revision-store/FUNCTIONS.md) says there is no CAS implementation yet. | One consumed store design. New local storage may use ACLs + immutable verified snapshots. Encryption is selected for an actual confidentiality need; preserve existing encrypted roots/keys. Do not extend unused key machinery before a writer uses it. |
+| [Generic secret lifecycle](../../crates/search-runtime/search-os-secrets/src/lifecycle.rs) and [pairing composer](../../bins/eliot-searchd/src/secret_composition/kernel/composer.rs) | Lifecycle file plus composition subtree: 10 files / **2,789 lines**, including 411 test-named lines. No production construction of PairingSecretComposer was found. The [real pairing credential path](../../bins/eliot-searchd/src/access_composition/native_binding/opening/credential.rs) directly uses the Windows adapter. | Remove uninstantiated catalogue/lease/rotation composition. Keep concrete secret storage for Qdrant or a selected restricted-client/encrypted feature. |
+| [Root snapshot](../../bins/eliot-searchd/src/owner_composition/kernel/native_snapshot.rs), [co-locks](../../bins/eliot-searchd/src/owner_composition/kernel/native_admission.rs), [request accounting](../../bins/eliot-searchd/src/owner_composition/kernel/native_request.rs) | Two owner slots, adjacent generation checks, current executable digest, two OS lock files, argv digest/entropy and per-native-call/canonical-byte accounting. `native_request.rs` alone has **1,097 lines**, including inline tests. The second lock excludes the old sealed owner. | One OS lock + root identity + transactional control state. Remove executable continuity and the second co-lock with the old writer. Keep real I/O/allocation/deadline limits, not generic per-call ceremony. |
+| [Source admission](../../crates/search-source/search-source-admission/src/lib.rs), [native source output](../../bins/eliot-searchd/src/owner_composition/kernel/native_source_command.rs), [registry cutover](../../crates/search-source/search-source-registry/src/cutover.rs) | Admission package: 8 files / **9,992 lines**, including inline tests. Native-v2 command explicitly reports admission only, no retained revision/body serving. Namespace transfer APIs have no ordinary ingestion/query caller. | Explicit local roots, excludes, no-follow containment and stable read; one local namespace. Six-domain policy/transfer is not the baseline. Do not remove the real contained-reader boundary. |
+| [Query registry/service](../../bins/eliot-searchd/src/query_composition/registry.rs), [executor](../../crates/search-query/search-retrieval-executor/src/indexed.rs) | Query composition family: 5 files / **1,643 lines**. Real query leg has no normal application caller. Executor unconditionally calls `count_exact` after nominations. | Concrete query/readback/validate/result flow. Ordinary top-k is explicitly non-exhaustive; count/proof becomes an explicit operation. Remove the implied `CompleteCandidateScope`/denominator contract with the count call. No new generic handler registry. |
+| [Qdrant gate](../../crates/search-index-qdrant/search-qdrant-bridge/src/qualified/gate.rs), [connect](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/connect_schema/connect.rs) | `RealDataPlane::connect` requires QualifiedGate; its constructor checks a caller-supplied record of 13 probe names/booleans. A typed receipt cannot itself prove that probes ran. Actual endpoint/version/auth/schema checks are separate. | Keep live operational checks; move executed qualification reports out of runtime construction. Do not manufacture a passing receipt to bypass the current API. |
+| [Optional restore composition](../../bins/eliot-searchd/src/restore_composition.rs) | 10 files / **937 lines**, including 44 test-named lines; wave-gated and no normal production caller found. S28.2 already calls paired restore optional. | Remove/defer accelerated restore. Rebuild projections; preserve actual registry startup restore and user-owned revisions. |
+| [Custom Rust source checker](../../xtask/src/qdrant_boundary/source.rs), [module graph](../../xtask/src/qdrant_boundary/source/module_graph.rs) | Source-checker file/subtree: **16 files / 3,293 lines**, including 532 test-named lines (other regression files also contain tests). It reconstructs import/alias/module and public vendor-type reachability. Its documented unsupported Rust forms still need compiler/review. | Retire this partial analyser. Use existing Cargo metadata for dependency ownership, private Rust adapter visibility and review of the real API. Do not replace it with another taint framework. |
+| [Source-shaped tests](../../bins/eliot-searchd/tests/rebuild_composition_module_ownership.rs) | **64 `*_module_ownership.rs` files / 7,965 lines**. The sampled rebuild test asserts module names, byte limits, string fragments and absence of transport tokens in the composition. This is an area inventory, not a claim that every assertion in all 64 files is useless. | Retire layout/token assertions that fossilize the implementation. Keep behavior/dependency boundaries that catch real regressions. |
 
-Other digest producers use the owner map above, each as a separate source repair. Disconnected A5,
-FakeGuards, test-export and zero-profile wrappers are fixed or removed in their owning cutover, before
-becoming reachable. A constant fixture in a test is not a production cryptographic producer.
+The five DEK files are `revision_candidate.rs`, `revision_selection.rs`, Windows
+`credential/revision_dek.rs`, and daemon `native_dek_command.rs`/`native_dek_selection.rs`.
+The migration count excludes four daemon process-test files (1,678 additional lines); it includes
+standalone tests nested in the two measured `src` families. No private #598 WIP was inspected.
 
-For #267, preserve the existing qualified native acquisition. Any remaining diagnostic-adapter cleanup
-must start from actual callers and its explicit diagnostic contract, not the audit's unproved ingestion
-exploit. Do not duplicate #598's registered-root/body-custody work.
+### A concrete deadline defect hidden by all the accounting
 
-Legacy harness removal is a separate deletion sequence: map the seven Cargo test targets and shared
-modules, preserve only meaningful regression inputs/cases, remove one obsolete family, and check its
-remaining consumers. Do not issue a blanket deletion of sealed_*, snapshot or plaintext stores while a
-current/legacy reader still uses them.
+The shared [OperationContext](../../crates/search-ports/src/context.rs) has a relative duration and a
+cancellation-only `preflight`. The bridge's [OpContext](../../crates/search-index-qdrant/search-qdrant-bridge/src/real.rs)
+also stores a `Duration`; [query](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/queries/search.rs),
+[readback](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/queries/readback.rs),
+[count](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/queries/count.rs) and
+[scroll](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/queries/scroll.rs) each start a
+fresh `timeout(context.deadline(), ...)`. Reusing this context does not enforce a total request deadline;
+a sequence may consume several full per-operation durations unless a caller separately reduces them.
+This is a source-level limit of the API, not a measured incident in the unwired public Qdrant path.
 
-## 5. Actual product integration that remains
+Convert the request deadline once to an absolute instant and pass the remaining budget/`timeout_at`
+through real calls. Tokio already supplies this mechanism; no new budget framework is required.
 
-Preserve delivered S11 (#256), UnitSet (#257), indexed contracts (#258), planner algorithm/complexity
-repairs (#259/#519), publication admission (PR #605), lexical operation-budget work (PR #608) and static
-Qdrant artifact admission (PR #609). Their exact prior evidence is not a new runtime qualification.
+## 5. The useful integration and donor conclusions
 
-Continue the existing source spine from #598: one admitted held source body → protected immutable object
-→ durable occurrence/head/residency/retention link → exact reopen. Then advance the actual preparation,
-ingestion and coherent-view consumers (#330/#331/#270/#271) using those outputs, without redoing their
-already delivered substeps.
+| Existing mechanism | Complete this consumer |
+|---|---|
+| Native held-source work / current revision preparation | Real retained snapshot → exact reopen → materialization/UnitSet. Keep #598's manager and reusable work. |
+| S11/planner/publication plus actual Qdrant transport | One coherent contract/manifest → bounded real write/readback → committed route/epoch. |
+| `BlockingRealQueryPlane` and delivered evidence schema | Real CLI/provider query → pinned scope → nominations → exact source validation → useful snippet/location. |
+| DIRECT/exact scanning | Explicit exhaustive verification; don't force it into every top-k request. |
+| redb + OS file lock | One local owner and committed state; reset/rebuild for incompatible derived formats. |
 
-The remaining integration is composed from these existing owners:
+[Upstream source comparison](DONOR_VERIFICATION_REGISTER_2026-10-09.md#2-architecture-donors-read-in-source):
+ripgrep shows one parsed invocation and concrete dispatch; Tantivy shows one writer/commit and a cheap
+query snapshot; Qdrant's Rust example demonstrates direct client/upsert/filtered-query calls; Serde and
+Tokio already provide serialization and absolute timeouts. These are mechanisms to reuse, not proposals
+for another search backend or for copying a donor application's full architecture.
 
-| Boundary | Existing work | Concrete result |
-|---|---|---|
-| Publication | #261, #262/#263, #333 | Actual owner observations → durable intent → exact Qdrant effects/readback → guarded redb VisibleEpoch and route. Qdrant alias change is not the commit point (S13.4). |
-| Source-backed query | #288/#274, #290/#291, #293/#294, #279/#280 | One coherent access plan → real retrieval → exact retained-source validation → bounded provider response. No post-filter-only access or source snippets taken from Qdrant. |
-| Feature/startup cutover | Daemon integration under the existing programme | Connect baseline callers, remove obsolete facades, then make the required indexed capability set available in the normal build. DIRECT remains usable while Qdrant is unavailable; build features do not assert readiness. |
-| Agent recipes | #213, #281 | Versioned free-text retrieval/orientation. Preserve existing v1 semantics; no raw Qdrant surface. |
-| Qualification | #215/#264 and named owners | Integrated Windows/Qdrant/restart/fault/scale/installed evidence after the complete implementation exists. |
-| Tooling cleanup | #214/#525 | Current xtask has no ticket/lease issuer commands. Remove historical policy/derived-output coupling and repeated ledger hashes with their consumers; preserve real product validators. Independent product work is not blocked on this cleanup. |
+The full source-backed path is the implementation result. Orientation/comparison/documents extend it;
+key rotation, provider ownership transfer and optional restore no longer precede it automatically.
 
-These integration rows are programme boundaries, not single mergeable tasks. A selected slice names one
-state/effect transition, exact existing inputs, immediate consumers, persisted-byte disposition and
-what becomes reachable. Do not require completion of every crypto/lifecycle/optional profile first.
+## 6. Verification of the implementation
 
-## 6. Implementation acceptance
+This preparation edits documentation/programme decisions. No Rust behavior has been changed or tested.
+When the manager implements a source result, check the changed production owner and real consumers,
+then test the integrated behavior that could fail: indexing/hit/readback, changed bytes, restart/index
+loss, scope exclusion, cancellation and bounded output. Use live Qdrant/native evidence for those claims.
 
-Use one manager worktree and read/research/review subagents. Implement the selected causal result first.
-Use the pinned Rust 1.98 toolchain and the smallest production closure:
-
-    cargo +1.98.0 check --locked -p <library-owner> --lib --all-features
-    cargo +1.98.0 clippy --locked -p <library-owner> --lib --all-features -- -D warnings
-
-For changed daemon wiring, select its binary and the actual required feature set; inspect the normal
-default and full-baseline build separately. --all-features also includes legacy-loopback-harness and
-must not be presented as the normal product configuration.
-
-Run no broad all-target/test/native/fault suites as a source-merge gate. Record required integrated
-cases and execute them after the implementation is complete. New production diagnostics or a new
-unsafe reachable path block; inherited unrelated debt is recorded once. Existing size debt does not
-force a shrinking slice to repair an entire package.
-
-Finish with one independent review of the final source head, checking actual callers, removed duplicates
-and the stated compatibility boundary. No audit, ledger, label, mock result or successful compile
-establishes product readiness.
+A fake callback, passed layout assertion, scope form, code count or review badge is insufficient. Preserve
+real exact-byte/hash/collision/recovery behavior checks; retire tooling whose purpose is the old layout
+or an exhaustive classification catalogue. Report remaining limitations and user-data disposition.
 
 ## 7. Measured reduction work
 
@@ -232,9 +231,10 @@ migration. `sealed_digest`, `sealed_owner_epoch`, `sealed_root_identity`, `seale
 ### CLI: existing client plus 2,031 lines of legacy candidates
 
 The [CLI linkage map](../../bins/eliot-search/FUNCTIONS.md#current-source-and-missing-linkage) separates
-delivered #235 session/native connection owners from absent product registration input, daemon listener
-and supported native command callers. Default dispatch already rejects old endpoint commands;
-`legacy-loopback-harness` is not the normal provider path. #332 owns the actual cutover.
+delivered #235 session/native connection owners from the unconnected registration/listener/callers of
+the paired native profile. Existing DIRECT already uses owned child stdio; the local baseline need not
+wait for that optional restricted profile. Default dispatch rejects old endpoint commands;
+`legacy-loopback-harness` is not the normal provider path. #332 connects actual supported local commands.
 
 | Disjoint candidate group | Exact current inventory | Removal boundary |
 |---|---:|---|
@@ -256,8 +256,8 @@ opportunity is unnecessary policy and stored derived output, not deletion of all
 |---|---:|---|
 | Architecture coverage, coverage graph and package-map source families | 49 files / 9,090 Rust lines | Mixed candidate area under #214; retain actual product invariants while removing duplicate historical policy and generated-map requirements. This is not 9,090 proven removable lines. |
 | Entire `swarm/coverage` subtree | 205 TOML files / 152,921 lines / 5,146,354 bytes | Mixed reviewed inputs and generated outputs, not a deletion set. Architecture/capability/invariant/port/schema/recipe/delivery registries are loaded as validator inputs. They are not product source or 152,921 product defects. |
-| Generated `swarm/coverage/package-maps/**` subset | 180 TOML files / 78,804 lines / 2,588,784 bytes | Concrete generator-owned output. Stop requiring committed maps before deleting them; change generator/validator/manual workflow consumers together. Preserve required source registries or explicitly redesign their loader/validation contract. |
-| Qdrant, canonical-digest and integration-bootstrap source families | 35 files / 7,728 Rust lines | Preserve their real vendor/dependency/hash/toolchain/layout checks. Narrow individual checks only with evidence, never bulk-delete xtask. |
+| Generated `swarm/coverage/package-maps/**` subset | 180 TOML files / 78,804 lines / 2,588,784 bytes | Concrete generator-owned output. Stop requiring committed maps before deleting them; change generator/validator/manual workflow consumers together. Remove obsolete policy inputs as well as outputs when their validator requirement is retired. |
+| Qdrant, canonical-digest and integration-bootstrap source families | 35 files / 7,728 Rust lines | Keep actual Cargo dependency and runtime behavior checks. Retire the per-site digest gate and partial Rust source analyser; they are not untouchable because this row once called them product guards. |
 | Cargo metadata adapter plus package status | 4 files / 2,214 Rust lines | Mixed shared dependency. Qdrant validation calls both [Cargo inventory and package-status validation](../../xtask/src/qdrant_boundary.rs#L125); separate actual Cargo/vendor enforcement from historical status policy first. |
 | Accepted-evidence utilities | 3 files / 881 Rust lines | Actual consumer census required; do not call the entire family controller-only by its name. |
 
@@ -269,20 +269,25 @@ Other generated indexes/manifest fields can also participate in loading; identif
 removal instead of treating everything under `swarm/coverage` as regenerable. Preserve needed CLI/common
 helpers. [Package-map workflow](../../.github/workflows/package-map-coverage-v2.yml) and
 [refactor-boundary workflow](../../.github/workflows/refactor-boundaries.yml) must change with their
-derived-output contract; keep workflows manual-only. #214 must not create a replacement registry or
-take over #525's separately bounded canonical ledger schema change.
+derived-output contract; keep workflows manual-only. Retire obsolete input registries with the policy
+that consumed them; being an input does not make a registry worth preserving. #214 covers the partial
+Rust source analyser and map/status coupling; coordinate #525's ledger removal through the same manager.
 
-### Ledger: remove repeated file hashes without weakening classification
+### Ledger: retire the per-site classification gate
 
-[The current ledger](../../xtask/canonical-digest-ledger.json) repeats a full-file `source_sha256` at
-each of 5,960 sites across 833 distinct paths: 5,127 repeated hash placements. A measured in-memory
-normalization to one `source_files[path]` hash map, retaining every other field and two-space JSON
-indentation, reduces 3,572,618 to 3,140,984 bytes: **431,634 bytes (12.08%)**. No ledger edit or guard
-execution was performed. #525 owns the actual schema/validator migration and its compatibility checks.
+The ledger contains 5,960 sites across 833 paths and repeats 5,127 whole-file hashes. Its 3,572,618 bytes /
+72,002 lines are an exhaustive metadata catalogue. The previous 12.08% normalization estimate addressed
+representation, not the reason this structure exists.
 
-Preserve exact site identity/count/context/signals, duplicate-key rejection, file-change detection,
-offline operation and compiler-required classification. GitHub issue state is not build authority.
-Removing stale OPEN/CLOSED status checks does not remove source classification or migration obligations.
+[allowlist.rs](../../xtask/src/canonical_digest_guard/allowlist.rs) checks every site against the full
+source-file SHA, count/test context, classification, owner issue snapshot, phase and a minimum review
+reason. An unrelated edit in a shared file forces metadata churn; a completed owner can still be required
+to appear OPEN in the offline snapshot. Neither fact verifies the runtime digest's algorithm/preimage.
+
+Under #525, remove this per-site ledger and its issue-state/hash coupling from the gate and callers.
+Keep concrete shared digest vectors, stored identity/profile behavior and actual dependency checks.
+A scanner may remain an optional report if useful; do not recreate the catalogue as an allowlist or
+one-hash-per-file approval database. #214 removes the separate historical map/status tooling.
 
 ### Reuse and consolidation
 

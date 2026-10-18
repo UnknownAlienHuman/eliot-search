@@ -4,7 +4,7 @@
 - **Date:** 2026-10-03
 - **Scope:** product mission, Qdrant boundary, agent-facing analysis workflow and large-corpus behavior
 - **Architecture:** ELIOT Search 8.4
-- **Extends:** ADR 0005 without changing the closed v1 wire recipes
+- **Extends:** ADR 0005; local-baseline prerequisites/compatibility follow the [2026-10-18 decision](../architecture/README.md)
 
 ## Context
 
@@ -23,13 +23,14 @@ subject resolution, comparison, exact verification, provenance, coverage, handle
 The active README and agent instructions must present those capabilities as the core product rather than
 as optional details.
 
-Two public-contract gaps remain visible:
+At this ADR's original date two public-contract gaps were visible:
 
 1. the closed eleven-recipe v1 surface has no first-class bounded free-text retrieval request;
 2. there is no first-class scope-orientation result that tells an agent what to read and which exact
    checks to execute next.
 
-The product also lacks qualification at the repository-fleet/research-corpus scale implied by its mission.
+Those #213 types and provider schemas have since landed; serving remains incomplete. Do not freeze or
+implement them again. Large-corpus qualification still requires the connected product.
 
 ## Decision
 
@@ -56,9 +57,10 @@ The product also lacks qualification at the repository-fleet/research-corpus sca
    reading, likely entry points, evidence-role groups and bounded suggested grep/regex/symbol/structural
    predicates. Suggestions are navigation hints until executed by the exact plane. Search does not issue
    tasks, approve changes or declare completion.
-8. **Free-text retrieval and scope orientation require a versioned contract extension.** The existing
-   eleven v1 recipes remain stable. Implementations must not smuggle heuristic free-text semantics into
-   `find_text@1`, overload `locate@1`, or expose raw Qdrant queries. The extension is tracked by #213.
+8. **Serve the delivered evidence/orientation contracts.** #213's schemas already exist. Keep exact
+   predicates distinct from ranked retrieval; do not overload `find_text@1` or expose raw Qdrant queries.
+   Pre-release simplification follows the current architecture: change actual consumer/version together,
+   rather than building another protocol adapter solely to preserve an unused old shape.
 9. **Scale is a product property.** Warm latency alone is insufficient. Qualification must measure large
    monorepos and multi-repository portfolios, incremental updates, quality/recall, false analogues,
    time-to-first-useful result, resource use, restart and rebuild. This is tracked by #215.
@@ -109,12 +111,10 @@ other qualified native coordinates.
 
 ## Compatibility
 
-This ADR clarifies product mission and prioritization. It does not mutate existing serialized v1 recipes,
-reason codes, collection schema or provider envelopes. New request/result shapes require the normal
-versioned contract process and incompatible projection changes require a new collection generation.
-
-Part I of the implementation master remains normative. The embedded Part II Codex handoff is historical
-scaffolding and cannot narrow this product scope or reinstate ticket/lease implementation authorization.
+The mission remains accepted. The current architecture supersedes automatic preservation of every
+pre-release wire/receipt/storage obligation. Do not silently reinterpret existing data; use explicit
+format/generation changes and protect retained user data. The historical 8.4 master and old handoff do
+not reinstate the retired baseline requirements or a controller/ticket/lease permission system.
 
 ## Consequences
 

@@ -82,8 +82,9 @@ Tantivy/Lucene/SQLite-FTS/local-postings fallback in the production design.
 - **Corpus intelligence:** profile and diff corpora, trace provenance and expose truthful coverage gaps.
 
 The current eleven v1 recipes cover exact navigation, entity inspection, comparison, corpus profile/delta,
-provenance and exact scans. The missing first-class free-text retrieval and scope-orientation contracts
-are tracked in [#213](https://github.com/UnknownAlienHuman/eliot-search/issues/213).
+provenance and exact scans. [#213](https://github.com/UnknownAlienHuman/eliot-search/issues/213) delivered
+the free-text retrieval and scope-orientation schemas. Their public indexed serving path remains to be
+connected; do not implement another contract family.
 
 ## Product boundary
 
@@ -116,9 +117,9 @@ for removal in [#214](https://github.com/UnknownAlienHuman/eliot-search/issues/2
 - standalone DIRECT remains independent of indexed-mode availability;
 - ELIOT integration is a leaf adapter, not a reverse authority path.
 
-Read the [architecture entry point](docs/architecture/README.md). Architecture Part I is the normative
-product contract. The embedded Part II Codex handoff is historical scaffolding and does not reinstate a
-P00/ticket/lease implementation gate.
+Read the [current architecture](docs/architecture/README.md). Its local-baseline decisions supersede
+mandatory multi-domain storage, migration/key-lifecycle and process machinery inherited from 8.4.
+The old master and handoff explain history; they do not reinstate those requirements.
 
 ## Current status
 
@@ -135,13 +136,13 @@ source admission / immutable revisions / preparation
 → bounded standalone/provider results
 ```
 
-Indexed readiness remains disabled until the exact Qdrant artifact, bridge, schema, query, restart and
-end-to-end qualification gates pass. Planning records, source presence and mock/oracle execution are not
-qualification.
+The indexed public path is not connected yet. Runtime must observe its actual Qdrant endpoint and
+schema; executed query/restart/end-to-end reports belong to evaluation and release. A test-report token
+must not be needed merely to construct a working application.
 
 Important open product work includes:
 
-- agent free-text retrieval and scope orientation: #213;
+- real serving of the delivered #213 free-text retrieval/orientation schemas;
 - cleanup of residual controller tooling: #214;
 - large multi-repository scale qualification: #215;
 - research/document materialization and navigation: #216;
@@ -176,14 +177,15 @@ full-baseline includes the indexed dependency graph. Neither compilation nor a f
 runtime integration or readiness. --all-features also enables the obsolete legacy-loopback-harness
 and is not the normal product configuration.
 
-Full workspace, tests, Windows/live-Qdrant and product qualification run after the integrated
-implementation is complete. See [execution protocol](docs/product/EXECUTION_PROTOCOL.md) and the
+After integration, execute the relevant behavior and Windows/live-Qdrant cases through the real
+application. Do not repair obsolete workspace harnesses merely to obtain a badge. See the
+[execution protocol](docs/product/EXECUTION_PROTOCOL.md) and the
 [verified audit/refactoring cards](docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md).
 
 ## Running
 
-Standalone is the supported baseline. Exact startup syntax is still evolving with provider transport,
-redb cutover and Qdrant supervisor integration; do not infer readiness from legacy experimental commands.
+Standalone is the supported baseline. Exact startup syntax is still evolving with local transport,
+control state and Qdrant integration; the old migration platform is not a startup prerequisite.
 
 The final baseline must support installation without ELIOT Memory OS, source/corpus registration, durable
 restart-safe state, real Qdrant indexing/search, index rebuild, local CLI use and optional ELIOT provider
@@ -191,7 +193,7 @@ integration without a second state owner.
 
 ## Repository workflow
 
-Read `AGENTS.md`, Architecture Part I, the nearest package instructions and the named issue/PR before
+Read `AGENTS.md`, the current local architecture, relevant package code and the named issue/PR before
 editing. Use one branch/worktree per manager and avoid overlapping package writers.
 
 No ticket/lease/signature issuance protocol is required. Do not implement generic agent-controller

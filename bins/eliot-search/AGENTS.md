@@ -4,12 +4,18 @@ The CLI owns invocation, connection assembly and presentation in `bins/eliot-sea
 Use [root instructions](../../AGENTS.md) and the
 [execution protocol](../../docs/product/EXECUTION_PROTOCOL.md) for named immediate-consumer cutovers.
 
+The [current local architecture](../../docs/architecture/README.md) distinguishes trusted child-stdio/
+OS-owned pipes from optional restricted-client pairing. Old grant/proof fields are not mandatory local
+bootstrap; remove obsolete requirements with their real callers, never fake permissive credentials.
+
 ## Ownership and reuse
 
 - Capture arguments/configuration once; preserve non-UTF-8 paths and build a closed invocation.
-- Assemble one local connection from independently trusted installation/binding coordinates.
-- Use `search-provider-client` for pairing/session/framing/correlation/cancellation semantics.
-- Build canonical recipe/grant requests; render bounded human or JSON/NDJSON output and truthful exits.
+- Assemble one owned local connection. Persistent endpoints need actual OS/root identity; restricted
+  clients additionally use their real installation/binding authority.
+- Reuse the existing client/framing/correlation/cancellation code. Keep one session implementation.
+- Build explicit scoped requests; render bounded human or JSON/NDJSON results. Grants belong to an
+  implemented restricted-client profile, not all same-user reads.
 - Reuse the existing Windows transport and purpose-bound Credential Manager owners through their
   narrow APIs. The CLI does not implement secret storage or choose arbitrary credential targets.
 
