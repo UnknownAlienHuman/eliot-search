@@ -1,25 +1,68 @@
-# search-retrieval-executor
+# search-retrieval-executor — direct backend work, not an execution OS
 
-Execute bounded retrieval legs and combine their nominations before source validation.
+Execute the retrieval operations actually selected for one query and preserve their useful order before
+source evidence lookup.
 
 ## Current source
 
-[lib.rs](src/lib.rs) implements admission checks, leg tickets, pin acquisition, dispatch, normalization
-and weighted rank fusion. Admission checks supplied queue counts; it does not reserve a queue slot or
-implement a scheduler. [indexed.rs](src/indexed.rs) implements lexical retrieval through
-`IndexedRetrievalPort`, currently including an unconditional exact count.
+`src/lib.rs` is about 19.7 KiB and implements caller queue admission, execution guards, cloneable leg
+tickets, separate pin sets, relative per-leg deadlines, mutable execution maps and floating weighted-rank
+fusion. `src/indexed.rs` is about 41.1 KiB and adds indexed request validation, unconditional exact count,
+process-test ports and candidate IDs containing the leg ID.
 
-The daemon's [execute_pinned_leg](../../../bins/eliot-searchd/src/query_composition.rs) still takes
-`ProcessTestIndexedPort`; its current callers are process tests. These APIs do not establish a connected
-public indexed query. [FUNCTIONS.md](FUNCTIONS.md) names their actual behavior and integration defects.
+The serving daemon still uses a process-test indexed port. These types do not establish a connected
+backend or a bounded running operation.
 
-## Implementation direction
+## Target execution
 
-Follow [query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query).
-Use one request operation with its actual scope, published-view pins, deadline and cancellation state.
-Keep pure ranking functions; connect the existing real indexed port and remove replaced dispatch paths.
+The query handler owns one ordinary request context:
 
-Deduplicate by the resolved published source/unit identity and scope/revision, then preserve the fused
-order through validation and projection. A leg identifies a ranking contribution, not a separate result.
-Paging uses the [single temporary window](../search-continuation/README.md#one-temporary-owner); it does
-not create another executor or durable query history.
+```text
+RequestContext
+  PublishedView guard
+  ResolvedScope
+  absolute deadline
+  cancellation token
+  finite backend-hit, source-read, retained-result and output limits
+```
+
+Call the concrete backend with remaining time and bounded output. Charge counters before retaining work.
+A small daemon concurrency semaphore may bound simultaneous requests; it does not require public scheduler
+snapshots, leg tickets, plan digests or durable terminal histories.
+
+Baseline lexical search is one Qdrant BM25 query. Preserve the Qdrant order. For multiple compatible
+indexed branches, use Qdrant native prefetch/RRF/grouping so candidates are bounded and fused where they
+are retrieved. Add a small local rank merge only when a real external branch such as an editor overlay or
+exact source result must combine with indexed output.
+
+## Ranking rules
+
+- backend scores are meaningful only within the exact backend/population/profile that produced them;
+- cross-branch merge uses ranks, not direct comparison/addition of raw `f32/f64` scores;
+- candidate identity is the stable retrieval point, never `leg_id + point_id`;
+- branch identity and rank are contributions, not result identity;
+- duplicate/conflicting point observations fail the affected backend result;
+- preserve the chosen final order through evidence lookup and card formatting;
+- bounded prefetch omissions remain non-exhaustive gaps.
+
+A private deterministic integer RRF helper is enough if a local merge is needed. It has fixed application
+constants, checked arithmetic and a stable point-ID tie. It needs no public ranking profile, formula DSL,
+canonical digest, golden credential or immutable evidence-key framework.
+
+## Removal
+
+After direct callers switch, remove:
+
+- caller `SchedulerSnapshot`/owner IDs and queue-count admission;
+- public/cloneable `ExecutionGuard`, `LegTicket`, `ExecutionState` and terminal maps;
+- relative per-leg deadlines and separate pin sets;
+- `CapabilitySet`/compiled-plan proof admission;
+- floating/default `FusionProfile` and raw-score projector reordering;
+- candidate IDs containing leg IDs;
+- unconditional `count_exact` and fake complete-candidate scope;
+- process-test indexed adapter from the product path.
+
+If direct Qdrant plus a small optional merge is all that remains, inline it into query composition and
+remove this package rather than retain an execution framework.
+
+[FUNCTIONS.md](FUNCTIONS.md) maps current APIs. [AGENTS.md](AGENTS.md) governs implementation.
