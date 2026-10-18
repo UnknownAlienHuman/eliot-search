@@ -1,19 +1,20 @@
 # Working on search-handles
 
-Read the [architecture](../../../docs/architecture/README.md),
-[query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query) and
-[current APIs](FUNCTIONS.md), then trace the actual expansion and lifecycle callers.
+Read the root [architecture](../../../docs/architecture/README.md), current
+[implementation](../../../docs/implementation/README.md) and the
+[query cutover](../README.md#one-query-window).
 
-Use exact source/revision/range references in the local result. Any required opaque locator shares
-the [single temporary window owner](../search-continuation/README.md#one-temporary-owner). Replace both
-existing catalogs with that owner; do not make a third registry or preserve a crate solely for its tests.
+This package is a removal target, not the future owner of result lifetime. Trace every real
+`SearchSourceHandle` producer/consumer, change the result contract with those callers and move only the
+useful exact-range/readback mechanics into the one query window or retained-source reader.
 
-- Resolve the real retained revision and scope, enforce the requested range and effective byte/time
-  limits, and reuse actual-byte verification. Never substitute a digest label for checking bytes.
-- Delete expired records and release owned resources; a live-record quota does not bound retained
-  terminal history. Keep issued locators usable until their stated expiry.
-- Make grant policy specific to the selected restricted profile. Changing trusted-local constructors
-  means changing their callers, not filling old fields with synthetic permissions.
-- Preserve actual restrictions on excluded sources, purged data and unsaved buffer lifetime.
-- Change shared APIs and native/public consumers together. No contract-change permission process,
-  durable ordinary-query journal or package line quota is required.
+Do not add:
+
+- another token format, digest domain or collision registry;
+- durable handle persistence, leases, tombstones or cleanup journals;
+- synthetic grants/owner epochs to satisfy obsolete constructors;
+- compatibility wrappers that keep the old store reachable.
+
+Keep real byte/range/deadline limits and selected restricted-client checks. For the baseline same-user
+local client, a result locator is not an authorization capability. Verify the connected query, expansion
+and terminal cleanup; package-local fixture preservation is not a completion criterion.

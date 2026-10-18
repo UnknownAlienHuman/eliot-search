@@ -1,22 +1,22 @@
 # Working on search-continuation
 
-Start with the [architecture](../../../docs/architecture/README.md),
-[query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query) and
-[one-owner design](README.md#one-temporary-owner). Read current source and both shared/native and public
-daemon callers before changing the owner.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and
+[query cutover](../README.md#one-query-window).
 
-- Reuse the existing daemon offset and commit-after-delivery mechanism in one surviving window owner.
-  Update consumers and remove the replaced engine; do not add another continuation implementation.
-- Own real view/retention resources, ordered bounded items, next index and an absolute expiry.
-  A permit, supplied boolean or cleanup receipt is not ownership or completion of its external effect.
-- Page work follows the selected page, not the previously issued prefix or whole source catalog.
-  Bound total retained bytes as well as counts; preserve exact source/revision and ranked order.
-- Keep failed output from advancing the cursor. Close a partially written framed session. Do not
-  introduce a durable acknowledgement/replay platform for ordinary local reads.
-- Expire windows and resources on their actual lifetime; restart may invalidate them. If issued item
-  locators depend on the window, paging completion cannot delete their backing items early.
-- Enforce real restrictions for selected restricted clients. Simplify trusted-local API and callers
-  together; no fake grant or blanket bypass replaces scope, purge or source validation.
+This package is a removal target. Do not harden its token, durable-replan, security-fence, issued-set or
+cleanup-effect model. Move only the useful O(page) cursor/output-commit behavior from the daemon paging
+code into one application `QueryWindow`.
 
-Check paging cost, output failure and actual resource release. Fixed recipes, contract-change approval,
-legacy checkpoint formats and line quotas do not constrain this implementation.
+Requirements for the surviving owner:
+
+- pin exactly the published view used by the query;
+- preserve final rank and advance one cursor after complete output only;
+- read/verify only selected-page ranges under one absolute deadline;
+- retain issued item locators only until the original bounded expiry;
+- delete terminal/expired state and release the view guard;
+- expire all windows on restart.
+
+Do not add durable query history, replay suppression sets, pin permits, cryptographic token authority,
+remote acknowledgement protocols or compatibility wrappers. Change actual result contracts and callers
+in the same cutover, then remove this package.

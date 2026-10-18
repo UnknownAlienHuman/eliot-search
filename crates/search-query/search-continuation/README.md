@@ -1,45 +1,46 @@
-# search-continuation
+# search-continuation — removal map
 
-Bounded temporary state for paging one query result.
+This package is a second in-memory continuation lifecycle. It stores token-digest records, candidate
+windows or durable-replan descriptors, issued fingerprints, security generations and cleanup effects.
+The public daemon does not use it for paging; it uses its own
+[`ContinuationCatalog`](../../../bins/eliot-searchd/src/continuation/kernel/catalog.rs) plus a separate
+result-handle catalogue.
 
-## Current source and consumers
+The shared package contains well over 160 KiB of Rust source before its security submodule is counted.
+Most of that code protects a durable/replayable query capability that the baseline local product does not
+need.
 
-[ContinuationStore](src/lib.rs) stores candidate-reference windows, issued fingerprint sets and
-durable-replan descriptors in memory. `resume` returns a selection/effect description; it does not
-call a planner, read source bytes or acquire/renew a pin. [Emission code](src/emission.rs) records
-issued fingerprints after delivery. Terminal transitions already release candidate allocations;
-`compact_terminal` removes eligible metadata.
+## One query window
 
-The daemon's [native binding composition](../../../bins/eliot-searchd/src/access_composition/native_binding/process.rs)
-constructs this store for lifecycle consumers. Public paging instead uses
-[ContinuationCatalog](../../../bins/eliot-searchd/src/continuation/kernel/catalog.rs), alongside a
-separate result-handle catalog. Shared store APIs alone do not connect indexed paging.
+Keep one application-owned `QueryWindow`:
 
-## One temporary owner
+```text
+window_id
+PublishedView guard
+final ordered EvidenceRef[]
+next_index
+optional retained excerpts / issued item locators
+absolute expiry
+finite item, byte and output limits
+selected session binding only for a real restricted-client profile
+```
 
-This is the target under
-[query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query):
+Reuse the daemon's useful slice/cursor and
+[`PreparedPage::deliver`](../../../bins/eliot-searchd/src/continuation/kernel/catalog/prepared.rs)
+mechanics: prepare the next page, emit it, and advance only after the complete output write succeeds.
 
-- Keep one bounded ordered window: resolved source/unit/revision references, selected scope and
-  published view, actual pins needed to retain that view, next index and an absolute expiry.
-- Reuse the daemon catalog's existing offset and
-  [delivery commit](../../../bins/eliot-searchd/src/continuation/kernel/catalog/prepared.rs) mechanics
-  in this owner. Move the useful implementation and connect its callers; remove the other engine.
-  Do not retain shared and daemon continuation platforms side by side.
-- Validate/read only the bounded page being prepared, produce compact cards and gaps, and advance the
-  cursor after successful delivery. Keep rank stable. A partial frame ends the session; it does not
-  become a successful page or an invitation to replay a partially emitted frame.
-- Trusted-local expansion uses exact source/revision/range references. If a selected client requires
-  opaque locators, they index items in this same owner. Finishing pagination must not discard backing
-  items while issued locators remain valid; retain those items only until the original bounded expiry.
-- Expiry, disconnect and cancellation release owned resources. Restart may expire the window.
-  Bound both total retained bytes and item/window counts; no permanent query/issued-ID history.
-- Use real published-view/source records and selected client restrictions. Do not rebuild and hash the
-  whole source catalog on each page, silently change the corpus, or invent a valid pin/grant flag.
+Do not recompute a whole source-catalog digest on every page. The pinned published view is the source and
+index fence. Read and verify only selected-page evidence. Completion, expiry, disconnect, cancellation or
+restart drops the process-local window and releases its view guard. A caller may repeat the query; there is
+no durable replan or cleanup journal.
 
-A query result is an ordered list of source/revision, location/range, excerpt and useful freshness/gaps,
-plus an optional next-page reference. Execution, source validation and projection are direct steps
-around this state, not four independent lifecycle systems. Durable replanning is absent from the normal
-query path; an actual durable-job consumer would have to justify it.
+An optional `WindowItemRef` resolves an item in this same window. Finishing pagination does not discard
+items still needed by issued locators before the original expiry.
 
-[FUNCTIONS.md](FUNCTIONS.md) distinguishes current APIs, repeated work and useful existing mechanics.
+## Cutover
+
+Move the useful daemon paging mechanics into the serving query owner, change `ContinuationHandle` and
+`SearchSourceHandle` result contracts together, migrate native lifecycle consumers, and delete both the
+shared continuation package and duplicate daemon catalogues after their last callers.
+
+[FUNCTIONS.md](FUNCTIONS.md) records current repeated work and the removal sequence.

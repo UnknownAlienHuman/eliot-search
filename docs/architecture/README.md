@@ -41,6 +41,10 @@ manifests and referenced artifacts alive. After a view is no longer acquirable a
 its derived data may be reclaimed. Ordinary local operation needs no universal lease, legal-hold, purge,
 mark-and-sweep or restore platform.
 
+**Results are evidence, not capabilities.** A normal card carries source, revision, location and excerpt.
+Paging or bounded expansion may use one short-lived query window derived from the pinned view. That window
+is not a second authority, durable history or bearer-security system and may expire on disconnect/restart.
+
 **Local by default.** The baseline serves the owning OS account and explicitly selected sources.
 It neither executes indexed material nor silently broadens the corpus. Restricted clients, remote
 adapters and encrypted storage are separate needs with real consumers, not universal prerequisites.

@@ -1,27 +1,27 @@
 # search-result-projector
 
-Turn verified source locations into compact, ordered evidence for the client.
+Turn one already ranked, source-verified page into compact evidence cards. Projection is a pure final
+transformation; it does not own retrieval, source I/O, handles, continuations or result lifetime.
 
-## Current source
+## Target input and output
 
-[lib.rs](src/lib.rs) implements `project_candidate_set` and `verify_handle_target_binding`.
-The first accepts source-backed candidates plus separately supplied metadata and already minted handles.
-It sorts by raw score, applies candidate/source-byte limits and emits the older handle-oriented
-`SearchCandidateSet`; it neither mints handles nor emits excerpts. Coverage is supplied by its caller.
-The binding helper compares source membership, revision and unit IDs; it does not resolve a handle.
+```text
+VerifiedEvidenceItem
+  final_rank
+  source / revision / representation
+  logical occurrence and exact range/location
+  verified excerpt
+  freshness / assurance / role
 
-Current daemon uses appear in
-[indexed_query_process tests](../../../bins/eliot-searchd/tests/indexed_query_process.rs).
-There is no connected public indexed-result projector demonstrated by those calls.
+→ EvidenceCard
+  rank, source/location, excerpt, useful gaps
+  optional WindowItemRef
+```
 
-## Implementation direction
+Accept the executor/fusion order exactly. Apply bounded card/output/gap limits without sorting by raw scores
+from incomparable populations. Derive public fields from the same verified item; do not combine a source
+candidate with separately minted handle metadata.
 
-Follow [query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query)
-and [FUNCTIONS.md](FUNCTIONS.md). Produce an ordered list of source/revision, location/range, short
-excerpt and useful freshness/gaps, with an optional next-page reference.
-
-Accept the final ranked order. Derive public evidence fields from the same verified source object;
-remove duplicate metadata, mandatory receipts and traces that have no consumer. Enforce the encoded
-response limit as well as readback limits. Use the
-[single temporary window](../search-continuation/README.md#one-temporary-owner) for paging; projection
-is a direct transformation, not another result lifecycle.
+Selection and retained-range loading happen before projection in the
+[query path](../README.md#target-flow). The one query window owns paging and optional item locators.
+[FUNCTIONS.md](FUNCTIONS.md) records current defects and the direct replacement.

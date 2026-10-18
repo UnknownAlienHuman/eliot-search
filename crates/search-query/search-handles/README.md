@@ -1,29 +1,36 @@
-# search-handles
+# search-handles — removal map
 
-Current handle lookup and retained-source expansion code; the baseline result need not carry a
-separate handle lifecycle.
+This package is an in-memory handle lifecycle that duplicates the daemon's
+[`ResultHandleCatalog`](../../../bins/eliot-searchd/src/result_handles/kernel/catalog.rs). The public
+query already has a continuation window and then mints another token/record for every emitted match.
 
-## Current source
+The package's two Rust files contain about 35 KiB of source before tests and documentation. They add
+token digests, bindings, grants, durable-handle claims, invalidation cursors and terminal records, but no
+production persistence or retention lease. Expiry/invalidation marks records terminal without removing
+them, so long-running use can grow history even when live quotas remain below their limit.
 
-[lib.rs](src/lib.rs) implements `HandleStore`, mint/resolve, expiry/invalidation, `revalidate` and
-`expand`; [invalidation.rs](src/invalidation.rs) adds cursor-based security/binding invalidation.
-Both handle classes live in memory. `mint_durable_source` does not persist a record or acquire a
-retention lease.
+## Target
 
-The daemon constructs this store in
-[native binding composition](../../../bins/eliot-searchd/src/access_composition/native_binding/process.rs)
-and registers lifecycle consumers. Public DIRECT search instead mints and expands through its separate
-[ResultHandleCatalog](../../../bins/eliot-searchd/src/result_handles/kernel/catalog.rs).
-These are duplicate owners, not a completed shared query/expansion path.
+A normal result is an `EvidenceCard` containing source/revision/representation, exact location/range and
+a short excerpt. Optional expansion uses a `WindowItemRef` into the same short-lived
+[query window](../README.md#one-query-window). The window already owns the pinned published view,
+ordered evidence references, expiry and byte limits.
 
-## Implementation direction
+Keep only mechanics that serve that path:
 
-Use source/revision/range references for trusted-local results and reopen them through the real retained
-reader. If a selected client needs opaque locators, resolve them to items in the
-[same temporary query window](../search-continuation/README.md#one-temporary-owner), with its scope and
-expiry. Do not add another registry or preserve both handle catalogs.
+- exact range and retained-revision readback;
+- actual byte/deadline/output limits;
+- selected restricted-client scope checks when that client exists;
+- deletion of expired/terminal state.
 
-Keep actual source/range/read limits and selected client restrictions. Change the public result,
-expansion caller and invalidation consumers with the owner. [FUNCTIONS.md](FUNCTIONS.md) records current
-defects; the [implementation guide](../../../docs/implementation/README.md#turn-a-point-into-evidence)
-owns retained-byte validation.
+Do not preserve a separate handle identity, token-digest database, durable source-handle profile,
+retention lease, replay history or per-result cryptographic authority for the owning local client.
+
+## Cutover
+
+Change `SearchSourceHandle` fields in `search-contracts`, recipes, evidence frames, ports, provider
+codecs, projector and daemon callers together. Results become evidence cards plus an optional window-item
+locator. Move any useful readback code to the retained-source reader/query window, switch all consumers,
+then delete this package and the daemon `result_handles` catalogue.
+
+[FUNCTIONS.md](FUNCTIONS.md) records the current API and exact removal boundary.
