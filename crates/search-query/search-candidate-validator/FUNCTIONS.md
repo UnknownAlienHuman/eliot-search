@@ -1,60 +1,54 @@
-# Functions — search-candidate-validator
+# search-candidate-validator — current API and removal boundary
 
-This owner turns a candidate nomination into a verified source slice or an explicit gap.
-Use [query integration](../../../docs/implementation/README.md#turn-a-point-into-evidence) for the
-real manifest/readback handoff. Existing grant, fingerprint and residency fields are source facts,
-not immutable requirements for every local query.
+## Current API
 
-## Implemented API
-
-All operations below exist in [src/lib.rs](src/lib.rs).
-
-| Function | Current behavior |
+| Function | Actual behavior |
 |---|---|
-| `precheck(nomination, context)` | Checks request/plan identity, candidate limit, allowed membership, collection/epoch, shadowed unit and current live-access state. Returns `Proceed`, `Gap` or `ContaminatedLeg`. |
-| `build_readback_request(nomination, max_read_bytes)` | Rejects empty/out-of-bounds ranges and copies the exact revision/unit/profile/digest expectations into `ExactRevisionReadbackRequest`. |
-| `reopen_and_verify(request, port)` | Calls `RevisionReadbackPort::read_exact`; compares returned identity, digest, profile, residency, assurance, coordinate and length fields. Returns `VerifiedSourceSlice` on agreement. |
-| `recheck_before_emission(verified, request_security, live_security)` | Calls the existing live-access check and binds its permit to the verified source membership/revision. It does not independently reload a grant, source catalog or root owner. |
-| `validate(nomination, context, max_read_bytes, port, final_live_security)` | Composes those steps and returns `Validated`, `Gap` or `ContaminatedLeg`. |
-| `material_coverage_change(before_validated, after_validated, target_candidates, refill_budget_remaining, contaminated_leg)` | Selects unchanged, bounded refill, replan or explicit incompleteness after candidate loss. |
+| `precheck(nomination, context)` | Compares caller request/plan/membership/collection/epoch/security fields and returns proceed/gap/contamination. |
+| `build_readback_request` | Copies expected revision/unit/profile/digest/residency fields from the public nomination into another request. |
+| `reopen_and_verify` | Calls a port and compares returned identity/digest/profile/residency/assurance/coordinate/length fields. It does not hash `readback.bytes`. |
+| `recheck_before_emission` | Compares another supplied live-security structure and permit. |
+| `validate` | Composes the above around a per-call candidate ordinal/read ceiling. |
+| `material_coverage_change` | Uses before/after counts and caller refill budget to choose unchanged/refill/replan/incomplete. |
 
-The inspected daemon tree uses a `FixedReadback` implementation in process tests; production retained
-readback is not connected. These functions do not make Qdrant candidates source-backed by themselves.
+`src/lib.rs` is about 24,524 bytes. Public-main production retained readback is not connected; fixed test
+ports exercise the pure comparisons.
 
-## Finish the actual source handoff
+## Replacement
 
-Resolve a nominated point through the pinned published manifest, then the unit/representation metadata,
-to its retained content revision and exact range. The executor's point ID, membership, score and digest
-fields alone are insufficient. The query/source owners provide this lookup using their actual records;
-do not manufacture UUIDs, cast source-record versions into content revisions or read the latest pathname.
+```text
+resolve_evidence(hit, published_view, resolved_scope, retained_reader, request_context)
+```
 
-`reopen_and_verify` currently compares supplied digest fields; it does **not** hash
-`SourceReadback.bytes`. One real owner must verify the actual object bytes and requested range, either
-in the retained reader or in this validator. Expected digests copied from the request alongside
-arbitrary same-length bytes cannot establish evidence. Preserve the actual source/representation
-coordinate connection and report missing or mismatched data as a gap.
+1. Reject a hit outside the selected view/scope or with contradictory stored identity as a query-leg
+   inconsistency.
+2. Lookup the authoritative `ViewManifestEntry` by stable retrieval point ID.
+3. Obtain exact source revision, representation/prepared artifact and range from that entry.
+4. Reserve remaining read/output budget and call the real retained reader with the absolute deadline and
+   cancellation token.
+5. Verify the immutable object under the reader's actual content/address/integrity format; check exact range
+   and coordinate mapping.
+6. Return one private `VerifiedEvidenceItem` containing the actual excerpt and final rank metadata, or an
+   explicit candidate gap.
 
-The current readback method has a byte ceiling in its request but no explicit deadline/cancellation
-parameter. Connect the runtime's request context through the reader when integrating; a trait name
-does not make a blocking read cancellable. Bound real I/O and output, and keep partial or failed
-readback out of successful evidence.
+Select the output page before this work and group reads by revision/representation where useful. Do not
+read every nomination and discard most of them in projection.
 
-## Simplify with the real consumers
+## Remove
 
-Keep one validation path. Remove unused plan fingerprints, residency proofs and mandatory grant inputs
-with their producers/consumers; do not add a second validator or satisfy old checks with synthetic
-`allowed` values. The trusted-local scope still excludes unselected sources, and actual removal or
-restriction must invalidate affected results. A selected restricted-client profile additionally
-enforces real delegated scope and current revocation at its admission/emission boundaries.
+- public `CandidateNomination`, `ValidationContext` and caller expected-digest authority;
+- profile/residency/coordinate/assurance booleans echoed through the port;
+- request/plan/grant/security permit fields already fixed by the pinned view/session;
+- per-call candidate ordinals and fresh read budgets instead of the request ledger;
+- candidate identity derived from leg ID or profile fallback;
+- count-only refill/completeness logic and validation receipts.
 
-A Qdrant score/payload, supplied permit or a successful constructor is not source evidence. Missing
-retained bytes yield an explicit unavailable/stale result. Ordinary ranked output remains
-non-exhaustive after validation or refill; only an explicit exact operation can claim completeness.
+Keep one source/view inconsistency versus candidate-gap distinction and actual range/read error mapping.
+Ordinary top-k stays non-exhaustive. If no meaningful package boundary remains, move the function beside
+query composition/retained reading and remove the crate.
 
-## Behavior to check
+## Verification
 
-Use the connected reader and real manifest/unit records to check changed bytes, wrong revision/range,
-profile/coordinate mismatch, missing objects, excluded or removed sources and cancellation.
-Check restricted-client revocation when that profile is selected. Test that rejected candidates emit
-no excerpt and candidate loss cannot turn top-k into an exhaustive result. Mocks exercise pure
-branches; they do not prove retained storage, byte verification or runtime integration.
+Use a real retained reader and view manifest to check correct excerpt, wrong/foreign point, wrong route or
+scope, missing revision, corrupted object, invalid range, lossy/unsupported coordinates, cancellation,
+deadline and aggregate read/output limits. Echoing expected digests with wrong bytes must not pass.

@@ -1,28 +1,21 @@
-# Source evidence validation
+# Working on source evidence resolution
 
-Read the [architecture manifesto](../../../docs/architecture/README.md) and
-[implementation guide](../../../docs/implementation/README.md#turn-a-point-into-evidence).
-[FUNCTIONS.md](FUNCTIONS.md) describes the actual API and its missing production readback connection.
+Read the [architecture](../../../docs/architecture/README.md),
+[query design](../README.md), [README](README.md) and [function map](FUNCTIONS.md).
 
-Turn nominated points into exact retained-source evidence or explicit gaps. Resolve the point through
-the pinned published manifest and unit/representation records to the actual revision and range.
-Qdrant payload, current pathname contents and fixture IDs cannot supply that connection.
+Implement one direct `point_id → pinned ViewManifestEntry → retained bytes/range` path. The view and source
+owners provide expectations; a Qdrant payload or caller nomination cannot choose source truth.
 
-Verify real bytes at one clear owner: the retained reader or this validator. The present
-`reopen_and_verify` compares supplied digest fields without hashing `readback.bytes`; copying expected
-values from the request does not verify anything. Connect actual byte/range checks and the request's
-deadline/cancellation with the reader. Keep failed or partial readback out of successful evidence.
+Use the actual immutable-object reader and request deadline/budget. Verify object identity/content at the
+real storage boundary, then validate the requested range/coordinate mapping. Do not accept echoed digest,
+profile, residency or assurance fields and do not rehash the entire object once per excerpt if the reader
+already verifies it.
 
-Preserve the user's resolved scope, published view, source/profile coordinates and actual removal or
-restriction. Selected restricted clients also need real delegated scope and current revocation checks.
-Remove redundant grant, fingerprint and residency requirements from the trusted-local API with their
-consumers; never replace them with fabricated permissions or disable a real enforced restriction.
+Classify a point absent/contradictory in the pinned view as backend/leg inconsistency; classify a genuinely
+missing retained artifact/range as a candidate gap. Preserve final rank and source-backed evidence. No
+grant/checkpoint/permit is required for the owning local client; restricted-session cancellation stays at
+its real boundary.
 
-Change this owner's types and its immediate query/source/result callers together. There is no separate
-contract-change approval, package-only edit wall or line quota. Keep one validation path; do not create
-another validator or compatibility wrapper to fit old constructors. Concrete storage/vendor I/O stays
-with the existing effect owners; pure validation can be called directly.
-
-Check real revision/byte/range mismatches, missing retained objects, excluded or removed sources,
-cancellation and non-exhaustive ranked results through the connected application. Mocks check local
-branches; they do not prove source retention or runtime behavior.
+Change actual executor/manifest/reader/result consumers together. Remove public nomination/context/readback
+proof structures, per-call budget resets and fallback identities. If only a small lookup adapter remains,
+inline it rather than preserving this package for fixtures.

@@ -1,17 +1,15 @@
-# Working on search-result-projector
+# Working on result formatting
 
-Read the [architecture](../../../docs/architecture/README.md), current
-[implementation](../../../docs/implementation/README.md) and [query cutover](../README.md).
+Read the [architecture](../../../docs/architecture/README.md), [query design](../README.md),
+[evidence resolver](../search-candidate-validator/README.md) and [function map](FUNCTIONS.md).
 
-Keep this package pure and small:
+Accept only ordered source-verified evidence items. Preserve final rank, format bounded evidence cards,
+attach an optional `WindowItemRef`, and summarize truthful gaps. Charge actual encoded output through the
+provider/serving owner.
 
-- preserve the final ranked order supplied by retrieval/fusion;
-- accept only selected, source-verified evidence items;
-- format bounded cards, excerpts and truthful gap counts;
-- enforce encoded output limits as well as card count;
-- use an optional `WindowItemRef`, not a separately minted source handle.
+Do not read sources, sort raw scores, mint handles, manage continuations, issue receipts, create coverage
+proofs or recheck local grants/security checkpoints. Remove caller metadata/envelopes and handle-binding
+helpers with their consumers.
 
-Do not read source bytes, mint handles, manage continuations, sort by raw score, own coverage proofs or
-create result fingerprints. Change result contracts, encoder and real caller together. If the final
-transformation is trivial after that cutover, inline it into query composition rather than preserving a
-crate for its fixtures.
+If the surviving code is trivial, inline it into query composition and remove this package. Verify through
+the real request/output path, not package-shape fixtures.
