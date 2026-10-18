@@ -1,27 +1,16 @@
 # search-source-reconcile
 
-**C05 — Change reconciliation.**
+Compare a registered source with an observation so ingestion can update content, rebind a path or
+remove a confirmed missing source from current search.
 
-**Status:** `SOURCE_PRESENT`; change-hint, inventory-diff and reconciliation planning source exists, while durable multi-root currentness and product integration remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #239 → #128.
+**Current source:** [`reconcile_source`](src/lib.rs) is a pure comparison. The package also contains
+batch validation and an in-memory operation ledger. It has no filesystem walker, watcher/USN producer,
+durable inventory or connected daemon scheduler. Old logical function lists were design proposals.
 
-Turn watcher hints and bounded inventories into truthful currentness, shadows and reconciliation work.
+**Target:** one incremental daemon path consumes coalesced hints and inventory entries, reads changed
+sources, retains their exact bytes and applies current source state. Startup, resume, explicit sync and
+periodic recovery use the same scanner. Missing observations remain visible; incomplete scans do not
+confirm deletions. The reconciler does not own source bytes or index publication.
 
-## Owns
-
-- watcher hint ingestion
-- cursor continuity and gap state
-- startup/resume/periodic reconciliation plans
-- inventory diffs and source-head observations
-- observation freshness classification
-
-## Must not own
-
-- treating watchers as complete source truth
-- reading file bytes directly
-- publishing index epochs
-- claiming current workspace across a gap
-- depending on the concrete redb adapter; durable state is reached through a vendor-neutral port
-
-- **Delivery wave:** W5 / P09
-- **Soft source-line target:** 7,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+See [implementation](../../../docs/implementation/README.md) for the application path and
+[FUNCTIONS.md](FUNCTIONS.md) for actual callers, donor choices and removal targets.

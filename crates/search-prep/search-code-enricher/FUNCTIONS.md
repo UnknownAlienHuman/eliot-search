@@ -1,198 +1,56 @@
-# Function contract — `search-code-enricher`
+# search-code-enricher functions
 
-**Status:** W5/P10 logical contract; no Rust parser provider or artifact is selected.
+## Existing functions
 
-The baseline profile extracts tolerant Rust syntax facts and relations. It does not type-check, execute
-repository code, expand procedural macros, run build scripts or claim compiler truth.
+These are implemented in [src/lib.rs](src/lib.rs); only package tests currently call `enrich_code`.
 
-## State and profile ownership
+| Symbols | Actual behavior |
+|---|---|
+| `validate_parser_profile`, `compare_profile_change` | Validate supplied profile/qualification metadata and classify profile changes; they do not load a donor parser. |
+| `parse_rust_no_execute` | Scan immutable `RustRepresentation` line by line using prefix/brace heuristics, with budget/cancellation and a digest callback. |
+| `extract_configuration_predicate`, internal `classify_evidence_role` | Parse the local bounded cfg syntax and classify the hand-built node kinds; no target configuration evaluation or resolved caller analysis. |
+| `extract_structural_facts`, `extract_structural_relations` | Build bounded facts and a subset of descriptive relations from those nodes. Current node-ordinal unit assignment must be replaced by range lookup. |
+| `validate_fact_anchor` | Check matching revision/representation fields, range bounds and UTF-8 slice validity; it does not reopen source storage or recompute the supplied fact digest. |
+| `build_enrichment_manifest`, `enrich_code` | Assemble the existing tree/facts/relations/manifest and receipts. No production source capture, publication or query consumer is connected. |
 
-The package owns:
+Change these APIs with their actual preparation/query consumers when replacing the scanner.
+Do not preserve its intermediate trees, generic assurance receipts or unused relation kinds to satisfy
+old tests. The [README](README.md#connect-useful-data) defines the compact output and ownership.
 
-- one immutable qualified Rust parser/enrichment profile;
-- bounded parser input/output and malformed-input policy;
-- structural facts, relations, evidence roles and configuration predicates;
-- provider assurance and explicit enrichment gaps;
-- deterministic enrichment manifests and fixture corpus.
+## Syntax extraction
 
-It owns no source bytes, source identity, query ranking, Qdrant transport, compiler/LSP process or
-multi-language runtime.
+Selected donor: [ast-grep `outline`](https://ast-grep.github.io/reference/cli/outline), released as an
+[alpha in 0.44.0](https://github.com/ast-grep/ast-grep/releases/tag/0.44.0). This is a planned integration.
+Its bundled extraction rules return file items/direct members with names, kinds, signatures and byte
+ranges. It does not resolve references/types or construct a call graph.
 
-## `validate_parser_profile`
-
-```text
-validate_parser_profile(candidate, qualification_receipt)
-    -> Result<QualifiedRustParserProfile, EnrichError>
-```
-
-Requires exact parser/grammar package name, version, source checksum, license evidence, node/query schema
-identity, Rust edition/dialect coverage, normalization rules, resource limits, malformed-input policy,
-no-execute declaration and golden-fixture digest.
-
-`latest`, semver ranges, floating Git revisions, undocumented defaults and a successful parse alone are
-not qualification. Any behavior-affecting change yields a new profile digest and requires re-enrichment/
-projection generation as classified by the integration plan.
-
-## `parse_rust_no_execute`
+Use one process for a bounded batch of explicit immutable file paths of the selected language:
 
 ```text
-parse_rust_no_execute(representation, profile, budget, cancel)
-    -> Result<RustSyntaxTree, EnrichError>
+ast-grep outline --lang rust --items all --view expanded --json=stream --threads 1 -- FILE1 FILE2
 ```
 
-**Preconditions**
+Pass paths as process arguments, not a shell command or a directory/default `.` scan. Map each input
+path back to its retained source/revision; do not reinterpret an arbitrary working-tree path as the
+indexed revision. For one retained blob, `--stdin --lang rust` accepts its bytes. Do not start a process
+for each file or query. Cache the prepared records by retained revision and extractor settings/version,
+and re-extract only changed inputs.
 
-- exact immutable representation and coordinate map are available;
-- input encoding/size is supported and bounded;
-- profile digest matches the accepted qualification receipt;
-- no external parser process, repository build action or network access is permitted unless separately
-  admitted by a future profile.
+The donor caches compiled rules once per command and streams one JSON file object at a time, but
+[its 0.44.0 worker](https://github.com/ast-grep/ast-grep/blob/0.44.0/crates/cli/src/outline/extract.rs#L134-L240)
+uses an unbounded channel and skips individual read/walk errors. Its
+[file reader](https://github.com/ast-grep/ast-grep/blob/0.44.0/crates/cli/src/utils/mod.rs#L111-L121)
+checks size after reading. Bound batch count/bytes and each file before launch; bound output and use
+the existing operation deadline/cancellation. Match output paths to the input list and account for
+empty inputs locally: this version omits empty files. Missing nonempty inputs, unsupported syntax and
+failures remain gaps; exit status alone does not prove complete extraction.
+Keep donor invocation settings explicit so repository-local custom extraction does not silently change
+the prepared data.
 
-**Postconditions**
-
-- syntax nodes are bounded, deterministic and anchored to exact representation coordinates;
-- parser diagnostics and recovery nodes are preserved as explicit degraded state;
-- source text is not copied into ordinary telemetry/receipts;
-- cancellation/deadline returns no manifest claiming complete parse.
-
-Parser callbacks, injections or queries cannot execute repository code, build scripts, macros, shell
-commands, credential prompts or remote resources.
-
-## `extract_structural_facts`
-
-```text
-extract_structural_facts(tree, representation, units, profile, budget, cancel)
-    -> Result<StructuralFactSet, EnrichError>
-```
-
-Extracts only profile-registered fact kinds such as module, function, method, type, trait, impl, field,
-constant, static, macro invocation, test, documentation section and configuration item.
-
-Every fact carries:
-
-- deterministic fact identity;
-- source revision/representation/unit identity;
-- native anchor and fact digest;
-- parser profile digest;
-- assurance class (`tolerant_syntax` baseline);
-- evidence role;
-- configuration predicate reference;
-- bounded attributes from a closed registry;
-- degradation/gap reasons.
-
-A syntax node does not become a definition/reference solely because its display text resembles one; the
-profile owns explicit extraction rules.
-
-## `extract_structural_relations`
-
-```text
-extract_structural_relations(tree, facts, profile, budget, cancel)
-    -> Result<StructuralRelationSet, EnrichError>
-```
-
-Produces bounded descriptive relations such as contains, declares, implements_syntactically,
-invokes_syntactically, references_name, tests_subject, documents_subject and guarded_by_cfg.
-
-Relations are not compiler-resolved call graphs, trait resolution, type identity or proof of runtime
-behavior. Unknown/ambiguous targets remain explicit and cannot be silently bound by name alone.
-
-## `classify_evidence_role`
-
-```text
-classify_evidence_role(node, ancestry, attributes, profile) -> EvidenceRoleDecision
-```
-
-Returns a closed role and reasons: definition, reference, test, documentation, caller, configuration or
-unknown. Tests/docs/callers are evidence categories, not automatic truth or ranking authority.
-
-## `extract_configuration_predicate`
-
-```text
-extract_configuration_predicate(node, representation, profile)
-    -> Result<ConfigurationPredicate, EnrichError>
-```
-
-Preserves a canonical bounded AST for `cfg`, `cfg_attr` and relevant feature/target predicates:
-`all`, `any`, `not`, key and key-value. It does not evaluate a predicate without an explicit target/
-feature environment. Unsupported macro-generated or malformed predicates return `unknown` plus exact
-anchor/reason, never unconditional applicability.
-
-Configuration variants remain separate in facts, relations, manifests and comparison inputs.
-
-## `validate_fact_anchor`
-
-```text
-validate_fact_anchor(fact, representation, coordinate_map)
-    -> Result<AnchorValidationReceipt, EnrichError>
-```
-
-Reopens/uses the exact representation, checks revision/profile/fact digests and maps the native anchor.
-Lossy or ambiguous mapping lowers assurance or rejects the fact; raw-byte exactness is never fabricated.
-
-## `build_enrichment_manifest`
-
-```text
-build_enrichment_manifest(request, facts, relations, gaps, limits)
-    -> Result<EnrichmentManifest, EnrichError>
-```
-
-Produces canonical deterministic ordering, exact counts/digests, profile/representation/unit identities,
-assurance summary, configuration-predicate registry and explicit incomplete/degraded gaps.
-
-A manifest with parse recovery or budget omissions cannot claim compiler-complete structure. No vendor
-syntax node type crosses the package boundary.
-
-## `compare_profile_change`
-
-```text
-compare_profile_change(old, new) -> EnrichmentProfileChange
-```
-
-Returns `NOOP`, `RE_ENRICH_AND_REPROJECT`, `GATE_REQUIRED` or `REJECT`. Parser/grammar/query schema,
-Rust dialect, extraction rules, assurance semantics, predicate parsing, coordinate behavior or bounds
-changes require a new profile identity and re-enrichment. No live reinterpretation of old facts is
-allowed.
-
-## Cancellation, deadlines and crash semantics
-
-Parsing/extraction/manifest creation are pure over immutable inputs. Equal inputs/profile yield equal
-outputs. Cancellation or budget exhaustion returns no successful complete manifest; a caller may accept
-a separately typed degraded manifest only when the recipe/assurance contract permits it and gaps are
-preserved.
-
-The package owns no durable mutation and no unknown external commit outcome. Rebuild after crash uses
-immutable representation/unit inputs and the exact accepted profile digest.
-
-## Typed failures
-
-- `PARSER_PROFILE_INVALID`
-- `PARSER_NOT_QUALIFIED`
-- `PARSER_UNAVAILABLE`
-- `RUST_INPUT_UNSUPPORTED`
-- `RUST_INPUT_TOO_LARGE`
-- `PARSE_DEGRADED`
-- `PARSE_CANCELLED`
-- `PARSE_BUDGET_EXHAUSTED`
-- `STRUCTURAL_FACT_UNMAPPED`
-- `STRUCTURAL_RELATION_AMBIGUOUS`
-- `CONFIGURATION_AMBIGUOUS`
-- `ANCHOR_MAPPING_FAILED`
-- `ENRICHMENT_MANIFEST_INVALID`
-- `ENRICHMENT_PROFILE_MISMATCH`
-
-## Required tests / qualification evidence
-
-- exact parser/grammar/source/license/profile identity and golden digest;
-- deterministic parse/fact/relation/manifest bytes;
-- malformed and incomplete Rust produces bounded degraded facts/gaps, never compiler truth;
-- Rust editions, modules, functions, traits, impls, methods, fields, constants, macros and tests corpus;
-- `cfg`/`cfg_attr` all/any/not/key/value and malformed/unknown variant separation;
-- definitions, references, callers, tests, docs and configuration evidence-role fixtures;
-- proc-macro/build-script/LSP/shell/network execution is structurally absent and runtime-probed;
-- macro invocation is not silently expanded or compiler-resolved;
-- non-UTF8/invalid coordinate behavior explicit;
-- anchor/digest/profile mismatch rejection;
-- cancellation and node/depth/byte/time limits;
-- profile change requires re-enrichment/reprojection;
-- public API contains no parser/vendor node type;
-- default telemetry contains no source bytes, query text, secrets or unrestricted paths.
+If packaging requires in-process parsing of retained bytes, replace this syntax owner with
+[Tree-sitter `Parser::set_language` / `parse`](https://docs.rs/tree-sitter/0.25.10/tree_sitter/struct.Parser.html),
+the selected grammar's [tag queries](https://tree-sitter.github.io/tree-sitter/4-code-navigation.html)
+and [node byte ranges](https://docs.rs/tree-sitter/0.25.10/tree_sitter/struct.Node.html#method.byte_range).
+Reuse the parse for extraction and unit mapping. Do not keep both syntax runtimes or build a grammar,
+cfg evaluator, name resolver or compiler around captures. Semantic facts follow the separate optional
+[SCIP import](README.md#optional-semantic-locations).

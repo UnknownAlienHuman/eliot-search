@@ -1,49 +1,50 @@
 # search-qdrant-bridge
 
-Qdrant collection, point and query operations behind private vendor translation.
-Oracle, qualification harness and real transport source exist; the shared S9.5/S11 cutover remains
-#262. Source presence and static artifact/configuration admission do not establish live qualification.
-[FUNCTIONS.md](FUNCTIONS.md) records the exact remaining contract mismatch and required behavior.
+Translate the application's source scope, writes and queries into the existing Qdrant Rust client.
+Keep one connection/runtime and bounded I/O. Source bytes, published-view selection and recovery of
+unfinished application writes remain with their existing owners.
 
-The bridge owns schema/capability probes, strict indexed filters, exact mutation/readback and vendor
-error mapping. Process/ACL/Job Object lifecycle belongs to the supervisor; secret storage, access,
-publication and result authority remain in their owners. No automatic upgrade, download or fallback.
+[FUNCTIONS.md](FUNCTIONS.md) maps the actual API and remaining integration work.
+The [architecture](../../../docs/architecture/README.md) and
+[implementation](../../../docs/implementation/README.md) govern the target; historical qualification
+receipts, compatibility rules and file quotas do not define another runtime protocol.
 
-The [current architecture](../../../docs/architecture/README.md) retires mandatory test-report tokens
-from connection and the exact count from ordinary top-k. Keep actual endpoint/auth/schema checks and
-source validation. `BlockingRealQueryPlane` already has one reused Tokio runtime per instance.
+## Use the server's search machinery
 
-## Implemented transport and fixture boundaries
+The real [`query_filtered`](src/real/queries/search.rs) already passes an explicit IDF corpus
+through the pinned 1.19 client. Qdrant 1.19 supports
+[filtered IDF](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-idf-statistics):
+retrieval `filter` and `params.idf.corpus` are separate parameters. Reuse the selected published
+scope for both; additional query-only restrictions need not redefine the IDF population.
 
-- The T22 disposable-server harness owns only qualification process setup, exact artifact measurement,
-  bounded diagnostics and cleanup. Product lifecycle remains in `search-qdrant-supervisor`.
-- Startup diagnostics read at most the final 1 KiB of each captured log. Lossy UTF-8 is confined to
-  failure evidence; the harness never loads an unbounded log or emits product authority.
-- Live probes retain one mandatory order for exact identity, topology/index/schema, wait/strong CRUD,
-  strict negative behavior, signed range, sparse modifier, independent IDF and missing upper bounds.
-  IDF comparisons use exact ID/score populations without assuming tie ordering.
-- Exact readback rejects duplicate IDs and returns points/missing/unexpected IDs in deterministic order.
-  Filtered nominations preserve ranking order while rejecting duplicate IDs and non-finite scores.
-- Mutation/schema errors distinguish definite pre-dispatch cancellation from possible durable effects.
-  Transport loss after possible write yields `QDRANT_MUTATION_OUTCOME_UNKNOWN`; read transport loss
-  remains `QDRANT_TRANSPORT_FAILED`. Collection existence without usable readback is not success.
+Use native local `qdrant/bm25` text inputs and the Query API's fusion/grouping when those branches are
+needed. These are new direct integrations of an existing dependency. Do not recreate a sparse encoder,
+DF store or indexed-branch fusion engine to produce the same product capability.
 
-The current private codec still writes legacy payload/vector-digest fields and accepts numeric/UUID
-point responses; the current physical collection name is a truncated 28-byte derived locator.
-These are existing implementation facts, not the accepted S9.5/S11 or durable route authority.
-The [cutover contract](FUNCTIONS.md#shared-payload-and-identity-cutover) defines their replacement;
-private Qdrant value conversion and exact readback remain necessary.
+The native sparse index performs exact dot-product retrieval and indexes writes in its mutable form.
+Publish only after completed writes (`wait=true`), not queue acknowledgement. Sparse top-k need not
+wait for background optimization or an exact count; it still cannot establish exact source absence.
 
-## Verification boundary
+Start with one local node and one shard. Filtered IDF is shard-local; nested fusion also runs per shard.
+With one replica and a serial publisher awaiting completed writes, strong ordering is not a required
+extra layer. Choose strict-mode cost limits deliberately; neither setting establishes source identity.
+A collection for every source adds independent resource overhead and cross-collection query fanout.
+A separate collection is useful for an actual distinct schema/lifecycle, not as a replacement for an
+ordinary selected-scope filter.
 
-The [adapter boundary](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md) retains Cargo/API behavior
-checks and retires the custom source analyser. The old diagnostic command is:
+Filtered statistics still cost work: the server resolves corpus points and intersects term postings.
+Use indexed scope fields, bounded requests and limited query branches. It counts physical points with
+the sparse vector, so final grouping does not remove duplicated inputs from IDF.
 
-```text
-cargo run --locked -p xtask -- validate qdrant-boundary --json
-```
+## Existing integration boundary
 
-Source-shape/module-name assertions are retirement candidates; the disposable suite's actual behavior
-cases remain useful evidence. The [implementation guide](../../../docs/implementation/README.md) selects source gates
-and defers test/live execution until the integrated candidate. [AGENTS.md](AGENTS.md) owns package
-guidance; historical waves and line targets do not require another wrapper or file split.
+The private codec still differs from the shared planner payload/identity data; the
+[existing field map](FUNCTIONS.md#shared-payload-and-identity-cutover) identifies that work.
+Its 20-field/19-index S9 baseline describes current types. Simplify shared owner, planner and bridge
+together; index the fields actually used for filtering/grouping rather than preserve those counts.
+Adapt precomputed-vector inputs for native BM25 with their producer and readback consumer.
+
+Keep actual endpoint/schema checks, source scope and mutation outcome handling.
+Ordinary top-k does not require exact count or executed test-report credentials. The existing live
+behavior cases remain useful evaluation material; these documentation changes do not establish a
+working native Eliot query or a measured throughput result.

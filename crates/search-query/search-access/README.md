@@ -1,26 +1,25 @@
 # search-access
 
-**C18 — Access compiler and live security.**
+Resolve the requested local corpus against application state and keep retrieval within that explicit
+scope and published view. Restricted external clients may add real access checks at their boundary.
+The ordinary owning-account path does not need signed grants, overlap certificates or a security
+checkpoint protocol around every local transformation.
 
-**Status:** `SOURCE_PRESENT`; grant/scope/barrier compilation source exists, while owner-derived live authority, durable scope integration and product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #117/#125/#218.
+The [architecture](../../../docs/architecture/README.md) and
+[implementation](../../../docs/implementation/README.md) supersede the historical grant/partition
+contract. [FUNCTIONS.md](FUNCTIONS.md) records actual calls and the concrete replacement.
 
-Validate grants, intersect scope with authoritative state and compile noninterfering pre-candidate access/scoring legs.
+## Scope without per-file query fanout
 
-## Owns
+The current compiler creates one leg per source membership unless an `OverlapFreeRouteProof`
+allows grouping. The indexed executor then rejects grouped legs containing multiple eligibility plans.
+This is an integration defect in source, not a required population model.
 
-- grant validation and expiry/revocation checks
-- server-authoritative scope intersection
-- eligibility and IDF filter AST construction
-- membership route deduplication and overlap proofs
-- live deny/security mutation barrier semantics
+Use one eligibility predicate for a compatible selected scope and its pinned published view. The
+bridge already supports a membership union and explicitly sends the corpus to Qdrant's native IDF.
+Split queries only for different physical routes or search settings that cannot share a request.
 
-## Must not own
-
-- client-authored raw vendor filters or point IDs
-- post-filter-only security
-- mixing duplicate equivalent memberships in one IDF population
-- granting authority from capability availability
-
-- **Delivery wave:** W4 / P08; hardened P13
-- **Soft source-line target:** 8,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Keep unknown/empty-scope handling, actual restrictions and bounded work. Remove proof-required
+grouping, local predicate digests and redundant grant machinery from the owning-account query path.
+Do not duplicate indexed unit occurrences to represent equivalent memberships; result grouping does
+not remove duplicates from the backend's IDF population.

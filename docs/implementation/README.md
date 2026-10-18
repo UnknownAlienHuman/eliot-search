@@ -16,11 +16,31 @@ Use the existing CLI, daemon and packages. Do not create another application or 
 **Ingestion:** selected root → stable read → immutable revision write → source head transaction →
 materialization/UnitSet → bounded Qdrant write/readback → published view.
 
-**Query:** typed request → resolve scope and pin published view → encode with its lexical profile →
-Qdrant candidates → manifest/unit lookup → retained-byte read and validation → locations/snippets.
+**Query:** typed request → resolve scope and pin published view → local Qdrant BM25/query →
+candidates → manifest/unit lookup → retained-byte read and validation → locations/snippets.
 
 A normal edit processes changed content. Index loss or a changed derived format rebuilds a generation.
 DIRECT remains an explicit exact/source scan, not an indexed-success fallback.
+
+### Preserve the useful requirements
+
+The [historical master](../architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md) contains useful
+workloads, not a package/dependency constitution. Implement them through the same path:
+
+| Requirement retained from the old design | Small implementation |
+|---|---|
+| Local standalone use, S0–S2 | CLI/daemon and local Qdrant; ordinary text search requires no model service. |
+| Large repositories and portfolios, S7.8/S16 | Selected roots and explicit commit/index/worktree views; one inventory/update scheduler with bounded batches. Portfolio is a query scope, not another copy of every repository. |
+| Exact identifiers and explicit completeness, S12/S25 | Ranked lexical navigation plus the existing literal/regex exact scan over a stated retained inventory. Top-k never supplies negative proof. |
+| Current incremental evidence, S13–S16 | Retain changed bytes, update affected units/points, publish one view; watcher hints accelerate reconciliation. |
+| Orientation, subjects and comparison, S21–S22 | Locations and syntax outlines first; import actual semantic occurrences when available. Compare source-backed implementations and show missing facts. |
+| Document coordinates, S17/S24 | Existing Markdown/JATS plus selected native PDF extraction. Page/text ranges remain useful without invented raw-PDF byte offsets. |
+| Saved/unsaved edits, S18 | Saved edits enter the normal update queue; an explicitly selected editor overlay shadows matching sources in memory. Do not persist every keystroke or index it twice. |
+| Rebuild and recovery, S28 | Keep source/control and unfinished publication; rebuild a lost derived index. Optional backup copies a coherent control/source snapshot, not an unbounded operation history. |
+| Responsiveness, S30 | Interactive work has priority; use bounded batches, cancellation and one deadline. Optional parsing/models run in background only when selected. |
+
+Old latency numbers are targets, not achieved performance. Measure useful result latency, bytes read and
+points rewritten per edit, extraction reuse and peak resources; a tiny fixture does not establish fleet scale.
 
 ### Existing owners and concrete work
 
@@ -29,7 +49,7 @@ DIRECT remains an explicit exact/source scan, not an indexed-success fallback.
 | Invocation and client | [CLI entry](../../bins/eliot-search/src/entry.rs), [public client](../../bins/eliot-search/src/public_client.rs), [daemon entry](../../bins/eliot-searchd/src/entry.rs), `search-config` | Parse once, use one command/config value, connect the actual local request to its handler. |
 | Source acquisition | [native source](../../bins/eliot-searchd/src/owner_composition/kernel/native_source.rs), [command](../../bins/eliot-searchd/src/owner_composition/kernel/native_source_command.rs), `search-safe-reader` | Pass the bytes already read to the revision writer; finish ingestion instead of returning admission metadata alone. |
 | Retained objects | [immutable object I/O](../../crates/search-source/search-revision-store/src/immutable_object.rs), [current writer](../../bins/eliot-searchd/src/secure_revision_writer.rs), `search-revision-store` | One persistent writer/reader for the new format; source identity/head semantics remain with the source owner. |
-| Preparation | [materializer pipeline](../../crates/search-prep/search-materializer/src/product/pipeline.rs), [UnitSet builder](../../crates/search-prep/search-unitizer/src/manifest/build.rs), `search-lexical` | Prepare retained bytes once, preserve source coordinates and feed the existing projection planner. |
+| Preparation | [materializer pipeline](../../crates/search-prep/search-materializer/src/product/pipeline.rs), [UnitSet builder](../../crates/search-prep/search-unitizer/src/manifest/build.rs), `search-lexical` | Prepare retained bytes once; keep coordinates and useful identifier expansion. Use native BM25 instead of maintaining a second generic sparse encoder. |
 | Durable control | [persistent control](../../crates/search-control-redb/src/persistent.rs), [transactions](../../crates/search-control-redb/src/persistent/transaction.rs), [publication records](../../crates/search-control-redb/src/persistent/publication.rs) | Typed current records and short redb transactions; unfinished external effects have one pending publication record. |
 | Publication | [shared coordinator](../../crates/search-index-qdrant/search-publication/src/machine.rs), [daemon composition](../../bins/eliot-searchd/src/publication_composition.rs), `search-projection-planner` | Keep one publication transition owner; daemon performs real I/O. Fold useful daemon `Publisher` behavior into this path and remove its duplicate floor/journal machine. |
 | Qdrant | [real bridge](../../crates/search-index-qdrant/search-qdrant-bridge/src/real.rs), [blocking runtime](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/blocking.rs) | One private SDK translation/connection, actual writes/queries/readback, no second operation journal. |
@@ -64,6 +84,21 @@ The native command currently records admission and reports `retained_revision:fa
 [run_source_sync_preflight](../../bins/eliot-searchd/src/owner_composition/kernel/source_sync.rs), which
 ends in `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE` even after successful checks. Replace this refusal-only
 custody/callback sequence with actual sync; do not add another admission stage.
+
+`SourceRootCatalog::refresh` probes root availability; it does not enumerate or reconcile source contents.
+Use one `notify::RecommendedWatcher` for hints and a shared dirty-path/scan queue. `ignore::WalkBuilder`
+supplies traversal and explicit ignore behavior; feed bounded batches to the source owner. Startup,
+resume, missed events and periodic checks use that same scan path. Clear dirty state only after a completed
+scan/update; an inaccessible directory is not evidence that all its files were deleted. Retain hints that
+arrive during a scan for the next update. Do not add `PollWatcher` beside an existing periodic inventory
+scan or a supervisor/receipt log per root. The
+[reconciliation map](../../crates/search-source/search-source-reconcile/FUNCTIONS.md) names actual gaps.
+
+For the first Git commit view, use controlled Git plumbing: one tree listing, `diff-tree` for changed
+entries and a reused `cat-file --batch-command` child for raw blobs. Resolve refs once to immutable OIDs;
+do not read unchanged blobs or run checkout, textconv, filters or lazy fetch. This replaces the old blanket
+ban on the Git executable. `gix-diff`/`gix-odb` are an alternative for a selected no-Git installation,
+not a second mandatory backend. See the [Git change map](../../crates/search-source/search-safe-reader/FUNCTIONS.md).
 
 Use one immutable-byte writer/reader built from the existing `search-revision-store` mechanics.
 Materializer's `legacy_artifact` contains a second staging/write/sync/link/readback engine; retire it
@@ -108,6 +143,25 @@ that producer/consumer together, reusing actual decode/normalization/coordinate 
 supported text/code profiles and report unsupported input. Old `--prepare-*` helpers are donor code,
 not a reason to require their storage layout.
 
+### Add useful code and document depth
+
+For code orientation, replace the line/brace parser in `search-code-enricher` with one syntax producer:
+selected `ast-grep outline` over bounded immutable-file batches, or direct Tree-sitter for a concrete
+embedding need. Cache facts by retained revision and extractor settings. Import SCIP/LSP occurrences
+only with the indexed snapshot/document version; never attach stale facts by pathname. The inspected
+rust-analyzer SCIP writer has no symbol relationships, so it cannot supply an implementation/call graph.
+Use [code-enricher's map](../../crates/search-prep/search-code-enricher/FUNCTIONS.md) for exact APIs/limits.
+Resolver/comparator currently consume prepared observations in tests; connect real facts and source
+ranges rather than inventing behavior proofs or another graph database.
+
+For the first PDF, use `pdfium-render` in the existing optional doc worker and return page/text locations.
+Its current binary only exits unavailable. Finish the real parser → materializer/UnitSet → query result
+in #227; a generic echo-worker supervisor is not the deliverable. OCR only missing usable page text;
+layout/table models and GROBID scientific structure are selected additions. Xberg/Docling are useful
+alternative extractors/artifact donors, not a reason to start every parser/service. The
+[document map](../../bins/eliot-search-doc-worker/FUNCTIONS.md) records APIs and coordinate limits;
+[optional settings](../../config/sections/optional_profiles.md) replaces the old qualification toggles.
+
 ## 3. Keep control state small and publication real
 
 Use the existing `search-control-redb` owner with typed methods for source/head, settings and publication.
@@ -131,6 +185,9 @@ pending intent through the real persistent owner, performs bounded Qdrant mutati
 commits the visible route/epoch. Simplify that coordinator with its callers: keep pending/visible state
 and actual effect outcomes, not every existing receipt argument or intermediate phase. Preserve needed
 incremental validity intervals and live pins.
+Qdrant sparse retrieval can search its mutable index after a completed write; background optimization
+and a corpus count are not publication prerequisites. An accepted asynchronous operation is not yet a
+completed write. Sparse dot-product exactness does not establish exact source matching or absence.
 The [old daemon Publisher](../../bins/eliot-searchd/src/publication_composition/kernel/publisher.rs)
 duplicates state; its [publication_codec::cas](../../crates/search-control-redb/src/publication_codec.rs)
 only computes/checks a new floor, not a redb commit. Remove that parallel machine and file journal.
@@ -140,8 +197,11 @@ Current `submit` takes the coordinator's active slot in `Prepared`, but `abandon
 cannot clear that phase. A cancelled pre-intent task can leave the same coordinator permanently busy.
 Remove that unnecessary reservation/state or provide its ordinary local discard with the actual caller.
 
-Preserve actual vector values alongside planned identity/payload; the current `PointSpec` contains
-vector digests, not uploadable vectors. Reuse the encoder product, not a new vector-proof API. Use
+Preserve uploadable input alongside planned identity/payload. For native BM25 this is bounded prepared
+text and actual encoder options; the current planner requires precomputed vectors/digests and `PointSpec`
+does not carry uploadable values. Change preparation/planner/bridge together to accept native inference
+input. Check the returned named vector and point/source identity; do not compute BM25 a second time merely
+to manufacture the old expected hash. A selected external encoder still supplies its actual values. Use
 bounded batches and manifest pages through the existing artifact owner. Current manifest CBOR
 limits one membership to 4,096 entries despite the planner's 100,000-point budget; `prepared_digest`
 also copies old/new manifest bytes into one 8 MiB canonical object. Remove that whole-object dependency
@@ -190,9 +250,17 @@ query and finite limits. `compile_canonical_plan` currently requires an external
 grant, request/snapshot/plan fingerprints and capability dependency evidence. The lexical path needs
 query encoding, retrieval and validation, not a separately manufactured set of proof documents.
 
-Use the existing `search-lexical` frozen profiles with `encode_query` / `encode_code_query`.
-The profile must match published vectors, not merely a profile name supplied by the client.
-Keep useful leg/fusion logic when multiple real retrieval modes use it; call pure transformations directly.
+Use Qdrant 1.19's local `qdrant/bm25` through the existing SDK `Document` input for ingestion and query.
+The pinned server handles it without a remote inference address or model worker. Use the same explicit
+tokenization, case, stopword/stemmer and BM25 settings at both ends; neutral/code input must not silently
+inherit English stemming and stopwords. Keep a small code identifier expansion only for useful behavior.
+Retire the generic custom sparse hashing/BM25/frozen-corpus and proof-profile path with its consumers;
+rebuild derived vectors rather than preserve its bytes. Exact literal/regex/Unicode semantics remain in
+their actual source-verification owners. [Lexical implementation](../../crates/search-lexical/FUNCTIONS.md)
+and the [donor index](../audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) record concrete options/source.
+
+Use native prefetch/RRF/grouping when the contributing legs are Qdrant queries. Keep a small local merge
+only for actual direct/overlay results; no parallel ranking framework or old score compatibility.
 Use the same published evidence identity across contributing legs, including its actual scope/revision
 and route semantics. Current candidate IDs include `leg_id`, preventing fusion of the same point from
 two legs. Carry the final fused order through validation/projection: the projector currently sorts
@@ -202,10 +270,17 @@ again by raw score, which can destroy that order. Neither fix needs a ranking-pr
 `IndexedRetrievalPort` to `BlockingRealQueryPlane` with a small private adapter, or call the executor
 directly from the handler. Do not add another runtime, factory or generic query host.
 
+Resolve one compatible published scope into one filter population. Current `search-access` emits a leg
+per source membership without `OverlapFreeRouteProof`; its grouped alternative is then refused by an
+executor that accepts only one eligibility plan. Remove that artificial fan-out/denial with the actual
+callers. The existing bridge already constructs membership unions. Split only across genuinely distinct
+routes or incompatible retrieval settings, not to satisfy a proof type.
+
 In the existing Qdrant bridge:
 
-- consume the shared S11/payload/eligibility/manifest contracts; the old nine-field payload cannot supply
-  missing UUIDs or coordinates by renaming fields;
+- use one shared identity/payload/eligibility model; change it with planner and bridge when removing
+  unused coordinates. The current 20 fields / 19 indexes are not a target to preserve; index fields
+  actually used by scope/filter/group queries. Never fill missing identities by renaming old fields;
 - remove `QualifiedGate` test-report inputs from connect/callers; keep actual endpoint/owner binding,
   authentication, server capability and schema checks;
 - remove the process-local mutation-receipt ledger as a second replay owner; publication owns retries
@@ -214,9 +289,25 @@ In the existing Qdrant bridge:
 - remove ordinary top-k's unconditional `count_exact` and change `IndexedLegOutput`/`LegCompletion`
   with it. Do not leave `CompleteCandidateScope` or invent a denominator.
 
+For one local node, one replica and one publisher awaiting each completed write, use default/weak
+ordering; a second distributed serialization policy adds no needed order. Change the current hardcoded
+strong setting with its consumers. Strict mode is a chosen cost/limit guard, not source correctness.
+These choices do not imply the same policy for concurrent writers or replicated deployments.
+
 The shared field-level [bridge map](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md)
-explains current payload/index/vector mismatches. Reuse its real data obligations; do not restore old
-process/compatibility requirements from it. Search and IDF use the same resolved eligibility population.
+explains current payload/index/vector mismatches. Use the resolved eligibility in both retrieval and
+`params.idf.corpus`; the retrieval filter alone does not scope IDF. Keep one shard for the initial local
+corpus. Native IDF counts physical points with the sparse vector, not distinct source documents or result
+groups, and scans the selected corpus/postings. Grouping cannot repair duplicate scoring populations.
+Do not index another membership copy merely to place a repository in a second portfolio; change the
+existing projection/eligibility relationship where it forces that duplication. Retain a real distinct
+projection only when its content/profile/view differs. No custom global IDF service is needed.
+
+Explicit exact checking reads the retained inventory in bounded batches and uses the existing Aho-Corasick
+literal/regex owners. The separate `proof.rs` path still has a second per-offset literal matcher and takes
+an already accumulated `Vec<ExactItemReadback>`. Remove that duplicate matcher and pre-buffering;
+preserve complete/incomplete/invalidated outcomes and one stated case/range semantics. See the
+[exact map](../../crates/search-query/search-exact/FUNCTIONS.md); a count or empty top-k cannot replace it.
 
 ### Turn a point into evidence
 

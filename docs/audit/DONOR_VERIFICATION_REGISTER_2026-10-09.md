@@ -40,6 +40,7 @@ Do not add mmap/rayon/runtime file helpers to the shared authority package.
 | [toml 1.1.7 API](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/mod.rs), [parser](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/parser/mod.rs) | `from_slice` / `from_str` into typed Serde settings replace Search's config event receiver, repeated string decode and generic document machinery. `xtask` already locks this version with `std,serde,parse`; production currently uses only `toml_parser`. The donor allocates token/event vectors and a `DeTable` before typed deserialization; default recursion limit 80 remains enabled. Bound file bytes before parsing and validate real fields. No streaming or measured memory claim; [decision](../../crates/search-config/TOML_PROFILE_2.md). |
 | [Rust environment](https://doc.rust-lang.org/std/env/fn.vars.html), [bounded reader](https://doc.rust-lang.org/std/io/trait.Read.html#method.take) | `vars_os` and a bounded read over one opened file are sufficient for daemon config capture. Current `vars()` can panic on unrelated non-Unicode data before prefix filtering; metadata followed by `fs::read` does not bound a file that grows meanwhile. OS-string paths and `take(limit+1)` need no new custody framework; byte limits do not establish I/O latency. |
 | [Tokio 1.53.1 timeout source](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/time/timeout.rs) | `timeout_at` consumes an absolute instant. Convert one deadline at admission and propagate it across query/readback/pages. Current bridge `OpContext` stores a duration and restarts a timeout per RPC; more per-ABI counters do not fix that. |
+| [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/best-practices/rules-of-durable-objects/), [Queues delivery](https://developers.cloudflare.com/queues/reference/delivery-guarantees/) | Design donor: one state owner, short local transactions and repeatable bounded background work. External I/O is not part of the local storage transaction; repeated deliveries need operation-specific handling. In Eliot this means redb current/pending records, a shared work queue and Qdrant publication, not a hosted Workers/DO/Queues deployment, SQLite backend or generic exactly-once engine. |
 
 These are inspected mechanisms, not benchmark or runtime claims. Direct Serde/TOML production integration
 is proposed; redb/Qdrant/Tokio already have production adapters. Existing [globset](../../crates/search-source/search-source-admission/src/policy_v2.rs)
@@ -48,23 +49,31 @@ do not import donor applications, another backend or another layer around each A
 
 ## 3. Git: replace a small parser; complete the missing backend
 
-[#335](https://github.com/UnknownAlienHuman/eliot-search/issues/335) is a candidate adoption, not an
-accepted version or a measured large deletion. Current [safe-reader Git code](../../crates/search-source/search-safe-reader/src/git.rs)
-validates already-decompressed loose-object bytes from an abstract backend. It does not implement a
-filesystem object store, pack/delta/ref reader or SHA-1 recomputation; packed and remote-required cases
-remain explicit unsupported results.
+Use existing #335 for one real Git source path. The current [Git reader](../../crates/search-source/search-safe-reader/src/git.rs)
+validates already-decompressed loose-object bytes from an abstract backend; no production ODB/pack/ref
+reader calls it. A donor completes missing functionality, not deletion of a nonexistent pack engine.
 
-Inspect narrow `gix-object` for object/header parsing and `gix-odb`/`gix-pack` only for required local
-backend behavior. Upstream inspection is pinned to
-[gitoxide ad0202e3](https://github.com/GitoxideLabs/gitoxide/blob/ad0202e3ab396d752a56664001c134f48d834177/gix-odb/src/lib.rs).
-That API supports writes and follows alternate object directories; a crate name does not make it
-read-only or confined. Admission must constrain every object/alternate path, replacement mapping,
-format and read, with total compressed/expanded/object-count/depth/deadline/allocation bounds.
+**First implementation: controlled installed Git plumbing.** Resolve refs to exact commit/tree OIDs,
+use `ls-tree -r -z --full-tree` initially and raw `diff-tree --no-renames` for changes, then one reused
+`cat-file --batch-command --buffer -Z` child for bounded `info`/`contents` batches. This replaces the
+old blanket external-Git prohibition. Direct argument arrays, raw builtins and disabled replacement/lazy
+fetch modes preserve the selected view without checkout, textconv, filters or indexed-code execution.
 
-Select and verify a minimal exact release/feature closure at adoption. Exclude network/fetch/checkout,
-hooks/filters/credentials, source writes, external `git` execution and all-in-one Git runtime defaults.
-Object hash verification and immutable retained-source binding remain required. Added backend
-functionality is implementation work, not credit for deleting code that never existed.
+[Git 2.51.0 cat-file source](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/builtin/cat-file.c)
+streams raw blobs; its command queue until `flush` is not inherently bounded. Its
+[tree diff](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/tree-diff.c) skips equal
+OID/mode subtrees. Check type/size before content, bound batches/output/deadline and retain exact blobs
+through the existing source writer. Git GC, missing objects, LFS pointers and conflict index stages do
+not turn into current worktree evidence. Occurrence/path identity is separate from a blob OID.
+
+**Alternative only if packaging requires no installed Git:**
+[gix-odb](https://github.com/GitoxideLabs/gitoxide/blob/ad0202e3ab396d752a56664001c134f48d834177/gix-odb/src/lib.rs)
+and direct `gix_diff::tree(TreeRefIter, TreeRefIter, State, objects, Visit)` at inspected revision
+`ad0202e3ab396d752a56664001c134f48d834177`. Avoid high-level attribute/similarity processing for an OID
+change list. `find_object` loads a body into a buffer; it is not a streaming/allocation bound. Select one
+backend, not a permanent native/CLI dual implementation. The
+[reader map](../../crates/search-source/search-safe-reader/FUNCTIONS.md) owns exact commands, source
+binding and remaining limitations. No legacy decoder, format migration or extra Git authority is required.
 
 ## 4. Canonical bytes and Unicode decisions
 
@@ -90,16 +99,81 @@ Do not reopen the completed decision, use floating UCD data, or substitute simpl
 
 ## 5. Further donor records: read the relevant section only
 
-| Role | Existing owner / record |
-|---|---|
-| TOML / globs / matching | #238 typed TOML; #241 explicit globset settings; #246/#247 memchr/aho-corasick; #248 bounded regex-automata. [Detailed pinned source/profile record](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md). Recheck actual source before claiming an engine remains to be adopted. |
-| Cargo / Rust syntax | Reuse actual Cargo metadata. #214 retires obsolete map/status policy and the custom partial Rust source analyser; keep private adapter visibility and review the real API. Do not build a pseudo-compiler or controller. |
-| Code facts / documents / external corpora | [Implementation](../implementation/README.md) and existing #223–#236/#216 issues retain selected producer/profile boundaries. No speculative universal parser, connector framework or second index. |
-| Historical indexed code | [Donor map](INDEXED_SPINE_PORT_MAP_2026-10-09.md) preserves exact #207/#209/#210/#200 heads, delivered portions and rejected ownership. |
+The [implementation requirement map](../implementation/README.md#preserve-the-useful-requirements)
+connects old product requirements to these concrete choices. New donor integrations below are planned;
+Qdrant capabilities are present in the pinned server/SDK but not connected to Eliot's normal query.
 
-Old Wave-1/Wave-2 “next”, `DECISION_REQUIRED` and coding-base statements are dated evidence, not current
-adoption status or a mandatory queue. The existing [source audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md)
-is the measured reduction map; avoid creating another registry to track this index.
+### Native lexical search and scope
+
+| Requirement / source | Use and remove |
+|---|---|
+| Ordinary lexical search; [Qdrant 1.19.0 local model](https://github.com/qdrant/qdrant/blob/74f3e85b9473c62560006c043e13737ce6b48412/src/common/inference/local_model.rs), [service](https://github.com/qdrant/qdrant/blob/74f3e85b9473c62560006c043e13737ce6b48412/src/common/inference/service.rs) | `qdrant/bm25` computes locally; absent remote inference address is permitted. SDK `DocumentBuilder` supplies bounded text/options for named upsert and nearest query. Remove the generic local sparse hashing/BM25/frozen-corpus/profile-proof path; no cloud, ONNX or model worker is needed for this mode. |
+| Text/code tokenization; [BM25 adapter](https://github.com/qdrant/qdrant/blob/74f3e85b9473c62560006c043e13737ce6b48412/src/common/inference/bm25_inference.rs) | Configure ingest/query identically. Defaults include English language processing. Neutral/code uses explicit no stemmer and empty stopwords; word tokenizer does not split camel case. A small identifier-term expansion plus whitespace tokenization can retain code names/components. Keep exact source matching separately. |
+| Corpus-restricted IDF; [Qdrant documentation](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-idf-statistics) | Supply `params.idf.corpus` explicitly; retrieval filter alone is insufficient. Existing Eliot `ScopedToRetrieval` already sends it. Statistics are shard-local physical sparse-vector points, not distinct files. One compatible population becomes one query/filter; remove per-membership legs and `OverlapFreeRouteProof`, not filtered IDF. |
+| Bounded ranking/groups; [Query API](https://qdrant.tech/documentation/concepts/hybrid-queries/) | Reuse prefetch, RRF and native groups for indexed legs. Retain a small local merge only for real direct/overlay inputs. Native RRF formula/tie behavior differs from Eliot's old arithmetic; accept the new ranking, preserve useful result ordering and verify relevance. Grouping does not undo duplicate point contributions to IDF. |
+
+The planner currently requires prepared vector values/digests. Native `Document` input therefore needs a
+coherent preparation/planner/bridge change, not another uncalled SDK helper. Do not calculate a second
+BM25 vector merely to satisfy the old digest contract. Read actual generated vector/point state where
+publication needs it. Corpus filtering scans selected points and query-term postings; it is not a free
+statistics lookup. Keep one shard initially, and do not create a collection per repository or an extra
+physical projection per overlapping portfolio. See [lexical](../../crates/search-lexical/FUNCTIONS.md)
+and [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) for exact APIs and limits.
+
+### Working-tree discovery
+
+Use [ripgrep/ignore WalkBuilder](https://github.com/BurntSushi/ripgrep/blob/4649aa9700619f94cf9c66876e9549d83420e16c/crates/ignore/src/walk.rs)
+for explicit nested ignore rules and streaming entries/errors, plus one
+[notify 8.2.0 watcher](https://github.com/notify-rs/notify/blob/a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf/notify/src/windows.rs)
+for hints. One queue handles changed paths and startup/resume/periodic scans. `PollWatcher` already
+rescans, so adding it beside that scanner doubles work. Watcher silence is not content continuity;
+incomplete scans cannot retire unseen files or clear changes arriving during the scan. Current root
+refresh only probes availability. [Reconciliation implementation](../../crates/search-source/search-source-reconcile/FUNCTIONS.md)
+replaces the old imaginary watcher/inventory APIs and lifetime ledger.
+
+### Code navigation and comparison
+
+| Useful depth | Donor and boundary |
+|---|---|
+| Names, signatures and file outline | [ast-grep outline 0.44.0](https://ast-grep.github.io/reference/cli/outline), an [alpha feature](https://ast-grep.github.io/guide/outline-code). One bounded explicit immutable-file batch produces JSON file records and byte ranges. Its channel is unbounded, file size is checked after reading and per-file failures may be skipped; Eliot bounds inputs/output and accounts for missing files. Replace the line/brace Rust scanner, not build another parser framework. |
+| In-process syntax when required | [Tree-sitter parser/tags](https://tree-sitter.github.io/tree-sitter/4-code-navigation.html) can replace the outline process with selected grammars and byte-range captures. Choose one syntax owner. No compiler/name resolution or second graph database follows from a parse tree. |
+| Actual definitions/references | Import [SCIP](https://github.com/scip-code/scip/blob/fcb3cb3c679fe2da18141550f864b9e67afab297/scip.proto) or a selected LSP session's locations, tied to exact input snapshot/buffer version and position encoding. The inspected [rust-analyzer SCIP writer](https://github.com/rust-lang/rust-analyzer/blob/91a3d3b547342c525a1a7f4d0983e6c4f1872d3a/crates/rust-analyzer/src/cli/scip.rs) emits occurrences/signatures but sets relationships empty and omits document text. The schema's implementation relation does not mean that this producer supplies it. |
+| Compare relevant implementations | Reuse lexical/name/structural candidates and validated source excerpts. The local comparator consumes supplied observations/digests; it does not derive behavior. Different digests do not establish a behavioral conflict. Show source-backed differences and unknowns, and group only known repository lineage. |
+| Exact absence/completeness | Reuse existing Aho-Corasick/regex source matching through one bounded retained-inventory scan. `proof.rs` duplicates literal matching and accepts a prebuilt readback vector; replace those mechanisms with the actual matcher/reader path. A rank result, syntax outline or missing SCIP occurrence is not an exhaustive semantic proof. |
+
+[Code enrichment](../../crates/search-prep/search-code-enricher/FUNCTIONS.md),
+[subject resolution](../../crates/search-query/search-subject-resolver/README.md),
+[comparison](../../crates/search-query/search-comparator/README.md) and
+[exact scanning](../../crates/search-query/search-exact/FUNCTIONS.md) name real code/consumers.
+Indexing with rust-analyzer may execute Cargo build scripts/proc macros; it is an explicitly selected
+preparation action, never an invisible ordinary query. Reuse available revision-bound artifacts first.
+
+### Documents
+
+First implement native PDF text using
+[pdfium-render 0.9.4](https://github.com/ajrcarey/pdfium-render/blob/ea2961cb8ac777bb1a06dddb8efd272d34d74f18/README.md)
+in the existing doc worker, with one selected matching PDFium library. Disable unused rendering/image
+features; return page text/ranges and gaps. PDFium does not guarantee human reading order in every layout
+and serializes calls, so more Rust threads do not make that parser parallel. This adds a native library;
+no runtime/Windows result is claimed by the source inspection.
+
+[Xberg](https://github.com/xberg-io/xberg/blob/28c5311862e6f3466b4e762bf73a2ffe4b318dfa/crates/xberg/Cargo.toml)
+is an alternative for selected multi-format support. Its current `pdf` selects its native engine, while
+`pdf-pdfium` is separate; do not assume Kreuzberg v4 examples describe current Xberg. Import the selected
+extractor, not its retrieval/crawler/agent stack. [Docling native pipeline](https://docling-project.github.io/docling/usage/advanced_options/#extract-the-native-content-of-a-pdf)
+also runs without OCR/layout/table models, but keeps its Python/parser runtime and parser ordering.
+GROBID supplies selected scientific TEI/coordinates; OCR adds recognition for pages lacking usable text.
+OCRmyPDF sidecar omits already-text and skipped pages. None of these outputs supplies raw binary-PDF
+byte offsets automatically. The [document implementation](../../bins/eliot-search-doc-worker/FUNCTIONS.md)
+contains concrete APIs and sources. A real searchable PDF replaces #227's generic-runtime-only ladder.
+
+### Other existing records
+
+TOML/glob/matcher pins remain in [WAVE2_DONOR_ACCEPTANCE](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md);
+reuse actual Cargo metadata instead of the old partial Rust analyser. Historical indexed source remains
+in the [indexed donor map](INDEXED_SPINE_PORT_MAP_2026-10-09.md). Old “next”/`DECISION_REQUIRED`/coding-base
+statements are dated evidence, not a mandatory queue. Keep new implementation decisions here or in the
+existing owner/issue; do not create another requirement registry.
 
 ## 6. Adoption without another process catalogue
 

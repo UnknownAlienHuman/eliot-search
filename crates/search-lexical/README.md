@@ -1,55 +1,37 @@
 # search-lexical
 
-**C11 — deterministic lexical analyzer and sparse encoder.**
+Keep the small amount of text preparation that improves source search: useful code identifier
+expansion, explicit normalization and original source spans. The current Rust implementation also
+contains general sparse encoders, corpus statistics and qualification machinery; these are removal
+targets, not the intended product surface.
 
-**Status:** implemented pure lexical analysis plus qualified sparse document/query encoding. No index or corpus store is owned by this crate.
+The [architecture](../../docs/architecture/README.md) and
+[implementation](../../docs/implementation/README.md) supersede historical immutable-profile,
+compatibility, qualification and size requirements. [FUNCTIONS.md](FUNCTIONS.md) maps the actual
+source to the replacement.
 
-Implemented behavior:
+## Native text ranking
 
-- bounded Unicode alphanumeric tokenization with exact original byte offsets;
-- explicit case, underscore, minimum-length, stop-word and position-gap policy;
-- deterministic term statistics;
-- stable seeded term-to-index mapping;
-- reject-or-measure collision policy with a finite rate threshold;
-- raw, logarithmic and BM25 local TF weighting;
-- binary, raw and logarithmic query TF weighting;
-- explicit `None`, Qdrant-delegated, or frozen-local IDF mode;
-- structural prevention of double IDF;
-- sorted unique finite sparse vectors;
-- exact profile/qualification/statistics/fingerprint receipts;
-- no I/O, index mutation, provider selection, or hidden fallback.
+Use Qdrant's local `qdrant/bm25` through the existing Rust client for ordinary text. Send bounded
+`Document { text, model, options }` inputs at ingestion and query time; the bridge owns the SDK
+translation. Qdrant supplies token hashing, TF/length weighting and sparse retrieval. Its explicit
+`params.idf.corpus` supplies IDF over the selected published scope.
 
-A profile is unusable until `validate_sparse_profile` receives a matching accepted qualification receipt. Any tokenizer, mapping, weighting, IDF, collision, artifact or fixture change requires a different profile fingerprint and collection generation.
+This is a new integration of an existing dependency, not an already connected Eliot path. The pinned
+[server implementation](https://github.com/qdrant/qdrant/blob/74f3e85b9473c62560006c043e13737ce6b48412/src/common/inference/service.rs)
+allows absent inference-provider configuration and evaluates BM25 locally. No model download,
+FastEmbed or second search backend is needed.
 
-## Additive code identifiers profile
+## What remains here
 
-`CodeIdentifiersProfile::new()` owns immutable `code_identifiers@1`: XID Unicode18 from
-unicode-ident1.0.26, token-local NFC Unicode17 from unicode-normalization0.1.25, and preserved case.
-Its internally computed shared CBOR/BLAKE3 identity binds both published artifacts/data editions,
-tinyvec1.13.3, complete grammar/limits, mapping/weighting and authored fixture definitions. It does
-not advertise full Unicode18 normalization. Definition identities do not certify executed fixtures.
+Retain identifier behavior that helps find code: whole identifiers and useful snake/camel/acronym
+components, bounded expansion, token-local normalization and original ranges. Apply the same
+preparation to documents and queries. Qdrant's word tokenizer does not split camel case and breaks
+underscores; already expanded terms can use its whitespace tokenizer.
 
-Maximal continuation runs require an XID-or-underscore start; invalid starts are skipped whole.
-Whole identifiers precede proper underscore/ASCII camel/acronym components. Invalid-start components
-are filtered after raw work charging; punctuation delimits runs without joined compounds. Siblings
-share one parent position and NFC duplicates retain the first original span. Separate parents retain
-occurrences. Original and normalized scalar/byte ceilings are checked independently, with all raw
-attempts charged before normalization, filtering and deduplication. Lower operation limits cannot
-exceed the profile's hard ceilings. Refusal returns no successful partial output.
+Choose text processing explicitly. Native defaults include English stopwords and stemming; disable
+them for code and neutral text. Keep exact matching and evidence reads in the existing source owners:
+ranked tokens and sparse scores do not establish literal identity or absence.
 
-`accept_code_identifiers_profile` checks the existing qualification record against the internally
-computed profile, artifact-set descriptor and fixture-definition identities. Its accepted wrapper
-feeds both `encode_code_document` and `encode_code_query` through one shared route, reusing the
-legacy numerical bodies through a private parameter view. The fixed baseline uses Raw document TF,
-Binary query TF, a seeded1048576-index mapping, measured merging with a10000ppm ceiling, and Qdrant
-IDF exactly once. New-mode local statistics/BM25 are not offered by this precise profile. Qualification
-must independently measure collisions and the document/query fixtures before product adoption.
-
-Existing `AnalyzerConfig`, `analyze`, `SparseProfile` fields, sparse encoders and frozen code_v1/
-text_neutral_v1 identities remain explicitly legacy and byte-compatible for real consumers. The new
-mode has distinct opaque types; there is no conversion through a dummy legacy analyzer or caller
-fingerprint. Downstream adoption requires VERSIONED_REBUILD. Daemon/Qdrant cutover and installed
-qualification remain separate owners. New fixtures are AUTHORED_NOT_RUN under #215.
-
-- **Delivery wave:** W3 / P06
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Replace the old sparse encoders and their callers together. Keep useful token/search behavior checks;
+old feature indexes, numeric scores, profile digests and fixture bytes impose no compatibility promise.

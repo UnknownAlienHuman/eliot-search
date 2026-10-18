@@ -1,16 +1,17 @@
 # eliot-search-doc-worker
 
-**Optional isolated P17 document materializer worker.**
+Optional document extraction in an owned child process. The daemon supplies a retained revision and
+receives text with page/region coordinates and explicit extraction gaps. Preparation, storage and
+publication continue through the same application owners.
 
-**Status:** complete worker contract; provider/runtime/artifact are unselected and implementation is
-blocked.
+**Current source:** [main.rs](src/main.rs) ignores arguments, reports
+`DOCUMENT_PROVIDER_NOT_QUALIFIED` and exits with code 2. No parser, request loop or daemon integration is
+implemented here. The unreferenced `src/sha256.rs` is not a worker implementation.
 
-Hosts one exact no-execute/no-network document profile over private daemon-only IPC. Enforces bounded
-container/page/object/image/decompression/output resources, malformed-input isolation, exact input
-identity, coordinate/loss maps, assurance and cleanup/removal.
+**First implementation:** native PDF text through `pdfium-render`, with a selected local PDFium library;
+no page rendering, OCR or model process for text already present in the PDF. This is a donor choice for
+implementation, not a dependency already in Cargo.lock or a measured Windows result. The
+[change map](FUNCTIONS.md) explains data flow, donor alternatives and real limits.
 
-- **Default:** binary absent or stopped.
-- **Gate:** exact accepted P15 + provider ADR + G6 candidate qualification.
-- **Soft source target:** 5,000 lines.
-- **Functions:** [FUNCTIONS.md](FUNCTIONS.md)
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Reuse [root rules](../../AGENTS.md) and [local instructions](AGENTS.md). A real searchable document
+replaces the old runtime-only/qualification ladder in #227; no generic framework must precede it.

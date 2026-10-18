@@ -1,36 +1,24 @@
-# Agent contract — eliot-search-doc-worker
+# Working on document extraction
 
-Own only `bins/eliot-search-doc-worker/**`. Keep the binary an isolated no-execute provider host. Do not
-edit libraries, daemon, root Cargo, shared evidence or architecture.
+Read the root architecture and implementation, then [FUNCTIONS.md](FUNCTIONS.md). The current binary
+only reports unavailable; the old function catalogue is not an implemented provider.
 
-## Gate and read set
+Deliver one real format through retained input → parser → page/text coordinates → materializer/units →
+searchable evidence. Change this binary and its immediate daemon/preparation consumers together.
+An echo worker, provider descriptor or process supervisor alone does not complete document support.
 
-Blocked until a candidate ticket supplies accepted P15, dedicated provider ADR, exact provider/runtime/
-Windows profile and accepted direct handoffs. Read only package instructions/assignment, `FUNCTIONS.md`,
-W10 cross-contract, document profile/settings and ticketed API digests.
+Use the selected parser directly in this child process. Keep source retention and publication in the
+daemon. Use owned stdio and concrete input/output types; reuse framing where useful. Do not build a
+plugin registry, worker certificate protocol, per-phase receipts or another universal document model.
 
-## Ownership
+Start with native PDF text. Page and extracted-text coordinates are useful; they are not offsets into
+the original PDF byte stream. OCR, layout models and scientific metadata are selected extensions.
+Do not run all extractors on every document or reparse unchanged revisions on a query.
 
-- exact provider/profile/artifact and inherited sandbox verification;
-- private daemon-only IPC;
-- bounded input/container inspection and no-execute/no-network enforcement;
-- provider dispatch, output/coordinate/loss-map validation seam;
-- finite resources/cancellation, malformed/crash isolation and cleanup/removal.
+Keep input/output and process resources bounded, propagate one deadline, and reap cancelled or failed
+children. Do not execute document actions or fetch linked resources. Use the donor parser rather than
+writing a second parser to pre-inspect every PDF object. Select only runtime dependencies actually needed
+by the format; a required OCR executable is different from executing indexed document code.
 
-## Forbidden ownership
-
-- source acquisition, revision storage, canonical materialization meaning, Qdrant/publication or clients;
-- scripts/macros/OLE/hooks/filters/shell/child process or remote resources;
-- path/reparse escape or unbounded archive/page/object/image/decompression/output;
-- provider selection in scaffold, automatic download/update, Python/Node without ADR;
-- G6 benefit verdict or self-acceptance.
-
-## Invariants
-
-Exact retained input digest/length; no current-path/Qdrant-payload substitution; lossy mapping never
-claims exactness; content absent from diagnostics; timeout/crash publishes no unverified temp output;
-worker absent/stopped by default; removal restores accepted P15 behavior.
-
-## Size
-
-Target `src/` <=5,000 lines; split review before 8,500 total; hard stop at 10,000 including local tests.
+Verify useful text/location output, malformed input, cancellation and daemon integration. No P15/G6
+receipt, provider ADR ceremony, source quota or legacy format compatibility is a coding prerequisite.

@@ -1,73 +1,29 @@
-# Agent contract — search-lexical
+# Working on search-lexical
 
-You own only `crates/search-lexical/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation](../../docs/implementation/README.md) and this package's
+[source map](FUNCTIONS.md). Historical frozen profiles, qualification receipts, fixture bytes and
+line quotas do not constrain the replacement.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S9.4, S12, H9, P06.
+The product needs useful code term preparation. Native Qdrant BM25 handles ordinary text tokenization,
+sparse encoding, weighting and retrieval. Keep the existing bounded identifier expansion,
+normalization and original-span behavior where it improves code search; remove replaced sparse engines,
+statistics builders and profile/fixture identity machinery with their consumers.
 
-## Mission
+Use the existing `unicode-ident` and `unicode-normalization` routines for retained code behavior.
+The bridge owns the existing Qdrant SDK and native `Document` inputs. Do not add a second backend,
+model runtime or generic lexical-provider interface. Select matching ingestion/query options explicitly;
+English stemming and stopwords are not defaults for code or neutral text.
 
-Encode documents and queries into immutable sparse-vector profiles without owning an index.
+Trace preparation, planner and real bridge/query callers before changing an API. A missing text-input
+path is integration work, not a reason to invent a qualified profile or preserve a byte-compatible
+encoder. Coordinate shared files with their actual writer; no contract-change issue is a prerequisite
+for an already authorized coherent change.
 
-## Ownership
+Keep source bytes and coordinates independent of normalized search terms. Exact/source owners perform
+literal and complete negative checks. Bound input, expansion and batches; propagate cancellation or
+unsupported input without advertising partial work as a complete result.
 
-- code_v1 and text_neutral_v1 profile behavior
-- tokenization, Unicode and identifier expansion
-- document/query compatibility fixtures
-- term-index/collision policy
-- profile and fixture digests
-
-## Forbidden ownership
-
-- inverted-index or searchable corpus storage
-- implicit English stopwords/stemming
-- runtime fallback between providers
-- using BM25 to prove exact identity or absence
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `LexicalEncoder::profile() -> LexicalProfileDescriptor`
-- `LexicalEncoder::encode_document(input) -> Result<SparseVector, LexicalError>`
-- `LexicalEncoder::encode_query(input) -> Result<SparseVector, LexicalError>`
-- `LexicalEncoder::fixture_digest() -> Digest`
-- `validate_document_query_compatibility(fixture) -> Result<(), LexicalError>`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `LEXICAL_PROFILE_MISMATCH`, `LEXICAL_FIXTURE_MISMATCH`, `COLLISION_PROFILE_UNQUALIFIED`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `snake/camel/Pascal/qualified identifiers match golden vectors`
-- `Unicode and paths follow pinned normalization`
-- `no implicit stopwords or stemming`
-- `document/query vectors match qualified reference fixture`
-- `provider/profile change requires new collection generation`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W3 / P06**
-- Soft `src/` target: **8,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Verify useful token/range behavior and connected native search with the relevant consumers. Remove
+checks whose sole purpose is to preserve old sparse bytes or qualify an obsolete protocol. A changed
+encoding needs consistent re-indexed content, not a universal migration or attestation platform.

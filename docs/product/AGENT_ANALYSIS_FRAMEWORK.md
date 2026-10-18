@@ -52,8 +52,11 @@ empty metadata fields and opaque receipts that force agents to make more calls t
 
 Source paths are locators; they do not replace immutable identity. Scores are hints, not confidence or
 proof. Cross-population scores are not directly comparable. Forks/mirrors are not independent evidence.
-Use the same eligible scope for retrieval/IDF and requested counts/statistics; never add excluded data
-back through ranking, groups or suggestions.
+Apply the resolved eligibility to retrieval and the explicit Qdrant IDF corpus; ordinary retrieval
+filtering alone does not scope statistics. IDF counts physical vector-bearing points, not distinct files
+or result groups.
+Do not add excluded data back through ranking, groups or suggestions, or duplicate index points just
+because a repository appears in multiple portfolios.
 
 A continuation may retain a bounded candidate window and snapshot pin; expiry/restart may require a new
 query. A normal read does not need a durable job, exported handle or provider ownership transfer.
@@ -61,8 +64,10 @@ Source restrictions take effect before their acknowledgement and invalidate affe
 
 ## Extend the useful path
 
-Plain text/source and sparse lexical retrieval come first. Import code facts and selected document
-profiles into the same units/maps, projection and validation path. Markdown/JATS adapters and lexical
+Plain text/source and local Qdrant BM25 come first. Native BM25 needs no model-worker service.
+Use a syntax outline for names/signatures; import actual SCIP/LSP occurrences when their source snapshot
+is known. An outline is not a semantic call graph. Add selected document profiles through the same
+units/maps, projection and validation path. Markdown/JATS adapters and lexical
 libraries already exist. Exact coordinate/loss maps matter when a parser transforms source. Document
 macros, indexed code, hooks and remote resources are never executed by ordinary search.
 

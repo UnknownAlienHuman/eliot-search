@@ -1,202 +1,59 @@
-# Function contract — `eliot-search-doc-worker`
+# Document extraction — implementation map
 
-**Status:** W10/P17 isolated optional document-worker contract; no provider/runtime/artifact is selected
-and the binary remains absent/stopped until accepted P15, a dedicated provider ADR and exact Windows
-qualification authorize one profile.
+The current [binary](src/main.rs) only exits unavailable. The following describes the selected
+implementation, not existing function signatures. Use existing #227 for the real document path.
 
-The worker hosts one exact document materializer in a private no-execute process. Canonical source and
-materialization meaning remain in Search contracts/materializer ports; activation, source acquisition,
-revision storage, projection publication and client capability state remain outside this binary.
+## Connect one PDF
 
-## Startup and profile admission
+1. The daemon selects an exact retained revision and supplies its bytes, or a read-only input derived
+   from that same retained object. Never reopen the current source pathname as if it were that revision.
+2. Start one owned child with bounded stdio and one document in flight. Bind explicitly to the packaged
+   PDFium library; avoid accidental system-library fallback. Load the PDF, visit pages and extract text.
+3. Return page text, extracted-text ranges, page number/size and available region coordinates, plus
+   skipped/failed-page reasons. Keep the source revision and extraction settings alongside the artifact.
+4. Parent preparation accepts the actual output once, builds units with those coordinates and publishes
+   through the existing planner. Reopen results through the retained PDF and derived text artifact.
 
-### `validate_provider_profile(config, gate_receipts, evidence) -> Result<ValidatedDocumentWorkerConfig, DocWorkerError>`
+The current raw UnitSet path requires byte-identical UTF-8. PDF output cannot be fed into it with a fake
+`ExactBytes` label. Change that real ingress together with materializer output; use existing coordinate
+maps, and add only a concrete page/region representation that its consumer needs.
 
-Requires accepted P15, candidate ADR, exact provider binary/library/runtime/Windows package/license,
-input MIME/encoding set, archive/container policy, page/object/image/table/figure/decompression limits,
-script/macro/hook/remote-resource/network policy, output schema, coordinate/loss-map identity,
-assurance/warning taxonomy, temp/content policy, finite resource limits and golden/fuzz fixture digest.
+## Selected parser and alternatives
 
-Rejects implicit provider defaults, floating versions, plaintext secrets, unsupported input ambiguity,
-network/credential requirements, executable behavior, unbounded archive/page/object/image/output policy
-and profiles whose coordinates/loss cannot be independently validated.
+| Use | Donor and concrete API | Limit / decision |
+|---|---|---|
+| First native PDF text | [pdfium-render 0.9.4](https://github.com/ajrcarey/pdfium-render/blob/ea2961cb8ac777bb1a06dddb8efd272d34d74f18/README.md#binding-to-pdfium): `Pdfium::bind_to_library`, load retained bytes, `document.pages()`, `page.text()`, `PdfPageText::all` / `chars` | Select the matching PDFium ABI/library at packaging. Disable default `image_latest` when rendering is unused; retain appropriate thread serialization. PDFium is a native dependency, not included by the Rust crate. |
+| Multiple selected formats in Rust | [Xberg source](https://github.com/xberg-io/xberg/blob/28c5311862e6f3466b4e762bf73a2ffe4b318dfa/crates/xberg/Cargo.toml), [Rust API](https://docs.xberg.io/guides/rust-core-api/) | An alternative when its format support removes more integration than the narrow PDF adapter. Use `ExtractInput::from_bytes`, `extract` and selected features; inspect per-input `errors` as well as `results`. Do not import its retrieval, agent, crawler or enrichment stack. Current `pdf` selects its native engine; it does not mean PDFium. |
+| Existing Docling artifacts or selected layout/table extraction | [NativePdfPipeline](https://github.com/docling-project/docling/blob/0e54294231b69bc2cf7a39873235495788f76b57/docling/pipeline/native_pdf_pipeline.py), [options](https://docling-project.github.io/docling/usage/advanced_options/#extract-the-native-content-of-a-pdf) | Native pipeline needs no layout/OCR/table model but keeps Python/docling-parse and has parser order only. Full layout/table extraction is a separate cost. Import existing revision-bound output before adding another persistent service. |
+| Scientific references/sections | [GROBID coordinates](https://grobid.readthedocs.io/en/latest/Coordinates-in-PDF/) | Selected `processFulltextDocument` + `teiCoordinates` gives TEI and native regions. Use only for the scientific corpus that needs this structure; it does not replace the lightweight PDF text path. |
+| Scanned pages | [OCRmyPDF options](https://ocrmypdf.readthedocs.io/en/stable/cookbook.html#produce-pdf-and-text-file-containing-ocr-text) or the selected OCR engine | OCR only pages lacking usable text, with explicit language/settings and gaps. OCRmyPDF sidecar omits pages that already had text and skipped pages; never treat that file as complete document text. Merge page outputs or read the produced PDF. |
 
-### `verify_inherited_sandbox(config, process_context) -> Result<DocumentSandboxReceipt, DocWorkerError>`
+These sources were inspected on 2026-10-18. No new parser dependency is locked or runtime-qualified by
+this Markdown change. Kreuzberg v4 LTS and current Xberg have different APIs; do not paste a v4 example
+into an Xberg adapter. The first PDF choice need not wait for all optional formats or a comparison service.
 
-Verifies daemon/process/installation incarnation, private endpoint, filesystem ACL, lifecycle boundary,
-private bounded temp root, effective no-network/no-child-process controls and resource policy before
-loading provider code.
+## Useful coordinates and bounded work
 
-The worker cannot open Search data roots, stores or Qdrant. A provider requiring broader privileges is
-not admitted.
+PDF character order may differ from human reading order in columns or custom layouts; the
+[text API](https://github.com/ajrcarey/pdfium-render/blob/ea2961cb8ac777bb1a06dddb8efd272d34d74f18/src/pdf/document/page/text.rs)
+states this limitation. Keep page boundaries and represent extraction quality honestly. Extracted text
+is not a byte slice of the binary PDF; a page citation remains useful without fabricated byte precision.
+Add layout inference only when the selected corpus needs it. OCR changes recognition quality, not source identity.
 
-### `load_qualified_provider(config, budget, cancel) -> Result<DocumentWorkerReady, DocWorkerError>`
+Check input bytes and page/text counts before retaining outputs; iterate pages rather than building a
+corpus-sized result. A page-size check cannot bound arbitrary allocation inside native parsing, so keep
+the child memory/process limit and one total deadline. PDFium serializes calls rather than gaining CPU
+parallelism from more Rust threads. Start with one worker; add a bounded process pool only for measured
+throughput needs. No parser runs on ordinary query/readback.
 
-Reopens exact local provider/runtime artifacts, verifies digests and runs bounded no-execute/golden/fuzz
-startup probes. It performs no package resolution, download, plugin discovery or remote-resource fetch.
+The parent owns child termination/wait and temporary-file cleanup on success, error and cancellation.
+Keep one terminal result with complete/partial/failed state. Partial page text may be useful but must carry
+its missing-page gaps; a crash or malformed output cannot become a complete representation. Worker
+output is ordinary typed data, not a receipt chain, credential exchange or independent source authority.
 
-Readiness remains `WORKER_READY_NOT_ACTIVE`; daemon gate/profile state controls serving.
+## Checks that matter
 
-### `open_private_session(ready, daemon_hello) -> Result<DocumentWorkerSession, DocWorkerError>`
-
-Binds daemon/worker identities, installation/process incarnation, profile digest, protocol version,
-nonce/sequence and bounded frame/in-flight limits. External clients cannot connect.
-
-## Request inspection
-
-### `admit_materialization_request(session, request, limits) -> Result<DocumentRequestGuard, DocWorkerError>`
-
-Requires one exact retained source revision digest/length, declared input kind/encoding, authorized
-materialization profile, finite bytes and resource/deadline/cancellation context. Input bytes are sent by
-the daemon; paths, URLs, store handles and Qdrant/redb/CAS clients are not accepted.
-
-Duplicate/conflicting request identity, unsupported/ambiguous MIME, oversize input and profile mismatch
-fail before provider invocation.
-
-### `inspect_container_and_input(guard, bytes, profile, budget, cancel) -> Result<SafeDocumentInput, DocWorkerError>`
-
-Performs bounded magic/type/container inspection and rejects:
-
-- absolute, parent-traversal, device, alternate-stream or duplicate-normalized member paths;
-- symlink, hardlink or reparse escape;
-- excessive nesting, members, compressed/uncompressed bytes or decompression ratio;
-- excessive pages, objects, images, dimensions, tables or figures;
-- embedded executables, scripts, JavaScript, VBA/macros, OLE actions or launch metadata;
-- external links, remote fonts/images/schemas/styles or credential prompts;
-- malformed encodings/structures outside the accepted fail/degrade policy.
-
-Inspection itself executes no archive member, hook, filter or external application.
-
-## Materialization
-
-### `materialize(guard, safe_input, provider, resource_guard) -> Result<DocumentWorkerProduct, DocWorkerError>`
-
-Invokes only the exact accepted provider under finite CPU/memory/commit/disk/temp/output/deadline bounds.
-The worker blocks network and child-process execution throughout the call.
-
-Success returns bounded typed outputs permitted by the profile:
-
-```text
-normalized text
-structure hierarchy
-qualified tables/figures metadata
-native anchors
-coordinate maps
-loss maps
-assurance ceiling
-warnings and omitted/degraded regions
-```
-
-Every output binds exact source revision/input digest and provider/profile/runtime identity. It contains
-no arbitrary provider object or executable payload.
-
-### `validate_materialization_output(expected, observed, profile) -> Result<ValidatedDocumentProduct, DocWorkerError>`
-
-Checks source digest/length, output byte/item limits, UTF/encoding contracts, structure references,
-anchor containment, page/bbox coordinate space, coordinate-map consistency, loss-map completeness,
-assurance/warning taxonomy and canonical output digests.
-
-It never fabricates raw-byte/page exactness when mapping is lossy. Missing/unreadable regions remain
-explicit; a degraded product cannot be relabeled high fidelity.
-
-### `emit_terminal(guard, product_or_error) -> Result<DocumentTerminalReceipt, DocWorkerError>`
-
-Emits exactly one bounded terminal response. Provider output is accepted only after validation. Late
-callbacks/results after cancellation/deadline/terminal state are discarded and temp/content buffers are
-released.
-
-## Cancellation, deadlines and cleanup
-
-### `cancel_request(session, request_id) -> CancelOutcome`
-
-Idempotently requests provider cancellation and prevents further successful emission. If provider code
-does not stop within the accepted grace period, the daemon terminates the worker process boundary.
-
-### `cleanup_request_workspace(guard, policy) -> Result<DocumentCleanupReceipt, DocWorkerError>`
-
-Closes handles, removes bounded private temp files and verifies no provider child/background process or
-remote session remains. Cleanup is required after success, failure, cancellation, timeout and provider
-crash. Receipt contains digests/counts only, not source content or raw paths.
-
-A timeout after the provider may have written temp output is not a materialization success. Only validated
-terminal output is publishable; unverified temp state is deleted/quarantined.
-
-## Health and lifecycle
-
-### `health_snapshot(session, resources) -> DocumentWorkerHealth`
-
-Returns profile/artifact/incarnation/state, bounded queue/in-flight/resource counts and content-free
-failure/quarantine codes. It excludes source names, MIME-derived private metadata, text, paths and
-provider diagnostic dumps.
-
-### `begin_drain(session, reason) -> DocumentWorkerDrainGuard`
-
-Stops new admission, completes/cancels bounded in-flight requests and enforces a finite drain deadline.
-
-### `shutdown_and_remove(guard, cleanup_policy) -> Result<DocumentWorkerRemovalReceipt, DocWorkerError>`
-
-Drains/cancels, unloads provider/runtime, clears private temp/cache state, closes the channel and verifies
-process/child cleanup. Receipt distinguishes graceful, forced verified and incomplete/quarantined
-cleanup.
-
-It does not switch Search materialization/projection routes or claim baseline restoration; daemon
-integration owns that transition and regression proof.
-
-## Crash and retry semantics
-
-The worker owns no durable Search state. Crash invalidates all unaccepted outputs. Daemon continues
-baseline capability, reports optional document degradation and restarts only under the same accepted
-profile and bounded policy or quarantines.
-
-Retry requires a new linked attempt or the same canonical operation identity after no terminal product
-was accepted. Current-path bytes cannot substitute for the retained revision. The worker never recovers
-requests from persistent content state.
-
-## Typed failures
-
-- `OPTIONAL_DEPTH_NOT_ACCEPTED`
-- `DOCUMENT_PROVIDER_DISABLED`
-- `DOCUMENT_PROVIDER_NOT_QUALIFIED`
-- `DOCUMENT_PROFILE_INVALID`
-- `DOCUMENT_ARTIFACT_MISMATCH`
-- `DOCUMENT_SANDBOX_FAILED`
-- `DOCUMENT_PRIVATE_CHANNEL_FAILED`
-- `DOCUMENT_PROTOCOL_MISMATCH`
-- `DOCUMENT_INPUT_UNSUPPORTED`
-- `DOCUMENT_INPUT_MALFORMED`
-- `DOCUMENT_INPUT_LIMIT_EXCEEDED`
-- `ARCHIVE_MEMBER_POLICY_DENIED`
-- `ARCHIVE_BOMB_DETECTED`
-- `NO_EXECUTE_POLICY_DENIED`
-- `REMOTE_RESOURCE_DENIED`
-- `DOCUMENT_RESOURCE_EXHAUSTED`
-- `DOCUMENT_DEADLINE_EXCEEDED`
-- `DOCUMENT_CANCELLED`
-- `DOCUMENT_PROVIDER_CRASHED`
-- `DOCUMENT_OUTPUT_INVALID`
-- `DOCUMENT_COORDINATE_MAP_INVALID`
-- `DOCUMENT_LOSS_MAP_INCOMPLETE`
-- `DOCUMENT_CLEANUP_INCOMPLETE`
-- `DOCUMENT_WORKER_QUARANTINED`
-
-## Required tests / qualification evidence
-
-- provider/runtime/artifact remains UNSELECTED and feature/binary absent by default;
-- accepted P15 + dedicated ADR + exact Windows artifact/license receipt required;
-- private daemon-only channel, replay/frame/in-flight bounds and no client endpoint;
-- no redb/CAS/Qdrant/source-inventory/handle/secret-store access;
-- exact retained revision digest/length and no current-path/Qdrant-payload substitution;
-- scripts/JavaScript/VBA/OLE/hooks/filters/shell/child process denied;
-- network, external fonts/images/schemas/styles/URLs and credential prompts denied;
-- traversal/device/alternate-stream/symlink/hardlink/reparse member denial;
-- nested archive/member/decompression/page/object/image/dimension/output bomb budgets;
-- malformed/truncated/fuzz corpus cannot crash daemon;
-- exact Windows packaging and provider startup fixture;
-- UTF-8/CRLF/UTF-16/page/bbox coordinate and loss-map fixtures;
-- lossy output never claims exact/high-fidelity assurance;
-- finite CPU/memory/commit/disk/temp/output/deadline/queue limits;
-- cancellation/timeout/crash cleanup and no publishable unverified temp output;
-- source content/path absent from logs/health/crash/receipt surfaces;
-- worker removal verifies process/temp/cache cleanup;
-- daemon removal returns to accepted P15 text/code materialization behavior;
-- public request/response API contains no vendor provider type or executable control.
+Exercise a text PDF, a multi-column page, a scan without native text, a malformed document and a cancelled
+large document through the real daemon/preparation/result path. Verify native page coordinates and
+retained revision identity, honest gaps, resource cleanup and that a normal query reuses the prepared
+artifact. Do not accept an echo provider or a passing constructor as format support.

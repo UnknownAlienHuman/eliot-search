@@ -1,32 +1,32 @@
-# Agent contract — search-qdrant-bridge
+# Working on search-qdrant-bridge
 
-Own the Qdrant data-plane adapter. Follow [root rules](../../../AGENTS.md) and the
-[implementation guide](../../../docs/implementation/README.md); a named immediate consumer may
-change with a replaced public API. Missing shared fields go to the existing contract owner.
+Follow the [root guidance](../../../AGENTS.md),
+[architecture](../../../docs/architecture/README.md) and
+[implementation](../../../docs/implementation/README.md). [FUNCTIONS.md](FUNCTIONS.md) maps the
+current source, native APIs and remaining integration work.
 
-## Ownership and reuse
+Use the existing pinned `qdrant-client`, private vendor conversion and reusable connection/runtime.
+Send bounded native `Document` inputs for `qdrant/bm25`, with matching ingestion/query text options.
+Translate the selected published scope into retrieval filters and explicit IDF corpus parameters.
+Use native indexed-branch fusion/grouping where useful; source bytes and evidence remain with their
+existing owners.
 
-- Consume shared S9.5 payload/schema/eligibility/epoch contracts and `search-point-identity::s11`.
-- Keep vendor schema/value/filter conversion, exact acknowledged mutations and readback private.
-- Bind actual operations to the exact admitted generation, profile, artifact and settings.
-- Use [FUNCTIONS.md](FUNCTIONS.md) for the old-to-shared payload and identity disposition under #262.
+The S9/S11 table describes current shared types. Simplify membership/profile/payload identity in the
+shared owner, planner and bridge together. Index fields actually used for filtering/grouping; retain
+one schema owner. Adapt precomputed-vector inputs for native BM25 rather than encoding it twice to
+satisfy an old expected digest.
 
-Do not own process/ACL/Job Object lifecycle, secret storage, access/recipe policy, durable publication
-or result authority. Do not expose vendor types, auto-download/upgrade, or add silent fallback.
-An SDK rename alone must not force daemon/query/control semantic changes.
+Use the actual configured endpoint, credentials and chosen server settings. Process startup belongs
+to the supervisor. Check the capabilities/schema the selected path uses; artifact/profile receipts
+and executed qualification reports are not runtime credentials.
 
-## Dependency and verification boundary
+For the local one-node, one-replica model, one publisher serializes dependent mutations. Require
+completed, visible writes with `wait=true` before publication; queue acknowledgement is insufficient.
+Strong ordering is not a universal floor for this model. Choose strict-mode cost limits deliberately.
+Keep batches bounded and resolve uncertain writes through the existing publication owner before
+advancing dependent work. Cancellation after possible effects does not imply rollback.
 
-`qdrant-client` is the private exact workspace pin, with `default-features = false`.
-The daemon supplies the actual endpoint and credential. The
-[adapter boundary](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md) keeps Cargo/API checks but retires
-partial source analysis and old status coupling. The existing diagnostic command is:
-
-```text
-cargo run --locked -p xtask -- validate qdrant-boundary --json
-```
-
-That diagnostic's historical package-status/source-shape requirements are not merge gates. The root
-protocol selects actual production checks and relevant behavior tests after integration.
-Review mixed responsibilities and delete replaced tables/codecs; a line count does not justify a new
-crate, public facade or a file split with identical ownership.
+Trace producers and consumers when changing an API, coordinate active shared files and remove replaced
+codecs/wrappers. Verify actual scope, native text options, stored results and write recovery after
+integration. Historical source-shape diagnostics, compatibility receipts and line quotas do not
+require preserving obsolete code.
