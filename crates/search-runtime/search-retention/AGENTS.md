@@ -1,28 +1,24 @@
-# Agent contract — search-retention
+# Working on search-retention
 
-Own only `crates/search-runtime/search-retention/`. Do not edit another package, root workspace, shared
-contracts or architecture. Missing fields use the contract-change process.
+This package is a legacy removal target. Read the root
+[architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and local
+[function map](FUNCTIONS.md).
 
-The bounded packet is `swarm/assignments/search-retention.md`.
+Allowed work:
 
-## Ownership
+- identify and switch the last real caller to current/pending/pinned view lifetime;
+- move a useful exact effect helper to its actual source/publication/bridge owner;
+- delete obsolete lease, sweep, purge, restore, migration, fixture and feature code;
+- keep unsupported old roots untouched.
 
-- CAS retention roots/mark/sweep policy
-- monotonic purge/tombstone/receipt semantics
-- restore revalidation/quarantine
-- lifecycle invalidation requests
+Do not add:
 
-## Forbidden ownership
+- a durable lease catalogue or replay journal;
+- legal-hold/security-purge planes, tombstone protocols or secure-erasure claims;
+- a generic object graph / CAS mark-and-sweep service;
+- live restore, root cutover, re-encryption or compatibility migration;
+- new proofs, receipts, canonical digests, ports, packages or line quotas.
 
-- ordinary index reclaim or handle storage/authorization
-- concrete redb/revision-store/Qdrant/process dependencies
-- physical secure-erasure overclaims
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-epoch-pins`, `search-index-reclaimer`, `search-handles`.
-Concrete control/object/index operations arrive through ports.
-
-## Size
-
-Target `src/` ≤ 7,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Ordinary local GC is described by the published view and exact references. If deletion is uncertain, retain
+bytes and retry later. The safe failure is a leak, not a larger lifecycle operating system.

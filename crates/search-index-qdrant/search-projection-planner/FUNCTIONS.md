@@ -1,48 +1,102 @@
 # Projection planning source and implementation
 
-## Current API
+The planner should turn one verified prepared view into ordered Qdrant work. It is pure planning code,
+not another source authority, publication journal or compatibility boundary.
+
+## Current API and cost
 
 | Source API | Actual work |
-| --- | --- |
-| [`validate_scope_binding`](src/plan.rs#L64) | Checks the supplied scope against the verified unit set and point budget. |
-| [`plan_projection(unit_set, scope, planned_units, requirements, budget)`](src/plan.rs#L373) | Checks complete unit/vector coverage, builds every point, sorts them and returns a whole `ProjectionPlan`. It has no cancellation/deadline parameter. |
-| [`manifest_canonical_bytes`](src/manifest.rs#L122) | Builds a complete generic CBOR value tree and encodes it under both caller and shared limits. |
-| [`diff_manifests`](src/diff.rs#L28) | Validates already sorted inputs, builds two maps and clones create/retain/retire entries. Reused IDs with changed immutable content are rejected. |
-| [`verify_manifest_reconstruction`, semantic-digest helpers](src/lib.rs#L81) | Rebuild or re-encode complete manifests before comparing/hashing them. |
-| [`decode_projection_manifest_data`](src/manifest_read.rs#L29) | Decodes the current stored format and re-encodes it for byte equality; does not prepare source data. |
-| [`validate_projection_manifest_metadata`](src/manifest_read.rs#L74), [`validate_schema`](src/lib.rs#L140) | Check metadata/scope/schema consistency. They neither fetch indexed data nor establish that publication happened. |
+|---|---|
+| [`plan_projection`](src/plan.rs#L373) | Checks unit/vector coverage, builds every point, sorts and returns one whole `ProjectionPlan`; no cancellation/deadline input. |
+| [`manifest_canonical_bytes`](src/manifest.rs#L122) | Builds and encodes a complete generic CBOR tree. |
+| [`diff_manifests`](src/diff.rs#L28) | Builds two maps, clones create/retain/retire entries and rejects a reused point ID whose full entry changed. |
+| [`verify_manifest_reconstruction`](src/lib.rs#L81) | Rebuilds/re-encodes complete manifests before comparing them. |
+| [`decode_projection_manifest_data`](src/manifest_read.rs#L29) | Decodes the current format and re-encodes it for byte equality. |
 
-## Concrete changes
+Current limits disagree: planning advertises 100,000 points / 64 MiB, while shared collection/codec limits
+cap a whole manifest at 4,096 entries / 8 MiB. Point construction happens before the smaller cap rejects.
+Use ordered bounded pages and check size/work before growing each page. Raising constants preserves the
+same whole-memory failure.
 
-**Make capacity follow the stored data.** [`ProjectionBudget::BASELINE`](src/model.rs#L32)
-sets 100,000 points and 64 MiB. Encoding rejects more than
-[`MAX_COLLECTION_ITEMS = 4,096`](../../search-contracts/src/bounds.rs#L9)
-or [8 MiB](../../search-contracts/src/bounds.rs#L8). This is one membership manifest,
-not the entire corpus. Point construction occurs before the row-cap rejection,
-and the encoded-size check follows tree construction. Store/iterate an ordered
-manifest in bounded pages; check the current piece's size before growing it.
-Keep total completeness while allowing cancellation between pieces. Merely raising
-these constants retains the same full-memory path.
+## Split retrieval points from view evidence
 
-**Keep actual vectors available for upload.** [`build_point`](src/plan.rs#L269)
-validates/hashes the borrowed vectors, then returns identity, payload bytes and
-expected digests. [`PointSpec`](src/model.rs#L143) has no vector values. Connect
-that metadata to the same prepared vector product when building a Qdrant batch;
-do not regenerate vectors, treat a digest as data or add another preparation proof.
+Current identity prevents efficient incremental updates:
 
-**Remove repeated representations.** [`rebuild_manifest`](src/plan.rs#L407)
-clones entries into a temporary manifest and copies the resulting bytes.
-Publication admission reconstructs the result again, then
-[embeds both manifests in a prepared digest](../search-publication/src/admission.rs#L501).
-Build/check the representation once and borrow it. Walk sorted old/new entries
-instead of rebuilding two `BTreeMap` indexes and cloning retained entries; an
-[existing merge walk](../search-publication/src/machine.rs#L556) provides the pattern.
+- source `UnitId` includes revision provenance, absolute coordinates and ordinal;
+- S11 point identity includes representation and Unit ID;
+- payload includes source revision, representation and Unit ID;
+- a manifest entry mixes immutable retrieval state with current evidence binding;
+- `diff_manifests` rejects the same point ID when any mixed field changes.
 
-**Read the active format directly.** Keep a bounded stored-metadata reader for
-actual consumers. Replace its format with the writer when simplifying storage;
-pre-release byte compatibility and mandatory old-format readers are not a
-prerequisite. Useful content identity does not require a digest of every transient
-plan, a second canonical tree or repeated re-encoding in unrelated consumers.
+Replace the mixed entry with two concepts.
 
-These changes join the existing planner, publication and bridge. They introduce
-no alternate search backend or additional planning framework.
+### Stable retrieval point
+
+A point key contains only fields that define stored retrieval/filter behavior:
+
+```text
+collection generation
+projection membership / stable source grouping
+occurrence incarnation
+retrieval profile and role
+exact retrieval-input digest
+point role
+```
+
+The occurrence incarnation distinguishes duplicate equal passages and changes when an occurrence vanishes
+and later returns. Absolute byte/line offsets and source revision do not belong in this key. A retrieval
+profile change normally creates a new generation; changed input/context creates a new point.
+
+Qdrant payload contains stable fields used by filtering/grouping plus point identity and validity interval.
+Remove version-specific citation coordinates from the payload with planner/bridge/query consumers. Do not
+pretend the current S9.5/S11 bytes already implement this model.
+
+### Versioned view binding
+
+Each ordered view-manifest entry binds a point to exact evidence for that view:
+
+```text
+point_id
+source_id / source membership
+source revision and representation
+logical occurrence and exact range
+prepared-artifact/reference information
+validity/view metadata needed by query lookup
+```
+
+Consecutive views can retain one unchanged retrieval point while writing a new evidence binding. Old pinned
+views keep their old binding. No in-place payload update may change historical citation meaning.
+
+Diff retrieval-point state separately from view bindings:
+
+- point absent before, present now → create;
+- same point bytes/profile/filter state → retain;
+- changed retrieval input/profile/incarnation → create new and retire old;
+- evidence range/revision only changed → retain point and update the new view manifest;
+- point absent now → close/retire after old views drain.
+
+## Keep uploadable input and one representation
+
+Current `build_point` hashes borrowed vectors and returns only identity, payload bytes and expected digests;
+`PointSpec` drops uploadable values. Keep the prepared text/vector input available to the same bounded
+Qdrant batch. Native BM25 carries text/options; selected client encoders carry actual vectors. Never
+recompute BM25 or treat a digest as vector data.
+
+Build/check each manifest page once and let publication/view storage retain those bytes. Remove whole old/new
+manifest embedding in another prepared digest, repeated reconstruction and full-map diffing. A merge walk
+over ordered pages is enough. New internal formats can replace current canonical bytes with their writer and
+readers together; unsupported old roots remain untouched.
+
+## Integration result
+
+The caller supplies one verified prepared artifact, accepted scope/profile and current view. The planner
+returns bounded pages containing:
+
+- complete/narrow Qdrant mutation input;
+- new view bindings;
+- exact retired IDs or retired generation;
+- expected readback fields actually checkable from Qdrant;
+- cancellation/progress checkpoints between pages.
+
+Publication owns durable pending/visible state and Qdrant effects. Query owns evidence lookup. The planner
+creates neither receipts nor another point/schema owner.

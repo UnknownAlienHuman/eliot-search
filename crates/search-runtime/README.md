@@ -1,16 +1,18 @@
 # Runtime family
 
-**Organizational capability family — not a Cargo package.**
+Organizational directory, not a Cargo package.
 
-## Child packages
+## Active responsibility
 
-- [`search-runtime-owner/`](search-runtime-owner/) — C01: Guarantee that exactly one process incarnation owns one data root and expose a fenced lifecycle to the daemon.
-- [`search-retention/`](search-retention/) — C28: Execute crash-safe mark-and-sweep, monotonic purge and restore quarantine across Search-owned projections and CAS.
+- [`search-runtime-owner/`](search-runtime-owner/) owns one process/data-root owner epoch and its real
+  acquire, drain and release effects.
+- [`search-os-secrets/`](../search-runtime/search-os-secrets/) owns optional OS-bound secret references.
+- The daemon composes runtime owners with source, control, publication and query behavior.
 
-## Family invariants
+[`search-retention/`](search-retention/) is a legacy W7 lifecycle implementation. Its generic leases,
+mark/sweep, purge and restore coordinators are not the baseline product. Useful ordinary lifetime behavior
+moves to current/pending/pinned published views and their owning source/publication stores; the package and
+`wave7-lifecycle` are removed after callers/tests switch.
 
-- Own lifecycle, retention and purge mechanics; never retrieval meaning.
-- The daemon is the composition root; this directory itself is not a Cargo package.
-- Security/legal purge dominates ordinary retention.
-
-Each writer agent owns exactly one child package and follows that package's `AGENTS.md`.
+Runtime code does not decide retrieval meaning, source evidence or query access. Do not add a family-level
+Cargo package or another lifecycle framework.

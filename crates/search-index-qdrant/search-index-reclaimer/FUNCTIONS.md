@@ -1,53 +1,98 @@
-# Reclaim source and implementation
+# Index cleanup — source and consolidation
 
-The current public records and helpers are implementation material. Their names
-do not establish durable commit, query lifetime or crash recovery.
+Ordinary cleanup belongs to the publication/view lifetime, not a separate proof-and-journal platform.
+Keep exact Qdrant delete/readback mechanics; fold their orchestration into the publisher and remove this
+package when callers switch.
 
-## Current API
+## Current source findings
 
-| Source API | Actual work |
-| --- | --- |
-| [`validate_retired_manifest(manifest, publication)`](src/manifest.rs#L71) | Checks nonempty sorted unique IDs and matching fields in a supplied `PublicationCommitProof`. It neither hashes those IDs nor reads committed control state. |
-| [`plan(manifest, watermark, settings, budget)`](src/plan.rs#L64) | Checks supplied pin counts and size limits, keeps the whole manifest, hashes the plan and copies IDs into all batches. |
-| [`execute_batch(plan, batch_index, admin, mutation)`](src/execute.rs#L122) | Checks the operation ID, calls exact delete, then exact readback; absence can resolve an unknown delete. It receives no context, deadline or current pin state. |
-| [`checkpoint(plan, receipts)`](src/receipt.rs#L90) | Validates and stores full completed receipts in an in-memory map. No write to storage occurs. |
-| [`resume(checkpoint, plan, watermark)`](src/receipt.rs#L115) | Rechecks supplied fields/counts and returns cloned unfinished batches. It does not execute or reopen anything. |
-| [`complete(plan, receipts)`](src/receipt.rs#L169) | Checks coverage of all planned IDs and returns an ordinary-reclaim summary. |
+| Current source | Problem |
+|---|---|
+| [`validate_retired_manifest`](src/manifest.rs) | Compares fields from two caller-supplied structures. It does not derive IDs from committed publication or bind the digest to `point_ids`. |
+| [`plan`](src/plan.rs) | Copies the whole manifest into batches and uses a custom FNV-like digest/short operation IDs. |
+| [`execute_batch`](src/execute.rs) | Useful exact delete/readback skeleton, but the port lacks route/generation/deadline binding and cleanup is detached from current pins. |
+| public plan/checkpoint/receipt types | Allow caller-constructed progress and require another durable journal. |
 
-## Replace the missing effects and redundant records
+A sampled `ReclamationWatermark` cannot close the acquisition race. Use the current-view guard model in
+[`search-epoch-pins`](../search-epoch-pins/FUNCTIONS.md): after cutover no new old-view guard can exist,
+so the last guard drop is the deletion boundary.
 
-**Read committed retirement once.** The validator compares two caller-supplied
-digest/receipt labels; changing the ordered point-ID list without changing those
-labels still passes its checks. Obtain the exact list from the actual committed
-publication/manifest owner and remove the parallel `PublicationCommitProof`.
-A third proof object would leave the same missing connection.
+## Cleanup owned by publication
 
-**Join final drain to deletion.** The daemon's
-[`authorize_reclaim`](../../../bins/eliot-searchd/src/rebuild_composition/kernel/reclaim.rs#L32)
-samples pins once. A later `execute_batch` does not recheck them; `resume` only
-accepts another unbound watermark value. Coordinate old-view admission and final
-guard release with [the pin owner](../search-epoch-pins/FUNCTIONS.md), then execute
-the committed list. Add the actual maintenance caller and adapter; existing
-`IndexAdmin` implementations are tests, not an installed background worker.
+The committed view transition already knows the old/new manifests, route/generation and exact retired IDs.
+Store cleanup progress in the same bounded publication artifact:
 
-**Keep one list and a position.** IDs currently remain in the manifest, batch
-vectors and each completed receipt; resume clones the unfinished batch vectors
-again. Read bounded slices from one committed retirement list. Repeating deletion
-of the same retired IDs and checking their absence is enough to retry; persist a
-compact position only when needed to avoid repeated work. Discard completed
-per-batch receipts and the custom plan digest when they serve no remaining retry
-purpose. Preserve the unfinished list across restart.
+```text
+cleanup kind: exact retired IDs | whole retired generation
+route / generation / retirement epoch
+ordered ID pages when needed
+next page/effect/readback cursor
+last unresolved effect, if any
+```
 
-**Use one bounded Qdrant operation path.** The already adopted
-[Qdrant client 1.19.0](https://github.com/qdrant/rust-client/blob/7c838035ae7b9455636dcaca918a55b7d7ca638f/src/qdrant_client/points.rs)
-provides `delete_points` and `get_points`. The existing
-[bridge delete](../search-qdrant-bridge/src/real/mutations/delete.rs#L13) uses an
-exact ID selector, `wait=true`, and a following `GetPoints`. The
-[live fixture adapter](tests/live_rebuild.rs#L191) calls that method and then the
-reclaimer requests another readback. Consolidate this into one exact absence
-check, including the path where delete timed out and may already have happened.
-Use the caller's remaining deadline across calls and check cancellation between
-bounded batches. SDK acknowledgement alone does not settle an unknown operation.
+Do not create a second operation identity, manifest proof, receipt graph or permanent checkpoint history.
+The existing pending operation identity and artifact pages identify the work.
 
-These are source-level integration findings; this documentation does not claim
-a live deletion incident or a completed Rust fix.
+### Same physical generation
+
+After every view that can observe the retired interval has drained:
+
+1. read the next bounded exact ID page;
+2. call the bridge delete on the same route/generation with the remaining deadline;
+3. read back exact absence of those IDs;
+4. advance the publication cleanup cursor;
+5. remove completed page data when no view needs it.
+
+A timeout/disconnect after dispatch is unresolved. Read actual state and continue; never infer rollback or
+blindly use a new operation ID. A partial or foreign response blocks progress. No broad filter deletion.
+
+### Replaced generation
+
+An incompatible vector/profile/schema normally uses a new physical generation. Old views keep the old
+collection. After the current pointer changed and its last guard is gone, delete the old collection as one
+bounded external cleanup operation. Do not manufacture per-point retire records for an entire obsolete
+generation.
+
+## Artifact and source GC
+
+Roots are intentionally small:
+
+- current published view and its manifest;
+- pending publication artifact;
+- live view guards/query windows;
+- current source heads;
+- explicitly retained user data that the product actually supports.
+
+View manifest entries lead to their exact source revisions, prepared artifacts and retrieval points.
+When no root refers to an immutable object, the owning store can delete it by exact object reference.
+Unknown inventory/readback leaves the object in place. Ordinary source removal publishes a view without
+that source; physical cleanup follows guards and references. This is not security purge and makes no
+secure-erasure claim.
+
+Tantivy's segment updater keeps files listed by committed and in-flight metadata and lets its directory GC
+remove untracked files. Lucene snapshot deletion keeps generations while references exist. Reuse these
+small rules, not either backend.
+
+## Removal boundary
+
+After publication and bridge callers use this flow, remove:
+
+- `PublicationCommitProof` and field-equality validation;
+- public `ReclaimPlan`, batch/checkpoint/receipt constructors and custom digests;
+- the separate reclaimer operation journal/ports;
+- route/epoch watermark inputs;
+- generic retention/purge dependencies and their fixtures.
+
+Keep only private helper code that performs exact bounded ID deletion/readback if it remains useful inside
+publication or the bridge.
+
+## Required behavior checks
+
+- old query continues while new view is current;
+- no new old-view guard after switch;
+- exact point cleanup starts only after the last relevant guard;
+- whole-generation cleanup waits for all old-view guards;
+- timeout after delete resolves by same-route/generation readback;
+- partial/unexpected IDs block cursor advancement;
+- current/pending/pinned manifest and source artifacts survive GC;
+- unreferenced derived artifacts eventually disappear without an eternal history.

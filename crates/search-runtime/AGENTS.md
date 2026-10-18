@@ -1,12 +1,15 @@
 # Runtime family rules
 
-- `search-runtime-owner` owns the data-root owner epoch and process-wide lease only.
-- `search-os-secrets` owns opaque OS-user/incarnation-bound secret references; plaintext never becomes
-  public configuration, argv, logs or telemetry.
-- `search-retention` owns CAS lifecycle, security/legal purge and restore quarantine.
-- Ordinary retired Qdrant-point deletion belongs to `search-index-reclaimer`, not retention or purge.
-- The daemon is the composition root; this directory itself is not a Cargo package.
-- Runtime packages never decide retrieval meaning or client admission.
+Read the root [architecture](../../docs/architecture/README.md) and
+[implementation](../../docs/implementation/README.md).
 
-Do not add a family-level `Cargo.toml` or shared implementation. Put behavior in the child package that
-owns the failure state and test seam.
+- `search-runtime-owner` owns only the process/data-root owner epoch and concrete acquire/drain/release.
+- `search-os-secrets` owns optional OS-user-bound secret references; plaintext stays out of public config,
+  argv, logs and telemetry.
+- Published-view lifetime belongs to publication/query owners, not a generic runtime lease catalogue.
+- Ordinary Qdrant cleanup belongs to publication plus the private bridge delete/readback operation.
+- `search-retention` is a removal target. Do not extend its lease, purge, sweep, restore or migration APIs.
+- The daemon is the composition root; this directory is not a Cargo package.
+
+A runtime package exists only for a real OS/process dependency or failure state. Do not create a package,
+port, receipt or state machine for hypothetical legal hold, migration, remote ownership or future storage.

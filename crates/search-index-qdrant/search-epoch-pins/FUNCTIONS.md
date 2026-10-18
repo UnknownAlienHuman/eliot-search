@@ -1,49 +1,91 @@
-# Pin source and implementation
+# Published-view guards — source and replacement
 
-## Current API
+The current package contains useful RAII release mechanics, but its public route/epoch/snapshot model is
+larger and less safe than the application needs. Replace it with one current-view owner used by query,
+continuation and publication cleanup.
 
-| Source API | Actual work |
-| --- | --- |
-| [`PinRegistry::new`](src/lib.rs#L207) | Creates process-local state for supplied active route, visible epoch and limits. |
-| [`publish_active_route`](src/lib.rs#L226) | Updates those fields under the lock; rejects epoch regression only on the same route. It does not observe a control commit. |
-| [`acquire_epoch_pin`](src/lib.rs#L242) | Queries require the active route/current epoch. The raw continuation case accepts any epoch at or below current visibility with an admissible expiry. |
-| [`acquire_route_pin`](src/lib.rs#L292) | Adds a guard for any supplied route, without a retired-route admission check. |
-| [Guard release/drop and `release_owner_pins`](src/lib.rs#L314) | Remove process-local records and counts. Cancellation/disconnect must invoke the real owning cleanup path. |
-| [`snapshot`](src/lib.rs#L368), [`compute_reclamation_watermark`](src/lib.rs#L592) | Copy counts under the lock, then count matching route pins and epochs below the supplied retirement epoch. No lock covers a later deletion. |
-| [`expire_continuation_pins`](src/lib.rs#L332) | Removes at most the requested number of expired continuation pins using caller time. |
-| [`ContinuationPins::with_query_pin`](src/continuation/creation.rs#L25) | Checks the still-live query guard and inserts its continuation guard under the same registry lock; failed creation releases the new guard. |
-| [Continuation `validate`, `release`, `retire_released`](src/continuation.rs#L135) | Validate the original binding/lifetime, release its guard, and separately remove its retained bookkeeping record. |
+## Current source findings
 
-## Close the real lifetime gaps
+| Current API | Problem |
+|---|---|
+| `publish_active_route(route, epoch)` | Accepts raw caller values instead of the committed publication view. |
+| `acquire_route_pin` | Can pin an arbitrary route; route pins make every point in that route unreclaimable. |
+| `acquire_epoch_pin` | Exposes route/epoch acquisition independently of the current view. |
+| `snapshot` + `compute_reclamation_watermark` | Samples counts, releases the lock and returns public data. A later old-route/epoch pin can appear before deletion. |
+| `release_owner_pins` | Releases by caller-known owner ID rather than a held guard/window. |
+| continuation `renew` / raw acquisition | Caller time can extend protection and legacy acquisition can create old pins without a live query. |
+| continuation `release` | Releases the guard but normally retains the binding; repeated windows can fill capacity. |
+| [`with_query_pin`](src/continuation/creation.rs) | Useful mechanism: under the same registry lock, transfers protection from a live query guard to an unpublished continuation. |
 
-**Use continuous protection.** [Daemon reclaim admission](../../../bins/eliot-searchd/src/rebuild_composition/kernel/reclaim.rs#L32)
-takes a snapshot and returns a plan; [execution](../search-index-reclaimer/src/execute.rs#L122)
-does not consult the registry. The raw continuation and route acquisition methods
-above can add a protecting pin after that observation. A copied `reclaimable` bool
-cannot close this race.
+The package is process-local. Restart already drops ordinary guards; no durable lease database is required
+for a short-lived query page.
 
-Connect admission and retirement in the existing lifecycle owner: new queries
-acquire the published view, continuations transfer a live guard, and old-route
-admission ends before final drain permits deletion. Keep the existing
-[`create_pinned_ephemeral`](../../search-query/search-continuation/src/security/creation.rs#L42)
-consumer; remove alternative old-view acquisition APIs when no caller needs them.
-This is an integration gap in source, not an observed production deletion.
+## Replacement model
 
-**Bound a continuation's actual lifetime.** The low-level
-[`EpochPinGuard::renew_continuation_pin`](src/lib.rs#L432) checks expiry relative
-to the supplied current time, not the original creation time. It can revive an
-expired but unswept record or extend repeatedly. Its only caller is a test.
-Prefer the fixed lifetime already enforced by `ContinuationPins::validate`;
-do not preserve this unused renewal API as a product requirement.
+Publication commits one immutable `PublishedView`:
 
-**Free completed bindings.** [`ContinuationPins::new`](src/continuation.rs#L83)
-caps records at `MAX_LIST_ITEMS` (4,096), including released records.
-`release` retains those records. The only current `retire_released` caller is
-[failed-creation cleanup](src/continuation/creation.rs#L164); successful
-[native invalidation](../../../bins/eliot-searchd/src/access_composition/native_security/invalidation.rs#L240)
-calls only `release`. Repeated completed lifecycles can therefore fill a
-long-lived store. Remove the binding when its owning continuation cleanup is
-complete; retain only an actual unfinished cleanup obligation.
+```text
+view_id / route / physical generation / visible epoch
+manifest root/pages
+scope and retrieval profile
+```
 
-Keep live guards through query I/O. Registry snapshots, copied epochs and receipt
-labels do not themselves keep the indexed data alive.
+The view owner holds one atomic current pointer. `pin_current()` clones a non-public `ViewGuard` containing
+an `Arc`/equivalent reference to that immutable view. Query code cannot choose a route or epoch.
+
+A continuation can obtain a second guard only from its still-live query guard, using the existing
+`with_query_pin` transfer pattern. The operation publishes the window only after its record/output is
+accepted. No raw old-view acquisition and no renewable continuation lease.
+
+When publication swaps the current pointer:
+
+1. new queries can acquire only the new view;
+2. existing query/windows continue using their exact old view;
+3. no API can create another old-view guard;
+4. the old guard count decreases monotonically;
+5. the last drop makes that view eligible for cleanup.
+
+This is the reclamation permit. It is not a sampled public Boolean, registry digest or durable receipt.
+The view owner queues one cleanup callback/item after the last guard. Registry poison/disappearance is
+reported and cleanup remains blocked; it never becomes apparent success.
+
+## Continuation/window lifetime
+
+One query-window owner keeps:
+
+```text
+view guard
+ordered result identities and already selected excerpts
+cursor
+optional opaque locators into the same window
+created/expires time and bounded bytes/items
+```
+
+Expiry/terminal completion removes the record and drops its guard. Restart expires process-local windows;
+a client can repeat/replan the query. Do not persist guards, renewable leases or released tombstone records.
+
+Remove normal use of:
+
+- route pins and arbitrary old route/epoch acquisition;
+- `PinRegistrySnapshot`, `ReclamationWatermark` and caller-provided fences;
+- release-by-owner string and renewal based on caller time;
+- separate continuation-pin records after the window owner adopts the guard;
+- package tests that enforce these old API shapes rather than view behavior.
+
+## Donor mechanism
+
+Lucene's
+[`SnapshotDeletionPolicy`](https://github.com/apache/lucene/blob/8a8ef488218405ee18ba9803c3ac1779ef74093a/lucene/core/src/java/org/apache/lucene/index/SnapshotDeletionPolicy.java)
+keeps a refcount per commit generation, suppresses deletion while a snapshot exists and releases it
+explicitly. Reuse that small lifetime rule. Eliot does not adopt Lucene or its index format.
+
+## Required behavior checks
+
+- query pins exactly the current committed view;
+- publication switches current while an old query remains valid;
+- continuation transfer cannot occur after the query guard is gone;
+- new query cannot acquire the old view after switch;
+- last old guard schedules cleanup exactly once;
+- window expiry/finish removes its record and releases protection;
+- restart leaves only the current durable view and pending publication state;
+- no forged snapshot/watermark or caller time can authorize deletion.

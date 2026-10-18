@@ -4,9 +4,9 @@ ELIOT Search helps agents and people understand large codebases and document col
 reading the entire corpus. It finds useful evidence, shows where it came from and makes the next
 source read or exact check obvious.
 
-This is the product manifesto to keep in the lead developer's context. The
+This manifesto stays in the lead developer's context. The
 [implementation guide](../implementation/README.md) owns code locations, integration and donor choices.
-This manifesto replaces conflicting requirements in the historical 8.4 design and old task packets.
+It overrides conflicting requirements in the historical 8.4 design and old task packets.
 
 ## Product
 
@@ -15,26 +15,31 @@ files, symbols or document ranges with short excerpts, revision identity and cle
 open the exact evidence, orient themselves in an unfamiliar project and compare implementations.
 
 The application works on its own through a CLI and local client interface. Large repositories and
-portfolios are a core workload. A model, agent controller or ELIOT integration is not required to run it.
+portfolios are a core workload. A model, agent controller or ELIOT integration is not required.
 
 ## What a useful result means
 
 - A citation corresponds to the exact source revision that supplied its bytes.
-- A ranked result helps navigate; it does not claim exhaustive coverage or prove absence.
-- An explicit exact check can establish a complete result over a stated, actually scanned scope.
-- Changes become searchable incrementally. Restart preserves committed state; a lost index can be rebuilt.
-- Results expose unsupported formats, missing revisions, stale observations and unfinished work clearly.
-- Interactive requests remain bounded and cancellable while background indexing makes progress.
+- A ranked result helps navigate; it does not prove exhaustive coverage or absence.
+- An explicit exact check can cover one stated, actually scanned inventory.
+- Changes become searchable incrementally. Restart preserves committed state; a lost index rebuilds.
+- Unsupported formats, missing revisions, stale observations and unfinished work remain visible.
+- Interactive requests stay bounded and cancellable while background indexing progresses.
 
 ## Design principles
 
 **Source truth has one owner.** Retained source bytes and their coordinates establish evidence.
 Qdrant is the only indexed retrieval engine. Control storage tracks current application state.
-Search does not maintain another search database or a parallel authority for the same fact.
+Search does not maintain another search database or parallel authority for the same fact.
 
-**One coherent view.** A query uses one explicit source scope and one published view. Incomplete writes
-never become a mixed visible index. Recovery resolves real unfinished effects. Ordinary reads and pure
+**One coherent view.** A query uses one explicit scope and one published view. Incomplete writes never
+become a mixed visible index. Recovery resolves real unfinished effects. Ordinary reads and pure
 transformations need no durable receipts.
+
+**Views own lifetime.** Current and pending views, plus live query windows derived from them, keep their
+manifests and referenced artifacts alive. After a view is no longer acquirable and its last guard is gone,
+its derived data may be reclaimed. Ordinary local operation needs no universal lease, legal-hold, purge,
+mark-and-sweep or restore platform.
 
 **Local by default.** The baseline serves the owning OS account and explicitly selected sources.
 It neither executes indexed material nor silently broadens the corpus. Restricted clients, remote
@@ -46,7 +51,7 @@ A capability name, agent assignment or hypothetical future backend does not just
 
 **Libraries supply established machinery.** Reuse parsing, matching, serialization, storage and
 transport implementations. Search adds source semantics and useful results. It does not need its own
-compiler, database transaction platform or general cryptographic protocol.
+compiler, transaction platform, lifecycle operating system or general cryptographic protocol.
 
 **Hashes have a specific purpose.** Content identity and necessary integrity checks use real hashes.
 A local request, plan, configuration, state transition or review does not need a digest or signature
@@ -56,21 +61,20 @@ merely to look trustworthy. A trusted local exchange needs no separate cryptogra
 Legacy implementations and their fixtures do not constrain the new product. Original files and sole
 retained copies remain user data; simplification never silently destroys them.
 
-**Cost follows useful work.** Normal updates touch changed content. Storage and maintenance do not grow
-with an eternal history of completed internal operations. Query bookkeeping is short-lived. Optional
-features do not multiply the normal startup and query paths. Source occurrence, current location and
-reusable derived input are separate facts: a small edit must not invalidate unrelated work merely
+**Cost follows useful work.** Normal updates touch changed content. Storage does not grow with an eternal
+history of completed operations. Query bookkeeping is short-lived. Source occurrence, current location
+and reusable derived input are separate facts: a small edit must not invalidate unrelated work merely
 because later offsets or revision identifiers changed.
 
 **Completion means an application.** Deliver connected behavior and remove the replaced implementation.
-Neither small files, a low line count, closed tickets nor passing structural checks establish a working
-product. Tests should expose incorrect results, lost state or unbounded work.
+Small files, a low line count, closed tickets and structural checks do not establish a working product.
+Tests should expose incorrect results, lost state, excessive rewrite or unbounded work.
 
 ## Product boundary
 
 Search owns source acquisition, retained revisions, preparation, indexed retrieval, exact verification
 and compact evidence for its clients. Agent scheduling, task governance, general memory, online research,
-a hosted service and universal data migration are outside this application.
+a hosted service, legal-record management and universal data migration are outside this application.
 
 Optional code intelligence, document formats, semantic ranking and adapters extend the same source and
 query path when selected. Their future possibility is not a reason to build an empty framework now.
