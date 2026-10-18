@@ -36,6 +36,11 @@ Search does not maintain another search database or parallel authority for the s
 become a mixed visible index. Recovery resolves real unfinished effects. Ordinary reads and pure
 transformations need no durable receipts.
 
+**Scope is selected from a view.** The published view already fixes its source memberships, route,
+profiles and evidence bindings. A request selects a subset of that view; a source update publishes a new
+view. The local product needs no parallel immutable corpus/portfolio authority, overlap proof, scope digest
+or security checkpoint protocol around that selection.
+
 **Views own lifetime.** Current and pending views, plus live query windows derived from them, keep their
 manifests and referenced artifacts alive. After a view is no longer acquirable and its last guard is gone,
 its derived data may be reclaimed. Ordinary local operation needs no universal lease, legal-hold, purge,
