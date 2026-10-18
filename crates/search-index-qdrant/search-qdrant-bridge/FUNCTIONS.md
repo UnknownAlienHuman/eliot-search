@@ -93,5 +93,5 @@ exact build/auth, topology/index/schema/strict readback, signed range/missing-fi
 IDF/independent corpus, named vectors, wait/strong/exact CRUD and unknown-outcome recovery.
 Add the causal shared-payload closure, UUID/numeric-ID distinction, full S11 collision/profile,
 exact route/restart admission and vector-readback cases to the existing owner fixtures.
-The [execution protocol](../../../docs/product/EXECUTION_PROTOCOL.md#4-implement-then-verify-the-production-closure)
+The [implementation guide](../../../docs/implementation/README.md#7-verification-and-delivery)
 selects production checks/guards and defers test/live execution until integrated implementation.

@@ -21,7 +21,7 @@ from remaining integration; it does not assign a new source writer.
 
 ## Current implementation method
 
-Follow [EXECUTION_PROTOCOL](../product/EXECUTION_PROTOCOL.md): one manager worktree, bounded source
+Follow [Implementation](../implementation/README.md): one manager worktree, bounded source
 owner plus required immediate consumers, read/research/review subagents, minimal production
 check/Clippy, explicit compatibility/deletion and one independent final-head review.
 

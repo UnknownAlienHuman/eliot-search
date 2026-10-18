@@ -1,29 +1,33 @@
 # search-query-planner
 
-**C22 — Server-owned query planner.**
+Pure query planning inside the application: choose the operations needed for a resolved source scope,
+published view, retrieval profile and finite query limits. Storage, scope resolution, Qdrant calls and
+source readback belong to their existing owners.
 
-**Status:** `SOURCE_PRESENT`; planning, dependency capture, leg-graph and fingerprint source exists, while canonical scope/recipe/ranking integration and installed product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #125/#213/#221.
+Use the [implementation guide](../../../docs/implementation/README.md#4-simplify-and-connect-the-query)
+for the integration change and [FUNCTIONS.md](FUNCTIONS.md) for the actual API.
 
-Compile a normalized recipe, coherent view, validated grant and budgets into an immutable vendor-neutral `SearchTaskPlan`.
+## What exists
 
-## Owns
+[src/lib.rs](src/lib.rs) implements recipe normalization, bounded leg construction, budget allocation,
+drift classification and canonical dependency/fingerprint checks. `compile_canonical_plan` returns
+`CompiledSearchPlan`; it consumes a caller-created `SearchTaskPlan`. The inspected tree has tests and
+support callers for compilation, but no connected production CLI/daemon query calling it.
 
-- recipe normalization
-- load-bearing dependency capture
-- bounded leg graph
-- `PlanFingerprint`
-- deterministic ordering and replan triggers
-- priority and budget assignment
+The current API uses V1 recipes and grant/fingerprint inputs. The delivered evidence/orientation
+contracts use V2 forms. Their existence does not connect either path to execution.
 
-## Must not own
+## Change this owner with its consumers
 
-- accepting raw client Qdrant plans
-- database clients
-- mixing source/workspace view revisions
-- unbounded legs or queues
-- embedding client admission authority
-- hard dependency on subject-resolution or optional-provider implementations
+Accept resolved scope, a pinned published view, the actual lexical profile, query and limits directly.
+Remove the mandatory task-plan/grant/fingerprint assembly from trusted-local planning. Keep useful
+ordering, scope/profile checks, leg bounds and drift behavior; do not create synthetic proof inputs or
+another planner to satisfy the old API.
 
-- **Delivery wave:** W4 / P08
-- **Soft source-line target:** 9,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Connect the daemon query handler to this owner, existing lexical encoding, retrieval and source
+validation. Update request and executor consumers together. Implement selected operations as they
+become usable; preserving all eleven V1 recipes and their bytes is not a prerequisite.
+
+Planning performs no I/O or pin acquisition. The runtime owns one request deadline; the executor and
+reader enforce actual work limits. An ordinary ranked query needs neither an exact denominator nor a
+persistent plan. See [AGENTS.md](AGENTS.md).

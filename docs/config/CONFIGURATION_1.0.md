@@ -2,9 +2,12 @@
 
 Historical format reference. The current FILE grammar is schema2 `eliot-config-toml@2`, defined in
 [TOML_PROFILE_2.md](../../crates/search-config/TOML_PROFILE_2.md). Schema1 files return
-`UnsupportedSchemaVersion` and require migration; the historical body below is preserved.
+`UnsupportedSchemaVersion`; use the current format. This does not require a migration subsystem.
+The historical section design below is not a promise that the daemon consumes every listed field.
+Read the [implementation guide](../implementation/README.md) and each real registry/owner before changing
+settings; old fingerprints, receipts and fixed pairing requirements do not constrain the new application.
 
-**Status:** implementation contract; runtime parsing and reload are not implemented.  
+**Status:** historical reference; current implementation differs from this original contract.
 **Owner of layering:** `search-config`.  
 **Owner of each typed section:** the package listed in `config/sections.toml`.  
 **Composition owner:** `eliot-searchd`.
@@ -255,18 +258,10 @@ state.
 
 ### 6.4 `[protocol]` — `search-provider-protocol`
 
-| Field | Type | Default / bound | Override | Reload |
-|---|---|---|---|---|
-| `max_frame_bytes` | `u32` | `8388608`; configurable downward only | file, env, CLI | restart |
-| `max_in_flight_per_connection` | `u16` | `32`; `1..32` baseline | file, env, CLI | live decrease; restart increase |
-| `hello_timeout_ms` | `u64` | `5000`; `100..30000` | file | live |
-| `request_deadline_cap_ms` | `u64` | `120000`; `100..600000` | file | live |
-| `compression` | `bool` | `false`; fixed baseline | none | reject |
-| `fragmented_messages` | `bool` | `false`; fixed baseline | none | reject |
-| `pairing_required` | `bool` | `true`; fixed | none | reject |
-
-Pipe/socket identity is derived from installation/binding state; a user string cannot create an
-unauthenticated second endpoint.
+See the [current protocol section](../../config/sections/protocol.md) for implemented `ProtocolLimits`
+and the missing daemon settings connection. The former `pairing_required` field was a design/example
+entry, not a working runtime switch. Trusted-local session APIs and actual settings/callers change
+together; restricted-client pairing is not a universal requirement.
 
 ### 6.5 `[source_admission]` — `search-source-admission`
 

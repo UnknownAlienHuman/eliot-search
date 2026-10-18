@@ -1,9 +1,10 @@
 # ADR 0003 — P00 contract projection and shared port ownership
 
-- **Status:** accepted
+- **Status:** historical decision; superseded as implementation guidance
 - **Date:** 2026-08-29
 - **Scope:** P00 implementation projection and package ownership
-- **Current architecture:** [local-baseline decisions](../architecture/README.md) supersede the older mandatory domain, port and process requirements below.
+- **Current guidance:** [architecture manifesto](../architecture/README.md) and
+  [implementation](../implementation/README.md) replace the mandatory domain, port and process rules below.
 
 This ADR records the original contract/port ownership split. Reuse its delivered types where useful;
 it does not require a trait, canonical digest or conformance catalogue for every function. The current
@@ -20,11 +21,12 @@ The bounded swarm scaffold still left two P00 hazards:
    prose would cause capability agents to invent incompatible local interfaces or import concrete
    adapters.
 
-A load-bearing handoff inconsistency also exists: Part I S7.2.1 defines
+A handoff inconsistency existed: Part I S7.2.1 defined
 `source_owner_generation` as a BLAKE3-256 digest, while Part II H3.1 sketches
-`SourceOwnerGeneration(NonZeroU64)`. Part I is the normative architecture body and therefore wins.
+`SourceOwnerGeneration(NonZeroU64)`. P00 followed Part I at that time; this does not freeze the current
+source model or require an owner-generation digest after its old consumers are removed.
 
-## Decision
+## Historical decision
 
 - Add `search-ports`, depending only on `search-contracts`, as the owner of shared vendor-neutral port
   traits and conformance interfaces.
@@ -53,7 +55,7 @@ search-contracts
 `search-ports` has no concrete implementation and no dependency on `search-domain`; a port exposes
 validated contract shapes, while the implementing capability applies its own accepted domain rules.
 
-## Consequences
+## Consequences recorded at the time
 
 - P00 may run `search-domain` and `search-ports` in parallel only after the contracts handoff is
   accepted.

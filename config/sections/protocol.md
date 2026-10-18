@@ -1,52 +1,56 @@
-# `[protocol]` configuration contract
+# Protocol configuration
 
-- **Owner:** `search-provider-protocol`
-- **Earliest wave:** W1
-- **Section minimum:** `RESTART_DEPENDENCY`
-- **Secret policy:** `forbid_plaintext`
-- **Canonical source:** `docs/config/CONFIGURATION_1.0.md`
+Protocol behavior belongs to `search-provider-protocol`; the daemon acquires settings and owns the
+connection. Follow the [local protocol implementation](../../docs/implementation/README.md#4-simplify-and-connect-the-query).
+This replaces the former packet's universal pairing requirement and generic section-digest/receipt API.
 
-This packet is the bounded read set for the section owner. It does not authorize implementation or
-override `swarm/launch-state.toml`.
+## Current implementation
 
-## Fields
+The existing V1 [binding API](../../crates/search-provider-protocol/src/binding.rs) requires
+`VerifiedPairing` in `authenticate_binding` and `BoundSession::open`. Its authenticated envelopes
+and callers have not been converted to the trusted-local target.
 
-| Key | Type | Default / bound | Override | Minimum action |
-|---|---|---|---|---|
-| `max_frame_bytes` | `u32` | `8388608; downward only` | `file, env, CLI` | `RESTART_DEPENDENCY` |
-| `max_in_flight_per_connection` | `u16` | `32; 1..32` | `file, env, CLI` | `APPLY_LIVE decrease / RESTART increase` |
-| `hello_timeout_ms` | `u64` | `5000; 100..30000` | `file` | `APPLY_LIVE` |
-| `request_deadline_cap_ms` | `u64` | `120000; 100..600000` | `file` | `APPLY_LIVE` |
-| `compression` | `bool` | `false; fixed` | `none` | `REJECT` |
-| `fragmented_messages` | `bool` | `false; fixed` | `none` | `REJECT` |
-| `pairing_required` | `bool` | `true; fixed` | `none` | `REJECT` |
+The [kernel defaults](../../crates/search-provider-protocol/src/config.rs) are:
 
-## Required section API
+| Runtime setting | Implemented value/bound |
+|---|---|
+| `ProtocolLimits.max_frame_bytes` | At most 8,388,608 bytes for the complete frame, including its four-byte prefix. |
+| `ProtocolLimits.max_body_bytes` | Default 8,388,604; cannot exceed frame capacity minus the prefix. |
+| `ProtocolLimits.max_in_flight_requests` | Default 32; accepted range 1–32. |
+| `ProtocolLimits.max_replay_entries` | Default 4,096; must be nonzero in the current session API. |
+| Compression/fragment assembly | Not implemented by the framing codec. |
 
-```text
-section_descriptor() -> ConfigSectionDescriptor
-compiled_defaults() -> ConfigSectionInput
-validate_section(input, platform, accepted_capabilities) -> Result<ValidatedSection, ConfigError>
-section_digest(validated) -> Blake3Digest32
-plan_section_change(old, new) -> Result<SectionReloadDecision, ConfigError>
-apply_live_change(old, new, context) -> Result<ConfigApplyReceipt, ConfigError>
-```
+The old [configuration reference](../../docs/config/CONFIGURATION_1.0.md) and
+[example TOML](../eliot-search.example.toml) declare `pairing_required = true`, hello timeouts and other
+section fields. That table is not an implemented settings API: `ProtocolLimits` has no
+`pairing_required` field, and the current
+[daemon registry](../../bins/eliot-searchd/src/config_composition/kernel/registry.rs) does not register
+`[protocol]`. Setting `pairing_required = false` therefore does not enable a supported local mode.
+The enforced pairing constraint is in the existing session constructors and consumers.
 
-`apply_live_change` is legal only for fields whose final action is `APPLY_LIVE`. Restart, security
-barrier, rebuild, collection-generation and gate actions are executed by daemon orchestration.
+## Target change
 
-## Invariants
+Use owned child stdio or an owner-only local pipe for the trusted-local exchange. Remove mandatory
+pairing, body MAC and grant inputs from that API with its actual client/daemon callers. Change the
+settings registry/parser, examples and session construction in the same integration; do not advertise
+an unsupported flag or pass invented proofs to the old API. One current protocol replaces the old
+forms without a compatibility adapter or parallel endpoint.
 
-- 8 MiB and 32 are architecture ceilings, not suggestions
-- no second unauthenticated endpoint
-- pairing/authentication cannot be disabled by configuration
+For a selected restricted-client profile, enforce actual credentials, replay protection and delegated
+scope. A generic configuration switch must not silently weaken that profile's promised restrictions.
 
-## Required tests
+Keep finite input/output, queue and in-flight limits. Check the declared frame length before allocating
+or reading its body; use typed decoding after framing. The runtime converts the admitted request limit
+to one absolute deadline used by all operations. A settings change does not replenish running requests'
+budgets. Unsupported compression or fragmented-message settings remain errors.
 
-- defaults validate and produce a stable section digest;
-- every field boundary and override source is tested;
-- unknown keys and wrong types fail closed;
-- the owner never accepts plaintext secrets or foreign section keys;
-- a field cannot be assigned a weaker action than this packet;
-- redacted diagnostics contain no secret, source/query content or raw path;
-- equal validated inputs produce equal digests and reload decisions.
+Only expose settings that the current application consumes. Add clear defaults, type/range validation
+and actionable errors with those consumers; do not require a section fingerprint, generic reload
+receipt or delivery-wave approval for each value. Existing connections retain coherent settings until
+replaced; a new transport format is selected when a connection is opened.
+
+## Verification
+
+Check actual configuration-to-runtime values, malformed/unknown options, prefix and output bounds,
+EOF/cancellation cleanup and the selected connection profile. Restricted-client checks apply when that
+profile is used. A parsed document or a section digest does not demonstrate that the daemon applies it.

@@ -39,8 +39,9 @@ are not connected into a normal indexed user query.
 The #213 schemas already exist:
 [request/result types](../../crates/search-contracts/src/evidence.rs) and
 [provider encoding](../../crates/search-provider-protocol/src/frame/client/evidence_schema.rs) for
-`retrieve_evidence@1` and `orient_scope@1`. The remaining work is their real serving path. Do not create
-another contract freeze, runtime or recipe registry because an older document calls those absent.
+`retrieve_evidence@1` and `orient_scope@1`. Simplify their mandatory plan/fence/trace metadata and exact-scan
+budget assumptions, then connect their real serving path. Change the existing V1 host and V2 consumers
+together; do not create another contract family, runtime or recipe registry.
 
 ## Result design
 
@@ -68,4 +69,4 @@ macros, indexed code, hooks and remote resources are never executed by ordinary 
 Measure whether an agent finds the right implementation with fewer source reads and less context;
 also measure recall, false analogues, first useful result, incremental update cost, restart and resource
 use on large scopes. A small example demonstrates connectivity, not repository-fleet scale. See the
-[completion programme](PROJECT_COMPLETION.md) for current outcomes and selected extensions.
+[implementation guide](../implementation/README.md) for concrete changes and selected extensions.

@@ -1,38 +1,20 @@
-# P00 contract implementation pack
+# Historical P00 contract map
 
-Bounded W0 projection from Architecture 8.4 SHA-256
-`ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c`.
-Part I wins; contradictions stop work and update this pack through the integration owner.
+The [architecture manifesto](../../architecture/README.md) and
+[implementation guide](../../implementation/README.md) govern the new application.
 
-## Read sets
+These files describe the earlier P00 schema. Read a specific record only when it helps understand a
+real producer/consumer. They do not require the old recipe family, grant/plan/proof fields, canonical
+wire bytes, API digests or receipt process to survive refactoring. Change real types and their consumers;
+there is no contract freeze or separate permission issue.
 
-- `search-contracts`: every file except port-support implementation ownership remains with
-  `search-ports` as marked.
-- `search-domain`: canonical types, named type completions, support schemas, source graph,
-  query/results, recipe results and reasons, plus the accepted frozen `search-contracts` API/type digest.
-- `search-ports`: canonical types, type registry/completions port-support sections, support schemas port
-  note, port operations, reasons and accepted contracts digest.
+| Existing record | Historical detail |
+|---|---|
+| [Types](TYPE_REGISTRY.md), [completions](TYPE_COMPLETIONS.md), [canonical types](CANONICAL_TYPES.md) | Existing names, encodings and bounds |
+| [Source graph](SOURCE_GRAPH.md) | Source, revision, preparation and old domain schemas |
+| [Queries/results](QUERY_AND_RESULTS.md), [recipes](RECIPES.md), [recipe results](RECIPE_RESULTS.md) | Existing request/result forms |
+| [Protocol](PROTOCOL_AND_LIFECYCLE.md), [ports](PORT_OPERATIONS.md) | Existing envelopes and port surface |
+| [Support records](SUPPORT_SCHEMAS.md), [reasons](REASON_CODES.md) | Existing auxiliary fields and errors |
 
-The bounded `search-domain` context does not duplicate the full raw type registry after
-`search-contracts` is accepted; the immutable accepted API/type digest is the authority for all other
-shared shapes.
-
-## Files
-
-- `CANONICAL_TYPES.md` — primitive encodings and digest domains.
-- `TYPE_REGISTRY.md` — helper types, owners, visibility, bounds and enums.
-- `TYPE_COMPLETIONS.md` — named types used by P00 schemas but previously missing from the registry:
-  `RecipeIdV1`, `RecipeBodyV1`, `ComparisonAxis`, `ProtocolRange` and `PackageOpaque`.
-- `SUPPORT_SCHEMAS.md` — ranking, behavior, exact, readiness and subordinate records.
-- `CONTRACT_CHALLENGES.md` — precedence and ambiguity decisions.
-- `SOURCE_GRAPH.md` — source, ownership, residency, view and preparation schemas.
-- `RECIPES.md` — exact requests.
-- `QUERY_AND_RESULTS.md` — grants, plans, validated candidates, gaps and exact reports.
-- `RECIPE_RESULTS.md` — eleven field-level result variants.
-- `PROTOCOL_AND_LIFECYCLE.md` — protocol, opaque handles, server records and lifecycle.
-- `PUBLICATION_GUARDS_CORRECTION.md` — required publication-guard compatibility and verification rules.
-- `REASON_CODES.md` — error namespaces.
-- `PORT_OPERATIONS.md` — shared port operation inventory.
-
-W0 receipt records architecture/manifest/file hashes, contracts/domain/ports API digests, exact
-toolchain/dependencies, test outcomes and zero unresolved challenges.
+Keep only the semantics used by the new application. Source truth, coherent publication and concrete
+bounds remain useful; every old field, helper type and handoff record does not.

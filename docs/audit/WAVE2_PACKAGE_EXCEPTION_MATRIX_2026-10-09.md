@@ -1,7 +1,7 @@
 # Wave 2 package-instruction exception matrix — historical path map
 
 **Recorded base:** `de07c2214097a596066d6afac308394d9b4bcd62`.
-**Applicability:** historical owner/path evidence. Current maintainer instructions, root AGENTS, the exact current slice and [bounded execution protocol](../product/EXECUTION_PROTOCOL.md) govern work. This matrix does not impose an old queue or missing-prerequisite claim.
+**Applicability:** historical owner/path evidence. Current maintainer instructions, root AGENTS, the exact current slice and [bounded implementation guide](../implementation/README.md) govern work. This matrix does not impose an old queue or missing-prerequisite claim.
 
 See the [2026-10-17 verification](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md): planner/publication already consume S11. For #329, prove actual remaining legacy imports rather than waiting on unrelated #262 bridge work.
 

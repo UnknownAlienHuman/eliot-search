@@ -86,5 +86,5 @@ not make it a required local baseline.
 Retain causal argument-order/`--`/non-UTF-8, JSON escaping/limits, protocol sequencing,
 slow-peer/cancel/EOF, child-cleanup, disclosure/partial-exit and opaque-handle cases. Pairing/binding/grant
 cases apply when the restricted-client feature is retained or changed.
-The [execution protocol](../../docs/product/EXECUTION_PROTOCOL.md#4-implement-then-verify-the-production-closure)
+The [implementation guide](../../docs/implementation/README.md#7-verification-and-delivery)
 selects the changed production targets; test/native/installed evidence follows integrated code.

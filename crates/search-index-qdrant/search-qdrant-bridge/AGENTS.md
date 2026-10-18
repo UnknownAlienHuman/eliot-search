@@ -1,7 +1,7 @@
 # Agent contract — search-qdrant-bridge
 
 Own the Qdrant data-plane adapter. Follow [root rules](../../../AGENTS.md) and the
-[execution protocol](../../../docs/product/EXECUTION_PROTOCOL.md); a named immediate consumer may
+[implementation guide](../../../docs/implementation/README.md); a named immediate consumer may
 change with a replaced public API. Missing shared fields go to the existing contract owner.
 
 ## Ownership and reuse

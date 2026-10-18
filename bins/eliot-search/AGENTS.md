@@ -2,10 +2,10 @@
 
 The CLI owns invocation, connection assembly and presentation in `bins/eliot-search/`.
 Use [root instructions](../../AGENTS.md) and the
-[execution protocol](../../docs/product/EXECUTION_PROTOCOL.md) for named immediate-consumer cutovers.
+[implementation guide](../../docs/implementation/README.md) for named immediate-consumer cutovers.
 
-The [current local architecture](../../docs/architecture/README.md) distinguishes trusted child-stdio/
-OS-owned pipes from optional restricted-client pairing. Old grant/proof fields are not mandatory local
+The [implementation guide](../../docs/implementation/README.md#4-simplify-and-connect-the-query) connects
+trusted child-stdio/OS-owned pipes separately from optional restricted-client pairing. Old grant/proof fields are not mandatory local
 bootstrap; remove obsolete requirements with their real callers, never fake permissive credentials.
 
 ## Ownership and reuse
@@ -16,12 +16,13 @@ bootstrap; remove obsolete requirements with their real callers, never fake perm
 - Reuse the existing client/framing/correlation/cancellation code. Keep one session implementation.
 - Build explicit scoped requests; render bounded human or JSON/NDJSON results. Grants belong to an
   implemented restricted-client profile, not all same-user reads.
-- Reuse the existing Windows transport and purpose-bound Credential Manager owners through their
-  narrow APIs. The CLI does not implement secret storage or choose arbitrary credential targets.
+- Reuse the existing Windows transport when a persistent pipe is selected. Use the concrete credential
+  owner only for a restricted integration that needs secrets; do not require it for child-stdio startup.
 
 The actual dependency graph is in [Cargo.toml](Cargo.toml): contracts, ports, config, provider protocol
-and typed client, plus the existing target-specific transport/secret adapters. Reuse those owners;
-new external dependencies/pins require the existing manager review. No second client engine.
+and typed client, plus target-specific transport/secret adapters. Reuse useful code and replace its
+obsolete constructors with their callers. Add direct serialization dependencies where they remove the
+manual grammars; no second client engine is needed.
 
 ## Boundaries
 
@@ -32,5 +33,5 @@ Native input/listener/command linkage and deletion candidates are in [FUNCTIONS.
 [#332](https://github.com/UnknownAlienHuman/eliot-search/issues/332) owns the remaining cutover.
 Preserve supported DIRECT commands while replacing their named connection/dispatch edges.
 
-Use the root production checks and deferred evidence rules. Count removed mechanisms and remaining
+Use the root production and behavior checks. Describe removed mechanisms and remaining
 callers; splitting files or adding forwarding crates to satisfy a line target is not progress.

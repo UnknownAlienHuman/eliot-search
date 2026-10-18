@@ -1,133 +1,52 @@
-# Function contract — `search-provider-protocol`
+# Functions — search-provider-protocol
 
-**Status:** bounded framing, pairing, binding, grant-specific authenticated
-envelopes, body-bound admission, terminal request lifecycle and canonical grant
-request bodies are implemented; complete W8 live integration/qualification
-remains open.
+The [implementation guide](../../docs/implementation/README.md#4-simplify-and-connect-the-query)
+defines the trusted-local target. The APIs below already exist; their paired/canonical prerequisites
+describe current source, not requirements to preserve in every local connection.
 
-The protocol is local, versioned, bounded and authenticated. It owns framing/session/request lifecycle,
-not client authority, source/index stores or search planning.
+## Existing mechanisms
 
-## Framing and negotiation
+| Source/API | Current behavior and integration boundary |
+|---|---|
+| [frame.rs](src/frame.rs): `FrameCodec::{encode, decode, validate_payload}` | Validates complete UTF-8 JSON and a `u32` little-endian length prefix. Returns payload bytes, not a typed authorized request. |
+| [frame/transport.rs](src/frame/transport.rs): `TypedTransportProfileV1::frame_length`, `TypedRecordBuffer` | Validates the declared length and collects one finite record. Its current `finish` also returns a proof digest; that digest is not required by the new trusted-local wire. |
+| [frame/client.rs](src/frame/client.rs): `ClientEnvelopeCodec`, `ServerEnvelopeCodec` | Current V1 typed message encoding/decoding. Replace incompatible local request/result forms with their real consumers. |
+| [evidence_schema.rs](src/frame/client/evidence_schema.rs): `encode_evidence_request`, `decode_evidence_request`, `encode_evidence_result`, `decode_evidence_result` | Delivered V2 retrieval/orientation schemas. Decoding validates shape; scope resolution, planning and source validation are elsewhere. The daemon registry currently dispatches V1. |
+| [negotiation.rs](src/negotiation.rs): `negotiate_hello` | Chooses a supported version. Version agreement does not imply a connected handler or source permission. |
+| [binding.rs](src/binding.rs): `authenticate_binding`, `BoundSession` | Current pairing-dependent binding/session composition. It must change with local callers; a constructor cannot be bypassed with fabricated ceremony material. |
+| [request.rs](src/request.rs): `RequestGuard`, `InFlightRegistry`; [binding/lifecycle.rs](src/binding/lifecycle.rs) | Bounded request identity, deadline, progress, cancellation and terminal state. Reuse useful lifecycle behavior without making request history a permanent ledger. |
+| [pairing.rs](src/pairing.rs), [grant.rs](src/grant.rs) and request envelopes | Existing ceremony and authenticated-request mechanics. Secret-owning adapters supply real proof material; daemon policy determines actual grants. These are relevant to selected restricted clients. |
 
-### `encode_frame(envelope, limits) -> Result<BoundedBytes, ProtocolError>`
+The current maximum complete frame is **8 MiB including its four-byte prefix**; body capacity is smaller
+by that prefix. Current in-flight capacity is capped at 32. See [ProtocolLimits](src/config.rs).
+There is no compressed or fragmented-message assembly. These are finite resource bounds, not claims
+that the new local protocol is already integrated.
 
-Emits `u32` little-endian length plus canonical UTF-8 JSON. Baseline has no compression or fragmented
-message assembly. The 8 MiB ceiling includes the JSON body.
+## Required local exchange
 
-### `decode_frame(prefix_and_body, limits) -> Result<ProviderEnvelope, ProtocolError>`
+Read the prefix and reject an oversized record before allocating/collecting its body. Decode a complete
+bounded body with typed serialization; `FrameCodec::decode` receives a complete buffer and cannot
+protect an adapter that already read an unlimited stream. On a live connection, use a bounded frame
+with `serde_json::from_slice`, not EOF-waiting `from_reader`. Bound serialization and output buffering too.
 
-Validates length before body allocation, UTF-8/JSON/schema/tag/unknown-field rules and exact protocol
-bounds. Oversize/malformed input is rejected without unbounded buffering.
+Remove duplicate manual JSON grammars, fixed-field-order/re-encode checks and substring event parsing
+with the actual CLI and daemon consumers. Keep a clear current format and unsupported-version errors;
+old byte-for-byte fixtures do not require compatibility shims or another schema generation.
 
-### `negotiate_hello(local, remote) -> Result<NegotiatedProtocol, ProtocolError>`
+Correlate each response to its request. Admit bounded work, propagate one deadline/cancellation signal,
+and complete each request once. Progress is non-terminal; terminal completion or disconnect releases
+request resources. A cancellation does not prove that an external mutation was rolled back.
+Return useful bounded result bodies; ordinary diagnostics exclude credentials and source/query bodies.
 
-Major mismatch fails. Minor/extension negotiation is explicit and cannot reinterpret load-bearing
-fields. Capability availability grants no authority.
+The trusted-local connection is established by owned stdio or an OS-owned local endpoint. Remove
+mandatory pairing/MAC/grant arguments from that API. Restricted-client credentials, replay checks and
+scope limits remain real requirements when that profile is selected; framing alone grants no delegated
+authority. No store, Qdrant client or access-policy persistence belongs in this package.
 
-### `authenticate_binding(hello, pairing, installation, transport_peer) -> Result<BindingContext, ProtocolError>`
+## Behavior to check
 
-Requires pairing proof plus installation/incarnation/peer binding. Named-pipe ACL or loopback location
-alone is insufficient authentication.
-
-## Standalone grant protocol
-
-### `encode_standalone_grant_request(request) -> Result<Vec<u8>, ProtocolError>`
-
-Emits one fixed-order canonical UTF-8 JSON body containing requested scope,
-recipe, budget, disclosure/sensitivity, permission and TTL ceilings. Binding,
-principal, installation, operation and grant identities are absent by design.
-
-### `decode_standalone_grant_request(bytes) -> Result<StandaloneGrantRequestV1, ProtocolError>`
-
-Rejects non-canonical order/spelling, whitespace, escapes, duplicate or oversized
-sets, invalid enum/profile values, zero generations/TTL, permission widening
-shape and trailing bytes. Re-encoding must equal the exact input bytes.
-
-### `seal_standalone_grant_envelope(version, nonce, request_id, body_digest, proof) -> AuthenticatedStandaloneGrantEnvelope`
-
-Creates the dedicated grant header from adapter-supplied proof material. Its
-transcript uses `ELIOT-STANDALONE-GRANT-REQ-v1` and binds version, server nonce,
-request identity and exact body digest. It is distinct from the W1 shell-command
-envelope and carries no command substitution path.
-
-### `encode_standalone_grant_envelope(envelope, limits) -> Result<BoundedBytes, ProtocolError>`
-
-Emits the fixed-order canonical grant-envelope JSON through the standard
-length-prefixed frame. The JSON has an independent 512-byte ceiling and uses
-lower-case fixed-size hex for nonce, request, body digest and proof.
-
-### `decode_standalone_grant_envelope(bytes, limits, versions) -> Result<AuthenticatedStandaloneGrantEnvelope, ProtocolError>`
-
-Rejects alternate field order, whitespace, upper-case hex, zero nonce,
-unsupported versions, trailing bytes and malformed framing. Re-encoding must
-equal the exact JSON bytes.
-
-Request-body decoding and envelope decoding create no grant and no authority;
-daemon composition supplies the session binding, operation identity and server
-policy.
-
-## Connection and request lifecycle
-
-### `admit_sequence(connection, sequence) -> Result<(), ProtocolError>`
-
-Sequences are monotonic; duplicate, replayed or regressed values fail closed.
-
-### `admit_request(connection, envelope, limits) -> Result<RequestGuard, ProtocolError>`
-
-Checks authenticated binding, request ID uniqueness, relative deadline and the
-32-in-flight ceiling before forwarding a bodyless shell request. This
-compatibility surface does not prove possession of external body bytes.
-
-### `admit_body_bound(connection, envelope, expected_proof, observed_body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
-
-Checks active paired session, exact version and server nonce, keyed envelope
-proof and constant-work equality between the envelope body digest and the
-digest computed by the adapter from exact request bytes. Every body check,
-deadline and capacity check completes before sequence/replay/in-flight mutation.
-
-### `admit_standalone_grant(connection, grant_envelope, expected_proof, observed_body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
-
-Runs the same bound-session lifecycle under the grant-specific proof domain.
-The request guard remains connection-owned until terminal completion,
-cancellation or disconnect.
-
-### `emit_progress(guard, event) -> Result<(), ProtocolError>`
-
-Progress sequence is monotonic and bounded, carries counts/phases/reasons only and never source/query
-content. Progress is non-terminal.
-
-### `complete_request(connection, request_id, terminal) -> Result<RequestStatus, ProtocolError>`
-
-Records exactly one terminal result/error/cancelled class and releases exactly
-one in-flight slot. The terminal guard remains retained for duplicate-terminal
-detection until disconnect. A cancelled request may complete only as cancelled;
-it cannot be relabelled success.
-
-### `cancel_request(connection, target_request_id) -> CancelOutcome`
-
-Idempotently marks cancellation and releases the request's in-flight slot.
-Unknown or already terminal IDs return bounded non-sensitive outcomes. A
-subsequent terminal acknowledgement, when required by the transport, must be
-`cancelled`.
-
-### `disconnect(connection) -> DisconnectReceipt`
-
-Cancels all request-local work, releases guards and invalidates connection-scoped state. Handle/
-continuation records follow their owning packages and binding policies.
-
-## Configuration and failures
-
-Implements `config/sections/protocol.md`. Security floors—pairing, frame/in-flight ceilings,
-no compression and no fragmented assembly—cannot be weakened. Failures include frame too large,
-malformed/unknown version, replay, binding auth, body mismatch, too many in flight, deadline,
-cancellation and invalid message transition.
-
-## Required fixtures
-
-Frame golden; oversize rejected before body allocation; malformed/unknown tags; major/minor negotiation;
-pairing required beyond ACL; canonical grant-body and grant-envelope round trips; non-canonical,
-duplicate, alternate-case and oversize rejection; body mismatch before mutable admission state; sequence
-replay; 32-in-flight; guard retained until terminal release; duplicate terminal rejection;
-cancelled-to-success relabelling rejected; progress ordering/content minimization; idempotent cancel;
-disconnect cleanup; protocol public API has no store, Qdrant or client-authority path.
+Through actual client/daemon callers, check prefix/size rejection, partial reads and EOF, typed event
+decoding, request correlation, finite queues/output, cancellation and single terminal cleanup.
+For selected restricted clients, also check credential/body mismatch, replay and scope rejection.
+Malformed data and absent handlers must produce clear errors. Wave labels, source-line quotas and
+canonical golden bytes are not runtime or delivery gates.

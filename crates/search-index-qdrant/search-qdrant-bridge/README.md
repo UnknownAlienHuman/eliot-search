@@ -44,6 +44,6 @@ cargo run --locked -p xtask -- validate qdrant-boundary --json
 ```
 
 Source-shape/module-name assertions are retirement candidates; the disposable suite's actual behavior
-cases remain useful evidence. The [execution protocol](../../../docs/product/EXECUTION_PROTOCOL.md) selects source gates
+cases remain useful evidence. The [implementation guide](../../../docs/implementation/README.md) selects source gates
 and defers test/live execution until the integrated candidate. [AGENTS.md](AGENTS.md) owns package
 guidance; historical waves and line targets do not require another wrapper or file split.

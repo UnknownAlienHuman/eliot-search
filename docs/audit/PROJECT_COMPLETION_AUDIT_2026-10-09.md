@@ -1,6 +1,10 @@
 # ELIOT Search — аудит всего пути до завершения проекта
 
-**Проверенный исходный снимок:** `1a6d17d073c5f6d1fe50f21082439f1965d24ef8`. **Координатор:** [#97](https://github.com/UnknownAlienHuman/eliot-search/pull/97). **Полная карта:** [PROJECT_COMPLETION.md](../product/PROJECT_COMPLETION.md). Эта редакция охватывает не только Wave 2, но и оставшуюся интеграцию, все группы профилей, lifecycle, квалификацию и выпуск.
+**Исторический аудит** исходного снимка `1a6d17d073c5f6d1fe50f21082439f1965d24ef8` для
+[#97](https://github.com/UnknownAlienHuman/eliot-search/pull/97). Описанная ниже карта этапов, её очередь,
+совместимость и release-процедуры больше не являются инструкцией разработчику.
+Текущие документы: [манифест архитектуры](../architecture/README.md) и
+[implementation](../implementation/README.md). Факты о коде ниже относятся к указанному старому снимку.
 
 ## Итог проверки
 

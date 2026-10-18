@@ -1,199 +1,89 @@
-# Function contract — `eliot-searchd`
+# eliot-searchd — composition and command map
 
-Fresh DIRECT initialization creates one fixed schema-5 `control/control.redb`
-under retained Native root/parent/database custody. Normal Root registration and
-listing use this same journal, publisher and atomic semantic registry protocol.
-Actual native identity binds the expected journal; stored headers, locator hints
-or marker presence cannot grant admission. Known prior/current owner epochs are
-verified before consuming succession; missing, corrupt, foreign or Inert state
-never creates a replacement or falls back to a legacy authority.
+Follow the [implementation guide](../../docs/implementation/README.md). The daemon composes the
+application's real effects and handlers; library owners retain their data/algorithm responsibilities.
+This map describes public source at `c8e38b6` and the concrete replacement work. It does not freeze
+old schemas, commands, receipts, platform limits or package boundaries.
 
-The optional file-only `source_root_locators.entries` maps RootBindingId to a
-lossless UTF-8 locator hint. Actual FD identity/current permissions and database
-state remain authoritative. Historical operation replay does not reactivate an
-Unbound Root. The explicit bootstrap-v1 policy selection is Root metadata only;
-it is not current permanent-v2 Source admission. Metadata output keeps
-`ready:false`, source/service/query consumers unavailable and no fabricated live
-read-security fence. Original request/work/unknown outcome and ordered teardown
-remain load-bearing. Native and installed product qualification remain separate.
-The separate `--register-source-root-v2 DATA_ROOT SOURCE_ROOT POLICY_ARCHIVE`
-restores the closed canonical `RetainedPolicyV2` archive before mutating owner
-acquisition. The same original request and work meter own qualified read-only
-metadata capture. Root registration uses the actual compiled v2 revision and
-fingerprint; changed policy/profile never upgrades or reactivates an old Root.
-This remains Root metadata only. First Source admission owns namespace creation
-and durable original-policy reference binding; an empty Root has no archive store.
-The shared Native journal identity recipe is compiled in the default DIRECT
-profile; it does not require the optional query/provider feature or Qdrant.
+## Current commands and missing connections
 
-`--admit-source-v2 DATA_ROOT SOURCE_ROOT RELATIVE_FILE POLICY_ARCHIVE OPERATION_ID EXPECTED_SOURCE_REVISION`
-admits one regular NTFS file under that registered v2 Root. The operation ID is
-32 nonzero lowercase hex digits; the predecessor is `new` or a positive Source
-record revision. Metadata admission precedes body reads; one retained synchronous
-read-only/no-follow FD supplies stable bytes and measured C04 identity. Final
-admission and Source/namespace originals commit through the same redb authority.
-Exact operation replay precedes a fresh Source open and preserves the original
-receipt; changed intent conflicts. Output is Source-admission metadata only:
-`retained_revision:false`, `source_body_serving:false`, `ready:false`. Immutable
-revision retention, ingestion batches and indexed query serving remain separate.
+| Existing path | What the source actually does | Next implementation |
+|---|---|---|
+| [entry.rs](src/entry.rs) | Chains `maybe_refuse_legacy_effects` and several `maybe_run` handlers; handlers independently capture/strip arguments. | Parse one invocation/config value and dispatch the selected concrete operation. Keep native paths as `OsString`. |
+| [Native root command](src/native_root_command.rs), [direct registry](src/owner_composition/kernel/direct_registry.rs) | Initializes/opens the current root and redb registry; root registration/listing updates metadata. Schema-5 and policy archive forms are current format details. | Use one root owner and direct current-state transactions. Root registration is not retained-source ingestion. |
+| `--admit-source-v2`: [native source](src/owner_composition/kernel/native_source.rs), [command](src/owner_composition/kernel/native_source_command.rs) | Reads a regular NTFS file, hashes/classifies the body, commits admission metadata and returns `retained_revision:false`. `AcquiredNativeSource` does not carry the body forward. | Pass those same bytes to the immutable revision writer, then commit the source head and prepare that retained revision. |
+| `--sync-source-roots`: [command](src/secure_commands/kernel/source_sync.rs), [preflight](src/owner_composition/kernel/source_sync.rs) | Successful preflight still ends with `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`; no ingestion effect follows. | Replace the preflight-only custody/callback chain with real bounded sync through the same ingestion operation. |
+| `--prepare-revision` / `--prepare-root`: [preparation composition](src/preparation_composition.rs), [batch](src/preparation_store/kernel/batch.rs) | Prepares existing legacy retained revisions through `persist_canonical`; it does not retain newly admitted native sources. | Reuse useful materialization/coordinate logic with the new reader. Old storage layout and extended receipt output are not prerequisites. |
+| `--serve-data-root`: [runtime entry](src/public_runtime_service/kernel/entry.rs), [dispatch](src/public_runtime_service/kernel/dispatch.rs) | Provides the current read-only DIRECT service. Mutation commands return `SERVICE_MUTATION_UNAVAILABLE`; old mutation handlers are test-only. | Connect supported typed local requests to actual source/query handlers. Keep DIRECT explicitly named. |
+| `--search-root`, list/verify/read commands: [read commands](src/secure_commands/kernel/read.rs) | Existing native read routes consume retained DIRECT state. | Keep useful exact reads/diagnostics through the one application; remove duplicate dispatch and format plumbing. |
+| Indexed search: [query composition](src/query_composition.rs) | `execute_pinned_leg` still receives a process-test port; the normal public indexed path is unconnected. | Connect the existing executor and `BlockingRealQueryPlane`, then resolve candidates to retained bytes and useful excerpts. |
 
-`--prepare-revision-dek-v1 DATA_ROOT OPERATION_ID` prepares one fresh revision
-DEK candidate. OPID is a stable nonzero 16-byte lowercase hex nonce. Actual
-Windows user observation, Native root custody and the original invocation
-context bind RNG, current-user DPAPI and exact Credential Manager publication.
-The same redb retains Intent before publication and conditionally records
-CandidateNonServing only after protected-key and control readback. Current must
-remain absent. Replay looks up the retained operation before key preparation;
-unknown/missing/contradictory state never creates a replacement. This command
-issues no Current selection, key-use capability, revision encryption or serving
-readiness. Fixture targets are captured before possible writes and deleted by
-exact reference with verified absence on every teardown path.
-
-Native executable verification hashes fresh bytes at every full fence. The
-native caller uses admitted heap scratch up to 1 MiB and the actual opened length,
-charges each requested read/short-read attempt, and verifies one-byte EOF before
-the unchanged post-read metadata and fresh-locator/native-identity comparison.
-The 64 MiB image bound, two opens, original context and owner-executable v1 BLAKE3
-transcript remain; the legacy reader is unchanged. This reduces owner I/O seam
-reservations without caching the image or changing a resource ceiling.
-
-Pinned revision readers obtain full native observation and live link count from
-one file-information result, with original pre/post callbacks for every ABI.
-Each before/after read boundary queries the retained FD afresh and still checks
-single-link admission, metadata, current path access and final locator identity.
-The legacy observation and hardlink APIs remain compatible. This removes a
-duplicate probe; it does not cache source bytes, permissions or currentness.
-
-The offline `--stage-source-control-migration ROOT TARGET_UUID OUTPUT_DIRECTORY`
-route keeps the original native read operation, registration/protector custody,
-deadline, allowance and output pins. It composes completed bootstrap inventory,
-two-pass source-map publication, same-database mapping/inventory adoption and
-original-bound source-content publication, import and full readback.
-The owning partial receipt reports complete_semantic_candidate_not_performed;
-this route grants no serving, candidate, cutover, restart or cleanup authority.
-
-Content and inventory share two independent source-backed detailed-read passes,
-using the frozen source-content v1 and location-inventory v2 encoders. Each current
-revision's final representations stay pinned through readback and physical-row
-emission. Inventory reuses their exact raw SHA/length/native-identity observations;
-plaintext is released before the next revision. Import and independent target
-readback consume fresh verified cursors over the retained immutable artifacts.
-Temporary/orphan residue stays explicitly accounted against the complete physical denominator.
-The original request supplies all native and record-artifact work; no new deadline,
-directory, source inventory or digest cache is created. A linear traversal of
-canonical revision occurrences joins exact legacy source/revision references to
-the imported SHA/length/BLAKE3 facts. Reused legacy objects do not collapse A/B/A
-occurrences. Missing historical content remains an explicit gap; wrong bindings,
-orphan content and unknown publication cannot issue a partial success receipt.
-The final CLI filter admits only exact content phase/outcome codes and recognized
-literal cause suffixes. An unrecognized/private cause is collapsed while preserving
-the public content outcome; it cannot inject source paths or JSON frame contents.
-
-Contextual legacy unprotect uses the original startup request/work pair or the
-separately admitted command pair for mandatory native-clear accounting, including
-after ordinary work refuses. The protector admits its final validated plaintext
-capacity and copy/zeroization work; revision callers do not reserve that same
-capacity again. The revision and preparation consumers share this guarantee.
-
-Inventory directories use one pinned locator snapshot, capped at 2,048 names,
-with canonically ordered 32-name output windows. Geometric buffer growth,
-index scratch, comparison bytes and linear permutation work are admitted before
-use. Explicit merge ordering has at most `n * ceil(log2(n))` key comparisons.
-The directory is reobserved after the visitors, not only after enumeration.
-
-The native producer selects eliot.legacy-inventory.v2. Physical subjects bind
-root-relative native component bytes, including tree, parent and shard, with
-length framing and a platform tag. Successful directory observations and decoded
-preparation reference/key pairs retain that binding. The SHA-256 locator is
-correlation only and grants no source, deletion or cutover authority. V1 evidence
-keeps its original basename interpretation in the owning codec; publication and
-same-target adoption retain the exact selected profile. Absolute paths and
-arbitrary bodies do not enter these metadata rows.
-
-One pass-local preparation link view is shared by Preparation and Residue;
-the second complete stream independently rebuilds it. Construction reads each
-retained reference and its target at most once; physical lookups do not reopen
-them. Unknown preparation-root files remain Unsupported, directories remain Gap,
-and bodies of unknown entries are never opened or recursively traversed.
-
-Preparation and revision traversal retain pass-local NTFS parent custody, bounded
-by eight ancestors and 2,048 directory pins. Native direct-child membership uses
-the held directory FD and caller-admitted 64 KiB scratch; incomplete enumeration
-never supplies membership. The opaque directory qualifier retains the same FD.
-Warm identity rechecks freshly observe volume, full index, creation time and
-directory/reparse attributes inside one bounded original-context bracket.
-This does not cache access rights: full-path leaf READ and directory LIST/traverse,
-single-link/EOF/raw-byte joins and final locator observations remain independent.
-
-A completed revision traversal retains only ordered scalar residue tuples and
-parent custody until that source pass ends. Referenced final representations,
-temporary/orphan/unknown/corrupt rows and directory outcomes keep their existing
-family dispositions. No body is retained, partial capture never installs a view,
-and the independent next source pass reconstructs both custody and observations.
-
-The original whole-command hard ceilings remain 1 GiB logical byte work,
-16,384 admitted native I/O seams, 256 opens and the original 120-second deadline. Per-directory
-and link-cache caps are additional refusal boundaries, not a guarantee that every
-shape below those caps fits the whole command. Native/scale qualification is #215.
-
-The explicit offline bootstrap command composes the `search-control-redb`
-original-operation bootstrap and inventory producer under one retained native
-read child. The output pins and target are external/inactive; source custody is
-never relabelled ACTIVE. Only the package-owned first-phase receipt is emitted.
-No normal serving, complete candidate or cleanup authority follows; native,
-restart/fault and installed qualification remain separate.
+Legacy `--index-file`, `--index-directory`, retire/repair/GC commands are explicitly refused by
+[secure command support](src/secure_commands/kernel/support.rs). Existing index/retire methods in
+[secure_direct_store/kernel/catalog.rs](src/secure_direct_store/kernel/catalog.rs) and the entire
+[public mutation module](src/public_runtime_service/kernel/mutation.rs) are test-only. Do not remove
+`cfg(test)` and claim that the new ingestion/storage path is integrated.
 
 ## Composition responsibilities
 
-The source boundaries above are implemented but do not establish complete or installed readiness.
-The daemon is the sole composition root; capability behavior remains in the existing libraries.
-The following are behavior obligations, not a required builder API or a new package/profile registry.
-Historical W1–W10 handoff status and review receipts are not runtime inputs.
-
-| Responsibility | Required boundary |
+| Owner | Concrete responsibility |
 |---|---|
-| Composition | Construct the concrete adapters needed by the supported profile and bind one implementation per required port. Keep vendor/native handles private and dependency direction toward the existing owners; CLI/workers/leaf adapters have no direct store path. |
-| Startup | Acquire the exact data-root/incarnation owner before secrets, journal or endpoints. Conflicting or ambiguous ownership blocks/quarantines. Open/verify the exact control journal under that guard; explicit migration uses its owner contract. Reconstruct the committed immutable snapshot before admission. Committed-but-unpublished state remains recoverable and fail closed. |
-| Configuration | Capture bounded inputs/provenance outside pure `search-config`; reject unknown prefixed keys or plaintext-secret-shaped inputs. Owner validation rejects the whole invalid candidate. Preserve every security barrier, restart, drain, rebuild, route/publication and reclaim obligation in the composite activation plan. |
-| Activation and recovery | Keep the old fingerprint/snapshot authoritative until all required effects and guarded control/snapshot publication succeed. Otherwise retain it or explicitly fail closed/quarantine the affected capability. Recover uncertain mutations through exact operation identity and owning-package readback; never blindly retry the entire plan or fabricate rollback. |
-| Readiness | Derive one coherent snapshot from actual config, handlers, control generation, routes and live prerequisites. Exact artifact/profile/settings qualification still governs the operations that require it; package presence, feature selection, endpoint response and Qdrant health alone establish none of it. Keep truthful DIRECT degradation when its own prerequisites permit. |
-| Requests | Require mutual pairing, current binding/grant, incarnation/session sequence, a supported handler and finite connection/frame/in-flight/backpressure/deadline budgets. Admit against one immutable control/capability snapshot with zero hot-path redb writes. Dispatch once, preserve monotonic progress and at most one terminal result, including partial/degraded/ambiguous outcomes. |
-| Cancellation and disconnect | Stop emission/admission as applicable and release request-local handles, continuations, pins, windows, quotas and leases. A possible durable mutation remains the owning package's explicit unknown outcome; disconnect does not delete its recovery obligation. |
-| Drain and shutdown | Stop admission, finish/cancel bounded requests and stop services in reverse dependency order. Release the data-root owner only after exact cleanup evidence proves no service still requires it. Unknown durable work or cleanup blocks unsafe release; daemon crash recovery starts from actual root/control/process/operation facts. |
+| Daemon invocation/root lifetime | One parsed command, one OS-owned root lock, actual configuration and orderly shutdown. Retire repeated argv fingerprints, executable hashing and per-ABI work-accounting scaffolding. Retire the old writer's co-lock with that writer. |
+| Source / `search-revision-store` | Stable source acquisition and one persistent immutable writer/reader. Bytes precede the source-head transaction; a source-record revision is not a content revision. Do not reread a path between stages or invent binding IDs. |
+| `search-materializer` / `search-unitizer` | Prepare retained bytes and feed the existing UnitSet/planner path. Current exact UTF-8 profiles require byte-identical coordinates; unsupported transformations produce a real gap. |
+| `search-control-redb` | Current settings/source/head/artifact/publication records in short transactions. No source bodies, ranked-query history or lifetime archive of completed operation receipts. |
+| `search-publication` | The sole publication transition owner. Daemon persists its pending intent, performs actual Qdrant effects/readback, then commits/publishes the visible view. Remove the duplicate [daemon Publisher](src/publication_composition/kernel/publisher.rs) and file journal. |
+| Qdrant bridge / query owners | One private connection/runtime, actual shared payload/profile/scope contracts, coherent query pins and retained-byte validation. Do not manufacture qualification tokens, fixture IDs or successful mock receipts. |
+| Client service | Bounded framed request/result exchange on an owned local connection; actual handlers determine availability. One absolute deadline spans the operation. Request windows/pins are transient. |
 
-Purpose/incarnation-bound secret leases and concrete handles are non-serializable/private. Stop their
-consuming services before releasing those resources. Plaintext secrets stay out of config, environment, argv, logs, errors, receipts and
-process launch. Normal startup never downloads, upgrades or silently selects an artifact/provider.
-Optional and evaluation modes require their actual explicit admission; mere source/config presence
-cannot enable them, and evaluation grants no direct-store bypass.
+A successful redb abort before commit is a known failure/cancellation, not an unknown commit.
+An unresolved commit or possible Qdrant write has a real recovery obligation. Keep pending external
+publication separate; do not extend that state to ordinary reads and pure transformations.
+Qdrant calls and source/preparation work run outside the redb writer.
 
 ### Readiness and client boundary
 
-Readiness distinguishes `STARTING`, `DIRECT_READY`, `INDEXED_READY`, `DEGRADED`, `DRAINING`,
-`QUARANTINED` and `STOPPED`, with exact exclusions/reasons. A recipe is available only when its real
-handler and every required operational prerequisite are live. Binding-filtered descriptors narrow
-disclosure; they do not grant access. Recover a lost capability-publication receipt by exact snapshot
-generation/digest readback. Never infer source currentness or indexed completeness from Qdrant.
+The CLI's [public client](../eliot-search/src/public_client.rs) already starts an owned daemon child
+on stdio. Use that concrete connection for the baseline and replace tab/hex/substr parsing with one
+typed framed exchange. Mandatory pairing/MAC/grants are removed from trusted-local constructors
+with their producers/consumers; no synthetic grant or "allowed" value fills an old API.
 
-The native local listener seam in
-[StandaloneLocalOwner](src/access_composition/native_binding_listener/local.rs) derives an endpoint
-from finalized registration and accepts a platform factory. At the reviewed source `c8e38b6`, it has
-no concrete `StandaloneLocalListener` implementation/caller. Existing pipe connection and session
-owners are separate delivered code, not a completed listener/CLI path. See the
-[CLI cutover map](../eliot-search/FUNCTIONS.md#current-source-and-missing-linkage) and #332.
+The [StandaloneLocalOwner seam](src/access_composition/native_binding_listener/local.rs) has no
+concrete `StandaloneLocalListener` implementation/caller in the inspected source. Its presence is
+not a working listener and it is not a prerequisite for the child-stdio path. A persistent owner-only
+pipe or genuinely restricted client can extend the same service when needed. See the
+[CLI map](../eliot-search/FUNCTIONS.md#current-source-and-missing-linkage).
+
+Report the actually available route and any concrete gap. A healthy Qdrant process, feature flag,
+compiled constructor or closed issue does not establish indexed serving. Ordinary top-k remains
+non-exhaustive; exact counts/absence checks are separately requested work.
+
+## Remove replaced paths
+
+- [Source migration commands](src/source_migration_command.rs) and `control_migration_*` stage offline
+  artifacts; they do not complete normal serving cutover. Remove the general plan/bootstrap/import/
+  cutover/rollback path with its last consumers. An old unsupported root gets an error before writes
+  and stays intact; neither legacy support nor an export implementation precedes the new product.
+- [Native DEK commands](src/owner_composition/kernel/native_dek_command.rs) and
+  [selection](src/owner_composition/kernel/native_dek_selection.rs) manipulate key metadata.
+  They do not make source admission a connected encrypted retained-source path. Optional encryption
+  uses one real writer/reader when selected; remove unused DEK/secret-lifecycle machinery.
+- Retire mandatory six-domain/provider-transfer and same-user receipt chains. Keep actual explicit
+  source scope, OS connection ownership, useful source/coordinate validation and private Qdrant access.
+- Remove legacy loopback/token-file transports, duplicate old application handlers and their exclusive
+  fixtures. Preserve useful DIRECT behavior through current owners, not a parallel legacy application.
+- Delete source-shape tests, coverage/status/digest ledgers and delivery-wave feature gates with their
+  retired consumers. Do not replace them with another approval registry or wrapper layer.
 
 ### Failure and qualification evidence
 
-Preserve the typed failure distinctions: invalid/unavailable profile or dependency; uncompiled feature;
-startup failure versus unknown startup outcome; owner/control unavailable; adapter binding or capability
-incoherence; config failure versus unknown activation; unauthorized/resource-exhausted/cancelled request;
-dependency degradation; security fail-closed/quarantine; incomplete shutdown and blocked owner release.
-Errors remain content-free; one generic failure must not erase a recovery obligation.
+Verify the integrated application: retain a real file across restart, prepare/index it, find it from
+the CLI and reopen the correct excerpt. Then check an edit, missing revision, excluded scope, lost
+index, cancellation and pending external publication. Check that root exclusion and bounded request
+cleanup work. An old unsupported root and sole retained data remain untouched.
 
-Keep causal startup/config/capability/shutdown crash boundaries, second-owner refusal, secret redaction,
-snapshot-before-admission, handler/route coherence, truthful DIRECT degradation, bounded request cleanup,
-zero hot-read writes, exact unknown-outcome recovery and safe owner release in the evidence inventory.
-Pure composition seams and Windows/redb/Qdrant/provider qualification prove different things.
-The [execution protocol](../../docs/product/EXECUTION_PROTOCOL.md#4-implement-then-verify-the-production-closure)
-selects production targets/guards and defers test/native/fault/scale execution until integration;
-historical wave, dependency-map or line-budget checks are not new product admission gates.
+Use meaningful errors and relevant compiler/behavior checks selected by the
+[implementation guide](../../docs/implementation/README.md#7-verification-and-delivery).
+No migration golden, original-invocation receipt, native clear counter, stage denominator or historical
+qualification badge is a requirement for the replacement. Native/live-Qdrant/scale claims need actual
+execution of that behavior; mocks and source presence do not establish them.

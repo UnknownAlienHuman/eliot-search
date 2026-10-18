@@ -1,7 +1,7 @@
 # Agent contract — search-point-identity
 
 Own stateless S11 point identity. Follow [root instructions](../../../AGENTS.md) and the
-[execution protocol](../../../docs/product/EXECUTION_PROTOCOL.md) for named owner/consumer cutovers.
+[implementation guide](../../../docs/implementation/README.md) for named owner/consumer cutovers.
 An unresolved field/profile belongs to its existing contract owner; do not invent a compatibility rule.
 
 ## Existing owner

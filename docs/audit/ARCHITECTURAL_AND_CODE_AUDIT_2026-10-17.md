@@ -8,7 +8,7 @@ This revision verifies and corrects that report; it does not assert that its pro
 The [current local architecture](../architecture/README.md) now replaces the baseline obligations that
 caused unnecessary migration, security and process machinery. This document records source evidence and
 reduction decisions; it does not assign another writer or claim that the code has been changed.
-Use [EXECUTION_PROTOCOL](../product/EXECUTION_PROTOCOL.md) for implementation and
+Use [Implementation](../implementation/README.md) for implementation and
 [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) for the current manager handoff.
 
 ## 1. Result and review scope
@@ -25,7 +25,7 @@ paths; canonical/S11/planner/publication/bridge boundaries; the audit's digest s
 #259/#260/#262/#329/#352/#598 context. This is a targeted static review, not a line-by-line review of all
 Rust files. This pass also traces migration/restore, local root admission, revision encryption and key
 selection, actual query/transport reachability, operation budgets and source-shaped tooling. Upstream
-ripgrep, Tantivy, Qdrant client, Serde and Tokio source was read for concrete alternatives.
+redb, ripgrep, Tantivy, Qdrant client, Serde/serde_json and Tokio source was read for concrete alternatives.
 No compile, Clippy, test, Windows or live-Qdrant execution is claimed by this preparation.
 
 ### Measured size at the source baseline
@@ -60,9 +60,9 @@ Paths and line anchors below refer to the source baseline, not an assumed future
 | Area | What the code actually establishes | Refactoring consequence |
 |---|---|---|
 | Daemon spine | [Cargo targets/features](../../bins/eliot-searchd/Cargo.toml#L17) select entry.rs and default wave1-shell. [Entry dispatch](../../bins/eliot-searchd/src/entry.rs#L106) serves DIRECT/config/provider paths; the indexed compositions are not connected into source → Qdrant → validated result. | Complete concrete composition. Changing a feature default only changes compilation; it is not runtime wiring or readiness. |
-| Already delivered query mechanisms | [BlockingRealQueryPlane](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/blocking.rs) owns one reused Tokio runtime; [evidence types](../../crates/search-contracts/src/evidence.rs) and [provider schema](../../crates/search-provider-protocol/src/frame/client/evidence_schema.rs) implement #213. | The older docs/comments calling these absent are wrong. #213 is closed; connect serving rather than repeat a contract/runtime implementation. |
+| Already delivered query mechanisms | [BlockingRealQueryPlane](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/blocking.rs) owns one reused Tokio runtime; [evidence types](../../crates/search-contracts/src/evidence.rs) and [provider schema](../../crates/search-provider-protocol/src/frame/client/evidence_schema.rs) implement #213. | The older docs/comments calling these absent are wrong. Reuse and simplify #213's real model with its decoder/host; its existence does not require preserving all V1/V2 fields or bytes. |
 | Local lexical index | [Legacy main](../../bins/eliot-searchd/src/main.rs#L5) owns [local postings](../../bins/eliot-searchd/src/lexical/mod.rs#L53). Cargo declares that source and six sealed CLI sources as test harness targets, not production binaries. | Remove obsolete harness implementations after mapping their shared modules and useful regression cases. Do not describe this as a demonstrated live production fallback. |
-| Semantic fingerprints | [Eligibility digest](../../crates/search-query/search-access/src/lib.rs#L918) uses four noncryptographic lanes; related sites remain in eval, reclaimer, lexical fingerprints, retention and source records/views. | Replace each semantic producer in its owner, with an explicit preimage/profile and consumer disposition. Do not bundle all owners into one PR. |
+| Semantic fingerprints | [Eligibility digest](../../crates/search-query/search-access/src/lib.rs#L918) uses four noncryptographic lanes; related sites remain in eval, reclaimer, lexical fingerprints, retention and source records/views. | First decide whether the field and its consumer are useful. Remove obsolete plan/receipt fingerprints; do not turn them all into new cryptography. A surviving API that promises BLAKE3 must compute real BLAKE3 over its stated input. |
 | Eligibility collision example | The function returns EligibilityPlanDigest, not Blake3Digest32. Its inputs are membership/projection IDs, partition digests, route/epoch and security generations; the audit's collection_alias/namespace/partition string example does not describe this function. | The noncryptographic algorithm is confirmed. The audit's quoted trivial multi-field collision is not a demonstrated valid-input exploit. |
 | Legacy point identity | [Root exports](../../crates/search-index-qdrant/search-point-identity/src/lib.rs#L350) still use a 16-byte non-S11 digest and ProjectionKind. [Planner](../../crates/search-index-qdrant/search-projection-planner/src/plan.rs#L18) and [publication](../../crates/search-index-qdrant/search-publication/src/model.rs#L6) already import s11. | Retire the unused root API under #329; preserve the implemented S11 API. Do not repeat the planner/publication identity port. A 128-bit Qdrant address remains correct; it is distinct from the required full 256-bit digest. |
 | Legacy collision guard | [compare_existing_identity](../../crates/search-index-qdrant/search-point-identity/src/lib.rs#L439) and [PointIdentityRegistry](../../crates/search-index-qdrant/search-point-identity/src/lib.rs#L497) compare complete keys. The audit names a PointCollisionLedger that is not this implementation. | “Collision detection is mathematically impossible” is too broad. Full-key conflicts are detectable; the legacy hash/profile is still not S11 and should be removed. |
@@ -72,39 +72,56 @@ Paths and line anchors below refer to the source baseline, not an assumed future
 | Windows identity/security adapter | [identity.rs](../../bins/eliot-searchd/src/safe_reader_adapter/kernel/identity.rs#L47) has path-derived root identity and a fallback tuple. [open_handle](../../bins/eliot-searchd/src/safe_reader_adapter/kernel/backend.rs#L95) also requires native checks before and after that branch. [read.rs](../../bins/eliot-searchd/src/safe_reader_adapter/kernel/read.rs#L91) fixes barrier 1; inspect fixes Permitted. | These are inadequate inputs for authoritative ingestion. Persistent native-observation failure is not shown to pass; no root-escape exploit or sharing-violation fallback is demonstrated. Reuse the qualified native owner for admitted operations. |
 | Synthetic deletion receipt | [confirm_absent_delete](../../bins/eliot-searchd/src/secret_composition/kernel/revocation.rs#L75) checks actual absence, then creates constant A5 evidence. No entry/secure-command/owner caller of this composer was found. | Compiled but disconnected composition debt. Delete it or bind evidence to the real effect/operation before activation. Do not claim the current daemon executed the fabricated receipt. |
 | Fixtures/profile fallback | [FakeGuards](../../bins/eliot-searchd/src/publication_composition/kernel/guards.rs#L40), [build_test_export](../../bins/eliot-searchd/src/restore_composition/kernel/fixture.rs#L12) and the [zero-profile wrapper](../../bins/eliot-searchd/src/access_composition/grant_authority/admission.rs#L110) remain in composition source. Query serving uses the explicit for_profile variant; no production call to the zero-profile wrapper was found. | Remove unused wrappers or test-gate true fixtures; require real profile observations before activating a consumer. Presence in src alone is not runtime reachability. |
-| Handwritten SHA-256 | Three sha256.rs implementations remain in daemon, document worker and Qdrant supervisor. Their APIs/protocols explicitly require SHA-256. | Reuse the accepted hashing owner/sha2 while preserving exact bytes. Replacing SHA-256 with BLAKE3, or adding framing to raw hashes, would corrupt compatibility. |
+| Handwritten SHA-256 | Three sha256.rs implementations remain in daemon, document worker and Qdrant supervisor. Their APIs/protocols explicitly require SHA-256. | Reuse the existing hashing owner/sha2 where these consumers survive. An external artifact's SHA-256 is not BLAKE3 or a hash of domain-prefixed bytes; replacing the algorithm alone would assert the wrong identity. |
 | Ledger | The ledger records 5,960 classified sites, including 1,770 test-vector entries. It is not a list consisting entirely of fake hashes. | Retire the exhaustive per-site ledger/issue-state gate. Keep concrete hash/identity behavior tests and actual dependency checks; see §7. |
+
+### Functional integration gaps
+
+These are source-level findings at the inspected public commit, not reports of observed data loss,
+production outages or completed Rust fixes. The [implementation guide](../implementation/README.md)
+owns the coordinated changes; the table records why connecting existing constructors alone is insufficient.
+
+| Source boundary | Confirmed behavior and consequence |
+|---|---|
+| [Native acquisition](../../bins/eliot-searchd/src/owner_composition/kernel/native_source.rs), [command result](../../bins/eliot-searchd/src/owner_composition/kernel/native_source_command.rs) | `acquire_source_v2` obtains `body`, hashes/classifies it, then returns `AcquiredNativeSource` without those bytes. The command records admission and reports `retained_revision:false`. No retained revision is produced by this handoff; pass the same acquired bytes to the writer. |
+| [Registered-root sync](../../bins/eliot-searchd/src/owner_composition/kernel/source_sync.rs) | `run_source_sync_preflight` checks custody, registration and store, then returns an error. Even successful checks end in `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`; this command cannot complete sync. |
+| [UnitSet v3 input](../../crates/search-prep/search-unitizer/src/manifest/input.rs) | `prepare_unit_set_input` requires UTF-8, `ExactBytes`, an empty loss map, equal input/canonical digests and equal input/output byte counts. Existing materialization of transformed text is not automatically accepted; wider preparation needs real coordinate-map support, not relabelled assurance. |
+| [Persistent transaction ledger](../../crates/search-control-redb/src/persistent/transaction.rs), [baseline limits](../../crates/search-control-redb/src/reference.rs) | Every fresh mutation retains an operation record and grows its cumulative byte count; no normal persistent pruning path was found. `plan_commit` rejects new mutations with `IdempotencyCapacityExceeded` at 65,536 receipts or when receipt bytes exceed 64 MiB, even if current records remain small. Completed bookkeeping becomes a lifetime write limit. |
+| [Local abort classification](../../crates/search-control-redb/src/persistent/transaction.rs) | A staging `ReadCancelled`/`BudgetExceeded` becomes `CommitOutcomeUnknown` even when `write.abort()` succeeds before commit. This confuses a definite local abort with possible external writes; uncertainty belongs to the actual pending effect. |
+| [Evidence contract](../../crates/search-contracts/src/evidence.rs), [result fence](../../crates/search-contracts/src/results.rs) | Retrieval/orientation validation requires nonzero exact-scan budgets; results require plan IDs/fingerprints and a result fence, while cards carry ranking traces. These obligations survive despite non-exhaustive top-k. Reuse useful scope/cards and remove unnecessary fields with their consumers; do not fabricate plans or proofs. |
+| [V1 recipe host](../../bins/eliot-searchd/src/query_composition/registry.rs), [V2 wire schema](../../crates/search-provider-protocol/src/frame/client/evidence_schema.rs) | The host registers `RecipeIdV1`; #213 defines separate V2 evidence forms. Adding a name to the old registry cannot connect that request/result model. Decoder, dispatch and handler must change together; preserving eleven V1 byte fixtures is not a product requirement. |
+| [Candidate readback](../../crates/search-query/search-candidate-validator/src/lib.rs) | `reopen_and_verify` compares digests supplied by `RevisionReadbackPort` to expected fields and checks range/length, but does not hash `readback.bytes`. A real reader must verify those bytes, or that check must move here. Matching supplied digests alone does not establish source truth; no live corrupt-reader incident is claimed. |
+| [Daemon Publisher](../../bins/eliot-searchd/src/publication_composition/kernel/publisher.rs), [shared coordinator](../../crates/search-index-qdrant/search-publication/src/machine.rs), [floor CAS](../../crates/search-control-redb/src/publication_codec.rs) | Daemon `Publisher` duplicates publication floor/reservation/active state. `publication_codec::cas` validates arguments and returns the next floor; it performs no database write. Neither a state-machine transition nor a supplied commit observation is the real persistent publication boundary. |
+| [Bridge receipt ledger](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/ledger.rs), [upsert](../../crates/search-index-qdrant/search-qdrant-bridge/src/real/mutations/upsert.rs) | Replay receipts are retained in a process-local map; a full `max_operation_receipts` map rejects further mutations. It is neither durable restart recovery nor a substitute for the publication owner's pending operation. Remove the second replay owner when connecting that path. |
 
 ### Digest repair boundaries
 
-Prefer the existing [search-contracts digest owner](../../crates/search-contracts/src/digest.rs).
-Canonical CBOR, domain-framed raw input and unframed exact bytes are different profiles. Preserve the
-contracted algorithm, field order, framing, bounds and version; change identity only through an explicit
-new profile/rebuild or an identified transient-plan invalidation boundary.
+Delete unnecessary digest fields before repairing their algorithm. A plan, read receipt or review
+catalogue does not earn a cryptographic identity merely because the old API has one. Remove the field
+and its consumers, or use a simple in-memory identifier where that is all the operation needs.
+
+For surviving source/artifact identity, reuse the existing
+[search-contracts digest owner](../../crates/search-contracts/src/digest.rs). Canonical CBOR,
+domain-framed raw input and unframed exact bytes hash different inputs. Compute the actual promised
+algorithm over actual bytes. Change new formats with their real ends and rebuild derived generations;
+an unsupported old root remains untouched without requiring a compatibility reader or migration engine.
 
 The FNV-derived u32 in [term_index_checked](../../crates/search-lexical/src/sparse/mapping.rs#L215) is a
 sparse bucket mapping, not a cryptographic identity. S12.2 permits measured term collisions. Repairing
 SparseFingerprint must not silently change term indexes or reinterpret previously built vectors.
-A new term mapping needs its own qualified profile/generation.
+A changed term mapping requires rebuilding the affected indexed generation. This protects query/vector
+agreement; it does not impose a qualification-token platform.
 
-Before repairing a hash producer, determine whether its plan/receipt/cache should exist at all. Delete
-unused evidence plumbing with its consumers. Recompute transient state or rebuild projections after an
-intentional format change; an unshipped legacy format does not automatically deserve a migration engine.
-The following rows describe existing bytes and real risks, not a mandate to preserve every old profile.
-
-The remaining owner map is #288 (eligibility), #233 (evaluation), #303 (index reclaim), #252
-(lexical fingerprints), #302 (retention), #270 (source admission/view) and #272 (membership).
-These are existing obligations, not newly issued source tasks. Persisted consumers must be identified
-before choosing preserve-bytes versus new-profile migration.
+The following rows identify existing consumers, not mandatory hash-port or migration tasks.
 
 | Producer | Output / consumer consequence |
 |---|---|
-| [Evaluation fingerprint](../../crates/search-eval/src/fingerprint.rs#L10) | FNV-like bytes wrapped as Blake3Digest32 feed report/run evidence. Identify historical report/profile compatibility before replacement. |
-| [Reclaim plan](../../crates/search-index-qdrant/search-index-reclaimer/src/plan.rs#L107) | ReclaimPlanDigest is carried by receipts/checkpoints. Old work must be explicitly invalidated/replanned or migrated; an equal new field name is not replay compatibility. |
+| [Evaluation fingerprint](../../crates/search-eval/src/fingerprint.rs#L10) | FNV-like bytes wrapped as Blake3Digest32 feed report/run evidence. Remove unused attestation fields; an ordinary run identifier does not require backward compatibility or a cryptographic transcript. |
+| [Reclaim plan](../../crates/search-index-qdrant/search-index-reclaimer/src/plan.rs#L107) | ReclaimPlanDigest is carried by receipts/checkpoints. Replace stale derived work with a newly computed plan; confirm actual live references before deleting data. No general replay-migration platform is needed. |
 | [Sparse fingerprint](../../crates/search-lexical/src/sparse/fingerprint.rs#L13) | SparseFingerprint is separate from token indexes. Profile/evidence equality changes even if vectors remain numerically unchanged. |
 | [Retention marks](../../crates/search-runtime/search-retention/src/sweep.rs#L774) | Protection/mark digests fence deletion. Resolve outstanding sweep intent/mark generations safely before switching profiles. |
 | [Membership ID](../../crates/search-source/search-source-records/src/membership.rs#L215) | A 64-bit FNV value plus its complement becomes a SourceMembershipId; the stored batch decoder recomputes this legacy formula. In-place rehashing would break journal/reverse-index identity. Use a new format/root or a specific retained-data import; do not automatically require online migration. |
-| [Workspace view ID](../../crates/search-source/search-source-registry/src/view.rs#L223) | Derived currentness token. Verify external cursor/reference retention before treating it as purely transient. |
+| [Workspace view ID](../../crates/search-source/search-source-registry/src/view.rs#L223) | Derived currentness token. Use the actual view/generation; bounded continuations can expire on restart. Do not preserve a cryptographic-looking token after its consumer disappears. |
 
 ## 3. What the previous preparation got wrong
 
@@ -119,13 +136,15 @@ before choosing preserve-bytes versus new-profile migration.
   checked. This does not prove there are no user installations; it provides no evidence of a released
   compatibility promise either. Preserve actual user data and make the pre-release format policy explicit.
 - **It missed delivered source.** #213 types/provider schemas and the blocking Qdrant runtime exist.
-  Docs saying they still need creating were stale. The actual gap is the real end-to-end caller.
+  Docs saying they still need creating were stale. Simplify their obsolete inputs and connect the real
+  end-to-end caller; delivery does not make the existing contract untouchable.
 - **It kept review structure as an implementation target.** A one-owner quota, scope freeze, formal
   review record and source-layout assertion can all be satisfied while query composition stays dead.
   The new programme asks for useful behavior and deletion, with verification of concrete risks.
 
-The [current architecture](../architecture/README.md#8-requirements-retired-from-the-local-baseline)
-records the decisions. They are not exceptions requiring a new waiver or another audit registry.
+The [manifesto](../architecture/README.md) records the product principles; the
+[implementation guide](../implementation/README.md#6-delete-replaced-mechanisms-and-consolidate) names
+what replaces the mechanisms. These are not exceptions requiring another waiver or audit registry.
 
 ## 4. Mechanisms to retire or simplify
 
@@ -134,8 +153,8 @@ Inline tests/comments/blank lines remain included. Areas overlap; do not sum the
 
 | Mechanism and source evidence | Actual state / cost | Decision for local search |
 |---|---|---|
-| [Daemon migration](../../bins/eliot-searchd/src/source_migration_command.rs), [cutover](../../bins/eliot-searchd/src/control_migration_cutover/operation.rs), [redb migration](../../crates/search-control-redb/src/migration/mod.rs) | Daemon `src` families: 33 files / 12,182 lines; redb migration: 31 / 10,976. Combined **64 / 23,158**, including 5,247 lines in 16 test-named files. Commands stage inactive artifacts. Cutover is uncalled and explicitly defers serving reroute; rollback is not a working reversal of an adopted store. | Retire general staging/cutover/rollback. Use fresh-format rebuild; a specific non-destructive export only for actual retained data. Preserve source originals, sole revision copies, configuration and keys. |
-| [Revision crypto](../../crates/search-runtime/search-revision-crypto/src/lib.rs), [DEK selection](../../crates/search-runtime/search-os-secrets/src/revision_selection.rs), [active storage](../../bins/eliot-searchd/src/secure_direct_store/kernel/lifecycle.rs) | Active DIRECT storage uses RevisionProtector/Windows DPAPI. AES-GCM crate: 521 lines, no Rust import/dependency from a consumer. Five DEK candidate/selection/Windows/daemon files: **2,449 lines**. They publish/select metadata; no call connects the selected DEK to that AEAD crate. C07's [contract](../../crates/search-source/search-revision-store/FUNCTIONS.md) says there is no CAS implementation yet. | One consumed store design. New local storage may use ACLs + immutable verified snapshots. Encryption is selected for an actual confidentiality need; preserve existing encrypted roots/keys. Do not extend unused key machinery before a writer uses it. |
+| [Daemon migration](../../bins/eliot-searchd/src/source_migration_command.rs), [cutover](../../bins/eliot-searchd/src/control_migration_cutover/operation.rs), [redb migration](../../crates/search-control-redb/src/migration/mod.rs) | Daemon `src` families: 33 files / 12,182 lines; redb migration: 31 / 10,976. Combined **64 / 23,158**, including 5,247 lines in 16 test-named files. Commands stage inactive artifacts. Cutover is uncalled and explicitly defers serving reroute; rollback is not a working reversal of an adopted store. | Retire general staging/cutover/rollback. New roots/generations rebuild from available sources. Leave unsupported old roots and sole revision copies intact; a separately selected reader/export is not a prerequisite for the new application. |
+| [Revision crypto](../../crates/search-runtime/search-revision-crypto/src/lib.rs), [DEK selection](../../crates/search-runtime/search-os-secrets/src/revision_selection.rs), [active storage](../../bins/eliot-searchd/src/secure_direct_store/kernel/lifecycle.rs) | Active DIRECT storage uses RevisionProtector/Windows DPAPI. AES-GCM crate: 521 lines, no Rust import/dependency from a consumer. Five DEK candidate/selection/Windows/daemon files: **2,449 lines**. They publish/select metadata; no call connects the selected DEK to that AEAD crate. [Immutable object I/O](../../crates/search-source/search-revision-store/src/immutable_object.rs) exists, but native acquisition is not connected to one persistent revision writer/reader. A stale package contract must not be read as absence of all object I/O. | One consumed store design. New local storage may use ACLs + immutable verified snapshots. Encryption is selected for an actual confidentiality need; preserve existing encrypted roots/keys. Do not extend unused key machinery before a writer uses it. |
 | [Generic secret lifecycle](../../crates/search-runtime/search-os-secrets/src/lifecycle.rs) and [pairing composer](../../bins/eliot-searchd/src/secret_composition/kernel/composer.rs) | Lifecycle file plus composition subtree: 10 files / **2,789 lines**, including 411 test-named lines. No production construction of PairingSecretComposer was found. The [real pairing credential path](../../bins/eliot-searchd/src/access_composition/native_binding/opening/credential.rs) directly uses the Windows adapter. | Remove uninstantiated catalogue/lease/rotation composition. Keep concrete secret storage for Qdrant or a selected restricted-client/encrypted feature. |
 | [Root snapshot](../../bins/eliot-searchd/src/owner_composition/kernel/native_snapshot.rs), [co-locks](../../bins/eliot-searchd/src/owner_composition/kernel/native_admission.rs), [request accounting](../../bins/eliot-searchd/src/owner_composition/kernel/native_request.rs) | Two owner slots, adjacent generation checks, current executable digest, two OS lock files, argv digest/entropy and per-native-call/canonical-byte accounting. `native_request.rs` alone has **1,097 lines**, including inline tests. The second lock excludes the old sealed owner. | One OS lock + root identity + transactional control state. Remove executable continuity and the second co-lock with the old writer. Keep real I/O/allocation/deadline limits, not generic per-call ceremony. |
 | [Source admission](../../crates/search-source/search-source-admission/src/lib.rs), [native source output](../../bins/eliot-searchd/src/owner_composition/kernel/native_source_command.rs), [registry cutover](../../crates/search-source/search-source-registry/src/cutover.rs) | Admission package: 8 files / **9,992 lines**, including inline tests. Native-v2 command explicitly reports admission only, no retained revision/body serving. Namespace transfer APIs have no ordinary ingestion/query caller. | Explicit local roots, excludes, no-follow containment and stable read; one local namespace. Six-domain policy/transfer is not the baseline. Do not remove the real contained-reader boundary. |
@@ -165,24 +184,16 @@ This is a source-level limit of the API, not a measured incident in the unwired 
 Convert the request deadline once to an absolute instant and pass the remaining budget/`timeout_at`
 through real calls. Tokio already supplies this mechanism; no new budget framework is required.
 
-## 5. The useful integration and donor conclusions
+## 5. Integration and donor conclusions
 
-| Existing mechanism | Complete this consumer |
-|---|---|
-| Native held-source work / current revision preparation | Real retained snapshot → exact reopen → materialization/UnitSet. Keep #598's manager and reusable work. |
-| S11/planner/publication plus actual Qdrant transport | One coherent contract/manifest → bounded real write/readback → committed route/epoch. |
-| `BlockingRealQueryPlane` and delivered evidence schema | Real CLI/provider query → pinned scope → nominations → exact source validation → useful snippet/location. |
-| DIRECT/exact scanning | Explicit exhaustive verification; don't force it into every top-k request. |
-| redb + OS file lock | One local owner and committed state; reset/rebuild for incompatible derived formats. |
+The [implementation guide](../implementation/README.md) connects the existing source, preparation,
+publication, Qdrant and query owners and names their replaced mechanisms. Preserve #598's manager and
+useful source work. Delivered schemas/runtime are reusable code, not a reason to freeze their old contracts.
 
-[Upstream source comparison](DONOR_VERIFICATION_REGISTER_2026-10-09.md#2-architecture-donors-read-in-source):
-ripgrep shows one parsed invocation and concrete dispatch; Tantivy shows one writer/commit and a cheap
-query snapshot; Qdrant's Rust example demonstrates direct client/upsert/filtered-query calls; Serde and
-Tokio already provide serialization and absolute timeouts. These are mechanisms to reuse, not proposals
-for another search backend or for copying a donor application's full architecture.
-
-The full source-backed path is the implementation result. Orientation/comparison/documents extend it;
-key rotation, provider ownership transfer and optional restore no longer precede it automatically.
+[Inspected upstream APIs](DONOR_VERIFICATION_REGISTER_2026-10-09.md#2-architecture-donors-read-in-source)
+support short redb transactions, typed JSON, concrete dispatch, bounded Qdrant calls and one absolute
+deadline. Serde is in Cargo.lock but is not integrated into the provider/control codecs. No donor is a
+new search backend, a complete application to import or proof that the actual Eliot caller works.
 
 ## 6. Verification of the implementation
 

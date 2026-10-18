@@ -1,204 +1,71 @@
 # ELIOT Search
 
-ELIOT Search is a **standalone Qdrant-backed analysis and retrieval framework for AI agents and human
-operators**. It is designed to turn very large repositories, portfolios of repositories, research
-collections and mixed text corpora into a fast, grounded navigation surface.
+ELIOT Search helps agents and people navigate large codebases and document collections. A user selects
+sources, asks a question and receives useful files, symbols or ranges with excerpts, revision identity
+and clear gaps. The result should make the next source read or exact check obvious.
 
-The product is not another model loop and not a second search database. Qdrant provides the indexed
-retrieval substrate; ELIOT Search supplies the product semantics around it: source acquisition, durable
-identity, preparation, projections, query planning, exact verification, provenance, currentness and
-compact agent-oriented results.
+It is a standalone local application with a CLI and daemon. Qdrant supplies indexed retrieval; Search
+owns source retention, preparation, publication and evidence. It runs without a model or agent controller.
+Large repositories and portfolios are a core workload.
 
-ELIOT Search runs independently through `eliot-searchd` and `eliot-search`. Integration with ELIOT
-Memory OS is optional and uses typed provider contracts over the same standalone owners.
+## Start here
 
-## Product mission
+| Document | Purpose |
+|---|---|
+| [Architecture](docs/architecture/README.md) | Short product manifesto: purpose, useful results, requirements and principles. Keep it in the lead developer's context. |
+| [Implementation](docs/implementation/README.md) | Concrete existing owners, changes, removals and donor APIs. |
 
-An agent should be able to enter an unfamiliar large corpus and quickly answer:
+[AGENTS.md](AGENTS.md) describes repository work. The [documentation index](docs/README.md) links to
+specific source evidence and optional capabilities. Historical masters and task packets are reference
+material; they do not impose compatibility, cryptographic or process requirements on the new product.
 
-- what repositories, documents, modules, files, sections and symbols exist;
-- where the likely implementation, evidence, tests, documentation and configuration live;
-- which exact files or source ranges should be read next;
-- which `grep`, regex, symbol or structural checks should verify a hypothesis;
-- how implementations differ across repositories and lineages;
-- whether a claim is grounded, partial, stale, ambiguous or not exactly proven.
+## Current implementation
 
-The intended analysis loop is:
+The public indexed application is not connected yet. The inspected code contains useful source readers,
+preparation, lexical encoding, a real Qdrant adapter and query components, but their presence does not
+constitute a complete ingestion/search path.
 
-```text
-orient the scope
-→ retrieve likely evidence
-→ inspect entities and relations
-→ compare implementations or documents
-→ verify important claims with the exact plane
-→ expand source-backed handles only where needed
-```
+The [implementation guide](docs/implementation/README.md) identifies the missing connections: retained
+bytes after native acquisition, actual source sync, persistent source/preparation records, one publication
+owner and real query-to-source readback. Delivered request/result schemas also need simplification and
+connection to the public client. DIRECT exact scans remain an explicit operation.
 
-Heuristic ranking is candidate generation, not truth. Every emitted citation/result is checked against an
-exact retained source revision, and complete negative claims require an explicit exact denominator.
-
-See [ADR 0006](docs/adr/0006-agent-analysis-framework-product-scope.md) and the
-[agent-analysis product guide](docs/product/AGENT_ANALYSIS_FRAMEWORK.md).
-
-## Qdrant and Search responsibilities
-
-### Qdrant provides
-
-- sparse and optional dense/multivector storage;
-- filtered query execution and exact point readback;
-- payload indexes and strict-mode enforcement;
-- collection-local scoring, filtered IDF and bounded count/scroll operations;
-- the physical indexed projection used for fast candidate retrieval.
-
-### ELIOT Search adds
-
-- safe source registration, immutable revisions and no-execute acquisition;
-- text/code/document materialization, unitization and coordinate maps;
-- deterministic lexical encoding and structural enrichment;
-- projection manifests, collision-safe identities, publication epochs and rebuild;
-- coherent workspaces, repository lineages and explicit multi-repository portfolios;
-- exact, keyword, structural, sparse lexical and optional semantic retrieval planning;
-- access/currentness filtering before retrieval and IDF;
-- deterministic fusion, diversity, lineage collapse and evidence-role balancing;
-- exact source readback, candidate validation, provenance and coverage;
-- exact grep/regex/symbol/structural verification;
-- progressive compact cards, handles and continuations for agent consumption.
-
-Qdrant payload is never authoritative source evidence, and redb is never a searchable corpus. There is no
-Tantivy/Lucene/SQLite-FTS/local-postings fallback in the production design.
-
-## Core workloads
-
-- **Repository orientation:** map an unfamiliar monorepo and identify likely entry points.
-- **Precise navigation:** locate symbols, paths, phrases, definitions, callers, tests and documentation.
-- **Cross-repository analysis:** compare implementations across an immutable reference portfolio while
-  collapsing forks, mirrors and copies.
-- **Research/document analysis:** navigate long text collections with source-backed sections, references,
-  tables and coordinates as qualified materializers become available.
-- **Current workspace search:** combine published Qdrant projections with saved/unsaved overlays without
-  silently serving stale results.
-- **Exact verification:** compile and execute complete grep/regex/symbol/structural scans independently of
-  top-k retrieval.
-- **Corpus intelligence:** profile and diff corpora, trace provenance and expose truthful coverage gaps.
-
-The current eleven v1 recipes cover exact navigation, entity inspection, comparison, corpus profile/delta,
-provenance and exact scans. [#213](https://github.com/UnknownAlienHuman/eliot-search/issues/213) delivered
-the free-text retrieval and scope-orientation schemas. Their public indexed serving path remains to be
-connected; do not implement another contract family.
-
-## Product boundary
-
-ELIOT Search owns:
-
-- source admission, identity, revision retention and preparation;
-- lexical, structural and optional semantic projection construction;
-- Qdrant supervision, schema, publication and retrieval;
-- access-scoped query planning, candidate validation and result projection;
-- currentness, handles, rebuild, retention and recovery;
-- standalone daemon/CLI and optional provider adapters.
-
-It does **not** own Tasks, WorkScopes, GM/Governor state, agent scheduling, native harness lifecycle,
-assignment tickets, writer leases, mailboxes, review acceptance or finish authority. Those responsibilities
-belong to [`eliot-swarm-controller`](https://github.com/UnknownAlienHuman/eliot-swarm-controller) and,
-after integration, [`eliot-memory-os`](https://github.com/UnknownAlienHuman/eliot-memory-os).
-
-The repository's remaining `swarm/**` files are advisory/historical development metadata. They are not
-runtime inputs or prerequisites for implementing or running Search. Residual controller tooling is tracked
-for removal in [#214](https://github.com/UnknownAlienHuman/eliot-search/issues/214).
-
-## Architecture baseline
-
-- Rust 1.98 workspace;
-- Qdrant is the only indexed/search database;
-- redb stores bounded technical control state;
-- immutable source/preparation evidence remains outside Qdrant;
-- one source view and one coherent access/currentness snapshot bind each query;
-- Qdrant nominations require exact source/revision validation before emission;
-- standalone DIRECT remains independent of indexed-mode availability;
-- ELIOT integration is a leaf adapter, not a reverse authority path.
-
-Read the [current architecture](docs/architecture/README.md). Its local-baseline decisions supersede
-mandatory multi-domain storage, migration/key-lifecycle and process machinery inherited from 8.4.
-The old master and handoff explain history; they do not reinstate those requirements.
-
-## Current status
-
-Implementation is incomplete and this is not a qualified production release.
-
-The active completion spine is:
-
-```text
-source admission / immutable revisions / preparation
-→ typed lexical/structural projections
-→ real Qdrant publication
-→ access-scoped retrieval and filtered IDF
-→ authoritative candidate readback and validation
-→ bounded standalone/provider results
-```
-
-The indexed public path is not connected yet. Runtime must observe its actual Qdrant endpoint and
-schema; executed query/restart/end-to-end reports belong to evaluation and release. A test-report token
-must not be needed merely to construct a working application.
-
-Important open product work includes:
-
-- real serving of the delivered #213 free-text retrieval/orientation schemas;
-- cleanup of residual controller tooling: #214;
-- large multi-repository scale qualification: #215;
-- research/document materialization and navigation: #216;
-- the existing Qdrant identity/projection/publication/daemon integration stack: #200, #207, #209, #210,
-  #211.
+The target is one working path from a local file to a durable revision, indexed result and correct source
+excerpt, followed by incremental update, restart and rebuild through the same owners. This refactoring
+also removes the obsolete applications and mechanisms that would otherwise remain beside that path.
 
 ## Workspace
 
-Key entrypoints:
+| Area | Current location |
+|---|---|
+| CLI and daemon | [bins/eliot-search](bins/eliot-search/), [bins/eliot-searchd](bins/eliot-searchd/) |
+| Sources and retained revisions | [crates/search-source](crates/search-source/) |
+| Preparation and lexical encoding | [crates/search-prep](crates/search-prep/), [search-lexical](crates/search-lexical/) |
+| Qdrant projection, publication and adapter | [crates/search-index-qdrant](crates/search-index-qdrant/) |
+| Planning, retrieval and source validation | [crates/search-query](crates/search-query/) |
+| Durable control state | [search-control-redb](crates/search-control-redb/) |
 
-- `bins/eliot-searchd` — standalone daemon and composition root;
-- `bins/eliot-search` — local client/CLI;
-- `crates/search-index-qdrant/search-qdrant-bridge` — sole Qdrant vendor adapter;
-- `crates/search-index-qdrant/search-publication` — epoch-safe publication coordinator;
-- `crates/search-query/*` — access, planning, retrieval, exact verification, validation and projection;
-- `crates/search-lexical` — deterministic document/query sparse encoding;
-- `crates/search-source/*` — admission, identity, revisions, materialization and unitization;
-- `crates/search-control-redb` — bounded technical control state.
+This is the current layout, not a requirement to preserve every package. Modules that split one
+responsibility without an independent dependency boundary can be consolidated.
 
-## Build
+## Development
 
-Use the pinned Rust 1.98 toolchain and locked dependencies. During implementation, select the changed
-production owner and its immediate consumers:
+Use the [pinned Rust toolchain](rust-toolchain.toml) and locked dependencies. Check the changed owner
+and its real consumers, for example:
 
-~~~powershell
-cargo +1.98.0 check --locked -p <library-owner> --lib --all-features
-cargo +1.98.0 clippy --locked -p <library-owner> --lib --all-features -- -D warnings
-~~~
+```sh
+cargo +1.98.0 check --locked -p <owner> --lib
+cargo +1.98.0 clippy --locked -p <owner> --lib -- -D warnings
+```
 
-For the daemon, select its binary and required feature set. The current default is wave1-shell;
-full-baseline includes the indexed dependency graph. Neither compilation nor a feature switch proves
-runtime integration or readiness. --all-features also enables the obsolete legacy-loopback-harness
+For binaries, select the actual binary and needed features. The daemon currently defaults to
+`wave1-shell`; `full-baseline` includes the indexed dependencies. The implementation removes this
+delivery-wave ladder as the real path is connected. `--all-features` also enables obsolete harness code
 and is not the normal product configuration.
 
-After integration, execute the relevant behavior and Windows/live-Qdrant cases through the real
-application. Do not repair obsolete workspace harnesses merely to obtain a badge. See the
-[execution protocol](docs/product/EXECUTION_PROTOCOL.md) and the
-[verified audit/refactoring cards](docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md).
-
-## Running
-
-Standalone is the supported baseline. Exact startup syntax is still evolving with local transport,
-control state and Qdrant integration; the old migration platform is not a startup prerequisite.
-
-The final baseline must support installation without ELIOT Memory OS, source/corpus registration, durable
-restart-safe state, real Qdrant indexing/search, index rebuild, local CLI use and optional ELIOT provider
-integration without a second state owner.
-
-## Repository workflow
-
-Read `AGENTS.md`, the current local architecture, relevant package code and the named issue/PR before
-editing. Use one branch/worktree per manager and avoid overlapping package writers.
-
-No ticket/lease/signature issuance protocol is required. Do not implement generic agent-controller
-features here. Keep GitHub Actions manual-only and never claim unexecuted gates.
+Exercise meaningful application behavior after integration. Compilation, fixtures and feature flags do
+not establish a working Windows/live-Qdrant application. Keep GitHub Actions manual-only.
 
 ## License
 
-See [`LICENSE`](LICENSE).
+See [LICENSE](LICENSE).

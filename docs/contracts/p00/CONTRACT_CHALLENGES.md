@@ -1,6 +1,9 @@
 # P00 contract challenge decisions
 
-These decisions resolve implementation ambiguity without changing Architecture 8.4 Part I.
+This table records how the original P00 packet resolved ambiguities in Architecture 8.4.
+It is historical reference. The [architecture manifesto](../../architecture/README.md) and
+[implementation guide](../../implementation/README.md) govern current changes; old pairing, canonical
+byte compatibility, durable handles and generic port rules are not implementation prerequisites.
 
 | ID | Ambiguity | Decision |
 |---|---|---|
@@ -23,9 +26,8 @@ These decisions resolve implementation ambiguity without changing Architecture 8
 | PC-017 | Snapshot isolation and live restrictive revalidation could be conflated. | `ResultFence` preserves planned snapshot and separately records latest emission owner/security fences. |
 | PC-018 | P00 schemas use `RecipeIdV1`, `RecipeBodyV1`, `ComparisonAxis`, `ProtocolRange` and `PackageOpaque` without explicit registry definitions. | `TYPE_COMPLETIONS.md` defines their closed shapes, owners, canonical/compatibility rules and no-vendor/no-serialization boundaries. Local aliases are forbidden. |
 
-## Stop conditions
+## Applying this reference
 
-Stop when Part I conflicts; recipe needs implicit authority; reason mapping is absent; port needs vendor
-types; canonical bytes cannot reproduce; mutually exclusive states coexist; invalid evidence would be
-required; public handle would expose server record; a named helper type lacks a closed definition; or a
-generic digest would hide a load-bearing snapshot/security field.
+Check the current producer and consumers before reusing a recorded type. Preserve real source identity,
+scope and correct result semantics. Replace obsolete inputs with their callers instead of manufacturing
+proof values or requesting an exception to an old packet.

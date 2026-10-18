@@ -1,60 +1,60 @@
-# Function contract — `search-candidate-validator`
+# Functions — search-candidate-validator
 
-**Status:** W4/P08 source-backed validation contract; security hardening continues in W7/P13.
+This owner turns a candidate nomination into a verified source slice or an explicit gap.
+Use [query integration](../../../docs/implementation/README.md#turn-a-point-into-evidence) for the
+real manifest/readback handoff. Existing grant, fingerprint and residency fields are source facts,
+not immutable requirements for every local query.
 
-A nomination can become evidence only after exact source readback and live-fence validation. Qdrant
-payload text, cached snippets and current-path bytes are never evidence substitutes.
+## Implemented API
 
-## Operations
+All operations below exist in [src/lib.rs](src/lib.rs).
 
-### `precheck(nomination, plan, live_state, overlay_state) -> ValidationPrecheck`
+| Function | Current behavior |
+|---|---|
+| `precheck(nomination, context)` | Checks request/plan identity, candidate limit, allowed membership, collection/epoch, shadowed unit and current live-access state. Returns `Proceed`, `Gap` or `ContaminatedLeg`. |
+| `build_readback_request(nomination, max_read_bytes)` | Rejects empty/out-of-bounds ranges and copies the exact revision/unit/profile/digest expectations into `ExactRevisionReadbackRequest`. |
+| `reopen_and_verify(request, port)` | Calls `RevisionReadbackPort::read_exact`; compares returned identity, digest, profile, residency, assurance, coordinate and length fields. Returns `VerifiedSourceSlice` on agreement. |
+| `recheck_before_emission(verified, request_security, live_security)` | Calls the existing live-access check and binds its permit to the verified source membership/revision. It does not independently reload a grant, source catalog or root owner. |
+| `validate(nomination, context, max_read_bytes, port, final_live_security)` | Composes those steps and returns `Validated`, `Gap` or `ContaminatedLeg`. |
+| `material_coverage_change(before_validated, after_validated, target_candidates, refill_budget_remaining, contaminated_leg)` | Selects unchanged, bounded refill, replan or explicit incompleteness after candidate loss. |
 
-Checks request/plan binding, projection membership, collection/profile identity, epoch validity,
-overlay shadow, current grant/live deny/purge and candidate budget before any source read.
-`CONTAMINATED_LEG` is returned when the scoring population changed restrictively.
+The inspected daemon tree uses a `FixedReadback` implementation in process tests; production retained
+readback is not connected. These functions do not make Qdrant candidates source-backed by themselves.
 
-### `build_readback_request(nomination, plan) -> Result<ExactRevisionReadbackRequest, ValidationError>`
+## Finish the actual source handoff
 
-Requests the exact source revision, representation/unit, native anchor, excerpt digest, profile and
-assurance expected by the nomination. It cannot substitute the latest path/revision.
+Resolve a nominated point through the pinned published manifest, then the unit/representation metadata,
+to its retained content revision and exact range. The executor's point ID, membership, score and digest
+fields alone are insufficient. The query/source owners provide this lookup using their actual records;
+do not manufacture UUIDs, cast source-record versions into content revisions or read the latest pathname.
 
-### `reopen_and_verify(request, readback_port, context) -> Result<VerifiedSourceSlice, ValidationError>`
+`reopen_and_verify` currently compares supplied digest fields; it does **not** hash
+`SourceReadback.bytes`. One real owner must verify the actual object bytes and requested range, either
+in the retained reader or in this validator. Expected digests copied from the request alongside
+arbitrary same-length bytes cannot establish evidence. Preserve the actual source/representation
+coordinate connection and report missing or mismatched data as a gap.
 
-Verifies source/revision IDs, content digest, byte length, residency authorization, coordinate/loss map,
-anchor bounds, unit/extractor/profile identity and requested disclosure ceiling.
+The current readback method has a byte ceiling in its request but no explicit deadline/cancellation
+parameter. Connect the runtime's request context through the reader when integrating; a trait name
+does not make a blocking read cancellable. Bound real I/O and output, and keep partial or failed
+readback out of successful evidence.
 
-### `recheck_before_emission(verified, plan, live_state) -> Result<EmissionPermit, ValidationError>`
+## Simplify with the real consumers
 
-Revalidates binding, grant, owner generation, source/workspace view, live deny, purge, shadow and
-residency immediately before projection.
+Keep one validation path. Remove unused plan fingerprints, residency proofs and mandatory grant inputs
+with their producers/consumers; do not add a second validator or satisfy old checks with synthetic
+`allowed` values. The trusted-local scope still excludes unselected sources, and actual removal or
+restriction must invalidate affected results. A selected restricted-client profile additionally
+enforces real delegated scope and current revocation at its admission/emission boundaries.
 
-### `validate(nomination, context, ports) -> ValidationOutcome`
+A Qdrant score/payload, supplied permit or a successful constructor is not source evidence. Missing
+retained bytes yield an explicit unavailable/stale result. Ordinary ranked output remains
+non-exhaustive after validation or refill; only an explicit exact operation can claim completeness.
 
-Returns exactly one tagged outcome:
+## Behavior to check
 
-```text
-Validated(ValidatedSearchCandidate)
-Gap(CandidateValidationGap)
-ContaminatedLeg(ReplanSignal)
-```
-
-A gap contains reason/scope/freshness metadata only: no excerpt, source handle or evidence-bearing
-payload. Invalid outcomes cannot be inserted into the validated candidate type.
-
-### `material_coverage_change(before, after, plan) -> CoverageChange`
-
-Determines whether lost nominations require bounded refill/replan or explicit incomplete coverage. It
-never relabels remaining top-k as complete.
-
-## Cancellation, retry and failure
-
-Readback is bounded and cancellable. Cancellation/timeout/unreadable/mismatch yields a gap, never a
-partially validated candidate. Retrying identical captured inputs is read-only and safe. Concrete
-revision/CAS/Qdrant types remain behind ports.
-
-## Required fixtures
-
-Stale payload cannot be cited; exact digest/length/anchor/profile mismatch; overlay shadow; unreadable
-revision gap has no evidence; revocation/purge at precheck/readback/emission; contaminated-leg signal;
-loss-triggered bounded refill versus explicit gap; lossy coordinate map never claims raw exactness; fake
-readback proves adapter independence.
+Use the connected reader and real manifest/unit records to check changed bytes, wrong revision/range,
+profile/coordinate mismatch, missing objects, excluded or removed sources and cancellation.
+Check restricted-client revocation when that profile is selected. Test that rejected candidates emit
+no excerpt and candidate loss cannot turn top-k into an exhaustive result. Mocks exercise pure
+branches; they do not prove retained storage, byte verification or runtime integration.

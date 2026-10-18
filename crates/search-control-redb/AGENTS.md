@@ -1,48 +1,34 @@
-# Agent contract — search-control-redb
+# Local control storage
 
-Own bounded technical control persistence. Use [root instructions](../../AGENTS.md) and the
-[execution protocol](../../docs/product/EXECUTION_PROTOCOL.md) for a named owner/consumer cutover.
-Missing semantic inputs go to the existing source, publication, runtime or secret owner.
+Use the [implementation guide](../../docs/implementation/README.md#3-keep-control-state-small-and-publication-real).
+This package is the concrete redb owner for current source/settings/publication metadata.
 
-## Ownership
+## Write the useful state
 
-- Journal schemas, conditional transactions, exact operation replay/recovery, route metadata,
-  immutable control snapshots, quarantine records and write counters.
-- Inactive source-import schema, bounded record chains, content-manifest metadata, immutable
-  artifact staging/readback/publication and explicit retained/unknown cleanup disposition.
-- Exact cutover marker classification and byte-stable staged-plan/commit/rollback/status projections.
+Use typed methods and short redb transactions. Read conditions inside the write transaction and commit
+the changed tables. Keep read snapshots coherent. Do not hold a write transaction over Qdrant RPCs.
 
-Concrete redb and accepted dependencies remain private; [Cargo.toml](Cargo.toml) is the actual graph.
-Use the pinned database, not another local persistence engine. [README.md](README.md) and
-[FUNCTIONS.md](FUNCTIONS.md) retain current schema/profile, transaction and artifact contracts.
+Remove the generic per-update plan/fingerprint/receipt/readback platform and permanent `OPERATIONS`
+archive. Its 65,536-operation baseline cap must not become a lifetime limit on a working root.
+Only real pending external work and a bounded retry window where needed belong in recovery state.
 
-## Authority boundaries
+A successful abort before commit means the local writes were rolled back. A failed commit or possible
+external Qdrant effect is a different case. Do not demand recovery receipts for every cancelled read.
 
-Never store source bodies, extracted text, postings, vectors, term statistics or query/ranked history.
-Do not infer currentness from orphaned Qdrant data. Retained-byte reads, source decryption/protection
-and body hashing remain in their owners. The source adapter supplies verified digests and lengths to
-the bounded content-manifest encoder; no source bytes enter control records.
+The shared publication owner uses actual persistent pending/visible transactions here.
+`publication_codec::cas` is a pure floor check, not durable commit; retire its duplicate FileJournal
+and daemon publication path after transferring useful behavior.
 
-Temporary-name entropy/time and native identity are injected observations, not authority. This package
-classifies exact marker/publication state; the daemon decides quarantine under its root owner.
-Receipt/status rendering consumes verified technical observations. It cannot authorize cutover,
-invent source truth, switch a serving path or turn uncertain cleanup into success.
-Preserve typed `CONTROL_STORE_CORRUPT`, `RESTORE_PENDING_REVALIDATION` and
-`CONTROL_ROUTE_MISMATCH` semantics, content-free errors and private vendor types.
+## Storage boundary
 
-## Evidence inventory
+Source bodies, prepared text/maps, vectors, postings and query/ranking history do not belong in control
+tables. Immutable objects live with the revision/preparation owner; Qdrant owns indexed retrieval.
 
-Preserve these cases with their owning behavior; this is not a command list for every source slice.
+The new application may reject an unsupported old root before writing and leave it intact. General
+migration staging/cutover/rollback, old-format codecs and a new export framework are not prerequisites.
+Historical README/FUNCTIONS schemas explain existing code; they do not reinstate retired requirements.
 
-| Contract | Causal evidence |
-|---|---|
-| Journal/profile | Required table/schema set; deterministic migration/replay; committed-only reopen; mismatched incarnation/route refusal; forbidden corpus payload rejection. |
-| Hot admission | Immutable snapshots and zero durable writes, including the existing 10,000-admission case. |
-| Record/content artifacts | Frozen chain/header/object/end bytes; ordering/count/byte overflow; changed second replay or native identity refusal; no clobber of an existing final locator. |
-| Cutover markers | Exact replay only; different valid state never overwritten; missing/corrupt/unknown readback remain distinct and fail closed. |
-| Projections | Byte-exact minimized staged-plan/cutover/status output; no duplicate daemon projection schema. |
-
-Use the root production check/Clippy and deferred test/qualification rules. A broad historical command
-in an adjacent handoff is evidence of that run, not a new source gate. Report actual reductions and
-remaining consumers. Line counts are review signals; they do not require another database wrapper,
-forwarding package, unrelated cleanup or a new fixture framework.
+Keep actual format/transaction/source-reference/publication consistency and actionable scoped errors.
+Test committed-state reopen, abort, genuine unknown outcomes and bounded retry-state retirement.
+Delete old ledger/migration fixtures with their obsolete mechanism; no byte-stable receipt output or
+prescribed static gate is required.

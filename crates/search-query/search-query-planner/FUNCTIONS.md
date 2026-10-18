@@ -1,58 +1,45 @@
-# Function contract — `search-query-planner`
+# Functions — search-query-planner
 
-**Status:** W4/P08 logical contract; no plan implementation exists yet.
+The planner is implemented in [src/lib.rs](src/lib.rs). This describes current source and the changes
+needed by [query integration](../../../docs/implementation/README.md#4-simplify-and-connect-the-query);
+the existing API is not a compatibility obligation.
 
-The planner is server-owned. Clients supply one versioned recipe request and bounded preferences, never
-Qdrant collections, filters, point IDs, raw execution graphs or authority predicates.
+## Implemented API
 
-## Operations
+| Function | Current behavior |
+|---|---|
+| `normalize_recipe(request)` | Accepts `SearchRecipeRequest`, checks recipe/body agreement and recipe-specific bounds, returns `NormalizedRecipeRequest`. It currently uses the V1 vocabulary. |
+| `canonical_execution_dependency(capabilities, authorized_scope, safe_index_legs)` | Builds the canonical dependency record later required by compilation. Retire this proof input with its consumers when simplifying local planning. |
+| `compile_canonical_plan(task_plan, grant, recipe, authorized_scope, capabilities, safe_index_legs)` | Verifies supplied scope/grant/dependency/fingerprint data, then builds `CompiledSearchPlan` with bounded legs and omitted capabilities. It consumes `SearchTaskPlan`; it does not create one. |
+| `allocate_leg_budgets(global, leg_count)` | Returns `Vec<LegBudget>`. Divides deadline/read/CPU/memory ceilings between legs; the candidate ceiling is already per leg. It allocates limits, not actual resource enforcement. |
+| `validate_drift(plan, observation)` | Classifies an expired snapshot, restrictive changes, replanning or observation gaps using `DriftObservation`. |
+| `direct_leg_support(recipe)` | Describes the current V1 recipe's DIRECT/exact/advanced support. This table does not prove a live handler exists. |
 
-### `normalize_recipe(request, contracts) -> Result<NormalizedRecipeRequest, PlanError>`
+There is no implemented public `capture_query_snapshot`, `compile_plan`, `fingerprint_snapshot` or
+`fingerprint_plan` matching the old draft contract. Compilation callers in the inspected tree are
+tests/support code. The real query composition remains to be connected.
 
-Accepts exactly one of the eleven v1 recipes. Normalization is recipe-specific, bounded, Unicode/profile
-explicit and deterministic. Unknown fields or unsupported recipe/profile variants fail closed.
+## Concrete handoff
 
-### `capture_query_snapshot(control_snapshot, source_view, overlay_state, capability_state) -> Result<QuerySnapshotFence, PlanError>`
+The daemon resolves the user's scope and pins one published view. This owner derives the necessary
+operations from that view, actual profile, query and finite limits. It must not obtain authorization
+from a client-supplied graph, collection, filter or fingerprint.
 
-Captures every Architecture S14 axis explicitly: catalog, membership, reference portfolio, access/live
-deny, shadow, purge, overlay, observation cursor/freshness, source/workspace view, collection route,
-visible epoch and lexical/profile generations. Direct-only plans use the contract's tagged route/epoch
-absence form; generic dependency maps cannot replace named axes.
+Simplify the current compilation API and the daemon/executor consumers together. Keep useful pure leg
+construction; remove local grant transcripts and externally manufactured plan/dependency hashes.
+Restricted-client admission enforces its real delegated scope before this handoff.
 
-### `compile_plan(recipe, grant, authorized_scope, snapshot, capabilities, budget) -> Result<SearchTaskPlan, PlanError>`
+Reuse `search-lexical`'s `encode_query` / `encode_code_query` under the published profile. Query and
+IDF use the same resolved eligibility population. Ordinary retrieval returns bounded non-exhaustive
+candidates; exact scanning is an explicit operation. Do not require nonzero exact-scan budgets for a
+query that does not request it.
 
-Builds a finite typed leg DAG using accepted direct, lexical, exact and optional capability descriptors.
-Each leg binds its safe eligibility plan, profile, route/epoch requirements, input/output limits,
-dependencies and cancellation semantics. Optional legs are additive and explicitly unavailable when
-not accepted.
+The runtime supplies one absolute deadline and cancellation; downstream operations enforce remaining
+time and concrete byte/candidate/output limits. Optional modes need actual handlers before entering
+a plan. A changed scope/view/profile must not be disguised by retaining an old fingerprint.
 
-### `allocate_leg_budgets(recipe, global_budget, leg_drafts) -> Result<BudgetAllocation, PlanError>`
+## Behavior to check
 
-Allocates finite deadline, candidate, source-read, CPU, memory and result budgets. Zero means disabled,
-never unlimited. The sum of child ceilings cannot exceed the admitted server budget.
-
-### `fingerprint_snapshot(snapshot) -> QuerySnapshotFingerprint`
-
-### `fingerprint_plan(plan_without_fingerprint) -> PlanFingerprint`
-
-Use deterministic canonical serialization and domain separation. Equal load-bearing inputs yield equal
-bytes/fingerprints; any named-axis/profile/budget/leg change yields a different fingerprint.
-
-### `validate_drift(plan, current_nonsecurity, current_security) -> PlanDriftDecision`
-
-Classifies `VALID`, `REVALIDATE_SECURITY`, `REPLAN`, `EXPLICIT_INCOMPLETE` or `SNAPSHOT_EXPIRED`.
-Restrictive security never waits for replan. Observation gaps cannot satisfy strict-current recipes.
-
-## Semantics
-
-Planning after captured inputs is pure, deterministic and retry-safe. Cancellation/budget exhaustion
-returns no executable partial plan. No I/O, mutable registry, pin, scheduler or vendor client is owned.
-Configuration implements `config/sections/query.md`; changed budget/profile settings affect only newly
-compiled plans unless a stronger accepted reconfiguration action is required.
-
-## Required fixtures
-
-Exact eleven-recipe normalization; snapshot field completeness/no-hidden-axis; direct/index tagged
-validity; equal-input golden fingerprints; one-axis drift changes fingerprint; strict currentness rejects
-observation gaps; client vendor graph rejection; finite leg/budget property; portfolio partitioning;
-optional provider absence truthful; deterministic plan bytes independent of map iteration.
+Check selected operation ordering, coherent scope/profile/view, finite limits, absent optional modes
+and meaningful drift handling through the connected query. No frozen eleven-recipe inventory, golden
+plan hash or source-shape assertion substitutes for retrieving and validating real source evidence.

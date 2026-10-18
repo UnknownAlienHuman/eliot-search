@@ -1,35 +1,24 @@
-# Documentation map
+# Search documentation
 
-ELIOT Search is a standalone analysis/retrieval framework. Qdrant owns indexed retrieval; Search owns
-source truth, preparation, access, publication, exact verification and bounded agent navigation.
-[ADR 0005](adr/0005-standalone-search-product-and-controller-boundary.md) defines the controller boundary;
-[ADR 0006](adr/0006-agent-analysis-framework-product-scope.md) defines product scope.
+The lead developer starts with two documents:
 
-## Read for the task at hand
-
-| Need | Read |
+| Document | Purpose |
 |---|---|
-| Begin a source change | [Root instructions](../AGENTS.md), [execution protocol](product/EXECUTION_PROTOCOL.md), exact current issue and nearest package `AGENTS.md`/`FUNCTIONS.md`. |
-| Resolve product semantics | [Architecture entrypoint](architecture/README.md), its explicit baseline decisions, relevant [ADRs](adr/) and actual owning code/contract. |
-| Reduce or replace code | [Verified audit and reduction map](audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md), [reuse index](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md), actual callers. |
-| Find remaining outcomes | [Product completion map](product/PROJECT_COMPLETION.md); current handoff/#352 determine scheduling. |
-| Understand agent experience | [Agent analysis framework](product/AGENT_ANALYSIS_FRAMEWORK.md). |
-| Change wire/config/currentness | [Contracts](contracts/p00/), [configuration](config/), [current workspace](current/), [client](client/). |
-| Qualify shipped behavior | [Evaluation](evaluation/), [optional profiles](optional/), repository-root [qualification inputs](../qualification/). |
-| Recover historical rationale | [Audit index](audit/README.md), `handoff/`, `execution/` and frozen Git history; read only the relevant record. |
+| [Architecture](architecture/README.md) | Concise product manifesto: why Search exists, useful results, boundaries and principles. Keep it in context. |
+| [Implementation](implementation/README.md) | What to write, where the real owners/callers are, what to remove and which donor APIs to use. |
 
-The current architecture replaces its listed 8.4 baseline obligations; older contracts cannot restore
-them. Current compiled source establishes what exists, not qualification. Maintainer instructions and the actual issue/PR govern scope. Part II,
-`swarm/**`, old launch packets and dated source maps are history, not a permission system or queue.
-Do not require the full master and every historical packet for each change.
+[AGENTS.md](../AGENTS.md) describes repository work and verification. The current maintainer request and
+these guides supersede historical compatibility, cryptographic and process obligations.
 
-Maintain one owner for each rule. Update an existing contract/issue instead of appending another plan.
-A dated observation must identify its base; current-state corrections belong in the current entrypoint.
-Old source/feature status and copied dependencies must be checked before assigning work.
+Read more only for the implementation being changed:
 
-## Qualification boundary
+- [Source audit](audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md): evidence for defects and removals.
+- [Donor index](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md): inspected implementations and current adoption.
+- [Agent workflows](product/AGENT_ANALYSIS_FRAMEWORK.md): examples of useful navigation and evidence.
+- [Config](config/), [contracts](contracts/p00/), [current workspace](current/) and [client](client/):
+  existing specific formats/behavior; update them with their real consumers.
+- [Evaluation](evaluation/) and [selected profiles](optional/): measure capabilities that actually ship.
 
-Configured, operational and release-qualified are different states. Runtime checks observe current
-process/schema/source state; test reports are not startup credentials. Native/Qdrant/recovery/scale/
-installed evidence is required for the capability/profile being shipped. Source presence or compilation
-does not supply it.
+The old 8.4 master, wave packets, status vocabularies and historical audits are reference material.
+They are not a required reading bundle, implementation queue or permission system. A dated source fact
+must be checked against current callers before use. Do not create another status/approval registry.

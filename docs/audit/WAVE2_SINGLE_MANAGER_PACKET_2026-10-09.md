@@ -8,9 +8,9 @@ Use the existing records for their distinct purposes:
 
 | Question | Current entrypoint |
 |---|---|
-| What may change, and how is it reviewed? | [Root instructions](../../AGENTS.md) and [EXECUTION_PROTOCOL](../product/EXECUTION_PROTOCOL.md). |
+| What may change, and how is it reviewed? | [Root instructions](../../AGENTS.md) and [Implementation](../implementation/README.md). |
 | Which writer is active? | Current maintainer handoff, [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352), actual issue/PR and merged source. Preserve #598 and its WIP. |
-| Which product result remains? | [PROJECT_COMPLETION](../product/PROJECT_COMPLETION.md). |
+| Which product result remains? | [Implementation](../implementation/README.md). |
 | Which duplicate can be removed? | [Verified source/reduction map](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md). |
 | Which donor/code is already available? | [Reuse index](DONOR_VERIFICATION_REGISTER_2026-10-09.md) and [indexed donor map](INDEXED_SPINE_PORT_MAP_2026-10-09.md). |
 | Where is historical path evidence? | [Exception matrix](WAVE2_PACKAGE_EXCEPTION_MATRIX_2026-10-09.md) and [donor archive](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md), verified against actual callers when relevant. |

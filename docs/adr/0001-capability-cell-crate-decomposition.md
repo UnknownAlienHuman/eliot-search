@@ -35,7 +35,7 @@ execution uses one source writer and narrow read/research/review subagents.
 ## Consequences
 
 Smaller owned mechanisms and explicit consumers matter more than file count. Cross-owner cutovers use
-one bounded manager slice under [EXECUTION_PROTOCOL](../product/EXECUTION_PROTOCOL.md). A package move
+one bounded manager slice under [Implementation](../implementation/README.md). A package move
 alone does not count as code reduction or completed integration.
 
 The 2026-10-18 architecture additionally retires baseline mechanisms; this packaging ADR cannot preserve

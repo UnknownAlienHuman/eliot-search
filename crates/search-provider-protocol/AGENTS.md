@@ -1,105 +1,28 @@
-# Agent contract — search-provider-protocol
+# Local request and result protocol
 
-You own only `crates/search-provider-protocol/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Use the [architecture](../../docs/architecture/README.md) and
+[implementation guide](../../docs/implementation/README.md#4-simplify-and-connect-the-query).
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S32.0-S32.2, S33, H16, P01, P14.
+Own one framed typed exchange used by the actual CLI and daemon. Reuse useful framing, correlation,
+cancellation and terminal-result behavior. Do not build another transport/session framework.
 
-## Mission
+The trusted-local baseline uses owned child stdio or a local pipe enforcing the owning OS account.
+Remove mandatory paired hello, grants, body MACs, canonical re-encode proofs and replay transcripts from
+that API with its callers. Do not manufacture valid-looking credentials for old constructors.
+A selected restricted-client profile must enforce real credentials and delegated scope separately.
 
-Implement the generic local transport, binding and capability edge shared by CLI and optional client adapters.
+Use existing request/result types with Serde/serde_json where the new wire needs them. Add direct
+dependencies to existing owners; do not add duplicate DTO crates. Bound and read one frame before
+`from_slice`; do not use EOF-waiting `from_reader` on a live connection. Bound serialized output too.
 
-## Ownership
+Replace manual grammar/escaping/field-order code and the CLI's substring event parsing together.
+One current format replaces old V1/V2 and loopback forms; old exact-byte fixtures are not a compatibility
+promise. Update decoder, dispatch, handler and result encoder in a coherent change.
 
-- named-pipe framing and version negotiation
-- mutual authenticated hello and binding state
-- sequence/replay/cancellation/flow control
-- capability descriptor projection
-- request/result/progress envelope lifecycle
-- canonical bounded standalone-grant request bodies containing requested ceilings only
-- grant-specific authenticated envelope and proof transcript
-- exact body-digest admission before mutable session state
-- single terminal ownership and in-flight release for bound requests
+Keep request correlation, bounded queues, cancellation and clear protocol/version errors where actually
+used. EOF/cancellation releases local work; a possible server mutation does not become rolled back.
+Capabilities describe connected handlers, not qualification records.
 
-## Forbidden ownership
-
-- Qdrant/redb/CAS access
-- binding/access-policy persistence or grant authority
-- client canonical writes or authority
-- raw vendor plans/filters/point IDs
-- compression or unbounded fragmentation in baseline
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `FrameCodec::decode(bytes, limits) -> Result<ProviderEnvelope, ProtocolError>`
-- `FrameCodec::encode(envelope, limits) -> Result<Bytes, ProtocolError>`
-- `BindingSession::accept_hello(hello, peer) -> Result<BoundSession, ProtocolError>`
-- `BoundSession::admit(envelope) -> Result<AdmittedRequest, ProtocolError>`
-- `BoundSession::admit_body_bound(envelope, proof, body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
-- `BoundSession::admit_standalone_grant(envelope, proof, body_digest, sequence, now) -> Result<RequestGuard, ProtocolError>`
-- `BoundSession::complete_request(request_id, terminal) -> Result<RequestStatus, ProtocolError>`
-- `BoundSession::cancel(request_id) -> CancelOutcome`
-- `encode_standalone_grant_request(request) -> Result<Vec<u8>, ProtocolError>`
-- `decode_standalone_grant_request(bytes) -> Result<StandaloneGrantRequestV1, ProtocolError>`
-- `encode_standalone_grant_envelope(envelope, limits) -> Result<BoundedBytes, ProtocolError>`
-- `decode_standalone_grant_envelope(bytes, limits, versions) -> Result<AuthenticatedStandaloneGrantEnvelope, ProtocolError>`
-- `project_capability_descriptor(snapshot, binding) -> SearchProviderCapabilityDescriptor`
-
-The grant request body never carries binding, principal, installation,
-operation or issued-grant identity. It becomes meaningful only after an
-authenticated session and server-side authority composition. Its dedicated
-envelope uses a separate proof domain and does not extend or masquerade as a W1
-health/version/shutdown shell command.
-
-A body-bearing request must not consume sequence, replay or in-flight state
-until the adapter-computed digest of the exact bytes equals the digest covered
-by the authenticated envelope proof. The request guard remains connection-owned
-until one terminal completion, cancellation or disconnect. Cancellation cannot
-be relabelled success.
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `PROTOCOL_VERSION_MISMATCH`, `FRAME_TOO_LARGE`, `REPLAY_DETECTED`, `AUTH_FAILED`, `RESOURCE_EXHAUSTED`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `u32-LE framing and 8 MiB cap`
-- `canonical standalone-grant body round trip; alternate encoding/duplicates/oversize rejected`
-- `grant-specific envelope JSON/frame/proof transcript round trip`
-- `body mismatch rejected before sequence/replay/in-flight mutation`
-- `request guard retained until exactly one terminal release`
-- `cancelled request cannot complete as success`
-- `maximum 32 in-flight requests and bounded queues`
-- `monotonic sequence/replay rejection`
-- `idempotent cancellation releases request resources`
-- `capability descriptor exposes only binding-visible opaque memberships`
-- `named-pipe ACL alone is insufficient authentication`
-- `transport primitives can be qualified before client-specific adapter integration`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W1 / P01 transport; W8 / P14 integration**
-- Soft `src/` target: **8,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+No Qdrant/redb/source-storage or access-policy owner belongs here. Test real framing, event decoding,
+size bounds and lifecycle behavior through the application. No wave, package-size quota, formal
+contract-change issue or all-profile handoff blocks the actual client integration.
