@@ -1,50 +1,36 @@
-# `[continuations]` configuration contract
+# Temporary query-window settings
 
-- **Owner:** `search-continuation`
-- **Earliest wave:** W4
-- **Section minimum:** `APPLY_LIVE`
-- **Secret policy:** `forbid_plaintext`
-- **Canonical source:** `docs/config/CONFIGURATION_1.0.md`
+Follow the [one-window implementation](../../crates/search-query/search-continuation/README.md#one-temporary-owner).
+The old `[continuations]` table is a proposal in the example/reference; the current
+[daemon registry](../../bins/eliot-searchd/src/config_composition/kernel/registry.rs) does not register
+that section. Setting its old TTL or per-binding fields does not configure public paging.
 
-This packet is the bounded read set for the section owner. It does not authorize implementation or
-override `swarm/launch-state.toml`.
+## Current runtime values
 
-## Fields
+These are separate Rust implementations, not one supported settings API.
 
-| Key | Type | Default / bound | Override | Minimum action |
-|---|---|---|---|---|
-| `ephemeral_ttl_ms` | `u64` | `300000; finite` | `file` | `APPLY_LIVE restrictive` |
-| `max_per_binding` | `u32` | `64; finite` | `file` | `APPLY_LIVE` |
-| `max_pinned_candidates` | `u32` | `512; finite` | `file` | `APPLY_LIVE` |
-| `max_pin_ttl_ms` | `u64` | `300000; finite` | `file` | `APPLY_LIVE restrictive` |
-| `durable_ordinary_queries` | `bool` | `false; fixed` | `none` | `REJECT` |
+| Existing owner | Current fields or constants |
+|---|---|
+| [ContinuationLimits](../../crates/search-query/search-continuation/src/lib.rs) | Baseline `max_records`: 1,024 including terminal metadata; `max_ephemeral_per_binding`: 128; `max_durable_per_binding`: 32. |
+| Window/page limits in `ContinuationLimits` | `max_candidate_window` / `max_issued_candidates`: shared list/set ceilings; `max_expansion_items` / `max_lifecycle_batch`: 256; `max_ttl_millis`: 900,000. |
+| [Daemon DIRECT constants](../../bins/eliot-searchd/src/continuation/kernel/spec.rs) | `MAX_CONTINUATIONS`: 16; `MAX_RETAINED_MATCHES`: 25,000 total; `MAX_PAGE_SIZE`: 1,000, default 100; `MAX_GAP_DETAILS`: 256; `CONTINUATION_TTL`: 15 minutes. |
 
-## Required section API
+Shared `ContinuationStore` accepts limits at construction and has `apply_live_limits`, expiry and
+compaction APIs. These change in-memory state and return effects; they do not apply TOML settings,
+perform pin cleanup or persist durable replan descriptors themselves. Public paging uses the separate
+daemon catalog. See [actual functions](../../crates/search-query/search-continuation/FUNCTIONS.md).
 
-```text
-section_descriptor() -> ConfigSectionDescriptor
-compiled_defaults() -> ConfigSectionInput
-validate_section(input, platform, accepted_capabilities) -> Result<ValidatedSection, ConfigError>
-section_digest(validated) -> Blake3Digest32
-plan_section_change(old, new) -> Result<SectionReloadDecision, ConfigError>
-apply_live_change(old, new, context) -> Result<ConfigApplyReceipt, ConfigError>
-```
+## Target
 
-`apply_live_change` is legal only for fields whose final action is `APPLY_LIVE`. Restart, security
-barrier, rebuild, collection-generation and gate actions are executed by daemon orchestration.
+Keep one owner for the ordered window, next index, real scope/view resources and absolute expiry.
+Use its concrete item/byte/window limits and a bounded page size; connect those accepted settings to
+the public handler. Reuse the existing daemon cursor and commit-after-delivery mechanics, then remove
+the duplicate engine and unconsumed settings.
 
-## Invariants
+New defaults affect new requests/windows. Admitted work keeps its own deadline and fixed expiry.
+A supported restrictive change can expire affected state and release its resources; a setting edit
+alone does neither. Last-page delivery cannot discard items still backing live expansion locators.
+Restart may expire temporary state; ordinary queries need no durable checkpoint/issued-ID history.
 
-- raw Qdrant cursors/scores are never public
-- ephemeral state dies on restart
-- durable replan checkpoints own no process-local pin
-
-## Required tests
-
-- defaults validate and produce a stable section digest;
-- every field boundary and override source is tested;
-- unknown keys and wrong types fail closed;
-- the owner never accepts plaintext secrets or foreign section keys;
-- a field cannot be assigned a weaker action than this packet;
-- redacted diagnostics contain no secret, source/query content or raw path;
-- equal validated inputs produce equal digests and reload decisions.
+Keep actual selected-scope restrictions and source validation. No whole-catalog fingerprint,
+section digest or generic reload-receipt system is needed for window limits.

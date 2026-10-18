@@ -1,14 +1,17 @@
-# Source family rules
+# Working on sources
 
-- Paths are locators, not identity.
-- `search-source-admission` is the sole source-admission policy evaluator and legacy v1 receipt owner.
-- `search-source-admission-receipt` owns permanent v2 receipt issuance and verification over the evaluator's immutable models; dependencies remain one-way.
-- `search-source-registry` stores verified policy bindings/receipts but does not reimplement policy.
-- `search-safe-reader` performs stable no-execute acquisition from an already admitted locator; it does
-  not decide admission.
-- Watchers are hints; inventory reconciliation proves observation continuity.
-- Only exact bytes or immutable admitted revisions are source truth.
-- `SourceIdentity` carries no membership or access policy.
+Read the [architecture](../../docs/architecture/README.md) and
+[implementation](../../docs/implementation/README.md). Complete the path from a selected root to
+retained bytes and a committed source head. Change its actual producers and consumers together;
+preserve #598's active manager/private work.
 
-This directory is not a package. Do not add a family-level `Cargo.toml` or shared implementation. Put
-behavior in the child package that owns the failure state and test seam.
+A path locates a source. Evidence refers to an exact retained revision. Watcher events request work;
+the read/reconciliation result determines current state. Transfer the bytes actually acquired to the
+writer instead of rereading a pathname after its identity was observed.
+
+Use one source/revision model and one immutable-byte I/O implementation. Pure admission decisions
+need no permanent receipt issuer, custody chain or separate lifecycle package. Remove obsolete v1/v2
+converters and duplicated records with their consumers. Keep meaningful scope and stable-read checks.
+
+These directories show the current layout. Consolidate packages that only split one responsibility;
+agent assignments and historical contracts do not define permanent dependency boundaries.

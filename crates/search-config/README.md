@@ -1,61 +1,36 @@
 # search-config
 
-**Deterministic, I/O-free typed configuration and reload planning.**
+Typed settings for one local application. Defaults, selected file values and explicit environment/CLI
+overrides produce the settings used to construct the runtime.
 
-This package owns finite typed documents, registry/layer semantics, section equality identities,
-effective snapshot fingerprints, redaction, deltas and plans. Capability packages own section
-meaning and runtime application. Configuration equality never proves validation or applied effects.
+Read the [implementation guide](../../docs/implementation/README.md) and
+[concrete change map](FUNCTIONS.md). This describes the refactoring target; the Rust implementation
+still contains the registry/fingerprint/reconfiguration machinery below.
 
-New snapshots compute BLAKE3 over shared deterministic CBOR under
-`eliot/cbor/config-snapshot/v2`. The config owner computes each section digest from exact typed
-fields, requested/selected profiles and supplied source/reset provenance; callers supply no digest.
-Private snapshot compute consumes its existing ordered bounded map, without another sort, full
-preimage or public arbitrary iterator.
+## Current code and consumer
 
-This is VERSIONED_REBUILD. The sole current file format is schema 2, `eliot-config-toml@2`,
-implemented through maintained `toml_parser` events. Schema-1 files return
-`UnsupportedSchemaVersion` and require migration. See [TOML_PROFILE_2.md](TOML_PROFILE_2.md).
-SHA-v1 bytes can be
-restored only with `ConfigFingerprint::restore_legacy_v1` for migration/comparison. They cannot
-construct a current effective snapshot. Equality preserves algorithm/profile/revision even if raw
-bytes coincide. The immediate daemon status emits the full tag under its explicit v2 schema and
-rejects report/snapshot identity mismatch. Runtime application/readback remains #333.
+`parse_document` uses `toml_parser` events to build generic `ConfigDocument` values. Registry/merge,
+section projection, canonical section/snapshot hashing, diff and receipt-based action planning are
+separate modules. The daemon's
+[config composition](../../bins/eliot-searchd/src/config_composition/kernel/process.rs) captures inputs
+and assembles these values. Its `effective_from_process` compares a startup candidate with defaults
+and calls `try_activate` with no receipts. A permitted `query.limit=11` therefore gets
+`DAEMON_CONFIG_PARTIAL_REFUSED` instead of constructing an application with that value.
 
-Borrowed identifier, value and list extents plus fixed scalar/digest payload are checked before
-temporary canonical rows. Assembly also charges names/owners before map clones and insertion.
-One shared encoder decides exact domain-inclusive CBOR bytes under the 8 MiB hard ceiling.
-Logical payload budgets are not measured allocator residency or serialized JSON/Debug size.
+The [current file profile](TOML_PROFILE_2.md) accepts schema2 and a restricted TOML subset.
+The historical schema1 reference and reload plans do not constrain the replacement.
 
-File/env/CLI documents retain the shared builder, descriptor/secret/precedence rules and admission
-ceilings: W1 identifiers 1 MiB, values 4 MiB, total list items 8,192. Captured document Debug emits
-fixed primitive metadata. Redacted views charge complete tagged header and entry payload before
-copies/hashing and omit over-budget entries whole. Bounded redacted path digests retain exact
-standard SHA-256 through the shared owner; no production legacy fingerprint encoder remains.
+## Implementation result
 
-File parsing and typed entry admission share one private document builder. Lexer tokens are
-charged before storage growth; donor strings are counted, charged and then filled. The W1 lexer
-ceilings are 131,072 tokens and 4 MiB logical token storage, independently of decoded payload
-budgets. No handwritten TOML grammar, dynamic donor document tree or second parser remains.
+Use concrete setting structs for consumed fields, a small override merge and field validation. Decode
+with the already locked `toml` + Serde API. No dynamic application-level TOML tree or generic registry
+is needed for a fixed settings model. Preserve useful defaults, supported override precedence, clear
+errors and real size limits. Do not accept documented fields that no runtime owner consumes.
 
-Identity, compatibility, parser and diagnostic fixtures are AUTHORED_NOT_RUN under #352.
-Integrated/native/installed/scale/release qualification remains #215; runtime application/readback
-remains #333. Logical limits do not establish measured allocator residency or corpus compatibility.
+Capture once, validate once, construct owners with the accepted settings and let status read that
+running state. Remove configuration provenance hashes, per-section receipts and mandatory secret
+settings from ordinary local startup. Optional credential use belongs to the selected dependency.
 
-## Owns
-
-- config source/layer identity and deterministic merge semantics
-- top-level section registry and unknown-section rejection
-- fixed/security-floor/override classification
-- effective snapshot fingerprint and redacted diagnostic projection
-- change classification: live, security barrier, restart, new generation or reject
-
-## Must not own
-
-- reading files/environment/process arguments
-- package-specific runtime state or vendor configuration objects
-- plaintext secrets or permissive fallback on unknown settings
-- silently applying restart/rebuild/security changes as live updates
-
-- **Delivery wave:** W1 / P01
-- **Soft source-line target:** 5,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Runtime changes call an existing owner where supported. A query default can affect new requests; a
+static process option may require restart; an indexed profile change uses the existing generation and
+publication path. These cases do not require a second general transaction/recovery engine for config.

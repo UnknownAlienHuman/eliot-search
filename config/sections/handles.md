@@ -1,50 +1,37 @@
-# `[handles]` configuration contract
+# Handle and source-expansion settings
 
-- **Owner:** `search-handles`
-- **Earliest wave:** W4
-- **Section minimum:** `APPLY_LIVE`
-- **Secret policy:** `forbid_plaintext`
-- **Canonical source:** `docs/config/CONFIGURATION_1.0.md`
+Follow the [query implementation](../../docs/implementation/README.md#4-simplify-and-connect-the-query).
+The old `[handles]` table is a proposal in the example/reference; the current
+[daemon registry](../../bins/eliot-searchd/src/config_composition/kernel/registry.rs) does not register
+that section. Its old TTL and per-binding keys are not an implemented file-to-runtime API.
 
-This packet is the bounded read set for the section owner. It does not authorize implementation or
-override `swarm/launch-state.toml`.
+## Current runtime values
 
-## Fields
+These are Rust fields/constants, not supported TOML keys.
 
-| Key | Type | Default / bound | Override | Minimum action |
-|---|---|---|---|---|
-| `ephemeral_ttl_ms` | `u64` | `600000; finite` | `file` | `APPLY_LIVE restrictive` |
-| `max_ephemeral_per_binding` | `u32` | `256; finite` | `file` | `APPLY_LIVE` |
-| `max_durable_per_binding` | `u32` | `128; finite` | `file` | `APPLY_LIVE` |
-| `max_expansion_bytes` | `u64` | `1048576; finite` | `file` | `APPLY_LIVE` |
-| `durable_unsaved_allowed` | `bool` | `false; fixed` | `none` | `REJECT` |
+| Existing owner | Current fields or constants |
+|---|---|
+| [HandlePolicy](../../crates/search-query/search-handles/src/lib.rs) | `max_ephemeral_records` and `max_durable_records`: 16,384 each, counting active records across that store; `max_expire_batch` and `max_invalidate_batch`: 1,024 each. |
+| `HandlePolicy.max_expansion_bytes` | Baseline 8 MiB; checked for nonzero during policy validation, but not consumed by `revalidate` or `expand`. It does not currently enforce that ceiling. |
+| [Daemon DIRECT constants](../../bins/eliot-searchd/src/result_handles/kernel/spec.rs) | `MAX_RESULT_HANDLES`: 50,000; `MAX_HANDLE_EXPANSION_BYTES`: 24 KiB; `RESULT_HANDLE_TTL`: 15 minutes. This is a separate catalog used by public DIRECT queries. |
 
-## Required section API
+Shared `HandleStore` accepts policy at construction and exposes mint/resolve/expire/invalidate; it has
+no `apply_live_limits` or section reload API. Expiration timestamps arrive with mint material, not a
+policy TTL field. Both shared handle classes are in memory. See
+[actual functions](../../crates/search-query/search-handles/FUNCTIONS.md).
 
-```text
-section_descriptor() -> ConfigSectionDescriptor
-compiled_defaults() -> ConfigSectionInput
-validate_section(input, platform, accepted_capabilities) -> Result<ValidatedSection, ConfigError>
-section_digest(validated) -> Blake3Digest32
-plan_section_change(old, new) -> Result<SectionReloadDecision, ConfigError>
-apply_live_change(old, new, context) -> Result<ConfigApplyReceipt, ConfigError>
-```
+## Target
 
-`apply_live_change` is legal only for fields whose final action is `APPLY_LIVE`. Restart, security
-barrier, rebuild, collection-generation and gate actions are executed by daemon orchestration.
+Return exact source/revision/range references for trusted-local results. Any selected opaque locator
+uses the [same temporary window](../../crates/search-query/search-continuation/README.md#one-temporary-owner)
+as paging. Replace both catalogs with that owner and change their real callers; preserve no separate
+durable-handle configuration platform.
 
-## Invariants
+Expose only limits the surviving owner enforces: retained item/byte capacity, expiry and source-read
+byte/time ceilings. Apply the expansion limit before the actual read. Delete expired state rather than
+retaining terminal history, and keep issued locators valid until their stated expiry unless their
+session ends or a real restriction invalidates them. Selected restricted clients retain actual scope,
+revocation and disclosure rules.
 
-- possession never grants access
-- durable handles require retained immutable revisions
-- quota/TTL reductions emit invalidation receipts
-
-## Required tests
-
-- defaults validate and produce a stable section digest;
-- every field boundary and override source is tested;
-- unknown keys and wrong types fail closed;
-- the owner never accepts plaintext secrets or foreign section keys;
-- a field cannot be assigned a weaker action than this packet;
-- redacted diagnostics contain no secret, source/query content or raw path;
-- equal validated inputs produce equal digests and reload decisions.
+Construct from validated settings. Implement a runtime limit change only with its real consumer;
+no section digest, generic reload receipt or compulsory live-update API is required.

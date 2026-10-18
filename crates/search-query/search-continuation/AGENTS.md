@@ -1,72 +1,22 @@
-# Agent contract — search-continuation
+# Working on search-continuation
 
-You own only `crates/search-query/search-continuation/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Start with the [architecture](../../../docs/architecture/README.md),
+[query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query) and
+[one-owner design](README.md#one-temporary-owner). Read current source and both shared/native and public
+daemon callers before changing the owner.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S14.3-S14.4, S26, H12, P08, P13.
+- Reuse the existing daemon offset and commit-after-delivery mechanism in one surviving window owner.
+  Update consumers and remove the replaced engine; do not add another continuation implementation.
+- Own real view/retention resources, ordered bounded items, next index and an absolute expiry.
+  A permit, supplied boolean or cleanup receipt is not ownership or completion of its external effect.
+- Page work follows the selected page, not the previously issued prefix or whole source catalog.
+  Bound total retained bytes as well as counts; preserve exact source/revision and ranked order.
+- Keep failed output from advancing the cursor. Close a partially written framed session. Do not
+  introduce a durable acknowledgement/replay platform for ordinary local reads.
+- Expire windows and resources on their actual lifetime; restart may invalidate them. If issued item
+  locators depend on the window, paging completion cannot delete their backing items early.
+- Enforce real restrictions for selected restricted clients. Simplify trusted-local API and callers
+  together; no fake grant or blanket bypass replaces scope, purge or source validation.
 
-## Mission
-
-Own bounded opaque continuation state without exposing vendor cursors or pinning snapshots indefinitely.
-
-## Ownership
-
-- ephemeral in-memory continuation windows
-- durable replan checkpoints
-- TTL/count/binding quotas
-- issued-ID suppression
-- security/view/route revalidation
-
-## Forbidden ownership
-
-- raw Qdrant offsets or score cursors
-- silent continuation on a newer corpus
-- indefinite epoch pins
-- durable continuation containing unsaved bytes
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`, `search-query-planner`, `search-access`, `search-epoch-pins`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `ContinuationStore::create(state, durability, limits) -> Result<ContinuationHandle, ContinuationError>`
-- `ContinuationStore::resume(handle, latest_state) -> Result<ResumePlan, ContinuationError>`
-- `ContinuationStore::invalidate(scope) -> InvalidationCount`
-- `ContinuationStore::expire(now) -> ExpiredSet`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `SNAPSHOT_EXPIRED`, `ACCESS_REVOKED`, `PURGED`, `RESOURCE_EXHAUSTED`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `raw vendor cursor is never serialized`
-- `expired fence returns SNAPSHOT_EXPIRED`
-- `revocation and purge invalidate affected continuations`
-- `ephemeral continuation releases pin on expiry/disconnect`
-- `durable checkpoint replans instead of trusting process-local pin`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W4 / P08; hardened P13**
-- Soft `src/` target: **6,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Check paging cost, output failure and actual resource release. Fixed recipes, contract-change approval,
+legacy checkpoint formats and line quotas do not constrain this implementation.

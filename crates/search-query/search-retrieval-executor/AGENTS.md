@@ -1,25 +1,21 @@
-# Agent contract — search-retrieval-executor
+# Working on search-retrieval-executor
 
-Own only `crates/search-query/search-retrieval-executor/`. Do not edit another package, root workspace,
-shared contracts or architecture. Missing fields use the contract-change process.
+Start with the [architecture](../../../docs/architecture/README.md) and
+[query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query).
+Read [FUNCTIONS.md](FUNCTIONS.md), the changed source and its actual daemon callers.
 
-The bounded packet is `swarm/assignments/search-retrieval-executor.md`.
+Execution is part of one query operation. Change its API, planner, real adapter and result consumers
+together where required; obsolete package boundaries and fixtures do not require a parallel executor.
 
-## Ownership
+- Keep actual scope, profile and published-view binding before retrieval.
+- Own pins and one absolute deadline/cancellation context through dependent I/O; a copied ticket or
+  caller-supplied flag is not ownership of the running work.
+- Normalize within populations and fuse ranks across them. Deduplicate actual result identities,
+  including their source/revision and route context; never use leg-prefixed IDs as result identity.
+- Preserve the resulting order through validation/projection. Report failed work and limits honestly.
+- Bound nominations and retained bytes before collecting the entire input. Pure ranking needs no
+  durable receipts, scheduler framework or request fingerprint hierarchy.
+- Use the existing real bridge at the concrete daemon seam. A process-test port proves only its test.
 
-- bounded leg scheduling/dispatch/cancellation
-- deterministic safe-leg fusion and partial coverage
-
-## Forbidden ownership
-
-- validation/admission or durable query history
-- raw-score comparison across populations
-- concrete Qdrant/redb/process dependencies
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-query-planner`, `search-lexical`, `search-epoch-pins`, `search-access`.
-
-## Size
-
-Target `src/` ≤ 7,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Check behavior that can fail: overlapping legs, score scales, saturation and cancellation with live
+resources. Documentation, type construction and successful mocks do not demonstrate runtime integration.

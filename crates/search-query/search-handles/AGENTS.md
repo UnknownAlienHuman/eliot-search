@@ -1,29 +1,19 @@
-# Agent contract — search-handles
+# Working on search-handles
 
-Own only `crates/search-query/search-handles/`. Do not edit the root workspace, shared contracts,
-architecture or another package. Missing fields use the contract-change process.
+Read the [architecture](../../../docs/architecture/README.md),
+[query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query) and
+[current APIs](FUNCTIONS.md), then trace the actual expansion and lifecycle callers.
 
-The bounded implementation packet is `swarm/assignments/search-handles.md`.
+Use exact source/revision/range references in the local result. Any required opaque locator shares
+the [single temporary window owner](../search-continuation/README.md#one-temporary-owner). Replace both
+existing catalogs with that owner; do not make a third registry or preserve a crate solely for its tests.
 
-## Ownership
-
-- opaque handle ID generation and mutable handle records
-- ephemeral/durable eligibility, TTL/count/binding quotas
-- expansion authorization and disclosure/range budgets
-- security, purge, owner-generation and view invalidation
-
-## Forbidden ownership
-
-- ranking, result projection or continuation windows
-- treating handle possession as authorization
-- raw source bytes, paths, Qdrant IDs or cursors in tokens
-- durable handles to unsaved or unretained revisions
-- direct redb/CAS/Qdrant dependency
-
-## Dependencies
-
-Only `search-contracts` and `search-domain`. Authorization, readback and durable storage arrive through vendor-neutral ports.
-
-## Size
-
-Target `src/` ≤ 6,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+- Resolve the real retained revision and scope, enforce the requested range and effective byte/time
+  limits, and reuse actual-byte verification. Never substitute a digest label for checking bytes.
+- Delete expired records and release owned resources; a live-record quota does not bound retained
+  terminal history. Keep issued locators usable until their stated expiry.
+- Make grant policy specific to the selected restricted profile. Changing trusted-local constructors
+  means changing their callers, not filling old fields with synthetic permissions.
+- Preserve actual restrictions on excluded sources, purged data and unsaved buffer lifetime.
+- Change shared APIs and native/public consumers together. No contract-change permission process,
+  durable ordinary-query journal or package line quota is required.

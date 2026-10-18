@@ -1,72 +1,39 @@
-# Function contract — `search-retrieval-executor`
+# search-retrieval-executor — implemented functions
 
-**Status:** W4/P08 bounded execution contract; no scheduler or retrieval implementation exists yet.
+## Current API
 
-The executor consumes an accepted immutable `SearchTaskPlan` and vendor-neutral leg ports. It never
-constructs redb/Qdrant/process adapters and never treats nominated candidates as evidence.
+These are source entrypoints, not evidence that the public daemon connects them.
 
-## Admission and scheduling
+| Entry point | Actual behavior |
+|---|---|
+| `admit(plan, owner_id, lane, now_tick, scheduler)` | Checks supplied queue counts and plan limits; creates `ExecutionGuard` with a deadline. No queue reservation. |
+| `schedule_leg(guard, leg, dependencies, request_security, live_security, now_tick)` | Checks dependencies, access, deadline and cancellation; clones the leg into a ticket. |
+| `acquire_leg_pins(ticket, registry, now_ms)` | Returns a separate `LegPinSet` owning the acquired epoch guards. |
+| `dispatch_leg(ticket, backend)` | Calls `LegBackend::dispatch`, then checks nomination shape and limits. |
+| `normalize_within_population(output)` | Sorts raw scores inside one population and assigns ranks. |
+| `fuse_safe_legs(outputs, profile)` | Builds a map keyed by `candidate_id`, adds weighted reciprocal ranks, sorts and truncates. |
+| `discard_contaminated(decision, execution)`, `classify_completion(execution, plan)` | Discard affected leg outputs and summarize supplied execution state. No redispatch. |
+| `cancel(guard, execution)` | Sets cancellation flags and clears stored outputs. |
 
-### `admit(plan, binding_quota, scheduler_snapshot) -> Result<ExecutionGuard, ExecuteError>`
+See [lib.rs](src/lib.rs). [indexed.rs](src/indexed.rs) adds `IndexedRetrievalPort::query_filtered`,
+`count_exact` and `execute_indexed_leg`: it checks the supplied route/pin/population, queries, counts
+and maps nominations. The [daemon adapter](../../../bins/eliot-searchd/src/query_composition.rs) currently
+uses a process-test port.
 
-Verifies plan/snapshot fingerprints, deadline, lane, resource ceilings and per-binding/global queue
-capacity. Admission acquires only process-local request state; ordinary reads create no durable job or
-idempotency row.
+## Changes required in the connected query
 
-### `schedule_leg(guard, leg, dependency_state) -> Result<LegTicket, ExecuteError>`
+- Fix fusion identity at its producer and consumer. `execute_indexed_leg` generates
+  `candidate:{leg_id}:{point_id}`; two legs finding the same published point therefore do not merge in
+  `fuse_safe_legs`. Resolve a result identity from the real published point/unit, source scope and
+  revision. Do not merge equal point strings from different routes or incompatible identities.
+  Keep leg contributions separately and pass final order to the projector.
+- Make the request own its pins and cancellation through dispatch/readback. Existing `cancel` neither
+  drops a separately held `LegPinSet` nor invalidates an already issued ticket; `dispatch_leg` accepts
+  that ticket without a deadline/cancellation check. Setting the guard flag alone cannot stop its I/O.
+- Bound combined input work before building the full fusion map. An output truncation after sorting
+  every nomination does not constrain input memory. Keep only real retrieval legs and their useful
+  ranking data.
 
-Checks dependencies, live access permit, budget remainder and lane priority before queueing. Queues and
-prefetch are finite. Interactive work outranks verification/background without starving bounded
-cleanup.
-
-### `acquire_leg_pins(ticket, pin_port) -> Result<LegPinSet, ExecuteError>`
-
-Acquires only the route/epoch pins required by the leg. Every pin is owned by the request guard and is
-released on completion, cancellation, disconnect or failure.
-
-### `dispatch_leg(ticket, ports, cancellation) -> Result<LegOutput, ExecuteError>`
-
-Dispatches direct/index/exact/provider operations through typed ports. Cancellation/deadline propagate
-to every cancellable dependency. Leg output contains bounded nominations, ranks, coverage and reasons,
-not trusted source excerpts.
-
-## Fusion and contamination
-
-### `normalize_within_population(output, profile) -> Result<RankedLegOutput, ExecuteError>`
-
-Raw scores are comparable only inside the exact scoring population/profile that produced them.
-
-### `fuse_safe_legs(outputs, fusion_profile) -> Result<FusedNominations, ExecuteError>`
-
-Cross-population combination uses the pinned rank-based fusion profile and deterministic tie-breaks.
-Raw scores never cross population boundaries. Duplicate lineage/unit handling is explicit and bounded.
-
-### `discard_contaminated(decision, execution) -> ContaminationReceipt`
-
-Drops every influenced leg, its ranks, counts, diversity and trace. It may re-dispatch under a new live
-permit within remaining budget or return an explicit gap; post-filtered ordering is forbidden.
-
-### `classify_completion(execution, plan, budget) -> ExecutionCoverage`
-
-Reports executed, failed, cancelled, omitted-budget and unavailable legs. Saturation/deadline may yield
-a truthful partial candidate scope, never complete scope or an absence claim.
-
-### `cancel(request_id, reason) -> CancelOutcome`
-
-Idempotently stops admission/dispatch where possible, propagates cancellation, releases pins and
-request-local memory, and records only bounded non-content outcome metadata.
-
-## Configuration and failure semantics
-
-Implements `config/sections/scheduler.md`. Live decreases constrain new dispatch immediately and may
-cancel excess background work; increases apply only within accepted host/server ceilings. Failures
-include resource exhaustion, deadline/cancellation, index/provider unavailable, stale plan, access
-revoked and incomplete coverage. Read-only dependency timeout is a typed failed leg, not a mutation
-unknown-outcome receipt.
-
-## Required fixtures
-
-Lane priority and bounded fairness; queue saturation; cancellation/disconnect releases all pins;
-deadline propagation; no durable read rows; raw-score isolation; deterministic weighted-RRF/tie-break;
-contaminated whole-leg discard; stable plan/stable ordering; optional leg cannot bypass access/budget;
-package graph/public API contains no concrete adapter.
+The [implementation guide](../../../docs/implementation/README.md#direct-planning-and-execution)
+owns real-port connection, removal of mandatory counts and request-proof inputs. Change output types
+and actual callers with those removals; ordinary top-k has no completeness denominator.

@@ -1,17 +1,19 @@
-# Preparation family
+# Preparation
 
-**Organizational capability family — not a Cargo package.**
+A retained revision is decoded/materialized, split into useful units and projected with the selected
+lexical profile. Each result keeps the coordinates needed to reopen its source evidence.
 
-## Child packages
+| Existing code | Role and integration |
+|---|---|
+| [materializer](search-materializer/) | Text/code decoding and Markdown/JATS preparation. Reuse the existing decoder/parsers and return the prepared product once. |
+| [unitizer](search-unitizer/) | Unit occurrences, coordinates and manifests. Consume the materializer's immutable result; remove redundant full verification/parsing between these in-process owners. |
+| [code enricher](search-code-enricher/) | Selected syntax-derived code facts. Do not present tolerant parse output as compiler-resolved truth or require this extension before basic search works. |
 
-- [`search-materializer/`](search-materializer/) — C08: Convert an exact retained revision into a canonical representation with explicit coordinate and loss maps.
-- [`search-unitizer/`](search-unitizer/) — C09: Turn a materialization into deterministic unit occurrences and an immutable unit manifest.
-- [`search-code-enricher/`](search-code-enricher/) — C10: Produce provider-qualified Rust definitions, references, tests and documentation facts without claiming compiler truth.
+Current UnitSet ingress is stricter than materializer decoding: its raw path requires byte-identical
+UTF-8 with `ExactBytes` and an empty loss map. Change a transform and its UnitSet/source-coordinate
+consumer together; a broader decoder alone does not make the whole pipeline support that format.
 
-## Family invariants
-
-- Every transform has a versioned profile and explicit assurance ceiling.
-- Coordinate and loss maps are mandatory when bytes are transformed.
-- Tolerant syntax parsing is not compiler truth.
-
-Each writer agent owns exactly one child package and follows that package's `AGENTS.md`.
+Text and maps are derived files, not a second corpus in redb. Reuse one existing immutable-byte writer/
+reader and move buffers or carry byte ranges instead of repeatedly cloning the full artifact.
+The [implementation guide](../../docs/implementation/README.md) owns the concrete path. Current child
+packages may become modules when their dependency boundary no longer serves the application.

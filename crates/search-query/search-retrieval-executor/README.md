@@ -1,24 +1,25 @@
 # search-retrieval-executor
 
-**C23 — Retrieval Executor.**
+Execute bounded retrieval legs and combine their nominations before source validation.
 
-**Status:** `SOURCE_PRESENT`; bounded lane execution, cancellation, typed dispatch and fusion source exists, while accepted ranking profiles and real bridge/provider product composition remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #125/#127/#200.
+## Current source
 
-Execute bounded direct/index/provider legs through vendor-neutral ports and fuse only compatible authorized outputs.
+[lib.rs](src/lib.rs) implements admission checks, leg tickets, pin acquisition, dispatch, normalization
+and weighted rank fusion. Admission checks supplied queue counts; it does not reserve a queue slot or
+implement a scheduler. [indexed.rs](src/indexed.rs) implements lexical retrieval through
+`IndexedRetrievalPort`, currently including an unconditional exact count.
 
-## Owns
+The daemon's [execute_pinned_leg](../../../bins/eliot-searchd/src/query_composition.rs) still takes
+`ProcessTestIndexedPort`; its current callers are process tests. These APIs do not establish a connected
+public indexed query. [FUNCTIONS.md](FUNCTIONS.md) names their actual behavior and integration defects.
 
-- execution lanes, scheduling and cancellation
-- typed leg dispatch
-- deterministic rank fusion
-- partial coverage accounting
+## Implementation direction
 
-## Must not own
+Follow [query implementation](../../../docs/implementation/README.md#4-simplify-and-connect-the-query).
+Use one request operation with its actual scope, published-view pins, deadline and cancellation state.
+Keep pure ranking functions; connect the existing real indexed port and remove replaced dispatch paths.
 
-- final validation/admission
-- durable query history
-- concrete Qdrant/redb/process adapters
-
-- **Delivery wave:** W4 / P08
-- **Soft source-line target:** 7,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Deduplicate by the resolved published source/unit identity and scope/revision, then preserve the fused
+order through validation and projection. A leg identifies a ranking contribution, not a separate result.
+Paging uses the [single temporary window](../search-continuation/README.md#one-temporary-owner); it does
+not create another executor or durable query history.

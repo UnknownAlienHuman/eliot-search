@@ -1,57 +1,38 @@
 # search-revision-store
 
-**C07 — Immutable revision CAS.**
+Retain exact source bytes and reopen the revision that supplied a result.
 
-**Status:** the pure vendor-neutral revision state machine is implemented. During T02 migration the package also owns the bounded no-clobber filesystem lifecycle, closed layout/name grammar, deterministic physical inventory model, checkpoint/cursor/page rules and exact report projection for legacy DIRECT revision objects. Canonical residency-aware CAS integration, encryption/secret adapters, lifecycle inventory, and restore flows remain incomplete and must not be inferred from that compatibility adapter.
+Read the [implementation guide](../../../docs/implementation/README.md) for the connected source,
+control and publication path. [FUNCTIONS.md](FUNCTIONS.md) maps the existing code;
+[AGENTS.md](AGENTS.md) describes changes in this owner.
 
-Admit, retain and reopen immutable source revisions under complete residency identities.
+## Current code
 
-The legacy immutable-object owner also exposes explicit contextual read and
-publication APIs (#466/#356). They borrow one caller context for every attempted
-filesystem/platform boundary, fallible logical capacity and requested short I/O
-including EOF. The contextual platform port has no default unmetered methods.
-Contextual errors preserve attempted-effect phase and paired platform/refusal
-causes while ordinary rendering remains content-free. A successful receipt binds
-the verified final object and reports that this call deferred stage cleanup; it
-does not certify ongoing stage custody or authorize reconciliation/deletion.
+| Area | What exists |
+|---|---|
+| [Immutable object I/O](src/immutable_object.rs) | Real bounded filesystem reads, staging, no-clobber publication and final readback. The daemon supplies platform observations. |
+| [Revision kernel](src/kernel/store.rs) | An in-memory state machine for append, recovery and deletion, with operation/deletion histories and tombstones. This is not a persistent source catalogue. |
+| [Backend contract](src/kernel/backend.rs) | `RevisionObjectBackend` describes encrypted writes/readback. There is no production implementation connected to the new ingestion path. |
+| [Legacy inventory](src/legacy_inventory.rs) | DIRECT filename classification, inventory, checkpoint/page and report code. These are old-format consumers, not requirements for new storage. |
 
-Both APIs share one private kernel with the retained legacy entrypoints. Only
-legacy compatibility installs its historical cleanup guard, with its original
-handle-close ordering. Contextual publication performs no unlink on success,
-error or Drop. Native platform implementation/caller adoption, preparation
-context, request reconciliation and installed qualification remain #355/#356,
-#348 and #215 work. No current native sync capability is claimed by this port.
+The daemon's [storage adapter](../../../bins/eliot-searchd/src/secure_direct_store_storage_io.rs)
+already calls the immutable-file APIs. Its existence does not connect native acquired bodies to a
+durable new revision/source-head record.
 
-## Owns
+## Implementation target
 
-- residency-key-derived CAS identities
-- immutable revision admission and exact readback contracts
-- bounded legacy `.bin` / `.dpapi` exact reads and no-clobber publication
-- stable native-identity and locator fencing through an injected platform
-- legacy `revisions/<shard>/<id>.<encoding>` layout and closed inventory grammar
-- deterministic names/sizes/mtimes inventory digest and stable counts
-- orphan checkpoint, canonical cursor, bounded page selection and exact JSON report bytes
-- stable referenced/orphan/temporary physical classification tags
-- replay fencing, unknown-outcome recovery, quarantine, and purge tombstones
-- retention/lifecycle enforcement surfaces
-- copy/re-encrypt transition contracts
+Use one existing immutable-byte writer/reader for retained objects and prepared artifacts. Source IDs,
+revision references and source-head changes belong to the source/control path; materialization formats
+belong to preparation. Different payload meanings do not justify two filesystem engines.
 
-## Must not own
+The current [revision I/O kernel](src/immutable_object/context.rs) and materializer's
+[artifact I/O kernel](../../search-prep/search-materializer/src/legacy_artifact/context.rs) duplicate
+staging, reads, linking and durability. Consolidate their useful mechanics without introducing a
+universal storage abstraction.
 
-- query language or ranking
-- global content-digest-only CAS namespace
-- cross-domain co-residency, ciphertext or key reuse
-- source identity or access authorization
-- DPAPI/keyring/secret acquisition or plaintext verification policy
-- preparation/materialization artifact storage
-- data-root traversal, metadata acquisition or object-content hashing
-- unqualified filesystem behavior hidden inside the pure kernel
+Write and verify the object before the short source-head transaction. Reopen actual stored bytes with
+their expected length/digest when serving evidence. Transfer the owned buffer to its consumer.
 
-- **Delivery wave:** W2 / P04
-- **Soft source-line target:** 8,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
-
-Immutable-object buffers have private zeroizing ownership through every read
-refusal and post-read identity check. Explicit legacy byte extraction transfers
-cleanup responsibility to the caller. This memory-lifetime guarantee does not
-interpret source contents or grant source, decryption or deletion authority.
+Do not connect the old in-memory operation archive, mandatory encrypted payloads or residency domains
+merely to satisfy their constructors. The new format may reject an old root before writing and leave it
+intact. Original files and sole retained copies remain user data.

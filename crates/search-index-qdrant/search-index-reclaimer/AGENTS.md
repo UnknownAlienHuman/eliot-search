@@ -1,30 +1,24 @@
-# Agent contract — search-index-reclaimer
+# Working on search-index-reclaimer
 
-Own only `crates/search-index-qdrant/search-index-reclaimer/`. Do not edit the root workspace, shared
-contracts, architecture or another package. Missing fields use the contract-change process.
+Read the root [AGENTS.md](../../../AGENTS.md), current
+[architecture](../../../docs/architecture/README.md), and
+[implementation](../../../docs/implementation/README.md). Change publication,
+pin admission and the actual Qdrant caller together when reclaim behavior requires it.
 
-The bounded implementation packet is `swarm/assignments/search-index-reclaimer.md`.
+Take retired IDs from the committed publication owner and preserve their route.
+Delete after the last relevant guard ends. A caller-created proof or an earlier
+pin snapshot cannot substitute for these facts.
 
-## Ownership
+Use one exact delete/readback path through the existing Qdrant adapter. Carry the
+real maintenance deadline and cancellation into bounded batches; resolve an
+uncertain delete by reading those same IDs. Avoid another port hierarchy or an
+extra transport round trip to re-establish a result just obtained.
 
-- committed retired-manifest validation
-- epoch/route watermark eligibility
-- exact-ID deletion plans, receipts and resume cursors
-- separation of ordinary reclamation from security purge
+Keep the retirement list and compact unfinished progress. Remove duplicated ID
+arrays, completed receipt history and custom plan hashing when they add no retry
+behavior. Ordinary reclaim does not change published visibility, acquire query
+pins, delete source storage or acknowledge security purge.
 
-## Forbidden ownership
-
-- publication visibility/retirement decisions
-- pin acquisition
-- broad-filter correctness deletion
-- CAS deletion or purge acknowledgement
-- direct vendor adapter dependency
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-epoch-pins`. Deletion executes through an injected
-vendor-neutral index-admin port.
-
-## Size
-
-Target `src/` ≤ 4,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Verify an actual held query guard, retirement/admission races, partial delete,
+timeout/readback and restart with unfinished work. A fixture that supplies
+matching proof fields does not establish committed retirement.

@@ -1,44 +1,22 @@
-# Agent contract — search-config
+# Working on search-config
 
-Own only `crates/search-config/`. Do not edit the root workspace, config registry, another package or
-Architecture 8.4. Missing fields use the contract-change process.
+Read the [architecture](../../docs/architecture/README.md) and
+[implementation](../../docs/implementation/README.md). This package should make settings easy to
+understand and use: typed values, defaults, explicit overrides and validation of real fields.
 
-The bounded implementation packet is `swarm/assignments/search-config.md`. Read the current FILE
-contract in `TOML_PROFILE_2.md` and the section registry in `config/sections.toml` before ordinary
-work. `docs/config/CONFIGURATION_1.0.md` is a historical schema-1 format reference, not current
-parser authority.
+Change the daemon capture, construction and actual setting consumers together. Keep OS/file capture
+at the application edge and dependency effects with their existing owners. A package boundary does
+not require generic descriptors, section hashes, receipt enums or a reload framework.
 
-## Mission
+Startup constructs the application from accepted settings. It does not apply a change to an already
+running defaults-only application. Do not satisfy `try_activate` with manufactured receipt kinds.
+Only implement hot reload for a concrete supported change; other settings can require restart.
 
-Make local configuration deterministic, typed, redacted and safely reconfigurable without absorbing
-package-owned settings or I/O.
+Use the existing locked TOML/Serde implementation directly for typed decoding; the current event
+adapter and schema are described in [TOML_PROFILE_2.md](TOML_PROFILE_2.md), not frozen requirements.
+Remove replaced parsing/canonicalization machinery with its callers. No legacy decoder or migration
+platform is required for pre-release configuration.
 
-## Ownership
-
-- immutable `ConfigLayer` and `ConfigDocument` values
-- precedence and allowed-override enforcement
-- `ConfigSectionDescriptor` registration and collision checks
-- effective snapshot canonicalization/fingerprint
-- `ConfigDelta` and ordered `ReconfigurationPlan`
-- redacted effective-config projection
-- the bounded `eliot-config-toml@2` FILE decoder into the shared typed document builder
-
-## Forbidden ownership
-
-- filesystem/environment/CLI acquisition
-- package-specific setting structs or runtime mutation
-- secret plaintext, command-line credential injection or debug serialization
-- automatic optional-profile activation
-- treating unknown section/key or failed package validation as a warning
-- a second handwritten grammar, generic dynamic TOML product tree or configuration framework
-
-## Dependencies
-
-`search-contracts` plus the exact private `toml_parser` event/decoder edge recorded in
-`Cargo.toml` and `TOML_PROFILE_2.md`. Do not add high-level `toml`, Serde configuration trees,
-parser-provider discovery, I/O, OS, redb, Qdrant or daemon dependencies.
-
-## Size
-
-Target `src/` ≤5,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust
-lines including local tests.
+Check meaningful behavior when implementing: precedence reaches the real consumer, invalid settings
+fail before construction, paths remain OS strings, file reads are actually bounded, and status reports
+the running settings. A fingerprint, source-line quota or authored fixture does not prove this.

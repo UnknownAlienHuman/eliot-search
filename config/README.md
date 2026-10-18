@@ -1,23 +1,29 @@
 # ELIOT Search configuration
 
-Configuration is implementation-scaffolded, not implemented.
+Configuration supplies values consumed by the running application. Start with the
+[implementation guide](../docs/implementation/README.md) and
+[config change map](../crates/search-config/FUNCTIONS.md).
 
-- [`sections.toml`](sections.toml) — machine registry of section owner, earliest wave, minimum action,
-  secret policy and bounded packet path.
-- [`sections/`](sections/) — one small field/validation/reload packet per capability-owned section.
-- [`eliot-search.example.toml`](eliot-search.example.toml) — complete safe DIRECT-mode example.
-- [`w5-current.toml`](w5-current.toml) — locked W5 currentness, transient-overlay and Rust parser-profile
-  settings; it is a stage qualification schema, not implementation authorization.
-- [`../docs/config/CONFIGURATION_1.0.md`](../docs/config/CONFIGURATION_1.0.md) — full cross-package
-  configuration contract.
+## Current code
 
-`search-config` owns parsing, layering, provenance, redaction, fingerprints, diffs and composite
-reconfiguration planning. It owns no capability setting and performs no I/O. Each section owner owns
-typed defaults, validation, digest and live-application behavior.
+[search-config](../crates/search-config/README.md) already implements parsing, layering and generic
+registry/reconfiguration machinery. The [current decoder](../crates/search-config/TOML_PROFILE_2.md)
+accepts schema2 and a restricted TOML profile. The
+[daemon registry](../bins/eliot-searchd/src/config_composition/kernel/registry.rs) identifies its current
+fields; registration alone does not demonstrate that a runtime consumer applies them.
 
-Stage-specific `w*-*.toml` files add locked qualification and bounded orchestration settings. They do not
-create new authority, select artifacts/providers or permit a future wave to start.
+[sections.toml](sections.toml), the [section references](sections/), the
+[example TOML](eliot-search.example.toml) and W5–W10 files include historical proposals and unconnected
+fields. The example is not a complete tested configuration for the current daemon. Check the real
+registry and consumer before treating a field as supported.
 
-The example does not select a Qdrant build, lexical profile or optional provider. Indexed settings remain
-disabled or `UNQUALIFIED` until their evidence is accepted. Plaintext secrets, automatic downloads/
-upgrades, currentness weakening and optional-profile self-authorization are invalid.
+## Implementation direction
+
+Capture one invocation, decode/merge supported overrides into typed settings, validate their actual
+values and construct the selected owners. Status reads those running settings. Use the existing locked
+TOML/Serde decoder; remove replaced generic trees, provenance hashes and per-section receipt planning.
+
+A supported runtime update calls its existing owner; otherwise require restart. Index profile changes
+use publication. Neither startup nor ordinary settings require qualification gates, compulsory secret
+lifecycle or a separate config transaction engine. The
+[configuration guide](../docs/config/README.md) distinguishes this target from historical formats.

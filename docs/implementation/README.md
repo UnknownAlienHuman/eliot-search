@@ -38,6 +38,20 @@ DIRECT remains an explicit exact/source scan, not an indexed-success fallback.
 These are current code locations, not a mandate to keep every package. A useful owner and its immediate
 consumers may change in one implementation. Avoid disconnected constructor/contract-only successors.
 
+### Construct from real settings
+
+Capture one invocation, decode/merge supported file/env/CLI values, validate actual fields and construct
+owners with those settings. Current `effective_from_process` compares startup against defaults and
+calls `try_activate` with no receipts: even permitted `query.limit=11` gets
+`DAEMON_CONFIG_PARTIAL_REFUSED`. Remove that startup gate, not just its failing test. Connect the value
+to the real handler; the handler must actually use it.
+
+Use typed settings with the locked TOML/Serde decoder; remove generic config provenance hashes and
+mandatory secret/reload machinery. A running owner supports concrete live changes or requires restart;
+indexed profile changes use publication. Status reads the running settings. The
+[config change map](../../crates/search-config/FUNCTIONS.md) covers actual callers, OS-string capture
+and bounded file reading; no second config journal or acquisition framework is needed.
+
 ## 2. Finish source retention and preparation
 
 `FreshRootContext::acquire_source_v2` already calls `acquire_with_cancel_v2`, obtains the body,
@@ -51,10 +65,17 @@ The native command currently records admission and reports `retained_revision:fa
 ends in `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE` even after successful checks. Replace this refusal-only
 custody/callback sequence with actual sync; do not add another admission stage.
 
-Use the atomic immutable-file mechanics already in `search-revision-store`. Its in-memory
-`RevisionStore` and source-history's `register_source_revision` are not a production persistent backend.
-The old DIRECT mutation methods and public-service mutation dispatch are test-only; removing their
-`cfg(test)` without connecting the new owners does not finish ingestion.
+Use one immutable-byte writer/reader built from the existing `search-revision-store` mechanics.
+Materializer's `legacy_artifact` contains a second staging/write/sync/link/readback engine; retire it
+with its daemon preparation callers. Current plaintext preparation rereads the new object in staging,
+after installation and again in the daemon. Keep one useful verified readback and move its buffer/range
+forward. Protected-storage decoding is a separate real effect when that optional mode is selected.
+The [revision-store](../../crates/search-source/search-revision-store/FUNCTIONS.md) and
+[materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md) maps identify these paths.
+
+The in-memory `RevisionStore` and source-history's `register_source_revision` are not a production
+persistent backend. Old DIRECT mutation methods and public-service mutation dispatch are test-only;
+removing their `cfg(test)` without connecting the new owners does not finish ingestion.
 
 Keep only data that the application uses:
 
@@ -75,13 +96,17 @@ revision. Native UUIDs, old DIRECT hex revisions and materializer `OpaqueId + No
 interchangeable casts. Change the real producer and preparation/UnitSet consumers; do not build a
 universal legacy converter.
 
-Call `materialize_text_or_code`, then `prepare_unit_set_input` / `build_unit_manifest`.
-The current UnitSet ingress accepts byte-identical UTF-8 with `ExactBytes`, an empty loss map and equal
-input/canonical digests. Broader materializer decoding does not make every transformed output admissible.
-Connect their retained-byte input to this reader or simplify the existing input API. Reuse the actual
-decode/normalization/coordinate code. Start with the supported text/code profiles; expose unsupported
-input honestly. Existing standalone `--prepare-*` code for old retained revisions is donor code, not
-a reason to require that old storage layout.
+Call the existing materializer and pass its owned prepared product into unit construction. Current
+Markdown/JATS UnitSet builders invoke `verify_markdown` / `verify_jats`, which reopen and rebuild the
+whole materialization before constructing raw and structural units. Remove this in-process full replay and its receipt
+parameters. Validate loaded bytes/artifacts at their real storage boundary; retain source coordinates
+and transformation checks, not repeated production of the same result.
+
+The raw UnitSet ingress currently requires byte-identical UTF-8, `ExactBytes`, an empty loss map and
+equal input/canonical digests. Broader decoding alone does not support transformed UnitSets. Change
+that producer/consumer together, reusing actual decode/normalization/coordinate code. Start with
+supported text/code profiles and report unsupported input. Old `--prepare-*` helpers are donor code,
+not a reason to require their storage layout.
 
 ## 3. Keep control state small and publication real
 
@@ -110,9 +135,29 @@ The [old daemon Publisher](../../bins/eliot-searchd/src/publication_composition/
 duplicates state; its [publication_codec::cas](../../crates/search-control-redb/src/publication_codec.rs)
 only computes/checks a new floor, not a redb commit. Remove that parallel machine and file journal.
 
-Do not treat a supplied commit observation, alias movement or mock receipt as durable publication.
-On restart, inspect pending intent and actual stored/indexed state before resuming. Delete unreferenced
-staging through the same owner; never infer rollback of a possible external write from a timeout.
+The prepared publication plan remains a discardable local result until the pending intent is durably written.
+Current `submit` takes the coordinator's active slot in `Prepared`, but `abandon` and compensation
+cannot clear that phase. A cancelled pre-intent task can leave the same coordinator permanently busy.
+Remove that unnecessary reservation/state or provide its ordinary local discard with the actual caller.
+
+Preserve actual vector values alongside planned identity/payload; the current `PointSpec` contains
+vector digests, not uploadable vectors. Reuse the encoder product, not a new vector-proof API. Use
+bounded batches and manifest pages through the existing artifact owner. Current manifest CBOR
+limits one membership to 4,096 entries despite the planner's 100,000-point budget; `prepared_digest`
+also copies old/new manifest bytes into one 8 MiB canonical object. Remove that whole-object dependency
+and diff ordered entries incrementally; increasing one quota does not make the path scale.
+
+Reclamation reads exact retired IDs from committed control/manifest state. The current
+[validator](../../crates/search-index-qdrant/search-index-reclaimer/src/manifest.rs) only compares supplied
+digest/proof fields, not their binding to `point_ids` or an actual commit. Remove the duplicate proof
+object; do not replace it with another attestation. Admit/release query pins through the same guarded
+view lifecycle, so no unsafe old pin can appear after reclamation is authorized. Remove released pin
+records, not just their live marker. The [pin](../../crates/search-index-qdrant/search-epoch-pins/FUNCTIONS.md)
+and [reclaimer](../../crates/search-index-qdrant/search-index-reclaimer/FUNCTIONS.md) maps show the current gaps.
+
+On restart, inspect pending intent and actual stored/indexed state before resuming. Alias movement or
+a supplied commit observation is not the durable boundary. Reuse one bounded delete/readback operation
+with cancellation/deadline; never infer rollback of a possible external write from a timeout.
 
 ## 4. Simplify and connect the query
 
@@ -148,6 +193,10 @@ query encoding, retrieval and validation, not a separately manufactured set of p
 Use the existing `search-lexical` frozen profiles with `encode_query` / `encode_code_query`.
 The profile must match published vectors, not merely a profile name supplied by the client.
 Keep useful leg/fusion logic when multiple real retrieval modes use it; call pure transformations directly.
+Use the same published evidence identity across contributing legs, including its actual scope/revision
+and route semantics. Current candidate IDs include `leg_id`, preventing fusion of the same point from
+two legs. Carry the final fused order through validation/projection: the projector currently sorts
+again by raw score, which can destroy that order. Neither fix needs a ranking-proof object.
 
 `execute_pinned_leg` currently takes `ProcessTestIndexedPort`. Connect the real existing
 `IndexedRetrievalPort` to `BlockingRealQueryPlane` with a small private adapter, or call the executor
@@ -185,6 +234,20 @@ preserving the actual revision/byte/coordinate connection.
 The readback trait also lacks explicit deadline/cancellation inputs. Connect the request context through
 the real reader; a byte ceiling alone does not bound waiting on I/O.
 
+### One short-lived result window
+
+Reuse the daemon DIRECT cursor and commit-after-delivery behavior in one query window owner. Its
+current public `cmd_continue` still does three complete `list_sources` traversals per page through
+continuation fences and handle minting. Replace those catalogue hashes with the actual pinned view
+and direct source/revision lookups needed for that page. Shared continuation's repeated scan from the
+window's start also disappears; a cursor advances through the retained ordering.
+
+Return source/revision/range directly. An optional opaque expansion locator references the same window
+item, not a second handle store. Bound window count/bytes and TTL; remove terminal records. Current
+shared `HandleStore` expires flags while retaining records/indexes and quotas count only Active entries.
+Do not preserve that unlimited history. Finishing paging must not delete backing items still needed
+by issued live locators. See the [single-owner map](../../crates/search-query/search-continuation/README.md#one-temporary-owner).
+
 ## 5. Use these donors at the named seams
 
 These are mechanisms, not whole applications to import. Versions describe the inspected/locked source;
@@ -196,6 +259,7 @@ there is no dependency-upgrade task here.
 | Request/result/events | [Serde 1.0.229](https://github.com/serde-rs/serde/blob/v1.0.229/README.md#serde-in-action), [serde_json 1.0.151](https://github.com/serde-rs/json/blob/v1.0.151/src/de.rs): derives, `from_slice`, `to_writer` | Manual JSON grammars/escaping/fixed field order and substring parsing. Add direct dependencies to the existing owners: presence in Cargo.lock is not integration. Bound the frame first; do not wait for EOF with `from_reader` on a live connection. |
 | Invocation | [ripgrep 14.1.1 dispatch](https://github.com/BurntSushi/ripgrep/blob/4649aa9700619f94cf9c66876e9549d83420e16c/crates/core/main.rs): one parsed invocation → concrete mode | Repeated `args_os`, `strip_config_args_os`, `maybe_run` and argv fingerprints. Preserve `OsString` paths; no new invocation crate. |
 | Indexed I/O | [Qdrant Rust client 1.19.0](https://github.com/qdrant/rust-client/blob/7c838035ae7b9455636dcaca918a55b7d7ca638f/src/qdrant_client/points.rs): `upsert_points`, `get_points`; `query` | Parallel SDK types/operation owners. Produce batches incrementally; a chunk helper that takes the whole corpus vector is not streaming ingestion. |
+| Settings | [toml 1.1.7](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/mod.rs): `from_slice` / `from_str` into Serde structs | Custom event receiver, double string decoding and generic config trees. It allocates tokens/events/tree before typed output: bound input first, retain the default recursion guard and validate real fields. Already locked for xtask; production integration remains. |
 | Request time | [Tokio 1.53.1](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/time/timeout.rs): `timeout_at` | Renewed per-RPC durations and another budget framework. Keep concrete byte/queue/candidate/output limits. |
 | Snapshot organisation | [Tantivy 0.22.0 example](https://github.com/quickwit-oss/tantivy/blob/17d5869ad61ea9f1072ef40546ddcada3a14b067/examples/basic_search.rs): writer/commit/query snapshot | A design reference for coherent view ownership, not a second backend or a ready-made cross-store recovery solution. |
 
@@ -221,11 +285,12 @@ that capability is selected. Do not turn future profiles into today's framework.
 - Drop the delivery-wave feature ladder. The supported default contains the real baseline; optional
   features represent selected dependencies. A feature flip must not expose an unconnected handler.
 
-After deleting mechanisms, combine packages that merely divide one responsibility. Source
-records/history/provenance do not each need a lifecycle platform. Query planning/validation/projection/
-paging can be modules around one query operation when no independent dependency boundary remains.
-Keep OS/vendor adapters and isolated document workers separate where their dependencies require it.
-Keep shared types only when multiple real consumers need them. Pure functions need no port/receipt.
+After deleting mechanisms, combine packages that merely divide one responsibility: source records/
+history/provenance around one source model; materializer/unitizer around one prepared product; query
+planning/validation/projection/paging around one operation and window. Family `AGENTS.md` and README
+files now describe this consolidation, not one permanent crate per agent. Keep OS/vendor adapters and
+isolated document workers separate where dependencies require it. Shared types need multiple real
+consumers; pure functions need no port/receipt.
 
 Do not satisfy old constructors using equal synthetic domain IDs, “allowed” booleans, fake grants or
 fixture digests. Remove the obsolete field/check and change its producers/consumers. No forwarding

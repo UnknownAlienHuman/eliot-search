@@ -1,59 +1,48 @@
-# Function contract — `search-projection-planner`
+# Projection planning source and implementation
 
-**Status:** W3/P06 logical contract; pure planning only.
+## Current API
 
-## Operations
+| Source API | Actual work |
+| --- | --- |
+| [`validate_scope_binding`](src/plan.rs#L64) | Checks the supplied scope against the verified unit set and point budget. |
+| [`plan_projection(unit_set, scope, planned_units, requirements, budget)`](src/plan.rs#L373) | Checks complete unit/vector coverage, builds every point, sorts them and returns a whole `ProjectionPlan`. It has no cancellation/deadline parameter. |
+| [`manifest_canonical_bytes`](src/manifest.rs#L122) | Builds a complete generic CBOR value tree and encodes it under both caller and shared limits. |
+| [`diff_manifests`](src/diff.rs#L28) | Validates already sorted inputs, builds two maps and clones create/retain/retire entries. Reused IDs with changed immutable content are rejected. |
+| [`verify_manifest_reconstruction`, semantic-digest helpers](src/lib.rs#L81) | Rebuild or re-encode complete manifests before comparing/hashing them. |
+| [`decode_projection_manifest_data`](src/manifest_read.rs#L29) | Decodes the current stored format and re-encodes it for byte equality; does not prepare source data. |
+| [`validate_projection_manifest_metadata`](src/manifest_read.rs#L74), [`validate_schema`](src/lib.rs#L140) | Check metadata/scope/schema consistency. They neither fetch indexed data nor establish that publication happened. |
 
-### `validate_projection_input(input, profiles) -> Result<ValidatedProjectionInput, ProjectionError>`
+## Concrete changes
 
-Requires immutable admitted revision/representation/unit manifests, exactly one
-`ProjectionMembership -> SourceMembership`, accepted profile IDs and complete vector encodings.
+**Make capacity follow the stored data.** [`ProjectionBudget::BASELINE`](src/model.rs#L32)
+sets 100,000 points and 64 MiB. Encoding rejects more than
+[`MAX_COLLECTION_ITEMS = 4,096`](../../search-contracts/src/bounds.rs#L9)
+or [8 MiB](../../search-contracts/src/bounds.rs#L8). This is one membership manifest,
+not the entire corpus. Point construction occurs before the row-cap rejection,
+and the encoded-size check follows tree construction. Store/iterate an ordered
+manifest in bounded pages; check the current piece's size before growing it.
+Keep total completeness while allowing cancellation between pieces. Merely raising
+these constants retains the same full-memory path.
 
-### `build_minimal_payload(unit, membership, profile_set, epoch) -> Result<MinimalPointPayload, ProjectionError>`
+**Keep actual vectors available for upload.** [`build_point`](src/plan.rs#L269)
+validates/hashes the borrowed vectors, then returns identity, payload bytes and
+expected digests. [`PointSpec`](src/model.rs#L143) has no vector values. Connect
+that metadata to the same prepared vector product when building a Qdrant batch;
+do not regenerate vectors, treat a digest as data or add another preparation proof.
 
-Emits only the opaque S9.5 fields. Corpus/repository display names, ACL subjects, membership arrays,
-source text, paths and vendor metadata are rejected.
+**Remove repeated representations.** [`rebuild_manifest`](src/plan.rs#L407)
+clones entries into a temporary manifest and copies the resulting bytes.
+Publication admission reconstructs the result again, then
+[embeds both manifests in a prepared digest](../search-publication/src/admission.rs#L501).
+Build/check the representation once and borrow it. Walk sorted old/new entries
+instead of rebuilding two `BTreeMap` indexes and cloning retained entries; an
+[existing merge walk](../search-publication/src/machine.rs#L556) provides the pattern.
 
-### `build_point_spec(input, identity_port) -> Result<PointSpec, ProjectionError>`
+**Read the active format directly.** Keep a bounded stored-metadata reader for
+actual consumers. Replace its format with the writer when simplifying storage;
+pre-release byte compatibility and mandatory old-format readers are not a
+prerequisite. Useful content identity does not require a digest of every transient
+plan, a second canonical tree or repeated re-encoding in unrelated consumers.
 
-Combines the canonical point identity, exact named-vector set, payload digest, unit/reference digests
-and expected readback shape. Point identity derivation remains owned by `search-point-identity`.
-
-### `plan_projection(input, profiles, budget) -> Result<ProjectionPlan, ProjectionError>`
-
-Creates a deterministically ordered exact point set and rejects duplicate UUIDs, duplicate unit roles,
-missing vectors, profile mismatches and unbounded plans.
-
-### `canonicalize_manifest(points) -> Result<ProjectionManifest, ProjectionError>`
-
-Produces immutable CAS-ready manifest bytes containing exact UUIDs, full identity digests, unit IDs,
-vector names and payload/vector digests. No broad selection predicate substitutes for the exact set.
-
-### `diff_manifests(old, new) -> Result<ManifestDiff, ProjectionError>`
-
-Returns exact create, retain and retire lists. Retained IDs require full identity and expected payload/
-vector equality.
-
-### `validate_schema_requirements(manifest, collection_schema) -> Result<(), ProjectionError>`
-
-Proves every filterable payload field has the required index and every expected named vector exists
-before the plan may enter publication.
-
-## Semantics
-
-Stored reads use `decode_projection_manifest_data(bytes, budget)` to check the exact existing
-canonical field sets, finite bounds, ordering and byte-identical re-encoding without preparing
-a source. `validate_projection_manifest_metadata(manifest, scope, schema, budget)` recomputes
-existing S11 addresses/full digests and scoring-document identities and checks scope/vector names.
-These return ordinary metadata, never source/completeness/access/publication proof. Root still
-authenticates actual C07 bytes and current C02/C03 bindings; publication uses complete UnitSet
-admission and citations require C24 exact source readback.
-
-Planning is pure, deterministic and retry-safe. Budget/cancellation yields no usable partial manifest.
-The crate performs no Qdrant/redb/CAS I/O and makes no source/admission/access decision.
-
-## Required fixtures
-
-One membership per point; minimal payload disclosure guard; deterministic manifest bytes; exact
-old/new diff; profile/generation change replaces affected points; duplicate/collision propagation;
-schema/index completeness; broad-filter closure structurally unavailable.
+These changes join the existing planner, publication and bridge. They introduce
+no alternate search backend or additional planning framework.

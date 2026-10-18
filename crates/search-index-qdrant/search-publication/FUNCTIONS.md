@@ -1,82 +1,54 @@
-# Function contract — `search-publication`
+# Publication source and implementation
 
-**Status:** W3/P07 linearizable state-machine contract; no storage implementation yet.
+This is a map of current Rust APIs and the work needed to make them one production
+path. It does not mandate the present phase/receipt model.
 
-At most one publication transaction is active globally. Prepared work may run concurrently, but a later
-epoch cannot enter staging while an earlier intent is unresolved.
+## Current API
 
-## Core operations
+| Source API | Actual work |
+| --- | --- |
+| [`validate_prepared_generation`](src/admission.rs#L390) | Reads owner projections and observations, checks membership/unit scope, reconstructs manifests and builds a private `PreparedGeneration`. |
+| [`PublicationCoordinator::submit`](src/machine.rs#L143) | Admits a proposal, occupies the local slot as `Prepared`, advances the local reservation and returns its epoch. |
+| [`persist_intent`](src/machine.rs#L191) | Accepts an operation ID and receipt label and changes local state. It performs no durable write. |
+| [`stage_new_points`, `close_old_points`](src/machine.rs#L212) | Check supplied exact-ID receipts against the admitted change set. They do not execute the mutations. |
+| [`verify_readback`](src/machine.rs#L246) | Compares supplied digest fields with those receipts; it does not fetch or inspect Qdrant bytes. |
+| [`commit_visible_epoch`](src/machine.rs#L282), [`publish_control_snapshot`](src/machine.rs#L316) | Accept supplied control/snapshot observations. Neither performs its named external effect. |
+| [`emit_retired_manifest`](src/machine.rs#L337), [`complete`](src/machine.rs#L364) | Derive retired IDs after the accepted commit/snapshot and clear a successfully completed local transaction. |
+| [`restore_inflight`](src/machine/restore.rs#L95), [`recover`](src/recovery.rs#L22) | Re-admit supplied preparation and decide from supplied recovery observations; no journal or index I/O occurs here. |
+| [Compensation/abandon methods](src/machine.rs#L388), [abort finalization](src/machine/abort.rs#L138) | Account for supplied cleanup and control results. They do not provide a discard operation for `Prepared`. |
 
-### `submit(prepared, ports, context) -> Result<PublicationReceipt, PublicationError>`
+## Changes to make with callers
 
-Validates owner/source/membership/access/shadow/purge/profile guards and the exact immutable projection
-manifest before reserving the next epoch.
+**Make local preparation cancellable.** `submit` occupies the slot before a real
+intent exists. Compensation and abandon exclude `Prepared`; `complete` requires
+`SnapshotPublished`. A cancellation between submit and persistence therefore
+leaves this coordinator busy. Keep preparation as an ordinary local result until
+the pending write is recorded, or add a simple discard of never-dispatched work.
+Retain recovery state only for a persisted or possibly dispatched operation.
 
-### `persist_intent(prepared, next_epoch, control, mutation) -> Result<PublicationIntent, PublicationError>`
+**Bound the actual representation.** The planner advertises 100,000 points and
+64 MiB, while [manifest encoding](../search-projection-planner/src/manifest.rs)
+uses the shared [4,096-item / 8 MiB limits](../../search-contracts/src/bounds.rs).
+These cap one membership manifest, not the entire corpus. The coordinator's
+1,000,000-point default cannot overcome them.
+[`prepared_digest`](src/admission.rs#L501) then copies old and new canonical
+manifests into one more 8 MiB preimage, so separately valid manifests can fail
+together. Use a paged or streamed ordered manifest over bounded batches; do not
+solve this by increasing a global codec limit.
 
-Durably records `INTENT_DURABLE` with exact manifest refs and operation identity. The epoch is consumed
-even if later abandoned and is never reused.
+**Keep each projection once.** [Planner reconstruction](../search-projection-planner/src/plan.rs)
+and [diffing](../search-projection-planner/src/diff.rs) materialize/copy full inputs;
+admission reconstructs them again and builds more ID maps. Reuse the checked
+projection and walk sorted entries, as the existing
+[`changed_point_id_is_reused`](src/machine.rs#L556) already does. Remove the
+whole-preparation digest when actual content identity and the pending operation
+already identify the work. Check cancellation between bounded pieces of real work;
+the current admission checkpoints bracket whole-manifest processing.
 
-### `stage_new_points(intent, index, context) -> Result<StageReceipt, PublicationError>`
-
-Upserts exact new IDs at `valid_from=N` with no upper bound, then performs exact readback.
-
-### `close_old_points(intent, index, context) -> Result<ClosureReceipt, PublicationError>`
-
-Sets `valid_until_epoch_exclusive=N` on the exact old manifest ID list and verifies every closed ID and
-count. Broad-filter closure is structurally unavailable.
-
-### `verify_readback(intent, staged, closed) -> Result<ReadbackVerified, PublicationError>`
-
-Checks IDs, full identity digests, payload/vector digests, epoch fields and absence of unexpected points.
-
-### `commit_visible_epoch(verified, guards, control) -> Result<ControlCommit, PublicationError>`
-
-One control compare-and-swap revalidates all load-bearing generations and atomically changes visible
-epoch/manifest refs/shadows/receipt. Qdrant aliases are not the linearization point.
-
-### `publish_control_snapshot(commit, snapshot_port, context) -> Result<SnapshotPublishReceipt, PublicationError>`
-
-Acknowledgement waits for immutable in-memory snapshot publication. Failure is fail-closed and recovered
-from the committed journal state.
-
-### `emit_retired_manifest(commit) -> RetiredPointManifest`
-
-Produces the exact committed retired-ID manifest consumed by the reclaimer. No physical deletion occurs
-here.
-
-## Recovery and doctor operations
-
-### `recover(active_intent, ports, context) -> Result<PublicationRecoveryDecision, PublicationError>`
-
-Uses durable state and exact readback to complete, compensate exact IDs, commit invalidation-only or
-enter `PUBLICATION_BLOCKED`. It never guesses from collection presence.
-
-### `compensate_exact(intent, index, context) -> Result<CompensationReceipt, PublicationError>`
-
-Operates only on IDs recorded by the intent/manifests and verifies the resulting exclusion.
-
-### `abandon(intent, fence, control) -> Result<AbandonReceipt, PublicationError>`
-
-Allowed only after an `AbandonedPublicationFence` excludes the complete affected membership/partition
-before retrieval and IDF. The skipped epoch remains unusable.
-
-## Collection-generation migration
-
-`create_candidate`, `build_base_at_r0`, `catch_up_change_log`, `enter_final_barrier`,
-`validate_candidate_at_r1`, `commit_route_switch`, `drain_old_route`, and `mark_old_route_reclaimable`
-implement the S13.7 state machine. Route switch is one guarded control transaction; active route pins
-keep the old collection alive.
-
-## Idempotency, cancellation and crash semantics
-
-Each external mutation has one durable operation identity. Replaying identical input is safe; differing
-input with the same identity is rejected. Cancellation before intent creation has no effect. After
-intent durability, cancellation yields a recoverable unresolved intent, never silent rollback.
-Every state transition and failpoint is crash-reopen tested.
-
-## Required fixtures
-
-Full H11/S13 kill matrix; guard race; exact readback mismatch; skipped epoch non-reuse; snapshot
-publication failure; exact compensation; abandon fence; invalidation-only path; migration catch-up and
-route-pin drain; fake journal/index ports proving adapter independence.
+**Wire actual effects once.** Use the existing
+[redb publication owner](../../search-control-redb/src/persistent/publication.rs)
+and [Qdrant bridge](../search-qdrant-bridge/src/real/mutations.rs) through daemon
+composition. A real committed view and unresolved index changes determine recovery.
+Caller-matched receipt fields cannot establish that either effect happened.
+Keep useful shared logic while removing the daemon's duplicate machine; do not
+turn the API table above into another mandatory orchestration chain.

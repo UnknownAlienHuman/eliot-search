@@ -1,55 +1,53 @@
-# Function contract — `search-index-reclaimer`
+# Reclaim source and implementation
 
-**Status:** W3/P07 ordinary index-reclaim contract.
+The current public records and helpers are implementation material. Their names
+do not establish durable commit, query lifetime or crash recovery.
 
-This package deletes rebuildable retired Qdrant points. It does not perform CAS retention, legal/security
-purge, publication visibility or secure erase.
+## Current API
 
-## Operations
+| Source API | Actual work |
+| --- | --- |
+| [`validate_retired_manifest(manifest, publication)`](src/manifest.rs#L71) | Checks nonempty sorted unique IDs and matching fields in a supplied `PublicationCommitProof`. It neither hashes those IDs nor reads committed control state. |
+| [`plan(manifest, watermark, settings, budget)`](src/plan.rs#L64) | Checks supplied pin counts and size limits, keeps the whole manifest, hashes the plan and copies IDs into all batches. |
+| [`execute_batch(plan, batch_index, admin, mutation)`](src/execute.rs#L122) | Checks the operation ID, calls exact delete, then exact readback; absence can resolve an unknown delete. It receives no context, deadline or current pin state. |
+| [`checkpoint(plan, receipts)`](src/receipt.rs#L90) | Validates and stores full completed receipts in an in-memory map. No write to storage occurs. |
+| [`resume(checkpoint, plan, watermark)`](src/receipt.rs#L115) | Rechecks supplied fields/counts and returns cloned unfinished batches. It does not execute or reopen anything. |
+| [`complete(plan, receipts)`](src/receipt.rs#L169) | Checks coverage of all planned IDs and returns an ordinary-reclaim summary. |
 
-### `validate_retired_manifest(manifest, publication_receipt) -> Result<CommittedRetiredManifest, ReclaimError>`
+## Replace the missing effects and redundant records
 
-Requires exact IDs, collection generation, retirement epoch, manifest digest and a matching committed
-publication receipt. Uncommitted or broad-predicate manifests are rejected.
+**Read committed retirement once.** The validator compares two caller-supplied
+digest/receipt labels; changing the ordered point-ID list without changing those
+labels still passes its checks. Obtain the exact list from the actual committed
+publication/manifest owner and remove the parallel `PublicationCommitProof`.
+A third proof object would leave the same missing connection.
 
-### `plan(manifest, watermark, settings, budget) -> Result<ReclaimPlan, ReclaimError>`
+**Join final drain to deletion.** The daemon's
+[`authorize_reclaim`](../../../bins/eliot-searchd/src/rebuild_composition/kernel/reclaim.rs#L32)
+samples pins once. A later `execute_batch` does not recheck them; `resume` only
+accepts another unbound watermark value. Coordinate old-view admission and final
+guard release with [the pin owner](../search-epoch-pins/FUNCTIONS.md), then execute
+the committed list. Add the actual maintenance caller and adapter; existing
+`IndexAdmin` implementations are tests, not an installed background worker.
 
-Requires the route/epoch watermark to prove invisibility to every active pin. Produces deterministic,
-finite exact-ID batches and a plan digest.
+**Keep one list and a position.** IDs currently remain in the manifest, batch
+vectors and each completed receipt; resume clones the unfinished batch vectors
+again. Read bounded slices from one committed retirement list. Repeating deletion
+of the same retired IDs and checking their absence is enough to retry; persist a
+compact position only when needed to avoid repeated work. Discard completed
+per-batch receipts and the custom plan digest when they serve no remaining retry
+purpose. Preserve the unfinished list across restart.
 
-### `execute_batch(plan, batch_index, index_admin, mutation, context) -> Result<ReclaimBatchReceipt, ReclaimError>`
+**Use one bounded Qdrant operation path.** The already adopted
+[Qdrant client 1.19.0](https://github.com/qdrant/rust-client/blob/7c838035ae7b9455636dcaca918a55b7d7ca638f/src/qdrant_client/points.rs)
+provides `delete_points` and `get_points`. The existing
+[bridge delete](../search-qdrant-bridge/src/real/mutations/delete.rs#L13) uses an
+exact ID selector, `wait=true`, and a following `GetPoints`. The
+[live fixture adapter](tests/live_rebuild.rs#L191) calls that method and then the
+reclaimer requests another readback. Consolidate this into one exact absence
+check, including the path where delete timed out and may already have happened.
+Use the caller's remaining deadline across calls and check cancellation between
+bounded batches. SDK acknowledgement alone does not settle an unknown operation.
 
-Deletes only the batch's exact IDs using the index-admin port, then verifies expected missing IDs and
-rejects unexpected/mismatched acknowledgements.
-
-### `checkpoint(plan, receipts) -> ReclaimCheckpoint`
-
-Records only plan/manifest digests, completed batch indices and exact receipts. It never stores source
-content or a broad deletion filter.
-
-### `resume(checkpoint, manifest, watermark, index_admin, context) -> Result<ReclaimReceipt, ReclaimError>`
-
-Revalidates manifest, publication receipt and current watermark before continuing. Already confirmed
-batches are idempotently skipped/read back.
-
-### `complete(plan, receipts) -> Result<ReclaimReceipt, ReclaimError>`
-
-Succeeds only when every exact ID is confirmed absent. The receipt is explicitly
-`ordinary_retired_point_reclaim` and cannot satisfy a purge acknowledgement.
-
-## Configuration operations
-
-Implements `config/sections/index_reclaim.md`. Batch/slice tuning is live and bounded, but never alters
-manifest or watermark eligibility.
-
-## Cancellation, retry and crash semantics
-
-Cancellation stops between batches and returns a resumable checkpoint. A timeout after delete is an
-unknown outcome resolved by exact readback. Same batch mutation identity plus same IDs is retry-safe;
-different IDs with the same identity are rejected.
-
-## Required fixtures
-
-Pinned/current/uncommitted never delete; exact IDs only; crash/timeout between batches; duplicate
-replay; unexpected receipt fail-closed; old route waits for final pin; ordinary receipt cannot satisfy
-security purge.
+These are source-level integration findings; this documentation does not claim
+a live deletion incident or a completed Rust fix.

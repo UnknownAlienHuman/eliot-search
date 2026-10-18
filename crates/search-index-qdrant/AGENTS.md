@@ -1,13 +1,18 @@
-# Index family rules
+# Working on indexing and publication
 
-- Qdrant stores rebuildable projections only.
-- `search-qdrant-supervisor` owns exact executable identity and local child-process lifecycle.
-- `search-qdrant-bridge` owns collection/point/query vendor translation and no process state.
-- `search-publication` retires exact point identities and linearizes visibility in the guarded control
-  commit; it does not physically reclaim points.
-- `search-epoch-pins` owns pins/watermarks; `search-index-reclaimer` performs ordinary exact-ID deletion.
-- Security purge is a separate lifecycle path owned by `search-retention`.
-- Vendor types never cross public ports and broad correctness-path point updates are forbidden.
+Read the [architecture](../../docs/architecture/README.md) and
+[implementation](../../docs/implementation/README.md). Qdrant stores rebuildable projections; source
+bytes and committed control state remain with their existing owners.
 
-This directory is not a package. Do not add a family-level `Cargo.toml` or shared implementation. Put
-behavior in the child package that owns the failure state and test seam.
+Use one publication transition owner and one pending record for real unfinished external writes.
+Preparation is local until that intent is durably recorded and can be discarded beforehand. Remove
+duplicate daemon/bridge journals, supplied commit-proof objects and permanent completed-operation
+history. Do not replace actual write/readback/commit observations with booleans or hashes.
+
+Publish a coherent view and admit query pins against it. Reclamation obtains exact retired IDs from
+committed state and excludes active readers; snapshotting pins once does not prevent later admission
+of an unsafe old pin. Reuse the existing guarded pin path and retire unguarded alternatives.
+
+The supervisor owns the real local Qdrant process; the bridge owns SDK transport/translation. Keep
+those effects concrete. A planner/point identity/pin/reclaimer name does not require a permanent crate,
+new receipt protocol or independent transaction engine.

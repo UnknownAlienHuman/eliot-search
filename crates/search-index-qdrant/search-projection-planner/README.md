@@ -1,27 +1,23 @@
 # search-projection-planner
 
-**C13 — Projection planning.**
+Turn prepared units and their vector products into point identities, expected
+payload/readback data and a membership manifest. The result supports incremental
+replacement, exact publication and later lookup of the original unit.
 
-**Status:** `SOURCE_PRESENT / LEGACY_PROFILE`; substantial planning/manifest source exists, but the selected sole canonical S9.5 projection-manifest owner is #209. Do not extend a parallel payload or completeness contract. See [central package status](../../../docs/product/PACKAGE_STATUS.toml).
+Current [planning](src/plan.rs) is pure and membership-scoped. It checks the complete
+`VerifiedUnitSet` and required vectors, but returns a whole in-memory plan.
+`PointSpec` retains vector digests, not vector values; the real upload path still
+needs the corresponding encoder products.
 
-Plan the exact rebuildable point set and immutable manifests for one projection membership without performing vendor I/O.
+The [manifest codec](src/manifest.rs) currently caps one membership at 4,096 entries
+and 8 MiB despite larger `ProjectionBudget` defaults. Full reconstruction, digest
+preimages and diffs allocate additional copies. These are current implementation
+limits, not a product capacity claim or a format that must be preserved.
 
-## Owns
+Use one ordered manifest, bounded pages/batches and the same prepared data through
+the actual publication/bridge consumer. Keep complete membership and stable
+unchanged-point identity while removing repeated maps, byte reconstruction and
+whole-request digests. [FUNCTIONS.md](FUNCTIONS.md) maps the concrete changes.
 
-- projection profile and input-descriptor validation
-- one-membership-per-projection enforcement
-- point/vector/payload plan construction from prepared contract artifacts
-- old/new manifest diff
-- expected payload/vector digests
-
-## Must not own
-
-- Qdrant transport
-- source truth or access authority
-- broad closure filters when exact IDs exist
-- sharing retrieval points across memberships
-- depending directly on parser, enricher or encoder implementations
-
-- **Delivery wave:** W3 / P06
-- **Soft source-line target:** 7,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and [agent notes](AGENTS.md).

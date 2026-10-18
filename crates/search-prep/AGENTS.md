@@ -1,7 +1,16 @@
-# Family rules
+# Working on preparation
 
-- Every transform has a versioned profile and explicit assurance ceiling.
-- Coordinate and loss maps are mandatory when bytes are transformed.
-- Tolerant syntax parsing is not compiler truth.
+Read the [architecture](../../docs/architecture/README.md) and
+[implementation](../../docs/implementation/README.md). Preparation turns a retained revision into
+searchable units while preserving the way back to its bytes.
 
-This directory is not a package. Do not add a family-level `Cargo.toml` or shared implementation. Put behavior in the child package that owns the failure state and test seam.
+Decode/parse once and pass the owned validated result to unit construction. An in-process immutable
+product does not need a second full parse to prove itself. Verify loaded artifacts at their actual
+storage boundary; do not replace that check with a supplied digest label.
+
+Keep a profile for transformations and usable source coordinate/loss maps where bytes change.
+A tolerant syntax parse does not establish compiler facts. Preserve those semantics while removing
+repeated text copies, document inventories, canonical records and duplicate immutable-file engines.
+
+Change materializer, unitizer and their concrete consumers together. Their current package separation
+is optional; no new generic preparation pipeline or crate is required by a format name.

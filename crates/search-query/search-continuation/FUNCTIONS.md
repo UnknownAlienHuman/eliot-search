@@ -1,86 +1,47 @@
-# Function contract — `search-continuation`
+# search-continuation — implemented functions
 
-**Status:** W4/P08 continuation contract; durable/security hardening continues in W7/P13.
+## Current API
 
-Public continuation values are opaque CSPRNG tokens. Candidate windows, issued-candidate suppression,
-plan/view/route/security fences and pins are server-owned records keyed by token digest.
+| Entry point | Actual behavior |
+|---|---|
+| `ContinuationStore::create(request)`, `create_with_security_scope(request, scope)` | Validate supplied records/token material and insert an in-memory window or replan descriptor. |
+| `resolve(credential)` | Looks up the record and checks binding/status. |
+| `resume(credential, live, now, max_items)` | Checks supplied live fences and returns `ResumePlan`: selected references plus a pin effect, a durable replan descriptor, or exhaustion. |
+| `bind_durable_emission` | Binds a caller-supplied durable selection; does not execute the replan. |
+| `revalidate_emission`, `commit_emission` | Check a selection before output, then account for delivered fingerprints/revision after output. |
+| `complete`, `invalidate`, `invalidate_restart`, `expire`, `apply_live_limits` | Change lifecycle state and return cleanup effects for the caller to perform. |
+| `compact_terminal(max_items)` | Remove terminal metadata/token entries with no pending security cleanup. |
+| `begin_security_invalidation`, `begin_binding_invalidation` | Start a cursor with `advance`, `complete_cleanup` and `finish`. |
 
-## Creation
+Sources: [lib.rs](src/lib.rs), [emission.rs](src/emission.rs), [security.rs](src/security.rs).
+The store does not persist descriptors, run query I/O or own the referenced epoch guards.
+A returned effect or supplied live-state boolean does not establish that its resource operation happened.
 
-### `create_ephemeral(plan, remaining_window, pin_set, binding, policy, randomness) -> Result<ContinuationHandle, ContinuationError>`
+## Repeated work to remove
 
-Requires a bounded in-memory candidate window and accepted route/epoch pins. The record is
-binding-scoped, TTL/count limited and restart-invalid. The token contains no cursor, score, point ID,
-plan fingerprint, fence or binding field.
+`resume` starts from `candidates.iter()` and skips issued fingerprints on every page.
+`prepare_emission` scans the candidate prefix again to determine completion; both pre-output
+revalidation and post-output commit call it. With N unique candidates delivered one at a time, repeated
+prefix visits grow quadratically. Keep an offset in one ordered window and advance after delivery.
+The current shared code clones selected items, not the full window; terminal transitions already free
+the candidate vector and issued set.
 
-### `create_durable_replan_checkpoint(job, plan, binding, policy, store, randomness) -> Result<ContinuationHandle, ContinuationError>`
+The public daemon already has the useful offset mechanics in
+[ContinuationCatalog](../../../bins/eliot-searchd/src/continuation/kernel/catalog.rs) and
+[PreparedPage::deliver](../../../bins/eliot-searchd/src/continuation/kernel/catalog/prepared.rs).
+Its next-page path does not rerun search or clone the entire window. It still repeats catalog work:
 
-Allowed only for an explicit durable job over immutable admitted data. The record stores a replan
-checkpoint, accepted dependency/API identities and issued-candidate fingerprints; it owns no
-process-local pin and cannot reference unsaved bytes.
+1. `prepare_continue_page` calls [source_fence::digest](../../../bins/eliot-searchd/src/source_fence.rs),
+   which enumerates every source, serializes their summaries into a temporary vector and hashes it.
+2. [ResultHandleCatalog::prepare_mint_page](../../../bins/eliot-searchd/src/result_handles/kernel/catalog.rs)
+   enumerates all sources again and builds a map.
+3. The same handle preparation calls `source_fence::digest` again.
 
-### `token_digest(handle) -> ContinuationTokenDigest`
+Thus a prepared page incurs three source enumerations before delivery, independent of page size.
+Use the pinned published view and direct source/revision lookups; an unrelated source change must not
+be tested by rebuilding a corpus-wide fingerprint for every existing page.
 
-Uses a dedicated domain. Plaintext tokens never appear in persistent records, logs, telemetry or
-receipts.
-
-## Expansion
-
-### `resolve(handle, store) -> Result<ContinuationRecord, ContinuationError>`
-
-Performs binding-safe token-digest lookup without disclosing whether a foreign token exists.
-
-### `revalidate(record, binding, live_state, now) -> Result<ContinuationPermit, ContinuationError>`
-
-Checks binding/principal, grant/revocation, owner generation, source/workspace view, route/epoch,
-profile, purge, TTL and configured pin/window ceilings. Possession grants no authority.
-
-### `expand_ephemeral(record, permit, budget) -> Result<ContinuationExpansion, ContinuationError>`
-
-Returns the next bounded unissued window and renews a continuation pin only within the original
-route/epoch and maximum TTL. It never silently refreshes against newer corpus state.
-
-### `expand_durable(record, permit, planner, executor, budget) -> Result<ContinuationExpansion, ContinuationError>`
-
-Recompiles/re-executes under the stored contract fence and suppresses previously issued stable
-candidate fingerprints. A changed/expired dependency returns `SNAPSHOT_EXPIRED` or explicit replan gap,
-not a transparent corpus switch.
-
-## Cancellation and deadlines
-
-- Creation checks cancellation/deadline before token generation, pin acquisition and record insertion.
-- If cancellation or deadline occurs after pin/record acquisition but before token delivery, the package
-  releases the exact pin/window and invalidates the orphan record; uncertain durable insertion is
-  resolved by stable operation identity rather than blind reminting.
-- Expansion checks cancellation/deadline before pin renewal, before planner/executor dispatch, between
-  bounded candidate windows and immediately before terminal emission.
-- Cancellation after a window was read or recomputed but before emission returns no candidates and does
-  not mark them issued.
-- A durable expansion cancelled after dependent work starts preserves the stored replan checkpoint and
-  reports truthful incomplete coverage; it cannot switch to a newer fence.
-- Deadline expiry never extends TTL or pin lifetime beyond configured maxima and never suppresses a
-  `SNAPSHOT_EXPIRED`/security failure.
-
-## Lifecycle
-
-### `invalidate(scope, generation, store) -> InvalidationReceipt`
-
-Monotonic and idempotent for security, purge, owner/view/route/profile and job changes.
-
-### `expire(now, policy, store, pins) -> ExpiryReceipt`
-
-Expires bounded batches and releases all process-local pins/window memory. Caller supplies time.
-Restart invalidates every ephemeral record.
-
-### `apply_live_limits(old, new, store, pins) -> Result<ConfigApplyReceipt, ContinuationError>`
-
-Implements restrictive changes in `config/sections/continuations.md`; excess records/pins are explicitly
-expired. Durable ordinary queries and durable unsaved targets remain always rejected.
-
-## Required fixtures
-
-Token entropy/opacity/redaction; foreign binding denial; raw Qdrant cursor/score/point ID absent;
-restart invalidates ephemeral and releases pin; TTL/count/pin bounds; durable ordinary-query/unsaved
-rejection; durable record owns no process pin; stable issued suppression; security/view/route drift;
-cancellation/deadline before creation, after pin acquisition and immediately before emission; orphan
-record/pin cleanup; expired fence returns `SNAPSHOT_EXPIRED`; no silent refresh.
+Consolidate through the [one temporary owner](README.md#one-temporary-owner), changing
+[public query callers](../../../bins/eliot-searchd/src/public_runtime_service/kernel/query.rs) and native
+lifecycle consumers together. Keep actual scope/revocation and retained-resource cleanup. Remove unused
+durable descriptors, duplicate stores and per-page fingerprint receipts with their last consumers.

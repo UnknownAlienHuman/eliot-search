@@ -1,20 +1,18 @@
-# Source family
+# Sources
 
-**Organizational capability family — not a Cargo package.**
+Selected roots become retained revisions and current source records. The
+[implementation guide](../../docs/implementation/README.md) defines the connected ingestion result;
+this is a map of existing code, not a requirement to retain every package.
 
-## Child packages
+| Existing code | Useful responsibility / simplification |
+|---|---|
+| [source registry](search-source-registry/), [source records](search-source-records/), [source identity](search-source-identity/) | Selected roots, source identity/locator and current revision. Consolidate repeated source/view models and lookups around these records. |
+| [source reconcile](search-source-reconcile/) | Turn notifications and bounded inventories into work for changed, moved or missing sources. |
+| [safe reader](search-safe-reader/) | Acquire stable bytes from the selected source without executing its contents. Pass those same bytes onward. |
+| [revision store](search-revision-store/) | Existing immutable object mechanics and revision models. Its in-memory store is not the missing persistent application backend. |
+| [source history](search-source-history/), [provenance](search-source-provenance/) | Keep relationships actually needed to reopen, trace or compare revisions; fold duplicate current/history bookkeeping into the source owner. |
+| [admission](search-source-admission/), [receipt issuer](search-source-admission-receipt/) | Keep selected-source policy evaluation. Retire permanent proof/receipt handoffs that duplicate an in-process decision. |
 
-- [`search-source-registry/`](search-source-registry/) — C03: Own admitted roots, source memberships, reference portfolios and coherent SourceView/WorkspaceViewRevision resolution.
-- [`search-source-identity/`](search-source-identity/) — C04: Derive stable source identity, retain path history and enforce single-writer namespace ownership and cutover.
-- [`search-source-reconcile/`](search-source-reconcile/) — C05: Turn watcher/USN hints and bounded inventories into truthful currentness, shadows and reconciliation work.
-- [`search-safe-reader/`](search-safe-reader/) — C06: Acquire exact source bytes without executing content, escaping admitted roots or mislabeling unstable files.
-- [`search-revision-store/`](search-revision-store/) — C07: Admit, retain and reopen immutable source revisions under complete residency identities.
-
-## Family invariants
-
-- Paths are locators, not identity.
-- Watchers are hints; inventory reconciliation proves observation continuity.
-- Only exact bytes or immutable admitted revisions are source truth.
-- SourceIdentity carries no membership or access policy.
-
-Each writer agent owns exactly one child package and follows that package's `AGENTS.md`.
+Source bytes and content-revision identity must agree. Store the immutable object before committing its
+head/reference; preparation can retry from that revision. An unsupported old format is rejected before
+writes and left intact. There is no legacy-reader or migration prerequisite for the new application.
