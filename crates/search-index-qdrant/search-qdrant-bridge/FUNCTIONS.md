@@ -95,13 +95,40 @@ descriptor. If keeping that model, supply its real binding from the owner descri
 [S11_PROFILE.md](../search-point-identity/S11_PROFILE.md). If reducing it, change the shared comparator
 and its consumers together. Do not infer identity from an address or add another local identity rule.
 
+## Partial point changes
+
+Qdrant `upsert_points` is a complete point replacement for an existing ID. The current bridge builds a
+new `PointStruct` containing one payload and one named-vector set, so using it to add an optional dense
+vector or repair one payload field can remove unrelated vectors or payload data that are not present in
+the replacement. Full upsert is correct only for a new point or when Eliot owns and supplies the complete
+authoritative point.
+
+Use the vendor's narrower operations through this same bridge:
+
+- `update_vectors` adds or replaces only the named vectors supplied and leaves the others intact;
+- `set_payload` changes only the selected payload fields;
+- full upsert replaces the complete point after assembling every required vector and payload field.
+
+The sole publisher serializes dependent changes and performs exact readback of the affected names/fields.
+Do not create a second migration or vector-backfill service. A selected semantic model can backfill its
+named vector with `update_vectors` under the normal pending/visible publication. Failure or timeout after
+dispatch remains an unresolved external effect for that publication.
+
+Keep citation/source coordinates in the versioned published manifest. A reusable retrieval point may be
+retained across source revisions only when its immutable retrieval/filter identity remains valid; each
+pinned view still maps it to the exact revision/range that supplied its evidence. Do not mutate an old
+view's source meaning in place merely to save a point write, and do not force a new point solely because
+an unrelated absolute byte offset shifted.
+
+Pinned SDK source: [`UpsertPoints`, `UpdatePointVectors`, `PointVectors` and `SetPayloadPoints`](https://github.com/qdrant/rust-client/blob/7c838035ae7b9455636dcaca918a55b7d7ca638f/proto/points.proto).
+
 ## Operation contract
 
 | Operation | Required behavior |
 |---|---|
 | Connect/probe | Use the configured endpoint and its actual credentials, and check the capabilities/schema the selected path needs. Process startup belongs to the supervisor. No auth-lease or qualification-report protocol is required by every local connection. |
 | Create/verify collection | Create the selected physical generation with the named vectors and filter/group indexes actually used. Read back those chosen settings and schema. Reuse the shared schema owner; do not manufacture 19 indexes or exact profile credentials to satisfy the old adapter. |
-| Upsert | Bind the actual source/unit identity, submit bounded text/vector input and await `wait=true` completion. The local publisher serializes dependent writes. Verify the relevant stored result; resolve uncertain external effects through publication/control, not a second bridge operation journal. |
+| Upsert/update | Bind the actual source/unit identity, submit bounded complete-point or narrow vector/payload input and await `wait=true` completion. Full upsert supplies the complete authoritative point; partial named-vector/payload changes use their dedicated operation. Verify the relevant stored result and resolve uncertain effects through publication/control, not a second bridge operation journal. |
 | Close/delete | Operate only on the exact bounded ID list. Close uses the shared exclusive epoch boundary. Broad-filter closure/deletion is absent from the correctness API; ordinary delete does not produce a security-purge receipt. |
 | Readback | Return exact address/identity coordinates, closed S9.5 payload and actual named vectors, with explicit missing/unexpected IDs. Keep manifest-held expected vector digests separate from Qdrant payload metadata. |
 | Query/count/scroll | Translate the resolved scope privately as above. Ordinary top-k does not require exact count; a requested count uses that scope. Enforce actual request limits and installed schema constraints. Results are bounded nominations; evidence comes from retained source. |

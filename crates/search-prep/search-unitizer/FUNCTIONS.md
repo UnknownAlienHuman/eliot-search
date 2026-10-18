@@ -29,10 +29,10 @@ observations remain separate facts.
 | Location / symbols | Current behavior |
 |---|---|
 | [markdown_unitset/build.rs](src/markdown_unitset/build.rs): `MarkdownUnitizationSource`, `unitize_markdown` | Accepts a product plus revision-read port, invokes `verify_markdown`, builds raw v3 and creates structural/inline observations. |
-| [markdown_unitset/codec.rs](src/markdown_unitset/codec.rs), [decode.rs](src/markdown_unitset/decode.rs) | Implements `canonicalize_markdown_unit_manifest` / `decode_markdown_unit_manifest` for the current v4 envelope. |
+| [markdown_unitset/codec.rs](src/markdown_unitset/codec.rs), [decode.rs](src/markdown_unitset/codec/decode.rs) | Implements `canonicalize_markdown_unit_manifest` / `decode_markdown_unit_manifest` for the current v4 envelope. |
 | [markdown_unitset/build.rs](src/markdown_unitset/build.rs): `verify_markdown_unit_manifest` | Reconstructs the expected set and compares the whole supplied manifest. |
 | [jats_unitset/build.rs](src/jats_unitset/build.rs): `JatsUnitizationSource`, `unitize_jats` | Invokes `verify_jats`, builds raw v3 and adds the existing complete subset observations. |
-| [jats_unitset/codec.rs](src/jats_unitset/codec.rs), [decode.rs](src/jats_unitset/decode.rs) | Implements `canonicalize_jats_unit_manifest` / `decode_jats_unit_manifest` for the current v5 envelope. |
+| [jats_unitset/codec.rs](src/jats_unitset/codec.rs), [decode.rs](src/jats_unitset/codec/decode.rs) | Implements `canonicalize_jats_unit_manifest` / `decode_jats_unit_manifest` for the current v5 envelope. |
 | [jats_unitset/build.rs](src/jats_unitset/build.rs): `verify_jats_unit_manifest` | Reconstructs and compares the expected set. |
 
 The current source inputs carry a `RevisionReadPort` because owning materializer verification reruns
@@ -61,6 +61,43 @@ document too. Whitespace-normalized text or a stable positional ID cannot establ
 Keep original text/ranges separate from any retrieval prefix or generated summary. Reuse the current
 artifact owner for selected derived outputs; do not duplicate raw text in every unit or build a generic
 cache database. Rebinding occurrences may require new index points even when no inference repeats.
+
+## Rewrite amplification and target boundaries
+
+The current raw layout starts at the previous byte end and chooses the next preferred line boundary.
+`derive_occurrence` then includes the complete revision content digest, absolute byte/line coordinates
+and ordinal in each identity. S11 point identity includes that `UnitId`. A small insertion near the start
+of a file can therefore move every later boundary and turn an otherwise local edit into a large
+create/retire suffix. A content-output cache can avoid some inference but cannot repair this publication
+amplification.
+
+Make the source UnitSet model-independent and structure-first:
+
+- Markdown/JATS sections and items, code definitions/blocks and document-native elements are the primary
+  boundaries. Split only an oversized structural unit; merge adjacent small peers only when they share
+  the same heading/context and remain within the selected bound.
+- Tokenizer/model-specific packing is a derived projection. Changing an embedding model, token limit or
+  retrieval prefix rebuilds that projection, not source occurrence identity or every source map.
+- Keep three facts distinct: current source revision/range, a logical occurrence within its structural
+  parent, and the exact prepared/model input that may be reused. A content hash alone cannot distinguish
+  two equal passages in one source; include a stable structural anchor and local duplicate position.
+- Preserve the old and new revision/range binding in versioned manifests. Reusing a retrieval artifact
+  never turns old coordinates into current source evidence.
+
+For unstructured oversized text, content-defined chunking can be evaluated as a local fallback inside
+a section, then snapped to UTF-8 and useful line/sentence boundaries. It is not the default semantic
+chunker or a global source identity: FastCDC was designed for deduplication, scans the complete input and
+can still split repetitive or meaningful text poorly. Measure retained units, model calls and Qdrant
+points rewritten after representative insertions before selecting it.
+
+Useful donors are Docling Core's
+[`HybridChunker`](https://github.com/docling-project/docling-core/blob/f5f01f97e9e1c7a50c1f378e114ca063085985ce/docling_core/transforms/chunker/hybrid_chunker.py),
+which refines hierarchical chunks by token-aware splitting and merges adjacent peers with matching
+headings; Unstructured's
+[`by_title`](https://github.com/Unstructured-IO/unstructured/blob/1b02b4d189c260ed9b1aca29583203e233d853cb/unstructured/chunking/title.py),
+which preserves section boundaries and optionally page boundaries; and the
+[FastCDC paper](https://www.usenix.org/conference/atc16/technical-sessions/presentation/xia) as the
+content-defined-boundary fallback. Reuse the mechanisms, not their runtime or storage stack.
 
 ## Encoding cost to remove
 

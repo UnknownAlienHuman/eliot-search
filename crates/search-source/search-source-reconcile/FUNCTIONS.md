@@ -23,9 +23,15 @@ Daemon composition owns one bounded work queue across selected roots. Repeated h
 paths; an uncertain or overflowing path set becomes an affected-root scan. Retain current source/head
 records and scan progress needed by real work, not a lifetime event ledger or a supervisor per root.
 
+Treat editor and tool writes as unstable event bursts, not one authoritative transition. Atomic-save
+patterns commonly create a temporary file, write it, rename it over the target and remove the old path.
+Coalesce a short bounded burst and then reread the final admitted path through the source owner. A lone
+remove/move-from hint does not retire a source while a matching replacement or rescan is still pending.
+An explicitly completed inventory or final read that confirms absence may retire it.
+
 Read confirmed changes through the existing source reader and writer. Compare content identity before
 repeating preparation and Qdrant work. A rename can change location without preparing identical content
-again. Metadata and watcher silence are hints, not proof that bytes are unchanged.
+again. File IDs, metadata and watcher silence are hints, not proof of stable bytes or source identity.
 
 An inventory error or cancellation leaves its scope incomplete. Do not retire unseen sources or clear
 a gap from that partial inventory. Changes observed during a scan remain pending after its completion.
@@ -52,10 +58,19 @@ continuity. The inspected Windows backend does not expose every lost-event condi
 keep periodic/startup recovery. `PollWatcher` already performs repeated complete walks, so do not layer
 it over the same periodic scanner by default. No USN service is required for the first connected path.
 
+Do not adopt `notify-debouncer-full`'s default whole-tree `FileIdMap` for large source roots. Its current
+implementation recursively walks each watched path with `follow_links(true)` and retains a path/file-ID
+entry for every visited object. That duplicates the ignore-filtered inventory, can cross excluded links
+and makes rename assistance proportional to the entire tree. Raw `RecommendedWatcher`, `NoCache`, or a
+small cache populated only from admitted inventory is sufficient. Debounced rename stitching remains an
+optimization; the final source read and content identity decide what changed.
+
 Pinned source: [ignore walk](https://github.com/BurntSushi/ripgrep/blob/4649aa9700619f94cf9c66876e9549d83420e16c/crates/ignore/src/walk.rs),
 [walkdir](https://github.com/BurntSushi/walkdir/blob/4f26be4d450910916ea11533b2efc52b9a6483bc/src/lib.rs),
 [notify Windows](https://github.com/notify-rs/notify/blob/a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf/notify/src/windows.rs),
-[notify poll](https://github.com/notify-rs/notify/blob/a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf/notify/src/poll.rs).
+[notify poll](https://github.com/notify-rs/notify/blob/a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf/notify/src/poll.rs),
+[debouncer](https://github.com/notify-rs/notify/blob/76f48c70bbf7fed75440d580e498e90cbc6ce140/notify-debouncer-full/src/lib.rs) and
+[its FileIdMap](https://github.com/notify-rs/notify/blob/76f48c70bbf7fed75440d580e498e90cbc6ce140/notify-debouncer-full/src/file_id_map.rs).
 
 ## Git deltas use the same ingestion path
 

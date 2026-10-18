@@ -58,7 +58,9 @@ retained copies remain user data; simplification never silently destroys them.
 
 **Cost follows useful work.** Normal updates touch changed content. Storage and maintenance do not grow
 with an eternal history of completed internal operations. Query bookkeeping is short-lived. Optional
-features do not multiply the normal startup and query paths.
+features do not multiply the normal startup and query paths. Source occurrence, current location and
+reusable derived input are separate facts: a small edit must not invalidate unrelated work merely
+because later offsets or revision identifiers changed.
 
 **Completion means an application.** Deliver connected behavior and remove the replaced implementation.
 Neither small files, a low line count, closed tickets nor passing structural checks establish a working

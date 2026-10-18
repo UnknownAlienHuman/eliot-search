@@ -26,6 +26,20 @@ leaves this coordinator busy. Keep preparation as an ordinary local result until
 the pending write is recorded, or add a simple discard of never-dispatched work.
 Retain recovery state only for a persisted or possibly dispatched operation.
 
+**Make the pending intent recoverable.** The shared `PublicationIntent` currently persists only a
+`prepared_manifest_ref: ReceiptRef`; tests commonly use sentinel strings. The full old/new manifests and
+diff remain in `PreparedGeneration` memory, and `persist_intent` merely accepts another receipt label.
+A process restart therefore has no defined owner that resolves that string into the exact bounded work.
+
+Write the prepared operation artifact before the redb intent references it. Store ordered manifest/diff
+pages through the existing artifact owner, plus the physical route/generation, selected vector/profile,
+old/new manifest roots, reserved epoch and the next bounded effect/readback cursor. redb keeps only the
+small current/pending record and artifact reference; it must not contain source text, whole point batches
+or model vectors. Recovery loads and validates those pages, reads Qdrant/control state and resumes or
+classifies the next operation. An opaque label without a real resolver and retention rule is not durable
+recovery evidence. Remove completed pages/checkpoints after the visible view and any retained old pins no
+longer need them; do not recreate an eternal operation archive.
+
 **Bound the actual representation.** The planner advertises 100,000 points and
 64 MiB, while [manifest encoding](../search-projection-planner/src/manifest.rs)
 uses the shared [4,096-item / 8 MiB limits](../../search-contracts/src/bounds.rs).

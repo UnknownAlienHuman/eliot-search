@@ -39,12 +39,18 @@ readback; do not compute BM25 a second time to fill an obsolete expected digest.
 ## Text and code semantics
 
 Use explicit, matching ingestion/query options. For neutral text and code, set
-`stemmer: {"type":"none"}`, `stopwords: {"languages":[],"custom":[]}`, `ascii_folding:false`
+`stemmer: {"type":"none"}`, an explicit empty stopword set, `ascii_folding:false`
 and an explicit case policy. The server otherwise defaults to English stemming/stopwords.
 Do not use the deprecated `language:"none"` shortcut. These options and the fixed ingestion
 `k`, `b`, `avg_len` are defined by the
 [pinned BM25 implementation](https://github.com/qdrant/qdrant/blob/74f3e85b9473c62560006c043e13737ce6b48412/src/common/inference/bm25_inference.rs).
-`avg_len` is a supplied estimate, not a continuously recomputed corpus mean.
+`avg_len` is a supplied estimate, not a continuously recomputed corpus mean. It is part of the derived
+vector profile; changing it, `k`, `b`, tokenization or preprocessing rebuilds the affected sparse vectors.
+
+Document and query embeddings are different task inputs even when their options match: the server calls
+`tokenize_doc`/`embed_document` for indexed text and `tokenize_query`/`embed_query` for search. Any
+prepared-output reuse key includes that role. Do not reuse a document vector as a query vector merely
+because the source string is equal.
 
 For ordinary text use the native word tokenizer; select multilingual processing when the supported
 corpus needs it. For enriched code, preserve complete identifiers plus useful components and submit
@@ -53,6 +59,11 @@ the resulting terms with `tokenizer:"whitespace"`; native
 split word input on non-alphanumeric characters and do not implement Eliot's identifier expansion.
 Keep normalization separate from original byte coordinates. Search relevance and original-span behavior
 matter; reproducing a retired vector layout does not.
+
+Identifier aliases alter term frequency and effective document length, so expansion is not free metadata.
+Bound unique expansions per identifier/unit, avoid repeated aliases and measure relevance plus index size
+on representative code. Do not inject every path segment, heading and spelling variant into every point;
+a small deterministic context prefix and separate payload/group coordinates are sufficient.
 
 A change to tokenization or document weighting requires re-encoding affected indexed content. Use the
 existing rebuild/published-view lifecycle to avoid mixing incompatible vectors, without a migration
