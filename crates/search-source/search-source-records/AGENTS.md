@@ -1,22 +1,13 @@
-# Source records ownership — #569
+# Working on search-source-records
 
-Own pure source entity/value models, versioned source metadata schemas/codecs
-and owner-governed rehydration boundaries. This is the shared data/schema leaf
-of C03, not another registry, state owner, database or task controller.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and [README](README.md). Trace real
+producer/consumer pairs; this package's relocation history does not justify a permanent boundary.
 
-The initial exact relocation is the frozen legacy DIRECT codec, source-root
-catalog codec and pure bounded root observation/currentness model. Keep their
-bytes, formulas and causal fixtures exact. Currentness records do not establish
-native access, source readback or current ownership.
+Keep pure current-format values only while shared by actual source/control callers. Move them to the
+closest owner when that removes a forwarding dependency. Do not add legacy batch, portfolio, currentness,
+provenance or restore schemas to the new application.
 
-No filesystem/process/clock/network/storage I/O, current-policy decisions,
-identity allocation, caller verified flags, source bodies, search or access
-authority belongs here. Semantic SourceRegistry orchestration and concrete
-redb/native operations remain separate owners. Do not create a forwarding shell
-or move fixtures without their owning implementation.
-
-Read root instructions, Architecture Part I and the exact #569 split scope.
-Root integrates manifests/lock; one writer per overlapping scope. Run Rust1.98
-locked/offline production check/strict and applicable existing causal cases.
-Count all physical handwritten Rust including fixtures: split review before
-8500, hard10000. Source presence/compilation is not product qualification.
+The package performs no I/O and grants no source, native, access or query authority. Old codecs are
+read-only evidence until their explicit consumer disappears; unsupported roots are not migrated or
+rewritten automatically. Delete exclusive fixtures with the retired format.

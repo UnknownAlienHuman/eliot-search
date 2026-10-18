@@ -1,71 +1,25 @@
-# Agent contract — search-runtime-owner
+# Working on search-runtime-owner
 
-You own only `crates/search-runtime/search-runtime-owner/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md), [README](README.md) and
+[source map](FUNCTIONS.md). Trace the actual daemon root-open and shutdown callers before preserving a
+logical owner type.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S7.1, S27.1, S33, H1, P01.
+Keep only behavior needed to initialize or exclusively open one local current-format root:
 
-## Mission
+- explicit initialize versus side-effect-free inspect/open-existing;
+- real native/process-lifetime exclusion;
+- exact root/install identity needed by the concrete owner;
+- honest handling of a real unresolved effect;
+- orderly release after concrete owners close.
 
-Guarantee that exactly one process incarnation owns one data root and expose a fenced lifecycle to the daemon.
+The daemon owns filesystem/process/control effects. Do not create another owner database, renewable lease,
+dependency-receipt graph, generic recovery workflow or supervisor merely to preserve package tests. A
+root guard is process-local and need not accompany every internal call.
 
-## Ownership
+Change this package and immediate daemon consumers together. Delete obsolete transitions, wrappers and
+fixtures with their last caller. No package-only edit wall, historical wave, line quota or compatibility
+promise requires keeping an unused lifecycle platform. Unsupported old roots remain untouched.
 
-- data-root lease and owner epoch
-- standalone/managed mode fence
-- crash/reopen ownership recovery
-- clean shutdown and drain state
-
-## Forbidden ownership
-
-- retrieval semantics
-- Qdrant schema or query operations
-- source catalog or access policy
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `DataRootOwner::acquire(path, mode) -> Result<OwnerGuard, OwnerError>`
-- `OwnerGuard::owner_epoch() -> OwnerEpoch`
-- `OwnerGuard::begin_drain() -> DrainToken`
-- `OwnerGuard::release_cleanly() -> Result<ShutdownReceipt, OwnerError>`
-- `recover_abandoned_owner(record) -> RecoveryDecision`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `DATA_ROOT_ALREADY_OWNED`, `OWNER_EPOCH_MISMATCH`, `MODE_TRANSITION_REQUIRES_RESTART`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `second_owner_denied`
-- `crash_reopen_advances_or_fences_owner_epoch`
-- `managed_and_standalone_modes_cannot_coown_root`
-- `mode_transition_requires_drain_fence_and_restart`
-- `owner guard releases on orderly shutdown`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W1 / P01**
-- Soft `src/` target: **4,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Check the actual initialize/open/second-owner/shutdown behavior. Pure transition tests do not establish
+native exclusion, root safety or a working daemon.

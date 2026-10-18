@@ -1,228 +1,83 @@
-# Function contract — `search-source-registry`
-
-**Status:** W2/P03 logical contract; no registry persistence, cutover or source-view evidence exists.
-
-This package owns admitted roots, sources, memberships, reference portfolios, coherent source/workspace
-views and source-namespace owner transitions. It persists accepted identity/admission decisions through a
-vendor-neutral control port and never reimplements those semantics.
-
-## Global rules
-
-`DecodedBatch::encoding_profile` retains the exact validated wire profile.
-`state_encoding_profile` likewise retains the operation's immutable state format.
-Observed restoration compares each actual state format with complete operation
-history. Subsequent CAS uses those retained bytes; historical replay reproduces
-the original closed formats before comparing the entire operation. No profile
-is a current admission or live-security grant.
-Re-encoding an observed v2 operation must remain v2 when the current writer is
-v3 or later; it cannot silently relabel immutable history. New v2 Source
-provenance/state integration under #569 is still work in progress and is not
-qualified by this format-preservation primitive alone.
-
-The atomic Root protocol retains canonical `eliot.registry-state.v3` values and
-`eliot.registry-batch.v3` immutable operations together. Same operation/request
-replay returns the original outcome without rolling later state backwards.
-Unknown commit remains pending until exact operation/state readback; a receipt
-alone cannot install state. Snapshot v4 is distinct from the old v3 digest.
-
-`restore_registry_state` validates a bounded complete four-family denominator
-and contiguous history from genesis, then compares replayed before/after values
-with all current rows. Duplicate, surplus, missing, foreign or contradictory
-inputs refuse without partial state. Shared preflight checks combined counts
-and encoded bytes before caller decoding/allocation; it grants no authority.
-Restored state still requires live Root, security and current-policy validation.
-
-- one admitted source namespace has at most one active mutable owner generation;
-- old owner is durably fenced before new owner activation;
-- root/source/membership/view/portfolio/cutover mutations use stable operation identity and expected
-  generation guards;
-- membership creation requires an exact current verified admission receipt;
-- source/reference scope is explicit and versioned; nearest repository, implicit HEAD or disk-wide scope
-  does not exist;
-- one compound operation resolves one coherent immutable registry/source/workspace view;
-- no source bytes, extracted text, vectors, Qdrant IDs or concrete redb types cross/store here.
-
-## Snapshot operations
-
-### `validate_registry_snapshot(snapshot) -> Result<ValidatedRegistrySnapshot, RegistryError>`
-
-Checks registry/root/source/membership/portfolio/owner generations, uniqueness, referential integrity,
-closed states and bounded counts. Missing/duplicate/incoherent records fail closed.
-
-### `snapshot_digest(snapshot) -> RegistrySnapshotDigest`
-
-Domain-separated canonical digest over technical registry state and immutable refs, excluding display
-paths/content beyond the accepted disclosure schema.
-
-### `redacted_registry_view(snapshot, binding, disclosure) -> RegistryView`
-
-Returns only authorized root/source/membership/portfolio metadata and reason classes. Foreign membership
-names/counts/readiness are not disclosed.
-
-## Root registration
-
-### `register_root(request, identity, admission_policy, control_port, operation, deadline, cancel) -> Result<RootRegistrationReceipt, RegistryError>`
-
-Requires exact current data-root/registry owner fence, resolved local root identity and validated policy
-fingerprint/revision. It creates one explicit root record with no implicit recursive source admission.
-
-Same operation plus same request is idempotent. Timeout after possible control commit is unknown until
-root/operation readback. Conflicting canonical root or operation input rejects.
-
-### `update_root_policy(root, expected_revision, new_policy, control_port, operation) -> Result<RootPolicyChangeReceipt, RegistryError>`
-
-Commits the new policy fence and emits restrictive/permissive reconciliation/invalidation obligations.
-It does not reevaluate/read files or silently alter membership.
-
-### `unbind_root(root, expected_revision, policy, control_port, operation) -> Result<RootUnbindReceipt, RegistryError>`
-
-Fences new admission/ownership under the root and creates explicit source/membership/view invalidation
-work. It never deletes revisions/index points or claims purge.
-
-## Source admission and membership
-
-### `admit_source(identity, root, admission_receipt, expected_snapshot, control_port, operation) -> Result<AdmittedSourceReceipt, RegistryError>`
-
-Verifies exact root/policy/observation/decision/source-identity generations and requires `ALLOW` under the
-current policy. Stale, review-required, denied or foreign receipt rejects.
-
-The commit creates technical registry state only; it does not read/retain bytes or publish projection.
-
-### `revalidate_admitted_source(source, admission_receipt, expected_revision, control_port, operation) -> Result<SourceAdmissionUpdateReceipt, RegistryError>`
-
-Records the exact current decision/policy fence and required invalidation/reconcile actions. A
-restrictive deny fences later preparation/serving through downstream security/currentness owners; it is
-not silently delayed until reindex.
-
-### `bind_membership(request, source, admission_receipt, expected_snapshot, control_port, operation) -> Result<SourceMembershipReceipt, RegistryError>`
-
-Requires admitted source, current verified receipt, explicit corpus/membership/role/access/scoring/
-residency policies and no duplicate/conflicting membership identity. One source may have multiple
-explicit memberships; each projection point later has one projection membership.
-
-### `transition_membership(membership, command, expected_revision, control_port, operation) -> Result<MembershipTransitionReceipt, RegistryError>`
-
-Closed commands activate, restrict, suspend, retire or remove membership with monotonic revision and
-explicit downstream security/publication/retention obligations. Removal is not purge or byte deletion.
-
-## Reference portfolios and views
-
-### `publish_reference_portfolio(portfolio, expected_revision, control_port, operation) -> Result<PortfolioReceipt, RegistryError>`
-
-Validates explicit ordered/typed memberships, lineage roles, policy/profile refs and finite bounds. Empty
-portfolio returns a typed reason unless the request explicitly permits it.
-
-### `resolve_source_view(request, snapshot, access_snapshot, currentness_snapshot, limits) -> Result<ResolvedSourceView, RegistryError>`
-
-Resolves exact explicit roots/sources/memberships/portfolio/revision policy into one immutable view with:
-
-- registry and owner generations;
-- allowed membership identities;
-- source/workspace-view revision refs;
-- disclosure/residency/profile fences;
-- explicit excluded/denied/missing/ambiguous reasons.
-
-It cannot infer nearest repository, broaden to disk or choose implicit current HEAD. Access/currentness
-snapshots are consumed as exact accepted inputs; the registry does not decide their meaning.
-
-### `resolve_workspace_view(request, snapshot, workspace_observations, limits) -> Result<WorkspaceViewResolution, RegistryError>`
-
-Binds one coherent repository/worktree/branch/index/buffer fence for compound operations. Branch/index/
-buffer-revision changes yield a new workspace-view revision. Nested repositories/submodules remain
-explicit boundaries.
-
-### `verify_view(view, current_snapshot, current_owner) -> Result<VerifiedRegistryView, RegistryError>`
-
-Rechecks registry/root/membership/portfolio/owner/view generations before a downstream operation uses the
-view. Stale or mixed-generation view fails rather than silently replans under the same operation.
-
-## Namespace ownership and cutover
-
-### `prepare_namespace_cutover(namespace, current_owner, proposed_owner, policy, control_port, operation) -> Result<CutoverPreparation, RegistryError>`
-
-Validates exact current owner generation, new owner identity/incarnation, affected sources/memberships and
-migration/export evidence. It creates a durable preparation record but does not activate the new owner.
-
-### `fence_old_owner(preparation, control_port, operation) -> Result<OwnerFenceReceipt, RegistryError>`
-
-Durably prevents new mutable source/revision publication by the old owner generation before any new owner
-activation. The fence is monotonic and immediately visible to view verification.
-
-### `activate_new_owner(preparation, fence, import_or_transfer_receipt, control_port, operation) -> Result<SourceOwnerActivationReceipt, RegistryError>`
-
-Requires old-owner fence, exact accepted transfer/import state and no conflicting owner. It advances
-`SourceOwnerGeneration`; old owner can never resume under the prior generation.
-
-### `verify_cutover_receipt(receipt, old_state, new_state, snapshot) -> Result<VerifiedCutoverReceipt, RegistryError>`
-
-Proves fence-before-activation ordering, namespace/source/membership coverage and owner-generation
-advance. Ordinary export/copy is not accepted as ownership cutover.
-
-### `recover_cutover(operation, control_port) -> Result<CutoverRecoveryDecision, RegistryError>`
-
-Returns prepared, old-owner-fenced, new-owner-active, completed, conflicting or quarantined state from
-durable records. It never activates based on process presence or partial external copy alone.
-
-## Mutation recovery and batch operations
-
-### `recover_registry_mutation(operation, expected_digest, control_port) -> Result<RegistryMutationRecovery, RegistryError>`
-
-Resolves unknown commit outcome by exact idempotency/entity/generation readback. It reconstructs success,
-permits same-operation retry only when not committed, or fails/quarantines on conflict/partial state.
-
-### `apply_admission_batch(batch, expected_snapshot, control_port, limits, deadline, cancel) -> Result<RegistryBatchReceipt, RegistryError>`
-
-Processes finite canonical items and commits one outcome per source. Cancellation before commit is clean;
-after possible commit, recovery uses the batch operation identity. Partial per-item business outcomes are
-explicit and never collapsed to total success.
-
-## Cancellation, deadline and crash semantics
-
-Pure validation/view operations are retry-safe. All durable mutations have finite deadlines, stable
-operation identity, expected generation guards and exact readback recovery. Cancellation after possible
-commit is unknown until recovered. No retry widens scope, changes owner or substitutes a newer snapshot
-under the old operation.
-
-## Typed failures
-
-- `REGISTRY_SNAPSHOT_INVALID`
-- `ROOT_IDENTITY_CONFLICT`
-- `ROOT_ALREADY_REGISTERED`
-- `ROOT_NOT_REGISTERED`
-- `ROOT_POLICY_GENERATION_MISMATCH`
-- `SOURCE_NOT_ADMITTED`
-- `SOURCE_ALREADY_ADMITTED_CONFLICT`
-- `ADMISSION_RECEIPT_STALE`
-- `ADMISSION_RECEIPT_MISMATCH`
-- `MEMBERSHIP_CONFLICT`
-- `MEMBERSHIP_GENERATION_MISMATCH`
-- `REFERENCE_SCOPE_EMPTY`
-- `REFERENCE_PORTFOLIO_INVALID`
-- `SOURCE_VIEW_AMBIGUOUS`
-- `SOURCE_VIEW_STALE`
-- `WORKSPACE_VIEW_INCOHERENT`
-- `SOURCE_NAMESPACE_OWNERSHIP_CONFLICT`
-- `SOURCE_OWNER_CUTOVER_REQUIRED`
-- `CUTOVER_RECEIPT_MISMATCH`
-- `REGISTRY_MUTATION_OUTCOME_UNKNOWN`
-- `REGISTRY_OPERATION_CONFLICT`
-- `REGISTRY_CANCELLED_BEFORE_COMMIT`
-
-## Required tests / qualification evidence
-
-- root register/replay/conflict and policy-change obligations;
-- membership requires exact current allow receipt and cannot weaken admission;
-- restrictive revalidation immediately fences downstream view use;
-- explicit portfolio/source view; no nearest-repo/HEAD/disk-wide fallback;
-- one coherent registry/source/workspace generation across compound operation;
-- nested repository/submodule/worktree/branch/index fixtures;
-- unauthorized/foreign membership name/count/readiness non-disclosure;
-- dual active mutable owner impossible;
-- cutover old-owner fence durably precedes new activation;
-- owner generation advances and old owner cannot resume;
-- ordinary export/copy cannot satisfy cutover receipt;
-- crash/unknown outcome at every root/source/membership/portfolio/cutover transaction;
-- batch accounts one outcome per input and cancellation recovery;
-- large bytes/point lists absent; only immutable manifest refs allowed;
-- no concrete redb/filesystem/Git/Qdrant dependency or source content;
-- vendor-neutral control-port fakes and canonical snapshot/view/receipt goldens.
+# search-source-registry — source map
+
+The [implementation guide](../../../docs/implementation/README.md) owns the connected source path. This
+file distinguishes current code from product operations that actually have callers.
+
+## Implemented API and caller status
+
+| Area | Current behavior / caller reality |
+|---|---|
+| Source-v2 preparation/commit/recovery | Exported through `api.rs` and used by daemon registry-control/native-source composition. It persists admission/original-input metadata. The acquired body is not retained and output still reports no retained revision. |
+| `register_root`, `admit_source`, `bind_membership`, transitions | Generic in-memory `SourceRegistry` mutation plus a vendor-neutral control port and receipt. Searches found root/membership calls predominantly in package or registry-control fixtures rather than the normal source command. |
+| `publish_reference_portfolio` | Implemented and exercised by package tests. No serving/query producer was found. |
+| `resolve_source_view` / workspace view / verify view | Pure snapshot/view functions and a source port adapter. No connected product query uses this registry view as the published Qdrant/evidence view. |
+| Namespace cutover | Pure cutover preparation/fence/activation/recovery over registry state. No normal source writer consumes it. |
+| Batch/restore | Replays complete legacy registry histories and operation receipts. This is not the baseline current-format source open path. |
+| Source revision registration | Reexported from `search-source-history`; searches found test callers, not the native acquired-body path. |
+| `search-source-records` / `search-source-history` | Relocated legacy codecs, currentness, revision and restore code that the registry reexports. They do not own source bodies or a separate database. |
+
+## Connected source operation
+
+Implement one coherent operation around the exact bytes already acquired by the daemon:
+
+```text
+pre-read admission
+→ stable final-handle read
+→ post-read classification
+→ immutable revision-object write/readback
+→ short redb transaction:
+     upsert SourceRecord
+     set current RevisionRef
+     record availability/locator
+→ enqueue preparation/publication work
+```
+
+The object writer runs before the source-head transaction. A failure before commit leaves an unreferenced
+object for bounded GC. A known transaction abort is a known failure. An actually unresolved commit is
+resolved by reading the current source/head record; do not rescan the pathname or append another generic
+operation receipt.
+
+## Target typed operations
+
+Exact names may change with current code, but the owner needs only:
+
+- `register_root` / `update_root` / `unbind_root` for selected local roots;
+- `get_source` / `list_sources` / consistent current snapshot;
+- `commit_source_head(source, expected_head, revision_ref, locator, availability)`;
+- `retire_source_head(source, expected_head, reason)` without deleting retained objects;
+- `resolve_selected_sources(requested_ids, current_snapshot)` with no widening;
+- source/reference enumeration for publication cleanup.
+
+Use existing redb transactions directly. Package-level in-memory journals and receipt collections are not
+the persistent implementation.
+
+## Published view versus registry snapshot
+
+A registry snapshot is current control input. `PublishedView` is the immutable query object produced after
+preparation and Qdrant publication. Do not rebuild permanent corpus/portfolio/source-view history in the
+registry. An old query stays coherent because it holds the old published-view guard and manifest, not
+because every prior registry alias remains forever queryable.
+
+## Delete after cutover
+
+- reference portfolio/history and membership policy machinery with no real user-facing consumer;
+- namespace export/cutover platforms and universal migration replay;
+- legacy DIRECT journal/root-catalog codecs from the new application path;
+- process-local currentness/receipt authority;
+- `search-source-records` / `search-source-history` forwarding splits once useful current types move to
+  their actual owner;
+- generic control-port operations and permanent operation archives replaced by typed redb changes.
+
+Keep read-only legacy code only while an explicitly selected old-format diagnostic needs it. It cannot
+write current state or block a clean current-format implementation.
+
+## Behavior to verify
+
+- the exact acquired body is the body referenced by the committed revision;
+- same source/same revision replay and same expected head/different revision conflict;
+- rename without content change updates location without duplicating preparation;
+- missing/partial inventory cannot mass-retire unseen sources;
+- restart reconstructs current roots/sources/heads from redb;
+- publication receives one consistent source snapshot;
+- old published-view readers keep exact evidence while new source heads advance;
+- no package test-only portfolio/cutover/restore path remains reachable from normal ingestion/query.

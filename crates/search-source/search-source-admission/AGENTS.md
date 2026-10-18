@@ -1,58 +1,27 @@
-# Agent contract — search-source-admission
+# Working on search-source-admission
 
-Own only `crates/search-source/search-source-admission/`. Do not edit the root workspace, shared
-contracts, architecture or another package. Missing fields use the contract-change process.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md), [README](README.md) and
+[source map](FUNCTIONS.md). Trace the native source caller before preserving a policy/receipt type.
 
-The bounded implementation packet is `swarm/assignments/search-source-admission.md`.
+Own one pure bounded admission policy:
 
-## Ownership
+- validate a portable root-relative locator and available metadata;
+- refuse mandatory unsafe classes before body I/O;
+- produce explicit allow-read, deny, review, unsupported or incomplete;
+- accept post-read facts only to narrow/finalize the decision;
+- expose content-free errors and finite work limits.
 
-- pure canonical `SourceAdmissionPolicy` evaluation
-- deny-by-default source/path/metadata/format/sensitivity rules
-- deterministic decisions and legacy v1 receipts bound to policy and observation digests
-- v2 receipt issuance/verification belongs to the permanent `search-source-admission-receipt` leaf; do not restore a forwarding module or reverse dependency
+Do not own filesystem reads, source identity/history, registry mutation, currentness, query access or a
+durable admission ledger. Ordinary local ingestion needs no receipt, original-input archive or canonical
+batch identity. Remove those packages/types with their last legacy consumer rather than manufacturing a
+new current caller.
 
-## Forbidden ownership
+Use the existing reviewed GlobSet matcher and evaluator. Do not add a second wildcard/regex engine,
+canonical writer or permission wrapper. Change the evaluator and native ingestion consumer together; no
+contract-change ceremony, package-only edit wall, historical byte promise or line quota blocks the current
+format.
 
-- opening files or Git objects
-- root, identity or membership mutation
-- post-admission authorization or ranking
-- unknown-field allow behavior
-
-## Dependencies
-
-Only `search-contracts` and `search-domain`. The evaluator performs no filesystem, clock, database,
-process or network I/O.
-
-## Size
-
-Target `src/` ≤ 4,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
-
-## #430 corrective ownership and size boundary
-
-The evaluator owns `EvaluationMeterV2` and its private subtraction helper.
-Its owner-internal `pub(super)` constructor accepts four admitted `usize` maxima;
-it does not depend on `BatchLimitsV2`. Batch validates its existing limits before
-constructing that meter and calling the sole evaluator. Keep the module dependency
-one-way: batch → evaluator. Public APIs, field/method charging bodies, probes,
-errors, profiles and the 1024-occurrence multiset contract remain unchanged.
-
-Remove only the eleven newly added batch fixture bodies and their local helpers
-and fixture-only prose/imports. Do not move those bodies to another source owner
-or test directory to hide size. Retain historical evaluator, observation, policy
-and v1 fixtures. Preserve the exact deferred case/assertion inventory under
-#427/#215 and in [BATCH_V2.md](BATCH_V2.md); removed bodies are absent from this
-corrective candidate, not passing tests. Historical authored bodies were not run.
-
-The complete corrected owner is 8,672 physical handwritten Rust lines TOTAL,
-including every retained fixture: batch 308 + evaluator 1,723 + lib 4,442 +
-policy 1,303 + observation 896. It removes 858 lines from accepted TOTAL 9,530.
-This still exceeds the 8,500 split-review threshold. Independent split review and manager pre-edit acceptance under #430 bind this
-exact owner to a new 8,700-line ceiling for this correction only. Final recount
-is required; the 10,000 hard stop stays.
-The prior batch allowance is obsolete and does not transfer; no new blanket
-growth grant, fixture exclusion or receipt/contracts allowance is implied.
-
-Reuse the measured shared producer; no sizing formula, second encode, duplicate
-evaluator, forwarding split or partial-success fallback. Original probes and
-all-refusal cleanup stay unchanged. Source gates and qualification remain separate.
+Preserve actual fail-closed safety rules while deleting compatibility/proof scaffolding. Verify through the
+connected source path that denied input is never read and the accepted owned body goes directly to
+retention. Package fixtures alone are not completion.
