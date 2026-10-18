@@ -1,24 +1,25 @@
 # Working on search-projection-planner
 
-Read the root [AGENTS.md](../../../AGENTS.md), current
-[architecture](../../../docs/architecture/README.md), and
-[implementation](../../../docs/implementation/README.md). Change the prepared-data,
-publication and bridge consumers together where their data flow requires it.
+Read the root [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and local [function map](FUNCTIONS.md).
+Change preparation, point identity, publication, bridge and query lookup together when their shared data
+model changes.
 
-Keep exact membership coverage, the source/unit coordinates used by retrieval,
-actual vector products and coherent indexed profiles. Use the existing shared
-payload/identity implementation while removing duplicate bridge representations.
-A field table, byte format or separate identity crate is not permanent architecture.
+The planner owns pure bounded transformation from one verified prepared view into:
 
-Produce bounded pieces from one checked representation. Preserve the complete
-membership in stored ordered data without requiring the full manifest, a generic
-canonical tree and several cloned diffs in memory at once. A larger global limit
-does not provide streaming or cancellation.
+- stable retrieval-point definitions and uploadable inputs;
+- versioned evidence bindings for the new published view;
+- exact create/retain/retire work;
+- ordered manifest/change pages for publication.
 
-Borrow the same prepared vectors for upload. Derive the change set by walking
-ordered entries; retain unchanged points and give changed immutable content a new
-physical ID. Keep Qdrant I/O with the concrete adapter.
+Do not preserve current S11/S9.5 bytes, revision-bound Unit IDs or a whole in-memory manifest merely because
+existing fixtures expect them. Source revision/range belongs in the view binding, not point identity or
+mutable Qdrant citation payload.
 
-Verify real preparation-to-upload data flow, complete membership across batch
-boundaries, incremental retention/replacement and cancellation between bounded
-pieces. Historical codec equality and source-line quotas do not constrain this work.
+Build pages once and pass their actual text/vector input to the bridge. Diff sorted point state separately
+from view evidence; do not allocate two maps, clone all entries and hash another whole old/new preimage.
+Planner code performs no redb/Qdrant effect and issues no receipt.
+
+Verify a top-of-file insertion retains unaffected points, old/new views open their own exact ranges,
+changed retrieval input creates a new point and batching preserves complete membership. Historical codec
+bytes, package size or an old API boundary are not acceptance criteria.

@@ -1,24 +1,20 @@
-# search-epoch-pins
+# search-epoch-pins → published-view guards
 
-Keep an active query's published route/epoch readable for the lifetime of that
-query. A continuation retains that protection while it can still be resumed.
-Retired points or an old collection can be removed after their final guard ends.
+The useful responsibility is small: keep the exact published view used by a query alive until that query
+and its result window finish.
 
-The [registry](src/lib.rs) uses an `Arc<Mutex<_>>` and RAII guards in one process.
-Ordinary queries need no durable lease records. The continuation owner already has
-a [transfer from a live query guard](src/continuation/creation.rs), used by
-[`create_pinned_ephemeral`](../../search-query/search-continuation/src/security/creation.rs).
+Current source uses an `Arc<Mutex<_>>` registry and RAII guards, but also exposes raw route/epoch pins,
+arbitrary route acquisition, caller-time continuation renewal and sampled reclamation watermarks. Those
+APIs permit a new old-view pin after a deletion check and retain completed binding history.
 
-A registry snapshot is an observation of current pins, not permission for a later
-delete. Current raw acquisition APIs can introduce an old pin after that snapshot.
-Publication, admission and reclamation still need one connected lifetime rule;
-`publish_active_route` is currently called only in tests.
+The replacement owner holds one atomic current `PublishedView`. A query can only `pin_current()` and gets a
+private RAII guard. A continuation receives another guard only from its still-live query guard using the
+existing transfer pattern. After publication swaps the pointer, no new old-view guard can appear; the last
+drop schedules cleanup.
 
-The useful donor is the per-query snapshot lifetime in
-[Tantivy 0.22.0](https://github.com/quickwit-oss/tantivy/blob/17d5869ad61ea9f1072ef40546ddcada3a14b067/examples/basic_search.rs):
-obtain one searcher, reuse it throughout related query work, then release it.
-This is an ownership example. Eliot still implements its Qdrant route/epoch view.
+Query windows are finite and process-local. Completion/expiry removes the record and drops the guard;
+restart expires them and the client may repeat the query. No durable query lease, renewable old-view pin or
+public reclaim permit.
 
-Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md), [API map](FUNCTIONS.md)
-and [agent notes](AGENTS.md).
+[FUNCTIONS.md](FUNCTIONS.md) · [Implementation](../../../docs/implementation/README.md) ·
+[Agent notes](AGENTS.md)

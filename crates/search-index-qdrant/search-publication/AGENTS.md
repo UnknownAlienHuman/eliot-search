@@ -1,24 +1,28 @@
 # Working on search-publication
 
-Read the root [AGENTS.md](../../../AGENTS.md), current
-[architecture](../../../docs/architecture/README.md), and
-[implementation](../../../docs/implementation/README.md). Keep the product purpose
-in context while changing this package and its actual consumers together.
+Read the root [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and local [source map](FUNCTIONS.md).
+Change planner, redb, bridge, current-view owner and query lookup together.
 
-Own the membership change and its publication lifecycle. Durable control belongs
-to `search-control-redb`; Qdrant calls belong to the existing bridge; daemon
-composition connects them. Remove a duplicate owner or receipt layer when a direct
-call expresses the same work.
+Publication owns one transition:
 
-Keep complete membership, coherent visibility and recovery of unresolved external
-effects. Make preparation disposable before persistence or dispatch. Work which may
-have changed Qdrant must remain resolvable after cancellation or restart.
+```text
+bounded local plan
+→ durable pending artifact/reference
+→ Qdrant effects and readback
+→ committed PublishedView
+→ old-view drain and cleanup
+```
 
-Use the planner's data once, borrow ordered manifests, and process bounded batches.
-Do not preserve an old digest format, phase enumeration, unused reservation or
-full receipt history merely because a fixture expects it. Retired-point deletion
-belongs to the query-view lifecycle, after the final relevant guard.
+Before pending persistence, preparation is disposable and must not occupy the coordinator permanently.
+After an external request may have committed, the same operation remains recoverable. redb stores small
+current/pending metadata; ordered pages and effect/cleanup cursor live in the artifact owner. Do not hold a
+redb writer across Qdrant I/O.
 
-Verify the changed behavior through real consumers: cancelled preparation, partial
-index writes, the committed query view and restart with an unfinished publication.
-Package-only observation fixtures do not establish those runtime properties.
+Publish one immutable current-view pointer after durable visibility commit. New queries pin only that view;
+old guards keep old manifests/evidence. Cleanup is part of the same operation after old guards drain. Remove
+the daemon's duplicate publisher, caller-created proof receipts, whole-manifest digest preimages and the
+separate reclaimer journal.
+
+Verify every durable/external boundary, old-query survival, no old-view reacquisition after switch,
+full/narrow Qdrant updates and exact cleanup. Package-only phase fixtures do not establish publication.

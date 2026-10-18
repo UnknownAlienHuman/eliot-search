@@ -1,23 +1,24 @@
 # search-projection-planner
 
-Turn prepared units and their vector products into point identities, expected
-payload/readback data and a membership manifest. The result supports incremental
-replacement, exact publication and later lookup of the original unit.
+Turn one verified prepared view into bounded Qdrant work and a versioned published-view manifest.
 
-Current [planning](src/plan.rs) is pure and membership-scoped. It checks the complete
-`VerifiedUnitSet` and required vectors, but returns a whole in-memory plan.
-`PointSpec` retains vector digests, not vector values; the real upload path still
-needs the corresponding encoder products.
+Current planning is pure and checks complete UnitSet/vector coverage, but returns one whole plan. It drops
+uploadable vector values, caps a whole manifest below advertised planner limits, reconstructs canonical
+bytes repeatedly and mixes retrieval-point identity with current source evidence.
 
-The [manifest codec](src/manifest.rs) currently caps one membership at 4,096 entries
-and 8 MiB despite larger `ProjectionBudget` defaults. Full reconstruction, digest
-preimages and diffs allocate additional copies. These are current implementation
-limits, not a product capacity claim or a format that must be preserved.
+The target emits ordered pages containing:
 
-Use one ordered manifest, bounded pages/batches and the same prepared data through
-the actual publication/bridge consumer. Keep complete membership and stable
-unchanged-point identity while removing repeated maps, byte reconstruction and
-whole-request digests. [FUNCTIONS.md](FUNCTIONS.md) maps the concrete changes.
+- stable retrieval points and actual BM25/vector mutation input;
+- `ViewManifestEntry` records mapping points to exact source revision/representation/range;
+- exact create/retain/retire or whole-generation replacement work;
+- expected Qdrant readback fields that the bridge can actually verify.
 
-Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md) and [agent notes](AGENTS.md).
+An unchanged retrieval point may be retained while the new view writes a new evidence binding. Changed
+input/profile/occurrence incarnation creates a new point. Old pinned views keep their old manifest. Planner
+code performs no durable or external effect.
+
+Use a merge walk over sorted pages, not whole-corpus maps and repeated canonical trees. A new internal
+format can replace current pre-release bytes with all readers/writers together.
+
+[FUNCTIONS.md](FUNCTIONS.md) · [Point identity](../search-point-identity/S11_PROFILE.md) ·
+[Implementation](../../../docs/implementation/README.md) · [Agent notes](AGENTS.md)

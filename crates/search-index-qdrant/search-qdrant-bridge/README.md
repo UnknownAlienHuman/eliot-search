@@ -1,50 +1,40 @@
 # search-qdrant-bridge
 
-Translate the application's source scope, writes and queries into the existing Qdrant Rust client.
-Keep one connection/runtime and bounded I/O. Source bytes, published-view selection and recovery of
-unfinished application writes remain with their existing owners.
+Private translation between Eliot's selected published view and the existing Qdrant Rust client.
+Keep one connection/runtime, bounded I/O and vendor types inside this package.
 
-[FUNCTIONS.md](FUNCTIONS.md) maps the actual API and remaining integration work.
-The [architecture](../../../docs/architecture/README.md) and
-[implementation](../../../docs/implementation/README.md) govern the target; historical qualification
-receipts, compatibility rules and file quotas do not define another runtime protocol.
+## Target boundary
 
-## Use the server's search machinery
+- Planner supplies stable retrieval points, actual BM25/vector input and expected stored state.
+- Publication owns pending/visible/recovery and cleanup cursors.
+- Query supplies a resolved scope and uses the pinned view manifest for source evidence.
+- Bridge performs schema, full/narrow mutations, exact readback and scoped query.
 
-The real [`query_filtered`](src/real/queries/search.rs) already passes an explicit IDF corpus
-through the pinned 1.19 client. Qdrant 1.19 supports
-[filtered IDF](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-idf-statistics):
-retrieval `filter` and `params.idf.corpus` are separate parameters. Reuse the selected published
-scope for both; additional query-only restrictions need not redefine the IDF population.
+Qdrant payload stores stable identity/filter/group/validity fields. Exact source revision, representation and
+range are versioned view-manifest data, not mutable point citation fields.
 
-Use native local `qdrant/bm25` text inputs and the Query API's fusion/grouping when those branches are
-needed. These are new direct integrations of an existing dependency. Do not recreate a sparse encoder,
-DF store or indexed-branch fusion engine to produce the same product capability.
+## Native search
 
-The native sparse index performs exact dot-product retrieval and indexes writes in its mutable form.
-Publish only after completed writes (`wait=true`), not queue acknowledgement. Sparse top-k need not
-wait for background optimization or an exact count; it still cannot establish exact source absence.
+Use local `qdrant/bm25` with explicit matching document/query options. Send the selected scope both as the
+retrieval filter and sparse `params.idf.corpus`; filtering alone does not scope IDF. Native prefetch/RRF/
+grouping handles Qdrant branches. Keep one shard for the local baseline and avoid duplicate portfolio points.
 
-Start with one local node and one shard. Filtered IDF is shard-local; nested fusion also runs per shard.
-With one replica and a serial publisher awaiting completed writes, strong ordering is not a required
-extra layer. Choose strict-mode cost limits deliberately; neither setting establishes source identity.
-A collection for every source adds independent resource overhead and cross-collection query fanout.
-A separate collection is useful for an actual distinct schema/lifecycle, not as a replacement for an
-ordinary selected-scope filter.
+Top-k is not absence proof and requires no unconditional exact count. Candidate points become evidence only
+after pinned-manifest lookup and retained-source validation.
 
-Filtered statistics still cost work: the server resolves corpus points and intersects term postings.
-Use indexed scope fields, bounded requests and limited query branches. It counts physical points with
-the sparse vector, so final grouping does not remove duplicated inputs from IDF.
+## Mutations
 
-## Existing integration boundary
+Full upsert overwrites the entire point and is used only for a complete authoritative replacement.
+Use vector add/delete and payload merge/delete/overwrite operations for narrow changes. Adding a named-vector
+schema does not populate existing points; incompatible profiles normally use a fully populated new physical
+generation before view switch.
 
-The private codec still differs from the shared planner payload/identity data; the
-[existing field map](FUNCTIONS.md#shared-payload-and-identity-cutover) identifies that work.
-Its 20-field/19-index S9 baseline describes current types. Simplify shared owner, planner and bridge
-together; index the fields actually used for filtering/grouping rather than preserve those counts.
-Adapt precomputed-vector inputs for native BM25 with their producer and readback consumer.
+Every operation uses `wait=true`, one absolute deadline and exact readback. A timeout after possible dispatch
+stays unresolved under publication. For the one-node/one-replica/one-writer baseline, strong ordering and an
+executed qualification report are not runtime credentials.
 
-Keep actual endpoint/schema checks, source scope and mutation outcome handling.
-Ordinary top-k does not require exact count or executed test-report credentials. The existing live
-behavior cases remain useful evaluation material; these documentation changes do not establish a
-working native Eliot query or a measured throughput result.
+The current S9/S11 and bridge field counts describe old code, not compatibility requirements. Change shared
+identity/payload/schema and all direct consumers together; index only fields real filters/groups use.
+
+[FUNCTIONS.md](FUNCTIONS.md) · [Implementation](../../../docs/implementation/README.md) ·
+[Agent notes](AGENTS.md)

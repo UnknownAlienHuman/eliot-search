@@ -1,33 +1,33 @@
-# Agent contract — search-point-identity
+# Working on search-point-identity
 
-Own stateless S11 point identity. Follow [root instructions](../../../AGENTS.md) and the
-[implementation guide](../../../docs/implementation/README.md) for named owner/consumer cutovers.
-An unresolved field/profile belongs to its existing contract owner; do not invent a compatibility rule.
+Read the root [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and the local
+[current/target profile map](S11_PROFILE.md).
 
-## Existing owner
+This package owns only deterministic retrieval-point identity and its compact Qdrant address. It does not
+own source revisions, citation ranges, view manifests, registries, Qdrant I/O or compatibility migration.
 
-Use `search_point_identity::s11` and [S11_PROFILE.md](S11_PROFILE.md). They already define the
-eight-coordinate canonical key, full BLAKE3 identity, all 128 address bits, independent observed
-identity and collision disposition. Use the shared `search-contracts` codec/digest implementation;
-this package owns the S11 preimage/profile, not another CBOR or hashing engine.
+The current `s11` implementation is delivered source, not a frozen product contract. Its key includes
+`representation_id` and revision-bound `unit_id`; keeping those coordinates would recreate every later
+point after harmless source-coordinate changes. Change the key with planner, payload, publication, bridge
+and query consumers in one cutover.
 
-A UUID is an address. Overwrite requires the full digest and independently reconstructed key,
-including role/schema and the exact generation's profile binding. Preserve rejection of foreign
-addresses, copied digests with changed coordinates and truncated-address collisions.
-Named vectors of one unit under one immutable profile set share one point identity.
+Keep the useful mechanics:
 
-Do not derive source identity, perform upserts, maintain an identity registry, or claim collisions
-impossible. Vendor types stay private. Keep relevant typed collision/canonical-encoding failures.
+- one closed typed preimage for the selected current generation;
+- full-width content identity before the 128-bit address projection;
+- all 128 address bits preserved;
+- explicit collision handling when an occupied address has different full identity;
+- bounded deterministic encoding through the existing shared digest/serialization owner.
 
-## Legacy disposition and evidence
+The replacement key identifies stable retrieval behavior: generation, projection membership or stable
+source grouping, occurrence incarnation, exact retrieval-input/profile/role and point role. Source revision,
+representation and byte/line ranges belong to the versioned published-view manifest.
 
-The root exports are a separate legacy profile, not aliases or an S11 conversion API. Planner and
-publication already use S11; #262 still ports the bridge. #329 removes obsolete producers/registry/
-exports using the actual caller census. Preserve a decoder only for an identified stored format and
-reader, with its deletion owner; do not keep a whole producer to manufacture a rejection fixture.
+Do not retain the eight-field v1 profile, goldens or decoder for compatibility. A new internal generation
+may use new bytes and rebuild derived points. Remove the root legacy FNV/registry API and the obsolete S11
+profile together with their last callers; do not add adapters, dual minting or a collision database.
 
-Retain the frozen independent canonical-byte/digest/address vectors, namespace separation and
-collision/changed-coordinate cases. The root protocol selects production checks and defers fixture
-execution until integrated implementation. Relevant internal dependencies are the accepted manifest;
-new boundaries/pins need manager review. Remove duplicate behavior before considering package moves;
-historical wave/line targets do not require forwarding wrappers or another crate.
+Verify same input/same occurrence stability, changed input/new point, duplicate equal occurrences,
+address collision refusal and old/new pinned evidence through real planner/query consumers. Package-only
+golden bytes do not prove useful incremental behavior.

@@ -1,87 +1,84 @@
-# S11 point identity profile and consumer handoff
+# Point identity: current S11 and replacement profile
 
-Source/API delivery for #256. Product cutover and live Qdrant qualification remain separate.
+This file records the implemented v1 profile and the required product cutover. It is not a promise to
+preserve pre-release point bytes.
 
-## Frozen profile
+## Current v1 source
 
-`search_point_identity::s11` owns profile revision 1 and key schema version 1.
-It uses `search-contracts` profile `eliot.cbor.length-first.v1` exclusively.
-The exact closed map has eight fields:
+`search_point_identity::s11` currently hashes a closed eight-field key:
 
-| Field | CBOR value |
-|---|---|
-| schema_version | unsigned integer 1 |
-| installation_incarnation_id | 16-byte UUID bytes |
-| collection_generation_id | 16-byte UUID bytes |
-| projection_membership_id | 16-byte UUID bytes |
-| representation_id | 16-byte UUID bytes |
-| unit_id | 16-byte UUID bytes |
-| projection_profile_set_id | bounded nonempty UTF-8 text |
-| point_role | unit, relation or auxiliary text |
+```text
+schema_version
+installation_incarnation_id
+collection_generation_id
+projection_membership_id
+representation_id
+unit_id
+projection_profile_set_id
+point_role
+```
 
-Map order follows the sole shared deterministic encoder. Source membership,
-paths, ranges, access/scoring state and vector contents are absent.
-The immutable profile set determines the required named vectors; adding a required
-profile publishes a new generation rather than another identity for the same unit.
+The full BLAKE3 identity is projected through a separate domain to a 128-bit address. UUID rendering keeps
+all address bits. `compare_existing_identity` rejects an occupied address with a different full identity or
+key. These are useful mechanics.
 
-Full identity is `BLAKE3(eliot/cbor/point-identity/v1 || NUL || canonical_key)`.
-Address bytes are the first 16 bytes of
-`BLAKE3(eliot/raw/point-address/v1 || NUL || full_identity_32_bytes)`.
-UUID rendering preserves all 128 address bits, including version/variant positions.
-A UUID is only an address; it is insufficient evidence for idempotent overwrite.
+The current frozen-vector fixture and canonical CBOR ceilings describe existing code only. Planner and
+publication use this module; the bridge still has a separate legacy address/payload model.
 
-Frozen ceilings: profile text 256 bytes, key CBOR 1024 bytes, each complete digest
-preimage 1088 bytes. The latter includes domain and NUL. Callers may narrow resource
-limits but may not widen the frozen profile or change canonical bytes/domains.
-Unknown schema/roles, oversize and noncanonical or non-closed key data fail closed.
+## Why v1 must change
 
-## Frozen oracle vector
+The current `unit_id` is derived from full revision provenance, absolute source/line coordinates and
+ordinal. `representation_id` is also view-specific. Including both in the Qdrant point key binds retrieval
+storage to one source revision and turns a small early insertion into a large create/retire suffix.
 
-`tests/s11_goldens.rs` fixes UUID bytes `[1;16]` through `[5;16]` in key-field order,
-profile `lexical-v1`, role `unit`, schema 1. The independently assembled CBOR is
-263 bytes. A standalone direct BLAKE3 oracle (no product derivation/helper calls)
-produces full identity
-`395a97a9b48700cfef5811d51367bc94e89bb899871e2d3c103afccebc429e92`
-and address `df8b4260-1ee4-decf-a59f-6028e5d0cecc`. Complete preimages are 292
-and 59 bytes respectively. The fixture file also freezes every canonical byte.
-The generation owner must bind this fixture/profile alongside the full domain
-and budget contract before accepting S11 points.
+The payload and projection manifest repeat the same coupling. A cache can avoid some model execution but
+cannot retain the old point or old citation correctly. Wrapping v1 with another mapping layer would preserve
+the amplification and add another identity owner.
 
-## API and readback
+## Replacement profile
 
-`ProjectionPointKey` uses existing typed contract identities. `derive_point_identity`
-returns a `PointIdentity` whose private evidence is exposed through `key`,
-`full_digest` and `point_id` getters. Stored readback is an independent
-`ObservedPointIdentity`: address, full 256-bit digest and all eight key coordinates.
-The 20-field indexed payload alone lacks the key schema version and point role;
-the consumer must obtain those from the exact generation/manifest contract rather
-than inventing a default from a matching address or digest.
+For a selected new physical generation, derive the full retrieval identity from a small closed value:
 
-`compare_existing_identity` returns `Vacant`, `SameFullIdentity` or `CollisionBlock`.
-A foreign address is an explicit error. At the expected address any different digest
-or coordinate blocks overwrite, including a copied digest with changed coordinates.
-No registry, insertion order, process state, transport or upsert is owned here.
+```text
+key schema version
+collection generation
+projection membership or stable source grouping
+occurrence incarnation
+retrieval profile / role
+exact retrieval-input digest
+point role
+```
 
-## Generation migration
+`occurrence_incarnation` distinguishes equal passages within one source and changes when an occurrence is
+removed and later reintroduced. It comes from the structure-first source owner; it is not an absolute byte
+offset, current revision ID or content hash by itself.
 
-#259 planner and #262 bridge must use this module directly, preserve the full digest
-and independently reconstruct the key from authoritative preparation/readback.
-Before publishing, the generation/manifest owner must bind the exact profile revision,
-domains, limits and frozen fixture identity. A collection-generation UUID alone does
-not prove which point-identity profile was accepted. Existing CollectionSchema does
-not yet encode a separate identity-profile descriptor; resolving that binding belongs
-to the named consumer/publication cutover, not an implicit S11 compatibility rule.
+Source revision, representation, structural occurrence and exact range belong to a versioned
+`ViewManifestEntry`. Consecutive views may point the same retrieval point to different exact ranges; old
+pinned views retain their old binding. Changed retrieval input/profile/incarnation creates a new point.
 
-The unchanged root exports (`PointIdentityKey`, `PointIdentity`, `PointId128`,
-`PointIdentityRegistry`, existing derivation/validation helpers and legacy profile)
-remain solely for existing callers. No adapter converts them to S11. #329 removes
-these producers, registry and exports after #259/#262 and before #264 qualification.
-Their canonical-ledger classifications remain pending, with removal owner #329.
+The selected generation binds the exact key/profile bytes. The full identity and address domains remain
+separate, and occupied-address collision refusal remains. No registry is required.
 
-## Donor boundary
+## Cutover
 
-Inspected #207 immutable source `f0ac8a1470336475f28e3fb30610947c83bbb6d1` supplies
-only key/collision/UUID behavior and canonical fixture shape. Its local codec,
-direct digest ownership, aliases and registry are not adopted. Its old domain grammar
-is incompatible with #237; new digest/address goldens describe this new profile and
-claim no persisted-ID parity. Cargo manifests and Cargo.lock are unchanged.
+Change together:
+
+- point-identity key/decoder/comparator;
+- projection planner and ordered view manifests;
+- shared payload fields and Qdrant bridge conversion/readback;
+- publication diff/cleanup;
+- query point→view-manifest→source lookup.
+
+Use a new derived collection generation and rebuild points. Delete the v1 issuer/decoder/goldens and root
+legacy FNV/registry after callers switch. Do not rehash stored IDs in place, mint both profiles or add a
+compatibility migration. Unsupported old application roots remain untouched.
+
+## Required behavior
+
+- same occurrence + same exact retrieval input/profile yields the same point within the generation;
+- changed input/profile/incarnation yields a different full identity;
+- duplicate equal passages have distinct incarnations;
+- address collision with another full identity blocks mutation;
+- harmless coordinate/revision shifts update only the new view binding;
+- old pinned view still opens its old exact evidence.

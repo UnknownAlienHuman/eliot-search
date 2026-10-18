@@ -1,32 +1,30 @@
 # Working on search-qdrant-bridge
 
-Follow the [root guidance](../../../AGENTS.md),
-[architecture](../../../docs/architecture/README.md) and
-[implementation](../../../docs/implementation/README.md). [FUNCTIONS.md](FUNCTIONS.md) maps the
-current source, native APIs and remaining integration work.
+Read the root [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and local [source map](FUNCTIONS.md).
 
-Use the existing pinned `qdrant-client`, private vendor conversion and reusable connection/runtime.
-Send bounded native `Document` inputs for `qdrant/bm25`, with matching ingestion/query text options.
-Translate the selected published scope into retrieval filters and explicit IDF corpus parameters.
-Use native indexed-branch fusion/grouping where useful; source bytes and evidence remain with their
-existing owners.
+Use the existing pinned Qdrant client, private vendor conversion and reusable connection/runtime. The bridge
+owns concrete schema/mutation/query/readback I/O only. Source bytes, published-view selection, evidence
+binding and recovery state remain with their existing owners.
 
-The S9/S11 table describes current shared types. Simplify membership/profile/payload identity in the
-shared owner, planner and bridge together. Index fields actually used for filtering/grouping; retain
-one schema owner. Adapt precomputed-vector inputs for native BM25 rather than encoding it twice to
-satisfy an old expected digest.
+Adopt the shared stable retrieval-point model with planner, point identity, payload and query consumers.
+Qdrant payload contains only stable identity/filter/group/validity data. Source revision, representation and
+range live in the versioned view manifest; never mutate an old view's citation through payload updates.
 
-Use the actual configured endpoint, credentials and chosen server settings. Process startup belongs
-to the supervisor. Check the capabilities/schema the selected path uses; artifact/profile receipts
-and executed qualification reports are not runtime credentials.
+Use local `qdrant/bm25` `Document` inputs with matching explicit document/query profile options. Resolve one
+selected scope into retrieval filter and `idf.corpus`. Use native fusion/grouping for Qdrant legs.
 
-For the local one-node, one-replica model, one publisher serializes dependent mutations. Require
-completed, visible writes with `wait=true` before publication; queue acknowledgement is insufficient.
-Strong ordering is not a universal floor for this model. Choose strict-mode cost limits deliberately.
-Keep batches bounded and resolve uncertain writes through the existing publication owner before
-advancing dependent work. Cancellation after possible effects does not imply rollback.
+Select the real mutation:
 
-Trace producers and consumers when changing an API, coordinate active shared files and remove replaced
-codecs/wrappers. Verify actual scope, native text options, stored results and write recovery after
-integration. Historical source-shape diagnostics, compatibility receipts and line quotas do not
-require preserving obsolete code.
+- full upsert for a new/complete authoritative point;
+- vector add/delete for selected named vectors;
+- payload merge/delete/overwrite with explicit semantics;
+- exact ID or whole-generation deletion for cleanup.
+
+Await `wait=true`, use one absolute deadline and read back affected state. Possible external effect remains
+pending under publication; no bridge operation ledger, qualification credential or strong-ordering floor for
+the one-node/one-writer baseline.
+
+Remove duplicate bridge point/payload/filter types, numeric-ID padding, payload vector-digest extensions and
+current fixed field/index counts with their callers. Verify the real retained-file → Qdrant → pinned-manifest
+→ source-excerpt path; historical codec bytes and source-shape fixtures do not constrain the cutover.
