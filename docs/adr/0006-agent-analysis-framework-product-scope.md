@@ -18,7 +18,7 @@ payload filtering, count/scroll or query execution would be wasteful and would c
 engine. The product value of ELIOT Search lies in the semantics and evidence pipeline around Qdrant.
 
 Architecture Part I already specifies most of that pipeline: immutable source truth, materialization,
-lexical/structural projections, explicit portfolios, safe access-scoped legs, deterministic fusion,
+lexical/structural projections, explicit portfolios, scope-aware retrieval and useful result ordering,
 subject resolution, comparison, exact verification, provenance, coverage, handles and source readback.
 The active README and agent instructions must present those capabilities as the core product rather than
 as optional details.
@@ -45,8 +45,9 @@ implement them again. Large-corpus qualification still requires the connected pr
    access, planning, fusion, validation and result projection remain Eliot-owned responsibilities.
 4. **Repository and document portfolios are first-class.** A query may target one active workspace, one
    corpus, explicit memberships or an immutable `ReferencePortfolioRevision` containing many
-   repositories/documents. Large portfolios are partitioned into bounded safe legs and deterministically
-   fused.
+   repositories/documents. A compatible selected portfolio becomes one bounded query/filter population.
+   Split only across genuinely different routes or incompatible retrieval settings; portfolio size
+   alone does not require a leg or physical index copy per membership.
 5. **The normal agent workflow is progressive.** Search should orient the scope, retrieve likely evidence,
    inspect/compare relevant entities, expose recommended reading, then compile exact checks where the
    claim matters. Clients should not need to read an entire corpus before taking the first grounded step.
@@ -65,29 +66,21 @@ implement them again. Large-corpus qualification still requires the connected pr
    monorepos and multi-repository portfolios, incremental updates, quality/recall, false analogues,
    time-to-first-useful result, resource use, restart and rebuild. This is tracked by #215.
 10. **Research/document analysis uses the same pipeline.** Plain text/source/Git remain the first
-    baseline. Qualified Markdown/HTML/LaTeX/PDF/Office/OCR profiles must preserve exact source identity,
-    coordinate/loss maps, assurance and rebuild semantics. This is tracked by #216.
+    baseline. Selected document extractors preserve exact source identity, coordinate/loss maps and
+    actual format gaps through that path. Broader document support is tracked by #216.
 11. **No model is required in the hot path.** Deterministic lexical and structural retrieval is the
-    baseline. Optional embeddings/rerank may improve recall only through explicit qualified profiles. A
+    baseline. Optional embeddings/rerank use a selected model, real inputs and connected consumers. A
     consuming agent/model interprets Search results; it cannot replace Search evidence controls.
 12. **Controller boundaries remain unchanged.** Agent orchestration, Tasks, WorkScopes, GM/Governor,
     scheduling, mailboxes, reviews and finish authority remain outside Search under ADR 0005.
 
 ## Product workflow
 
-```text
-admit exact sources
-→ retain immutable revisions
-→ materialize and unitize with coordinate maps
-→ create lexical/structural/optional semantic projections
-→ publish a verified Qdrant collection epoch
-→ compile one coherent access/currentness-scoped plan
-→ retrieve candidates through bounded Qdrant legs
-→ fuse/diversify/collapse lineages deterministically
-→ reopen exact source revisions and validate candidates
-→ return compact navigation, coverage and source handles
-→ compile/execute exact verification where required
-```
+Retain selected sources, prepare useful text/coordinates and publish their Qdrant projection. Resolve
+the query scope, retrieve bounded candidates, read selected retained ranges and return useful excerpts
+with exact locations and gaps. Orientation and comparison use those same records; the client chooses
+further reading or an explicit exact check. The [implementation guide](../implementation/README.md)
+owns the concrete owners, ranking and optional models.
 
 Index loss is recoverable because Qdrant is a projection, not source truth. Query admission remains
 read-only. A top-k result never becomes a complete corpus statement.
@@ -100,14 +93,14 @@ For an unfamiliar repository or portfolio, the product should be able to return:
 - likely entry files, sections, symbols and configuration points;
 - definitions, callers, tests, documentation and relevant relations;
 - comparable implementations grouped by independent repository lineage;
-- exact source-backed handles for recommended reading;
+- exact excerpts and source/revision/range locators for recommended reading;
 - explicit ambiguity, unsupported modalities and coverage gaps;
 - suggested exact phrase/regex/symbol/structural checks;
 - provenance and corpus-delta information;
 - progressive continuation without forcing the client to ingest the whole result set.
 
 For research/document corpora the same result model applies to sections, pages, tables, references and
-other qualified native coordinates.
+other supported native coordinates.
 
 ## Compatibility
 
@@ -123,7 +116,7 @@ not reinstate the retired baseline requirements or a controller/ticket/lease per
   symbol/path.
 - Product evaluation must compare time-to-grounded-action and context/source reads against raw grep and
   current tools, not only report CRUD or latency.
-- Document providers and optional semantic models stay replaceable and independently qualified.
+- Document providers and optional models use concrete settings and actual consumers in the same path.
 - Residual controller-oriented tooling remains removal work under #214.
 
 ## Rejected alternatives

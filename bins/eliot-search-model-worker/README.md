@@ -1,15 +1,27 @@
 # eliot-search-model-worker
 
-**Optional isolated P16 model worker.**
+Optional process for a selected embedding or reranking runtime.
 
-**Status:** the dependency-free binary is an explicit refusal stub. Its existing unavailable-invocation fixtures remain; no model runtime/profile is selected or qualified. The unused model-provider dependency closure was removed under #528.
+## Current state
 
-Hosts one exact qualified model profile over private daemon-only IPC with finite resource, cancellation,
-content-minimization, crash-isolation and removal semantics. It never opens Search stores/index or an
-external client endpoint.
+[`main`](src/main.rs) is a dependency-free refusal stub. Every invocation emits
+`UNAVAILABLE MODEL_WORKER_PROFILE_DISABLED` and exits with code 2; arguments and environment do not
+activate a model. There is no model loading, IPC loop, encoding or reranking implementation.
+The message still names old P15/ADR/G6 requirements; those are obsolete implementation guidance.
 
-- **Default:** binary absent or stopped.
-- **Gate:** exact accepted P15 + ADR + G6 candidate qualification.
-- **Soft source target:** 4,500 lines.
-- **Functions:** [FUNCTIONS.md](FUNCTIONS.md)
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+## Target
+
+Use this process only when the chosen runtime needs dependency, crash or resource isolation. A library
+inside an existing owner is also valid. The [model path](../../crates/search-model-provider/README.md)
+does not require both a provider framework and a worker.
+
+The daemon supplies bounded text and concrete model settings over its owned channel. The worker loads
+the selected model once, processes finite encode/rerank batches and returns vectors or candidate order.
+It has no source-discovery, publication, context-handle or generated-answer role. A knowledge graph and
+LLM query planner are not worker prerequisites.
+
+Keep finite frames, tokens, batches, concurrency and memory, and the request's deadline/cancellation.
+The daemon owns startup, shutdown and actual capability status. Optional work must not block ordinary
+lexical search; unavailable code remains unavailable until a real caller works.
+
+[Function map](FUNCTIONS.md) · [Implementation guide](../../docs/implementation/README.md)

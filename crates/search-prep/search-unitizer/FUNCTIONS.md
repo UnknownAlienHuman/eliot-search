@@ -44,6 +44,24 @@ The Markdown and JATS codecs embed a complete encoded raw v3 manifest inside the
 Keep one useful prepared artifact and its unit/structural records. A raw coverage summary does not
 need another independently serialized manifest and identity tree.
 
+## Context and reuse
+
+Use existing headings, section parents, ranges and inline observations for a source guide and bounded
+neighbor selection. Markdown's [model](src/markdown_unitset/model.rs) marks references potentially
+incomplete; an observed destination is a navigation candidate, not a complete cross-source graph.
+Connect the actual prepared-record reader to query composition rather than adding another notebook store.
+
+In `derive_occurrence` in [manifest/build.rs](src/manifest/build.rs), the content digest describes the
+chunk, but the occurrence identity also includes provenance, revision-bearing anchor, ordinal and
+coordinates. Unchanged text in an edited file is not guaranteed to keep `UnitId`. Preserve the exact
+source binding while reusing expensive outputs independently by actual prepared input and model/task/options.
+Heading/path context supplied to an encoder belongs in that input; full-document context depends on the
+document too. Whitespace-normalized text or a stable positional ID cannot establish identical model input.
+
+Keep original text/ranges separate from any retrieval prefix or generated summary. Reuse the current
+artifact owner for selected derived outputs; do not duplicate raw text in every unit or build a generic
+cache database. Rebinding occurrences may require new index points even when no inference repeats.
+
 ## Encoding cost to remove
 
 `assemble_manifest` constructs/hashes `body_value(&body)`, then calls

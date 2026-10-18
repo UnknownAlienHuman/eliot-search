@@ -20,7 +20,8 @@ bytes. There is no recipe dispatcher, handle factory, source reader or serialize
   no fused-rank field. Carry the ranked sequence directly; do not recover rank from unrelated scores.
 - Select and validate a bounded page incrementally. Current inputs already own verified bytes and
   minted handles before projection can omit them. Avoid reading/minting every result just to discard
-  most of them; do not leave omitted handles in a separate catalog.
+  most of them; do not leave omitted handles in a separate catalog. Bound neighbor/relationship work
+  before loading it; a small final token budget cannot limit an earlier full graph scan.
 - Bound actual output and gap detail. Source-byte totals do not measure encoded metadata, and
   `omissions` grows once per rejected input. Return bounded gap samples/counts and reflect projection
   truncation in the response; the current function copies `envelope.coverage` unchanged.
@@ -29,5 +30,13 @@ bytes. There is no recipe dispatcher, handle factory, source reader or serialize
   that its public handle resolves to the candidate.
 
 The [query implementation](../../../docs/implementation/README.md#turn-a-point-into-evidence) owns
-manifest lookup and actual-byte verification. Reuse that owner for expansion. The result encoder and
-its CLI consumer change with the compact response; keeping the old envelope is not a prerequisite.
+manifest lookup and actual-byte verification. Group the selected ranges by revision/representation,
+merge same-basis overlaps before I/O, and distribute verified excerpts without losing original locators
+or rank. Reuse those excerpts in the same bounded query window. Current public expansion's
+[`read_revision_range`](../../../bins/eliot-searchd/src/secure_direct_store/kernel/read.rs) reads the
+whole revision and copies a slice; repeated tiny expansions repeat that cost. Change its actual reader
+with the validator handoff. Whole-object integrity may require one streamed verification pass; a range
+request does not itself establish bounded total read bytes. Pass the request limits/deadline to the
+reader and count scanned bytes even when only a few ranges are retained. Report unfinished verification
+without imposing a new rehash-per-excerpt policy. The encoder and CLI change with the compact response;
+neither a separate context-builder service nor the old envelope is a prerequisite.

@@ -50,6 +50,11 @@ bounded snippet, why it matched, and any stale/missing/unsupported/truncated con
 relations, lineage, evidence roles and suggested next reads as real producers exist. Avoid mandatory
 empty metadata fields and opaque receipts that force agents to make more calls to understand a hit.
 
+Orientation uses a cheap source guide from paths, headings, definitions and prepared coordinates.
+Return selected snippets and a few useful next reads, adding nearby or linked locations only when
+they help the question. No mandatory generated summary hierarchy or entity graph is needed. A model
+summary is derived assistance; the source excerpt and its locator remain independently readable.
+
 Source paths are locators; they do not replace immutable identity. Scores are hints, not confidence or
 proof. Cross-population scores are not directly comparable. Forks/mirrors are not independent evidence.
 Apply the resolved eligibility to retrieval and the explicit Qdrant IDF corpus; ordinary retrieval
@@ -72,6 +77,6 @@ libraries already exist. Exact coordinate/loss maps matter when a parser transfo
 macros, indexed code, hooks and remote resources are never executed by ordinary search.
 
 Measure whether an agent finds the right implementation with fewer source reads and less context;
-also measure recall, false analogues, first useful result, incremental update cost, restart and resource
-use on large scopes. A small example demonstrates connectivity, not repository-fleet scale. See the
+also measure recall, false analogues, first useful result, actual bytes/relations read, model calls and
+points rewritten per edit. A small returned context can conceal expensive upstream work. See the
 [implementation guide](../implementation/README.md) for concrete changes and selected extensions.

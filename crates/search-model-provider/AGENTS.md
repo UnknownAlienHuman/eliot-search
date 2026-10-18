@@ -1,47 +1,23 @@
-# Agent contract — search-model-provider
+# Working on optional models
 
-Own only `crates/search-model-provider/**`. Do not edit workers, daemon, Cargo root, shared contracts,
-qualification evidence, configuration registry or architecture. Missing load-bearing fields use the
-contract-change process.
+Start with the [architecture](../../docs/architecture/README.md),
+[implementation](../../docs/implementation/README.md) and [local README](README.md).
+This directory has no implementation; do not turn its former function wishlist into a new framework.
 
-## Gate and read set
+Select a real model/runtime only for an implemented embedding or reranking use case. Change the model
+owner, preparation/query callers and Qdrant input/schema together. Use a library directly when practical;
+a separate worker earns its place through actual dependencies or resource isolation.
 
-This W10/P16 package is blocked until an integration ticket supplies the exact accepted P15 receipt,
-candidate ADR, selected profile/artifacts, G6 evidence plan and accepted direct handoffs.
+Keep finite input bytes/tokens, batch size, queue/concurrency, output dimensions and deadline/cancellation.
+Apply limits before allocation/inference. Validate actual outputs; a profile label or receipt does not
+make a vector well formed or a snippet source-backed. Respect the selected scope and client restrictions.
 
-Read only root/package instructions, package assignment, `FUNCTIONS.md`, the W10 cross-contract,
-`model-profile.toml`, W10 settings and exact accepted dependency/API digests listed by the ticket.
+Coalesce identical model inputs and reuse their outputs across source occurrences. Include actual
+context, model revision, document/query/rerank task and input/output options in that reuse decision.
+Rebind current source/revision/range independently; do not key all reuse by revision-bearing `UnitId`
+or reuse an old handle, scope decision or citation as model output.
 
-## Ownership
-
-- immutable provider-neutral model profile identity;
-- document/query dense or multivector input/output contracts;
-- bounded rerank subset transform;
-- output/profile validation and content-free receipts;
-- profile-change/migration classification;
-- instrumentation and removal-plan validation seams.
-
-## Forbidden ownership
-
-- worker process, model/runtime/vendor implementation or artifact selection in scaffold;
-- Qdrant/redb/CAS/source/handle/client access;
-- query scope, access, evidence, exact proof or client disposition;
-- generative answers, network, download/update, training/learning or persistent content cache;
-- G6 benefit verdict or self-acceptance;
-- fallback to another provider.
-
-## Required invariants
-
-- provider output is nomination/ranking only;
-- rerank output is a subset of its bounded input;
-- inaccessible/stale/denied/purged/shadowed content cannot influence output;
-- exact profile identity covers all tokenizer/runtime/vector/rerank/resource behavior;
-- dense/multivector require new collection generation;
-- cancellation/timeout/crash produces no successful partial output;
-- P15 baseline works when provider is absent or fails;
-- unsaved/source/query content is process-memory-only and absent from diagnostics.
-
-## Size
-
-Target `src/` <=6,500 lines; split review before 8,500 total; hard stop at 10,000 including local tests.
-No crate split without a real dependency/replacement/security/test boundary and ADR.
+Normal search remains usable without a model. A failed optional leg has a visible gap; rerank failure
+can preserve the previous order. Do not add LLM query rewriting, generated research verdicts, an
+extraction graph or a second query orchestrator. Remove unused port/scaffold requirements with their
+consumers instead of manufacturing receipts or another provider registry.

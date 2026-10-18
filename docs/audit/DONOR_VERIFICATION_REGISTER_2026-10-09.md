@@ -148,6 +148,81 @@ replaces the old imaginary watcher/inventory APIs and lifetime ledger.
 Indexing with rust-analyzer may execute Cargo build scripts/proc macros; it is an explicitly selected
 preparation action, never an invisible ordinary query. Reuse available revision-bound artifacts first.
 
+### Context, source guides and model work
+
+Source inspection on 2026-10-18 supports a small extension of the existing query: selected IDs →
+bounded related locations → shared source read → excerpts and next reads. These donors supply design
+and API examples, not a selected dependency or a requirement to generate a corpus graph.
+
+| Inspected donor / reachable API | Useful mechanism and real cost |
+|---|---|
+| EdgeQuake 0.34.0, `17e836a1bd58d556cac684de0341c01d27e08b23`: [`hydrate_retrieved_chunks`](https://github.com/raphaelmansuy/edgequake/blob/17e836a1bd58d556cac684de0341c01d27e08b23/edgequake/crates/edgequake-query/src/chunk_hydration.rs), [`truncate_chunks` / `balance_context`](https://github.com/raphaelmansuy/edgequake/blob/17e836a1bd58d556cac684de0341c01d27e08b23/edgequake/crates/edgequake-query/src/truncation.rs) | Batch-fetch selected missing bodies; count the whole formatted context and keep room for source excerpts. These helpers limit already collected inputs, not all upstream work. Hydration failure leaves empty bodies; Eliot must expose missing evidence. Its [query pipeline](https://github.com/raphaelmansuy/edgequake/blob/17e836a1bd58d556cac684de0341c01d27e08b23/edgequake/crates/edgequake-query/src/engine_impl/query_entry/query_pipeline.rs) prepares keywords/embeddings before checking context cache. `context_only` skips final generation, not preparation; heuristic/explicit keywords can avoid the keyword LLM, but retrieval still prepares dense embeddings. |
+| LightRAG, `aaebfe1bb8d55deb6a4304d357a3bf4c92fcd40a`: [`aquery_data`](https://github.com/HKUDS/LightRAG/blob/aaebfe1bb8d55deb6a4304d357a3bf4c92fcd40a/lightrag/lightrag.py), [`kg_query` / related-chunk selection](https://github.com/HKUDS/LightRAG/blob/aaebfe1bb8d55deb6a4304d357a3bf4c92fcd40a/lightrag/operate.py) | Return structured context before answer generation; deduplicate selected chunk IDs before `get_by_ids` and reuse query embeddings. Keyword LLM/reranking can still run. `_find_most_related_edges_from_entities` fetches all incident edges of selected nodes before later truncation; small `top_k` does not bound a hub's work. Eliot must bound visited relations before hydration. |
+| Microsoft GraphRAG, `5faaaf4f5685fa2056fa8c3bf9342cb089f2942f`: [`LocalSearchMixedContext.build_context`](https://github.com/microsoft/graphrag/blob/5faaaf4f5685fa2056fa8c3bf9342cb089f2942f/packages/graphrag/graphrag/query/structured_search/local_search/mixed_context.py) | Deduplicate source units and prefer useful connections among selected entities. Do not copy the full-corpus dictionaries/DataFrames: `_build_text_unit_context` scans all relationships for each selected entity, and `_build_local_context` repeatedly rebuilds relation context while adding entities. Use bounded lookups of Eliot's prepared records, not this whole query engine. |
+
+Eliot keeps source/revision/range identity. Preserve direction and source occurrence for imported
+semantic facts; syntax and observed Markdown links remain useful without resolving language semantics.
+Names or citation numbers do not establish that identity. Do not merge same-name functions into one
+LLM entity or treat a citation's membership in a catalogue as verification of the associated claim.
+The EdgeQuake [shipped server](https://github.com/raphaelmansuy/edgequake/blob/17e836a1bd58d556cac684de0341c01d27e08b23/edgequake/src/main.rs)
+still requires PostgreSQL; its non-postgres branch validates a profile and exits. Additional adapters
+do not establish a working SQLite-only binary. No GraphRAG server/database becomes Eliot's baseline.
+
+**Reuse the actual input, not a reassuring cache name.** EdgeQuake's
+[`ChunkReuseIndex`](https://github.com/raphaelmansuy/edgequake/blob/17e836a1bd58d556cac684de0341c01d27e08b23/edgequake/crates/edgequake-pipeline/src/chunk_reuse.rs)
+hashes whitespace-normalized chunk text, although its
+[extraction input](https://github.com/raphaelmansuy/edgequake/blob/17e836a1bd58d556cac684de0341c01d27e08b23/edgequake/crates/edgequake-pipeline/src/prompts/section_context.rs)
+also contains heading context. Changed headings can therefore change model input without changing that
+key. [`finish_document_processing`](https://github.com/raphaelmansuy/edgequake/blob/17e836a1bd58d556cac684de0341c01d27e08b23/edgequake/crates/edgequake-pipeline/src/pipeline/processing.rs)
+still calls `generate_all_embeddings` after extraction reuse. Reusing extraction does not establish
+delta embeddings or delta persistence. Eliot reuses exact prepared inputs/context and model/task/options,
+then binds current occurrences independently; changed occurrence-bearing points may still need writing.
+
+GraphRAG's inspected file-reader [delta detector](https://github.com/microsoft/graphrag/blob/5faaaf4f5685fa2056fa8c3bf9342cb089f2942f/packages/graphrag/graphrag/index/update/incremental_index.py)
+compares titles, so changed text with the same title is not new input. The
+[update reader](https://github.com/microsoft/graphrag/blob/5faaaf4f5685fa2056fa8c3bf9342cb089f2942f/packages/graphrag/graphrag/index/workflows/load_update_documents.py)
+materializes all input documents before the delta and returns only new inputs. Model caches can avoid
+some inference; this is not a claim that every update regenerates every summary. Do not use that
+append-oriented detector for Eliot source revisions.
+
+**NotebookLM is a product reference with only partial engine disclosure.** Google's
+[2025 engine explanation](https://blog.google/innovation-and-ai/models-and-research/google-labs/notebooklm-custom-personas-engine-upgrade/)
+describes retrieval/ranking and assembling relevant context from selected sources. It does not publish
+the chunker, index, reranker algorithm or cache keys. Borrow the source guide, explicit selection and
+click-through excerpts; implement the cheap guide from existing paths/headings/syntax records. Current
+[consumer source help](https://support.google.com/gemininotebook/answer/16215270?hl=en) describes Drive
+autosync, while the specific [Enterprise import](https://docs.cloud.google.com/gemini/enterprise/docs/access-notebooklm)
+creates a copy without automatic updates. Neither is a specification of Eliot's retained revisions.
+Current [agentic chat](https://support.google.com/gemininotebook/answer/16179559) also includes web/code
+actions; that broader research product is outside Search's local retrieval purpose.
+
+**Cloudflare AI Search separates retrieval from generation.** Its
+[retrieval flow](https://developers.cloudflare.com/ai-search/concepts/how-ai-search-works/) is a useful
+API reference: `search()` returns chunks; generation is separate. Selected embedding/reranking still
+cost model work. [Query rewriting](https://developers.cloudflare.com/ai-search/configuration/retrieval/query-rewriting/)
+is an extra LLM step for conversation follow-ups using `messages`, not `query` input. The
+[similarity cache](https://developers.cloudflare.com/ai-search/configuration/retrieval/cache/) uses
+MinHash/LSH over shingles, a TTL and dependent-chunk invalidation. Our inference: similar wording is not
+exact query equivalence, and dependent-chunk freshness alone does not establish freshness after new
+relevant sources appear. Start with prepared-output reuse and the query window; any later result cache
+must respect exact query, scope, published view, settings and current restrictions. No hosted backend or
+similarity-based evidence cache is selected.
+
+**Contextual retrieval has a cheaper first step.** Anthropic's
+[method](https://www.anthropic.com/engineering/contextual-retrieval) generates context for each chunk
+using its full document, then prefixes embedding/BM25 input. Prompt caching can amortize document input,
+but does not remove per-chunk generation. Start with a bounded deterministic path/title/heading/signature
+prefix and measure relevance. The [official notebook](https://github.com/anthropics/claude-cookbooks/blob/a162e0184e71b60290808a43961a6cbc8060123c/capabilities/contextual-embeddings/guide.ipynb)
+is a demonstration: its local vector DB loads whole arrays, searches the full matrix and reuses an
+existing pickle without checking changed dataset/model identity. Do not import its storage/cache or
+Elasticsearch backend. Generated context remains derived metadata, separately dependent on its actual
+input document; it is not an original source quote.
+
+Implement these choices at the [unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md#context-and-reuse),
+[query/projector](../../crates/search-query/search-result-projector/FUNCTIONS.md) and
+[optional model](../../crates/search-model-provider/FUNCTIONS.md) seams. The model-provider directory is
+docs-only and the worker exits unavailable; no model runtime has been selected or demonstrated here.
+
 ### Documents
 
 First implement native PDF text using

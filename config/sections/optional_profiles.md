@@ -11,7 +11,8 @@ The daemon [registry](../../bins/eliot-searchd/src/config_composition/kernel/reg
 [Readiness](../../bins/eliot-searchd/src/config_composition/kernel/readiness.rs) consults that flag and a
 supplied acceptance value. This is not a connected model runtime. `document`, `advanced_scale` and the
 three old profile-reference fields in the historical configuration catalogue are not implemented fields
-of this registry. The doc worker itself exits unavailable.
+of this registry. Both the doc worker and model worker exit unavailable; the
+[model-provider directory](../../crates/search-model-provider/README.md) has no implementation.
 
 Do not advertise those catalogue fields as working toggles. Replace the actual registry, typed settings,
 runtime construction and status together as a capability is connected. Remove P15/G6 acceptance digests
@@ -26,6 +27,10 @@ and generic migration/removal receipts from the ordinary settings path.
 | Reranking | Selected local model/runtime, candidate cap and deadline. Reranking already retrieved candidates needs no persistent vector rebuild. |
 | Dense/multivector retrieval | Selected model, vector name/dimensions and encoder settings. Publish compatible derived vectors/schema before advertising retrieval; never reinterpret the old vectors. |
 | More workers/shards | Actual concurrency/topology settings for a measured bottleneck. A generic `advanced_scale` boolean does not implement capacity. Keep the one-shard local baseline until it needs to change. |
+
+Reuse model outputs with existing prepared artifacts by exact input/context and actual model/task/options.
+A changed source occurrence gets its current revision/range; an old vector never carries forward source
+authority. Reranking needs no corpus graph, LLM query rewriting or generated-answer service.
 
 Disabled or unavailable extensions leave ordinary text/code search usable and report a specific gap.
 Stop optional work and release its processes/resources when disabled. Keep live query pins valid while

@@ -1,38 +1,23 @@
-# Agent contract — eliot-search-model-worker
+# Working on the optional model process
 
-Own only `bins/eliot-search-model-worker/**`. Keep the binary a thin isolated host for the accepted
-`search-model-provider` contract. Do not edit libraries, daemon, root Cargo, shared evidence or
-architecture.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation](../../docs/implementation/README.md) and [local README](README.md).
+The current binary only exits unavailable. Implement a worker when a selected runtime needs this
+process boundary; do not build its former lifecycle/function catalogue in advance.
 
-## Gate and read set
+Keep `main` a thin loader and request loop. Change the real daemon caller and model input/output owner
+together. Share the same selected model settings and framing; an owned local child needs no separate
+pairing, attestation or receipt system.
 
-Blocked until a candidate-specific ticket supplies accepted P15, ADR, exact model/runtime/worker profile,
-Windows qualification and accepted direct handoffs. Read only package instructions/assignment,
-`FUNCTIONS.md`, W10 cross-contract, model profile/settings and ticketed API digests.
+Bound input bytes/tokens, queue, batch, concurrency and output before inference. Propagate one deadline
+and cancellation. If the runtime cannot interrupt work, let the daemon terminate the child after a
+finite wait and reject its late response. Load the model once for accepted batches, not per file/query.
 
-## Ownership
+Return only vectors or an order/subset of supplied candidates. Source selection, retained bytes,
+Qdrant writes, source validation, context windows and expensive-output reuse belong to their existing
+application owners. The worker must not independently read the corpus, re-extract a graph, rewrite the
+question, generate an answer or schedule further research.
 
-- exact worker startup/profile/artifact verification;
-- private daemon-only IPC session and request lifecycle;
-- finite queue/concurrency/CPU/GPU/memory/deadline/cancellation policy;
-- provider dispatch, output framing and health;
-- drain, crash isolation, cleanup and verified process removal.
-
-## Forbidden ownership
-
-- model meaning/profile validation already owned by `search-model-provider`;
-- stores, Qdrant, source inventory, handles, secret store or external client endpoint;
-- network, auto-download/update, training/learning or persistent input cache;
-- generative/client authority;
-- route/config activation or G6 self-acceptance.
-
-## Invariants
-
-Worker absent/stopped by default; exact one-profile identity; content process-memory-only; exactly one
-terminal response; cancellation/timeout/crash leaves no accepted partial output; bounded restart ends in
-quarantine; removal verifies process/context/temp/cache cleanup; P15 baseline remains available.
-
-## Size
-
-Target `src/` <=4,500 lines; split review before 8,500 total; hard stop at 10,000 including local tests.
-Behavior belongs in the model-provider library; `main` and wiring stay thin.
+Model inputs stay out of normal logs. Missing artifacts, invalid outputs and crashes produce concrete
+optional failure; they do not disable lexical search or start another model silently. Report actual
+connected behavior, not an unavailable stub's contract tests as model support.

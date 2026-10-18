@@ -40,7 +40,8 @@ workloads, not a package/dependency constitution. Implement them through the sam
 | Responsiveness, S30 | Interactive work has priority; use bounded batches, cancellation and one deadline. Optional parsing/models run in background only when selected. |
 
 Old latency numbers are targets, not achieved performance. Measure useful result latency, bytes read and
-points rewritten per edit, extraction reuse and peak resources; a tiny fixture does not establish fleet scale.
+points rewritten per edit, model inputs/calls actually avoided and peak resources. A short response or
+extraction-cache hit does not bound earlier traversal, embedding or publication work.
 
 ### Existing owners and concrete work
 
@@ -153,6 +154,27 @@ rust-analyzer SCIP writer has no symbol relationships, so it cannot supply an im
 Use [code-enricher's map](../../crates/search-prep/search-code-enricher/FUNCTIONS.md) for exact APIs/limits.
 Resolver/comparator currently consume prepared observations in tests; connect real facts and source
 ranges rather than inventing behavior proofs or another graph database.
+
+Use those prepared records as a cheap source guide: path/title, format/language, headings, definitions
+and their locations. Orientation groups selected records and suggests a few exact next reads; it does
+not generate a hierarchy of corpus summaries. The Markdown preparation libraries already
+[build section parents and observed link destinations](../../crates/search-prep/search-unitizer/src/markdown_unitset/build.rs);
+their production wiring and source-guide reader are still missing. Resolve selected local links/symbols
+within the pinned scope, preserving direction, source occurrence and missing facts. The current Markdown
+reference set is potentially incomplete. Matching names nominate comparisons, not one merged entity.
+
+Keep retrieval input separate from quoted source. A bounded title/heading/signature prefix can help an
+isolated chunk make sense to lexical or selected model retrieval; it is derived context, not bytes at
+the chunk's source range. Use existing prepared artifacts and source maps. A model-generated summary
+is an optional derived artifact with its actual inputs/settings, never an indexing prerequisite.
+
+Reuse expensive model outputs by exact input and the context/model/task/options actually used. Current
+`UnitId` includes revision/provenance and coordinates; an unchanged chunk in an edited file can receive
+a new occurrence ID. Rebind source/revision/range separately. A changed heading or full-document input
+invalidates context-dependent reuse even if the central chunk is unchanged. Reused inference may still
+need new occurrence-bearing points; measure computation and publication separately. The
+[unitizer map](../../crates/search-prep/search-unitizer/FUNCTIONS.md#context-and-reuse) and
+[model map](../../crates/search-model-provider/FUNCTIONS.md) describe the actual changes.
 
 For the first PDF, use `pdfium-render` in the existing optional doc worker and return page/text locations.
 Its current binary only exits unavailable. Finish the real parser → materializer/UnitSet → query result
@@ -325,6 +347,31 @@ preserving the actual revision/byte/coordinate connection.
 The readback trait also lacks explicit deadline/cancellation inputs. Connect the request context through
 the real reader; a byte ceiling alone does not bound waiting on I/O.
 
+Select the candidate page and useful neighboring sections/definitions before reading their bodies.
+Bound visited relations and source reads as well as returned context; a high-degree node must not cause
+an unrestricted graph scan. Pass remaining item/byte limits and the deadline into those lookups/reads;
+do not fetch everything and truncate afterward. Group selected ranges by retained revision and
+representation, merge same-basis overlaps, and preserve each result's locator and final rank.
+
+Current public expansion reaches
+[`read_revision_range`](../../bins/eliot-searchd/src/secure_direct_store/kernel/read.rs), which loads the
+whole revision through `read_revision_detailed` and then copies the requested slice. The
+[projector](../../crates/search-query/search-result-projector/FUNCTIONS.md) also receives all verified
+bytes before applying its budget and emits handles without those excerpts. Change both consumers to
+share the actual read result. Where the source owner requires whole-object verification, share one
+cancellable streaming pass across selected ranges; a seek alone cannot verify a whole-object digest.
+Count all scanned bytes, including discarded ones, against actual read work and report unfinished reads
+when the budget expires. This does not require rehashing every object for every excerpt. Return verified
+excerpts immediately and retain only bounded useful excerpts in the same query window. Do not add a
+second context service, full-corpus buffer or range-proof tree.
+
+Optional semantic retrieval/reranking uses this same query. `search-model-provider` is documentation
+only, and its worker exits unavailable; planner leg flags are not model integration. Select a concrete
+runtime, encode each distinct query input once and rerank a finite subset of already read snippets.
+The real `query_filtered` interface is sparse-only: change its actual producer/bridge for dense inputs
+instead of casting vectors or adding another backend. [Model implementation](../../crates/search-model-provider/FUNCTIONS.md)
+owns those changes. The ordinary request does not rewrite itself with an LLM or generate a research answer.
+
 ### One short-lived result window
 
 Reuse the daemon DIRECT cursor and commit-after-delivery behavior in one query window owner. Its
@@ -342,7 +389,8 @@ by issued live locators. See the [single-owner map](../../crates/search-query/se
 ## 5. Use these donors at the named seams
 
 These are mechanisms, not whole applications to import. Versions describe the inspected/locked source;
-there is no dependency-upgrade task here.
+there is no dependency-upgrade task here. The [context donor comparison](../audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#context-source-guides-and-model-work)
+covers EdgeQuake, LightRAG, GraphRAG, NotebookLM, Cloudflare AI Search and contextual retrieval.
 
 | Eliot seam | Donor/API | What disappears / limit |
 |---|---|---|

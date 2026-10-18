@@ -1,18 +1,33 @@
 # search-model-provider
 
-**C12 — Optional model profile and scoring boundary.**
+Optional embeddings and reranking for the ordinary preparation/query path.
 
-**Status:** documentation-only W10/P16 contract; no Cargo package or runtime API exists. The unused provider scaffold was removed under #528. No model/runtime/provider is selected or qualified.
+## Current state
 
-Owns versioned dense/multivector/rerank profiles, bounded input/output validation, provider-neutral
-worker requests, content-free receipts, migration classification and removal validation.
+This directory contains documentation only: no Cargo package, runtime or provider implementation.
+[`ModelProviderPort`](../search-ports/src/optional.rs) declares `profile`, `encode` and `rerank`,
+but has no implementation. The [worker binary](../../bins/eliot-search-model-worker/src/main.rs)
+always reports unavailable and exits with code 2. Planner capability flags do not connect a model.
 
-Does not own worker lifecycle, stores/index, query/access authority, source evidence, generative answers,
-network/download/update/training/cache behavior or G6 acceptance.
+The implementation target uses Qdrant's local BM25 input for ordinary lexical search, without a model
+worker. Scope orientation, source links, syntax outlines and imported semantic occurrences also need no LLM.
 
-- **Delivery:** W10/P16 only after exact accepted P15 + ADR + qualification.
-- **Default:** absent/disabled.
-- **Soft source target:** 6,500 lines.
-- **Functions:** [FUNCTIONS.md](FUNCTIONS.md)
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
-- **Cross-contract:** [`../../docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md`](../../docs/optional/W10_OPTIONAL_DEPTH_CONTRACTS_1.0.md)
+## Selected model path
+
+When a concrete model is useful, integrate its library directly or use the existing worker if dependency
+or resource isolation requires a process. No runtime library or model is selected by this document.
+One small model owner prepares bounded inputs and validates vectors or a reranked candidate subset;
+preparation, Qdrant publication and query remain with their existing owners.
+
+Encode changed prepared content in bounded background batches. Encode a query once for the selected
+retrieval profile; use document/query task modes consistently, including asymmetric model instructions.
+A selected reranker receives the already bounded query candidates and their source-backed snippets.
+It may reorder or drop them, and returns no new evidence or generated answer.
+
+Reuse expensive outputs by exact model input and model/task/options. A source edit changes current
+`UnitId` even for an unchanged chunk; a cached vector can be reused while its source/revision/range
+occurrence is rebuilt. Cache data never supplies source authority or bypasses the current scope.
+
+See the [implementation guide](../../docs/implementation/README.md) and
+[concrete change map](FUNCTIONS.md). There is no mandatory graph, query-rewriting model, answer
+orchestrator, qualification-receipt chain or separate migration platform to build first.
