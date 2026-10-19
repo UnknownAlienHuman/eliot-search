@@ -1,375 +1,561 @@
 # ELIOT Search — implementation
 
 Read the [architecture manifesto](../architecture/README.md) first and keep it in the lead developer's
-context. This document owns what to change, where to change it and which donor mechanisms to use.
+context. This document says what to write, where to write it, what to reuse and what to delete.
 
-**Inspected source:** public `main` at `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`, 2026-10-18 UTC.
-This is the refactoring target, not a claim that the indexed application already works. Preserve #598's
-active manager/private work and consume its useful held-source result when integrating. Historical waves,
-closed issues and pre-release formats are evidence, not prerequisites or compatibility obligations.
+**Inspected target:** public `main` at `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`, 2026-10-18/19.
+It is not a working indexed product. Historical waves, old issues, byte goldens and pre-release formats are
+evidence only. Preserve #598's active private source-retention work and consume only its accepted public
+handoff; do not inspect/reset/rebase/compete with its branch or worktrees.
 
-## 1. Build one application
-
-Use the existing CLI, daemon, source owners, redb owner and Qdrant bridge. Do not create another product,
-backend, lifecycle platform or orchestration framework.
+## 1. Build one connected application
 
 ```text
-ingest: selected source → stable read → retained revision → prepared units
-        → bounded Qdrant mutation/readback → published view
+ingest:
+  selected source
+  → stable final-handle read
+  → one immutable ObjectRef
+  → one current source head
+  → one MaterializationProduct
+  → structure-first units / retrieval inputs
+  → bounded Qdrant publication/readback
+  → CurrentPublishedView
 
-query:  typed request → current-view guard → scoped Qdrant query
-        → view-manifest binding → retained bytes → excerpt/location
+query:
+  SearchRequest
+  → pin current PublishedView
+  → resolve selected source scope
+  → one RequestContext
+  → real Qdrant native BM25
+  → ViewManifestEntry
+  → retained object/range verification
+  → EvidenceCard[]
+  → optional QueryWindow
 ```
 
-The first completed slice is one real local file retained across restart, indexed, found from the CLI and
-reopened at the correct excerpt. Then make one edit update only affected work, restart with the same view,
-rebuild a lost index and cancel a bounded request. DIRECT remains an explicit exact/source scan, not a
-silent fallback that turns an indexed failure into success.
+The first finished slice retains one real local file across restart, indexes it, finds it from the CLI and
+reopens the correct excerpt. A normal edit then updates only affected work. A lost Qdrant index rebuilds from
+retained current-format state. DIRECT remains an explicit exact/source scan, never a silent fallback which
+turns indexed failure into success.
 
-### Historical requirements kept with small mechanisms
+A constructor, receipt, capability descriptor, package split or passing shape test is not delivery. Connect
+the real producer and consumer and delete the replaced path in the same slice.
 
-| Useful workload | Implementation |
-|---|---|
-| Local standalone search | CLI/daemon, redb and local Qdrant. Lexical search needs no model service. |
-| Large repositories and portfolios | Selected roots and commit/index/worktree views. Portfolio is a scope filter, not duplicate points or collections. |
-| Exact identifiers and negative proof | Ranked BM25 for navigation; literal/regex exact scan over a stated retained inventory for completeness. |
-| Incremental evidence | One inventory queue, changed-byte retention, structure-first units and one published view. |
-| Orientation and comparison | Paths/headings/syntax facts first; import actual semantic locations when available. |
-| Documents | Existing Markdown/JATS plus one selected native PDF extractor with page/text coordinates. |
-| Unsaved edits | One explicit in-memory editor overlay that shadows matching source occurrences. |
-| Recovery | Keep current source/control state and unfinished external publication; rebuild derived index data. |
-| Backup | Stop the daemon, close writers, copy one coherent current-format root and rebuild Qdrant after restore. |
-| Responsiveness | Bounded batches, one deadline, cancellation and interactive priority. |
+## 2. Owners and required cutovers
 
-Not baseline: backward readers for pre-release roots, universal migration, legal-hold/purge workflows,
-cross-user key migration, online research, generated answers, a second search backend or durable records
-for every pure transition.
-
-## 2. Existing owners and required result
-
-| Responsibility | Existing source | Required result |
+| Responsibility | Current source/problem | Required result |
 |---|---|---|
-| Invocation and config | [`eliot-search`](../../bins/eliot-search/src/entry.rs), [`eliot-searchd`](../../bins/eliot-searchd/src/entry.rs), `search-config` | Parse invocation/config once and construct real handlers from typed settings. Remove receipt-gated startup and repeated argv/env capture. |
-| Source inventory | `search-source-reconcile`, `search-safe-reader`, daemon source roots | One bounded dirty-path/scan queue across startup, watcher hints, periodic recovery and explicit sync. |
-| Source retention | daemon native-source composition, `search-revision-store`, `search-control-redb` | Pass the bytes already read into one immutable writer; atomically record source/head references after the object exists. |
-| Preparation | `search-materializer`, `search-unitizer`, `search-code-enricher`, `search-lexical` | Produce one prepared artifact and structure-first source units without replaying the full materializer. |
-| Projection | `search-projection-planner`, `search-point-identity` | Separate stable retrieval-point identity from revision-specific evidence binding; emit ordered bounded manifest pages and uploadable input. |
-| Publication | `search-publication`, daemon publication composition, redb publication records | One recoverable pending artifact, one external mutation owner and one visible-view commit. |
-| Qdrant | `search-qdrant-bridge` and its existing blocking runtime | Private SDK translation for schema, full/narrow mutations, readback and scoped query. No process-local replay ledger. |
-| Query/evidence | public dispatch, query composition, planner/executor/validator/projector | One typed request reaches a real indexed handler and returns ranked, source-backed excerpts. |
-| View lifetime | `search-epoch-pins`, `search-index-reclaimer` | Replace raw route/epoch pins and generic retention with current-view guards and cleanup owned by publication. |
+| CLI | `eliot-search` has child stdio, a typed client and a legacy provider core; indexed query is translated back to tab/hex. | One parsed invocation, one owned child-stdio connection, one current typed client, bounded output. |
+| Local protocol | `search-provider-protocol/client`, daemon provider composition and public runtime form parallel pairing/grant/manual-codec/recipe/line applications. | `u32-le length + bounded Serde JSON`, direct handler dispatch, optional progress, one terminal response. |
+| Settings | Startup compares settings through receipt-gated activation and can reject permitted values. | Merge bounded file/env/CLI once, validate actual fields, construct owners. Static changes require restart. |
+| Current control | `PersistentControlJournal` appends permanent operations, copies all records after each mutation and scans history on recovery. Registry commands restore v4 batches/original inputs. | Short typed redb transactions for current settings, roots, source heads, prepared refs, current view, one pending publication and finite cleanup rows. |
+| Source inventory | Watcher/currentness/reconcile fragments do not produce one real update; root sync ends unavailable. | One bounded dirty-path/root-scan queue used by startup, watcher hints, explicit sync and recovery. |
+| Source bytes | `acquire_source_v2` reads/hashes/classifies then drops the body. Revision/materializer/DIRECT stores duplicate publication logic. | Pass the same acquired bytes into one immutable object writer, then compare/set one source head. |
+| Preparation | Markdown/JATS verification can reopen and rebuild complete materialization between adjacent stages. | One materialization product feeds structure-first unitization; persist/load once. |
+| Point identity | Unit/S11/payload mix revision/absolute coordinates with retrieval identity, causing suffix-wide rewrites. | Stable retrieval point separated from version-specific evidence binding. |
+| Publication | Three disconnected phase/receipt machines; no real Qdrant cursor or recoverable view. | One immutable operation artifact, one pending row, real Qdrant apply/readback, current-view commit and finite cleanup obligations. |
+| Qdrant | Real SDK code exists but daemon does not call it; runtime gate/secret equality/process-local receipts surround it. | One daemon-owned client/runtime for publication and query; exact full/narrow operations and native BM25. |
+| View lifetime | Raw route/epoch pins, owner IDs, renewals and sampled watermarks permit deletion races. | One `Mutex + Arc/Weak` current-view manager; no arbitrary old-view acquisition. |
+| Query | Recipe/capability/plan/access/executor/validator/projector stacks are fixture/process-test driven. | Direct `Search/Exact/Continue/Expand` handlers with one scope/context and source-backed cards. |
+| Paging | Shared and daemon handle/continuation stores duplicate state and rescan the source catalogue. | One process-local `QueryWindow` with final refs, cursor, view guard and bounded item locator. |
+| GC/retention | Generic leases, graph sweep, purge, restore and reclaimer journals are disconnected. | Known typed roots, one bounded object-GC gate and publication-owned Qdrant cleanup. |
 
-A package is a current code location, not a permanent boundary. Change an owner and its direct consumers in
-one slice. Do not ship a constructor, receipt type or facade without the real producer and consumer.
+Packages are current locations, not permanent architecture. Merge/delete packages when the remaining code no
+longer isolates a real dependency or effect.
 
-## 3. Data model to implement
+## 3. Current data model
 
-Keep the records needed to answer and update search:
+### Typed redb state
 
 ```text
-SourceRecord
-  source_id, locator/view, current_revision, availability
-
-Revision
-  revision_id, content_digest, length, immutable_object_ref
-
-PreparedArtifact
-  revision_id, preparation_profile, text/maps/structure, gap if unsupported
-
-SourceOccurrence
-  source_id, structural_anchor, occurrence_incarnation, duplicate_position,
-  current revision/representation/range
-
-RetrievalInput
-  role(document|query|rerank), retrieval profile, bounded context, exact input bytes/digest
-
-RetrievalPoint
-  point_id, stable occurrence incarnation, retrieval-input/profile identity,
-  stable filter/group coordinates, named vectors, validity interval
-
-PublishedView
-  route/generation/epoch, ordered manifest pages, scope/profile, current source bindings
-
-ViewManifestEntry
-  point_id → source revision, representation, logical occurrence, exact range,
-  prepared-artifact/reference data required to reopen evidence
-
-PendingPublication
-  operation artifact ref, target view, effect/readback cursor, finite limits
+AppliedSettings
+RootRecord
+SourceRecord { source_id, root_id, locator/view, current_revision, availability }
+PreparedRef { revision, preparation_profile, artifact_ref }
+CurrentPublishedView
+PendingPublication?
+RetiredCleanup[]
 ```
 
-### Separate retrieval identity from evidence binding
+Do not store source text, vectors, whole point pages, completed operation receipts, query history or
+caller-supplied proofs in redb.
 
-Current code cannot retain a point across a harmless source-coordinate shift:
+### Immutable objects
 
-- raw `UnitId` includes revision provenance, absolute coordinates and ordinal;
-- S11 includes `representation_id` and `unit_id` in the point key;
-- `PointPayload` includes source revision, representation and Unit ID;
-- `diff_manifests` rejects a reused point ID whose full entry changed.
+```text
+ObjectRef { content identity, length, storage profile }
+RevisionObject
+PreparedArtifact
+PublicationOperation / ManifestPage / CleanupPage
+```
 
-Change these owners together. A retrieval point is identified by one stable occurrence incarnation plus the
-exact retrieval input/profile/role and stable filter coordinates. Version-specific revision, representation,
-range and citation data live in the published view manifest. Consecutive views may retain the point while
-updating only their own evidence binding. Changed retrieval input, changed structural meaning or a new
-occurrence incarnation creates a new point. If an occurrence disappears and later returns, allocate a new
-incarnation rather than reopening a closed interval.
+One shared writer/reader owns final object names. Current source/control/view rows reference objects after
+finalization/readback. Unsupported old roots fail before writes and remain untouched.
 
-Do not reduce this to a content hash: equal passages can occur more than once. Do not keep old-view citation
-meaning in a mutable Qdrant payload. Pinned views must continue to resolve their exact old revision/range.
+### Source, retrieval and evidence
 
-### Source units are structure-first
+```text
+SourceOccurrence {
+  source_id
+  structural_anchor
+  occurrence_incarnation
+  duplicate_position
+  current revision/representation/range
+}
 
-Use parser/syntax structure as the primary boundary: Markdown/JATS sections/items, code definitions/blocks
-and document-native elements. Split only oversized structures. Merge adjacent small peers only under the
-same heading/context and selected size bound. Tokenizer/model-specific packing is a derived projection,
-not source occurrence identity.
+RetrievalInput {
+  role: document | query | rerank
+  retrieval_profile
+  bounded contextual prefix
+  exact input bytes/identity
+}
 
-The current line-preferred layout remains a fallback for plain text. Evaluate content-defined splitting
-only inside oversized unstructured sections and only after measuring retained units/points after insertions.
-FastCDC-style boundaries are a deduplication mechanism, not semantic identity.
+RetrievalPoint {
+  stable point identity + collision evidence
+  occurrence incarnation
+  retrieval input/profile/role
+  stable filter/group coordinates
+  validity interval
+  actual named vectors or native document input
+}
 
-## 4. Finish ingestion without another admission chain
+ViewManifestEntry {
+  view / stable point
+  exact retained source ObjectRef / revision
+  representation / logical occurrence
+  exact byte/line range
+  prepared reference / verification data
+}
+```
 
-### Settings and startup
+Equal text is not one occurrence. A disappeared/reappeared occurrence receives a new incarnation. Revision,
+absolute offsets and citation range do not belong in stable retrieval identity. A later view may reuse the
+point while binding it to a new exact revision/range; an old pinned view keeps its old binding.
 
-Decode bounded TOML/Serde settings, merge file/env/CLI once, validate actual fields and construct owners.
-Current startup compares user settings against defaults and calls activation with no receipts, so permitted
-values can end in `DAEMON_CONFIG_PARTIAL_REFUSED`. Remove that gate and connect settings to the handlers
-that use them. A concrete live setting is either supported or requires restart; no general config journal.
+### Publication records
 
-### Filesystem and Git
+```text
+CurrentPublishedView {
+  view_id / monotonic sequence
+  route / physical generation / retrieval profile
+  manifest/evidence roots
+  selected source bindings
+}
 
-Use one `ignore::WalkBuilder` inventory and one `notify::RecommendedWatcher` as a hint source. Coalesce
-short editor/tool bursts, then reread the final admitted path. A remove/move-from event alone is not source
-retirement while a replacement or rescan is pending. An incomplete scan never retires unseen files.
+PendingPublication {
+  operation_artifact_ref
+  expected_current_view
+  target_view
+  next apply/readback cursor
+}
 
-Do not adopt `notify-debouncer-full`'s default whole-tree `FileIdMap`: it recursively walks watched paths,
-follows links and retains an ID for every object, duplicating the ignore-filtered inventory. Raw events,
-`NoCache` or a small cache populated from admitted inventory are sufficient.
+RetiredCleanup {
+  cleanup_artifact_ref
+  kind: exact point IDs | whole physical generation
+  route / generation
+  retire_before_sequence
+  next delete/readback cursor
+}
+```
 
-For a Git commit view, resolve the ref once, list the initial tree, use raw `diff-tree --no-renames` for
-changes and reuse one bounded `cat-file --batch-command` child for blobs. No checkout, textconv, filters,
-lazy fetch or process-per-file. `gix` is an alternative only for an installation that must run without Git;
-do not maintain both backends by default.
+`RetiredCleanup` is finite unfinished external state, not history. Remove each row after exact success.
 
-### Retain the bytes already read
+## 4. Ingestion and current control
 
-`FreshRootContext::acquire_source_v2` obtains the body, hashes/classifies it and then drops it from the
-returned value. Pass that same verified buffer/stream into the immutable writer. Do not reread a pathname
-and claim the second contents belong to the first observation. Replace the refusal-only
-`SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE` path with actual source/head/update effects.
+### Parse settings/invocation once
 
-Use one persistent writer/reader based on `search-revision-store`. Retire materializer's second
-staging/write/sync/link/readback engine and old DIRECT storage after callers switch. Write the immutable
-object first; then commit its revision/source-head reference in a short redb transaction. A crash before
-the reference leaves an unreferenced object for GC; a crash after it leaves preparation to retry.
+Use `args_os()` and bounded typed TOML/Serde. Preserve non-UTF-8 paths. Merge file/env/CLI once and pass one
+closed value. Unknown fields/commands fail before starting work. Do not hash configuration, freeze it behind
+a receipt or reread argv/env in chained handlers.
+
+### Inventory and change hints
+
+Use one `ignore::WalkBuilder` inventory. Feed raw `notify::RecommendedWatcher` events as hints into the same
+bounded dirty queue. Coalesce short editor/tool bursts and reread the final admitted path. Overflow or
+uncertain continuity schedules an affected-root scan.
+
+A remove/move-from hint alone is not retirement while replacement/rescan is pending. Incomplete/cancelled
+scans never retire unseen files. Do not use a whole-tree `FileIdMap`, duplicate `PollWatcher` or supervisor
+per root.
+
+For Git commit views, resolve exact commit/tree OIDs once, use `ls-tree -r -z --full-tree`, raw
+`diff-tree --no-renames` and one reused bounded `cat-file --batch-command -Z`. No checkout, textconv, filters,
+hooks, lazy fetch or process per file. `gix` is an optional no-Git alternative only when packaging requires
+it; do not ship both by default.
+
+### Retain exactly the acquired bytes
+
+```text
+pre-read admission
+→ stable final-handle read
+→ post-read classification
+→ immutable ObjectRef write/readback
+→ short source-head compare/set transaction
+→ preparation queue
+```
+
+The object exists before the source-head reference. Same expected head + same revision replays; same expected
+head + different revision conflicts. A known abort is known failure. A genuinely uncertain redb commit is
+resolved by point-reading the current source row, not by replaying a registry operation or rereading the path.
+
+Replace `RegistryJournal`, v4 original-input retention/restore, complete `SourceRegistry` replay, generic
+batch receipts and full `ControlSnapshot` publication. Use exact point reads and bounded iteration only for a
+real inventory/publication snapshot.
+
+### One immutable writer
+
+Extract the useful create-new/file-sync/no-clobber/final-readback sequence already present in Eliot's old
+cutover artifact code. Use unique concurrent-safe staging names and remove the stage after success or reuse.
+
+The current Windows directory-sync path is a no-op returning success. Qualify a native same-volume
+no-clobber/write-through profile or state a weaker guarantee explicitly. Final readback proves logical state,
+not power-loss durability. Do not hide the gap behind receipts.
+
+## 5. Preparation and projection
 
 ### Prepare once
 
-Pass the owned materializer product into unitization. Current Markdown/JATS builders reopen the revision and
-rebuild the materialization through `verify_markdown` / `verify_jats`; remove that in-process replay.
-Validate persisted/external artifacts when they are loaded, not by reproducing the whole pipeline between
-adjacent functions.
+Pass the owned materialization result directly into unitization. Validate a persisted/external artifact when
+loading it; do not reproduce the complete parser between adjacent functions.
 
-Keep original source bytes/ranges separate from a bounded path/title/heading/signature retrieval prefix.
-Cache expensive model outputs by the exact prepared input, context, role, model/task and relevant options.
-Rebind current source evidence separately. A cache hit does not imply that no manifest or Qdrant work is
-needed, and a new occurrence must not inherit an old citation.
+Use structure-first boundaries:
 
-## 5. Publish one recoverable view
+- Markdown/JATS sections/items;
+- code definitions/blocks;
+- native document elements/pages;
+- line-preferred plain-text fallback;
+- local split only for oversized structures;
+- merge adjacent small peers only under the same context.
 
-### Native lexical and optional vectors
+Tokenizer/model packing is a derived projection, not source occurrence identity. FastCDC-like boundaries are
+only an evaluated fallback inside oversized unstructured sections, never semantic identity.
 
-Use Qdrant 1.19 local `qdrant/bm25` `Document` input for document and query roles. Explicitly bind `k`, `b`,
-`avg_len`, tokenizer, case, stemmer, stopwords and ASCII folding to the published sparse-vector profile.
-Document and query embeddings are different roles. Keep only bounded useful code-identifier expansion;
-it changes term frequency and effective document length.
+Keep source bytes/ranges separate from bounded path/title/heading/signature retrieval context. Cache model
+work only by exact input, context, role, model/task and relevant options. A cache hit can still require a new
+manifest/Qdrant binding.
 
-A profile/tokenization change normally creates a new physical collection generation, fully populates and
-verifies it, then switches the published route. Adding a named-vector schema does not populate old points.
-In-place vector backfill is an optional scale optimization requiring dual writes, bounded progress,
-delete/retirement accounting and explicit completeness before profile switch.
+### Emit bounded publication pages
 
-### Use the correct Qdrant mutation
+Planner output contains actual uploadable text/vector values, stable point identity and target evidence
+entries. Use ordered merge walks; do not materialize both complete manifests and all diff ID copies into a
+single canonical digest object. A harmless source-coordinate shift updates only the new view manifest.
 
-- Full upsert only for a new point or complete authoritative replacement.
-- `update_vectors` / `delete_vectors` for selected named vectors.
-- `set_payload` merges fields; `delete_payload` removes selected keys.
-- `overwrite_payload` replaces the complete authoritative payload while preserving vectors.
+## 6. Qdrant and publication
 
-Read back the affected names/fields. A timeout after dispatch is an unresolved external effect, not proof
-of rollback. Use one absolute deadline across validation, RPCs, pages and readback.
+### One real Qdrant runtime
 
-### Pending artifact before pending record
+Use the workspace-pinned client privately. One daemon-owned client/runtime serves both publication and query.
+Construct it from selected endpoint and optional actual credential. Key rotation rebuilds the client.
 
-The current `PublicationIntent` stores an opaque `prepared_manifest_ref` while old/new manifests and diff
-remain in process memory. Replace it with a real bounded operation artifact written before redb references
-it. The artifact contains route/generation/profile, old/new manifest roots, ordered change pages, target
-epoch, exact affected IDs/input pages and the next effect/readback cursor.
+Remove runtime `QualifiedGate`, executable/client/probe receipts, API-key equality leases, process-local
+mutation replay and relative timeout renewal. Live qualification is release/upgrade evidence, not a runtime
+credential.
 
-redb stores only small current/pending metadata and the artifact reference. The daemon then performs
-Qdrant work, reads actual state and commits the visible view. It never holds the redb writer across Qdrant
-I/O. After visibility, manifest pages become roots of the new/old view as needed; operation-only cursor and
-checkpoint pages are removed after recovery and old-view requirements end. No eternal operation archive.
+Carry one absolute monotonic deadline and cancellation through every RPC. Before dispatch, timeout is
+known. After a mutation may have reached Qdrant, outcome is unresolved and publication inspects actual state.
+Reads commit nothing.
 
-### One current-view guard
+Use exact native operations:
 
-Replace arbitrary route/epoch acquisition with one owner holding the current immutable `PublishedView`.
-A query clones a non-public guard from the current pointer. A continuation may receive another guard only
-from its still-live query guard under the same owner operation. After publication swaps the current pointer,
-new queries cannot acquire the old view; its guard count can only decrease.
+- full upsert only for new/complete authoritative point replacement;
+- `update_vectors` / `delete_vectors` for selected vectors;
+- payload set/delete/overwrite with merge/replacement distinguished;
+- `wait=true` plus exact relevant readback;
+- exact ID delete or whole-generation delete;
+- native prefetch/RRF/grouping for compatible indexed branches.
 
-This removes the race in sampled `PinRegistrySnapshot`/`ReclamationWatermark`: no new old-view pin can
-appear after cutover. Remove raw `acquire_route_pin`, old-route acquisition, renewal of arbitrary
-continuations and release-by-known-owner APIs. Query windows are process-local and finite; restart may
-expire them and replan.
+Local baseline: one node/shard/replica, one serialized publisher and default/weak ordering with exact
+readback. Stronger topology/ordering is an explicit measured profile, not a correctness floor.
 
-### Reclaim as publication cleanup
+### Native lexical profile
 
-Keep the useful exact delete/readback code, but fold its ownership into publication instead of another
-reclaimer journal.
+Use Qdrant 1.19 `Document` input for stored and query `qdrant/bm25`. Bind document/query role, `k`, `b`,
+`avg_len`, tokenizer, case, stemmer, stopwords and folding to the published profile. Bounded identifier
+expansion is document input, not a second local sparse engine. Each sparse leaf uses the selected base
+population as `params.idf.corpus`; query-only narrowing does not silently change that denominator.
 
-- Retired points in the same generation: after every view that can see them drains, delete exact IDs in
-  bounded pages and read back absence on the same route/generation.
-- Replaced generation: after its last view guard drains, delete the whole old collection/generation.
-- Pending operation artifact: retain until its external outcome is resolved.
-- View manifests/source revisions/prepared artifacts: retain while current, pending or a live view refers
-  to them; then delete exact unreferenced objects.
+A profile/vector/schema incompatibility creates and fully verifies a new physical generation, then publishes
+it. Adding a vector name does not populate old points.
 
-Store one cleanup cursor with the existing publication artifact. On uncertain deletion, read back and retry;
-leaking an object is safer than deleting a referenced object. Do not build generic leases, legal holds,
-purge tombstones or a complete object-graph operating system for normal local GC.
-
-### Backup and restore
-
-Baseline backup is offline and current-format only: stop the daemon, resolve/finish or report pending
-publication, close redb/object writers and copy one coherent data root. Qdrant is derived and rebuilds.
-Restore starts the same current application against a copied root for the same supported storage/secret
-profile. Unsupported old formats, live root cutover, re-encryption and cross-user migration are not
-baseline features. Original roots remain untouched until the user explicitly removes them.
-
-## 6. Connect the query to source evidence
-
-### One request and scope
-
-Replace V1/V2 parallel request trees with one typed request containing scope, query and real limits. Parse
-one bounded frame with Serde; remove tab/hex protocols, substring event parsing, plan fingerprints and
-mandatory exact-scan budgets for ordinary ranked search.
-
-Resolve one compatible portfolio into one Qdrant filter population and the same `params.idf.corpus`.
-Remove per-membership fan-out and the executor's grouped-plan refusal together. Split only across different
-physical routes or incompatible retrieval settings. Use native prefetch/RRF/grouping for Qdrant legs;
-keep a small local merge only for real DIRECT/editor-overlay results.
-
-Ordinary top-k is explicitly non-exhaustive. Remove unconditional `count_exact` and
-`CompleteCandidateScope`. Count/scroll exist only for operations that request them.
-
-### Candidate to excerpt
-
-Implement the actual lookup:
+### Publication effect loop
 
 ```text
-Qdrant point
-→ current view manifest entry
-→ source revision / representation / range
-→ retained revision reader
-→ verified excerpt and location
+write/verify immutable operation artifact
+→ redb PendingPublication
+→ for each page:
+     observe if prior outcome uncertain
+     dispatch missing Qdrant work
+     exact readback
+     advance small cursor
 ```
 
-Qdrant payload is not source text. Candidate validation must hash/check actual retained bytes once at a
-clear owner; comparing caller-returned digest fields is not validation. Propagate the request deadline and
-cancellation through readback.
+No redb writer across object/Qdrant I/O. No bridge receipt ledger. Conflicting observed state blocks the
+target while the committed current view remains serviceable. After possible external effect, finish forward
+under the same operation; no compensation theatre, sequence rewind or invalidation-only publication.
 
-Select candidates and useful neighboring structural records before body I/O. Group ranges by retained
-revision/representation and merge same-basis overlaps. The current range API reads the whole revision and
-then copies a slice; share one cancellable verification/read pass across selected ranges where whole-object
-integrity requires it. Charge all scanned bytes, not only returned bytes.
+### Linearizable current-view commit
 
-Return excerpts in the first result. One short-lived query window keeps ordering, cursor, view guard and
-optional opaque expansion locators. Remove the second handle store, catalogue-wide continuation hashes and
-records that remain after expiry. The cursor advances; it does not rescan the window prefix each page.
+Use one short standard-library mutex around the view manager. After all pages verify:
 
-### Exact and optional model depth
+```text
+block pin_current
+→ redb transaction:
+     compare current/pending
+     CurrentPublishedView = target
+     RetiredCleanup += unfinished physical delete, if any
+     PendingPublication = none
+→ commit
+→ old Weak + new current Arc
+→ unblock
+```
 
-Exact literal/regex checking streams the stated retained inventory through the existing matcher. Remove the
-second per-offset matcher and corpus-sized preloaded readback vector. Preserve complete/incomplete outcomes.
+No Qdrant/object I/O under the lock. If commit acknowledgement is uncertain, inspect typed rows before
+unblocking and install exactly the durable result. Clearing pending without cleanup loses work after crash;
+retaining the whole completed pending operation creates an archive. Transfer only unfinished delete pages.
 
-Optional dense retrieval encodes each distinct query input once and uses a real named-vector input. Optional
-reranking reads a finite source-backed subset and only reorders/subsets it. The model worker is used only if
-the selected runtime needs process isolation; it does not read the corpus, build a graph, rewrite the query
-or generate an answer.
+### View manager and cleanup eligibility
 
-## 7. Donors at the named seams
+```text
+current: Arc<PublishedViewState>
+retired: ViewId → Weak<PublishedViewState>
+```
 
-Use the [donor index](../audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) for pinned source and limits.
-The selected mechanisms are:
+`pin_current()` clones only current. A live request may clone its guard into a `QueryWindow`. No route,
+generation, sequence, owner ID or renewal API. Last old drop wakes cleanup; periodic scanning is fallback.
+Never delete inside `Drop`.
 
-| Seam | Donor mechanism |
-|---|---|
-| CLI dispatch | ripgrep: parse once, dispatch one concrete mode. |
-| Inventory | `ignore::WalkBuilder` plus raw `notify::RecommendedWatcher` hints. |
-| Git | `ls-tree` / `diff-tree` / reused `cat-file --batch-command`; optional `gix` alternative. |
-| Control | redb short write transactions and read snapshots. |
-| Serialization/config | Serde/serde_json and bounded TOML typed decoding. |
-| Qdrant | Existing Rust client, local BM25, filtered IDF, RRF/grouping and narrow mutation APIs. |
-| Deadlines | Tokio `timeout_at` with one absolute instant. |
-| Structure-aware units | Existing parsers plus Docling `HybridChunker` and Unstructured `by_title` mechanisms. |
-| Code facts | `ast-grep outline` or direct Tree-sitter; import actual SCIP/LSP occurrences when available. |
-| PDF | `pdfium-render` in the existing optional worker; OCR only missing text pages. |
-| View lifetime | Lucene snapshot generation refcounts; Tantivy tracked-file GC. Copy the mechanism, not either backend. |
+Correct cleanup conditions:
 
-## 8. Delete replaced mechanisms
+```text
+point IDs closed at N:
+  no live view on same route/generation has sequence < N
 
-Delete with their last production consumers:
+old collection:
+  no live view uses that route/generation
+```
 
-- legacy snapshot/sealed daemon harness applications and obsolete loopback/token protocols;
-- generic custom sparse/BM25/frozen-corpus engine and qualification records;
-- duplicate revision/preparation staging engines and old DIRECT formats;
-- duplicate daemon publication machine, bridge operation ledger and caller-created proof receipts;
-- raw route/epoch pin acquisition, durable continuation/handle histories and separate reclaimer journal;
-- `search-retention` lease/purge/sweep/restore platform, `wave7-lifecycle`, restore composition and their
-  module-shape/process fixtures;
-- staged migration/cutover/rollback and old-root compatibility requirements;
-- committed package maps, digest ledgers, partial Rust import/type analyser and source-shape tests;
-- delivery-wave feature ladder after the connected baseline replaces it.
+The immediate predecessor is not enough: v1 can remain live after v2 is gone while v3 closes a point seen by
+both. After restart old interactive guards are gone; durable cleanup rows remain and are reevaluated.
 
-Do not replace deleted code with forwarding modules, copied archive trees, deprecation adapters, fake grants,
-equal synthetic UUIDs, “allowed” booleans or another exception registry.
+The cleanup table is finite. When full, backpressure publication before another external operation; never
+evict a live view or delete optimistically. Unknown delete keeps the same cursor and retries exact readback.
 
-## 9. Implementation order
+## 7. Immutable-object GC
 
-1. Connect acquired bytes to one retained revision and durable source head.
-2. Produce one prepared artifact and structure-first units with stable occurrence incarnations.
-3. Publish one complete lexical Qdrant view through real pending/readback/visible effects.
-4. Connect CLI query to manifest lookup and retained excerpts.
-5. Make one local edit retain unaffected retrieval points and update only changed evidence/input.
-6. Replace pins/reclaimer/retention with current-view guards and bounded cleanup.
-7. Add selected Git, code, PDF, overlay or model depth through the same owners.
-8. Remove remaining legacy mechanisms and obsolete issue/workflow gates.
+There is a real race between final object publication/reuse and the first redb reference. Use one
+process-local `RwLock<()>` or equivalent:
 
-Each slice must end in a real caller using the new path and the replaced implementation deleted or clearly
-scheduled in the same active cutover. Do not count documentation, constructors or closed issues as product
-progress.
+```text
+producer shared guard:
+  acquire before final object publication/reuse
+  → finalize/verify object
+  → commit first source/prepared/pending/cleanup/history reference
+  → release
 
-## 10. Verification
+bounded GC exclusive guard:
+  snapshot current source/prepared, current view, pending, cleanup and live-view roots
+  → traverse only known current-format manifests under finite limits
+  → enumerate/delete one exact unreferenced page
+  → release/yield
+```
 
-For changed production owners and actual consumers, run the pinned compiler and a minimal Clippy pass, for
-example `cargo +1.98.0 check --locked -p <owner>` and the corresponding binary/features. Add focused
-behavior checks with the integration, not a broad historical matrix.
+Reads do not need the gate. Strong live-view snapshots protect old manifests for the pass. Missing/corrupt/
+unsupported roots, incomplete inventory or uncertain delete retain bytes. Failed deletion remains
+rediscoverable; no sweep journal is required. Staging files are outside the final namespace and have separate
+bounded debris cleanup.
 
-Required connected cases:
+Delete `search-retention`, generic leases/graphs/sweep/purge, `wave7-lifecycle`, restore composition and their
+config/tooling/fixtures after callers move.
 
-- retained file survives restart and returns the correct excerpt;
-- edit near file start does not rewrite an unrelated suffix;
-- changed retrieval input creates a new point while old pinned evidence still opens;
-- full upsert and narrow vector/payload mutations preserve unrelated data;
-- publication restart before/after every durable/external boundary;
-- new-generation switch keeps old readers and reclaims only after the last view guard;
-- cancellation/deadline before and after possible external mutation;
-- exact scan reports complete/incomplete scope truthfully;
-- lost Qdrant index rebuilds from retained source/control state;
-- offline backup restores the current format and rebuilds derived index data.
+## 8. Query, evidence and paging
 
-Measure useful-result latency, bytes read, units/points retained/created/retired per edit, model calls avoided,
-Qdrant writes and peak resources. Do not claim Windows, live-Qdrant, scale or installed results from static
-source review or compilation alone.
+### One current request
+
+Use current typed operations only:
+
+```text
+Search    ranked source-backed evidence
+Exact     one bounded exhaustive retained-source scan
+Continue  next QueryWindow page
+Expand    bounded context around one emitted item
+Orient / Compare only when real source-backed handlers exist
+```
+
+Do not translate current requests through `RecipeIdV1`, `SearchTaskPlan`, capabilities, grants, plan digests
+or a V3 compatibility wrapper.
+
+### Scope and request context
+
+Resolve explicit/default source IDs against the pinned view. Unknown IDs fail; explicit empty never widens.
+Compatible sources share one route/profile retrieval/IDF population. Split only incompatible routes/profiles.
+Optional restricted session can only narrow.
+
+One request owns:
+
+```text
+PublishedViewGuard
+ResolvedScope
+absolute deadline
+cancellation token
+remaining backend nominations
+remaining evidence items
+remaining source-read bytes
+remaining retained/output bytes
+```
+
+A small RAII semaphore may bound concurrency. No public scheduler snapshot, tickets, terminal map or durable
+query ledger. Nested operations never reset the deadline.
+
+### Retrieval and evidence
+
+Baseline Search is one real Qdrant BM25 call; preserve Qdrant order. Compatible hybrids use native Qdrant
+prefetch/RRF/grouping. A small local integer rank merge exists only for a real non-Qdrant branch. Never compare
+raw scores across populations or include leg ID in candidate identity. Ordinary top-k is non-exhaustive and
+does not call unconditional exact count.
+
+A hit becomes evidence only through:
+
+```text
+stable point
+→ pinned ViewManifestEntry
+→ exact retained ObjectRef / representation / range
+→ real immutable-object/range verification
+→ VerifiedEvidenceItem
+```
+
+Select one output page before retained-source I/O. Group selected reads by object/representation. A foreign/
+conflicting/missing manifest point contaminates the backend result; a valid entry whose object/range is
+unavailable becomes a gap. Echoed payload/vector/readback digests are not evidence.
+
+Projection preserves final order, enforces remaining output limits and formats cards. If trivial, inline it
+and delete the package.
+
+### One QueryWindow
+
+```text
+QueryWindow {
+  id
+  PublishedViewGuard
+  final ordered EvidenceRef[]
+  next_index
+  optional issued item locators / cached excerpts
+  absolute expiry
+  finite metadata/read/output limits
+}
+```
+
+First-page insertion and later cursor advance commit only after a complete frame flushes. Failed/partial
+output advances zero and closes the session/window safely. Page selection is direct slicing, not prefix or
+corpus rescanning.
+
+Cards contain source/revision/representation/location/excerpt directly. Optional
+`WindowItemRef { window_id, item_index }` expands only a finite neighborhood around that exact manifest item;
+it cannot request arbitrary bytes from the revision. Restart may expire all windows.
+
+Delete shared and daemon handle/continuation stores, source-catalog fences, random per-item tokens, durable
+replan/security histories and arbitrary-range expansion.
+
+### Exact scan
+
+Use the existing Aho-Corasick literal matcher and optional one bounded `regex-automata` adapter. Stream one
+ordered pinned retained inventory, verify/read/release one object at a time and report truthful complete or
+incomplete outcome. Delete compile/execute plans, permits, supplied readbacks, denominator digests,
+checkpoints and the second matcher.
+
+## 9. Local protocol and CLI
+
+Use one wire:
+
+```text
+[u32 little-endian body length][bounded UTF-8 Serde JSON]
+```
+
+Check declared size before allocation, read exactly one body, decode current DTO, dispatch one actual handler,
+optionally emit finite progress and exactly one terminal response. Encode/size-check the complete output frame
+before the first write. Partial output is fail-stop; append no second error and commit no window/cursor state.
+
+Trusted baseline is owned child stdin/stdout; an owner-only OS pipe is optional. It needs no pairing challenge,
+per-frame MAC, durable binding, product grant or capability digest. A selected restricted-client adapter may
+authenticate externally and terminate into the same dispatcher.
+
+CLI captures one invocation, owns child/stream handles, converts timeout once to an absolute deadline, sends
+best-effort cancellation on interrupt and performs bounded child cleanup. `Continue` carries `WindowId`;
+`Expand` carries `WindowItemRef` plus relative bounded context. Use Serde for human/JSON/NDJSON presentation;
+do not substring-parse events or concatenate JSON.
+
+Delete provider pairing/binding/grant/manual JSON/recipe stacks, typed old session, legacy core/TCP/token/
+endpoint/tab/hex paths and old wire/crypto fixtures with their callers.
+
+## 10. Optional depth and documents
+
+- Orientation: existing path/title/heading/syntax/Markdown link records first; bounded relations only.
+- Code outline: selected `ast-grep outline` output with real ranges; import actual SCIP/LSP locations when
+  available. Do not infer missing semantic relationships.
+- PDF: one selected native extractor (for example `pdfium-render`) returning page/text coordinates; OCR only
+  for pages without useful text.
+- Dense retrieval: one real selected model/profile and actual vector input. No model registry before caller.
+- Reranking: finite source-backed subset only; it may reorder/subset, not generate evidence.
+- Editor overlay: one explicit process-local shadow branch over matching source occurrences.
+- No GraphRAG/notebook database/query-rewriting LLM/generated answer pipeline in Search baseline.
+
+## 11. Donor mechanisms
+
+| Seam | Reuse | Reject |
+|---|---|---|
+| CLI | ripgrep parse-once direct dispatch | repeated argv capture or command framework |
+| Inventory | `ignore::WalkBuilder` + raw `notify` hints | whole-tree ID cache / duplicate poller |
+| Git | `ls-tree`, `diff-tree --no-renames`, reused `cat-file --batch-command` | checkout/filter/process-per-file |
+| Control | redb short typed tx + MVCC reads | eternal operation ledger / full snapshot copies |
+| Objects | Eliot cutover finalization shape + Git temp/final publication | migration owner / permanent receipt |
+| Framing/config | Serde JSON/TOML on bounded input | hand-written grammars / canonical hashes |
+| Deadlines | one absolute `timeout_at`/remaining-time pattern | renewed duration per phase/RPC |
+| Qdrant | pinned client, native BM25/IDF/fusion/grouping and exact mutations | second backend / local sparse platform |
+| Structure | existing parsers + selected Docling/Unstructured boundary ideas | imported document framework |
+| View lifetime | Lucene in-memory snapshot rule | durable query leases / public reclaim permits |
+| Object GC | Tantivy living-file callback pattern | second index / generic managed-file authority |
+
+Lucene explicitly says its snapshot state is not persisted; Eliot persists only real unfinished cleanup.
+Tantivy supplies the “derive living files from committed/in-flight metadata” idea; Eliot roots come from its
+own typed current/pending/cleanup/live records.
+
+## 12. Implementation order
+
+1. **#330/#270:** one immutable writer/reader and one real source head using #598's accepted handoff.
+2. **#331:** one materialization/structure-first unitization and prepared ref.
+3. **#259/#329:** stable point identity + versioned manifest evidence.
+4. **#263:** one real Qdrant runtime and native BM25 path.
+5. **#261/#300/#303:** pending publication, current-view manager and finite cleanup rows.
+6. **#302:** object-GC gate and known-root bounded GC.
+7. **#272/#291/#293/#279:** selected scope, request context, evidence lookup and connected Search.
+8. **#275/#280/#332:** QueryWindow, framed protocol and actual CLI.
+9. **#249:** direct exact scan.
+10. Remove superseded packages/features/tests as each caller cutover lands; do not defer all deletion to a
+    final cleanup mega-task.
+
+Later: one edit/rename, restart, lost-index rebuild, documents/code depth, optional models and performance.
+
+## 13. Verification and delivery
+
+During implementation, write code first and run minimal pinned compiler/Clippy for changed production owners
+and immediate consumers. Use only focused checks needed to expose catastrophic semantic mistakes in the
+current slice. Broad test matrices, native/platform qualification and scale work follow after the connected
+product path exists.
+
+Minimum product evidence before calling Search ready:
+
+- retain a real file and restart;
+- prepare/index/query it through real CLI/daemon/Qdrant;
+- reopen exact retained excerpt;
+- update/rename without suffix-wide rewrite;
+- explicit scope and IDF population;
+- old query survives view switch;
+- v1/v2/v3 cleanup threshold and generation cleanup;
+- crash at pending/current/cleanup boundaries;
+- GC finalization→reference race;
+- paging/expansion/partial output;
+- cancellation/deadline/no renewal;
+- delete Qdrant and rebuild;
+- unsupported modes fail truthfully.
+
+Do not claim Windows durability, live Qdrant behavior, recovery, performance or readiness from source presence,
+fixtures, capability descriptors, review records or compilation alone.
