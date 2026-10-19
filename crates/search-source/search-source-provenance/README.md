@@ -1,16 +1,58 @@
-# search-source-provenance
+# search-source-provenance — legacy archive scheduled for deletion
 
-Current code reconstructs complete v2 admission policy/observation/decision/receipt inputs for legacy
-registry/archive formats. It performs no I/O and grants no source or access authority.
+This package reconstructs complete pre-release admission policy/observation/decision/receipt inputs for old
+registry/source-record formats. It is not current source authority and is not needed to retain a local file.
 
-The baseline current-format ingestion path does not need this as a separate owner. Admission evaluates the
-current candidate directly; source/control state retains only the policy/profile revision, closed outcome
-and bounded facts needed to explain the current source head. Equal pure inputs can be reevaluated.
+## Verified source and callers
 
-Keep this package only while an explicit read-only old-format diagnostic or #598's active private work
-still consumes its exact records. Do not make full original-input archives, receipt reconstitution or
-canonical fragments prerequisites for retaining a local file.
+Production source is about **57.1 KiB** before the 9.7 KiB package test file:
 
-After those consumers move, merge any useful small value into admission/registry and delete this package,
-`ARCHIVE_V2.md`, its forwarding codecs and exclusive fixtures. Unsupported old roots remain intact rather
-than being silently reinterpreted.
+```text
+admission.rs       13,001 B
+codec.rs            3,986 B
+fragments.rs       12,613 B
+lib.rs              1,183 B
+policy.rs          20,088 B
+storage_proof.rs    6,276 B
+```
+
+`OriginalAdmissionV2` is used by:
+
+- the current native source acquisition path;
+- source-record provenance/request/v4 batch codecs;
+- daemon registry-control original-input/v4 restore paths;
+- package and compatibility tests.
+
+Those consumers exist to reproduce old input archives and operation history. The direct current source path
+requires none of them.
+
+## Current replacement
+
+```text
+bounded current admission policy
+→ small before-read decision
+→ exact stable body read
+→ small after-read final classification
+→ immutable ObjectRef
+→ typed current SourceRecord / RevisionRef
+```
+
+Store only the policy revision, final outcome/reason and classification if current diagnostics need them.
+Equal pure inputs may be reevaluated. Restart reads current root/source/head rows; it never reconstructs
+complete original policy arrays or admission receipts.
+
+## Delete after #270 cutover
+
+- `OriginalAdmissionV2`, `RetainedPolicyV2` and `OriginalInputsLayoutV2`;
+- archive fragment codecs, canonical digest/preimage and storage proof;
+- `ARCHIVE_V2.md` profile and byte compatibility;
+- source-record v4 provenance/request/batch codecs;
+- daemon `registry_control/original_inputs*` and v4 restore paths;
+- package fixtures and workspace/dependency/status/ledger entries.
+
+Move no forwarding facade. Unsupported old roots are refused before writes and left intact. Preserve #598's
+active private work; consume only its accepted retained-source result and do not create a competing writer.
+
+See the [current admission map](../search-source-admission/FUNCTIONS.md),
+[source registry map](../search-source-registry/FUNCTIONS.md) and issue
+[#270](https://github.com/UnknownAlienHuman/eliot-search/issues/270).

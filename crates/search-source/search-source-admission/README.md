@@ -1,56 +1,96 @@
 # search-source-admission
 
-Pure source inclusion policy. It decides whether a selected source may be read and retained; it does not
-own the filesystem, source registry, currentness, access control or a receipt platform.
+One pure bounded policy decision before and after a stable source read. It does not own native containment,
+source identity, immutable storage, current source state, receipts or historical provenance.
 
 Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md) and [source map](FUNCTIONS.md).
+[implementation guide](../../../docs/implementation/README.md) and [source map](FUNCTIONS.md).
 
-## Current source reality
+## Verified current source
 
-The v2 policy/observation/evaluator is implemented. Native source acquisition calls
-`evaluate_pre_read_v2` before the body read. Full v2 evaluation/receipt reconstruction is routed through
-`search-source-provenance` and `search-source-admission-receipt` to preserve original-input/archive
-contracts.
-
-The package also retains extensive v1 byte compatibility, canonical receipt/batch identities, a complete
-1024-occurrence batch evaluator and many deferred fixtures. Public-main search found no product caller for
-`evaluate_batch_v2`. Those mechanisms do not retain one source or make sync work.
-
-## Target policy flow
+`src/` contains about **367 KiB** of Rust:
 
 ```text
-bounded root-relative locator + metadata
-→ pre-read policy
-   AllowRead | Deny | ReviewRequired | Unsupported | ObservationIncomplete
-→ stable source read only when admitted
-→ post-read facts that actually require bytes
-→ final retain or explicit gap
+lib.rs                 165,719 B
+policy_v2.rs            45,976 B
+observation_v2.rs       34,038 B
+evaluation_v2.rs        67,133 B
+batch_v2.rs             11,471 B
+original_envelope.rs    27,419 B
+original_inputs_v2.rs   12,034 B
+bootstrap_v1.rs          3,562 B
 ```
 
-Known credential/private-key/system and other mandatory safety exclusions remain fail-closed. Post-read
-classification may narrow a pre-read allow; it cannot widen a deny or missing observation. The same policy
-profile is reused across one inventory operation.
+The connected daemon uses `evaluate_pre_read_v2`, but first reconstructs a full original observation from
+canonical input arrays. After reading the file it reconstructs another observation, issues/verifies a full
+`OriginalAdmissionV2` through provenance/receipt packages and stores that archive in source registry records.
+The same `AcquiredNativeSource` does **not** retain the acquired body for immutable storage.
 
-Store only the decision facts needed by current source state and diagnostics: policy/profile revision,
-closed outcome/reason and relevant bounded classification. A decision is not a capability for later query
-access. The owning local client still searches only its selected published source view.
+The package also contains v1 compatibility, canonical input/decision identities, complete batch evaluation
+and many receipt-oriented fixtures. Search found no normal product caller for `evaluate_batch_v2`.
 
-## No admission lifecycle OS
+## Small current policy
 
-Ordinary current-format ingestion needs no separately minted receipt, full original-input archive,
-canonical decision history or durable batch record. Equal pure inputs can simply be reevaluated. If a
-restricted/audited product later requires durable admission evidence, that profile must justify its exact
-records without making them prerequisites for local repositories.
+The product needs three pure operations:
 
-Remove v1 compatibility, receipt/provenance leaves and batch identity machinery with their final legacy
-consumers. An unsupported old root may be rejected before writes; preserving every pre-release admission
-byte is not a baseline requirement.
+```text
+compile_policy(current settings) -> CompiledAdmissionPolicy
 
-Keep one reviewed path matcher (`globset`) and one evaluator. Inventory/watcher ignore rules and admission
-policy are distinct: the walker avoids irrelevant traversal, while admission enforces safety on every
-candidate that reaches the reader.
+pre_read(policy, CandidateBeforeRead) ->
+    AllowRead | Deny | ReviewRequired | Unsupported | Incomplete
 
-Verify deny-before-read, policy/locator bounds, incomplete observations, post-read narrowing, cancellation
-and content-free errors through the actual ingestion caller. Pure goldens and authored-but-unrun fixtures
-do not establish a connected source path.
+finalize(policy, pre_read_allow, CandidateAfterRead) ->
+    Allow { classification } | Deny | ReviewRequired | Unsupported | Incomplete
+```
+
+`CandidateBeforeRead` contains only bounded facts already observed by the native source owner: root-relative
+locator, configured source class, file type, location class and metadata needed by the current policy.
+`CandidateAfterRead` adds only facts which require the exact acquired bytes: actual length, binary/text and
+encoding/content classification.
+
+The source owner remains responsible for:
+
+- selected-root containment and no-follow final-handle traversal;
+- hard-link/location/own-data-root policy tied to native observations;
+- stable file identity and read-race detection;
+- hashing and retaining the exact body;
+- current source-head transaction.
+
+Admission does not reproduce or hash those observations into another authority object.
+
+## Current state
+
+A current `SourceRecord` may retain only useful bounded diagnostics:
+
+```text
+policy revision/profile actually applied
+closed outcome and reason code
+selected final classification
+```
+
+It does not retain complete policy rules, original input arrays, canonical observation preimages, decision
+fingerprints or a permanent receipt. Equal pure inputs can be evaluated again. A policy change affects future
+inventory/reconcile work; removal/update of an existing source remains the source owner's decision.
+
+## Remove after direct caller migration
+
+- v1 policy/observation/decision/receipt/batch compatibility;
+- `OriginalAdmissionV2`, original envelope/input arrays and their canonical identities;
+- 1,024-occurrence batch identity/result framework;
+- `search-source-admission-receipt` and `search-source-provenance` from current ingestion;
+- v4 registry/source-record archive/reconstitution codecs;
+- compatibility and receipt fixtures which protect those types;
+- package-size/Ready/review bureaucracy embedded in local instructions.
+
+Keep one reviewed pattern matcher and one small evaluator. If the useful result fits naturally beside source
+inventory, move it there and delete this package rather than retaining a framework boundary.
+
+## Completion
+
+A denied candidate performs zero body reads. An allowed candidate is read once through the stable native
+reader; the same owned bytes pass to immutable retention and post-read classification; one typed current
+source head is committed; no provenance/receipt/original-input object is constructed.
+
+Run minimal Rust 1.98 compiler/Clippy for the changed admission/source/daemon consumers after code. Focused
+cases cover deny-before-read, mandatory exclusions, incomplete facts, post-read narrowing, cancellation and
+content-free diagnostics. Historical byte/golden/batch matrices are removed with their APIs.

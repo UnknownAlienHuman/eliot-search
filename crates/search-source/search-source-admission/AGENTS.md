@@ -1,27 +1,23 @@
 # Working on search-source-admission
 
 Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md), [README](README.md) and
-[source map](FUNCTIONS.md). Trace the native source caller before preserving a policy/receipt type.
+[implementation guide](../../../docs/implementation/README.md), [README](README.md) and
+[source map](FUNCTIONS.md).
 
-Own one pure bounded admission policy:
+Do not preserve the 367 KiB v1/v2 receipt/original-input/batch framework. Keep only one small pure current
+policy compiler plus pre-read and post-read decision functions.
 
-- validate a portable root-relative locator and available metadata;
-- refuse mandatory unsafe classes before body I/O;
-- produce explicit allow-read, deny, review, unsupported or incomplete;
-- accept post-read facts only to narrow/finalize the decision;
-- expose content-free errors and finite work limits.
+The native source owner supplies bounded facts, performs containment/no-follow/stable identity and owns the
+single body read. Admission may deny before read and narrow after read; it never owns native handles, source
+identity, immutable storage, registry/currentness, access grants or durable history.
 
-Do not own filesystem reads, source identity/history, registry mutation, currentness, query access or a
-durable admission ledger. Ordinary local ingestion needs no receipt, original-input archive or canonical
-batch identity. Remove those packages/types with their last legacy consumer rather than manufacturing a
-new current caller.
+Change the daemon/source consumer directly so the exact owned body passes to the object writer. Remove
+`OriginalAdmissionV2`, receipt/provenance archives, canonical observation/decision identities, v4 registry
+restore and batch codecs with their last callers. Do not add V3 wrappers or forwarding packages.
 
-Use the existing reviewed GlobSet matcher and evaluator. Do not add a second wildcard/regex engine,
-canonical writer or permission wrapper. Change the evaluator and native ingestion consumer together; no
-contract-change ceremony, package-only edit wall, historical byte promise or line quota blocks the current
-format.
+Persist only a useful policy revision, closed outcome/reason and final classification in current source state.
+Unsupported old roots fail before writes and remain intact.
 
-Preserve actual fail-closed safety rules while deleting compatibility/proof scaffolding. Verify through the
-connected source path that denied input is never read and the accepted owned body goes directly to
-retention. Package fixtures alone are not completion.
+After code, run minimal Rust 1.98 compiler/Clippy for changed admission/source/daemon consumers. Verify deny
+before read, same-body retention, post-read narrowing, cancellation and content-free errors through the real
+ingestion path. Old byte/golden/batch fixtures are deleted with their APIs.

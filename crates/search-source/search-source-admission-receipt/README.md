@@ -1,28 +1,26 @@
-# search-source-admission-receipt
+# search-source-admission-receipt — historical removal leaf
 
-Pure v2 receipt issuance and current-policy verification over immutable models
-from `search-source-admission`. This package owns the full receipt implementation
-and its causal fixtures; callers import `receipt_v2` from this permanent leaf.
+This 34.4 KiB pure receipt package exists to preserve the pre-release v2 admission decision/fingerprint
+profile. It does not read a source, prove native containment, retain bytes or commit current state.
 
-`issue_receipt_v2` checks the immutable decision's policy fence, revalidates its
-observation, checks raw lower ceilings and counts before variable copies, and
-computes the receipt through the shared checked CBOR/BLAKE3 producer.
-`verify_receipt_v2` checks schema, current policy fence and retained identities,
-revalidates the observation and recomputes the exact receipt before returning
-the private immutable verified wrapper. Refusals return no partial receipt.
+Its production consumer is the legacy `search-source-provenance` archive/reconstitution path. The current
+local ingestion target evaluates the selected candidate directly and stores only the useful current outcome.
+It needs no separately issued or verified admission receipt.
 
-The original caller supplies checkpoints; cancellation and its existing deadline
-are never renewed. Failures contain closed metadata. There is no I/O, native
-identity, root/source registration, access/currentness proof, v1 fallback, mutable
-receipt field or caller-supplied digest/accepted constructor.
+## Disposition
 
-#424 moves the complete accepted implementation from admission with its fixtures.
-The old `search_source_admission::receipt_v2` module is deleted. New callers use
-`search_source_admission_receipt::receipt_v2`; receipt profile/domain/bytes and
-existing v1 behavior remain compatible. Ingestion/currentness adoption remains
-#270/#271, and whole-call batch evaluation stays in admission under #241/#405.
+Delete this package with:
 
-Existing receipt fixture groups remain authored, not run. Production source gates
-and independent exact-head review are separate from runtime/native/live-Qdrant/
-resource/scale/installed qualification under #215. See `RECEIPT_V2.md` for the
-unchanged receipt schema and operation ceilings and `AGENTS.md` for ownership.
+- `search-source-provenance`;
+- source-record/registry v4 original-input archive codecs;
+- `OriginalAdmissionV2` from native acquisition;
+- receipt/profile/golden fixtures and documentation;
+- workspace/dependency/status/ledger entries which exist only for this leaf.
+
+Do not preserve the `eliot-admission-receipt@2` bytes, API path or canonical fingerprint as compatibility.
+Unsupported pre-release roots are refused before writes and left intact. A historical diagnostic may keep a
+read-only copy only while it has an explicit real caller; it cannot participate in current ingestion.
+
+The current admission flow is described in
+[`search-source-admission/FUNCTIONS.md`](../search-source-admission/FUNCTIONS.md) and issue
+[#270](https://github.com/UnknownAlienHuman/eliot-search/issues/270).

@@ -1,14 +1,20 @@
 # Working on search-source-provenance
 
-Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md) and [README](README.md). Trace every remaining
-consumer before changing the archive model.
+This package is a legacy original-input/archive compatibility owner scheduled for deletion. Read
+[README.md](README.md) and the current [admission map](../search-source-admission/FUNCTIONS.md).
 
-This package is transitional legacy reconstitution, not a permanent source authority. Do not add new
-original-input fragments, receipt formats, canonical identities or forwarding APIs for the current local
-path. Preserve exact old bytes only for an explicit read-only consumer while it exists.
+Do not add fragments, archive profiles, receipt reconstruction, storage proofs, current ingestion callers,
+forwarding APIs or compatibility promises. Do not optimize the v4 restore path.
 
-Current ingestion evaluates admission directly and commits a retained revision/current head. Move any
-small still-useful value to its real owner and delete this package with its archive codecs and fixtures when
-legacy/#598 consumers no longer require it. Do not inspect, reset or compete with #598's active private
-source work.
+Migrate each caller to current typed state:
+
+- native acquisition keeps the exact body and small final admission outcome;
+- source registry stores only current root/source/head references;
+- restart point-reads current redb state;
+- unsupported old roots remain intact and unavailable.
+
+Delete this package, source-record/registry original-input codecs and their fixtures after the final caller
+moves. Preserve #598's active private work and use only its accepted handoff.
+
+After production changes, run minimal Rust 1.98 compiler/Clippy for the actual source/admission/registry/
+daemon consumers. Archive byte parity and provenance fixtures are removed with their APIs.

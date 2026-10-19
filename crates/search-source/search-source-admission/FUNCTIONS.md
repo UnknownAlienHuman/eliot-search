@@ -1,67 +1,127 @@
-# search-source-admission — source map
+# search-source-admission — source and deletion map
 
-The [implementation guide](../../../docs/implementation/README.md) owns the connected ingestion path.
-This map distinguishes useful policy code from compatibility/proof machinery.
+## Current connected call
 
-## Implemented functions and callers
+`bins/eliot-searchd/src/owner_composition/kernel/native_source.rs::acquire_source_v2` currently performs:
 
-| Source/API | Actual behavior / caller reality |
+```text
+native root/file qualification
+→ construct metadata input
+→ reconstruct canonical AdmissionObservationV2
+→ evaluate_pre_read_v2
+→ stable safe-reader body acquisition
+→ hash/classify body
+→ reconstruct another canonical observation
+→ OriginalAdmissionV2::retain
+   → full evaluate_v2
+   → receipt_v2 issue/verify
+   → retained original policy/observation/decision/receipt
+→ derive another native observation digest and source identity
+→ return AcquiredNativeSource without the body
+```
+
+`AcquiredNativeSource` retains native handles, identity/binding observations and `OriginalAdmissionV2`; it
+cannot pass the exact bytes to the object writer. Registry/source-record v4 codecs then persist/reconstruct
+the original-input archive.
+
+## Useful current functions
+
+| Source/API | Disposition |
 |---|---|
-| `policy_v2::compile_policy_v2`, path matching | Compiles the bounded reviewed GlobSet policy and matches validated relative locator bytes. Pure CPU work. |
-| `observation_v2::AdmissionObservationV2` | Retains bounded locator/metadata observations and computes their existing identity. It proves no containment or read. |
-| `evaluation_v2::evaluate_pre_read_v2` | Produces the pre-read verdict. Native source acquisition calls it before opening/reading the body. |
-| `evaluation_v2::evaluate_v2` | Produces the full decision from a complete observation. Current non-test callers route through source-provenance/receipt reconstruction. |
-| `batch_v2::evaluate_batch_v2` | Complete bounded multiset evaluator. Search found package/docs callers, not normal daemon ingestion. |
-| v1 policy/observation/decision/receipt/batch codecs | Preserve old byte profiles and refusal semantics. They are compatibility inventory, not the target current format. |
-| `search-source-admission-receipt` | Separate receipt issuer/verifier leaf. A receipt is not native read, retained bytes or current source state. |
-| `search-source-provenance` | Stores/reconstructs complete original inputs for historical registry/archive formats. It is not needed to evaluate a current source candidate. |
+| `policy_v2::compile_policy_v2` and reviewed `globset` matching | Keep/simplify as the one current policy compiler. |
+| `evaluation_v2::evaluate_pre_read_v2` | Keep the behavior, with a smaller current observation type. |
+| `evaluation_v2::evaluate_v2` | Reduce to a post-read finalizer over actual acquired-byte facts. |
+| `observation_v2` | Replace with small before/after structs; no canonical fingerprint authority. |
+| `batch_v2::evaluate_batch_v2` | Delete; inventory calls the pure evaluator per candidate or in an internal iterator. |
+| v1/bootstrap/original envelope/input models | Delete after legacy readers are removed. |
+| receipt/provenance packages | Delete from current ingestion; they add no read/storage/currentness guarantee. |
 
-## Connected operation
+## Target data
 
-The daemon inventory/source owner supplies one bounded candidate observation. Admission performs no I/O:
+```text
+CompiledAdmissionPolicy {
+  revision
+  finite allow/deny/review rules
+  maximum admitted bytes/classes/locations
+}
 
-1. Validate the root-relative locator and metadata that exist before body acquisition.
-2. Evaluate mandatory exclusions and path/class rules.
-3. Return a closed pre-read outcome.
-4. For `AllowRead`, the source owner performs one stable final-handle read.
-5. Add only facts that genuinely require bytes: actual size/digest, encoding/binary/content class and
-   selected detector/profile results.
-6. Reevaluate/finalize; a later fact may narrow but never widen a pre-read refusal.
-7. Pass the owned body and final bounded classification directly to revision retention/current source
-   commit.
+CandidateBeforeRead {
+  root_relative_locator
+  source/file class
+  location class
+  observed metadata required by policy
+}
 
-The inventory loop may evaluate candidates one at a time or in a small bounded batch for efficiency. It
-does not need a durable canonical batch object, sorted multiset identity or receipt per candidate.
+CandidateAfterRead {
+  exact byte length
+  binary/text/encoding/content class
+}
 
-## Keep
+AdmissionDecision {
+  outcome
+  stable reason code
+  final classification when allowed
+  policy revision
+}
+```
 
-- one immutable compiled policy per operation/profile;
-- portable validated root-relative locator bytes;
-- mandatory deny precedence and explicit review/unsupported/incomplete outcomes;
-- finite rule/pattern/input/work limits and caller deadline/cancellation checkpoints;
-- content-free errors and diagnostics;
-- exact policy/profile revision used by current source state where useful.
+Do not copy source bytes or native handles into policy values. Do not include caller-produced digests,
+`accepted` Booleans, access grants, source identity or currentness.
 
-## Remove after caller migration
+## Direct ingestion sequence
 
-- v1 byte compatibility and its exclusive fixtures from the current product;
-- separate receipt issuance/verification for ordinary local ingestion;
-- full original-input provenance archive and reconstitution pipeline;
-- canonical decision/batch identities and permanent batch result types;
-- duplicate configuration/bootstrap/digest paths used only by retired formats;
-- package size/fixture allowances and historical AUTHORED_NOT_RUN status prose.
+```text
+compile policy once for inventory/config revision
+→ native owner builds CandidateBeforeRead
+→ pre_read
+→ if allowed: one stable final-handle read
+→ native/source owner computes actual body facts
+→ finalize
+→ if allowed: pass same owned body to #330 object writer
+→ compare/set typed source head under #270
+→ enqueue #331 preparation
+```
 
-Do not replace removed records with another admission journal. A changed policy causes future candidates or
-an explicit reconcile to be evaluated under the new policy; actual current-source removal/update is owned
-by ingestion/reconcile.
+A post-read decision may narrow a pre-read allow. It cannot widen a deny/review/unsupported/incomplete result.
+Cancellation/deadline before object publication retains nothing. Once an immutable object is published,
+failure to commit the source head leaves a safe unreferenced object for bounded GC.
 
-## Behavior to verify through ingestion
+## Persistence
 
-- denied source produces zero body-read calls;
-- an absent or malformed locator never becomes allow;
-- known secret/private/system exclusions dominate permissive patterns;
-- final-handle replacement/race is reported by the reader, not repaired by policy receipts;
-- post-read binary/encoding/size facts narrow correctly;
-- cancellation/deadline yields no accepted body;
-- same accepted source body reaches retention without a pathname reread;
-- ordinary errors/logs disclose no path, policy text or source body.
+Store only policy revision, outcome/reason and selected classification when useful for current diagnostics.
+No complete original policy/observation array, receipt fingerprint, matched-rule archive or completed operation
+is required in redb.
+
+An old root which depends on v1/v2 archive bytes is unsupported by the new application. Refuse it before
+writes and leave it intact. Do not port archive fragments or source-record v4 batches into the current schema.
+
+## Delete with callers
+
+```text
+search-source-admission:
+  bootstrap_v1
+  batch_v2
+  original_envelope
+  original_inputs_v2
+  v1 families and receipt-oriented portions of lib.rs
+
+search-source-admission-receipt package
+search-source-provenance package
+source-records provenance/v4 archive codecs
+registry_control original_inputs_v4 / v4_restore / batch restore paths
+old receipt/archive/canonical/batch fixtures and docs
+```
+
+Move only a genuinely useful bounded policy type/reason code to the source owner. No forwarding modules or
+`admission-v3` compatibility family.
+
+## Verification
+
+- deny/review/unsupported/incomplete performs no body read;
+- known private-key/credential/system/own-state exclusions remain fail-closed in the correct native/policy
+  owner;
+- allowed body is read exactly once and retained unchanged;
+- post-read binary/encoding/size classification narrows correctly;
+- policy update is reflected on the next inventory/reconcile without operation-history replay;
+- restart point-reads current source/head and never restores original admission inputs;
+- ordinary errors reveal no locator/rule/source content.
