@@ -16,6 +16,11 @@ and syncs a stage, reads the full stage, links/publishes the final name, syncs t
 full final object. Existing-object reuse also reads and compares bytes. Materializer has a second copy of
 this platform with its own receipt family.
 
+The platform durability claim is inconsistent: `sync_directory_result` calls `File::sync_all` on a Unix
+directory, while the non-Unix `sync_directory` implementation is a no-op and the wrapper still returns
+`Ok(())`. That may be sufficient for no durability guarantee, but it cannot be reported as an executed
+Windows directory flush.
+
 ## Target API
 
 Exact names may follow #598's accepted handoff, but one owner must provide the following behavior:
@@ -33,22 +38,58 @@ contain source membership, current-head or query authority.
 
 ## Publication sequence
 
-1. Validate final address/kind/profile and byte ceilings.
-2. Create one unpredictable stage in the final directory.
+1. Validate admitted final directory, final address/kind/profile and byte ceilings.
+2. Create one unpredictable `create_new` stage in the final directory. Retry a bounded name collision;
+   do not share a fixed temporary name between concurrent writers.
 3. Stream/write exact bytes while computing/verifying the selected content identity.
 4. Flush/sync the stage according to the supported storage profile.
-5. Publish no-clobber. If the final name already exists, open and verify it exactly.
+5. Publish no-clobber. If another writer already created the final name, open and verify it exactly.
 6. Verify the resulting final object once.
-7. Remove the stage after either verified reuse or verified publication.
-8. Return `ObjectRef` and, where useful, the already verified owned bytes to the caller.
+7. Complete the platform-qualified namespace durability step.
+8. Remove the stage after either verified reuse or verified publication.
+9. Return `ObjectRef` and, where useful, the already verified owned bytes to the caller.
 
-A failure before possible publication removes the stage when possible. A failure after possible
-publication is resolved by the exact final address/readback. Stage cleanup remains best effort and
-bounded; a leftover is GC input, not a successful-operation record.
+Two concurrent writes of the same bytes converge on one final object. A final name containing different
+bytes is an immutable conflict. A failure before possible publication removes the stage when possible. A
+failure after possible publication is resolved by the exact final address/readback. Stage cleanup remains
+best effort and bounded; a leftover is GC input, not a successful-operation record.
 
-The useful donor pattern is Git's loose-object finalization: publish a temporary object to its content
-address, then remove the temporary name after successful link/rename. Eliot still supplies its own current
-format, integrity and platform durability requirements.
+## Donor code already present
+
+`crates/search-control-redb/src/migration/cutover_artifact.rs` already implements the useful small sequence:
+
+```text
+create_new temporary
+→ write_all + file.sync_all
+→ temporary readback
+→ fs::hard_link(temp, final)
+→ remove temp
+→ directory sync
+→ final readback
+```
+
+Use this as an internal code donor while deleting the migration owner. Git's loose-object finalization
+confirms the same temporary-to-content-addressed-final and temporary-removal pattern.
+
+Do not copy its fixed temporary basename into a concurrent object store. Do not copy its over-conservative
+rule that byte-identical readback after an unclassified native error can never resolve the desired final
+state; object publication recovery is determined by whether the exact content-addressed final object now
+exists and verifies, not by proving which process call created it.
+
+## Windows finalization boundary
+
+- `hard_link` requires same-volume filesystem support; creating the stage in the final directory handles
+  the volume issue but not an unsupported filesystem.
+- the current Windows directory sync is a no-op; exact final readback is not a power-loss durability test;
+- select and qualify a supported native no-clobber/write-through move/link strategy for the supported
+  Windows filesystem, or expose a weaker durability profile explicitly;
+- test competing writers, destination already present, antivirus/file sharing, crash before/after final
+  namespace change and restart before committing the redb source/preparation pointer;
+- never silently fall back to overwrite, copy/delete or a receipt-only success.
+
+The source/preparation pointer is committed only after the final object is known to satisfy the selected
+storage profile. If that profile cannot establish crash durability, the application must report that fact
+rather than claim a stronger guarantee.
 
 ## Range and integrity reads
 
@@ -66,8 +107,12 @@ Do not represent a digest field returned beside arbitrary bytes as verification.
 
 The object store enumerates and deletes exact objects. Reachability belongs to current source heads,
 current/pending view manifests and live view guards. Registering an object before or during creation may
-help discover crash debris; it must not become a second permanent graph or operation journal. Failed delete
-leaves the object discoverable for a later pass.
+help discover crash debris; it must not become a second permanent graph or operation journal.
+
+Compute one bounded deletion batch from a coherent root snapshot. Recheck/delete only exact unreferenced
+addresses. On Windows an open-handle/share-mode conflict may make deletion fail; keep the object visible for
+a later pass. A failed delete is not evidence that the object is referenced and is not a reason for a
+separate tombstone database.
 
 ## Remove after cutover
 

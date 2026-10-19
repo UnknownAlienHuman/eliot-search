@@ -26,19 +26,37 @@ Staging disposition is not durable source truth and should not become a permanen
 
 ```text
 verified owned bytes
-→ unique stage in target directory
+→ unique create-new stage in the final directory
 → bounded write + file sync
-→ no-clobber publication to content-addressed final name
-→ existing-object/full final verification
-→ directory durability required by the selected filesystem profile
+→ no-clobber publication to the content-addressed final name
+→ exact existing/final verification
+→ platform-qualified namespace durability
 → remove stage
 → ObjectRef
 ```
 
-If the final object already exists, verify exact kind/profile/length/content and remove the stage. If a
-crash leaves a stage or an unreferenced final object, ordinary bounded GC may remove it after current,
-pending and pinned references are known. Unknown cleanup leaks bytes safely; it does not block serving a
-verified final object or require a lifetime receipt journal.
+If another writer wins the same final name, verify exact kind/profile/length/content and remove this
+writer's stage. Different bytes at one address are an immutable conflict. If a crash leaves a stage or an
+unreferenced final object, ordinary bounded GC may remove it after current, pending and pinned references
+are known. Unknown cleanup leaks bytes safely; it does not block serving a verified final object or require
+a lifetime receipt journal.
+
+The repository already contains a useful internal donor in
+`search-control-redb/src/migration/cutover_artifact.rs`: create-new temporary write, file sync, no-clobber
+hard link, temporary removal, directory sync and final readback. Extract that small mechanism; do not keep
+the migration platform that currently owns it.
+
+## Windows durability is an explicit profile decision
+
+The existing daemon adapter's `sync_directory_result` is a real directory `sync_all` on Unix but a no-op
+that returns success on non-Unix. Exact post-publication readback establishes the current namespace state;
+it does **not** by itself prove that the name survives a sudden power loss.
+
+The Windows implementation must therefore select and qualify a supported same-volume no-clobber/
+write-through finalization primitive, or explicitly report a weaker crash-durability profile. A candidate
+is native move/rename with write-through and no replace, but its exact NTFS/ReFS semantics, antivirus/file-
+sharing behavior and crash result must be exercised on supported Windows. Never represent the current
+no-op directory sync as durable success and never add a receipt platform to conceal the missing primitive.
 
 ## Reads
 

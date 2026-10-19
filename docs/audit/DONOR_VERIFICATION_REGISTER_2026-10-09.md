@@ -18,7 +18,9 @@ build a provider framework for every alternative.
 | Git commit views | [Git `c44beea`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/builtin/cat-file.c) | Resolve exact OIDs; `ls-tree`, raw `diff-tree`, reused bounded `cat-file --batch-command`. | Checkout, textconv, filters, lazy fetch, process-per-file or mandatory dual backend. |
 | Native Git alternative | [gitoxide `ad0202e`](https://github.com/GitoxideLabs/gitoxide/blob/ad0202e3ab396d752a56664001c134f48d834177/gix-diff/src/tree/function.rs) | Optional no-Git tree/ODB path. | Shipping both backends before a packaging requirement exists. |
 | Control state | [redb 2.6.3 transactions](https://github.com/cberner/redb/blob/v2.6.3/src/transactions.rs) | Short typed write transactions and MVCC read snapshots; load current state once and update the changed pointer/cache. | Eliot's eternal operation ledger, complete record copy after every write, or pretending redb transacts with Qdrant/files. |
-| Immutable object finalization | [Git object finalization `c44beea`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/object-file.c) | Stage locally, publish to the content address with link/rename, then remove the temporary name after success/reuse. | Git's ODB, pack format or an operation receipt per immutable write. |
+| Internal immutable finalization | [Eliot cutover artifact `c8e38b6`](https://github.com/UnknownAlienHuman/eliot-search/blob/c8e38b6fc9829f1cd38070773b1b3e5b21de18ad/crates/search-control-redb/src/migration/cutover_artifact.rs) | Extract create-new stage, file sync, stage readback, no-clobber hard link, stage removal, directory sync and final readback. | The migration owner, fixed shared temp basename, receipt protocol or its overly broad unknown-outcome rule. |
+| External immutable finalization | [Git object finalization `c44beea`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/object-file.c) | Stage locally, publish to the content address with link/rename, then remove the temporary name after success/reuse. | Git's ODB, pack format or an operation receipt per immutable write. |
+| Windows write-through candidate | [MoveFileEx `MOVEFILE_WRITE_THROUGH`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexa) | Candidate same-volume native finalization to qualify when hard-link + directory sync cannot supply an honest durability profile. | Assuming it provides no-clobber/crash guarantees without exact Windows/NTFS/ReFS tests; `REPLACE_EXISTING` or copy/delete fallback. |
 | Orphan file GC | [Tantivy `ManagedDirectory` `6788926`](https://github.com/quickwit-oss/tantivy/blob/67889269cae67063c372bc236b102d632a021568/src/directory/managed_directory.rs) | Track files created by the owner; compute living files under the metadata lock; failed deletes remain tracked for retry. | Tantivy as a backend or its persisted JSON registry as Eliot's source-of-truth graph. Eliot derives roots from current/pending/pinned records. |
 | JSON / config | [Serde 1.0.229](https://github.com/serde-rs/serde/blob/v1.0.229/README.md), [serde_json 1.0.151](https://github.com/serde-rs/json/blob/v1.0.151/src/de.rs), [toml 1.1.7](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/mod.rs) | Bounded typed frames/settings. | Handwritten JSON/TOML grammars, canonical hashes for ordinary records or parsing an unbounded input. |
 | Deadlines | [Tokio 1.53.1](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/time/timeout.rs) | One absolute `timeout_at` deadline across phases. | Renewing a full duration for every RPC or another generic budget framework. |
@@ -40,8 +42,8 @@ The donor mechanisms agree on a small design:
 
 ```text
 immutable object:
-  unique stage → bounded write/sync → no-clobber finalization
-  → exact existing/final verification → remove stage
+  unique create-new stage → bounded write/file sync → no-clobber finalization
+  → exact existing/final verification → qualified namespace durability → remove stage
 
 control state:
   short typed redb transaction → committed current value
@@ -52,10 +54,16 @@ cleanup:
   → bounded exact deletion; failed deletion stays discoverable
 ```
 
-Git removes the temporary name after successful link/rename rather than preserving it as permanent
-success evidence. Tantivy registers owned files before creation so crash debris remains discoverable, then
-removes files absent from the live set while retaining failed deletions for retry. Eliot should copy those
-mechanics, not either donor's storage format or metadata database.
+Eliot already contains the core immutable-finalization sequence in the old cutover-marker code. Reuse that
+small code shape rather than importing a new crate or preserving the migration system. Git independently
+confirms removal of the temporary name after link/rename. Tantivy registers owned files early enough that
+crash debris remains discoverable and keeps failed deletions retryable.
+
+The current daemon's Windows `sync_directory` is a no-op that returns success through its wrapper. Therefore
+exact final readback proves current logical state but not power-loss durability of the namespace entry. The
+new store must qualify a supported Windows finalization/durability profile, or state the weaker guarantee
+explicitly. `MoveFileEx(..., MOVEFILE_WRITE_THROUGH)` is a candidate to test, not a pre-proven drop-in.
+Neither a receipt nor another recovery state machine repairs an unimplemented durability primitive.
 
 ## Existing workspace owners to reuse
 
@@ -68,6 +76,8 @@ mechanics, not either donor's storage format or metadata database.
   commands instead of extracting another client framework.
 - Point identity, verified UnitSet and publication/planner code exist, but their mixed revision/retrieval
   identity must change with actual consumers rather than be wrapped for compatibility.
+- The old control cutover-marker publisher is an internal donor only; delete its migration semantics after
+  the object primitive is extracted.
 
 ## Context and research donors
 
@@ -96,6 +106,7 @@ query-rewriting LLM or generated research-answer pipeline is required.
 - Multiple physical point copies solely for portfolio membership.
 - Permanent success-stage aliases or operation receipts for immutable object writes.
 - Full mirrored control snapshots rebuilt after each typed current-state update.
+- Treating a non-Unix directory-sync no-op as durable publication.
 
 ## Verification rule
 
