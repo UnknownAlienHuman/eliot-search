@@ -1,45 +1,100 @@
-# search-eval
+# search-eval — optional post-product evaluator
 
-**C29 — Content-minimized evaluation and candidate Product Pulse reports.**
+Evaluation compares actual public product results after the connected application works. It is tooling, not a
+runtime owner, release credential, evidence database or prerequisite for implementation.
 
-**Status:** source is present for schemas, audits, metrics, evidence handling and reports. This is an evaluation-only package, not an accepted installed-product measurement or qualification system. Existing local fingerprints and caller-supplied evidence still require the migrations assigned below. Source presence and compilation do not establish product acceptance.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md) and release issue
+[#215](https://github.com/UnknownAlienHuman/eliot-search/issues/215).
 
-## Owns
+## Verified current state
 
-- pure corpus, baseline, run, metric and evidence models;
-- deterministic aggregation and compatible-run comparison;
-- candidate latency/resource/fault/protocol/security reports;
-- content-minimization and source-admission audit calculations;
-- candidate Product Pulse classification and report construction.
+The package has no external Rust caller in public main. Its production source is roughly **150 KiB** across:
 
-The current implementation is exported by `src/lib.rs` from `audits`, `core`, `evidence`, `metrics` and `report`. The private `fingerprint` module is retained migration debt, not proof that all identities already use the canonical digest owner.
+- corpus/baseline/run registries;
+- evidence attempts, ledgers and schedules;
+- protocol/fault/leakage/reproducibility audits;
+- metric/SLO/resource/comparison machinery;
+- report, verdict, receipt and independent-review models;
+- a package-local fingerprint implementation.
 
-## Current implementation boundaries
+Issues #233/#234/#240 proposed another immutable run store, canonical identity hierarchy, in-toto/DSSE
+attestation system, recursive verifier, reviewer quorum, Windows Job sampler, disclosure scanner and fault
+runner. That is a second product. It must not precede or gate Search.
 
-- [#233](https://github.com/UnknownAlienHuman/eliot-search/issues/233): immutable run/query/qrel/result formats and pure evaluation.
-- [#234](https://github.com/UnknownAlienHuman/eliot-search/issues/234): independently checked statement subjects, predicates and reviewer policy.
-- [#240](https://github.com/UnknownAlienHuman/eliot-search/issues/240): effectful installed-product execution and retained raw measurements.
-- [#137](https://github.com/UnknownAlienHuman/eliot-search/pull/137): measurement/disclosure integration program; historical tracking branch is not an implementation base.
-- [#215](https://github.com/UnknownAlienHuman/eliot-search/issues/215): preregistered product qualification.
+## Small useful evaluator
 
-Canonical computation belongs to `search-contracts`. A caller's status, sample, digest or approval Boolean is not independently verified execution evidence.
+After #264 proves the real CLI path, a pure tool may consume explicit files:
 
-## Does not own
+```text
+cases.jsonl
+  case_id, query, selected sources, requested limit/profile
 
-- production query, ranking, source, index or lifecycle behavior;
-- production telemetry services or hidden learning/oracle feedback;
-- raw source, unsaved buffers, query text, secrets, tokens or private paths in ordinary reports;
-- a second installed-product runner, store reader or cross-package fault executor;
-- independent acceptance of its own candidate report;
-- production packages depending on evaluation tooling.
+qrels.jsonl              // optional when relevance is being measured
+  case_id, exact expected source/evidence ID, grade
 
-## Working entrypoints
+results.jsonl
+  case_id, terminal status, ordered EvidenceCard identities,
+  truthful gaps/coverage, raw integer durations and optional bounded resource observations
+```
 
-- [Package instructions](AGENTS.md) and [function contract](FUNCTIONS.md).
-- [Current audit/launch entrypoint](../../docs/audit/README.md).
-- [Central package status](../../docs/product/PACKAGE_STATUS.toml).
-- [Evaluation contract](../../docs/evaluation/W9_PRODUCT_PULSE_CONTRACTS_1.0.md).
+It may compute:
 
-Historical W4/W9/P08/P15 labels trace obligations only. They do not replace the current root instructions and assigned issue, and do not authorize a controller, ticket or lease system inside Search.
+- case status counts (`PASS/FAIL/PARTIAL/NOT_RUN` are descriptive test outcomes, not runtime credentials);
+- Recall/Precision/MRR/nDCG at declared `k` where qrels exist;
+- per-case and aggregate latency from retained raw integer durations;
+- simple before/after differences between compatible runs;
+- explicit missing/invalid/mismatched case rows.
 
-Soft source target: 7,500 hand-written lines; split review before 8,500 total; hard review threshold 10,000 including local tests. Split by responsibility, not by inventing another report or acceptance authority.
+Use exact source/revision/range identities already returned by the current product. Path/title/chunk text is
+not evidence identity. Failed/partial/timeout/cancelled cases remain present. No metric turns a correctness,
+scope or corruption failure into success.
+
+## Runner boundary
+
+The smallest release runner is an ordinary tooling command or script which:
+
+1. starts/opens the exact built candidate through the same public CLI/protocol;
+2. executes a finite declared case list;
+3. records raw request/result/duration/exit data;
+4. optionally records a few clearly named OS process counters;
+5. exits nonzero or leaves explicit failure rows on missing cases.
+
+It does not need a new workspace package, process identity ontology, Job evidence store, histogram framework,
+fault DSL, inventory graph or immutable publication service. For selected Windows resource testing, use the
+existing process/Job owner or a small dedicated helper and retain raw integer samples; descriptive reports
+are enough.
+
+## Release evidence
+
+A release may archive:
+
+- exact source/build/package identifiers;
+- commands/configuration/corpus and raw results;
+- evaluator version and generated summary;
+- ordinary package signatures/checksums when the release process selects them.
+
+These artifacts are records for humans and reproducibility. They are not passed back into product
+constructors, do not authorize readiness and need no in-toto/DSSE/reviewer-quorum operating system.
+Independent review is a normal review/release process, not a public Rust contract.
+
+## Remove or simplify
+
+Delete after current consumers are confirmed absent:
+
+- evidence ledger/schedule/attempt authority;
+- package-local fingerprint/canonical identity system;
+- report receipts, verdict authority and independent-review records;
+- generic audit registry and SLO/acceptance policy engine;
+- runtime/package/profile attestation schemas;
+- fixtures preserving those pre-release APIs.
+
+Keep only the small pure input validation and standard metric functions which #215/#264 actually consume.
+If the remaining tool is simpler outside Rust, delete the package entirely rather than preserving a crate for
+status purposes.
+
+## Completion
+
+This package never blocks implementation. It is complete when one actual post-product result set can be
+validated and summarized deterministically from explicit finite files, with failures and missing cases still
+visible. Product truth comes from the connected run and raw evidence, not an evaluator receipt.
