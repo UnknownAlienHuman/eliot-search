@@ -1,47 +1,45 @@
-# W7 hardening — `search-publication`
+# Restricted scope, revocation and restore
 
-This packet refines publication interaction with restrictive security, purge and restore. The existing
-W3 `FUNCTIONS.md` remains authoritative for normal point publication/recovery.
+The old W7 invalidation-only, purge and restore publication protocol is not a baseline product subsystem.
+It mixed access control, legal retention, Qdrant cleanup and publication recovery into another state machine.
 
-## Invalidation-only publication
+## Local baseline
 
-```text
-commit_invalidation_only(command, control_port, snapshot_port, operation)
-    -> Result<InvalidationPublicationReceipt, PublicationError>
-```
+The owning-account local application resolves an explicit non-widening `ResolvedScope` from the pinned
+`PublishedView`. It does not persist a security command, deny generation, purge receipt or invalidation-only
+view sequence for every publication.
 
-Used when live security/currentness must advance without waiting for index cleanup/rebuild. One guarded
-control transaction increments the relevant deny/shadow/purge generation, records exact affected scope
-and publishes an immutable snapshot before acknowledgement.
+## Optional restricted client
 
-No new point becomes current. Existing Qdrant bytes may remain physically present but are excluded before
-retrieval/IDF/counts/traces by the live fence.
+A selected restricted-client adapter owns its real session policy:
 
-## Purge interaction
+- explicit allowed source/view set;
+- non-widening retrieval filter and identical scoring/IDF population;
+- request limits, expiry and revocation;
+- manifest/evidence lookup constrained to the same scope.
 
-A purge/security fence is not a normal retired-point manifest and cannot be downgraded to ordinary
-reclaim. Publication may emit exact security-purge index targets/receipts through the lifecycle port,
-but `search-retention` owns purge plan/final receipt and `search-index-reclaimer` owns only ordinary
-retirement.
+Revocation changes the adapter/session's admitted scope immediately. Physical Qdrant bytes are not access
+authority. Ordinary publication can later remove or replace points; cleanup waits for view guards where
+required.
 
-Any staged/uncommitted intent overlapping a purge scope is fenced, recovered/compensated under its exact
-intent and cannot later commit visibility. The allocated epoch remains consumed.
+A pending publication that overlaps a newly restricted source does not need epoch abandonment,
+compensation or a membership fence. Queries cannot widen into the source; the same pending operation is
+resolved from actual Qdrant/current-view state, and the next ordinary publication reflects the new selected
+source set.
 
-## Restore interaction
+## Restore
 
-Restored Qdrant collection/snapshot never becomes the active route directly. It enters a candidate
-quarantine generation. After lifecycle/source/access/profile/purge revalidation, publication performs
-normal exact readback and one new guarded route/epoch commit. Old backup visible epoch is not reused or
-trusted as current.
+A restored Qdrant backup or collection is merely candidate external data. Validate it against current
+source/preparation manifests, publish it as a normal new physical generation and commit one new
+`CurrentPublishedView`. An alias or historical epoch never makes it current by itself.
 
-## Required tests
+## Deliberately absent
 
-- invalidation-only commit live before acknowledgement;
-- Qdrant unavailable during revocation still yields logical non-accessibility;
-- purge racing every normal publication state cannot expose/stage-commit purged material;
-- purge fence/targets/receipts distinct from ordinary retired manifest/reclaim;
-- staged overlap is compensated/fenced and epoch never reused;
-- restored old route cannot serve before new guarded publication;
-- purge tombstone blocks restore/republication resurrection;
-- restore route commit uses current owner/access/profile/source guards;
-- failure after control commit before snapshot publication remains fail-closed/recoverable.
+Do not implement invalidation-only publication, purge tombstones, security-purge target/receipt families,
+consumed abandoned epochs, restore-candidate quarantine or a second access snapshot publisher. A real legal
+hold, secure erasure or multi-tenant authorization feature may introduce its own selected requirements only
+when an actual consumer exists; it must not burden the baseline local path.
+
+See [FUNCTIONS.md](FUNCTIONS.md),
+[`search-access`](../../search-query/search-access/README.md) and the
+[view-guard map](../search-epoch-pins/FUNCTIONS.md).

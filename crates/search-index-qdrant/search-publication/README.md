@@ -1,110 +1,118 @@
 # search-publication
 
-Own one real recoverable transition from prepared projection pages to one immutable `PublishedView`.
-Publication is the only owner of pending Qdrant effects, visible-view commit and derived-index cleanup.
+Own the only transition from prepared retrieval pages to one queryable immutable `PublishedView`.
+Publication owns the Qdrant effect cursor, visible-view commit, current-view swap and cleanup after old
+readers drain.
 
 Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md) and [source map](FUNCTIONS.md).
+[implementation guide](../../../docs/implementation/README.md) and [source map](FUNCTIONS.md).
 
-## Current source and missing connection
+## Current source is not a publisher
 
-The package `PublicationCoordinator` is an in-memory phase machine. Its methods accept prepared values,
-receipt labels and external observations but do not write redb, call Qdrant or publish a query view. Search
-finds package/tests callers, not the daemon product.
+Public main contains about 102 KiB of non-test Rust in this package. It has no Qdrant or redb dependency.
+`PublicationCoordinator` stores full manifests/diffs and several copies of exact point-ID lists while
+accepting caller-produced receipts and observations. `recover` only classifies those supplied values.
+`restore_inflight` requires the caller to reconstruct the original preparation, intent, receipt prefix,
+control observation and Qdrant observation before it can rebuild the in-memory machine.
 
-The daemon contains a second `publication_composition::Publisher` with a `PublicationFloor`, file journal,
-CAS reservation, compensation and retirement types. `entry.rs` declares it under `#[allow(dead_code)]`; its
-consumers are process/module-shape tests. It is not the live publisher.
+Repository search finds package/tests/documentation users, not a connected daemon caller. The daemon has a
+second dead-code `publication_composition::Publisher`; redb has a third intent/visible-epoch machine. None
+publishes a query view or owns a real Qdrant cursor.
 
-redb has typed publication intent/visibility code, but searches for `persist_publication_intent` find its
-own tests. The current intent retains an opaque prepared-manifest receipt/reference while the complete
-manifests/diff remain in process memory. There is no implemented application `PublishedView` owner/pointer.
+Do not connect or synchronize these three machines. Replace them.
 
-These are three partial state machines, not three layers to synchronize.
-
-## One publication operation
+## One operation
 
 ```text
-bounded projection pages
-→ write immutable operation/manifest pages
-→ short redb pending record
-→ Qdrant mutation page + exact readback
-→ short redb visible-view commit
-→ atomic current PublishedView swap
+ordered prepared pages
+→ immutable operation/manifest artifact
+→ small PendingPublication row
+→ Qdrant page dispatch + exact readback
+→ CurrentPublishedView compare/set
+→ atomic current-view swap
 → old-view drain
-→ bounded point/generation/artifact cleanup
+→ exact point/generation/artifact cleanup
 ```
 
-Local preparation is disposable until the pending record exists. After an RPC may have committed, the same
-pending operation remains; recovery reads actual Qdrant/control state and advances its cursor. No new
-operation identity, inferred rollback or compensation theatre.
+A publication receives one target view sequence. New points are staged with `valid_from = target`; retired
+points are closed with `valid_until = target`. Until redb commits the target `CurrentPublishedView`, queries
+continue to pin the previous sequence and cannot see staged points. After commit, old pinned queries still
+see their previous sequence.
 
-## Pending artifact
+This visibility interval is the useful mechanism. It does not require ten durable phases, seven global
+guards, success receipts, snapshot acknowledgements or an epoch reservation archive.
 
-Write the actual bounded operation artifact before redb references it. It contains:
+## Durable state
 
-- target physical route/generation, retrieval profile and target epoch;
-- ordered new `ViewManifestEntry` pages and current/old manifest roots;
-- complete/narrow Qdrant mutation input pages;
-- exact expected readback for each page;
-- retired point IDs or retired physical generation;
-- next mutation/readback/visibility/cleanup cursor;
-- finite operation limits and version.
+The immutable artifact contains bounded ordered pages:
 
-Manifest pages are immutable objects through the shared current-format object store. redb retains only the
-small current/pending records and object references. It never stores source text, vectors, whole point
-batches or an eternal completed-operation history.
+- target route/physical generation/profile/view sequence;
+- point upserts and exact old-point closures;
+- `ViewManifestEntry` pages binding point IDs to retained evidence;
+- exact expected Qdrant readback for each page;
+- retired IDs or replaced physical generation;
+- old/new manifest roots and cleanup work.
 
-## Effects and visibility
+redb stores only small current records:
 
-1. Validate one prepared page stream and write its immutable pages.
-2. Commit pending metadata in a short redb transaction.
-3. Execute one Qdrant page through the single bridge/runtime under the original absolute deadline.
-4. Read back actual relevant point/vector/payload/schema state.
-5. Advance the pending cursor in a short transaction.
-6. After every required page is verified, atomically commit route/generation/epoch/manifest roots as the
-   visible view.
-7. Swap one in-memory current-view pointer built from that committed record.
+```text
+CurrentPublishedView {
+  view_id / sequence
+  route / physical generation / profile
+  manifest roots and retained-object roots
+}
 
-Never hold a redb writer across object or Qdrant I/O. A failed local transaction before commit is known
-failure. Timeout after possible Qdrant dispatch is unresolved. A committed view with failed in-memory swap
-is recovered by rebuilding the pointer from committed control state; do not rerun mutations.
+PendingPublication {
+  artifact_ref
+  expected_current_view
+  target_view
+  next_effect/readback/cleanup cursor
+  compact state
+}
+```
+
+Write and verify the artifact before redb references it. Never hold a redb writer across object or Qdrant
+I/O. redb contains no source text, vectors, point batches or completed-operation history.
+
+## Forward recovery, not compensation theatre
+
+Before any possible Qdrant dispatch, cancellation or validation failure discards the local preparation.
+After dispatch may have occurred, keep the same pending operation and inspect actual Qdrant state. If the
+expected page is absent, dispatch it; if present, advance; if conflicting, block the target and keep serving
+the committed current view.
+
+Baseline recovery finishes the same operation. It does not mint a replacement identity, rewind a view
+sequence, restore old payloads from receipts, abandon through membership fences or publish an
+invalidation-only epoch. Later source changes queue behind the pending publication and become the next
+ordinary publication.
 
 ## View lifetime and cleanup
 
-A query obtains only a private guard to the atomic current `PublishedView`. A `QueryWindow` can clone that
-guard from its live request. Once publication swaps the pointer, no new old-view guard can appear; existing
-old guard count decreases monotonically.
+Queries can only `pin_current()`. A `QueryWindow` may inherit a guard from its live request. After the
+pointer swaps, no new old-view guard can appear; the old guard count only falls.
 
-Publication cleanup starts after the relevant guards drain:
+After the last relevant guard:
 
-- same generation: delete exact retired IDs in bounded pages and read back absence;
-- replaced generation: delete the whole old collection after its final guard;
-- manifest/source/prepared objects: remove exact unreferenced objects only after current, pending and live
-  view roots no longer reference them;
-- uncertain delete: retain the cursor/root, inspect state and retry; leaking is safer than deleting live data.
+- same physical generation: delete exact retired IDs in bounded pages and read back absence;
+- replaced generation: delete the whole old collection;
+- local source/prepared/manifest objects: delete only after current, pending and live-view roots disappear;
+- uncertain deletion: retain the cursor and retry after readback. Leaking is safer than deleting live data.
 
-Move the useful exact delete/readback helper from `search-index-reclaimer`; delete that package's public
-plan/proof/permit/checkpoint platform. No generic leases, legal purge, tombstones or second GC journal.
+## Remove after cutover
 
-## Removal boundary
+- `PublicationCoordinator`, `PublicationPhase`, durable-intent/receipt/observation/restore/abort APIs;
+- repeated whole-manifest reconstruction and canonical digest preimages between trusted adjacent owners;
+- daemon `publication_composition`, `FileJournal`, `PublicationFloor`, compensation and retirement models;
+- redb VisibleEpoch/intent/snapshot-receipt machines;
+- separate reclaimer journal and raw epoch-pin registry;
+- package/process/module-shape fixtures whose only purpose is preserving those boundaries.
 
-After the real operation is connected, remove:
-
-- the current receipt/observation phase API and whole-preparation digest/reconstruction loops;
-- daemon `publication_composition`, `FileJournal`, `PublicationFloor` and process-only fault machine;
-- redb intent phases that merely mirror supplied receipts instead of a real effect cursor;
-- completed publication receipt/history archives;
-- separate index reclaimer journal and sampled pin-watermark proof;
-- source-shape/module-ownership tests that require the deleted decomposition.
-
-Keep useful validation of page ordering, stable point identity, exact readback, visible-view atomicity and
-unknown-outcome recovery. Change producer/consumer APIs together; do not add a facade preserving the three
-old machines.
+Keep ordered diff/page validation, stable point identity checks, real Qdrant readback, typed current/pending
+rows, view guards and exact cleanup.
 
 ## Completion
 
-Close when a daemon restart can resume before/after each object/redb/Qdrant/visibility boundary, one real
-query pins the committed view, an old query survives a switch, no new old guard can appear, and retired
-points/generations/artifacts are cleaned only after the final guard. Package phase tests alone do not
-establish publication.
+A real retained file must publish, become queryable through the committed view and reopen the correct
+retained excerpt. Restart must resume around artifact persistence, pending commit, each RPC/readback,
+visible-view commit and pointer swap. An old query must survive the switch and cleanup must wait for its
+last guard. Package phase tests do not establish publication.

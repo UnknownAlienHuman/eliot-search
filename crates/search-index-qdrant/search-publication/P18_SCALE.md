@@ -1,52 +1,34 @@
-# P18 advanced-scale supplement — `search-publication`
+# Physical-generation replacement
 
-**Status:** blocked. Existing publication `FUNCTIONS.md` and visible-epoch invariants remain normative.
+The old P18 scale programme is not a current product subsystem. Do not implement `SCALE_PLANNED → R0 →
+catch-up → R1 → final barrier → route switch → rollback` as another durable state machine.
 
-## Migration state
-
-```text
-SCALE_PLANNED
-CANDIDATE_CREATED
-BASE_BUILT_AT_R0
-CHANGELOG_CATCHING_UP
-FINAL_BARRIER_ENTERED
-VALIDATED_AT_R1
-ROUTE_SWITCH_COMMITTED
-OLD_ROUTE_DRAINING
-OLD_ROUTE_RECLAIMABLE
-COMPLETE
-```
-
-Recovery states are `CANDIDATE_FAILED`, `CANDIDATE_DISCARDED`, `ROLLBACK_PENDING`, `ROLLED_BACK`,
-`SCALE_BLOCKED` and `QUARANTINED`.
-
-## Required operations
+A schema, lexical profile or vector-layout incompatibility is an ordinary publication whose target is a new
+physical collection generation:
 
 ```text
-persist_scale_intent(plan, control, mutation) -> ScaleIntent
-record_base_at_r0(intent, manifest, control) -> ScaleBaseReceipt
-apply_ordered_catch_up(intent, change_log, candidate, context) -> CatchUpReceipt
-enter_final_barrier(intent, guards, control) -> FinalBarrierGuard
-validate_candidate_at_r1(intent, candidate, baseline, context) -> ScaleValidationReceipt
-commit_route_switch(validated, control, mutation) -> ScaleRouteCommit
-recover_scale_intent(intent, control, routes, context) -> ScaleRecoveryReceipt
-rollback_scale_intent(intent, baseline_route, control, context) -> ScaleRollbackReceipt
-emit_old_route_manifest(commit) -> RetiredRouteManifest
+one consistent current-source/preparation snapshot
+→ bounded publication pages into the new generation
+→ exact Qdrant readback
+→ CurrentPublishedView route/generation commit
+→ atomic current-view swap
+→ old-view guard drain
+→ delete the old collection
 ```
 
-## Invariants
+The old collection remains the committed query route until the new view commits. A failed or incomplete
+candidate therefore cannot hide current points. Qdrant aliases may be an implementation detail, never the
+visibility commit.
 
-- one unresolved global correctness-path publication/migration intent;
-- ordered change-log catch-up loses/duplicates no accepted source change;
-- final barrier freezes the exact R1 fence before validation/commit;
-- guarded redb route transaction is the only serving linearization point;
-- Qdrant alias is never commit;
-- failed candidate cannot hide/retire baseline points;
-- post-switch rollback is a forward guarded route transition, not epoch rewind;
-- every transition is crash/reopen tested.
+Ingestion may continue changing current source heads while a large replacement is built. Before commit,
+compare the source/prepared snapshot named by the operation artifact with current state. Baseline may
+serialize the replacement, replan it, or apply one bounded ordered delta before final readback. Do not add a
+durable change-log/catch-up/barrier platform until measured scale requires one.
 
-## Required evidence
+After possible Qdrant dispatch, resume the same `PendingPublication`. Failure before view commit leaves the
+old view serving. Failure after view commit rebuilds the current pointer and finishes cleanup. A later
+rollback, if ever needed, is another forward publication to a verified generation; it is not epoch rewind.
 
-Kill/reopen at every state and acknowledgement boundary; R0/R1 manifests; guard race; catch-up ordering;
-failed-candidate exact discard; route-switch snapshot publication; post-switch rollback; no staged
-visibility; old route emitted only after committed switch.
+No candidate-quarantine ledger, R0/R1 receipts, final-barrier token, skipped sequence, `SCALE_BLOCKED`,
+`QUARANTINED` or separate scale recovery owner is required. The same artifact, cursor, current view, guards
+and cleanup rules in [FUNCTIONS.md](FUNCTIONS.md) own both small updates and full generation replacement.
