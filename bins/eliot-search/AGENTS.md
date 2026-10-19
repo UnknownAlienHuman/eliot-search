@@ -1,37 +1,25 @@
-# Agent contract — eliot-search
+# Working on eliot-search
 
-The CLI owns invocation, connection assembly and presentation in `bins/eliot-search/`.
-Use [root instructions](../../AGENTS.md) and the
-[implementation guide](../../docs/implementation/README.md) for named immediate-consumer cutovers.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md),
+[local protocol](../../crates/search-provider-protocol/README.md) and local [source map](FUNCTIONS.md).
 
-The [implementation guide](../../docs/implementation/README.md#4-simplify-and-connect-the-query) connects
-trusted child-stdio/OS-owned pipes separately from optional restricted-client pairing. Old grant/proof fields are not mandatory local
-bootstrap; remove obsolete requirements with their real callers, never fake permissive credentials.
+The CLI owns invocation capture, one owned local connection, current typed request construction, bounded
+presentation and exit status. It does not own query/access policy, redb/object/Qdrant state or grants.
 
-## Ownership and reuse
+Use the smallest supported route first: spawn/own the daemon child and communicate over inherited
+stdin/stdout through the one current framed client. A persistent owner-only OS pipe is optional. Do not
+require pairing, shared keys, grants, binding records or capability digests for child stdio. A selected
+restricted-client profile authenticates separately and terminates into the same current dispatcher.
 
-- Capture arguments/configuration once; preserve non-UTF-8 paths and build a closed invocation.
-- Assemble one owned local connection. Persistent endpoints need actual OS/root identity; restricted
-  clients additionally use their real installation/binding authority.
-- Reuse the existing client/framing/correlation/cancellation code. Keep one session implementation.
-- Build explicit scoped requests; render bounded human or JSON/NDJSON results. Grants belong to an
-  implemented restricted-client profile, not all same-user reads.
-- Reuse the existing Windows transport when a persistent pipe is selected. Use the concrete credential
-  owner only for a restricted integration that needs secrets; do not require it for child-stdio startup.
+Capture `args_os()` and config once. Build `Search | Exact | Continue | Expand` directly. Do not translate to
+`RecipeIdV1`, marked indexed payloads, tab/hex commands or opaque source handles. `Expand` uses one
+`WindowItemRef` and bounded relative context, never arbitrary revision offsets.
 
-The actual dependency graph is in [Cargo.toml](Cargo.toml): contracts, ports, config, provider protocol
-and typed client, plus target-specific transport/secret adapters. Reuse useful code and replace its
-obsolete constructors with their callers. Add direct serialization dependencies where they remove the
-manual grammars; no second client engine is needed.
+Render typed human/JSON/NDJSON output with exact source/revision/location/excerpt and truthful partial/gaps.
+Use Serde; do not substring-parse events or concatenate JSON. Convert timeout once to an absolute deadline;
+interrupt sends best-effort cancellation for the live request and closes within the remaining bound.
 
-## Boundaries
-
-Never open redb, revision CAS or Qdrant, implement query/access policy, mint or widen a grant,
-decode opaque handles, expose hidden payloads, or use pipe reachability as authentication.
-Do not enable `legacy-loopback-harness` for product startup or add TCP/endpoint-file/token-file fallback.
-Native input/listener/command linkage and deletion candidates are in [FUNCTIONS.md](FUNCTIONS.md);
-[#332](https://github.com/UnknownAlienHuman/eliot-search/issues/332) owns the remaining cutover.
-Preserve supported DIRECT commands while replacing their named connection/dispatch edges.
-
-Use the root production and behavior checks. Describe removed mechanisms and remaining
-callers; splitting files or adding forwarding crates to satisfy a line target is not progress.
+Delete the duplicate legacy core/session/endpoint/harness path with its last callers. Preserve child
+ownership/cleanup, non-UTF-8 invocation behavior, finite output and useful exit mapping. After code, run
+minimal Rust 1.98 compiler/Clippy for actual CLI/client/protocol/daemon consumers.

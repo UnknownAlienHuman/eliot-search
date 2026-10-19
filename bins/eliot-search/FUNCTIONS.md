@@ -1,90 +1,155 @@
-# Function contract — `eliot-search`
+# eliot-search CLI — current source and replacement map
 
-The CLI owns invocation capture, local connection assembly, request construction, bounded presentation
-and exit status. `search-provider-client` owns the protocol/session engine. The source already exists;
-the supported native provider path and installed qualification remain incomplete.
+The CLI owns one captured invocation, owned local connection, current typed request, bounded presentation and
+exit status. It never opens redb/object/Qdrant state or invents query/access authority.
 
-The [current architecture](../../docs/architecture/README.md) changes the target to an OS-owned local
-connection and explicit source scope. Existing paired registration below is a source inventory for the
-restricted-client path, not a prerequisite for child-stdio local search. Do not manufacture grant/proof
-fields to satisfy the old constructor; simplify its real request/session contract when implementing.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md),
+[local protocol](../../crates/search-provider-protocol/README.md) and
+[client map](../../crates/search-provider-client/FUNCTIONS.md).
 
-## Current source and missing linkage
+## Verified current source
 
-Verified at `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`; refresh the actual caller census before editing.
+The repository already has three client directions:
 
-| Boundary | Delivered code / remaining caller |
+| Path | Actual state |
 |---|---|
-| Default dispatch | [entry.rs](src/entry.rs) uses public/DIRECT dispatch; [public_client.rs](src/public_client.rs) connects to its owned daemon child through stdin/stdout. [app.rs](src/app.rs) rejects old address/token-file provider commands before its old parser. `legacy-loopback-harness` is off by default; its presence is not a live product fallback. |
-| Typed session | [search-provider-client](../../crates/search-provider-client/) already owns the extracted session, framing, correlation and cancellation engine (#235/PR #383). CLI has API consumers; the missing result is the supported native command connection, not another extraction. |
-| Trusted input | [NativeLocalRegistration](src/native_local_registered.rs) needs installation/incarnation, binding, peer digest, pairing generation, proof ref and optional capability digest from an independently trusted installation/configuration owner. Its constructor/resolver have only fixture callers; no product input producer is connected. |
-| Client connection | `resolve_registered_local` selects the exact credential locator and retains the original deadline. [open_resolved_windows](src/provider_client/local.rs) consumes that handoff through the existing Windows `NativeLocalConnection` and `TypedProviderSession::open_native`; it has no caller. |
-| Daemon listener | [StandaloneLocalOwner::bind](../eliot-searchd/src/access_composition/native_binding_listener/local.rs) accepts a platform factory, but has no concrete listener implementation/caller. Its server-side durable registration expectation is not a client registration source. |
+| `public_client.rs` | Starts an owned daemon child through stdin/stdout for DIRECT. This is the smallest useful transport owner. |
+| `search-provider-client` / `provider_client/local.rs` | Implements native typed pairing/profile/grant connection. Product caller for its trusted registration input/listener was not found. |
+| `provider_client.rs` active facade | Reexports typed types, but `ProviderSession` wraps `core::ProviderSession`. `UnsignedRequest::IndexedQuery` calls `encode_indexed_query`, embeds a strict prefix, then maps to legacy `op\tquery\t<hex>`. `Expand` still carries opaque handle bytes and arbitrary absolute start/end. |
 
-The [existing Credential Manager adapter](src/native_credentials.rs) reads only the canonical
-purpose-bound pairing locator. Possession of a key, a pipe name, an endpoint file or peer-asserted
-installation coordinates cannot authorize a restricted client. Retain pairing/current binding checks
-when that profile is selected. Trusted local stdio and OS-owned pipes use the local architecture.
-Do not use the legacy `runtime/native-endpoint.v1` TCP descriptor as trusted installation input.
+The old provider core/endpoint/harness candidate identified earlier is roughly 2,031 physical lines across
+eight files, but replacing it with another wrapper is not progress. The current typed session and legacy core
+must converge into one current client.
 
-[#332](https://github.com/UnknownAlienHuman/eliot-search/issues/332) owns named input/listener/command
-cutovers. Reuse these owners and establish the actual producer/consumer before deleting the replaced
-path. A feature flip or another unused constructor cannot close that integration.
+## One invocation
 
-## Invocation and operation contract
+Capture `args_os()` and relevant environment/config once. Preserve non-UTF-8 paths. Produce one closed enum,
+for example:
 
-Capture `args_os()` and relevant environment once, retain non-UTF-8 path values and pass a closed
-invocation/config-source snapshot. Unknown/unversioned recipes, raw vendor filters, collection/point
-IDs and direct store paths fail. Sensitive proof/credential values do not enter plaintext argv.
+```text
+CliCommand {
+  Search { selected_sources, query, limit, page_size, timeout, output }
+  Exact { selected_sources, predicate, limits, timeout, output }
+  Continue { window_id, page_size, timeout, output }
+  Expand { window_id, item_index, context, timeout, output }
+  Status / Health / Version
+  ShutdownOwnedChild
+}
+```
 
-These are behavior roles, not mandatory new wrapper functions:
+Optional `Orient`/`Compare` are parsed only when real handlers exist. Unknown command/field fails before
+starting a child or opening a pipe. Help/version that need no daemon create nothing.
 
-| Role | Required behavior |
-|---|---|
-| Parse/build | Capture one supported command and explicit scope/query/limits. The #213 evidence/orientation schemas already exist. Add their real serving path; all optional recipe handlers need not precede useful indexed search. |
-| Connect/authenticate | One owned child-stdio or OS-authenticated local pipe connection. Reuse framing/session code; add pairing only for a selected restricted-client profile. One setup deadline and one absolute operation deadline; phases do not renew either. |
-| Capabilities/scope | Advertise connected handlers. Resolve the user's explicit scope in the daemon. Restricted-client grants intersect real server policy; the CLI cannot mint or widen them. |
-| Run/cancel | Use the existing typed request lifecycle, monotonic progress and one terminal result/error/cancellation. Cancellation is idempotent; acknowledge it only as the protocol permits. Disconnect or timeout cannot claim rollback of a possible server mutation. |
-| Expand | Send an opaque handle/continuation with the active scope, limits and expiry; apply grants only in the restricted-client profile. Do not decode token contents, cache a permit or silently refresh expiry. |
-| Close | Stop new requests, cancel bounded local work where possible and close the owned transport. Clean up a child only if this invocation created it, with bounded kill/wait and explicit unknown cleanup. Daemon shutdown requires an explicit authenticated server command. |
+Do not retain separate `Query` versus `IndexedQuery`, marked strict prefixes, V1 recipes or legacy DIRECT
+query syntax. The current `Search` operation selects the connected implementation.
 
-## Output, exits and privacy
+## One connection
 
-Human and JSON/NDJSON output provide useful locations/ranges/snippets, exact revision, freshness/gaps
-and continuation expiry. Preserve a denominator only when an explicit exhaustive operation supplies it. Never relabel
-`candidate_scope` or `unknown` as `complete_scope`. External JSON uses closed serialized output
-structures, bounded escaped records and one physical line per NDJSON record; changing an old wire shape requires changing both real ends/version, not silently redefining stored
-identity bytes.
+Baseline:
 
-Keep the closed exit distinctions `SUCCESS`, `PARTIAL_OR_DEGRADED`, `USAGE_ERROR`,
-`AUTHENTICATION_OR_BINDING_FAILED`, `UNAUTHORIZED_OR_SCOPE_EMPTY`, `PROTOCOL_ERROR`,
-`DEPENDENCY_UNAVAILABLE`, `REQUEST_CANCELLED`, `REQUEST_FAILED` and `SNAPSHOT_EXPIRED`.
-Material partial/degraded results never become silent success; any explicitly permitted
-successful-with-warning contract retains a non-zero machine status field.
+```text
+CLI
+→ spawn/own daemon child
+→ inherited stdin/stdout
+→ LocalClient
+→ current framed protocol
+```
 
-Preserve typed usage/unsupported-command, daemon-unavailable, pairing-required, revoked-binding,
-version-mismatch, unavailable-capability, partial/cancelled/expired and output-limit failures.
-Presentation/progress may be local; restricted-client grant TTL is only a requested ceiling. Keep secrets,
-pairing proofs and source/query content out of default logs. Return actionable scoped errors and requested
-snippets to the user. Help/status on an uninitialized
-installation creates nothing. No direct redb/CAS/Qdrant access or arbitrary credential target.
+This reuses the actual child ownership already present. A persistent owner-only OS pipe may be added when a
+measured startup/use case needs it. Do not require both routes before useful search.
 
-## Removal boundary and evidence
+Child cleanup:
 
-The obsolete `provider_client/core.rs`, its four implementation submodules and `endpoint_client.rs`
-are a six-file / 1,638-physical-line candidate. `remote_client.rs` and `app/indexed.rs` add 393 lines
-of separate harness entry paths: eight files / 2,031 physical lines in total, counted as newline bytes.
-These disjoint counts include comments/blank lines and are not achieved net production deletion.
+- retain exact child/stdin/stdout ownership;
+- close input after terminal/explicit cancellation;
+- bounded wait;
+- kill only the child created by this invocation when cleanup exceeds its bound;
+- report unknown cleanup honestly.
 
-Remove each last caller and dispose of its still-relevant fixtures in the same bounded cutover.
-A harness-only deletion may proceed once the census proves its supported callers are already absent;
-it need not wait for every native capability in #332.
-Mixed `provider_client.rs` retains typed re-exports/local assembly; mixed `app/core.rs` retains DIRECT
-commands. Neither is a whole-file deletion candidate. Retain paired bootstrap only for a real restricted-client consumer; an uncalled constructor alone does
-not make it a required local baseline.
+A persistent daemon is never killed by an ordinary query client. Explicit shutdown must be authorized by
+that connection profile.
 
-Retain causal argument-order/`--`/non-UTF-8, JSON escaping/limits, protocol sequencing,
-slow-peer/cancel/EOF, child-cleanup, disclosure/partial-exit and opaque-handle cases. Pairing/binding/grant
-cases apply when the restricted-client feature is retained or changed.
-The [implementation guide](../../docs/implementation/README.md#7-verification-and-delivery)
-selects the changed production targets; test/native/installed evidence follows integrated code.
+Trusted child stdio does not use pairing, grants, binding records, shared-key MAC or capability digests. A
+selected restricted-client integration authenticates separately and can reuse the same current request/result
+wire.
+
+## Request execution
+
+1. Build the current typed operation directly from the parsed invocation.
+2. Validate finite query/scope/page/context/output limits.
+3. Convert the configured request timeout once to a local absolute deadline.
+4. Send one bounded framed request through `LocalClient`.
+5. Render finite optional progress and exactly one terminal response.
+6. On interrupt, send best-effort cancel for the live request ID and close after the remaining deadline.
+7. On partial/protocol/EOF failure, fail the session; do not retry blindly or claim server rollback.
+
+The daemon resolves selected source IDs against its pinned view. The CLI cannot mint/widen a grant or pass raw
+Qdrant filters/routes/point IDs.
+
+## Continue and expand
+
+`Continue` carries one `WindowId` and finite page size. `Expand` carries one `WindowItemRef` plus a bounded
+relative context request. The CLI never decodes the ID or supplies arbitrary absolute revision offsets.
+
+A normal card already includes exact source/revision/representation/location and a short verified excerpt.
+Expansion is optional context around that exact emitted item.
+
+## Output
+
+Human and JSON/NDJSON render the same typed response:
+
+- final rank order unchanged;
+- source/revision/representation/range/location;
+- actual verified excerpt;
+- truthful partial/gap/coverage metadata;
+- optional next window/item locator and expiry;
+- no denominator unless an explicit exhaustive operation produced it.
+
+Use Serde for machine output. Bound the encoded record before write. NDJSON uses one escaped physical line
+per record. Do not substring-parse daemon events or manually concatenate JSON.
+
+Exit classes remain small and actionable:
+
+```text
+success
+partial_or_degraded
+usage
+connection_or_protocol
+unauthorized_or_scope_empty       // selected restricted profile only
+cancelled_or_expired
+request_failed
+```
+
+A material partial response is not silent success; machine output includes its status.
+
+## Remove after cutover
+
+- `provider_client/core.rs` and legacy line/TCP/token/endpoint modules;
+- `UnsignedRequest` facade and `to_core()` translation;
+- strict indexed query prefix and hex/tab operation grammar;
+- active `core::ProviderSession` wrapper;
+- `legacy-loopback-harness` product paths;
+- uncalled native registration/pairing/credential constructors unless a real restricted consumer remains;
+- opaque source-handle + arbitrary byte-range expansion;
+- separate remote/indexed harness entry paths and old parser/output fixtures.
+
+Retain child ownership/cleanup, `args_os` correctness, typed client call, bounded presentation and useful
+exit mapping.
+
+## Verification
+
+After code, exercise the actual binary:
+
+- help/version without installation side effects;
+- real child-stdio Search to Qdrant/retained evidence;
+- explicit/empty/unknown source selection;
+- human and JSON/NDJSON escaping/limits;
+- Continue/Expand under one query window;
+- Ctrl-C/cancel, request timeout, EOF and daemon error;
+- partial output fail-stop and no cursor advancement;
+- owned child cleanup;
+- non-UTF-8 path invocation where applicable.
+
+Run minimal Rust 1.98 compiler/Clippy for changed CLI/client/protocol/daemon targets after implementation.
+Restricted pairing/credential matrices apply only if that selected profile is changed.

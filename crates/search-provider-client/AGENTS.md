@@ -1,26 +1,26 @@
-# Agent contract — search-provider-client
+# Working on search-provider-client
 
-Own one synchronous typed client session/correlation engine. Consume a concrete
-platform connection and non-Clone BindingKey with mandatory caller-owned trusted
-comparison coordinates. Pairing/profile/grant policy remain the protocol/server
-owners; expectations are not an authenticated receipt or authority.
+Read the [protocol](../search-provider-protocol/README.md),
+[implementation guide](../../docs/implementation/README.md) and local [source map](FUNCTIONS.md).
 
-Keep LocalByteStream, framing I/O, setup budget and mutable state private. One
-reader, one key, one sequence/correlation ledger, one cancellation slot; no stream
-clone, background task, reconnect, pooling, discovery, fallback or blind replay.
-Preserve the original absolute setup deadline and one deadline per operation.
-Raw I/O errors and credential/path/query/handle/proof material never enter public
-Debug, Display or source(). Reuse accepted protocol types and exact wire bytes.
+Implement one small synchronous framed client used by the actual CLI. Keep owned connection I/O, finite
+buffers, request-ID correlation, optional cancellation/progress, exactly one terminal response, original
+absolute deadline and fail-stop partial I/O.
 
-Dependencies are search-contracts, search-ports, search-provider-protocol, the
-concrete search-provider-transport-windows owner and the accepted exact BLAKE3
-pin. No database, Qdrant, async runtime or external networking framework.
+Do not preserve or wrap:
 
-Nondefault legacy-loopback-compatibility retains old TCP APIs only until #332
-atomically cuts over/deletes their consumers. A missing independently trusted
-installation cannot issue a product grant, even with this feature enabled.
+- `NativeClientExpectations`/binding/pairing/profile comparison for child stdio;
+- mandatory standalone grant state;
+- per-record MAC/sequence/replay transcript history;
+- legacy loopback TCP/token/endpoint constructors;
+- duplicate CLI `core::ProviderSession`;
+- exact old wire bytes or fixture-only consumers.
 
-Compile the library and direct CLI/example consumers with Rust 1.98 locked
-checks and strict production Clippy. Author causal fixtures with changes;
-execution/native/fault/installed qualification follows the execution protocol.
-Compilation alone is not product qualification.
+The child-stdio constructor consumes and owns the child/stream handles. A persistent owner-only pipe is
+validated by its platform owner before this package receives it. A selected restricted-client adapter may
+authenticate separately, then use the same current framed session; do not fabricate restricted identities for
+trusted local use.
+
+Change CLI, current protocol and daemon dispatcher together. Never translate current requests back to
+`RecipeIdV1` or legacy tab/hex operations. After code, run minimal Rust 1.98 compiler/Clippy for the package
+and real CLI/daemon consumers; delete old grant/profile/wire fixtures with their APIs.

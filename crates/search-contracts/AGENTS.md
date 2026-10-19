@@ -1,20 +1,23 @@
-# Shared contract code
+# Working on search-contracts
 
-Follow the [architecture](../../docs/architecture/README.md),
-[implementation guide](../../docs/implementation/README.md) and
-[query cutover](../search-query/README.md#direct-operations-not-a-recipe-operating-system).
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md), [query cutover](../search-query/README.md) and
+[local protocol](../search-provider-protocol/README.md).
 
-Keep types and small validation/encoding functions shared by real producers and consumers. This package is
-not a registry of planned features, recipes, capability credentials or proof records.
+Keep only small immutable data used by at least two real current producers/consumers. This package is not a
+registry of planned features, recipes, capabilities, proofs, provider schemas or mutable lifecycle.
 
-Change a contract and the necessary producer/consumer together. Remove obsolete V1 recipes,
-`SearchTaskPlan`, fingerprints, grants, durable source handles and capability descriptors when the new
-current request/result path replaces them. Do not create V3 wrappers or fill old constructors with fake
-IDs/digests.
+Replace the eleven V1 recipes, V2 parallel results, public plans/grants/capabilities and durable handles with
+one current `Search | Exact | Continue | Expand` request/result family. Optional operations exist only with
+real handlers. Change real producers and consumers together; do not add V3 wrappers or fake old IDs/digests.
 
-Keep source/revision identity, coordinates, selected scope, actual limits, indexed data and source-backed
-cards. Use typed Serde for ordinary records. Canonical bytes and hashes remain only where an actual
-identity or integrity rule consumes them.
+Keep stable source/revision/object/view/point identities, locations/ranges, selected scope, actual limits,
+retrieval-profile semantics and source-backed cards/gaps. Distinguish stable Qdrant retrieval point from
+versioned `ViewManifestEntry` evidence. Concrete Qdrant/redb/protocol/session/window types belong to their
+owners.
 
-Verify through the connected CLI/daemon behavior and immediate codecs. Frozen recipe counts, P00 byte
-goldens, package maps and contract-change tickets do not constrain this pre-release replacement.
+Use Serde for ordinary DTOs. Canonical bytes/hashes remain only for actual content/artifact/profile identity.
+Delete generic canonical/digest frameworks and golden fixtures when their proof-oriented consumers disappear.
+
+After code, run minimal Rust 1.98 compiler/Clippy for changed real producers/consumers and focused current
+codec/identity behavior. Frozen recipe counts, sparse-only schemas and pre-release wire goldens are not gates.

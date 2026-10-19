@@ -1,22 +1,36 @@
-# Local request and result protocol
+# Working on search-provider-protocol
 
 Read the [architecture](../../docs/architecture/README.md),
-[implementation guide](../../docs/implementation/README.md) and
-[query cutover](../search-query/README.md#direct-operations-not-a-recipe-operating-system).
+[implementation guide](../../docs/implementation/README.md), [query cutover](../search-query/README.md) and
+local [source map](FUNCTIONS.md).
 
-Own one bounded typed exchange used by the actual CLI and daemon. Keep frame sizing, request correlation,
-cancellation and one terminal result. Do not build another host/session/capability framework.
+Implement one bounded framed typed exchange used by the actual CLI and daemon:
 
-Replace the eleven V1 recipes and parallel V2 endpoint with one current request/result family. Update
-codec, dispatch, handler and client together; no V3 wrapper or old-byte compatibility layer.
+```text
+u32-le length + Serde JSON ClientMessage
+→ direct constructed handler
+→ optional bounded progress
+→ exactly one terminal ServerMessage
+```
 
-The trusted-local path uses owned stdio or an owner-only pipe. It does not need paired hello, grants,
-body MACs, capability credentials or registry revisions. A selected restricted-client profile owns real
-credentials, replay checks and delegated scope separately.
+Keep prefix-before-allocation bounds, incremental reads, request correlation/cancellation, original absolute
+deadline and fail-stop behavior after partial output. Encode the complete response frame before the first
+write; commit `QueryWindow` insertion/cursor advancement only after complete flush.
 
-Capabilities, if exposed, are a simple projection of constructed handlers and useful limits. They are not
-request authority and need no canonical digest. Unsupported operations fail clearly.
+Do not preserve or wrap:
 
-Use typed Serde on complete bounded frames. Bound serialized output, queues and in-flight requests. Test
-through the application. Historical recipe counts, provider ceremonies, waves and all-profile gates do
-not block local integration.
+- eleven V1 recipes or the parallel V2 endpoint;
+- fixed-order manual JSON/base64 grammar;
+- pairing challenge/proof, per-frame MAC or shared binding key on child stdio;
+- grant, capability descriptor/digest or replay authority;
+- binding commit/revoke/drain lifecycle;
+- source handle/continuation/security cleanup records;
+- legacy tab/hex/TCP/token-file commands.
+
+Trusted child stdio/owner-only local pipes derive connection ownership from actual process/OS handles. A
+selected restricted-client adapter authenticates separately and terminates into the same dispatcher; it does
+not redefine the baseline wire.
+
+Change current contracts, codec, client, daemon dispatch and CLI together. Do not add a V3 compatibility
+family or translate current requests back into old recipes/lines. After code, run minimal Rust 1.98
+compiler/Clippy for actual consumers; historical wire/crypto/recipe fixtures are removed with their APIs.
