@@ -1,85 +1,82 @@
-# Control persistence — functions and implementation
+# search-control-redb — source and replacement map
 
-Use the [implementation guide](../../docs/implementation/README.md#3-keep-control-state-small-and-publication-real).
-This is a map of existing functions and their replacement responsibilities, not a frozen schema or
-signature contract. Change the producer and immediate consumers together.
+The package currently mixes a useful redb current-state owner with several retired lifecycle platforms.
+This document identifies what exists and what the connected application should keep.
 
-## Existing entrypoints
+## Current generic journal
 
-| Current entrypoint | Source | Treatment |
-|---|---|---|
-| `PersistentControlJournal::{create,open}` | [persistent.rs](src/persistent.rs) | Keep one actual disk owner. Validate the selected format and settings; refuse unsupported roots before writes. |
-| `transact`, `transact_conditionally` | [persistent.rs](src/persistent.rs), [calls.rs](src/persistent/calls.rs), [transaction.rs](src/persistent/transaction.rs) | Replace generic operation/envelope machinery with short typed updates to current records. Check needed conditions inside the write transaction. |
-| `commit_registry_batch`, `read_registry_snapshot` | [registry/transaction.rs](src/persistent/registry/transaction.rs) | Preserve atomic source/head metadata and coherent startup reads. Source identity, admission and retained bytes remain with the source owner. |
-| `lookup_registry_operation`, `read_registry_operation_targets` | [registry/lookup.rs](src/persistent/registry/lookup.rs) | Retain targeted reads needed by actual callers; remove permanent operation-envelope lookup when its caller is replaced. |
-| `persist_publication_intent`, `load_unresolved_publication` | [publication.rs](src/persistent/publication.rs) | Keep a bounded pending record for real unfinished external publication. |
-| `commit_visible_epoch`, `read_publication_visibility` | [publication/visibility.rs](src/persistent/publication/visibility.rs) | Commit the published view after actual Qdrant effects/readback. A caller-supplied digest or receipt cannot substitute for those effects. |
-| `control_snapshot_with_context`, `publish_committed_snapshot_with_context`, `recover_snapshot_publication_with_context` | [snapshot.rs](src/persistent/snapshot.rs) | Read committed state and publish one coherent in-memory view. Recover that view without replaying a completed mutation. |
-| `recover_transaction`, `recover_registry_batch`, `recover_visible_epoch_commit` | [persistent.rs](src/persistent.rs), [registry/transaction.rs](src/persistent/registry/transaction.rs), [visibility.rs](src/persistent/publication/visibility.rs) | Resolve real uncertain state; simplify with the journal being replaced rather than preserving every historical receipt API. |
-
-These functions already exist; their simplified forms are not implemented by this documentation.
-The in-memory `ControlJournal` in [reference.rs](src/reference.rs) remains a reference model, not a
-production fallback. The pure `publication_codec::cas` computes a new floor; it does not commit redb.
-
-## Current records and transaction boundaries
-
-The source owner supplies source/revision identity, locator, availability and head changes. This package
-stores those records, explicit settings, artifact references and publication metadata. It does not
-store source bodies, extracted text, postings, vectors or ranked-query history.
-
-A useful mutation is direct:
-
-1. Validate the typed command and finite input sizes.
-2. Begin a redb write transaction and read the affected records/required generation conditions.
-3. Apply the current-state change and commit.
-4. Publish or refresh the corresponding in-memory view from committed state.
-
-Keep the transaction short. No Qdrant call, source scan or preparation runs while holding its writer.
-Normal lookups read the needed keys; a full inventory read is an explicit startup/recovery operation.
-Read/query admission produces zero durable control writes.
-
-Remove `ControlMutation` fingerprints, `ControlCommitReceipt` and opaque port/envelope plumbing where
-their only remaining consumer is the retired replay archive. Keep a generation or operation identifier
-only where it resolves an actual race or retry. Do not add another callback/work-meter hierarchy.
-
-## Failure semantics to implement
-
-| Observed outcome | Required behavior |
+| Source/API | Actual behavior |
 |---|---|
-| Rejected before mutation | Return the actionable validation, cancellation or limit error. |
-| Staged transaction aborted successfully before commit | Return the original error; that transaction did not commit. Do not retain an unknown-commit fence. |
-| Commit result unresolved | Inspect current durable state before retrying the same effect. |
-| redb committed, in-memory publication failed | Rebuild/publish the committed snapshot; do not rerun the mutation. |
-| Qdrant write may have happened | Keep pending publication and inspect actual Qdrant/control state. Do not infer rollback from a timeout or a later redb abort. |
-| Unsupported old format | Refuse before writes and leave that root untouched. |
+| `PersistentControlJournal::open` | Opens/initializes the journal and may permit redb's native recovery. It is not a side-effect-free inspector. |
+| `transact` / `recover` | Validate a caller mutation, write `RECORDS`, append one `OPERATIONS` receipt and update the header. A possible outcome occupies the package-wide pending slot. |
+| `verify` | Reads and validates current records plus operation/header consistency. |
+| `snapshot` / `publish_snapshot_checked` | Enumerate all `RECORDS`, copy them into a `BTreeMap`, rebuild `ControlSnapshot` and publish the new `Arc`. This runs after every committed mutation. |
+| `recover_publication_checked` | Verifies current state, then iterates `OPERATIONS` to locate the receipt whose `after_generation` equals the current generation. |
+| operation limits | Cap total operation count and receipt bytes over the lifetime of the journal; completed entries are not removed. |
 
-The current `execute_scoped` marks cancelled/budget-exhausted staging unknown even when abort succeeds;
-change this branch. Real commit uncertainty and external publication recovery remain distinct.
-Use the request's actual deadline and concrete size/work limits without renewing the deadline at
-each nested operation.
+Consequences:
 
-## Retire historical requirements
+```text
+ordinary mutation cost  = O(all current control records)
+recovery lookup cost     = O(all retained operation receipts)
+maximum useful lifetime  = bounded by historical operations, not current state
+one unknown mutation     = broad package availability fence
+```
 
-Schema-5 operating-profile/genesis/adoption records, schema-1–4 support and frozen class/table bytes
-are existing old-format details. No new implementation must preserve them, support every old version
-or perform a Direct → Indexed → migration-adoption sequence.
+These costs are properties of Eliot's wrapper, not requirements imposed by redb.
 
-Remove the general migration/bootstrap/source-map/inventory/content-stage APIs with their consumers.
-Do not implement the former conceptual `plan_migration`, `execute_migration`, `verify_migration` or
-export pipeline just because an old function document listed them. New formats may open only new roots.
+## Other current modules
 
-Remove the lifetime `OPERATIONS` archive and its generation-equals-history invariant. Where retries
-are real, bound the retry window and protect only unresolved operations from eviction. Do not create
-a general idempotency-maintenance subsystem to keep every historical command replayable.
+`access_policy`, `provider_authority`, `security_restriction`, `revision_dek`, `migration`, publication
+phase codecs and quarantine helpers implement earlier programmes. Their typed codecs and fixtures do not
+make them required owners for the local baseline.
 
-The shared `search-publication` coordinator owns transitions; this package owns their persistence.
-Remove the parallel daemon publisher/file journal. Optional secret/DEK operations do not belong to
-the ordinary local-source transaction path.
+Keep only modules with a real remaining current-state consumer. Do not preserve a package API solely so
+old migration, grant, key-lifecycle or receipt tests continue compiling.
 
-## Verification
+## Target typed operations
 
-Check meaningful atomicity, conflict handling, known abort, unresolved commit, restart and
-committed-snapshot recovery. Exercise pending Qdrant publication with the real adapter when claiming
-that integration works. Verify that completed operation history cannot impose a lifetime update limit.
-Keep source data intact when rejecting an old format. Old schema goldens, migration fixtures and
-formal qualification records are not acceptance criteria for their replacement.
+Implement narrow operations in the existing package or inline them in the control adapter:
+
+```text
+read/write applied settings
+read/write root registration and current source head
+read/write current preparation reference
+read/write CurrentPublishedView
+read/write/update one PendingPublication cursor
+read small root/schema identity
+```
+
+Rules:
+
+1. Open the relevant table(s) in one short transaction.
+2. Check expected-current values when concurrent writers can conflict.
+3. Commit, close the transaction, then update the narrow in-memory pointer/cache.
+4. Never hold the writer across source-object or Qdrant I/O.
+5. Never copy every table merely to publish one changed value.
+6. Never retain a success receipt after no recovery or idempotency consumer remains.
+
+### Failure semantics
+
+- validation failure or explicit abort before commit: known failure;
+- commit returned success: current typed state is authoritative;
+- commit acknowledgement genuinely uncertain: reopen and inspect the affected key/revision;
+- possible external Qdrant effect: keep publication's exact pending artifact and resolve external state;
+- ordinary read/query cancellation: no durable control record.
+
+A process-local current pointer may accelerate the published view or settings, but redb remains the durable
+owner. The pointer is reconstructed from committed typed records at startup, not from a receipt scan.
+
+## Removal boundary
+
+After direct callers move, delete:
+
+- generic `ControlJournal` mutation/receipt API and `OPERATIONS` table;
+- full `ControlSnapshot` reconstruction after every write;
+- lifetime receipt-count/receipt-byte ceilings;
+- package-wide pending mutation for unrelated typed state;
+- superseded migration, DEK, provider-grant and security-restriction persistence;
+- source-shape/receipt fixtures whose only purpose is to preserve those APIs.
+
+Retain focused tests for atomic current-state updates, expected-current conflict, restart readback,
+unsupported schema and the real pending publication transition.

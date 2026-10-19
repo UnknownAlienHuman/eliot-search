@@ -75,6 +75,10 @@ merely to look trustworthy. A trusted local exchange needs no separate cryptogra
 Legacy implementations and their fixtures do not constrain the new product. Original files and sole
 retained copies remain user data; simplification never silently destroys them.
 
+**Transient work is disposable.** Staging files, temporary pages and failed unpublished objects are not
+product history. Success removes them; interruption may leave bounded, discoverable debris for ordinary
+GC. They never justify a permanent receipt archive or another lifecycle database.
+
 **Cost follows useful work.** Normal updates touch changed content. Storage does not grow with an eternal
 history of completed operations. Query bookkeeping is short-lived. Source occurrence, current location
 and reusable derived input are separate facts: a small edit must not invalidate unrelated work merely

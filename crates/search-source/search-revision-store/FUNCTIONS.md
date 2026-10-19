@@ -1,57 +1,78 @@
-# Code map — search-revision-store
+# search-revision-store — source and cutover map
 
-The [implementation guide](../../../docs/implementation/README.md) defines the target. This is an
-inventory of actual functions, not a requirement to preserve the old encrypted/lifecycle model.
+## Current source
 
-## Existing functions
-
-| Location / symbols | Current behavior |
+| Location / symbols | Actual behavior |
 |---|---|
-| [immutable_object.rs](src/immutable_object.rs): `read_legacy_revision_object`, `publish_legacy_revision_object` | Read bounded bytes and publish immutable files through supplied platform observations. |
-| [immutable_object/context.rs](src/immutable_object/context.rs): `read_legacy_revision_object_with_context`, `publish_legacy_revision_object_with_context` | The same file mechanics with caller context, work counters and attempted-effect reporting. Contextual publication currently leaves its stage behind. |
-| [LegacyRevisionObjectRead::into_bytes](src/immutable_object.rs) | Transfers the owned read buffer; it does not copy the whole object. |
-| [kernel/address.rs](src/kernel/address.rs): `derive_object_address` | Derives the old residency-qualified address. |
-| [kernel/store/append.rs](src/kernel/store/append.rs): `RevisionStore::prepare_append`, `confirm_append` | Mutates in-memory Pending/Active state and retained operation receipts using supplied intent/readback. Does not write a file or commit redb. |
-| [kernel/store/recovery.rs](src/kernel/store/recovery.rs): `mark_outcome_unknown`, `recover_unknown` | Reconciles that in-memory revision state. |
-| [kernel/store/lifecycle.rs](src/kernel/store/lifecycle.rs): `install_purge_tombstone`, `apply_exact_object_deletion` | Applies old lifecycle state/receipt rules; not a connected general filesystem deletion service. |
-| [kernel/backend.rs](src/kernel/backend.rs): `RevisionObjectBackend` | An encrypted-object trait. A declaration is not the missing persistent implementation. |
-| [kernel/model.rs](src/kernel/model.rs): `EncryptedRevisionPayload::new` | Owns ciphertext and computes its actual BLAKE3 digest. Encryption is a requirement of this old model, not the new local baseline. |
-| [legacy_inventory.rs](src/legacy_inventory.rs) and [submodules](src/legacy_inventory) | Classify legacy names, construct physical inventories, paginate and render migration reports. |
+| `immutable_object.rs` | Bounded legacy object read and immutable stage/final publication through a supplied platform. |
+| `immutable_object/context.rs` | Reimplements the same mechanics with request context, work accounting, attempted-effect phases and a receipt. The source file is about 40 KiB before tests. |
+| `ContextualRevisionObjectReceipt::staging_cleanup_deferred` | Reports that this call did not clean its stage. Successful contextual publication commonly leaves the stage behind. |
+| `LegacyRevisionObjectRead::into_bytes` | Transfers the owned object buffer without another full copy. Keep this ownership pattern. |
+| `kernel/store/*` | In-memory Pending/Active/tombstone/operation vectors driven by supplied intents/readbacks. It is not the persistent object store. |
+| `legacy_inventory*` | Old filename classification and migration inventory/reporting. |
 
-`RevisionStore` stores a `BTreeMap` of states plus operation, deletion and tombstone vectors.
-`prepare_append` searches retained operation identities and checks their lifetime capacity.
-There is no production `RevisionObjectBackend` implementation or production kernel caller connecting
-this model to the new native ingestion path. Avoid creating a second persistent state machine to
-make this otherwise unused model live.
+The daemon `DaemonImmutableObjectPlatform` calls the immutable-object kernel. Publication currently writes
+and syncs a stage, reads the full stage, links/publishes the final name, syncs the directory and reads the
+full final object. Existing-object reuse also reads and compares bytes. Materializer has a second copy of
+this platform with its own receipt family.
 
-## Actual daemon I/O
+## Target API
 
-[secure_direct_store_storage_io.rs](../../../bins/eliot-searchd/src/secure_direct_store_storage_io.rs)
-supplies `DaemonImmutableObjectPlatform`. Its `read_revision_object`,
-`read_revision_object_detailed_with_context` and `persist_revision_object` call this package.
+Exact names may follow #598's accepted handoff, but one owner must provide the following behavior:
 
-The private `publish` kernel writes/syncs a stage, reads it completely, links the final name, syncs the
-directory and reads the final object completely. Existing-file reuse also reads and compares bytes.
-Those are current mechanics. Keep the needed final durability/integrity boundary, while removing
-duplicate full reads and a second implementation of the same mechanism.
+```text
+put_object(kind, profile, owned bytes, OperationContext) -> ObjectRef
+open_object(ObjectRef, OperationContext) -> VerifiedObject
+read_ranges(ObjectRef, ranges, OperationContext) -> VerifiedRanges
+list_objects(cursor, limit) -> bounded object identities
+remove_exact(ObjectRef) -> known absent | removed | unresolved
+```
 
-The adjacent preparation adapter calls materializer's almost identical artifact engine. Use one
-existing byte primitive for both callers; preparation still owns its payload schema. No per-kind
-filesystem platform, receipt family or new storage framework is needed.
+`ObjectRef` binds the current-format address, kind/profile, content identity and exact length. It does not
+contain source membership, current-head or query authority.
 
-## Connected result to implement
+## Publication sequence
 
-1. Accept the actual acquired body and its source observation; do not reacquire a pathname.
-2. Persist immutable bytes and validate the stored object once at the selected storage boundary.
-3. Return the usable object reference and owned/borrowed verified bytes to the existing caller.
-   The caller commits the revision/source head in redb after successful object publication.
-4. Reopen by that retained revision reference, verify actual bytes and range, and feed preparation or
-   evidence reads. A failed or missing read does not substitute the current file.
+1. Validate final address/kind/profile and byte ceilings.
+2. Create one unpredictable stage in the final directory.
+3. Stream/write exact bytes while computing/verifying the selected content identity.
+4. Flush/sync the stage according to the supported storage profile.
+5. Publish no-clobber. If the final name already exists, open and verify it exactly.
+6. Verify the resulting final object once.
+7. Remove the stage after either verified reuse or verified publication.
+8. Return `ObjectRef` and, where useful, the already verified owned bytes to the caller.
 
-The useful record is revision identity, content digest/length and object locator. Keep real pending
-effects where recovery needs them. Pure handoffs need no durable receipt, and completed local work
-does not need another permanent replay archive.
+A failure before possible publication removes the stage when possible. A failure after possible
+publication is resolved by the exact final address/readback. Stage cleanup remains best effort and
+bounded; a leftover is GC input, not a successful-operation record.
 
-Remove old encrypted/residency/lifecycle and inventory producers with their exclusive consumers.
-A new binary can reject an unsupported old root before writes; no compatibility converter, export
-platform or migration programme must precede this path. Leave existing originals and sole copies intact.
+The useful donor pattern is Git's loose-object finalization: publish a temporary object to its content
+address, then remove the temporary name after successful link/rename. Eliot still supplies its own current
+format, integrity and platform durability requirements.
+
+## Range and integrity reads
+
+- never reacquire the live pathname;
+- reject foreign/corrupt kind/profile/length before returning evidence;
+- enforce the request's original absolute deadline and cancellation;
+- reserve input bytes before allocation/read;
+- group selected ranges by object and merge same-basis overlaps;
+- share a required full integrity pass across those ranges;
+- return exact coordinates and scanned-byte accounting.
+
+Do not represent a digest field returned beside arbitrary bytes as verification.
+
+## GC boundary
+
+The object store enumerates and deletes exact objects. Reachability belongs to current source heads,
+current/pending view manifests and live view guards. Registering an object before or during creation may
+help discover crash debris; it must not become a second permanent graph or operation journal. Failed delete
+leaves the object discoverable for a later pass.
+
+## Remove after cutover
+
+- contextual compatibility platform and duplicate materializer artifact platform;
+- deferred-stage receipt/disposition APIs;
+- in-memory append/recovery/purge operation histories with no current caller;
+- legacy inventory/migration codecs after unsupported old roots are isolated;
+- old encrypted/DIRECT object variants after their last declared reader moves.

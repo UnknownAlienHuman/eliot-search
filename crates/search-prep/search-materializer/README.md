@@ -1,42 +1,45 @@
 # search-materializer
 
-Convert retained source bytes into text and useful source coordinates. A transformation that changes
-bytes must describe its mapping and loss; search results must not present transformed offsets as exact
-original offsets.
+Convert one retained object into text, source-coordinate maps and useful document/code structure.
+Materialization owns transformations and their assurance; it does not own another object store or
+publication lifecycle.
 
-Read the [implementation guide](../../../docs/implementation/README.md) for integration and
-[FUNCTIONS.md](FUNCTIONS.md) for actual functions. [AGENTS.md](AGENTS.md) covers changes here.
+Read the [implementation guide](../../../docs/implementation/README.md) and
+[FUNCTIONS.md](FUNCTIONS.md).
 
-## Current code
+## One preparation pass
 
-| Area | What exists |
-|---|---|
-| [Text/code pipeline](src/product/pipeline.rs) | Retained revision read, explicit encoding, decoding, newline normalization, coordinate/loss maps and immutable product. |
-| [Markdown](src/markdown/pipeline.rs) | Implemented raw-backed observations using the existing pulldown-cmark parser. HTML and link targets remain inert. |
-| [JATS](src/jats/pipeline.rs) | Implemented strict UTF-8 XML subset with mapped observations using quick-xml. This is not full JATS schema validation. |
-| [DIRECT preparation](src/legacy_direct.rs), [store codec](src/legacy_store.rs), [artifact I/O](src/legacy_artifact.rs) | Existing old daemon framing, references, manifests and real immutable filesystem mechanics. |
+```text
+committed retained revision
+→ one verified object read
+→ one MaterializationProduct
+→ structure-first UnitSet
+→ one PreparedArtifact
+→ shared immutable object writer
+→ short current-preparation reference in redb
+```
 
-The new product and Markdown/JATS APIs are implemented. They are not yet connected to the production
-daemon ingestion path through a real `RevisionReadPort`. The daemon's existing DIRECT path uses the old
-preparation APIs. Optional provider qualification functions currently refuse; that does not block
-supported text/code preparation.
+Markdown/JATS/plain/code unitization consumes the private immutable product directly. Rebuild/reparse only
+when loading an independently persisted or external artifact, not between adjacent trusted functions.
 
-## Simplify while connecting
+## Current duplication
 
-Use one materialization result through unitization. The current Markdown/JATS verifiers reopen and
-rebuild the entire source product, and the structural unitizers call them again. Keep validation of
-external or persisted inputs at their acceptance boundary; a private immutable product passed directly
-from its producer does not need another source read, parser run and replay receipt.
+The text/product pipeline is useful. The legacy artifact platform is not: its contextual publication
+kernel is about 40 KiB before tests and mirrors revision-store's stage/write/sync/publish/readback code.
+It can leave the staging name after successful publication. Daemon preparation then performs additional
+complete reads/copies of plaintext artifacts.
 
-The exact UTF-8 path currently copies text in both
-[decode](src/decode/engine.rs) and [preserve normalization](src/normalize/engine.rs).
-Transfer the owned buffer and reuse unchanged text. UTF-16 decoding should collect line boundaries
-as it decodes, without two temporary arrays containing every scalar.
+Delete that platform after prepared artifacts use the shared current-format object writer. Materializer
+continues to define prepared payload/maps/structure, but filesystem publication and GC have one owner.
 
-Consolidate [artifact filesystem mechanics](src/legacy_artifact/context.rs) with the existing revision
-byte writer/reader. Materializer owns preparation contents and maps; that does not require its own
-parallel staging/publication engine. The current old-format names, receipts, cleanup disposition and
-hash domains are inventory, not a compatibility obligation.
+## Allocation discipline
 
-The current UnitSet ingress accepts exact byte-identical UTF-8. Broader decoding in this package does
-not make all transformed output supported by unitization.
+- Move the owned UTF-8 buffer into `String` when it is already valid and unchanged.
+- Preserve exact text without allocating a second identical normalization buffer.
+- During UTF-16 decode, collect coordinates/line boundaries in one pass instead of retaining multiple
+  scalar-sized temporary arrays.
+- Keep parser offset iterators and borrowed XML events from the existing donors.
+- Bound actual parsed nodes/events/maps/units and output bytes before retaining them.
+
+Unsupported encoding, lossy mapping, cancellation, deadline or truncation yields a typed gap/error. It
+never produces zero digests, `invalid` profile strings or a complete-looking checkpoint.
