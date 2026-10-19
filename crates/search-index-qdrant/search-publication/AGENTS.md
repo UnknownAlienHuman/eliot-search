@@ -1,45 +1,39 @@
 # Working on search-publication
 
-Read the root [architecture](../../../docs/architecture/README.md),
+Read the [architecture](../../../docs/architecture/README.md),
 [implementation guide](../../../docs/implementation/README.md) and local [source map](FUNCTIONS.md).
-Change planner, typed redb state, Qdrant bridge, current-view owner and query lookup together.
+Change planner, typed redb state, Qdrant bridge, view manager and query lookup together.
 
-Implement one external-effect owner:
+Implement one owner:
 
 ```text
-prepared pages
-→ immutable operation artifact
+operation artifact
 → PendingPublication
-→ actual Qdrant mutation/readback
-→ one transaction: CurrentPublishedView + RetiredCleanup - PendingPublication
-→ in-memory current-view swap
+→ Qdrant apply/readback
+→ redb: CurrentPublishedView + RetiredCleanup - PendingPublication
+→ short view-manager install
 → eligibility-gated cleanup
 ```
 
-Do not clear pending at the view commit without durably transferring unfinished deletion to
-`RetiredCleanup`; a crash would forget old IDs/collection. Do not retain the whole completed publication
-instead; cleanup rows contain only real unfinished external delete/readback and disappear after success.
+Do not hold the view-manager mutex across redb fsync or any object/Qdrant I/O. Durable commit comes first,
+then a short `Arc` pointer install. A request which pins old in that gap remains valid and simply delays
+cleanup. Report publication success only after install; restart reconstructs from redb.
 
-Use one short view-manager lock around the redb current-view commit and pointer swap so no new request pins
-the old view between those steps. Never hold that lock or a redb writer across object/Qdrant I/O.
+Clearing pending without inserting unfinished cleanup loses old IDs/collection after crash. Retaining the
+whole completed publication creates history. Persist only finite `RetiredCleanup` rows and remove them after
+exact delete/readback.
 
-Current-view guards are private `Arc` ownership. The manager keeps weak retired references. Existing guards
-may clone into a `QueryWindow`; callers cannot acquire a route/generation/sequence by value. Cleanup checks
-all live views:
+Use private `Arc/Weak` guards. No route/sequence acquisition, owner ID or renewal API. Cleanup checks every
+live view: point IDs closed at N wait until no same-generation live view has sequence below N; a collection
+waits until no live view uses it. Immediate-predecessor drain is insufficient.
 
-- point IDs closed at sequence N wait until no live view on the same generation has sequence < N;
-- an old collection waits until no live view uses that generation.
+Keep ordered pages, view-sequence validity, exact readback and forward recovery. Delete phase/receipt/
+observation/restore/abort APIs, old redb visibility machines, bridge receipt ledger, raw pins and separate
+reclaimer state.
 
-The immediate predecessor's last guard is not sufficient when an even older view is live.
+Coordinate object lifetime through the shared GC gate: final object publication/reuse through first durable
+reference under shared protection; bounded root snapshot/deletion under exclusive protection. Never acquire
+view manager while holding long redb/object/Qdrant work.
 
-Keep view-sequence validity, ordered pages, exact readback and forward recovery. Delete phase/receipt/
-observation/restore/abort APIs, old redb visibility machines, raw pins and the separate reclaimer platform.
-Unknown Qdrant deletion leaks safely and retries under the same cleanup cursor.
-
-Coordinate immutable-object GC with a small shared/exclusive gate: producers hold shared protection from
-object finalization through first durable reference; bounded GC holds exclusive protection while snapshotting
-current/pending/cleanup/live roots and deleting exact unreferenced objects. Do not create a lease catalogue
-or sweep journal.
-
-After code, run minimal Rust 1.98 compiler/Clippy for changed production owners. Verify the connected daemon
-across crash points, the v1/v2/v3 old-view case, cleanup backlog, uncertain deletion and object-GC races.
+After code, run minimal Rust 1.98 compiler/Clippy for changed production owners and focused crash, commit-gap,
+v1/v2/v3, cleanup-backlog and GC-race behavior. Broad tests follow the connected product.
