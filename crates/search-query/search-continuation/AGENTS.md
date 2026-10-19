@@ -1,22 +1,28 @@
 # Working on search-continuation
 
-Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md) and
-[query cutover](../README.md#one-query-window).
+Read the [query cutover](../README.md), [daemon map](../../../bins/eliot-searchd/FUNCTIONS.md) and local
+[source map](FUNCTIONS.md).
 
-This package is a removal target. Do not harden its token, durable-replan, security-fence, issued-set or
-cleanup-effect model. Move only the useful O(page) cursor/output-commit behavior from the daemon paging
-code into one application `QueryWindow`.
+Do not repair or integrate the shared continuation lifecycle. The product already has a second daemon
+catalogue, and neither model owns the pinned `PublishedView`. Replace both with one process-local
+`QueryWindow` in the real query owner.
 
-Requirements for the surviving owner:
+Keep only:
 
-- pin exactly the published view used by the query;
-- preserve final rank and advance one cursor after complete output only;
-- read/verify only selected-page ranges under one absolute deadline;
-- retain issued item locators only until the original bounded expiry;
-- delete terminal/expired state and release the view guard;
-- expire all windows on restart.
+- final ordered `EvidenceRef[]`;
+- direct cursor slicing;
+- one `PublishedViewGuard`;
+- finite TTL/item/metadata/read/output limits;
+- optional bounded cached excerpts/item locators;
+- exclusive prepared-page delivery which commits insertion/advance only after complete output.
 
-Do not add durable query history, replay suppression sets, pin permits, cryptographic token authority,
-remote acknowledgement protocols or compatibility wrappers. Change actual result contracts and callers
-in the same cutover, then remove this package.
+Do not keep durable replan descriptors, issued fingerprints, token digests, grant/security generations,
+cleanup effects, source-catalog fences or terminal histories. Restart may expire every ordinary interactive
+window. A real restricted-client adapter binds/cancels its own windows directly.
+
+Expansion uses `(window_id, item_index)` and a bounded neighborhood around that exact manifest range. It may
+not request arbitrary bytes from the revision or mint another handle.
+
+Change protocol/results/daemon callers together, move the useful prepared-page code and delete this crate
+and the legacy daemon catalogue. After code, run minimal Rust 1.98 compiler/Clippy for actual query/window/
+protocol consumers. Broad lifecycle fixtures for deleted APIs are not implementation blockers.

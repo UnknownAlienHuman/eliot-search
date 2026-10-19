@@ -1,20 +1,26 @@
 # Working on search-handles
 
-Read the root [architecture](../../../docs/architecture/README.md), current
-[implementation](../../../docs/implementation/README.md) and the
-[query cutover](../README.md#one-query-window).
+Read the [query cutover](../README.md), [query-window map](../search-continuation/FUNCTIONS.md) and local
+[source map](FUNCTIONS.md).
 
-This package is a removal target, not the future owner of result lifetime. Trace every real
-`SearchSourceHandle` producer/consumer, change the result contract with those callers and move only the
-useful exact-range/readback mechanics into the one query window or retained-source reader.
+Do not repair or integrate either current handle store. Normal source-backed cards contain their verified
+excerpt/location directly. Optional expansion uses `(window_id, item_index)` inside the same live
+`QueryWindow` and pinned view.
 
-Do not add:
+Move only useful mechanics:
 
-- another token format, digest domain or collision registry;
-- durable handle persistence, leases, tombstones or cleanup journals;
-- synthetic grants/owner epochs to satisfy obsolete constructors;
-- compatibility wrappers that keep the old store reachable.
+- exact immutable range read and actual byte/range verification;
+- finite expansion/output limits;
+- exclusive prepared expansion through output;
+- original absolute expiry/deadline check.
 
-Keep real byte/range/deadline limits and selected restricted-client checks. For the baseline same-user
-local client, a result locator is not an authorization capability. Verify the connected query, expansion
-and terminal cleanup; package-local fixture preservation is not a completion criterion.
+Do not mint random per-item tokens, enumerate/hash the whole source catalogue, copy source/revision authority
+into another record or allow arbitrary absolute offsets across the revision. Expansion derives a bounded
+neighborhood from the exact emitted item's `ViewManifestEntry`.
+
+Owning-account local use needs no cryptographic bearer handle. A real restricted-client adapter binds and
+cancels the window through its concrete session. Remove handle grants, permits, invalidation generations,
+durable retention leases and crypto/provider seams with consumers.
+
+Change protocol/results/daemon callers together and delete this crate plus the daemon result-handle module.
+After code, run minimal Rust 1.98 compiler/Clippy for actual query/window/evidence/protocol consumers.

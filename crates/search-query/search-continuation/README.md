@@ -1,46 +1,115 @@
-# search-continuation — removal map
+# search-continuation — replace every continuation store with one QueryWindow
 
-This package is a second in-memory continuation lifecycle. It stores token-digest records, candidate
-windows or durable-replan descriptors, issued fingerprints, security generations and cleanup effects.
-The public daemon does not use it for paging; it uses its own
-[`ContinuationCatalog`](../../../bins/eliot-searchd/src/continuation/kernel/catalog.rs) plus a separate
-result-handle catalogue.
+The baseline product needs short-lived paging over one already ranked result set. It does not need a durable
+query capability, replay journal, issued-fingerprint history, security-generation graph or replan protocol.
 
-The shared package contains well over 160 KiB of Rust source before its security submodule is counted.
-Most of that code protects a durable/replayable query capability that the baseline local product does not
-need.
+Read the [query cutover](../README.md), [daemon map](../../../bins/eliot-searchd/FUNCTIONS.md) and
+[source map](FUNCTIONS.md).
 
-## One query window
+## Verified current source
 
-Keep one application-owned `QueryWindow`:
+This shared package is not the public daemon's paging owner. Its production files already exceed 79 KiB
+before the nested security directory is counted; tests add much more. It stores token-digest records,
+candidate windows or durable-replan descriptors, issued fingerprints, security generations and external
+cleanup effects.
+
+The public daemon instead has its own `ContinuationCatalog`. It retains a complete `Vec<StoredMatch>`, cursor,
+expiry, namespace/session tag and a SHA-256 fence over every current source. Every continuation page
+re-enumerates and rehashes the whole source catalogue. The same page then enters a separate result-handle
+catalogue which enumerates the catalogue and computes another full fence.
+
+Do not migrate the daemon to the shared lifecycle package. Replace both.
+
+## One application window
 
 ```text
-window_id
-PublishedView guard
-final ordered EvidenceRef[]
-next_index
-optional retained excerpts / issued item locators
-absolute expiry
-finite item, byte and output limits
-selected session binding only for a real restricted-client profile
+QueryWindow {
+  id
+  PublishedViewGuard
+  final ordered EvidenceRef[]
+  next_index
+  optional issued-item visibility / cached verified excerpts
+  absolute expiry
+  finite item / metadata-byte / source-read / output limits
+  optional concrete restricted-session binding
+}
 ```
 
-Reuse the daemon's useful slice/cursor and
-[`PreparedPage::deliver`](../../../bins/eliot-searchd/src/continuation/kernel/catalog/prepared.rs)
-mechanics: prepare the next page, emit it, and advance only after the complete output write succeeds.
+`EvidenceRef` is enough information to resolve a stable ranked point through the pinned view manifest. It is
+not a second source snapshot, backend cursor or public authority record.
 
-Do not recompute a whole source-catalog digest on every page. The pinned published view is the source and
-index fence. Read and verify only selected-page evidence. Completion, expiry, disconnect, cancellation or
-restart drops the process-local window and releases its view guard. A caller may repeat the query; there is
-no durable replan or cleanup journal.
+The window is process-local. Restart, daemon shutdown, session disconnect, explicit cancellation or expiry
+may invalidate it. A caller may repeat the query. No durable continuation recovery is required for ordinary
+interactive search.
 
-An optional `WindowItemRef` resolves an item in this same window. Finishing pagination does not discard
-items still needed by issued locators before the original expiry.
+## Page delivery
 
-## Cutover
+Preserve the useful mechanic from the daemon's `PreparedPage`:
 
-Move the useful daemon paging mechanics into the serving query owner, change `ContinuationHandle` and
-`SearchSourceHandle` result contracts together, migrate native lifecycle consumers, and delete both the
-shared continuation package and duplicate daemon catalogues after their last callers.
+1. hold an exclusive mutable borrow of the selected window;
+2. choose `[next_index .. next_index + page_size]` without rescanning earlier results;
+3. reserve request/window read and output budget;
+4. resolve and verify only that page's retained evidence under the original absolute deadline;
+5. format one bounded response in the established final order;
+6. write the complete frame;
+7. advance `next_index` only after complete output success.
 
-[FUNCTIONS.md](FUNCTIONS.md) records current repeated work and the removal sequence.
+A failed or partial frame advances zero. The connection/session fails closed and may drop the window so a
+partial response is never treated as a recoverable acknowledgement.
+
+For the first page, stage the new window and insert it only after successful output. Do not expose a token
+for a window which was never committed.
+
+## Item expansion
+
+Cards normally contain the source, exact revision/representation/location and a short verified excerpt.
+When more context is useful, return:
+
+```text
+WindowItemRef { window_id, item_index }
+```
+
+Expansion resolves that exact item under the same view guard and expiry. It may return a bounded configured
+neighborhood around the manifest range. It cannot select another item, another view or arbitrary bytes from
+the entire revision. The immutable reader verifies the object/range again or reuses a verified cached slice.
+
+The final page may mark the cursor exhausted while keeping the window until expiry if issued item locators
+remain valid. Without locators/caching, the exhausted window can be dropped immediately.
+
+## Limits and identity
+
+The window manager enforces finite:
+
+- live-window count;
+- total retained evidence-reference count and metadata bytes;
+- per-window result count and TTL;
+- per-page item/source-read/output ceilings;
+- optional cached excerpt bytes.
+
+For the owning-account local pipe, the ID is a process-local locator, not a cryptographic bearer grant. A
+selected restricted-client adapter binds windows to its actual connection/session and cancels them on
+revocation. Do not add token signatures, grant digests, purpose leases or durable secret storage to the
+baseline.
+
+## Remove after cutover
+
+Delete:
+
+```text
+crates/search-query/search-continuation/
+bins/eliot-searchd/src/continuation/ legacy catalogue
+shared durable-replan / issued-set / security / cleanup lifecycle types
+source-catalog fence hashing for pages
+continuation token crypto/provider seams
+continuation-specific contract compatibility families
+```
+
+Move only the direct slice/cursor and commit-after-output behavior to the real query owner. Change current
+protocol/result callers together; do not retain forwarding wrappers.
+
+## Completion
+
+Page N preserves final rank, reads only its selected evidence, does no whole-corpus/source-catalog scan,
+advances only after complete output and retains the old view exactly while the window is live. Expansion
+cannot escape the selected item/view. Restart invalidates windows and releases guards. No second continuation
+store remains reachable.
