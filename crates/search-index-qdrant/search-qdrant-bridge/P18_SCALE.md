@@ -1,39 +1,38 @@
-# P18 advanced-scale supplement — `search-qdrant-bridge`
+# Physical topology and scale
 
-**Status:** blocked until accepted P15, measured one-shard bottleneck, dedicated ADR and exact topology
-qualification. Existing `FUNCTIONS.md` remains authoritative for ordinary data-plane operations.
+The old P18 advanced-scale supplement is not a product state machine or runtime qualification protocol.
+The local baseline is one Qdrant node, one shard, one replica and one serialized publisher. Measure that
+path before adding topology.
 
-## Owns
-
-- exact server/client/topology capability probe for one selected scale profile;
-- candidate collection topology/schema creation and readback;
-- bounded query/mutation behavior under the selected topology;
-- scoring, filtered-IDF, strict-mode and response-shape equivalence evidence.
-
-## Required operations
+When a measured limit requires another topology, select it as collection-generation configuration:
 
 ```text
-validate_scale_profile(profile, artifact_receipts) -> QualifiedScaleProfile
-probe_scale_capabilities(disposable_route, profile, context) -> ScaleCapabilityReceipt
-create_scale_candidate_collection(profile, schema, context) -> CandidateCollectionReceipt
-verify_scale_candidate_schema(route, expected, context) -> SchemaReceipt
-validate_scale_query_equivalence(baseline, candidate, fixtures, context) -> EquivalenceReceipt
-validate_scale_mutation_readback(route, fixtures, context) -> MutationEquivalenceReceipt
+measured bottleneck
+→ explicit shard/replica/resource profile
+→ create new physical generation
+→ ingest bounded publication pages
+→ exact schema/query/mutation readback
+→ CurrentPublishedView switch
+→ old-view drain
+→ delete old generation
 ```
 
-## Invariants
+Qdrant already owns shard distribution, replication, transfer and cluster consistency. The bridge translates
+the selected API; Eliot does not need `QualifiedScaleProfile`, capability receipts, equivalence receipts,
+R0/R1 catch-up or another migration coordinator.
 
-- no topology selected in scaffold;
-- active collection schema/topology is never mutated in place;
-- exact payload/vector/profile/strict indexes exist before ingest;
-- access/currentness/shadow/purge and filtered-IDF predicates remain equivalent;
-- query fanout, pages, memory and queues are finite;
-- different scoring/IDF semantics require a distinct accepted scoring/product profile;
-- bridge never commits serving route or owns migration recovery.
+A changed topology may change scoring/IDF behavior. Verify it against the actual product corpus/evaluation set
+before view commit. If semantics differ materially, assign a new retrieval profile and build a new generation.
+Do not pretend equality through a digest or historical probe report.
 
-## Required evidence
+During a large build, baseline may serialize publication, replan against a newer current-source snapshot or
+apply one bounded ordered delta before final readback. Add a durable change stream only after measurement
+shows those simple choices insufficient.
 
-Exact Windows artifacts and profile; disposable topology fixture; signed epoch/open upper bound; strict
-unindexed rejection; filtered-IDF noninterference; exact mutation/readback/count; fanout/resource bounds;
-baseline/candidate scoring fixtures; process restart and partial-shard failure; vendor types remain
-private.
+Write ordering is selected by topology. Weak/default is sufficient for the one-node/one-writer baseline when
+each publication page uses `wait=true`, exact readback and a separate committed-view switch. Medium/strong
+ordering may be chosen for a distributed profile with a demonstrated need; it is not a universal schema
+floor.
+
+No scale-specific bridge APIs are required beyond create/verify/delete generation, ordinary bounded point
+operations and query/readback. Publication remains the only owner of recovery and route visibility.

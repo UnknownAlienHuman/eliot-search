@@ -1,13 +1,19 @@
-# Qdrant qualification
+# Qdrant evaluation archive
 
-This directory is the P05–P07 evidence contract for the exact self-hosted Qdrant server/client pair
-used by ELIOT Search.
+This directory preserves selected Qdrant 1.19.0 artifact/schema/probe inputs and results from the earlier
+W3 qualification programme. They are historical evaluation evidence, not runtime authority and not a gate
+that disables an otherwise working current-format product.
 
-- [`W3_QUALIFICATION.md`](W3_QUALIFICATION.md) — ownership, sequence, stop conditions and evidence.
-- [`artifact.toml`](artifact.toml) — exact server/client/artifact identity; initially unqualified.
-- [`collection-schema.toml`](collection-schema.toml) — architecture-required topology, vectors, payload
-  fields and indexes.
-- [`probes.toml`](probes.toml) — machine-readable mandatory capability probes.
+- [`W3_QUALIFICATION.md`](W3_QUALIFICATION.md) explains what remains useful and what is retired.
+- [`artifact.toml`](artifact.toml) records the selected Windows server/client pair used by those runs.
+- [`collection-schema.toml`](collection-schema.toml) records the old frozen probe schema.
+- [`probes.toml`](probes.toml) records probe definitions/outcomes.
+- `evidence/` and `vendor-boundary/` retain supporting outputs.
 
-These files select no product version by themselves. Indexed mode is disabled until immutable evidence
-for one exact Windows x64 pair is independently accepted.
+Normal startup does not consume these files, manufacture a passing receipt or require `QualifiedGate`.
+It connects to the configured service, checks the current server capabilities and verifies the exact
+collection generation/schema it will use.
+
+Keep the workspace dependency pin until a deliberate upgrade. Run a focused live suite when changing the
+selected Qdrant/client pair or making a concrete behavior claim. Store results as evaluation/release evidence;
+do not feed them back into the product constructor or rebuild a permanent acceptance bureaucracy.

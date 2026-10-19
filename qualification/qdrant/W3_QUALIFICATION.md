@@ -1,155 +1,99 @@
-# W3 Qdrant and lexical qualification contract
+# Historical W3 Qdrant qualification programme
 
-**Status:** `UNQUALIFIED`  
-**Architecture:** ELIOT Search 8.4, S9–S14, H8–H12, P05–P07  
-**Scope:** exact local Qdrant artifact, Rust client, process containment, collection schema, sparse lexical
-compatibility, mutation/readback semantics, publication and reclaim prerequisites.
+The previous W3 programme attempted to turn one exact Windows Qdrant executable, Rust client revision,
+artifact digest, process/secret lease and a large probe matrix into runtime admission. Public main then made
+`QualifiedGate` and the lease/equality receipts mandatory inputs to `RealDataPlane::connect`.
 
-No version string, upstream release tag, documentation claim or successful health request is an
-acceptance receipt. Indexed mode remains disabled until every mandatory item below is reproduced
-against one exact Windows x64 server artifact and one exact Rust client revision.
+That design is retired. The selected 1.19.0 pair and probe outputs remain useful historical evidence, but a
+report produced by an earlier test run is not authority over the service currently running.
 
-## Owners
+## What the old programme established
 
-| Evidence | Owner |
+The 2026-09-10 bridge run exercised thirteen useful behaviors against the selected pair, including:
+
+- server identity and one-shard schema;
+- required payload indexes and strict-mode rejection;
+- signed epoch/open-upper-bound filtering;
+- sparse IDF and independently scoped IDF population;
+- `wait=true`, write ordering and exact mutation/readback;
+- schema/readback response shape.
+
+Several broader process/publication/restart claims remained unavailable. Do not convert the partial result
+into either a product-ready claim or a reason to keep the constructor gate.
+
+## Current use
+
+Use this directory only when:
+
+- changing the pinned Qdrant server/client pair;
+- changing a concrete schema/query/mutation behavior;
+- reproducing a platform-specific defect;
+- recording a release or performance evaluation.
+
+A focused run records the exact version, configuration, command, platform and raw result needed for that
+claim. Independent review may be useful for a release decision, but the codebase does not need an immutable
+review receipt or package-wide acceptance state.
+
+Normal startup instead performs the operations it actually needs:
+
+```text
+configured endpoint + optional credential
+→ live connection
+→ current server capability/version observation
+→ exact selected collection generation/schema readback
+→ publication/query operations
+```
+
+Unsupported or incompatible current state fails truthfully. A previous probe report cannot override the
+current service, and a missing report cannot replace an actual failed connection/schema readback.
+
+## Useful ownership boundary
+
+| Responsibility | Current owner |
 |---|---|
-| executable path/version/SHA-256, process identity, loopback/ACL/Job Object | `search-qdrant-supervisor` |
-| collection capabilities, payload indexes, strict mode, mutations, readback and queries | `search-qdrant-bridge` |
-| document/query sparse vectors and profile fixtures | `search-lexical` |
-| canonical point identity and collision refusal | `search-point-identity` |
-| exact point/payload/vector manifest | `search-projection-planner` |
-| publication kill/reopen matrix | `search-publication` |
-| route/epoch pin and watermark | `search-epoch-pins` |
-| exact ordinary retired-point deletion | `search-index-reclaimer` |
-| final P05–P07 evidence acceptance | integration owner + independent reviewer |
+| optional local Qdrant child/endpoint lifecycle | selected daemon/supervisor composition |
+| SDK translation, collection/point/query/readback RPCs | `search-qdrant-bridge` |
+| native BM25 text/profile and prepared publication pages | preparation/planner |
+| stable point identity | point-identity owner |
+| publication recovery and current view | `search-publication` + typed redb current/pending rows |
+| source evidence | retained object store + `ViewManifestEntry` |
+| old-view lifetime and cleanup | current-view/publication owner |
 
-One package may produce its own evidence but cannot accept its own handoff.
+Do not restore the old reclaimer, epoch-pin, acceptance-review or process-receipt platforms merely because
+they appear in historical probe ownership.
 
-## Frozen inputs required before execution
+## Current baseline to verify
 
-Populate [`artifact.toml`](artifact.toml) with exact, non-empty values:
+For the connected local product, focus on:
 
-- server semantic/build version;
-- server executable SHA-256 and byte length;
-- source/release identity and license receipt;
-- Windows architecture and required runtime identity;
-- Rust client crate version, source checksum and lockfile identity;
-- qualified working directory/config template identities;
-- OS-secret lease mechanism and process-injection receipt;
-- disposable qualification data-root identity.
+1. create/verify one selected physical generation;
+2. ingest real text using native `qdrant/bm25` `Document` input;
+3. query with selected-scope `idf.corpus` and preserve Qdrant order;
+4. exact full/narrow mutation readback with `wait=true`;
+5. unknown write recovery from actual Qdrant state after restart;
+6. `CurrentPublishedView` switch and old-view evidence survival;
+7. exact retired-point or old-generation cleanup after final guard.
 
-`latest`, ranges, floating Git revisions, auto-download and auto-upgrade are forbidden.
+One node, one shard, one replica and one serialized publisher are the baseline. Strong ordering, strict mode
+and another topology are configuration choices, not universal correctness floors. Measure before expanding.
 
-## Qualification order
+## Retired requirements
 
-1. Verify artifact bytes before execution.
-2. Acquire one isolated data-root owner and a purpose/incarnation-bound API-key lease.
-3. Start the exact executable under loopback-only binding, ACL and Job Object containment.
-4. Verify PID, executable path, executable digest, installation incarnation and data-root identity.
-5. Create a disposable one-shard collection from [`collection-schema.toml`](collection-schema.toml).
-6. Create every mandatory payload index **before** point ingestion.
-7. Enable strict mode and prove unindexed retrieve/update filters are rejected.
-8. Execute every mandatory probe in [`probes.toml`](probes.toml).
-9. Reproduce lexical document/query golden vectors and collision corpus against one provider path.
-10. Execute exact point mutation/readback/delete and response-shape fixtures.
-11. Execute publication crash/failpoint recovery against fake ports first, then the qualified bridge.
-12. Execute route/epoch pin and ordinary exact reclaim fixtures.
-13. Publish immutable raw outputs and a reviewer receipt. Only then set artifact/probe status to
-    `QUALIFIED`.
+Do not require:
 
-Failure or `UNAVAILABLE` keeps indexed mode disabled. DIRECT and exact/source paths may remain available
-with explicit degraded capability state.
+- exact executable SHA/build, client source checksum and thirteen probe outcomes as a runtime token;
+- a purpose/incarnation-bound secret callback and process/owner equality receipt before every RPC;
+- `QUALIFIED | UNQUALIFIED` global product state or automatic indexed-mode disablement based on this archive;
+- immutable reviewer receipts, package handoff acceptance or frozen source spelling;
+- strongest write ordering for the local one-writer topology;
+- exact counts for ordinary ranked top-k;
+- source revision/range or vector digests echoed through Qdrant payload as evidence;
+- separate publication/reclaim/pin qualification state machines.
 
-## Mandatory admission properties
+Keep credentials out of repository/logs, keep vendor types private and state live claims only after actual
+execution. These are direct engineering requirements; they do not justify the retired qualification
+operating system.
 
-### Process and secret boundary
-
-- loopback only;
-- API authentication required;
-- no plaintext secret in argv, repository/config files, logs, metrics, crash-report metadata or receipts;
-- exact executable identity is rechecked after start and during health/recovery;
-- child terminates with the daemon/Job Object;
-- restart is bounded and ends in quarantine;
-- orphan/PID reuse/executable replacement never causes blind attachment.
-
-### Collection and filter boundary
-
-- one shard, one active generation plus at most one migration candidate;
-- one `ProjectionMembership` per point;
-- exact named vector/profile set;
-- explicit payload index for every base-eligibility predicate;
-- strict mode rejects unindexed retrieval/update filters;
-- signed `i64` epoch range behavior matches the fixture;
-- missing `valid_until_epoch_exclusive` passes the open-ended `must_not <= E` condition;
-- retrieval and IDF population use the same canonical base eligibility plan;
-- inaccessible, staged, retired, denied, purged or shadowed points do not affect IDF;
-- every schema/profile/topology incompatibility creates a new collection generation.
-
-### Mutation and readback boundary
-
-- correctness-path mutations request synchronous acknowledgement and strongest qualified ordering;
-- timeout/cancellation after possible mutation yields `OUTCOME_UNKNOWN`, never a fabricated failure;
-- unknown outcomes are resolved by exact ID readback;
-- upsert/close/delete uses exact point IDs, not broad payload filters;
-- UUID projection collisions compare full 256-bit identity and never overwrite;
-- exact counts and readback sets must match manifests before publication commit.
-
-### Lexical boundary
-
-- exactly one accepted provider path per collection generation;
-- document/query token IDs and weighting are fixture-compatible;
-- no implicit language, stopword, stemming, normalization or hashing defaults;
-- profile identity covers provider artifact, tokenizer, Unicode rules, identifier expansion, mapping,
-  collision policy, weighting, sparse modifier/schema and fixture digest;
-- lexical matches nominate candidates only; exact identity/completeness/absence remain source/exact-plane
-  claims.
-
-## Evidence products
-
-Each run publishes immutable references for:
-
-```text
-artifact_identity
-process_containment
-secret_side_channel_scan
-collection_schema
-strict_mode
-signed_epoch_and_missing_upper_bound
-sparse_idf_and_independent_idf_population
-payload_index_completeness
-lexical_document_query_golden
-point_collision_nonoverwrite
-wait_ordering_mutation_readback
-publication_failpoint_matrix
-route_epoch_pin_watermark
-exact_reclaim_resume
-direct_mode_degradation
-```
-
-Every record contains exact command/fixture, commit, server/client identities, configuration fingerprint,
-platform, start/end time, `PASS | FAIL | UNAVAILABLE`, raw output digest and reviewer. Prose-only evidence
-is rejected.
-
-## Current disposition
-
-The selected adapter pair has been exercised, but W3 as a whole has not been
-accepted. The 2026-09-10 bridge run recorded 13 `PASS` probes and left 11
-mandatory probes `UNAVAILABLE`; therefore the probe registry is
-`PARTIALLY_EXECUTED`, the artifact is still `UNQUALIFIED`, and indexed mode
-remains disabled.
-
-```text
-server artifact: SELECTED qdrant.exe 1.19.0 / build 74f3e85b
-server digest: PINNED in artifact.toml
-Rust client: SELECTED qdrant-client 1.19.0
-collection schema: DESIGNED_NOT_EXECUTED
-capability probes: PARTIALLY_EXECUTED (13 PASS / 11 UNAVAILABLE)
-lexical profile: UNQUALIFIED
-Windows containment: NOT_EXECUTED
-indexed mode: DISABLED
-```
-
-The selected versions are upgrade inputs, not public service contracts. The
-workspace must consume Qdrant only through `search-qdrant-bridge`; the adapter
-boundary and upgrade procedure are defined in
-[`../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
+The current adapter and cutover map are in
+[`../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md`](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md)
+and [`../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
