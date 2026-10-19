@@ -1,31 +1,57 @@
-# search-result-projector — current API and cutover
+# search-result-projector — source map and deletion boundary
 
 ## Current API
 
-`project_candidate_set(envelope, inputs, budget)` currently:
+| API/type | Actual behavior |
+|---|---|
+| `project_candidate_set(envelope, inputs, budget)` | Owns a complete `Vec`, re-sorts descending by supplied raw score and candidate ID, then applies result/source-byte ceilings after earlier validation/handle work. |
+| `CandidateProjectionInput` | Carries already verified source bytes plus an already minted `SearchSourceHandle` and caller public metadata. |
+| omission/coverage projection | Copies caller coverage and grows one omission record per rejected item. |
+| `verify_handle_target_binding` | Compares supplied IDs only; it reads no handle/window/manifest owner. |
+| callers | Normal product query caller was not found. The indexed process fixture constructs and calls it. |
 
-- consumes a complete `Vec<CandidateProjectionInput>`;
-- re-sorts it by raw score;
-- receives already verified source bytes and an already minted `SearchSourceHandle`;
-- applies candidate/source-byte limits only after that earlier work;
-- returns the old handle-oriented `SearchCandidateSet`;
-- copies caller coverage while growing one omission record per rejected input.
+The package is one 10,337-byte production file. It is downstream of disconnected planner/executor/validator
+and handle systems; preserving its current API would preserve all of them.
 
-`verify_handle_target_binding` compares three supplied IDs. It neither resolves the handle nor proves that
-the public metadata belongs to the candidate.
+## Replacement
 
-Source: [lib.rs](src/lib.rs).
+Final ranking belongs to retrieval/fusion. Evidence lookup belongs to the pinned manifest and immutable
+reader. Query-window lifetime belongs to one `QueryWindow`. Projection receives only final-order verified
+items and remaining output limits:
 
-## Required change
+```text
+format_cards(
+  items: &[VerifiedEvidenceItem],
+  gaps: GapSummary,
+  window_items: Option<&[WindowItemRef]>,
+  context: &mut RequestContext,
+) -> BoundedResponse
+```
 
-1. Retrieval/fusion establishes final order.
-2. Query composition selects one bounded page before retained-source I/O.
-3. Candidate validation resolves `ViewManifestEntry` and verifies actual retained bytes/ranges.
-4. Projection receives `VerifiedEvidenceItem` values in final order and formats `EvidenceCard` values.
-5. The query window owns the cursor, view guard and optional `(window_id, item_index)` locator.
-6. Bound encoded output and sampled gap details; report total omitted counts without storing one record per
-   omitted candidate.
+Rules:
 
-Remove `CandidatePublicMetadata`, mandatory `SearchSourceHandle`, raw-score sorting and handle-binding
-helpers with their consumers. If no nontrivial transformation remains, fold the code into the query owner
-and delete this package rather than maintain another lifecycle boundary.
+1. never reorder `items`;
+2. reserve/charge item and encoded-byte budget before copying excerpts;
+3. include source/revision/representation/location and actual verified excerpt directly;
+4. keep rank/contribution metadata separate from evidence identity;
+5. sample finite gap details and retain aggregate counts;
+6. ordinary ranked top-k remains explicitly non-exhaustive;
+7. output failure does not advance the query-window cursor.
+
+If these operations are simple response encoding, inline them into the daemon/protocol owner and delete this
+crate.
+
+## Delete after caller cutover
+
+- old `SearchCandidateSet` envelope and handle-oriented result family;
+- `CandidatePublicMetadata`, `SearchSourceHandle` input and target-binding helper;
+- raw-score sorting/tie behavior;
+- caller coverage/proof input and per-omission allocation;
+- process fixture pipeline that treats oracle nominations as source-backed evidence;
+- projector-specific compatibility/version adapters and source-shape fixtures.
+
+## Verification
+
+Check final order preservation, exact item/output ceilings, no retained-source read for unselected items,
+bounded gap details, correct verified excerpt/location and zero query-window cursor advancement on partial or
+failed output.

@@ -1,24 +1,39 @@
 # Working on search-query-planner
 
 Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md) and
-[query cutover](../README.md#direct-operations-not-a-recipe-operating-system).
+[implementation guide](../../../docs/implementation/README.md), [query cutover](../README.md) and local
+[source audit](FUNCTIONS.md).
 
-Do not preserve caller-created `CapabilitySet`, `SearchTaskPlan`, grants, dependency graphs, plan IDs or
-fingerprints. Change the request, planner, executor and daemon consumers together. Connected services and
-the pinned view are the actual input authority.
+Do not repair, privatize or version the current 104 KiB proof protocol. `CapabilitySet`, `SearchTaskPlan`,
+grants, safe-leg proofs, dependency graphs, plan IDs, fingerprints and drift observations have no connected
+production caller and are not current compatibility contracts.
 
-Keep only nontrivial pure selection:
+Implement the real handler first:
 
-- choose implemented branches requested by the current typed request;
-- keep one resolved scope and published view;
-- split only incompatible physical routes/profiles;
-- assign finite work limits under one absolute deadline;
-- preserve deterministic operation/fusion order.
+```text
+pinned PublishedView
++ ResolvedScope
++ typed request
++ RequestContext
++ constructed service references
+→ direct operation(s)
+```
 
-If the baseline lexical path is one direct Qdrant call, inline it rather than manufacturing a one-leg plan.
-Optional branches stay unsupported until their real handlers exist. Do not add a capability registry,
-canonical descriptor, qualification credential or V3 request family.
+For baseline `Search`, call the real Qdrant BM25 handler directly. Do not manufacture a one-leg plan.
+`Exact`, `Continue` and `Expand` dispatch to their direct owners. Optional operations remain unsupported
+until a real handler exists.
 
-Verify the connected query and truthful unsupported behavior. Planner fixtures and frozen plan hashes are
-not product completion.
+Keep only nontrivial pure selection that survives integration:
+
+- group compatible sources into one route/profile population;
+- split incompatible physical routes/profiles;
+- assign finite branch ceilings within the existing absolute deadline/counters;
+- preserve deterministic internal operation order;
+- fail unsupported modes before work.
+
+Change request/contracts, daemon, executor and provider consumers in the same cutover. Delete old planner
+APIs and fixtures rather than adding facades or a V3 family. If the remaining code is a few helpers, move
+it into query composition and delete the crate.
+
+After code, run minimal Rust 1.98 compiler/Clippy for changed production consumers. Do not spend the
+implementation phase maintaining plan hashes, source-shape tests or recipe matrices for deleted APIs.
