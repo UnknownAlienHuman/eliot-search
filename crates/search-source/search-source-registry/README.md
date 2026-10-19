@@ -1,96 +1,105 @@
-# search-source-registry
+# search-source-registry — collapse to typed current rows
 
-Current root, source and current-head metadata for the local application. Retained bytes live in the
-immutable object store; published query meaning lives in `PublishedView`. This package must not become a
-second corpus, history, migration, operation-replay or access database.
+Current root, source and source-head state belongs in short typed redb operations. Retained bytes live in the
+immutable object store; immutable query membership/evidence lives in `PublishedView`. The registry is not a
+second database, replay engine, corpus, access authority or history.
 
 Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md), [source map](FUNCTIONS.md) and
-[control-state map](../../search-control-redb/FUNCTIONS.md).
+[implementation guide](../../../docs/implementation/README.md), [source map](FUNCTIONS.md),
+[control-state map](../../search-control-redb/FUNCTIONS.md) and
+[current identity map](../search-source-identity/FUNCTIONS.md).
 
-## Current production path is a restore pipeline
+## Verified current source
 
-The native root/source commands do not read a small current registry. They bind `RegistryJournal` through
-`bind_original_v4`, restore the full `SourceRegistry` from registry batch history, restore original policy
-and admission input layouts, requalify current records, replay or commit another generic batch and then
-rebuild/publish the complete control snapshot.
-
-`native_source_command` performs that work before and after the stable source read, yet still outputs:
+Production files total about **214.4 KiB** before more than 137 KiB of inline/external tests:
 
 ```text
-retained_revision: false
-source_body_serving: false
-ready: false
+api / batch / recovery / restore       ~83.8 KiB
+cutover / membership / portfolio       ~37.2 KiB
+root / source / source-v2 / view       ~69.1 KiB
+error / lib / IDs                      ~21.3 KiB
 ```
 
-The normal command therefore pays migration/replay cost without producing a usable retained source.
-The small `RegistryJournal::bind` path was found mainly in tests; the normal daemon selects v4 restore.
+The normal daemon does not read a small current registry. It binds `RegistryJournal` through v4 original-
+input restore, reconstructs complete `SourceRegistry`, replays a batch/operation, mutates one item, reads
+batch targets back and rebuilds a complete control snapshot. Source admission still returns no retained
+revision.
 
-The pure `registry_snapshot` helper also clones roots, sources, memberships, portfolios, portfolio history,
-active generations, ownerships and namespace states into another aggregate before view resolution.
-That is not a cheap current-state read and is not needed by the target query path.
+`registry_snapshot` separately clones roots, sources, memberships, portfolios, portfolio history, active
+generations, namespace ownership and namespace state before resolving a view.
 
-## Required current state
-
-Keep only records the running local application uses:
+## Current records
 
 ```text
-RootRecord
-  root_id, selected locator/view, policy, availability
+RootRecord {
+  RootId
+  current locator/view and policy revision
+  availability
+}
 
-SourceRecord
-  source_id, root_id, current locator/view, current_revision, availability
+SourceRecord {
+  SourceId
+  RootId
+  current locator
+  optional current physical key
+  current RevisionRef
+  availability
+  optional current admission outcome/reason/classification
+}
 
-RevisionRef
-  revision_id, content_digest, length, immutable_object_ref
+RevisionRef {
+  revision/content identity
+  byte length
+  immutable ObjectRef
+}
 
-optional SavedSelection
-  name, ordered source IDs for future requests
+optional SavedSelection {
+  name
+  ordered SourceId[]
+}
 ```
 
-An immutable object is verified before a short typed redb transaction changes `current_revision`.
-Replaying the same source/head and revision is harmless; the same expected head with another revision
-conflicts. Source removal affects future views but does not delete retained objects still referenced by a
-current, pending or live published view.
+The root/source/control owner may store these directly in typed redb tables. A separate in-memory
+`SourceRegistry` is optional only as a read-through cache while the daemon owns the root; it is never rebuilt
+from operation history before every command and never becomes durable authority.
 
-Publication builds the immutable `PublishedView` used by queries. That view binds exact source revisions,
-route/profile and evidence manifest. The registry needs no permanent historical SourceView/corpus/
-portfolio revisions or access/scoring proof records to make one coherent query.
-
-## Small operations
+## Current operations
 
 ```text
-register/update/unbind one root
-get/list one bounded page of current roots/sources
-commit_source_head(source, expected_head, RevisionRef, locator, availability)
+register / update / unbind root
+get root/source and bounded list pages
+commit_source_head(source, expected_head, RevisionRef, locator, physical_key, availability)
 retire_source_head(source, expected_head, reason)
-read one consistent current source snapshot for reconcile/publication
-resolve an explicit/default source subset without widening
+read one consistent current source snapshot for inventory/publication
+resolve explicit/default selected SourceId subset without widening
 ```
 
-Use typed redb rows and exact point/bounded-page reads. A read-only in-memory cache may mirror current rows
-while the daemon owns the root, but it is not reconstructed from operation history before every command and
-is never an outage fallback.
+The immutable object exists and is read back before the short source-head transaction. A known abort is a
+known failure. A genuinely uncertain commit is resolved by point-reading the source row. Failure before the
+head leaves a safe unreferenced object for bounded GC.
 
-A source/head commit stores no source body, admission transcript, original input layout, canonical batch or
-completed operation receipt. A genuinely uncertain redb commit is resolved by reading the current source
-row. The immutable object may be left unreferenced for bounded GC if the head commit did not occur.
+Source identity matching is current-state logic: same locator, optional proven rename by exact physical key,
+new source or explicit conflict. No permanent path/lineage history.
 
 ## Remove with callers
 
-- `RegistryJournal` adapter, operation envelopes and full batch restore on normal commands;
-- v4 original policy/admission retention and reconstitution;
-- package-wide `SourceRegistry` replay before one root/source mutation;
-- generic namespace owner cutover, portfolio/history and membership policy machinery without a current
-  user-facing consumer;
-- legacy DIRECT/root-catalog authority and receipt-bound currentness;
-- `search-source-records` / `search-source-history` forwarding splits once useful current types move to
-  their actual owner;
-- process-local operation/receipt collections and full aggregate snapshot cloning.
+- package-wide `SourceRegistry` restore/replay and generic operations;
+- batch, source-v2, recovery and registry-restore paths;
+- namespace owner cutover and membership/portfolio/history machinery;
+- cloned aggregate `registry_snapshot` and old query views;
+- receipt/currentness/original-input/provenance fields;
+- `search-source-records` and `search-source-history` forwarding packages;
+- old identity binding/history/lineage framework;
+- legacy DIRECT/root-catalog authority and fixtures.
 
-Keep read-only legacy code only while an explicitly selected old-format diagnostic needs it. It cannot
-write current state or block a clean current-format application.
+If the remaining operations are naturally methods of typed redb/source composition, delete this crate rather
+than retain another repository layer.
 
-Preserve #598's active private source-retention work and consume its accepted retained revision/head result;
-do not create a competing writer. Unsupported pre-release roots may be rejected before writes and left
-intact.
+Unsupported pre-release roots fail before writes and remain intact. Preserve #598's active private work and
+consume only its accepted retained revision/head result.
+
+## Completion
+
+One acquired body becomes one immutable object and one current source head. Restart point-reads current rows
+without operation replay. Inventory/publication obtains one consistent bounded current snapshot. Old query
+evidence remains exact through its pinned `PublishedView`, not registry history.

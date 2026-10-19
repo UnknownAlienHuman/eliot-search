@@ -1,18 +1,70 @@
-# Sources
+# Sources — one ingestion owner, not seven operating systems
 
-Selected roots become retained revisions and current source records. The
-[implementation guide](../../docs/implementation/README.md) defines the connected ingestion result;
-this is a map of existing code, not a requirement to retain every package.
+Selected roots become immutable retained objects, current source heads and later published evidence. The
+[implementation guide](../../docs/implementation/README.md) defines the connected result.
 
-| Existing code | Useful responsibility / simplification |
+## Measured current overhead
+
+The following policy/receipt/provenance/records/history/identity/registry packages contain **more than
+1.22 million bytes of production Rust** before safe-reader, revision-store, reconcile and tests are counted:
+
+| Existing package | Gross production source | Current disposition |
+|---|---:|---|
+| `search-source-admission` | ~367 KiB | keep one small pre/post-read policy evaluator |
+| `search-source-admission-receipt` | ~34 KiB | delete |
+| `search-source-provenance` | ~57 KiB | delete |
+| `search-source-records` | ~332 KiB | move a few current rows, delete |
+| `search-source-history` | ~70 KiB | delete |
+| `search-source-identity` | ~149 KiB | keep/move small physical-key/current-source matcher |
+| `search-source-registry` | ~214 KiB | replace with typed current redb/source operations |
+
+This is gross source inventory, not a promised net deletion. It shows why a single file still does not reach
+retention despite extensive source infrastructure.
+
+## Current target
+
+```text
+configured root
+→ ignore-filtered bounded inventory / watcher hint
+→ current admission pre-read decision
+→ one stable final-handle or Git-object read
+→ current admission post-read classification
+→ same owned bytes to one immutable object writer
+→ one typed SourceRecord / RevisionRef compare-set
+→ one preparation job
+→ later PublishedView
+```
+
+Owners:
+
+| Responsibility | Owner |
 |---|---|
-| [source registry](search-source-registry/), [source records](search-source-records/), [source identity](search-source-identity/) | Selected roots, source identity/locator and current revision. Consolidate repeated source/view models and lookups around these records. |
-| [source reconcile](search-source-reconcile/) | Turn notifications and bounded inventories into work for changed, moved or missing sources. |
-| [safe reader](search-safe-reader/) | Acquire stable bytes from the selected source without executing its contents. Pass those same bytes onward. |
-| [revision store](search-revision-store/) | Existing immutable object mechanics and revision models. Its in-memory store is not the missing persistent application backend. |
-| [source history](search-source-history/), [provenance](search-source-provenance/) | Keep relationships actually needed to reopen, trace or compare revisions; fold duplicate current/history bookkeeping into the source owner. |
-| [admission](search-source-admission/), [receipt issuer](search-source-admission-receipt/) | Keep selected-source policy evaluation. Retire permanent proof/receipt handoffs that duplicate an in-process decision. |
+| root lock, containment, native/Git stable read | root/safe-reader composition |
+| selected-source policy | one small admission evaluator |
+| immutable bytes | one object writer/reader from #598/#330 |
+| current roots/sources/heads | typed redb/source methods |
+| changed/moved/missing work | one reconcile/inventory queue |
+| query evidence | `PublishedView` manifest + immutable reader |
 
-Source bytes and content-revision identity must agree. Store the immutable object before committing its
-head/reference; preparation can retry from that revision. An unsupported old format is rejected before
-writes and left intact. There is no legacy-reader or migration prerequisite for the new application.
+## Identity and state
+
+A path locates a source. `SourceId` is assigned/persisted in current state. An optional exact native physical
+key may prove a rename. Content digest identifies a revision, never the source. Git evidence binds the exact
+selected tree/path/object ID and retained bytes.
+
+Keep no permanent path history, portfolio/membership history, original admission transcript or operation
+archive merely so an old query can reopen data. Old queries hold their immutable `PublishedView` and exact
+revision references.
+
+## Package disposition
+
+- Keep/simplify `search-safe-reader`, `search-revision-store` and `search-source-reconcile` around the connected
+  path.
+- Fold the few useful admission/identity/current-row values into those concrete owners.
+- Delete receipt, provenance, records, history, restore, batch, cutover, portfolio and lineage packages after
+  direct callers move.
+- If the remaining registry/identity code is only typed redb methods and a small matcher, delete those crate
+  boundaries too.
+
+Unsupported old roots are refused before writes and left intact. There is no migration or legacy-reader
+prerequisite. Preserve #598's active private source work and consume only its accepted handoff.

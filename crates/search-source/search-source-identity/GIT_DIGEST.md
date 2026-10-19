@@ -1,35 +1,25 @@
-# Git stable identity digest
+# Historical Git stable-identity digest
 
-`search-source-identity` owns the pure compatibility formula that binds one
-already-admitted repository identity to one exact Git object ID:
+The old helper derives another SHA-256 value from one admitted repository digest and one exact 20-byte Git
+object ID. It is not required by the current source model.
+
+Git object identity already belongs to the repository's selected object format. A current Git source/evidence
+binding uses:
 
 ```text
-SHA-256-domain-frame(
-  "eliot-searchd/git-stable-identity/v1",
-  repository_identity_digest,
-  object_id,
-)
+registered repository/view
+exact commit/tree snapshot
+exact tree path
+exact blob OID bytes and algorithm
+retained blob bytes / ObjectRef
 ```
 
-The crate does not implement SHA-256 itself. The integration boundary supplies
-a qualified `GitIdentityDigest`, while this package owns the domain and ordered
-framing through `derive_git_stable_identity_digest`.
+A blob OID identifies content, not the logical source path in a tree. Conversely a path/ref/name/remote URL
+is not object identity. Keep both exact pieces where the view manifest/source head needs them; do not hash
+them into another compatibility identity.
 
-Load-bearing inputs are only:
+The hard-coded 20-byte input also assumes SHA-1 repositories. The current Git adapter must accept the exact
+OID format reported by the selected repository/tooling rather than pad/truncate/relabel it.
 
-- the exact admitted 32-byte repository identity digest;
-- the exact validated 20-byte Git object ID.
-
-Repository path, remote URL, repository name, ref, branch, HEAD, worktree path,
-logical display path and lineage label are not identity inputs. Lineage evidence
-is retained separately and cannot substitute for repository/object identity.
-
-The operation is deterministic, bounded, I/O-free and retry-safe. It performs no
-Git command, hook/filter execution, credential-helper invocation, filesystem
-read, network fetch, registry mutation, clock access or random ID generation.
-
-Manual check:
-
-```powershell
-cargo test --locked -p search-source-identity git_digest
-```
+Delete `derive_git_stable_identity_digest`, its domain/profile/goldens and this file after the old identity
+consumer moves. No migration is required for unsupported pre-release roots.
