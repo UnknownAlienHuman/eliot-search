@@ -9,8 +9,8 @@ and handlers; library owners retain data/algorithm responsibilities. This map de
 | Existing path | What the source actually does | Next implementation |
 |---|---|---|
 | [entry.rs](src/entry.rs) | Chains `maybe_refuse_legacy_effects` and several handlers which recapture arguments. | Parse one invocation/config value and dispatch one concrete operation. |
-| native root / direct registry | Opens current root and redb metadata. | Use one root owner and current-state transactions. Root registration is not ingestion. |
-| `--admit-source-v2` | Reads, hashes and classifies the file, commits admission metadata, then drops the body and returns `retained_revision:false`. | Pass the same bytes into the immutable writer, commit source head and prepare them. |
+| native root / direct registry | Opens current root and redb metadata. Before ordinary root/source work it binds `registry_control` through `bind_original_v4`, restores the complete in-memory registry and historical original inputs, then republishes a full control snapshot. | Point-read/update typed current root/source rows. Remove v4 restore, operation replay and snapshot publisher from the normal command path. |
+| `--admit-source-v2` | Restores the full registry, reads/hashes/classifies the file, commits Source-v2 admission metadata through another generic batch, drops the body and returns `retained_revision:false`. | Pass the same bytes into #330, compare/set one current source head in redb and enqueue #331. |
 | `--sync-source-roots` | Successful preflight ends with `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`. | Execute bounded inventory/update through the same ingestion owner. |
 | legacy preparation commands | Prepare old retained objects through a second storage engine. | Reuse useful materialization/coordinates with the one current reader/writer. |
 | public DIRECT service | Serves existing read-only DIRECT commands; mutation unavailable. | Keep exact source scan explicit and connect the current typed protocol. |
@@ -25,13 +25,41 @@ Do not expose test-only index/mutation methods by removing `cfg(test)` and call 
 | Owner | Concrete responsibility |
 |---|---|
 | Invocation/root | One parsed command, one root lock, actual settings and orderly shutdown. |
-| Source / revision store | Stable acquisition and one immutable writer/reader. Bytes precede source-head commit. |
+| Source / object store | Stable acquisition and one immutable writer/reader. Bytes precede source-head commit. |
+| Current source state | Typed redb RootRecord/SourceRecord/current RevisionRef rows and bounded list/point reads. No registry operation archive or full restore before each command. |
 | Preparation | One materialization and structure-first units. Unsupported transformations become gaps. |
-| redb control | Current settings/source/head/artifact/publication records in short transactions. No source bodies or query history. |
+| redb control | Current settings/source/head/artifact/publication records in short transactions. No source bodies, completed-operation history or query history. |
 | Publication | One pending artifact, Qdrant effect/readback and one visible `PublishedView`. |
 | Qdrant/query | One private connection/runtime, scoped query, view-manifest lookup and retained-byte validation. |
 | Query window | One process-local cursor/view guard for paging and bounded expansion; restart may expire it. |
 | Local protocol | One bounded typed request/result exchange. Actual handlers determine availability. |
+
+### Current source-state cutover
+
+The normal direct command currently performs:
+
+```text
+restore full SourceRegistry
+→ replay historical operation/original input layouts
+→ mutate one root/source
+→ read generic batch targets back
+→ rebuild/publish full ControlSnapshot
+```
+
+Replace it with:
+
+```text
+open root owner once
+→ point-read current root/source rows
+→ perform stable source/object work outside redb writer
+→ one compare/set typed transaction
+→ update narrow current cache/pointer
+```
+
+Use bounded table iteration only for an actual inventory/publication snapshot. `search-control-redb` already
+contains a point-read primitive that reads selected keys in one redb transaction without an operation scan
+or snapshot swap. Move useful record codecs to their direct owner and delete `RegistryJournal`, v4 original-
+input retention/readback, generic `ControlJournalPort` and complete registry replay after callers move.
 
 ### Direct request dispatch
 
@@ -59,8 +87,14 @@ A successful redb abort before commit is a known failure. An unresolved commit o
 has a real recovery obligation. Keep pending publication for that external effect; do not extend durable
 receipts to reads, planning, paging or pure transformations. Qdrant/source work runs outside the redb writer.
 
+For a possibly uncertain source-head commit, reopen the typed source row and compare its expected/current
+revision. Do not replay a generic registry operation or restore policy/admission transcripts merely to
+know whether one current row changed.
+
 ## Remove replaced paths
 
+- registry operation envelopes, original-input retention, v4 restore/requalification and full snapshot
+  publication from normal root/source commands;
 - migration/cutover/rollback frameworks for unsupported old roots;
 - unused DEK/secret-lifecycle machinery outside a selected storage profile;
 - legacy loopback/token-file transports and duplicate applications;
@@ -76,8 +110,9 @@ synthetic grants, fake IDs, approved booleans or another registry.
 ## Verification
 
 Verify the connected application: retain a real file across restart, prepare/index it, query from CLI and
-reopen the correct excerpt. Then check one edit, excluded scope, old pinned view, paging, exact scan, lost
-index, cancellation and pending external publication. Unsupported optional operations must fail truthfully.
+reopen the correct excerpt. Then check one edit, rename, excluded scope, old pinned view, paging, exact scan,
+lost index, cancellation and pending external publication. Restart must point-read current roots/sources
+without replaying completed operations. Unsupported optional operations must fail truthfully.
 
 Use minimal compiler/Clippy for changed production owners and actual consumers. Native/live-Qdrant/scale
 claims require actual execution; source presence, capability descriptors and mocks do not establish them.
