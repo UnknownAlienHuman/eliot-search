@@ -1,28 +1,26 @@
-# P18 advanced-scale supplement — `search-epoch-pins`
+# Historical P18 route-pin programme
 
-**Status:** blocked. Existing process-local route/epoch pin semantics remain normative.
+The old P18 design added migration-route pins, fences, drain snapshots, reclaimability values and owner-epoch
+invalidation. It is superseded by the ordinary published-view manager and physical-generation publication.
 
-## Required operations
+A topology/profile change builds a new physical generation, verifies it and commits a new `PublishedView`.
+New requests then pin only that view. Existing requests/windows retain their old view through private Arc
+ownership. Publication persists one `RetiredCleanup` record for the old collection.
+
+Cleanup checks the live view manager directly:
 
 ```text
-acquire_migration_route_pin(route, owner, limits) -> RoutePinGuard
-fence_old_route_for_new_pins(route, revision) -> RoutePinFence
-snapshot_route_drain(route, generation, clock) -> RouteDrainSnapshot
-evaluate_old_route_reclaimability(retired_route, snapshot) -> RouteReclaimEligibility
-invalidate_scale_owner_epoch(previous, next) -> PinInvalidationReceipt
+delete old collection iff
+  no live PublishedView uses its route/generation
 ```
 
-## Invariants
+No migration pin, route fence, drain snapshot, watermark, rollback-protection pin or owner epoch is needed.
+A later rollback is another forward publication. Restart drops old interactive guards while the durable
+cleanup record remains.
 
-- route switch does not move existing pins to the candidate route;
-- old route accepts no new pins after the committed fence while existing pins drain;
-- watermarks are per route/generation and unknown/stale state fails closed;
-- worker/model/document request pins are bounded and released on cancel/disconnect/crash;
-- process restart never assumes old in-memory pins survived;
-- reclaimer receives exact current drain evidence, not a scalar global watermark.
+For many rapid publications, use a finite cleanup backlog and backpressure new publication before external
+work when full. Do not create a scale-specific pin service. Qdrant owns shard/replica transfer; Eliot owns
+only generation creation, committed route selection and eventual exact collection deletion.
 
-## Required evidence
-
-Concurrent old/new route queries across switch; continuation TTL/renewal; disconnect/crash cleanup;
-route fence race; final-pin release; stale owner/generation rejection; no old-route reclaim while any pin
-can observe it.
+Remove the P18 APIs/tests with the raw pin registry. Current requirements are in [FUNCTIONS.md](FUNCTIONS.md)
+and [`search-publication`](../search-publication/FUNCTIONS.md).

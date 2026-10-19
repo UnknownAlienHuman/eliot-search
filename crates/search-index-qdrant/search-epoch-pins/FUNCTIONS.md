@@ -1,91 +1,174 @@
-# Published-view guards — source and replacement
+# Published-view guards — source and replacement map
 
 The current package contains useful RAII release mechanics, but its public route/epoch/snapshot model is
-larger and less safe than the application needs. Replace it with one current-view owner used by query,
-continuation and publication cleanup.
+larger and less safe than the application needs. Replace it with one current-view manager used by query,
+query windows, publication and cleanup.
 
 ## Current source findings
 
+Production source is about 36 KiB (`lib.rs` 21,015 bytes, continuation 15,323 bytes before tests).
+
 | Current API | Problem |
 |---|---|
-| `publish_active_route(route, epoch)` | Accepts raw caller values instead of the committed publication view. |
-| `acquire_route_pin` | Can pin an arbitrary route; route pins make every point in that route unreclaimable. |
-| `acquire_epoch_pin` | Exposes route/epoch acquisition independently of the current view. |
-| `snapshot` + `compute_reclamation_watermark` | Samples counts, releases the lock and returns public data. A later old-route/epoch pin can appear before deletion. |
-| `release_owner_pins` | Releases by caller-known owner ID rather than a held guard/window. |
-| continuation `renew` / raw acquisition | Caller time can extend protection and legacy acquisition can create old pins without a live query. |
-| continuation `release` | Releases the guard but normally retains the binding; repeated windows can fill capacity. |
-| [`with_query_pin`](src/continuation/creation.rs) | Useful mechanism: under the same registry lock, transfers protection from a live query guard to an unpublished continuation. |
+| `PinRegistry::new(active_route, visible_epoch, limits)` | Creates a second process-local route/epoch authority from caller values rather than the committed `PublishedView`. |
+| `publish_active_route(route, epoch)` | Mutates that authority independently of redb current-view commit. |
+| `acquire_route_pin` | Pins an arbitrary route and can protect every point in it. It does not require current-view ownership. |
+| `acquire_epoch_pin` | Accepts route/epoch/owner/purpose/caller time; continuation mode may pin older epochs and renew them. |
+| `release_owner_pins` | Releases by caller-known owner ID rather than lexical ownership of a guard/window. |
+| `expire_continuation_pins(now, max)` | Trusts caller time and scans registry history. |
+| `snapshot` + watermark | Samples counts, releases the lock and returns public data. It cannot prevent another old acquisition before deletion. |
+| continuation bindings | A second store transfers/renews/releases pins and can retain released bindings until a separate retirement call. |
+| `with_query_pin` shape | Useful idea only: transfer protection from a live query to an unpublished continuation under one owner. |
 
-The package is process-local. Restart already drops ordinary guards; no durable lease database is required
-for a short-lived query page.
+A process restart already drops every in-memory pin. Persisting more pin records would not make query
+recovery useful; interactive requests can repeat.
 
-## Replacement model
-
-Publication commits one immutable `PublishedView`:
-
-```text
-view_id / route / physical generation / visible epoch
-manifest root/pages
-scope and retrieval profile
-```
-
-The view owner holds one atomic current pointer. `pin_current()` clones a non-public `ViewGuard` containing
-an `Arc`/equivalent reference to that immutable view. Query code cannot choose a route or epoch.
-
-A continuation can obtain a second guard only from its still-live query guard, using the existing
-`with_query_pin` transfer pattern. The operation publishes the window only after its record/output is
-accepted. No raw old-view acquisition and no renewable continuation lease.
-
-When publication swaps the current pointer:
-
-1. new queries can acquire only the new view;
-2. existing query/windows continue using their exact old view;
-3. no API can create another old-view guard;
-4. the old guard count decreases monotonically;
-5. the last drop makes that view eligible for cleanup.
-
-This is the reclamation permit. It is not a sampled public Boolean, registry digest or durable receipt.
-The view owner queues one cleanup callback/item after the last guard. Registry poison/disappearance is
-reported and cleanup remains blocked; it never becomes apparent success.
-
-## Continuation/window lifetime
-
-One query-window owner keeps:
+## Target state
 
 ```text
-view guard
-ordered result identities and already selected excerpts
-cursor
-optional opaque locators into the same window
-created/expires time and bounded bytes/items
+struct ViewManager {
+    inner: Mutex<ViewManagerState>,
+    cleanup_wake: CleanupWake,
+}
+
+struct ViewManagerState {
+    current: Arc<PublishedViewState>,
+    retired: BTreeMap<ViewId, Weak<PublishedViewState>>,
+}
+
+struct PublishedViewState {
+    view: PublishedView,
+}
+
+struct ViewGuard {
+    state: Arc<PublishedViewState>,
+}
 ```
 
-Expiry/terminal completion removes the record and drops its guard. Restart expires process-local windows;
-a client can repeat/replan the query. Do not persist guards, renewable leases or released tombstone records.
+A standard mutex is intentional: acquisition and swap are short and infrequent relative to query work. No
+`arc-swap`/lock-free dependency or generic lease registry is needed.
 
-Remove normal use of:
+### `pin_current() -> ViewGuard`
 
-- route pins and arbitrary old route/epoch acquisition;
-- `PinRegistrySnapshot`, `ReclamationWatermark` and caller-provided fences;
-- release-by-owner string and renewal based on caller time;
-- separate continuation-pin records after the window owner adopts the guard;
-- package tests that enforce these old API shapes rather than view behavior.
+Under the manager lock, clone `current`. Return no public pin ID or owner record. The guard exposes immutable
+view data to its query but no method to change route/sequence or renew lifetime.
 
-## Donor mechanism
+### `clone_for_window(&ViewGuard) -> ViewGuard`
 
-Lucene's
-[`SnapshotDeletionPolicy`](https://github.com/apache/lucene/blob/8a8ef488218405ee18ba9803c3ac1779ef74093a/lucene/core/src/java/org/apache/lucene/index/SnapshotDeletionPolicy.java)
-keeps a refcount per commit generation, suppresses deletion while a snapshot exists and releases it
-explicitly. Reuse that small lifetime rule. Eliot does not adopt Lucene or its index format.
+A live request may clone its existing Arc when creating a `QueryWindow`. Window insertion occurs only after
+the first output frame succeeds. There is no API which looks up an old view by ID or accepts caller expiry.
+Window expiry/drop releases the Arc normally.
+
+### `commit_and_swap(expected, committed_target)`
+
+Publication holds the manager lock while performing the short redb current-view transaction and swapping the
+in-memory Arc:
+
+```text
+lock manager / block pin_current
+→ verify manager.current.id == expected
+→ redb compare/set current + insert RetiredCleanup + clear PendingPublication
+→ commit
+→ retired.insert(old.id, Arc::downgrade(&old))
+→ current = Arc::new(target)
+→ unlock
+```
+
+No Qdrant/object I/O occurs under the lock. If redb commit acknowledgement is uncertain, publication reads
+the typed rows before releasing the lock and installs exactly the durable result. A crash reconstructs the
+manager from durable current state.
+
+### `live_views_snapshot() -> Vec<Arc<PublishedViewState>>`
+
+Under the manager lock:
+
+1. clone current;
+2. upgrade every retired weak ref;
+3. remove dead weak entries;
+4. return strong snapshots for the bounded cleanup/GC decision.
+
+Returning strong snapshots keeps their manifests/artifacts alive for that pass. The manager itself never
+retains a strong retired reference.
+
+### Cleanup eligibility
+
+For a same-generation point cleanup with exclusive threshold `N`:
+
+```text
+safe = live_views.none(|view|
+    view.route == cleanup.route
+    && view.generation == cleanup.generation
+    && view.sequence < N)
+```
+
+For whole-generation cleanup:
+
+```text
+safe = live_views.none(|view|
+    view.route == cleanup.route
+    && view.generation == cleanup.generation)
+```
+
+The first rule is stronger than waiting for the immediate predecessor. Example: v1 and v2 include P; v3
+closes P. No v2 guard does not permit deletion while v1 remains. `valid_until = 3` means every live same-
+generation sequence below 3 matters.
+
+If a retired weak ref cannot upgrade, there is no strong old guard left. No future old strong ref can appear:
+the only acquisition path is current, and cloning an old guard requires an existing old strong guard.
+
+### Cleanup wake
+
+Last strong drop may send a best-effort wake. The cleanup worker also scans periodically and at publication/
+startup, so a lost wake causes delay, not leakage of correctness. Do not perform Qdrant deletion in `Drop`.
+
+## Durable interaction
+
+View guards are deliberately process-local. Publication persists only:
+
+- one `CurrentPublishedView`;
+- one optional `PendingPublication`;
+- finite `RetiredCleanup` records for actual unfinished external deletion.
+
+After restart old guards do not exist; cleanup records can be re-evaluated against current only. This is the
+small crash-safe complement to Lucene's in-memory snapshot rule. Do not persist every query/window as a lease.
+
+## Capacity
+
+Bound live query windows and retained result metadata at the query-window owner. The view manager needs only
+current plus weak retired entries; dead entries are pruned. A finite durable cleanup backlog backpressures
+new publication before external work, not query reads. Successful queries do not consume lifetime slots
+forever.
+
+## Remove after caller cutover
+
+- `PinRegistry`, `RouteIdentity`, `PinLimits`, `EpochPinPurpose` and all public pin/receipt types;
+- route/epoch acquisition and active-route publication;
+- owner-count maps, release-by-owner, renewal and caller-time expiry;
+- snapshot/watermark/fence/reclaimability APIs;
+- continuation binding catalogue and released-binding retirement;
+- scale/hardening/source-shape fixtures preserving these APIs.
+
+Move the small manager/guard code into publication/query composition if no independent package boundary
+remains.
+
+## Donor correction
+
+Lucene `SnapshotDeletionPolicy` holds in-memory refcounts per commit generation and suppresses deletion while
+a snapshot exists. Its own documentation explicitly says this state is not persisted. Eliot reuses only the
+in-process lifetime rule; crash-safe cleanup obligations live in finite `RetiredCleanup` records.
+
+Tantivy's segment updater passes the set of currently useful files to directory GC after metadata commit.
+Eliot similarly snapshots current/pending/cleanup/live view roots; it does not import Tantivy's backend.
 
 ## Required behavior checks
 
 - query pins exactly the current committed view;
-- publication switches current while an old query remains valid;
-- continuation transfer cannot occur after the query guard is gone;
-- new query cannot acquire the old view after switch;
-- last old guard schedules cleanup exactly once;
-- window expiry/finish removes its record and releases protection;
-- restart leaves only the current durable view and pending publication state;
-- no forged snapshot/watermark or caller time can authorize deletion.
+- commit/swap blocks new old-view acquisition at one linearizable boundary;
+- window cloning requires a live guard;
+- v1/v2/v3 point example never deletes early;
+- generation cleanup waits for all views using it;
+- last old drop wakes but does not execute deletion;
+- dead weak entries disappear and do not consume permanent capacity;
+- restart installs current only and resumes durable cleanup rows;
+- uncertain redb commit cannot split durable current from in-memory current;
+- no caller-created snapshot/watermark/time value authorizes deletion.

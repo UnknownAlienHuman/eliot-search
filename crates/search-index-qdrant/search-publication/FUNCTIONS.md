@@ -1,166 +1,296 @@
 # Publication — source audit and replacement map
 
-The [implementation guide](../../../docs/implementation/README.md) selects one recoverable publisher. This
-file maps current source to that implementation. Existing public structs and phase names are not
-compatibility requirements.
+The [implementation guide](../../../docs/implementation/README.md) selects one recoverable publisher. Existing
+public structs, phase names, receipts and frozen wire bytes are inventory, not compatibility requirements.
 
 ## Current source inventory
 
-The package has no `qdrant-client`, `redb` or daemon dependency. Its non-test Rust is roughly 102 KiB:
+The package has no `qdrant-client`, redb or daemon dependency. Its non-test Rust is roughly 102 KiB:
 
 | Source | Current behavior |
 |---|---|
-| `admission.rs` | Reopens complete UnitSet/plans, constructs full unit/point `BTreeMap`s, recomputes complete semantic digests and builds another canonical digest containing scopes, guards, both manifests and create/retain/retire IDs. |
-| `machine.rs` | Keeps a process-local single slot with ten phases. Stores complete old/new manifests and diff plus stage/closure/readback/control/snapshot receipts. `DEFAULT_MAX_PUBLICATION_POINTS` is one million. |
-| `model.rs` | Defines caller-constructible receipts and recovery observations. Several values duplicate exact point-ID vectors already present in manifests/diffs. |
-| `recovery.rs` | Compares supplied booleans and ID sets. It performs no redb read, Qdrant inspection or effect. |
-| `machine/restore.rs` | Cannot restore from durable state. The caller must reconstruct the original proposal/preparation, intent, every acknowledged receipt, control observation and fresh effect observation. |
-| `machine/abort.rs` | Adds compensation/exclusion, another guarded control commit, another snapshot acknowledgement and a final release barrier. It executes no effect. |
-| package callers | Repository search finds package tests and old documentation, not a connected daemon product caller. |
+| `admission.rs` | Reopens complete UnitSet/plans, constructs full unit/point maps, recomputes complete semantic digests and another digest over scopes, guards, both manifests and all create/retain/retire IDs. |
+| `machine.rs` | Keeps one process-local slot with ten phases, complete old/new manifests and diff, stage/closure/readback/control/snapshot receipts and a one-million-point default. |
+| `model.rs` | Defines caller-constructible receipts/observations and duplicates point-ID vectors already in manifests/diffs. |
+| `recovery.rs` | Compares supplied Booleans and ID sets; performs no redb read, Qdrant inspection or effect. |
+| `machine/restore.rs` | Requires the caller to reconstruct proposal, preparation, intent, every receipt and fresh observations before restoring the in-memory machine. |
+| `machine/abort.rs` | Adds compensation/exclusion, guarded control commit, snapshot acknowledgement and release barrier; executes no real effect. |
+| callers | Package tests and old documentation dominate; no connected daemon publisher was found. |
 
 Two more disconnected machines exist:
 
 - daemon `publication_composition::Publisher`: dead-code floor/file-journal/guard/compensation model used by
-  process/module tests;
-- `search-control-redb`: durable intent, VisibleEpoch, successor, abort and snapshot-publisher state.
+  fixtures;
+- `search-control-redb`: intent, VisibleEpoch, successor, abort and snapshot-publisher codecs without the
+  actual operation pages.
 
-The daemon model persists an opaque marker but still has no Qdrant operation or `PublishedView`. The redb
-model persists receipt-shaped phase data but not the actual operation pages. Synchronizing all three would
-preserve the defect.
+Do not synchronize the three systems. Replace them.
 
 ## Useful code to keep or move
 
-- ordered old/new manifest merge and detection of changed data under a reused point ID;
+- ordered old/new manifest merge and detection of changed retrieval state under a reused point ID;
 - finite page/point/byte bounds;
-- validation that exact readback matches the actual page sent;
-- stable target view sequence and physical generation;
+- validation that exact readback matches the page actually sent;
+- monotonic target view sequence and physical generation;
+- stable point/evidence-binding validation;
 - fail-closed conflict handling.
 
-Scope/UnitSet/schema validation belongs at preparation/planning handoff and runs once. Do not rebuild
-complete trusted products at every publication phase or after restart.
+Scope, preparation and schema validation happen once at their handoff. Do not rebuild complete trusted
+products during each publication step or after restart.
 
-## Target records
+## Target durable records
 
 ```text
 PublishedView {
   id: ViewId
   sequence: u64
   route: PhysicalRoute
+  generation: CollectionGeneration
   profile: RetrievalProfileId
   manifest_root: ObjectRef
   evidence_roots: ObjectRef[]
 }
 
 PendingPublication {
-  operation: ObjectRef
+  operation_artifact_ref: ObjectRef
   expected_current_view: Option<ViewId>
   target: PublishedView
   cursor: PublicationCursor
 }
 
 PublicationCursor {
-  stage: apply | verify | commit | cleanup
+  stage: apply | verify
   page: u32
+  substep: observe | dispatch | readback
+}
+
+RetiredCleanup {
+  id: CleanupId
+  cleanup_artifact_ref: ObjectRef
+  kind: PointIds | Generation
+  route: PhysicalRoute
+  generation: CollectionGeneration
+  retire_before_sequence: u64
+  cursor: CleanupCursor
 }
 ```
 
-The immutable operation object owns ordered pages:
+The operation artifact contains ordered apply/readback pages plus the target manifest. Cleanup pages may be
+separate immutable roots so apply-only pages can become unreferenced after view commit.
 
 ```text
 PublicationPage {
-  upserts: QdrantPoint[]
+  full/narrow point operations
   closures: { point_id, valid_until = target.sequence }[]
-  manifest_entries: ViewManifestEntry[]
-  expected_readback: ExactPageExpectation
+  ViewManifestEntry[]
+  exact expected readback
+}
+
+CleanupPage {
+  exact retired point IDs                  // same generation
+  or old collection identity              // replaced generation
 }
 ```
 
-New upserts carry `valid_from = target.sequence`; unchanged points are not rewritten. A changed evidence
-binding receives a new stable point identity. Exact old IDs to close/delete come from the old/new ordered
-merge, not from caller-produced proof objects.
+New points carry `valid_from = target.sequence`; closures set exclusive `valid_until = target.sequence`.
+Unchanged points are not rewritten. A changed retrieval input/identity creates a new point; a changed
+revision/range alone updates only the target view's evidence manifest.
 
-The concrete encoded types may differ, but there must be one artifact, one small pending row and one current
-view row. Do not add separate stage, receipt, checkpoint, floor or snapshot tables.
+redb contains no source bodies, vectors, batches or terminal history. `RetiredCleanup` rows are bounded
+unfinished external effects, not completed publications.
 
 ## Target operations
 
 ### `prepare_operation(old_view, prepared_pages) -> ObjectRef`
 
-Validate ordered pages once, verify stable identity/evidence bindings, write immutable pages through the
-shared object store and return the exact operation root. No redb/Qdrant effect.
+Validate pages once, verify stable identity/evidence bindings, write immutable operation/manifest/cleanup
+pages through the shared object store and return the operation root. No redb/Qdrant effect.
 
-### `start(operation, expected_current_view)`
+The artifact's exact old/new ordered merge determines closures and cleanup pages. Do not accept a separate
+caller-produced retired manifest or publication proof.
 
-In one short redb transaction, verify the expected current view and absence/identity of the pending row,
-then store `PendingPublication`. An identical existing pending operation resumes; different input conflicts.
+### `start(operation_ref, expected_current_view)`
+
+In one short redb transaction:
+
+1. verify `CurrentPublishedView == expected_current_view`;
+2. verify no conflicting pending publication;
+3. insert `PendingPublication` at page zero.
+
+An identical existing pending operation resumes. Different input conflicts. Apply backpressure before this
+step when the finite retired-cleanup backlog is full and the operation will create another cleanup record.
 
 ### `step(pending, context)`
 
-1. Load the page at the durable cursor.
-2. If prior dispatch is uncertain, inspect exact relevant Qdrant state first.
-3. Dispatch the absent full/narrow mutation through the one Qdrant runtime with `wait=true`.
-4. Read back exact point/vector/payload/validity fields required by the page.
-5. Advance the cursor in a short redb transaction.
+For the durable cursor page:
 
-Carry one absolute deadline and cancellation. Failure before dispatch is definite. Failure after possible
-dispatch is unresolved and leaves the same cursor.
+1. load the immutable page;
+2. if a prior dispatch may have happened, inspect exact Qdrant state first;
+3. dispatch only the missing full/narrow operation through the one Qdrant runtime with `wait=true`;
+4. read back exact point/vector/payload/validity/schema state required by the page;
+5. advance the cursor in a short redb transaction.
 
-### `commit_view(pending)`
+Use one absolute deadline/cancellation. Failure before dispatch is definite. Failure after possible dispatch
+is unresolved and leaves the same cursor. The bridge keeps no replay ledger.
 
-After every page is verified, compare/set `CurrentPublishedView` against `expected_current_view` and move the
-cursor to cleanup in one transaction. Build/swap the in-memory current view from the committed record. A
-crash after commit rebuilds the pointer; it does not rerun Qdrant.
+### `commit_view(pending, view_manager)`
 
-### `pin_current() -> PublishedViewGuard`
+After every apply page verifies:
 
-The query owner exposes no arbitrary old route/sequence acquisition. A live request can privately transfer
-a guard into its `QueryWindow`. Last old-guard drop schedules the matching cleanup cursor.
+1. acquire the view manager's short commit/swap lock, blocking new `pin_current()` calls;
+2. open one redb write transaction;
+3. compare the pending row and expected current view;
+4. write target `CurrentPublishedView`;
+5. insert one bounded `RetiredCleanup` when exact point or generation deletion remains;
+6. clear `PendingPublication`;
+7. commit redb;
+8. replace the in-memory current `Arc` with the target and retain only a `Weak` reference to the old state;
+9. release the manager lock and wake cleanup.
 
-### `cleanup_step(pending, old_view)`
+No object or Qdrant I/O occurs under this lock. Existing old guards continue. New requests after unlock can
+only clone the target.
 
-- same generation: exact bounded ID delete + absence readback;
-- replaced generation: whole old collection delete + absence readback;
-- operation-only/local artifacts: remove after current, pending and live roots no longer reference them.
+If redb commit acknowledgement is uncertain, resolve `CurrentPublishedView`, `PendingPublication` and the
+expected cleanup row while new pins remain blocked. Install exactly the committed view or keep the old
+pointer. A process crash reconstructs from redb.
 
-Unknown deletion leaks safely and retries. Cleanup has no separate plan/proof/journal identity.
+Do **not** keep cleanup only in `PendingPublication`: clearing pending would lose deletion work after a crash.
+Do **not** keep the whole pending operation forever: that is a history ledger. Transfer only unfinished
+cleanup pages to `RetiredCleanup`.
+
+### `pin_current() -> ViewGuard`
+
+Baseline manager:
+
+```text
+ViewManagerState {
+  current: Arc<PublishedViewState>
+  retired: BTreeMap<ViewId, Weak<PublishedViewState>>
+}
+```
+
+A short mutex is sufficient; no lock-free pointer or new crate is required. `pin_current()` locks, clones
+`current`, unlocks. A live request can clone/transfer its guard to a `QueryWindow`. There is no method taking
+a route, generation, sequence or owner ID.
+
+The manager stores weak retired refs only. Last strong-drop sends a cleanup wake; periodic scanning handles
+lost wakes. On restart only the durable current view is reconstructed; all old ephemeral guards are gone.
+
+### `cleanup_eligible(record, live_views)`
+
+Check all live views under the manager, not one sampled pin count.
+
+For exact point cleanup closed at sequence `N`:
+
+```text
+eligible iff no live view has
+  same route/generation
+  and sequence < N
+```
+
+For whole-generation cleanup:
+
+```text
+eligible iff no live view uses that route/generation
+```
+
+This distinction is mandatory. If v1 and v2 see a point and v3 closes it, no v2 guard does not make deletion
+safe while v1 remains live.
+
+The manager may prune dead `Weak` entries and return strong view snapshots for a bounded GC/eligibility pass.
+If a weak reference cannot upgrade, no new old strong guard can appear because old views are never acquired
+by ID. Existing guards may clone; their existing strong count keeps the weak upgradeable.
+
+### `cleanup_step(record, context)`
+
+1. evaluate eligibility from the live manager;
+2. load the next exact cleanup page;
+3. inspect state first when prior dispatch may have occurred;
+4. delete exact IDs on the same route/generation or delete the old collection;
+5. read back exact absence;
+6. advance the cleanup cursor in a short transaction;
+7. remove the row and cleanup-only pages after final success.
+
+Unknown deletion retains the row and retries. Partial/foreign state blocks advancement. Broad-filter deletion
+is unavailable.
+
+### `startup_recover()`
+
+1. load/validate `CurrentPublishedView` and install it in the manager;
+2. load one optional `PendingPublication` and resume its exact page;
+3. load finite `RetiredCleanup` rows;
+4. because old process guards did not survive, evaluate cleanup against current view only;
+5. enqueue eligible cleanup and ordinary artifact GC.
+
+Missing/corrupt pending or cleanup artifacts block the affected operation but do not erase it or invent
+success. The committed current view remains serviceable when its own manifest is valid.
+
+## Local object GC coordination
+
+Publication artifacts and manifests are immutable objects. A producer holds the shared object-GC gate from
+finalization through the first durable reference transaction. Bounded GC takes the exclusive gate, snapshots
+current/pending/cleanup and live-view roots, traverses only known current-format manifests and deletes exact
+unreferenced objects. This prevents GC from deleting a newly finalized/deduplicated object before its redb
+reference commits.
+
+The gate is process-local coordination, not a lease catalogue or sweep journal. Failed delete remains
+visible to later enumeration.
 
 ## Recovery rules
 
 | Observation | Action |
 |---|---|
-| no pending row | Serve committed current view; unreferenced local pages are later GC candidates. |
-| missing/corrupt pending artifact | Keep serving current view, block new publication and report corruption. |
+| no pending row | Serve committed current view; process cleanup rows and later GC unreferenced local pages. |
+| missing/corrupt pending artifact | Keep current view, block new publication, report corruption. |
 | page definitely absent | Dispatch same page. |
 | page outcome unknown | Inspect exact Qdrant state. |
 | expected page state present | Advance without replay. |
 | conflicting state | Block target; never infer success from receipt text. |
-| all pages verified, target not committed | Commit current view. |
+| all pages verified, target not committed | Run `commit_view`. |
 | target committed, pointer stale/absent | Rebuild/swap pointer from redb. |
-| cleanup incomplete | Wait for guards/read back and continue same cursor. |
+| cleanup row exists | Wait for eligibility, inspect/delete/read back and advance same row. |
+| delete uncertain | Retain row and inspect again. |
 
-Once any Qdrant effect may exist, baseline forward recovery completes the same operation. Later source
-changes become the next publication. Do not implement epoch rewind, generic compensation, membership-fence
-abandonment or invalidation-only publication.
+Once a Qdrant effect may exist, baseline forward recovery completes the same operation. Later source changes
+become the next publication. No epoch rewind, generic compensation, membership-fence abandonment or
+invalidation-only publication.
 
 ## Physical-generation replacement
 
-Schema/profile/vector incompatibility creates a new physical generation using the same operation type. Build
-from one consistent current-source snapshot. Before commit, either apply a bounded delta from newer current
-heads or replan; baseline may serialize this work. After view commit, old guards retain the old collection,
-then cleanup deletes that collection whole. No R0/R1 migration state machine is required.
+Schema/profile/vector incompatibility uses a new generation and the same pending operation. Build from one
+consistent current-source/preparation snapshot; baseline may serialize, replan or apply one bounded ordered
+delta before commit. At commit insert a generation cleanup row. Old guards keep the old collection; cleanup
+deletes it only when no live view uses that generation.
 
-## Delete after cutover
+## Removal boundary
 
-- all current coordinator/phase/receipt/recovery/restore/abort public APIs;
-- daemon publication composition and `publication_codec::{FileJournal,PublicationFloor,cas}`;
-- redb publication intent/VisibleEpoch/successor/checkpoint/snapshot-publisher codecs;
-- whole-manifest canonical digest admission and duplicate million-ID vectors;
-- reclaimer proof/permit/checkpoint package and raw epoch-pin registry;
-- old P18/W7 state machines and source-shape/process fixtures.
+After direct callers switch, delete:
 
-## Verification
+- current coordinator/phase/receipt/recovery/restore/abort public APIs;
+- daemon publication composition and file/floor/compensation/retirement machinery;
+- old redb publication intent/VisibleEpoch/successor/checkpoint/snapshot-publisher codecs;
+- repeated whole-manifest canonical digest admission and duplicate point-ID copies;
+- process-local bridge mutation receipts;
+- reclaimer proof/plan/checkpoint package and raw epoch-pin registry;
+- old P18/W7/process/module/source-shape fixtures.
 
-Use one connected daemon path. Exercise restart before/after each local commit and external dispatch/readback,
-old-query survival, impossibility of new old-view acquisition, same/new-generation cleanup and conflicting
-Qdrant state. Run minimal Rust 1.98 check/Clippy for changed production owners and actual consumers; broad
-tests remain after the product path exists.
+Keep/move only ordered merge/page validation, exact effect/readback helpers, typed current/pending/cleanup
+rows, view-manager guards and known-root GC inputs.
+
+## Behavior to verify
+
+- restart before/after artifact write, pending commit, each RPC/readback, current-view commit, cleanup-row
+  insertion and pointer swap;
+- uncertain redb commit cannot expose an uncommitted target or lose a committed one;
+- v1/v2/v3 example prevents premature point deletion;
+- no new old-view acquisition after swap;
+- query-window transfer keeps exact old view;
+- same-generation cleanup waits for every older sequence on that generation;
+- generation cleanup waits for every view using it;
+- crash after view commit retains cleanup obligation;
+- cleanup backlog bound backpressures safely;
+- uncertain delete leaks/retries and never broad-deletes;
+- current/pending/cleanup/live roots survive object GC.
+
+Run minimal Rust 1.98 compiler/Clippy for changed publication/control/bridge/view/query owners after code.
+Broad fault matrices follow the connected path.
