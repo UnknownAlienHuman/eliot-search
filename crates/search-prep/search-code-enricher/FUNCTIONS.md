@@ -1,56 +1,93 @@
-# search-code-enricher functions
+# search-code-enricher — source and removal map
 
-## Existing functions
+## Current API and callers
 
-These are implemented in [src/lib.rs](src/lib.rs); only package tests currently call `enrich_code`.
-
-| Symbols | Actual behavior |
+| Current symbol/area | Actual behavior / caller reality |
 |---|---|
-| `validate_parser_profile`, `compare_profile_change` | Validate supplied profile/qualification metadata and classify profile changes; they do not load a donor parser. |
-| `parse_rust_no_execute` | Scan immutable `RustRepresentation` line by line using prefix/brace heuristics, with budget/cancellation and a digest callback. |
-| `extract_configuration_predicate`, internal `classify_evidence_role` | Parse the local bounded cfg syntax and classify the hand-built node kinds; no target configuration evaluation or resolved caller analysis. |
-| `extract_structural_facts`, `extract_structural_relations` | Build bounded facts and a subset of descriptive relations from those nodes. Current node-ordinal unit assignment must be replaced by range lookup. |
-| `validate_fact_anchor` | Check matching revision/representation fields, range bounds and UTF-8 slice validity; it does not reopen source storage or recompute the supplied fact digest. |
-| `build_enrichment_manifest`, `enrich_code` | Assemble the existing tree/facts/relations/manifest and receipts. No production source capture, publication or query consumer is connected. |
+| `parse_rust_no_execute` | Prefix/brace line scanner; not a Rust grammar. |
+| `extract_configuration_predicate` | Parses a small local cfg subset; does not evaluate target/build configuration. |
+| `extract_structural_facts` | Builds hand-written fact kinds and assigns units by node ordinal/clamping. |
+| `extract_structural_relations` | Emits only a subset of the public relation vocabulary. |
+| `validate_fact_anchor` | Compares supplied revision/range fields; does not reopen the retained object or recompute the supplied fact digest. |
+| `build_enrichment_manifest` / `enrich_code` | Builds tree/facts/relations/receipt structures. External production caller was not found. |
+| parser profile / qualification | Validates caller metadata; loads no actual donor parser. |
 
-Change these APIs with their actual preparation/query consumers when replacing the scanner.
-Do not preserve its intermediate trees, generic assurance receipts or unused relation kinds to satisfy
-old tests. The [README](README.md#connect-useful-data) defines the compact output and ownership.
+Production source is one 63,638-byte `lib.rs`; the qualification integration test is another 38,737 bytes.
+Do not refactor the file into many modules while preserving the disconnected system.
 
-## Syntax extraction
+## Baseline action
 
-Selected donor: [ast-grep `outline`](https://ast-grep.github.io/reference/cli/outline), released as an
-[alpha in 0.44.0](https://github.com/ast-grep/ast-grep/releases/tag/0.44.0). This is a planned integration.
-Its bundled extraction rules return file items/direct members with names, kinds, signatures and byte
-ranges. It does not resolve references/types or construct a call graph.
+Remove the package if no connected outline/navigation consumer is selected. Existing project orientation uses
+source paths, prepared headings/sections/code blocks and exact ranges. Text retrieval remains available for
+all languages.
 
-Use one process for a bounded batch of explicit immutable file paths of the selected language:
+Delete:
+
+- line/brace Rust parser;
+- profile qualification/receipt model;
+- generic fact/relation/assurance manifest;
+- ordinal/clamped UnitSet mapping;
+- unused relation kinds and fact digests;
+- qualification fixtures/status/coverage/package-map entries;
+- open donor-program dependencies which have no product consumer.
+
+## Optional syntax outline
+
+If selected after base search, implement one direct owner beside preparation/project orientation:
 
 ```text
-ast-grep outline --lang rust --items all --view expanded --json=stream --threads 1 -- FILE1 FILE2
+extract_outline(
+  retained representation,
+  selected extractor profile,
+  RequestContext / preparation context
+) -> Vec<OutlineItem> + gaps
 ```
 
-Pass paths as process arguments, not a shell command or a directory/default `.` scan. Map each input
-path back to its retained source/revision; do not reinterpret an arbitrary working-tree path as the
-indexed revision. For one retained blob, `--stdin --lang rust` accepts its bytes. Do not start a process
-for each file or query. Cache the prepared records by retained revision and extractor settings/version,
-and re-extract only changed inputs.
+`OutlineItem` contains source/revision/representation, exact byte range, name, kind, bounded signature and
+optional parent range. It does not carry a generic assurance receipt, fact-generation ID, canonical batch
+digest or UnitSet ordinal.
 
-The donor caches compiled rules once per command and streams one JSON file object at a time, but
-[its 0.44.0 worker](https://github.com/ast-grep/ast-grep/blob/0.44.0/crates/cli/src/outline/extract.rs#L134-L240)
-uses an unbounded channel and skips individual read/walk errors. Its
-[file reader](https://github.com/ast-grep/ast-grep/blob/0.44.0/crates/cli/src/utils/mod.rs#L111-L121)
-checks size after reading. Bound batch count/bytes and each file before launch; bound output and use
-the existing operation deadline/cancellation. Match output paths to the input list and account for
-empty inputs locally: this version omits empty files. Missing nonempty inputs, unsupported syntax and
-failures remain gaps; exit status alone does not prove complete extraction.
-Keep donor invocation settings explicit so repository-local custom extraction does not silently change
-the prepared data.
+### ast-grep option
 
-If packaging requires in-process parsing of retained bytes, replace this syntax owner with
-[Tree-sitter `Parser::set_language` / `parse`](https://docs.rs/tree-sitter/0.25.10/tree_sitter/struct.Parser.html),
-the selected grammar's [tag queries](https://tree-sitter.github.io/tree-sitter/4-code-navigation.html)
-and [node byte ranges](https://docs.rs/tree-sitter/0.25.10/tree_sitter/struct.Node.html#method.byte_range).
-Reuse the parse for extraction and unit mapping. Do not keep both syntax runtimes or build a grammar,
-cfg evaluator, name resolver or compiler around captures. Semantic facts follow the separate optional
-[SCIP import](README.md#optional-semantic-locations).
+Use an exact packaged `ast-grep outline` artifact for bounded explicit inputs. Invoke one process for a finite
+batch or stdin blob, with no shell/default directory crawl/user rules/network. Bound every input before launch
+and bound streamed JSON output. Match every result to the exact input and verify its range. This command may
+skip read errors/empty files and uses an unbounded internal channel, so omissions/failures remain gaps.
+
+### Tree-sitter option
+
+Use one exact runtime+grammar+query profile in-process only when packaging/process constraints justify it.
+Compile the fixed ELIOT-owned query once, parse exact retained bytes and map exact byte ranges. Do not build a
+language framework or accept repository-provided grammars/queries.
+
+Choose one syntax owner. Do not keep both in production.
+
+## Optional semantic import
+
+A concrete producer may later supply bounded SCIP/LSP locations for one selected source view. The importer:
+
+1. validates exact producer/source-view identity;
+2. maps document paths only through the frozen view;
+3. converts producer positions to exact retained byte ranges;
+4. emits the few location records consumed by a real navigation handler;
+5. reports missing/incomplete/unsupported relationships explicitly.
+
+Do not create a provider-neutral graph/fact database. Rust-analyzer SCIP document text may be empty and its
+relationship fields may be unpopulated; producer presence does not establish capability.
+
+## Deferred profiles
+
+Universal Ctags, SARIF, CodeQL, Semgrep and other analyzers remain separate optional integrations. They are
+not dependencies of syntax outline, baseline search or orientation. Reopen a narrow issue only with one
+selected producer, corpus, expected output and user-facing consumer.
+
+## Verification if selected
+
+- exact retained source/range mapping;
+- malformed/incomplete input yields gaps without false completeness;
+- no repository code/network/config execution;
+- finite process/input/output/deadline/cancellation bounds;
+- unchanged revision/extractor settings reuse the prepared outline;
+- changed source/profile regenerates it;
+- actual project-guide/navigation consumer uses the result;
+- no old heuristic parser or generic fact platform remains reachable.
