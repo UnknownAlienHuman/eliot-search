@@ -1,85 +1,75 @@
-# Dependency graph and launch topology
+# Current implementation dependency graph
 
-`swarm/crates.toml` is the machine authority. This file explains semantic topology and the sole
-progressive-composition exception.
-
-## Foundation
+The product is one application with concrete owners. Package boundaries may shrink or disappear; this graph
+records effects and data ownership, not a permanent crate topology.
 
 ```text
-search-contracts
-  ├─ search-domain
-  └─ search-ports
+eliot-search CLI
+  → one framed local client
+  → eliot-searchd direct dispatcher
+
+eliot-searchd
+  ├→ source owner
+  │    ├→ safe final-handle/Git read
+  │    ├→ one immutable object writer/reader
+  │    └→ typed redb RootRecord / SourceRecord / RevisionRef
+  ├→ preparation owner
+  │    └→ materialization → structure-first units → retrieval inputs
+  ├→ publication owner
+  │    ├→ immutable operation/manifest/cleanup pages
+  │    ├→ typed redb PendingPublication / CurrentPublishedView / RetiredCleanup
+  │    ├→ one real Qdrant runtime
+  │    └→ one private current-view manager
+  └→ query owner
+       ├→ current ViewGuard
+       ├→ non-widening ResolvedScope
+       ├→ RequestContext(deadline, cancellation, counters)
+       ├→ real Qdrant query or explicit retained-source exact scan
+       ├→ ViewManifestEntry → immutable object/range evidence
+       └→ one process-local QueryWindow
 ```
 
-`search-contracts` is accepted first. `search-domain` and `search-ports` may then run in parallel from
-the same immutable contracts API/schema digest.
+## Ownership rules
 
-## Capability waves
+- Source bytes have one immutable object owner. redb stores references, not duplicate bodies.
+- Qdrant is a derived retrieval index. It never owns source evidence or durable publication recovery.
+- `PublishedView` is the immutable query snapshot. Source registry/current control state is not a second query
+  snapshot.
+- Publication is the only Qdrant mutation/recovery/current-view owner.
+- Query reads have no durable operation journal.
+- Optional restricted clients, model providers, overlays, connectors, orientation and comparison exist only
+  after a real consumer/implementation is selected. They narrow or enrich this graph; they do not create a
+  parallel application.
+
+## Interfaces
+
+Use concrete owner methods. A narrow trait is local to a consumer only when multiple real implementations
+exist. There is no global `search-ports` registry, service locator, effect bus or conformance catalogue.
 
 ```text
-W1  runtime-owner, os-secrets, control-redb, provider-protocol shell
-W2  source-admission, source-identity, registry, safe-reader, revision-store,
-    text/code materializer and unitizer
-W3  point identity, projection planner, Qdrant supervisor/bridge, lexical encoder,
-    publication, epoch pins and index reclaimer
-W4  access, query planner/executor, candidate validator, handles, projector,
-    continuation and evaluation baseline
-W5  reconciler, overlay and Rust code enrichment
-W6  exact proof, subject resolver and comparator
-W7  retention/purge/restore and security/lifecycle hardening
-W8  generic edge hardening and optional ELIOT/Research leaf adapters
-W9  Product Pulse and Windows qualification
-W10 optional model/document/advanced-scale work after accepted P15 + ADR
+one implementation        → concrete type/method
+multiple current adapters → smallest consumer-owned trait
+test fake only             → private/local fake, not public product architecture
 ```
 
-Packages in one wave are not automatically parallel. Every direct dependency and consumed port must
-have an accepted commit and API digest first. Exact dependency lists live only in
-`swarm/crates.toml`; Markdown does not duplicate them.
+Cross-package shared types live in `search-contracts` only when at least two real current owners use them.
+Vendor/redb/OS types stay private to their adapter where useful.
 
-## Adapter direction
+## Cutover order
 
 ```text
-search-contracts records
-        ↓
-search-ports traits ← pure search-domain rules where applicable
-        ↓
-capability/orchestration package
-        ↓
-concrete adapter implementation
-        ↓
-eliot-searchd composition
+1. current root/source/object/control path
+2. one preparation and stable retrieval/evidence model
+3. real Qdrant publication + current view
+4. real source-backed Search
+5. one framed CLI path and QueryWindow
+6. exact scan, rebuild and bounded cleanup/GC
+7. optional features only from measured user need
 ```
 
-A Qdrant startup example:
+Every slice connects the real producer and consumer and removes the replaced mechanism. A trait, adapter,
+receipt, capability, issue or test fixture is not delivery.
 
-```text
-SecretStorePort → search-os-secrets → bounded SecretLease
-ProcessSupervisorPort → search-qdrant-supervisor consumes lease
-SearchIndexPort → search-qdrant-bridge owns data plane
-eliot-searchd constructs and connects all three
-```
-
-No concrete adapter opens another adapter's private store or exposes a vendor type through a port.
-
-## Progressive daemon composition
-
-```text
-wave1-shell
-  contracts + domain + ports + runtime-owner + os-secrets + control-redb + provider-protocol
-wave2-source
-  + source admission/identity/registry/readback/revision/materialization/unitization
-wave3-index
-  + lexical + point/projection + Qdrant supervisor/bridge + publication + pins/reclaimer
-wave4-query
-  + access/planner/executor/validator + handles/projector/continuation + eval baseline
-wave5-current
-  + reconciler/overlay/code enrichment
-wave6-proof
-  + exact/subject/comparator
-wave7-lifecycle
-  + retention/purge/restore hardening
-```
-
-`eliot-searchd` is first launched at W1 but declares feature-gated optional dependencies from later
-waves. `progressive_composition = true` is the only wave-monotonicity exception; a feature cannot be
-enabled without accepted dependency receipts.
+The former Architecture 8.4 graph at commit `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`
+is historical evidence only. It cannot restore the global port catalogue, wave dependencies or pre-release
+compatibility requirements.

@@ -1,188 +1,42 @@
-# Vendor-neutral port operation inventory
+# Historical P00 port operations
 
-This file defines behavior, not exact Rust async syntax. Every potentially blocking operation accepts
-an `OperationContext` with request identity, deadline, cancellation and bounded budget.
+The previous P00 contract froze one shared trait and generic operation semantics for every planned subsystem.
+It produced `search-ports`: 23 public traits, 80 registered methods, a generic relative-deadline context,
+mutation identity/receipt records and a conformance fake catalogue.
 
-Every mutation additionally accepts `MutationIdentity` with an explicit idempotency class. Every
-operation returns a typed result/receipt; vendor strings never cross the boundary.
+That contract is retired. See [`search-ports/README.md`](../../../crates/search-ports/README.md), the
+[current dependency graph](../../handoff/DEPENDENCY_GRAPH.md) and the
+[implementation guide](../../implementation/README.md).
 
-## Runtime and control
+## Replacement
 
-### `ClockPort`
+Use direct current owners:
 
-- `utc_now() -> UtcTimestamp`
-- `monotonic_now() -> MonotonicInstant`
-- no wall-clock use for ordering when monotonic time is required
+| Need | Current boundary |
+|---|---|
+| current settings/source/view/publication state | typed redb methods |
+| immutable source/prepared/publication artifacts | one object writer/reader |
+| source inventory/read | source owner methods |
+| preparation | direct materializer/unitizer/projection functions |
+| Qdrant | private bridge operations with exact vendor semantics |
+| view lifetime | private `ViewGuard` manager |
+| query | one `RequestContext`, `ResolvedScope` and `QueryWindow` |
+| protocol | one bounded typed frame and direct dispatcher |
 
-### `SecretStorePort`
+The real domain decides cancellation, deadline, idempotency, recovery and output semantics. Do not force a
+read, pure transform, redb compare/set, immutable write and uncertain Qdrant mutation through the same
+`OperationContext`/`MutationIdentity`/`PortReceipt` model.
 
-- `create_secret(scope, purpose, mutation) -> SecretRef`
-- `lease_secret(secret_ref, purpose, context) -> SecretLease`
-- `rotate_secret(secret_ref, mutation) -> RotationReceipt`
-- `delete_secret(secret_ref, mutation) -> DeletionReceipt`
+## Local traits
 
-Plaintext is available only inside a bounded purpose/incarnation-bound lease and is never serializable.
+A consumer may define a narrow local trait when it simultaneously supports real alternatives. It should:
 
-### `ProcessSupervisorPort`
+- contain only methods the consumer calls;
+- use current concrete domain values;
+- carry an absolute deadline/cancellation/counters where blocking work needs them;
+- return real state/readback or a domain error;
+- keep its fake beside the consumer;
+- disappear when only one implementation remains.
 
-- `qualify_artifact(candidate, context) -> QualifiedArtifact`
-- `start_process(owner_fence, artifact, secret_lease, mutation) -> ProcessGuard`
-- `verify_process_identity(guard, context) -> ProcessIdentityReceipt`
-- `readiness(guard, context) -> ProcessReadiness`
-- `shutdown_process(guard, mode, mutation) -> ShutdownReceipt`
-
-### `ControlJournalPort`
-
-- `read_control_snapshot(context) -> ControlSnapshot`
-- `transact(command, mutation) -> ControlCommit`
-- `compare_and_swap_visible_epoch(guards, commit, mutation) -> ControlCommit`
-- `load_unresolved_publication(context) -> PublicationIntent | null`
-- `quarantine(reason, mutation) -> QuarantineReceipt`
-- `write_counters(context) -> JournalWriteCounters`
-
-### `ControlSnapshotPort`
-
-- `current_snapshot() -> immutable ControlSnapshot`
-- reads are process-local and perform no durable write
-
-## Source and residency
-
-### `SourceAdmissionPort`
-
-- `normalize_policy(policy) -> CanonicalAdmissionPolicy`
-- `evaluate(policy, observation) -> AdmissionDecision`
-- `verify_receipt(receipt, policy, observation) -> unit`
-
-### `SourceInventoryPort`
-
-- `resolve_source_view(request, context) -> ResolvedSourceView`
-- `resolve_workspace_view(workspace, context) -> WorkspaceViewRevision`
-- `list_exact_denominator(scope, context) -> BoundedPage<SourceRevisionRef>`
-- `lookup_source_head(source_id, context) -> SourceRevisionRef | null`
-- `read_inventory_revision(context) -> CatalogRevision`
-
-### `SourceOwnershipPort`
-
-- `read_namespace_owner(namespace, context) -> SourceNamespaceOwnership`
-- `transition_namespace_owner(command, mutation) -> SourceNamespaceOwnership`
-- `verify_cutover_receipt(receipt, context) -> CutoverVerificationReceipt`
-
-### `SafeReaderPort`
-
-- `resolve_final_source(locator, admitted_root, context) -> ResolvedSource`
-- `stable_read(resolved, context) -> StableRead`
-- `read_git_object_no_execute(repo, oid, path, context) -> StableRead`
-
-### `SourceRevisionStorePort`
-
-- `admit_revision(stable_read, residency, mutation) -> RevisionReceipt`
-- `reopen_exact(revision_ref, context) -> VerifiedRevision`
-- `retain(revision_ref, cause, mutation) -> RetentionLease`
-- `release_retention(lease, mutation) -> ReleaseReceipt`
-- `enumerate_mark_roots(snapshot, context) -> BoundedPage<MarkRoot>`
-
-### `ResidencyPolicyPort`
-
-- `resolve_residency(profile_ref, source, context) -> SearchObjectResidencyKey`
-- `authorize_copy_or_reencrypt(source_key, target_profile, context) -> ResidencyTransitionPlan`
-- `record_transition(receipt, mutation) -> ResidencyTransitionReceipt`
-
-## Preparation and providers
-
-### `MaterializerPort`
-
-- `profile() -> MaterializerProfileDescriptor`
-- `materialize(revision, context) -> MaterializationProduct`
-
-### `UnitizerPort`
-
-- `profile() -> UnitizerProfileDescriptor`
-- `unitize(materialization, context) -> UnitManifest`
-
-### `CodeEnricherPort`
-
-- `profile() -> EnricherProfileDescriptor`
-- `enrich(representation, context) -> StructuralFactSet`
-
-### `LexicalEncoderPort`
-
-- `profile() -> LexicalProfileDescriptor`
-- `encode_document(input, context) -> SparseVector`
-- `encode_query(input, context) -> SparseVector`
-- `fixture_digest() -> Blake3Digest32`
-
-### `ModelProviderPort` — optional
-
-- `profile() -> ModelProfileDescriptor`
-- `encode(input, context) -> ModelVectorProduct`
-- `rerank(request, context) -> BoundedRerankResult`
-
-No optional provider is called unless its profile is explicitly admitted.
-
-## Index and publication support
-
-### `SearchIndexPort`
-
-- `probe_capabilities(context) -> CapabilityReceipt`
-- `ensure_schema(schema, mutation) -> SchemaReceipt`
-- `upsert_exact(batch, write_policy, mutation) -> MutationReceipt`
-- `close_exact(ids, epoch, write_policy, mutation) -> MutationReceipt`
-- `readback_exact(ids, context) -> PointReadback`
-- `query(leg, context) -> BoundedStream<IndexCandidate>`
-- `exact_count(filter, context) -> u64`
-
-### `SearchIndexAdminPort`
-
-- `delete_exact(ids, write_policy, mutation) -> MutationReceipt`
-- `validate_route(route, context) -> RouteValidationReceipt`
-
-No broad delete/update operation exists on a correctness path.
-
-### `EpochPinPort`
-
-- `acquire_epoch_pin(route, epoch, owner, context) -> EpochPinGuard`
-- `acquire_route_pin(route, owner, context) -> RoutePinGuard`
-- `reclamation_watermark(route, context) -> ReclamationWatermark`
-- `release_owner(owner) -> ReleaseReceipt`
-
-## Query/security services
-
-### `AccessCompilerPort`
-
-- `validate_grant(claims, binding, live_state, context) -> ValidatedGrant`
-- `intersect_scope(request, grant, snapshot, context) -> AuthorizedScope`
-- `compile_safe_legs(scope, proofs, context) -> BoundedList<SafeLeg>`
-- `revalidate_checkpoint(checkpoint, live_state, context) -> SecurityPermit`
-
-### `OverlayPort`
-
-- `snapshot_overlay(view, grant, context) -> OverlaySnapshot`
-- `shadowed_memberships(snapshot) -> BoundedSet<SourceMembershipId>`
-- `direct_candidates(snapshot, request, context) -> BoundedStream<OverlayCandidate>`
-
-Unsaved bytes never appear in a durable receipt or serializable port object.
-
-### `ExactScannerPort`
-
-- `compile_exact_scan(request, inventory, context) -> ExactScanPlan`
-- `execute_exact_scan(plan, readback, context) -> ExactExecutionReport`
-
-### `HandleStorePort`
-
-- `mint_ephemeral(subject, binding, limits, context) -> SearchSourceHandle`
-- `mint_durable(subject, retention_receipt, binding, limits, mutation) -> SearchSourceHandle`
-- `expand(handle, request, live_state, context) -> HandleExpansionResult`
-- `invalidate(scope, mutation) -> InvalidationReceipt`
-- `expire(now, mutation) -> ExpiryReceipt`
-
-## Conformance requirements
-
-Each port publishes a fake/in-memory implementation able to force:
-
-- deadline before start and during operation;
-- cancellation before side effects and after an acknowledged external side effect;
-- stale generation / compare-and-swap rejection;
-- partial bounded stream or receipt;
-- dependency unavailable and fail-closed state;
-- idempotent retry with the same mutation identity;
-- rejection of an unsafe retry with a different identity.
+Do not rebuild the P00 registry under another name. Historical trait names, method counts, fake failure
+matrices and golden source shapes do not constrain the pre-release cutover.

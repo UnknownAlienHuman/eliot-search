@@ -1,86 +1,38 @@
-# Vendor-neutral port catalog
+# Historical port catalogue
 
-`search-ports` owns the shared trait surface. This document maps those traits to exact concrete
-implementation owners and capability consumers; exact operation semantics are frozen in
-[`../contracts/p00/PORT_OPERATIONS.md`](../contracts/p00/PORT_OPERATIONS.md). The machine-readable
-closure is [`../../swarm/coverage/ports.toml`](../../swarm/coverage/ports.toml).
+This document formerly assigned one global `search-ports` trait to every planned capability and treated the
+trait/implementation matrix as architectural closure. That model is retired.
 
-## Rules
+Current dependency ownership is described in [DEPENDENCY_GRAPH.md](DEPENDENCY_GRAPH.md), the
+[architecture manifesto](../architecture/README.md) and the
+[implementation guide](../implementation/README.md).
 
-1. Shared serialized records come from `search-contracts`.
-2. Shared vendor-neutral traits and operation contexts come from `search-ports`.
-3. Pure transition, ordering and coverage meaning comes from `search-domain`.
-4. A capability package owns its mutable state and implements or consumes accepted ports.
-5. Concrete platform adapters are private modules of `eliot-searchd`; concrete capability adapters are
-   the exact packages named below.
-6. Vendor/native types, credentials, raw database handles, process handles and reusable authorization
-   decisions never cross a public port.
-7. Every shared port has one exact implementation owner. “Selected implementation,” “runtime adapter”
-   or another floating owner description is invalid.
-8. Port changes require an accepted contract-change receipt and a new public API digest.
+## Current rule
 
-## Port ownership matrix
-
-| Port | Trait owner | Exact implementation owner | Principal consumers |
-|---|---|---|---|
-| `ClockPort` | `search-ports` | private `eliot-searchd::adapters` platform adapter | contracts requiring controlled time, expiry and tests |
-| `SecretStorePort` | `search-ports` | `search-os-secrets::store` | daemon composition, provider binding |
-| `ProcessSupervisorPort` | `search-ports` | `search-qdrant-supervisor::process` | daemon composition |
-| `ControlJournalPort` | `search-ports` | `search-control-redb::transaction` | publication, registry, retention, daemon |
-| `ControlSnapshotPort` | `search-ports` | `search-control-redb::snapshot` | access, planner, daemon |
-| `SourceAdmissionPort` | `search-ports` | `search-source-admission::decision` | source registry |
-| `SourceInventoryPort` | `search-ports` | `search-source-registry::view` | exact, reconciler, planner |
-| `SourceOwnershipPort` | `search-ports` | `search-source-registry::cutover` | daemon and cutover/adapters |
-| `SafeReaderPort` | `search-ports` | `search-safe-reader::stable_read` | source spine, reconciler |
-| `SourceRevisionStorePort` | `search-ports` | `search-revision-store::revision` | validator, exact, retention, adapters |
-| `ResidencyPolicyPort` | `search-ports` | `search-revision-store::residency` | revision store, retention |
-| `MaterializerPort` | `search-ports` | `search-materializer::product` | preparation/runtime |
-| `UnitizerPort` | `search-ports` | `search-unitizer::manifest` | preparation/overlay |
-| `CodeEnricherPort` | `search-ports` | `search-code-enricher::facts` | preparation/query |
-| `LexicalEncoderPort` | `search-ports` | `search-lexical::sparse` | projection/executor/overlay |
-| `ModelProviderPort` | `search-ports` | `search-model-provider::encode` when separately admitted | optional model worker/executor |
-| `SearchIndexPort` | `search-ports` | `search-qdrant-bridge::mutation` | publication, retrieval executor |
-| `SearchIndexAdminPort` | `search-ports` | `search-qdrant-bridge::admin` | index reclaimer, purge coordination |
-| `EpochPinPort` | `search-ports` | `search-epoch-pins::registry` | executor, continuation, reclaimer, retention |
-| `AccessCompilerPort` | `search-ports` | `search-access::legs` | planner, executor, validator, exact |
-| `OverlayPort` | `search-ports` | `search-overlay::snapshot` | planner, executor, validator |
-| `ExactScannerPort` | `search-ports` | `search-exact::execute` | provider protocol and adapters |
-| `HandleStorePort` | `search-ports` | `search-handles::resolve` | projector, protocol, retention |
-
-Package-specific orchestration APIs such as projection planning, publication coordination,
-continuation and lifecycle may be public capability APIs rather than shared infrastructure traits.
-They still use `search-contracts` records and cannot expose their private adapter state.
-
-## Composition examples
+Concrete effect owners expose the smallest API their real consumers use:
 
 ```text
-search-publication
-  → ControlJournalPort + SearchIndexPort
-  → daemon binds search-control-redb + search-qdrant-bridge
-
-search-retrieval-executor
-  → SearchIndexPort + AccessCompilerPort + EpochPinPort
-  → daemon binds accepted implementations
-
-search-candidate-validator
-  → SourceRevisionStorePort + AccessCompilerPort
-  → daemon binds search-revision-store + search-access
-
-search-retention
-  → ControlJournalPort + SourceRevisionStorePort + SearchIndexAdminPort + HandleStorePort
-  → daemon binds control, revision, index and handle owners
+source/object owner   → acquisition, immutable read/write, current source head
+redb owner            → typed current-state transactions and reads
+preparation owner     → materialize/unitize/project
+Qdrant bridge         → concrete schema/mutation/query/readback
+publication owner     → pending/current/cleanup transitions
+query owner           → scope/context/evidence/window
+protocol owner        → current bounded request/result frames
 ```
 
-## Handoff requirement
+There is no mandatory global port registry, implementation-owner table, conformance fake catalogue or rule
+that all operations carry the same receipt/mutation/context shape.
 
-The `search-ports` handoff publishes:
+A narrow trait may live beside a consumer only when that consumer currently needs multiple implementations.
+It is removed with the alternate implementation. Vendor types remain private where useful, but that does not
+require a universal abstraction package.
 
-- canonical public API digest and complete method inventory;
-- cancellation, deadline, idempotency and bounded-output semantics;
-- typed error mapping and retryability;
-- fake/in-memory conformance interfaces;
-- proof that no vendor/native type crosses the API.
+## Historical disposition
 
-Concrete adapter handoffs publish conformance results against that exact port digest. A consumer cannot
-invent a local substitute when a required port is missing; it remains blocked and raises a contract
-change.
+The 23-port / 80-operation catalogue at public main commit
+`c8e38b6fc9829f1cd38070773b1b3e5b21de18ad` remains source evidence for why the project expanded. It is not
+an implementation specification and must not be regenerated as current architecture.
+
+`search-ports`, generated `swarm/coverage/ports.toml` consumers and package maps are deleted after current
+owner cutovers. Missing entries do not block product work; real connected behavior is the authority.
