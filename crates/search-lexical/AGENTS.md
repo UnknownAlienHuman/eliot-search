@@ -1,29 +1,32 @@
 # Working on search-lexical
 
 Read the [architecture](../../docs/architecture/README.md),
-[implementation](../../docs/implementation/README.md) and this package's
-[source map](FUNCTIONS.md). Historical frozen profiles, qualification receipts, fixture bytes and
-line quotas do not constrain the replacement.
+[implementation guide](../../docs/implementation/README.md), [source/caller audit](FUNCTIONS.md) and
+[Qdrant bridge map](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md).
 
-The product needs useful code term preparation. Native Qdrant BM25 handles ordinary text tokenization,
-sparse encoding, weighting and retrieval. Keep the existing bounded identifier expansion,
-normalization and original-span behavior where it improves code search; remove replaced sparse engines,
-statistics builders and profile/fixture identity machinery with their consumers.
+Do not repair, version or connect the current general analyzer, frozen profiles, local sparse encoders,
+scoring-corpus builder, qualification records or legacy daemon BM25 index. They are replacement/deletion
+targets and have no current Qdrant product caller.
 
-Use the existing `unicode-ident` and `unicode-normalization` routines for retained code behavior.
-The bridge owns the existing Qdrant SDK and native `Document` inputs. Do not add a second backend,
-model runtime or generic lexical-provider interface. Select matching ingestion/query options explicitly;
-English stemming and stopwords are not defaults for code or neutral text.
+Implement the selected path:
 
-Trace preparation, planner and real bridge/query callers before changing an API. A missing text-input
-path is integration work, not a reason to invent a qualified profile or preserve a byte-compatible
-encoder. Coordinate shared files with their actual writer; no contract-change issue is a prerequisite
-for an already authorized coherent change.
+```text
+bounded unit/query text
+→ optional small deterministic code-identifier expansion
+→ Qdrant native qdrant/bm25 Document input
+→ selected base idf.corpus
+```
 
-Keep source bytes and coordinates independent of normalized search terms. Exact/source owners perform
-literal and complete negative checks. Bound input, expansion and batches; propagate cancellation or
-unsupported input without advertising partial work as a complete result.
+Preserve only useful Unicode identifier behavior: whole identifier, unique bounded snake/camel/acronym
+components, XID boundaries, token-local NFC, deterministic ordering, finite expansion and cancellation. Do
+not retain source revision/ordinal/offsets, token-position arrays, term-statistics maps, receipts, fixture
+identities or local vector bytes in that helper. Source/evidence owners already retain exact coordinates.
 
-Verify useful token/range behavior and connected native search with the relevant consumers. Remove
-checks whose sole purpose is to preserve old sparse bytes or qualify an obsolete protocol. A changed
-encoding needs consistent re-indexed content, not a universal migration or attestation platform.
+Change preparation, planner, bridge/publication and query consumers together. Do not compute BM25 twice to
+satisfy an old expected vector digest. Do not add a lexical-provider trait, encoder registry, second backend,
+compatibility adapter or profile qualification service.
+
+After code, run minimal Rust 1.98 check and strict Clippy for the helper and actual preparation/query/bridge
+consumers, plus focused Unicode/expansion/limit cases and one connected native-Qdrant retrieval. Delete sparse
+byte goldens, collision/qualification corpora, denominator digests, manual BM25 and legacy lexical fixtures
+with their APIs.

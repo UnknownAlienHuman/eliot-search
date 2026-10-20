@@ -1,37 +1,39 @@
-# search-lexical
+# search-lexical — native BM25 plus one bounded code helper
 
-Keep the small amount of text preparation that improves source search: useful code identifier
-expansion, explicit normalization and original source spans. The current Rust implementation also
-contains general sparse encoders, corpus statistics and qualification machinery; these are removal
-targets, not the intended product surface.
+This package currently contains about **200.8 KiB** of three incompatible lexical systems. The selected
+product uses Qdrant native BM25 for ranking. Only a small deterministic identifier-expansion helper may
+remain.
 
-The [architecture](../../docs/architecture/README.md) and
-[implementation](../../docs/implementation/README.md) supersede historical immutable-profile,
-compatibility, qualification and size requirements. [FUNCTIONS.md](FUNCTIONS.md) maps the actual
-source to the replacement.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md), [exact source/caller audit](FUNCTIONS.md) and
+[Qdrant bridge map](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md).
 
-## Native text ranking
+## Verified disposition
 
-Use Qdrant's local `qdrant/bm25` through the existing Rust client for ordinary text. Send bounded
-`Document { text, model, options }` inputs at ingestion and query time; the bridge owns the SDK
-translation. Qdrant supplies token hashing, TF/length weighting and sparse retrieval. Its explicit
-`params.idf.corpus` supplies IDF over the selected published scope.
+The only production Rust imports of `search-lexical` are the legacy daemon snapshot lexical modules. That
+application builds its own postings and BM25 in memory and serves separate TCP/token commands. The frozen
+sparse profiles, scoring-corpus builder and code-identifier encoder have no external production caller.
 
-This is a new integration of an existing dependency, not an already connected Eliot path. The pinned
-[server implementation](https://github.com/qdrant/qdrant/blob/74f3e85b9473c62560006c043e13737ce6b48412/src/common/inference/service.rs)
-allows absent inference-provider configuration and evaluates BM25 locally. No model download,
-FastEmbed or second search backend is needed.
+Delete the local analyzer/sparse/scoring/qualification systems and the legacy daemon in-memory index when the
+native Qdrant path connects. Do not preserve their byte formats, profile digests or numerical behavior.
 
-## What remains here
+## Selected behavior
 
-Retain identifier behavior that helps find code: whole identifiers and useful snake/camel/acronym
-components, bounded expansion, token-local normalization and original ranges. Apply the same
-preparation to documents and queries. Qdrant's word tokenizer does not split camel case and breaks
-underscores; already expanded terms can use its whitespace tokenizer.
+Preparation sends bounded text to Qdrant `Document(model="qdrant/bm25")`; query sends bounded query text
+with the same published profile. The profile explicitly binds tokenizer/case/stemmer/stopwords/folding and
+BM25 parameters. The selected base source population supplies `idf.corpus`.
 
-Choose text processing explicitly. Native defaults include English stopwords and stemming; disable
-them for code and neutral text. Keep exact matching and evidence reads in the existing source owners:
-ranked tokens and sparse scores do not establish literal identity or absence.
+For code, a small pure helper may add the whole identifier and unique bounded snake/camel/acronym components
+using `unicode-ident` and token-local NFC. It returns prepared text/terms, not local sparse vectors, source
+coordinates, receipts or fixture identities. Source ranges and exact matching remain with unit/retained-source
+owners.
 
-Replace the old sparse encoders and their callers together. Keep useful token/search behavior checks;
-old feature indexes, numeric scores, profile digests and fixture bytes impose no compatibility promise.
+Keep this crate only if that shared algorithm remains substantial and has real preparation/query consumers.
+Otherwise move it to the retrieval-input owner and delete the package. Never add a lexical provider registry,
+second index or qualification platform.
+
+## Completion
+
+One real prepared unit is indexed and queried through native Qdrant BM25 under the selected scope, then
+resolved through the pinned manifest to retained evidence. No local postings/BM25, frozen sparse profile,
+vector digest prediction or legacy lexical command remains.
