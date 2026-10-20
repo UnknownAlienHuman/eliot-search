@@ -1,23 +1,28 @@
 # Working on search-contracts
 
 Read the [architecture](../../docs/architecture/README.md),
-[implementation guide](../../docs/implementation/README.md), [query cutover](../search-query/README.md) and
-[local protocol](../search-provider-protocol/README.md).
+[implementation guide](../../docs/implementation/README.md), [source/caller audit](FUNCTIONS.md),
+[query cutover](../search-query/README.md) and [local protocol](../search-provider-protocol/README.md).
 
-Keep only small immutable data used by at least two real current producers/consumers. This package is not a
-registry of planned features, recipes, capabilities, proofs, provider schemas or mutable lifecycle.
+This package is a reduction/consolidation area. Do not add a new recipe, grant, capability, plan, fence,
+receipt, lifecycle record, provider-neutral vendor schema, digest wrapper or version family.
 
-Replace the eleven V1 recipes, V2 parallel results, public plans/grants/capabilities and durable handles with
-one current `Search | Exact | Continue | Expand` request/result family. Optional operations exist only with
-real handlers. Change real producers and consumers together; do not add V3 wrappers or fake old IDs/digests.
+For each cutover:
 
-Keep stable source/revision/object/view/point identities, locations/ranges, selected scope, actual limits,
-retrieval-profile semantics and source-backed cards/gaps. Distinguish stable Qdrant retrieval point from
-versioned `ViewManifestEntry` evidence. Concrete Qdrant/redb/protocol/session/window types belong to their
-owners.
+1. identify the real current producers and consumers;
+2. decide whether the value is genuinely shared immutable data or owner-private state;
+3. change all current consumers together;
+4. move concrete Qdrant/redb/protocol/window/runtime state to its owner;
+5. delete the old type, alias, codec, canonical preimage, golden and generated contract in the same slice;
+6. keep only actual current IDs, locations, limits, request/results and retrieval/evidence semantics.
 
-Use Serde for ordinary DTOs. Canonical bytes/hashes remain only for actual content/artifact/profile identity.
-Delete generic canonical/digest frameworks and golden fixtures when their proof-oriented consumers disappear.
+Use one current `Search | Exact | Continue | Expand` family. Do not add `V3`, deprecated aliases, forwarding
+modules or raw-byte restore constructors. Optional operations/types exist only with real handlers.
 
-After code, run minimal Rust 1.98 compiler/Clippy for changed real producers/consumers and focused current
-codec/identity behavior. Frozen recipe counts, sparse-only schemas and pre-release wire goldens are not gates.
+Ordinary DTOs use bounded Serde. Canonical bytes and cryptographic hashes are allowed only for a real
+content/artifact/point/profile identity whose owner recomputes and verifies the exact input. Caller-supplied
+digests never establish authority or evidence.
+
+After code, run minimal Rust 1.98 check and strict Clippy for changed real producers/consumers plus focused
+current serialization/identity/location/result behavior. Recipe counts, old wire bytes, proof matrices and
+frozen indexed schema tests are deleted with their APIs.

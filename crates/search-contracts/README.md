@@ -1,120 +1,91 @@
-# search-contracts
+# search-contracts — keep only current shared data
 
-Small shared data used by real producers and consumers. This package performs no filesystem, process,
-network, redb or Qdrant I/O and owns no mutable lifecycle.
+This package must not be the catalogue of every planned operation, proof, provider and lifecycle. It should
+contain only small immutable values shared by real current producers and consumers.
 
 Read the [architecture](../../docs/architecture/README.md),
-[implementation guide](../../docs/implementation/README.md),
+[implementation guide](../../docs/implementation/README.md), [exact source/caller audit](FUNCTIONS.md),
 [query cutover](../search-query/README.md) and [local protocol](../search-provider-protocol/README.md).
 
-## Current source is a planned-system catalogue
+## Current cost
 
-`src/` is about 486 KiB. It includes:
+At public main:
 
-- authority/grant/capability records;
-- 49.8 KiB canonical encoding and 25.1 KiB digest framework;
-- V1 recipes, request/task-plan/query/lifecycle structures;
-- evidence frames and parallel result families;
-- indexed field/payload/vector/schema/readback/eligibility models;
-- durable source/continuation handles and proof-oriented IDs.
+```text
+production src                       425,255 bytes (~415.3 KiB)
+tests                                131,618 bytes (~128.5 KiB)
+Cargo manifests depending directly        47
+```
 
-Most of these types are consumed by codecs, fixtures or disconnected host/planner scaffolding. A shared type
-is not justified merely because several obsolete layers import it.
+Production code divides into roughly:
 
-## Current shared application data
+- **127.5 KiB** common bounds/canonical/digest/ID/error/schema infrastructure;
+- **168.3 KiB** grants, recipes, plans, protocol, results, evidence frames and lifecycle;
+- **113.1 KiB** frozen indexed/Qdrant-neutral collection/payload/vector/readback models;
+- **16.4 KiB** source/view vocabulary.
 
-Keep only data with at least two real current consumers:
+The V2 evidence family was added beside the frozen eleven-recipe V1 system, not used to replace it.
+`EvidenceFrameV2` appears only in its definition, provider codec and protocol test. The contract package is
+therefore planned-system gravity, not a coherent application API.
+
+## What remains shared
+
+Keep only values with at least two real current consumers:
 
 ```text
 SourceId / RevisionId / ObjectRef / RepresentationId
-ViewId / view sequence / stable PointId
-SourceLocation / byte-line range / logical occurrence
-SelectedSourceScope and finite query limits
-Retrieval profile identity actually used by preparation/publication/query
+ViewId / ViewSequence / stable PointId
+source location/range/page/region and logical occurrence
+selected source scope and actual finite request limits
+retrieval profile/role/input identity
+stable RetrievalPoint semantics and versioned ViewManifestEntry
 
 SearchRequest
 ExactRequest
 ContinueRequest { WindowId, page_size }
-ExpandRequest { WindowItemRef, bounded context }
-optional OrientRequest / CompareRequest only with real handlers
+ExpandRequest { WindowItemRef, bounded relative context }
 
-EvidenceCard
-GapSummary / truthful coverage
+EvidenceCard with actual verified excerpt/location
+GapSummary and truthful coverage
 Search/Exact/Continue/Expand response variants
 stable public failure code/class
 ```
 
-Runtime-only guards, streams, clocks, cancellation objects, Qdrant SDK types, redb rows and mutable stores
-belong to their concrete owners.
+Runtime guards, streams, cancellation, redb rows, Qdrant SDK records, publication cursors and query-window
+contents belong to their concrete owners.
 
-## Direct request/result replacement
+## Remove and move
 
-Replace eleven `RecipeIdV1` request/result families, V2 evidence/orientation forms, `SearchTaskPlan`, grant/
-capability/dependency records and durable source handles with one current family used by CLI, daemon and
-optional restricted adapters.
+Delete with their old consumers:
 
-The first implementation needs `Search`, `Exact`, `Continue` and `Expand`. Optional operations do not exist
-on the wire until their handlers exist. Exact compile/execute collapses into one server-owned operation.
-Handle expansion becomes one query-window item plus bounded relative context.
-
-Change current decoder, daemon handler, result encoder and client together. Do not add a V3 compatibility
-family, forwarding facade or synthetic fields for removed IDs/digests/grants.
-
-## Stable retrieval versus versioned evidence
-
-Shared indexed data distinguishes:
-
-```text
-stable retrieval point:
-  full point identity and collision evidence
-  occurrence incarnation
-  retrieval role/profile/input identity
-  stable source/group/filter coordinates
-  valid_from / valid_until view sequence
-  actual named vectors or native document input
-
-ViewManifestEntry:
-  view / point
-  exact retained source revision ObjectRef
-  representation / logical occurrence
-  byte/line range and real verification data
-```
-
-Do not place exact citation revision/range or payload/vector digest echoes in the Qdrant point contract.
-Qdrant is a retrieval index; the pinned manifest and immutable reader own evidence.
-
-Collection configuration types belong to the Qdrant bridge/publication owner unless preparation/query also
-need an abstract retrieval-profile field. Do not freeze vendor topology, strictness or payload-index tables
-into a provider-neutral global contract.
-
-## Serialization and identity
-
-Use Serde for ordinary request/result/event records. Bound the complete frame before decoding and bound
-encoded output. A canonical representation exists only where an actual content/artifact/profile identity
-consumes those bytes.
-
-Keep BLAKE3/SHA-256 only for real content/object/artifact integrity or a stable point/profile identity whose
-owner verifies it. Do not hash ordinary requests, plans, capability reports, grants or state transitions to
-make them appear authoritative. Matching caller-supplied digests does not prove bytes were read.
-
-## Removal boundary
-
-Delete with their last consumers:
-
-- `recipes`, public plan/query authority and capability/grant/lifecycle families;
-- generic canonical/digest framework used only by those records;
-- evidence-frame compatibility families and proof chains;
-- durable handle/continuation and protocol session records;
-- frozen sparse-only indexed schema, 20-field payload table and digest readback authority;
-- provider/process/store-specific error and receipt shapes;
+- provider binding/grant/capability authority;
+- eleven V1 recipes and parallel V2 evidence/orientation families;
+- public plans, snapshot/security fences, leg records and fingerprints;
+- durable source/continuation handles and validation receipts;
+- recipe-specific graph/comparison/provenance result catalogue;
+- progressive evidence-frame state machine;
+- frozen sparse-only indexed schema, payload/index table and digest readback authority;
+- optional-provider/readiness lifecycle records;
 - conformance/golden fixtures for removed pre-release bytes.
 
-Move concrete collection schema/point/payload/query records into the private Qdrant boundary. Move redb rows,
-publication cursor and query window state to their owners. Keep this crate small enough to understand by
-reading it, not by consulting a contract registry.
+Move physical collection/vector/payload/query types into the private Qdrant boundary. Move current redb,
+publication and window state to their owners. Shrink IDs/reasons/schema to current semantics.
+
+Use Serde for ordinary current request/result records. Keep canonical bytes/hashes only for real content,
+artifact, point or profile identity whose owner recomputes them. Do not hash requests, plans, grants or state
+transitions into authority.
+
+## Cutover
+
+Change current protocol/client/daemon/result consumers together. Do not add `V3`, deprecated aliases,
+forwarding wrappers or raw-byte compatibility constructors. After each family moves, delete its types,
+fixtures and generated P00/coverage records immediately.
+
+The crate may remain as a small shared DTO/identity package. If the final set is trivial and used only by the
+protocol/application boundary, merge it there and remove this workspace member instead of preserving a name.
 
 ## Verification
 
-Compile changed real producers/consumers. Exercise request/result Serde bounds, exact source/location identity,
-truthful partial/gap behavior, stable point/manifest linkage and CLI/daemon round trips through the connected
-application. Frozen recipe counts, canonical byte goldens and all-planned-feature matrices are not gates.
+Run minimal Rust 1.98 check/strict Clippy for changed real producers/consumers and focused current Serde,
+identity, location and source-backed result cases. Frozen recipe counts, canonical wire goldens and planned
+schema matrices are not gates.
