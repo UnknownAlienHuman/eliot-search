@@ -1,28 +1,37 @@
 Status: NOT QUALIFIED
 Inspected production source: public main c8e38b6fc9829f1cd38070773b1b3e5b21de18ad
-Documentation audit head: 11da81b9b60269b66cf9f88d9bfe256c0f5fba64
+Documentation audit head before this correction: 61a65a36a55bf2ca328964a5a437b740276dbd02
 Inspected: 2026-10-20
 
 CURRENT VERIFIED SOURCE FACTS
-- Production dispatch supports bounded one-shot --scan-file/--scan-stdin search over current bytes.
-- Persistent initialize/index/search/reopen/serve and source-root command families route to
-  LEGACY_EFFECTS_UNAVAILABLE in production or have handlers compiled only under #[cfg(test)].
-- --help still advertises unsupported persistent surfaces.
-- --self-test hard-codes persistent_direct_store_available=true although those handlers are unavailable.
-- No current exact-head run proves one source retained across restart, published/read back through Qdrant,
+- Production one-shot --scan-file/--scan-stdin search works over current bytes.
+- The daemon entrypoint is a sequence of independent argv interceptors, not one dispatcher/application.
+- The direct-registry interceptor runs before the read-only DIRECT service and secure persistent-command
+  stack. It recognizes serve/search/list/read/sync command names and emits registry metadata instead of
+  executing the later named operation.
+- The primary CLI's serve-data-root client therefore cannot receive the data_root_ready frame it waits for.
+- Native root initialization/inspection, old preparation and offline migration are separately reachable but
+  do not form one source-to-Qdrant product path.
+- Early refusal rejects legacy index/directory/retire/repair/GC effects.
+- The read-only DIRECT service source refuses mutations and keeps mutation handlers test-only; its serve argv
+  is shadowed in the current entrypoint.
+- Default wave1-shell excludes Qdrant/query dependencies. full-baseline compiles more disconnected and
+  obsolete systems but does not connect entrypoint, ingestion, publication or query.
+- --self-test validates shell/scan/hash behavior then prints persistent_direct_store_available=true as a
+  literal without traversing the persistent route.
+- No exact-head run proves one fresh source retained across restart, published/read back through Qdrant,
   found from the standalone CLI and reopened at the exact retained excerpt.
 
 DISPOSITION
-- The previous September 2026 PASS/failure transcript referred to older commits and mixed multiple sessions.
-  It is historical and is not carried forward as current evidence.
-- Compilation or old test counts do not qualify the current product path.
-- G0-G6/W0-W10 and package acceptance state are retired architecture metadata, not current blockers or PASS.
-- Issue #264 owns replacement of the unavailable dispatcher branches and the first real product run.
-- Until #264 succeeds, report persistent Search readiness as unavailable.
+- The former persistent quickstart and old September PASS/failure transcript are historical only.
+- G0-G6/W0-W10, package acceptance and feature presence are not current readiness evidence.
+- #264 owns one connected default product application and factual help/status.
+- #332 owns one current child-stdio CLI/client/protocol route and deletion of duplicate stacks.
+- Until both land, persistent indexed Search readiness is unavailable.
 
 NOT MEASURED BY THIS DOCUMENTATION AUDIT
 - Rust compiler/Clippy at the documentation head
 - live Qdrant mutation/query/readback
-- current Windows root/object durability
+- current Windows object/root durability
 - restart/rebuild/cancellation/recovery behavior
-- installed CLI-to-daemon product flow
+- installed current CLI-to-daemon product flow

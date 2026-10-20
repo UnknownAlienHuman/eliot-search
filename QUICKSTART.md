@@ -1,10 +1,7 @@
 # Current runnable smoke
 
-The public source does **not** yet expose the persistent Search product path. The only production-dispatched
-search operation is a bounded one-shot scan over current bytes. It does not retain a revision, use Qdrant,
-survive source deletion or prove restart behavior.
-
-Rust 1.98.0 is selected by the repository.
+ELIOT Search does not yet have a connected persistent quickstart. The only simple production search route
+that can be run from a fresh checkout is the bounded one-shot scan over current bytes.
 
 ## Scan one file
 
@@ -30,26 +27,41 @@ Get-Content -Raw $Source |
   cargo +1.98.0 run --locked -p eliot-searchd -- --scan-stdin needle
 ```
 
-This is useful for checking the current bounded exact-scan path only.
+This checks only the current exact-scan path. It does not initialize a product root, retain a revision, use
+Qdrant, survive source deletion or prove restart behavior.
 
-## Persistent commands are not a smoke test
+## Why there is no persistent setup command yet
 
-The production dispatcher currently routes persistent initialization, indexing, retained-revision reads,
-root search, serving and source-root registration to `LEGACY_EFFECTS_UNAVAILABLE`; the old persistent
-handlers are test-only or disconnected. `--help` still lists some of those commands and `--self-test`
-currently hard-codes `persistent_direct_store_available=true`. Neither output is capability evidence.
-
-Do not use these commands as a setup guide until their real handlers replace the unavailable branches:
+The daemon entrypoint is a chain of independent command applications rather than one product dispatcher:
 
 ```text
---initialize-data-root
---index-file / --index-directory
---search-root / --read-revision / --list-sources / --verify-root
---serve-data-root
---register-source-root / --sync-source-roots
+early legacy-effect refusal
+→ direct registry/journal command interceptor
+→ native root initialization/inspection
+→ offline migration staging
+→ legacy preparation
+→ optional old loopback
+→ read-only DIRECT service
+→ another persistent-command application
+→ shell/one-shot application
 ```
 
-Issue [#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the first real product run:
+The first direct-registry interceptor recognizes `--serve-data-root`, `--search-root`, `--list-sources`,
+`--read-revision`, `--sync-source-roots` and related names before the later services. For the read-looking
+commands it restores/requalifies registry state and emits a `direct_registry` metadata result; it does not
+execute the named search/read/service operation. Consequently the CLI's `serve-data-root` client waits for
+`data_root_ready` from a later read-only service which that argv cannot reach.
+
+Other commands are separately reachable—native root initialize/inspect, old preparation and offline migration
+staging—but they do not form one source → immutable object → Qdrant → retained excerpt application. The
+production read-only service source also refuses all mutation/preparation commands, and its mutating command
+implementation is test-only.
+
+The default daemon feature is empty `wave1-shell`; Qdrant/query dependencies are behind old wave features.
+`full-baseline` compiles additional obsolete query/reclaimer/overlay/retention systems but does not repair
+entrypoint routing or connect the product.
+
+Issue [#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the first real quickstart:
 initialize one current-format root, retain one file, restart, publish/query through Qdrant from the CLI and
-reopen the exact retained excerpt. Until that succeeds, the repository has a one-shot development scan—not a
-working persistent Search quickstart.
+reopen the exact retained excerpt. Until that succeeds, use the one-shot scan only and treat persistent help,
+`--self-test` capability flags and historical qualification as non-product evidence.

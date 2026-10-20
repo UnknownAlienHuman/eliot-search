@@ -1,188 +1,141 @@
-# eliot-searchd — composition and command map
+# eliot-searchd — source routing and replacement map
 
-Follow the [implementation guide](../../docs/implementation/README.md). The daemon composes real effects
-and direct handlers; library owners retain data and algorithm responsibilities. This map describes public
-source at `c8e38b6` and the replacement path. Existing command, package, receipt and recipe boundaries are
-not compatibility requirements.
+Follow the [implementation guide](../../docs/implementation/README.md). Existing command/package/receipt
+boundaries are not compatibility requirements.
 
-## Current commands and missing connections
+## Root cause: several applications share one binary
 
-| Existing path | What the source actually does | Next implementation |
-|---|---|---|
-| [entry.rs](src/entry.rs) | Chains `maybe_refuse_legacy_effects` and several handlers which recapture arguments. | Parse one invocation/config value and dispatch one concrete operation. |
-| native root / direct registry | Binds `registry_control` through `bind_original_v4`, restores the complete in-memory registry and original inputs, then republishes a full control snapshot for ordinary root/source work. | Point-read/update typed current root/source rows. Remove operation replay and snapshot publication from the normal path. |
-| `--admit-source-v2` | Restores the registry, reads/hashes/classifies the file, commits admission metadata, drops the body and returns `retained_revision:false`. | Pass the same bytes into the single object writer, compare/set one source head and enqueue one preparation. |
-| `--sync-source-roots` | Successful preflight ends with `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`. | Execute bounded inventory/update through the same ingestion owner. |
-| legacy preparation commands | Prepare old retained objects through another storage engine. | Reuse useful materialization/coordinates with the one current object reader/writer. |
-| public DIRECT service | Serves legacy read-only store commands; mutation is unavailable. | Keep exact source scan explicit and connect the one current typed protocol. |
-| indexed query helper | `execute_pinned_leg` is typed directly to `ProcessTestIndexedPort`. Public search finds only its process test caller. It cannot accept the real Qdrant plane without replacing the API. | Directly call the one real Qdrant runtime from the current `Search` handler. |
-| query authority/recipe composition | `registry.rs`, `service.rs`, `serving.rs` and `live_authority.rs` total about 51 KiB. `live_authority` is dead-code gated; no production constructors of `LiveNativeQueryAuthorityOwner`, `CanonicalRegisteredQueryService` or `CanonicalRecipeRegistry` were found, and no real `RegisteredAdmittedRecipeHandler` implementation was found. | Delete the host/registry/grant/capability ceremony and dispatch current typed operations to constructed handlers. |
-| planner/executor/access/validator/projector | Roughly 104 KiB + 61 KiB + 52 KiB + 24.5 KiB + 10.3 KiB of production Rust. Their principal APIs are fixture/process-test callers, accept caller-shaped authority and do not connect retained evidence. | Keep only direct scope selection, bounded backend calls, manifest lookup, retained reads and card formatting; inline small remnants. |
-| result paging | One daemon continuation catalogue retains `StoredMatch`; another catalogue mints one random source handle per emitted item. Shared handle/continuation packages form two more disconnected lifecycle systems. | Use one `QueryWindow` with a pinned view, final evidence refs, cursor and bounded item locator. |
+The production entrypoint does not parse one command and construct one application. It calls nine interceptors
+in sequence; each independently recaptures argv/config and may claim the command:
 
-Do not expose test-only methods by removing `cfg(test)` and call that integration. Do not wire the real
-backend through old recipe, plan, ticket, grant, checkpoint or handle facades.
+```text
+legacy-effect refusal
+→ direct registry/journal
+→ native root lifecycle
+→ offline migration
+→ legacy preparation
+→ optional loopback
+→ read-only DIRECT session
+→ second persistent command stack
+→ shell/stdio/one-shot application
+```
 
-## Composition responsibilities
+This is behaviorally unsafe even where each component is locally careful. Command ownership depends on order,
+later handlers can be unreachable and help text can describe a different implementation from the one that
+receives the argv.
 
-| Owner | Concrete responsibility |
+### Confirmed shadowing
+
+`direct_registry_command::is_direct_command` recognizes:
+
+```text
+register/unregister/source-roots/sync-source-roots
+admit-source-v2 and DEK commands
+health/verify/list/search/read-revision
+serve-data-root
+```
+
+It runs before both `public_runtime_service` and `secure_commands::maybe_run`. Its non-source/non-DEK path does
+not dispatch by the read-looking command name: it restores/requalifies the complete registry, republishes a
+control snapshot and emits `DirectOutput::metadata`, including `ready:false`,
+`source_body_serving:false` and `source_read_refusal`. Thus:
+
+- `--serve-data-root` cannot reach the later session which emits `data_root_ready`;
+- `--search-root` cannot reach the later source search implementation;
+- `--list-sources`, `--read-revision`, health/verify and sync names are similarly captured as registry work;
+- the later secure registration/sync/read commands are duplicate unreachable routes for the same argv.
+
+The primary CLI's interactive client starts `eliot-searchd --serve-data-root ROOT` and waits for
+`data_root_ready`, so its advertised persistent session cannot start against this entrypoint.
+
+### Other reachable islands
+
+- Native root initialize/inspect/owner-check uses the large installation/owner-slot lifecycle.
+- `--prepare-root` and `--prepare-revision` operate a separate legacy `DirectStore`.
+- Three control-migration commands stage old mapping/bootstrap/source artifacts offline.
+- The final shell application provides one-shot scan, stdio health/status and a literal self-test claim.
+- Early refusal owns index/directory/retire/repair/GC command names.
+
+None joins one fresh root, one source body, one immutable object, Qdrant publication and source-backed query.
+
+## Feature-ladder defect
+
+`bins/eliot-searchd/Cargo.toml` defaults to empty `wave1-shell`. Qdrant and query packages are omitted unless
+historical wave features are manually enabled. `full-baseline` includes Qdrant/query but also disconnected
+access/planner/executor/validator/projector, multiple handle/continuation systems, overlay, proof/comparison,
+reclaimer, evaluation and generic retention. Enabling it compiles more source; it does not select one runtime
+or make dead composition reachable.
+
+Cut over to direct required dependencies for the current application and delete the wave features with their
+last cfg/caller. Do not make `full-baseline` the default as a substitute for integration.
+
+## Connected target
+
+```text
+startup:
+  one args_os/config capture
+  → explicit initialize or open current root
+  → one process-lifetime guard
+  → current state/object/source/Qdrant owners
+  → current view + handlers
+  → one dispatcher
+
+ingest:
+  selected source
+  → stable read
+  → immutable ObjectRef
+  → current SourceRecord/RevisionRef compare-set
+  → one MaterializationProduct
+  → Qdrant apply/readback
+  → CurrentPublishedView
+query:
+  SearchRequest
+  → pin current view + resolve scope + RequestContext
+  → Qdrant BM25
+  → ViewManifestEntry
+  → retained object/range verification
+  → EvidenceCard[]
+  → optional QueryWindow
+```
+
+## Owners which survive
+
+| Owner | Responsibility |
 |---|---|
-| Invocation/root | One parsed command, one root lock, actual settings and orderly shutdown. |
-| Source / object store | Stable acquisition and one immutable writer/reader. Bytes precede source-head commit. |
-| Current source state | Typed redb root/source/current revision rows and bounded list/point reads. No operation archive or full restore before each command. |
-| Preparation | One materialization and structure-first units. Unsupported transformations become gaps. |
-| redb control | Current settings/source/head/artifact/publication rows in short transactions. No source bodies, completed-operation history or query history. |
-| Publication | One pending artifact/cursor, Qdrant effect/readback and one committed `PublishedView`. |
-| Qdrant | One private client/runtime used by publication and query. No qualification credential or process-local mutation ledger. |
-| Query | Direct `Search`/`Exact` handlers over one pinned view, one resolved scope and one request context. |
-| Evidence | Stable point → pinned `ViewManifestEntry` → exact retained object/range verification. |
-| Query window | One process-local cursor/view guard for paging and bounded expansion. Restart may expire it. |
-| Local protocol | One bounded typed request/result exchange. Actual constructed handlers determine availability. |
+| invocation/root | one command/settings value, initialize/open, one actual OS lock, orderly shutdown |
+| source/object | stable acquisition and one immutable writer/reader; bytes before source-head commit |
+| current state | short typed redb rows/transactions; no operation archive or full restore per command |
+| preparation | one materialization and structure-first units; unsupported transforms become gaps |
+| Qdrant | one private reusable client/runtime for publication and query |
+| publication | pending artifact/cursor, external effect/readback, current view and finite cleanup |
+| query/evidence | direct handlers, pinned view/scope/context, manifest lookup and exact retained read |
+| window | one temporary final-order cursor/view guard and bounded item locator |
+| protocol | one framed typed exchange; actual constructed handlers determine availability |
 
-## Current source-state cutover
+## Remove during cutover
 
-The normal direct command currently performs:
+- argv interceptor chain and duplicate command/help implementations;
+- full registry replay/original inputs/full control snapshot for ordinary source operations;
+- old installation owner slots/epochs/succession and duplicate locks after one guard replaces them;
+- legacy preparation/object store beside the selected object owner;
+- migration, sealed, secure-command and DIRECT compatibility applications for unsupported pre-release roots;
+- wave feature ladder and dead-code composition facades;
+- provider pairing/grant/capability/receipt stacks;
+- planner/executor/access/validator/projector operating systems when direct handlers replace them;
+- process-test indexed backend and caller-shaped authority;
+- four continuation/handle catalogues, random source handles and catalogue-wide rescans;
+- generic reclaimer/pin/retention/restore platforms after publication cleanup and object GC own the work.
 
-```text
-restore full SourceRegistry
-→ replay historical operation/original input layouts
-→ mutate one root/source
-→ read generic batch targets back
-→ rebuild/publish full ControlSnapshot
-```
-
-Replace it with:
-
-```text
-open root owner once
-→ point-read current root/source rows
-→ perform stable source/object work outside redb writer
-→ one compare/set typed transaction
-→ update narrow current cache/pointer
-```
-
-Use bounded table iteration only for an actual inventory/publication snapshot. Move useful codecs to their
-direct owner and delete `RegistryJournal`, original-input replay, generic `ControlJournalPort` and complete
-registry reconstruction after callers move.
-
-## Direct query dispatch
-
-The local handler owns the actual resources:
-
-```text
-SearchRequest
-→ pin current PublishedView
-→ resolve non-widening ResolvedScope
-→ RequestContext(absolute deadline, cancellation, finite counters)
-→ real Qdrant BM25/native query
-→ preserve final point order
-→ ViewManifestEntry lookup
-→ select one bounded page
-→ retained object/range read and verification
-→ EvidenceCard[]
-→ optional QueryWindow
-```
-
-Dispatch current operations directly:
-
-```text
-Search    ranked source-backed evidence
-Exact     one bounded complete source scan
-Continue  next page from QueryWindow
-Expand    bounded selected-item neighborhood from QueryWindow
-Orient    optional only after a real source-backed handler exists
-Compare   optional only after a real source-backed handler exists
-```
-
-The owning-account CLI needs no capability registry, descriptor digest, grant transcript, phase checkpoint
-or plan fingerprint. A selected restricted-client profile may advertise actual handlers and must enforce
-its real connection/session scope separately.
-
-For one lexical branch there is no plan: call Qdrant. If multiple compatible Qdrant branches become real,
-use native prefetch/RRF/grouping. A private local operation list exists only for genuinely incompatible
-routes or a real non-Qdrant branch. It never becomes a public `SearchTaskPlan` authority.
-
-## One request context
-
-The request owner carries:
-
-```text
-PublishedViewGuard
-ResolvedScope
-absolute monotonic deadline
-cancellation token
-remaining backend nominations
-remaining evidence items
-remaining source-read bytes
-remaining retained/output bytes
-```
-
-All Qdrant, object, formatting and output work consumes this context. No nested operation resets the
-deadline. A process semaphore may bound concurrent requests through RAII; do not expose scheduler snapshots,
-leg tickets or durable terminal maps.
-
-Reads have no recovery journal. Cancellation releases content, window and view guards. The only durable
-external uncertainty in the application is publication mutation, owned by `PendingPublication`.
-
-## Evidence and output
-
-A Qdrant hit is a nomination, not evidence. The query owner resolves the stable point in the pinned view's
-manifest, verifies the exact retained object and range and then formats the card. Echoed payload/vector
-hashes, caller readback digests and Boolean assurance records do not establish the bytes.
-
-Select the output page before source I/O. Preserve final rank through lookup and projection. Group reads from
-the same retained object where useful. A missing retained object/range is a candidate gap; a foreign,
-conflicting or absent manifest point contaminates the backend result. Ordinary top-k remains
-non-exhaustive.
-
-The projector receives already ordered `VerifiedEvidenceItem` values. It may enforce encoded-output limits
-and format cards/gap summaries. It must not re-sort raw scores, mint handles or receive prevalidated public
-metadata. If that transformation stays trivial, inline it and delete the projector package.
-
-## Query-window cutover
-
-Current paging repeats whole-catalog work:
-
-```text
-continuation source_fence(store.list_sources)
-+ handle source map(store.list_sources)
-+ handle source_fence(store.list_sources)
-```
-
-Expansion repeats the fence and source scan again. Replace all stores with one window containing the pinned
-view guard, final evidence refs, direct cursor, expiry and finite byte/item limits. The pinned immutable view
-is the fence; unrelated source updates do not invalidate or rescan it.
-
-Keep the daemon's useful exclusive `PreparedPage` rule: prepare the slice, resolve/emit it, then advance only
-after complete output success. A partial frame advances zero and closes the session. Optional
-`WindowItemRef(window_id, item_index)` can expand only that item's bounded neighboring range under the same
-view and expiry; it cannot request arbitrary bytes from the entire revision.
-
-## Remove replaced paths
-
-- registry operation envelopes, original-input restore/requalification and full snapshot publication;
-- migration/cutover/rollback frameworks for unsupported old roots;
-- unused DEK/secret lifecycle outside a selected storage profile;
-- legacy loopback/token-file transports and duplicate applications;
-- V1 recipe registry, V2 parallel endpoint, authority bundle, capability projection and canonical query
-  host;
-- public plan/capability/grant/dependency/fingerprint records;
-- scheduler/ticket/execution-state/terminal-map framework and process-test indexed backend;
-- caller nomination/readback proof and raw-score projector sorting;
-- duplicate handle/continuation stores, random per-item handles, source-fence rescans and lifecycle records;
-- daemon Publisher/file journal after one publication owner is connected;
-- source/module/shape tests and wave feature gates after their protected APIs disappear.
-
-Unsupported old roots fail before writes and remain untouched. Do not replace deleted code with adapters,
-synthetic grants, fake receipts, approved booleans or another registry.
+Unsupported old roots fail before writes and remain untouched. Do not move a shadowed command into another
+facade or expose a test-only mutation implementation as the replacement.
 
 ## Verification
 
-Verify the connected application: retain a real file across restart, prepare/index it, query from CLI and
-reopen the correct excerpt. Then check one edit/rename, excluded scope and IDF population, foreign/missing
-point, corrupt/missing evidence, old pinned view, page order, bounded expansion, exact scan, lost index,
-cancellation and pending external publication.
+After code, exercise the actual default binaries: help/version without root effects; initialize/open; ingest
+and retain one file; restart; publish/read back Qdrant; Search from CLI; reopen exact excerpt; edit/rename;
+source scope/IDF; old pinned view; pending publication recovery; lost-index rebuild; cancellation; paging and
+bounded expansion. Public help/status must match only the handlers actually constructed.
 
-Run minimal Rust 1.98 compiler/Clippy for changed production owners and actual consumers after code. Native,
-live-Qdrant, recovery and scale claims require actual execution; constructors, fixtures, capability
-records and historical qualification receipts do not establish them.
+Run minimal Rust 1.98 check and strict Clippy for changed production owners and immediate consumers. Native,
+live-Qdrant and recovery claims require actual execution; feature presence, constructors and old receipts do
+not establish them.
