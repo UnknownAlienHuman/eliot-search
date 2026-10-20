@@ -1,62 +1,42 @@
 # ELIOT Search configuration
 
-Configuration supplies values consumed by the running application. Start with the
-[implementation guide](../docs/implementation/README.md) and
-[config source map](../crates/search-config/FUNCTIONS.md).
+Configuration supplies values to concrete runtime owners. It does not certify capabilities, issue receipts or
+own a generic reconfiguration transaction.
 
-## Current problem
+Read the [implementation guide](../docs/implementation/README.md),
+[source/deletion map](../crates/search-config/FUNCTIONS.md),
+[typed TOML replacement](../crates/search-config/TOML_PROFILE_2.md) and
+[source audit](../docs/config/CONFIGURATION_1.0.md).
 
-The current library/daemon stack is about **208 KiB of production Rust before tests**. It implements a
-custom TOML grammar, dynamic registry, section ownership/security floors, provenance, canonical fingerprints,
-diff/action planning, receipt-gated activation and readiness acceptance records.
+## Current source truth
 
-Startup still rejects a valid non-default `query.limit`: defaults and candidate are compared, `ApplyLive` is
-planned and no synthetic `LiveApply` receipt is supplied. Most registered values are not retained as typed
-settings by their actual owners. Readiness additionally requires caller booleans such as
-`search_accepted`/`indexed_accepted`.
+The public daemon still uses a custom schema-2 parser, dynamic registry, generic snapshot/fingerprint and
+receipt-gated activation. Its registry contains only eight section families and most values do not reach typed
+runtime consumers. The checked-in example previously listed many unregistered fields; it is now an explicit
+legacy-parser no-op, not a product configuration.
 
-This platform is a removal target, not a base for another reconfiguration layer.
+The `sections.toml` registry and individual packets are removal/audit inputs. Some packets already describe the
+new direction; others are historical and are being reduced to concrete dispositions. Neither registry nor
+packet can make a field supported.
 
-## Current implementation direction
+## Target
 
 ```text
-one args_os invocation
-+ one bounded TOML file
-+ selected vars_os/CLI overrides
-→ one typed DaemonSettings
-→ validate actual fields
+capture args_os once
++ bounded TOML/Serde file
++ selected vars_os / field-specific CLI overrides
+→ concrete DaemonSettings
+→ validate actual values
 → construct actual owners/handlers
-→ retain running settings for status/new requests
+→ status reads retained running settings and observed component state
 ```
 
-Use the locked `toml` + Serde decoder and `deny_unknown_fields`. Bound file bytes before decoding. Keep paths
-as OS values. Only documented fields with real consumers are accepted.
+Only fields with a real consumer exist. Unknown fields/types/ranges fail before side effects. Paths stay OS
+values. Optional features add settings only with their real handler.
 
-Selected settings include the actual root/source, storage, Qdrant, lexical/query and chosen optional-profile
-values. Generic `[secrets]`, control migration epochs, qualification/gate receipts and planned subsystem fields
-are not current configuration.
+Runtime changes are direct owner operations: query default update, source reconcile/publication, process
+restart or retrieval-generation publication. There is no generic action DAG, configuration journal, completed
+receipt history, fingerprint readiness or compatibility decoder.
 
-## Changes while running
-
-A runtime update exists only when a concrete owner implements it:
-
-- a query default may change for future requests;
-- source selection/policy runs actual reconcile/publication or requires restart;
-- root/storage/Qdrant endpoint/process settings require restart;
-- lexical/model/schema changes use a new publication generation;
-- unsupported changes fail without changing current settings.
-
-No generic action DAG, config journal, completed-operation history or second recovery engine.
-
-## Status and readiness
-
-Status serializes selected redacted running settings and actual component state. It does not rebuild a generic
-snapshot, emit a configuration fingerprint or require acceptance receipts. Search is ready when its actual
-root/control/object/Qdrant/view/handler dependencies are ready. An unavailable optional component does not
-block lexical Search.
-
-## Historical material
-
-[sections.toml](sections.toml), [section packets](sections/), the old example and W5–W10 files contain
-historical proposals. They do not define supported fields. Update or delete them with the typed settings
-cutover; do not preserve them through compatibility adapters.
+Issue [#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333) owns the cutover. Historical W5–W10
+configuration files remain evidence only and are deleted with their last tooling consumers under #214/#525.
