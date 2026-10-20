@@ -5,25 +5,24 @@
 multiple generators/validators which freeze the historical Architecture 8.4 package/wave layout.
 
 The current architecture does not need a replacement governance framework. Keep direct compiler/package
-commands and real behavior checks; delete generated authority and source-shape policy.
+commands and real behavior checks; delete generated authority and source-shape policy. See the
+[test cutover](../docs/implementation/TEST_CUTOVER.md).
 
 ## Current command surface and disposition
 
 | Command family | Current behavior | Disposition |
 |---|---|---|
 | accepted-evidence digest | Canonicalizes package handoff evidence into another reviewed digest/profile and parity corpus. | Delete. Git/PR history and direct result artifacts are enough; no accepted-package authority remains. |
-| architecture coverage/contracts | Parses hundreds of Markdown headings and registry relations into an exact package/module ownership graph. | Delete. Architecture is a manifesto; implementation docs and actual Cargo/callers own current direction. |
-| coverage graph / package maps | Generates and validates committed package bundles and relation maps. | Delete generators, validators, 180 generated TOML outputs and their workflows. |
+| architecture coverage/contracts | Parses hundreds of Markdown headings and registry relations into an exact package/module ownership graph. | Delete. Architecture is a manifesto; implementation docs and actual Cargo/callers own direction. |
+| coverage graph / package maps | Generates and validates committed package bundles and relation maps. | Delete generators, validators, 180 generated TOML outputs and workflows. |
 | canonical digest guard | Scans source and requires 5,960 sites to match a 72,002-line approval ledger. | Delete ledger, scanner/allowlist/review schema and merge gate under #525. Keep actual digest/preimage tests. |
-| Qdrant boundary | Walks the repository, partially parses Rust/import aliases and cross-checks frozen qualification/version records. | Replace with Cargo metadata/dependency review, private bridge API and connected live behavior. Delete partial Rust analyser. |
-| integration bootstrap | Freezes exactly 45 members, five wave profiles, exact aliases, seven directories, `CONTROL_JOURNAL_ONLY`, migration quarantine and an old workflow. | Delete. Cargo/rust-toolchain/lockfile and current root manifest are their own source of truth. |
+| Qdrant boundary | Walks the repository, partially parses Rust/import aliases and compares frozen qualification/version records. | Replace with Cargo metadata/dependency review, private bridge API and connected live behavior. |
+| integration bootstrap | Freezes exactly 45 members, five wave profiles, exact aliases, seven directories, `CONTROL_JOURNAL_ONLY`, migration quarantine and an old workflow. | Delete. Cargo/rust-toolchain/lockfile and the current root manifest own those facts. |
 
-Historical reports may remain in Git history. Do not create an archive copy, compatibility wrapper, new map
+Historical reports remain in Git history. Do not create an archive copy, compatibility wrapper, new map
 format or smaller approval database.
 
 ## Measured generated state
-
-The already audited inventory is:
 
 ```text
 xtask Rust                                      123 files / 23,823 lines
@@ -31,24 +30,55 @@ coverage/architecture/package-map Rust           49 files / 9,090 lines
 swarm/coverage                                  205 TOML / 152,921 lines
 generated package-maps subset                   180 TOML / 78,804 lines / 2,588,784 bytes
 canonical-digest-ledger.json                    5,960 sites / 833 paths / 72,002 lines / 3,572,618 bytes
-Qdrant partial Rust source analyser subtree       16 files / 3,293 lines including tests
+Qdrant partial Rust source analyser               16 files / 3,293 lines including tests
 ```
 
 These are gross deletion candidates, not promised net deletion. Shared Cargo metadata helpers survive only
 when an actual remaining command consumes them.
 
+## Source-shape and module-ownership tests
+
+The governance system extends into product test suites. Public main contains 33 daemon
+`*_module_ownership.rs` tests. Representative cases open Rust source files and assert exact module names,
+`pub use` spelling, marker strings, source byte ceilings, old lifecycle states and exact test-function names.
+The giant `refactor-boundaries.yml` workflow explicitly runs many of these tests across daemon, preparation,
+revision-store, evaluation and Qdrant packages.
+
+Delete these tests and workflow entries with the policies they protect. They prevent the intended merging,
+inlining and deletion while proving no user behavior. Do not replace them with a new source scanner, AST
+rule set, rustdoc manifest, package map or line budget.
+
+Compiler/type/privacy/dependency checks protect real code boundaries. Focused owner tests protect algorithms
+and state transitions. Connected product tests protect the application. Reviewers can inspect a public API
+without a custom Rust parser.
+
+## Process/harness inventory
+
+`bins/eliot-searchd/tests` contains 76 Rust files, including 28 `*_process.rs`, while the daemon manifest
+adds seven harness-only snapshot/sealed targets. Process execution alone does not make a test valuable:
+
+- remove tests of migration, quarantine, pairing, purge, old owner lifecycle, obsolete handles/continuations,
+  overlays and other removed subsystems;
+- remove indexed tests which use the in-memory oracle/proof stack instead of the served daemon;
+- remove two-halves tests which manually call Qdrant separately from legacy daemon commands;
+- move only still-valid causal scenarios to the new direct owners or one real end-to-end product test;
+- delete harness-only binaries after their final unique behavior case moves.
+
+The [test cutover](../docs/implementation/TEST_CUTOVER.md) identifies useful current scenarios and the target
+portfolio.
+
 ## Direct development tools
 
-During the refactor, use the smallest command which checks the changed production owners and immediate
-consumers:
+During refactoring, use the smallest command which checks changed production owners and immediate consumers:
 
 ```text
 cargo +1.98.0 check --locked -p <changed-package> [other actual consumers]
 cargo +1.98.0 clippy --locked -p <changed-package> [other consumers] -- -D warnings
+git diff --check
 ```
 
 Run focused behavior/live cases when the connected feature exists. Full workspace/all-features/all-tests are
-late integration/release operations, not a prerequisite for every deletion slice.
+late integration/release operations, not prerequisites for every deletion slice.
 
 Useful repository facts require no custom authority:
 
@@ -68,13 +98,13 @@ crate for usage text, JSON reports or wrappers around direct Cargo commands.
 Delete together with their last command/data consumer:
 
 - package-map/coverage/architecture workflows and PowerShell wrappers;
-- accepted-evidence digest workflow/wrappers/profiles/fixtures;
+- accepted-evidence workflow/wrappers/profiles/fixtures;
 - integration-bootstrap validator/workflow and frozen build/layout registries;
 - `refactor-boundaries.yml` module-ownership/source-shape matrix;
 - swarm/stage/function/optional-wave validators which only preserve retired architecture;
-- qualification directories whose PASS means only structural conformance to those registries.
+- qualification directories whose PASS means structural conformance to those registries.
 
-A small manual workflow may remain for an explicitly requested compiler/Clippy or later release suite, but it
+A small manual workflow may remain for explicitly requested compiler/Clippy or later release suites, but it
 runs direct commands and records raw outcomes. It does not issue acceptance, freeze module layout or require
 regeneration of retired artifacts.
 
@@ -83,7 +113,7 @@ regeneration of retired artifacts.
 Keep `qdrant-client` as a private direct dependency of the selected bridge. Verify with:
 
 1. `cargo metadata`/manifest review that no other production package directly depends on it;
-2. compile-time private types and a direct public-API review;
+2. compile-time private types and direct public-API review;
 3. focused real bridge/publication/query execution.
 
 Do not implement another Rust parser, rustdoc analyser, source allowlist, qualification-token comparison or
@@ -91,6 +121,6 @@ vendor-type taint engine.
 
 ## Completion
 
-Close #214/#525 when retired commands, wrappers, workflows, registries, generated outputs and tests are gone;
-Cargo metadata/direct compiler checks still work; and normal implementation no longer requires map, ledger,
-status, issue-state, module-shape or review-badge updates. Report actual code/data deletion separately.
+Close #214/#525 when retired commands, wrappers, workflows, registries, generated outputs and exclusive tests
+are gone; Cargo metadata/direct compiler checks still work; and normal implementation no longer requires map,
+ledger, status, issue-state, module-shape or review-badge updates. Report actual code/data deletion separately.
