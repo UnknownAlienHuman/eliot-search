@@ -1,44 +1,28 @@
-# Windows local pipe transport — optional persistent profile
+# Windows provider transport — delete with the old provider client
 
-This small package owns one concrete Windows client pipe handle and synchronous byte I/O. It is not the
-baseline CLI path and owns no protocol, pairing, grant, endpoint discovery or access policy.
+This package is one small synchronous **client-side** named-pipe adapter. It opens an endpoint described by
+the old provider protocol, exposes `Read + Write`, translates a few pipe errors and uses `PIPE_NOWAIT`
+polling. Production source is about 8.4 KiB before tests.
 
-The first working local product uses owned child stdin/stdout under #280/#332. Keep this package only if a
-persistent owner-only Windows pipe is selected after that path works.
+Repository callers are the old typed provider client, its example and the unconnected CLI native-pairing
+path. There is no server/listener implementation here and no caller on the selected child-stdio path.
 
-## If retained
+The current architecture uses owned child stdin/stdout first. Therefore remove this package and its workspace
+member with #280/#332 and the old provider client. Do not preserve it merely because a future persistent pipe
+might exist.
 
-The platform owner, not this package's pipe name alone, must establish that the connected server belongs to
-the expected OS user/installation. This package then:
+If a persistent Windows daemon later has a measured need, implement the smallest transport at that time:
 
-- opens one explicitly supplied canonical pipe endpoint once;
-- retains one non-clone owned handle;
-- checks byte-pipe/local shape available from the OS;
-- performs finite partial reads/writes under the caller's original absolute deadline/cancellation loop;
-- maps EOF/would-block/content-free OS failures;
-- closes only its handle.
+```text
+actual owner-only named-pipe server/listener
++ real ACL/peer-owner validation
++ one owned client stream
+→ current u32-length + Serde protocol
+```
 
-Connection success is not authentication, source authority, a grant, a peer acknowledgement or rollback
-proof. A selected restricted-client adapter authenticates separately and terminates into the same current
-framed dispatcher.
+That implementation may reuse the narrow Win32 error/handle lessons, but it must not depend on
+`NativeEndpointNameV1`, pairing keys, grants, capability digests, endpoint files or legacy session types.
+Transport reachability alone does not grant source scope; the daemon still resolves every request against its
+pinned view and optional restricted-session policy.
 
-## Remove if not selected
-
-Delete the package, native registration/credential constructors and pipe-listener scaffolding if child stdio
-remains the shipped local route. Do not keep it as a mandatory second transport, compatibility facade or
-future plugin seam.
-
-Do not add:
-
-- pairing/MAC/grant logic;
-- endpoint files/token files/TCP fallback;
-- arbitrary handle adoption;
-- listener/process lifecycle;
-- background threads, reconnect or pooling;
-- durable connection receipts.
-
-## Verification
-
-Only for a selected persistent-pipe profile: actual same-owner connection, wrong-user/foreign-server refusal
-in the platform owner, byte mode, partial I/O, would-block, deadline/cancel, EOF, backpressure and handle
-cleanup through the current framed protocol. Source presence and pure fixtures are not installed behavior.
+No TCP/token-file fallback, discovery framework, reconnect pool or generic transport plugin is required.

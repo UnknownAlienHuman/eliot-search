@@ -1,19 +1,15 @@
-# Working on Windows provider transport
+# Working on the old Windows provider transport
 
-This package is optional. Read the [local protocol](../../search-provider-protocol/README.md),
-[CLI cutover](../../../bins/eliot-search/FUNCTIONS.md) and local [boundary](FUNCTIONS.md).
+Read the [current protocol](../../search-provider-protocol/README.md),
+[client map](../../search-provider-client/FUNCTIONS.md), [CLI issue #332](https://github.com/UnknownAlienHuman/eliot-search/issues/332) and local [source map](FUNCTIONS.md).
 
-Implement child stdio first under #332. Keep this package only if a persistent owner-only Windows pipe is an
-actual selected product route.
+Do not harden or extend this client-only `PIPE_NOWAIT` adapter. It is coupled to the deleted pairing/grant
+provider stack, has no server/listener and is not used by the selected child-stdio product path. Remove the
+package/workspace member with its last old typed-client/CLI callers.
 
-If retained, own one admitted non-clone pipe handle and synchronous byte I/O only. The platform/connection
-owner establishes real user/installation identity before handing the endpoint to this package. Pipe name,
-reachability and byte mode are not authentication.
+A later persistent-daemon feature may implement one actual owner-only Windows pipe server and client against
+the current framed protocol. It must validate real ACL/peer ownership and use one bounded I/O context. Do not
+preserve `NativeEndpointNameV1`, endpoint files, pairing keys, grants, capability digests or TCP fallbacks.
 
-Use the original absolute deadline/cancellation, preserve partial counts, distinguish would-block/EOF and
-keep diagnostics content-free. Do not add pairing, grant, protocol parsing, endpoint discovery, TCP/token
-fallback, arbitrary handles, listener/process lifecycle, reconnect, pooling or receipts.
-
-If no persistent pipe consumer remains after child-stdio integration, delete the package and its native
-registration/listener callers rather than preserving a second transport. After code run minimal Rust 1.98
-compiler/Clippy for actual consumers and native checks only for the selected profile.
+After deletion, run minimal Rust 1.98 compiler/Clippy for actual client/CLI consumers. Native pipe tests return
+only with a real selected persistent-pipe implementation.

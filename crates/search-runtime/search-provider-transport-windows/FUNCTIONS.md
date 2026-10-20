@@ -1,41 +1,59 @@
-# Windows pipe effect boundary
+# Windows provider transport — source map and removal
 
-`NativeLocalConnection` is optional infrastructure for a selected persistent local pipe. The baseline
-child-stdio client does not depend on it.
+## Current API
 
-## Retained API, if selected
+| Source/API | Actual behavior |
+|---|---|
+| `NativeLocalConnection::open` | Opens one `NativeEndpointNameV1` through `CreateFileW` before/after a caller deadline check. No retry/wait or server ownership. |
+| `Read` / `Write` | Delegates to one named-pipe handle in `PIPE_NOWAIT`; maps `ERROR_NO_DATA` to `WouldBlock` and broken-pipe errors to EOF/failure. |
+| `flush` | Returns success without calling `FlushFileBuffers`; it is not a peer acknowledgement. |
+| platform support | Windows client only; non-Windows always returns unsupported. |
+| production callers | `search-provider-client` typed I/O/native session, its example and CLI `provider_client/local.rs`. These belong to the old pairing/grant client stack. |
+| missing half | No named-pipe server/listener or actual current daemon dispatcher is implemented in this package. |
+
+The package uses the old protocol's endpoint type and has no independent product responsibility once that
+client stack is removed.
+
+## Current disposition
+
+Baseline local Search uses the child process and inherited stdio:
 
 ```text
-open(admitted_endpoint, absolute_deadline) -> NativeLocalConnection
-read_once(buffer, absolute_deadline/cancel) -> bytes | would-block | EOF
-write_once(bytes, absolute_deadline/cancel) -> count | would-block
-close/drop
+CLI owns child/stdin/stdout
+→ one current framed client
+→ one current daemon dispatcher
 ```
 
-Concrete names may stay while useful. Rules:
+Delete:
 
-1. The caller/platform owner supplies an already admitted endpoint and real OS-owner/installation decision.
-2. Open exactly once; no discovery, retry loop, alternate endpoint, TCP or token-file fallback.
-3. Retain one non-clone handle; no arbitrary public `File`/raw-handle constructor or extraction.
-4. Validate byte-pipe/local shape available from Windows. Pipe locality/name alone is not authentication.
-5. Partial I/O advances only the reported bytes. `WouldBlock` and EOF are distinct.
-6. All polling uses the caller's original absolute deadline/cancellation; no phase renews time.
-7. `flush` is no peer acknowledgement and no durability/rollback evidence.
-8. Drop closes only this handle and claims no remote effect rollback.
-9. Errors are stable/content-free; raw pipe paths, handles and source/query bytes do not enter diagnostics.
+```text
+crates/search-runtime/search-provider-transport-windows/
+workspace member / target dependency edge
+old typed-client LocalByteStream implementation
+CLI native-local constructor which consumes it
+transport examples/fixtures tied to pairing/grant expectations
+```
 
-Protocol framing, request correlation, cancellation, partial-output fail-stop and one terminal response belong
-to `search-provider-protocol`/client. Restricted-client credentials/session policy belong to their selected
-adapter.
+Do not move this API into another forwarding package.
 
-## Deletion boundary
+## Optional future pipe
 
-If #332 ships only child stdio, remove:
+Only a real persistent-daemon requirement may add a Windows named pipe. Implement server and client together
+against the current framed protocol. The platform owner must:
 
-- this package;
-- native client registration/credential/end-point resolver used only for it;
-- daemon native pipe listener/opening/grant composition;
-- old pairing/profile expectations and compatibility fixtures.
+- create a private endpoint under the current installation/root identity;
+- apply and verify the selected owner-only ACL/peer identity;
+- retain exact listener/connection handles;
+- bound accept/read/write/backpressure/cancellation under one absolute context;
+- close and release on disconnect/shutdown;
+- expose only an owned byte stream to the current dispatcher/client.
 
-If retained, remove all APIs beyond the small byte-stream effect above. Do not make the optional pipe a
-second protocol or product-readiness gate.
+Use ordinary blocking/overlapped I/O according to the measured serving model. Do not inherit `PIPE_NOWAIT`
+polling merely for compatibility. No provider pairing, application MAC, grant or capability digest is needed
+for the same-owner profile; a genuinely restricted external profile adds its authentication separately.
+
+## Verification if reintroduced
+
+Exercise wrong-user/foreign server rejection, pipe type/mode, partial prefix/body I/O, backpressure,
+cancellation, EOF, partial output, listener shutdown and actual CLI/daemon round trip. A client-only open test
+or existing source compilation does not establish a supported transport.
