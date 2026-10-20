@@ -1,62 +1,22 @@
-# Archived package-assignment protocol
+# Retired assignment protocol
 
-> **Historical only.** This file described a repository-local multi-agent campaign and is superseded as
-> implementation authority by ADR 0005 and ADR 0006. ELIOT Search does not require assignment tickets,
-> materialized prompt contexts, writer leases, acknowledgements, submission/review records or launch-state
-> transitions before code may be changed.
+ELIOT Search no longer uses repository-local assignment tickets, materialized prompt contexts, writer leases,
+acknowledgements, submissions, review receipts, package handoffs or launch-state transitions.
 
-## Current working rule
-
-A maintainer request, issue or PR plus one non-overlapping branch/worktree is sufficient. Read
-Architecture Part I, accepted product ADRs, the nearest package instructions and the current issue/PR.
-Use one active writer per overlapping package scope and run the smallest applicable Cargo check/Clippy
-gate.
-
-Useful ideas retained from the old protocol are ordinary engineering practices:
-
-- exact base revision;
-- bounded, non-overlapping write scope;
-- explicit dependency/public-contract compatibility;
-- one worktree per manager;
-- independent review for load-bearing changes;
-- exact-head evidence and honest unavailable checks.
-
-They do not require a Search-local controller or persistent actor/lease state.
-
-## No active authority
-
-The following are advisory/historical and cannot authorize or block product work:
+For current work:
 
 ```text
-swarm/launch-state.toml
-swarm/orchestration.toml
-swarm/ticket-drafts/**
-swarm/context-drafts/**
-swarm/tickets/**
-swarm/context-manifests/**
-swarm/leases/**
-swarm/submissions/**
-swarm/reviews/**
-swarm/handoffs/**
+maintainer request / GitHub issue
+→ one manager-owned non-overlapping branch/worktree
+→ concrete producer-to-consumer change and deletion
+→ minimal changed-owner check/Clippy
+→ focused real behavior when available
+→ ordinary PR review/merge
 ```
 
-Do not create new records in these directories for ordinary Search implementation. Do not port their
-state machines into Rust tooling. Residual controller tooling is removed under issue #214.
+Exact base revision, bounded scope, dependency compatibility and honest evidence remain useful engineering
+facts. They do not require persistent actor state, signatures, control-plane schemas or accepted API digests.
 
-## Product ownership
-
-- shared Search records and wire schemas: `search-contracts`;
-- pure product meaning: `search-domain`;
-- vendor-neutral ports: `search-ports`;
-- configuration mechanics: `search-config`;
-- capability state/behavior: owning product package;
-- Qdrant vendor translation: `search-qdrant-bridge` only;
-- platform/vendor composition: `eliot-searchd`;
-- standalone user surface: `eliot-search`;
-- optional external integrations: leaf adapters only.
-
-Generic Tasks, WorkScopes, Attempts, GM/Governor state, mailboxes, schedulers, agent roles, controller
-credentials, review acceptance and finish authority belong to `eliot-swarm-controller` / `eliot-memory-os`.
-
-Historical details remain available in Git history. This active file intentionally does not reproduce the
-obsolete ticket/lease state machine.
+All records under `swarm/tickets`, `context-manifests`, `leases`, `submissions`, `reviews`, `handoffs`,
+`supersessions`, `wave-receipts` and their draft/schema/template files are historical removal inputs. Do not
+create new records or port their state machines into Rust tooling. Removal is tracked by #214/#525.

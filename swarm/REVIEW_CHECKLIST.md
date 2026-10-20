@@ -1,29 +1,18 @@
-# Review checklist
+# Current review checklist
 
-## Package reviewer
+Review the connected result, not conformance to the retired package/wave map.
 
-- Changes stay inside assigned package scope.
-- Mutable state has one owner; no duplicate store, policy engine, handle table or deletion path appears.
-- Shared records come from the accepted `search-contracts` digest.
-- Shared traits come from the accepted `search-ports` digest; no local substitute port appears.
-- Pure rules are not duplicated around `search-domain`.
-- Public API contains no vendor/native type, credential, raw store locator, raw point ID or reusable
-  authorization decision.
-- Direct dependencies match `swarm/crates.toml` and accepted handoffs.
-- Every blocking operation defines deadline/cancellation/bounds; every mutation defines idempotency.
-- Failures are typed and explicitly mapped to public/protocol reasons where applicable.
-- No placeholder success, fake receipt, silent fallback, `todo!()` or hidden unbounded queue exists.
-- Split review occurs before 8,500 total hand-written lines; 10,000 is a hard stop.
-- Raw commands and unavailable checks are reported honestly.
+- One real producer reaches one real consumer; the replaced path and callers are deleted.
+- No second store, source authority, query path, protocol, key lifecycle or cleanup owner was introduced.
+- Public APIs expose product meaning rather than vendor handles, credentials or caller-mintable authority.
+- Bounds, one absolute deadline/cancellation and unknown external-effect handling exist where work can block
+  or mutate state.
+- Persisted current-format behavior and unsupported old-format disposition are explicit.
+- Optional failure cannot silently widen scope, manufacture evidence or disable the baseline.
+- Minimal Rust 1.98 check/Clippy covers changed production owners and immediate consumers.
+- Runtime claims come from the actual integrated route, not constructors, fixtures, structural validators or
+  hard-coded status fields.
+- Unavailable checks and active private work are stated honestly.
+- Obsolete tickets, receipts, generated maps, source-shape tests and compatibility facades are not repaired.
 
-## Integration reviewer
-
-- Cargo members, package directories, registry entries and assignments are identical.
-- Cargo manifest dependencies match registry dependencies.
-- Graph is acyclic and wave-monotonic except the declared daemon composition exception.
-- Only daemon composition constructs concrete redb, OS-secret, Qdrant process/data-plane adapters.
-- Contracts, domain and ports publish immutable accepted API digests before consumers start.
-- Access/currentness happen before retrieval/scoring.
-- Source readback, publication, handles, ordinary reclaim and purge remain distinct end-to-end invariants.
-- Optional providers remain blocked, removable and separately qualified.
-- Wave evidence is complete; compilation alone is not acceptance.
+Package size, file count and module layout are review signals, not automatic reasons to create another crate.

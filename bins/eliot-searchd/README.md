@@ -1,62 +1,46 @@
 # eliot-searchd
 
-**Composition root for Search stores, local Qdrant process and provider server.**
+Composition root for the local Search application.
 
-**Status:** DIRECT control/root registration and bounded native source-admission commands are wired.
-Their exact limits and non-serving outcomes are in [FUNCTIONS.md](FUNCTIONS.md). Retained-revision,
-indexed source-to-result and supported native provider integration remain incomplete and unqualified.
+## Current executable truth
 
-## Owns
+Production dispatch currently supports bounded one-shot scans:
 
-- data-root owner acquisition and progressive startup
-- concrete redb/OS-secret/Qdrant adapter construction
-- vendor-neutral port wiring
-- bounded request supervision and provider server
-- shutdown/readiness/degradation reporting
+```text
+--scan-stdin QUERY
+--scan-stdin-ascii-insensitive QUERY
+--scan-file QUERY FILE
+--scan-file-ascii-insensitive QUERY FILE
+```
 
-## Must not own
+These scan current bytes only. They do not retain revisions, publish Qdrant points, survive restart or serve
+the final local protocol.
 
-- capability logic
-- shared clients for CLI/workers/adapters
-- reverse adapter edges into query/lifecycle packages
-- hidden fallback or client canonical writes
+Persistent mutation/read, source-root, initialization and serving command families currently return
+`LEGACY_EFFECTS_UNAVAILABLE` in production or exist only under `#[cfg(test)]`. The help text still advertises
+some of them. `--self-test` also contains a stale hard-coded `persistent_direct_store_available=true`; do not
+use it as readiness evidence. [#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the
+connected replacement.
 
-Use [AGENTS.md](AGENTS.md) for ownership and the current execution rules; historical waves/line targets
-are not readiness or package-splitting gates.
+## Target ownership
 
-## DIRECT proxy child bounds
+The daemon constructs and owns the concrete application:
 
-`--serve-loopback-data-root` retains one process owner and one pipe worker. Startup/READY has a
-30-second budget; each command has one 120-second budget across pipe writing, reply reading, client
-forwarding and shutdown exit confirmation. Normal exit/forced cleanup has a 5-second budget. The
-worker queue and each operation-specific reply channel have capacity one. No command is replayed.
+```text
+current-format root + one process guard
+→ current redb/object/source owners
+→ one preparation path
+→ one Qdrant client/runtime
+→ publication and current-view owner
+→ direct Search | Exact | Continue | Expand handlers
+→ one bounded local dispatcher
+```
 
-Frames retain the 64 KiB ceiling. A reply also has a 64 MiB total-byte ceiling including newlines;
-shutdown output is retained within 128 KiB until the exact child exits successfully and its pipe
-worker joins. A STOPPED frame alone cannot acknowledge shutdown. Timeout or ambiguous output closes
-the socket, terminates the child and prevents later admission. Ordinary complete errors stay reusable.
+It owns startup, factual readiness, request admission, cancellation/deadlines, shutdown and cleanup. It does
+not own source policy meaning, query ranking rules, immutable-object algorithms or a second copy of product
+state.
 
-Cleanup uses bounded polling, not an unconditional `Child::wait` or thread join. An OS failure to
-reap a child or close inherited pipe handles remains failed/unknown cleanup, never clean owner
-release. The proxy exits rather than silently retaining a serving worker. This is not process-tree
-containment or proof against an uninterruptible OS syscall; native owner/job qualification remains.
-
-`--bootstrap-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY` creates
-one original-operation-bound inactive target before inventory publication. It uses
-retained existing-only source/registration/protector custody and no-follow output
-ancestor/target pins. The returned `eliot.migration-bootstrap.v1` receipt records
-this first phase and explicitly reports `complete_candidate_not_performed`.
-Existing targets are never reopened as original proof; uncertainty preserves the
-target/artifact and grants no retry, restart reconciliation, cleanup or serving.
-This command does not also create a legacy v2 import. Full mapping continues in
-this target under the next accepted profile. The old plan command and formats are
-unchanged and remain unable to authorize a complete candidate or authority cutover.
-
-`--stage-source-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY`
-continues the original bootstrap through source-map publication, bounded row import
-and full readback in the same inactive target. It retains one native request,
-deadline, allowance, source/registration custody, protector and output pins through
-final reobservation. The metadata receipt uses `eliot.owner-source-stage.v1` and
-reports `complete_inventory_candidate_not_performed`. Full twelve-family adoption,
-candidate acceptance, cutover and installed qualification remain separate work.
-
+Read [AGENTS.md](AGENTS.md), [FUNCTIONS.md](FUNCTIONS.md), the
+[architecture](../../docs/architecture/README.md) and
+[implementation guide](../../docs/implementation/README.md). Historical DIRECT/sealed/proxy/migration
+commands and their fixtures are deletion inputs, not supported product surfaces.
