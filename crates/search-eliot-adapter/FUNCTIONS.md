@@ -1,141 +1,158 @@
-# Function contract — `search-eliot-adapter`
+# search-eliot-adapter — source audit and removal map
 
-**Status:** optional disabled-by-default P14 compatibility profile; no implementation exists yet.
+This package is optional and disconnected. The standalone Search application and its current local protocol
+must work before any MCP/ELIOT leaf is added.
 
-This leaf maps existing ELIOT provider contracts to generic Search contracts. It owns no ELIOT or
-Search authority/state store and never changes core Search schemas.
+## Current source and caller reality
 
-## `validate_profile_activation`
+| Source/API | Actual behavior |
+|---|---|
+| `src/adapter.rs` | One 19,311-byte state machine for adapter version, installation/incarnation/workspace/grant binding, request admission/replay, cancellation, terminal receipts, drain/close/quarantine and retained terminal history. |
+| `EliotBinding` | Requires `InstallationId`, incarnation, workspace and `GrantId`; these duplicate the retired provider binding/grant model rather than map current Search data. |
+| `EliotRequest` | Adds a caller payload digest and byte count to an already-decoded payload. No real transport/handler is called. |
+| `Admission` / `TerminalReceipt` | Process-local replay and terminal receipt authority. It disappears on restart and is unnecessary for ephemeral query reads. |
+| docs | Promise capability pulses, exact eleven-recipe mapping, source/workspace fences, revocation notices and authority-boundary receipts not implemented by the source. |
+| callers | Repository search found no `search_eliot_adapter::` import and no `EliotAdapter::new` caller outside the package. |
 
-```text
-validate_profile_activation(feature, config, generic_edge_receipt, mapping_receipt, binding_policy)
-  -> Result<EliotAdapterProfile, AdapterError>
-```
+The package depends on `search-contracts`, `search-domain` and the old provider protocol. Connecting it would
+reintroduce the grant/recipe/session operating system being removed by #280/#332.
 
-Requires compiled feature, explicit enablement, accepted generic edge, exact mapping fixture/profile and
-current binding authorization policy. Configuration alone is insufficient.
+## Selected protocol donor
 
-Failure returns profile disabled and does not affect standalone generic Search.
-
-## `map_work_scope`
-
-```text
-map_work_scope(work_scope, disclosure_policy, capability_descriptor)
-  -> Result<EliotRequestedSearchScope, AdapterError>
-```
-
-Produces requested Search scope/domain/ceiling only. It cannot mint a grant, add an invisible
-membership, raise a disclosure ceiling or translate a capability into authority.
-
-Unknown ELIOT scope variants/fields and stale descriptor identity fail closed.
-
-## `map_source_view_and_fence`
+Current upstream inspected on 2026-10-20:
 
 ```text
-map_source_view_and_fence(source_view, workspace_view, state_fence, capability)
-  -> Result<SearchViewAndDependencyRequest, AdapterError>
+MCP specification: 2026-07-28
+official Rust SDK:  rmcp 3.6.0
+release tag:        rmcp-v3.6.0
+commit:             74d789515fdee63ef46a1635b801364aad6695e4
+MSRV:               Rust 1.88
+license:            Apache-2.0
 ```
 
-Preserves exact source view/workspace revision and relevant owner/access/inventory/route/epoch/profile
-dependencies. It cannot substitute latest state, discard unknown dependencies or create a generic opaque
-fence that hides missing load-bearing axes.
+Sources:
 
-## `map_provider_request`
+- [MCP 2026-07-28](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2026-07-28)
+- [rmcp 3.6.0 release](https://github.com/modelcontextprotocol/rust-sdk/releases/tag/rmcp-v3.6.0)
+- [rmcp feature manifest](https://github.com/modelcontextprotocol/rust-sdk/blob/74d789515fdee63ef46a1635b801364aad6695e4/crates/rmcp/Cargo.toml)
+
+The official SDK owns JSON-RPC, initialization/version negotiation, tool schemas, request IDs, cancellation,
+stdio/async-RW transport and protocol errors. Release 3.6.0 includes non-blocking stdio-pipes transport and a
+bounded incoming async-RW line buffer. Do not build a second MCP protocol/session implementation.
+
+Candidate initial feature closure after final lock/advisory review:
+
+```toml
+rmcp = { version = "=3.6.0", default-features = false,
+         features = ["server", "macros", "transport-io"] }
+```
+
+Exclude HTTP/reqwest/OAuth/auth, client/child-process transports, resources, prompts, sampling, elicitation,
+roots, Tasks, subscriptions and unrelated extensions.
+
+## Optional leaf after standalone completion
 
 ```text
-map_provider_request(eliot_query_or_verify, requested_scope, view_fence, budget)
-  -> Result<SearchRecipeRequest, AdapterError>
+MCP host stdio
+→ official rmcp tools-only server
+→ small tool argument/result mapping
+→ same search-provider-client LocalClient as CLI
+→ same current framed daemon protocol
+→ Search / Exact / Continue / Expand handlers
+→ source-backed current result
 ```
 
-Maps only to the exact eleven generic recipes and accepted leaf compatibility labels. It does not add a
-new `eliot.search` authority surface or send client-authored vendor filters.
+One optional binary is sufficient. It owns MCP process lifetime and mapping only. It does not own Search
+session state, source scope, Qdrant, redb, object bytes, planning, ranking or grants.
 
-Client task/admission/finish intent is not serialized into Search request authority.
-
-## `map_capability_pulse`
+Suggested files if implemented:
 
 ```text
-map_capability_pulse(binding_filtered_descriptor) -> EliotLocalProviderCapabilityPulse
+bins/eliot-search-mcp/
+  main.rs
+  server.rs
+  tools.rs
+  client.rs
+  errors.rs
+  limits.rs
 ```
 
-Reports only visible generic capabilities, readiness, freshness and degraded reasons. It cannot expose
-hidden memberships or interpret availability as permission/quality/admission.
+A separate mapping crate is justified only if another real adapter consumes the exact same pure mapping.
+Otherwise delete `search-eliot-adapter` and keep the small mapping in the leaf binary.
 
-## `map_search_result`
+## Closed first tool surface
+
+Expose only working standalone operations:
 
 ```text
-map_search_result(result, original_request, mapping_profile)
-  -> Result<EliotProviderResult, AdapterError>
+eliot_search
+eliot_exact_scan
+eliot_continue
+eliot_expand
 ```
 
-Preserves candidates, immutable source refs/handles, coverage denominator, freshness, assurance,
-validation state, ambiguity/conflicts, gaps and reason codes.
+Mapping:
 
-Output contains no ELIOT memory disposition, canonical admission, verification verdict beyond the exact
-Search proof report, synthesis result, task completion or finish decision.
+- `eliot_search` → current `SearchRequest` and source-backed `SearchResponse`;
+- `eliot_exact_scan` → current bounded `ExactRequest`;
+- `eliot_continue` → `WindowId` + page size;
+- `eliot_expand` → `WindowItemRef` + bounded relative context.
 
-Search failure/degradation maps to narrower coverage/availability and does not synchronously block
-unrelated ELIOT work.
+Do not expose:
 
-## `map_search_revocation_event`
+- generic recipe names or arbitrary JSON pass-through;
+- raw filesystem paths/read/list/glob;
+- Qdrant filters/collections/points/vectors/scores;
+- redb/object/control/internal manifest rows;
+- shell/process/network tools;
+- resources/prompts/sampling/model calls;
+- arbitrary revision offsets or old source handles;
+- unsupported orientation/comparison placeholders.
 
-```text
-map_search_revocation_event(event, imported_influence_refs)
-  -> Result<EliotInfluenceRevocationNotice, AdapterError>
-```
+Add orientation/comparison only after their real source-backed handlers exist.
 
-Maps Search source/purge/owner-generation revocation to a governed ELIOT influence/evidence notice. It
-does not delete ELIOT canonical evidence or mutate ELIOT memory directly.
+## Scope, authentication and lifetime
 
-## `validate_no_reverse_authority`
+MCP stdio reachability does not grant Search scope. Each tool sends explicit selected source IDs/options over
+the same LocalClient. The daemon resolves them against one pinned `PublishedView`. The leaf cannot mint a
+grant, membership, capability or view fence.
 
-```text
-validate_no_reverse_authority(profile_graph, public_api, dependencies)
-  -> Result<AuthorityBoundaryReceipt, AdapterError>
-```
+The host owns the MCP process; the leaf owns one LocalClient connection. MCP cancellation maps to the one live
+Search request. EOF/shutdown cancels bounded work and closes the LocalClient. Query windows stay in the daemon
+and are addressed through the current `WindowId`/`WindowItemRef` types.
 
-Proves:
+If a future remote/restricted profile is selected, its actual authentication/session scope terminates before
+tool mapping and can only narrow the daemon request. Do not revive `EliotBinding`, `GrantId`, payload digests,
+terminal receipts or durable revocation/influence records.
 
-- no ELIOT canonical DB/client or Search store/Qdrant dependency;
-- no canonical credential or reverse write channel;
-- no client-specific type imported into Search contracts/domain;
-- no grant signing/membership mutation/source-owner transition;
-- no memory/admission/finish disposition in output;
-- generic Search contracts remain canonical.
+## Limits and result mapping
 
-## Source ownership
+Apply finite:
 
-Search remains mutable owner of admitted local namespaces. ELIOT stores immutable refs and governed
-influence records. Ordinary mapping cannot transfer ownership. A cutover uses the separate source-owner
-protocol and accepted receipt outside this adapter request/result path.
+- MCP frame/JSON/tool-argument bytes and depth;
+- active request count;
+- selected source/query/page/context sizes;
+- result/card/gap/output bytes;
+- one absolute request deadline and cancellation.
 
-## Idempotency and cancellation
+Return structured current Search results. A text rendering may be a bounded convenience field, not the only
+result. Preserve exact source/revision/location/excerpt, truthful gaps/partial state and window locators.
+Never convert empty partial output into “nothing exists”.
 
-Pure mapping functions are deterministic. Profile activation/deactivation uses daemon operation identity.
-Cancelling a Search request follows generic protocol semantics; the adapter does not fabricate ELIOT
-rollback or retry under a widened/new scope.
+## Remove now or with leaf implementation
 
-## Typed failures
+- `EliotAdapter`, `EliotBinding`, `AdapterProtocolVersion` and `EliotCommand`;
+- payload/request/response digests used only for adapter replay;
+- process-local request/terminal history and replay classification;
+- drain/close/quarantine lifecycle;
+- exact-eleven-recipe/capability/fence/revocation/authority-receipt docs and fixtures;
+- dependencies on old provider protocol/domain authority types;
+- package status/wave/line-target obligations.
 
-- `PROFILE_DISABLED`
-- `CLIENT_ADAPTER_AUTHORITY_VIOLATION`
-- `ELIOT_MAPPING_PROFILE_MISMATCH`
-- `ELIOT_SCOPE_MAPPING_FAILED`
-- `ELIOT_VIEW_FENCE_MISMATCH`
-- `ELIOT_RECIPE_MAPPING_UNSUPPORTED`
-- `ELIOT_RESULT_MAPPING_FAILED`
-- `PROVIDER_COVERAGE_DEGRADED`
-- `REVERSE_WRITE_CHANNEL_DETECTED`
+Do not add another adapter manager, session registry, capability pulse or mapping receipt.
 
-## Required tests
+## Completion boundary
 
-- disabled by default and every activation prerequisite;
-- exact WorkScope/disclosure never-widens mapping;
-- hidden membership not mappable or disclosed;
-- SourceView/WorkspaceViewRevision/StateFence exact fixture and drift rejection;
-- exact eleven generic recipes; no new authority surface;
-- result preserves coverage/gaps/reasons/ambiguity and has no memory disposition;
-- provider failure narrows coverage without unrelated-work failure;
-- revocation maps to notice, not client evidence deletion;
-- no canonical credential/store/reverse-write dependency;
-- generic Search API digest unchanged by enabling adapter.
+This package may be deleted immediately after confirming no caller. Optional #219 closes only after the
+standalone CLI path works and one official-rmcp stdio tools-only leaf maps the four implemented operations
+through the same LocalClient with bounded schemas/results/cancellation and no second authority/state system.
