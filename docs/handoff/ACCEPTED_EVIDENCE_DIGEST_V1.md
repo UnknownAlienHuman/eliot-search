@@ -1,51 +1,25 @@
-# Accepted evidence digest v1
+# Historical accepted-evidence digest v1
 
-`OrderedAcceptedPackageHandoff.evidence_digest` is a semantic digest derived from the exact accepted
-`package_handoff_v1` record. It is not an extra mutable field in that handoff and is not record-path
-identity.
+This profile hashed an accepted package handoff's `evidence[]` array into another canonical SHA-256 identity
+and surrounded it with machine profiles, parity fixtures, wrappers and a qualification workflow.
 
-Machine profiles:
+The current project does not use accepted package handoffs, gates or waves as implementation authority.
+Therefore the digest is redundant: Git commits/PRs and direct raw command/runtime outputs already identify the
+actual evidence when it matters.
 
-- `swarm/accepted-evidence-digest-v1.toml`;
-- `swarm/type-rule-profiles-v1.toml`.
-
-## Input
-
-Read and verify the immutable handoff reference first: repository, commit, path, Git blob ID, exact full
-record SHA-256, signed-payload digest and signature. Then consume the committed `evidence[]` array in its
-exact array order.
-
-Each element has exactly:
+Retire together:
 
 ```text
-requirement_id
-evidence_class
-artifact_ref
-artifact_sha256
-raw_outcome_digest
-availability
+xtask accepted-evidence compute/validate modules
+swarm/accepted-evidence-digest-v1.toml
+related type-rule/context-planner entries
+PowerShell wrappers
+qualification/accepted-evidence fixtures/workflow
+documentation and coverage-map consumers
 ```
 
-`requirement_id` is unique and `artifact_sha256` equals `artifact_ref.sha256`.
+Do not replace it with a new canonical record, signed handoff, review receipt or smaller digest registry.
+Keep real content/artifact hashes and behavior results only where a concrete product/release consumer uses
+them. Historical bytes remain in Git.
 
-## Canonical bytes
-
-```text
-ELIOT_ACCEPTED_EVIDENCE_MANIFEST_1<LF>
-<canonical compact JSON for evidence[0]><LF>
-<canonical compact JSON for evidence[1]><LF>
-...
-```
-
-JSON object keys are lexicographically sorted, UTF-8 is strict, line endings are LF, null/floating-point
-values and unknown fields are rejected. Array order is preserved rather than silently sorted.
-
-The digest is SHA-256 over all manifest bytes, including the magic line and terminal LF. Empty evidence
-is valid and hashes the magic line alone.
-
-## Boundary
-
-This digest is a convenience identity for the reviewed evidence set. The `handoff_ref` remains the
-immutable authority and transitively binds the full handoff, evidence, compatibility and signatures.
-The evidence digest cannot replace exact handoff readback, cannot name a control record and cannot accept
-a package, gate or wave.
+Current tooling direction is [`../../xtask/README.md`](../../xtask/README.md).

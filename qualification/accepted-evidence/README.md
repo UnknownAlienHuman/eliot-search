@@ -1,16 +1,11 @@
-# Accepted evidence digest qualification
+# Historical accepted-evidence digest qualification
 
-Run:
+This directory qualified the retired package-handoff evidence digest. It is not a current product or release
+check.
 
-```powershell
-cargo test --locked -p xtask --test accepted_evidence_parity
-pwsh -NoProfile -File tools/validate-accepted-evidence-digest.ps1
-```
+Delete the parity corpus, workflow, wrappers and xtask modules with the old digest/profile under
+[#214](https://github.com/UnknownAlienHuman/eliot-search/issues/214). Do not preserve frozen vectors or add a
+replacement review/acceptance identity.
 
-The Rust parity suite consumes the frozen byte vectors under
-`fixtures/tooling/accepted-evidence/` and the ten-case qualification inventory.
-It covers deterministic ordering, empty evidence, order sensitivity, duplicate
-requirements, unknown fields, invalid digests, artifact mismatch, invalid
-identifiers, bounds and null/float rejection.
-
-Python is not required. Passing proves only semantic digest-profile conformance.
+When a real release evaluation exists, retain direct finite case/result files and raw command outputs as
+post-product tooling. Product implementation does not wait for accepted-package evidence digests.

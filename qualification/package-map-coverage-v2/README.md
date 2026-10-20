@@ -1,26 +1,21 @@
-# Package-map and relationship coverage v2
+# Historical package-map coverage qualification
 
-Reconcile and validate the reviewed relation graph with the bounded Rust tooling:
+This directory qualified the generated Architecture 8.4 relationship/package-map system. That policy is
+retired under [#214](https://github.com/UnknownAlienHuman/eliot-search/issues/214).
 
-```powershell
-cargo run --locked --quiet -p xtask -- generate coverage-graph --check --json
-cargo run --locked --quiet -p xtask -- generate package-maps --check --json
-cargo run --locked --quiet -p xtask -- validate coverage-graph --json
-cargo run --locked --quiet -p xtask -- validate package-maps --json
-```
-
-Coverage routes are explicit reviewed registries. The generator updates only derived manifest metadata and the human report; it does not assign ownership through lexical similarity or package-name heuristics. A new or changed operation, documentation node or dependency route requires an explicit registry change and review.
-
-The suite checks the complete bidirectional path:
+Do not run or preserve:
 
 ```text
-document / principle / operation
-→ exact reviewed package-local module
-→ Cargo package
-→ Cargo dependency and accepted public handoff
-→ architecture / configuration / recipe / port / schema relations
+xtask generate/validate coverage-graph
+xtask generate/validate package-maps
+xtask validate architecture-coverage*
+validate-function-packets
 ```
 
-It also verifies that every package has one bounded four-file map bundle, every map remains below ten thousand lines, workspace members and internal Cargo dependencies match the machine package registry, and the package dependency graph is acyclic and wave-monotonic.
+The suite proved only that checked-in registries, Markdown headings, declared modules, package bundles and
+Cargo edges agreed with one another. It did not establish implementation correctness, and it now blocks
+package deletion/merging by treating the old topology as authority.
 
-A PASS is static design evidence only. It does not authorize implementation, issue a ticket or lease, accept a package, accept a gate/wave, or prove runtime behavior.
+Delete this qualification directory, its workflow, generated outputs, wrappers and exclusive fixtures with
+the retired commands. Historical reports remain in Git. Current boundaries are checked by Cargo metadata,
+compiler privacy/direct API review and the connected application's behavior.
