@@ -1,22 +1,39 @@
 # Working on search-config
 
-Read the [architecture](../../docs/architecture/README.md) and
-[implementation](../../docs/implementation/README.md). This package should make settings easy to
-understand and use: typed values, defaults, explicit overrides and validation of real fields.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md), package [README](README.md) and
+[source audit](FUNCTIONS.md).
 
-Change the daemon capture, construction and actual setting consumers together. Keep OS/file capture
-at the application edge and dependency effects with their existing owners. A package boundary does
-not require generic descriptors, section hashes, receipt enums or a reload framework.
+Do not repair the generic configuration platform. Replace it with concrete typed settings used by actual
+owners.
 
-Startup constructs the application from accepted settings. It does not apply a change to an already
-running defaults-only application. Do not satisfy `try_activate` with manufactured receipt kinds.
-Only implement hot reload for a concrete supported change; other settings can require restart.
+Use locked `toml` + Serde over a bounded file, `vars_os()` for selected environment fields and one
+`args_os()` parser. Keep paths as OS strings. Merge supported optional fields over defaults and validate
+final values once. Unknown fields/types/ranges fail before constructing any owner.
 
-Use the existing locked TOML/Serde implementation directly for typed decoding; the current event
-adapter and schema are described in [TOML_PROFILE_2.md](TOML_PROFILE_2.md), not frozen requirements.
-Remove replaced parsing/canonicalization machinery with its callers. No legacy decoder or migration
-platform is required for pre-release configuration.
+Startup constructs the application directly. Remove `try_activate`, fingerprints, registry/section digests,
+action DAGs, receipt kinds, mandatory secret section and accepted-readiness receipts. Do not manufacture a
+`LiveApply` receipt to accept startup values.
 
-Check meaningful behavior when implementing: precedence reaches the real consumer, invalid settings
-fail before construction, paths remain OS strings, file reads are actually bounded, and status reports
-the running settings. A fingerprint, source-line quota or authored fixture does not prove this.
+Retain only supported concrete settings:
+
+- root/source locations and real source policy fields;
+- storage profile;
+- Qdrant endpoint/optional managed settings;
+- lexical/retrieval profile;
+- query defaults;
+- selected optional profiles with real handlers.
+
+Implement hot reload only for a concrete owner operation. Otherwise require restart. Profile/schema changes
+use publication; external uncertainty remains with that owner. Persist one current typed value only when
+restart must remember a runtime-applied change—never a completed config operation history.
+
+Status serializes running settings and actual component readiness. It does not rebuild/redact a generic
+snapshot, hash it or require acceptance booleans.
+
+Change daemon capture/construction/status and setting consumers together, then delete generic parser/tree/
+registry/snapshot/fingerprint/diff/plan/redaction APIs and their fixtures. If little shared code remains,
+delete this crate rather than preserve a facade.
+
+After code run minimal Rust 1.98 compiler/Clippy for actual config/control/daemon/consumer targets and focused
+precedence/bounds/non-Unicode/file-ceiling/status/live-vs-restart cases.

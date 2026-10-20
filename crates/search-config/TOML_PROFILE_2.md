@@ -1,39 +1,125 @@
-# Configuration TOML: existing format and simpler replacement
+# Configuration TOML — one bounded typed file
 
-Read the [implementation map](FUNCTIONS.md). `eliot-config-toml@2` describes the current Rust parser;
-it does not freeze a pre-release grammar or require a compatibility/migration subsystem.
+The old `eliot-config-toml@2` grammar is an implementation artifact, not a compatibility contract. Replace its
+custom event receiver and generic document builder with the locked high-level TOML/Serde decoder over a small
+bounded file.
 
-## Existing decoder
+Read the [source audit](FUNCTIONS.md) and [configuration guide](../../docs/config/README.md).
 
-`parse_document` uses the locked `toml_parser =1.1.4` event API and Search's `DocumentBuilder`.
-It requires UTF-8, no BOM, root `schema_version=2` and `profile` before flat bare-name tables. Values
-are booleans, decimal i64, single-line strings and flat string arrays. Dotted/quoted keys, nested/inline/
-array tables, multiline strings, non-decimal numbers, floats and datetimes are rejected. Schema1 is
-unsupported. These are current implementation restrictions, not product requirements.
+## Current decoder cost
 
-Current W1 limits include a 1 MiB input, 16,384 logical lines, 131,072 tokens, 4 MiB logical token
-storage, 256 sections and 8,192 entries. Additional identifier/value/list and canonical-CBOR ceilings
-apply. They describe this adapter's accounting; they are not measured process memory or I/O latency.
-Do not carry the full budget taxonomy into a finite settings decoder without a real requirement.
+The existing path uses `toml_parser` events, custom syntax callbacks, a double-pass string decoder, generic
+`ConfigDocument`, layer operations, dynamic section/field descriptors and later canonicalization. It requires:
 
-## Use the existing high-level donor
+- UTF-8 and no BOM;
+- root `schema_version=2` and `profile` before flat tables;
+- flat bare-name sections/keys;
+- booleans, decimal i64, single-line strings and flat string lists only;
+- rejection of ordinary TOML dotted/quoted/nested/inline/array tables, multiline strings, floats/datetimes and
+  non-decimal integers.
 
-`Cargo.lock` already contains `toml 1.1.7+spec-1.1.0`; `xtask` uses its `std,serde,parse` features.
-The production config package currently depends only on `toml_parser`, so the direct typed decoder
-still needs integration. This is not a version-upgrade proposal.
+Its W1 budget vocabulary allows up to 1 MiB, 16,384 lines, 131,072 tokens, 4 MiB logical token storage, 256
+sections and 8,192 entries plus additional canonical-CBOR limits. These ceilings describe the generic adapter,
+not a measured need for local settings.
 
-- [Public decoding API](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/mod.rs): `toml::from_slice::<FileSettings>` / `from_str` with Serde derives.
-- [Deserializer](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/deserializer/mod.rs): parses a `DeTable` before visiting the target struct.
-- [Parser](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/parser/mod.rs): allocates token/event vectors and a document tree; its default recursion limit is 80. Keep `unbounded` disabled.
+## Selected donor
 
-The tag `toml-v1.1.7` resolves to this inspected commit. The donor is **not streaming** and typed
-output does not prevent its intermediate allocations. Bound file bytes before decoding, keep concrete
-field/list limits and inspect the bounded worst case during integration. For a small local settings
-file, this documented overhead is a reasonable trade for removing the custom receiver, double string
-decoding and generic document machinery. No memory benchmark was run in this documentation pass.
+`Cargo.lock` already includes `toml 1.1.7+spec-1.1.0`; `xtask` uses its `std,serde,parse` features. Production
+`search-config` currently depends only on `toml_parser`, so direct `toml` and `serde` dependencies must be
+added to the actual owner during implementation.
 
-Decode into the actual settings fields, merge optional overrides over defaults, reject unknown fields
-and validate values before owner construction. Use ordinary TOML syntax supported by the donor and
-the selected types. No legacy fingerprint restoration, schema migration table, syntax receipt or
-per-file cryptographic provenance is required. A clear unsupported-format error leaves the original
-file unchanged.
+Inspected donor:
+
+- [`toml::from_slice`](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/mod.rs)
+- [deserializer](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/deserializer/mod.rs)
+- [parser](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/parser/mod.rs)
+
+The donor builds token/event/document structures before visiting the target type. It is not streaming. Keep a
+small file-byte bound and the default recursion guard; do not enable `unbounded`. For local settings this is a
+reasonable trade for deleting the custom grammar and generic configuration OS. No memory benchmark is claimed.
+
+## Target file
+
+The exact supported fields follow actual owners. Illustrative shape:
+
+```toml
+[instance]
+data_root = "..."
+
+[storage]
+protection = "plain"
+
+[source]
+roots = ["..."]
+allow_generated = true
+
+[qdrant]
+mode = "external"
+endpoint = "http://127.0.0.1:6333"
+connect_timeout_ms = 5000
+
+[lexical]
+profile = "qdrant-bm25-v1"
+
+[query]
+default_limit = 10
+max_page_size = 50
+```
+
+Optional managed Qdrant or model/document profiles add only fields their selected implementation consumes.
+There is no universal `[secrets]`, control migration epoch, gate acceptance or capability registry section.
+
+Use nested structs with `#[serde(deny_unknown_fields)]`. File layer fields are `Option<T>` where absence means
+use default/another override. Validate after merge:
+
+- paths/URLs and closed enums;
+- integer/item/string bounds;
+- source root count and duplicates/nesting policy;
+- timeout/output ceilings;
+- selected profile compatibility with constructed owners.
+
+Do not expose plaintext credentials in the ordinary file. Concrete local secret sources supply the optional
+Qdrant/restricted/storage credential directly to their owners.
+
+## Capture and bounds
+
+```text
+open selected file once
+→ verify selected regular/no-follow policy on that object
+→ read at most max_file_bytes + 1
+→ reject overflow
+→ toml::from_slice<FileSettings>
+→ validate typed field/list bounds
+```
+
+A practical default may be tens or hundreds of KiB, not the old 1 MiB/131k-token grammar allowance; choose
+from actual documented settings and tests. `Read::take` limits bytes, not wait time. Startup file reads may be
+synchronous for a selected local regular file.
+
+Use `vars_os()` for environment capture and convert only known selected textual values. Keep config/data/source
+paths as `PathBuf` through CLI/file ownership. CLI/env override syntax may remain small and field-specific;
+do not reconstruct arbitrary dotted-key TOML or a generic map.
+
+## No compatibility platform
+
+This is a pre-release configuration. Unsupported old files fail clearly and remain unchanged. Do not add:
+
+- schema1/schema2 migration;
+- old profile/fingerprint restoration;
+- custom canonical ordering/bytes;
+- section descriptors or ownership digests;
+- syntax/provenance receipts;
+- duplicated parser for env/CLI;
+- a legacy decoder fallback.
+
+Change the actual CLI/daemon reader and current configuration file/examples together.
+
+## Focused verification
+
+- defaults and supported file/env/CLI precedence;
+- ordinary TOML strings/arrays used by supported fields;
+- unknown/duplicate/type/range-invalid fields;
+- oversized/deep/large-list input before unbounded retention;
+- non-Unicode unrelated environment and OS paths;
+- no plaintext credential in parsed/serialized diagnostics;
+- every documented field reaches a real consumer.
