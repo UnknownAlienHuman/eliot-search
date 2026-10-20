@@ -1,15 +1,19 @@
-# Concrete Windows provider byte transport
+# Working on Windows provider transport
 
-Own only one non-Clone local client pipe handle and synchronous byte I/O.
-The selected name comes from NativeEndpointNameV1. No arbitrary File/handle,
-path, host, discovery, fallback, listener, parser, credential or grant API.
+This package is optional. Read the [local protocol](../../search-provider-protocol/README.md),
+[CLI cutover](../../../bins/eliot-search/FUNCTIONS.md) and local [boundary](FUNCTIONS.md).
 
-Only src/windows.rs may allow unsafe for checked synchronous Kernel32 calls.
-Callers do not inherit that exception. The private handle has no clones,
-extraction API, background operations or outstanding overlapped I/O.
+Implement child stdio first under #332. Keep this package only if a persistent owner-only Windows pipe is an
+actual selected product route.
 
-Connection/type/locality are not authentication. Pairing and policy remain in
-the provider/client and daemon owners. Deadline checks observe the caller's
-original Instant; no native hard real-time guarantee or async I/O claim.
+If retained, own one admitted non-clone pipe handle and synchronous byte I/O only. The platform/connection
+owner establishes real user/installation identity before handing the endpoint to this package. Pipe name,
+reachability and byte mode are not authentication.
 
-Focused fixtures belong here. Native/installed qualification remains #332/#215.
+Use the original absolute deadline/cancellation, preserve partial counts, distinguish would-block/EOF and
+keep diagnostics content-free. Do not add pairing, grant, protocol parsing, endpoint discovery, TCP/token
+fallback, arbitrary handles, listener/process lifecycle, reconnect, pooling or receipts.
+
+If no persistent pipe consumer remains after child-stdio integration, delete the package and its native
+registration/listener callers rather than preserving a second transport. After code run minimal Rust 1.98
+compiler/Clippy for actual consumers and native checks only for the selected profile.

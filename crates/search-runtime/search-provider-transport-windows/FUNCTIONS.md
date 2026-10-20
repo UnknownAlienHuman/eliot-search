@@ -1,16 +1,41 @@
-# Function contract
+# Windows pipe effect boundary
 
-`NativeLocalConnection::open(endpoint, absolute_deadline)` opens exactly the
-canonical local Windows client pipe once, with identification SQOS and no wait,
-retry or fallback. Reject expired budget and non-byte/server pipe shape.
-No public arbitrary handle adoption. Success creates no authority.
+`NativeLocalConnection` is optional infrastructure for a selected persistent local pipe. The baseline
+child-stdio client does not depend on it.
 
-Read/Write each perform one synchronous PIPE_NOWAIT operation. Read error 232
-becomes WouldBlock, 109/233 becomes EOF. Nonempty zero-progress byte writes
-become WouldBlock. Other failures discard raw OS diagnostic text.
-Partial I/O consumes only reported bytes; the existing typed engine retains
-framing, cancellation, retry quantum and absolute operation deadlines.
+## Retained API, if selected
 
-Flush is a no-op because this owner has no userspace write buffer. It is never a
-peer acknowledgement/durability receipt. Drop closes only this handle and
-never rolls back a peer-visible write. Non-Windows opening is explicitly unsupported.
+```text
+open(admitted_endpoint, absolute_deadline) -> NativeLocalConnection
+read_once(buffer, absolute_deadline/cancel) -> bytes | would-block | EOF
+write_once(bytes, absolute_deadline/cancel) -> count | would-block
+close/drop
+```
+
+Concrete names may stay while useful. Rules:
+
+1. The caller/platform owner supplies an already admitted endpoint and real OS-owner/installation decision.
+2. Open exactly once; no discovery, retry loop, alternate endpoint, TCP or token-file fallback.
+3. Retain one non-clone handle; no arbitrary public `File`/raw-handle constructor or extraction.
+4. Validate byte-pipe/local shape available from Windows. Pipe locality/name alone is not authentication.
+5. Partial I/O advances only the reported bytes. `WouldBlock` and EOF are distinct.
+6. All polling uses the caller's original absolute deadline/cancellation; no phase renews time.
+7. `flush` is no peer acknowledgement and no durability/rollback evidence.
+8. Drop closes only this handle and claims no remote effect rollback.
+9. Errors are stable/content-free; raw pipe paths, handles and source/query bytes do not enter diagnostics.
+
+Protocol framing, request correlation, cancellation, partial-output fail-stop and one terminal response belong
+to `search-provider-protocol`/client. Restricted-client credentials/session policy belong to their selected
+adapter.
+
+## Deletion boundary
+
+If #332 ships only child stdio, remove:
+
+- this package;
+- native client registration/credential/end-point resolver used only for it;
+- daemon native pipe listener/opening/grant composition;
+- old pairing/profile expectations and compatibility fixtures.
+
+If retained, remove all APIs beyond the small byte-stream effect above. Do not make the optional pipe a
+second protocol or product-readiness gate.

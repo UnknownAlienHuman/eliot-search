@@ -1,21 +1,40 @@
-# search-revision-crypto
+# search-revision-crypto — unconnected candidate, not a permanent subsystem
 
-Authenticated encryption boundary for immutable source-revision bytes.
+This 19.3 KiB AES-256-GCM package has no incoming public-main Rust dependency/caller. Source comments in the
+revision store mirror its proposed envelope, but no checked-in writer/reader invokes it.
 
-The package uses AES-256-GCM with a fresh operating-system random 96-bit nonce.
-Associated data binds every ciphertext to:
+Do not treat source presence, a workspace member or planned consumers as a delivered encrypted storage
+profile. Universal key lifecycle/migration issue #309 is closed `not_planned`.
 
-- monotone data-encryption-key generation;
-- stable source plus immutable revision identity digest;
-- complete object-residency key digest;
-- encryption/profile digest;
-- plaintext SHA-256 and exact byte length.
+## Disposition
 
-The binary envelope is versioned, bounded, strictly decoded, and rejects trailing,
-truncated, unknown-version, unknown-algorithm, cross-revision, cross-residency,
-and modified ciphertext.
+Preserve #598's active private work and wait for its accepted public handoff.
 
-`RevisionKey` and decrypted `PlaintextRevision` buffers are redacted and zeroized
-on drop. The key has no persistence method. On Windows its exact 32 bytes are to
-be wrapped by `search-os-secrets-windows`; only the DPAPI-protected key and the
-AES-GCM revision envelope may be stored durably.
+- If that handoff directly uses this codec for the selected current encrypted immutable-object format,
+  simplify it with the actual writer/reader and move it beside that object boundary if a separate crate is
+  unnecessary.
+- If it uses another accepted object/key format, delete this package, its mirrored revision-store binding
+  assumptions and documentation.
+- Do not keep it for hypothetical rotation, migration, backup or future providers.
+
+## Requirements if retained
+
+Only the concrete current format matters:
+
+- accepted algorithm/key/nonce size and one exact versioned envelope;
+- nonce uniqueness policy owned by the actual writer;
+- authenticated header/AAD binding the identities required to prevent substitution;
+- exact finite plaintext/ciphertext bounds;
+- wrong key/binding, tamper, truncation and unknown version fail closed;
+- key/plaintext ownership is finite and redacted with best-effort clearing, not secure-erasure claims;
+- same bytes flow from acquisition to encryption to immutable persistence/readback;
+- decryption returns bytes only to the verified object reader;
+- no current/candidate/retiring key roles, generic references, usage ledgers or cross-root re-encryption unless
+  a later measured product requirement explicitly adds them.
+
+A plain fresh-root profile does not depend on this package. An old encrypted root may use a narrow explicit
+legacy reader/export path and does not force this format onto new objects.
+
+After the #598 handoff, run minimal compiler/Clippy and exact object round-trip/restart/tamper/wrong-binding/
+nonce-policy tests through the real immutable-object owner. Package-only crypto fixtures are not product
+integration.

@@ -1,23 +1,44 @@
-# Windows provider byte transport
+# Windows local pipe transport — optional persistent profile
 
-Concrete OS effect owner used by the CLI's existing private typed stream seam.
-No session or protocol logic is duplicated here. #380 implements the source
-foundation; #373/#235 still own the reusable API and engine extraction, and #332
-owns native server, command cutover and compatibility removal.
+This small package owns one concrete Windows client pipe handle and synchronous byte I/O. It is not the
+baseline CLI path and owns no protocol, pairing, grant, endpoint discovery or access policy.
 
-Synchronous PIPE_NOWAIT polling is deliberate; it is not overlapped or async I/O.
-If an empty/closed pipe reports ERROR_NO_DATA, the engine retains the original
-deadline and conservative unknown outcome. Successful open/flush is not evidence
-of pairing, grant acceptance, peer receipt or rollback.
+The first working local product uses owned child stdin/stdout under #280/#332. Keep this package only if a
+persistent owner-only Windows pipe is selected after that path works.
 
-Spec references (verified 2026-10-10):
+## If retained
 
-- [Microsoft pipe modes](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-type-read-and-wait-modes)
-- [GetNamedPipeInfo](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-getnamedpipeinfo)
-- [SetNamedPipeHandleState](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-setnamedpipehandlestate)
-- [CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
-- [Rust 1.98 Windows File implementation](https://github.com/rust-lang/rust/blob/1.98.0/library/std/src/sys/fs/windows.rs)
+The platform owner, not this package's pipe name alone, must establish that the connected server belongs to
+the expected OS user/installation. This package then:
 
-Focused pure/deadline fixtures are AUTHORED_NOT_RUN. Native wrong-user, foreign
-server, pipe mode, backpressure, cancellation, EOF and installed end-to-end
-qualification remains unperformed Q/#332/#215.
+- opens one explicitly supplied canonical pipe endpoint once;
+- retains one non-clone owned handle;
+- checks byte-pipe/local shape available from the OS;
+- performs finite partial reads/writes under the caller's original absolute deadline/cancellation loop;
+- maps EOF/would-block/content-free OS failures;
+- closes only its handle.
+
+Connection success is not authentication, source authority, a grant, a peer acknowledgement or rollback
+proof. A selected restricted-client adapter authenticates separately and terminates into the same current
+framed dispatcher.
+
+## Remove if not selected
+
+Delete the package, native registration/credential constructors and pipe-listener scaffolding if child stdio
+remains the shipped local route. Do not keep it as a mandatory second transport, compatibility facade or
+future plugin seam.
+
+Do not add:
+
+- pairing/MAC/grant logic;
+- endpoint files/token files/TCP fallback;
+- arbitrary handle adoption;
+- listener/process lifecycle;
+- background threads, reconnect or pooling;
+- durable connection receipts.
+
+## Verification
+
+Only for a selected persistent-pipe profile: actual same-owner connection, wrong-user/foreign-server refusal
+in the platform owner, byte mode, partial I/O, would-block, deadline/cancel, EOF, backpressure and handle
+cleanup through the current framed protocol. Source presence and pure fixtures are not installed behavior.
