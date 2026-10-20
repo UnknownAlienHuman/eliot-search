@@ -1,24 +1,44 @@
-# search-projection-planner
+# search-projection-planner — bounded pages, not a whole-corpus proof
 
-Turn one verified prepared view into bounded Qdrant work and a versioned published-view manifest.
+Turn one current prepared-unit stream into bounded Qdrant operation pages and versioned evidence bindings.
+Do not build another source authority, complete in-memory manifest, publication journal or compatibility
+contract.
 
-Current planning is pure and checks complete UnitSet/vector coverage, but returns one whole plan. It drops
-uploadable vector values, caps a whole manifest below advertised planner limits, reconstructs canonical
-bytes repeatedly and mixes retrieval-point identity with current source evidence.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation guide](../../../docs/implementation/README.md), [exact audit](FUNCTIONS.md),
+[point identity](../search-point-identity/S11_PROFILE.md) and
+[publication](../search-publication/FUNCTIONS.md).
 
-The target emits ordered pages containing:
+## Verified current defect
 
-- stable retrieval points and actual BM25/vector mutation input;
-- `ViewManifestEntry` records mapping points to exact source revision/representation/range;
-- exact create/retain/retire or whole-generation replacement work;
-- expected Qdrant readback fields that the bridge can actually verify.
+Production source is 64,388 bytes, but its principal APIs are connected only to planner/publication tests.
+`PublicationAdmissionOwners` has no production implementation.
 
-An unchanged retrieval point may be retained while the new view writes a new evidence binding. Changed
-input/profile/occurrence incarnation creates a new point. Old pinned views keep their old manifest. Planner
-code performs no durable or external effect.
+The current plan receives actual vectors, hashes them, then drops them. It returns payload bytes and vector
+digests which cannot upload either native BM25 text or the original vectors. It advertises 100,000 points /
+64 MiB while the manifest codec caps one object at 4,096 entries / 8 MiB after points were already built.
+It also binds point/scoring identity to revision, representation and current Unit ID, mixes evidence into the
+point entry and repeatedly copies/encodes whole manifests.
 
-Use a merge walk over sorted pages, not whole-corpus maps and repeated canonical trees. A new internal
-format can replace current pre-release bytes with all readers/writers together.
+## Target
 
-[FUNCTIONS.md](FUNCTIONS.md) · [Point identity](../search-point-identity/S11_PROFILE.md) ·
-[Implementation](../../../docs/implementation/README.md) · [Agent notes](AGENTS.md)
+```text
+prepared units sorted by stable point identity
++ old point/view page iterator
+→ bounded PointMutation[] with actual BM25 text/options or actual vectors
+→ bounded ViewBinding[] with exact ObjectRef/revision/range
+→ exact close/retain/create result
+→ immutable operation pages
+```
+
+Scope/profile/route facts live once in the operation header. Stable point state and versioned evidence binding
+are diffed separately. A source-coordinate shift may retain the point and write a new binding; changed
+retrieval input/profile/incarnation creates a new point.
+
+Use a two-way merge over sorted pages. Enforce point/encoded-byte limits before growth and poll one absolute
+context between pages. Publication persists/apply/readbacks the pages; query resolves published bindings.
+Planner code performs no redb/Qdrant effect and issues no receipt.
+
+Delete complete plans/manifests, vector-digest substitution, generic canonical trees, full-map diff,
+revision-bound scoring identity and fixture-only publication admission. If only a small page builder/merge
+remains, merge it into preparation/publication rather than preserve the package name.

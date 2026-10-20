@@ -1,25 +1,33 @@
 # Working on search-projection-planner
 
-Read the root [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md) and local [function map](FUNCTIONS.md).
-Change preparation, point identity, publication, bridge and query lookup together when their shared data
-model changes.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation guide](../../../docs/implementation/README.md), [source/caller audit](FUNCTIONS.md) and
+[publication map](../search-publication/FUNCTIONS.md).
 
-The planner owns pure bounded transformation from one verified prepared view into:
+Do not repair or version the current whole `ProjectionPlan`, canonical manifest, vector-digest proof,
+revision-bound scoring identity or `PublicationAdmissionOwners` seam. Their production path is disconnected
+and they cannot upload the data they claim to plan.
 
-- stable retrieval-point definitions and uploadable inputs;
-- versioned evidence bindings for the new published view;
-- exact create/retain/retire work;
-- ordered manifest/change pages for publication.
+Change preparation, identity, bridge, publication and query together:
 
-Do not preserve current S11/S9.5 bytes, revision-bound Unit IDs or a whole in-memory manifest merely because
-existing fixtures expect them. Source revision/range belongs in the view binding, not point identity or
-mutable Qdrant citation payload.
+```text
+one current prepared unit stream
+→ stable point identity
+→ actual native BM25 text/options or actual selected vectors
+→ exact versioned evidence binding
+→ bounded ordered operation pages
+→ publication apply/readback
+```
 
-Build pages once and pass their actual text/vector input to the bridge. Diff sorted point state separately
-from view evidence; do not allocate two maps, clone all entries and hash another whole old/new preimage.
-Planner code performs no redb/Qdrant effect and issues no receipt.
+Keep scope constants once in the operation header. Diff stable point state separately from view evidence by
+merge-walking sorted page iterators. Enforce page point/byte limits before allocation growth and checkpoint the
+same absolute deadline/cancellation between pages. Never allocate both complete old/new manifests, construct a
+generic canonical tree or hash values as a substitute for uploadable input.
 
-Verify a top-of-file insertion retains unaffected points, old/new views open their own exact ranges,
-changed retrieval input creates a new point and batching preserves complete membership. Historical codec
-bytes, package size or an old API boundary are not acceptance criteria.
+The planner owns no redb/Qdrant effect, current view, receipt or recovery state. Remove fixture-only owner
+traits, full reconstruction checks and pre-release codec goldens with their callers. If the surviving page
+builder and merge are small, move them to preparation/publication and delete the package.
+
+After code, run minimal Rust 1.98 check/strict Clippy for changed preparation/identity/planner/publication/
+bridge/query consumers and focused page/identity/incremental cases. Measure peak page memory and actual Qdrant
+writes, not only digest equality.
