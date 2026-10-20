@@ -1,47 +1,55 @@
 # Qdrant adapter boundary
 
-Qdrant is the only indexed backend. Keep its SDK private to one adapter so a vendor API change does not
-spread through source/query/result code. The [current architecture](../architecture/README.md) defines
-the local baseline; this is an implementation boundary, not a security principal or a custom compiler.
+Qdrant is the only indexed backend. Keep its SDK private to one adapter so vendor changes do not spread
+through source/query/result code. This is an implementation boundary, not a security principal,
+qualification authority or process manager.
 
-## Keep the actual boundary
+## Runtime boundary
 
-- Only the bridge depends directly on `qdrant-client`; use the pinned workspace dependency.
-- Keep vendor request/response/filter types private and expose the small application API needed by real
-  publication/query callers. Review that API when it changes.
-- The runtime owns the actual Qdrant child, endpoint and credential. The bridge performs RPC translation.
-- Check endpoint/owner binding, authenticated API access, version/build and the selected collection schema
-  through real operations. Do not use a caller-supplied test report as runtime authority.
-- Keep bounded upsert/query/readback, shared eligibility/IDF, exact source validation and explicit unknown
-  mutation outcomes. Vendor status text is not an operator-safe structured application error by itself.
+- Only `search-qdrant-bridge` depends directly on `qdrant-client`.
+- Keep vendor request/response/filter/schema types private and expose only the concrete operations used by
+  publication/query.
+- Baseline daemon composition supplies a configured endpoint plus optional actual credential. The bridge owns
+  one client/runtime for both publication and query.
+- Startup observes the current server/version/capabilities and verifies the exact selected physical
+  collection generation/schema. A historical probe report or executable hash is not a constructor token.
+- Managed child ownership is optional. If selected, a small concrete process owner supplies the endpoint and
+  actual child lifetime; it does not change the bridge API or add qualification receipts.
+- Keep bounded full/narrow mutation, query and exact readback with one absolute deadline/cancellation.
+  Possible mutation effects remain unresolved for publication to observe; reads commit nothing.
 
-Use the existing Cargo metadata adapter to check actual dependency ownership, including renamed/target
-entries. Rust visibility and review of the changed public API keep the vendor surface narrow. Compile
-actual callers. There is no need for another import/module/alias/taint analyser in the product repository.
+Use ordinary Cargo metadata and Rust visibility to keep the SDK local. Compile actual consumers and review the
+small application API. There is no need for another import/module/alias/taint analyser.
 
 ## Retire the partial source analyser
 
 `xtask/src/qdrant_boundary/source.rs` and `source/**` contain 16 Rust files / 3,293 physical lines at
-c8e38b6, including test-named and other inline/regression test code. They tokenize Rust, reconstruct
-imports/aliases/module graphs and propagate vendor-type reachability. The old contract admitted that
-macro-generated directives, conditional module selection, shadowing and other Rust forms still needed
-compiler checks/review. Growing that partial language implementation is not the search product.
+`c8e38b6`, including fixtures. They tokenize Rust, reconstruct imports/aliases/module graphs and propagate
+vendor-type reachability while still relying on compiler/review for macros, conditional modules, shadowing and
+other language behavior.
 
-Under #214 remove this analyser and its dedicated shape fixtures/command coupling. Keep useful Cargo
-metadata, pin consistency and actual adapter behavior checks. A public SDK leak should be fixed in the
-adapter API; do not build another policy framework to prove it impossible across every Rust spelling.
-Source token/file-size/module-name assertions and historical package-status requirements are no longer
-merge prerequisites. Do not recreate them as an AST or rustdoc approval catalogue.
+Under #214 remove this analyser and its shape/command coupling. Keep useful Cargo dependency pin/ownership
+checks and actual adapter behavior. A public SDK leak is fixed in the adapter API; do not build another Rust
+language implementation to certify every spelling.
+
+## Process lifecycle is separate and optional
+
+The current `search-qdrant-supervisor` is about 90.7 KiB of production Rust and has no product caller. It
+models artifact qualification, owner/secret/containment receipts and restart/quarantine. Its own source states
+that it cannot apply Windows Job Object/ACL APIs and accepts caller-created evidence instead.
+
+Baseline product integration connects to a configured local Qdrant endpoint. Optional managed-child mode may
+later own an actual spawned process handle/platform child-tree guard, private config and bounded shutdown. It
+must use this bridge for authenticated readiness and cannot block #263/#264. See
+[`search-qdrant-supervisor/FUNCTIONS.md`](../../crates/search-index-qdrant/search-qdrant-supervisor/FUNCTIONS.md).
 
 ## Qdrant changes and evidence
 
-When changing the vendor release, update its selected dependency/artifact, adapt private translation and
-check the real calling path and schema behavior. Keep installed artifact/version information in one
-existing place; only add runtime observations that actual operations use. Source-format restrictions on
-how a version constant is spelled are not a release contract.
+When changing the vendor release, update the selected dependency/artifact, adapt private translation and run
+the connected schema/query/mutation behavior. Release/upgrade evidence records what actually ran; it is not
+stored as runtime authority.
 
-Run relevant bridge/consumer compilation and behavior tests after implementation. Execute the selected
-live suite to establish query/IDF/schema/mutation/restart claims. Keep those reports in evaluation/release;
-remove the `QualifiedGate` test-outcome parameter from runtime construction with its consumers, without
-fabricating a passing receipt. Normal startup verifies its current service and schema, not its own future
-acceptance report. Compilation or a source-pattern match does not qualify a live server.
+Normal startup verifies its current service and selected schema. Compilation, source-pattern matching, a
+matching version string or a past qualification report does not qualify a live server. Likewise, missing
+release paperwork cannot disable an otherwise observed development endpoint while the product is being
+implemented.

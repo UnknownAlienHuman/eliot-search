@@ -1,57 +1,85 @@
-# `[qdrant_process]` configuration contract
+# Qdrant connection/process configuration
 
-- **Owner:** `search-qdrant-supervisor`
-- **Earliest wave:** W3
-- **Section minimum:** `RESTART_DEPENDENCY`
-- **Secret policy:** `opaque_refs_only`
-- **Canonical source:** `docs/config/CONFIGURATION_1.0.md`
+This replaces the old W3 `[qdrant_process]` qualification contract. Configuration selects a live endpoint
+and, optionally later, a small managed-child convenience. It does not create runtime artifact/probe receipts.
 
-This packet is the bounded read set for the section owner. It does not authorize implementation or
-override `swarm/launch-state.toml`.
+## Baseline endpoint mode
 
-## Fields
+The first product needs only values consumed by the real bridge:
 
-| Key | Type | Default / bound | Override | Minimum action |
-|---|---|---|---|---|
-| `enabled` | `bool` | `false in DIRECT` | `file, CLI` | `RESTART_DEPENDENCY` |
-| `artifact_path` | `local absolute path` | `required when enabled` | `file` | `RESTART_DEPENDENCY` |
-| `expected_sha256` | `Sha256Digest32` | `required when enabled` | `file` | `RESTART_DEPENDENCY` |
-| `expected_version` | `BoundedText` | `required when enabled` | `file` | `RESTART_DEPENDENCY` |
-| `api_secret_ref` | `SecretRef` | `required when enabled` | `file, whitelisted env` | `RESTART_DEPENDENCY` |
-| `port` | `u16` | `0 supervised selection; loopback only` | `file` | `RESTART_DEPENDENCY` |
-| `startup_timeout_ms` | `u64` | `30000; bounded` | `file` | `APPLY_LIVE for next start` |
-| `health_timeout_ms` | `u64` | `2000; bounded` | `file` | `APPLY_LIVE` |
-| `restart_max_attempts` | `u8` | `3; 0..10` | `file` | `APPLY_LIVE` |
-| `restart_window_ms` | `u64` | `300000; bounded` | `file` | `APPLY_LIVE` |
-| `auto_download` | `bool` | `false; fixed` | `none` | `REJECT` |
-| `auto_upgrade` | `bool` | `false; fixed` | `none` | `REJECT` |
-
-## Required section API
-
-```text
-section_descriptor() -> ConfigSectionDescriptor
-compiled_defaults() -> ConfigSectionInput
-validate_section(input, platform, accepted_capabilities) -> Result<ValidatedSection, ConfigError>
-section_digest(validated) -> Blake3Digest32
-plan_section_change(old, new) -> Result<SectionReloadDecision, ConfigError>
-apply_live_change(old, new, context) -> Result<ConfigApplyReceipt, ConfigError>
+```toml
+[qdrant]
+mode = "external"
+endpoint = "http://127.0.0.1:6333"
+# api_key = supplied by the selected local secret/config owner when enabled
+connect_timeout_ms = 5000
 ```
 
-`apply_live_change` is legal only for fields whose final action is `APPLY_LIVE`. Restart, security
-barrier, rebuild, collection-generation and gate actions are executed by daemon orchestration.
+Required behavior:
 
-## Invariants
+- endpoint must be an explicitly selected local/allowed address;
+- optional API key is an actual credential passed to the bridge, not a purpose/lease/equality record;
+- startup connects and observes the current server/version/capabilities;
+- publication verifies the exact selected collection generation/schema;
+- static changes require restart;
+- no automatic download, upgrade, fallback or provider switching.
 
-- enabled requires exact path/version/SHA-256/SecretRef and accepted qualification
-- bind is loopback-only and process identity is verified
-- automatic download/upgrade and plaintext credentials are impossible
+No `expected_sha256`, executable receipt, qualification digest, restart window or artifact path is required
+for external mode. Packaging/release tooling may record exact server bytes separately.
 
-## Required tests
+## Optional managed-child mode
 
-- defaults validate and produce a stable section digest;
-- every field boundary and override source is tested;
-- unknown keys and wrong types fail closed;
-- the owner never accepts plaintext secrets or foreign section keys;
-- a field cannot be assigned a weaker action than this packet;
-- redacted diagnostics contain no secret, source/query content or raw path;
-- equal validated inputs produce equal digests and reload decisions.
+Add only when a shipped standalone profile requires it:
+
+```toml
+[qdrant]
+mode = "managed"
+endpoint = "http://127.0.0.1:6333"
+connect_timeout_ms = 5000
+
+[qdrant.managed]
+executable_path = "..."
+data_dir = "..."
+http_port = 6333
+grpc_port = 6334
+startup_timeout_ms = 30000
+shutdown_timeout_ms = 10000
+```
+
+The implementation owns only the child it spawns. It may generate a private config and actual API key, but
+must not expose them in argv/logs. On Windows, managed mode requires a real Job Object/child-tree platform
+adapter; caller booleans/digests are not sufficient. Without that adapter, managed mode is unsupported while
+external mode remains available.
+
+First managed profile has no automatic restart. Unexpected exit makes Qdrant unavailable and preserves data;
+restart policy may be added later only from a measured need.
+
+## Parsing and application
+
+Use the ordinary typed TOML/Serde configuration owner:
+
+```text
+parse bounded section
+→ reject unknown/wrong fields
+→ validate selected mode
+→ construct endpoint or optional child owner
+```
+
+Do not compute a section digest, create a generic reload plan, persist a config operation receipt or call a
+future qualification gate. Endpoint/managed configuration changes restart the dependency/daemon.
+
+## Diagnostics and privacy
+
+Diagnostics may show mode, redacted endpoint host/port, server version, connected/ready state and child exit
+class. They do not expose API keys, full private paths, inherited environment, config contents or source/query
+material.
+
+## Focused checks
+
+- external endpoint unavailable/auth failure/wrong schema;
+- external mode creates no process state;
+- managed missing executable/occupied endpoint/early exit/startup timeout;
+- actual Windows child-tree containment or honest unsupported mode;
+- bounded shutdown/reap and no orphan;
+- no auto-download/upgrade/restart loop;
+- unknown keys and plaintext secrets in logs/argv refused.

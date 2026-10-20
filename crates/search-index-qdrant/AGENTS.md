@@ -1,18 +1,22 @@
 # Working on indexing and publication
 
 Read the [architecture](../../docs/architecture/README.md) and
-[implementation](../../docs/implementation/README.md). Qdrant stores rebuildable projections; source
-bytes and committed control state remain with their existing owners.
+[implementation](../../docs/implementation/README.md). Qdrant stores rebuildable projections; source bytes
+and committed control state remain with their actual owners.
 
-Use one publication transition owner and one pending record for real unfinished external writes.
-Preparation is local until that intent is durably recorded and can be discarded beforehand. Remove
-duplicate daemon/bridge journals, supplied commit-proof objects and permanent completed-operation
-history. Do not replace actual write/readback/commit observations with booleans or hashes.
+Connect one configured Qdrant endpoint through one bridge/runtime before adding process management. The
+current supervisor is disconnected and cannot itself apply the Windows containment it claims. Treat managed
+Qdrant as an optional convenience: replace the supervisor with a small actual child/platform owner or delete
+it. Artifact/probe/secret/containment receipts are not runtime authority.
 
-Publish a coherent view and admit query pins against it. Reclamation obtains exact retired IDs from
-committed state and excludes active readers; snapshotting pins once does not prevent later admission
-of an unsafe old pin. Reuse the existing guarded pin path and retire unguarded alternatives.
+Use one publication owner and one pending record for real unfinished external writes. Preparation is local
+until the intent is durably recorded. Remove duplicate daemon/bridge journals, supplied commit proofs and
+completed-operation history.
 
-The supervisor owns the real local Qdrant process; the bridge owns SDK transport/translation. Keep
-those effects concrete. A planner/point identity/pin/reclaimer name does not require a permanent crate,
-new receipt protocol or independent transaction engine.
+Publish one coherent immutable view. Queries can pin only current and windows clone that guard. Fold exact
+point/generation cleanup into publication; delete sampled pin/reclaimer/retention platforms. Unknown external
+delete leaks safely and retries.
+
+A planner, point-identity, bridge, publication or view-manager name does not require a permanent crate. Keep
+a boundary only for a real dependency/effect or substantial algorithm. Change direct callers and delete the
+replaced mechanism in the same slice.
