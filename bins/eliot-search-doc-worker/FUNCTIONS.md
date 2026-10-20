@@ -1,59 +1,162 @@
-# Document extraction — implementation map
+# Document extraction — source audit and #227 implementation map
 
-The current [binary](src/main.rs) only exits unavailable. The following describes the selected
-implementation, not existing function signatures. Use existing #227 for the real document path.
+## Current package
 
-## Connect one PDF
+| Current source | Actual state |
+|---|---|
+| `src/main.rs` | 1,073-byte unconditional unavailable exit. No argument parsing, request framing, parser or daemon integration. |
+| `src/sha256.rs` | 4,756-byte hand-written SHA-256 implementation. It is not declared as a module and therefore is not part of the binary. |
+| `Cargo.toml` | Declares `search-contracts`, `search-ports`, `search-provider-protocol` and `search-materializer`; none is used by `main.rs`. |
+| package status | Workspace member and apparent executable despite no capability. |
 
-1. The daemon selects an exact retained revision and supplies its bytes, or a read-only input derived
-   from that same retained object. Never reopen the current source pathname as if it were that revision.
-2. Start one owned child with bounded stdio and one document in flight. Bind explicitly to the packaged
-   PDFium library; avoid accidental system-library fallback. Load the PDF, visit pages and extract text.
-3. Return page text, extracted-text ranges, page number/size and available region coordinates, plus
-   skipped/failed-page reasons. Keep the source revision and extraction settings alongside the artifact.
-4. Parent preparation accepts the actual output once, builds units with those coordinates and publishes
-   through the existing planner. Reopen results through the retained PDF and derived text artifact.
+The package must not remain as an unavailable placeholder. #227 either replaces it with the concrete parser
+or removes it until implementation begins.
 
-The current raw UnitSet path requires byte-identical UTF-8. PDF output cannot be fed into it with a fake
-`ExactBytes` label. Change that real ingress together with materializer output; use existing coordinate
-maps, and add only a concrete page/region representation that its consumer needs.
+Delete the custom SHA-256. Source/revision identity comes from the retained `ObjectRef`; derived artifact
+identity uses the shared selected content/artifact mechanism if needed. A document worker never creates an
+independent source identity.
 
-## Selected parser and alternatives
+## One selected PDF path
 
-| Use | Donor and concrete API | Limit / decision |
-|---|---|---|
-| First native PDF text | [pdfium-render 0.9.4](https://github.com/ajrcarey/pdfium-render/blob/ea2961cb8ac777bb1a06dddb8efd272d34d74f18/README.md#binding-to-pdfium): `Pdfium::bind_to_library`, load retained bytes, `document.pages()`, `page.text()`, `PdfPageText::all` / `chars` | Select the matching PDFium ABI/library at packaging. Disable default `image_latest` when rendering is unused; retain appropriate thread serialization. PDFium is a native dependency, not included by the Rust crate. |
-| Multiple selected formats in Rust | [Xberg source](https://github.com/xberg-io/xberg/blob/28c5311862e6f3466b4e762bf73a2ffe4b318dfa/crates/xberg/Cargo.toml), [Rust API](https://docs.xberg.io/guides/rust-core-api/) | An alternative when its format support removes more integration than the narrow PDF adapter. Use `ExtractInput::from_bytes`, `extract` and selected features; inspect per-input `errors` as well as `results`. Do not import its retrieval, agent, crawler or enrichment stack. Current `pdf` selects its native engine; it does not mean PDFium. |
-| Existing Docling artifacts or selected layout/table extraction | [NativePdfPipeline](https://github.com/docling-project/docling/blob/0e54294231b69bc2cf7a39873235495788f76b57/docling/pipeline/native_pdf_pipeline.py), [options](https://docling-project.github.io/docling/usage/advanced_options/#extract-the-native-content-of-a-pdf) | Native pipeline needs no layout/OCR/table model but keeps Python/docling-parse and has parser order only. Full layout/table extraction is a separate cost. Import existing revision-bound output before adding another persistent service. |
-| Scientific references/sections | [GROBID coordinates](https://grobid.readthedocs.io/en/latest/Coordinates-in-PDF/) | Selected `processFulltextDocument` + `teiCoordinates` gives TEI and native regions. Use only for the scientific corpus that needs this structure; it does not replace the lightweight PDF text path. |
-| Scanned pages | [OCRmyPDF options](https://ocrmypdf.readthedocs.io/en/stable/cookbook.html#produce-pdf-and-text-file-containing-ocr-text) or the selected OCR engine | OCR only pages lacking usable text, with explicit language/settings and gaps. OCRmyPDF sidecar omits pages that already had text and skipped pages; never treat that file as complete document text. Merge page outputs or read the produced PDF. |
+```text
+parent preparation:
+  exact retained PDF ObjectRef
+  + finite extraction profile/settings
+  + absolute deadline/cancellation
 
-These sources were inspected on 2026-10-18. No new parser dependency is locked or runtime-qualified by
-this Markdown change. Kreuzberg v4 LTS and current Xberg have different APIs; do not paste a v4 example
-into an Xberg adapter. The first PDF choice need not wait for all optional formats or a comparison service.
+owned child when selected:
+  explicitly packaged PDFium
+  → load exact retained bytes/read-only object input
+  → iterate pages
+  → native text and available character/region coordinates
+  → bounded typed page results + explicit gaps
 
-## Useful coordinates and bounded work
+parent:
+  validate result/object/profile binding
+  → persist one derived representation through the common object writer
+  → one MaterializationProduct / structure-first UnitSet
+  → ordinary planner/publication/query
+```
 
-PDF character order may differ from human reading order in columns or custom layouts; the
-[text API](https://github.com/ajrcarey/pdfium-render/blob/ea2961cb8ac777bb1a06dddb8efd272d34d74f18/src/pdf/document/page/text.rs)
-states this limitation. Keep page boundaries and represent extraction quality honestly. Extracted text
-is not a byte slice of the binary PDF; a page citation remains useful without fabricated byte precision.
-Add layout inference only when the selected corpus needs it. OCR changes recognition quality, not source identity.
+The worker is not a long-lived provider service. Start with one document in flight. Reuse one child across a
+bounded batch only if startup cost is measured and cleanup remains simple. No document parser runs during an
+ordinary query.
 
-Check input bytes and page/text counts before retaining outputs; iterate pages rather than building a
-corpus-sized result. A page-size check cannot bound arbitrary allocation inside native parsing, so keep
-the child memory/process limit and one total deadline. PDFium serializes calls rather than gaining CPU
-parallelism from more Rust threads. Start with one worker; add a bounded process pool only for measured
-throughput needs. No parser runs on ordinary query/readback.
+## Input and output
 
-The parent owns child termination/wait and temporary-file cleanup on success, error and cancellation.
-Keep one terminal result with complete/partial/failed state. Partial page text may be useful but must carry
-its missing-page gaps; a crash or malformed output cannot become a complete representation. Worker
-output is ordinary typed data, not a receipt chain, credential exchange or independent source authority.
+Input contains only what the concrete parser needs:
 
-## Checks that matter
+```text
+request ID
+retained object input/handle or bounded bytes
+source revision/ObjectRef identity supplied by parent
+selected PDF extraction profile/version
+finite page/text/output/resource limits
+```
 
-Exercise a text PDF, a multi-column page, a scan without native text, a malformed document and a cancelled
-large document through the real daemon/preparation/result path. Verify native page coordinates and
-retained revision identity, honest gaps, resource cleanup and that a normal query reuses the prepared
-artifact. Do not accept an echo provider or a passing constructor as format support.
+Output:
+
+```text
+page number and page size
+extracted page text
+text offsets within the derived representation
+available character/region coordinates
+page status: complete | partial | no-native-text | failed
+bounded warnings/gaps
+```
+
+Do not return source authority, Qdrant records, receipts, grants or completeness booleans detached from page
+results. The parent validates page counts, bounds, UTF-8, coordinate ranges and profile/object binding.
+
+Extracted text is not an exact byte range of the binary PDF. Use a mapped page/region representation. Preserve
+page boundaries and honest reading-order limitations; do not fabricate binary byte offsets.
+
+## Selected donor
+
+For #227, use the inspected `pdfium-render` API with one matching packaged PDFium library:
+
+```text
+Pdfium::bind_to_library
+load retained PDF bytes/input
+Document::pages
+page.text()
+PdfPageText::all / character/region access as needed
+```
+
+The Rust crate does not ship PDFium. Bind the explicit packaged artifact; do not fall back silently to an
+arbitrary system library. Disable image/rendering features when not used. PDFium serializes native access;
+more Rust threads do not create useful parser parallelism.
+
+Alternative donors remain alternatives, not parallel requirements:
+
+- Xberg when one selected Rust integration removes more code across actual required formats;
+- imported Docling artifacts or a selected layout/table profile when native page text is insufficient;
+- GROBID only for a scholarly corpus requiring TEI/references/regions;
+- OCR only for pages with no usable native text, with explicit language/settings and gaps.
+
+No automatic fallback chain. OCRmyPDF sidecar alone is not complete text because pages with existing text or
+skipped processing may be absent.
+
+## Boundary and limits
+
+Use the smallest private typed stdio frame owned by #227 or the current local frame helper after #280. Do not
+depend on generic `search-ports`, the old provider pairing/grant protocol or a universal worker supervisor.
+
+Parent owns:
+
+- process creation and exact executable/library path;
+- one absolute deadline and cancellation;
+- input/output byte and page/text ceilings;
+- OS memory/CPU/process containment when selected;
+- kill/wait and temporary-file cleanup on every outcome;
+- rejecting late, malformed or mismatched responses.
+
+A page-size check cannot bound all native allocations. The child boundary plus practical process limits is
+the reason to use a worker for PDFium. Safe bounded Rust parsers for other selected formats may run directly.
+
+## Preparation cutover
+
+Current raw UnitSet ingress requires byte-identical UTF-8. Do not label PDF-derived text `ExactBytes`.
+Change materializer/unitizer consumers together:
+
+```text
+DerivedDocumentRepresentation {
+  source ObjectRef/revision
+  extraction profile/version
+  ordered page text
+  page/region coordinate map
+  explicit page gaps
+}
+```
+
+Persist/reload this artifact through the common object store. Unitize pages/structural blocks and return
+citations to the retained PDF plus derived page/region location. Reuse the artifact on later queries and
+unchanged revisions; no parser rerun at query time.
+
+## Remove with implementation
+
+- refusal-only `main.rs` and obsolete unavailable/qualification message;
+- unlinked `src/sha256.rs`;
+- unused `search-contracts`, `search-ports`, `search-provider-protocol`, `search-materializer` dependency edges;
+- generic provider/runtime qualification documents and fixtures;
+- echo parser/protocol demonstrations which do not produce searchable results;
+- any second document database, source identity or publication path.
+
+The real package may add only the exact dependencies selected by #227. If implementation is deferred, remove
+the workspace member rather than retaining a dormant executable.
+
+## Completion
+
+Exercise through the real application:
+
+- text PDF;
+- multi-column/ambiguous reading order;
+- page without native text;
+- malformed PDF;
+- oversized/long document and cancellation;
+- child crash/timeout and cleanup;
+- restart/reuse of the prepared artifact;
+- Search returning the correct retained PDF revision, page/region and excerpt.
+
+Completion is a searchable retained PDF with honest gaps. A worker constructor, echo response, checksum or
+qualification report is not document support.

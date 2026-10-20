@@ -1,24 +1,27 @@
-# Working on document extraction
+# Working on the document worker
 
-Read the root architecture and implementation, then [FUNCTIONS.md](FUNCTIONS.md). The current binary
-only reports unavailable; the old function catalogue is not an implemented provider.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md), [source map](FUNCTIONS.md),
+[#216](https://github.com/UnknownAlienHuman/eliot-search/issues/216) and
+[#227](https://github.com/UnknownAlienHuman/eliot-search/issues/227).
 
-Deliver one real format through retained input → parser → page/text coordinates → materializer/units →
-searchable evidence. Change this binary and its immediate daemon/preparation consumers together.
-An echo worker, provider descriptor or process supervisor alone does not complete document support.
+The current package is a refusal stub with an unlinked hand-written SHA-256 file and four unused internal
+dependencies. Do not harden, qualify or preserve that scaffold. Replace it atomically with the selected PDF
+path, or delete the workspace member until #227 implementation begins.
 
-Use the selected parser directly in this child process. Keep source retention and publication in the
-daemon. Use owned stdio and concrete input/output types; reuse framing where useful. Do not build a
-plugin registry, worker certificate protocol, per-phase receipts or another universal document model.
+For #227, the parent supplies the exact retained PDF object and owns identity, deadline, cancellation,
+process/resource limits, termination/wait and cleanup. The child binds one explicitly packaged matching
+PDFium library, extracts finite page text/coordinates and returns bounded typed page results with explicit
+gaps. It writes no redb/object/Qdrant state and never reopens a source pathname.
 
-Start with native PDF text. Page and extracted-text coordinates are useful; they are not offsets into
-the original PDF byte stream. OCR, layout models and scientific metadata are selected extensions.
-Do not run all extractors on every document or reparse unchanged revisions on a query.
+Delete `src/sha256.rs`; the worker does not mint source identity. Use the common object/artifact identity only
+where the parent actually persists a derived representation. Remove unused `search-ports` and old provider
+protocol dependencies; use one small private/current frame, not a generic worker/provider platform.
 
-Keep input/output and process resources bounded, propagate one deadline, and reap cancelled or failed
-children. Do not execute document actions or fetch linked resources. Use the donor parser rather than
-writing a second parser to pre-inspect every PDF object. Select only runtime dependencies actually needed
-by the format; a required OCR executable is different from executing indexed document code.
+Extracted text is a mapped representation, not `ExactBytes` of the binary PDF. Change the real
+materializer/unitizer consumer with the worker and persist one page/region map. Native text first; OCR/layout/
+GROBID/other formats are separate selected profiles, never automatic fallbacks.
 
-Verify useful text/location output, malformed input, cancellation and daemon integration. No P15/G6
-receipt, provider ADR ceremony, source quota or legacy format compatibility is a coding prerequisite.
+After code, run minimal Rust 1.98 compiler/Clippy for the worker and actual preparation/daemon consumers, then
+exercise real retained PDFs through publication and source-backed query. A refusal stub, echo provider or
+constructor test is not completion.

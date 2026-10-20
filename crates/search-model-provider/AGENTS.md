@@ -1,23 +1,20 @@
-# Working on optional models
+# Working on optional model support
 
-Start with the [architecture](../../docs/architecture/README.md),
-[implementation](../../docs/implementation/README.md) and [local README](README.md).
-This directory has no implementation; do not turn its former function wishlist into a new framework.
+This directory is a design note, not a Cargo package. Keep it that way until one exact measured model has a
+real preparation or query consumer.
 
-Select a real model/runtime only for an implemented embedding or reranking use case. Change the model
-owner, preparation/query callers and Qdrant input/schema together. Use a library directly when practical;
-a separate worker earns its place through actual dependencies or resource isolation.
+Delete the always-unavailable model worker and unused `ModelProviderPort`; do not implement a generic provider
+registry, plugin framework, qualification receipt, model lifecycle OS or capability flag in advance.
+Baseline Search uses Qdrant native BM25 and remains independent of optional models.
 
-Keep finite input bytes/tokens, batch size, queue/concurrency, output dimensions and deadline/cancellation.
-Apply limits before allocation/inference. Validate actual outputs; a profile label or receipt does not
-make a vector well formed or a snippet source-backed. Respect the selected scope and client restrictions.
+A later implementation issue must name the exact model/artifact/tokenizer/task/options, measured need,
+packaging, finite limits, direct consumers and failure semantics. Prefer an in-process library. Create a
+worker only for demonstrated dependency/crash/resource isolation, using the same bounded local framing.
 
-Coalesce identical model inputs and reuse their outputs across source occurrences. Include actual
-context, model revision, document/query/rerank task and input/output options in that reuse decision.
-Rebind current source/revision/range independently; do not key all reuse by revision-bearing `UnitId`
-or reuse an old handle, scope decision or citation as model output.
+Model code may encode bounded prepared/query inputs or rerank a finite supplied candidate set. It cannot own
+source discovery/scope, Qdrant publication, citations, generated answers, query rewriting, graphs or research
+scheduling. Cache only by exact input/context/role/model/options; current source bindings remain with the
+ordinary manifest/publication owners.
 
-Normal search remains usable without a model. A failed optional leg has a visible gap; rerank failure
-can preserve the previous order. Do not add LLM query rewriting, generated research verdicts, an
-extraction graph or a second query orchestrator. Remove unused port/scaffold requirements with their
-consumers instead of manufacturing receipts or another provider registry.
+After future code, run minimal Rust 1.98 compiler/Clippy for the concrete owner and real consumers, then
+measure against lexical baseline. Until then, no model code is correct.

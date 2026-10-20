@@ -1,23 +1,19 @@
-# Working on the optional model process
+# Working on the dormant model worker
 
-Read the [architecture](../../docs/architecture/README.md),
-[implementation](../../docs/implementation/README.md) and [local README](README.md).
-The current binary only exits unavailable. Implement a worker when a selected runtime needs this
-process boundary; do not build its former lifecycle/function catalogue in advance.
+Do not implement, harden or qualify the current refusal stub. Delete the package and workspace member; it has
+no model, caller or user-visible capability.
 
-Keep `main` a thin loader and request loop. Change the real daemon caller and model input/output owner
-together. Share the same selected model settings and framing; an owned local child needs no separate
-pairing, attestation or receipt system.
+Baseline Search uses Qdrant native BM25. A model path returns only after the connected lexical product exists
+and a measured exact model/profile has a direct preparation or query consumer.
 
-Bound input bytes/tokens, queue, batch, concurrency and output before inference. Propagate one deadline
-and cancellation. If the runtime cannot interrupt work, let the daemon terminate the child after a
-finite wait and reject its late response. Load the model once for accepted batches, not per file/query.
+When that happens, prefer the selected model library in the existing owner. Create a worker only when real
+native dependency, crash or resource isolation requires a child. The same implementation slice must select
+the artifact/tokenizer/task/options, change actual consumers and remove any superseded path.
 
-Return only vectors or an order/subset of supplied candidates. Source selection, retained bytes,
-Qdrant writes, source validation, context windows and expensive-output reuse belong to their existing
-application owners. The worker must not independently read the corpus, re-extract a graph, rewrite the
-question, generate an answer or schedule further research.
+Never create a generic provider registry, plugin framework, qualification receipt chain, model lifecycle OS,
+query-rewriting/answer agent or another transport protocol. A selected worker accepts bounded encode/rerank
+input and returns validated vectors or an order/subset of supplied candidates. It cannot own source scope,
+Qdrant publication, evidence or generated answers.
 
-Model inputs stay out of normal logs. Missing artifacts, invalid outputs and crashes produce concrete
-optional failure; they do not disable lexical search or start another model silently. Report actual
-connected behavior, not an unavailable stub's contract tests as model support.
+After future code, run minimal Rust 1.98 compiler/Clippy for the concrete model owner and its real consumers,
+then measure the candidate against the lexical baseline. Until then, absence is the correct implementation.

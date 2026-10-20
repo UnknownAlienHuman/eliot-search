@@ -1,33 +1,41 @@
-# search-model-provider
+# search-model-provider — design note, not a package
 
-Optional embeddings and reranking for the ordinary preparation/query path.
+This directory contains documentation only. There is no Cargo package, implementation or runtime owner.
+That is the correct baseline state.
 
-## Current state
+The remaining `eliot-search-model-worker` is only an always-unavailable workspace binary and must be deleted.
+Do not recreate `ModelProviderPort`, a generic provider registry or a disabled pseudo-capability around it.
+Qdrant native BM25 supplies the first working lexical path; syntax, headings, links and imported code
+locations need no language model.
 
-This directory contains documentation only: no Cargo package, runtime or provider implementation.
-[`ModelProviderPort`](../search-ports/src/optional.rs) declares `profile`, `encode` and `rerank`,
-but has no implementation. The [worker binary](../../bins/eliot-search-model-worker/src/main.rs)
-always reports unavailable and exits with code 2. Planner capability flags do not connect a model.
+## When model code is justified
 
-The implementation target uses Qdrant's local BM25 input for ordinary lexical search, without a model
-worker. Scope orientation, source links, syntax outlines and imported semantic occurrences also need no LLM.
+Add one concrete integration only after:
 
-## Selected model path
+- the source → Qdrant → retained-excerpt product path works;
+- a declared evaluation set demonstrates a material need beyond lexical/structural retrieval;
+- one exact model, tokenizer, document/query/rerank role, options and packaged artifact are selected;
+- preparation/query/publication consumers are updated in the same implementation slice.
 
-When a concrete model is useful, integrate its library directly or use the existing worker if dependency
-or resource isolation requires a process. No runtime library or model is selected by this document.
-One small model owner prepares bounded inputs and validates vectors or a reranked candidate subset;
-preparation, Qdrant publication and query remain with their existing owners.
+Prefer a direct bounded library in the existing owner. Use a child process only for demonstrated dependency,
+crash or resource isolation. Do not require both a provider abstraction and worker.
 
-Encode changed prepared content in bounded background batches. Encode a query once for the selected
-retrieval profile; use document/query task modes consistently, including asymmetric model instructions.
-A selected reranker receives the already bounded query candidates and their source-backed snippets.
-It may reorder or drop them, and returns no new evidence or generated answer.
+## Narrow responsibilities
 
-Reuse expensive outputs by exact model input and model/task/options. A source edit changes current
-`UnitId` even for an unchanged chunk; a cached vector can be reused while its source/revision/range
-occurrence is rebuilt. Cache data never supplies source authority or bypasses the current scope.
+A selected model owner may:
 
-See the [implementation guide](../../docs/implementation/README.md) and
-[concrete change map](FUNCTIONS.md). There is no mandatory graph, query-rewriting model, answer
-orchestrator, qualification-receipt chain or separate migration platform to build first.
+- encode bounded prepared retrieval inputs in finite batches;
+- encode one bounded query with the matching published query role/options;
+- rerank a finite list of already source-backed candidate snippets;
+- validate output count, dimensions, finite values and candidate IDs;
+- report explicit optional failure.
+
+It may not discover sources, widen scope, write Qdrant independently, create evidence, persist raw queries,
+generate answers, rewrite questions, build a graph or schedule research.
+
+Reuse expensive document outputs by exact input/context/role/model/options. A reused vector never supplies the
+current source occurrence, revision or range; publication rebuilds those bindings normally. A model/profile
+change is ordinary retrieval-profile/generation rebuild, not migration compatibility.
+
+No runtime model, donor library or version is selected by this documentation. A later issue must name the
+exact candidate and measured reason before adding code.
