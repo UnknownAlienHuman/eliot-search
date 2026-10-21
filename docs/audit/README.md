@@ -1,21 +1,38 @@
-# Audit evidence
+# Audit documents
 
-Start implementation with the [architecture](../architecture/README.md) and
-[implementation guide](../implementation/README.md). Audits explain findings; they do not add product
-requirements or an independent task queue.
+Use this directory through the following current entrypoints:
 
-| Need | Record |
-|---|---|
-| Actual source defects and removal boundaries | [Verified source audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) |
-| Existing libraries and inspected donor code | [Donor index](DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
-| Historical indexed implementations | [Donor disposition](INDEXED_SPINE_PORT_MAP_2026-10-09.md) |
-| Current source work | Existing handoff and [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) |
+1. [Audit coverage and documentation map](AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) — what was
+   actually checked, remaining gaps and document authority.
+2. [Workspace member disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) — target decision for every
+   Cargo workspace member.
+3. [Distilled architecture/code audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) — source-backed findings
+   and the reasons for the refactor.
+4. [Donor verification register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) — selected donor mechanisms and
+   their limits.
 
-The [older master audit](ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md),
-[completion audit](PROJECT_COMPLETION_AUDIT_2026-10-09.md), launch records and wave packets are dated
-evidence. Their “next”, BLOCKED, accepted-digest and qualification-prerequisite statements do not govern
-current implementation. No requirement survives only because an audit or old fixture mentions it.
+Project direction comes from [`docs/architecture/README.md`](../architecture/README.md) and
+[`docs/implementation/README.md`](../implementation/README.md), not from an audit snapshot.
 
-Keep a source finding tied to its actual caller and observed base. Distinguish a library/type from a
-connected runtime path. Test actual behavior after integration; no receipt, issue state or structural
-validator can stand in for a real indexing/query result.
+## Historical files
+
+Every other file in this directory is historical or supporting evidence unless a current document above
+links to a specific claim. In particular, an old title containing `MASTER`, `CURRENT`, `LAUNCH`, `GATE`,
+`ACCEPTANCE`, `STATUS` or `IMPLEMENTATION` does not grant current authority.
+
+Historical audits may still contain useful defect observations, measurements or donor notes. Cite their exact
+base and limitation. Do not use them to:
+
+- launch or schedule implementation;
+- require P00/W0–W10 waves, tickets, leases, handoffs or gate receipts;
+- preserve old internal formats, package boundaries or qualification credentials;
+- restore universal migration, purge, retention, pairing or proof platforms;
+- claim runtime behavior from source, fixtures or structural validation.
+
+The [old master audit](ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md) is now an explicit historical pointer. Launch
+records, completion audits, backlog/status reconciliations and donor-acceptance files remain dated evidence
+only.
+
+Git history is the archive. Do not create a second copied archive or update historical reports to mimic the
+new architecture. Shorten/delete them only when needed to prevent false current authority or when their final
+consumer is removed.
