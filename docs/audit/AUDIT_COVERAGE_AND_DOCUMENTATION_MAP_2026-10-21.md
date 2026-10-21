@@ -27,7 +27,7 @@ were traced.
 | Area | Status | What was checked | Remaining uncertainty / required follow-up | Current implementation map |
 |---|---|---|---|---|
 | Architecture, ADRs and old requirements | SOURCE-TRACED | Part I, accepted ADRs, Architecture 8.4 master, execution/wave/qualification requirements and conflicts with the local product | Continue detecting stale normative language outside the paths classified historical below | [`docs/architecture/README.md`](../architecture/README.md) |
-| Workspace, Cargo topology, features and entrypoints | SOURCE-TRACED | Workspace members, daemon/CLI targets, default features, harness binaries, disconnected entrypoints and shadowed applications | Compiler validation after Rust cutovers; no current build claim | [`docs/handoff/DEPENDENCY_GRAPH.md`](../handoff/DEPENDENCY_GRAPH.md) |
+| Workspace, Cargo topology, features and entrypoints | SOURCE-TRACED | Workspace members, daemon/CLI targets, default features, harness binaries, disconnected entrypoints and shadowed applications | Compiler validation after Rust cutovers; no current build claim | [`WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md`](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
 | Root ownership and daemon owner composition | SOURCE-TRACED | Root open/init/inspect, lock/owner machinery, daemon composition, create-on-read and migration/quarantine paths | Windows/native behavior not executed | [`search-runtime-owner/FUNCTIONS.md`](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
 | Configuration, startup and readiness | SOURCE-TRACED | Typed model, custom parser/tree/diff/action/receipt layers, startup rejection of valid non-default settings and readiness flags | Actual simplified settings implementation not built | [`search-config/FUNCTIONS.md`](../../crates/search-config/FUNCTIONS.md) |
 | Source admission, stable read, registry, history and identity | SOURCE-TRACED | Native acquisition, admission order, dropped body, registry replay/original inputs, source identity/history packages, sync refusal and reconcile scaffolding | #598 result must be consumed without duplicating its writer | [`crates/search-source/README.md`](../../crates/search-source/README.md) |
@@ -57,8 +57,9 @@ These are the only project-wide documents allowed to direct implementation:
 2. [`docs/implementation/README.md`](../implementation/README.md) — concrete owners, cutovers, order and donor seams.
 3. [`docs/handoff/DEPENDENCY_GRAPH.md`](../handoff/DEPENDENCY_GRAPH.md) — current effect/data dependency graph.
 4. This coverage/disposition map — audit completeness and document authority.
-5. Current package-local `README.md`, `FUNCTIONS.md` and `AGENTS.md` only where they agree with items 1–4.
-6. Current GitHub issue body for the active implementation slice; an old issue description cannot override items 1–4.
+5. [`WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md`](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) — target disposition for all 52 workspace members.
+6. Current package-local `README.md`, `FUNCTIONS.md` and `AGENTS.md` only where they agree with items 1–5.
+7. Current GitHub issue body for the active implementation slice; an old issue description cannot override items 1–5.
 
 The donor register is authoritative only for the donor behavior and limits it explicitly records. It does
 not define product ownership.
@@ -76,8 +77,8 @@ block a cutover or restore compatibility/process machinery:
 
 ```text
 docs/architecture/ELIOT_SEARCH_8.4_*
-docs/audit/* before the current coverage/audit pair, unless explicitly referenced as evidence
-docs/handoff/P00_* and wave/gate/lease/handoff control-plane documents
+docs/audit/* outside the current README/coverage/disposition/distilled-audit/donor set
+docs/handoff/* except README.md and DEPENDENCY_GRAPH.md
 docs/product/PACKAGE_STATUS.toml
 swarm/**
 qualification/**
@@ -86,42 +87,38 @@ config/data-layout-v1.toml
 retired package maps, coverage graphs and accepted-evidence records
 ```
 
-Historical documents should be shortened to an explicit pointer or deleted with their final consumer. Git
-history is the archive; do not create a second archive directory.
+[`docs/audit/README.md`](README.md) and [`docs/handoff/README.md`](../handoff/README.md) make these path-level
+authority rules explicit. Historical documents should be shortened to a pointer or deleted with their final
+consumer. Git history is the archive; do not create a second archive directory.
 
-## 4. Known contradictions at map creation
+## 4. Documentation corrections completed in this pass
 
-These are defects in the documentation branch, not future Rust work:
-
-1. `ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md` still calls itself the main entrypoint and prescribes old package-status, wave and migration work.
-2. The 2026-10-17 audit still says to preserve the delivered S11 API, while the current point-identity map correctly replaces revision/coordinate-bound S11 v1.
-3. PR #610 links and scope statistics lag its actual head.
-4. Many old audits/qualification/handoff files remain discoverable without a prominent historical marker.
-
-The current documentation pass must fix items 1–3 immediately and continue item 4 by path class rather than
-editing hundreds of historical files individually.
+- [x] Replaced `ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md` with an explicit historical pointer.
+- [x] Distilled the 2026-10-17 audit and removed the obsolete instruction to preserve revision-bound S11 v1.
+- [x] Added this coverage map and the 52-member workspace disposition.
+- [x] Made `docs/audit/README.md` and `docs/handoff/README.md` explicit authority entrypoints.
+- [ ] Update PR #610 links/statistics to its final head after the remaining sweep.
+- [ ] Continue detecting individual historical files which still falsely claim current authority despite the path-level rule.
 
 ## 5. Remaining audit work
 
 The audit is **not complete** until all of the following are true:
 
-- [ ] Every workspace member has one disposition: **keep**, **merge/inline**, **delete**, **optional selected profile**, or **outside active handoff**.
-- [ ] Every project-wide document is classified by the authority rules above; no old document calls itself current or directs agents into retired mechanisms.
+- [x] Every workspace member has one disposition: **keep/rewrite**, **merge/inline**, **delete**, **optional selected profile**, or **#598 conditional**.
+- [x] Project-wide document authority is classified by explicit path rules and current entrypoint READMEs.
 - [ ] Current package-local instructions contain no requirement which contradicts architecture/implementation.
 - [ ] Active implementation issues use the current owner/data model and do not retain obsolete blockers.
 - [ ] Remaining optional areas are either explicitly deferred/deleted or receive a selected concrete implementation.
-- [ ] Runtime/native/Qdrant/recovery/performance claims are separated from static findings and executed only after the connected product path exists.
-- [ ] The final audit summary names remaining unreviewed source families instead of claiming complete line-by-line coverage.
+- [x] Runtime/native/Qdrant/recovery/performance claims are separated from static findings.
+- [x] The current audit names remaining unreviewed source families instead of claiming complete line-by-line coverage.
 
-## 6. Immediate audit sequence
+## 6. Remaining audit sequence
 
-1. Replace the obsolete master audit with a historical pointer.
-2. Distill the 2026-10-17 audit and correct decisions which changed during the deeper source review.
-3. Build a workspace-member disposition table from current Cargo metadata/source callers.
-4. Sweep current package instructions for old compatibility/security/receipt/qualification requirements.
-5. Sweep old project-wide documents for false "current/main/required" status and classify/delete them by path.
-6. Reconcile the active issue queue against the final implementation order.
-7. Only then declare documentation preparation complete and begin the first Rust cutover.
+1. Sweep current package instructions for old compatibility/security/receipt/qualification requirements.
+2. Sweep individual historical project documents for false `current`, `main`, `required` or `authoritative` status which could bypass the path-level rule.
+3. Reconcile the active issue queue against the final implementation order and correct stale blockers.
+4. Re-read the final documentation head for contradictions and broken links.
+5. Only then declare documentation preparation complete and begin the first Rust cutover.
 
 No percentage-complete claim is made. The map records evidence and remaining closure conditions instead of a
 plausible-looking number.
