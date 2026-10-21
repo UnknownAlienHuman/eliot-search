@@ -1,155 +1,108 @@
-# Local protocol — source audit and replacement map
+# Local protocol — one wire and one I/O contract
 
-The [query cutover](../search-query/README.md) and [daemon map](../../bins/eliot-searchd/FUNCTIONS.md) own the
-application behavior. This package should contain only framing/current wire DTOs after the cutover.
+The [implementation guide](../../docs/implementation/README.md) owns overall composition. This file owns
+framing/session behavior; client and CLI documents link here rather than defining another protocol.
 
-## Current source inventory
+## Source findings
 
-Known production layers before the active CLI reaches a daemon handler:
+At `c8e38b6`, protocol/client/provider-composition/public-runtime code forms several parallel stacks:
+manual JSON/base64, pairing/MAC, bindings, grants, recipes, replay records and a separate tab-line service.
+The active legacy facade can turn IndexedQuery back into `op\tquery\t<hex>`. None is the target wire.
 
-| Layer | Current behavior |
-|---|---|
-| `search-provider-protocol` | The first visible source-tree segment already exceeds 236 KiB. It combines framing, manual JSON, pairing/MAC, bindings, grants, replay, recipes, evidence compatibility, cancellation and session lifecycle. |
-| `search-provider-client` | About 70.8 KiB of production Rust. Reuses pairing/profile/grant/sequence state and mandatory trusted comparison coordinates before a request can be sent. |
-| daemon `provider_composition` | About 136.5 KiB of production Rust. Owns canonical TCP, pairing, capability, serving, router and terminal state and is coupled to access/query grant composition. |
-| daemon `public_runtime_service` | About 59 KiB of production Rust. A separate tab-line dispatcher/session/query/handle/continuation path. |
-| CLI `provider_client` | Exposes typed-looking `UnsignedRequest`, but maps `IndexedQuery` to a marked payload and then to legacy `op\tquery\t<hex>` through `core::ProviderSession`. |
-| `search-contracts` | About 486 KiB of shared source. Carries eleven recipes, authority/plan/lifecycle/proof records and several wire/result families in addition to useful IDs/scope/results. |
+Retain the useful length-prefix parser and fail-stop output handling. The actual
+[output_deadline helper](../../bins/eliot-searchd/src/public_runtime_service/kernel/output_deadline.rs)
+explicitly says that it cannot interrupt an already-blocked writer. Its clock check is useful but not a
+transport timeout implementation.
 
-This is already well over half a megabyte of production source before CLI legacy core/local modules and the
-remaining protocol source are counted. The issue is not one missing adapter; it is multiple parallel
-applications.
-
-## Useful current mechanisms
-
-Keep or move:
-
-- four-byte little-endian length prefix;
-- reject declared oversize before allocating/reading a body;
-- one-frame incremental read buffer;
-- finite frame/body/request/output ceilings;
-- request-ID correlation and idempotent cancellation of live work;
-- optional monotonic progress and exactly one terminal response;
-- fail-stop connection behavior after partial output;
-- check the original absolute deadline before each read/write/flush;
-- output-side transaction callback used by `QueryWindow` to commit only after a complete frame.
-
-The daemon `public_runtime_service::SessionOutput` correctly distinguishes no output from partial output and
-refuses to continue the session after a partial logical/I/O failure. `output_deadline` correctly prevents a
-new write/flush after the original deadline. Move these small behaviors to the single framed session; do not
-retain the line dispatcher around them.
-
-## Current mechanisms to delete
-
-| Source | Replacement |
-|---|---|
-| `frame/client/wire.rs` fixed-order JSON/base64 encoder/decoder | Serde on bounded current DTOs. |
-| `frame/transport.rs` pairing/MAC preface and 32-byte trailer | Plain bounded frame on inherited/owner-only local transport. |
-| pairing/challenge/proof/session key modules | None for trusted local baseline; optional restricted adapter terminates before dispatcher. |
-| binding commit/revoke/drain/provider lifecycle | Concrete restricted-session owner only when enabled. |
-| grant/envelope codecs and capability descriptor | Daemon-resolved scope; optional session subset. |
-| V1 recipe/V2 evidence client schemas | One current request/result family. |
-| protocol replay/sequence authority | Live request map/correlation only; no durable request history. |
-| provider composition canonical TCP/host/router | One daemon local connection/session dispatcher. |
-| public runtime tab-line/hex parser | Typed frame decoder and enum dispatch. |
-| CLI `UnsignedRequest` → legacy core conversion | Direct typed client request. |
-
-## Target DTO ownership
-
-Contracts own only data used by both ends. Protocol owns the frame envelope and serialization. Client owns
-I/O. Daemon owns handler dispatch and state.
+## Framing and allocation
 
 ```text
-// shared current contract
-QueryOperation = Search | Exact | Continue | Expand | optional Orient | Compare
-OperationResponse = Search | Exact | Continue | Expand | optional Orient | Compare
-EvidenceCard / gap / coverage / WindowId / WindowItemRef
-
-// protocol only
-ClientMessage { version, request_id, timeout_ms?, operation/admin }
-ServerMessage { version, request_id, Progress | Terminal }
-ProtocolFailure { stable code, retryable/live-window/partial metadata only when useful }
+u32 little-endian body length + one UTF-8 Serde JSON message
 ```
 
-Do not expose Qdrant routes/IDs, redb keys, retained-object internal paths, grant/checkpoint digests, plan IDs
-or vendor errors.
+Read the prefix incrementally, reject zero/oversize before body allocation, then read one bounded body.
+Decode a current typed DTO and validate field/collection limits before dispatch. A frame bound is not a claim
+of zero-allocation decoding or a bound on every downstream allocation; downstream work has its own counters.
 
-### Timeout
+For output, use `serde_json::to_writer` into a small capped in-memory Write sink which rejects a write before
+its checked remaining capacity is exceeded. Bound the input DTO too. Only after complete encoding succeeds,
+write the prefix/body and flush. `to_vec` followed by a size check is not allocation-bounded serialization.
+Do not serialize directly into the transport, where an encoding/limit error would leave half a frame.
 
-A wire request may provide a bounded duration ceiling. On admission:
+A resource failure before writing may produce one small bounded failure response. Any partial transport
+write/flush failure closes the session; no appended second terminal/error frame and no cursor commit.
 
-```text
-local_deadline = Instant::now() + min(request_timeout, server_limit)
-```
+## Messages are data, not an API-generation checklist
 
-Only the local `Instant` enters `RequestContext`. No cross-process monotonic timestamp is serialized. Every
-nested operation uses the remaining time from that same deadline.
+Use only operations with actual handlers: Search first, then selected Exact/Continue/Expand and real admin
+commands. Version, request ID, finite timeout and the operation form the request envelope. Response events
+carry request ID and one terminal result; progress is optional and bounded. DTO names are illustrative.
+Do not generate optional providers, progress registries, grants or recipes because the sketch names them.
 
-### Framed I/O
+On a healthy connection the server emits at most one terminal per request; a cancelled/dropped connection
+may deliver none. No exactly-once receipt protocol is implied.
 
-```text
-read_exact 4-byte prefix incrementally
-→ validate 1..=max_body_bytes
-→ allocate exactly the bounded body
-→ read body incrementally under deadline/cancellation
-→ serde_json::from_slice::<ClientMessage>
-→ validate typed field/collection bounds
-→ dispatch
-```
+## Connection and process lifetime
 
-Output:
+The owning-account baseline uses owned child stdio. No pairing key, per-frame MAC or product grant is needed;
+selected source scope is still resolved by the daemon.
 
-```text
-serde_json::to_vec(ServerMessage) under encoded ceiling
-→ prefix
-→ write_all prefix+body and flush under original deadline
-→ commit prepared page/window only after success
-```
+One-shot: request, terminal, close/reap; return no live query locators.
+Multi-request session: terminal ends a request but leaves the same child/streams alive. Continue/Expand refer
+only to windows in that session. Explicit end/EOF/failure drops windows and closes/reaps the child. New
+independent invocations cannot reuse them. Persistent cross-invocation transport is not baseline scope.
 
-A partial output is fatal for the connection. Do not send a second terminal/error frame.
+A selected restricted-client adapter authenticates outside this wire and narrows its actual session scope.
+Do not build that adapter until selected.
 
-## Request lifecycle
+## Cancellation and I/O
 
-The baseline may process one request at a time. If bounded multiplexing is retained:
+One active data request is sufficient, but the connection reader must keep servicing Cancel and EOF while
+that handler runs. A synchronous `read request → execute handler → read again` loop cannot support this.
+Use the existing runtime with one bounded control/read path, one active operation and one response writer.
+Do not add a general scheduler or unbounded request/progress queues.
 
-- reject duplicate live request IDs;
-- cap in-flight count and queued progress bytes;
-- cancellation targets only a live request on that connection;
-- terminal removes the live entry;
-- disconnect cancels all live entries and drops its restricted-session/windows;
-- no sequence ledger survives connection close or restart.
+Deadline checks before blocking calls cannot bound an already-blocked call. Neither wrapping a blocking
+operation in a timeout nor aborting a started `spawn_blocking` task proves that it stopped. Select an actual
+interruptible platform I/O path, or use the owned child's finite close/termination boundary and explicitly
+state the limitation. Do not leak a new detached blocking worker after each timeout. Platform support remains
+unverified until silent input, blocked output and shutdown are exercised.
 
-Health/version/status are direct read operations. Shutdown is available only when the connection owns the
-child/daemon lifecycle. Ingest/admin mutations may use current typed commands later; they do not justify
-keeping the query recipe/grant platform.
+## Three different clocks
 
-## Contract migration order
+- Session idle/lifetime policy controls the connection, not each operation's work budget.
+- Each new request establishes a fresh local monotonic deadline. Nested calls do not renew it. Charge queue
+  and framing time where the chosen transport can observe them; serialize durations, not cross-process Instant.
+- A QueryWindow has an absolute expiry fixed at creation. Continue/Expand use the earlier of their new request
+  deadline and that expiry. They neither inherit an already expired Search deadline nor extend window TTL.
 
-1. Define current `Search/Exact/Continue/Expand` request/result DTOs and stable failure codes.
-2. Implement one Serde frame codec and one simple synchronous client/session.
-3. Add one daemon dispatcher over actual constructed handlers.
-4. Connect CLI child stdio to the typed client.
-5. Connect search to real Qdrant/evidence/window path.
-6. Change output/presentation consumers.
-7. Delete old recipe/grant/pairing/manual-codec/provider-composition/line-session paths and their fixtures.
+After an operation deadline, a separate small cleanup allowance may release/terminate owned resources; it
+cannot resume backend work or report late results as timely success.
 
-Do not keep a bridge from current DTOs to `RecipeIdV1`, `UnsignedRequest`, `CanonicalRecipeTask` or legacy
-`op` lines. Both ends change in one cutover.
+## Output and window commit
 
-## Verification
+Keep a prepared page uncommitted until the whole frame has been written/flushed locally. The commit concerns
+only the handled candidate prefix represented in that frame; output-limited candidates are not skipped.
+Successful flush is not proof the peer received or processed the frame. A lost connection invalidates its
+windows and the user repeats Search; there is no durable resume, acknowledgement ledger or exactly-once claim.
+Do not hold a global view/window-manager lock across slow source/transport I/O; serialize only the active
+connection/window work needed by this sequential session.
 
-Focused behavior after code:
+## Donor verification — 2026-10-21
 
-- oversize prefix refused before body allocation;
-- partial prefix/body reads converge without over-read;
-- malformed/unknown version/operation/field bounds fail before handler work;
-- one request maps to the correct direct handler;
-- duplicate/live cancellation behavior is bounded;
-- original deadline does not renew across framing/query/evidence/output;
-- partial output closes the connection and commits no window/cursor progress;
-- exactly one terminal response per admitted request;
-- child EOF/shutdown releases live work and owned process handles;
-- no legacy tab/hex, pairing, grant, capability or handle token is constructed.
+- [serde_json 1.0.151 to_writer](https://docs.rs/serde_json/1.0.151/serde_json/fn.to_writer.html): accepts an io::Write sink; the application supplies its capped buffer.
+- [Tokio 1.53.1 spawn_blocking](https://docs.rs/tokio/1.53.1/tokio/task/fn.spawn_blocking.html): started blocking closures cannot be aborted; a shutdown timeout stops waiting, not the work.
+- [Tokio stdin](https://docs.rs/tokio/latest/tokio/io/fn.stdin.html): its blocking reader is not cancellable. Wrapping it does not establish bounded shutdown. This is a documentation check, not a tested platform adapter.
 
-Run minimal Rust 1.98 compiler/Clippy for changed protocol/client/CLI/daemon/current-contract consumers after
-code. Old wire goldens and all-profile pairing/grant matrices are deleted with their APIs rather than gates.
+Use the workspace's selected versions during implementation; these references establish only the described
+API semantics. No new dependency or native adapter is claimed to have been integrated.
+
+## Cutover and behavior checks
+
+Change the actual DTO, decoder, dispatcher, client and output consumer together; delete manual-codec,
+pairing/grant/recipe and legacy line paths after callers move. A sync client API may wrap the same runtime;
+do not create a second I/O engine.
+
+After code/minimal Clippy, exercise split/oversize frames, capped serialization, same-session paging, a new
+invocation's expired locator, Cancel during active work, silent input, blocked output, EOF and owned-child
+cleanup. A complete source-backed round trip is still required; this document proves no runtime result.

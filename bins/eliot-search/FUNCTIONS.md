@@ -1,88 +1,71 @@
-# eliot-search CLI — current source and replacement map
+# CLI — one invocation, explicit session lifetime
 
-The CLI should own one captured invocation, owned local connection, current typed request, bounded
-presentation and exit status. It never owns query/access policy, redb/object/Qdrant state or grants.
+Read the [implementation](../../docs/implementation/README.md). Wire/I/O semantics belong only to the
+[protocol map](../../crates/search-provider-protocol/FUNCTIONS.md); paging belongs to the
+[window map](../../crates/search-query/search-continuation/FUNCTIONS.md).
 
-## Current source has four directions
+## Source findings at c8e38b6
 
-| Path | Actual state |
-|---|---|
-| one-shot forwarding in `app/core.rs` | Starts the daemon command for scan-file/stdin; this is the only simple working search route. |
-| `public_client.rs` | Intercepts `serve-data-root`, spawns a child, waits for `data_root_ready`, then uses newline/tab/hex commands, session continuation strings and opaque source handles. The daemon entrypoint shadows this argv before the service handler, so startup fails. |
-| default provider stack | `search-provider-client`, protocol/config/ports, native registration and Windows pairing credential/pipe dependencies compile even though `app.rs` rejects provider search/status/refresh/indexed commands by default. |
-| legacy-loopback harness | Re-enables address/token/endpoint descriptors and a marked `IndexedQuery`; fixture-only and not a fallback. |
+- `app/core.rs` forwards the working one-shot scan-file/stdin path.
+- `public_client.rs` starts a child and waits for `data_root_ready`; the daemon's earlier argv interceptor
+  shadows the intended service. Presence of a child client does not prove indexed serving.
+- The default provider dependencies compile although default commands reject provider operations.
+- Legacy `IndexedQuery` still becomes a marked tab/hex command. Expansion carries an opaque handle and
+  arbitrary absolute offsets. These paths are replaced, not adapted into another protocol version.
 
-`UnsignedRequest::IndexedQuery` still embeds a strict marker and converts to legacy `op\tquery\t<hex>`.
-Expansion can carry an opaque handle plus caller-selected absolute revision offsets. Machine output is partly
-constructed/substr-parsed manually. These are replacement targets, not the wire to preserve.
+## Capture and dispatch
 
-## One invocation
+Capture `args_os()` and supported settings once. Keep OS paths as OS values. Validate input before spawning.
+Help/version without daemon work creates nothing. Build the current typed operation directly; do not pass
+through recipes, grants, capability descriptors or `UnsignedRequest::to_core()`.
 
-Capture `args_os()` and selected configuration once. Preserve non-UTF-8 paths. Produce one closed enum:
+## One-shot versus session
 
-```text
-Search { selected_sources, query, limit, page_size, timeout, output }
-Exact { selected_sources, predicate, limits, timeout, output }
-Continue { window_id, page_size, timeout, output }
-Expand { window_item, relative_context, timeout, output }
-Health | Status | Version | ShutdownOwnedChild
-```
+These are two lifetimes of the same client/dispatcher, not two transport stacks.
 
-Optional operations exist only with real handlers. Unknown input fails before starting a child. Help/version
-create no daemon/root effects. Do not retain separate Query/IndexedQuery, recipe IDs, marked payloads or raw
-provider filters.
+| Mode | Lifetime | Output contract |
+|---|---|---|
+| One-shot command | Own child for the one request, then close/reap it | Bounded cards and truthful truncation; no reusable WindowId/WindowItemRef after exit. |
+| Multi-request session | Own child/streams until explicit session end, EOF, expiry policy or failure | Search may return a window; Continue/Expand are sent on this same live connection. |
 
-## One connection
+The CLI session can be an interactive command loop or framed client mode; select one actual interface rather
+than building both pre-emptively. A terminal event completes one request, not the session. Do not close stdin
+or kill the child after each successful terminal in session mode.
 
-```text
-CLI
-→ spawn/own daemon child
-→ inherited stdin/stdout
-→ one LocalClient
-→ u32-le length + bounded Serde JSON
-→ current dispatcher
-```
+A new independent invocation has no old process-local window. Return an expired/unavailable-window error;
+do not persist tokens, resurrect a daemon or replay Search under the same locator. A future shared daemon is
+a separately selected transport/use case, not a workaround for this mismatch.
 
-Retain exact child/stdin/stdout handles. On terminal/error/cancel: close input, bounded wait, then kill only
-the child created by this invocation if cleanup exceeds its bound. A persistent daemon is never killed by an
-ordinary client.
+The same root cannot be held by several independently spawned owner children. A busy root reports the actual
+owner conflict; it does not start another storage copy or silently change transports.
 
-One original absolute deadline covers write/read/cancel. Partial I/O, EOF or protocol corruption makes the
-session unusable; do not blindly reconnect/replay. Trusted child stdio uses no pairing/grants/binding key.
+## I/O and cleanup
 
-## Output and windows
+Use the current client's request IDs and deadlines. Cancel/EOF must remain observable while a request runs;
+a sync public `invoke` may wrap an internally serviced control/read path. The protocol map specifies the
+blocking-I/O limitation and required finite shutdown behavior.
 
-Render one typed response in human or JSON/NDJSON form:
+At session termination: close owned input, allow bounded child shutdown, then terminate/reap only the child
+owned by this invocation if it does not stop. Do not kill a persistent daemon or claim an uncertain storage
+mutation rolled back. A separate cleanup deadline never authorizes further query work.
 
-- final rank unchanged;
-- exact source/revision/representation/location;
-- verified excerpt;
-- truthful partial/gap/coverage metadata;
-- optional window/item locator and expiry;
-- no denominator unless Exact produced it.
+## Results
 
-Use Serde and bound encoded records before write. `Continue` sends one `WindowId`. `Expand` sends one
-`WindowItemRef` and finite relative context; it cannot request arbitrary bytes from the retained revision.
-Cursor/window state advances only after complete output delivery.
+Render the same typed cards in human/JSON output without changing rank or losing gaps. Encoded records use a
+capped buffer before transport output. Session results may expose locators scoped to that session; one-shot
+results cannot. Continue/Expand obtain a new request budget capped by the original window expiry.
 
-## Remove after cutover
+Expand accepts a selected item plus finite relative context, not arbitrary revision offsets. Partial I/O
+fails the session; do not print a second protocol error after a partial frame. A successful local flush is
+not a client acknowledgement.
 
-- `provider_client/core.rs`, endpoint/TCP/token/descriptor and line-protocol modules;
-- `UnsignedRequest`, `to_core`, marked indexed query and active legacy session wrapper;
-- old typed pairing/profile/grant path for trusted local use;
-- Windows provider transport and pairing credential consumers unless a selected restricted client needs a
-  new concrete adapter;
-- `public_client` tab/hex session and opaque range expansion;
-- `legacy-loopback-harness`, remote/indexed fixture entries and token files;
-- duplicate parser/output/profile/grant fixtures and forwarding facades.
+## Removal and checks
 
-Retain child ownership/cleanup, args_os correctness, current framed client, cancellation and bounded output.
+Remove legacy provider core/endpoint/tab-hex paths, strict indexed markers, mandatory local pairing/grants,
+unused native registration/Windows transport and arbitrary handle-range expansion when real callers move.
+Keep useful child ownership, args_os handling and presentation code.
 
-## Verification
-
-Exercise the actual default binary: help/version no side effects; child Search to Qdrant/retained evidence;
-explicit/empty/unknown source selection; human and JSON/NDJSON escaping/limits; Continue/Expand; Ctrl-C,
-timeout, EOF and partial output; owned-child cleanup; non-UTF-8 path invocation. Verify that no default command
-can enter a legacy endpoint/pairing/tab-hex route.
-
-Run minimal Rust 1.98 compiler/Clippy for changed CLI/client/protocol/daemon targets after implementation.
+Minimal changed-owner compiler/Clippy follows code. Focused behavior: one-shot emits no dead locator; two
+requests and Continue work in the same live child; independent invocation cannot reuse that window; terminal
+does not end a live session; EOF/cancel/timeout clean up only the owned child; actual default dispatch reaches
+the intended handler. No runtime outcome is asserted by this document.

@@ -1,523 +1,214 @@
 # ELIOT Search — implementation
 
-Read the [architecture manifesto](../architecture/README.md) first and keep it in the lead developer's
-context. This document says what to change, where, and what to delete. Historical waves, old receipts,
-pre-release formats and fixture-only APIs are evidence—not compatibility requirements.
+Read the [manifesto](../architecture/README.md) for product intent. This guide selects mechanisms and their
+owners. Package notes contain the source seams; audit maps contain evidence and remaining uncertainty.
+Names in sketches are descriptive, not mandatory new APIs/packages. Implement only the part consumed by the
+current connected change. Keep correct existing code rather than rewriting everything labelled KEEP/REWRITE.
 
-**Inspected target:** public `main` at `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`, 2026-10-18/19.
-Preserve #598's active private source-retention work and consume only its accepted public handoff. Do not
-inspect, reset, rebase or assign a competing writer to its branch/worktrees.
+**Source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
+**Documentation re-review:** 2026-10-21, starting at `36fe7f4`. The earlier blanket audit-closure claim is
+withdrawn; see the [coverage map](../audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md).
 
 ## 1. Build one application
 
 ```text
-ingest:
-  selected source
-  → stable final-handle read
-  → immutable ObjectRef
-  → current SourceRecord/RevisionRef
-  → one MaterializationProduct
-  → structure-first units / retrieval inputs
-  → Qdrant mutation + exact readback
-  → CurrentPublishedView
-
-query:
-  typed SearchRequest
-  → pin current PublishedView
-  → resolve selected scope
-  → one RequestContext
-  → real Qdrant BM25
-  → ViewManifestEntry
-  → retained object/range verification
-  → EvidenceCard[]
-  → optional QueryWindow
+selected source → retained bytes → current source head → prepared units
+→ real Qdrant publication → published view
+→ scoped query → manifest lookup → retained excerpt
 ```
 
-The first finished slice retains one real file across restart, indexes it, finds it from the CLI and reopens
-the correct excerpt. Then make one edit update only affected work, rebuild a lost Qdrant index and cancel a
-bounded request. DIRECT remains an explicit exact/source scan, never a silent indexed fallback.
-
-A constructor, capability, receipt, closed issue, package split or shape test is not delivery. Connect the
-real producer and consumer and remove the replaced path in the same slice.
+One-file lexical search is the first executable milestone, not completion of the manifesto's large-corpus,
+navigation, comparison and incremental-update requirements. A deferred implementation has no empty scaffold
+or mandatory dependency, but its product requirement must not disappear merely because a package is deleted.
 
 ## 2. Owners and cutovers
 
-| Area | Replace | Keep/build |
+| Responsibility | Source map | Change |
 |---|---|---|
-| CLI/protocol | legacy tab/hex, paired provider host, V1 recipes/V2 endpoint, manual JSON, grants/capabilities | one child-stdio client, `u32-le + bounded Serde JSON`, direct handlers, one terminal response |
-| Root ownership | durable owner epochs/records, sealed/migration ownership ceremony | one exclusive OS lock held for the daemon lifetime; it is the prerequisite for process-local GC coordination |
-| Control | eternal `OPERATIONS`, full `ControlSnapshot` copies, registry v4 replay/original inputs | short typed redb transactions and point/bounded-page reads |
-| Source | admission which drops bytes, refusal-only sync, duplicate stores | one inventory queue, one stable read, one immutable object writer, one current source head |
-| Preparation | adjacent-stage reparsing and a second artifact writer | one materialization, structure-first units, one prepared artifact |
-| Identity | revision/absolute-offset-bound Unit/S11/payload identity | stable retrieval point plus versioned manifest evidence |
-| Qdrant | runtime qualification credentials, key-equality leases, in-memory mutation receipts | one daemon-owned client/runtime, native BM25, exact full/narrow mutations and readback |
-| Publication | three phase/receipt machines, compensation and snapshot acknowledgements | one immutable operation artifact, one pending row, one durable current view and finite unfinished cleanup rows |
-| View lifetime | route/epoch pin registry, owner IDs, renewals, sampled watermarks | one small `Mutex + Arc/Weak` current-view manager |
-| Query | recipe/plan/access/executor/validator/projector operating systems | direct `Search/Exact/Continue/Expand`, one scope/context, source-backed cards |
-| Paging | four handle/continuation stores and catalogue-wide fences | one process-local `QueryWindow` |
-| GC/retention | generic leases, graph sweep, purge, restore and reclaimer journals | typed roots, one bounded object-GC gate, publication-owned Qdrant cleanup |
+| Root and settings | [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [config](../../crates/search-config/FUNCTIONS.md) | Actual lifetime lock; typed settings; no owner epochs or activation receipts. |
+| Source and objects | [source](../../crates/search-source/README.md), [objects](../../crates/search-source/search-revision-store/FUNCTIONS.md) | One stable read, one immutable writer, one current source head. |
+| Preparation | [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [units](../../crates/search-prep/search-unitizer/FUNCTIONS.md) | One prepared product, useful structure and exact coordinates. |
+| Index and publication | [planner](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md), [publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md), [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) | Bounded pages, real effects, current view and unfinished cleanup. |
+| Query and output | [query](../../crates/search-query/README.md), [windows](../../crates/search-query/search-continuation/FUNCTIONS.md) | Actual scope, one request context, verified excerpts and session-owned paging. |
+| Local interface | [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) | One typed exchange with an explicit process/session lifetime. |
 
-Packages are current locations, not permanent boundaries. Inline or merge a package when its remaining code
-does not isolate a real dependency or effect.
+An owner is a responsibility, not necessarily a crate or service. Delete wrappers whose only purpose is to
+preserve a discarded interface. Candidate donor APIs are choices, not a checklist of features to implement.
 
 ## 3. Current data
 
-### redb
+redb owns current roots, source heads, prepared references, the published view, one pending publication and
+unfinished cleanup. It does not store bodies, vectors, query history or completed-operation archives.
 
-```text
-AppliedSettings
-RootRecord
-SourceRecord { source_id, root_id, locator/view, current_revision, availability }
-PreparedRef { revision, preparation_profile, artifact_ref }
-CurrentPublishedView
-PendingPublication?
-RetiredCleanup[]
-```
-
-Do not store source text, vectors, complete point pages, query history, completed operations or caller proofs.
-
-### immutable objects
-
-```text
-ObjectRef { content identity, length, storage profile }
-RevisionObject
-PreparedArtifact
-PublicationOperation / ManifestPage / CleanupPage
-```
-
-One writer/reader owns final object names. Unsupported old roots fail before writes and remain untouched.
-
-### retrieval and evidence
-
-```text
-SourceOccurrence {
-  source_id, structural_anchor, occurrence_incarnation, duplicate_position,
-  current revision/representation/range
-}
-
-RetrievalInput {
-  role(document|query|rerank), retrieval_profile,
-  bounded contextual prefix, exact input identity
-}
-
-RetrievalPoint {
-  stable point identity + collision evidence,
-  occurrence incarnation, retrieval input/profile/role,
-  stable filter/group coordinates, validity interval,
-  actual vectors or native document input
-}
-
-ViewManifestEntry {
-  view + point,
-  exact retained source ObjectRef/revision,
-  representation/logical occurrence/range,
-  prepared reference and verification data
-}
-```
-
-Equal text is not one occurrence. Disappear/reappear creates a new incarnation. Revision, absolute offsets and
-citation range do not belong in stable retrieval identity. A later view can reuse a point while binding it to
-a new exact revision/range; old views keep their own binding.
-
-### publication
-
-```text
-CurrentPublishedView {
-  view_id, monotonic sequence,
-  route/generation/retrieval profile,
-  manifest/evidence roots, selected source bindings
-}
-
-PendingPublication {
-  operation_artifact_ref,
-  expected_current_view, target_view,
-  next apply/readback cursor
-}
-
-RetiredCleanup {
-  cleanup_artifact_ref,
-  kind(point IDs | whole generation),
-  route/generation,
-  retire_before_sequence,
-  next delete/readback cursor
-}
-```
-
-`RetiredCleanup` is finite unfinished external state, not history. Remove each row after exact success.
+The immutable store owns source/prepared/manifest/operation bytes. Qdrant owns derived retrieval state.
+A view manifest maps stable points to exact retained revisions, representations and ranges. These are data
+relationships; do not generate a separate repository, schema registry and serializer for every noun.
 
 ## 4. Source and control path
 
-### Settings and invocation
+Capture invocation/config once. Inspect without repair; initialize explicitly. Hold the real root lock for
+the process lifetime and use short typed redb transactions outside filesystem/Qdrant work.
 
-Capture `args_os()` and bounded file/env/CLI config once. Preserve non-UTF-8 paths. Decode typed TOML/Serde,
-validate actual fields and construct owners. Unknown input fails before side effects. Static settings require
-restart; do not build a generic config journal or hash ordinary configuration.
-
-### One root owner
-
-Retain the actual OS exclusion primitive behind `DataRootGuard`, but simplify it to one live owner of the
-current-format root. The process-local object-GC gate is valid only while this exclusive root lock is held.
-Do not require durable owner epochs, sealed co-holds, migration borrowers or ownership receipts for normal
-startup unless a remaining real consumer proves the need.
-
-### Inventory
-
-Use one `ignore::WalkBuilder` traversal and raw `notify::RecommendedWatcher` hints feeding the same bounded
-dirty queue. Coalesce editor/tool bursts; overflow/uncertain continuity schedules an affected-root scan.
-Incomplete scans never retire unseen files; remove/move-from alone is not retirement while replacement or
-rescan is pending. Do not use a whole-tree `FileIdMap`, duplicate `PollWatcher` or supervisor per root.
-
-For Git commit views, resolve exact OIDs once, use `ls-tree -r -z --full-tree`, raw
-`diff-tree --no-renames` and one reused bounded `cat-file --batch-command -Z`. No checkout, textconv, filters,
-hooks, lazy fetch or process per file. `gix` is optional only when packaging requires a no-Git installation.
-
-### Retain the exact acquired body
+Use one ignore-filtered inventory and raw watcher hints feeding the same dirty queue. Incomplete inventory
+never retires unseen sources. For a selected Git view, resolve its exact OIDs once and use bounded raw Git
+plumbing; no checkout/filter/hook/fetch pipeline is implied.
 
 ```text
-pre-read admission
-→ stable final-handle read
-→ post-read classification
-→ immutable object write/readback
-→ short source-head compare/set transaction
-→ preparation queue
+small pre-read policy → stable final-handle read → post-read classification
+→ same acquired bytes into object writer → current-head compare/set → preparation
 ```
 
-The object exists before its source-head reference. Same expected head/same revision replays; same expected
-head/different revision conflicts. Resolve uncertain redb commit by point-reading the source row—not by
-replaying a registry operation or rereading the pathname.
+Do not reread the mutable pathname between acquisition and persistence. Finalize the object before its first
+durable reference; unknown commit resolves by reading the affected row. Remove registry replay, original-input
+archives and admission receipts with callers. The object writer owns actual no-clobber/sync/readback behavior;
+Windows namespace durability is unverified until the selected primitive is exercised, not established by a
+receipt or final readback alone.
 
-Delete `RegistryJournal`, v4 original-input retention/restore, full `SourceRegistry` replay, generic batch
-receipts and complete `ControlSnapshot` publication. Use exact point reads and bounded iteration only for a
-real inventory/publication snapshot.
-
-### One immutable writer
-
-Extract Eliot's useful create-new/file-sync/no-clobber/final-readback sequence from the old cutover artifact.
-Use unique staging names and remove the stage after success/reuse. The current Windows directory-sync path is
-a no-op returning success: qualify a real same-volume no-clobber/write-through profile or state the weaker
-guarantee. Final readback is not power-loss durability, and receipts cannot make it so.
+#598 owns overlapping private object/key work. Preserve that work and coordinate its public handoff; unrelated
+query, protocol, config and documentation changes need not wait for it. Its existing public issue still
+contains six-domain, purge, restore-quarantine and old-format obligations; those do not transfer to this
+architecture. Integrate useful accepted code, not its superseded programme.
 
 ## 5. Preparation and point projection
 
-Pass the owned `MaterializationProduct` directly into unitization. Validate persisted/external artifacts when
-loading them; do not rebuild Markdown/JATS between adjacent stages.
+Pass the same owned materialization into unit construction. Validate loaded external/persisted artifacts at
+the boundary, not by repeating the producer pipeline between adjacent stages.
 
-Use structure-first boundaries: Markdown/JATS sections/items, code definitions/blocks, native document
-items/pages and line-preferred plain-text fallback. Split only oversized structures; merge small adjacent
-peers only under the same context. Tokenizer/model packing is a derived projection, not source identity.
-FastCDC-like boundaries are only an evaluated fallback inside oversized unstructured sections.
+Use existing Markdown/JATS structure and line-preferred plain-text fallback. Code definitions require a real
+selected syntax producer; do not fabricate them. Split oversized items locally. Token/model packing is a
+projection, not source identity.
 
-Keep source bytes/ranges separate from bounded path/title/heading/signature retrieval context. Cache model
-work only by exact input, context, role, model/task and relevant options. A cache hit may still require a new
-manifest/Qdrant binding.
+Separate occurrence identity, current source location and actual retrieval input. A changed offset alone
+must not force unrelated point rewrites. Equal text is not proof that two occurrences are identical. Matching
+ambiguous duplicate/moved structures needs a bounded rule; conservatively recreate ambiguous occurrences
+rather than inventing a universal lineage engine or claiming all edits preserve IDs.
 
-Planner emits bounded ordered pages with uploadable text/vector values, stable point identity and target
-`ViewManifestEntry` values. Use ordered merge walks. Do not rebuild both complete manifests and every diff
-ID into another canonical digest preimage.
+Projection carries uploadable text/vectors plus target evidence bindings in bounded pages. Page ordering and
+point lookup need a concrete implementation; 'paged' alone does not prove bounded memory or fast lookup.
+Avoid complete old/new manifest copies and a new generic plan/fingerprint framework.
 
 ## 6. Qdrant
 
-Use the pinned client privately. One daemon-owned client/runtime serves publication and query. Construct it
-from the configured endpoint and optional actual credential; key rotation rebuilds the client.
+Use one concrete client/runtime for the selected endpoint and actual credential. Remove qualification tokens,
+per-RPC key-equality leases and the process-local mutation receipt ledger.
 
-Remove runtime `QualifiedGate`, executable/client/probe receipts, API-key equality leases, process-local
-mutation replay and relative timeout renewal. Qualification is release/upgrade evidence, not a runtime token.
+Native BM25 document/query inputs and explicit base IDF population replace the local sparse engine. Preserve
+Qdrant order for baseline search. Add native hybrid/prefetch/grouping only when a real selected branch uses
+it. Implement only mutation methods needed by current publication; the vendor's API catalogue is not a task
+list. Full upsert replaces a point; vector/payload patches must preserve unrelated state.
 
-Carry one absolute monotonic deadline/cancellation through every RPC. Before mutation dispatch, timeout is
-known; after a request may have reached Qdrant, outcome is unresolved and publication inspects actual state.
-Reads commit nothing.
-
-Use native semantics exactly:
-
-- full upsert only for a new/complete point replacement;
-- `update_vectors` / `delete_vectors` for selected vectors;
-- payload set/delete/overwrite with merge and replacement distinguished;
-- `wait=true` and exact relevant readback;
-- exact ID or whole-generation deletion;
-- native prefetch/RRF/grouping for compatible branches.
-
-Baseline is one node/shard/replica, one serialized publisher and default/weak ordering with exact readback.
-Stronger topology/ordering is a measured profile, not a universal correctness floor.
-
-Use Qdrant 1.19 `Document` for stored/query `qdrant/bm25`. Bind document/query role, `k`, `b`, `avg_len`,
-tokenizer, case, stemmer, stopwords and folding to the published profile. Bounded identifier expansion is
-input text, not a second sparse engine. Each sparse leaf uses the selected base population as
-`params.idf.corpus`; query-only narrowing does not silently change that denominator.
-
-Profile/vector/schema incompatibility builds and verifies a new physical generation, then publishes it.
-Adding a vector name does not populate old points.
+Every RPC consumes the operation's remaining deadline. Mutation uncertainty belongs to publication and actual
+readback. A partially applied batch is not automatically corruption: distinguish expected pre-state, desired
+post-state and genuinely foreign state per affected item before retrying idempotent work. Incompatible
+profile/schema builds a new generation; no relabelling old points.
 
 ## 7. Publication and lifetime
 
-### Apply and recover
+Keep one publication owner:
 
 ```text
-write/verify operation artifact
-→ commit PendingPublication
-→ for each page:
-     observe if prior outcome uncertain
-     dispatch missing Qdrant work
-     exact readback
-     advance cursor in a short redb transaction
+immutable operation/manifest pages → PendingPublication
+→ Qdrant apply/readback → redb transaction(current view + unfinished cleanup - pending)
+→ short in-process current-view install → eligible cleanup
 ```
 
-No redb writer across object/Qdrant I/O. No bridge receipt ledger. After possible external effect, finish
-forward under the same operation; no compensation theatre, sequence rewind or invalidation-only publication.
+The durable commit precedes pointer installation. Never hold the view-manager mutex over disk/RPC I/O. A
+request pinning the old view in that gap remains valid. Recovery reads the actual current/pending/cleanup
+rows, not historical success receipts.
 
-### Durable commit, then short pointer swap
-
-After all apply pages verify:
-
-```text
-redb transaction:
-  compare current/pending
-  CurrentPublishedView = target
-  RetiredCleanup += unfinished physical delete, if any
-  PendingPublication = none
-→ commit
-→ under a short view-manager mutex:
-     retired += Weak(old current)
-     current = Arc(target)
-→ report publication visible
-```
-
-Do **not** hold the view-manager mutex across redb fsync. A query which pins the old view between durable
-commit and pointer swap remains correct: its immutable sequence/manifest still works and merely delays
-cleanup. If the process crashes in that gap, restart installs the durable target and no old request survives.
-If redb commit acknowledgement is uncertain, resolve typed rows before swapping. Publication completion is
-reported only after the in-memory current pointer is installed.
-
-Serving/query/status use the manager's current view. redb is the restart/recovery source, not a second live
-routing authority.
-
-### View manager
-
-```text
-current: Arc<PublishedViewState>
-retired: ViewId → Weak<PublishedViewState>
-```
-
-`pin_current()` briefly locks and clones only current. A live request may clone its guard into a
-`QueryWindow`. There is no route/generation/sequence/owner-ID acquisition or renewal API. The manager stores
-only weak old refs and prunes dead ones. Last old drop only wakes cleanup; periodic scanning is fallback.
-Never delete in `Drop`.
-
-### Correct cleanup threshold
-
-```text
-point IDs closed at sequence N:
-  safe iff no live view on the same route/generation has sequence < N
-
-old collection:
-  safe iff no live view uses that route/generation
-```
-
-The immediate predecessor is insufficient: v1 may remain live after v2 is gone while v3 closes a point seen
-by both. After restart, interactive old guards are gone; durable cleanup rows remain and are reevaluated.
-
-The cleanup table is finite. If full, pause new publication before another external mutation and continue
-serving/cleanup. Do not evict a live view or delete optimistically. Unknown deletion keeps the same cursor and
-retries exact readback. A later generation-cleanup row may subsume exact rows only through an explicit exact
-same-generation transfer; baseline may simply retain/backpressure rather than invent another merger.
+New requests pin only current. Existing requests may keep their guard in a live query window. For point
+closures at N, wait for every same-generation live view below N, not only the immediate predecessor. A
+collection waits for all its users. Cleanup rows contain only unfinished effects and disappear on completion.
+Use ordinary Arc/Weak ownership; no public pin IDs, renewal or acquisition of old views by ID.
 
 ## 8. Immutable-object GC
 
-The root's exclusive OS lock guarantees one live writer/GC process. Inside it, use one process-local
-`RwLock<()>` or equivalent to close the finalization→first-reference race.
+Protect current source/prepared refs, current/pending/cleanup manifests and live views. A shared producer guard
+must cover finalization/reuse through first durable reference; GC must not delete in that gap. Keep filesystem
+I/O out of the view-manager lock. Unknown/corrupt/incomplete root information retains bytes.
 
-```text
-producer shared guard:
-  acquire before final object publication/reuse
-  → finalize/verify object
-  → commit its first source/prepared/pending/cleanup/history reference
-  → release
-
-bounded GC exclusive guard:
-  snapshot current source/prepared, current view, pending, cleanup and live-view roots
-  → traverse known current-format manifests under finite limits
-  → enumerate/delete one exact unreferenced page
-  → release/yield
-```
-
-Lock order is fixed:
-
-1. root OS lock exists for process lifetime;
-2. object-GC shared/exclusive gate;
-3. redb transaction;
-4. view-manager mutex is never held while acquiring the GC gate or running redb/object/Qdrant I/O.
-
-Reads need no GC guard. Strong live-view snapshots protect old manifests during a pass. Missing/corrupt/
-unsupported roots, incomplete inventory or uncertain delete retain bytes. Failed deletion is rediscovered;
-no sweep journal. Staging names are outside the final namespace and have separate bounded debris cleanup.
-
-Delete `search-retention`, generic leases/graphs/sweep/purge, `wave7-lifecycle`, restore composition and their
-configuration/tooling/fixtures after callers move.
+The current GC proposal still needs a bounded traversal/cost analysis: rescanning every live manifest for
+every deletion page is not made cheap by calling each page bounded. Settle this in the object/publication
+owner without reinstating generic leases, a graph database or permanent sweep history. No claim of completed
+GC design or runtime verification is made here.
 
 ## 9. Query and evidence
 
-Current operations:
+A handler pins the view, resolves the selected non-widening scope and owns one request deadline, cancellation
+and finite nomination/read/output counters. Baseline Search calls Qdrant directly; no plan/capability/grant
+objects are needed. Exact streams the selected retained inventory and alone may claim complete no-match.
 
-```text
-Search    ranked source-backed evidence
-Exact     one bounded exhaustive retained-source scan
-Continue  next QueryWindow page
-Expand    bounded context around one emitted item
-Orient / Compare only when real handlers exist
-```
-
-Do not translate through `RecipeIdV1`, `SearchTaskPlan`, capabilities, grants, plan digests or a V3 wrapper.
-
-Resolve requested source IDs against the pinned view: unknown fails, explicit empty never widens, compatible
-sources share one route/profile retrieval/IDF population, and optional restricted session can only narrow.
-Split only incompatible routes/profiles.
-
-One request owns:
-
-```text
-PublishedViewGuard
-ResolvedScope
-absolute deadline + cancellation
-remaining backend nominations / evidence items
-remaining source-read / retained-result / output bytes
-```
-
-A small RAII semaphore may bound concurrency. No public scheduler, tickets, terminal map or durable query
-ledger. Nested work never resets the deadline.
-
-Baseline Search is one Qdrant BM25 call; preserve Qdrant order. Compatible hybrids use native Qdrant fusion.
-A private integer rank merge exists only for a real non-Qdrant branch. Never compare raw scores across
-populations or include leg ID in candidate identity. Ordinary top-k is non-exhaustive and does not call
-unconditional exact count.
-
-A hit becomes evidence only through:
-
-```text
-stable point
-→ pinned ViewManifestEntry
-→ exact retained ObjectRef/representation/range
-→ actual immutable-object/range verification
-→ VerifiedEvidenceItem
-```
-
-Select the output page before source I/O and group reads by object/representation. Foreign/conflicting/missing
-manifest points fail the backend result; a valid entry with unavailable evidence becomes a gap. Echoed payload
-or vector digests are not evidence. Projection preserves final order and only formats bounded cards; inline
-it if trivial.
+Select a page before retained-source reads. Lookup each point in the pinned manifest, read actual retained
+bytes and preserve final rank through formatting. Foreign/conflicting manifest points fail that backend
+result; missing retained evidence is an explicit gap. Hash echoes do not establish bytes.
 
 ### QueryWindow
 
-```text
-QueryWindow {
-  id, PublishedViewGuard,
-  final ordered EvidenceRef[], next_index,
-  optional issued item locators/cached excerpts,
-  absolute expiry, finite metadata/read/output limits
-}
-```
+The [window owner](../../crates/search-query/search-continuation/FUNCTIONS.md) specifies lifetime, page
+accounting and output commit. The window belongs to one live session; a one-shot CLI must not print a locator
+which will die as soon as its child exits. Each Continue/Expand has a fresh request deadline capped by the
+unchanged window expiry. Never reuse the completed Search deadline or renew the window TTL.
 
-Insert the first window and advance later pages only after a complete response frame flushes. Partial output
-advances zero and closes safely. Page selection is direct slicing. Cards include source/revision/location/
-excerpt. `WindowItemRef { window_id, item_index }` expands only a bounded neighborhood around that exact item,
-not arbitrary revision offsets. Restart may expire all windows.
-
-Delete shared and daemon handle/continuation stores, source-catalog fences, random per-item tokens, durable
-replan/security histories and arbitrary-range expansion.
-
-### Exact
-
-Use the existing Aho-Corasick matcher and optional one bounded `regex-automata` adapter. Stream one ordered
-pinned inventory, verify/read/release one object at a time and report truthful complete/incomplete outcome.
-Delete compile/execute plans, permits, supplied readbacks, denominator digests, checkpoints and the second
-matcher.
+Advance only across candidate references whose card or gap was represented in the successfully written
+response. Output-limited, unprocessed references remain for the next page. A successful flush is not proof of
+client receipt; lost/partial sessions expire their windows rather than requiring exactly-once delivery.
 
 ## 10. Local protocol and CLI
 
-One wire:
+Use one length-prefixed typed JSON exchange. The [protocol map](../../crates/search-provider-protocol/FUNCTIONS.md)
+owns the single wire/I/O recipe; package READMEs link to it instead of copying it.
 
-```text
-[u32 little-endian body length][bounded UTF-8 Serde JSON]
-```
+Separate a one-shot command from a multi-request session using the same transport and dispatcher. One-shot
+returns no live locators after exit. Session mode keeps the owned child until explicit session end, disconnect,
+expiry policy or failure; a terminal event ends a request, not the session. Persistent cross-invocation daemon
+support is a separate selected need, not a prerequisite or an excuse to persist windows.
 
-Check size before allocation, read exactly one body, decode the current DTO, dispatch one actual handler,
-optionally emit finite progress and exactly one terminal response. Encode/size-check the whole output frame
-before first write. Partial output is fail-stop; append no second error and commit no window/cursor state.
+One active data request still requires a control reader able to receive Cancel/EOF while the handler runs.
+Do not advertise cancellation with a read→execute→read loop. Use the existing runtime and a small bounded
+reader/control path, not a general request scheduler. Check actual blocked-I/O behavior: polling a clock
+before blocking Write, or aborting a started spawn_blocking task, cannot guarantee interruption.
 
-Trusted baseline is owned child stdin/stdout; an owner-only OS pipe is optional. It needs no pairing challenge,
-per-frame MAC, durable binding, product grant or capability digest. A selected restricted-client adapter may
-authenticate separately and terminate into the same dispatcher.
-
-CLI captures one invocation, owns child/stream handles, converts timeout once to an absolute deadline, sends
-best-effort cancellation on interrupt and performs bounded child cleanup. `Continue` carries `WindowId`;
-`Expand` carries `WindowItemRef` plus bounded relative context. Use Serde for machine output; do not substring-
-parse events or concatenate JSON.
-
-Delete provider pairing/binding/grant/manual JSON/recipe stacks, the old typed session, legacy core/TCP/token/
-endpoint/tab/hex paths and their wire/crypto fixtures with callers.
+Encode with Serde into a capped buffer before any transport write. `to_vec` followed by a size check does not
+bound serialization allocation. Keep one response writer; on partial I/O close the session and commit no
+page progress. Transport/cleanup guarantees must match executed platform behavior.
 
 ## 11. Optional depth
 
-- Orientation: existing path/title/heading/syntax/Markdown link facts first; bounded relations only.
-- Code outline: selected `ast-grep outline` output; import actual SCIP/LSP locations when available.
-- PDF: one native extractor returning page/text coordinates; OCR only when useful text is absent.
-- Dense retrieval: one selected model/profile and actual vector input; no model registry before caller.
-- Reranking: finite source-backed subset only; it may reorder/subset, never create evidence.
-- Editor overlay: one explicit process-local branch shadowing matching occurrences.
-- No GraphRAG/notebook database/query-rewriting LLM/generated-answer pipeline in baseline Search.
+Delete dead scaffolds, not the purpose of the product. Ordinary path/heading/range information supplies the
+first orientation. More precise outline/SCIP, selected document extraction, dense retrieval, reranking,
+overlays, remote clients and MCP are separate changes only when requested with a real consumer. An unselected
+option adds no enum variant, provider registry, worker, config section or dependency now.
+
+The manifesto still owns navigation/comparison/large-corpus goals. Removing an existing optional package
+means its current design is not reused; it does not silently cancel the user's goal or require a model.
 
 ## 12. Donor seams
 
-| Seam | Reuse | Reject |
-|---|---|---|
-| CLI | ripgrep parse-once dispatch | repeated argv capture/framework |
-| Inventory | `ignore::WalkBuilder` + raw `notify` hints | whole-tree ID cache/duplicate poller |
-| Git | `ls-tree`, raw `diff-tree`, reused `cat-file --batch-command` | checkout/filter/process-per-file |
-| Control | redb typed tx + MVCC reads | operation ledger/full snapshots |
-| Objects | Eliot cutover finalization shape + Git temp/final publication | migration owner/permanent receipt |
-| Framing/config | bounded Serde JSON/TOML | hand-written grammar/canonical hash |
-| Deadlines | one absolute remaining-time pattern | renewed duration per phase/RPC |
-| Qdrant | pinned client, native BM25/IDF/fusion/grouping, exact mutations | second backend/local sparse engine |
-| Structure | existing parsers + selected Docling/Unstructured boundary ideas | imported document framework |
-| View lifetime | Lucene in-memory snapshot rule | durable query leases/public reclaim permits |
-| Object GC | Tantivy living-file callback idea | second index/generic managed-file authority |
+Use the [donor register](../audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) for inspected behavior/version
+limits: redb transactions; Qdrant retrieval/mutations; Serde/TOML; ignore/notify; Git plumbing; selected parsers
+and matchers. Borrow only the needed mechanism. No donor becomes a second backend or framework.
 
-Lucene explicitly states its snapshot state is not persisted; Eliot persists only real unfinished cleanup.
-Tantivy supplies the “derive living files from committed/in-flight metadata” idea; Eliot roots come from its
-own typed current/pending/cleanup/live records.
+For framing specifically, Serde `to_writer` supports a capped local Write sink. Tokio blocking-I/O cancellation
+limitations are recorded in the protocol map. Do not turn an upstream limitation into a false timeout promise.
 
 ## 13. Implementation order
 
-1. **#330/#270:** one immutable writer/reader and one real source head using #598's accepted handoff.
-2. **#331:** one materialization, structure-first units and prepared ref.
-3. **#259/#329:** stable point identity and versioned manifest evidence.
-4. **#263:** one real Qdrant runtime and native BM25 path.
-5. **#261/#300/#303:** pending publication, commit-then-swap view manager and finite cleanup rows.
-6. **#302:** object-GC gate and known-root bounded GC.
-7. **#272/#291/#293/#279:** selected scope, request context, evidence lookup and connected Search.
-8. **#275/#280/#332:** QueryWindow, framed protocol and actual CLI.
-9. **#249:** direct exact scan.
-10. Delete superseded packages/features/tests as each caller cutover lands; do not defer removal to a final
-    mega-task.
+Integrate one retained-source path with #598's coordinated handoff (#330/#270), preparation (#331), stable
+retrieval/evidence (#259/#329), real Qdrant (#263), publication/view/cleanup (#261/#300/#303), source-backed
+query (#272/#291/#293/#279) and CLI/session (#275/#280/#332). Exact and rebuild use the same owners.
+
+This is data dependency order, not a global writer queue. Independent code and cleanup can proceed on actual
+non-overlapping responsibilities. Do not require a full product in each small change or create missing
+prerequisite frameworks. The first end-to-end milestone may span several compiling changes; remove each
+replaced path when its real callers move.
 
 ## 14. Verification
 
-Write code first. Run minimal pinned compiler/Clippy for changed production owners and immediate consumers.
-Use focused checks only for catastrophic semantics in the current slice; broad matrices/native/scale work
-follow after the connected product exists.
+Write the selected code and run minimal pinned check/Clippy over changed owners/consumers. Focused causal
+checks follow the changed behavior; broad test/native/recovery/scale work follows the connected product.
+No audit map, package count, review badge or old byte fixture is a prerequisite for independent implementation.
 
-Minimum readiness evidence:
-
-- retain a real file and restart;
-- real CLI → daemon → Qdrant → retained excerpt;
-- edit/rename without suffix-wide rewrite;
-- explicit scope and IDF population;
-- old query survives view switch;
-- v1/v2/v3 cleanup threshold and generation cleanup;
-- crash at pending/current/cleanup/pointer-swap boundaries;
-- GC finalization→first-reference race under one root owner;
-- paging/expansion/partial output;
-- cancellation/deadline without renewal;
-- delete Qdrant and rebuild;
-- unsupported modes fail truthfully.
-
-Do not claim Windows durability, live-Qdrant behavior, recovery, performance or readiness from source presence,
-fixtures, capability descriptors, review records or compilation alone.
+Still required as behavior exists: retained restart; actual CLI→Qdrant→excerpt; edit/rename reuse; selected
+IDF/scope; old-view lifetime; pending/current/cleanup crash boundaries; first-reference/GC race; session
+paging; short output; blocked-I/O cancellation; index rebuild and truthful unsupported modes. Record unrun
+cases explicitly. Source inspection and this guide establish no runtime or exhaustive-audit guarantee.

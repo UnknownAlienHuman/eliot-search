@@ -1,129 +1,78 @@
-# ELIOT Search — audit coverage and documentation disposition
+# Audit coverage and documentation corrections
 
-**Audited public baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Closure status:** **STATIC AUDIT COMPLETE FOR REFACTOR PREPARATION**  
-**Product/runtime qualification:** false.
+**Source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
+**Documentation examined:** `36fe7f439e2aa271852620fd33dc424cc975a88e`, re-reviewed 2026-10-21.
+**Status:** broad static review with open design/documentation gaps. The preceding claim
+`STATIC AUDIT COMPLETE FOR REFACTOR PREPARATION` is withdrawn. No exhaustive or runtime claim is made.
 
-This is the single map of what the audit established. “Complete” means that the current public architecture,
-principal implementations, real callers, competing owners, active implementation queue and documentation
-authority were traced deeply enough to define the refactor. It does **not** mean every Rust line or fixture
-was read and does not claim native/runtime/live-Qdrant/recovery/performance execution.
+This file records evidence and unresolved work. It is not implementation authority, an agent launch gate,
+a new task queue or a requirement to read every audit before coding. The manifesto and implementation guide
+remain the two project-wide starting documents.
 
-## 1. Status vocabulary
+## Coverage
 
-| Status | Meaning |
-|---|---|
-| **SOURCE-TRACED** | Principal implementation, entrypoint, real callers and competing owners were inspected deeply enough to define the keep/merge/delete boundary. |
-| **INVENTORIED** | The family was measured/classified; individual files are reviewed while their owning cutover is implemented. |
-| **OPTIONAL** | It cannot block the baseline and may return only through a selected concrete consumer/profile. |
-| **NOT EXECUTED** | No native/runtime/live-Qdrant/performance/recovery claim exists. |
-| **OUTSIDE AUDIT** | Deliberately not inspected because another active manager owns unpublished work. |
+| Area | Evidence available | Limit |
+|---|---|---|
+| Workspace/entrypoints | Cargo targets, feature topology and principal caller paths; every workspace member has a proposed disposition | Disposition is not proof that every line or removal consumer was checked. |
+| Source/root/config/control | Source maps trace dropped bytes, replay/archive layers, root and configuration blockers | Native behavior and the private object/key implementation were not executed/read. |
+| Preparation/identity/Qdrant | Source maps and donor seams trace duplicate work, unstable identities and disconnected bridge calls | Duplicate-occurrence matching, manifest lookup cost and live scoring/mutation behavior are not fully demonstrated. |
+| Publication/view/GC | Recorded state ownership, crash-boundary reasoning and multi-view cleanup condition | Runtime fault behavior and bounded GC traversal cost remain unverified. |
+| Query/protocol/CLI | Principal proof/handle/recipe stacks and serving callers were inspected | This re-review found contradictions in the replacement design itself. |
+| Tests/tooling/history | Families inventoried and major consumers traced | No exhaustive fixture-by-fixture or all-document sweep. |
+| Optional features/donors | Selected implementations/callers and mechanisms inspected | Not an exhaustive donor survey; optional does not mean a cancelled product goal. |
+| Private #598 | Public issue contract read | Unpublished source/worktrees untouched; public old requirements conflict with the new baseline. |
 
-The audit does not use a fake completion percentage. Its closure criterion is a concrete owner/disposition for
-every workspace member, one implementation graph, a reconciled active issue queue and unambiguous document
-authority.
+## Defects found in the replacement documentation
 
-## 2. Coverage and result
+| Finding at the examined head | Why it invites excess or broken code | Correction / owner |
+|---|---|---|
+| This map declared itself normative and made #598 the only legitimate pre-code dependency | Recreates an approval hierarchy and blocks unrelated implementation | Maps are descriptive. Coordinate actual overlapping object/key files; do not inherit #598's old six-domain/purge/restore programme. Root AGENTS and implementation corrected. |
+| Package table summary disagreed with its own 52 rows | False certainty can drive mechanical package recreation/deletion | Rows recount to 17 keep, 11 merge, 16 delete, 6 optional, 2 conditional. Map corrected; counts are not targets. |
+| CLI closes child on every terminal but exposes Continue/Expand locators | Locators die before another invocation can use them; invites durable-token workaround | Explicit one-shot versus live multi-request session. One-shot emits no reusable window ID. CLI/protocol/window maps corrected. |
+| Sequential read→handler execution combined with advertised Cancel | Cancel cannot be read while the handler blocks the reader | One active data request plus an independently serviced bounded control reader; not a general scheduler. Protocol map corrected. |
+| Checking deadline before Write was treated as a complete timeout mechanism | A blocked call can outlive its deadline; fake cancellation wrappers multiply | Source itself says it cannot interrupt blocked I/O. Actual transport cancellation/owned-child termination must supply the bound. |
+| `serde_json::to_vec(...) under encoded ceiling` | The ceiling is not enforced during allocation | `to_writer` to a capped local buffer, then frame/write; input DTO bounds remain necessary. |
+| 'Original deadline' applied ambiguously to future pages | Either every page expires with Search or TTL is renewed indefinitely | Each request has its own deadline; fixed window expiry caps Continue/Expand. |
+| Advance a prepared slice after formatting fewer cards | Output truncation can silently skip unprocessed candidates | Track the handled prefix: emitted cards plus explicitly represented gaps, not the proposed slice length. |
+| Successful flush called delivery | Local write success does not establish client receipt | No exactly-once claim. Lost/partial connection drops session windows; caller repeats Search. |
+| Pseudocode types/API lists and optional candidates were repeated across documents | Agents can implement a separate abstraction for every noun and every future option | Names are illustrative; only actual callers justify code. Wire/window algorithms have one owning FUNCTIONS map; READMEs link to it. |
 
-| Area | Status | What was established | Current map |
-|---|---|---|---|
-| Architecture, ADRs and old requirements | SOURCE-TRACED | Architecture 8.4/waves, compatibility, migration, security, qualification and process requirements were compared with the actual local product. The short manifesto supersedes them. | [`docs/architecture/README.md`](../architecture/README.md) |
-| Workspace, packages, features and entrypoints | SOURCE-TRACED | All 52 Cargo members received **keep/rewrite**, **merge/inline**, **delete**, **optional** or **#598-conditional** disposition. Shadow applications, harness binaries and feature ladders were mapped. | [`WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md`](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
-| Root ownership and daemon composition | SOURCE-TRACED | Real lock/handle authority was separated from epochs, leases, owner slots, migration custody and receipt history. | [`search-runtime-owner/FUNCTIONS.md`](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
-| Configuration and readiness | SOURCE-TRACED | Custom parser/tree/registry/fingerprint/diff/action/receipt stack and startup refusal were traced; one typed settings value replaces it. | [`search-config/FUNCTIONS.md`](../../crates/search-config/FUNCTIONS.md) |
-| Source admission/read/registry/history/reconcile/Git | SOURCE-TRACED | Dropped acquired body, registry replay/original inputs, receipt/provenance archives, sync refusal and watcher/inventory gaps were traced to real callers. | [`crates/search-source/README.md`](../../crates/search-source/README.md) |
-| Immutable objects and storage protection | SOURCE-TRACED, #598-CONDITIONAL | Duplicate publication kernels, staging leaks and Windows durability gap were traced. Final crypto/Windows package disposition depends only on the accepted #598 handoff. | [`search-revision-store/FUNCTIONS.md`](../../crates/search-source/search-revision-store/FUNCTIONS.md) |
-| Materialization and unitization | SOURCE-TRACED | Adjacent-stage reparsing, duplicate artifact writer, copy/serialization waste, ExactBytes restrictions and revision/offset identity amplification were traced. | [`search-materializer/FUNCTIONS.md`](../../crates/search-prep/search-materializer/FUNCTIONS.md) |
-| Retrieval point identity and projection | SOURCE-TRACED | Legacy identity and revision-bound S11 v1 were both rejected; stable retrieval identity was separated from versioned evidence binding. Whole plans/manifests become bounded pages. | [`search-point-identity/README.md`](../../crates/search-index-qdrant/search-point-identity/README.md) |
-| Qdrant supervisor/bridge/query | SOURCE-TRACED | Real SDK code, disconnected daemon callers, qualification/auth ceremony, process-local receipt ledger, schema/profile defects, native BM25/IDF/fusion and exact mutation semantics were traced. | [`search-qdrant-bridge/FUNCTIONS.md`](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
-| Publication, view lifetime, cleanup and GC | SOURCE-TRACED | Three publication machines, incomplete durable recovery, raw pins/watermarks/reclaimer/retention overlap and correct multi-view cleanup threshold were traced. | [`search-publication/FUNCTIONS.md`](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
-| Query, exact scan and evidence | SOURCE-TRACED | Recipe/capability/plan/grant stack, scheduler/tickets/count, fusion identity, readback-proof defect, projector reorder and exact-proof platform were traced. | [`crates/search-query/README.md`](../../crates/search-query/README.md) |
-| Handles, continuation and output | SOURCE-TRACED | Four overlapping stores, whole-catalog fences, prefix rescans, arbitrary revision expansion and useful commit-after-complete-output behavior were traced. | [`search-continuation/FUNCTIONS.md`](../../crates/search-query/search-continuation/FUNCTIONS.md) |
-| Protocol, clients and CLI | SOURCE-TRACED | Pairing/MAC/grant/manual JSON stacks, typed client, daemon provider platform, separate line protocol, tab/hex translation and child-stdio ownership were traced. | [`search-provider-protocol/FUNCTIONS.md`](../../crates/search-provider-protocol/FUNCTIONS.md) |
-| Shared contracts, domain and ports | SOURCE-TRACED | Planned recipe/proof/lifecycle catalogue, domain ownership drift and 23 global traits/80 operations were traced to actual callers. Concrete owners replace the global port OS. | [`search-contracts/README.md`](../../crates/search-contracts/README.md) |
-| Tests and harnesses | INVENTORIED / SOURCE-TRACED BY FAMILY | Module/source-shape tests, process harnesses, oracle indexed path and manually joined product-spine path were classified. Causal tests move to receiving owners. | [`docs/implementation/TEST_CUTOVER.md`](../implementation/TEST_CUTOVER.md) |
-| Tooling, swarm and generated governance | SOURCE-TRACED BY FAMILY | xtask commands, maps, ledgers, integration bootstrap, workflows, partial Rust/Qdrant analyser and P00 control plane were traced with their consumers. | [`xtask/README.md`](../../xtask/README.md) |
-| Optional model/document/overlay/MCP/code-intelligence/evaluation | OPTIONAL | Each area is deleted, deferred or constrained to one selected profile/consumer. None blocks lexical Search. | [`docs/implementation/README.md`](../implementation/README.md) §11 |
-| Donors | VERIFIED PER RECORDED SEAM | Concrete mechanisms and limitations were checked for redb, Qdrant, Tokio, Serde/TOML, ripgrep, Git, Tantivy/Lucene, Docling/Unstructured/PDFium, ast-grep/SCIP and selected RAG systems. This is not an exhaustive market survey. | [`DONOR_VERIFICATION_REGISTER_2026-10-09.md`](DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
-| Native Windows, live Qdrant, crash recovery, scale and performance | NOT EXECUTED | These become implementation/runtime evidence after the connected product path exists. | Implementation §14 |
-| Private #598 branch/worktrees | OUTSIDE AUDIT | Only its public issue contract was used. No unpublished work was inspected or duplicated. | [#598](https://github.com/UnknownAlienHuman/eliot-search/issues/598) |
+### Source and donor checks for the I/O corrections
 
-## 3. Documentation authority
+The actual [output_deadline.rs](../../bins/eliot-searchd/src/public_runtime_service/kernel/output_deadline.rs)
+explicitly states it does not interrupt an already-blocked writer. This is a source fact, not a reproduced
+runtime hang.
 
-The only project-wide documents allowed to direct implementation are:
+Official documentation checked 2026-10-21: Serde JSON 1.0.151 `to_writer` accepts an `io::Write` sink;
+Tokio 1.53.1 `spawn_blocking` cannot abort a started closure. Current Tokio stdin documentation also describes
+an uncancellable blocking read. References and the chosen application limits are in the
+[protocol map](../../crates/search-provider-protocol/FUNCTIONS.md). This does not qualify a Windows pipe.
 
-1. [`docs/architecture/README.md`](../architecture/README.md) — concise purpose, boundaries and principles.
-2. [`docs/implementation/README.md`](../implementation/README.md) — concrete owners, cutovers, order and donor seams.
-3. [`docs/handoff/DEPENDENCY_GRAPH.md`](../handoff/DEPENDENCY_GRAPH.md) — current effect/data dependency graph.
-4. This coverage map.
-5. [`WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md`](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) — all workspace members.
-6. Current package-local `README.md`, `FUNCTIONS.md` and `AGENTS.md` where they agree with items 1–5.
-7. The current active issue body for the implementation slice.
+## What remains open
 
-Supporting evidence:
+- Cross-check all remaining local instructions/active issue bodies against the changed session and
+  implementation rules. Only affected issues are reconciled in this pass; no issue-number range implies that
+  every intervening issue was checked.
+- Specify bounded manifest point lookup and ambiguous occurrence matching before those operations are coded.
+  Neither 'stable' nor 'paged' is an algorithm.
+- Check GC traversal/locking cost and object-root completeness against the implemented producer/reference path.
+- Reconcile the public #598 handoff with the simplified storage boundary without touching private work or
+  reintroducing its old requirements.
+- Separate buildable source, demonstrated behavior, measurements and proposed design in remaining historical
+  claims. Native/live-Qdrant/crash/performance runs are still absent.
 
-- [`ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md`](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) — distilled source findings and reasons.
-- [`docs/implementation/TEST_CUTOVER.md`](../implementation/TEST_CUTOVER.md) — test/harness disposition.
-- donor register — only for explicitly recorded donor behavior/limits.
+These are scoped follow-ups, not a new mandatory audit wave. Independent implementation need not wait for
+unrelated checks. Never claim that assigning a disposition proves all documentation defects were found.
 
-Historical-only path classes:
+## Document roles
 
-```text
-docs/architecture/ELIOT_SEARCH_8.4_*
-docs/audit/* outside README/coverage/disposition/distilled-audit/donor register
-docs/handoff/* except README.md and DEPENDENCY_GRAPH.md
-docs/product/PACKAGE_STATUS.toml and the old analysis framework
-swarm/**
-qualification/**
-config/build-profiles-v1.toml
-config/data-layout-v1.toml
-retired package maps, coverage graphs and accepted-evidence records
-```
+[Architecture](../architecture/README.md): purpose and constraints.
+[Implementation](../implementation/README.md): selected mechanisms and receiving owners.
+Local FUNCTIONS maps: concrete source seams and the single definition of an operation's behavior.
+READMEs/AGENTS/issues: concise routing and change scope, not copies of the algorithm.
 
-These files may preserve evidence but cannot issue a current `MUST`, block a cutover or restore old
-compatibility/process machinery. [`docs/audit/README.md`](README.md),
-[`docs/handoff/README.md`](../handoff/README.md) and [`docs/product/README.md`](../product/README.md) make the
-path-level rule explicit. Git history is the archive; individual historical files need not be rewritten to
-mirror the new architecture.
-
-## 4. Documentation and queue reconciliation completed
-
-- [x] Old master audit replaced by an explicit historical pointer.
-- [x] 2026-10-17 audit distilled and corrected; S11 v1 is no longer preserved.
-- [x] All 52 workspace members mapped.
-- [x] Audit, handoff and product entrypoints define current versus historical authority.
-- [x] High-risk current package instructions checked: root, config, source, control, preparation, identity,
-      Qdrant, publication, scope/query/evidence, windows, protocol/client/CLI, contracts, optional packages,
-      retention/tooling.
-- [x] Active implementation queue reconciled: #214, #244, #248, #249, #259, #261, #263, #264, #266, #267,
-      #270–#280, #291, #293, #300, #302, #303, #329–#333, #335, #360 and #525 describe the current owner/data
-      model and do not retain old blockers.
-- [x] Optional areas explicitly deleted/deferred/selected; they cannot block baseline.
-- [x] Static findings are separated from unexecuted runtime claims.
-
-Old issue links to immutable intermediate documentation commits remain valid evidence; architecture,
-implementation and this map override them if wording differs. There is no need to churn every issue merely
-to replace a stable commit URL.
-
-## 5. Closure and next step
-
-The **architecture/code/donor/documentation audit is complete for beginning the refactor**. It remains a broad
-source-traced audit, not a line-by-line verification of all 1,593 Rust files. Compiler-guided removal will
-expose individual residual callers during implementation, and each cutover must delete its replaced package,
-tests, docs, tooling and dependency edges.
-
-The only legitimate pre-code dependency is the accepted public handoff from #598 for its owned source/object/
-key boundary. Everything else has a target owner and implementation issue.
-
-First Rust slice:
-
-```text
-#598 accepted retained-source result
-→ #330 one immutable object owner
-→ #270 one current SourceRecord / RevisionRef compare-set
-→ #331 one preparation handoff
-```
-
-Then follow the implementation order in [`docs/implementation/README.md`](../implementation/README.md). No
-additional audit wave, launch gate, package-status update, compatibility plan or qualification receipt is
-required before coding.
+The [workspace map](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md),
+[source findings](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) and
+[donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) are supporting evidence. Historical 8.4/wave,
+swarm, qualification and package-status material cannot direct new implementation. Preserve useful original
+requirements as goals or explicit gaps instead of silently deleting them with their old mechanism.

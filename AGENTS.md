@@ -1,45 +1,45 @@
 # Working on ELIOT Search
 
-Read these two documents at the start of implementation:
+Start with the [architecture](docs/architecture/README.md) and the
+[implementation guide](docs/implementation/README.md). Keep the short manifesto in the lead developer's
+context; load only the code and local implementation notes needed for the current change.
 
-1. [Architecture](docs/architecture/README.md): product purpose, boundaries and principles. Keep it in
-   the lead developer's context.
-2. [Implementation](docs/implementation/README.md): current owners, concrete integration, removals and
-   donor APIs. Read the code for the part being changed.
+The maintainer's current request governs. Audit tables record findings; they are not another specification,
+permission system or prerequisite for coding. Historical waves and package contracts cannot restore retired
+compatibility, cryptographic or process requirements.
 
-The maintainer's current instructions govern. Historical masters, issue trains and package contracts
-cannot restore retired legacy, cryptographic or process requirements.
+## Implement the behavior, not the diagram
 
-## Make the application work
+Trace the real input, owner and consumer. Reuse a correct implementation; change the defective responsibility
+and its immediate consumers together, then remove the replaced path. A pseudocode type, candidate donor,
+package row or issue number is not an instruction to create a class, trait, crate, registry or worker.
 
-Trace the entrypoint, data and actual callers before editing. Reuse delivered code where it serves the
-result; a type, trait or closed issue does not prove a working consumer. Change an owner and its real
-consumers together. Remove the replaced implementation in the same coherent change.
+Use direct calls and ordinary data first. Isolate a real dependency, effect or repeated policy only where it
+helps the current operation. Do not invent a second implementation to justify a trait or split a function to
+satisfy a line quota. Internal/pre-release APIs need no compatibility wrappers. Reject unsupported stored
+roots before writes and preserve user data.
 
-Do not manufacture grants, digests, probe receipts or placeholder IDs to satisfy an obsolete API.
-Simplify that API and its users. Internal/pre-release formats need no compatibility layer. Reject an
-unsupported old root before writing and leave it intact; no migration/export platform is a prerequisite
-for the new application.
+A document rule has one home. Architecture states purpose; implementation selects mechanisms; local notes
+record exact source seams and unresolved decisions. Other READMEs and issues link to that rule instead of
+copying a second algorithm. When a conflict is found, correct the owning rule and affected callers; do not
+satisfy both by adding adapters, fake receipts or more versions.
 
-Use established dependencies directly where practical. New wrappers, crates and generic engines require
-a concrete role in the connected result. Do not preserve a duplicate implementation to host old tests.
-Package instructions describe surviving responsibilities, not permanent file quotas or permission walls.
+## Scope and verification
 
-## Verify the actual change
-
-Use the pinned Rust toolchain and locked dependencies for changed production targets and their real
-consumers. After integration, exercise the behavior that could fail. Keep exact source/identity,
-publication/recovery, scope, cancellation and output checks relevant to that change.
-
-Do not run or repair obsolete all-target harnesses, regenerate retired maps or maintain source-hash
-ledgers to obtain a badge. No prescribed scope form, commit freeze, review count or receipt is required.
-Report what works, what was removed, meaningful checks and actual remaining limitations in the existing PR.
-Keep Actions manual-only. Do not commit credentials, private captures or local logs.
+Implement only capabilities selected for the current change. Deferring an implementation does not silently
+remove a user requirement from the product. A one-file lexical path is a milestone, not the complete product.
+Use the pinned compiler and minimal Clippy closure for changed production owners and real consumers. Broader
+runtime/native/scale work follows implementation; no source-shape, receipt or qualification gate substitutes
+for behavior. Keep Actions manual-only and secrets/private captures out of Git.
 
 ## Current work
 
-This preparation remains documentation-only in [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
-[#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) and the actual source handoff identify
-active work. Preserve #598's manager, private branch and unpublished changes; do not introduce a competing
-writer into that work. Coordinate real overlapping files, not an invented crate-per-agent organisation.
-Update existing PR/issue bodies rather than posting progress comments.
+Preparation remains in [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
+Use [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) to coordinate actual overlapping work.
+Do not inspect or modify #598's unpublished branch, reset its worktree or create a competing object/key
+writer. That restriction applies to its owned files and handoff, not all code in the repository. Its old
+six-domain, retention, purge and compatibility programme is not inherited by this refactor. Public issue
+contracts may be reviewed without touching private work.
+
+Use one manager-owned worktree when working locally. Report findings and remaining uncertainty in the
+existing PR/issue bodies; do not create a second audit-control system or claim exhaustive closure.
