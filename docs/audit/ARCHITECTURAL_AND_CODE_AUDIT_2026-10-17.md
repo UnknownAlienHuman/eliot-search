@@ -1,7 +1,7 @@
 # ELIOT Search — distilled architecture and code audit
 
 **Source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
-**Replacement documentation rechecked:** `8106347f18cf9b8ccc9e6ab9041efd2878ee82d3`, 2026-10-21.
+**Replacement documentation rechecked:** `de06d75e534b912bdff70e84fa4bcb53d1d91a42`, 2026-10-21.
 Static evidence and design review only. No exhaustive, build, native or runtime qualification claim.
 
 This report records reasons and counterexamples, not a second implementation specification. The
@@ -103,6 +103,8 @@ payload merge versus overwrite have different semantics.
 The [bridge recipe](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) uses concrete Qdrant
 behavior and actual readback. Native BM25/IDF/fusion are donor mechanisms, not proof that runtime integration,
 quality or scale has been measured. Partial expected batch progress must not be classified as corruption.
+The latest review also distinguishes native generated-vector readback from known-input vector equality;
+see section 18. An SDK's ability to update payload/vectors is not permission to alter a published view.
 
 ## 9. Publication, view lifetime and cleanup
 
@@ -114,6 +116,8 @@ earlier live view.
 snapshot-backed evidence. [Stopped-root collection](../../crates/search-runtime/search-retention/FUNCTIONS.md)
 replaces the rejected online full-root scan per deletion page. This report no longer repeats either
 algorithm. Old redb readers, offline maintenance downtime and scratch disk remain explicit costs.
+Reader lifetime is only half the condition: an unresolved writer can recreate retired state after a readback
+or deletion. Section 18 records why our simplified recovery previously failed to account for it.
 
 ## 10. Query, evidence and paging
 
@@ -163,6 +167,8 @@ The [donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) records concrete
 exhaustive market survey. Standard libraries replace machinery, not source meaning, restore isolation or
 correct liveness. RustCrypto's nonce requirement is checked against
 [aes-gcm 0.10.3 usage](https://docs.rs/aes-gcm/0.10.3/aes_gcm/#usage), not a claim of a dependency upgrade.
+Qdrant checks in section 18 use the project's 1.19.0 source and official API documentation fetched 2026-10-21;
+no vendor upgrade or live-server experiment was performed.
 
 ## 15. Implementation order
 
@@ -178,7 +184,7 @@ outcomes is not proof of correctness. Each below counterexample still needs a ca
 
 ## 17. Old requirements versus mistakes in the replacement
 
-| Evidence inspected in this pass | Replacement defect / counterexample | Useful requirement retained without the old framework |
+| Evidence inspected in the preceding pass | Replacement defect / counterexample | Useful requirement retained without the old framework |
 |---|---|---|
 | Old [S28.1/S28.2](https://github.com/UnknownAlienHuman/eliot-search/blob/c8e38b6fc9829f1cd38070773b1b3e5b21de18ad/docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s281-rebuildability-first); restore `kernel/lifecycle.rs`; #244 at 2026-10-21 | A copied root is reopened normally while its pending/cleanup still names the original collection. Two different local locks do not isolate that collection. | Explicit archive/import creates a fresh destination generation and never replays copied external work. Original retained evidence remains intact. No paired-snapshot or quarantine service. |
 | Public #598 deterministic AES-GCM counter contract; RustCrypto algorithm requirement | Same-user access to a copied key is mistaken for permission to resume a copied/rolled-back nonce counter. | Readability and writable continuity are separate. No same-key/counter writable fork; require supported independent destination key state or explicit unsupported restore. Private implementation untouched. |
@@ -190,3 +196,26 @@ outcomes is not proof of correctness. Each below counterexample still needs a ca
 These are static source facts plus explicit counterexamples to the proposed design. They are not reports of
 observed production data loss. Owner recipes contain the corrections; this material explains why the new
 documentation must retain the behavior while dropping the former mechanism.
+
+## 18. Qdrant lifetime, late writes and native-inference readback
+
+This pass rechecked the old architecture's INV-11/12/14, replacement bridge/publication/planner instructions
+at de06d75e, public bridge code, #263/#303 and Qdrant 1.19.0 source. It does not assert that the disconnected
+new product was run or that the counterexamples were reproduced against a live server.
+
+| Evidence | Defect in the replacement | Owning correction |
+|---|---|---|
+| Planner says changed retrieval input creates a new point; bridge mutation table allows replacing vectors/filter payload on existing points | An old redb snapshot preserves citation rows but not mutated Qdrant retrieval state. A request can rank/filter on new data while resolving old evidence. | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#immutable-retrieval-state-versus-versioned-evidence): published retrieval state is immutable; one fixed future-validity closure is the exception. |
+| `real/mutations/upsert.rs` uses full default UpsertPoints under a local timeout; `publication/FUNCTIONS.md` previously treated desired readback as done | A timed-out original request can remain outstanding while a retry is observed, then arrive after a later closure/deletion. Readback observes present state, not absence of future old effects. | [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md#apply-observed-state-is-not-dispatch-completion): preserve possible-dispatch state, settle writers or isolate recovery in a fresh physical generation. |
+| [Qdrant 1.19.0 update_from_client](https://github.com/qdrant/qdrant/blob/v1.19.0/lib/collection/src/collection/point_ops.rs) dispatches through update_runtime.spawn; official docs describe insert-only and ordering | Client cancellation/reconnect and a local serialized writer are not server completion. Insert-only ignores an existing ID but can insert it again after physical deletion; strong ordering is not the application's old-request version. | Retain the late-writer counterexample. No speculative competing retry or cleanup-complete claim from one absence read; bound unresolved generations/backlog. |
+| `real/mutations/readback.rs` compares decoded PointRecord to expected explicit vectors; replacement selects native Document input and forbids a duplicate encoder | The instruction 'compare actual vectors' omitted where expected native coefficients come from. It could induce a second BM25 implementation, fake digest or unfulfillable gate. | [Bridge readback](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#native-lexical-input-and-bounded-readback): known-vector equality versus native generated-vector shape/binding validation, with the selected server's inference trust explicit. |
+| Bridge target API and #263 enumerate every vector/payload mutation despite the new-point/closure baseline | A donor capability list again becomes instructions to build unused wrappers; a narrow API can still violate view semantics. | Implement only connected operations. Keep SDK operation differences as reference, not a mandatory framework. |
+| Bridge/#263 still reject every empty scope after the preceding pass accepted empty published states | Successful last-source removal or explicit empty selection remains inconsistent at the RPC boundary. | Known empty returns empty without RPC; unknown IDs and missing/incomplete state remain errors/gaps. Empty never becomes an omitted wildcard filter. |
+
+The donor facts are supported by [native BM25](https://qdrant.tech/documentation/inference/inference-bm25/),
+[point update semantics](https://qdrant.tech/documentation/manage-data/points/),
+[write ordering](https://qdrant.tech/documentation/scaling/consistency-guarantees/) and
+[1.19 filtered IDF](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-idf-statistics).
+The native-inference contract does not independently prove numerical embedding correctness. The isolated
+recovery choice sacrifices rebuild time and may retain unresolved garbage; it does not promise free or
+unbounded automatic recovery. Those costs and the late-writer behavior need implementation evidence.

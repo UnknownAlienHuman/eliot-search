@@ -70,19 +70,30 @@ a pointer. Long readers retain pages; finite windows and measured update backpre
 
 ## Publication and retrieval
 
-One concrete Qdrant runtime serves native BM25 and currently required mutations. The selected base population
-supplies IDF; query-only filters do not redefine it. Preserve server rank. Full upsert differs from narrow
-updates. Hybrid/rerank branches appear only for selected real consumers.
+One concrete Qdrant runtime serves native BM25 and only currently consumed mutations. The selected base
+population supplies IDF; query-only filters do not redefine it. Preserve server rank. Optional hybrid/rerank
+and unused vector/payload wrappers are not baseline work merely because the SDK supports them.
 
-Pending input fixes operation, births and readback targets. Expected post-state is done; expected pre-state
-is retried; foreign state blocks the operation. Keep the same input through uncertain/partial effects.
-Each recovery attempt has a finite new budget; nested calls cannot renew it and a retry cannot change inputs.
+A redb snapshot does not freeze Qdrant. Published point vectors and query-visible retrieval/filter/group
+state are immutable; changed meaning creates another point or generation. Only the fixed future validity
+closure may change in place. Citation-only changes stay in the evidence rows. The bridge recipe distinguishes
+known-vector comparison from native Document generated-vector readback; no second local BM25 encoder or
+payload digest can supply independent proof of server inference.
+
+Pending input fixes operation, births and targets. First distinguish observed point state from whether an
+old dispatched writer may still execute. Desired/pre-state readback resolves ordinary retry only after the
+relevant dispatches settle. A timeout, reconnect, local single publisher or strong ordering alone is not a
+fence against late writes. Preserve possible dispatch across restart; do not blindly resend or clear pending.
+The publication recipe chooses bounded isolated-generation recovery when terminality cannot be established,
+retaining the abandoned route's unfinished obligation. This can cost a rebuild and retained garbage, not a
+new receipt/recovery platform. Each attempt has a finite budget; nested calls cannot renew it.
 
 Commit evidence, published inventory, current view and unfinished cleanup atomically. Capture/install the
 matching read snapshot before visibility or another publication. No manager lock across disk/network I/O.
 New requests pin current only; old guards retain their exact snapshot and Qdrant sequence. Point cleanup
-waits for every earlier relevant live view, collection cleanup for all users. Cleanup is unfinished work,
-not permanent history. Valid zero-point views are not missing/failed generations.
+waits for every earlier relevant live view, collection cleanup for all users, and both account for outstanding
+writers that could recreate the retired state. Cleanup is unfinished work, not permanent history. Physical
+generation names are not reused. Valid zero-point views are not missing/failed generations.
 
 ## Local object lifetime and restore
 
@@ -106,6 +117,8 @@ See the maintenance recipe; the old six-domain/quarantine programme is not reins
 Search pins a view, resolves non-widening scope and owns one request deadline/cancellation and finite read/
 output limits. Exact alone may claim complete no-match over its actually evaluated inventory. Select the
 page before source I/O, lookup exact metadata, verify retained bytes, preserve rank and report gaps.
+Known empty selection/inventory returns empty without backend RPC; unknown IDs and missing/incomplete state
+do not. An empty set must never turn into an omitted wildcard filter.
 
 One window belongs to one live session. One-shot output cannot expose a locator destroyed on child exit.
 Continue/Expand get new request deadlines capped by fixed window expiry. Commit only the handled prefix
@@ -134,7 +147,8 @@ causal/native/recovery/scale runs follow the implementation they exercise. Unsup
 copies remain intact. Historical bytes/shapes/qualification gates do not direct the rewrite.
 
 Unrun cases include lost wake-up, stale completion, empty/gap transitions, same-root restart versus restored
-copy, encrypted counter continuity, exact lookup, duplicate edits, old-reader growth, partial RPC recovery,
-staging rebuild, stopped-root collection, blocked I/O and real retrieval quality/scale. The
-[audit evidence](../audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md#17-old-requirements-versus-mistakes-in-the-replacement)
+copy, encrypted counter continuity, exact lookup, duplicate edits, old-reader growth, partial and delayed RPCs,
+immutable old-view retrieval, native inference/readback, isolated-generation recovery, staging, stopped-root
+collection, blocked I/O and actual retrieval quality/scale. The
+[audit evidence](../audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md#18-qdrant-lifetime-late-writes-and-native-inference-readback)
 records counterexamples; it does not certify that every defect has been found.

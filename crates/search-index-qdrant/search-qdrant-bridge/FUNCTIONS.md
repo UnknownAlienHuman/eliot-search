@@ -1,267 +1,163 @@
 # Qdrant bridge — source audit and replacement map
 
-The [implementation guide](../../../docs/implementation/README.md) selects one real Qdrant owner. Existing
-public models, qualification receipts and test-oracle APIs are inventory, not compatibility requirements.
+The [implementation guide](../../../docs/implementation/README.md) selects one real Qdrant owner. This map
+owns SDK translation and readback meaning; [publication](../search-publication/FUNCTIONS.md) owns effect
+ordering, ambiguous dispatch and recovery. Reviewed against c8e38b6 and Qdrant 1.19.0 on 2026-10-21.
+These are implementation instructions, not a claim that the new product path has run.
 
 ## Current source inventory
 
 | Source/API | Actual behavior and defect |
 |---|---|
-| `src/real.rs` / `RealDataPlane` | Owns real SDK client, auth lease, qualification gate, in-memory schema cache and process-local mutation receipt map. The useful client is coupled to three unrelated authorities. |
-| `real/connect_schema/connect.rs` | Requires exact `QualifiedGate`, supervisor binding and API-key lease. Uses fixed 5/10/15-second transport/connect checks rather than the caller's absolute context. |
-| `qualified/**` | Freezes Windows x64 server 1.19.0 build/SHA, Rust client source/checksum and thirteen mandatory live probes into a runtime admission token. `QualifiedGate.collection` is exercised by tests but not used by normal routes. |
-| `auth.rs` | About 15.8 KiB. Carries process/root/installation/owner/artifact/endpoint/secret equality fields and callback-only key access. The SDK still retains its own copied key after client construction. |
-| `real/blocking.rs` | Reuses one Tokio runtime but exports reads only. It refuses calls from another Tokio runtime and cannot serve publication mutations. |
-| `real/ledger.rs` | `operation_id → MutationReceipt` map is memory-only, lost on restart and capped for the process lifetime. |
-| `OpContext` | Relative `Duration`; every RPC gets the full value. Multi-RPC operations renew time. `collection_exists` in collection creation has no context timeout. |
-| `schema.rs` / `create.rs` | Schema validation requires one shard, strict mode, wait and strong ordering; collection creation accepts sparse vectors only. These are one frozen test profile. |
-| `mutation.rs` / payload codec | `PointPayload` includes revision/unit citation fields and payload/identity digests; payload also stores `vector_digest_<name>`. Qdrant becomes a duplicate evidence store. |
-| `query_filtered` | Accepts precomputed sparse indices/values; supports only global IDF or a clone of the complete retrieval filter. Native text/BM25 and separate base-population/query-only filters are absent. |
-| mutation methods | Full upsert, validity close and exact delete exist. Narrow vector update/delete and explicit payload merge/delete/overwrite are absent. All writes hard-code strong ordering. |
-| `QdrantBridge` | In-memory oracle with parallel schema/query/mutation behavior. Tests only; never a product fallback. |
-| callers | Searches find real plane construction in bridge/live/reclaimer tests and the blocking wrapper. Daemon indexed query explicitly says it does not call the real plane. |
+| `src/real.rs`, `RealDataPlane` | Real SDK client coupled to auth lease, historical qualification, schema cache and process-local mutation receipts. Normal daemon publication/query is not connected. |
+| `real/connect_schema/connect.rs` | QualifiedGate, supervisor binding and API-key lease plus fixed nested transport timeouts. |
+| `qualified/**`, `auth.rs` | Frozen executable/client/probe evidence and repeated equality checks; the SDK nevertheless retains its own API-key copy. |
+| `real/blocking.rs` | Reusable Tokio runtime exposes reads only; no normal publication mutation consumer. |
+| `real/ledger.rs` | Memory-only operation map disappears on restart and consumes a lifetime receipt capacity. |
+| `OpContext` | Relative Duration renews the budget for nested RPCs; collection existence check escapes that timeout. |
+| `schema.rs`, `create.rs` | Sparse-only strict/strong single-shard probe profile presented as universal schema validity. |
+| `real/mutations/upsert.rs` | Full UpsertPoints with default update mode, wait=true and strong ordering. Tokio timeout returns unknown; it does not establish server quiescence. |
+| `real/mutations/readback.rs` | Retrieves payload/vectors and compares decoded PointRecord with caller-known explicit vectors. This cannot be transplanted unchanged to native Document inference. |
+| `query_filtered`, payload/vector codecs | Precomputed sparse pairs; global IDF or full retrieval-filter clone; echoed vector/evidence digest fields. |
+| in-memory QdrantBridge / capability fixtures | Test oracle, never a product fallback or runtime authority. |
 
-The qualification/live fixture tree is useful release evidence, but it is not the running application.
-Do not connect the product by fabricating a `QualifiedGate` or retaining the whole evidence protocol.
+## One concrete runtime
 
-## Target owner and context
+One daemon-owned qdrant_client::Qdrant serves publication and queries. Use direct async composition, or one
+reused Tokio runtime if synchronous composition remains; not independent read/write runtimes. Endpoint,
+actual optional credential and ordinary transport settings are inputs. Credential rotation rebuilds the
+client. Vendor types/status text and credentials remain inside this adapter.
 
-One daemon-owned adapter serves publication and query:
+Startup checks the running server's required features and the selected physical generation/schema. Keep the
+existing dependency pin until an explicit upgrade. Historical probes remain release evidence, not constructor
+credentials. Do not fabricate QualifiedGate or retain its receipt/lease system to connect the application.
 
-```text
-struct QdrantRuntime {
-    client: qdrant_client::Qdrant,
-    runtime: tokio::runtime::Runtime, // only if synchronous composition remains
-}
+Every nested connect/schema/effect/readback/query call uses the same attempt's absolute monotonic deadline
+and cancellation. Server operation timeout and local timeout are different observations. A local timeout,
+client drop or reconnect is not proof that an already dispatched write cannot finish later.
 
-struct RequestContext {
-    deadline: std::time::Instant,
-    cancelled: Arc<AtomicBool>,
-}
-```
+## Implement only the operations consumed now
 
-At every blocking/async boundary compute `deadline.saturating_duration_since(Instant::now())`; never create a
-fresh relative budget for a nested operation. One collection creation may perform several RPCs, but all
-share the same deadline.
+The connected baseline needs generation create/verify, creation of complete new points, one validity closure,
+exact point read/delete, whole-generation delete and native BM25 query. Count/scroll and optional hybrid/vector
+operations are added only for an actual caller. An SDK API catalogue is not a backlog.
 
-Connection inputs are selected endpoint, optional actual API key and ordinary transport settings. Startup
-checks live server identity/capabilities and verifies the exact selected physical generation. If the API key
-rotates, rebuild the client. Do not revalidate unrelated root/owner/artifact digests on every Qdrant call.
+For a new immutable point, use the pinned client's insert-only mode and verify any already-present point
+against the expected identity/state. A collision or foreign existing point is never overwritten. Insert-only
+is protection against overwriting an existing point, not protection against a late insert after deletion.
+The publication recipe supplies the additional dispatch/lifetime rule.
 
-The exact crate/server pin may stay until an explicit upgrade. Qualification suites run when establishing a
-release claim; their report is not passed back as a constructor credential.
+Narrow SDK semantics remain useful knowledge, not permission to mutate a published point:
 
-## Target application API
-
-Concrete names may vary, but keep one small boundary:
-
-```text
-connect(config, context) -> QdrantRuntime
-
-ensure_generation(route, schema, context)
-verify_generation(route, schema, context) -> GenerationReadback
-delete_generation(route, context)
-
-upsert_full(route, points, context) -> PointReadback
-update_vectors(route, changes, context) -> VectorReadback
-delete_vectors(route, ids_and_names, context) -> VectorReadback
-set_payload(route, ids, fields, context) -> PayloadReadback
-delete_payload(route, ids, keys, context) -> PayloadReadback
-overwrite_payload(route, ids, payload, context) -> PayloadReadback
-delete_points(route, ids, context) -> AbsenceReadback
-read_points(route, ids, selection, context) -> PointReadback
-
-query(route, resolved_scope, query_input, query_plan, context) -> nominations
-count(route, resolved_scope, context) -> ExactCount       // explicit operation only
-scroll(route, resolved_scope, cursor, context) -> Page    // explicit operation only
-```
-
-The bridge does not accept an operation digest and return a durable/replay receipt. `PendingPublication`
-identifies the immutable page. If dispatch may have happened, publication calls the relevant readback and
-decides whether to advance or retry.
-
-## Current code to reuse
-
-Preserve and simplify:
-
-- private Qdrant request/response translation;
-- full UUID/128-bit point conversion;
-- exact-ID validation, finite vector values and response-shape checks;
-- `wait=true` completion checks;
-- exact point/vector/payload/schema readback;
-- stable mapping of vendor failures into application error classes;
-- one reusable Tokio runtime where synchronous daemon composition needs it;
-- payload-index and validity-filter rendering after the stable point model changes;
-- real live fixtures that establish behavior during a selected release/upgrade.
-
-Do not preserve caller-produced digests/receipts merely because existing methods expose them.
-
-## Current code to delete or move
-
-| Source | Action after consumers move |
+| SDK operation | Meaning when a selected caller actually needs it |
 |---|---|
-| `real/ledger.rs`, `BridgeMutation`, `MutationReceipt` | Delete. Publication artifact/page identity owns recovery; Qdrant state owns readback. |
-| `qualified/**` runtime exports | Remove from the product constructor. Keep only minimal upgrade/evaluation tooling outside the hot package if still useful. |
-| `auth.rs` binding/lease protocol | Replace with selected endpoint plus optional actual credential loading. Rotation rebuilds the client. |
-| `capability.rs` / in-memory oracle capability receipts | Delete with oracle/product adapter; retain direct live schema/capability observations actually consumed. |
-| `StrictnessFloors` | Delete. Topology, strict resource limits and write ordering are selected configuration/profile fields, not universal correctness proofs. |
-| `source_revision`, `unit_ordinal`, payload/vector digests | Move exact revision/range to `ViewManifestEntry`; compare actual vectors/readback rather than echoed digest fields. |
-| `BlockingRealQueryPlane` | Rename/extend to the one full runtime or replace with direct daemon async composition. Do not create a second write runtime. |
-| source analyser / package-shape tests | Remove under the adapter-boundary cleanup; compile actual consumers and review the public API. |
+| full upsert | Replaces an existing point, including omitted vectors; not an immutable-point retry primitive. |
+| update/delete vectors | Changes selected vectors, preserving others. |
+| set/delete payload | Merges fields or deletes selected keys. |
+| overwrite payload | Replaces payload while retaining vectors. |
 
-## Stable point and published evidence
+Such operations may construct an unexposed staging target. They must not change retrieval state used by an
+existing published view. Do not generate unused wrappers or a second mutation framework.
 
-Change planner, point identity, bridge and query together. One point carries stable retrieval state:
+## Immutable retrieval state versus versioned evidence
 
-```text
-point_id: UUID / full 128-bit value
-identity evidence sufficient to reject collision
-occurrence incarnation
-retrieval role/profile/input identity
-stable source/group/filter coordinates
-valid_from_sequence
-valid_until_sequence?
-named vectors
-```
+A redb read snapshot does not snapshot Qdrant. Once a point is published, its vectors, retrieval input/profile,
+source/group meaning and query-visible filtering/scoring payload are immutable. A semantic change creates a
+new point (or incompatible generation) and closes the old interval. Reuse of derived vector work does not
+require reusing a mutable point ID. If path/title metadata is used only for presentation, keep its changing
+value in the view's evidence/source rows rather than rewriting a Qdrant payload.
 
-A view-manifest entry carries:
+The permitted in-place change is one fixed exclusive valid_until closure at the pending target sequence.
+Retries write that same closure, never remove it or choose another boundary. Pure coordinate/revision changes
+for unchanged retrieval meaning update only evidence metadata. The planner's occurrence/input identity rule
+and the bridge must agree on every field that can affect candidates, IDF, grouping or rank.
 
-```text
-view_id / sequence
-point_id
-exact source revision ObjectRef
-representation / logical occurrence
-byte/line range and verification data
-```
+Qdrant stores the full point address, collision/input identity, occurrence/role/profile, necessary stable
+filter/group fields, validity interval and actual named vectors. The pinned view resolves exact source and
+prepared ObjectRefs, representation and byte/line ranges. Payload digests are not source-byte evidence.
 
-Qdrant nominations may include the point ID and minimal stable routing metadata. They do not need payload
-hashes pretending to prove the source. Query resolves the point in the pinned manifest, then verifies the
-retained object/range.
+## Native lexical input and bounded readback
 
-## Schema and generation creation
+Use Document(text, model="qdrant/bm25", options=published_role_options) for both ingestion and query, with
+the appropriate published document/query options. Preparation may supply bounded identifier expansion;
+it does not run another BM25 encoder to predict token IDs or manufacture expected vector digests.
 
-`CollectionSchema` should describe actual selected behavior:
+Pending pages retain the actual text/options or concrete optional vector values needed for dispatch. Validate
+input/page/encoded-request ceilings before effects. Bound response bytes and vector entries before accepting
+or copying a readback; a small point count alone does not bound a vector response.
 
-- physical route/generation;
-- sparse/dense/multivector names and their real parameters;
-- native BM25 model/options for document and query roles;
-- only payload indexes used by scope/grouping;
-- selected shard/replica/write-ordering/resource limits.
+Readback has two different contracts:
 
-Local baseline: one shard, one replica, serialized publisher, `wait=true`, exact readback, default/weak
-ordering. Stronger ordering is an explicit topology choice, not a hard-coded floor.
+- **Client-computed vectors:** compare actual returned values against known expected values under the selected
+  backend's documented storage transformation, plus required names, shape, finite values and known payload.
+- **Native Document inference:** compare exact IDs and all known immutable input/profile/filter/validity
+  bindings; require the selected vector field and validate its returned sparse structure and finite values.
+  The resulting coefficients are generated by Qdrant, not known from a local expected PointRecord. A valid
+  zero-term vector is not evidence that the retained source was empty. Missing/malformed vectors are not
+  success. Do not invent a vector digest or claim equality to an independently computed expected embedding.
 
-Generation creation is idempotent by observed state:
+This establishes observed storage shape/bindings and uses Qdrant as the trusted selected inference engine.
+It is not independent proof that every coefficient represents the submitted text. Source evidence still
+requires the real immutable reader and range checks. Retrieval correctness/quality is exercised with actual
+text queries against the selected server/profile, not a digest echoed in payload. Unsupported inference
+fails explicitly; there is no silent oracle/local-encoder fallback.
 
-1. inspect exact collection existence/schema within the original deadline;
-2. create missing collection;
-3. create missing selected indexes;
-4. verify complete target schema;
-5. return the actual generation readback.
+## Schema, scope and IDF
 
-Any failure after a possible effect is unresolved. Publication keeps the same pending generation operation
-and repeats observation; no bridge receipt ledger is needed.
+Schema binds the actual physical generation, selected named-vector parameters, required payload indexes,
+retrieval options and resource/topology settings. Create missing indexes and verify the complete schema within
+the attempt budget. Schema incompatibility builds a new generation; never silently adopts a foreign collection.
+Local baseline is one node/shard/replica and serialized publisher. Strong ordering is a topology choice, not
+an application-time order token and not a cure for a delayed old request submitted later.
 
-## Native lexical ingestion/query
-
-Use the Rust client's `Document` form for the baseline lexical vector:
+Render scope into:
 
 ```text
-stored document:
-  Document(text = unit.retrieval_text,
-           model = "qdrant/bm25",
-           options = published_document_options)
-
-query:
-  Document(text = request.query,
-           model = "qdrant/bm25",
-           options = published_query_options)
+base population = compatible selected sources + pinned validity + selected access partition
+retrieval filter = base population + request-only narrowing
+sparse leaf params.idf.corpus = base population
 ```
 
-Document/query roles and options belong to the published retrieval profile. `search-lexical` may contribute
-bounded identifier expansions to document text; do not run a second local encoder to predict token IDs or a
-vector digest.
+Qdrant 1.19 supports the independent IDF corpus. Require that feature when this profile needs it; do not fall
+back to shard-global statistics. Apply it to each relevant sparse leaf. One compatible route uses one native
+query; native fusion/grouping serves selected compatible branches. Preserve final server order. Top-k does
+not prove complete absence and needs no unconditional exact count.
 
-Current `StoredVector` requires explicit sparse values and a fixed `dimensions` upper bound. Replace it for
-native document inputs; retain explicit vectors only for optional client-computed branches.
+An explicitly selected empty set, or a known valid empty published inventory, returns the corresponding empty
+result without Qdrant RPC; never omit the filter and widen to all sources. Unknown IDs are errors. Missing
+metadata/collection or an incomplete inventory is not known-empty success. The exact operation reports only
+its actual coverage. This replaces the earlier blanket 'empty scope fails' rule.
 
-## Scope and IDF
+## Failure boundary
 
-Render a `ResolvedScope` into two layers:
+Before dispatch, validation/cancellation/expiry is a definite non-write. Read failure commits nothing. After
+possible mutation dispatch, retain uncertainty. Preserve whether a terminal completed response was actually
+received: completed-but-unverified is different from a request that may still run. Neither a receipt ID nor
+one matching readback can settle every outstanding attempt. Publication owns that decision and keeps only
+finite unfinished state; the bridge has no replay ledger.
 
-```text
-base population filter
-  compatible selected sources
-  selected access partition when enabled
-  pinned view validity interval
+Keep useful error classes: not found, already exists, auth, schema/identity conflict, resource limit,
+transport, definite pre-dispatch failure and unresolved mutation. Do not flatten them into a generic receipt
+error or infer successful cancellation from dropping a local future.
 
-query filter
-  base population
-  + optional request-only narrowing constraints
-```
+## Remove and verify
 
-Each BM25/sparse leaf uses the base population as `params.idf.corpus`. Retrieval uses the query filter.
-Qdrant documents `idf.corpus` as independent from retrieval filtering; cloning all future query-only
-constraints would change the denominator. Empty base population fails before RPC.
+Remove runtime qualification/auth-binding ceremony, the operations map and receipt ceiling, duplicated
+point/payload models, relative deadline renewal, unconsumed mutation wrappers, revision-bound citation and
+vector-digest payload extensions, and product-reachable oracle/shape fixtures after actual caller cutover.
+Keep UUID conversion, finite validation, private SDK translation, relevant readback and structured errors.
 
-For one physical route/profile, use one native query. Split only across incompatible routes/profiles. Native
-prefetch/RRF/grouping owns compatible Qdrant branches. Preserve Qdrant result order and expose truthful
-limits; ordinary top-k is not complete-negative evidence and does not need `count_exact`.
+After code check native ingestion/query/evidence end to end; old-view retrieval during a changed-vector/filter
+publication; exact closure; native versus explicit-vector readback; empty/unknown scope; per-leaf filtered IDF;
+response bounds; and delayed-dispatch recovery from the publication recipe. Minimal changed-owner check/Clippy
+comes first. No runtime, performance or Windows result is established by this document.
 
-## Mutation semantics
+## Primary donor references
 
-| Application change | Qdrant operation |
-|---|---|
-| new point or complete authoritative replacement | full upsert with all required vectors/payload |
-| add/replace selected named vectors | `update_vectors` |
-| remove selected named vectors | `delete_vectors` |
-| merge selected payload fields | `set_payload` |
-| remove selected payload keys | `delete_payload` |
-| replace complete payload while preserving vectors | `overwrite_payload` |
-| retire point from future view | close validity field before view commit, exact delete only after guards drain |
-| retire replaced generation | delete whole collection after final old-view guard |
+Checked 2026-10-21; project pin remains 1.19.0, not upgraded by this review.
 
-A full upsert of an existing point replaces the point; omitted vectors are not implicitly preserved. Read
-back exactly the state the operation promises, including absence for deletes. Narrow operations must not
-erase unrelated vectors or retain stale payload keys.
-
-## Failure mapping
-
-- validation/cancellation/expired deadline before dispatch: definite failure;
-- read/query transport failure: definite operation failure, because no mutation was made;
-- mutation timeout/transport/cancellation after possible dispatch: `OutcomeUnknown`;
-- completed acknowledgement followed by failed readback: still unresolved until observation succeeds;
-- schema or point readback conflict: block the publication target; do not convert it into success from an
-  operation ID or digest.
-
-Vendor status text remains private, but do not flatten every useful status into one generic receipt error.
-Preserve enough structured class for caller action: not found, already exists, schema conflict,
-authentication, resource limit, transport and unknown mutation outcome.
-
-## Official donor mechanics
-
-- [BM25 `Document` input](https://qdrant.tech/documentation/inference/inference-bm25/)
-- [point idempotence/full replacement/narrow vector updates/`wait=true`](https://qdrant.tech/documentation/concepts/points/)
-- [payload merge/overwrite/delete](https://qdrant.tech/documentation/concepts/payload/)
-- [independent IDF corpus](https://qdrant.tech/documentation/tutorials/multiple-partitions/)
-- [native hybrid/prefetch/RRF/grouping](https://qdrant.tech/documentation/search/hybrid-queries/)
-- [weak/medium/strong ordering trade-offs](https://qdrant.tech/documentation/scaling/consistency-guarantees/)
-
-Use these mechanisms; do not import a second index, local BM25 engine, mutation journal or capability
-framework.
-
-## Verification
-
-Exercise through the connected daemon:
-
-1. create/verify a physical generation within one absolute deadline;
-2. publish real text through native BM25 and find it under the selected base IDF population;
-3. resolve the returned point through the pinned manifest to retained bytes;
-4. preserve unrelated vectors/payload fields under narrow updates;
-5. recover an unknown write by actual exact readback after restart;
-6. switch generations while an old view remains queryable;
-7. delete exact retired IDs or an old generation only after guards drain.
-
-Run minimal Rust 1.98 check/Clippy for the changed bridge and actual publication/query/daemon consumers after
-code. Broad qualification and fault suites come after the connected product path exists; historical probe
-receipts do not substitute for it.
+- [Native Document input and generated-vector retrieval](https://qdrant.tech/documentation/inference/inference-bm25/)
+- [Point replacement, insert-only and narrow-update semantics](https://qdrant.tech/documentation/manage-data/points/)
+- [Filtered IDF, available since 1.19.0](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-idf-statistics)
+- [Write ordering](https://qdrant.tech/documentation/scaling/consistency-guarantees/#write-ordering)
+- [1.19.0 server update task](https://github.com/qdrant/qdrant/blob/v1.19.0/lib/collection/src/collection/point_ops.rs)
