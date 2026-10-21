@@ -1,115 +1,112 @@
-# Donor and reuse index
+# Donor evidence and limits
 
-**Refreshed:** 2026-10-18 against Eliot source
-`c8e38b6fc9829f1cd38070773b1b3e5b21de18ad` and the pinned upstream revisions below.
-This is static source research, not a dependency-upgrade or runtime qualification claim.
+Rechecked 2026-10-21: Eliot source `c8e38b6`, replacement documentation `32f26536`, Qdrant server
+`v1.19.0`, and the workspace's Aho-Corasick `1.1.5` selection. This is source inspection, not a benchmark,
+completed integration or dependency upgrade. The [previous index](https://github.com/UnknownAlienHuman/eliot-search/blob/32f265368c45627f1e93cd539361884b07e4d41a/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md)
+retains earlier donor research; its blanket implementation recommendations are not current instructions.
 
-Use a donor to remove a mechanism. Do not import a donor application, preserve Eliot wrappers around it or
-build a provider framework for every alternative.
+A donor removes code only when its actual semantics fit the consumer. A feature name, native implementation
+or small response does not establish cheap execution, exact identity or complete evidence. Current operation
+rules live in implementation and owner maps, not in this research index.
 
-## Selected mechanisms
+## Rechecked retrieval assumptions
 
-| Eliot seam | Inspected donor | Use | Do not import |
-|---|---|---|---|
-| CLI dispatch | [ripgrep `4649aa9`](https://github.com/BurntSushi/ripgrep/blob/4649aa9700619f94cf9c66876e9549d83420e16c/crates/core/main.rs) | Parse one invocation, dispatch one concrete mode. | Repeated argv capture, command fingerprinting or a new CLI framework. |
-| Filesystem inventory | [ignore walk `4649aa9`](https://github.com/BurntSushi/ripgrep/blob/4649aa9700619f94cf9c66876e9549d83420e16c/crates/ignore/src/walk.rs) | Nested ignore rules and bounded traversal. | Another glob language or whole-portfolio collect/sort for receipts. |
-| Change hints | [notify `a1d7c2d`](https://github.com/notify-rs/notify/blob/a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf/notify/src/windows.rs) | One `RecommendedWatcher` feeding the shared dirty queue. | Event continuity claims, duplicate `PollWatcher`, or a watcher supervisor per root. |
-| Debouncing | [notify-debouncer-full `76f48c7`](https://github.com/notify-rs/notify/blob/76f48c70bbf7fed75440d580e498e90cbc6ce140/notify-debouncer-full/src/lib.rs) | Rename/burst coalescing ideas only. | Default `FileIdMap`: it recursively follows links and retains IDs for the whole watched tree. |
-| Git commit views | [Git `c44beea`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/builtin/cat-file.c) | Resolve exact OIDs; `ls-tree`, raw `diff-tree`, reused bounded `cat-file --batch-command`. | Checkout, textconv, filters, lazy fetch, process-per-file or mandatory dual backend. |
-| Native Git alternative | [gitoxide `ad0202e`](https://github.com/GitoxideLabs/gitoxide/blob/ad0202e3ab396d752a56664001c134f48d834177/gix-diff/src/tree/function.rs) | Optional no-Git tree/ODB path. | Shipping both backends before a packaging requirement exists. |
-| Control state | [redb 2.6.3 transactions](https://github.com/cberner/redb/blob/v2.6.3/src/transactions.rs) | Short typed write transactions and MVCC read snapshots; load current state once and update the changed pointer/cache. | Eliot's eternal operation ledger, complete record copy after every write, or pretending redb transacts with Qdrant/files. |
-| Internal immutable finalization | [Eliot cutover artifact `c8e38b6`](https://github.com/UnknownAlienHuman/eliot-search/blob/c8e38b6fc9829f1cd38070773b1b3e5b21de18ad/crates/search-control-redb/src/migration/cutover_artifact.rs) | Extract create-new stage, file sync, stage readback, no-clobber hard link, stage removal, directory sync and final readback. | The migration owner, fixed shared temp basename, receipt protocol or its overly broad unknown-outcome rule. |
-| External immutable finalization | [Git object finalization `c44beea`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/object-file.c) | Stage locally, publish to the content address with link/rename, then remove the temporary name after success/reuse. | Git's ODB, pack format or an operation receipt per immutable write. |
-| Windows write-through candidate | [MoveFileEx `MOVEFILE_WRITE_THROUGH`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexa) | Candidate same-volume native finalization to qualify when hard-link + directory sync cannot supply an honest durability profile. | Assuming it provides no-clobber/crash guarantees without exact Windows/NTFS/ReFS tests; `REPLACE_EXISTING` or copy/delete fallback. |
-| Orphan file GC | [Tantivy `ManagedDirectory` `6788926`](https://github.com/quickwit-oss/tantivy/blob/67889269cae67063c372bc236b102d632a021568/src/directory/managed_directory.rs) | Track files created by the owner; compute living files under the metadata lock; failed deletes remain tracked for retry. | Tantivy as a backend or its persisted JSON registry as Eliot's source-of-truth graph. Eliot derives roots from current/pending/pinned records. |
-| JSON / config | [Serde 1.0.229](https://github.com/serde-rs/serde/blob/v1.0.229/README.md), [serde_json 1.0.151](https://github.com/serde-rs/json/blob/v1.0.151/src/de.rs), [toml 1.1.7](https://github.com/toml-rs/toml/blob/f72038c2508112dfaaedb227a511f91bf9b2015c/crates/toml/src/de/mod.rs) | Bounded typed frames/settings. | Handwritten JSON/TOML grammars, canonical hashes for ordinary records or parsing an unbounded input. |
-| Deadlines | [Tokio 1.53.1](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/time/timeout.rs) | One absolute `timeout_at` deadline across phases. | Renewing a full duration for every RPC or another generic budget framework. |
-| Indexed storage/query | [Qdrant client 1.19.0 `7c83803`](https://github.com/qdrant/rust-client/blob/7c838035ae7b9455636dcaca918a55b7d7ca638f/src/qdrant_client/points.rs) | Existing client for schema, full/narrow mutations, readback, query and grouping. | Vendor types outside the bridge, another backend or another operation ledger. |
-| Lexical ranking | [Qdrant BM25 `74f3e85`](https://github.com/qdrant/qdrant/blob/74f3e85b9473c62560006c043e13737ce6b48412/src/common/inference/bm25_inference.rs) | Local document/query BM25 with explicit profile options. | Custom generic sparse engine, cloud/model worker or English defaults for neutral/code text. |
-| Filtered IDF / fusion | [Qdrant IDF `74f3e85`](https://github.com/qdrant/qdrant/blob/74f3e85b9473c62560006c043e13737ce6b48412/lib/segment/src/index/sparse_index/sparse_vector_index/read_view/idf.rs) | Same resolved scope for retrieval and `idf.corpus`; native prefetch/RRF/grouping. | Duplicate portfolio points, global IDF service or local fusion graph for Qdrant-only legs. |
-| Structure-aware document chunks | [Docling Core `f5f01f9`](https://github.com/docling-project/docling-core/blob/f5f01f97e9e1c7a50c1f378e114ca063085985ce/docling_core/transforms/chunker/hybrid_chunker.py) | Hierarchical boundaries, token-aware split, merge adjacent peers with matching headings. | Python runtime/storage stack or tokenizer-specific source identity. |
-| Section chunks | [Unstructured `1b02b4d`](https://github.com/Unstructured-IO/unstructured/blob/1b02b4d189c260ed9b1aca29583203e233d853cb/unstructured/chunking/title.py) | Preserve title/section and optional page boundaries. | Its complete partition/chunk framework. |
-| Unstructured oversized fallback | [FastCDC paper](https://www.usenix.org/conference/atc16/technical-sessions/presentation/xia) | Measure content-defined boundaries inside an oversized plain section. | Global semantic identity or an assumption that CDC preserves meaning. |
-| Code outline | [ast-grep outline](https://ast-grep.github.io/guide/tools/outline.html) | Bounded syntax facts with real ranges. | Eliot's line/brace parser, a compiler platform or unsupported semantic relationships. |
-| Semantic locations | [SCIP](https://github.com/sourcegraph/scip) / language producer output | Import actual definitions/references tied to the indexed snapshot. | Assuming every producer emits implementation/call relationships; inspected rust-analyzer output does not. |
-| PDF | [pdfium-render](https://github.com/ajrcarey/pdfium-render) | Native page text and page/text coordinates in the optional worker. | Generic document runtime, OCR on pages with usable text or invented raw-PDF byte offsets. |
-| Published-view lifetime | [Lucene snapshot policy `8a8ef48`](https://github.com/apache/lucene/blob/8a8ef488218405ee18ba9803c3ac1779ef74093a/lucene/core/src/java/org/apache/lucene/index/SnapshotDeletionPolicy.java) | Generation refcount; deletion suppressed while a snapshot exists. | Lucene backend, durable query leases or public reclaim permits. |
-| Artifact GC | [Tantivy segment updater `6788926`](https://github.com/quickwit-oss/tantivy/blob/67889269cae67063c372bc236b102d632a021568/src/indexer/segment_updater.rs) | Committed/in-flight metadata lists useful files; remove untracked files after commit. | A second index or Tantivy's whole writer/segment system. |
+### Filtered IDF performs population work
 
-### Storage donor conclusions
+In Qdrant 1.19.0, [`read_view/idf.rs`](https://github.com/qdrant/qdrant/blob/v1.19.0/lib/segment/src/index/sparse_index/sparse_vector_index/read_view/idf.rs)
+(blob `7e0d2ed0b7b433b3cdb55e1e66ca07e9289daef0`):
 
-The donor mechanisms agree on a small design:
+- `fill_global_idf_statistics` reads posting-list lengths and the indexed-vector count.
+- `fill_corpus_idf_statistics` first calls `collect_corpus_points`; this enumerates the filtered population
+  with a vector into a sorted ID list or a dense bit mask.
+- The mask is sized by total segment points. The switch threshold is `max(total_points / 32, 128)`.
+- Term frequencies then require posting-list walks against the mask or skips through the selected IDs.
 
-```text
-immutable object:
-  unique create-new stage → bounded write/file sync → no-clobber finalization
-  → exact existing/final verification → qualified namespace durability → remove stage
+Thus a request for ten results can still enumerate a large selected population before ranking. Payload
+indexes help select that population; they do not turn this implementation into cached constant-time IDF.
+For a broad corpus, mask allocation scales with the physical segment and traversal with selected points
+and queried postings, not returned cards. This is a source-derived cost, not a measured latency result.
 
-control state:
-  short typed redb transaction → committed current value
-  → optional narrow in-memory pointer/cache update
+Eliot needs scope/validity-specific statistics to keep staged/retired/unselected points out of ranking. Keep
+that meaning; do not silently switch to global IDF to make a benchmark fast. But do not claim large-corpus
+interactive performance from `top_k`, page size or native delegation. Measure cold/warm requests, different
+scope sizes and retained/staged points through the real query. A timeout remains incomplete, not empty.
+No local IDF engine, per-request collection or statistics cache is selected by this finding. A different
+layout or deliberately weaker scoring contract needs an explicit measured decision.
 
-cleanup:
-  living references from current/pending/pinned owners
-  → bounded exact deletion; failed deletion stays discoverable
-```
+### Lexical tokens do not preserve identifier identity
 
-Eliot already contains the core immutable-finalization sequence in the old cutover-marker code. Reuse that
-small code shape rather than importing a new crate or preserving the migration system. Git independently
-confirms removal of the temporary name after link/rename. Tantivy registers owned files early enough that
-crash debris remains discoverable and keeps failed deletions retryable.
+Qdrant 1.19.0 [`WordTokenizer::tokenize`](https://github.com/qdrant/qdrant/blob/v1.19.0/lib/segment/src/index/field_index/full_text_index/tokenizers/mod.rs)
+(blob `5d10e3ca3e4b99c4062d1132bb86fa0e9c3ab224`) splits on every non-alphanumeric character. Consequently
+`parse_manifest`, `parse-manifest` and `parse::manifest` have the same word sequence; `C++` and `C#` both
+lose their punctuation. Adding the original spelling to a text string does not keep it as an indivisible
+term. Snake/camel aliases improve recall; they do not implement exact-name resolution.
 
-The current daemon's Windows `sync_directory` is a no-op that returns success through its wrapper. Therefore
-exact final readback proves current logical state but not power-loss durability of the namespace entry. The
-new store must qualify a supported Windows finalization/durability profile, or state the weaker guarantee
-explicitly. `MoveFileEx(..., MOVEFILE_WRITE_THROUGH)` is a candidate to test, not a pre-proven drop-in.
-Neither a receipt nor another recovery state machine repairs an unimplemented durability primitive.
+The old architecture already distinguished this in S12.3 and S21. Exact literal/name/location requests
+must not depend on a BM25 top-k candidate set. The [lexical map](../../crates/search-lexical/FUNCTIONS.md)
+and [query behavior](../../crates/search-query/README.md) retain that boundary without resurrecting the
+recipe or resolver platform.
 
-## Existing workspace owners to reuse
+[`bm25_inference.rs`](https://github.com/qdrant/qdrant/blob/v1.19.0/src/common/inference/bm25_inference.rs)
+(blob `06be18127c0b283fd699dcc1be9dc4a060979842`) also defaults to English stemming and stopwords when they
+are omitted. The document/query roles differ. Its defaulting behavior is not a neutral code/text profile.
+Use explicit selected options; independent native-vector verification is limited as stated in the bridge.
 
-- BLAKE3/SHA-256 execution belongs to `search-contracts`; remove unnecessary hashes before replacing the
-  remaining copied algorithm implementations.
-- Unicode XID/NFC/case-fold decisions already have selected libraries/profiles. Do not create another
-  Unicode engine.
-- `pulldown-cmark`, `quick-xml`, `globset`, `aho-corasick`, regex and Qdrant client already have real callers.
-- The typed provider client, Windows transport and credential adapter already exist; connect the local
-  commands instead of extracting another client framework.
-- Point identity, verified UnitSet and publication/planner code exist, but their mixed revision/retrieval
-  identity must change with actual consumers rather than be wrapped for compatibility.
-- The old control cutover-marker publisher is an internal donor only; delete its migration semantics after
-  the object primitive is extracted.
+### A chunk API is not an incremental reader
 
-## Context and research donors
+Eliot [`literal.rs`](../../crates/search-query/search-exact/src/literal.rs) at `c8e38b6` correctly carries
+Aho state across UTF-8 chunks and preserves overlapping matches. However, `scan_chunks(&[&str], ...)` builds
+the NFA inside every invocation, requires the chunks to be supplied already, and has no cancellation check
+inside its byte loop. Calling it once per file is not compile-once streaming across a corpus.
 
-| Donor | Useful idea | Limitation relevant to Eliot |
+The selected [Aho-Corasick automaton API](https://docs.rs/aho-corasick/1.1.5/aho_corasick/automaton/index.html)
+already exposes state transitions. Reuse the NFA once per request, reset state per source and feed bounded
+blocks with cancellation checks. Do not casually substitute a non-overlapping convenience iterator for the
+existing overlapping contract. The [exact map](../../crates/search-query/search-exact/FUNCTIONS.md) also
+restores the old S25 distinction between raw bytes and decoded/derived text.
+
+## Selected mechanisms, not wholesale donor applications
+
+| Need | Source retained from research | Applicability boundary |
 |---|---|---|
-| EdgeQuake | Return retrieval context separately from final generation; batch selected chunks. | Context-only can still invoke keyword/model/embedding work. Extraction reuse does not eliminate later embedding, and its inspected reuse key omitted supplied heading context. |
-| LightRAG | Select/deduplicate IDs before loading source text. | A selected hub can load all incident edges before truncation; small output does not bound traversal. |
-| Microsoft GraphRAG | Order related sources and deduplicate text units. | Local context repeats relationship scans; inspected incremental detection compared titles, not complete content. |
-| NotebookLM public material | Explicit source selection, source-grounded retrieval and navigation back to evidence. | Public material does not reveal a complete chunker/index/cache/reranker implementation; agentic web/code research is outside Search. |
-| Cloudflare AI Search | Retrieval result can be returned before generation. | Hosted service/runtime is not a local dependency; embeddings/reranking still cost work. |
-| Anthropic Contextual Retrieval | A bounded heading/path/signature prefix can make an isolated chunk intelligible. | Generated context is per-chunk model work and depends on the document; it is optional derived input, not quoted source. |
+| CLI | [ripgrep `4649aa9` main](https://github.com/BurntSushi/ripgrep/blob/4649aa9700619f94cf9c66876e9549d83420e16c/crates/core/main.rs) | Parse once and dispatch. Do not copy its whole application or build command fingerprints. |
+| Inventory | [ignore walk `4649aa9`](https://github.com/BurntSushi/ripgrep/blob/4649aa9700619f94cf9c66876e9549d83420e16c/crates/ignore/src/walk.rs), [notify `a1d7c2d`](https://github.com/notify-rs/notify/blob/a1d7c2d8f80786679d58ec6d5986a1d4278bc8cf/notify/src/windows.rs) | Ignore traversal and event hints; neither proves a complete observation history. |
+| Debounce | [notify-debouncer-full `76f48c7`](https://github.com/notify-rs/notify/blob/76f48c70bbf7fed75440d580e498e90cbc6ce140/notify-debouncer-full/src/lib.rs) | Burst/rename ideas only; its whole-tree FileIdMap is not the selected inventory. |
+| Git | [Git `c44beea` cat-file](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/builtin/cat-file.c) | Exact OIDs and bounded raw plumbing. [gitoxide `ad0202e`](https://github.com/GitoxideLabs/gitoxide/blob/ad0202e3ab396d752a56664001c134f48d834177/gix-diff/src/tree/function.rs) remains an alternative, not a second mandatory backend. |
+| Metadata snapshots | [redb 2.6.3](https://github.com/cberner/redb/blob/v2.6.3/src/transactions.rs) | Typed point/range reads and real read snapshots; no transaction across Qdrant/files, and old readers retain database pages. |
+| Immutable files | [Eliot cutover publisher](https://github.com/UnknownAlienHuman/eliot-search/blob/c8e38b6fc9829f1cd38070773b1b3e5b21de18ad/crates/search-control-redb/src/migration/cutover_artifact.rs), [Git object-file `c44beea`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/object-file.c) | Extract temp/no-clobber/final verification/cleanup. Neither imports migration, Git ODB or another writer. |
+| Windows durability candidate | [MoveFileEx](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexa) | A candidate, not proof of required no-clobber/power-loss behavior. No-op directory sync plus readback is not power-loss evidence. |
+| JSON/settings | [Serde](https://github.com/serde-rs/serde), [serde_json](https://github.com/serde-rs/json), [toml](https://github.com/toml-rs/toml) | Typed syntax and capped buffers. Earlier researched releases do not prove these dependencies are already wired into Eliot. |
+| Async timeouts | [Tokio 1.53.1 timeout](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/time/timeout.rs) | One attempt deadline; dropping a future does not cancel arbitrary blocking work or prove an external mutation stopped. |
+| Indexed retrieval | [Qdrant client `7c83803`](https://github.com/qdrant/rust-client/blob/7c838035ae7b9455636dcaca918a55b7d7ca638f/src/qdrant_client/points.rs), Qdrant 1.19.0 sources above | One SDK boundary; native BM25, selected filtering and real effects. No numerical-correctness, latency or old-write-terminality claim from a feature name. |
+| Structure | [Docling `f5f01f9`](https://github.com/docling-project/docling-core/blob/f5f01f97e9e1c7a50c1f378e114ca063085985ce/docling_core/transforms/chunker/hybrid_chunker.py), [Unstructured `1b02b4d`](https://github.com/Unstructured-IO/unstructured/blob/1b02b4d189c260ed9b1aca29583203e233d853cb/unstructured/chunking/title.py) | Section/split/merge behavior, not Python runtimes or proof of edit-stable occurrence identity. FastCDC remains only a measured oversized-plain-section candidate. |
+| Source coordinates | Existing pulldown-cmark and quick-xml consumers | Retain actual parser ranges/maps; syntax observations do not prove call targets or behavior. |
+| Old-view lifetime | [Lucene SnapshotDeletionPolicy `8a8ef48`](https://github.com/apache/lucene/blob/8a8ef488218405ee18ba9803c3ac1779ef74093a/lucene/core/src/java/org/apache/lucene/index/SnapshotDeletionPolicy.java) | Refcount idea only. Lucene protects immutable commits/files; this does not prove Qdrant mutable retrieval state is snapshotted. |
+| Living-file ideas | [Tantivy ManagedDirectory `6788926`](https://github.com/quickwit-oss/tantivy/blob/67889269cae67063c372bc236b102d632a021568/src/directory/managed_directory.rs) | Reference selection and retryable failed deletes. Current Eliot local GC is stopped-root maintenance, not this donor's locking/registry design. |
 
-Eliot's small implementation is therefore: existing path/title/heading/syntax records form the source
-guide; select bounded relations/ranges before I/O; share verified excerpts through the same query window;
-add a selected model only for exact embedding or finite rerank input. No notebook store, GraphRAG database,
-query-rewriting LLM or generated research-answer pipeline is required.
+## Optional research is not a selected implementation
 
-## Rejected baseline mechanisms
+Syntax outline tools, SCIP producers and pdfium-render remain candidates with concrete consumers required.
+The unversioned ast-grep outline page was not retrievable in this recheck; do not claim that link as a newly
+verified API. SCIP symbols/occurrences must be tied to the indexed source; missing call/implementation facts
+cannot be fabricated. PDF page text/regions are derived representations, not binary-PDF byte ranges.
 
-- Tantivy/Lucene as a second search backend.
-- General provider/model registry before one real model caller exists.
-- Generic migration, compatibility, legal-hold, purge, retention-lease or restore platforms.
-- Whole-tree watcher identity caches and duplicate periodic walkers.
-- Per-site digest ledgers, committed package maps and partial Rust import/type analysis.
-- Canonical hashes, signatures or qualification reports for normal local requests and transitions.
-- Multiple physical point copies solely for portfolio membership.
-- Permanent success-stage aliases or operation receipts for immutable object writes.
-- Full mirrored control snapshots rebuilt after each typed current-state update.
-- Treating a non-Unix directory-sync no-op as durable publication.
+Prior EdgeQuake/LightRAG/GraphRAG research contributes select-before-load and context-reuse lessons, not a
+framework. NotebookLM public material does not reveal a complete reusable index/chunker. Cloudflare AI Search
+is a hosted service, not a local dependency. Generated contextual text costs work and is not quoted source.
+These references are not evidence that Eliot's navigation/comparison path exists or works.
 
-## Verification rule
+## Corrections to this register itself
 
-A donor is accepted only when the connected Eliot path uses it and the replaced code is deleted. Record the
-pinned source/API, actual caller, removed mechanism, focused behavior checks and remaining limitations.
-Compilation or a donor tutorial does not establish Windows, live-Qdrant, scale or installed behavior.
+The previous index said to connect the existing typed provider client/Windows transport while current
+owner maps retire their pairing/grant stack. Reuse useful owned I/O only through the selected current
+protocol; do not wire the old stack back in. Its cleanup synopsis also omitted the later stopped-root
+choice. Research notes now point to owner recipes instead of publishing a competing algorithm.
+
+There is no single 'accepted donor' boolean. Distinguish inspected upstream behavior, proposed Eliot use,
+actual connected caller and measured runtime outcome in ordinary prose when making a claim. Do not turn
+that distinction into a registry, review receipt, per-file stamp or launch requirement.
+
+Next implementation evidence is concrete: scoped-IDF work at realistic corpus size; code spelling versus
+lexical recall; raw/decoded exact semantics; cancellation through real reads; and source-backed navigation
+and comparison examples. No elapsed-time, relevance, live-Qdrant or exhaustive-audit result is claimed here.

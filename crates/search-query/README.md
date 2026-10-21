@@ -1,114 +1,117 @@
 # Query and results
 
-The [implementation guide](../../docs/implementation/README.md) connects one typed request to one
-published view, retrieval, retained-source validation and compact evidence. Existing packages are donor
-code and current locations, not permanent product boundaries.
+The [implementation guide](../../docs/implementation/README.md) connects retained sources, a published view,
+real retrieval and evidence. That connection is necessary, but returning a verified excerpt is not by itself
+useful code search. Old architecture S12.3, S16, S21-S25 contained user behavior that must survive deletion of
+its recipes, grants, fingerprints and proof packages.
 
 ## Target flow
 
 ```text
-request + selected source scope + limits
-→ pin current PublishedView
-→ resolve scope as a subset of that view / restricted session
-→ select real constructed operations
-→ Qdrant / exact / selected overlay retrieval
-→ preserve final rank
-→ resolve ViewManifestEntry
-→ select one bounded page
-→ read and verify its retained ranges
-→ emit EvidenceCard[]
-→ optionally retain one QueryWindow for another page or bounded expansion
+explicit operation + selected sources + limits
+-> pin published view and resolve non-widening scope
+-> run the concrete handler for that operation
+-> establish final candidate order and select a page
+-> resolve exact evidence metadata and verify retained data
+-> source/revision/location/excerpt, match basis and truthful gaps
+-> optional window on the same live session
 ```
 
-`EvidenceCard` carries source/revision/representation, location/range, short excerpt, rank/freshness and
-useful gaps. It does not require a separately minted source capability. `WindowItemRef` is only an opaque
-`(window, item)` locator for evidence already selected under the window's pinned view.
+The operation determines what the result means. BM25 is one ranked nomination mechanism, not the
+implementation of every request. A valid citation proves where the excerpt came from, not that it answers
+the question, resolves a symbol, exhausts a corpus or represents independent implementations.
+
+## Product behaviors that must not disappear
+
+| User task | Observable result | Smallest connected mechanism / limit |
+|---|---|---|
+| Find a literal or exact spelling | Actual matching ranges under declared byte/text semantics | [Exact reader/matcher](search-exact/FUNCTIONS.md), not filtering a truncated BM25 result |
+| Locate a selected symbol | Exact source location, or bounded materially different definitions with reasons | Explicit location or actual syntax/semantic name observations; no same-name identity guess |
+| Explore an unfamiliar repository | Useful entry points, headings/definitions and relevant next source reads | Existing prepared facts and source metadata; no architecture verdict generated from filenames |
+| Search a question | Ranked relevant source excerpts, with the basis and missing evidence visible | [Native lexical query](../search-lexical/FUNCTIONS.md); optional stronger retrieval only when connected and assessed |
+| Compare selected implementations | Side-by-side evidence for requested axes and explicit unknowns | Selected source ranges and real parser/semantic observations; no arbitrary behavioral equivalence |
+| Check absence | No-match only for the stated predicate/domain and completely scanned inventory | Exact scan; a missing symbol provider or empty top-k is not absence |
+| Inspect changing work | Which retained revision/view was used and what is known about pending observation/indexing | Current state/status already owned by source/publication; no fresh-workspace claim from a pinned old view |
+
+These are product requirements, not orders for seven new services. The first lexical milestone can omit
+unimplemented modes, but must not advertise them under a broad `Search` name or silently reinterpret them.
+Deletion of a package does not close these behaviors as delivered.
 
 ## Scope comes from the published view
 
-The local request selects configured sources or an explicit subset of the pinned `PublishedView`.
-Unknown IDs fail and an explicit empty set never widens. One compatible selection feeds Qdrant retrieval,
-`params.idf.corpus`, exact inventory and evidence validation. Split only incompatible routes/profiles.
+Resolve configured or explicit sources from one pinned view, optionally narrowed by a real restricted
+session. Unknown IDs fail. Explicit empty and known empty inventory return an empty result without wildcard
+RPC; unavailable/incomplete inventory is different. Compatible sources share the selected retrieval/IDF
+population. [Lexical](../search-lexical/FUNCTIONS.md) owns the exact IDF meaning and donor cost caveat.
 
-A source update publishes a new view; an already pinned local request may finish coherently on its old
-view. A selected restricted-client profile intersects the request with its authenticated session scope;
-revocation closes/cancels that session and its windows. No grants, overlap proofs, scope digests, purge
-generations or phase checkpoints are required for the owning-account path.
+Published is not necessarily current working tree. New source heads and unresolved watcher/indexing gaps
+remain distinguishable from the revisions served. A client asking for current-workspace semantics must get
+that actually established scope or a stale/incomplete/unsupported result, not a renamed published snapshot.
+Do not reread the whole corpus on ordinary Search, infer freshness from watcher silence, or prove whole-scope
+freshness from a few returned hits. Explicit synchronization and historical search are distinct operations.
+
+Already admitted local requests may finish on their old immutable view. A selected restricted-session
+revocation cancels that actual session/windows; no local grant or phase-checkpoint platform is reinstated.
 
 ## Direct operations, not a recipe operating system
 
-The current contracts freeze eleven `RecipeIdV1` values, a caller-created `SearchTaskPlan`, capability
-booleans, dependency/fingerprint records and a capability descriptor. Daemon query composition adds a
-handler registry, projected descriptor, authority/grant host and service wrapper. Public-main search found
-no implementation of `RegisteredAdmittedRecipeHandler` outside the registry definition, and
-`compile_canonical_plan` has fixture callers only.
+Use current direct handlers: `Search`, `Exact`, `Continue`, `Expand`. Add `Orient`/`Compare` only with their
+actual source-backed producers. Availability comes from construction, not capability descriptors.
 
-Replace that scaffolding with one current typed request family and direct dispatch to constructed handlers:
+Exact input does not become a lexical query on failure. An explicit location that no longer resolves does
+not silently select a different symbol with a similar name. For an unqualified symbol name, keep distinct
+definitions ambiguous unless real context disambiguates them. A raw text occurrence is not necessarily a
+definition; syntax is not compiler-resolved call/reference evidence. The useful small selection logic in
+[subject resolver](search-subject-resolver/FUNCTIONS.md) may be moved into its real consumer; no public
+resolution ladder, receipt or service registry is needed.
 
-```text
-Search    scope + query + retrieval options + limits
-Exact     scope + literal/regex predicate + completeness limits
-Continue  query_window + requested page size
-Expand    window_item + bounded neighboring range/metadata request
-Orient    optional source-guide dimensions/focus
-Compare   optional selected subjects/axes
-```
+For orientation use prepared paths/headings/definitions and independently observed imports/tests/docs where
+available. For comparison choose actual source-backed subjects first, then show available evidence for each
+requested axis. Absence of a fact is unknown unless the relevant exact operation established it. Equal names
+or lexical scores do not establish equal behavior. Known copies may share a presentation group, but repeated
+forks/copies must not be reported as independent confirming evidence. Do not invent repository lineage when
+no producer supplies it.
 
-`Search` is the first connected mode. `Exact` is one server-owned operation, not public compile-plan then
-execute-plan recipes. `Continue` and `Expand` use the same `QueryWindow`. `Orient` and `Compare` exist only
-when their concrete prepared-fact/source handlers are implemented.
+Within one lexical population preserve server order. If results need source diversity, use the selected
+native grouping or a finite, explicit presentation policy. Deduplication/reranking cannot recover candidates
+that never entered the bounded candidate set. Do not promise enough distinct sources merely because a
+larger raw hit limit was requested. Across incompatible scoring populations do not sort raw scores together.
 
-For the local CLI, a command calls the handler directly; unsupported operations return a typed error. No
-capability handshake is needed. A selected restricted-client adapter may advertise request versions,
-limits and actual handlers, but advertisement is derived information and not authorization.
+## Cost is not the response length
 
-The planner may remain a small pure helper for real multi-branch search. It accepts private references to
-constructed services, the resolved scope, pinned view, query and limits. It does not accept public
-capability/grant/task-plan/fingerprint records. If lexical search is one direct call, do not preserve a
-planner crate merely to manufacture a one-leg plan.
+Selecting a page before evidence reads avoids reading unselected candidates. It does not make the backend
+or integrity verification O(page size). Qdrant 1.19 scoped IDF enumerates a population; a whole-object hash
+or AEAD reader can require more bytes than the excerpt. Charge actual source/integrity work and expose a
+limit gap rather than forging verification from a digest field. Group selected reads by object where useful.
+No speculative IDF cache, range-authentication tree, secondary index or global scheduler is selected here.
+
+Measure realistic scopes and source sizes through the connected application. A small successful example
+establishes integration, not the large-corpus requirement. Remove scope-wide scans performed only for old
+catalogue fences, but do not claim zero corpus-dependent work merely because it moved into a donor.
 
 ## One query window
 
-The current public daemon uses two stores for one response:
-
-- `ContinuationCatalog` keeps ordered `StoredMatch` values, cursor and expiry;
-- `ResultHandleCatalog` creates another record and random token for every emitted match.
-
-The next-page path recomputes a whole-catalog source fence and rebuilds the source map before reading the
-page. Replace both with one application-owned `QueryWindow` containing a `PublishedView` guard, final
-ordered evidence refs, direct cursor, optional retained excerpts/item locators, absolute expiry and finite
-item/byte/output limits.
-
-Prepare the next slice, emit it and advance only after complete output. Read/validate only the emitted
-page. Completion, expiry, disconnect or cancellation removes the record and releases its guard. Restart
-invalidates windows; the caller repeats the query. The owning-account window ID is a locator, not bearer
-authority; a restricted session may bind it to the real connection.
+Use the [window recipe](search-continuation/FUNCTIONS.md), not another handle/continuation store. It owns the
+same pinned view, final references, handled-prefix cursor, fixed expiry and finite retained bytes. One-shot
+CLI output cannot expose a window destroyed on child exit. Each Continue/Expand has a new request deadline
+bounded by window expiry. Complete local output commits the handled prefix; it does not prove peer receipt.
+Expansion is bounded context around an emitted item, not arbitrary revision offsets.
 
 ## Current owners and cutover
 
-| Existing code | Keep | Remove or change |
-|---|---|---|
-| [access](search-access/) | Non-widening selected-scope resolution and a real optional restricted-session policy. | Local grants, overlap proofs, predicate digests, per-phase checkpoints and durable security barrier. |
-| [query planner](search-query-planner/) | Useful selection/order/budget logic for real branches. | `CapabilitySet`, `SearchTaskPlan`, dependency/fingerprint proof and frozen recipe support tables. |
-| daemon query composition | Real scope/view acquisition and backend calls. | Recipe registry, projected capability/authority ceremony and host layers without handlers. |
-| provider protocol | Bounded framing, correlation, cancellation and one terminal result. | V1 recipes, paired local grants/MACs and duplicate V2 endpoint. |
-| retrieval executor | Real backend calls and contribution merge. | Raw-score reordering across populations and unconditional exact counts. |
-| candidate validator | Manifest lookup and actual retained-byte/range verification. | Digest-field equality presented as byte validation. |
-| result projector | Format selected verified evidence into bounded cards/gaps. | Handle lifecycle and re-sorting final rank. |
-| continuation / handles | Direct slice/cursor and actual read limits only. | Separate stores, durable replan, token authority and terminal history. |
-| exact | Aho matcher, bounded source scan and truthful coverage. | Public plan/proof/checkpoint platform, corpus preload and duplicate matcher. |
+Concrete scope, backend call, retained reader and result formatter replace the disconnected
+recipe/capability/plan/grant/executor/proof stack. Existing packages are donor locations, not a required
+package topology. Current contracts, daemon/client handlers and result consumers change together. Remove
+obsolete forwarders and fixtures; no V3 compatibility family.
 
-Change request/result, scope, planner, protocol, dispatch and actual callers coherently. Do not leave
-forwarding wrappers or introduce a V3 family.
+#279 owns connected Search, #249 Exact, #281 source-backed navigation/comparison, and #275 the window.
+Those assignments should link here rather than reproduce another behavioral specification.
 
 ## Verification
 
-- local search reaches BM25 without capability/access credentials;
-- selected sources never widen and excluded sources affect neither candidates nor IDF;
-- exact and indexed paths use the same pinned population;
-- unsupported optional operations fail truthfully;
-- page N preserves final order and reads only selected ranges;
-- old evidence remains readable while its view guard lives;
-- partial output advances zero;
-- restricted-session revocation cancels its windows;
-- no duplicate handle/continuation, recipe/capability or access-checkpoint database remains.
+After implementation and minimal changed-owner Clippy, use a small set of actual source tasks with known
+locations: punctuation-colliding names; two same-named definitions; definition versus mention; implementation
+plus relevant test/docs; known copies versus independent alternatives; raw versus decoded no-match; and a
+changed source whose published revision is still old. Add real scoped-IDF and evidence-read costs before a
+scale claim. Ordinary source examples and recorded outcomes suffice; no new evaluation/governance platform
+or automatic all-feature gate is needed. No runtime, relevance or exhaustive-audit result is claimed here.
