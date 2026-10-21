@@ -1,85 +1,78 @@
 # ELIOT Search — audit coverage and documentation disposition
 
 **Audited public baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Audit branch at map creation:** `49db5723f3896b6ca78c444c50e0ae9622273912`  
-**Status:** refactor preparation; no product/runtime qualification.
+**Closure status:** **STATIC AUDIT COMPLETE FOR REFACTOR PREPARATION**  
+**Product/runtime qualification:** false.
 
-This is the single map of what the current audit did and did not establish. It prevents a broad static
-review from being represented as a line-by-line audit or runtime verification, and prevents historical
-Architecture 8.4 documents from regaining implementation authority.
+This is the single map of what the audit established. “Complete” means that the current public architecture,
+principal implementations, real callers, competing owners, active implementation queue and documentation
+authority were traced deeply enough to define the refactor. It does **not** mean every Rust line or fixture
+was read and does not claim native/runtime/live-Qdrant/recovery/performance execution.
 
 ## 1. Status vocabulary
 
 | Status | Meaning |
 |---|---|
-| **SOURCE-TRACED** | Primary implementations, entrypoints, real callers and competing owners were inspected deeply enough to make the recorded ownership/deletion decision. It does **not** mean every line or fixture was read. |
-| **PARTIAL** | Important implementations or callers were inspected, but a remaining owner, optional branch or active private handoff prevents a final disposition. |
-| **INVENTORIED** | Files, packages or generated state were measured/classified, but their implementation was not reviewed line by line. |
+| **SOURCE-TRACED** | Principal implementation, entrypoint, real callers and competing owners were inspected deeply enough to define the keep/merge/delete boundary. |
+| **INVENTORIED** | The family was measured/classified; individual files are reviewed while their owning cutover is implemented. |
+| **OPTIONAL** | It cannot block the baseline and may return only through a selected concrete consumer/profile. |
 | **NOT EXECUTED** | No native/runtime/live-Qdrant/performance/recovery claim exists. |
-| **OUTSIDE AUDIT** | Deliberately not inspected, normally because another active manager owns unpublished work. |
+| **OUTSIDE AUDIT** | Deliberately not inspected because another active manager owns unpublished work. |
 
-A subsystem is not "fully audited" merely because its README, traits, constructors or tests were read. A
-refactoring decision is valid only where the real producer, real consumer and replacement/deletion boundary
-were traced.
+The audit does not use a fake completion percentage. Its closure criterion is a concrete owner/disposition for
+every workspace member, one implementation graph, a reconciled active issue queue and unambiguous document
+authority.
 
-## 2. Source audit coverage
+## 2. Coverage and result
 
-| Area | Status | What was checked | Remaining uncertainty / required follow-up | Current implementation map |
-|---|---|---|---|---|
-| Architecture, ADRs and old requirements | SOURCE-TRACED | Part I, accepted ADRs, Architecture 8.4 master, execution/wave/qualification requirements and conflicts with the local product | Continue detecting stale normative language outside the paths classified historical below | [`docs/architecture/README.md`](../architecture/README.md) |
-| Workspace, Cargo topology, features and entrypoints | SOURCE-TRACED | Workspace members, daemon/CLI targets, default features, harness binaries, disconnected entrypoints and shadowed applications | Compiler validation after Rust cutovers; no current build claim | [`WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md`](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
-| Root ownership and daemon owner composition | SOURCE-TRACED | Root open/init/inspect, lock/owner machinery, daemon composition, create-on-read and migration/quarantine paths | Windows/native behavior not executed | [`search-runtime-owner/FUNCTIONS.md`](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
-| Configuration, startup and readiness | SOURCE-TRACED | Typed model, custom parser/tree/diff/action/receipt layers, startup rejection of valid non-default settings and readiness flags | Actual simplified settings implementation not built | [`search-config/FUNCTIONS.md`](../../crates/search-config/FUNCTIONS.md) |
-| Source admission, stable read, registry, history and identity | SOURCE-TRACED | Native acquisition, admission order, dropped body, registry replay/original inputs, source identity/history packages, sync refusal and reconcile scaffolding | #598 result must be consumed without duplicating its writer | [`crates/search-source/README.md`](../../crates/search-source/README.md) |
-| Immutable objects, storage profile and Windows secrets | PARTIAL | Public revision stores, duplicate publication kernels, Windows durability gap, legacy DPAPI/DEK/pairing surfaces and unused crypto package | Active private #598 source/object/key work is OUTSIDE AUDIT; final keep/delete decision waits for accepted handoff | [`search-revision-store/FUNCTIONS.md`](../../crates/search-source/search-revision-store/FUNCTIONS.md) |
-| Materialization, unitization and preparation | SOURCE-TRACED | Markdown/JATS/plain preparation, repeated parse/materialization, duplicate artifact writer, ExactBytes restrictions, UnitSet serialization/copying and structure-first donor mechanisms | No runtime corpus/throughput measurements | [`search-materializer/FUNCTIONS.md`](../../crates/search-prep/search-materializer/FUNCTIONS.md) |
-| Retrieval point identity, projection and manifests | SOURCE-TRACED | Legacy identity, S11 v1, point collision/readback mechanics, revision/offset rewrite amplification, projection planner and full-plan copying | New stable identity/profile must be implemented and measured on edits | [`search-point-identity/README.md`](../../crates/search-index-qdrant/search-point-identity/README.md) |
-| Qdrant supervisor, bridge, schema, mutations and query | SOURCE-TRACED | Real SDK plane, blocking runtime, qualification gate, auth lease, process-local receipt ledger, payload/vector semantics, BM25/IDF/fusion donor APIs and disconnected daemon callers | No live Qdrant execution; topology/performance remain NOT EXECUTED | [`search-qdrant-bridge/FUNCTIONS.md`](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
-| Publication, view lifetime, cleanup and GC | SOURCE-TRACED | Coordinator/daemon publisher duplication, pending intent recovery gap, pins/watermarks/reclaimer/retention systems, cleanup thresholds, backup/restore and object-GC roots | Crash/restart ordering remains design-only until code and fault execution | [`search-publication/FUNCTIONS.md`](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
-| Query access, planning, execution, validation, projection and exact scan | SOURCE-TRACED | Recipe/capability/plan/grant stack, scope compilation, executor tickets/scheduler/count, fusion identity, readback proof defect, projector reorder and exact proof platform | Real connected query not executed | [`crates/search-query/README.md`](../../crates/search-query/README.md) |
-| Handles, continuation, paging and expansion | SOURCE-TRACED | Two shared stores plus two daemon stores, whole-catalog fences, prefix rescans, arbitrary revision expansion and useful commit-after-output behavior | QueryWindow implementation and output fault behavior not executed | [`search-continuation/FUNCTIONS.md`](../../crates/search-query/search-continuation/FUNCTIONS.md) |
-| Protocol, provider client, transports and CLI | SOURCE-TRACED | Pairing/MAC/grant/manual JSON stacks, typed client, daemon provider composition, public line protocol, legacy tab/hex path and child-stdio owner | Current framed protocol not implemented or executed | [`search-provider-protocol/FUNCTIONS.md`](../../crates/search-provider-protocol/FUNCTIONS.md) |
-| Shared contracts, domain and global ports | SOURCE-TRACED | Contract families, recipes/plans/proofs, 23 global port traits/80 operations, domain operations and external production caller inventories | Not every type implementation was reviewed line by line; cutover requires compiler-guided removal | [`search-contracts/README.md`](../../crates/search-contracts/README.md) |
-| Tests, harnesses and process proofs | INVENTORIED / SOURCE-TRACED BY FAMILY | Daemon test families, module-ownership tests, process binaries, oracle-based indexed query and manually joined product-spine harness | Individual causal tests must be reclassified during each Rust deletion slice | [`docs/implementation/TEST_CUTOVER.md`](../implementation/TEST_CUTOVER.md) |
-| Tooling, generated governance and swarm records | SOURCE-TRACED BY FAMILY | xtask commands, coverage/maps, digest ledger, integration bootstrap, workflows, source-shape/Qdrant analyser and P00 control plane | Exact removal closure must be compiler/search driven when Rust/data/workflows are deleted | [`xtask/README.md`](../../xtask/README.md) |
-| Optional model/document/overlay/MCP/code-intelligence/evaluation | PARTIAL | Main scaffolds, callers, refusal binaries, selected donor APIs and whether each blocks baseline | No exhaustive review of every optional implementation/donor; each remains optional until a real consumer exists | [`docs/implementation/README.md`](../implementation/README.md) §11 |
-| Donors | PARTIAL / VERIFIED PER RECORDED SEAM | Concrete source/docs for redb, Qdrant, Tokio, Serde/TOML, ripgrep, Git plumbing, Tantivy/Lucene, Docling/Unstructured/PDFium, ast-grep/SCIP and selected RAG systems | This is not an exhaustive market survey; only recorded mechanisms are accepted | [`DONOR_VERIFICATION_REGISTER_2026-10-09.md`](DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
-| Native Windows, live Qdrant, crash recovery, scale and performance | NOT EXECUTED | Source and donor behavior only | Must be executed after the connected path exists; no source document may claim qualification | Implementation §14 |
-| Private #598 branch/worktrees | OUTSIDE AUDIT | Public issue contract only | Do not inspect/reset/rebase/duplicate unpublished work; consume accepted handoff later | [#598](https://github.com/UnknownAlienHuman/eliot-search/issues/598) |
+| Area | Status | What was established | Current map |
+|---|---|---|---|
+| Architecture, ADRs and old requirements | SOURCE-TRACED | Architecture 8.4/waves, compatibility, migration, security, qualification and process requirements were compared with the actual local product. The short manifesto supersedes them. | [`docs/architecture/README.md`](../architecture/README.md) |
+| Workspace, packages, features and entrypoints | SOURCE-TRACED | All 52 Cargo members received **keep/rewrite**, **merge/inline**, **delete**, **optional** or **#598-conditional** disposition. Shadow applications, harness binaries and feature ladders were mapped. | [`WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md`](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
+| Root ownership and daemon composition | SOURCE-TRACED | Real lock/handle authority was separated from epochs, leases, owner slots, migration custody and receipt history. | [`search-runtime-owner/FUNCTIONS.md`](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md) |
+| Configuration and readiness | SOURCE-TRACED | Custom parser/tree/registry/fingerprint/diff/action/receipt stack and startup refusal were traced; one typed settings value replaces it. | [`search-config/FUNCTIONS.md`](../../crates/search-config/FUNCTIONS.md) |
+| Source admission/read/registry/history/reconcile/Git | SOURCE-TRACED | Dropped acquired body, registry replay/original inputs, receipt/provenance archives, sync refusal and watcher/inventory gaps were traced to real callers. | [`crates/search-source/README.md`](../../crates/search-source/README.md) |
+| Immutable objects and storage protection | SOURCE-TRACED, #598-CONDITIONAL | Duplicate publication kernels, staging leaks and Windows durability gap were traced. Final crypto/Windows package disposition depends only on the accepted #598 handoff. | [`search-revision-store/FUNCTIONS.md`](../../crates/search-source/search-revision-store/FUNCTIONS.md) |
+| Materialization and unitization | SOURCE-TRACED | Adjacent-stage reparsing, duplicate artifact writer, copy/serialization waste, ExactBytes restrictions and revision/offset identity amplification were traced. | [`search-materializer/FUNCTIONS.md`](../../crates/search-prep/search-materializer/FUNCTIONS.md) |
+| Retrieval point identity and projection | SOURCE-TRACED | Legacy identity and revision-bound S11 v1 were both rejected; stable retrieval identity was separated from versioned evidence binding. Whole plans/manifests become bounded pages. | [`search-point-identity/README.md`](../../crates/search-index-qdrant/search-point-identity/README.md) |
+| Qdrant supervisor/bridge/query | SOURCE-TRACED | Real SDK code, disconnected daemon callers, qualification/auth ceremony, process-local receipt ledger, schema/profile defects, native BM25/IDF/fusion and exact mutation semantics were traced. | [`search-qdrant-bridge/FUNCTIONS.md`](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
+| Publication, view lifetime, cleanup and GC | SOURCE-TRACED | Three publication machines, incomplete durable recovery, raw pins/watermarks/reclaimer/retention overlap and correct multi-view cleanup threshold were traced. | [`search-publication/FUNCTIONS.md`](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Query, exact scan and evidence | SOURCE-TRACED | Recipe/capability/plan/grant stack, scheduler/tickets/count, fusion identity, readback-proof defect, projector reorder and exact-proof platform were traced. | [`crates/search-query/README.md`](../../crates/search-query/README.md) |
+| Handles, continuation and output | SOURCE-TRACED | Four overlapping stores, whole-catalog fences, prefix rescans, arbitrary revision expansion and useful commit-after-complete-output behavior were traced. | [`search-continuation/FUNCTIONS.md`](../../crates/search-query/search-continuation/FUNCTIONS.md) |
+| Protocol, clients and CLI | SOURCE-TRACED | Pairing/MAC/grant/manual JSON stacks, typed client, daemon provider platform, separate line protocol, tab/hex translation and child-stdio ownership were traced. | [`search-provider-protocol/FUNCTIONS.md`](../../crates/search-provider-protocol/FUNCTIONS.md) |
+| Shared contracts, domain and ports | SOURCE-TRACED | Planned recipe/proof/lifecycle catalogue, domain ownership drift and 23 global traits/80 operations were traced to actual callers. Concrete owners replace the global port OS. | [`search-contracts/README.md`](../../crates/search-contracts/README.md) |
+| Tests and harnesses | INVENTORIED / SOURCE-TRACED BY FAMILY | Module/source-shape tests, process harnesses, oracle indexed path and manually joined product-spine path were classified. Causal tests move to receiving owners. | [`docs/implementation/TEST_CUTOVER.md`](../implementation/TEST_CUTOVER.md) |
+| Tooling, swarm and generated governance | SOURCE-TRACED BY FAMILY | xtask commands, maps, ledgers, integration bootstrap, workflows, partial Rust/Qdrant analyser and P00 control plane were traced with their consumers. | [`xtask/README.md`](../../xtask/README.md) |
+| Optional model/document/overlay/MCP/code-intelligence/evaluation | OPTIONAL | Each area is deleted, deferred or constrained to one selected profile/consumer. None blocks lexical Search. | [`docs/implementation/README.md`](../implementation/README.md) §11 |
+| Donors | VERIFIED PER RECORDED SEAM | Concrete mechanisms and limitations were checked for redb, Qdrant, Tokio, Serde/TOML, ripgrep, Git, Tantivy/Lucene, Docling/Unstructured/PDFium, ast-grep/SCIP and selected RAG systems. This is not an exhaustive market survey. | [`DONOR_VERIFICATION_REGISTER_2026-10-09.md`](DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
+| Native Windows, live Qdrant, crash recovery, scale and performance | NOT EXECUTED | These become implementation/runtime evidence after the connected product path exists. | Implementation §14 |
+| Private #598 branch/worktrees | OUTSIDE AUDIT | Only its public issue contract was used. No unpublished work was inspected or duplicated. | [#598](https://github.com/UnknownAlienHuman/eliot-search/issues/598) |
 
 ## 3. Documentation authority
 
-### Current normative documents
-
-These are the only project-wide documents allowed to direct implementation:
+The only project-wide documents allowed to direct implementation are:
 
 1. [`docs/architecture/README.md`](../architecture/README.md) — concise purpose, boundaries and principles.
 2. [`docs/implementation/README.md`](../implementation/README.md) — concrete owners, cutovers, order and donor seams.
 3. [`docs/handoff/DEPENDENCY_GRAPH.md`](../handoff/DEPENDENCY_GRAPH.md) — current effect/data dependency graph.
-4. This coverage/disposition map — audit completeness and document authority.
-5. [`WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md`](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) — target disposition for all 52 workspace members.
-6. Current package-local `README.md`, `FUNCTIONS.md` and `AGENTS.md` only where they agree with items 1–5.
-7. Current GitHub issue body for the active implementation slice; an old issue description cannot override items 1–5.
+4. This coverage map.
+5. [`WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md`](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) — all workspace members.
+6. Current package-local `README.md`, `FUNCTIONS.md` and `AGENTS.md` where they agree with items 1–5.
+7. The current active issue body for the implementation slice.
 
-The donor register is authoritative only for the donor behavior and limits it explicitly records. It does
-not define product ownership.
+Supporting evidence:
 
-### Supporting evidence, not implementation authority
-
-- [`ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md`](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) — distilled source findings and reasons for cutovers.
+- [`ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md`](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) — distilled source findings and reasons.
 - [`docs/implementation/TEST_CUTOVER.md`](../implementation/TEST_CUTOVER.md) — test/harness disposition.
-- Older audits, benchmarks and inventory files may support a claim only when their base and limitation are stated.
+- donor register — only for explicitly recorded donor behavior/limits.
 
-### Historical-only path classes
-
-The following may be read for requirements, defects or donor history but cannot issue a current `MUST`,
-block a cutover or restore compatibility/process machinery:
+Historical-only path classes:
 
 ```text
 docs/architecture/ELIOT_SEARCH_8.4_*
-docs/audit/* outside the current README/coverage/disposition/distilled-audit/donor set
+docs/audit/* outside README/coverage/disposition/distilled-audit/donor register
 docs/handoff/* except README.md and DEPENDENCY_GRAPH.md
-docs/product/PACKAGE_STATUS.toml
+docs/product/PACKAGE_STATUS.toml and the old analysis framework
 swarm/**
 qualification/**
 config/build-profiles-v1.toml
@@ -87,38 +80,50 @@ config/data-layout-v1.toml
 retired package maps, coverage graphs and accepted-evidence records
 ```
 
-[`docs/audit/README.md`](README.md) and [`docs/handoff/README.md`](../handoff/README.md) make these path-level
-authority rules explicit. Historical documents should be shortened to a pointer or deleted with their final
-consumer. Git history is the archive; do not create a second archive directory.
+These files may preserve evidence but cannot issue a current `MUST`, block a cutover or restore old
+compatibility/process machinery. [`docs/audit/README.md`](README.md),
+[`docs/handoff/README.md`](../handoff/README.md) and [`docs/product/README.md`](../product/README.md) make the
+path-level rule explicit. Git history is the archive; individual historical files need not be rewritten to
+mirror the new architecture.
 
-## 4. Documentation corrections completed in this pass
+## 4. Documentation and queue reconciliation completed
 
-- [x] Replaced `ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md` with an explicit historical pointer.
-- [x] Distilled the 2026-10-17 audit and removed the obsolete instruction to preserve revision-bound S11 v1.
-- [x] Added this coverage map and the 52-member workspace disposition.
-- [x] Made `docs/audit/README.md` and `docs/handoff/README.md` explicit authority entrypoints.
-- [ ] Update PR #610 links/statistics to its final head after the remaining sweep.
-- [ ] Continue detecting individual historical files which still falsely claim current authority despite the path-level rule.
+- [x] Old master audit replaced by an explicit historical pointer.
+- [x] 2026-10-17 audit distilled and corrected; S11 v1 is no longer preserved.
+- [x] All 52 workspace members mapped.
+- [x] Audit, handoff and product entrypoints define current versus historical authority.
+- [x] High-risk current package instructions checked: root, config, source, control, preparation, identity,
+      Qdrant, publication, scope/query/evidence, windows, protocol/client/CLI, contracts, optional packages,
+      retention/tooling.
+- [x] Active implementation queue reconciled: #214, #244, #248, #249, #259, #261, #263, #264, #266, #267,
+      #270–#280, #291, #293, #300, #302, #303, #329–#333, #335, #360 and #525 describe the current owner/data
+      model and do not retain old blockers.
+- [x] Optional areas explicitly deleted/deferred/selected; they cannot block baseline.
+- [x] Static findings are separated from unexecuted runtime claims.
 
-## 5. Remaining audit work
+Old issue links to immutable intermediate documentation commits remain valid evidence; architecture,
+implementation and this map override them if wording differs. There is no need to churn every issue merely
+to replace a stable commit URL.
 
-The audit is **not complete** until all of the following are true:
+## 5. Closure and next step
 
-- [x] Every workspace member has one disposition: **keep/rewrite**, **merge/inline**, **delete**, **optional selected profile**, or **#598 conditional**.
-- [x] Project-wide document authority is classified by explicit path rules and current entrypoint READMEs.
-- [ ] Current package-local instructions contain no requirement which contradicts architecture/implementation.
-- [ ] Active implementation issues use the current owner/data model and do not retain obsolete blockers.
-- [ ] Remaining optional areas are either explicitly deferred/deleted or receive a selected concrete implementation.
-- [x] Runtime/native/Qdrant/recovery/performance claims are separated from static findings.
-- [x] The current audit names remaining unreviewed source families instead of claiming complete line-by-line coverage.
+The **architecture/code/donor/documentation audit is complete for beginning the refactor**. It remains a broad
+source-traced audit, not a line-by-line verification of all 1,593 Rust files. Compiler-guided removal will
+expose individual residual callers during implementation, and each cutover must delete its replaced package,
+tests, docs, tooling and dependency edges.
 
-## 6. Remaining audit sequence
+The only legitimate pre-code dependency is the accepted public handoff from #598 for its owned source/object/
+key boundary. Everything else has a target owner and implementation issue.
 
-1. Sweep current package instructions for old compatibility/security/receipt/qualification requirements.
-2. Sweep individual historical project documents for false `current`, `main`, `required` or `authoritative` status which could bypass the path-level rule.
-3. Reconcile the active issue queue against the final implementation order and correct stale blockers.
-4. Re-read the final documentation head for contradictions and broken links.
-5. Only then declare documentation preparation complete and begin the first Rust cutover.
+First Rust slice:
 
-No percentage-complete claim is made. The map records evidence and remaining closure conditions instead of a
-plausible-looking number.
+```text
+#598 accepted retained-source result
+→ #330 one immutable object owner
+→ #270 one current SourceRecord / RevisionRef compare-set
+→ #331 one preparation handoff
+```
+
+Then follow the implementation order in [`docs/implementation/README.md`](../implementation/README.md). No
+additional audit wave, launch gate, package-status update, compatibility plan or qualification receipt is
+required before coding.
