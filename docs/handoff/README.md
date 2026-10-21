@@ -1,16 +1,28 @@
-# Historical handoffs
+# Handoff documents
 
-Use the [architecture manifesto](../architecture/README.md) and
-[implementation guide](../implementation/README.md) for current work.
+Current implementation uses:
 
-The wave packets and controller material in this directory describe earlier plans. They are not
-obligation checklists. Their contract freezes, stage order, receipts, all-profile completion rules and
-package assignments do not apply to the new application.
+- [Dependency graph](DEPENDENCY_GRAPH.md) — current effect/data ownership and cutover order.
+- [Audit coverage and documentation map](../audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) —
+  document authority and remaining audit gaps.
+- [Issue #352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) — current manager coordination and
+  preserved active source handoff.
 
-Read a historical file only to understand code being replaced. Neither a packet nor a source fixture
-requires preserving its protocol, storage format or framework. Update a surviving owner's concrete
-contract with its implementation; do not repair the historical handoff programme.
+Everything else in this directory is historical unless one of those current records links to a specific
+fact. Old packet, context, digest, ticket, lease, review, accepted-evidence, P00/W0–W10 and coverage documents
+cannot authorize work, freeze an API or block a current cutover.
 
-The current source handoff in [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) still
-identifies active work. Preserve #598's private work and avoid overlapping changes. Controller
-functionality belongs outside Search.
+Historical handoffs may explain why code exists or preserve a defect/requirement. They do not require:
+
+- materialized agent contexts or package-only writers;
+- assignment tickets, leases, acknowledgement events or acceptance receipts;
+- package/wave/gate ordering;
+- canonical handoff/evidence digests;
+- old compatibility, migration or qualification machinery;
+- preservation of package/file/module topology.
+
+Use Git commits, the active issue, current owner documentation and actual compiler/runtime results. Git history
+is the archive; do not repair or regenerate the retired handoff control plane.
+
+#598 remains active private source/object/key work. Do not inspect, reset, rebase, duplicate or compete with
+its unpublished branch/worktrees. Consume only its accepted public handoff.
