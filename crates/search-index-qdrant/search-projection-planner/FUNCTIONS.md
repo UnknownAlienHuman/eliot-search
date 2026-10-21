@@ -1,243 +1,69 @@
-# Projection planner — exact source/caller audit and replacement
+# Projection: changed-source diff, not a whole-corpus plan
 
-The current package is pure code, but it plans the wrong object: one complete revision-bound vector/digest
-manifest assembled in memory. The selected application needs bounded publication pages containing actual
-Qdrant inputs plus a separate versioned evidence manifest.
+At `c8e38b6`, `plan_projection` and `PublicationAdmissionOwners` feed package/process fixtures rather than a
+connected daemon publisher. `PointSpec` discards actual vectors in favour of digests. The builder creates all
+points, clones manifests, constructs canonical trees and re-encodes them; its advertised 100,000-point limit
+conflicts with the 4,096-item codec ceiling. `manifest_read.rs` decodes and re-encodes the entire object.
+Those costs are not fixed by merely renaming the output 'pages'.
 
-## Measured source and caller reality
+## Concrete input and ordering
 
-At public main `c8e38b6`, production `src/` is **64,388 bytes**:
+Work on changed sources, not a globally materialized UnitSet. Preparation supplies one bounded source product,
+exact revision/prepared refs and actual retrieval inputs. The unchanged-source check skips preparation when
+both the retained bytes and relevant preparation/retrieval settings are unchanged.
 
-```text
-diff.rs             2,120
-error.rs            5,088
-lib.rs              6,080
-manifest.rs         5,866
-manifest_read.rs    9,348
-model.rs            9,583
-plan.rs            18,288
-point.rs             3,599
-validate.rs          4,416
-```
+The [unitizer map](../../search-prep/search-unitizer/FUNCTIONS.md) owns occurrence matching. After matching,
+sort that source's finite point descriptors by point ID in place. Read its old ordered bindings with a
+source-prefix range in the [control tables](../../search-control-redb/FUNCTIONS.md). Merge those two sequences
+into create/retain/close operations and evidence changes. Do not assume preparation emits hash-derived IDs
+already sorted, or sort the complete corpus to make the iterator interface look streaming.
 
-Repository searches find:
+For m new units and o old units in the changed source, sorting is O(m log m) and the merge is O(m + o), apart
+from database access. Memory includes the bounded source product, its descriptors and one output batch; it
+is not constant in source size. State/enforce the source and metadata-batch limits before allocations/effects.
+Large repositories are many independently updated sources, not one giant atomic input.
 
-- `plan_projection` used by this package's tests and publication tests/support;
-- `diff_manifests` called by publication admission plus tests;
-- `decode_projection_manifest_data` used only by this package's tests/docs;
-- `PublicationAdmissionOwners` implemented only in publication test modules/support, not by daemon/control/
-  preparation production code.
+## Occurrence versus point versus citation
 
-Thus the planner/publication validation stack is not connected to a real preparation producer, durable
-publication owner or Qdrant uploader. Passing its fixtures does not establish an application path.
+An occurrence is reused only under the conservative matching rule in the unitizer map. Retrieval identity
+includes its incarnation, exact retrieval input/profile/role and selected stable source/group meaning.
+Revision and absolute citation coordinates are absent. A changed input gets a new retrieval point even if the
+occurrence is the same; changed coordinates only update evidence metadata. Duplicate text is not identity.
 
-## Current plan loses the data needed for publication
+Allocate unmatched occurrences from the operation's target sequence and source-local new-unit slot, scoped
+by source identity. This is an internal birth value, not a continuity rule based on ordinal. Persist it with
+the prepared publication input; recovery uses that same input. Once external work starts, never allocate a
+replacement birth or reopen a closed point interval. No eternal occurrence registry is needed.
 
-`PlannedUnit` receives complete `PlannedVector` values. `build_point` validates them and constructs canonical
-per-vector digests, but returned `PointSpec` retains only:
+## Output required by the real consumer
 
-```text
-point identity
-canonical payload bytes + payload digest
-vector-name → digest map
-unit/reference digests
-```
+Immutable operation pages contain actual BM25 Document text/options or selected vector values, full/narrow
+point operations, validity closures and the compact evidence delta. A digest cannot stand in for uploadable
+input. Header/page bounds are checked on write and independent load; no second canonical-value tree or
+receipt establishes correctness.
 
-Actual vector values are dropped. No text/options exist for native Qdrant BM25. Publication can validate
-expected digests but cannot upload the data represented by the plan without another computation or an
-out-of-band producer.
+The query lookup layout is not left to the implementer: compact source/evidence rows and pinned redb snapshots
+are specified in the control map. There is no custom page-directory/index or corpus-sized manifest cache.
+Operation pages are temporary recovery inputs, not a second permanent evidence database.
 
-The replacement page retains the actual operation input until exact Qdrant apply/readback:
+## Publication unit
 
-```text
-PointMutation {
-  stable point identity + collision evidence
-  complete or narrow selected payload fields
-  native BM25 Document text/options and/or actual selected vector values
-  expected observable Qdrant state
-}
+An incremental operation covers complete changed sources within the configured metadata-commit ceiling.
+Validate the final evidence/source delta before Qdrant work. Split between sources; never publish half of
+one source as if it were complete. Oversize/unsupported input is an explicit gap with the previous published
+revision still identifiable. A new-generation rebuild fills staging metadata in bounded transactions and
+switches its pointer only when complete; see the [publisher](../search-publication/FUNCTIONS.md).
 
-ViewBinding {
-  point_id
-  exact retained ObjectRef/revision
-  representation/logical occurrence/range
-  prepared-artifact reference and verification data
-}
-```
+## Remove
 
-A digest may identify an input/artifact, but never substitutes for uploadable text/vector values.
+Remove whole `ProjectionPlan`/manifest copies, two full diff maps, digest-only vector output, revision-bound
+S11/scoring IDs, artificial allocation arithmetic and test-only admission-owner proof APIs. Keep useful
+validation, exact point identity, source-local sorting and merge logic. A small remainder belongs directly
+in preparation/publication, not a new planner service.
 
-## Advertised limits are false
+## Cases and measurements
 
-`ProjectionBudget::BASELINE` advertises 100,000 points and 64 MiB. The manifest codec also enforces global
-`MAX_COLLECTION_ITEMS = 4,096` and `MAX_CANONICAL_BYTES = 8 MiB`. `plan_projection` builds and sorts every
-point before the later whole-manifest encoder rejects the smaller limit.
-
-Do not raise all constants. Replace whole-corpus planning with bounded pages. Validate page point/encoded-byte
-limits before reserve/growth and checkpoint cancellation/deadline between pages.
-
-## Current identity and manifest amplify edits
-
-`derive_scoring_document_id` hashes/truncates:
-
-```text
-source_revision_id
-representation_id
-unit_id
-projection_profile_set_id
-```
-
-The 128-bit result drops the remaining digest and therefore is not demonstrably collision-safe by itself.
-More importantly, revision/representation/current Unit ID make it change on harmless source movement.
-`ProjectionPointKey` also includes representation and Unit ID.
-
-`ProjectionManifestEntry` then repeats per point:
-
-```text
-source/projection membership
-collection generation
-installation incarnation
-access/scoring partitions
-profile
-unit/reference/payload/vector digests
-```
-
-Many are one scope/header fact or belong to the stable point, while the entry still lacks the exact retained
-`ObjectRef` and evidence range needed by query.
-
-Replace this mixed record:
-
-```text
-stable retrieval point:
-  collection generation
-  stable source/group membership
-  occurrence incarnation
-  retrieval profile/role/input identity
-  point role and selected filter/group fields
-
-versioned view binding:
-  view sequence
-  point ID
-  exact retained source ObjectRef/revision
-  representation/logical occurrence/range
-```
-
-A top-of-file insertion may retain the point and write a new binding. Changed retrieval input/profile or a
-new occurrence incarnation creates a new point. Old pinned views keep old bindings.
-
-## Whole-memory and repeated work
-
-Current planning performs multiple full copies:
-
-- builds all point specs;
-- derives all manifest entries;
-- clones the complete entry vector;
-- builds a generic `CanonicalValue` tree;
-- serializes and stores another full byte copy;
-- decode copies the encoded bytes and re-encodes the complete manifest for equality;
-- diff converts already sorted vectors to two `BTreeMap`s and clones create/retain/retire entries;
-- publication admission walks complete units/points/manifests and computes artificial allocation work again.
-
-Use ordered iterators and immutable pages instead:
-
-```text
-prepared-unit stream sorted by stable point identity
-+ old point/view page iterator
-→ bounded new point-operation page
-→ bounded new view-binding page
-→ ordered create/retain/retire result
-→ immutable artifact write
-```
-
-A two-way merge over sorted page iterators is linear and bounded. It does not need two maps. Point-state diff
-and evidence-binding diff are separate: changed evidence does not make stable point reuse a collision.
-
-## Target page model
-
-One publication operation artifact contains a small header and ordered pages:
-
-```text
-ProjectionOperationHeader {
-  target route/generation/profile/view sequence
-  stable selected source/group population
-  page counts / exact current-format codec version
-}
-
-ProjectionPage {
-  PointMutation[]
-  ViewBinding[]
-  ClosePointId[]
-  expected Qdrant readback fields
-}
-```
-
-Store scope constants in the header, not every entry. Keep the current-format page codec simple and versioned
-with its reader/writer together. A sorted explicit binary or bounded Serde record is sufficient; do not build
-another global canonical-value framework. The immutable object hash identifies exact page bytes.
-
-Publication persists the artifact reference/cursor, applies one page, reads actual Qdrant state and advances.
-Query loads the published view-binding page/index needed for selected points. Planner owns no redb/Qdrant
-mutation, current view, receipt or recovery state.
-
-## Direct preparation input
-
-Do not require a duplicate `PlannedUnit[]` parallel to `VerifiedUnitSet`. Preparation should expose one
-current iterator/record containing:
-
-```text
-occurrence incarnation and stable structural anchor
-exact evidence binding
-bounded retrieval input text and/or selected actual vectors
-retrieval role/profile
-stable filter/group values
-```
-
-The planner validates each unit once while building the page. Native BM25 uses retained text/options; optional
-client encoders provide actual finite vectors. It does not precompute BM25 token IDs/weights/digests locally.
-
-## Publication admission simplification
-
-The current `PublicationAdmissionOwners` trait has only test implementations. Its production API asks a
-caller to provide projection/control snapshots, then performs an artificial allowance calculation:
-
-```text
-(payload + manifest bytes) * 16
-+ units * 8192
-+ 32768
-```
-
-`AdmissionWork::Allocate/Process` does not reserve the allocations it predicts. Remove this proof seam.
-The real publication owner receives one verified immutable operation artifact plus expected current view,
-checks its actual header/page bounds and persists `PendingPublication`. It observes current redb/Qdrant state
-directly during apply/recovery.
-
-## Remove after cutover
-
-- whole `ProjectionPlan` / complete `ProjectionManifest` ownership;
-- caller-supplied membership/lineage/proof scope records not read from current owners;
-- precomputed vector requirements/digests as substitutes for actual inputs;
-- revision-bound scoring-document identity and current S11/S9.5 point construction;
-- full canonical payload/manifest preimages and reconstruction proof;
-- full-map `ManifestDiff` and same-point/evidence-change collision rule;
-- `PublicationAdmissionOwners`, `AdmissionWork` and fixture-only owner implementations;
-- planner/publication fixtures whose only subject is these exact bytes/proofs.
-
-Keep or rewrite only substantial pure algorithms: stable identity input construction, bounded ordered page
-building, actual vector/text shape checks and merge-walk diff. If this is small after cutover, merge it into
-preparation/publication instead of preserving a crate boundary.
-
-## Verification
-
-Focused cases:
-
-- insertion near file start retains unaffected point identities and changes only new view bindings;
-- duplicate equal occurrences stay distinct; disappear/reappear gets a new incarnation;
-- changed retrieval context/profile creates a new point;
-- native BM25 text/options and optional vectors reach the actual Qdrant request unchanged;
-- page ceilings are enforced before growth and complete membership survives page boundaries;
-- old/new page merge produces exact create/retain/close without whole-corpus allocation;
-- old pinned and new views reopen their own exact retained ranges;
-- publication resumes from one immutable page/cursor after an unknown external outcome.
-
-Measure retained/created/closed points, bytes encoded, peak page memory and Qdrant writes—not only cache hits
-or manifest digest equality.
+Check: edit at the start of a file; repeated equal blocks; insert/remove/reorder a duplicate; same input under
+changed heading context; disappear/reappear after committed removal; a source exceeding the ceiling; and a
+rebuild while source heads advance. Measure actual retained/new/closed points, changed metadata rows,
+preparation bytes and Qdrant writes. Cache hits alone do not establish incrementality.

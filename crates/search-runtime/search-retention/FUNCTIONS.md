@@ -1,168 +1,76 @@
-# search-retention source map and removal plan
+# Local object collection: one stopped-root pass
 
-## What exists
+The old package's lib/sweep/purge modules implement leases, caller graphs, operation receipts, purge and
+restore machinery. They are not retained. This file selects the smaller replacement for local immutable
+objects; Qdrant deletion remains the publisher's separate unfinished external work.
 
-| Source | Actual behavior |
-|---|---|
-| `src/lib.rs` (38,059 bytes) | Broad error/policy vocabulary, process-local lease/operation state, restore/reclaim concepts and large default capacities. |
-| `src/sweep.rs` (30,401 bytes) | Accepts caller-supplied roots, pins, leases, graph and inventory; constructs protection/mark/sweep sets with custom digest/operation machinery. No production object owner supplies a complete authoritative graph. |
-| `src/purge.rs` (13,605 bytes) | General multi-plane purge coordinator with caller authority, receipts, backup disposition and tombstones. It is not ordinary source removal. |
-| daemon `restore_composition` | Behind `wave7-lifecycle`, marked dead code and exercised mainly by process fixtures; adds another phase/count/digest coordinator rather than normal startup. |
+## Defect in the replacement proposal
 
-The crate is about 82 KiB before tests/config/tooling. The source defects in old issues are reasons not to
-use these APIs, not reasons to harden the platform.
+The previous recipe rescanned every live manifest while holding an exclusive GC gate before each deletion
+page. For R reachable references and P candidate pages that can repeat O(P * R) traversal. A small deletion
+page does not bound the preceding root traversal or its writer pause. Building publication artifacts before
+their first reference also left ambiguous how long producers must hold the shared gate.
 
-## Current lifetime data
+Do not repair this by adding barriers, reference-count journals or a generic incremental graph collector.
+The first local collector is an explicit maintenance command on a stopped current-format root.
 
-Ordinary local lifetime is determined by typed records already required by the product:
+## Exclusion and lifetime
 
-```text
-current source heads / prepared refs
-CurrentPublishedView
-PendingPublication?
-RetiredCleanup[]
-live PublishedView guards / QueryWindows
-optional explicitly retained history
-```
+Acquire the same actual exclusive root guard as the daemon. If busy, refuse without modifying the root. Do
+not force-stop another process. No producer, query window or live old-view reader exists during the pass;
+restart has already ended process-local windows. Keep the guard for the whole command, not one page.
 
-`ViewManifestEntry` and prepared/publication manifests contain the exact current-format references needed to
-reach source revisions, prepared artifacts and retrieval data. Do not accept an injected generic graph,
-caller lease list or proof digest as deletion authority.
+While Search is running, successful writes still remove their own stages, but final immutable objects are
+not automatically garbage-collected. Disk pressure stops new ingestion/publication safely and reports the
+need for maintenance; it does not evict evidence. This is an explicit availability trade-off, not a claim of
+online collection. A future online collector requires a measured need and a separately justified algorithm.
 
-## Process-local object GC gate
+## Mark once, delete only after complete traversal
 
-### Race being prevented
+1. Open one consistent current control snapshot. Enumerate current source/prepared refs, the current
+   generation's published source/evidence refs, pending operation refs and unfinished cleanup refs.
+2. Visit outgoing references only in known typed preparation/operation/cleanup metadata. Mark raw source
+   bodies as leaves; do not read/hash every source merely to determine reachability.
+3. Insert each exact ObjectRef into a disposable scratch redb table. Use the existing library's finite
+   cache and bounded batches instead of an unbounded HashSet or a new sorting/index implementation.
+4. Complete and validate the entire root traversal before deleting any final object. Missing, corrupt,
+   unsupported or truncated reference metadata aborts collection with zero final-object deletions. There is
+   no guessed 'affected set' unless a real independent namespace has been proved.
+5. Enumerate finalized object names once in bounded pages. Check each exact identity against the mark table;
+   delete only recognized current-format unmarked objects through the object owner. Leave foreign names,
+   unknown layouts and uncertain deletions intact.
+6. Close/delete scratch data and release the root guard. Never persist a completed-GC receipt or resume from
+   an old mark set. After any interruption, the next run rebuilds marks from its newly locked root.
 
-Current object ordering is intentionally:
+Scratch redb is temporary membership data, not a second product database or authority. Never let its files
+enter the final object namespace. A failed marking write, limit or cancellation before sweep deletes
+nothing. Interruption during sweep may leave garbage, but no live object was selected for deletion.
 
-```text
-final immutable object exists
-→ short redb transaction records first durable reference
-```
+Traversal is once per command, plus ordered enumeration and indexed mark lookups. Memory follows configured
+cache/page limits; temporary disk scales with distinct reachable ObjectRefs. State that disk cost and fail
+cleanly when it cannot be met. No performance result is claimed before measurement.
 
-A concurrent GC which snapshots roots between those steps can delete the object. Deduplication makes the
-same race possible even when the writer reuses an old unreferenced object instead of creating new bytes.
+## Stages and pending work
 
-### Minimal coordination
+A stage is removable only when recognized as this store's temporary format, never because an arbitrary file
+is old. With the daemon absent no active writer owns one; finalization-success cleanup remains immediate.
+Pending and cleanup artifacts are roots even if Qdrant is unavailable. Maintenance never runs their effects,
+clears pending, or turns a copied object into a published source. An incomplete pending reference list aborts
+collection instead of guessing which pages are disposable.
 
-Use one process-local read/write gate owned by the immutable object/control composition:
+## Other lifecycle operations
 
-```text
-ObjectGcGate {
-  inner: RwLock<()>
-}
-```
+Source removal affects new published views; while serving, old guards continue to reopen old evidence.
+Stopped-root collection later removes unreferenced local objects. This is not legal/security purge or a
+physical-erasure promise. Backup remains an explicit coherent stopped-root copy with retained pending state;
+Qdrant is rebuilt as derived data, not used as the backup authority.
 
-Every producer acquires a shared/read guard **before final publication/reuse of the final object name** and
-keeps it through the first redb transaction which references the object. This applies to:
+## Remove and verify
 
-- source revision objects and source-head commit;
-- prepared artifacts and current prepared-ref commit;
-- publication operation/manifest pages and pending row;
-- cleanup pages and `RetiredCleanup` insertion;
-- any explicit user-retained-history reference.
+Remove search-retention, wave7-lifecycle, restore/purge/lease models, the proposed ObjectGcGate and their
+exclusive adapters/fixtures. Keep exact object enumeration/deletion with the actual immutable store owner.
 
-A producer failure before reference commit leaves an unreferenced object. After releasing the shared guard,
-bounded GC may remove it.
-
-GC acquires the exclusive/write guard for one bounded page:
-
-1. open one consistent redb read transaction;
-2. collect current source/prepared refs, current view, optional pending and finite cleanup roots;
-3. under the view-manager lock, clone strong snapshots of current and every live retired view;
-4. traverse only known current-format manifest/object references under finite item/byte/depth ceilings;
-5. enumerate one bounded page of final objects;
-6. delete exact unmarked candidates;
-7. release the gate and yield before the next page.
-
-The strong view snapshot keeps old manifest roots alive through the pass. New producers cannot finalize/reuse
-and reference an object while the exclusive guard is held. Reads may continue because every live/current
-object is marked.
-
-If any root/manifest is missing, corrupt, unsupported or exceeds traversal bounds, do not delete affected
-objects. If inventory is incomplete or delete outcome is uncertain, retain and retry. A failed delete remains
-visible in the next enumeration, so no sweep journal/checkpoint is required.
-
-### Staging debris
-
-Staging names are outside the final content-addressed namespace and never treated as roots. Clean only stale
-staging files which are not held by an active writer, using bounded age/owner rules selected by the object
-store. Success removes its stage immediately. Staging cleanup cannot delete final objects.
-
-## Qdrant lifetime
-
-Qdrant is derived external state and uses publication's durable cleanup queue, not object GC:
-
-```text
-RetiredCleanup::PointIds {
-  route, generation, retire_before_sequence, exact pages, cursor
-}
-
-RetiredCleanup::Generation {
-  route, generation, cursor
-}
-```
-
-Point cleanup is safe only when no live same-route/generation view has sequence below
-`retire_before_sequence`. Generation cleanup is safe only when no live view uses it. Crash removes old query
-guards but cleanup rows survive. Unknown deletion retains the same row/cursor and observes actual Qdrant
-state again.
-
-## Source removal
-
-Removing a source changes current source state and publishes a new view which excludes it. Old view guards
-continue to reference exact old revisions. Only after publication cleanup and object-root analysis say the
-objects are unreachable may they be deleted. There is no global deny, tombstone, legal hold, backup
-instruction or secure-erasure receipt in the baseline.
-
-## Backup/restore
-
-Offline current-format backup:
-
-1. stop new work;
-2. finish/report pending publication and preserve cleanup rows;
-3. close redb/object writers;
-4. copy one coherent data root for the same supported storage/secret profile;
-5. restore by opening the copy with the current application;
-6. rebuild Qdrant and resume durable cleanup.
-
-No live root switch, paired Qdrant snapshot, compatibility reader, cross-user secret migration or generic
-restore quarantine.
-
-## Donor mechanics
-
-### Lucene
-
-`SnapshotDeletionPolicy` holds an in-memory refcount per commit generation and suppresses deletion while a
-snapshot is held. Its documentation explicitly says the snapshot state is not persisted. Use this only as
-the process-local view-guard rule; durable cleanup obligations remain typed Eliot records.
-
-### Tantivy
-
-The segment updater calls directory GC with a closure returning useful committed/in-flight files after
-metadata save. Eliot likewise computes a living set from current/pending/cleanup/live typed roots. Failed or
-uncertain deletion remains for later discovery. Do not import Tantivy's segment system or persisted managed-
-file registry.
-
-## Code removal sequence
-
-1. Implement the current-view manager and finite `RetiredCleanup` table.
-2. Move exact Qdrant delete/readback into publication/bridge.
-3. Add `ObjectGcGate` around finalization→reference and bounded root-snapshot→delete.
-4. Connect known current-format object enumeration/traversal.
-5. Add the small offline backup/startup path if selected.
-6. Remove `search-retention`, `wave7-lifecycle`, restore composition and lifecycle configs/fixtures/tools.
-7. Remove dormant features and forwarding types; do not keep a future-compatibility shell.
-
-## Verification
-
-- object finalized/reused while GC waits, then first reference commits safely;
-- crash before reference leaves an object eventually collected;
-- GC root snapshot protects current/pending/cleanup/live views;
-- concurrent old view drop may retain extra data but cannot cause early deletion;
-- malformed/incomplete manifest blocks deletion;
-- bounded pages yield between batches;
-- failed delete remains discoverable;
-- source removal waits for old view evidence;
-- Qdrant cleanup threshold/restart behavior is correct;
-- no ordinary code path constructs lease/purge/tombstone/restore records.
+After implementation check busy-root refusal, first-reference interleaving impossible under exclusion,
+current/published/pending/cleanup coverage, malformed metadata before deletion, cancellation/crash, scratch
+restart invalidation, foreign files and eventually reclaimed orphans. Verify total traversal work, not only
+size of one deletion page. Minimal changed-owner Clippy follows code.

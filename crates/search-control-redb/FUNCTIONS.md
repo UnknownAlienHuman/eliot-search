@@ -1,128 +1,90 @@
-# search-control-redb — source and replacement map
+# Control state and evidence lookup
 
-The package currently mixes useful redb transactions/point reads with a generic journal, snapshot
-publisher and several retired lifecycle programmes. Keep the primitives; remove the operating system.
+Source inspected at `c8e38b6`; replacement design revised 2026-10-21. This is an implementation decision,
+not a claim that the replacement exists or has passed runtime checks.
 
-## Current generic journal
+## Existing code worth retaining
 
-| Source/API | Actual behavior |
-|---|---|
-| `PersistentControlJournal::open` | Opens/initializes the journal and may permit redb's native recovery. It is not a side-effect-free inspector. |
-| `transact` / `recover` | Validate a caller mutation, write `RECORDS`, append one `OPERATIONS` receipt and update the header. A possible outcome occupies the package-wide pending slot. |
-| `verify` | Reads and validates current records plus operation/header consistency. |
-| `snapshot` / `publish_snapshot_checked` | Enumerate all `RECORDS`, copy them into a `BTreeMap`, rebuild `ControlSnapshot` and publish the new `Arc`. This runs after every committed mutation. |
-| `recover_publication_checked` | Verifies current state, then iterates `OPERATIONS` to locate the receipt whose `after_generation` equals the current generation. |
-| operation limits | Cap total operation count and receipt bytes over the lifetime of the journal; completed entries are not removed. |
+`persistent/snapshot/lookup.rs::read_current_records_checked` already point-reads selected keys in one
+transaction. The generic journal instead appends permanent `OPERATIONS`, rebuilds every current record into
+`ControlSnapshot` after a mutation and scans receipts during recovery. Normal registry commands add full
+v4 batch/original-input replay. Keep typed transactions and point reads; remove those copied databases.
 
-Consequences:
+## Use the existing database for compact evidence metadata
 
-```text
-ordinary mutation cost  = O(all current control records)
-recovery lookup cost     = O(all retained operation receipts)
-maximum useful lifetime  = bounded by historical operations, not current state
-one unknown mutation     = broad package availability fence
-```
+The previous proposal moved all evidence bindings to immutable pages without defining their lookup index.
+Do not implement a second B-tree, sparse-directory format or whole-manifest memory cache. The pinned
+`redb = 2.6.3` already supplies ordered tables, range reads and copy-on-write read snapshots.
 
-These costs are properties of Eliot's wrapper, not requirements imposed by redb.
-
-## Useful primitive already implemented
-
-[`persistent/snapshot/lookup.rs`](src/persistent/snapshot/lookup.rs) contains
-`read_current_records_checked`. It already does the small operation the replacement needs:
-
-1. validate a finite distinct key set;
-2. open one redb read transaction;
-3. verify the current header;
-4. point-read only those keys from `RECORDS`;
-5. return the common generation and bounded values;
-6. perform no table scan, write, operation lookup or snapshot swap.
-
-Use this shape for typed settings/root/source/view reads. It does not need `ControlSnapshotPublisher` or a
-copy of every control record. Where direct typed tables replace the generic `RECORDS` encoding, preserve
-the same one-transaction point-read behavior.
-
-## Registry adapter on the current path
-
-The normal daemon does not use a small current-state adapter. `direct_registry_command` and
-`native_source_command` call `bind_original_v4`, then:
+For each physical Qdrant generation use two private typed tables, with names derived internally from its ID:
 
 ```text
-restore full SourceRegistry from registry operation history
-→ load/replay the selected operation
-→ retain/reconstitute original policy/admission input layouts
-→ prepare/commit one generic registry batch
-→ read every changed target back
-→ drop the port
-→ publish a rebuilt full ControlSnapshot
+published_sources[g]: source_id -> exact revision/prepared references and recorded gaps
+published_evidence[g]: (source_id, point_id) -> identity/input metadata + ObjectRef/representation/range
 ```
 
-`RegistryJournal::bind` without original-v4 handling was found mainly in its tests. Supporting non-test
-files under `bins/eliot-searchd/src/registry_control/` already exceed about 63 KiB before the large main
-adapter; they exist to retain originals, restore v4 batches and reproduce source IDs. The command still
-ends with no retained source revision.
+These are metadata rows, not source bodies, vectors or an additional search index. One source prefix gives
+its old ordered points for update planning; one exact key resolves a nomination. Qdrant's source ID is only
+a routing hint: it must belong to the selected scope, and the exact key/identity must exist in the pinned
+snapshot. Never trust the payload's revision/range or search another source after a failed lookup.
 
-This is pre-release replay/migration machinery in the normal command path. Do not optimize it. Replace it
-with typed current-state rows and remove the wrapper.
+`ViewManifestEntry` now means this compact binding value. There is no second authoritative serialized view
+manifest. Prepared artifacts retain their useful text/structure/maps; immutable publication pages retain
+inputs for unfinished effects. Their bodies remain outside redb.
 
-## Other current modules
+## Snapshot actually held by a view
 
-`access_policy`, `provider_authority`, `security_restriction`, `revision_dek`, `migration`, publication
-phase codecs and quarantine helpers implement earlier programmes. Their codecs and fixtures do not make
-them required owners for the local baseline.
+A private `PublishedViewState` contains the committed route/profile/sequence and an owned redb read snapshot.
+Open its source/evidence tables through that snapshot. Do not begin a fresh database transaction for a later
+page of an old view, or copy the whole table into a `BTreeMap`.
 
-Keep only modules with a real remaining current-state consumer. Do not preserve a package API solely so
-old migration, grant, key-lifecycle or receipt tests continue compiling.
+After publication commits, the serialized publisher opens a read transaction, verifies that its current-view
+row is the target, constructs the state, and installs it before starting another publication. A new query
+clones this state; a session window inherits it. Old readers retain old bindings through redb MVCC even when
+a later transaction changes the same keys. Redb types stay private to the control/publication composition.
 
-## Target typed operations
+Long-lived readers retain database pages. This is a real disk-retention cost, not free snapshotting: bound
+request/window lifetime and indexing backlog, and stop accepting additional updates on resource exhaustion.
+Do not promise bounded disk use solely from the count of view handles. Measure with a stalled publisher and
+an old reader; a new snapshot service or durable lease is not the remedy.
 
-Implement narrow operations in this package or its direct daemon adapter:
+## Incremental commit versus generation build
 
-```text
-read/write applied settings
-read/write RootRecord
-read/write SourceRecord + current RevisionRef
-read/write current PreparedArtifactRef
-read/write CurrentPublishedView
-read/write/update one PendingPublication cursor
-read small root/schema identity
-list a bounded page of current roots/sources/references
-```
+For an ordinary update, load and validate the finite metadata delta before opening the writer. After Qdrant
+readback, one transaction applies that delta, updates published source inventory, changes current view,
+inserts unfinished cleanup and clears pending. No object or RPC I/O runs inside it. Bound delta rows/bytes
+before any external effect; split a multi-source batch only at complete source boundaries. An individual
+source beyond the supported limit produces an explicit indexing gap, not a half-new published source.
 
-Rules:
+A full rebuild must not become one corpus-sized transaction. Fill separate target-generation tables in
+bounded transactions while the old generation remains current. Pending state owns the target generation and
+its exact selected inputs. Once complete, publish by changing the current-generation pointer, not copying
+all rows. Current queries never open staging tables. Source changes after the selected build snapshot are
+queued for a following update rather than substituted silently.
 
-1. Open the relevant table(s) in one short transaction.
-2. Check expected-current values only where concurrent writers can conflict.
-3. Commit, close the transaction, then update the narrow in-memory current pointer/cache.
-4. Never hold the writer across source-object or Qdrant I/O.
-5. Never copy every table merely to publish one changed value.
-6. Never retain a success receipt after no recovery/idempotency consumer remains.
-7. Resolve source registration/update by the actual current root/source/head rows, not a historical
-   operation envelope or restored original admission transcript.
-8. Use one consistent read transaction for publication/inventory snapshots; do not reconstruct a
-   second mutable in-memory database from all previous operations.
+## Other current state
 
-### Failure semantics
+Settings, root/source heads, current prepared refs, current view, one pending publication and finite cleanup
+remain ordinary typed rows. Current source heads may be newer than published inventory; query and Exact use
+the latter. A known abort changes nothing; uncertain commit is resolved by reading the relevant typed rows.
+No successful read, page or pure transformation creates a durable operation record.
 
-- validation failure or explicit abort before commit: known failure;
-- commit returned success: current typed state is authoritative;
-- commit acknowledgement genuinely uncertain: reopen and inspect the affected typed key/revision;
-- possible external Qdrant effect: keep publication's exact pending artifact and resolve external state;
-- ordinary read/query cancellation: no durable control record.
+## Donor verification
 
-A process-local current pointer may accelerate the published view or settings, but redb remains the durable
-owner. The pointer is reconstructed from committed typed records at startup, not from a receipt scan.
+Checked the repository-pinned version, not latest redb:
 
-## Removal boundary
+- [redb 2.6.3](https://docs.rs/crate/redb/2.6.3): copy-on-write B-trees and concurrent MVCC readers.
+- [get/range](https://docs.rs/redb/2.6.3/redb/trait.ReadableTable.html): point lookup and ordered iteration.
+- [ReadTransaction source](https://github.com/cberner/redb/blob/f4e3eb69dc2a4b4e01fefff0b9e039c6c7ab98f6/src/transactions.rs): captures a table-tree root and retains a transaction guard when opening tables.
 
-After direct callers move, delete:
+This supports the selected mechanism, not a measured latency or Windows durability claim. No dependency
+upgrade is required by this design.
 
-- generic `ControlJournal` / `ControlJournalPort` mutation-and-receipt API and `OPERATIONS` table;
-- `ControlSnapshotPublisher`, full `ControlSnapshot` reconstruction and generation receipt lookup;
-- `RegistryJournal`, v4 batch restore, original-input retention/reconstitution and source-ID replay;
-- lifetime receipt-count/receipt-byte ceilings;
-- package-wide pending mutation for unrelated typed state;
-- superseded migration, DEK, provider-grant and security-restriction persistence;
-- source-shape/receipt fixtures whose only purpose is to preserve those APIs.
+## Removal and checks
 
-Retain focused tests for atomic current-state updates, point reads from one generation, expected-current
-conflict, restart readback, unsupported schema and the real pending publication transition.
+Delete generic journal/snapshot/registry restore, obsolete grant/key/migration persistence and their exclusive
+fixtures after callers move. Do not replace them with another generic repository or versioned-record framework.
+
+Check through real callers: point lookup without corpus enumeration; source-prefix update; old reader after
+binding replacement; current/source/evidence atomicity; restart before/after commit; staging-generation isolation;
+bounded final delta; and disk growth while old snapshots are held. Minimal changed-owner Clippy follows code.

@@ -1,195 +1,108 @@
-# Publication — source audit and replacement map
+# Publication: real effects and one atomic metadata boundary
 
-The [implementation guide](../../../docs/implementation/README.md) selects one publisher. Current phase names,
-receipts and frozen wire bytes are inventory, not compatibility requirements.
+At `c8e38b6`, this package's admission/machine/recovery modules hold full manifests and caller receipts without
+redb/Qdrant/daemon effects. Daemon and control codecs add two competing machines. Keep useful validation and
+exact readback; remove those machines rather than synchronizing their labels.
 
-## Current source
+The [control map](../../search-control-redb/FUNCTIONS.md) owns evidence tables/snapshots; the
+[planner](../search-projection-planner/FUNCTIONS.md) owns changed-source input. This file owns effect order.
 
-The package has no redb/Qdrant/daemon dependency and roughly 102 KiB of non-test Rust.
+## Preparation
 
-| Source | Current behavior |
-|---|---|
-| `admission.rs` | Reopens complete UnitSet/plans, constructs whole maps and hashes both manifests plus all diff IDs again. |
-| `machine.rs` | Keeps one process-local ten-phase slot with complete manifests/diff and repeated ID lists. |
-| `model.rs` | Exposes caller-constructible receipts/observations rather than concrete external state. |
-| `recovery.rs` | Compares supplied Booleans/ID sets; reads no redb/Qdrant owner. |
-| `machine/restore.rs` | Requires the caller to reconstruct the original operation and every receipt before “recovery”. |
-| daemon/redb alternatives | Two more disconnected publication/visibility machines. |
+Choose expected current view and target sequence under the serialized publisher. Produce finite immutable
+operation pages carrying actual Qdrant inputs, compact binding/source deltas and exact cleanup IDs. Source
+selection, occurrence births and inputs are fixed for this operation; recovery does not reread live paths.
 
-Keep only ordered diff/page validation, stable identity/evidence checks, finite limits and exact readback
-matching. Remove the three state machines rather than synchronizing them.
+Before any Qdrant mutation, validate the incremental delta's row/byte ceilings, complete-source boundaries
+and cleanup capacity. Store the verified operation reference in one `PendingPublication`. A preparation
+failure before that reference leaves collectible debris, not a durable success record.
 
-## Immutable artifacts
+No online local object deletion runs in this baseline. Offline maintenance obtains the root lock only after
+the daemon stops, so it cannot collect an object between finalization and its first durable reference.
 
-```text
-PublicationOperation {
-  target PublishedView
-  ordered PublicationPage[]
-  manifest/evidence roots
-  optional CleanupPage[]
-}
+## Apply and uncertain outcomes
 
-PublicationPage {
-  full/narrow Qdrant operations
-  point closures { point_id, valid_until = target.sequence }
-  ViewManifestEntry[]
-  exact expected readback
-}
-```
+Each RPC uses the same operation deadline. With `wait=true`, inspect the exact affected state before advancing
+the cursor. After lost acknowledgement or partial batch application, classify each item:
 
-Write/verify the artifact before inserting `PendingPublication`. Use ordered merge walks; do not build both
-whole manifests and every ID copy into another canonical digest object.
+- desired post-state: done;
+- expected pre-state or absent new item: perform the idempotent missing operation;
+- genuinely foreign identity/state: stop that publication and preserve evidence of the unfinished work.
 
-## Durable records
+A mix of old and desired state is not by itself corruption. Do not re-upsert a whole point to repair a narrow
+payload/vector update. The bridge has no second replay ledger. Once a mutation may exist, finish the same
+pending operation forward; cancellation does not authorize changing inputs or reusing a closed interval.
+
+## Ordinary incremental commit
+
+Qdrant validity uses `valid_from=target` and exclusive `valid_until=target`, so old pinned sequences remain
+queryable while effects are prepared. A point retained for a new citation keeps its old retrieval state.
+
+After required readbacks, decode the already bounded metadata delta before opening the writer:
 
 ```text
-CurrentPublishedView { view, route, generation, profile, manifest/evidence roots }
-PendingPublication { artifact_ref, expected_current, target, apply/readback cursor }
-RetiredCleanup { cleanup_ref, kind, route, generation, retire_before_sequence, delete/readback cursor }
+one redb write transaction:
+  compare expected current and exact pending operation
+  apply evidence changes and published source inventory changes
+  current = target
+  insert unfinished Qdrant cleanup, if any
+  remove pending
+commit
+open read snapshot; verify its current row is target
+install snapshot-backed target under short view-manager lock
+report visible
 ```
 
-A cleanup row is current unfinished external state. It disappears after success. No completed publication
-receipt/history remains.
+No object/RPC I/O or unbounded corpus delta inside the transaction. The serialized publisher does not start
+another publication before snapshot capture/install. If commit acknowledgement is uncertain, resolve current,
+pending and cleanup rows first. If snapshot construction/install fails after durable commit, keep old serving
+state or refuse new serving and recover; do not report target visible or roll it back.
 
-## Operations
+An old request uses its old redb snapshot and Qdrant sequence in the commit/install gap. A new read of the
+latest evidence table must never be combined with an old view sequence.
 
-### `prepare(old_view, prepared_pages) -> ObjectRef`
+## Initial build or incompatible profile
 
-Validate each bounded page once, write operation/manifest/cleanup objects through the shared object store and
-return the root. No redb/Qdrant effect. A changed citation alone changes the target manifest, not the stable
-point.
+Build a new physical Qdrant generation and separate source/evidence tables. Populate staging metadata in
+bounded transactions; it is not query-visible. Pending state names the staging generation and exact build
+inputs. Validate completeness, then atomically switch current and transfer old-generation cleanup. The final
+transaction changes pointers, not every corpus row. Never copy all old/new bindings into a plan in memory.
 
-### `start(operation_ref, expected_current)`
+Changes to source heads during the build are queued for a later update. The published source inventory names
+the actual built revisions and gaps. A failed/restarted build resumes its existing target; do not silently
+adopt the newest source state or unrelated Qdrant collection.
 
-In one short redb transaction, compare current, reject a conflicting pending operation and insert the pending
-row at page zero. Identical pending input resumes. Check cleanup-backlog capacity before any new external
-mutation which would create another cleanup obligation.
+## View lifetime
 
-### `apply_step(context)`
+`PublishedViewState` privately owns a redb read snapshot plus route/profile/sequence. One current Arc and weak
+retired references are enough. Queries acquire only current; live windows clone their existing guard. Never
+acquire an old view by an arbitrary ID. Redb/table types do not enter the public protocol.
 
-For the durable page cursor:
+The manager lock covers pointer/weak-reference changes only, not database, object or network I/O. Last drop
+can wake cleanup but performs no deletion. Long snapshots retain old redb pages; finite request/window time
+and update backpressure are real resource requirements, not proof that snapshots cost nothing.
 
-1. load the immutable page;
-2. if prior dispatch may have happened, inspect exact Qdrant state first;
-3. dispatch only missing full/narrow work through the one bridge runtime with `wait=true`;
-4. read back exact affected vectors/payload/validity/schema;
-5. advance the cursor in a short redb transaction.
+## Qdrant cleanup
 
-Use one absolute deadline/cancellation. Failure before dispatch is definite. Failure after possible dispatch
-leaves the same cursor unresolved. The bridge owns no replay ledger.
+Persist only unfinished `RetiredCleanup` rows in the same commit that clears pending. Point closures at N wait
+until no live view on that generation has sequence below N. A whole collection waits for every live user,
+not merely the immediate predecessor. v1 can still need a point when v2 is gone and v3 closes it.
 
-### `commit_current()`
+Read back absence per exact ID/collection and advance/remove the cleanup row. A partially deleted page retries
+its remaining exact IDs; foreign identity is an error, partial progress is not. Unknown outcomes keep the row.
+Bound the backlog before accepting more effects. Generation metadata tables can be dropped after the last
+view and relevant pending/cleanup consumer is gone; no permanent table per published view is created.
 
-After every page verifies:
+On restart, open durable current with one consistent read snapshot, resume pending, and reevaluate cleanup.
+Old process-local queries are gone. Local object collection is an explicit stopped-root maintenance operation,
+not part of startup/query or a hidden full-corpus scan.
 
-```text
-redb transaction:
-  compare CurrentPublishedView and PendingPublication
-  write target CurrentPublishedView
-  insert RetiredCleanup if physical deletion remains
-  clear PendingPublication
-→ commit
-→ view_manager.install(target)
-→ report publication visible
-```
+## Remove and verify
 
-The redb transaction and pointer swap are deliberately not enclosed by one long mutex. `install` takes a
-short manager lock, inserts `Weak(old)` and replaces the strong current `Arc`.
+Delete old phase/receipt/observation/restore/compensation machines, full manifest encodings, raw pins and the
+separate reclaimer journal after callers move. Preserve #598's private overlap; it does not impose its old
+six-domain/retention programme on these independent publication rules.
 
-A request which pins old after redb commit but before `install` remains valid. It sees the old sequence and
-manifest, and its guard delays cleanup. A crash in the gap installs the durable target on startup. Serving and
-status use the manager pointer; redb is recovery state. Publication success is emitted only after install.
-
-If redb commit acknowledgement is uncertain, inspect current/pending/cleanup typed rows before install. If
-target committed, install it; otherwise keep old. A poisoned manager stops new serving and restarts from
-redb; do not roll back the committed view.
-
-### `pin_current() -> ViewGuard`
-
-The manager uses a standard mutex:
-
-```text
-current: Arc<PublishedViewState>
-retired: BTreeMap<ViewId, Weak<PublishedViewState>>
-```
-
-Lock, clone current, unlock. A live request can clone its guard into a window. No old-view lookup by ID,
-route/epoch selector, owner ID, renewal or durable query lease.
-
-### `live_views_snapshot()`
-
-Under the manager lock, clone current, upgrade every retired weak ref and prune dead refs. Return strong
-snapshots for one bounded cleanup/GC decision. Last `PublishedViewState` drop sends a best-effort wake;
-periodic scanning is fallback. Never perform Qdrant/object deletion in `Drop`.
-
-### Cleanup eligibility
-
-Exact IDs closed at sequence `N`:
-
-```text
-eligible iff no live view has
-  same route/generation
-  and sequence < N
-```
-
-Whole generation:
-
-```text
-eligible iff no live view uses that route/generation
-```
-
-The immediate predecessor is insufficient. If v1 and v2 see P and v3 closes P, a live v1 still blocks P
-delete after v2 is gone.
-
-### `cleanup_step(record, context)`
-
-1. snapshot live views and test eligibility;
-2. load next exact cleanup page;
-3. inspect actual state first when prior dispatch may have happened;
-4. delete exact IDs or the old collection;
-5. read back exact absence;
-6. advance/remove the row in a short transaction;
-7. release completed cleanup-only objects to ordinary GC.
-
-Unknown delete keeps the same row/cursor. Partial/foreign state blocks advancement. Broad-filter delete is
-unavailable.
-
-### Startup
-
-1. load/validate current view and install it;
-2. resume optional pending publication;
-3. enumerate finite cleanup rows;
-4. old process guards are gone, so evaluate cleanup against current only;
-5. enqueue eligible cleanup and bounded object GC.
-
-Missing/corrupt operation or cleanup artifacts block that operation but do not erase it or invent success.
-
-## Object-GC interaction
-
-The single live root owner holds OS exclusion. Producers hold the shared object-GC guard from final object
-publication/reuse through the first durable source/prepared/pending/cleanup reference. Bounded GC holds the
-exclusive guard while snapshotting typed roots plus live views and deleting one exact unreferenced page.
-
-Do not acquire the view-manager mutex while holding redb/object/Qdrant I/O. GC may briefly clone live-view
-roots under the manager lock, then release it before manifest traversal/deletion.
-
-## Remove
-
-- coordinator phase/receipt/recovery/restore/abort APIs;
-- daemon publication journal/floor/compensation stack;
-- old redb intent/VisibleEpoch/successor/snapshot codecs;
-- raw pin registry and reclaimer plan/checkpoint/receipt package;
-- bridge mutation receipts;
-- old W7/P18/process/module/source-shape fixtures.
-
-## Focused behavior
-
-- crash around artifact, pending, every RPC/readback, current commit and pointer install;
-- old request pinned in the commit→install gap remains valid;
-- uncertain current commit resolves before install;
-- v1/v2/v3 prevents early point deletion;
-- generation deletion waits for every guard;
-- crash after current commit retains cleanup row;
-- finite cleanup backlog backpressures safely;
-- unknown deletion leaks/retries;
-- current/pending/cleanup/live roots survive object GC.
+Verify after code: pre/partial/post RPC recovery, delta limit before effects, atomic bindings/current commit,
+old snapshot in commit/install gap, new-generation staging isolation, v1/v2/v3 cleanup, restart and stalled
+reader disk growth. No runtime result is asserted by this document.
