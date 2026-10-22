@@ -32,12 +32,13 @@ This file records what the refactor audit actually inspected, what changed and w
 | A012 | Query/evidence/exact | planner/executor/access/validator/projector/handles/continuations; literal matcher; oracle path | CHECKED | Direct handlers, one request context, retained evidence and explicit exact input semantics selected. | Implement real Qdrant/evidence path and streaming cancellation. | High static. |
 | A013 | Protocol/client/CLI | provider protocol/client; daemon provider/public runtime; CLI legacy/typed stacks | CHECKED | One framed live session selected; dead locators, blocked-I/O cancellation, partial output and cursor accounting contradictions corrected. | Implement and execute same-session Continue/Expand/cancel/child cleanup. | High static. |
 | A014 | Product depth | old orientation/comparison/document requirements; enrichers/resolvers/comparator/workers/overlay | PARTIAL | Observable user behavior preserved; scaffolds are not capabilities. | Select concrete producers/consumers and evaluate quality. | Medium. |
-| A015 | Tests/governance code | `xtask/**`; module/source-shape tests; harness inventory; qualification consumers | PARTIAL | Generated authority and wrappers mapped for deletion. Qualification consumers are retired validators/tests, not runtime authority. | Delete xtask, digest ledger, exclusive fixtures and Cargo consumers; run minimal Clippy. | High inventory, medium closure. |
+| A015 | Tests/governance code | `xtask/**`; root `Cargo.toml`/`Cargo.lock`; `.cargo/config.toml`; workflows; qualification/source-shape/module-ownership consumers | PARTIAL | Every public `xtask` command served removed evidence, graph, map, bootstrap or source-shape governance. `xtask`, its 3.57 MB digest ledger, workspace member, `cargo_metadata` dependency and exclusive lock entries were removed in `f9275731`/`9d2fe65a`. Run `39868374272` passed absence checks, locked metadata, `cargo check -p search-contracts --locked` and strict Clippy. | Inspect and remove surviving product-package source-shape/module-ownership/qualification-bound tests and stale references; preserve causal behavior tests. | High for xtask closure, medium for remaining consumers. |
 | A016 | Donors | redb 2.6.3; Qdrant 1.19; Aho-Corasick; selected Git/ripgrep/Tantivy/Lucene mechanics | PARTIAL | Mechanisms and hidden costs separated from product claims; API catalogues are not implementation checklists. | Revisit only for concrete owner decisions. | Medium-high named mechanisms. |
 | A017 | Qualification tree | Complete tree inventory; root policy/blockers; Qdrant/code-enrichment/os-secret samples; consumer searches | CHECKED | Old W1-W10/gate/PASS/FAIL database archived at `2f9c9720`; current tree retains only policy and blocker summary. | Remove qualification-bound Rust/tests under A010/A015. | High disposition. |
 | A018 | Package-local auxiliary docs | Complete current-tree package/binary root sweep; xtask supplement-name set; nonstandard journal/profile/helper files | CHECKED | All W7/W8/W10/P18 supplements, copied window helpers, old control journal/checkpoint/quarantine notes, `SECURITY_RESTRICTION_JOURNAL.md` and duplicate `S11_PROFILE.md` were inspected and removed. Unique current `DIAGNOSTICS.md` remains. Point identity rules moved into its sole `FUNCTIONS.md` owner. | Recheck only when a package adds or renames an auxiliary owner document. Rust references to removed names are A015. | High static. |
 | A019 | Open issues | Current implementation chain and obvious duplicate/superseded tasks; #352 | CHECKED | Issues reconciled to current owners; old harness/graph/lint/status tasks closed. | Refresh after material code/issue changes. | Medium-high. |
 | A020 | Runtime evidence | Windows durability/cancellation; live Qdrant late writes/IDF; relevance; reader growth; protected restore; restart | RUNTIME-ONLY | Static docs identify required experiments and issue no readiness. | Implement and execute; record raw results with owning issue/PR. | Not statically knowable. |
+| A021 | Compiler baseline | Ubuntu Rust 1.98 runs `39867915623`, `39868025680`, `39868205817`, `39868374272`; daemon and `search-contracts` slices | PARTIAL | The xtask cut itself resolves cleanly. The minimal real owner passes locked check and strict Clippy. A broader `cargo check -p eliot-searchd` exposed pre-existing legacy/target-bound errors: missing unsupported modules, unconditional Windows-secret imports, missing `std::fs::File` and ambiguous associated types. These are not caused by the tooling deletion. | Assign each daemon error to its owner cutover, remove obsolete paths rather than patching dead architecture, then rerun daemon and Windows checks. | High for observed runs; product build remains failing. |
 
 ## Pass log
 
@@ -69,4 +70,19 @@ Findings:
 - `crates/search-index-qdrant/search-point-identity/S11_PROFILE.md` contained useful replacement reasoning, but `FUNCTIONS.md` simultaneously froze the old S11 public surface. That was two conflicting owners. The replacement identity, collision rule, ambiguous-occurrence policy and cutover now live directly in `FUNCTIONS.md`; README is only an entrypoint.
 - `crates/search-control-redb/DIAGNOSTICS.md` is retained because it defines a distinct current read-only operation rather than a historical gate or copied state machine.
 
-Action: remove the redundant journal/profile files and mark A018 checked. The next static/code pass is A015: remove `xtask`, digest/shape/qualification consumers and obsolete Cargo wiring, then run minimal compiler/Clippy for the changed tooling surface.
+Action: remove the redundant journal/profile files and mark A018 checked.
+
+### R006 — xtask and digest-governance removal
+
+Inspected the root manifest/lock/aliases/workflows and the complete `xtask` command/module surface. No current product operation remained: every command generated or validated removed accepted-evidence, architecture coverage, package maps, integration bootstrap, Qdrant source boundaries or the canonical digest ledger.
+
+Actions:
+
+- `f9275731`: delete `xtask/**`, including the 3.57 MB ledger; remove the workspace member and `cargo_metadata` workspace dependency;
+- `9d2fe65a`: regenerate `Cargo.lock`, removing only xtask-exclusive packages;
+- run `39868374272`: verify the directory/package/dependencies are absent, locked metadata resolves, and `search-contracts` passes check plus strict Clippy under Rust 1.98 on Ubuntu;
+- `fe770d8c`: remove the temporary verification workflow after success.
+
+A broad daemon check was deliberately recorded rather than concealed: its old Linux/Windows composition already fails independently of this cut. Those errors are tracked in A021 and must be removed with their actual owner paths, not patched merely to make obsolete architecture compile.
+
+Next pass: enumerate product-package source-shape, module-ownership and qualification-bound tests; delete only structural governance tests while retaining tests that exercise real behavior.
