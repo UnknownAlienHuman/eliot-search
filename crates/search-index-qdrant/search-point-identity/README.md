@@ -5,32 +5,17 @@ contains no registry, source authority, transport or publication state.
 
 ## Current source
 
-`src/s11.rs` implements an eight-coordinate v1 key containing generation, projection membership,
-representation, Unit ID, profile set and role. The full BLAKE3 digest is projected to a 128-bit address;
-readback compares the address, full digest and coordinates. These collision/address mechanics are useful.
-
-The key shape is not the target. Representation and current Unit ID are revision/coordinate-bearing in the
-existing preparation path, so a local edit can mint a new point for every later unit. The
-[current/target map](S11_PROFILE.md) describes the cutover.
+`src/s11.rs` implements a revision/coordinate-bearing v1 key. Its separation of full BLAKE3 identity from
+128-bit address and its collision refusal are useful. The key shape and pre-release encoded bytes are not.
 
 ## Target
 
-Point identity contains only immutable retrieval state for one generation:
+Point identity contains only immutable retrieval meaning for one physical generation. Exact revision,
+representation, logical occurrence and range belong to versioned evidence in the pinned published view.
+Unambiguous unchanged occurrences may retain identity; ambiguous equal repeats receive new incarnations.
 
-```text
-projection membership / stable grouping
-occurrence incarnation
-retrieval profile and role
-exact retrieval-input digest
-point role
-```
-
-Exact source revision, representation, logical occurrence and range live in the published-view manifest.
-Old pinned views retain their old evidence binding while an unchanged retrieval point can remain stored.
-Equal text occurrences remain distinct; changed input/profile/incarnation creates a new point.
-
-Change planner, payload, publication, bridge and query consumers together. New derived formats rebuild;
-there is no old S11 compatibility/migration requirement. Remove the separate root legacy minting/registry
-and obsolete goldens with their last callers.
+The complete operation, cutover and focused behavior checks live in [FUNCTIONS.md](FUNCTIONS.md). Change
+point identity, projection, Qdrant payload/readback, publication and query lookup together. Build a new
+physical generation; do not preserve old S11 through dual issuers, adapters or migration machinery.
 
 [Implementation guide](../../../docs/implementation/README.md) · [Agent notes](AGENTS.md)
