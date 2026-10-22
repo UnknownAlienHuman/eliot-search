@@ -21,4 +21,4 @@ cargo +1.98.0 check --workspace --locked
 
 The manual GitHub workflow records the same kind of raw diagnostic output and grants no package, gate, wave, readiness or release authority.
 
-`xtask` remains legacy governance source scheduled for deletion under #214/#525. Until its Rust callers and workspace entry are removed in a checked code slice, its commands are not current implementation gates and its generated data must not be regenerated.
+The legacy `xtask` package, generated maps and digest ledger were removed. Do not recreate a custom command merely to mirror Cargo metadata, source layout, review status or acceptance state. Add repository-specific tooling only when a surviving product workflow cannot be expressed clearly with direct Cargo or Git commands.
