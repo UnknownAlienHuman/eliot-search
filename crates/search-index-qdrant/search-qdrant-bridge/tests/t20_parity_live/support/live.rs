@@ -11,13 +11,12 @@ pub(crate) async fn live_plane() -> (search_qdrant_bridge::live::DisposableServe
         .expect("disposable server");
     let report = run_qualification_suite(&server)
         .await
-        .expect("qualification suite");
-    let gate = QualifiedGate::admit(&report.receipt).expect("gate");
+        .expect("live behavior suite");
+    assert!(report.receipt.outcomes.iter().all(|outcome| outcome.passed));
     let plane = RealDataPlane::connect(
         server.endpoint(),
         server.fixture_connection_binding(),
         server.fixture_api_key_lease(),
-        gate,
         BridgeLimits::BASELINE,
     )
     .await
