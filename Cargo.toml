@@ -52,7 +52,6 @@ members = [
     "crates/search-runtime/search-revision-crypto",
     "crates/search-runtime/search-os-secrets-windows",
     "crates/search-runtime/search-provider-transport-windows",
-    "xtask",
 ]
 
 [workspace.package]
@@ -118,9 +117,6 @@ qdrant-client = { version = "=1.19.0", default-features = false }
 # testing/unstable feature); do not widen it implicitly.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 sha2 = { version = "=0.10.9", default-features = false }
-
-# #250: official read-only Cargo facts, private to the bounded xtask adapter.
-cargo_metadata = { version = "=0.23.1", default-features = false }
 
 # #400/#389: private maintained file syntax events; no donor product tree.
 # Cargo ignores build metadata in requirements; locked artifact/checksum bind spec-1.1.0.
