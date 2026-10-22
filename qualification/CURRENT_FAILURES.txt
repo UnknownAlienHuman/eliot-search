@@ -1,37 +1,28 @@
-Status: NOT QUALIFIED
-Inspected production source: public main c8e38b6fc9829f1cd38070773b1b3e5b21de18ad
-Documentation audit head before this correction: 61a65a36a55bf2ca328964a5a437b740276dbd02
-Inspected: 2026-10-20
+Status: NOT READY
+Inspected production-source baseline: c8e38b6fc9829f1cd38070773b1b3e5b21de18ad
+Static audit registry: docs/audit/ANALYSIS_REGISTRY.md
+Historical qualification archive: 2f9c9720f3e14799a0f8dfefa00077d2fa6a9887/qualification
+Updated: 2026-10-22
 
-CURRENT VERIFIED SOURCE FACTS
-- Production one-shot --scan-file/--scan-stdin search works over current bytes.
-- The daemon entrypoint is a sequence of independent argv interceptors, not one dispatcher/application.
-- The direct-registry interceptor runs before the read-only DIRECT service and secure persistent-command
-  stack. It recognizes serve/search/list/read/sync command names and emits registry metadata instead of
-  executing the later named operation.
-- The primary CLI's serve-data-root client therefore cannot receive the data_root_ready frame it waits for.
-- Native root initialization/inspection, old preparation and offline migration are separately reachable but
-  do not form one source-to-Qdrant product path.
-- Early refusal rejects legacy index/directory/retire/repair/GC effects.
-- The read-only DIRECT service source refuses mutations and keeps mutation handlers test-only; its serve argv
-  is shadowed in the current entrypoint.
-- Default wave1-shell excludes Qdrant/query dependencies. full-baseline compiles more disconnected and
-  obsolete systems but does not connect entrypoint, ingestion, publication or query.
-- --self-test validates shell/scan/hash behavior then prints persistent_direct_store_available=true as a
-  literal without traversing the persistent route.
-- No exact-head run proves one fresh source retained across restart, published/read back through Qdrant,
-  found from the standalone CLI and reopened at the exact retained excerpt.
+CURRENT SOURCE FACTS
+- The bounded one-shot --scan-file/--scan-stdin route works over current bytes.
+- The daemon entrypoint remains a chain of competing argv interceptors rather than one connected application dispatcher.
+- Persistent source registration, retained-object preparation, Qdrant publication/query and retained evidence do not form one reachable default product path.
+- The earlier DIRECT, migration, pairing/grant, qualification and in-memory-oracle systems do not establish current indexed Search readiness.
+- No exact-head execution proves: fresh source retained across restart -> published/read back through real Qdrant -> found by the standalone CLI -> reopened at the exact retained excerpt.
 
-DISPOSITION
-- The former persistent quickstart and old September PASS/failure transcript are historical only.
-- G0-G6/W0-W10, package acceptance and feature presence are not current readiness evidence.
-- #264 owns one connected default product application and factual help/status.
-- #332 owns one current child-stdio CLI/client/protocol route and deletion of duplicate stacks.
-- Until both land, persistent indexed Search readiness is unavailable.
+CURRENT OWNERS
+- #264: one connected default product application and factual help/status.
+- #330/#270/#331: retained bytes, current source head and recoverable preparation.
+- #263/#261/#300/#303: real Qdrant, current published view and safe cleanup.
+- #279/#275/#280/#332: source-backed Search, live window, one protocol and actual CLI.
 
-NOT MEASURED BY THIS DOCUMENTATION AUDIT
-- Rust compiler/Clippy at the documentation head
-- live Qdrant mutation/query/readback
-- current Windows object/root durability
-- restart/rebuild/cancellation/recovery behavior
-- installed current CLI-to-daemon product flow
+NOT ESTABLISHED BY THE STATIC AUDIT
+- Rust compilation or Clippy after the planned code deletion/cutover;
+- live Qdrant mutation/query/readback, unknown or delayed writers;
+- Windows object/root durability and blocked-I/O cancellation;
+- restart/rebuild/restore/GC behavior;
+- retrieval relevance, large-corpus latency or scoped-IDF cost;
+- installed current CLI-to-daemon product flow.
+
+Historical PASS/FAIL files, wave milestones, package acceptance and probe registries were removed from the current tree. Git history preserves their exact revisions. New evidence is recorded with the concrete implementation issue/PR and does not become a runtime credential.

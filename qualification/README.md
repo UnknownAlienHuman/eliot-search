@@ -1,20 +1,18 @@
-# Qualification artifacts
+# Current evidence boundary
 
-This directory mixes historical structural-gate material with raw runtime evidence from earlier revisions.
-No file here is a current runtime token, package acceptance, launch state or product-readiness authority.
+This directory is not a runtime input, capability registry, package acceptance system or product-readiness authority.
 
-Retire artifacts whose only subject is the old architecture:
+The complete historical qualification tree immediately before removal is preserved in Git at commit
+[`2f9c9720f3e14799a0f8dfefa00077d2fa6a9887`](https://github.com/UnknownAlienHuman/eliot-search/tree/2f9c9720f3e14799a0f8dfefa00077d2fa6a9887/qualification).
+It includes old W1-W10 milestones, agent drafts, gate maps, probe registries, package failures, Qdrant 1.19 evaluation inputs and earlier unit-level reports. Those files describe exact historical revisions only; they must not be copied forward as a current PASS or constructor credential.
 
-- package/wave/stage/coverage/accepted-evidence conformance;
-- ticket/context/lease/handoff and digest profiles;
-- source-shape/module-ownership checks;
-- unavailable worker/provider constructors represented as capabilities.
+The current tree retains only [`CURRENT_FAILURES.txt`](CURRENT_FAILURES.txt), a concise source-backed blocker summary. New runtime evidence belongs in the issue or PR that executed the concrete behavior, with exact commit, platform/backend, command, inputs and raw outcome. Do not recreate a central qualification database or feed its records into application startup.
 
-A runtime artifact is useful only when it names the exact current commit, selected platform/dependency
-artifacts, command, inputs and raw outcome for a real connected behavior. Old results remain historical; they
-must not be carried forward as current PASS. Live Qdrant/native/recovery evidence is regenerated after the
-current handler exists and is linked from its owning issue/PR.
+Current implementation and evidence rules are in:
 
-`CURRENT_FAILURES.txt` records the current public-source blocker summary. Issue #264 owns the first complete
-current-format source → retained object → Qdrant → CLI → exact excerpt run. Issues #214/#525 own removal of
-structural qualification machinery.
+- [`docs/architecture/README.md`](../docs/architecture/README.md);
+- [`docs/implementation/README.md`](../docs/implementation/README.md);
+- [`docs/audit/ANALYSIS_REGISTRY.md`](../docs/audit/ANALYSIS_REGISTRY.md);
+- the nearest owner `FUNCTIONS.md` and active issue.
+
+Compilation, Clippy, live Qdrant, Windows durability, recovery, relevance and scale remain separate executed claims. A source file, fixture, report or old green probe does not establish them.
