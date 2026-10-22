@@ -1,154 +1,84 @@
-# Index cleanup — source audit and consolidation
+# Index cleanup — temporary extraction map
 
-Ordinary Qdrant cleanup is the terminal external effect of committed publication, not a separate proof and
-journal platform. Move the useful exact delete/readback helper into publication/bridge and remove this
-package when callers switch.
+This package has no independent durable responsibility in the target product. It currently contains a useful exact Qdrant delete/readback skeleton surrounded by caller proofs, plans, digests, receipts and checkpoint state. Move the useful private helper into publication/bridge, then delete this package and its workspace dependencies.
+
+Read the [publication owner](../search-publication/FUNCTIONS.md), [Qdrant bridge](../search-qdrant-bridge/FUNCTIONS.md) and [stopped-root maintenance](../../search-runtime/search-retention/FUNCTIONS.md).
 
 ## Current source findings
 
-Production source is about 25.3 KiB:
+- `manifest.rs` validates caller-supplied structures instead of deriving exact retired IDs from committed publication.
+- `plan.rs` copies manifests into another plan and adds custom identities.
+- `execute.rs` contains the reusable exact delete/absence-readback shape but lacks the current route, view, deadline and recovery owner.
+- `receipt.rs` creates a second cleanup journal.
+- public-main callers are dominated by fixtures; no connected product caller owns its checkpoints.
 
-| Current source | Problem |
-|---|---|
-| `manifest.rs` | `validate_retired_manifest` compares two caller-supplied structures. It neither derives IDs from committed publication nor binds its digest to `point_ids`. |
-| `plan.rs` | Copies the manifest into batches and creates custom FNV-like plan/operation identities. |
-| `execute.rs` | Useful synchronous exact delete/readback skeleton, but the port lacks authoritative route/generation/deadline ownership and is detached from live views. |
-| `receipt.rs` | Adds public batch/checkpoint/receipt state which would require another durable journal. |
-| callers | Package/live fixtures dominate; no connected production `execute_batch` caller or checkpoint owner was found. |
+## Current owner
 
-A sampled `ReclamationWatermark` cannot close acquisition races. The current raw pin registry also checks
-only route/epoch counts, not the exact set of older view sequences which may still reference a retired point.
-
-## Durable cleanup record
-
-Publication's visible-view transaction transfers only unfinished physical work from pending state:
+Publication commits one finite unfinished cleanup obligation with the new current view:
 
 ```text
 RetiredCleanup {
-  cleanup_id
-  cleanup_artifact_ref
-  kind: PointIds | Generation
+  artifact containing exact point IDs or exact retired collection identity
   route / generation
-  retire_before_sequence
+  retire_before_sequence when point cleanup is used
   next effect/readback cursor
+  possible-dispatch state needed for recovery
 }
 ```
 
-The immutable artifact owns exact sorted ID pages or the exact old collection identity. The record is
-removed after exact completion. There is no separate operation identity, proof, checkpoint history or
-terminal receipt.
+There is no separate reclaim plan, proof, receipt history or terminal record. When the finite cleanup table is full, publication backpressures before another external mutation.
 
-The finite cleanup table is allowed to contain multiple outstanding view transitions. A single pending row
-cannot remain occupied by cleanup while later views publish, and clearing pending without this row would
-lose cleanup on crash. When the finite bound is full, publication backpressures before new external work.
+### Reader eligibility
 
-## Eligibility from live views
+A same-generation point closed with exclusive `valid_until = N` is eligible only when no live view of the same route/generation has `sequence < N`. A retired collection is eligible only when no live view uses that route/generation.
 
-Publication/view manager supplies a strong snapshot of every currently live view.
+Checking the immediate predecessor or one watermark is insufficient. New requests can acquire only current; existing queries/windows retain their exact old view guard. Restart removes old process-local guards but not durable cleanup rows.
 
-### Same generation
+### Writer eligibility
 
-Points closed with exclusive `valid_until = N` are physically deletable iff:
+Reader drain is not writer quiescence. Do not delete or declare completion while an earlier Qdrant writer may still recreate or replace the state. One matching readback, elapsed client deadline or reconnect does not prove terminality. Unresolved abandoned-route obligations remain visible and bounded as specified by publication.
 
-```text
-no live view has
-  route == cleanup.route
-  generation == cleanup.generation
-  sequence < N
-```
+## Exact cleanup effect
 
-This is not equivalent to “the immediate old view has no guard.” Example:
+For a settled exact-ID page:
 
-```text
-v1: P visible
-v2: P visible
-v3: P closed at N=3
-```
+1. load the immutable page named by the cleanup row;
+2. inspect exact same-route/generation state when a prior delete may have happened;
+3. issue exact-ID deletion under the current attempt deadline/cancellation;
+4. read back exact absence;
+5. advance the durable cursor in one short redb transaction;
+6. remove the row/artifact only after exact completion.
 
-A live v1 still needs P even when no v2 guard exists. Deleting after only v2 drains breaks v1.
+For a retired generation, inspect/delete/read back exact collection absence. Partial or foreign state blocks advancement. Broad-filter deletion is not used. Qdrant vendor conversion stays private to the bridge; publication owns the row, cursor, recovery and visibility.
 
-### Replaced generation
+## Local immutable-object GC is not this operation
 
-The old collection is deletable iff no live view uses its route/generation. Delete the collection whole;
-do not create per-point retire pages for a generation no future view will use.
+Local object collection is explicit **stopped-root maintenance**. The daemon and all producers/windows are stopped, one exclusive root lock is held, all current/prepared/published/pending/cleanup references are validated and marked once, then only proven-unreferenced objects are swept. Unknown traversal or delete keeps bytes.
 
-### Restart
-
-Old interactive guards/windows are process-local and do not survive. Durable cleanup rows do. At startup the
-manager installs current only, then cleanup reevaluates all rows; work blocked solely by old process guards
-becomes eligible.
-
-## Cleanup execution
-
-For an eligible exact-ID page:
-
-1. load the next immutable page;
-2. inspect exact same-route/generation state first if a prior dispatch may have happened;
-3. issue exact ID delete with the original cleanup deadline/cancellation policy;
-4. read back exact absence of every ID;
-5. advance cursor in one short redb transaction;
-6. remove completed page data and final row after success.
-
-For a generation row, inspect/delete/read back exact collection absence.
-
-Timeout, cancellation or transport failure after possible dispatch is unresolved. Keep the same cursor and
-read actual state. Partial/foreign/unexpected results block advancement. Broad-filter deletion is absent.
-
-The bridge owns vendor translation only. Publication owns row/cursor/recovery. This package owns nothing
-after helpers move.
-
-## Local artifact GC
-
-Qdrant cleanup and immutable-object GC are separate effects but use the same lifetime roots:
-
-- current source/prepared references;
-- `CurrentPublishedView` manifest/evidence roots;
-- one `PendingPublication` artifact;
-- finite `RetiredCleanup` artifacts/pages;
-- live view snapshots/query windows;
-- explicitly selected retained history, if any.
-
-Object producers hold a shared GC gate from finalization through first durable reference. Bounded GC holds
-the exclusive gate while snapshotting roots and deleting a small exact unreferenced page. This prevents a
-newly finalized or deduplicated object from being deleted before its source/view/cleanup reference commits.
-
-Unknown root traversal or delete keeps bytes. No generic protection graph, lease catalogue or sweep journal.
-
-## Donor interpretation
-
-Lucene's snapshot policy refcounts in-memory commit generations and suppresses deletion while a snapshot is
-held; its documentation explicitly says that state is not crash-persistent. Eliot reuses the process-local
-view lifetime only and persists physical cleanup obligations separately.
-
-Tantivy's segment updater asks its directory GC to remove files outside the committed/in-flight living set.
-Eliot similarly derives living objects from current/pending/cleanup/live roots. It does not import Tantivy's
-segment writer or JSON registry.
+Do not implement the previous online shared/exclusive `ObjectGcGate`, per-publication root rescans, generic lease catalogue or sweep journal. Qdrant cleanup remains online because it is coordinated with live view/writer state; local object-file GC does not.
 
 ## Removal boundary
 
 Delete after direct publication/bridge callers move:
 
-- caller `PublicationCommitProof` and retired-manifest field-equality admission;
-- public reclaim plan/batch/checkpoint/receipt constructors and custom digests;
-- route/epoch watermark and reclaimable Boolean inputs;
+- `PublicationCommitProof` and retired-manifest field-equality admission;
+- reclaim plan/batch/checkpoint/receipt constructors and custom digests;
+- route/epoch watermark and caller `reclaimable` booleans;
 - separate operation port/journal;
-- purge/restore/rollback interaction state;
-- P18/W7/source-shape/process fixtures;
+- purge/restore/rollback interactions;
+- W7/P18/source-shape/process fixtures;
 - package and workspace dependencies.
 
-Move only private exact delete/absence-readback code which remains useful.
+Move only the private exact delete/readback code that remains useful.
 
-## Required behavior checks
+## Required behavior checks after integration
 
-- v1/v2/v3 point example never deletes early;
-- old query continues after new view commit;
-- new old-view acquisition is impossible after swap;
-- exact point cleanup starts at the correct sequence threshold;
+- a live v1 prevents deletion even when v2 is gone and v3 closed the point;
 - generation cleanup waits for every view using it;
-- crash after current-view commit preserves the cleanup row;
-- restart with no old guards resumes eligible work;
-- timeout after delete resolves by exact same-route/generation readback;
-- partial/unexpected IDs block cursor advancement;
-- cleanup backlog bound causes safe publication backpressure;
-- current/pending/cleanup/live object roots survive GC;
-- no ordinary cleanup path claims purge or secure erase.
+- possible delayed writers prevent unsafe cleanup;
+- current-view commit crash preserves cleanup work;
+- restart resumes work blocked only by dead process guards;
+- unknown/partial delete resolves from exact state without broad retry;
+- backlog bound causes safe publication backpressure;
+- stopped-root GC preserves every current/pending/cleanup object root;
+- ordinary cleanup never claims purge or secure erase.
