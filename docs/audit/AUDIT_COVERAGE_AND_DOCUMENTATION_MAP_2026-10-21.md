@@ -1,78 +1,117 @@
-# Audit coverage and remaining documentation work
+# Static refactor audit closure and rewrite map
 
-Source baseline: `c8e38b6`. Replacement documentation re-reviewed on 2026-10-21, most recently from
-`7b15dd6` through `8e603e0`. This is a broad static review with explicit remaining checks, not an exhaustive
-line-by-line audit, runtime qualification or permission gate. The earlier blanket closure claim remains withdrawn.
+**Inspected public source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
+**Audit/refactor documentation:** PR #610 through the final documentation sweep  
+**Status:** sufficient input for rewriting the current-format documentation and implementation; not a line-by-line source proof, build result, runtime qualification or product-readiness certificate.
 
-## Where implementation starts
+The earlier blanket “everything is checked” claims were wrong. This record closes only the static architecture/documentation audit: the major owners, real callers, competing applications, historical requirements, selected donor semantics, active implementation issues and documentation authority have been reconciled enough to begin the rewrite without another audit gate.
 
-[Architecture](../architecture/README.md) states purpose; [implementation](../implementation/README.md) selects
-mechanisms. A local FUNCTIONS map owns its operation recipe. READMEs/AGENTS/issues route to it rather than
-copying another algorithm. This audit and the [workspace disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md)
-record evidence; package counts and audit statuses do not authorize or block code.
+## One authority chain
 
-## Review coverage
+Implementation work uses only:
 
-| Area | Evidence available | Boundary |
+1. [`AGENTS.md`](../../AGENTS.md) — repository method and current coordination rule;
+2. [`docs/architecture/README.md`](../architecture/README.md) — product purpose, observable requirements and principles;
+3. [`docs/implementation/README.md`](../implementation/README.md) — selected current-format mechanisms and order;
+4. the nearest owner `FUNCTIONS.md` — one concrete operation recipe and source seams;
+5. the active issue — scope, consumers and completion evidence for that change.
+
+Audit and donor documents explain evidence and limitations. They do not authorize code, freeze APIs or add gates. Pseudocode names, package rows, donor method catalogues and issue nouns are not orders to create types, traits, services, crates, registries or workers.
+
+The 8.4 master, package-status graph, P00 contracts, handoff packets and `swarm/**` control plane were removed from the current tree in this sweep. Git history remains the archive. They cannot be used as a second specification.
+
+## Coverage completed for the rewrite
+
+| Area | What was checked | Rewrite consequence |
 |---|---|---|
-| Workspace/entrypoints | Members, features, principal callers and competing applications inventoried | Not every Rust line or deletion consumer checked |
-| Source/root/config/control | Source maps trace dropped body, replay/archive layers, root/settings blockers | Native/private object-key behavior unexecuted |
-| Preparation/identity/Qdrant | Major implementations and selected upstream mechanisms inspected | No corpus or live-Qdrant measurement |
-| Publication/views/GC | Effect ordering, old-view lifetime and real root dependencies reasoned through | Replacement code and fault behavior not executed |
-| Query/session/protocol | Serving paths and replacement scenarios reviewed | No current end-to-end application run |
-| Tests/tooling/optional features | Families and principal consumers inventoried | Not an exhaustive fixture or donor survey |
-| Private #598 | Public contract only | Unpublished branch/worktrees untouched |
+| Workspace and entrypoints | 52 Cargo members, default/features, daemon/CLI applications, principal production callers and fixture-only paths | One CLI/daemon application; every member has KEEP/MERGE/DELETE/OPTIONAL/CONDITIONAL disposition, not a target package count |
+| Root/config/control | root/owner composition, configuration registry, generic redb journal/snapshot and registry replay | One real root lock, typed settings/current rows and finite unfinished external work; no eternal operation archive |
+| Source and retained objects | admission/receipt/provenance/history/registry families, safe read, revision stores and public #598 contract | One stable acquisition, one immutable writer/reader and one current source head; protect private #598 overlap without inheriting its obsolete programme |
+| Preparation and identity | materializer/unitizer paths, repeated verification/copies, UnitId/S11 rewrite amplification and empty/gap cases | One materialization, structure-first units, conservative occurrence reuse, stable retrieval identity and versioned evidence |
+| Qdrant and lexical | real SDK adapter/callers, mutation/readback semantics, native BM25 tokenizer/inference, filtered IDF source and late-write behavior | One private real runtime; immutable published retrieval state; exact-name plane separate from BM25; no unmeasured O(top-k) or vector-readback claim |
+| Publication/lifetime/cleanup | three publication machines, pending recovery, old-view snapshots, pins/reclaimer/retention and restore code | One pending publication/current view/unfinished cleanup owner; old readers and unresolved writers both constrain deletion; stopped-root local GC |
+| Query/evidence/session | recipes/capabilities/plans/access proofs/executor/validator/projector/handles/continuations and exact matcher | Direct Search/Exact/Continue/Expand, one request context, retained evidence, one live query window and explicit exact input semantics |
+| Protocol/client/CLI | pairing/grant/manual JSON, parallel line protocol, typed and legacy clients, output/cancellation behavior | One bounded framed current protocol; same-session window lifetime; actual cancellation/partial-output limits; no local grant framework |
+| Product depth | old orientation/comparison/document/overlay/model requirements and their disconnected scaffolds | Preserve source-backed navigation, ambiguity, comparison and document goals; add only concrete producers/consumers, not empty frameworks |
+| Tests/tooling/governance | source-shape tests, generated package maps, digest ledger, xtask analyzers, P00/swarm/qualification authority | Keep causal behavior checks; delete structure/governance machinery with consumers; minimal compiler/Clippy after real code |
+| Documentation and issues | all 288 PR paths, current root/package instructions, current open-issue queue and obvious duplicate/superseded tasks | One owner rule per behavior; #352 is the concise current programme; obsolete harness/graph/lint/status tasks are closed rather than implemented |
 
-## Corrections to the replacement documentation itself
+The detailed evidence is in [the distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md), [workspace disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) and [donor evidence](DONOR_VERIFICATION_REGISTER_2026-10-09.md).
 
-The prior `7b15dd6` pass removed a false audit-complete claim, map-as-authority hierarchy and repository-wide
-#598 gate; corrected workspace counts; separated one-shot/session lifetime; and fixed Cancel observability,
-blocked-I/O claims, capped serialization, window deadlines, handled-prefix cursor accounting and the false
-equation of local flush with peer acknowledgement. Those changes remain in their operation owners.
+## Errors found in the replacement itself
 
-The `8e603e0` pass addresses three remaining algorithmic holes and their immediate consumers:
+The audit repeatedly created new failure modes while deleting the old architecture. These corrections are mandatory rewrite inputs:
 
-| Fault | Consequence | Selected correction and owner |
-|---|---|---|
-| 'Sorted prepared stream' without an ordering producer; whole-view pages without a point index | Full-corpus sort/cache or an invented manifest storage engine | Source-local bounded sort/diff; compact redb source/evidence rows with exact-key/range lookup. [Planner](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) |
-| 'Stable anchor + duplicate position' treated as continuity | Inserted equal blocks shift positions or reuse the wrong occurrence | One-old/one-new input match only; ambiguous repeats get fixed new births. [Unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
-| Full live-root traversal repeated under a lock before every deletion page | Work can scale with references times deletion pages; page size does not bound the writer pause | Explicit stopped-root maintenance, complete mark once, then exact enumeration/deletion. [Local GC](../../crates/search-runtime/search-retention/FUNCTIONS.md) |
+- a queue notification is not durable work; current input/outcome comparison recovers lost wake-ups;
+- stale preparation cannot overwrite a newer source/profile/removal;
+- successful empty input is not extraction failure or unavailable index;
+- a copied root is an archive/import, not an authorized restart of original Qdrant pending/cleanup;
+- readable copied ciphertext is not writable nonce-counter continuity;
+- a redb snapshot does not snapshot mutable Qdrant vectors/filter payload;
+- observed state does not prove all old Qdrant writers are terminal;
+- native-generated BM25 vectors have no locally known coefficient oracle;
+- scoped IDF can enumerate a broad population even when `top_k` is small;
+- Qdrant word tokenization does not preserve punctuated identifier identity;
+- the existing chunk matcher is not a compile-once cancellable retained-source scanner;
+- a one-shot child cannot return a continuation locator whose process is immediately destroyed;
+- a blocked write is not cancelled by checking a clock before the call;
+- local flush is not peer acknowledgement or exactly-once delivery;
+- a bounded page does not bound work performed before page selection;
+- audit/issue pseudocode and vendor API catalogues must not become implementation checklists.
 
-Related corrections: ordinary metadata deltas commit atomically with current view; full rebuilds populate
-separate generation tables; a view pins the actual read snapshot rather than using latest rows; partial
-expected RPC/delete progress is retried per item rather than automatically classified as corruption.
-[Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) owns those rules.
+If a later design changes one of these decisions, it must provide a concrete counterexample and owner, not another general framework.
 
-Issues #259, #261, #300, #302, #303 and #329 were updated to reference these recipes rather than retain their
-old duplicate algorithms. Other issue/local-document bodies are not claimed completely re-swept in this pass.
+## Rewrite rules against neural slop
 
-## Source and donor evidence used in this pass
+1. **Observable behavior first.** State input, output, failure, cost and owner before naming a new abstraction.
+2. **One fact, one owner.** Source bytes, current control, retrieval state, evidence and session state must not be duplicated across databases or packages.
+3. **One algorithm, one document.** Architecture states why; implementation selects the mechanism; owner notes specify the operation. Issues link instead of copying another algorithm.
+4. **No proof-shaped substitutes.** Digests, receipts, booleans, capability names, qualification records and caller-supplied readbacks do not establish unperformed effects or unread bytes.
+5. **No catalogue completion.** Implement only SDK/donor operations with real connected consumers.
+6. **No hidden cost claims.** `bounded`, `streaming`, `native`, `incremental`, `snapshot` and `top-k` require the actual preceding work and retained memory/disk cost to be stated.
+7. **No compatibility for pre-release internals.** Protect user data; reject unsupported roots before writes. Do not preserve dead APIs, receipts, bytes or fixtures through adapters.
+8. **No scaffold as capability.** A package, worker, schema, handler name or fixture without a real producer/consumer is unavailable and may be deleted.
+9. **Delete with cutover.** Move useful behavior, change actual callers, then remove the displaced path, tests, docs, dependencies and generated governance.
+10. **Claims follow execution.** Compilation is not Windows durability, live-Qdrant recovery, relevance, scale or product readiness.
 
-The planner's current `manifest_read.rs` materializes/re-encodes a complete manifest; the updated source maps
-identify its callers and lost vector inputs. `search-control-redb/Cargo.toml` already pins redb 2.6.3.
-Checked redb tag v2.6.3 at `f4e3eb69dc2a4b4e01fefff0b9e039c6c7ab98f6`: read transactions capture the table-tree root
-and table handles retain the transaction guard. Official 2.6.3 docs provide get/range and describe copy-on-write
-MVCC. Exact links and the selected table boundary are in the control map. No dependency upgrade was made.
+## Current implementation programme
 
-## Costs and limits not to hide
+Issue #352 owns only coordination. The implementation chain is:
 
-- Conservative matching may rewrite repeated units in an edited source; it does not promise universal ID reuse.
-- Source-local work is bounded by a supported source size/unit count, not constant memory for an unlimited file.
-- Incremental metadata commits have a prechecked ceiling; oversized single-source updates remain explicit gaps.
-- Old redb readers retain old pages. Disk/backlog behavior must be measured with stalled publication and windows.
-- Local GC requires downtime and temporary mark-table disk. It is not online or zero-cost; disk pressure pauses
-  writes rather than authorizing eviction. Qdrant cleanup still operates with live-view eligibility.
-- Platform I/O cancellation, Windows namespace durability, Qdrant behavior, recovery and quality/scale are unrun.
+```text
+#330 + #270 + #331
+  retained bytes → current source head → recoverable preparation
 
-## Remaining checks
+#259 + #329
+  changed-source projection → stable retrieval point + versioned evidence
 
-Check residual same-level README/AGENTS/issue duplication against the selected owner maps, especially old
-manifest-page, source-GC and snapshot wording. Do not solve contradictions by implementing both versions.
-Confirm the useful private storage handoff against the simplified boundary without importing its retired
-six-domain/purge/restore obligations. Preserve navigation/comparison/document/large-corpus goals while
-removing their broken scaffolds. Actual compilation, runtime faults and measurements follow implementation;
-this record must not manufacture evidence that does not exist.
+#263 + #261 + #300 + #303
+  real Qdrant → atomic current view → reader/writer-safe cleanup
 
-Historical Architecture 8.4, waves, swarm, qualification and package-status material remains evidence only.
-Git history preserves old recipes; no additional approval database or audit wave is needed to start an
-independent concrete change.
+#272 + #291 + #293 + #279
+  selected scope → one request context → retained evidence → Search
+
+#275 + #280 + #332
+  live query window → one framed protocol → actual CLI
+
+#249
+  explicit retained-source exact scan
+```
+
+Optional source-backed capabilities follow real producers: #281 orientation/comparison, #227 PDF, #335 Git views, #336 editor overlay, #219 MCP leaf and #334 managed Qdrant child. Deleting their current scaffolds does not declare their user requirements complete.
+
+#598 remains protected unpublished storage work. Only its accepted public handoff may be consumed; its six-domain/purge/compatibility programme is not a repository-wide prerequisite.
+
+## Remaining evidence — not a reason for another audit wave
+
+The following are implementation and measurement work, not missing static documentation authority:
+
+- compiler/Clippy after each actual cutover and deletion;
+- Windows no-clobber/namespace durability and blocked-I/O cancellation;
+- live Qdrant unknown-write/late-write behavior, scoped-IDF cost and relevance;
+- old redb reader growth, cleanup backlog and stopped-root GC disk/time;
+- protected-storage handoff and supported restore/import mode;
+- real large-repository/navigation/comparison/document quality;
+- end-to-end source → restart → Qdrant → verified excerpt.
+
+A new audit/status/qualification control plane is not required before implementation. New findings belong in the owning issue/document and must change the concrete design rather than create another parallel report.

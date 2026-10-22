@@ -1,82 +1,79 @@
-# Agent analysis framework
+# Agent-oriented analysis behavior
 
-ELIOT Search helps agents navigate and verify large repositories and document corpora without loading
-all source into context. The [current architecture](../architecture/README.md) defines the local
-baseline; [ADR 0006](../adr/0006-agent-analysis-framework-product-scope.md) preserves the broader mission.
+ELIOT Search should help an agent or person understand a large repository or document collection with fewer source reads while keeping every claim tied to exact retained evidence.
 
-## What the product should do
+This is a product-behavior document. It does not prescribe a recipe host, graph database, plan fingerprint, capability registry, model loop or package topology.
 
-A query selects a repository/corpus, retrieves likely evidence and returns useful locations, exact
-revision ranges, short previews and freshness/gaps. The client can reopen those bytes or request an
-exact check. Qdrant finds indexed candidates; Search owns source snapshots, preparation, publication
-and source validation. redb is small control state, not another search engine.
+## Core result
 
-Ranked retrieval and source accuracy are different properties. Every cited snippet must match its
-revision; a bounded top-k response still does not prove corpus-wide completeness or absence. Do not
-require a full count/proof operation before returning useful navigation.
+A user selects explicit sources and asks a question. Search returns a bounded ordered set of cards containing:
 
-## User workflows
+- exact source, revision, representation and location;
+- a short verified excerpt;
+- why the result was nominated or grouped;
+- freshness, unsupported state and material gaps;
+- an optional same-session item locator for more context;
+- suggested exact checks only as suggestions, not completed proof.
 
-| User need | Useful result |
-|---|---|
-| Understand an unfamiliar repository | Likely entry files, definitions, configuration, tests and documentation; short reasons and exact places to read. |
-| Find where to grep | A small set of relevant source ranges and suggested exact phrases/regex/symbol checks. |
-| Inspect an entity | Definitions/references/callers and related tests/docs, with ambiguity shown rather than guessed away. |
-| Compare implementations | Relevant implementations grouped by independent repository lineage; differences backed by exact source. |
-| Read research/document corpora | Sections/pages/tables/references with native coordinates and source/profile identity. |
-| Verify absence/completeness | A separately requested frozen-inventory scan with complete-match, complete-no-match, incomplete or invalidated outcome. |
+Ranked retrieval is navigation. It does not prove identity, correctness, consensus, completeness or absence. Exact retained-source operations own those claims over the inventory and representation they actually evaluate.
 
-The first two should become useful through the same indexed path before optional comparison, parser,
-backup, encryption or delegated-client frameworks become prerequisites. Keep exact DIRECT scanning
-available. Models may improve optional ranking but do not supply source truth or the baseline runtime.
+## Required user workflows
 
-## What exists and what is missing
+### Orient an unfamiliar repository
 
-The current default daemon/client serves DIRECT retained-source search. Real Qdrant transport, one
-blocking Tokio facade, preparation, point/planner code, source validation and result owners exist, but
-are not connected into a normal indexed user query.
+Return useful entry files, definitions, configuration, tests and documentation from actual prepared facts and source locations. Show missing fact producers and published-versus-current gaps. Do not generate an architectural verdict from filenames or lexical rank.
 
-The #213 schemas already exist:
-[request/result types](../../crates/search-contracts/src/evidence.rs) and
-[provider encoding](../../crates/search-provider-protocol/src/frame/client/evidence_schema.rs) for
-`retrieve_evidence@1` and `orient_scope@1`. Simplify their mandatory plan/fence/trace metadata and exact-scan
-budget assumptions, then connect their real serving path. Change the existing V1 host and V2 consumers
-together; do not create another contract family, runtime or recipe registry.
+### Inspect an entity
 
-## Result design
+Start with an explicit location or actual observed definitions/occurrences. Preserve ambiguity between same-named definitions. A mention, comment or string is not automatically a definition; syntax is not compiler-resolved call truth.
 
-Start with the fields that let the user act: resolved scope/revision, relative location, exact range,
-bounded snippet, why it matched, and any stale/missing/unsupported/truncated condition. Add optional
-relations, lineage, evidence roles and suggested next reads as real producers exist. Avoid mandatory
-empty metadata fields and opaque receipts that force agents to make more calls to understand a hit.
+### Compare selected implementations
 
-Orientation uses a cheap source guide from paths, headings, definitions and prepared coordinates.
-Return selected snippets and a few useful next reads, adding nearby or linked locations only when
-they help the question. No mandatory generated summary hierarchy or entity graph is needed. A model
-summary is derived assistance; the source excerpt and its locator remain independently readable.
+Compare explicit source-backed subjects over requested axes such as interface, validation, side effects, callers, tests and documentation. Show exact evidence and unknown axes. Equal names or scores do not prove equivalence, and repeated forks/copies are not independent confirmation without real lineage evidence.
 
-Source paths are locators; they do not replace immutable identity. Scores are hints, not confidence or
-proof. Cross-population scores are not directly comparable. Forks/mirrors are not independent evidence.
-Apply the resolved eligibility to retrieval and the explicit Qdrant IDF corpus; ordinary retrieval
-filtering alone does not scope statistics. IDF counts physical vector-bearing points, not distinct files
-or result groups.
-Do not add excluded data back through ranking, groups or suggestions, or duplicate index points just
-because a repository appears in multiple portfolios.
+### Navigate documents
 
-A continuation may retain a bounded candidate window and snapshot pin; expiry/restart may require a new
-query. A normal read does not need a durable job, exported handle or provider ownership transfer.
-Source restrictions take effect before their acknowledgement and invalidate affected outstanding reads.
+Use the same retained-source/preparation/publication/evidence path for supported sections, pages, tables and references. Derived text carries its profile, coordinates and loss/gaps. Citation does not automatically establish support or contradiction. No hidden network or model fallback.
 
-## Extend the useful path
+### Verify an exact predicate
 
-Plain text/source and local Qdrant BM25 come first. Native BM25 needs no model-worker service.
-Use a syntax outline for names/signatures; import actual SCIP/LSP occurrences when their source snapshot
-is known. An outline is not a semantic call graph. Add selected document profiles through the same
-units/maps, projection and validation path. Markdown/JATS adapters and lexical
-libraries already exist. Exact coordinate/loss maps matter when a parser transforms source. Document
-macros, indexed code, hooks and remote resources are never executed by ordinary search.
+Evaluate a stated raw-byte, decoded-text, extracted-representation, symbol or structural predicate over one pinned inventory. Report complete-with-match, complete-no-match, incomplete or invalid with item/byte accounting. A lexical top-k response never substitutes for this operation.
 
-Measure whether an agent finds the right implementation with fewer source reads and less context;
-also measure recall, false analogues, first useful result, actual bytes/relations read, model calls and
-points rewritten per edit. A small returned context can conceal expensive upstream work. See the
-[implementation guide](../implementation/README.md) for concrete changes and selected extensions.
+## Progressive use
+
+The first useful response should not require loading the entire corpus or generating a complete map. Search may return a few evidence-backed starting points and let the client continue, expand or request exact checks. Small output does not imply cheap upstream work; population scans, parsing, source integrity and retained reads remain measured costs.
+
+One `QueryWindow` may retain the final ordered result set and pinned view for paging or bounded context in the same live session. Restart/disconnect may expire it. A one-shot child must not return an unusable continuation token.
+
+## Retrieval and evidence boundary
+
+Qdrant is the only indexed backend. Native BM25 and optional selected branches nominate candidates under the explicit published scope. Exact punctuation/name identity remains independent of word-token BM25. The selected base population controls IDF; excluded data must not influence rank, but the cost of scoped statistics must be measured.
+
+Before emission, a nomination resolves through the pinned published evidence row to the exact retained object/range. The source reader, not echoed payload digests or caller booleans, verifies the bytes. A correct excerpt proves its origin, not ranking quality or corpus completeness.
+
+## Optional depth
+
+Syntax outlines, SCIP/LSP facts, document extractors, editor overlays, models and MCP are optional concrete producers or adapters. Add one only with:
+
+- a real user workflow and caller;
+- exact snapshot/profile/input identity;
+- bounded work and explicit unsupported cases;
+- the same evidence-card/query-window path;
+- deletion of the displaced scaffold or duplicate owner.
+
+A model-generated label or summary is derived assistance and never replaces the source excerpt. Search does not own free-form research planning, web crawling, hidden reasoning, task authority or mutable notebook facts.
+
+## Evidence for delivery
+
+A connected implementation should demonstrate, on ordinary source examples:
+
+- an unfamiliar repository with useful entry points;
+- duplicate symbol names and mention-versus-definition ambiguity;
+- an implementation with relevant tests/documentation;
+- two selected implementations with one unsupported comparison axis;
+- known copies that are not counted as independent evidence;
+- a source head newer than the published view;
+- exact raw/decoded behavior and truthful incomplete cases;
+- bounded page/expansion behavior without rereading the whole result set.
+
+Measure time to first useful evidence, source bytes/ranges read, candidate quality, false analogues, backend work, points rewritten per edit and context returned. Do not introduce an evaluation operating system merely to record those observations.

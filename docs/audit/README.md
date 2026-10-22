@@ -1,38 +1,14 @@
-# Audit documents
+# Audit evidence
 
-Use this directory through the following current entrypoints:
+Current static refactor-audit entrypoints:
 
-1. [Audit coverage and documentation map](AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) — what was
-   actually checked, remaining gaps and document authority.
-2. [Workspace member disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) — target decision for every
-   Cargo workspace member.
-3. [Distilled architecture/code audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) — source-backed findings
-   and the reasons for the refactor.
-4. [Donor verification register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) — selected donor mechanisms and
-   their limits.
+1. [Static audit closure and rewrite map](AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) — checked surface, errors found in the replacement, rewrite rules and remaining runtime evidence.
+2. [Distilled architecture/code audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) — source findings and concrete counterexamples.
+3. [Workspace member disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) — receiving owner or deletion decision for every Cargo member; not a target package count.
+4. [Donor evidence and limits](DONOR_VERIFICATION_REGISTER_2026-10-09.md) — inspected donor behavior, hidden costs and unverified assumptions.
 
-Project direction comes from [`docs/architecture/README.md`](../architecture/README.md) and
-[`docs/implementation/README.md`](../implementation/README.md), not from an audit snapshot.
+Project direction comes from [`docs/architecture/README.md`](../architecture/README.md) and [`docs/implementation/README.md`](../implementation/README.md). Audit records explain why; they do not authorize code, freeze APIs, schedule agents or add qualification gates.
 
-## Historical files
+The old master audits, launch gates, wave packets, acceptance matrices and generated status records were removed from the current tree. Git history preserves them at their exact commits. Cite a historical fact only with its source/base and do not reuse the old implementation graph.
 
-Every other file in this directory is historical or supporting evidence unless a current document above
-links to a specific claim. In particular, an old title containing `MASTER`, `CURRENT`, `LAUNCH`, `GATE`,
-`ACCEPTANCE`, `STATUS` or `IMPLEMENTATION` does not grant current authority.
-
-Historical audits may still contain useful defect observations, measurements or donor notes. Cite their exact
-base and limitation. Do not use them to:
-
-- launch or schedule implementation;
-- require P00/W0–W10 waves, tickets, leases, handoffs or gate receipts;
-- preserve old internal formats, package boundaries or qualification credentials;
-- restore universal migration, purge, retention, pairing or proof platforms;
-- claim runtime behavior from source, fixtures or structural validation.
-
-The [old master audit](ELIOT_SEARCH_MASTER_AUDIT_2026-10-09.md) is now an explicit historical pointer. Launch
-records, completion audits, backlog/status reconciliations and donor-acceptance files remain dated evidence
-only.
-
-Git history is the archive. Do not create a second copied archive or update historical reports to mimic the
-new architecture. Shorten/delete them only when needed to prevent false current authority or when their final
-consumer is removed.
+The static audit is sufficient input for the current-format rewrite. It does not claim line-by-line verification, successful compilation, Windows durability, live-Qdrant behavior, relevance, scale or product readiness. Those claims require the implemented path and actual execution.
