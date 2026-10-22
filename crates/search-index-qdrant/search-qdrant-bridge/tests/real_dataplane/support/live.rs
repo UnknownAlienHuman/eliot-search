@@ -4,9 +4,9 @@ fn exe_path() -> String {
     std::env::var("ELIOT_QDRANT_EXE").unwrap_or_else(|_| NATIVE_EXE_PATH.to_owned())
 }
 
-/// Spawns a disposable server, runs the complete T22 qualification suite,
-/// admits the gate and connects the real data plane. The returned server must
-/// stay alive for the whole scenario.
+/// Spawns a disposable server, runs the complete live behavior suite, and
+/// connects the real data plane from current endpoint/binding/lease state. The
+/// returned server must stay alive for the whole scenario.
 pub(crate) async fn live_plane() -> (search_qdrant_bridge::live::DisposableServer, RealDataPlane) {
     let (http_port, grpc_port) = free_loopback_ports().expect("loopback ports");
     let server = spawn_disposable_server(&exe_path(), http_port, grpc_port)
@@ -14,18 +14,16 @@ pub(crate) async fn live_plane() -> (search_qdrant_bridge::live::DisposableServe
         .expect("disposable server");
     let report = run_qualification_suite(&server)
         .await
-        .expect("qualification suite");
+        .expect("live behavior suite");
     assert_eq!(
         report.receipt.outcomes.len(),
         13,
-        "all mandatory probes executed"
+        "all mandatory live cases executed"
     );
-    let gate = QualifiedGate::admit(&report.receipt).expect("live receipt admits gate");
     let plane = RealDataPlane::connect(
         server.endpoint(),
         server.fixture_connection_binding(),
         server.fixture_api_key_lease(),
-        gate,
         limits(),
     )
     .await
