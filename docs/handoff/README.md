@@ -1,28 +1,13 @@
-# Handoff documents
+# Current ownership graph
 
-Current implementation uses:
+This directory contains only the small current ownership/cutover graph:
 
-- [Dependency graph](DEPENDENCY_GRAPH.md) — current effect/data ownership and cutover order.
-- [Audit coverage and documentation map](../audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) —
-  document authority and remaining audit gaps.
-- [Issue #352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) — current manager coordination and
-  preserved active source handoff.
+- [Dependency graph](DEPENDENCY_GRAPH.md) — current effect and data owners plus cutover order.
+- [Static audit closure and rewrite map](../audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) — checked surface, replacement mistakes and remaining runtime evidence.
+- [Issue #352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) — overlap coordination and current implementation chain.
 
-Everything else in this directory is historical unless one of those current records links to a specific
-fact. Old packet, context, digest, ticket, lease, review, accepted-evidence, P00/W0–W10 and coverage documents
-cannot authorize work, freeze an API or block a current cutover.
+The former packet, context, digest, ticket, lease, review, accepted-evidence, P00/W0–W10 and swarm documents were removed from the current tree. Git history is their archive. They cannot authorize work, freeze APIs, require package/wave order or restore compatibility, migration or qualification machinery.
 
-Historical handoffs may explain why code exists or preserve a defect/requirement. They do not require:
+Use ordinary Git commits/PRs, the active issue, current owner documentation and actual compiler/runtime results. Do not regenerate the retired handoff control plane or create a replacement status/approval database.
 
-- materialized agent contexts or package-only writers;
-- assignment tickets, leases, acknowledgement events or acceptance receipts;
-- package/wave/gate ordering;
-- canonical handoff/evidence digests;
-- old compatibility, migration or qualification machinery;
-- preservation of package/file/module topology.
-
-Use Git commits, the active issue, current owner documentation and actual compiler/runtime results. Git history
-is the archive; do not repair or regenerate the retired handoff control plane.
-
-#598 remains active private source/object/key work. Do not inspect, reset, rebase, duplicate or compete with
-its unpublished branch/worktrees. Consume only its accepted public handoff.
+#598 remains protected unpublished source/object/key work. Do not inspect, reset, rebase, duplicate or compete with its private branch/worktrees. Consume only its accepted public handoff; its old six-domain/purge/compatibility programme is not repository-wide authority.
