@@ -1,24 +1,28 @@
 # Search documentation
 
-Keep only the documents needed for the current change in context.
+Keep the implementation context small.
+
+## Current authority
 
 | Document | Purpose |
 |---|---|
 | [Architecture](architecture/README.md) | Product purpose, observable requirements, boundaries and principles. |
-| [Implementation](implementation/README.md) | Selected current-format mechanisms, owners, order and removal rules. |
-| [Audit closure](audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) | Checked surface, replacement mistakes, rewrite rules and remaining runtime evidence. |
-| [Product behavior](product/AGENT_ANALYSIS_FRAMEWORK.md) | Navigation, evidence, comparison, document and exact-verification outcomes that must survive simplification. |
+| [Implementation](implementation/README.md) | Current mechanisms, owners, cutover order, removals and selected donors. |
+| [Product behavior](product/AGENT_ANALYSIS_FRAMEWORK.md) | Useful navigation, ambiguity, comparison, document and exact-verification outcomes. |
+| [Static audit closure](audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) | Checked surface, replacement mistakes and remaining runtime evidence. |
+| [Current ownership graph](handoff/DEPENDENCY_GRAPH.md) | Small effect/data ownership graph and cutover order. |
 
-[AGENTS.md](../AGENTS.md) defines repository work. The nearest owner `FUNCTIONS.md` contains the one concrete operation recipe. The active issue scopes the change and evidence; it does not copy another implementation specification.
+The nearest package or binary `FUNCTIONS.md` owns one concrete operation recipe and source seams. The active issue names the exact callers, deletion and completion evidence for that change.
 
-Read supporting evidence only when relevant:
+## Supporting current material
 
-- [distilled source audit](audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md);
-- [donor evidence and limits](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md);
-- [workspace disposition](audit/WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md);
-- [current ownership graph](handoff/DEPENDENCY_GRAPH.md);
-- selected configuration, ADR, runtime or optional-profile document tied to the real consumer.
+- [Configuration](config/) records the typed-settings replacement and direct runtime-change semantics.
+- [Qdrant runtime boundary](runtime/QDRANT_ADAPTER_BOUNDARY.md) and [Windows/runtime notes](runtime/QDRANT_NATIVE_WINDOWS.md) describe the selected indexed backend seam.
+- [ADRs](adr/) retain only decisions that still constrain the current product or packaging.
+- [Audit](audit/) and donor records explain evidence and limitations; they do not authorize code or create gates.
 
-The old Architecture 8.4 master, package-status graph, P00 contracts, handoff packets and `swarm/**` control plane are preserved by Git history, not the current tree. They cannot authorize work, freeze APIs, require compatibility or restore waves/tickets/leases/receipts.
+## Historical material
 
-Do not create another document hierarchy, status database or audit gate. Correct the owning rule and its actual callers when a contradiction is found.
+Architecture 8.4 masters, P00/W0–W10 contracts, dated execution packets, client/current/evaluation/optional wave bundles, generated maps, standalone DIRECT/DPAPI runbooks, handoff receipts, swarm assignments and structural qualification records were removed from the current tree. Git history is their archive.
+
+Do not regenerate those records, preserve their APIs through adapters or use an old title containing `CURRENT`, `CONTRACT`, `GATE`, `ACCEPTANCE`, `STATUS` or `IMPLEMENTATION` as current authority. A useful historical fact must be rechecked against current code and placed in its real owner document.
