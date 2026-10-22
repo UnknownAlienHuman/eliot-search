@@ -2,7 +2,7 @@ use super::support::*;
 
 #[tokio::test]
 async fn t24_stale_endpoint_binding_fails_before_dispatch() {
-    let (server, plane) = live_plane().await;
+    let (server, _plane) = live_plane().await;
     let (_, wrong_grpc_port) = free_loopback_ports().expect("loopback ports");
     let endpoint = search_qdrant_bridge::live::LiveEndpoint::loopback(
         server.endpoint().host(),
@@ -14,7 +14,6 @@ async fn t24_stale_endpoint_binding_fails_before_dispatch() {
         &endpoint,
         server.fixture_connection_binding(),
         server.fixture_api_key_lease(),
-        plane.gate().clone(),
         limits(),
     )
     .await
