@@ -1,4 +1,4 @@
-//! Synchronous query facade over the qualified async real data plane.
+//! Synchronous query facade over the async real data plane.
 //!
 //! The daemon provider loop is synchronous, while the pinned `qdrant-client`
 //! transport is async-only. This owner keeps one finite Tokio runtime alive for
@@ -12,7 +12,6 @@ use std::fmt;
 use tokio::runtime::{Builder, Handle, Runtime};
 
 use crate::live::LiveEndpoint;
-use crate::qualified::QualifiedGate;
 use crate::{
     BoundedPointReadback, BridgeError, BridgeLimits, CandidateNomination, CollectionRoute,
     CollectionSchema, EligibilityFilter, ExactCount, QdrantApiKeyLease, QdrantConnectionBinding,
@@ -21,7 +20,7 @@ use crate::{
 
 use super::{IdfScope, OpContext, RealDataPlane};
 
-/// One qualified real Qdrant query plane for synchronous composition.
+/// One real Qdrant query plane for synchronous composition.
 ///
 /// Field order is intentional: the Qdrant client is dropped before its owning
 /// runtime. The runtime has one worker thread and is reused for every operation
@@ -32,7 +31,7 @@ pub struct BlockingRealQueryPlane {
 }
 
 impl BlockingRealQueryPlane {
-    /// Connect through the exact executed qualification gate.
+    /// Connect from the selected endpoint, current binding and actual lease.
     ///
     /// Construction is valid only from synchronous composition. Calling this
     /// facade from inside another Tokio runtime fails closed with
@@ -43,7 +42,6 @@ impl BlockingRealQueryPlane {
         endpoint: &LiveEndpoint,
         supervisor: QdrantConnectionBinding,
         auth_lease: QdrantApiKeyLease,
-        gate: QualifiedGate,
         limits: BridgeLimits,
     ) -> Result<Self, BridgeError> {
         ensure_synchronous_context()?;
@@ -54,7 +52,7 @@ impl BlockingRealQueryPlane {
             .build()
             .map_err(|_| BridgeError::TransportFailed)?;
         let plane = runtime.block_on(RealDataPlane::connect(
-            endpoint, supervisor, auth_lease, gate, limits,
+            endpoint, supervisor, auth_lease, limits,
         ))?;
         Ok(Self { plane, runtime })
     }
@@ -119,19 +117,12 @@ impl BlockingRealQueryPlane {
         self.runtime
             .block_on(self.plane.count_exact(route, filter, context))
     }
-
-    /// Executed qualification gate retained by the real data plane.
-    #[must_use]
-    pub const fn gate(&self) -> &QualifiedGate {
-        self.plane.gate()
-    }
 }
 
 impl fmt::Debug for BlockingRealQueryPlane {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("BlockingRealQueryPlane")
-            .field("gate", self.plane.gate())
             .finish_non_exhaustive()
     }
 }
