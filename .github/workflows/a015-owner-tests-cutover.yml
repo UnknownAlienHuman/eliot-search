@@ -53,3 +53,12 @@ jobs:
           -p search-qdrant-bridge
           -p search-eval
           -- -D warnings
+
+      - name: Inventory active stale references
+        shell: bash
+        run: |
+          set -euo pipefail
+          pattern='W7_HARDENING\.md|W8_CLIENT\.md|W8_INTEGRATION\.md|W10_INTEGRATION\.md|W10_OPTIONAL_EVALUATION\.md|P18_SCALE\.md|PACKAGE_STATUS\.toml|qualification/(qdrant|product-pulse|client-edge|lifecycle|proof|query|current|optional-depth)|swarm/|xtask'
+          git grep -nE "$pattern" -- '*.md' '*.rs' 'Cargo.toml' \
+            | grep -vE '^(docs/audit/|qualification/)' \
+            || true
