@@ -5,14 +5,14 @@ production change and executed check are different facts. Architecture and owner
 
 ## Resume after interruption
 
-**Checkpoint:** R028, 2026-10-23 — remaining composition boundaries, CLI orphan removal and maintained Markdown fix.
+**Checkpoint:** R029, 2026-10-23 — unused config catalogues removed; one typed layer/path recipe.
 
 **Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
 
-**Inspected checkpoint:** `37dbb198ca983d00e987f17ed2a71171d53d1d4e` (R027).
+**Inspected checkpoint:** `afc3bfca60cd0a350c3cf822ccda48f5a13e2028` (R028).
 
-**Last production-source analysis:** R028, the named readset below. Five unreferenced CLI files removed;
-two remaining Rust files have comment-only changes. Connected runtime behavior is unchanged.
+**Last production-source analysis:** R029 checks configuration artifact consumers and corrects two Rust
+files' comments. R028 retains the full composition readset. Runtime settings and connected behavior are unchanged.
 
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
@@ -32,7 +32,9 @@ the actual source/object/preparation/publication/query path. The named native/qu
 config-consumer question and mixed-test dispositions are answered. Follow their owner recipes and change the
 real callers; no further general audit precedes those known cuts. #333 settings and #441's maintained Markdown
 correction are concrete independent work while actual #598 overlap is coordinated. For #441 the next step is
-the dependency/consumer cut and focused execution, not another search for an upstream fix.
+the dependency/consumer cut and focused execution, not another search for an upstream fix. R029 consolidates
+#333's [layer/path decisions](../../crates/search-config/FUNCTIONS.md#sparse-layers-and-validation) and removes
+unused repository config catalogues; those files are not pending schema inputs to recreate.
 
 ## Counted remainder
 
@@ -90,7 +92,9 @@ document links plus six stale heading links and the example's old TOML pointer. 
 closure map. R028 checks all 48 then-open issue bodies, refreshes current-owner links while preserving immutable
 evidence, corrects integration/cleanup/release handoff and updates #441 for the released fix. The handoff index
 now points to this registry instead of the superseded closure map. Closed issues, comments and every historical
-instruction are not certified by that bounded review. Correct further conflicts at the affected owner.
+instruction are not certified by that bounded review. R029 removes 31 unused config files and two duplicate
+versioned guides, retaining rules at their concrete owners; affected issue/index links follow that owner.
+Correct further conflicts at the affected owner.
 
 ### S3. Configuration and transformation identity
 
@@ -105,6 +109,9 @@ execution bounds; those are known implementation changes, not unread source. R02
 config paths: startup/status, DIRECT ID-to-path locator hints and the narrow DEK-selection policy. It also records
 the semantic flag's readiness-only effect and the missing high-level TOML/Serde dependency. Implement #333 with
 actual setting consumers; do not add receipts to make `try_activate` pass or reinterpret locators as membership.
+R029 clarifies sparse nested layers, whole-list replacement, parse versus final-value validation, Unicode TOML
+versus OS path inputs, relative bases and safe optional-span diagnostics using current official donor docs.
+This is a documentation correction; high-level TOML/Serde and typed runtime settings remain unimplemented.
 
 ### S4. Mixed migration fixtures
 
@@ -157,12 +164,12 @@ excludes unpublished work; RUNTIME-ONLY requires execution. No existing area ID 
 
 | ID | Area | Status | Established result / current state | Remaining |
 |---|---|---|---|---|
-| A001 | Documentation authority | PARTIAL | R028 replaces stale handoff/current-owner links and obsolete source wiring instructions; product/owner rules retain one home. | Consistency at the actual changed owner; no new master-spec pass. |
+| A001 | Documentation authority | PARTIAL | R029 removes unused config catalogues, duplicate section recipes and versioned guides; one config owner replaces conflicting input rules. | Consistency at the actual changed owner; no new master-spec pass. |
 | A002 | Historical governance data | CHECKED | Swarm/maps/packets/generated status removed; Git preserves history. | Code remnants tracked separately. |
 | A003 | Workflows/wrappers | CHECKED | Old gates/wrappers removed; Actions manual-only. | Recheck when changed, not a new gate. |
 | A004 | Workspace inventory | CHECKED for inventory | 50 explicit members confirmed at 5af8cde5; the 52-row plan is historical. | Actual Cargo resolution and remaining package cuts. |
 | A005 | Entrypoints/product | PARTIAL | R028 maps disconnected query/publication/rebuild and active CLI selection; five loose source copies removed. | Actual default CLI/daemon integration; named caller question is answered. |
-| A006 | Root/config/control | PARTIAL | Real root exclusion/config consumers mapped; R028 distinguishes file intent/in-memory floor from a redb commit. | Implement typed settings/root/current state with actual consumers. |
+| A006 | Root/config/control | PARTIAL | Root/config consumers mapped; R029 fixes the typed layer/path recipe and removes catalogues without consumers. Runtime decoder/receipt gating remain. | Implement typed settings/root/current state with actual consumers. |
 | A007 | Sources/reconciliation | PARTIAL | R010 defects and live provider currentness consumer recorded. | Source/object/current-row integration and published freshness. |
 | A008 | Private object/key work | PROTECTED | Public contract reviewed; retired programme not inherited. | Accepted handoff; no unpublished branch/worktree changes. |
 | A009 | Preparation/identity | PARTIAL | Test/limit coupling, budget/empty/stale/ABA distinctions established; S3 disposition is implementation-ready. | Implement through actual consumers; no fixture-backed production authority. |
@@ -172,10 +179,10 @@ excludes unpublished work; RUNTIME-ONLY requires execution. No existing area ID 
 | A013 | Protocol/client/CLI | PARTIAL | Native/shared effects and actual CLI/typed-client boundaries mapped; five orphan files removed, active session still legacy. | Serviced session implementation and platform execution. |
 | A014 | Product depth | PARTIAL | R027 preserves orientation/delta, coordinates, priority and conditional comparisons; query table names actual seams/gaps. | Concrete product-depth implementation and quality; optional choices with consumers. |
 | A015 | Tests/governance code | PARTIAL | All 16 tests in S4's two suites classified; no current-product test retained unchanged. | Move causal cases/delete old harnesses with owners; residual structural consumers. |
-| A016 | Donors | PARTIAL | R028 verifies released Markdown 0.13.5 fix and printable-case raw acceptance; installed pin remains 0.13.1. Earlier donor limits retained. | Actual parser upgrade/offset checks and selected integration; optional donors with consumers. |
+| A016 | Donors | PARTIAL | R028 Markdown 0.13.5 fix remains unadopted; R029 verifies TOML/Serde feature, nested-default, UTF-8 and diagnostic boundaries. Pins unchanged. | Actual parser upgrade/offset checks and selected integration; optional donors with consumers. |
 | A017 | Qualification tree | CHECKED | Archived; policy/blocker notes remain. | Runtime ceremony under A022. |
-| A018 | Auxiliary documents | CHECKED for filename/disposition | Duplicate supplements removed; retention path is documentation only. | Semantic consistency under A001. |
-| A019 | Issues/PR handoff | PARTIAL | R028 reviews 48 open bodies, refreshes 64 owner links in 23 issues and corrects affected scopes; historical evidence stays pinned. | Update with actual implementation; closed issues/comments and future changes remain separate. |
+| A018 | Auxiliary documents | CHECKED for filename/disposition | R029 removes 31 unused repository config artifacts and two duplicated guides; retention path remains documentation only. | Semantic consistency under A001. |
+| A019 | Issues/PR handoff | PARTIAL | R028 reviewed 48 open bodies; R029 updates the affected config/tooling/programme handoff and PR. Historical evidence stays pinned. | Update with actual implementation; closed issues/comments and future changes remain separate. |
 | A020 | Runtime evidence | RUNTIME-ONLY | Static findings and deleted fixtures do not establish platform/recovery/performance. | Exact-SHA relevant runs after implementation. |
 | A021 | Compiler baseline | PARTIAL | Historical bridge-lib run covers 7d92fb8b only; R028 CLI check cannot start (cargo absent, exit 127). | Actual binary/current-consumer checks and locked resolution. |
 | A022 | Runtime qualification/identity | PARTIAL | Qdrant activation gone; lexical/materializer fixture authority remains. Its disposition is already recorded. | Real caller/identity cleanup, not another qualification registry. |
@@ -206,7 +213,8 @@ current implementation instructions. Use the current owner recipe when a later p
 | R025 | Native authority lock cost, forgotten ownership, Interrupted accept, admission order | [be84c8ab](https://github.com/UnknownAlienHuman/eliot-search/blob/be84c8abb395e2b96426cf7b1bb87a5cae4d062d/docs/audit/ANALYSIS_REGISTRY.md) |
 | R026 | Recovery/status/navigation reconciliation; directory-only next-read index | [5af8cde5](https://github.com/UnknownAlienHuman/eliot-search/blob/5af8cde5416fa33e3f1a8f3c19367ed520eac9a4/docs/audit/ANALYSIS_REGISTRY.md) |
 | R027 | Native/shared effects; config callers; test dispositions; product/ADR/donor corrections | [37dbb198](https://github.com/UnknownAlienHuman/eliot-search/blob/37dbb198ca983d00e987f17ed2a71171d53d1d4e/docs/audit/ANALYSIS_REGISTRY.md#r027-owner-consumer-and-donor-reconciliation) |
-| R028 | Query/publication/rebuild callers; CLI orphan deletion; issue links; Markdown 0.13.5 disposition | [this pass](#r028-composition-cutover-and-maintained-markdown-fix) |
+| R028 | Query/publication/rebuild callers; CLI orphan deletion; issue links; Markdown 0.13.5 disposition | [afc3bfca](https://github.com/UnknownAlienHuman/eliot-search/blob/afc3bfca60cd0a350c3cf822ccda48f5a13e2028/docs/audit/ANALYSIS_REGISTRY.md#r028-composition-cutover-and-maintained-markdown-fix) |
+| R029 | Config artifact consumers/removal; sparse layers, path/validation semantics and typed TOML donor constraints | [this pass](#r029-configuration-catalogue-removal-and-typed-input-policy) |
 
 Earlier source/donor material: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md),
 [donor evidence](DONOR_VERIFICATION_REGISTER_2026-10-09.md), and
@@ -217,27 +225,30 @@ is historical, not current readiness. The donor register now indexes the later T
 ## Execution evidence
 
 Last previously recorded passing run: [39872058276](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/39872058276),
-`7d92fb8b`, Ubuntu/Rust 1.98.0, `search-qdrant-bridge --lib` check and strict Clippy. R028 does not extend
-that scope. Earlier broad daemon compilation failed. R020 lock pruning was manually reviewed, not
-Cargo-regenerated. No current binary, Windows, live Qdrant or end-to-end success follows.
+`7d92fb8b`, Ubuntu/Rust 1.98.0, `search-qdrant-bridge --lib` check and strict Clippy. It does not cover the current
+binaries. Earlier broad daemon compilation failed; R020 lock pruning was manually reviewed, not Cargo-regenerated.
+R028's CLI check could not start because cargo was absent (exit 127). The full earlier record remains at
+[afc3bfca](https://github.com/UnknownAlienHuman/eliot-search/blob/afc3bfca60cd0a350c3cf822ccda48f5a13e2028/docs/audit/ANALYSIS_REGISTRY.md#execution-evidence).
 
-R028 attempted `cargo +1.98.0 check --locked -p eliot-search --bin eliot-search`; it could not start because
-cargo is absent (exit 127). Clippy and runtime tests were not run. Source/module/reference checks establish
-only that the five deleted CLI files have no current target/include consumer. Remaining Rust changes are
-comments; Cargo manifests/lock, settings, tests and workflows are unchanged.
+R029 changes documentation, removes unused repository config artifacts and changes only comments in two Rust
+files. Cargo manifests/lock, parser behavior, setting values, tests and workflows are unchanged. No Rust
+compilation, Clippy, configuration integration, parser adoption, Windows or product runtime check ran in R029.
 
-The one manager-owned checkout starts from the exact upstream `37dbb198` tree
-`e1942c14bbdab212658108c6171f93079c85d1d1`. Its local analysis commit is synthetic, not a publication parent;
-GitHub publication uses the verified actual upstream parent. Git network is unavailable; API reads/writes
-provide the upstream verification. Original snapshot/blob and R027 documentation-check details remain in
-[the R027 record](https://github.com/UnknownAlienHuman/eliot-search/blob/37dbb198ca983d00e987f17ed2a71171d53d1d4e/docs/audit/ANALYSIS_REGISTRY.md#execution-evidence).
+Tracked-tree filename/content and directory-reader/include/build/workflow checks found no operational consumer
+of the removed config files. The two Rust references were comments; non-comment lines remain identical.
+Legacy parser tests construct their own inputs. The retired P00 fixture contains static expected validator
+text, not a current file reader. Python 3.12 `tomllib` accepted eight of the nine former TOMLs and rejected
+`w10-optional-depth.toml` at line 11: scalar `gate = "G6"` is redefined as `[gate]`. That inert catalogue is removed,
+not repaired as a future runtime schema. This Python inspection is not a test of Eliot's Rust parser.
 
-R028 validation resolves **690 relative links, including 80 heading links, across 228 Markdown files**.
-The prepared issue bodies' current-owner links also resolve. This uses a local Markdown link/heading extractor,
-not an exhaustive external crawl. `git diff --check` passes; target/module/include checks find no outside source
-consumer of the deleted files, and non-comment lines in both remaining Rust files are unchanged.
-Independent reviews checked these boundaries and the issue/donor corrections. No current Markdown panic
-reproduction, upgrade, materializer/replay or product runtime success is claimed.
+R029 validation resolves **665 relative links, including 90 heading links, across
+204 Markdown files**. Current issue-owner links are checked locally; this is not an external-link crawl.
+`git diff --check` and deletion/reference checks pass. Independent reviewers inspect the removal boundary and
+the final owner recipe; this does not establish exhaustive semantic closure or product readiness.
+
+The one manager-owned checkout starts from actual upstream `afc3bfca` and tree
+`a17aa6f41298a6c0d1ee2d3d139f1478d4fdb8af`. Local snapshot commits have synthetic metadata. Publication must use
+the actual upstream parent and an expected-head non-forced update, followed by blob/tree and issue/PR readback.
 
 ## R026. Recovery and index reconciliation
 
@@ -255,58 +266,50 @@ runtime behavior. Its native/config/test questions are answered; known delivery 
 
 ## R028. Composition cutover and maintained Markdown fix
 
-**Source:** `37dbb198ca983d00e987f17ed2a71171d53d1d4e`, 2026-10-23. Three GPT Luna agents reviewed independent
-readsets and proposed changes in the same manager-owned checkout; the manager made and checked all edits.
+The complete readset, caller/removal decisions, Markdown donor evidence and execution limits are preserved at
+[afc3bfca](https://github.com/UnknownAlienHuman/eliot-search/blob/afc3bfca60cd0a350c3cf822ccda48f5a13e2028/docs/audit/ANALYSIS_REGISTRY.md#r028-composition-cutover-and-maintained-markdown-fix).
+That pass inspected `37dbb198`, removed five orphan CLI files and corrected composition/issue instructions.
+Its installed Markdown pin remained 0.13.1; no connected runtime or current compiler success followed.
+
+## R029. Configuration catalogue removal and typed input policy
+
+**Source:** `afc3bfca60cd0a350c3cf822ccda48f5a13e2028`, 2026-10-23. Three GPT Luna reviewers read separate
+configuration documentation, artifact consumers and typed-donor worksets in the same manager-owned checkout.
+The manager independently checked findings, made the edits and reviewed the assembled diff.
 
 **Inspected scope:**
 
-- Daemon `entry.rs`, feature/dependency sections and complete `query_composition.rs`,
-  `query_composition/{registry,service,serving}.rs`; live authority lines 317–430. Targeted public routing,
-  direct-registry, secure read/dispatch and DIRECT query callers. Whole-tree Rust searches for named query
-  constructors, `execute_pinned_leg`, process port, live authority and `RealDataPlane` supplement the reads.
-- All daemon `publication_composition{.rs,/kernel.rs,/kernel/*.rs}` and
-  `rebuild_composition{.rs,/kernel.rs,/kernel/*.rs}`; complete `publication_fault_process.rs`,
-  `search-publication/src/machine.rs`, `search-control-redb/src/publication_codec.rs`, reclaimer
-  `src/{execute,plan,receipt,manifest}.rs`, epoch-pins `src/lib.rs`, and bridge exact mutation/readback files.
-  These distinguish actual side effects, supplied observations, outside consumers and receiving owners.
-- CLI target manifest, complete entry/app declarations, provider facade/local opener and client lib; native
-  resolver and active `public_client`/`app::core` invocation/child/response slices, plus the complete
-  `legacy_effects_refusal.rs`. Candidate orphan file contents were inspected in overlapping named ranges;
-  deletion rests on tracked-tree target/module/path/include/reference checks, not line-by-line correctness.
-  The sole explicit bin has automatic bins/examples disabled; no candidate is included under either feature.
-- Materializer `markdown/parse.rs` construction/iteration/preflight and event/range checks,
-  `markdown/pipeline.rs` materialize/replay calls, `markdown/identity.rs::donor_row`, raw profile and
-  `utf8/scan.rs` / `decode/engine.rs` binary-control checks. Manifests/lock confirm 0.13.1 unchanged.
-  Upstream #1129 and comments, release #1181/0.13.5, versioned firstpass functions and relevant
-  firstpass/parse/manifest/regression diffs. The released fix is source evidence, not executed Eliot evidence.
-- All **48 open issue bodies**, excluding the PR, at the start of this pass: 598, 535, 441, 360, 359, 352,
-  336, 335, 334, 333, 332, 331, 330, 329, 315, 303, 302, 300, 293, 291, 281, 280, 279, 278, 275, 274,
-  272, 271, 270, 267, 266, 264, 263, 261, 259, 249, 248, 244, 242, 239, 233, 227, 219, 216, 215, 214,
-  205, 189. Read-only public #598 body only; no unpublished branch/worktree. Closed bodies and issue comments
-  are not included. Compared current product/owner docs and navigation, with focused independent review.
+- Root/daemon/config instructions, architecture/implementation and complete config owner README/FUNCTIONS;
+  both versioned `docs/config` guides and their index. All 31 tracked files under former `config/`: two indexes,
+  twenty section packets and nine TOMLs (sections, build profiles, data layout, parser-only example and W5/W7/W8/W9/W10).
+- Receiving owner recipes for root, source admission/reader/reconcile/object store, lexical, protocol,
+  handles/window/query, Qdrant bridge/supervisor/publication and stopped-root maintenance. The packet requirements
+  already live there; deletion preserves these owners. No unpublished #598 branch/worktree was inspected.
+- Tracked-tree consumers, includes, path derivation and directory/glob readers across Rust, tests, build scripts,
+  tooling, manifests and workflows. Targeted daemon `config_composition/kernel/{spec,registry}.rs` declarations,
+  startup/status and DIRECT locator call sites; synthetic parser fixture in `search-config/src/document.rs`
+  and config test entrypoints. These reference checks do not repeat a full semantic audit of the legacy parser.
+  The old P00 acceptance JSON was inspected only for static configuration-path expectation strings.
+- Official TOML 1.1.0 specification, Serde container/field attributes, high-level `toml` 1.1.8+spec-1.1.0
+  exported decode APIs and `de::Error` span/display behavior. Exact source URLs and adoption limits are in the
+  [donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md#typed-configuration-donor-boundaries).
+- Current affected issue bodies #214/#333/#352 and PR #610; current open-body link scan for removed paths.
+  R028's broader 48-body review is retained as historical evidence, not repeated or extended to closed comments.
 
-**Decisions and changes:** the named query/rebuild/publication caller questions are answered. The oracle host,
-in-memory floor/file intent and supplied rebuild proofs are disconnected; enabling features is not the next
-integration step. Keep concrete bridge effects, redb snapshots, retained evidence, real root exclusion and
-shared storage. The daemon and receiving owner maps now identify the exact cuts without repairing old gates.
+**Findings and changes:** the directory's wave/section catalogues had no tracked runtime/test/tool reader.
+The daemon builds its registry in Rust, despite comments claiming a TOML source. The old example was a no-op;
+prospective field names were not a supported schema. The retention packet still prescribed an online
+process-local GC gate, contradicting selected stopped-root collection. The W10 catalogue also redefined a
+scalar as a table. Remove all 31 config artifacts and both duplicated versioned guides: **33 files, 2,903 lines**.
+Their immutable history remains linked. Preserve useful source/storage/query/publication rules with actual owners.
 
-Removed five unreferenced CLI files (1,625 physical lines): owned/service/paged/directory client copies and
-unused help. No active handler was removed. Corrected stale source comments about qualification, missing module
-inclusion and an absent e2e caller. Active legacy CLI/session behavior remains implementation work.
-The repository change is 14 Markdown files, comments in two Rust files and five orphan Rust deletions;
-Cargo manifests/lock, settings, tests and workflows are unchanged.
+One config FUNCTIONS recipe now defines sparse nested layers, whole-list replacement, explicit false/zero/empty,
+parse/type rejection versus final domain validation, native path inputs versus Unicode TOML, path resolution,
+finite capture and safe optional-span diagnostics. The package README and config index point there rather than
+copying another algorithm. Two Rust files have comment-only corrections. This selects implementation behavior;
+no typed decoder, dependency, live update or real setting application was added.
 
-The Markdown donor register now records the released 0.13.5 fix and current 0.13.1 adoption gap. #441 and the
-materializer recipe choose the maintained correction with actual offset/structure checks instead of a local
-parser fork, blacklist or plain-iterator fallback. Pins and parser code are unchanged. The printable case
-passes raw control screening; the NUL-bearing case is correctly refused earlier.
-
-Current-owner navigation replaces 64 frozen instructional links in 23 issue bodies; source/checkpoint/audit
-counterexample links remain immutable. #189/#264 are reduced to current owner boundaries and observable
-integration outcomes; #215 accounts for unresolved writers, stopped-root collection and scoped-IDF cost.
-#359 is optional administration without settings changes or a product prerequisite. #332 records the actual
-orphan cut. #352 and PR #610 continue to point to this single registry; no parallel status system is added.
-
-**Remaining:** implement known source/settings/preparation/publication/query/client changes, integrate the
-Markdown fix with a working toolchain, and run actual target/platform/recovery/relevance/scale checks. Further
-review follows changed callers. All 25 area IDs remain; no exhaustive semantic closure or product PASS.
+**Remaining:** implement #333 with real consumers, pin/regenerate dependencies and execute its focused cases.
+The protected storage caller moves only with its accepted owner. #441's parser adoption and the connected
+source/preparation/publication/query/client path remain separate implementation work. All 25 area IDs and their
+limited statuses are retained. Do not requeue removed catalogues as prerequisites or generate replacement packets.

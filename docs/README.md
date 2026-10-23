@@ -27,6 +27,10 @@ and [CLI selection/removal map](../bins/eliot-search/FUNCTIONS.md#current-cli-se
 now named. For Markdown adoption, use the [maintained parser correction](../crates/search-prep/search-materializer/FUNCTIONS.md#markdown-donor-correction);
 the upstream fix is released but the project's dependency has not yet changed.
 
+For settings work, use the [typed layer/path recipe](../crates/search-config/FUNCTIONS.md#sparse-layers-and-validation)
+and [configuration index](config/README.md). Unused wave/section catalogues and their duplicate guides are
+removed; their historical field lists do not define a supported file schema.
+
 ## Resume research
 
 [Audit navigation](audit/README.md) leads to the single [analysis registry](audit/ANALYSIS_REGISTRY.md):

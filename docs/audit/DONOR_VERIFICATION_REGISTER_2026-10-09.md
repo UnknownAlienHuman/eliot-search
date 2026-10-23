@@ -2,6 +2,7 @@
 
 Version/consumer status rechecked 2026-10-23 against Eliot `5af8cde5416fa33e3f1a8f3c19367ed520eac9a4`,
 its manifests and lock; R028 at `37dbb198` additionally checks the Markdown caller and upstream 0.13.5 fix.
+R029 at `afc3bfca` checks typed configuration API/default/path boundaries; no dependency changes follow.
 Dependencies are unchanged between those checkpoints. Current official Qdrant/Tokio/TOML documentation was also consulted. Pinned Qdrant
 source-cost findings below come from the 2026-10-21 inspection and remain version-specific. This is not a
 benchmark, completed integration or dependency upgrade. The [previous index](https://github.com/UnknownAlienHuman/eliot-search/blob/32f265368c45627f1e93cd539361884b07e4d41a/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md)
@@ -25,6 +26,25 @@ rules live in implementation and owner maps, not in this research index.
 | High-level `toml` + `serde`; `serde_json` | Absent as packages from this lock. Typed TOML/JSON is the selected replacement direction; versions/features are not yet pinned. | Choose and lock with actual settings/framing consumers. [TOML docs](https://docs.rs/toml/latest/toml/) inspected at `1.1.8+spec-1.1.0` expose typed `from_slice` with `parse`/`serde`; that inspected release is not an automatic dependency upgrade. |
 | `ignore::WalkBuilder` | Selected walker donor, absent from the lock; [0.4.33 API](https://docs.rs/ignore/0.4.33/ignore/struct.WalkBuilder.html) is a reference. | [Source reconcile](../../crates/search-source/search-source-reconcile/FUNCTIONS.md) must connect observation/acquisition; the present sync entrypoint still refuses with `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`. |
 | PDFium, tree-sitter, MCP SDK | `pdfium-render`, `tree-sitter` and `rmcp` are absent from the lock. | Optional candidates, not installed handlers. Select only against an actual document/outline/adapter operation; see [query seams](../../crates/search-query/README.md#current-owners-and-cutover). |
+
+## Typed configuration donor boundaries
+
+Official documentation checked 2026-10-23: high-level `toml` **1.1.8+spec-1.1.0**, TOML **1.1.0** and
+Serde's current derive documentation. The repository still uses low-level `toml_parser 1.1.4+spec-1.1.0`;
+`toml`, `serde` and `serde_json` are absent from the inspected lock. These checks select implementation
+constraints, not installed versions or a completed #333 cutover.
+
+| Verified donor behavior | Consequence for the concrete settings owner |
+|---|---|
+| [`toml::from_str`](https://docs.rs/toml/latest/toml/fn.from_str.html) is available with `parse` and `serde`; the [crate source](https://docs.rs/toml/latest/src/toml/lib.rs.html) exposes both string and byte decoding. | Pin compatible dependencies/features with consuming code; decode the bounded UTF-8 file directly into typed layers. |
+| [Serde `deny_unknown_fields`](https://serde.rs/container-attrs.html) is a struct attribute and is incompatible with `flatten`; [defaults](https://serde.rs/field-attrs.html) fill missing fields during deserialization. | Close every nested struct. Layer defaults must preserve absence; populating application defaults in each layer would overwrite earlier values. |
+| [TOML 1.1.0](https://toml.io/en/v1.1.0) uses Unicode strings/UTF-8 documents and rejects duplicate definitions. | Separate OS-valued path inputs from file text; no promise that a TOML string encodes arbitrary native path bytes. Keep syntax rejection distinct from effective-value validation. |
+| [`toml::de::Error`](https://docs.rs/toml/latest/toml/de/struct.Error.html) exposes an optional source span; its display can include input context. | Handle absent spans and bounded safe diagnostics; do not dump config text or credentials through automatic error formatting. |
+
+The [config owner](../../crates/search-config/FUNCTIONS.md#sparse-layers-and-validation) defines precedence,
+whole-list replacement, omission/default behavior, validation, path bases and focused examples. These are
+Eliot policy choices; the libraries do not select them. No parser fork, generic dotted-key database or second
+settings registry is required. Adoption and execution remain #333 work.
 
 ## Rechecked retrieval assumptions
 

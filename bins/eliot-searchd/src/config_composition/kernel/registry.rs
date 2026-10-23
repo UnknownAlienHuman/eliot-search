@@ -65,8 +65,8 @@ fn make_field(spec: FieldSpec<'_>) -> Result<ConfigFieldDescriptor, ConfigError>
 
 /// Closed daemon-observed registry.
 ///
-/// Mirrors `config/sections.toml` for the daemon-observed subset. Every
-/// reload/obligation class the daemon must gate appears at least once.
+/// Constructs the legacy daemon registry directly in Rust.
+/// No repository configuration catalogue is read by this constructor.
 pub fn daemon_registry() -> Result<ConfigRegistry, ConfigError> {
     register_sections(
         DAEMON_CONFIG_SCHEMA_VERSION,

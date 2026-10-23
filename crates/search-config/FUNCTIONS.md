@@ -113,27 +113,82 @@ DaemonSettings {
 }
 ```
 
-Use `#[serde(deny_unknown_fields)]`. File/env/CLI layers contain `Option` fields. Merge in the supported
-precedence, then validate final values once. CLI/env override parsing is field-specific and small; do not
-reconstruct a generic dotted-key database.
+### Sparse layers and validation
 
-Paths stay `OsString`/`PathBuf`. Text enums/integers are converted only after selecting their known field.
-Secret bytes are not ordinary config values.
+This is the selected replacement policy, not the legacy parser's behavior or a shipped file schema.
+Decode closed nested structs with `#[serde(deny_unknown_fields)]` on **each** struct; the attribute on the
+outer struct does not close its nested fields. Do not combine it with `flatten`. Every layer field is optional,
+including fields inside an optional section. An absent section and a present empty section both inherit.
+Serde defaults, if used for layer structs, produce only absent fields; application defaults are applied once
+to the final settings, not inserted into each incoming layer. See the [Serde attributes](https://serde.rs/container-attrs.html)
+and [field defaults](https://serde.rs/field-attrs.html), checked 2026-10-23.
+
+Apply defaults < file < selected environment < CLI, field by field. Omission inherits; `false`, `0` and an
+empty list are explicit values. A supplied list replaces the lower-precedence list in full. Do not merge
+lists by position, append implicitly or reinterpret an empty source list as all sources. Repeated scalar
+CLI options, including aliases for the same field, are errors. A selected repeated list-item option builds
+one bounded CLI list; it is not a sequence of appends to file settings. Exact flag names ship with the parser.
+
+Decode every supplied layer before constructing owners. Invalid UTF-8 file content, malformed TOML, unknown
+nested keys, duplicate definitions, wrong types and integers outside the chosen Rust representation fail even when a higher layer
+would override them. TOML duplicate-definition rejection belongs to the parser, not `deny_unknown_fields`.
+After merging, validate domain ranges, cross-field constraints and checked unit conversions once on the
+effective value. Do not use truncating casts or unchecked duration/size arithmetic. Bound captured file/value
+bytes, selected entry counts and collected CLI lists before decode/merge; an override cannot excuse oversized
+input. The small file cap bounds TOML input, not an exact parser heap or CPU allowance.
+
+Ignore unrelated environment entries without decoding their values. Reject unknown names within the selected
+`ELIOT_SEARCH__` namespace, including malformed names, so misspelled settings do not silently disappear.
+Only known text fields require Unicode conversion; path fields retain their OS values.
+
+Examples of that policy, independent of the final field/flag spelling:
+
+| Inputs | Effective result |
+|---|---|
+| Default limit 10; file 20; environment 30; CLI 40 | 40. |
+| File limit 20; a higher layer contains an empty query section | 20; omitted fields do not reset lower values. |
+| File list `[A, B]`; higher layer `[]` | Empty selection; no append or wildcard. |
+| File Boolean `true`; higher layer `false` | `false`, not absence. |
+| Representable limit 0 in file; CLI 5; final minimum 1 | 5 is valid; without the override, reject 0. |
+| Wrong-type or unrepresentable file limit; valid CLI limit | Reject the malformed lower layer. |
+
+### Paths and diagnostics
+
+Keep config-file locators and supported path overrides from `args_os`/`vars_os` as `OsString`/`PathBuf`.
+Convert only selected textual fields. TOML file contents and string paths are Unicode: they cannot encode
+arbitrary Unix path bytes or Windows unpaired surrogates. The baseline uses Unicode paths in TOML and OS-valued
+CLI/environment path inputs where exposed; no lossy conversion or invented byte-escape format. This distinction
+also applies to retained locator hints. A list of OS paths must not be split on a delimiter that can occur in
+a pathname. Reject NUL/invalid OS paths at the actual path owner. See [TOML 1.1.0](https://toml.io/en/v1.1.0).
+
+The [inspected TOML error API](https://docs.rs/toml/latest/toml/de/struct.Error.html) is
+`1.1.8+spec-1.1.0` as of 2026-10-23. `span()` is optional and indexes the original document. Use a valid
+span to report bounded location information; otherwise report the known field/source label and error class.
+Do not unwrap the span, expose raw file/value excerpts through automatic `Display`/`Debug`, or dump argv/environment: parse
+errors may contain a mistakenly supplied credential. Secret bytes are not ordinary config values.
 
 ## Capture implementation
 
 ```text
-parse args_os once
-→ open file once with no-follow/regular-file policy selected by application
+capture cwd; parse args_os once into config locator and typed CLI layer
+→ open selected file once; verify the opened handle is a regular file
 → read at most max_file_bytes + 1
-→ toml::from_slice<FileSettings>
-→ vars_os, select known prefix/field, convert selected text only
-→ parse known CLI overrides
+→ reject invalid UTF-8, then toml::from_str<FileSettings>
+→ vars_os, check selected namespace/field, build typed environment layer
 → merge + validate DaemonSettings
 ```
 
 `Read::take` bounds bytes but not waiting time; local regular-file capture may remain synchronous under the
 startup bound. Do not add a source-custody protocol for configuration.
+
+Select the high-level `toml` `parse`/`serde` features and Serde derive with the actual code/lock change;
+the [verified decoder API](https://docs.rs/toml/latest/toml/fn.from_str.html) was
+`1.1.8+spec-1.1.0` on 2026-10-23. Check `max_file_bytes + 1` for overflow. Configuration lookup has no implicit
+current-directory/parent search. An explicitly named missing or unreadable file is an error; when no file is
+selected, use defaults plus selected overrides. Resolve a relative config-file locator against captured startup
+cwd first. Relative TOML paths use that selected absolute config pathname's parent; CLI/environment paths use
+captured startup cwd. Resolve each layer's paths before merging; a later cwd change cannot retarget a setting.
+An optional future fixed application config location must be explicit in its parser/help.
 
 ## Startup and status
 
@@ -175,13 +230,20 @@ publication's pending artifact; there is no config transaction journal.
 If typed decode/merge/validation is small, move it into daemon/config owner and remove the crate rather than
 leave a generic facade.
 
+## Retired repository catalogues
+
+Removed catalogues do not define a supported schema. Publish a small runnable example only with its connected
+typed settings consumers; do not restore wave/section registries or no-op examples for old fixtures. The
+[R029 record](../../docs/audit/ANALYSIS_REGISTRY.md#r029-configuration-catalogue-removal-and-typed-input-policy)
+owns removal evidence. Storage lifetime remains with [stopped-root maintenance](../search-runtime/search-retention/FUNCTIONS.md).
+
 ## Focused checks
 
 - non-default values reach their actual owners;
 - file < env < CLI precedence for supported fields;
-- unknown/duplicate/type/range-invalid fields fail before owner construction;
+- nested unknown/duplicate/type-invalid fields fail before owner construction; final domain bounds follow the layer examples;
 - unrelated non-Unicode environment entry cannot panic;
-- non-UTF8 config/root paths work where OS supports them;
+- non-Unicode OS path inputs survive capture; TOML paths obey the stated Unicode/relative-base policy;
 - growing/oversized file cannot exceed allocation ceiling;
 - status reflects retained runtime values and actual readiness;
 - optional semantic absence does not block lexical Search;

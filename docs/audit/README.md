@@ -20,6 +20,7 @@ Work on the head of [PR #610](https://github.com/UnknownAlienHuman/eliot-search/
 | Native/shared effects and mixed-test dispositions | [Daemon caller map](../../bins/eliot-searchd/FUNCTIONS.md#inspected-callers-and-effects) and [test cutover](../implementation/TEST_CUTOVER.md#mixed-migration-tests-retained-for-behavior-extraction) |
 | Disconnected query/rebuild/publication and actual CLI routes | [Composition boundaries](../../bins/eliot-searchd/FUNCTIONS.md#query-publication-and-rebuild-boundaries) and [CLI cutover](../../bins/eliot-search/FUNCTIONS.md#current-cli-selection-and-orphan-removal) |
 | Released Markdown parser correction and local adoption gap | [Donor evidence](DONOR_VERIFICATION_REGISTER_2026-10-09.md#markdown-offset-iterator-released-fix-not-yet-adopted) and [materializer action](../../crates/search-prep/search-materializer/FUNCTIONS.md#markdown-donor-correction) |
+| Typed settings semantics and retired config catalogues | [Layer/path recipe](../../crates/search-config/FUNCTIONS.md#sparse-layers-and-validation), [removal boundary](../../crates/search-config/FUNCTIONS.md#retired-repository-catalogues) and [donor constraints](DONOR_VERIFICATION_REGISTER_2026-10-09.md#typed-configuration-donor-boundaries) |
 
 The disposition map's 52 rows describe the original baseline; do not recreate removed packages. A donor's API,
 a constructor, a successful fixture or a heading saying "current" is not proof of connected behavior.
@@ -31,7 +32,7 @@ nearest FUNCTIONS select the code change. Audit files record evidence and uncert
 catalogues, schedules or qualification gates. The registry is the single continuation record, not this index.
 
 The [former closure map](AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) is superseded as a status source.
-Its archived text and the earlier detailed R001–R027 checkpoints remain linked. Do not describe incomplete static review
+Its archived text and the earlier detailed checkpoints remain linked. Do not describe incomplete static review
 as "only runtime work remains", or erase inspected-path provenance when shortening a report.
 
 Update the existing registry with the actual inspected SHA/ranges, finding, changed owner and unrun work. Persist

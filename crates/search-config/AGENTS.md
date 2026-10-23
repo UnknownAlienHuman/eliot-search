@@ -9,8 +9,9 @@ owners.
 
 Select and pin high-level `toml` + Serde during the typed-settings cutover; the current lock has only
 `toml_parser`, not those target dependencies. Use a bounded file, `vars_os()` for selected environment fields and one
-`args_os()` parser. Keep paths as OS strings. Merge supported optional fields over defaults and validate
-final values once. Unknown fields/types/ranges fail before constructing any owner.
+`args_os()` parser. Preserve OS-valued path inputs; TOML paths are Unicode. The local
+[layer/path recipe](FUNCTIONS.md#sparse-layers-and-validation) owns omissions, precedence, lists, validation
+and relative path bases. Unknown fields/types and invalid effective values fail before constructing any owner.
 
 Startup constructs the application directly. Remove `try_activate`, fingerprints, registry/section digests,
 action DAGs, receipt kinds, mandatory secret section and accepted-readiness receipts. Do not manufacture a
