@@ -65,6 +65,29 @@ source heads. Its inspected production caller supplies `false`, so R021 establis
 a reproduced stale-success incident. Use the existing source/preparation/published-state comparison for
 freshness; replacing that `false` with backend health would be wrong. Do not add a second freshness ledger.
 
+## Retire the native authority platform, not its useful resource ownership
+
+The remaining canonical handshake/work/local-stream, native binding/listener and live-query authority families
+are not prerequisites for trusted child stdio. Their removal decision does not require repairing every old
+pairing/receipt/registration algorithm. Trace surviving outside callers and shared effects, move the useful
+behavior to the selected owner, then remove the exclusive family. Do not construct missing factories just to
+make obsolete generic APIs reachable.
+
+[Query](../../crates/search-query/README.md#scope-comes-from-the-published-view) owns the pinned-view and short-lock
+rule. Do not carry `LiveNativeQueryAuthorityOwner`'s per-turn population validation or mutex across backend and
+socket output into it. Tuning a request work limit is not a security-generation migration or a reason to rebuild
+an authority owner; transformation-affecting settings still follow the preparation/profile recipe.
+
+Keep one explicit process/root owner until its real in-process work has stopped. Listener/discovery cleanup
+failure must not make that owner unreachable through `mem::forget`. Report the cleanup failure and complete
+shutdown through the same owner; do not release the root while work still uses it, invent a RELEASED receipt,
+or erase retained user data. The child-stdio baseline needs no endpoint descriptor. Uncertain external writes
+remain publication's persisted unfinished work, not a reason to leak an anonymous process owner.
+
+Every retry path in any retained polling adapter, including `Interrupted`, observes the existing deadline and
+cancellation; no branch skips its bound indefinitely. Use the selected runtime rather than preserving custom
+accept/pairing loops. Shared OS-secret and #598 object/key code are not exclusive provider machinery.
+
 ## Hidden query-time inventory defect
 
 DIRECT query/page/continue/expand call `refresh_storage` before output. `StorageSecurityStatus::inspect` replays
@@ -92,6 +115,7 @@ ingest:
   → Qdrant apply/readback → atomic CurrentPublishedView
 query:
   typed request → pin current view + resolve scope + RequestContext
+  → reserve finite candidate/window/output allowances
   → real Qdrant BM25 → pinned evidence row → retained raw/prepared read
   → one bounded terminal response → optional session QueryWindow
 maintenance:

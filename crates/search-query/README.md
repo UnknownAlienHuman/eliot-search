@@ -10,6 +10,7 @@ its recipes, grants, fingerprints and proof packages.
 ```text
 explicit operation + selected sources + limits
 -> pin published view and resolve non-widening scope
+-> reserve finite candidate/output capacity and any session-window allowance
 -> run the concrete handler for that operation
 -> establish final candidate order and select a page
 -> resolve exact evidence metadata and verify retained data
@@ -43,6 +44,14 @@ Resolve configured or explicit sources from one pinned view, optionally narrowed
 session. Unknown IDs fail. Explicit empty and known empty inventory return an empty result without wildcard
 RPC; unavailable/incomplete inventory is different. Compatible sources share the selected retrieval/IDF
 population. [Lexical](../search-lexical/FUNCTIONS.md) owns the exact IDF meaning and donor cost caveat.
+
+Publication establishes the immutable view's invariants. Ordinary deltas validate changed source/evidence rows
+against the retained state; a full generation validates its captured population as it is built. Do not replace
+per-query scans with a new unconditional whole-population scan on every small publication. Ordinary work turns
+check selected scope and actual evidence against the pinned view, not the whole access/membership bundle.
+Per-object integrity and genuine restricted-session revocation still apply. Hold a shared current-view lock
+only while acquiring/installing the reference, never through backend work, source reads or transport output.
+Do not import the old live-authority mutex/updater into this path.
 
 Published is not necessarily current working tree. New source heads and unresolved watcher/indexing gaps
 remain distinguishable from the revisions served. A client asking for current-workspace semantics must get
@@ -84,6 +93,10 @@ or integrity verification O(page size). Qdrant 1.19 scoped IDF enumerates a popu
 or AEAD reader can require more bytes than the excerpt. Charge actual source/integrity work and expose a
 limit gap rather than forging verification from a digest field. Group selected reads by object where useful.
 No speculative IDF cache, range-authentication tree, secondary index or global scheduler is selected here.
+
+Candidate/window admission precedes retrieval allocation, not just evidence reading. Follow the
+[window owner's reservation rule](search-continuation/FUNCTIONS.md#admission-before-expensive-work);
+no separate quota service is required. This bounds retained/transient request data, not all internal backend work.
 
 Measure realistic scopes and source sizes through the connected application. A small successful example
 establishes integration, not the large-corpus requirement. Remove scope-wide scans performed only for old
