@@ -1,22 +1,22 @@
 # Local protocol — one framed session and one commit boundary
 
-This file owns wire framing, request/session lifetime, cancellation and transport failure.
+This file owns framing, request/session lifetime, cancellation and transport failure.
 [Windowing](../search-query/search-continuation/FUNCTIONS.md) owns cursor/item lifetime;
-[client](../search-provider-client/FUNCTIONS.md) and [CLI](../../bins/eliot-search/FUNCTIONS.md) identify their
-actual source seams. This is the replacement recipe, not a description of a connected implementation.
+[client](../search-provider-client/FUNCTIONS.md) selects concrete I/O mechanisms;
+[CLI](../../bins/eliot-search/FUNCTIONS.md) owns invocation and presentation.
+This is the replacement recipe, not a connected-implementation claim.
 
-## Source findings
+## Inspected source
 
-R013 inspected the active DIRECT loop at `44d7416c`: read one line, execute a whole handler, flush several JSON
-lines, then read again. Its per-request cancellation flag has no active control reader. The CLI prints those
-lines before terminal, so failed output can expose cards/handles which the server never commits. The 64-KiB
-per-line bound does not cap a whole result, and manual JSON is allocated before the check.
+R013 found DIRECT's synchronous read/execute/read loop and result display before terminal. R022 found
+completed-ID history blocking Cancel, synchronous output starving controls and expired data budgets preventing
+cleanup transmission. R023 separated the native declarations, obsolete bootstrap and actual legacy CLI route.
 
-R022 at `ff59f930` also inspected the legacy typed client and `src/{session,config}.rs`. Its input polling retains
-a finite deadline, but output retries a whole record before yielding. SessionMachine retains completed IDs;
-its default 4096-entry replay ceiling applies to cancellation as well as data admission. Client cancellation
-also inherits the earliest pending deadline, so a late cancellation call can fail before any control is written.
-These are inspected old-code limits and replacement counterexamples, not a reproduced new-product incident.
+R024 at `676135f4` read the remaining CLI transport/response/cancellation helpers and the historical daemon
+canonical I/O/serving path. Its input timer begins when poll_record is first called, before any bytes arrive;
+that old timestamp is later used to charge the incoming request. Its 25-ms task quantum does not bound a
+whole-record output call. Preserve the old helper's useful partial-frame/accounting continuity, not these
+lifetime rules, strict JSON field order, MACs or multi-record acknowledgements. Exact evidence is in the registry.
 
 ## Wire and terminal visibility
 
@@ -26,94 +26,97 @@ Use one wire for one-shot and live-session modes:
 u32 little-endian body length + one bounded UTF-8 Serde JSON message
 ```
 
-Read the prefix incrementally and reject zero/oversize before allocating the body. Decode a current DTO and
-validate fields/collections before dispatch. A frame limit does not bound downstream work or every decoded
-allocation; the request owns its actual work/storage counters.
+Reject zero/oversize length before body allocation. Decode a current DTO and validate fields/collections before
+dispatch. JSON member order and insignificant whitespace are not protocol identity. Required typed fields and
+correlation still matter; a syntactically valid object is not automatically a valid result. Frame size does not
+bound downstream allocations or work.
 
-Encode with `serde_json::to_writer` into a capped local Write sink before emitting any frame bytes. Do not
-serialize an unbounded value and check afterward. One terminal contains bounded cards/gaps, stop/truncation
-state and any session-local locators. The client exposes the terminal only after the whole frame validates.
+Encode with serde_json::to_writer into a capped local Write sink before any frame byte. One terminal contains
+bounded cards/gaps, stop/truncation state and usable session locators. The client exposes it only after the entire
+frame decodes and validates. Progress is optional: omit it initially; when needed coalesce the latest update and
+cap cumulative events/bytes. It contains no cards or locators dependent on a later commit.
 
-Progress is optional; omit it until needed. If enabled, retain at most the latest bounded progress update,
-limit cumulative progress bytes/events per request, and prioritize terminal/control over another update. A
-progress denominator is not an event/byte budget. Progress contains no cards or locators requiring later commit.
+A handled request has at most one terminal. Transport failure may deliver none. Local flush is not peer
+acknowledgement, exactly-once delivery or proof of rollback.
 
-A healthy handled request has one terminal. Transport failure may deliver none; never retry partial framing or
-manufacture a second terminal after uncertain output. Local flush is not peer acknowledgement or exactly-once.
+## One active request and live control
 
-## One active request, live controls, no replay history
+Dispatch only constructed operations. Version, a non-reused session-local request ID, finite remaining duration
+and operation form the envelope. Trusted owned-child stdio needs no pairing, MAC, grant or capability receipt;
+source selection still belongs to the daemon. Restricted external authentication is separate scope.
 
-Dispatch only constructed operations: Search, Exact, Continue, Expand and selected administration. Version,
-request ID, finite remaining duration and operation form the envelope; type names are not new subsystem requests.
-Trusted owned-child stdio needs no pairing/MAC/grant/capability receipt. The daemon still resolves source scope.
+One active data request is sufficient. Cancel names that request and consumes neither another work slot nor
+completed-ID history. A late Cancel cannot cancel the next ID. Counter exhaustion closes instead of wrapping.
+Coalesce redundant control signals; do not build a replay ledger or a general work scheduler.
 
-Use a monotonically increasing, non-reused session-local data-request ID and one active request. Correlate replies
-with that request; reject unsolicited/duplicate terminals. A Cancel names the active ID and is not another data
-request. A cancel racing with an already completed target cannot cancel the next request. Do not retain a set
-of every completed ID, acquire a work slot for Cancel, or require a grant/replay capacity to close the session.
-Counter exhaustion closes explicitly rather than wrapping. Restricted remote authentication is separate scope.
+Service reads, writes, control and deadlines while work is active. A synchronous public call may wrap this same
+serviced runtime. Never hold the only session owner inside a full write/read loop or block the event-loop thread
+with a synchronous handler and call the result cancellable.
 
-The client and server must service input/control, output and deadlines while a handler runs. Use the selected
-runtime's I/O support or a small per-connection polling loop, not a new general scheduler. A synchronous public
-API may wait on that same serviced runtime. It must not hold the only mutable session/lock inside write-all or
-read-until-terminal while cancellation needs the same owner.
+Retain one outbound buffer/cursor and bounded inbound prefix/body state across turns. A partial frame cannot
+contain an inserted Cancel. Finish within its existing bound or close. Under backpressure the other I/O direction
+must still progress. Changing from data work to cleanup does not reset counters or discard an already consumed
+prefix. The client recipe specifies cancellation-safe donor calls; async syntax alone supplies none of this.
 
-Keep finite partial-frame state: one outbound frame/cursor and bounded pending control; coalesce redundant
-Cancel signals. Continue servicing the other direction under output backpressure. On a byte stream, control
-cannot be spliced into a partly written frame. Finish that frame within its bound, or fail/close the connection
-and cancel server work through disconnect. A second data request is not dispatched while one is active.
+## Distinct clock origins
 
-A clock check before blocking I/O is not interruption. The platform adapter must supply real interruptibility,
-or the design must rely on the owned child's bounded termination attempt and report its limitation. Do not
-spawn a detached blocking task on every timeout. PIPE_NOWAIT polling is not overlapped I/O, and its availability
-on a named pipe does not prove inherited child stdio has the same behavior.
+Keep idle policy, incomplete-frame timeout, request deadline and window expiry separate:
 
-## Deadlines across processes
+- Caller: start the deadline before request-specific setup/spawn/encoding. New requests get new deadlines;
+  nested operations and polling turns do not renew them.
+- Wire: send the remaining duration sampled when preparing the frame, not the original timeout after setup.
+  Continue enforcing the caller's own deadline during send/receive.
+- Receiver: no request exists while waiting for its first byte. Use idle policy there. Start the frame clock
+  on the first observed byte and retain it across partial reads. Charge observed framing/queue time to the
+  request's remaining duration; cap by operation limits and window expiry. Do not reuse the timestamp of an
+  earlier empty poll. Example: twenty seconds idle must not consume a later one-second operation budget.
+- Cross-process: a duration does not reveal prior transport delay; no serialized Instant or identical process
+  epoch is assumed. The caller can cancel/close at its own deadline, but external effects may remain uncertain.
+- Cleanup: after data expiry a finite separate allowance may send best-effort control on an aligned stream,
+  close and terminate the owned child. It cannot renew work or finish an expired partial data frame for reuse.
 
-Keep session idle policy, each request deadline and the QueryWindow's fixed expiry separate.
+A pre-I/O clock check cannot interrupt a blocked call. Parent async child-pipe support does not make the daemon's
+inherited stdin or the CLI console interruptible. A process-scoped reader may be used with the explicit parent-
+close/owned-child-termination fallback; no detached worker per timeout and no hard OS timing guarantee from a
+plain wait. Publication, not transport, resolves uncertain external writes.
 
-- The caller starts one monotonic request deadline before request-specific setup/spawn, encoding and I/O.
-  Existing-session requests get a new deadline; nested calls and polling turns cannot renew it.
-- The envelope carries a finite remaining duration sampled when preparing its outbound frame, not the original
-  timeout copied after setup. Check the original caller deadline throughout actual sending and receiving.
-- The receiver separately bounds incomplete prefix/body reception from the first observed byte; no per-read
-  renewal. After decoding, its local deadline charges observed framing/queue time and is capped by configured
-  operation limits and any window expiry. Do not serialize a Rust Instant or compare process-local epochs.
-- A duration cannot reveal time spent before the receiver observed bytes. Do not claim identical cross-process
-  absolute deadlines. The owning client still closes/cancels at its original deadline; unavoidable OS/backend
-  tail work is an explicit limitation, not rollback. Publication owns uncertain external effects.
-- After data expiry, a small independent cleanup allowance may send best-effort Cancel/end on an aligned stream,
-  close it and terminate the owned child. It cannot admit new data or extend computation. If sending would require
-  completing an already-expired partial frame, close instead. Do not cap every cleanup attempt by an already
-  expired data deadline and then claim that cancellation was delivered.
+## Cancellation versus terminal output
 
-## Session and window commit
+Decide on the one session owner, without a new commit protocol:
 
-One-shot receives a terminal without reusable locators, then closes/reaps its owned child. A live session keeps
-the same child/streams across terminals; Continue/Expand use that connection and their fixed window expiry.
-A new invocation cannot restore an old process-local window.
+| State | Action |
+|---|---|
+| Before the first terminal byte | Cancel stops work. Discard uncommitted page state; a small cancelled/error terminal may use the still-valid output allowance. This ordinary outcome need not destroy a healthy aligned session. If no allowance remains, close. |
+| A terminal frame has started | Keep that exact frame/meaning. Finish within its existing deadline or close; never replace its suffix or send a second terminal. Cancel cannot retrospectively rewrite it. |
+| Complete write and local flush succeeded | Apply the already prepared local window update before dispatching the next data request. A late Cancel for the completed ID is a no-op. |
+| Partial I/O, malformed framing or uncertain alignment | Close; commit no new window progress. Previously observed bytes and external effects are not rolled back. |
 
-EOF/end/failure signals active work and drops session windows. Idle turns expire windows; an active operation's
-guard remains live until the operation actually stops. No separate cleanup daemon is needed.
+A cancelled/error terminal does not expose new cards/locators requiring a cursor commit. Valid server partial/gap
+results are typed application outcomes, not transport errors. Never reinterpret a cancelled read as an absent
+candidate. User-level errors before any write are not a reason to poison an otherwise healthy session.
 
-Stage the exact handled prefix/item indexes and complete terminal buffer before output. Only complete terminal
-write/local flush permits the window owner to insert/advance that prefix. Encoding failure, partial output or
-cancellation before terminal commits no progress and fails the session. Do not hold a global view/window lock
-across source/backend/transport I/O. Lost sessions repeat Search rather than using a durable resume ledger.
+## Session and window lifetime
+
+One-shot returns no reusable locators and then closes/reaps its child. A live session keeps the same streams
+across Search/Continue/Expand. A new process cannot revive an old window.
+
+Before terminal output, reserve the pending window slot/metadata, validate cursor arithmetic and stage item
+indexes. After successful local flush, commit is an infallible local assignment with no new allocation, source
+read, policy requalification or backend call. Serialize the next data dispatch after it. This prevents an
+avoidable failure after advertising a locator; it does not claim atomic delivery across a crashed connection.
+Do not hold global view/window locks across I/O. The window recipe owns detailed accounting and expiry.
+
+EOF/end/failure signals active work and removes session windows. Idle turns service expiry; active guards remain
+until their operations actually stop. No cleanup daemon or durable resume ledger is required.
 
 ## Cutover and evidence
 
-Change DTO, codec, dispatcher, client and CLI together. Remove line/tab/hex/manual JSON, pairing/binding/grant/
-recipe/replay compatibility through the actual callers. Keep useful incremental bounds, error distinctions and
-partial-I/O failure behavior; these do not require the surrounding authentication platform.
+Change DTO/codec/client/dispatcher and real handlers together. Remove line/tab/hex/manual JSON, pairing, grants,
+recipes and replay families with their callers. Keep useful framing, error distinctions and partial-I/O behavior.
+After code, minimal pinned compiler/Clippy precedes later behavior checks: idle then short request; split frame;
+Cancel before/during/after terminal; duplex backpressure; complete terminal before display; no fallible post-output
+cursor work; long sequential sessions; EOF/expiry and owned-child cleanup. No R024 transport run is claimed.
 
-After code and minimal pinned compiler/Clippy, exercise long sequential sessions without historical-ID growth;
-Cancel at data-capacity/expiry; simultaneous read/write backpressure; partial prefix/body/write; aggregate output
-and progress limits; complete terminal before display; two requests and Continue; silent input, EOF, idle expiry
-and owned-child shutdown. No execution result is asserted here.
-
-Donor references read 2026-10-23: [Rust process I/O](https://doc.rust-lang.org/std/process/) describes pipe
-backpressure; [Instant](https://doc.rust-lang.org/std/time/struct.Instant.html) is opaque; Microsoft's
-[named-pipe modes](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-type-read-and-wait-modes)
-distinguish blocking and nonblocking operation. Retrieved Rust pages identify std 1.99.1; they are API-reference
-observations, not a Rust 1.98 build or a dependency/toolchain upgrade.
+Donor: [Tokio 1.53.1 select cancellation safety](https://docs.rs/tokio/1.53.1/tokio/macro.select.html#cancellation-safety),
+plus the exact-version sources linked by the client recipe. A library's API documentation is not execution evidence
+for the application's transport or pinned compiler.

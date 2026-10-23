@@ -1,115 +1,88 @@
 # CLI — invocation, one owned session and bounded presentation
 
-[Protocol](../../crates/search-provider-protocol/FUNCTIONS.md) owns framing/control/deadline behavior;
-[client](../../crates/search-provider-client/FUNCTIONS.md) owns the serviced session;
+[Protocol](../../crates/search-provider-protocol/FUNCTIONS.md) owns framing, clocks and terminal races;
+[client](../../crates/search-provider-client/FUNCTIONS.md) owns the serviced session, process and concrete I/O;
 [windowing](../../crates/search-query/search-continuation/FUNCTIONS.md) owns paging and item lifetime.
-This is the replacement recipe, not a claim that the indexed application currently works.
+This is the replacement recipe, not a claim that indexed Search currently works.
 
-## Inspected source and deletion boundaries
+## Inspected source and removal boundaries
 
-R013 at `44d7416c` inspected `public_client.rs`: the persistent child uses line/string parsing, prints events
-before terminal, remembers the latest random handle, and sends arbitrary revision offsets. User input is not
-read while waiting for the response. Multiple post-spawn errors bypass the final wait; normal shutdown has no
-finite fallback. Those defects remain recorded; R022 does not claim to have repaired that Rust.
+R013/R022 inspected public_client and app/core: separate launch loops, inactive input during a request,
+line/string parsing, display before terminal, arbitrary raw-range expansion, child cleanup escape paths and
+Command::output followed by a late stdout-only limit. These Rust paths remain until the real session replaces them.
+Core error output also replaces quotes rather than correctly serializing JSON. The audit registry retains exact
+source revisions and paths; do not repeat those implementations in another wrapper.
 
-R022 at `ff59f930` inspected `entry.rs`, `app.rs`, `provider_client.rs` and the invocation/dispatch portion of
-`app/core.rs`:
+R023 at `305ccab1` traced these concrete paths:
 
-- entry first tries the feature-gated remote path, then public client, then app; there is still no single
-  invocation/session path;
-- app gates old endpoint commands but retains another core parser; the provider wrapper reexports the typed
-  client while its `ProviderSession` still delegates to the old core. Reexports are not integration;
-- `core::invoke_stdio` owns another child/readiness/shutdown loop with fallible exits before reap;
-- `self-test` calls `Command::output()`, then checks only `output.stdout.len()`. The API has already collected
-  stdout and stderr into memory and waited for exit. That late stdout check is not a capture bound;
-- ordinary forwarding uses `Command::status()` with inherited streams. It waits for exit and neither parses nor
-  bounds the product response through the selected client;
-- `core::run_main` replaces quotes in an error string before embedding it in JSON. Backslashes/control bytes are
-  not thereby escaped. Preserve the error meaning through the selected serializer, not string replacement.
+| Path | Boundary / decision |
+|---|---|
+| remote_client → endpoint_client → provider_client → core | Feature-only TCP/token client, not the typed pipe client. Remove with legacy dispatch; do not reconnect the retired server. |
+| native_bootstrap → native_registered | Descriptor/key checks followed by a compatibility binding without the installation anchor required by its mandatory grant. Remove, not repair for the local baseline. |
+| native_local_registered → provider_client/local.rs | Resolver and private Windows opener are not called by the inspected CLI dispatch. Do not build a registration platform to make unused constructors callable. |
+| native_credentials | Provider-pairing credential reader, distinct from retained-revision keys. Remove only its exclusive consumers; protect shared secret owners/#598. |
 
-R023 at `305ccab1` follows the named native/remote constructors, not just their declarations:
+R024 removes sync-directory and verify-directory-manifests from primary help because the inspected dispatcher
+has neither arm. It labels remaining root forwarding as legacy and no longer advertises an installed native
+provider. Health/shutdown currently spawn a shell child; they do not inspect/stop an already running daemon.
+These are help corrections, not new command routing. The feature-only search/lexical aliases and old core help
+remain with their obsolete owners until cutover; no distinct BM25 path follows from their names.
 
-| Path | Actual boundary | Rewrite decision |
-|---|---|---|
-| `remote_client -> endpoint_client -> provider_client::open_session -> core::open_session` | Explicit legacy feature; fresh TCP/token session, not the typed pipe client. | Remove with legacy command dispatch; do not reconnect the retired daemon endpoint. |
-| `native_bootstrap -> native_registered::open_registered_native` | Descriptor/key authentication then compatibility `NativeClientBinding::new`; loses the installation anchor needed by the mandatory grant. | Do not repair this obsolete bootstrap or fabricate a grant producer for it. |
-| `native_local_registered -> provider_client/local.rs` | Resolver returns a bundle; the Windows opener is private to the provider-client module tree. The inspected entry/dispatch/wrapper does not call it. | Not an available CLI handler. Do not add a registration platform merely to make this unused constructor callable. |
-| `native_credentials` | Reads provider-pairing credentials through `load_provider_pairing_credential`. | Distinct from retained-revision protection; remove only exclusive provider callers/dependencies. |
-
-The default help advertises `sync-directory` and `verify-directory-manifests`, but the inspected entry/app/core
-routing has neither command arm. Remove the advertisements until actual handlers are connected; do not expose
-old mutation code just to make help true. Likewise, the feature-only `search` and `lexical` branches both build
-`UnsignedRequest::query(false, ...)`; a command name does not establish a distinct indexed-retrieval mode.
-
-This closes the named constructor/dispatch questions, not all tests, native transport internals or daemon
-counterparts. See R023 in the analysis registry for exact inspected ranges and remaining callers.
+The native/canonical counterpart audit is still partial. Do not delete every native file from this table alone.
 
 ## Capture once and use the real session
 
-Capture `args_os()`/settings once, preserving OS paths. Validate help/version and request shape before spawning.
-Construct current Search/Exact/Continue/Expand or connected administration directly. Do not pass through recipes,
-grants, endpoint discovery, marked query payloads or tab/hex commands. The local child path does not need an
-installation-registration producer, pairing-key source or capability descriptor before it can send a request.
-Choose a separate restricted/shared-pipe adapter only for a selected consumer, not to preserve these APIs.
+Capture args_os/settings once and preserve OS paths. Validate help/version and request shape before spawning.
+Construct current Search/Exact/Continue/Expand or connected administration directly. No recipes, grants,
+registration producer, endpoint discovery, marked query payload or tab/hex conversion precedes child stdio.
+A restricted/shared-pipe adapter needs a selected consumer, not an old constructor to preserve.
 
-The CLI supplies the selected executable/settings to one client session. That session immediately owns the
-spawned child and its streams in one cleanup guard. The CLI does not create a second guard/wait loop for health,
-self-test, forwarding or interactive commands. Independently owned persistent daemons are never killed by this
-invocation. A busy root reports the conflict; there is no hidden second installation or transport fallback.
+The CLI supplies executable/settings to the one client session, which immediately owns the child/streams and
+cleanup guard. Do not add another wait loop for diagnostics, forwarding or interactive commands. A busy root
+reports the conflict, with no hidden second installation or transport fallback. Never kill an independent daemon.
 
-The caller's deadline includes request-specific child setup and encoding. A synchronous public call still runs
-the serviced client: user cancellation/EOF, input and output remain observable while work is active. Protocol
-owns partial-frame handling and expiry; do not reproduce it in each command adapter.
+The request deadline covers setup and encoding. A synchronous public invocation uses the serviced client;
+input/control/output remain observable during work. Its concrete Tokio/terminal-reader choice belongs to the
+client recipe, not duplicated per-command subprocess frameworks.
 
-## One-shot and session are lifetimes, not separate implementations
+## One-shot and session
 
 | Mode | Contract |
 |---|---|
-| One-shot | One terminal with bounded cards/gaps, no reusable window/item locator, then bounded owned-child cleanup. |
-| Session | Keep the same child/streams across requests; Continue/Expand use that session's window. A terminal ends one request, not the session. |
+| One-shot | Bounded terminal cards/gaps, no reusable window/item locators, then owned-child cleanup. |
+| Session | Same child/streams across requests. Continue/Expand use that session; terminal ends one request, not the session. |
 
-A new invocation cannot reuse process-local locators. One active data request plus bounded control is enough;
-no general scheduler or request-history archive is required.
+A new invocation cannot use old process-local locators. One active data request and bounded control suffice;
+no general scheduler or completed-request archive.
 
-## Output and diagnostic streams
+## Presentation and diagnostics
 
-Decode and validate the complete framed terminal before displaying its cards or locators. Render human/JSON/
-NDJSON from typed values with the existing selected serializer. Preserve rank, source/revision/representation/
-location and truthful partial/gaps. Never substring-parse events or repair JSON by replacing characters.
-Progress is optional and cannot expose commit-dependent results before terminal. A signed status/sequence
-receipt is not evidence that a displayed payload or citation was verified; use the actual typed terminal and
-retained-evidence path. Do not answer the obsolete receipt mismatch by adding MACs to trusted child stdio.
+Decode/validate the whole framed terminal before displaying cards or locators. Render typed human/JSON/NDJSON
+with Serde, retaining rank, source/revision/representation/location and truthful gaps. Do not substring-parse,
+replace quote characters or mistake a signed status receipt for verification of printed payload/evidence.
+Progress is optional and contains no results requiring a later window commit.
 
-Do not use `Command::output`/`wait_with_output` followed by a length check as bounded capture. If stderr is piped,
-service it alongside stdout with finite retained diagnostic bytes; keep it outside the framed result parser.
-An intentionally inherited/discarded diagnostic stream is a separate policy, not a claim of bounded capture.
-Never leave a captured stderr pipe unread while waiting for stdout or process exit. A full pipe can prevent the
-child from making progress. Parent output failure also ends the owned session; it must not leave child work running.
-
-Do not advertise a raw `status()` passthrough as a validated/cancellable product exchange. Remove these parallel
-launch loops when the selected session handles the real operation, rather than adding a different subprocess
-framework for each command.
+Captured stderr is serviced alongside stdout with finite retained diagnostics, outside the result parser.
+Inherited/discarded stderr is a separate policy, not bounded capture. Never wait for stdout/exit while leaving a
+piped stderr unread. Command::output/wait_with_output plus a later length check is not a bounded collector.
+A raw status passthrough is not the selected validated/cancellable exchange. Parent output failure ends the owned
+session instead of leaving child work running.
 
 ## Cleanup and expansion
 
-Every success/error/interrupt path uses the session's same owner: stop new work, best-effort Cancel/end, close
-owned stdin, allow finite graceful exit, terminate only this child when needed, and observe/reap its exit.
-A kill call is not itself reap or rollback. Do not claim a hard OS timing bound from an unconditional wait;
-report unresolved cleanup honestly and verify the chosen platform mechanism. No detached per-timeout workers.
+All exits use the same client owner: stop new work, best-effort control, close stdin, finite graceful allowance,
+termination when necessary and observation/reaping of exit. Issuing kill is not reap or rollback. No indefinite
+join on terminal input, no detached per-timeout workers, and no hard OS timing promise without platform evidence.
+An ordinary typed failed/cancelled request on a healthy aligned session differs from broken framing; protocol
+owns whether the connection remains usable.
 
-Expand uses `(window_id, item_index)` and bounded relative context in the emitted item's representation. It
-cannot select arbitrary raw offsets, revive an expired session or silently read a newer source revision.
-Partial/invalid terminal input closes the session without presenting a result. A lost session repeats Search.
+Expand uses window_id/item_index and bounded relative context in the emitted representation. It cannot select
+arbitrary raw offsets, revive expiry or silently change revisions. Lost sessions repeat Search.
 
 ## Cutover and checks
 
-Change CLI/client/protocol/dispatcher together. Delete old launch/parser/session/endpoint paths and their
-exclusive fixtures with actual consumers, preserving useful OS-path handling and causal child/output cases.
-After code, run minimal pinned compiler/Clippy on the actual CLI and daemon binaries and affected libraries.
-Later checks cover split/partial responses, two requests and Continue/Expand, Ctrl-C/EOF during read and write,
-stdout/stderr backpressure, oversized diagnostics, setup deadline, output failure, cleanup, busy root and
-independent-invocation locator rejection. No R022 build/test/runtime result is claimed.
-
-Donor references read 2026-10-23: [Command::output/status](https://doc.rust-lang.org/std/process/struct.Command.html)
-and [Child lifecycle](https://doc.rust-lang.org/std/process/struct.Child.html). These document collection/wait/drop
-semantics; they do not establish runtime behavior of this checkout or upgrade its pinned compiler.
+Change actual CLI/client/protocol/daemon handlers together. Remove old parser/launch/endpoint/session owners and
+exclusive fixtures; keep OS-path handling and useful causal child/output cases. Minimal pinned compiler/Clippy
+must select actual binaries, not just libraries. Later checks cover complete terminal before display, two
+requests and Continue/Expand, Ctrl-C/EOF during read/write, diagnostic backpressure/limits, output failure,
+cleanup, busy root and independent-invocation locator rejection. No R024 runtime success is claimed.

@@ -1,97 +1,98 @@
 # Provider client — one serviced session, not another protocol platform
 
-[Protocol](../search-provider-protocol/FUNCTIONS.md) owns framing, control scheduling and deadlines.
-[CLI](../../bins/eliot-search/FUNCTIONS.md) owns invocation and presentation. This file identifies what to reuse
-and replace in the client. Names below are source seams, not a catalogue of APIs to implement.
+[Protocol](../search-provider-protocol/FUNCTIONS.md) owns framing, cancellation, clock origins and terminal races.
+[CLI](../../bins/eliot-search/FUNCTIONS.md) owns invocation/presentation. This file selects the client mechanisms;
+names from old code are inspection seams, not an API catalogue.
 
-## Inspected at ff59f930 (R022)
+## Inspected paths
 
-The current clients are still different paths:
+R022 (`ff59f930`) and R023 (`305ccab1`) established:
 
-| Source | Actual responsibility / limitation |
+| Source | Finding |
 |---|---|
-| `src/typed.rs` | Pairing/profile/grant session; exposes synchronous send/receive and incremental `poll_receive`; an operation error drops its state. |
-| `src/typed/io.rs` | Incremental bounded input with a retained deadline, but `write_parts` retries all bytes and flush until completion/deadline in one call. |
-| `src/typed/state.rs` | Live request correlation plus a separate `SessionMachine`; sends and cancels borrow the same state. Cancel send time is capped by the oldest pending deadline. |
-| `../search-provider-protocol/src/session.rs` | Retains every admitted request/control ID in a BTreeSet. Terminal completion does not remove history. Requests and cancellation share its capacity check. |
-| `../search-provider-protocol/src/config.rs` | Default replay capacity is 4096 identities, not 4096 concurrent requests. |
-| `bins/eliot-search/src/provider_client.rs` | Reexports the typed client, but its separate `ProviderSession` delegates to the legacy core; indexed requests become marked legacy query payloads. |
-| `bins/eliot-search/src/app/core.rs` | Additional process invocation and endpoint-command path; not an implementation of this target session. |
+| typed.rs / typed/io.rs | Useful incremental input and fail-stop state, wrapped in pairing/profile/grants. Whole-record writes monopolize the mutable session. |
+| typed/state.rs and protocol/session.rs | Completed IDs fill a replay set and can block Cancel. Cancel sending is capped by the oldest data deadline. |
+| CLI provider_client.rs | Reexports the typed client but delegates its ProviderSession to a separate legacy core; constructs duplicate owned requests. |
+| CLI native_registered.rs / typed/native.rs / state/grant.rs | Compatibility bootstrap checks installation coordinates, then stores no trusted installation; mandatory first grant rejects it. Anchored NativeClientExpectations is a different path. |
+| CLI provider_client/local.rs | Pipe opener exists but is not called from the inspected CLI dispatch. A declaration is not an installed handler. |
+| CLI core verifier/exchange | Digest covers a synthetic status/request/sequence receipt, not displayed payload. Ordinary lines are printed before terminal/ack. |
 
-Two counterexamples follow from those branches, without claiming a reproduced product incident:
+R024 (`676135f4`) finishes the named CLI response/transport/cancellation helpers and native/grant source tails.
+The line reader correctly retains a partial response, original counters and one cleanup allowance across a
+diagnostic timeout. DeadlineCancellation applies only to Health/Version, not arbitrary Search work. The daemon's
+canonical reader starts a request clock on an empty poll, and its serving quantum does not bound whole-record
+writes. These are source findings, not exercised product behavior.
 
-- once historical IDs fill the replay capacity, cancellation of an otherwise live request is rejected too;
-- after the oldest data deadline has expired, `send_cancel` cannot use a new caller-supplied timeout to send
-  cleanup control: its effective send deadline is already expired, and the error closes the session.
+Do not preserve the old protocol merely to reuse those small correct mechanisms. Conversely, do not discard
+partial-frame continuity, source scope, error meaning or child ownership when removing old ceremony.
 
-`poll_receive` is useful, but it does not make the whole API responsive: a caller inside synchronous write/flush
-cannot poll input or observe a new local cancel through that same mutable session until the call returns. Do not
-copy the legacy transport wholesale merely because it already uses bounded records.
+## Selected replacement
 
-## Native handoff and wrapper findings (R023, 305ccab1)
+Keep one owned connection, its finite buffers, one active data request, bounded control state and a non-reused
+session-local ID counter. Remove completed-request data. No replay set, grant history, compatibility facade or
+new scheduling framework. Counter exhaustion closes instead of aliasing an old request.
 
-The CLI's `open_registered_native` compares the descriptor's installation ID, then constructs compatibility
-`NativeClientBinding::new`, which stores `trusted_installation_id: None`. `open_connected_local_stream` installs
-that anchor only for `Some`; `request_standalone_grant` rejects `None` before any grant write. Thus even successful
-pairing/profile setup along this route does not yield a usable product request. This is a static composition
-contradiction in the obsolete path, not a reason to bypass the grant guard or rebuild registration for the baseline.
+The current CLI and one-shot/session modes use this same client. A synchronous outward call may wait on it, but
+cannot run write-all/read-until-terminal while preventing control. Do not hold a session-wide mutex across I/O.
 
-The separate `NativeClientExpectations` path can carry an anchor, but its existence does not connect the CLI.
-The inspected Windows opener and resolver have no caller on the examined CLI dispatch path. Construction,
-connection, permission metadata and actual handler execution must not be conflated.
+Use already pinned **Tokio 1.53.1** for the parent's spawned-child I/O and process waiting. Add only the direct
+features needed by that real caller during Cargo cutover; no version upgrade or second runtime per command.
+Take ChildStdin/ChildStdout/optional ChildStderr into the one session owner. Service both directions and captured
+diagnostics concurrently, with finite application buffers. Command::output/wait_with_output remain collecting
+APIs, not bounded-capture shortcuts.
 
-The CLI wrapper also constructs and discards a `core::UnsignedRequest` just to validate a query/ingest/expand,
-then allocates its own equivalent value; `to_core` constructs another at send time. Remove that adapter family,
-not merely the temporary copy. Validate borrowed fields and construct the selected request once; retain real
-wire-boundary validation without another request-model/validation crate. Allocation cost has not been measured.
+Keep prefix/body positions and outbound byte position in the session, outside disposable futures. In a select
+loop use cancellation-safe read/write calls and advance by their returned count. Do not recreate read_exact or
+write_all after another branch wins: their internal progress would be lost or resent. If the whole connection
+is deliberately discarded, abandoning partial state is fine; it is not fine when reusing the stream. The
+protocol recipe determines when to finish the frame and when to close.
 
-In the legacy line core, `verify_sealed_response` checks a digest of a synthetic status/request/sequence receipt,
-not the printed payload; `invoke_op` prints non-control lines before its terminal acknowledgement. That verification
-cannot serve as result/evidence validation in the replacement. Preserve correlation, bounded typed decoding and
-source-backed evidence instead of upgrading the retired cryptographic protocol.
+A single event loop still stops if one branch blocks its thread. Do not put synchronous OS reads, large transforms
+or backend waits directly into it and call the loop concurrent. Reuse bounded workers already required by the
+real operation; retain ownership until they stop. No detached blocking task per timeout.
 
-## Replacement state and ownership
+## Child and input lifetime
 
-For the sequential local baseline keep the connection, limits, a non-reused session-local request counter,
-one active data request and bounded control state. The protocol recipe owns the partial read/write state.
-Remove terminal request data when it is handled. No completed-request set, grant history or replay database.
-Counter exhaustion closes explicitly; it never wraps and aliases an old request. This is local correlation,
-not authentication for a future remote service.
+The client session owns the child and exactly one cleanup boundary. Enable kill_on_drop as a last-resort fallback,
+not proof of reaping. Explicit cleanup closes owned stdin, observes a finite graceful wait, requests termination
+when necessary and observes/reaps exit. Tokio start_kill requests termination; kill().await also waits. Neither
+an issued kill nor dropping a handle is a hard timing/rollback guarantee. Do not kill an independent daemon.
 
-One concrete session is used by one-shot and interactive CLI modes. A synchronous `invoke` can wrap that same
-serviced runtime, but cannot be a write-all/read-until-terminal loop that prevents controls. Do not hold a
-session-wide mutex across a blocking operation and then attempt to cancel through that mutex.
+Child pipe handles are not the CLI's console stdin or the daemon's inherited stdin. Tokio stdin uses a blocking
+reader that cannot be cancelled; dropping its future can leave runtime shutdown waiting for input. Do not move
+that problem into spawn_blocking or create a reader per request. For the standalone CLI, one process-lifetime
+terminal reader with a bounded command handoff is sufficient: control can signal cancellation directly, the
+reader owns no child/store guard, and process exit rather than an indefinite join ends a blocked console read.
+A reusable library must not silently inherit that process-exit policy. In the child daemon, inherited input has
+one process-scoped reader; parent EOF/close and owned-child termination are the explicit fallback for blocked I/O.
+This does not certify platform timing, crash cleanup or server-side cancellation of external effects.
 
-The owned-child constructor transfers child/stdin/stdout and any captured stderr to one cleanup guard in this
-session. CLI code does not separately wait on the same process. The selected platform adapter supplies actual
-interruptible I/O or the explicitly limited owned-child termination path; a trait named bounded is insufficient.
-An already-open independently owned pipe has different process ownership and must not be killed on close.
+## Reuse and removal boundaries
 
-## What to preserve
+Retain length-before-allocation, incremental framed input, typed correlation, complete terminal validation,
+truthful partial/gap results and fail-stop damaged-stream handling. Native pipe flush must not become blocking
+FlushFileBuffers or a delivery receipt. Do not globally discard live windows on an ordinary pre-write application
+error; protocol distinguishes request outcome from failed transport.
 
-- Prefix validation before body allocation and incremental reads retaining one deadline across polls.
-- Response/request correlation, no duplicate terminal, and complete typed decoding before exposing a result.
-- Fail-stop behavior after partial writes, malformed input, EOF before terminal or uncertain stream alignment.
-- Server partial/gap results remain results; transport failure is not a fabricated successful empty result.
-- Error classes useful to the CLI, without embedding source text, credentials or raw frames in default output.
-- Native pipe `flush` does not call blocking `FlushFileBuffers` or claim peer acknowledgement. Its existing
-  nonblocking adapter is a useful seam, not proof of a new child-stdio implementation.
+Remove pairing/profile/grant constructors, synthetic registration producers, MAC/replay state, TCP/token/endpoint
+features and duplicate request/client models with their real callers. Provider pairing credentials are not
+revision encryption: shared OS-secret owners and unpublished #598 storage remain outside this deletion.
+Validate borrowed fields, construct one current request and retain actual wire-input validation; no second
+request-model or validation crate. Do not repair a retired bootstrap just to keep its constructor usable.
 
-Cancellation of active work is mandatory; reporting progress is optional. The protocol recipe specifies how
-control survives data backpressure and expiry without corrupting a partial frame. The CLI recipe specifies
-cleanup and bounded diagnostic capture. Do not copy those algorithms into another client wrapper.
+## Evidence and remaining cutover
 
-## Remove with the real caller cutover
+Exact source read: tokio-rs/tokio tag tokio-1.53.1,
+[stdin.rs](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/io/stdin.rs),
+[read_exact.rs](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/io/util/read_exact.rs),
+[write_all.rs](https://github.com/tokio-rs/tokio/blob/tokio-1.53.1/tokio/src/io/util/write_all.rs).
+API references: [process](https://docs.rs/tokio/1.53.1/tokio/process/index.html),
+[Child](https://docs.rs/tokio/1.53.1/tokio/process/struct.Child.html),
+[select](https://docs.rs/tokio/1.53.1/tokio/macro.select.html), read 2026-10-23.
+These identify mechanisms and limitations, not a working transport in this repository.
 
-Remove the old pairing/profile/grant constructors, binding expectations, sequence/MAC compatibility, replay
-ledger, TCP/token/endpoint feature and duplicate CLI core. A reexport is not evidence that the CLI uses the typed
-path. Trace entrypoint, actual constructor, read/write loop and terminal consumer together before deleting a
-shared module. R023 classifies the named native/remote constructor chains and their broken grant handoff; it does
-not certify all tests, transport internals or daemon counterparts. The CLI recipe owns the removal map. Provider
-pairing credential lookup is not revision encryption: do not delete shared secret adapters or #598-owned storage
-code when removing the provider caller. No new baseline registration/key owner is required.
-
-After the production change, use minimal pinned compiler/Clippy for the actual client and CLI binary. Later
-behavior checks cover long sequential use without history growth, cancellation at data-capacity/expiry,
-backpressure in both directions, split input, partial output, complete terminal decoding, and one owned-child
-cleanup on every exit. No R022 runtime or compilation result is asserted.
+After the connected production cut, run minimal pinned compiler/Clippy on the client and actual CLI/daemon
+binaries. Later cases cover persistent partial-frame state, idle then short request, long sessions without
+history growth, simultaneous backpressure, cancellation/terminal races, diagnostic bounds and child cleanup.
+The full daemon native/bootstrap/authority caller closure remains separate audit work; no broad deletion is
+licensed by reading these helpers. R024 changes these instructions, not the legacy transport implementation.
