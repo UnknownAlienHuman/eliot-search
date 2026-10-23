@@ -6,7 +6,7 @@ changed production slice, and delete tests whose only subject disappears. Broad 
 follow the connected application.
 
 **Public baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Latest inspected tree:** `53ab0ea33f8d405f72e984881b5aea0db69e7c3b` (`R017`, 2026-10-23)
+**Latest inspected tree:** `151456672ea4ec8773ed65c5017cb63989912d30` (`R018`, 2026-10-23)
 
 ## Classification rule
 
@@ -20,61 +20,78 @@ Every legacy test belongs to one of three buckets:
 
 A subprocess, native call or large fixture does not make an obsolete architecture a product requirement.
 
-## R015: structural and lifecycle proof removal
+## R015-R017: remove topology and lifecycle proof systems
 
-R015 removed ten files that read repository source/manifests and asserted exact modules, marker strings, byte
-ceilings, feature topology or ownership placement. It also removed daemon `restore_process`, `retention_process`,
-`purge_process` and package `search-retention/tests/{purge_barriers,sweep}.rs`, which exclusively exercised the
-rejected `wave7-lifecycle`/generic retention platform.
+R015 removed source-text topology tests and exclusive restore/retention/purge suites. R016 removed eight
+standalone snapshot/sealed Cargo applications and their private snapshot/control/local-BM25 source. R017 removed
+the feature-gated daemon restore implementation and generic retention/purge/sweep/restore source, leaving only an
+empty package shell for the later manifest/lock cut.
 
-The useful causal requirements survive without those state machines:
+The useful causal requirements survived without those systems: complete marks before deletion, foreign/sole-copy
+preservation, archive marker last, fresh destination/Qdrant identities, no copied nonce continuity, stable
+bounded acquisition, no-clobber immutable objects, link/reparse refusal, exact coordinates and truthful gaps.
 
-- incomplete/unknown mark input causes zero deletion;
-- foreign files and sole retained copies survive;
-- interruption before sweep deletes nothing and interruption during sweep can leave only garbage;
-- partial archive is refused and the completion marker is published last;
-- original/archive remain intact until a fresh destination is verified;
-- destination receives new installation and Qdrant identities and cannot mutate the original;
-- missing/wrong protected-storage material fails without downgrade or copied nonce continuity;
-- no physical secure-erasure claim is inferred from file absence.
+## R018: remove disconnected process proof stacks
 
-## R016: remove eight isolated applications
+The following fixtures explicitly did not execute the selected product or existed only for mechanisms the target
+removes. R018 deletes them rather than preserving their architecture through test pressure:
 
-R016 removed the explicit snapshot daemon/CLI and six sealed Cargo test applications together with the private
-snapshot control store, snapshot format, local BM25 implementation and structural isolation test. Those were
-independent programs, not handlers of the selected daemon `entry.rs`.
+- `indexed_query_process.rs` — in-memory Qdrant oracle plus canonical plan, access permits, leg tickets, candidate
+  readback proofs and projector; its header says it does not drive the served daemon;
+- `product_spine_process.rs` — real DIRECT commands manually joined to a second hand-written Qdrant REST client;
+  its header says there is no single CLI indexed query;
+- `rebuild_process.rs` — old rebuild/reclaimer composition over the in-memory oracle, pin/receipt machinery and
+  an ordinary-reclaim proof system;
+- `qdrant_grpc_parity_process.rs` — stale live-qualification lane that constructs `QualifiedGate`, already removed
+  from the selected bridge;
+- `indexed_provider_process.rs` — proves indexed query is unavailable behind the old qualification gate;
+- `pairing_process.rs` — token/vault/pairing handshake system for loopback TCP; trusted owned-child stdio needs no
+  product pairing or frame MAC;
+- `provider_process.rs` — canonical envelopes, grants/pairing/replay and endpoint/token files over the obsolete
+  loopback proxy;
+- `recipes_process.rs` — freezes eleven recipe IDs and support matrices while the target uses direct operations;
+- `live_handles_process.rs` — random result handles, whole-source fences and continuation catalogues that are
+  replaced by one session-owned `QueryWindow`.
 
-Useful behavior from the removed snapshot prototype belongs to current owners: stable bounded acquisition,
-no-clobber immutable objects, symlink/reparse refusal, exact range/line coordinates, incomplete-capture
-truthfulness and bounded output. Its FNV identity, manual TCP/token protocol and local BM25 are not retained.
+These nine files total 243,346 source bytes. Their deletion does not implement the replacement and does not erase
+the following causal requirements:
 
-## R017: remove the lifecycle implementation, not just its tests
+### Qdrant/publication cases to move
 
-After R015 removed every exclusive restore/retention/purge test, static caller inspection found the remaining
-production chain to be:
+- selected scope and base IDF population exclude foreign points without widening;
+- exact point/schema readback follows real effects;
+- unknown mutation outcome is resolved from actual state, never a fabricated receipt;
+- lost collection rebuilds from retained/current control truth into a fresh generation;
+- complete readback precedes view installation;
+- an old pinned view blocks cleanup until its real guard releases;
+- partial readback or stale/foreign generation never cuts over.
 
-```text
-wave7-lifecycle
-→ entry.rs cfg module restore_composition
-→ search-retention public restore/retention types
-```
+These belong to the real bridge/publication path, not an in-memory oracle or duplicate REST client.
 
-No current default handler called it. R017 removes daemon `restore_composition/**` and its `entry.rs` module, and
-replaces the generic `search-retention` implementation with an intentionally empty no-API crate. `purge.rs` and
-`sweep.rs` are deleted. This eliminates the same-installation restore, receipt phases, key migration, sole-copy
-deletion, generic graph mark/sweep, leases and purge planes.
+### Query/window cases to move
 
-The empty package is not a compatibility facade. It remains only because removing the workspace member, daemon
-optional dependency, wave feature and lockfile records must be one dedicated Cargo cut. No test should import or
-recreate its old types.
+- wrong/foreign point and genuinely missing retained evidence are distinct;
+- empty known scope is valid; unknown scope fails; bounded top-k does not claim exhaustive coverage;
+- page admission occurs before excessive allocation/source reads;
+- one fixed-expiry window owns final refs and item indexes;
+- independent session/restart cannot reuse a locator;
+- mutation of current source does not invalidate evidence retained by an old pinned view;
+- expansion is bounded relative context in the emitted representation;
+- partial/cancelled terminal output advances no cursor.
 
-The current-format causal requirements remain assigned to actual owners:
+### Protocol/client cases to move
 
-- stopped-root mark every typed current/published/pending/cleanup root before any deletion;
-- unknown/corrupt reference metadata causes zero sweep;
-- archive verification and complete marker occur before acceptance;
-- import creates a fresh installation/Qdrant generation and executes no copied pending/cleanup authority;
-- protected writable restore requires an independent real key/nonce context.
+- one complete capped frame is validated before cards/locators become visible;
+- Cancel/EOF remains observable during active work;
+- every post-spawn exit closes, terminates if needed and reaps only the owned child;
+- replay/sequence/token-envelope machinery is not retained for trusted child stdio;
+- unavailable handlers are represented by construction, not qualification credentials.
+
+### Product task cases to move
+
+Literal search, exact absence, provenance, expansion, orientation and comparison remain user behaviors. They do
+not require a fixed recipe registry, support matrix, grant or receipt family. Test the direct handler that actually
+implements each task.
 
 ## Mixed migration tests retained only for behavior extraction
 
@@ -87,19 +104,18 @@ Windows/filesystem cases mixed with source-text assertions. Do not delete their 
 - hard-link/alias refusal;
 - incomplete/unknown metadata remains a gap rather than silent absence.
 
-Move those cases to the current root/object/source/archive owners during their cutover. Delete the remaining
+Move those cases to current root/object/source/archive owners during their cutover. Delete the remaining
 `include_str!`/marker-order assertions and legacy migration harness at that time.
 
 ## Remaining harness cuts
 
-The explicit snapshot/sealed targets and old lifecycle implementation are gone. The current package still
-contains:
+The explicit snapshot/sealed targets, old lifecycle implementation and nine disconnected proof fixtures are gone.
+The current package still contains:
 
 - `wave1` through `wave7`/`full-baseline` feature composition and optional old-package wiring;
 - an empty `search-retention` Cargo/workspace/lock shell pending coordinated removal;
-- shared `sealed_*`, migration and compatibility/interceptor code used by remaining tests or old commands;
-- process fixtures for migration, quarantine, pairing, recipes, overlays, old handles and manually joined
-  Qdrant/DIRECT halves;
+- shared `sealed_*`, migration, pairing/provider/handle/query proof and compatibility/interceptor production code;
+- process fixtures for migration, quarantine and remaining old command surfaces;
 - lexical fixture-backed activation/profile authority.
 
 Remove each owner with its last real caller and move only its causal behavior. Do not replace the wave ladder

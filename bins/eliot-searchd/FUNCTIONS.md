@@ -24,23 +24,25 @@ Each captures arguments/config and may shadow later handlers. The CLI's advertis
 reach a different implementation or refusal than its help describes. Enabling historical wave features compiles
 more disconnected planner/access systems; it does not select one product.
 
-R016 removed the explicit snapshot daemon/CLI and six sealed Cargo test applications together with the exclusive
-snapshot control store, snapshot format and in-memory BM25 implementation. R017 then removed the feature-gated
-daemon `restore_composition` and the generic retention/purge/sweep/restore implementation. The empty
-`search-retention` package and `wave7-lifecycle` manifest entries remain only for a separate Cargo/lock pruning
-cut; they expose no runtime API.
+R016 removed the explicit snapshot daemon/CLI and six sealed Cargo test applications. R017 removed daemon
+`restore_composition` and the generic retention/purge/sweep/restore implementation. R018 removes the process
+proofs that protected the old in-memory query/rebuild oracle, manually joined DIRECT/Qdrant halves, pairing/token
+provider, qualification-gated indexed operation, eleven-recipe registry and random handle/continuation catalogues.
 
-Shared `sealed_*`, migration and other compatibility modules still remain in the primary package and must be
-removed with their actual callers.
+The empty `search-retention` package and `wave7-lifecycle` manifest records remain only for a separate Cargo/lock
+cut. Shared `sealed_*`, migration, provider, query, rebuild and compatibility production modules still remain in
+the primary package and must be removed with their actual callers.
 
 Representative current islands:
 
 - source admission restores/requalifies registry history yet drops acquired bytes;
 - source sync still returns `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`;
 - preparation uses another DIRECT store/profile/receipt family;
-- indexed query proof stacks are wired to fixtures/test ports rather than the real Qdrant/evidence path;
-- DIRECT query uses continuation plus random result-handle catalogues and the old line protocol;
-- wave features still aggregate optional packages even after the obsolete lifecycle implementation disappeared.
+- indexed query proof modules are not connected to the real default handler;
+- DIRECT query still uses continuation plus random result-handle catalogues and the old line protocol;
+- provider composition still contains pairing/grant/envelope and loopback compatibility code after its proof
+  fixtures were removed;
+- wave features still aggregate optional packages instead of constructing one application.
 
 Do not fix reachability by adding another dispatcher, facade or compatibility version. Select the current path,
 move useful behavior, and delete the old owner with its actual callers.
@@ -140,12 +142,11 @@ operations with their own output and cancellation.
 - migration/sealed/secure-command applications and owner-slot/epoch/succession machinery still shared by the
   primary package;
 - wave feature ladder, empty `search-retention` workspace shell and optional old-package wiring;
-- provider pairing/grant/capability/receipt stacks;
+- provider pairing/grant/capability/receipt/loopback stacks;
 - planner/executor/access/validator/projector proof operating systems after direct handlers replace them;
-- process-test indexed oracle/manual REST halves;
+- rebuild/reclaimer composition after current publication owns rebuild and cleanup;
 - continuation/result-handle catalogues, full source fences and arbitrary range expansion;
 - recursive storage-security/legacy-GC scans from query/output;
-- generic reclaimer/pin platforms after publication and concrete maintenance own their work;
 - source-shape/process fixtures whose only subject is removed topology.
 
 Unsupported old roots fail before writes and remain untouched. Do not expose a fixture mutation or shadowed
@@ -168,7 +169,7 @@ initialize/open
 → exact retained excerpt
 ```
 
-Then exercise edit/rename, explicit scope/IDF, old pinned view, lost wake-up, pending publication recovery,
-lost-index rebuild, cancellation, paging/expansion, no query-time storage inventory, stopped-root GC and fresh-
-destination restore. Native/platform/recovery/relevance/scale claims require actual execution, not constructor or
-source-shape tests.
+Then exercise edit/rename, explicit scope/IDF, old pinned view, unknown/late write, lost-index rebuild,
+cancellation, paging/expansion, no query-time storage inventory, stopped-root GC and fresh-destination restore.
+Native/platform/recovery/relevance/scale claims require actual execution, not constructor, process-oracle or
+manual-two-halves tests.
