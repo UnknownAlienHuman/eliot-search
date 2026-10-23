@@ -1,83 +1,83 @@
 # Analysis registry
 
 Audit continuation memory: inspected source, findings, changes, execution evidence and unresolved questions.
-This is not a permission gate, product specification or completion percentage. A statically established defect
-can still have an unimplemented correction; those are different states.
+Not a permission gate, product specification or completion percentage. A statically established defect and an
+implemented correction are different states.
 
 **Original public baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Latest inspected source:** `e6c7bb902c9aa91509ceeccae996c610f2b8f0cd` (`R021`, 2026-10-23)  
+**Latest inspected source:** `ff59f930c5b160b1ed36684538be3dca1bdd6970` (`R022`, 2026-10-23)  
 **Historical qualification archive:** `2f9c9720f3e14799a0f8dfefa00077d2fa6a9887/qualification`
 
 Resume from the actual PR head and inspect intervening commits. Bind execution claims to exact SHA, command and
-target. When condensing this file, preserve immutable links to detailed prior passes, not just their conclusions.
-Default-branch code search discovers paths; it does not establish current-branch caller absence.
+target. Condensation must preserve immutable links to detailed prior passes. Default-branch search discovers
+paths; it does not establish current-branch caller absence.
 
 ## Status vocabulary
 
 - **CHECKED**: the named static question was inspected, not every line/runtime property.
-- **PARTIAL**: findings exist; the named inspection or implementation work remains.
+- **PARTIAL**: findings exist; named inspection or implementation work remains.
 - **PENDING**: insufficient inspection to direct a safe change.
-- **RUNTIME-ONLY**: code and execution are necessary; prose is not evidence.
+- **RUNTIME-ONLY**: code/execution are necessary; prose is not evidence.
 - **PROTECTED**: unpublished work is not inspected or overwritten.
 
 ## Coverage ledger
 
-Detailed pre-R021 inspected surfaces and findings remain in the immutable checkpoints below. These rows retain
-all existing area IDs; they do not replace the detailed evidence with a claim that every file was read.
+Detailed earlier surfaces and findings remain in the immutable checkpoints below. All area IDs are retained.
 
 | ID | Area | Status | Established result / current state | Remaining |
 |---|---|---|---|---|
-| A001 | Documentation authority | PARTIAL | Parallel historical specs removed. R021 fixes stale retention-shell instructions and false shell help/self-test claims. | Surviving local documents/issues and old useful requirements, matched to actual code. |
-| A002 | Historical governance data | CHECKED | Swarm/maps/packets/generated status removed; Git is the archive. | Code remnants below. |
-| A003 | Workflows/wrappers | CHECKED | Old gates/wrappers removed; Actions remain manual-only. | Recheck changed workflows, not a new gate. |
+| A001 | Documentation authority | PARTIAL | Historical parallel specs removed. R022 removes client instructions making cancellation optional/synchronous and reconciles process ownership and terminal semantics. | Other surviving local documents/issues and useful old requirements against code. |
+| A002 | Historical governance data | CHECKED | Swarm/maps/packets/generated status removed; Git is archive. | Code remnants below. |
+| A003 | Workflows/wrappers | CHECKED | Old gates/wrappers removed; Actions manual-only. | Recheck changed workflows, not a new gate. |
 | A004 | Workspace inventory | CHECKED for inventory | R020 removed retention member/dependency/lock shell; 50 declared members. | Actual Cargo resolution and remaining package cuts. |
-| A005 | Entrypoints/product | PARTIAL | Snapshot/sealed/restore/daemon-loopback paths removed. R021 gives shell help one owner and removes self-test capability claims. Interceptor routing remains. | Connect default daemon/CLI; verify actual binary, not only its library. |
-| A006 | Root/config/control | PARTIAL | One root guard and typed state selected; durable build inputs differ from live read snapshots. | Implement current state/capture and real platform durability. |
-| A007 | Sources/reconciliation | PARTIAL | R010 defects recorded. R021 confirms source-root inspection still calls provider currentness with index unavailable. | Source/object/current-row integration and published-versus-desired freshness; actual #598 overlap only. |
-| A008 | Private object/key work | PROTECTED | Public #598 contract reviewed; old six-domain/purge programme not inherited. | Accepted handoff; no private branch/worktree changes. |
-| A009 | Preparation/identity | PARTIAL | Test/limit identity coupling, budget gap, empty refusal, stale/ABA installation distinctions established. | Implement corrections through actual preparation callers. |
-| A010 | Qdrant/donors | CHECKED for named static questions | Gate removed; BM25/tokenizer/scoped-IDF/readback/late-write limitations recorded. | Real connection and relevance/scale/late-write execution. |
-| A011 | Publication/view/cleanup | PARTIAL | Two-sided reconciliation, immutable retrieval and durable captured inputs selected. | Crash/late-writer/view/rebuild/cleanup implementation. |
-| A012 | Query/evidence/window | PARTIAL | Evidence/window failures recorded. R021 inspects generic service/host and shows their extra authority/registry inputs, not a constructed product. | Direct Qdrant/evidence/window integration; complete current-branch caller map. |
-| A013 | Protocol/client/CLI | PARTIAL | Daemon loopback removed; active Cancel, framing and child cleanup defects remain. Wave4 pairing/grant and CLI compatibility remain. | Connect real framed session; preserve/move live currentness callers when removing provider. |
-| A014 | Product depth | PARTIAL | Exact/navigation/comparison/documents/models/MCP remain requirements, not delivered scaffolds. | Selected concrete producers/consumers and quality assessment. |
-| A015 | Tests/governance code | PARTIAL | xtask/ledger, structural and disconnected proof suites removed. Inspected app tests do not validate self-test's former persistence claim. | Mixed migration behavior extraction and remaining structural consumers. |
-| A016 | Donors | PARTIAL | redb/Qdrant/matcher/Git/ignore seams recorded. R021 reads official Cargo feature semantics, not a resolved build graph. | Only concrete remaining donor questions; no whole-donor claims. |
-| A017 | Qualification tree | CHECKED | Archived; current policy/blocker notes remain. | Runtime ceremony under A022. |
-| A018 | Auxiliary documents | CHECKED for filename/disposition | Duplicate wave/profile specs removed. Retention path is notes only. | Semantic consistency is A001. |
-| A019 | Issues/PR handoff | PARTIAL | Named owner issues and PR are reconciled per pass; no whole-queue claim. | R021 handoff plus other changed owners as inspected. |
-| A020 | Runtime evidence | RUNTIME-ONLY | No static counterexample or deleted fixture establishes platform/recovery/relevance performance. | Exact-SHA Windows/Qdrant/restart/scale/GC/archive/session runs after implementation. |
-| A021 | Compiler baseline | PARTIAL | Last previously verified bridge-lib run is 39872058276 at 7d92fb8b. R021 pinned daemon Clippy could not start: cargo absent, exit 127. | Locked metadata and actual daemon/current-consumer compilation; Windows separately. |
-| A022 | Runtime qualification/identity | PARTIAL | Qdrant activation removed; lexical/materializer fixture authority and identity coupling remain. | Real caller cleanup; causal examples remain ordinary tests. |
-| A023 | GC/storage diagnostics | PARTIAL | Generic platform and Cargo shell removed; query-time inventories and current-format collector remain unfinished. | Typed stopped-root mark/sweep; remove hot-path deep inventory. |
-| A024 | Backup/restore | PARTIAL | Fresh destination/archive design recorded; old generic restore removed. | Actual archive/import and partial/corrupt/interrupted/protected cases. |
-| A025 | Features/harness topology | PARTIAL | R020 removed wave7/full-baseline; R021 maps remaining manifest and inspected entry/provider/query roots. No features removed in R021. | Complete current-branch consumers before Cargo cuts; compile actual selected targets. |
+| A005 | Entrypoints/product | PARTIAL | R021 corrected daemon help/self-test claims. R022 traces CLI entry/public interception/app/core and finds another process/diagnostic path bypassing session bounds. | One actual default daemon/CLI and binary compilation; no claim of indexed integration. |
+| A006 | Root/config/control | PARTIAL | One root guard and typed state selected; captured durable build inputs differ from live snapshots. | Current state/capture and platform durability. |
+| A007 | Sources/reconciliation | PARTIAL | R010 defects recorded; R021 confirms live source-root currentness consumer in provider. | Source/object/current-row and published-versus-desired freshness; actual #598 overlap only. |
+| A008 | Private object/key work | PROTECTED | Public contract reviewed; old six-domain/purge programme not inherited. | Accepted handoff; no private branch/worktree changes. |
+| A009 | Preparation/identity | PARTIAL | Test/limit identity coupling, budget gap, empty refusal and stale/ABA distinctions established. | Correct actual preparation callers. |
+| A010 | Qdrant/donors | CHECKED for named static questions | Gate removed; BM25/tokenizer/IDF/readback/late-write limitations recorded. | Real connection and relevance/scale/late-write execution. |
+| A011 | Publication/view/cleanup | PARTIAL | Two-sided reconciliation, immutable retrieval and durable captured inputs selected. | Crash/late-writer/view/rebuild/cleanup code. |
+| A012 | Query/evidence/window | PARTIAL | Evidence/window failures and unconstructed generic service inputs recorded. | Direct Qdrant/evidence/window integration and remaining callers. |
+| A013 | Protocol/client/CLI | PARTIAL | R022 establishes replay-capacity cancellation refusal, expired-data cancellation refusal, synchronous-write starvation risk, late stdout-only capture check and conflicting client instructions. Documentation corrected; Rust remains. | Actual serviced session/caller cutover; native/remote/legacy core internals and platform execution. |
+| A014 | Product depth | PARTIAL | Exact/navigation/comparison/documents/models/MCP remain requirements. | Concrete producers/consumers and quality assessment. |
+| A015 | Tests/governance code | PARTIAL | xtask/ledger and inspected structural/disconnected proofs removed. R022 adds/removes no tests. | Mixed migration behavior extraction and residual structural consumers. |
+| A016 | Donors | PARTIAL | Prior storage/search seams retained. R022 reads current Rust process/Instant docs and Microsoft pipe-mode semantics; no upgrade or pinned runtime claim. | Concrete remaining donor questions only. |
+| A017 | Qualification tree | CHECKED | Archived; current policy/blocker notes remain. | Runtime ceremony A022. |
+| A018 | Auxiliary documents | CHECKED for filename/disposition | Duplicate supplements removed; retention path is notes only. | Semantic consistency A001. |
+| A019 | Issues/PR handoff | PARTIAL | Named issues are reconciled per pass, not a whole-queue check. R022 affects #280/#332. | Remaining owner issues as inspected. |
+| A020 | Runtime evidence | RUNTIME-ONLY | Static findings and deleted fixtures do not establish platform/recovery/performance. | Exact-SHA relevant runs after implementation. |
+| A021 | Compiler baseline | PARTIAL | Last previously verified bridge-lib run: 39872058276 at 7d92fb8b. No R022 compiler/test/runtime run; current container has no cargo/rustc. | Locked metadata and actual daemon/CLI/current consumers; Windows separately. |
+| A022 | Runtime qualification/identity | PARTIAL | Qdrant activation removed; lexical/materializer fixture authority remains. | Real caller cleanup; causal examples stay tests. |
+| A023 | GC/storage diagnostics | PARTIAL | Generic platform/Cargo shell removed; current collector and query inventory removal unfinished. | Typed stopped-root collection and no hot-path deep inventory. |
+| A024 | Backup/restore | PARTIAL | Fresh destination/archive design recorded; old generic restore gone. | Actual archive/import and partial/corrupt/interrupted/protected cases. |
+| A025 | Features/harness topology | PARTIAL | Wave7/full-baseline removed. R022 reads CLI entry feature gates but does not complete the remaining feature/consumer graph. | Wave1–wave6 and native/remote/shared consumers before further Cargo cuts. |
 
 ## Remaining static audit
 
-1. Finish current-branch wave1–wave6, CLI/provider-client, shared sealed/migration and query consumer tracing.
-   Preserve live source/status helpers; do not delete whole directories because their primary platform is obsolete.
-2. Reconcile remaining README/AGENTS/FUNCTIONS and affected issue bodies. Check useful old requirements against
-   selected behavior; do not turn every unresolved point into another framework or global specification.
-3. Finish lexical/materializer fixture-activation and configuration-authority caller inspection.
-4. Separate real filesystem cases from source-text assertions in mixed migration tests.
+1. Finish current-branch wave1–wave6 and shared sealed/migration/query callers. For CLI, next inspect the remaining
+   `native_*`, `remote_client`, `endpoint_client`, `provider_client/{core,local}` implementations and their actual
+   daemon counterparts; R022 inspected roots/selected loops, not their complete caller closure.
+2. Reconcile surviving README/AGENTS/FUNCTIONS and affected issues against code; preserve useful old requirements
+   without adding another global specification. R022's named client/protocol/CLI cluster is reconciled, not all docs.
+3. Finish lexical/materializer fixture-activation and configuration-authority callers.
+4. Separate causal filesystem cases from source-text assertions in mixed migration tests.
 5. Resolve concrete exact/navigation/comparison/document/model/MCP producer/donor seams.
 
 ## Known implementation work, not unread audit scope
 
-Connect one command application and retained source/object/current-state/preparation path; apply recorded
-source, budget, empty/gap, stale-completion and lost-wakeup fixes. Connect Qdrant/publication with real pending
-work, immutable retrieval, atomic evidence/view, rebuild and cleanup. Connect query/evidence/window/framing,
-Cancel and owned-child shutdown. Implement stopped-root GC/archive/fresh import. Remove replaced mechanisms
-with their consumers and run minimal pinned compiler/Clippy. Runtime claims wait for the relevant execution.
+Connect one command application and retained source/object/current-state/preparation path; apply recorded source,
+budget, empty/gap, stale-completion and lost-wakeup fixes. Connect Qdrant/publication, real pending effects,
+immutable retrieval, atomic evidence/view, rebuild and cleanup. Connect one query/evidence/window/framed session
+with actual cancellation and child ownership. Implement stopped-root GC/archive/fresh import. Remove replaced
+mechanisms with their consumers and run minimal pinned compiler/Clippy. Runtime claims wait for execution.
 
-R021 changes diagnostics/help only. It does not make any of these product paths available, fix source freshness,
-remove remaining features or establish that the daemon currently compiles.
+R022 corrects seven Markdown files only. No production code, Cargo graph, transport, tests or actual capture/
+cancellation behavior is changed. Do not mark an old Rust defect fixed because its replacement instructions changed.
 
 ## Immutable detailed evidence
 
-Earlier condensed records remain recoverable by exact commit, including inspected file lists and execution
-limits. The current architecture/implementation, not superseded historical recipes, directs development.
+These checkpoints retain exact inspected paths and execution limits. Current recipes, not superseded historical
+instructions, govern implementation.
 
 | Pass | Detailed checkpoint |
 |---|---|
@@ -89,74 +89,65 @@ limits. The current architecture/implementation, not superseded historical recip
 | R017 | [15145667](https://github.com/UnknownAlienHuman/eliot-search/blob/151456672ea4ec8773ed65c5017cb63989912d30/docs/audit/ANALYSIS_REGISTRY.md) |
 | R018 | [174f3ec7](https://github.com/UnknownAlienHuman/eliot-search/blob/174f3ec758cb0ec5c38b780cd3de913be9120fdc/docs/audit/ANALYSIS_REGISTRY.md) |
 | R019 | [156528ad](https://github.com/UnknownAlienHuman/eliot-search/blob/156528ad0a2ab64599d9cef01d3eeea2b6f11040/docs/audit/ANALYSIS_REGISTRY.md) |
-| R020 / full prior ledger | [e6c7bb90](https://github.com/UnknownAlienHuman/eliot-search/blob/e6c7bb902c9aa91509ceeccae996c610f2b8f0cd/docs/audit/ANALYSIS_REGISTRY.md) |
+| R020 | [e6c7bb90](https://github.com/UnknownAlienHuman/eliot-search/blob/e6c7bb902c9aa91509ceeccae996c610f2b8f0cd/docs/audit/ANALYSIS_REGISTRY.md) |
+| R021 / full previous ledger | [ff59f930](https://github.com/UnknownAlienHuman/eliot-search/blob/ff59f930c5b160b1ed36684538be3dca1bdd6970/docs/audit/ANALYSIS_REGISTRY.md) |
 
-## R021 — feature roots, truthful diagnostics and live provider consumers (2026-10-23)
+## R022 — client control liveness and subprocess bounds (2026-10-23)
 
-Inspected exact source `e6c7bb902c9aa91509ceeccae996c610f2b8f0cd`:
+### Exact inspected scope
 
-- root `AGENTS.md`, current registry and PR #610;
-- daemon `Cargo.toml`, `FUNCTIONS.md`, `src/entry.rs`;
-- daemon `src/app.rs`, `src/app/kernel.rs`, and `kernel/{dispatch,spec,tests,source_root_commands}.rs`;
-- daemon `src/provider_composition.rs`, its `kernel.rs`, `kernel/{canonical,currentness}.rs`;
-- daemon `src/query_composition/{service,serving}.rs`;
-- daemon `src/source_roots/kernel/inspection.rs`.
+Source head `ff59f930c5b160b1ed36684538be3dca1bdd6970`:
 
-Code searches for wave3/4/5/6, self-test's persistence field, CanonicalQueryHost/RegisteredQueryService and
-currentness consumers returned default-branch results at c8e38b6. Used them for discovery, then fetched the
-listed surviving source at the exact PR head. Neither search absence nor these named reads proves that every
-current-branch cfg/caller has been inspected. No full checkout was available.
+- CLI `AGENTS.md`, `FUNCTIONS.md`, `src/{entry,app,provider_client}.rs`;
+- CLI `src/public_client.rs` lines 1–150: interception, spawn and beginning of interactive loop;
+- CLI `src/app/core.rs`: help, daemon-path/options, bounded-line reader, `invoke_stdio`, `invoke_daemon`, forward,
+  dispatch including self-test and `run_main`; the remainder of endpoint parsing/tests is not a full-file claim;
+- client `AGENTS.md`, `README.md`, `FUNCTIONS.md`, `src/typed.rs`, `src/typed/{io,state}.rs`;
+- protocol `AGENTS.md`, `README.md`, `FUNCTIONS.md`, `src/{session,config}.rs`;
+- Windows transport `src/lib.rs` including platform selection, flush and result classification; not `windows.rs`;
+- continuation `FUNCTIONS.md`, PR #610 and issues #280/#332.
 
-### Inspected feature boundary
+Directory listing and default-branch Cancelled-body search were discovery only. No whole-repository caller
+absence or complete feature closure is inferred from them.
 
-| Feature | Manifest / inspected source effect | What it does not establish |
+### Findings, corrections and limits
+
+| Finding | Source / counterexample | Disposition |
 |---|---|---|
-| wave1-shell | Empty default feature | That the current binary builds or a handler is ready |
-| wave2-source | Empty compatibility marker; source/preparation dependencies are already mandatory | A second source implementation or a source cutover |
-| wave3-index | Enables index-related dependencies and entry's rebuild module | A callable ingestion/publication/Qdrant path |
-| wave4-query | Enables query dependencies plus access/query/live-authority/serving and provider modules | A constructed service connected to main |
-| wave5-current | Aggregates reconcile/overlay/enricher dependencies over wave4 | Actual observation/index convergence |
-| wave6-proof | Aggregates resolver/comparator dependencies over wave5 | A concrete Exact/Orient/Compare handler |
+| Replacement instructions recreate blocking behavior | Client AGENTS required a small synchronous client with optional cancellation; the protocol/CLI required active control during work. | Client AGENTS/README/FUNCTIONS now require one serviced session; only the outward API may be synchronous. Progress remains optional. |
+| History capacity blocks control | SessionMachine inserts IDs without removal and applies max_replay_entries to admit_cancellation too; default is 4096. The final admitted operation can exhaust history before its Cancel. | Do not repair this by a larger ledger. Local replacement uses non-reused session IDs, one active request and bounded control, without completed-ID history. Old Rust unchanged. |
+| Expired work prevents cancellation transmission | State::send_cancel takes min(new deadline, pending_deadline); after pending expiry remaining fails, and with_state drops the connection. | Distinguish control during active work from bounded cleanup after expiry. An aligned stream may send best-effort control during cleanup; otherwise close. Never claim sent cancellation or rollback. |
+| Read polling alone is insufficient | SocketIo::write_parts loops through all parts and flush until completion/deadline; the same mutable state cannot poll receive/control during that call. | Selected runtime services both directions and keeps bounded partial-write state. No byte-level insertion of Cancel into an unfinished frame; finish within bound or close. This is a liveness counterexample, not a reproduced deadlock. |
+| Diagnostic capture bypasses output bounds | CLI core self-test calls Command::output, then checks stdout only; stderr is also collected. Forwarding status() inherits streams and does not validate framed results. | One owned client path for product commands; any captured diagnostics are bounded/drained separately. No output()/wait_with_output() then size-check as a bounded-capture recipe. Rust unchanged. |
+| Duplicate ownership and malformed error output | CLI and client both described child ownership without saying which guard; core has additional spawn/wait paths and quote-replacement JSON. | Session owns one guard; CLI supplies invocation/presentation. Typed serializer preserves error meaning. No new command-specific process manager. |
+| Cross-process deadline wording was stronger than implementation | Client state creates a local deadline but serializes the original relative duration before encoding/write. Documentation spoke of one absolute deadline without specifying handoff. | Protocol distinguishes caller deadline, remaining-duration handoff, receiver frame/operation limits and cleanup. No serialized Instant, shared-clock or exact transport-delay claim. End-to-end server enforcement remains unexecuted. |
 
-The last two rows describe manifest aggregation, not exhaustive proof that no hidden cfg/caller exists.
-Official [Cargo features](https://doc.rust-lang.org/cargo/reference/features.html), read 2026-10-23, confirms the
-conditional-compilation/optional-dependency distinction; it is not execution evidence. No wholesale flag removal
-or enabling all features as a product fix is selected.
+Preserved useful behavior: SocketIo retains input deadline across polling turns; Operation drops state on failed
+partial I/O; NativeLocalConnection::flush is a no-op, not blocking FlushFileBuffers or a delivery receipt. These
+mechanisms do not justify retaining the surrounding pairing/grant platform. Protocol AGENTS now distinguishes
+one healthy terminal from none on transport failure instead of requiring impossible unconditional delivery.
 
-### Findings and changes
+The current public-client interceptor owns only serve-data-root; normal self-test reaches app/core in the primary
+feature path. Native/remote-feature behavior and all other callers remain explicitly partial.
 
-1. `dispatch::self_test` checks command parsing, shell non-readiness, in-memory literal coordinates and a SHA-256
-   vector. Its successful output nevertheless advertised persistent storage and file/stdin availability. Removed
-   those capability booleans; the output now names only the checks that completed and their in-process scope.
-2. `spec::help` claimed source-backed persistent search and a plaintext store. `entry::main` separately appended
-   another help section after re-reading raw arguments. That suffix depended on exactly two argv values, so help
-   with configuration arguments could differ. Moved the unique preparation/migration names into the single help
-   owner, labeled legacy/disconnected paths and removed the plaintext/readiness promise and entry suffix. Handler
-   routing, feature selection, stored formats and arguments accepted by handlers are unchanged.
-3. `CanonicalRegisteredQueryService::new` needs an authority owner, closed recipe registry, authoritative
-   descriptor and binding pin; its serving transition also needs a grant issuer. `CanonicalQueryHost` likewise
-   needs a real task factory. Compiling these generic wrappers is not construction of source-backed handlers.
-   The inspected main dispatcher does not call these constructors; whole-repository caller absence is not claimed.
-4. Provider deletion has a live boundary: `source_roots/kernel/inspection.rs` calls ungated currentness helpers.
-   The test-only source-root command module calls them too. Keep/move this small logic with its actual consumers,
-   not the provider platform. Owner instructions now record that boundary.
-5. The helper equates current source observations plus `index_available` with a current workspace. Backend health
-   alone cannot establish that the served published revisions match desired input. Inspected callers pass false,
-   so this is a hazard when wiring the replacement, not a reproduced stale result today. Existing source/prepared/
-   published-state comparison supplies the missing distinction; no extra freshness database is required.
-6. Daemon FUNCTIONS still assigned removal of the retention Cargo shell after R020 had removed it. Corrected that
-   stale assignment. Condensed this ledger with immutable links instead of discarding detailed prior evidence.
+### Donors and evidence boundary
 
-### Execution boundary and next work
+Official references read 2026-10-23:
 
-R021 changes three production Rust files for output/help and two Markdown files. No Cargo/lock/workflow,
-private #598 code, storage, query, transport or feature change. No tests were run.
+- [Command](https://doc.rust-lang.org/std/process/struct.Command.html): output collects output and waits; status waits;
+- [Child](https://doc.rust-lang.org/std/process/struct.Child.html): dropping a Child is not kill/wait;
+- [process I/O](https://doc.rust-lang.org/std/process/): writing without concurrently draining the other pipe direction
+  can deadlock;
+- [Instant](https://doc.rust-lang.org/std/time/struct.Instant.html): opaque monotonic value, not a portable wire epoch;
+- [Microsoft pipe modes](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-type-read-and-wait-modes):
+  nonblocking byte-pipe behavior does not establish an inherited-stdio implementation.
 
-The attempted command `cargo +1.98.0 clippy --locked -p eliot-searchd --bin eliot-searchd -- -D warnings` could not
-start (`cargo: command not found`, exit 127). This is a tool-availability failure, not compilation of a checkout.
-Git checkout retrieval failed DNS; an archive download was rejected before retrieval. Further source work used
-exact GitHub connector reads. No new compiler/runtime or successful self-test execution is claimed.
+Retrieved current Rust pages identify std 1.99.1. Attempts to open version-specific 1.98.0 pages were unavailable;
+no pinned-source inspection, dependency upgrade or compiler execution is claimed from those references.
 
-Before broader Cargo removal, complete current-branch caller coverage and obtain the actual binary compiler
-result. Next code inspection remains CLI/provider compatibility and shared sealed/migration consumers, plus
-remaining qualification/configuration authority. Do not label A005/A013/A025 closed because diagnostics are honest.
+No Rust/Cargo/workflow/private #598 change and no tests run. Current environment inspection found no cargo/rustc.
+Git checkout failed DNS; public archive retrieval could not pass the available download route. After those
+failures source work stayed on exact GitHub connector reads; it did not infer a whole-tree scan or a build.
+
+The next static seam is the remaining native/remote/legacy CLI implementations and their real counterpart
+handlers, followed by shared sealed/migration and lexical/materializer authority. A001/A013/A025 stay PARTIAL.

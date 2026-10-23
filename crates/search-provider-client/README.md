@@ -1,20 +1,12 @@
 # search-provider-client
 
-One concrete current-protocol client owns its connection, bounded I/O and request correlation. It may expose
-a synchronous call while keeping its internal control/read path live. Framing, clocks, cancellation and
-session semantics have one definition in the [protocol map](../search-provider-protocol/FUNCTIONS.md).
+Target: one serviced framed session used by the real CLI and daemon. A synchronous public call may wrap it;
+active cancellation is required, while progress and additional transport modes are optional.
 
-Current source still carries pairing/profile/grant expectations and sequence history while the CLI has a
-separate legacy core. Replace their actual callers together; do not add another extraction or adapter.
+The current source still has pairing/profile/grant and replay state, and the CLI retains a separate legacy core.
+Those are not the target implementation. [FUNCTIONS.md](FUNCTIONS.md) identifies the inspected seams and cutover;
+[protocol](../search-provider-protocol/FUNCTIONS.md) owns framing/control/clocks;
+[CLI](../../bins/eliot-search/FUNCTIONS.md) owns invocation and presentation.
 
-A terminal result completes one request. A live session retains its child/streams for Continue/Expand;
-a one-shot invocation closes the child and returns no reusable window locators. Each operation gets a new
-request deadline; window expiry remains fixed. Cleanup is not a renewed work budget.
-
-Keep owned stream/child cleanup and finite response validation. Remove mandatory local pairing/grant/binding
-records, legacy loopback, old wire goldens and duplicate CLI session code. A selected restricted client can
-authenticate separately; do not prebuild it.
-
-The existing [source map](FUNCTIONS.md) records code to remove; its former API sketches are not obligations to
-implement start/cancel/receive/pipe variants without a caller. Use the protocol map for the corrected runtime
-semantics and the [CLI map](../../bins/eliot-search/FUNCTIONS.md) for invocation lifetime.
+There is one owned-child session/cleanup guard, not one process manager per command. Remove obsolete callers
+with their producer. Do not implement every old API sketch or future transport merely because it was named.

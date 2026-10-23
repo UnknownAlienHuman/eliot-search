@@ -1,26 +1,24 @@
 # Working on search-provider-client
 
-Read the [protocol](../search-provider-protocol/README.md),
-[implementation guide](../../docs/implementation/README.md) and local [source map](FUNCTIONS.md).
+Read the [architecture](../../docs/architecture/README.md), the
+[protocol recipe](../search-provider-protocol/FUNCTIONS.md), and [FUNCTIONS.md](FUNCTIONS.md).
 
-Implement one small synchronous framed client used by the actual CLI. Keep owned connection I/O, finite
-buffers, request-ID correlation, optional cancellation/progress, exactly one terminal response, original
-absolute deadline and fail-stop partial I/O.
+Implement one serviced framed session used by the actual CLI and daemon. The public call may be synchronous;
+the connection must still service response reads, partial writes, cancellation and its deadline while work is
+active. Cancellation is baseline behavior, not an optional future API. Progress is optional.
 
-Do not preserve or wrap:
+Use one active data request and bounded control state. Do not retain completed-request replay history, add a
+multiplexing scheduler or let a data/history limit prevent cancellation and close. Never interleave a control
+frame into a partially written frame; follow the protocol owner's failure rule.
 
-- `NativeClientExpectations`/binding/pairing/profile comparison for child stdio;
-- mandatory standalone grant state;
-- per-record MAC/sequence/replay transcript history;
-- legacy loopback TCP/token/endpoint constructors;
-- duplicate CLI `core::ProviderSession`;
-- exact old wire bytes or fixture-only consumers.
+The child-stdio session owns exactly one child/stream cleanup guard. The CLI supplies invocation settings and
+renders results; it does not build another process manager. A separately owned pipe connection is never killed
+as though it were this client's child.
 
-The child-stdio constructor consumes and owns the child/stream handles. A persistent owner-only pipe is
-validated by its platform owner before this package receives it. A selected restricted-client adapter may
-authenticate separately, then use the same current framed session; do not fabricate restricted identities for
-trusted local use.
+Replace pairing/profile/grant authority, NativeClientExpectations, per-record MACs, replay transcripts,
+loopback/token/endpoint fallback and duplicate CLI core sessions with their actual consumers. Preserve useful
+framing, fixed-deadline polling, typed error/result distinction and fail-stop cleanup. Do not translate new
+requests through old RecipeIdV1 or tab/hex messages.
 
-Change CLI, current protocol and daemon dispatcher together. Never translate current requests back to
-`RecipeIdV1` or legacy tab/hex operations. After code, run minimal Rust 1.98 compiler/Clippy for the package
-and real CLI/daemon consumers; delete old grant/profile/wire fixtures with their APIs.
+After a production cut, run minimal pinned compiler/Clippy for the actual CLI/client/protocol/daemon targets.
+Neither a constructor nor a local documentation change establishes a working transport.

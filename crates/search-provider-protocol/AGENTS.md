@@ -1,36 +1,22 @@
 # Working on search-provider-protocol
 
 Read the [architecture](../../docs/architecture/README.md),
-[implementation guide](../../docs/implementation/README.md), [query cutover](../search-query/README.md) and
-local [source map](FUNCTIONS.md).
+[implementation](../../docs/implementation/README.md) and [FUNCTIONS.md](FUNCTIONS.md).
 
-Implement one bounded framed typed exchange used by the actual CLI and daemon:
+Implement one bounded length-prefixed typed JSON exchange used by the real CLI and daemon. Keep one active
+data request, a serviced control path, bounded reads/writes and complete terminal decoding. A healthy handled
+request has one terminal; a failed or disconnected transport can deliver none. Do not invent an acknowledgement
+journal to promise otherwise.
 
-```text
-u32-le length + Serde JSON ClientMessage
-→ direct constructed handler
-→ optional bounded progress
-→ exactly one terminal ServerMessage
-```
+FUNCTIONS owns framing, backpressure, clock handoff and terminal visibility. A synchronous caller API must not
+block cancellation behind write-all/read-all. A partial frame is finished within its bound or the session closes;
+Cancel is not inserted into its byte stream. Data capacity and completed-request history cannot gate close/cancel.
 
-Keep prefix-before-allocation bounds, incremental reads, request correlation/cancellation, original absolute
-deadline and fail-stop behavior after partial output. Encode the complete response frame before the first
-write; commit `QueryWindow` insertion/cursor advancement only after complete flush.
+Use process/OS ownership for trusted child stdio. Remove recipes, manual JSON/base64 grammar, pairing/MACs,
+grants/capability digests, replay history, binding lifecycle, source-handle cleanup records and legacy line/TCP/
+token families with their consumers. Restricted external authentication is separate selected scope, not a reason
+to put those mechanisms back into the local wire.
 
-Do not preserve or wrap:
-
-- eleven V1 recipes or the parallel V2 endpoint;
-- fixed-order manual JSON/base64 grammar;
-- pairing challenge/proof, per-frame MAC or shared binding key on child stdio;
-- grant, capability descriptor/digest or replay authority;
-- binding commit/revoke/drain lifecycle;
-- source handle/continuation/security cleanup records;
-- legacy tab/hex/TCP/token-file commands.
-
-Trusted child stdio/owner-only local pipes derive connection ownership from actual process/OS handles. A
-selected restricted-client adapter authenticates separately and terminates into the same dispatcher; it does
-not redefine the baseline wire.
-
-Change current contracts, codec, client, daemon dispatch and CLI together. Do not add a V3 compatibility
-family or translate current requests back into old recipes/lines. After code, run minimal Rust 1.98
-compiler/Clippy for actual consumers; historical wire/crypto/recipe fixtures are removed with their APIs.
+Change DTOs, codec, dispatcher, client and CLI together. Window insertion/advance follows its existing complete-
+output boundary; local flush is not peer acknowledgement. Do not introduce another compatibility wire version.
+After code, run minimal pinned compiler/Clippy for actual consumers; runtime claims require execution.
