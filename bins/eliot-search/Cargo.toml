@@ -14,13 +14,6 @@ readme = "README.md"
 name = "eliot-search"
 path = "src/entry.rs"
 
-# Legacy implementations are harness-only. Their CLI main is never run.
-[[test]]
-name = "eliot-search-snapshot"
-path = "src/main.rs"
-harness = true
-test = true
-
 [features]
 default = []
 # Retains the obsolete address/token-file CLI only for existing process fixtures.

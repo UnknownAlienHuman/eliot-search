@@ -10,56 +10,13 @@ repository.workspace = true
 publish = false
 readme = "README.md"
 
-# Stateless native boundary shared only by this package's bin/test targets.
+# Stateless native boundary shared by the package binary and integration tests.
 [lib]
 path = "src/lib.rs"
 
 [[bin]]
 name = "eliot-searchd"
 path = "src/entry.rs"
-
-# Legacy implementations are harness-only. Their CLI main is never run.
-[[test]]
-name = "eliot-search-snapshotd"
-path = "src/main.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-authority"
-path = "src/bin/eliot-search-sealed-authority.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-catalog"
-path = "src/bin/eliot-search-sealed-catalog.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-direct"
-path = "src/bin/eliot-search-sealed-direct.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-recover"
-path = "src/bin/eliot-search-sealed-recover.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-store"
-path = "src/bin/eliot-search-sealed-store.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-transaction"
-path = "src/bin/eliot-search-sealed-transaction.rs"
-harness = true
-test = true
 
 [features]
 default = ["wave1-shell"]

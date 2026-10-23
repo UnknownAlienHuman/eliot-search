@@ -6,7 +6,7 @@ changed production slice, and delete tests whose only subject disappears. Broad 
 follow the connected application.
 
 **Public baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Latest inspected tree:** `8cf331a44decded2c84c7f579dcbf8434e040dc7` (`R015`, 2026-10-23)
+**Latest inspected tree:** `bf2bde299b3f009527397571bd9baeea51fde840` (`R016`, 2026-10-23)
 
 ## Classification rule
 
@@ -20,44 +20,14 @@ Every legacy test belongs to one of three buckets:
 
 A subprocess, native call or large fixture does not make an obsolete architecture a product requirement.
 
-## R015: exact current-tree disposition
+## R015: structural and lifecycle proof removal
 
-### Removed source-shape tests
+R015 removed ten files that read repository source/manifests and asserted exact modules, marker strings, byte
+ceilings, feature topology or ownership placement. It also removed daemon `restore_process`, `retention_process`,
+`purge_process` and package `search-retention/tests/{purge_barriers,sweep}.rs`, which exclusively exercised the
+rejected `wave7-lifecycle`/generic retention platform.
 
-The following files read repository source/manifests and assert exact modules, marker strings, byte ceilings,
-feature topology or ownership placement. They execute no product behavior and actively prevent inlining,
-merging and deletion:
-
-- `bins/eliot-searchd/tests/product_targets.rs`;
-- `bins/eliot-searchd/tests/control_migration_owner_boundary.rs`;
-- `bins/eliot-searchd/tests/direct_preparation_owner_boundary.rs`;
-- `bins/eliot-searchd/tests/direct_store_registry_owner_boundary.rs`;
-- `bins/eliot-searchd/tests/git_source_owner_boundary.rs`;
-- `bins/eliot-searchd/tests/revision_inventory_model_ownership.rs`;
-- `bins/eliot-searchd/tests/revision_key_derivation_ownership.rs`;
-- `bins/eliot-searchd/tests/revision_protection_contract_ownership.rs`;
-- `bins/eliot-searchd/tests/source_composition_owner_boundary.rs`;
-- `bins/eliot-searchd/tests/stable_native_identity_api.rs`.
-
-This removes 39,523 source bytes. `product_targets.rs` specifically required seven daemon and one CLI legacy
-harness targets to remain, contradicting this cutover guide.
-
-### Removed lifecycle proof family
-
-These tests exclusively exercise the rejected `wave7-lifecycle`/`search-retention` platform rather than the
-selected stopped-root GC and fresh-destination archive/import:
-
-- `bins/eliot-searchd/tests/restore_process.rs`;
-- `bins/eliot-searchd/tests/retention_process.rs`;
-- `bins/eliot-searchd/tests/purge_process.rs`;
-- `crates/search-runtime/search-retention/tests/purge_barriers.rs`;
-- `crates/search-runtime/search-retention/tests/sweep.rs`.
-
-They instantiate same-installation restore, purge planes, receipt phases, generic graph roots, leases/pins and
-synthetic CAS adapters. Qdrant is absent or represented as unresolved proof. Removing these 83,573 source bytes
-does not claim that GC, backup, restore or legal erasure is implemented.
-
-The useful causal cases are retained below as requirements for the concrete owners:
+The useful causal requirements survive without those state machines:
 
 - incomplete/unknown mark input causes zero deletion;
 - foreign files and sole retained copies survive;
@@ -68,7 +38,40 @@ The useful causal cases are retained below as requirements for the concrete owne
 - missing/wrong protected-storage material fails without downgrade or copied nonce continuity;
 - no physical secure-erasure claim is inferred from file absence.
 
-### Mixed migration tests retained only for behavior extraction
+## R016: remove eight isolated applications
+
+The exact current manifests and source at `bf2bde29` showed eight explicit Cargo test applications:
+
+- daemon `eliot-search-snapshotd` from `src/main.rs`;
+- daemon `eliot-search-sealed-{authority,catalog,direct,recover,store,transaction}` from `src/bin/**`;
+- CLI `eliot-search-snapshot` from its own `src/main.rs`.
+
+The snapshot daemon was a separate loopback TCP/token service with its own alternating control store, immutable
+snapshot format and complete in-memory BM25 index. The snapshot CLI spoke only that old protocol. The six sealed
+programs were separate Windows owner/catalog/store/transaction/access applications. None was a handler called by
+the selected daemon `entry.rs`; their only Cargo callers were the explicit test-target declarations. The remaining
+`legacy_snapshot_isolation.rs` merely required this topology and source split to stay in place.
+
+R016 removes the eight target declarations and their exclusive source:
+
+- daemon snapshot `src/main.rs`, `control_store.rs`, `snapshot.rs`, `snapshot/**`, `lexical/**`;
+- six daemon sealed entrypoint files under `src/bin/`;
+- CLI snapshot `src/main.rs`;
+- `tests/legacy_snapshot_isolation.rs`.
+
+This does **not** claim that the shared `sealed_*`, migration, key/object or current daemon modules are now gone;
+several remain imported by `entry.rs` or other tests. It removes only the independently compiled applications.
+No workspace member or dependency changed, so `Cargo.lock` is intentionally unchanged.
+
+Useful behavior from the removed snapshot prototype is already assigned to current owners and must be tested
+there: stable bounded acquisition, no-clobber immutable objects, symlink/reparse refusal, exact range/line
+coordinates, incomplete-capture truthfulness and bounded output. Do not preserve its FNV snapshot identity,
+manual TCP/token protocol or local BM25 implementation to keep those cases.
+
+Protected-object behavior belongs to the accepted object/key owner and current root/object tests. The old sealed
+programs' owner epochs, purge/access receipts and transaction CLIs are not donors for that behavior.
+
+## Mixed migration tests retained only for behavior extraction
 
 `control_migration_bootstrap_boundary.rs` and `control_migration_inventory_owner_boundary.rs` contain real
 Windows/filesystem cases mixed with source-text assertions. Do not delete their useful cases blindly:
@@ -84,17 +87,17 @@ Move those cases to the current root/object/source/archive owners during their c
 
 ## Remaining harness cuts
 
-The current manifests still contain:
+The explicit snapshot/sealed Cargo targets are gone. The current package still contains:
 
-- seven daemon harness-only snapshot/sealed test targets;
-- one CLI snapshot test target;
-- `wave1` through `wave7`/`full-baseline` feature composition;
-- feature-gated `restore_composition` and optional `search-retention`;
+- `wave1` through `wave7`/`full-baseline` feature composition and optional old-package wiring;
+- feature-gated `restore_composition`, shared `sealed_*` modules and compatibility/interceptor code;
 - process fixtures for migration, quarantine, pairing, recipes, overlays, old handles and manually joined
-  Qdrant/DIRECT halves.
+  Qdrant/DIRECT halves;
+- lexical fixture-backed activation/profile authority.
 
-Remove each target with its last unique causal behavior. Do not replace the feature ladder with another test
-profile, package map or acceptance feature. The default binaries must become the only product application.
+Remove each owner with its last real caller and move only its causal behavior. Do not replace the wave ladder
+with another test profile, package map or acceptance feature. The default binaries must become the only product
+application.
 
 ## Target test portfolio
 
