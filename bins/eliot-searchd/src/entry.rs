@@ -1,9 +1,7 @@
-//! Primary ELIOT Search daemon entrypoint.
+//! Current daemon command routing.
 //!
-//! The primary binary composes the owner-fenced persistent DIRECT runtime,
-//! bounded continuation windows, opaque source handles, directory manifests,
-//! guarded maintenance and platform revision protection. Canonical provider IPC
-//! is installation-scoped local transport.
+//! Legacy interceptors remain until one connected application replaces them.
+//! Shell help is emitted by the application, not appended by this entrypoint.
 
 #![deny(unsafe_code)]
 
@@ -86,52 +84,12 @@ mod protected_ingest_tests;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    let result = secure_commands::maybe_refuse_legacy_effects()
+    secure_commands::maybe_refuse_legacy_effects()
         .or_else(owner_composition::maybe_run_direct_registry)
         .or_else(native_root_command::maybe_run)
         .or_else(source_migration_command::maybe_run)
         .or_else(preparation_composition::maybe_run)
         .or_else(public_runtime_service::maybe_run)
         .or_else(secure_commands::maybe_run)
-        .unwrap_or_else(app::run_main);
-    if result == ExitCode::SUCCESS
-        && std::env::args_os().len() == 2
-        && std::env::args_os()
-            .nth(1)
-            .is_some_and(|argument| argument == "--help" || argument == "-h")
-    {
-        print!(
-            "{}",
-            concat!(
-                "\nPERSISTENT SOURCE-ROOT REGISTRATION:\n",
-                "  eliot-searchd --source-roots ROOT\n",
-                "  eliot-searchd --register-source-root ROOT DIRECTORY\n",
-                "  eliot-searchd --unregister-source-root ROOT DIRECTORY\n",
-                "  eliot-searchd --sync-source-roots ROOT\n",
-                "Registration controls explicit observation, not access grants or purge.\n",
-                "Unregistering does not revoke already retained revisions.\n",
-                "\nRETAINED REVISION PREPARATION:\n",
-                "  eliot-searchd --prepare-revision ROOT REVISION_ID\n",
-                "  eliot-searchd --prepare-root ROOT [CURSOR]\n",
-                "Build missing preparation from retained bytes; search never rebuilds it.\n",
-                "prepare-root handles a bounded batch; pass next_cursor until exhausted=true.\n",
-                "Changed catalog/profile invalidates the cursor; restart without it. Gaps stay explicit.\n",
-                "\nOFFLINE SOURCE-MAPPING PLAN:\n",
-                "  eliot-searchd --plan-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
-                "Requires an existing unowned root and an existing, separate output directory.\n",
-                "Preserves source state; writes a mapping draft only, without redb import or cutover.\n",
-                "\nOFFLINE SOURCE-MAPPING BOOTSTRAP:\n",
-                "  eliot-searchd --bootstrap-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
-                "Same existing-only custody as the plan command; bootstrap stages a distinct bootstrap entry.\n",
-                "\nOFFLINE SOURCE-MAPPING SOURCE STAGE:\n",
-                "  eliot-searchd --stage-source-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY\n",
-                "Same existing-only custody as the bootstrap command; it consumes that bootstrap and\n",
-                "stages the source mapping in the same target, reading every row back before its receipt.\n",
-                "\nPROVIDER TRANSPORT:\n",
-                "  Canonical startup uses installation-scoped local IPC.\n",
-                "  TCP ports, endpoint files and token files are not accepted by the primary build.\n"
-            )
-        );
-    }
-    result
+        .unwrap_or_else(app::run_main)
 }
