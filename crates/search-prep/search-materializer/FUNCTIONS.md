@@ -98,6 +98,32 @@ EmptyUnitSet/manifest checks, when implementing empty support. No sentinel unit/
 artifact. Nonempty -> empty closes former current points through publication; the last source can yield a
 valid empty view. Missing metadata/collection and failed initial build are not empty success.
 
+## Markdown donor correction
+
+The current Markdown adapter uses pinned `pulldown-cmark 0.13.1` with empty options and `OffsetIter`.
+The printable whitespace case recorded in the [donor register](../../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#markdown-offset-iterator-released-fix-not-yet-adopted)
+passes raw control preflight under sufficient limits and reaches the synchronous donor. The register traces
+the maintained 0.13.5 correction; it does not claim an Eliot runtime reproduction or completed upgrade.
+
+For [#441](https://github.com/UnknownAlienHuman/eliot-search/issues/441), adopt that maintained fix through the
+existing adapter before live Markdown enablement. Update the actual Cargo pin/lock and the version/checksum
+in `markdown/identity.rs::donor_row` together. Preserve exact source/range and complete event semantics;
+the release changes parsing behavior, so preparation must distinguish its transformed output from the old
+parser's. Apply the reuse rule above instead of recreating fixture/source-hash acceptance or old-format
+compatibility. Retained originals remain available for preparation under the selected parser.
+
+Exercise the printable reference-definition/list case and bounded list/blockquote/CRLF variants with empty
+options. Fully exhaust offset iteration, check balanced events and valid UTF-8 byte ranges, and exercise
+actual `materialize_markdown` plus the current owning replay path. A no-panic count alone misses premature
+end-of-stream. The NUL reproducer belongs to donor diagnostics; Eliot should keep its existing raw refusal.
+Use the changed owner's relevant coordinate/structure cases and minimal compiler/Clippy after the dependency
+cut; no broad qualification programme precedes it.
+
+Keep `OffsetIter`; do not substitute plain iteration, drop events, fabricate offsets or blacklist a spelling.
+A maintained parser fix is preferred to a local fork or catch wrapper. Any remaining isolation requirement
+belongs to the actual consumer: catching unwind neither works under abort nor bounds synchronous donor CPU.
+No new worker framework is selected by this correction. Unrelated source/plain-text work can proceed.
+
 ## Removal and checks after implementation
 
 Keep current Markdown/XML donor mechanisms and inert content. Remove duplicate writers, adjacent reparse,

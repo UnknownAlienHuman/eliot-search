@@ -1,33 +1,29 @@
 # Current implementation dependency graph
 
-The product is one application with concrete owners. Package boundaries may shrink or disappear; this graph
-records effects and data ownership, not a permanent crate topology.
+The target is one application with concrete owners. This path is not connected in the current binary.
+Package boundaries may shrink or disappear; the graph records data dependencies, not a permanent crate topology
+or a recovery algorithm. The [owner recipes](../implementation/README.md#owners) define each operation.
 
-```text
-eliot-search CLI
-  → one framed local client
-  → eliot-searchd direct dispatcher
-
-eliot-searchd
-  ├→ source owner
-  │    ├→ safe final-handle/Git read
-  │    ├→ one immutable object writer/reader
-  │    └→ typed redb RootRecord / SourceRecord / RevisionRef
-  ├→ preparation owner
-  │    └→ materialization → structure-first units → retrieval inputs
-  ├→ publication owner
-  │    ├→ immutable operation/manifest/cleanup pages
-  │    ├→ typed redb PendingPublication / CurrentPublishedView / RetiredCleanup
-  │    ├→ one real Qdrant runtime
-  │    └→ one private current-view manager
-  └→ query owner
-       ├→ current ViewGuard
-       ├→ non-widening ResolvedScope
-       ├→ RequestContext(deadline, cancellation, counters)
-       ├→ real Qdrant query or explicit retained-source exact scan
-       ├→ ViewManifestEntry → immutable object/range evidence
-       └→ one process-local QueryWindow
+```mermaid
+flowchart TD
+    source[Selected source] --> retained[Retained bytes and current head]
+    retained --> prepared[Prepared units and maps]
+    prepared --> publication[Publication]
+    publication -->|fixed effects| qdrant[Qdrant generation]
+    publication -->|atomic metadata commit| view[Published view and redb snapshot]
+    cli[CLI session] -->|framed request| query[Direct query handler]
+    view -->|pin| query
+    query -->|scoped retrieval| qdrant
+    qdrant -->|ranked point IDs| evidence[Evidence lookup and retained read]
+    view -->|exact metadata| evidence
+    retained -->|source bytes| evidence
+    evidence --> result[Result and optional session window]
 ```
+
+The query owns scope, deadline/cancellation and finite limits. Exact uses the retained reader directly; it
+does not take its domain from ranked nominations. One client owns child stdio. Bodies and unfinished effect
+pages stay in the shared object store; compact current/published metadata stays in redb. A view owns the real
+read snapshot, not a manifest copied into a second index. Qdrant does not become the evidence store.
 
 ## Ownership rules
 
@@ -57,15 +53,12 @@ Vendor/redb/OS types stay private to their adapter where useful.
 
 ## Cutover order
 
-```text
-1. current root/source/object/control path
-2. one preparation and stable retrieval/evidence model
-3. real Qdrant publication + current view
-4. real source-backed Search
-5. one framed CLI path and QueryWindow
-6. exact scan, rebuild and bounded cleanup/GC
-7. optional features only from measured user need
-```
+The [implementation order](../implementation/README.md#order-and-evidence) and
+[#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) connect source/preparation, publication,
+query and the local client. Implement rebuild/cleanup with publication's real recovery state; they are not a
+separate legacy rebuild platform. Product depth follows actual producers, and independent cuts can proceed
+without waiting for every earlier box. The [caller map](../../bins/eliot-searchd/FUNCTIONS.md#query-publication-and-rebuild-boundaries)
+identifies the disconnected owners being replaced.
 
 Every slice connects the real producer and consumer and removes the replaced mechanism. A trait, adapter,
 receipt, capability, issue or test fixture is not delivery.

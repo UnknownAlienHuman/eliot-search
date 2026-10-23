@@ -10,7 +10,9 @@ Read the [publication owner](../search-publication/FUNCTIONS.md), [Qdrant bridge
 - `plan.rs` copies manifests into another plan and adds custom identities.
 - `execute.rs` contains the reusable exact delete/absence-readback shape but lacks the current route, view, deadline and recovery owner.
 - `receipt.rs` creates a second cleanup journal.
-- public-main callers are dominated by fixtures; no connected product caller owns its checkpoints.
+- R028 at `37dbb198` traces daemon `rebuild_composition::authorize_reclaim`: it returns a plan after
+  caller-proof/pin checks, performs no deletion and has no production caller. A feature gate does not
+  connect `execute_batch` to the real bridge; its `IndexAdmin` is still a supplied abstraction.
 
 ## Current owner
 

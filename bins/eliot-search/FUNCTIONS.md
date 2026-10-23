@@ -28,7 +28,25 @@ provider. Health/shutdown currently spawn a shell child; they do not inspect/sto
 These are help corrections, not new command routing. The feature-only search/lexical aliases and old core help
 remain with their obsolete owners until cutover; no distinct BM25 path follows from their names.
 
-The native/canonical counterpart audit is still partial. Do not delete every native file from this table alone.
+R027/R028 map the named daemon counterparts in the [caller/effect map](../eliot-searchd/FUNCTIONS.md#inspected-callers-and-effects).
+Use those receiving-owner boundaries during the cutover; do not wait for another registration-platform audit.
+
+### Current CLI selection and orphan removal
+
+At `37dbb198`, the sole binary target is `src/entry.rs`; automatic binaries/examples are disabled.
+Its active chain is optional legacy remote → `public_client::maybe_run` → `app::run_main`/`app::core`.
+The typed client reexports and private Windows pipe opener are not called by that primary dispatcher.
+`serve-data-root` launches the child with `--serve-data-root`, whose earlier daemon registry interceptor
+returns metadata instead of `data_root_ready`; the client's readiness refusal kills/waits for its child.
+
+R028 removes five unreferenced files: `owned_client.rs`, `service_client.rs`, `paged_client.rs`,
+`directory_client.rs` and `help.rs`. Tracked-tree target/module/path/include and name searches found no outside
+consumer, including tests and the legacy feature. They were loose source copies, not alternative live handlers.
+Active help remains in `app.rs`; directory sync/verify forwarding in the removed file was never selected.
+
+Keep useful OS-native arguments, finite line/query/path limits and child shutdown/error behavior from
+`public_client` and `app::core` while replacing them. Their error escape paths and blocking I/O remain known
+defects; deleting orphan copies does not implement the new session or connect indexed Search.
 
 ## Capture once and use the real session
 

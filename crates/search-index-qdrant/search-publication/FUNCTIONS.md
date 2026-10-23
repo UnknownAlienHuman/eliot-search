@@ -4,6 +4,14 @@ At c8e38b6, shared admission/machine/recovery code holds complete manifests and 
 redb/Qdrant effects. Daemon/control add competing machines. Keep useful validation/readback, not the machines.
 R011 rechecks the replacement instructions at `7c7fd36c`; the corrections below are not implemented-state claims.
 
+R028 at `37dbb198` traces daemon `publication_composition::Publisher`: it has no production caller;
+`publication_fault_process.rs` includes it directly with a backend double. `propose` changes an in-memory
+`PublicationFloor` and persists opaque intent bytes through `publication_codec::FileJournal`; it does not
+commit a redb current view or call Qdrant. Its compensation trait and caller-supplied recovery booleans are
+not real observations. `rebuild_composition` similarly creates plans/readback proofs without building or
+switching a backend generation. The [daemon map](../../../bins/eliot-searchd/FUNCTIONS.md#query-publication-and-rebuild-boundaries)
+names the cutover; do not connect these competing machines as intermediate production owners.
+
 The [control map](../../search-control-redb/FUNCTIONS.md) owns evidence tables/snapshots and restartable build
 input capture; [projection](../search-projection-planner/FUNCTIONS.md) owns changed-source input;
 [preparation](../../search-prep/search-materializer/FUNCTIONS.md) owns wanted-input/result reconciliation;

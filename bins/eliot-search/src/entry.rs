@@ -1,9 +1,9 @@
 //! Primary ELIOT Search CLI entrypoint.
 //!
-//! The primary client exposes the persistent DIRECT command surface, the
-//! interactive paged runtime with opaque source handles, and the canonical local
-//! provider bootstrap. Obsolete address/token-file routing is available only in
-//! the explicit `legacy-loopback-harness` feature for process fixtures.
+//! The primary dispatcher selects the legacy DIRECT session or the shell/scan
+//! facade. The daemon currently intercepts that session's argv before serving it;
+//! native provider declarations do not establish a connected transport. Obsolete
+//! address/token-file routing is limited to `legacy-loopback-harness`.
 
 #![forbid(unsafe_code)]
 

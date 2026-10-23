@@ -105,9 +105,28 @@ evidence, not a resolved Cargo graph or proof that the binary builds.
 
 The `provider_composition` source-currentness consumer is described above. Config has its own
 [three-path caller map](../../crates/search-config/FUNCTIONS.md#observed-callers-and-startup-refusal).
-Feature-gated query/rebuild modules and their internal dependencies still need removal or connection with the
-chosen real query/publication owners. These established boundaries are implementation inputs, not an instruction
-to audit the same obsolete native algorithms again.
+R028 adds the remaining query/rebuild boundaries below. These established boundaries are implementation inputs,
+not an instruction to audit the same obsolete native algorithms again.
+
+### Query, publication and rebuild boundaries
+
+R028 at `37dbb198` traced these modules and their outside references. `entry.rs` already declares query under
+`wave4-query` and rebuild under `wave3-index`; publication composition is ungated but allows dead code.
+No selected production handler constructs these owners. Textual caller searches do not certify a Cargo build.
+
+| Existing owner | Observed work and consumers | Receiving owner / removal |
+|---|---|---|
+| `query_composition`, registered service and live authority | `execute_pinned_leg`, registry/service constructors and live-authority construction have no outside production caller. `ProcessTestIndexedPort` queries, reads and counts the in-memory `QdrantBridge`, not `RealDataPlane`. | Connect the direct [query handler](../../crates/search-query/README.md) to a pinned view, concrete SDK and retained evidence, then remove the oracle host, query-specific native provider/capability gates and ticket/proof wrappers. No unconditional count or old qualification credential. |
+| `publication_composition::Publisher` | `propose` performs an in-memory floor CAS and writes opaque intent bytes through `FileJournal`; `observe_control_commit` changes that floor. The outside consumer is `publication_fault_process.rs`, which directly includes the module and uses a backend double. No redb current-view commit or Qdrant mutation occurs here. | Use the one [publication recipe](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) and real control/bridge effects. Retire the competing floor/journal and exclusive fixture; transfer useful failure cases to actual owner behavior. |
+| Publication compensation/recovery/retirement helpers | Traits and exact-ID records plus decisions from caller-supplied booleans; no concrete backend observation or physical retirement. | Keep fixed pending inputs, exact IDs and genuine uncertainty in publication. Do not implement these abstract contracts just to retain this coordinator. |
+| `rebuild_composition::{propose_rebuild,verify_full_readback,stage_cutover,commit_cutover}` | Builds in-memory plans/digests and accepts supplied readback. It does not create/fill a Qdrant generation or durably switch a route; no external caller found. | The [control owner](../../crates/search-control-redb/FUNCTIONS.md#restartable-generation-input-capture) captures actual build inputs; publication builds and switches the fresh generation. Delete the parallel plan/proof/staging chain. |
+| Rebuild pin/reclaim helpers | Pin helpers mutate a process-local `PinRegistry`; `authorize_reclaim` returns a plan. Neither is called by the selected query, and the latter does no delete. | Preserve actual snapshot lifetime in the private view owner and exact cleanup in publication/bridge. Remove raw-pin, watermark and reclaimer proof/checkpoint plumbing with its exclusive callers. |
+
+The real bridge's mutation/readback/query implementation remains reusable; it is not connected merely because
+these modules mention Qdrant. Likewise the current public `--search-root`/`--serve-data-root` argv reaches the
+earlier registry metadata route, not either the downstream DIRECT search or this query host. Replace actual
+selection and owner calls together. The [CLI map](../eliot-search/FUNCTIONS.md#current-cli-selection-and-orphan-removal)
+distinguishes active client code from removed orphan duplicates.
 
 ## Hidden query-time inventory defect
 

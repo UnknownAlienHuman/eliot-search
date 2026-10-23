@@ -10,6 +10,11 @@ transaction. The generic journal instead appends permanent OPERATIONS, rebuilds 
 ControlSnapshot after a mutation and scans receipts during recovery. Normal registry commands add full
 v4 batch/original-input replay. Keep typed transactions and point reads; remove those copied databases.
 
+`publication_codec::cas` only updates a supplied in-memory floor. The disconnected daemon `Publisher`
+uses it plus `FileJournal` intent bytes; it neither persists that floor through `persist_floor` nor invokes
+the real redb current-view transaction/snapshot APIs. Remove that extra floor/journal with its callers.
+The actual redb primitives remain useful; an intent-file write is not an atomic publication commit.
+
 ## Use the existing database for compact evidence metadata
 
 The earlier immutable-page proposal did not define efficient evidence lookup. Do not implement another

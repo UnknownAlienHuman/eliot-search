@@ -22,6 +22,11 @@ For the current cutover, the [daemon caller/effect map](../bins/eliot-searchd/FU
 [donor versions and limits](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#installed-selected-and-optional)
 give concrete implementation entrypoints. They distinguish working pieces from target behavior.
 
+The remaining [query/publication/rebuild boundaries](../bins/eliot-searchd/FUNCTIONS.md#query-publication-and-rebuild-boundaries)
+and [CLI selection/removal map](../bins/eliot-search/FUNCTIONS.md#current-cli-selection-and-orphan-removal) are
+now named. For Markdown adoption, use the [maintained parser correction](../crates/search-prep/search-materializer/FUNCTIONS.md#markdown-donor-correction);
+the upstream fix is released but the project's dependency has not yet changed.
+
 ## Resume research
 
 [Audit navigation](audit/README.md) leads to the single [analysis registry](audit/ANALYSIS_REGISTRY.md):

@@ -10,8 +10,10 @@ tickets, separate pin sets, relative per-leg deadlines, mutable execution maps a
 fusion. `src/indexed.rs` is about 41.1 KiB and adds indexed request validation, unconditional exact count,
 process-test ports and candidate IDs containing the leg ID.
 
-The serving daemon still uses a process-test indexed port. These types do not establish a connected
-backend or a bounded running operation.
+The daemon contains an unwired process-test indexed port over an in-memory oracle. No serving handler
+constructs or calls it; the `wave4-query` module declaration is already present. These types do not establish
+a connected backend or a bounded running operation. The [daemon caller map](../../../bins/eliot-searchd/FUNCTIONS.md#query-publication-and-rebuild-boundaries)
+records its actual removal boundary.
 
 ## Target execution
 

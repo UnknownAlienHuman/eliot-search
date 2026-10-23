@@ -1,7 +1,8 @@
 # Donor evidence and limits
 
 Version/consumer status rechecked 2026-10-23 against Eliot `5af8cde5416fa33e3f1a8f3c19367ed520eac9a4`,
-its manifests and lock. Current official Qdrant/Tokio/TOML documentation was also consulted. Pinned Qdrant
+its manifests and lock; R028 at `37dbb198` additionally checks the Markdown caller and upstream 0.13.5 fix.
+Dependencies are unchanged between those checkpoints. Current official Qdrant/Tokio/TOML documentation was also consulted. Pinned Qdrant
 source-cost findings below come from the 2026-10-21 inspection and remain version-specific. This is not a
 benchmark, completed integration or dependency upgrade. The [previous index](https://github.com/UnknownAlienHuman/eliot-search/blob/32f265368c45627f1e93cd539361884b07e4d41a/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md)
 retains earlier donor research; its blanket implementation recommendations are not current instructions.
@@ -18,7 +19,8 @@ rules live in implementation and owner maps, not in this research index.
 | `aho-corasick` | Locked `1.1.5`. | Existing literal helper; connect its state machine to actual retained reads as described below. |
 | `redb` | Locked `2.6.3`. | Real control-store dependency. Keep typed point/range/snapshot behavior; long readers retain pages and transactions do not include Qdrant/files. |
 | Tokio | Locked `1.53.1` in daemon/bridge/reclaimer consumers. | Reuse async I/O/runtime/deadline primitives. Runtime presence does not connect the selected session or cancel blocking/native/server work. |
-| `pulldown-cmark`, `quick-xml` | Locked `0.13.1` and `0.42.0`. | Existing parsing/coordinate consumers; these do not constitute a working PDF/document worker. |
+| `pulldown-cmark` | Locked `0.13.1`; maintained `0.13.5` fix selected for the next verified Markdown dependency cut, not installed. | Existing offset/coordinate consumer reaches the printable panic case under sufficient limits. See [released fix](#markdown-offset-iterator-released-fix-not-yet-adopted) and the materializer owner; no local parser fork or blacklist. |
+| `quick-xml` | Locked `0.42.0`. | Existing parsing/coordinate consumer, not a working PDF/document worker. |
 | `toml_parser` | Locked `1.1.4+spec-1.1.0`. | Current custom config decoder uses this low-level parser. It is not the proposed high-level typed decoder. |
 | High-level `toml` + `serde`; `serde_json` | Absent as packages from this lock. Typed TOML/JSON is the selected replacement direction; versions/features are not yet pinned. | Choose and lock with actual settings/framing consumers. [TOML docs](https://docs.rs/toml/latest/toml/) inspected at `1.1.8+spec-1.1.0` expose typed `from_slice` with `parse`/`serde`; that inspected release is not an automatic dependency upgrade. |
 | `ignore::WalkBuilder` | Selected walker donor, absent from the lock; [0.4.33 API](https://docs.rs/ignore/0.4.33/ignore/struct.WalkBuilder.html) is a reference. | [Source reconcile](../../crates/search-source/search-source-reconcile/FUNCTIONS.md) must connect observation/acquisition; the present sync entrypoint still refuses with `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`. |
@@ -98,6 +100,32 @@ already exposes state transitions. Reuse the NFA once per request, reset state p
 blocks with cancellation checks. Do not casually substitute a non-overlapping convenience iterator for the
 existing overlapping contract. The [exact map](../../crates/search-query/search-exact/FUNCTIONS.md) also
 restores the old S25 distinction between raw bytes and decoded/derived text.
+
+## Markdown offset iterator: released fix, not yet adopted
+
+Eliot's `markdown/parse.rs` uses `Parser::new_ext(..., Options::empty()).into_offset_iter()` and calls
+`next()` synchronously. The printable input `"- [o]:u\n    \t"` from upstream
+[#1129](https://github.com/pulldown-cmark/pulldown-cmark/issues/1129#issuecomment-5893660830)
+passes the current raw path's control-character check; the original NUL-bearing reproducer does not.
+There is no panic boundary around construction/iteration. This is source-level applicability to the locked
+0.13.1 path, not a locally executed panic or an observed live-ingestion incident.
+
+The upstream issue closed on 2026-10-19; [0.13.5](https://github.com/pulldown-cmark/pulldown-cmark/releases/tag/v0.13.5)
+shipped on 2026-10-21 at `48a2767b5b8ab0a4893e80d942e510065889fc6b`.
+The [release PR](https://github.com/pulldown-cmark/pulldown-cmark/pull/1181) includes the #1021 backport.
+In its [firstpass.rs](https://github.com/pulldown-cmark/pulldown-cmark/blob/48a2767b5b8ab0a4893e80d942e510065889fc6b/pulldown-cmark/src/firstpass.rs#L423-L443),
+`scan_next_line_or_lazy_continuation` now ends the paragraph when the remainder after container scanning is
+blank. The corresponding [0.13.1 function](https://github.com/pulldown-cmark/pulldown-cmark/blob/v0.13.1/pulldown-cmark/src/firstpass.rs#L417-L437)
+lacks that condition. This addresses the empty `TightParagraph` path described in #1129.
+
+The old 0.13.4 plain-iterator fix could hide the panic by ending the event stream before closing tags; plain
+iteration is not a coordinate-preserving workaround. The [0.13.4 → 0.13.5 diff](https://github.com/pulldown-cmark/pulldown-cmark/compare/v0.13.4...v0.13.5)
+also changes other parsing/range behavior. A patch-release title or upstream test result does not establish
+Eliot's offset/structure compatibility or CPU bound.
+
+Use the maintained release through the [materializer correction](../../crates/search-prep/search-materializer/FUNCTIONS.md#markdown-donor-correction).
+[#441](https://github.com/UnknownAlienHuman/eliot-search/issues/441) owns that implementation. Current Cargo pin,
+lock and donor descriptor still say 0.13.1; no upgrade, reproducer or materializer/replay run occurred in R028.
 
 ## Selected mechanisms, not wholesale donor applications
 

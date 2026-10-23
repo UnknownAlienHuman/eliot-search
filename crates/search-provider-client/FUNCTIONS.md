@@ -94,5 +94,7 @@ These identify mechanisms and limitations, not a working transport in this repos
 After the connected production cut, run minimal pinned compiler/Clippy on the client and actual CLI/daemon
 binaries. Later cases cover persistent partial-frame state, idle then short request, long sessions without
 history growth, simultaneous backpressure, cancellation/terminal races, diagnostic bounds and child cleanup.
-The full daemon native/bootstrap/authority caller closure remains separate audit work; no broad deletion is
-licensed by reading these helpers. R024 changes these instructions, not the legacy transport implementation.
+R027/R028's [daemon caller map](../../bins/eliot-searchd/FUNCTIONS.md#inspected-callers-and-effects) now supplies
+the named native/query/publication/rebuild removal boundaries. Use it with the actual receiving owner, preserving
+shared root/storage effects. R028 removes only unreferenced CLI source copies; the serviced transport remains
+implementation work. No broad directory deletion follows from these helper inspections.
