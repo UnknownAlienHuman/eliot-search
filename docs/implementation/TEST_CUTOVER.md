@@ -6,7 +6,7 @@ changed production slice, and delete tests whose only subject disappears. Broad 
 follow the connected application.
 
 **Public baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Latest inspected tree:** `bf2bde299b3f009527397571bd9baeea51fde840` (`R016`, 2026-10-23)
+**Latest inspected tree:** `53ab0ea33f8d405f72e984881b5aea0db69e7c3b` (`R017`, 2026-10-23)
 
 ## Classification rule
 
@@ -40,36 +40,41 @@ The useful causal requirements survive without those state machines:
 
 ## R016: remove eight isolated applications
 
-The exact current manifests and source at `bf2bde29` showed eight explicit Cargo test applications:
+R016 removed the explicit snapshot daemon/CLI and six sealed Cargo test applications together with the private
+snapshot control store, snapshot format, local BM25 implementation and structural isolation test. Those were
+independent programs, not handlers of the selected daemon `entry.rs`.
 
-- daemon `eliot-search-snapshotd` from `src/main.rs`;
-- daemon `eliot-search-sealed-{authority,catalog,direct,recover,store,transaction}` from `src/bin/**`;
-- CLI `eliot-search-snapshot` from its own `src/main.rs`.
+Useful behavior from the removed snapshot prototype belongs to current owners: stable bounded acquisition,
+no-clobber immutable objects, symlink/reparse refusal, exact range/line coordinates, incomplete-capture
+truthfulness and bounded output. Its FNV identity, manual TCP/token protocol and local BM25 are not retained.
 
-The snapshot daemon was a separate loopback TCP/token service with its own alternating control store, immutable
-snapshot format and complete in-memory BM25 index. The snapshot CLI spoke only that old protocol. The six sealed
-programs were separate Windows owner/catalog/store/transaction/access applications. None was a handler called by
-the selected daemon `entry.rs`; their only Cargo callers were the explicit test-target declarations. The remaining
-`legacy_snapshot_isolation.rs` merely required this topology and source split to stay in place.
+## R017: remove the lifecycle implementation, not just its tests
 
-R016 removes the eight target declarations and their exclusive source:
+After R015 removed every exclusive restore/retention/purge test, static caller inspection found the remaining
+production chain to be:
 
-- daemon snapshot `src/main.rs`, `control_store.rs`, `snapshot.rs`, `snapshot/**`, `lexical/**`;
-- six daemon sealed entrypoint files under `src/bin/`;
-- CLI snapshot `src/main.rs`;
-- `tests/legacy_snapshot_isolation.rs`.
+```text
+wave7-lifecycle
+→ entry.rs cfg module restore_composition
+→ search-retention public restore/retention types
+```
 
-This does **not** claim that the shared `sealed_*`, migration, key/object or current daemon modules are now gone;
-several remain imported by `entry.rs` or other tests. It removes only the independently compiled applications.
-No workspace member or dependency changed, so `Cargo.lock` is intentionally unchanged.
+No current default handler called it. R017 removes daemon `restore_composition/**` and its `entry.rs` module, and
+replaces the generic `search-retention` implementation with an intentionally empty no-API crate. `purge.rs` and
+`sweep.rs` are deleted. This eliminates the same-installation restore, receipt phases, key migration, sole-copy
+deletion, generic graph mark/sweep, leases and purge planes.
 
-Useful behavior from the removed snapshot prototype is already assigned to current owners and must be tested
-there: stable bounded acquisition, no-clobber immutable objects, symlink/reparse refusal, exact range/line
-coordinates, incomplete-capture truthfulness and bounded output. Do not preserve its FNV snapshot identity,
-manual TCP/token protocol or local BM25 implementation to keep those cases.
+The empty package is not a compatibility facade. It remains only because removing the workspace member, daemon
+optional dependency, wave feature and lockfile records must be one dedicated Cargo cut. No test should import or
+recreate its old types.
 
-Protected-object behavior belongs to the accepted object/key owner and current root/object tests. The old sealed
-programs' owner epochs, purge/access receipts and transaction CLIs are not donors for that behavior.
+The current-format causal requirements remain assigned to actual owners:
+
+- stopped-root mark every typed current/published/pending/cleanup root before any deletion;
+- unknown/corrupt reference metadata causes zero sweep;
+- archive verification and complete marker occur before acceptance;
+- import creates a fresh installation/Qdrant generation and executes no copied pending/cleanup authority;
+- protected writable restore requires an independent real key/nonce context.
 
 ## Mixed migration tests retained only for behavior extraction
 
@@ -87,10 +92,12 @@ Move those cases to the current root/object/source/archive owners during their c
 
 ## Remaining harness cuts
 
-The explicit snapshot/sealed Cargo targets are gone. The current package still contains:
+The explicit snapshot/sealed targets and old lifecycle implementation are gone. The current package still
+contains:
 
 - `wave1` through `wave7`/`full-baseline` feature composition and optional old-package wiring;
-- feature-gated `restore_composition`, shared `sealed_*` modules and compatibility/interceptor code;
+- an empty `search-retention` Cargo/workspace/lock shell pending coordinated removal;
+- shared `sealed_*`, migration and compatibility/interceptor code used by remaining tests or old commands;
 - process fixtures for migration, quarantine, pairing, recipes, overlays, old handles and manually joined
   Qdrant/DIRECT halves;
 - lexical fixture-backed activation/profile authority.

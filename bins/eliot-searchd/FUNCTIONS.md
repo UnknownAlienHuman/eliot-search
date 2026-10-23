@@ -22,12 +22,16 @@ legacy effect refusal
 
 Each captures arguments/config and may shadow later handlers. The CLI's advertised persistent child can therefore
 reach a different implementation or refusal than its help describes. Enabling historical wave features compiles
-more disconnected planner/access/restore systems; it does not select one product.
+more disconnected planner/access systems; it does not select one product.
 
 R016 removed the explicit snapshot daemon/CLI and six sealed Cargo test applications together with the exclusive
-snapshot control store, snapshot format and in-memory BM25 implementation. They were independent products, not
-layers of `entry.rs`. Shared `sealed_*`, migration, restore and compatibility modules still remain in the primary
-package and must be removed only with their actual callers.
+snapshot control store, snapshot format and in-memory BM25 implementation. R017 then removed the feature-gated
+daemon `restore_composition` and the generic retention/purge/sweep/restore implementation. The empty
+`search-retention` package and `wave7-lifecycle` manifest entries remain only for a separate Cargo/lock pruning
+cut; they expose no runtime API.
+
+Shared `sealed_*`, migration and other compatibility modules still remain in the primary package and must be
+removed with their actual callers.
 
 Representative current islands:
 
@@ -36,8 +40,7 @@ Representative current islands:
 - preparation uses another DIRECT store/profile/receipt family;
 - indexed query proof stacks are wired to fixtures/test ports rather than the real Qdrant/evidence path;
 - DIRECT query uses continuation plus random result-handle catalogues and the old line protocol;
-- `wave7-lifecycle` can still compile a same-installation restore/purge/receipt state machine even though its
-  exclusive proof fixtures and standalone targets have been removed.
+- wave features still aggregate optional packages even after the obsolete lifecycle implementation disappeared.
 
 Do not fix reachability by adding another dispatcher, facade or compatibility version. Select the current path,
 move useful behavior, and delete the old owner with its actual callers.
@@ -135,14 +138,14 @@ operations with their own output and cancellation.
 - registry/original-input replay and full aggregate snapshots for ordinary source work;
 - duplicate object/preparation stores and compatibility formats;
 - migration/sealed/secure-command applications and owner-slot/epoch/succession machinery still shared by the
-  primary package after the standalone R016 targets were deleted;
-- wave feature ladder and optional old-package wiring;
+  primary package;
+- wave feature ladder, empty `search-retention` workspace shell and optional old-package wiring;
 - provider pairing/grant/capability/receipt stacks;
 - planner/executor/access/validator/projector proof operating systems after direct handlers replace them;
 - process-test indexed oracle/manual REST halves;
 - continuation/result-handle catalogues, full source fences and arbitrary range expansion;
 - recursive storage-security/legacy-GC scans from query/output;
-- generic reclaimer/pin/retention/purge/restore platforms, including daemon `restore_composition`;
+- generic reclaimer/pin platforms after publication and concrete maintenance own their work;
 - source-shape/process fixtures whose only subject is removed topology.
 
 Unsupported old roots fail before writes and remain untouched. Do not expose a fixture mutation or shadowed

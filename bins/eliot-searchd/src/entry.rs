@@ -57,9 +57,6 @@ mod query_serving_composition;
 #[cfg(feature = "wave3-index")]
 #[allow(dead_code)]
 mod rebuild_composition;
-#[cfg(feature = "wave7-lifecycle")]
-#[allow(dead_code)]
-mod restore_composition;
 mod result_handles;
 mod revision_protection;
 mod safe_reader_adapter;
