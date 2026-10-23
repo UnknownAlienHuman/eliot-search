@@ -1,49 +1,22 @@
 # Working on search-qdrant-bridge
 
 Read the root [architecture](../../../docs/architecture/README.md),
-[implementation guide](../../../docs/implementation/README.md), local [source map](FUNCTIONS.md) and
-[current Qdrant documentation](https://qdrant.tech/documentation/).
+[implementation](../../../docs/implementation/README.md) and [local recipe](FUNCTIONS.md).
+The local recipe owns mutation, schema, scope and readback rules; do not copy another version here.
 
-Use the workspace-pinned `qdrant-client` privately in this package. Implement one daemon-owned client/runtime
-for both publication and query; do not add another wrapper/runtime for writes.
+Use the workspace-pinned SDK privately. Trace the real publication/query caller before adding an operation.
+One daemon-owned client/runtime serves both paths. Do not build an SDK-method catalogue, a second write
+runtime, an acceptance-token replacement or a forwarding facade around the retired interfaces.
 
-The current code contains real RPC translation mixed with runtime qualification and receipt machinery. Keep
-private vendor conversion, exact schema/point readback, structured errors and finite bounds. Remove:
+`QualifiedGate` has already been removed from runtime construction. Keep useful live probes as diagnostic
+behavior, not an activation prerequisite. The remaining supervisor/lease ceremony, fixed build admission,
+relative deadlines and mutation ledger are separate unfinished cuts; removing the gate did not remove them.
 
-- `QualifiedGate`/probe reports as constructor credentials;
-- process/root/artifact/secret equality receipts on every RPC;
-- process-local mutation replay ledger;
-- relative per-RPC deadline renewal;
-- sparse-only, strict-mode and strong-ordering universal floors;
-- revision/range citation data and vector digest echoes in payload.
+Published retrieval state is immutable under the publication recipe. Known empty scope is not unknown scope.
+Observed point state is not proof that a timed-out writer has stopped. Native inference coefficients are not
+known client-computed vectors. Follow the concrete distinctions in FUNCTIONS rather than weakening them to
+satisfy old fixtures or restoring the former README's generic upsert/update list.
 
-Connect from selected endpoint plus optional actual credential. A key rotation rebuilds the SDK client. Run
-live qualification when establishing a release/upgrade claim; normal startup checks the current service and
-selected collection schema directly.
-
-Carry one absolute deadline/cancellation context through every RPC. Before mutation dispatch, timeout is
-definite. After a request may have reached Qdrant, return unresolved to publication and let its persisted
-page cursor inspect actual state. The bridge owns no idempotency history.
-
-Use native Qdrant operations with their exact semantics:
-
-- `Document` input for stored/query `qdrant/bm25` text;
-- full upsert only for complete authoritative replacement;
-- `update_vectors` / `delete_vectors` for selected vectors;
-- payload set/delete/overwrite without conflating merge and replacement;
-- `wait=true` and exact relevant readback;
-- exact-ID or whole-generation cleanup;
-- native prefetch/RRF/grouping for compatible Qdrant branches.
-
-Resolve base selected scope separately from query-only narrowing. The base population supplies
-`idf.corpus`; the query filter may be narrower. Do not clone every future query-only predicate into IDF.
-
-Qdrant points contain stable retrieval state. Exact source revision, representation and range live in the
-pinned `ViewManifestEntry`; a hit remains a nomination until retained evidence is verified.
-
-Use one-node/one-replica/default ordering for the baseline serialized publisher. Select stronger ordering or
-another topology only from a measured profile. Do not preserve the old P18 qualification/receipt API.
-
-After code, run minimal Rust 1.98 check/Clippy for this package and actual daemon/publication/query consumers.
-Do not spend the implementation phase maintaining oracle/shape/qualification tests for APIs being deleted;
-broad tests follow the connected product.
+After a source change, run minimal pinned compiler/Clippy for the changed owner and actual consumers. Record
+which revision/targets ran in the analysis registry; do not reuse an older successful run as evidence for a
+new cut. Broad live/native/recovery work follows the implementation it exercises.

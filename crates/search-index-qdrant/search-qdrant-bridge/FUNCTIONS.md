@@ -2,16 +2,17 @@
 
 The [implementation guide](../../../docs/implementation/README.md) selects one real Qdrant owner. This map
 owns SDK translation and readback meaning; [publication](../search-publication/FUNCTIONS.md) owns effect
-ordering, ambiguous dispatch and recovery. Reviewed against c8e38b6 and Qdrant 1.19.0 on 2026-10-21.
-These are implementation instructions, not a claim that the new product path has run.
+ordering, ambiguous dispatch and recovery. Donor review used Qdrant 1.19.0 on 2026-10-21; the constructor
+inventory below was rechecked at `7d92fb8b` on 2026-10-23. Target instructions are not implemented-state claims.
 
 ## Current source inventory
 
 | Source/API | Actual behavior and defect |
 |---|---|
-| `src/real.rs`, `RealDataPlane` | Real SDK client coupled to auth lease, historical qualification, schema cache and process-local mutation receipts. Normal daemon publication/query is not connected. |
-| `real/connect_schema/connect.rs` | QualifiedGate, supervisor binding and API-key lease plus fixed nested transport timeouts. |
-| `qualified/**`, `auth.rs` | Frozen executable/client/probe evidence and repeated equality checks; the SDK nevertheless retains its own API-key copy. |
+| `src/real.rs`, `RealDataPlane` | Real SDK client coupled to auth lease, schema cache and process-local mutation receipts. The historical gate field is gone. Normal daemon publication/query is still not connected. |
+| `real/connect_schema/connect.rs` | No QualifiedGate input. Still requires supervisor binding and API-key lease, checks an exact server build, and uses fixed nested transport timeouts. |
+| `qualified/gate.rs` | Live-report validator now returns `()` for tests/diagnostics. It cannot produce an activation token. Do not recreate the removed wrapper under another name. |
+| other `qualified/**`, `auth.rs` | Fixed artifact/client metadata and repeated binding checks remain; the SDK retains its own API-key copy. These remaining dependencies need their own caller cutover. |
 | `real/blocking.rs` | Reusable Tokio runtime exposes reads only; no normal publication mutation consumer. |
 | `real/ledger.rs` | Memory-only operation map disappears on restart and consumes a lifetime receipt capacity. |
 | `OpContext` | Relative Duration renews the budget for nested RPCs; collection existence check escapes that timeout. |
@@ -30,7 +31,9 @@ client. Vendor types/status text and credentials remain inside this adapter.
 
 Startup checks the running server's required features and the selected physical generation/schema. Keep the
 existing dependency pin until an explicit upgrade. Historical probes remain release evidence, not constructor
-credentials. Do not fabricate QualifiedGate or retain its receipt/lease system to connect the application.
+credentials. QualifiedGate is already removed; do not replace it with another receipt, readiness wrapper or
+fixture-backed constructor requirement. Removing the remaining auth-binding ceremony must preserve actual
+credential loading and current endpoint/schema failures, not substitute an unconditional ready Boolean.
 
 Every nested connect/schema/effect/readback/query call uses the same attempt's absolute monotonic deadline
 and cancellation. Server operation timeout and local timeout are different observations. A local timeout,
@@ -134,7 +137,7 @@ Before dispatch, validation/cancellation/expiry is a definite non-write. Read fa
 possible mutation dispatch, retain uncertainty. Preserve whether a terminal completed response was actually
 received: completed-but-unverified is different from a request that may still run. Neither a receipt ID nor
 one matching readback can settle every outstanding attempt. Publication owns that decision and keeps only
-finite unfinished state; the bridge has no replay ledger.
+finite unfinished state; the bridge has no replay ledger in the target design.
 
 Keep useful error classes: not found, already exists, auth, schema/identity conflict, resource limit,
 transport, definite pre-dispatch failure and unresolved mutation. Do not flatten them into a generic receipt
@@ -142,15 +145,16 @@ error or infer successful cancellation from dropping a local future.
 
 ## Remove and verify
 
-Remove runtime qualification/auth-binding ceremony, the operations map and receipt ceiling, duplicated
-point/payload models, relative deadline renewal, unconsumed mutation wrappers, revision-bound citation and
-vector-digest payload extensions, and product-reachable oracle/shape fixtures after actual caller cutover.
-Keep UUID conversion, finite validation, private SDK translation, relevant readback and structured errors.
+The runtime gate-token cut is implemented at `7d92fb8b`. Remove the remaining auth-binding ceremony, fixed
+build admission, operations map and receipt ceiling, duplicated point/payload models, relative deadline
+renewal, unconsumed mutation wrappers, revision-bound citation and vector-digest payload extensions, and
+product-reachable oracle/shape fixtures with their actual caller cutovers. Keep UUID conversion, finite
+validation, private SDK translation, relevant readback and structured errors.
 
 After code check native ingestion/query/evidence end to end; old-view retrieval during a changed-vector/filter
 publication; exact closure; native versus explicit-vector readback; empty/unknown scope; per-leaf filtered IDF;
 response bounds; and delayed-dispatch recovery from the publication recipe. Minimal changed-owner check/Clippy
-comes first. No runtime, performance or Windows result is established by this document.
+comes first. The gate-removal library check does not establish those runtime behaviors or a Windows result.
 
 ## Primary donor references
 

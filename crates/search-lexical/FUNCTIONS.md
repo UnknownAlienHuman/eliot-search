@@ -19,6 +19,39 @@ consumers. Do not preserve three numerical encoders, a second index or their pro
 Useful Unicode identifier splitting is independent of those engines. Keep it only with actual preparation
 and query callers. Source coordinates stay with prepared/source evidence, not token-position receipts.
 
+## Test data must not determine runtime activation or retrieval identity
+
+Rechecked at `7d92fb8b` on 2026-10-23:
+
+- `src/code_identifiers.rs::CodeIdentifiersProfile::new` hashes artifact descriptors and the compatibility/
+  collision fixture definitions. `profile_definition` includes those hashes and every hard resource ceiling
+  in the retrieval fingerprint. Editing a test expectation or adding a case can therefore change profile
+  identity without changing the transform. Wiring that identity into publication would cause needless
+  invalidation; it is not evidence that a connected product has already performed such a rebuild.
+- `code_identifiers/encoding.rs::accept_code_identifiers_profile` matches caller-supplied acceptance and
+  identity fields; it executes no fixtures. An opaque returned wrapper does not turn matching metadata into
+  observed backend behavior. Do not harden this with a signature or another issuer.
+- `qualify_code_identifiers_profile` runs embedded fixtures under the supplied operation limits/deadline.
+  A source-derived counterexample is an input-byte ceiling of 16: the real input `name` fits, but the
+  24-byte `foo-bar/baz\\qux.mod:name` compatibility case cannot pass. Whether the actual input is admissible
+  must not depend on the size of an unrelated startup test. This counterexample has not been runtime-tested.
+
+Do not integrate `AcceptedCodeIdentifiersProfile`, runtime `qualify`/`accept`, qualification receipts or the
+local numerical encoder as a stepping stone to native BM25. Remove them with their exclusive consumers;
+retain causal Unicode splitting examples as ordinary tests when the helper moves to its real text consumer.
+The default-branch caller search found definitions, reexports and fixtures, not a daemon caller; it is a
+candidate search, not an exhaustive proof about every branch or feature.
+
+The published retrieval identity binds actual transform semantics: selected tokenizer/normalization data,
+document/query options, expansion rules, and any truncation/packing rule that changes successful output.
+It does not hash the test suite, review report, build packaging or per-request timeout/output budget. A
+behavior-changing donor upgrade still requires an explicit profile decision. Lower resource ceilings refuse
+or report incomplete work; they do not silently produce a different successful vector under the same identity.
+
+Changing processing policy may make a previously refused source eligible. The existing preparation
+wanted-input/outcome comparison must reconsider that gap without forcing unchanged successful outputs into
+a new retrieval generation. Do not add a second policy-history or qualification database for this distinction.
+
 ## One explicit native profile
 
 ```text
@@ -117,5 +150,6 @@ splitting cases. Inline the remaining helper if a package no longer earns its bo
 Use concrete cases instead of a universal profile verdict: exact `parse_manifest` among punctuation variants;
 camel/snake/acronym recall; `not` and other English stopwords retained; explicit code versus non-space-language
 limits; correct document/query roles; alias repetition; scope/validity isolation; and selected-population cost.
-A wrong or empty lexical result cannot prove absence. Run minimal changed-owner compiler/Clippy after code;
-then exercise the real Qdrant path. No live relevance or performance result is claimed here.
+A wrong or empty lexical result cannot prove absence. A test-only edit must not alter retrieval identity;
+an operation that fits its limits must not require a larger fixture budget. Run minimal changed-owner
+compiler/Clippy after code, then exercise the real Qdrant path. No live relevance/performance result is claimed.
