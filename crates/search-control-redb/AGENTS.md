@@ -1,6 +1,6 @@
 # Local control storage
 
-Use the [implementation guide](../../docs/implementation/README.md#3-keep-control-state-small-and-publication-real).
+Use the [implementation guide](../../docs/implementation/README.md#publication-and-retrieval).
 This package is the concrete redb owner for current source/settings/publication metadata.
 
 ## Write the useful state

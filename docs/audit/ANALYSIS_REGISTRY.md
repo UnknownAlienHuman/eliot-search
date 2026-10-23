@@ -5,14 +5,18 @@ production change and executed check are different facts. Architecture and owner
 
 ## Resume after interruption
 
-**Checkpoint:** R026, 2026-10-23 — recovery, indexing and documentation-status reconciliation only.  
-**Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).  
-**Inspected checkpoint:** `be84c8abb395e2b96426cf7b1bb87a5cae4d062d`.  
-**Last production-source analysis:** R025, published as `be84c8ab`, inspected `2d33dbde`.  
+**Checkpoint:** R027, 2026-10-23 — owner/consumer documentation, test dispositions and donor reconciliation.
+
+**Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
+
+**Inspected checkpoint:** `5af8cde5416fa33e3f1a8f3c19367ed520eac9a4` (R026).
+
+**Last production-source analysis:** R027, the named readset below; no Rust changes in this pass.
+
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
-The interrupted session had already published R025. R023 (`676135f4`) and R024 (`2d33dbde`) are also in the branch;
-the old downloadable R023 patch is not pending work. Do not apply it again over newer owner documents.
+The interrupted work had already published R025 and the R026 recovery index. R023 (`676135f4`) and R024
+(`2d33dbde`) are also in the branch; the old downloadable R023 patch is not pending work. Do not apply it again.
 
 The project is in audit/refactor preparation, not a completed rewrite. The indexed source → retained evidence →
 CLI application is not connected; the current binary build is not established by the historical library checks.
@@ -22,10 +26,11 @@ To resume, read current PR head, inspect any intervening commits, then load only
 its owner recipe. Current branch links are for navigation; immutable checkpoint links are evidence. Default-branch
 code search finds paths but cannot prove caller absence on this branch. Use one manager-owned worktree.
 
-**Next source question: [S1](#s1-consumers-and-removal-boundaries).** Finish outside callers and shared effects of
-the retired native/provider family, starting at `native_binding/{opening,registration,startup,journal_open}.rs`.
-Do not reread R025's handshake/work/local-stream files as new work, or repair a whole obsolete platform merely
-to remove it. Their exact readset and unresolved qualifications remain in the [R025 record](https://github.com/UnknownAlienHuman/eliot-search/blob/be84c8abb395e2b96426cf7b1bb87a5cae4d062d/docs/audit/ANALYSIS_REGISTRY.md).
+**Next implementation slice:** use the [implementation order](../implementation/README.md) and #352 to connect
+one actual source/object/preparation/publication/query path. The config caller map and the native/migration
+removal boundaries are now concrete owner recipes. Check surviving query/rebuild callers when changing those
+owners; do not reopen the native registration family or wait for a whole-repository audit certificate.
+The named S3/S4 questions below are answered; their known defects/case transfers now belong to implementation.
 
 ## Counted remainder
 
@@ -34,15 +39,17 @@ A002/A003/A004/A010/A017/A018. These are not a completion percentage. PARTIAL ca
 remain; it does not reset inspected files to unread. No complete file-level denominator or remaining-defect
 count exists. The five static worksets and six delivery groups below are not estimates of commits or duration.
 
-The root manifest at `be84c8ab` explicitly lists **50 workspace members**. The 52-row disposition document describes
+The root manifest at `5af8cde5` explicitly lists **50 workspace members**. The 52-row disposition document describes
 the original baseline, not today's workspace or a target size; `xtask` and `search-retention` are no longer members.
 This is a manifest recount, not Cargo dependency resolution.
 
 ## Remaining static audit
 
-All five worksets remain open. A workset is closed by a recorded answer and correction of conflicting instructions,
-not by finishing the entire product. Already-established defects awaiting implementation belong to delivery work.
-Paths below are read entrypoints, not instructions to create new packages or repair every historical primitive.
+S3's named caller/identity question and S4's two-suite classification are answered. S1 has a concrete native/shared
+effect map; S5 has current product seams and selected-donor status. Broad S1/S2 consistency and future optional
+donor selection remain bounded follow-ups during the relevant code changes, not prerequisites for all coding.
+Established defects awaiting implementation belong to delivery work. Paths below are entrypoints, not orders
+to create packages or repair every historical primitive. No whole-tree semantic closure is claimed.
 
 ### S1. Consumers and removal boundaries
 
@@ -54,17 +61,15 @@ entrypoint to constructor, effect and output. Separate exclusive obsolete code f
 OS-secret effects and protected object/key work. Output: named removal/receiving-owner decisions with callers;
 no reconstructed registration platform, blanket directory deletion or caller-absence claim from main search.
 
-Immediate follow-up paths under the [native_binding directory](../../bins/eliot-searchd/src/access_composition/native_binding/):
+R027 read the native opening/credential, registration/provisioning, startup and journal-opening family that
+R026 had only listed. Its [caller/effect table](../../bins/eliot-searchd/FUNCTIONS.md#inspected-callers-and-effects)
+separates disconnected registration from reachable migration/root/preparation routes, actual root exclusion,
+source-currentness helpers and shared protected storage. The `restore_existing_standalone_process` entry has
+only definition/re-export hits in the inspected Rust tree; this is textual evidence, not Cargo reachability.
 
-```text
-opening.rs; opening/{connections,credential,tcp}.rs
-registration.rs; registration/{finalization,intent,provisioning,readback}.rs
-startup.rs; journal_open.rs; codec.rs only where a surviving caller requires it
-```
-
-R026 confirmed these paths from current GitHub directory/tree metadata, not their code semantics. `process.rs`
-and the parent binding/listener/security/live-authority files were read in R025; use that evidence first.
-The two subtree listings were complete (`truncated=false`). This is not a whole-repository caller inventory.
+Remaining for the affected implementation cuts: surviving feature-gated query/rebuild dependencies and
+CLI/client compatibility. Start from their actual entrypoints and immediate consumers, using R018/R021/R025
+instead of auditing the entire removed platform again. Preserve only useful effects in their selected owners.
 
 ### S2. Surviving documentation and issue consistency
 
@@ -72,8 +77,11 @@ Areas A001/A019. Start with [documentation index](../README.md), the nearest REA
 corresponding issue. Compare useful historical requirements against current owners; one algorithm has one home.
 Output: corrected owner rule and links, or an explicit retained/deferred/unsupported behavior. No new master spec.
 
-R026 fixes stale audit-closure navigation in this directory, `docs/README.md` and #352; it does not reconcile all
-package instructions or all issues. The old closure map is now a pointer to current evidence and its archived text.
+R027 reconciles ADR0006 with the product/query owners, restores explicit coordinate/priority/condition-aware
+comparison and orientation requirements, corrects config dependency/consumer claims, and repairs seven deleted
+document links plus six stale heading links and the example's old TOML pointer. R026 already retired the false
+closure map. These changes do not certify every historical
+issue/local instruction; correct further conflicts at the owner when encountered, without a second master spec.
 
 ### S3. Configuration and transformation identity
 
@@ -82,9 +90,12 @@ Areas A009/A022 and the configuration part of A006. Start with
 [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), and
 [config](../../crates/search-config/FUNCTIONS.md), then their actual consumers.
 
-R009/R011 already establish fixture-backed activation and test/limit identity coupling. Finish the caller map:
-which values change transformed output, guard current installation, limit execution, or permit retry? Output:
-concrete caller changes/deletions preserving useful tests as tests, not another profile/qualification registry.
+**Named static question answered.** R009/R011 already establish fixture-backed activation and test/limit identity
+coupling. The materializer recipe distinguishes transformed-output reuse, current installation checks and retry/
+execution bounds; those are known implementation changes, not unread source. R027 maps all three inspected
+config paths: startup/status, DIRECT ID-to-path locator hints and the narrow DEK-selection policy. It also records
+the semantic flag's readiness-only effect and the missing high-level TOML/Serde dependency. Implement #333 with
+actual setting consumers; do not add receipts to make `try_activate` pass or reinterpret locators as membership.
 
 ### S4. Mixed migration fixtures
 
@@ -93,10 +104,12 @@ Area A015 with S1's shared effects. Start at the two current Windows-only suites
 - [control_migration_bootstrap_boundary.rs](../../bins/eliot-searchd/tests/control_migration_bootstrap_boundary.rs);
 - [control_migration_inventory_owner_boundary.rs](../../bins/eliot-searchd/tests/control_migration_inventory_owner_boundary.rs).
 
-Extract actual filesystem/no-clobber/drift/alias/incomplete-state cases from source-text assertions and obsolete
-phases, using [TEST_CUTOVER](../implementation/TEST_CUTOVER.md). Trace production dependencies before removal.
-R026 checked only lines 1–30 to confirm current paths/scope; it neither reread entire suites nor executed them.
-Output: named DELETE / MOVE CAUSAL CASE / RETAIN decisions tied to current owners, not a new test framework.
+**Named static question answered.** R027 read both complete suites and recorded all 16 named test dispositions
+in [TEST_CUTOVER](../implementation/TEST_CUTOVER.md#mixed-migration-tests-retained-for-behavior-extraction).
+Filesystem/no-clobber/drift/alias/incomplete-state cases move to actual owners; synthetic migration phases and
+source-text assertions are deleted. No suite is retained unchanged as a current-product test. Tests themselves
+are unchanged and unrun; transfer the causal cases when implementing the receiving owner. Other residual harness
+consumers remain A015 work and are not declared removed by this classification.
 
 ### S5. Product depth and selected donors
 
@@ -104,11 +117,14 @@ Areas A014/A016. Start with [product behavior](../product/AGENT_ANALYSIS_FRAMEWO
 [query overview](../../crates/search-query/README.md), [exact](../../crates/search-query/search-exact/FUNCTIONS.md),
 and the [donor index](DONOR_VERIFICATION_REGISTER_2026-10-09.md). Later donor evidence is also indexed below.
 
-For Exact, navigation/ambiguity/comparison, documents, selected models/adapters and MCP, identify a real producer,
-consumer and small implementation seam, or explicitly record the unsupported/deferred boundary. Preserve useful
-old requirements; deleting scaffolds is not delivery. Inspect donors only to answer a selected question, with
-version/source and cost limitations. Output: owner decisions, not empty workers/registries or every SDK method.
-Quality and scale require the implemented application and execution, not more research prose.
+R027 maps Exact, orientation/ambiguity/comparison, document/model workers and MCP to actual producer/consumer
+limits in the query overview. Existing matchers/parsers are reusable; document/model refusal stubs and absent
+MCP/runtime selection are explicit gaps. Selected dependencies versus proposed donors are now distinguished in
+the register, with official BM25/IDF/default-processing and timeout limitations. No new framework is selected.
+
+This answers the named current-state/selected-donor question. Pick any optional extractor/model/adapter only
+with a concrete operation and inspect that donor then; do not repeatedly survey all candidates. Product depth,
+relevance and scale remain implementation/execution work, not claims from package or SDK availability.
 
 ## Delivery remaining, separate from static audit
 
@@ -132,31 +148,31 @@ excludes unpublished work; RUNTIME-ONLY requires execution. No existing area ID 
 
 | ID | Area | Status | Established result / current state | Remaining |
 |---|---|---|---|---|
-| A001 | Documentation authority | PARTIAL | R026 removes contradictory closure pointers and provides one continuation index. Prior owner corrections remain in their pass records. | S2; other local instructions and useful historical requirements. |
+| A001 | Documentation authority | PARTIAL | R027 reconciles ADR0006, restores useful product requirements and fixes removed-document links; one continuation index remains. | S2; further local/issue conflicts when encountered. |
 | A002 | Historical governance data | CHECKED | Swarm/maps/packets/generated status removed; Git preserves history. | Code remnants tracked separately. |
 | A003 | Workflows/wrappers | CHECKED | Old gates/wrappers removed; Actions manual-only. | Recheck when changed, not a new gate. |
-| A004 | Workspace inventory | CHECKED for inventory | R026 recounts 50 explicit members at be84c8ab; the 52-row plan is historical. | Actual Cargo resolution and remaining package cuts. |
+| A004 | Workspace inventory | CHECKED for inventory | 50 explicit members confirmed at 5af8cde5; the 52-row plan is historical. | Actual Cargo resolution and remaining package cuts. |
 | A005 | Entrypoints/product | PARTIAL | Help/readiness corrected; root forwarding and native constructors do not form indexed Search. | S1 and actual default CLI/daemon integration. |
-| A006 | Root/config/control | PARTIAL | One root guard/typed state selected; R025 records intentional forgetting of legacy process ownership. | S1/S3 and current-state/platform implementation. |
+| A006 | Root/config/control | PARTIAL | R027 separates real root exclusion and three config consumers from obsolete epoch/registration/readiness machinery. | Implement typed settings/root state with actual consumers; S1 remaining cuts. |
 | A007 | Sources/reconciliation | PARTIAL | R010 defects and live provider currentness consumer recorded. | Source/object/current-row integration and published freshness. |
 | A008 | Private object/key work | PROTECTED | Public contract reviewed; retired programme not inherited. | Accepted handoff; no unpublished branch/worktree changes. |
-| A009 | Preparation/identity | PARTIAL | Test/limit coupling, budget/empty/stale/ABA distinctions established. | S3 and implementation through actual consumers. |
+| A009 | Preparation/identity | PARTIAL | Test/limit coupling, budget/empty/stale/ABA distinctions established; S3 disposition is implementation-ready. | Implement through actual consumers; no fixture-backed production authority. |
 | A010 | Qdrant/donors | CHECKED for named static questions | Gate removed; BM25/tokenizer/IDF/readback/late-write limitations recorded. | Real integration and relevance/scale/late-write execution. |
 | A011 | Publication/view/cleanup | PARTIAL | Two-sided reconciliation, immutable retrieval and durable captured inputs selected. | Crash/view/rebuild/cleanup code, not rediscovery of old findings. |
 | A012 | Query/evidence/window | PARTIAL | R025 traces population validation and shared locks through backend/output; pinned-view replacement selected. | S1 and actual query/evidence/window integration. |
-| A013 | Protocol/client/CLI | PARTIAL | R023–R025 named helper/authority readsets preserved. R026 indexes remaining native paths only. | S1 and serviced session/platform execution. |
-| A014 | Product depth | PARTIAL | Useful exact/navigation/comparison/documents and selected adapters remain requirements. | S5 and concrete implementation/quality. |
-| A015 | Tests/governance code | PARTIAL | Structural/disconnected proofs removed; useful causal cases retained. R026 locates two mixed suites. | S4 and residual structural consumers. |
-| A016 | Donors | PARTIAL | redb/Qdrant/ignore/Tokio findings preserved with version/source limitations. | S5; no new donor inspection in R026. |
+| A013 | Protocol/client/CLI | PARTIAL | R027 extends native readset and records actual OS credential effects versus disconnected registration callers. | S1 and serviced session/platform execution. |
+| A014 | Product depth | PARTIAL | R027 preserves orientation/delta, coordinates, priority and conditional comparisons; query table names actual seams/gaps. | Concrete product-depth implementation and quality; optional choices with consumers. |
+| A015 | Tests/governance code | PARTIAL | All 16 tests in S4's two suites classified; no current-product test retained unchanged. | Move causal cases/delete old harnesses with owners; residual structural consumers. |
+| A016 | Donors | PARTIAL | R027 verifies pins/consumers and current official IDF/TOML/Tokio semantics; target-only dependencies explicit. | Actual integration; future selected optional donor/API checks. |
 | A017 | Qualification tree | CHECKED | Archived; policy/blocker notes remain. | Runtime ceremony under A022. |
 | A018 | Auxiliary documents | CHECKED for filename/disposition | Duplicate supplements removed; retention path is documentation only. | Semantic consistency under A001. |
-| A019 | Issues/PR handoff | PARTIAL | R026 reconciles #352 and PR with the registry; no whole-queue claim. | S2 for other affected owners/issues. |
+| A019 | Issues/PR handoff | PARTIAL | #352 and PR use current registry/owner entrypoints; no whole-queue claim. | S2 for other affected owners/issues. |
 | A020 | Runtime evidence | RUNTIME-ONLY | Static findings and deleted fixtures do not establish platform/recovery/performance. | Exact-SHA relevant runs after implementation. |
-| A021 | Compiler baseline | PARTIAL | Historical bridge-lib run 39872058276 covers 7d92fb8b only. No R026 compilation. | Actual binary/current-consumer checks and locked resolution. |
-| A022 | Runtime qualification/identity | PARTIAL | Qdrant activation gone; lexical/materializer fixture authority remains. | S3 and real caller cleanup. |
+| A021 | Compiler baseline | PARTIAL | Historical bridge-lib run 39872058276 covers 7d92fb8b only. No R027 compilation. | Actual binary/current-consumer checks and locked resolution. |
+| A022 | Runtime qualification/identity | PARTIAL | Qdrant activation gone; lexical/materializer fixture authority remains. Its disposition is already recorded. | Real caller/identity cleanup, not another qualification registry. |
 | A023 | GC/storage diagnostics | PARTIAL | Generic platform gone; current collector and hot-path inventory removal unfinished. | Actual implementation, not rediscovery. |
 | A024 | Backup/restore | PARTIAL | Fresh archive/destination design recorded; generic restore removed. | Actual archive/import and interrupted/protected cases. |
-| A025 | Features/harness topology | PARTIAL | Wave7/full-baseline removed; named native families read, remaining paths indexed. | S1 before broader Cargo pruning; no whole-tree caller claim. |
+| A025 | Features/harness topology | PARTIAL | Wave7/full-baseline removed; native/migration/shared effects mapped, test inventory corrected. | S1 caller cuts with Cargo changes; no resolved whole-tree claim. |
 
 ## Evidence index by pass and topic
 
@@ -179,48 +195,87 @@ current implementation instructions. Use the current owner recipe when a later p
 | R023 | Native/legacy constructors, lost installation anchor, receipt scope | [676135f4](https://github.com/UnknownAlienHuman/eliot-search/blob/676135f49c5373b27edfd6429717464e53202974/docs/audit/ANALYSIS_REGISTRY.md) |
 | R024 | Idle/frame clocks, terminal races, Tokio 1.53.1, CLI help | [2d33dbde](https://github.com/UnknownAlienHuman/eliot-search/blob/2d33dbdeefce0eb0c564f013a8e66032e73f6693/docs/audit/ANALYSIS_REGISTRY.md) |
 | R025 | Native authority lock cost, forgotten ownership, Interrupted accept, admission order | [be84c8ab](https://github.com/UnknownAlienHuman/eliot-search/blob/be84c8abb395e2b96426cf7b1bb87a5cae4d062d/docs/audit/ANALYSIS_REGISTRY.md) |
-| R026 | Recovery/status/navigation reconciliation; directory-only next-read index | [this pass](#r026-recovery-and-index-reconciliation) |
+| R026 | Recovery/status/navigation reconciliation; directory-only next-read index | [5af8cde5](https://github.com/UnknownAlienHuman/eliot-search/blob/5af8cde5416fa33e3f1a8f3c19367ed520eac9a4/docs/audit/ANALYSIS_REGISTRY.md) |
+| R027 | Native/shared effects; config callers; test dispositions; product/ADR/donor corrections | [this pass](#r027-owner-consumer-and-donor-reconciliation) |
 
 Earlier source/donor material: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md),
 [donor evidence](DONOR_VERIFICATION_REGISTER_2026-10-09.md), and
 [baseline package dispositions](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md).
 The [qualification archive](https://github.com/UnknownAlienHuman/eliot-search/tree/2f9c9720f3e14799a0f8dfefa00077d2fa6a9887/qualification)
-is historical, not current readiness. Later Tokio/source observations live in R024/R025, not only the older donor file.
+is historical, not current readiness. The donor register now indexes the later Tokio/source findings as well.
 
 ## Execution evidence
 
 Last previously recorded passing run: [39872058276](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/39872058276),
-`7d92fb8b`, Ubuntu/Rust 1.98.0, `search-qdrant-bridge --lib` check and strict Clippy. R026 does not reverify its logs
+`7d92fb8b`, Ubuntu/Rust 1.98.0, `search-qdrant-bridge --lib` check and strict Clippy. R027 does not reverify its logs
 or extend its scope. Earlier broad daemon compilation failed. R020 lock pruning is manually reviewed, not a
 Cargo-regenerated result. No current CLI/daemon, Windows, live Qdrant or end-to-end success follows.
 
-R026 changes Markdown only; no compiler/test/runtime run. Tool lookup in this session found no cargo/rustc.
-A direct archive request failed DNS; exact repository reads and publication use GitHub APIs. No full checkout,
-resolved dependency graph, exhaustive link crawl, whole-tree caller scan or subagent execution is claimed.
+R027 changes Markdown and one documentation comment in the example TOML; no compiler/test/runtime run.
+No Rust, settings value, Cargo manifest/lock, workflow or test changed. This environment has no cargo/rustc. Git network
+attempts failed at proxy/DNS; GitHub API reads succeeded. One manager worktree now contains all **1,624 tracked
+files**, with every blob and reconstructed tree verified against upstream `5af8cde5` / tree
+`09e3c4ec6a005def0e3308f97c385410bae72486`. Its local analysis anchor is synthetic, not a newer upstream commit
+or the parent to use for publication. All source claims refer to the upstream SHA. Complete materialization
+does not mean complete semantic review or a resolved Cargo graph.
+
+Documentation validation extracted **666 local links, including 58 heading links, from 228 tracked Markdown
+files**; all resolved after the corrections. External URLs were not exhaustively crawled. `git diff --check`
+passed. The 25 unique area IDs retain 6 checked / 17 partial / 1 protected / 1 runtime-only. The change is
+limited to 27 Markdown files and one example-TOML comment; parsing confirms the example's values are unchanged.
+Independent reviews checked the changed product rules, donor/status claims, native/test map and resume indexes.
 
 ## R026. Recovery and index reconciliation
 
-Inspected repository checkpoint `be84c8abb395e2b96426cf7b1bb87a5cae4d062d` on 2026-10-23.
+The full readset, metadata-only limits and reconciliation record are preserved at
+[5af8cde5](https://github.com/UnknownAlienHuman/eliot-search/blob/5af8cde5416fa33e3f1a8f3c19367ed520eac9a4/docs/audit/ANALYSIS_REGISTRY.md#r026-recovery-and-index-reconciliation).
+That pass inspected `be84c8ab`, retired the false static-closure pointers and indexed S1–S5 without claiming
+new Rust analysis. It must not be interpreted as completion of those questions or of the application.
 
-**Content inspected:** root AGENTS; architecture; README lines 1–48; implementation lines 1–60;
-root Cargo.toml lines 1–95 including the complete members list; docs/README; audit README, coverage map,
-workspace disposition and complete analysis registry; donor register lines 1–65; the two S4 fixture headers
-(lines 1–30 each); PR #610, issue #352 and R025 commit metadata/diff.
+## R027. Owner, consumer and donor reconciliation
 
-**Metadata only:** docs/audit directory; native_binding directory and complete opening/registration subtree
-listings. Paths discovered there are indexed in S1, not marked semantically checked. No new production Rust
-path was deeply audited in this recovery pass, and the architecture/implementation rules were not redesigned.
+**Source:** `5af8cde5416fa33e3f1a8f3c19367ed520eac9a4`, 2026-10-23. Read/research/review assistance used three
+GPT Luna agents against the same manager-owned snapshot; all repository edits remained with the manager.
 
-**Reconciled defects in the audit material:** the old coverage map still claimed static closure and all 288 PR
-paths/active issues reconciled; audit README and docs/README promoted that claim; #352 pinned current authority
-to an older commit and linked the same closure map. Those conflict with the explicit five-workset remainder.
-The old map's full text remains at be84c8ab; its current path redirects to this ledger and actual owner recipes.
-#352/PR use current-branch entrypoints instead of another copied algorithm/status queue.
+**Inspected scope:**
 
-**Persistence:** this registry retains all 25 area IDs and every prior immutable checkpoint, adding a topic
-index, S1–S5 read questions and a separate delivery list. Resume from the published PR head, not chat memory or
-a stale local patch. For each further pass append exact inspected scope, finding/disposition, changed paths and
-execution result; retain a permalink before condensing any older detailed record. Listing a file is not reading
-it, documentation is not implementation, and an absent check is not a passing check.
+- Root/local instructions, architecture/implementation/product/query owners, config guides, ADR0001/0005/0006,
+  audit/donor/index/test-disposition files and root/relevant package manifests/lock. Historical main architecture
+  at `c8e38b6` supplied selected Part I S0–S3, S16–S18, S20–S25 and S29–S35 behavior comparisons; it is not restored
+  as an implementation contract. Targeted Markdown searches distinguished historical defects from active rules.
+- Complete `access_composition/native_binding/{opening,registration,startup,journal_open}.rs`,
+  `opening/{connections,credential,tcp}.rs` and `registration/{intent,provisioning,readback,finalization}.rs`.
+  Caller/effect slices in `entry.rs`, `native_binding.rs`, `process.rs`, root/migration command routing,
+  `development/kernel/owner.rs`, `owner_composition/kernel/succession.rs`, DIRECT registry/preparation and
+  `secure_commands/kernel/{entry,dispatch,read}.rs`; source-currentness and shared protection references.
+  Repository-wide exact-symbol searches supplement these reads; they are not Rust name resolution.
+- Config capture/activation/readiness/root-locator paths; `app/kernel/{status,dispatch}.rs` status/self-test;
+  `public_runtime_service/kernel.rs`, `kernel/{entry,runtime}.rs` caller/mutation boundaries;
+  `direct_registry_command.rs::capture_hints`, `fresh_root.rs::requalify_roots`,
+  `native_dek_selection.rs::capture_candidate` and `RevisionDekSelectionPolicy::from_config`.
+  Materializer profile digest/change and request/execution bounds, compared with the already recorded R009/R011
+  lexical/identity findings. These are named function/caller scopes, not every function in each parent directory.
+- Both complete S4 Windows suites (5 bootstrap + 11 inventory tests); their synthetic contexts/direct includes
+  and source-text assertions. No Windows execution or rewritten test is claimed.
+- Exact literal matcher and comparator producer/readback limits; code-enricher/document/model/adapters owner
+  notes and refusal paths; installed donor packages; Qdrant connect/build checks. Current official Qdrant BM25,
+  scoped IDF and preprocessing documentation, pinned Tokio/redb APIs and selected typed-TOML API. Prior pinned
+  Qdrant source-cost and R024 timeout evidence remain separately linked in the donor register.
 
-This completes the recovery/indexing task only. S1–S5, known implementation defects and runtime gaps stay open.
+**Corrections and decisions:** native/provider disposal now names effects and receiving owners; real root locks,
+source-currentness and object protection are not blanket-deleted. Reachable migration and shadowed DIRECT
+read/service routes are explicit. Config locators are relocation hints, DEK selection consumes only its narrow
+backend/digest contract, and the semantic flag is only a readiness gate; no applied query/lexical setting is
+invented. High-level TOML/Serde and `ignore` are not installed merely because recipes select them. The daemon
+README no longer advertises removed loopback/wave7/full-baseline or an obsolete self-test persistence claim.
+
+ADR0006 retains the product mission while retiring Architecture 8.4 portfolio/recipe prescriptions. Product/query
+docs preserve explicit coordinate representation, orientation/readiness/delta, foreground priority and
+condition-aware comparison. The query table names reusable pieces and absent integrations. TEST_CUTOVER records
+all named dispositions; the donor register links official API limits and gives a small change-driven update rule.
+
+**Changed implementation:** none. Markdown owner recipes, indexes, evidence/instructions and one obsolete
+documentation pointer in the example TOML changed; configuration values did not.
+All 25 area IDs and previous immutable checkpoints are preserved. S3/S4 named static questions are answered;
+known delivery gaps and the narrowly stated S1/S2 follow-ups remain. No per-file approval, generated registry,
+new framework or whole-queue/exhaustive-audit claim is introduced. #598 unpublished work was not inspected.

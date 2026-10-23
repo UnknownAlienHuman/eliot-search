@@ -4,7 +4,7 @@
 # removed by #333. Non-default values may be refused at startup or never reach a real consumer. This file is
 # therefore intentionally a no-op and is NOT a persistent Search setup or the target DaemonSettings schema.
 #
-# See docs/config/CONFIGURATION_1.0.md and crates/search-config/TOML_PROFILE_2.md.
+# See docs/config/CONFIGURATION_1.0.md and crates/search-config/FUNCTIONS.md.
 
 schema_version = 2
 profile = "direct"

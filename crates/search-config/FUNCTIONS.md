@@ -18,7 +18,7 @@ platform around a small local settings model.
 
 | Module | Current behavior | Replacement |
 |---|---|---|
-| `document`, `builder`, `decode`, `syntax` | Restricted TOML event receiver, double-pass string decode, generic `ConfigDocument`, section/entry accounting. | Bound file bytes once and decode concrete Serde settings with locked `toml`. |
+| `document`, `builder`, `decode`, `syntax` | Restricted TOML event receiver, double-pass string decode, generic `ConfigDocument`, section/entry accounting. | Bound file bytes once and decode concrete settings with the selected high-level `toml`/Serde donor. |
 | `registry`, `section`, `value`, `names` | Dynamic field/section descriptors, generic values, owner names, security floors, allowed sources, action sets. | Concrete Rust fields, direct defaults/range validation and selected override policy. |
 | `merge`, `builder`, `environment` | Generic file/env/CLI layer operations and provenance. | Small optional-layer merge over real setting structs. |
 | `canonical_identity`, `fingerprint`, `snapshot` | Canonical CBOR-like snapshot identity and BLAKE3 fingerprint used by receipts/status. | Ordinary typed equality/current settings revision only when a real owner needs it. |
@@ -34,11 +34,25 @@ platform around a small local settings model.
 | `registry.rs` | Registers instance, mandatory secrets, control migration, source admission, lexical, query, optional semantic and source-root fields with owner/digest/action metadata. |
 | `snapshot.rs` | Reconstructs the registry, merges/project-validates every section, requires `ValidatedSecretsConfig`, builds full fingerprinted snapshot. It retains no typed query/lexical/control settings fields. |
 | `activation.rs` | Diffs fingerprints, builds action/receipt plan and refuses candidate when receipt enum values are absent. It executes/observes none of those effects. |
-| `readiness.rs` | Gates actual search/indexed availability on caller-supplied `AcceptedReceipts` booleans and optional gate acceptance; returns a configuration fingerprint as readiness evidence. |
-| `root_locators.rs` | String-key projection from generic snapshot into one actually consumed setting. Useful behavior moves to typed settings. |
+| `readiness.rs` | Gates actual search/indexed availability on caller-supplied `AcceptedReceipts` booleans; `optional_profiles.semantic=true` requires optional gate acceptance even without a semantic handler. Returns a configuration fingerprint as readiness evidence. |
+| `root_locators.rs` | Projects `source_root_locators.entries` into bounded `RootBindingId -> PathBuf` hints used by DIRECT commands. Useful behavior moves to typed settings. |
 | status/diagnostics | Rebuilds redacted generic view and manually formats fingerprint-heavy JSON rather than serializing actual running component state. |
 
-## Confirmed startup failure
+## Observed callers and startup refusal
+
+Caller search at `5af8cde5` distinguishes three paths:
+
+| Actual consumer | What is consumed | What this does not establish |
+|---|---|---|
+| `app/kernel/status.rs` and `public_runtime_service/kernel/runtime.rs` → `effective_from_process` | Merged config for shell/DIRECT service startup, readiness and diagnostics. Invalid/refused config can stop startup. | `query.limit`, lexical/profile, root and admission declarations are not passed to their operational handlers. A status field is not an applied setting. |
+| `owner_composition/kernel/direct_registry_command.rs::capture_hints` → `RootLocatorHints`, then `fresh_root.rs::requalify_roots` | Bounded `RootBindingId -> PathBuf` locator hints for already selected/admitted roots. This input accepts only `source_root_locators`. | A locator does not admit a new member, set source policy or prove a complete inventory. Preserve this real consumer during cutover. |
+| `owner_composition/kernel/native_dek_selection.rs::capture_candidate` → `RevisionDekSelectionPolicy::from_config` | The explicit DEK-selection command checks the backend and fingerprint tag, then binds the fingerprint and secrets-section digest. | It does not apply lease TTL, rotation grace or the Qdrant secret reference. Change this narrow caller with its actual object/key owner; do not delete shared protection code as provider-only machinery. |
+
+These paths are source callers, not proof of successful command routing. The DIRECT service's serve command
+is shadowed by the earlier registry selector in the [daemon entry chain](../../bins/eliot-searchd/README.md#exact-production-entrypoint-order).
+None was executed here. `derive_readiness` also hardcodes
+`configuration_ready` and `endpoint_ready` to true; neither proves an opened root or a listening endpoint.
+The replacement below constructs owners from actual settings and reports observations of those owners.
 
 `query.limit` is registered with default 10 and `ApplyLive`. Startup builds defaults and a candidate, then:
 
@@ -62,13 +76,19 @@ enum value would only bypass the gate; it would still not pass the value to the 
 | `lexical.profile_id` | Direct retrieval profile setting; change requires normal generation/publication. |
 | `query.limit` | Direct bounded default used by the query owner for new requests. |
 | `optional_profiles.semantic` | Do not gate lexical readiness. Keep only when a real semantic handler/profile is selected. |
-| `source_root_locators.entries` | Direct bounded `Vec<PathBuf>` used by inventory/reconcile. |
+| `source_root_locators.entries` | Preserve the existing bounded ID-to-path lookup while its DIRECT consumer remains. Keep relocation hints separate from an explicit source selection/admission operation; do not treat them as corpus membership. |
 | Qdrant/process settings | Direct endpoint/optional managed profile in `[qdrant]`. |
 | storage protection | Direct root storage profile in `[storage]`. |
 
-Do not preserve unused fields for documentation parity.
+The table describes target disposition, not applied runtime settings. Do not preserve unused fields for
+documentation parity or turn the legacy locator map into a new membership authority.
 
 ## Target structures and merge
+
+The inspected lock at `5af8cde5` contains `toml_parser 1.1.4+spec-1.1.0`, used by the custom decoder.
+It contains neither `toml` nor Serde. High-level typed TOML is the replacement choice, not an installed API;
+pin its compatible version/features and regenerate the lock with the consuming code change. See the
+[donor register](../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md).
 
 Suggested shape; exact ownership follows final consumers:
 

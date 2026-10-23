@@ -1,6 +1,6 @@
 # eliot-searchd
 
-Composition root for the intended local Search application. Public main is not yet one application: it
+Composition root for the intended local Search application. At inspected PR head `5af8cde5` it is not yet one application: it
 multiplexes several independent pre-release roots, stores and protocols by argv interception.
 
 ## Exact production entrypoint order
@@ -13,10 +13,9 @@ multiplexes several independent pre-release roots, stores and protocols by argv 
 3. native_root_command::maybe_run
 4. source_migration_command::maybe_run
 5. preparation_composition::maybe_run
-6. optional legacy loopback
-7. public_runtime_service::maybe_run
-8. secure_commands::maybe_run
-9. app::run_main
+6. public_runtime_service::maybe_run
+7. secure_commands::maybe_run
+8. app::run_main
 ```
 
 Each layer recaptures/parses argv and may terminate the process. This creates shadowed commands, not one
@@ -40,16 +39,16 @@ GC and migration. Its mutation implementation is `#[cfg(test)]`. In the current 
 `--serve-data-root` argv is shadowed by the earlier direct-registry interceptor, so the primary CLI cannot
 receive the `data_root_ready` frame it expects.
 
-`--self-test` checks shell readiness, one-shot scanning and a SHA-256 vector, then prints
-`persistent_direct_store_available:true` as a literal. It does not traverse the persistent entrypoint route and
-is not product evidence.
+`--self-test` checks shell readiness, an in-memory scan and a SHA-256 vector. Its output now describes those
+in-process checks; it does not open a persistent store or exercise real file/stdin I/O or indexed Search.
+The [diagnostic boundary](FUNCTIONS.md#help-diagnostics-and-provider-removal-boundary) owns that distinction.
 
 ## Feature topology is not product composition
 
 The default is `wave1-shell = []`. Qdrant dependencies are behind `wave3-index`; query dependencies are behind
-`wave4-query`; reconcile/overlay, proof and generic retention continue through waves 5–7. `full-baseline`
-selects that whole historical ladder, including systems scheduled for deletion, but does not change the
-argv chain or connect the source/object/publication/query path.
+`wave4-query`; reconcile/overlay and proof-oriented dependencies continue through waves 5–6. The daemon
+loopback route, `wave7-lifecycle`, `full-baseline` and retention Cargo shell have already been removed.
+The remaining feature ladder does not change the argv chain or connect the source/object/publication/query path.
 
 Replace the ladder with ordinary direct dependencies of the one product composition. Optional dependencies
 remain optional only for actual optional capabilities—not delivery waves.

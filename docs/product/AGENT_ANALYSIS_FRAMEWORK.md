@@ -4,6 +4,9 @@ ELIOT Search should help an agent or person understand a large repository or doc
 
 This is a product-behavior document. It does not prescribe a recipe host, graph database, plan fingerprint, capability registry, model loop or package topology.
 
+The CLI and local client consume the same [query operations and evidence](../../crates/search-query/README.md).
+MCP is an optional adapter to that application, not a prerequisite or a second query implementation.
+
 ## Core result
 
 A user selects explicit sources and asks a question. Search returns a bounded ordered set of cards containing:
@@ -23,6 +26,10 @@ Ranked retrieval is navigation. It does not prove identity, correctness, consens
 
 Return useful entry files, definitions, configuration, tests and documentation from actual prepared facts and source locations. Show missing fact producers and published-versus-current gaps. Do not generate an architectural verdict from filenames or lexical rank.
 
+Include a bounded summary of the selected scope: what is published, known newer source heads, unfinished or
+unsupported work and available handlers. Derive it from existing source/publication state. A corpus delta
+names the two actual observations/views compared; it is not an invented change history or proof of currentness.
+
 ### Inspect an entity
 
 Start with an explicit location or actual observed definitions/occurrences. Preserve ambiguity between same-named definitions. A mention, comment or string is not automatically a definition; syntax is not compiler-resolved call truth.
@@ -30,6 +37,9 @@ Start with an explicit location or actual observed definitions/occurrences. Pres
 ### Compare selected implementations
 
 Compare explicit source-backed subjects over requested axes such as interface, validation, side effects, callers, tests and documentation. Show exact evidence and unknown axes. Equal names or scores do not prove equivalence, and repeated forks/copies are not independent confirmation without real lineage evidence.
+
+Keep each observation tied to its revision and applicable configuration/condition. Mutually exclusive variants,
+conflicting evidence and unknowns remain separate; do not combine them into one unconditional behavior claim.
 
 ### Navigate documents
 

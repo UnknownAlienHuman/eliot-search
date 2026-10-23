@@ -1,7 +1,7 @@
 # Protocol configuration
 
 Protocol behavior belongs to `search-provider-protocol`; the daemon acquires settings and owns the
-connection. Follow the [local protocol implementation](../../docs/implementation/README.md#4-simplify-and-connect-the-query).
+connection. Follow the [local protocol implementation](../../docs/implementation/README.md#queries-windows-and-process-lifetime).
 This replaces the former packet's universal pairing requirement and generic section-digest/receipt API.
 
 ## Current implementation
@@ -20,9 +20,10 @@ The [kernel defaults](../../crates/search-provider-protocol/src/config.rs) are:
 | `ProtocolLimits.max_replay_entries` | Default 4,096; must be nonzero in the current session API. |
 | Compression/fragment assembly | Not implemented by the framing codec. |
 
-The old [configuration reference](../../docs/config/CONFIGURATION_1.0.md) and
-[example TOML](../eliot-search.example.toml) declare `pairing_required = true`, hello timeouts and other
-section fields. That table is not an implemented settings API: `ProtocolLimits` has no
+The historical configuration reference/example declared `pairing_required = true`, hello timeouts and other
+section fields. The [current source audit](../../docs/config/CONFIGURATION_1.0.md) replaces that catalogue and
+the [current example](../eliot-search.example.toml) is only a parser-compatible no-op. The old table was not an
+implemented settings API: `ProtocolLimits` has no
 `pairing_required` field, and the current
 [daemon registry](../../bins/eliot-searchd/src/config_composition/kernel/registry.rs) does not register
 `[protocol]`. Setting `pairing_required = false` therefore does not enable a supported local mode.

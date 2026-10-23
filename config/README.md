@@ -5,7 +5,7 @@ own a generic reconfiguration transaction.
 
 Read the [implementation guide](../docs/implementation/README.md),
 [source/deletion map](../crates/search-config/FUNCTIONS.md),
-[typed TOML replacement](../crates/search-config/TOML_PROFILE_2.md) and
+[typed TOML replacement](../crates/search-config/FUNCTIONS.md#target-structures-and-merge) and
 [source audit](../docs/config/CONFIGURATION_1.0.md).
 
 ## Current source truth

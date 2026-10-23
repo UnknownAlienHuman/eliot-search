@@ -1,7 +1,7 @@
 # Handle and source-expansion settings
 
-Follow the [query implementation](../../docs/implementation/README.md#4-simplify-and-connect-the-query).
-The old `[handles]` table is a proposal in the example/reference; the current
+Follow the [query implementation](../../docs/implementation/README.md#queries-windows-and-process-lifetime).
+The old `[handles]` table was a proposal in the historical example/reference; the current
 [daemon registry](../../bins/eliot-searchd/src/config_composition/kernel/registry.rs) does not register
 that section. Its old TTL and per-binding keys are not an implemented file-to-runtime API.
 
@@ -23,7 +23,7 @@ policy TTL field. Both shared handle classes are in memory. See
 ## Target
 
 Return exact source/revision/range references for trusted-local results. Any selected opaque locator
-uses the [same temporary window](../../crates/search-query/search-continuation/README.md#one-temporary-owner)
+uses the [same temporary window](../../crates/search-query/search-continuation/FUNCTIONS.md)
 as paging. Replace both catalogs with that owner and change their real callers; preserve no separate
 durable-handle configuration platform.
 

@@ -88,6 +88,27 @@ Every retry path in any retained polling adapter, including `Interrupted`, obser
 cancellation; no branch skips its bound indefinitely. Use the selected runtime rather than preserving custom
 accept/pairing loops. Shared OS-secret and #598 object/key code are not exclusive provider machinery.
 
+### Inspected callers and effects
+
+R027 inspected the following boundaries at `5af8cde5`. Whole-tree Rust symbol searches below are textual caller
+evidence, not a resolved Cargo graph or proof that the binary builds.
+
+| Existing path | Actual caller/effect | Cutover boundary |
+|---|---|---|
+| `source_migration_command.rs` | `entry.rs` still routes plan/bootstrap/stage migration commands into legacy input/inventory and DIRECT store effects. | Remove this callable route with its last consumers. It is not merely a test harness. Preserve the causal cases mapped in [TEST_CUTOVER](../../docs/implementation/TEST_CUTOVER.md#mixed-migration-tests-retained-for-behavior-extraction); do not implement old-format migration for the new baseline. |
+| `native_root_command.rs`, `development/kernel/owner.rs`, `owner_composition/kernel/succession.rs` | Root commands are reachable; development ownership uses `SealedRootLease`; succession reads the sealed owner epoch/head and root identity. | Preserve actual exclusive root ownership and physical root identity in the current root owner. Remove the sealed epoch/receipt programme with its consumers, not the lock that still excludes another writer. |
+| `preparation_composition`, `public_runtime_service`, `secure_commands` | Explicit prepare commands still use DIRECT preparation/store owners. The DIRECT service is read-only and its mutation module is test-only; its serve argv is shadowed by direct-registry selection. Secure dispatch refuses old mutations; its health/search/list/verify/read arms are test-only, while the real one-shot read implementation is `secure_commands/kernel/read.rs` (also behind earlier selection). | Change actual command selection and read/write/preparation callers together. A test-only dispatch arm does not make the shared store or protection code dead, and a compiled read implementation is not necessarily the first selected handler. |
+| `access_composition/native_binding/{journal_open,startup}.rs` and `process.rs` | `restore_existing_standalone_process` has only a definition/re-export in the inspected tree; its restore chain has no external entrypoint caller. Journal opening retains a file identity and derives a previous owner epoch before restoring registration. | Retire the disconnected restore/registration chain. Keep useful verified-file/root ownership in the direct root/control owner; do not carry provider epochs or build a factory to activate this family. |
+| `native_binding/opening/{connections,credential,tcp}.rs` | Standalone TCP/local opening is called within the process family. Windows credential adapters perform real Credential Manager reads/publication; non-Windows paths refuse. | Retire provider pairing/listener policy for trusted child stdio. Preserve the shared OS-secret implementation for actual storage consumers; provider-only credential methods can go with their last callers. |
+| `native_binding/registration/{intent,provisioning,readback,finalization}.rs` | Five-row provisioning intents coordinate Credential Manager with redb; finalization publishes policy state and drains/revokes sessions, handles and continuations. | These effects explain what the old family owns, not a requirement to reconstruct it. Remove its exclusive records/callers; direct sessions and query windows own their own bounded lifetime. No new generic registration journal. |
+| `revision_protection`, `secure_direct_store`, `search-os-secrets-windows` | Retained reads and DIRECT preparation still share object protection/native secret code outside provider pairing. | Preserve useful protection until the actual object/key owner replaces these callers. Respect #598's unpublished overlap; no competing writer or blanket storage deletion. |
+
+The `provider_composition` source-currentness consumer is described above. Config has its own
+[three-path caller map](../../crates/search-config/FUNCTIONS.md#observed-callers-and-startup-refusal).
+Feature-gated query/rebuild modules and their internal dependencies still need removal or connection with the
+chosen real query/publication owners. These established boundaries are implementation inputs, not an instruction
+to audit the same obsolete native algorithms again.
+
 ## Hidden query-time inventory defect
 
 DIRECT query/page/continue/expand call `refresh_storage` before output. `StorageSecurityStatus::inspect` replays

@@ -25,6 +25,7 @@ portfolios are a core workload. A model, agent controller or ELIOT integration i
 - Changes become searchable incrementally. Restart preserves committed state; a lost index rebuilds.
 - Unsupported formats, missing revisions, stale observations and unfinished work remain visible.
 - Interactive requests stay bounded and cancellable while background indexing progresses.
+- Foreground queries and evidence reads take priority; background preparation/indexing yields under resource pressure.
 
 ## Design principles
 

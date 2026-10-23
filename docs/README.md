@@ -10,10 +10,17 @@ Keep the implementation context small. These links follow the branch being viewe
 | [Architecture](architecture/README.md) | Product purpose, observable requirements, boundaries and principles. |
 | [Implementation](implementation/README.md) | Selected mechanisms, owners, removals and donor seams. |
 | [Product behavior](product/AGENT_ANALYSIS_FRAMEWORK.md) | Useful navigation, ambiguity, comparison, document and exact-verification outcomes. |
+| [Query operations and current seams](../crates/search-query/README.md) | Search/Exact/Continue/Expand behavior, scope/evidence rules and actual producer/consumer gaps. |
 | [Ownership graph](handoff/DEPENDENCY_GRAPH.md) | Effect/data ownership and cutover relationships, not a package-count target. |
 
 Nearest FUNCTIONS owns the concrete recipe and source seams. Issues name change scope and callers and link
 to that recipe rather than repeating another algorithm.
+
+For the current cutover, the [daemon caller/effect map](../bins/eliot-searchd/FUNCTIONS.md#inspected-callers-and-effects),
+[config caller/settings map](../crates/search-config/FUNCTIONS.md),
+[test dispositions](implementation/TEST_CUTOVER.md#mixed-migration-tests-retained-for-behavior-extraction) and
+[donor versions and limits](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#installed-selected-and-optional)
+give concrete implementation entrypoints. They distinguish working pieces from target behavior.
 
 ## Resume research
 

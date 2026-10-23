@@ -7,7 +7,10 @@ Read the [architecture](../../docs/architecture/README.md),
 [implementation guide](../../docs/implementation/README.md), local [source map](FUNCTIONS.md) and
 [configuration guide](../../docs/config/README.md).
 
-## Verified public-main scale and behavior
+## Inspected source scale and behavior
+
+The scale below was measured on main `c8e38b6`; the caller map was rechecked at PR head `5af8cde5` in
+[FUNCTIONS](FUNCTIONS.md#observed-callers-and-startup-refusal). This describes existing code, not the target API.
 
 `search-config/src` contains about **158 KiB of production Rust** before `identity_tests.rs` (~15.1 KiB).
 The daemon's `config_composition` adds about **50 KiB of production Rust** before its tests. Together they
@@ -26,10 +29,13 @@ Startup still fails the basic job. `effective_from_process` builds defaults, bui
 `DAEMON_CONFIG_PARTIAL_REFUSED`.
 
 `EffectiveDaemonConfig` stores the generic snapshot/registry plus one separately validated secret section.
-Root locator hints are extracted by string-key lookup. Most registered fields—control migration epoch,
-admission policy, lexical profile, query limit and optional semantic flag—are not represented as typed values
-owned by their actual runtime consumers. Registration and fingerprints therefore describe an intended system
-without constructing it.
+Root locator hints are extracted by string-key lookup for already admitted roots; an explicit DEK-selection
+command checks the backend and binds a fingerprint/secrets-section digest. It does not apply lease/rotation or
+Qdrant credential settings. Neither is a general config-to-runtime wiring.
+Most registered fields—control migration epoch,
+admission policy, lexical profile and query limit—are not represented as typed values owned by their actual
+runtime consumers. The optional semantic flag is read by readiness and can block baseline Search, but constructs
+no semantic handler. Registration and fingerprints therefore describe an intended system without constructing it.
 
 Readiness adds another false authority: even when stores/Qdrant are observed live, search/indexed availability
 requires caller-supplied `AcceptedReceipts` booleans and the status output verifies a configuration fingerprint.
@@ -81,9 +87,11 @@ Keep acquisition at the daemon/CLI edge:
 - reject unknown fields, invalid selected values and oversized collections;
 - preserve source labels only for useful errors, not a cryptographic provenance transcript.
 
-The locked `toml 1.1.7` + Serde decoder is acceptable for a small bounded local settings file. It builds an
-intermediate tree, so the byte bound remains mandatory. Do not recreate `ConfigDocument`, custom TOML grammar
-or generic `ConfigValue` around it.
+Use high-level `toml` + Serde for a small bounded local settings file. This is a selected replacement, not a
+dependency already in the lock: current code uses `toml_parser 1.1.4+spec-1.1.0`. Pin the typed decoder and its
+features with the consuming implementation. Bound bytes before parsing and do not recreate `ConfigDocument`,
+custom TOML grammar or generic `ConfigValue` around it. The [source map](FUNCTIONS.md#target-structures-and-merge)
+owns the target shape and merge recipe.
 
 ## Runtime changes
 

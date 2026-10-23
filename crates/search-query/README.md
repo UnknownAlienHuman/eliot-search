@@ -22,6 +22,12 @@ The operation determines what the result means. BM25 is one ranked nomination me
 implementation of every request. A valid citation proves where the excerpt came from, not that it answers
 the question, resolves a symbol, exhausts a corpus or represents independent implementations.
 
+Text locations identify their retained representation and a half-open byte range `[start, end)`. Display
+lines are 1-based; text columns use UTF-8 byte offsets unless another encoding is explicitly named. An adapter
+using UTF-16 must label that encoding. Decoded/extracted text carries its source mapping and loss/gaps;
+prepared-text offsets and page coordinates must never be presented as raw-source byte offsets. The actual
+reader validates the stated range against that retained representation before emission.
+
 ## Product behaviors that must not disappear
 
 | User task | Observable result | Smallest connected mechanism / limit |
@@ -64,7 +70,7 @@ revocation cancels that actual session/windows; no local grant or phase-checkpoi
 
 ## Direct operations, not a recipe operating system
 
-Use current direct handlers: `Search`, `Exact`, `Continue`, `Expand`. Add `Orient`/`Compare` only with their
+Implement direct handlers: `Search`, `Exact`, `Continue`, `Expand`. Add `Orient`/`Compare` only with their
 actual source-backed producers. Availability comes from construction, not capability descriptors.
 
 Exact input does not become a lexical query on failure. An explicit location that no longer resolves does
@@ -111,6 +117,16 @@ bounded by window expiry. Complete local output commits the handled prefix; it d
 Expansion is bounded context around an emitted item, not arbitrary revision offsets.
 
 ## Current owners and cutover
+
+At inspected source `5af8cde5`, these are integration seams, not delivered operations:
+
+| Behavior | Existing producer/helper | Receiving consumer and limit |
+|---|---|---|
+| Exact | [literal matcher](search-exact/src/literal.rs) over already supplied UTF-8 chunks | Target: read the pinned inventory through the retained reader; reuse the matcher as described in its [recipe](search-exact/FUNCTIONS.md). No BM25 shortlist or old proof/spine prerequisite. |
+| Orientation / symbols | Source metadata and prepared text; [code-enricher](../search-prep/search-code-enricher/FUNCTIONS.md) has no connected outline consumer | Query/CLI can show observed paths/headings and gaps. Definitions, callers and relations need an actual producer; missing facts stay unsupported/unknown. |
+| Comparison | [comparator](search-comparator/FUNCTIONS.md) assembles supplied observations; no connected production producer/readback caller | Select subjects and retained evidence in query first, then present supported axes. No claim of compiler-resolved behavior from this helper. |
+| Documents | Markdown/XML parsers in preparation; [document worker](../../bins/eliot-search-doc-worker/FUNCTIONS.md) remains a refusal stub | Use supported prepared text/coordinates in the same evidence path. PDF extraction needs a selected real extractor; the worker name is not support. |
+| Models / MCP | [model worker](../../bins/eliot-search-model-worker/FUNCTIONS.md) remains a refusal stub; no selected MCP runtime | Optional adapters consume the same connected operations. No empty worker, raw-Qdrant tool or new protocol catalogue is required for baseline delivery. |
 
 Concrete scope, backend call, retained reader and result formatter replace the disconnected
 recipe/capability/plan/grant/executor/proof stack. Existing packages are donor locations, not a required

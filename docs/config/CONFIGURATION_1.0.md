@@ -5,9 +5,13 @@ schema and must not be used to generate section APIs, reload receipts or capabil
 
 Read the current [configuration guide](README.md),
 [`search-config` source map](../../crates/search-config/FUNCTIONS.md) and
-[typed TOML replacement](../../crates/search-config/TOML_PROFILE_2.md).
+[typed TOML replacement](../../crates/search-config/FUNCTIONS.md#target-structures-and-merge).
 
-## What public main actually implements
+## What the inspected source implements
+
+Main `c8e38b6` supplied the original audit; the relevant public callers were rechecked at `5af8cde5`.
+The [caller map](../../crates/search-config/FUNCTIONS.md#observed-callers-and-startup-refusal) distinguishes
+startup/status, root relocation hints and the existing explicit DEK-selection command.
 
 The current decoder accepts the custom `eliot-config-toml@2` shape:
 
@@ -20,14 +24,14 @@ followed by restricted flat tables. The daemon dynamically registers only:
 
 | Section | Registered fields | Actual problem |
 |---|---|---|
-| `instance` | `mode`, `data_root` | generic snapshot; only root locator is later projected by string key |
-| `secrets` | `backend`, `lease_ttl_ms`, `rotation_grace_ms`, `qdrant_api_secret_ref` | universal secret lifecycle with no selected common consumer |
+| `instance` | `mode`, `data_root` | generic snapshot; not a typed root owner constructed from settings |
+| `secrets` | `backend`, `lease_ttl_ms`, `rotation_grace_ms`, `qdrant_api_secret_ref` | DEK selection checks the backend and binds fingerprint/section digest; TTL, grace and Qdrant reference are not applied by that caller |
 | `control` | `durability`, `migration_epoch` | pre-release migration/action metadata |
 | `source_admission` | `allow_generated` | registered value is not a typed setting of the real source path |
 | `lexical` | `profile_id` | registered identity is not applied to a connected Qdrant generation |
 | `query` | `limit` | non-default startup value is receipt-gated and does not reach the query handler |
-| `optional_profiles` | `semantic` | gate flag without a model runtime |
-| `source_root_locators` | `entries` | generic snapshot is string-projected into the only substantially consumed field |
+| `optional_profiles` | `semantic` | readiness reads the flag and can block baseline Search when an optional receipt is absent; no semantic handler is constructed |
+| `source_root_locators` | `entries` | string-projected ID-to-path hints reach DIRECT root requalification; they do not select or admit corpus members |
 
 The example/reference previously advertised many additional sections—protocol, source reader, reconcile,
 revision store, Qdrant data/process, reclaimer, scheduler, overlay, handles, continuations, retention and
@@ -73,9 +77,10 @@ DaemonSettings {
 }
 ```
 
-Use the locked high-level TOML/Serde decoder with nested `deny_unknown_fields` structs. Bound bytes before
-decoding. Keep paths as `PathBuf`; inspect only selected environment variables through `vars_os()`. Plaintext
-credentials are not ordinary configuration values.
+Select and pin the high-level TOML/Serde decoder with nested `deny_unknown_fields` structs during implementation.
+The current lock contains only the low-level `toml_parser` donor; typed settings are not yet implemented.
+Bound bytes before decoding. Keep paths as `PathBuf`; inspect only selected environment variables through
+`vars_os()`. Plaintext credentials are not ordinary configuration values.
 
 Startup is not a live update of a defaults-only runtime. Non-default valid values construct the owners
 directly. A running change exists only when a real owner implements it:

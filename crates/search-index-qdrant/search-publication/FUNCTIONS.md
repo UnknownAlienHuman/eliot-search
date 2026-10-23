@@ -188,7 +188,7 @@ cleanup and reconciles desired/published inputs. Old process-local readers are g
 server may still execute old requests. Full-build input capture follows the control recipe, not a fresh scan
 silently relabelled as old work.
 
-A backup copy cannot enter this replay path. [Restore/import](../../search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport)
+A backup copy cannot enter this replay path. [Restore/import](../../search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport-into-a-fresh-destination)
 uses committed source/prepared state in a fresh destination/generation. Copied pending/cleanup is archive
 evidence, not authority over the original. Index loss requires a fresh verified rebuild, not empty success
 or adoption of an unrelated collection.

@@ -2,7 +2,10 @@
 
 Configuration is data for current owners. It is not a transaction coordinator for every subsystem.
 Read the [source audit](../../crates/search-config/FUNCTIONS.md) and
-[typed TOML direction](../../crates/search-config/TOML_PROFILE_2.md).
+[typed settings recipe](../../crates/search-config/FUNCTIONS.md#target-structures-and-merge).
+
+This is target behavior. The source audit names the current status/startup, locator and DEK-selection
+consumers; ordinary query settings are not yet connected to a query owner.
 
 ## Startup
 

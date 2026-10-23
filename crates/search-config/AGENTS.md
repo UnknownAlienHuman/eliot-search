@@ -7,7 +7,8 @@ Read the [architecture](../../docs/architecture/README.md),
 Do not repair the generic configuration platform. Replace it with concrete typed settings used by actual
 owners.
 
-Use locked `toml` + Serde over a bounded file, `vars_os()` for selected environment fields and one
+Select and pin high-level `toml` + Serde during the typed-settings cutover; the current lock has only
+`toml_parser`, not those target dependencies. Use a bounded file, `vars_os()` for selected environment fields and one
 `args_os()` parser. Keep paths as OS strings. Merge supported optional fields over defaults and validate
 final values once. Unknown fields/types/ranges fail before constructing any owner.
 

@@ -153,7 +153,7 @@ code. A useful isolated dependency/effect may justify a boundary; a dead test or
 ## 13. Tests, tooling and generated governance
 
 Maps, digest approvals, P00 tickets, frozen package counts and module-shape tests preserve the discarded
-architecture. See [tooling](../../xtask/README.md) and [test cutover](../implementation/TEST_CUTOVER.md).
+architecture. See [tooling disposition](../../tools/README.md) and [test cutover](../implementation/TEST_CUTOVER.md).
 Preserve causal scenarios, not obsolete source spelling. No audit form, per-file stamp or new acceptance
 registry is introduced by this review.
 

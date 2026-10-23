@@ -2,7 +2,7 @@
 
 Read the root [architecture](../../../docs/architecture/README.md),
 [implementation](../../../docs/implementation/README.md) and the local
-[current/target profile map](S11_PROFILE.md).
+[current/target identity recipe](FUNCTIONS.md).
 
 This package owns only deterministic retrieval-point identity and its compact Qdrant address. It does not
 own source revisions, citation ranges, view manifests, registries, Qdrant I/O or compatibility migration.

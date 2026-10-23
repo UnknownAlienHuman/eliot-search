@@ -2,8 +2,9 @@
 
 The [implementation guide](../../../docs/implementation/README.md) selects one real Qdrant owner. This map
 owns SDK translation and readback meaning; [publication](../search-publication/FUNCTIONS.md) owns effect
-ordering, ambiguous dispatch and recovery. Donor review used Qdrant 1.19.0 on 2026-10-21; the constructor
-inventory below was rechecked at `7d92fb8b` on 2026-10-23. Target instructions are not implemented-state claims.
+ordering, ambiguous dispatch and recovery. Donor source review used Qdrant 1.19.0 on 2026-10-21; current IDF
+documentation and remaining constructor requirements were rechecked at `5af8cde5` on 2026-10-23.
+Target instructions are not implemented-state claims.
 
 ## Current source inventory
 
@@ -126,6 +127,14 @@ back to shard-global statistics. Apply it to each relevant sparse leaf. One comp
 query; native fusion/grouping serves selected compatible branches. Preserve final server order. Top-k does
 not prove complete absence and needs no unconditional exact count.
 
+Index the corpus-filter fields. Statistics are shard-local and the corpus filter does not restrict returned
+points; the retrieval filter still carries scope/validity. An empty IDF corpus removes the rarity signal rather
+than falling back to global statistics; BM25 text queries also lose length normalization. Keep `idf.corpus`
+equal to the selected base population. A zero-result response proves neither an empty corpus nor complete
+absence. Determine known-empty from the published inventory; do not add per-query count/scan to diagnose IDF.
+[Donor evidence](../../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#native-bm25-and-separate-statistics-scope)
+records the documented limits and the separate population-work cost.
+
 An explicitly selected empty set, or a known valid empty published inventory, returns the corresponding empty
 result without Qdrant RPC; never omit the filter and widen to all sources. Unknown IDs are errors. Missing
 metadata/collection or an incomplete inventory is not known-empty success. The exact operation reports only
@@ -158,10 +167,10 @@ comes first. The gate-removal library check does not establish those runtime beh
 
 ## Primary donor references
 
-Checked 2026-10-21; project pin remains 1.19.0, not upgraded by this review.
+Source semantics checked 2026-10-21; IDF documentation rechecked 2026-10-23. Project pin remains 1.19.0.
 
 - [Native Document input and generated-vector retrieval](https://qdrant.tech/documentation/inference/inference-bm25/)
 - [Point replacement, insert-only and narrow-update semantics](https://qdrant.tech/documentation/manage-data/points/)
-- [Filtered IDF, available since 1.19.0](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-idf-statistics)
+- [Filtered IDF, available since 1.19.0](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-scoring-statistics)
 - [Write ordering](https://qdrant.tech/documentation/scaling/consistency-guarantees/#write-ordering)
 - [1.19.0 server update task](https://github.com/qdrant/qdrant/blob/v1.19.0/lib/collection/src/collection/point_ops.rs)

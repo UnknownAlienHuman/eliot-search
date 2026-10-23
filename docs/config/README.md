@@ -5,7 +5,7 @@ Configuration constructs the current application; it does not authorize it.
 ## Governing implementation documents
 
 - [Source/deletion map](../../crates/search-config/FUNCTIONS.md)
-- [Typed TOML replacement](../../crates/search-config/TOML_PROFILE_2.md)
+- [Typed TOML replacement](../../crates/search-config/FUNCTIONS.md#target-structures-and-merge)
 - [Direct runtime-change semantics](RECONFIGURATION_1.1.md)
 - [Historical/current-source audit](CONFIGURATION_1.0.md)
 - [Configuration directory disposition](../../config/README.md)

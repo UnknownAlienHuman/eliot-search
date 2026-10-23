@@ -5,7 +5,8 @@ Connect the real producer to the real consumer, run minimal pinned compiler/Clip
 and delete tests whose only subject disappears. Broad regression and scale suites follow the connected product.
 
 **Public baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Latest inspected tree:** `174f3ec758cb0ec5c38b780cd3de913be9120fdc` (`R019`, 2026-10-23)
+**Latest inspected tree:** `5af8cde5416fa33e3f1a8f3c19367ed520eac9a4` (`R027` review, 2026-10-23).
+The named Windows suites below were read completely; they were not executed or rewritten in this documentation pass.
 
 ## Classification rule
 
@@ -87,21 +88,49 @@ feature. R019 does not claim the new framed protocol is implemented.
 
 ## Mixed migration tests retained for behavior extraction
 
-`control_migration_bootstrap_boundary.rs` and `control_migration_inventory_owner_boundary.rs` mix real
-Windows/filesystem cases with source-text assertions. Move these causal cases before deleting the harness:
+Both suites use Windows-only direct `#[path]` source inclusion and synthetic migration inputs/allowances.
+They do not exercise a connected current application. Their named classification is complete; transferring
+useful behavior belongs to the receiving owner's implementation, not another audit pass.
 
-- no-clobber creation and retained parent-directory identity;
-- bounded exact reads, missing versus non-file and path-escape refusal;
-- membership drift detection between pages;
-- hard-link/alias refusal;
-- incomplete/unknown metadata remains a gap rather than silent absence.
+In [control_migration_bootstrap_boundary.rs](../../bins/eliot-searchd/tests/control_migration_bootstrap_boundary.rs):
+
+| Test | Disposition and receiving owner |
+|---|---|
+| `actual_retained_output_prevents_ancestor_replacement_and_target_clobber` | MOVE causal retained-parent/no-clobber behavior to the actual object writer. |
+| `existing_target_is_preserved_and_never_reopened_as_original` | MOVE existing-target preservation to the object writer; no competing writer beside #598. |
+| `locator_reservation_refusal_prevents_ancestor_storage_and_target_creation` | DELETE the synthetic migration allocation-allowance protocol. |
+| `original_refusal_and_relative_or_escaped_output_fail_closed` | MOVE path containment to the actual output owner; DELETE the legacy original-context refusal shim. |
+| `bootstrap_uses_one_target_before_inventory_and_cannot_run_legacy_import` | DELETE source-text ordering/old-import guards. Preserve the useful pre-effect budget and definite-not-performed versus possible-effect behavior in current control/publication owner tests; do not preserve `ATTEMPT_KEY`, old bootstrap rows or a generic operation journal merely to reproduce those strings. |
+
+In [control_migration_inventory_owner_boundary.rs](../../bins/eliot-searchd/tests/control_migration_inventory_owner_boundary.rs):
+
+| Test | Disposition and receiving owner |
+|---|---|
+| `ordered_windows_pages_cover_more_than_one_page_exactly_once` | MOVE bounded stable enumeration to stopped-root collection when its actual reader pages; do not retain the legacy page protocol. |
+| `same_handle_bytes_are_exact_and_over_limit_never_read_or_truncated` | MOVE exact bounded reads to the retained object reader. The existing test observes a limit error, not whether every oversized-input byte avoided I/O; its name is not stronger execution evidence. |
+| `missing_file_and_non_file_are_distinct_dispositions` | MOVE absent versus invalid-object distinction to the real reader. |
+| `escaped_parent_is_refused_before_io` | MOVE containment to the current filesystem acquisition owner. |
+| `original_context_refusal_stops_before_any_new_observation` | DELETE the synthetic legacy-context protocol. |
+| `page_callback_drift_cannot_turn_disappearance_into_complete_absence` | MOVE drift/incomplete enumeration behavior to stopped-root collection; incomplete marks cannot authorize deletion. |
+| `visit_retains_leaf_directory_and_blocks_replacement_between_pages` | MOVE retained-directory behavior only if the current walker spans such observations; otherwise DELETE the obsolete paging fixture. |
+| `multi_link_object_is_a_gap_and_no_content_is_returned` | MOVE alias-safe identity and uncertain-object preservation to acquisition/collection. |
+| `stale_unmapped_preparation_is_not_a_current_link_and_dangling_links_are_refused` | DELETE old DIRECT preparation-link protocol; preserve stale/dangling outcome refusal in the actual materializer/object reader. |
+| `unknown_control_representation_is_incomplete_instead_of_silently_skipped` | MOVE unknown-metadata blocking of collection to the current collector; DELETE source-text assertions. |
+| `empty_temporary_control_directory_has_a_metadata_row_before_recursion` | DELETE the old recursive control-directory representation/source-shape assertion. |
+
+None is retained unchanged as a current-product test. Relevant owners are the
+[object store](../../crates/search-source/search-revision-store/FUNCTIONS.md),
+[safe reader](../../crates/search-source/search-safe-reader/FUNCTIONS.md),
+[materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md) and
+[stopped-root collector](../../crates/search-runtime/search-retention/FUNCTIONS.md).
+The [daemon caller map](../../bins/eliot-searchd/FUNCTIONS.md#inspected-callers-and-effects) records why removing
+these test harnesses alone does not remove the still-callable migration route or its shared storage code.
 
 ## Remaining harness cuts
 
 Still present:
 
-- `wave1`–`wave7`/`full-baseline` and optional old-package wiring;
-- empty `search-retention` Cargo/workspace/lock shell;
+- `wave1`–`wave6` and optional old-package wiring;
 - CLI/provider-client loopback compatibility;
 - wave4/test provider pairing/router/capability code;
 - shared sealed/migration and query/rebuild/handle production modules;
@@ -110,6 +139,9 @@ Still present:
 
 Remove each owner with its last real caller. Do not replace the wave ladder with another acceptance profile or
 package map. Default binaries must become the only product application.
+
+R020 already removed `wave7-lifecycle`, `full-baseline` and the empty `search-retention` Cargo/workspace/lock
+shell. Its remaining FUNCTIONS file owns maintenance behavior, not a crate to restore.
 
 ## Target portfolio
 
@@ -162,3 +194,4 @@ For each Rust cutover:
 
 R015–R019 have no new compiler/runtime claim. The available Actions workflow is manual-only and no dispatch tool
 or local Cargo runtime was available for these SHAs. Static caller inspection is not a build result.
+R027 changes this classification only; no Rust/test/manifest change or execution is claimed.

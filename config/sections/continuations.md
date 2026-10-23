@@ -1,7 +1,7 @@
 # Temporary query-window settings
 
-Follow the [one-window implementation](../../crates/search-query/search-continuation/README.md#one-temporary-owner).
-The old `[continuations]` table is a proposal in the example/reference; the current
+Follow the [one-window implementation](../../crates/search-query/search-continuation/FUNCTIONS.md).
+The old `[continuations]` table was a proposal in the historical example/reference; the current
 [daemon registry](../../bins/eliot-searchd/src/config_composition/kernel/registry.rs) does not register
 that section. Setting its old TTL or per-binding fields does not configure public paging.
 

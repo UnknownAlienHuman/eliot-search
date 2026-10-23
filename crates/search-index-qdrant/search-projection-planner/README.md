@@ -6,7 +6,7 @@ contract.
 
 Read the [architecture](../../../docs/architecture/README.md),
 [implementation guide](../../../docs/implementation/README.md), [exact audit](FUNCTIONS.md),
-[point identity](../search-point-identity/S11_PROFILE.md) and
+[point identity](../search-point-identity/FUNCTIONS.md) and
 [publication](../search-publication/FUNCTIONS.md).
 
 ## Verified current defect
