@@ -14,24 +14,27 @@ legacy effect refusal
 → native-root lifecycle
 → migration
 → legacy preparation
-→ optional proxy
 → DIRECT session
 → secure command stack
 → final shell
 ```
 
 Each captures arguments/config and may shadow later handlers. The CLI's advertised persistent child can therefore
-reach a different implementation or refusal than its help describes. Enabling historical wave features compiles
-more disconnected planner/access systems; it does not select one product.
+reach a different implementation or refusal than its help describes. Historical wave features compile more
+disconnected planner/access systems; they do not select one product.
 
-R016 removed the explicit snapshot daemon/CLI and six sealed Cargo test applications. R017 removed daemon
-`restore_composition` and the generic retention/purge/sweep/restore implementation. R018 removes the process
-proofs that protected the old in-memory query/rebuild oracle, manually joined DIRECT/Qdrant halves, pairing/token
-provider, qualification-gated indexed operation, eleven-recipe registry and random handle/continuation catalogues.
+Cleanup already performed:
+
+- R016 removed standalone snapshot daemon/CLI and six sealed Cargo test applications;
+- R017 removed daemon `restore_composition` and generic retention/purge/sweep/restore implementation;
+- R018 removed process proofs for the in-memory indexed stack, manually joined DIRECT/Qdrant halves, qualification,
+  pairing/token provider, recipes, rebuild/reclaimer and random handles;
+- R019 removed the daemon `legacy-loopback-harness`, `authenticated_proxy`, endpoint pairing server and its private
+  proxy child/exchange implementation. The primary daemon no longer accepts TCP port/token-file startup.
 
 The empty `search-retention` package and `wave7-lifecycle` manifest records remain only for a separate Cargo/lock
-cut. Shared `sealed_*`, migration, provider, query, rebuild and compatibility production modules still remain in
-the primary package and must be removed with their actual callers.
+cut. CLI/provider-client loopback compatibility is a separate remaining layer. Shared `sealed_*`, migration,
+provider, query, rebuild and compatibility production modules still remain and must be removed with actual callers.
 
 Representative current islands:
 
@@ -40,8 +43,8 @@ Representative current islands:
 - preparation uses another DIRECT store/profile/receipt family;
 - indexed query proof modules are not connected to the real default handler;
 - DIRECT query still uses continuation plus random result-handle catalogues and the old line protocol;
-- provider composition still contains pairing/grant/envelope and loopback compatibility code after its proof
-  fixtures were removed;
+- provider composition still contains wave4/test pairing/grant/envelope code after the daemon loopback owner and
+  its process proofs disappeared;
 - wave features still aggregate optional packages instead of constructing one application.
 
 Do not fix reachability by adding another dispatcher, facade or compatibility version. Select the current path,
@@ -57,14 +60,13 @@ That calls `StorageSecurityStatus::inspect`, which:
 3. scans the revision tree again for protected-object headers;
 4. scans preparation refs/objects.
 
-Thus an interactive page can perform work proportional to all historical events and stored objects merely to
-print `storage_security`/`encrypted_at_rest`. File suffixes and magic bytes do not prove that every object is
-readable/authentic, and this scan is not request authorization.
+Thus one page can perform work proportional to all historical events and stored objects merely to print storage
+metadata. File suffixes and magic bytes do not prove that every object is readable/authentic, and this scan is not
+request authorization.
 
-Remove it from normal startup/query/formatting. The root owner exposes the selected storage mode cheaply; each
-actual retained read verifies its object through the real format. A separate explicit verify/maintenance command
-may run a full inventory and report exactly what it checked. Do not cache that report as a capability token or
-replay it per response.
+Remove it from normal startup/query/formatting. The root owner exposes configured storage mode cheaply; each
+actual retained read verifies its object. Full verify/GC/archive/import are explicit expensive operations, not
+per-response credentials.
 
 ## Connected daemon
 
@@ -76,7 +78,7 @@ startup:
   → construct current state/object/source/Qdrant owners
   → recover unfinished current work
   → install current view and concrete handlers
-  → one framed dispatcher
+  → one framed local dispatcher
 ingest:
   selected source
   → stable read
@@ -113,37 +115,22 @@ retain only finite unfinished state. Normal reads and pure transforms create no 
 | publication | fixed pending input, effects/readback, atomic view/evidence commit and finite cleanup |
 | query/evidence | direct handler, pinned view/scope/context, exact composite lookup and retained read |
 | session/window | one fixed-expiry final-order cursor with item indexes; no source fences or random handles |
-| protocol/CLI | one framed typed exchange with active Cancel path and one owned-child lifetime |
+| protocol/CLI | one framed typed local exchange with active Cancel path and one owned-child lifetime |
 | maintenance/import | stopped-root typed mark/sweep; archive marker last; fresh destination/generation |
 
 Responsibilities do not imply one crate each. Concrete internal calls are preferred; retain a boundary only for
 a real dependency/effect or repeated policy.
 
-## Availability and diagnostics
-
-Availability comes from constructed handlers and dependencies. A descriptor, receipt, qualification report or
-method name cannot advertise an absent path. Health/status must distinguish:
-
-- configured storage/backend mode;
-- currently constructed handlers;
-- current/published source state and explicit gaps;
-- last operation's real failure;
-- an explicit deep verification result when the user requested one.
-
-It must not recursively scan the corpus/object store on every request, infer freshness from watcher silence, or
-claim complete encryption/integrity from object names. Full verify, GC, backup and restore are explicit expensive
-operations with their own output and cancellation.
-
 ## Remove during cutover
 
-- argv interceptor chain and duplicate command/help implementations;
+- remaining argv interceptor chain and duplicate command/help implementations;
 - registry/original-input replay and full aggregate snapshots for ordinary source work;
 - duplicate object/preparation stores and compatibility formats;
-- migration/sealed/secure-command applications and owner-slot/epoch/succession machinery still shared by the
-  primary package;
-- wave feature ladder, empty `search-retention` workspace shell and optional old-package wiring;
-- provider pairing/grant/capability/receipt/loopback stacks;
-- planner/executor/access/validator/projector proof operating systems after direct handlers replace them;
+- migration/sealed/secure-command applications and owner-slot/epoch/succession machinery;
+- wave feature ladder, empty `search-retention` shell and optional old-package wiring;
+- CLI/provider-client endpoint/token/pairing/grant/capability/replay compatibility;
+- wave4/test provider pairing/router/capability code when direct typed handlers replace it;
+- planner/executor/access/validator/projector proof operating systems;
 - rebuild/reclaimer composition after current publication owns rebuild and cleanup;
 - continuation/result-handle catalogues, full source fences and arbitrary range expansion;
 - recursive storage-security/legacy-GC scans from query/output;
@@ -155,9 +142,9 @@ command as the replacement.
 ## Verification
 
 For each Rust slice, run pinned Rust 1.98 check and strict Clippy for changed production owners and immediate
-real consumers. Broad all-feature/all-test matrices remain late.
+consumers. Broad all-feature/all-test matrices remain late.
 
-The connected smoke is the default binaries and one real Qdrant route:
+The connected smoke uses default binaries and one real Qdrant route:
 
 ```text
 initialize/open

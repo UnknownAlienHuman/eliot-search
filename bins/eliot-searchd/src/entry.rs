@@ -3,8 +3,7 @@
 //! The primary binary composes the owner-fenced persistent DIRECT runtime,
 //! bounded continuation windows, opaque source handles, directory manifests,
 //! guarded maintenance and platform revision protection. Canonical provider IPC
-//! is installation-scoped local transport. The obsolete TCP/token-file proxy is
-//! compiled only with `legacy-loopback-harness` for process fixtures.
+//! is installation-scoped local transport.
 
 #![deny(unsafe_code)]
 
@@ -13,8 +12,6 @@
 mod access_composition;
 mod app;
 mod source_classification;
-#[cfg(feature = "legacy-loopback-harness")]
-mod authenticated_proxy;
 mod catalog_presence;
 mod catalog_quarantine;
 mod config_composition;
@@ -25,8 +22,6 @@ mod direct_preparation;
 #[path = "secure_direct_store.rs"]
 mod direct_store;
 mod directory_manifest;
-#[cfg(feature = "legacy-loopback-harness")]
-mod endpoint;
 #[allow(dead_code)]
 #[path = "source_composition.rs"]
 mod git_source_composition;
@@ -90,23 +85,12 @@ mod protected_ingest_tests;
 
 use std::process::ExitCode;
 
-#[cfg(feature = "legacy-loopback-harness")]
-fn maybe_run_legacy_loopback() -> Option<ExitCode> {
-    authenticated_proxy::maybe_run()
-}
-
-#[cfg(not(feature = "legacy-loopback-harness"))]
-const fn maybe_run_legacy_loopback() -> Option<ExitCode> {
-    None
-}
-
 fn main() -> ExitCode {
     let result = secure_commands::maybe_refuse_legacy_effects()
         .or_else(owner_composition::maybe_run_direct_registry)
         .or_else(native_root_command::maybe_run)
         .or_else(source_migration_command::maybe_run)
         .or_else(preparation_composition::maybe_run)
-        .or_else(maybe_run_legacy_loopback)
         .or_else(public_runtime_service::maybe_run)
         .or_else(secure_commands::maybe_run)
         .unwrap_or_else(app::run_main);
