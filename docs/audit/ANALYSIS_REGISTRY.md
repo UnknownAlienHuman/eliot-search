@@ -4,7 +4,7 @@ This records the refactor audit's inspected surface, findings, changes and remai
 continuation, not an approval gate, package-status system or substitute for owner instructions.
 
 **Original public source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Latest inspected source revision:** `7c7fd36cfc2e076458de141f0a4c037ade580f1c` (2026-10-23, R011).  
+**Latest inspected source revision:** `e5350809ba501e88b7c76e32d97cfe0c8838b2ac` (2026-10-23, R012).  
 **Historical qualification archive:** `2f9c9720f3e14799a0f8dfefa00077d2fa6a9887/qualification`  
 **Update rule:** commit findings and this registry together. Resume from the actual PR head and intervening
 changes. Bind execution evidence to SHA/command/targets. Row counts are not an audit completion percentage.
@@ -21,27 +21,27 @@ changes. Bind execution evidence to SHA/command/targets. Row counts are not an a
 
 | ID | Area | Exact inspected surface | Status | Finding / change | Remaining work | Confidence |
 |---|---|---|---|---|---|---|
-| A001 | Documentation authority/consistency | Root authority; bridge/reconcile local docs; R011 preparation/publication/control/registry recipes and old materializer contract | PARTIAL | Competing historical instructions removed. R011 fixes current recipes' semantic/budget/installation conflation and missing publication/capture transitions; no new parallel specification. | Other current owner documents and actual consumers still need reconciliation. | High named findings, incomplete cross-owner sweep. |
+| A001 | Documentation authority/consistency | Root authority; bridge/reconcile/preparation/publication/control/registry; R012 query/window/evidence owner docs and old continuation contract | PARTIAL | R012 fixes late retention admission, lazy expiry, raw-versus-represented ranges and request failures treated as item gaps. Window/evidence READMEs now link to their single recipes. | Other current owner documents and actual consumers still need reconciliation. | High named findings, incomplete cross-owner sweep. |
 | A002 | Historical governance data | swarm, generated maps, packets/handoffs, context/ticket artifacts | CHECKED | Removed from current tree; Git history is archive. | Code remnants A015/A022. | High disposition. |
 | A003 | Workflows/wrappers | .github/workflows, tools/*.ps1, A022 YAML/run | CHECKED | Old validators and temporary automatic A022 removed; one manual Cargo diagnostic remains. | Recheck when workflows change. | High inspected tree. |
 | A004 | Workspace inventory | Root manifest and 51 current package manifests; disposition | CHECKED | Each member has a receiving/removal/optional/conditional disposition; xtask removed. Not a target package count. | Actual product-package cutovers. | High inventory. |
-| A005 | Entrypoints/product | Daemon/CLI composition; quickstarts; R010 source_sync; R011 preparation_composition | CHECKED for named routes | One-shot scan remains the simple runnable path. Source sync still refuses; preparation CLI is legacy DirectStore composition, not the target current-row scheduler. | Execute connected source/publication/CLI after implementation. | High static, not product execution. |
+| A005 | Entrypoints/product | Daemon/CLI composition; quickstarts; R010 source_sync; R011 preparation_composition; R012 public runtime query/session | CHECKED for named routes | One-shot scan remains the simple runnable path. Source sync still refuses. Inspected paging materializes search before retention admission; current line-session loop has no expiry turn. | Execute connected source/publication/CLI after implementation. | High static, not product execution. |
 | A006 | Root/config/control | Earlier root/config/journal/snapshot inventory; R011 control recipe and pinned redb ReadTransaction source | PARTIAL | Typed state selected. R011 supplies missing restartable full-build input capture using pending/target tables; process-held read snapshot is not durable selection. | Implement capture/application transactions and platform behavior; no runtime recovery proof. | High source/document distinction. |
 | A007 | Source acquisition/registry/reconciliation | Admission/source stack; R010 comparator/currentness/catalog/sync; R011 registry recipe | PARTIAL | R010 source defects remain unimplemented. R011 strengthens proposed current-row application against ABA/re-registration, without putting concurrency revisions into transform identity. | Real source-owner/sync cutover and accepted #598 handoff; execute named cases. | High inspected branches, disconnected product. |
 | A008 | Private storage/key work | Public #598 contract only | PROTECTED | Old six-domain/purge/compatibility programme is not inherited. | Accepted public handoff; do not inspect/reset/duplicate private work. | Boundary known, implementation unknown. |
-| A009 | Preparation/identity | Prior unitizer/identity audit; R011 materializer profile, request/budget, product pipeline/read/model and old FUNCTIONS | PARTIAL | Same golden/limit identity coupling as lexical; separate request/execution budgets can read before the tighter limit. Replacement now separates semantic reuse, guarded installation and retry eligibility. Known empty refusal sites recorded. | Implement current preparation; verify config-only retry, budget preflight, ABA, source-bound artifacts and stale failure handling. | High source findings; target scenarios unrun. |
+| A009 | Preparation/identity | Prior unitizer/identity audit; R011 materializer profile, request/budget, product pipeline/read/model and old FUNCTIONS | PARTIAL | Same golden/limit identity coupling as lexical; separate request/execution budgets can read before the tighter limit. Replacement separates semantic reuse, guarded installation and retry eligibility. R012 checks the receiving evidence coordinate contract separately. | Implement current preparation; verify config-only retry, budget preflight, ABA, source-bound artifacts and stale failure handling. | High source findings; target scenarios unrun. |
 | A010 | Qdrant/donors | Bridge callers and Qdrant 1.19 mutation/readback/BM25/tokenizer/IDF; real/connect/gate | CHECKED for named static questions | Gate token removed at 7d92fb8b; actual runtime integration, auth/build/deadline/ledger replacement remain. | Connect real path; late-write/relevance/scale checks. | High named source, no product claim. |
-| A011 | Publication/view/cleanup | Prior machine/lifetime audit; R011 publication/control recipes | PARTIAL | R011 finds success-only comparison misses published-only removals/gaps, and full-build snapshot selection lacked restart persistence. Two-sided comparison and captured target inputs specified. | Implement these with existing immutable-point/late-writer/cleanup rules; no executed crash proof. | High counterexamples to prior specification. |
-| A012 | Query/evidence/exact | Earlier planner/executor/access/validator/projector/handles/continuation/exact audit; access FUNCTIONS reread R011 | CHECKED for named static questions | Direct handlers, retained evidence and explicit exact coverage selected; local old-view lifetime distinct from restricted-session revocation. | Real query/evidence/streaming cancellation implementation. | Static only. |
-| A013 | Protocol/client/CLI | Prior provider/daemon/CLI paths | CHECKED for named static questions | One framed live session; dead locators, blocked-I/O, partial output and cursor contradictions corrected. | Implement same-session continuation/expansion/cancel/cleanup. | Static only. |
-| A014 | Product depth | Orientation/comparison/document requirements and old enrichers/resolvers/workers/overlay | PARTIAL | Observable goals retained; scaffolds are not capabilities. | Concrete producer/consumer selection and quality evaluation. | Medium. |
-| A015 | Tests/governance code | xtask/workspace/lock/workflows; inspected ownership/source-text tests | PARTIAL | xtask, ledger and exclusive dependencies removed; 11 Qdrant, 5 evaluation, 33 daemon and 17 preparation/store structural tests removed, behavior suites retained. | Residual structural consumers. No additional test deletion or compiler run in R010/R011. | High removed surface; residual search incomplete. |
-| A016 | Donors | Prior named redb/Qdrant/matching/Git/ignore work; R011 redb 2.6.3 Cargo + transactions.rs at f4e3eb69 | PARTIAL | Exact read snapshot captures a tree root and shares an in-process guard. It does not supply a durable application build selection. Std Read byte cap is not time/completeness proof. | Other concrete donor questions only; no dependency upgrade or whole-donor audit. | High named mechanisms. |
+| A011 | Publication/view/cleanup | Prior machine/lifetime audit; R011 publication/control recipes; R012 window lifetime boundary | PARTIAL | Two-sided desired/published comparison and captured build inputs specified. R012 distinguishes expired-window removal from active work still holding its guard. | Implement publication/capture/cleanup and actual cancellation/release; timestamps alone do not establish reader drain. | High counterexamples; no executed crash proof. |
+| A012 | Query/evidence/exact | Prior query audit; R012 shared validator through validate, daemon paging/catalog/prepared output and direct exact helper | PARTIAL | Port errors collapse to item gaps; raw-range length/exact-map contract cannot represent transformed excerpts unchanged. Retention is count-only and after full search. Replacement separates coordinate domains, failure scope, bounded nomination retention and coverage meaning. | Implement real query/reader/page consumers; preserve partial-result correctness and test mapped evidence/cancellation. Not every caller/feature inspected. | High named source; target behavior unrun. |
+| A013 | Protocol/client/CLI | Prior provider/daemon/CLI; R012 line-session/read_line and page commands | PARTIAL | Session window policy lacked an idle-expiry mechanism. Existing synchronous loop does not itself service expiry while waiting for input. Target uses existing event/control path, not a cleanup service. | Real timed control loop, active-work cancellation/guard release, same-session pages and expansion. | High inspected path; not all transports. |
+| A014 | Product depth | Orientation/comparison/document requirements and old enrichers/resolvers/workers/overlay | PARTIAL | Observable goals retained; scaffolds are not capabilities. R012 does not add a document extractor. | Concrete producer/consumer selection and quality evaluation. | Medium. |
+| A015 | Tests/governance code | xtask/workspace/lock/workflows; inspected ownership/source-text tests | PARTIAL | xtask, ledger and exclusive dependencies removed; 11 Qdrant, 5 evaluation, 33 daemon and 17 preparation/store structural tests removed, behavior suites retained. R012 confirms spine completeness guard is useful, not a deletion target based on its name. | Residual structural consumers. No test deletion or compiler run in R010-R012. | High removed/named surface; residual search incomplete. |
+| A016 | Donors | Prior redb/Qdrant/matching/Git/ignore; R011 redb 2.6.3; R012 official Vec truncate documentation | PARTIAL | Vec truncation does not reduce allocated capacity. This stable contract does not establish measured allocator RSS or target memory use. | Concrete donor questions only; no dependency/toolchain upgrade or whole-donor audit. | High named mechanisms. |
 | A017 | Qualification tree | Complete tree inventory, representative reports, consumer searches | CHECKED | Archived at 2f9c9720; policy/current blockers only. | Runtime approval remnants A022. | High disposition. |
 | A018 | Auxiliary filenames | Package/binary roots, standard/nonstandard helper files | CHECKED for filename/disposition scope | Wave/profile/DIRECT/duplicate helper specs removed; distinct DIAGNOSTICS retained. | Surviving semantics are A001. | High stated scope. |
-| A019 | Issues/PR handoff | Current chain; #352/#214/#525; #263 R009; #271/#239 R010; #270/#331/#261 R011 | PARTIAL | Current issues linked to owner recipes rather than stale pinned algorithms; no whole-queue reread. #525 complete, #214 open. | Refresh other affected issues with real owner changes. | High named issues only. |
-| A020 | Runtime evidence | Windows, Qdrant late writers/IDF, relevance/scale, reader growth, restore, source/preparation/publication restart | RUNTIME-ONLY | Static counterexamples are not failure reproductions or product readiness. | Implement and execute with exact SHA/commands/raw outcome. | Not statically established. |
-| A021 | Compiler baseline | Ubuntu Rust 1.98 runs 39867915623, 39868025680, 39868205817, 39868374272, 39869930525, 39870086718, 39872058276 | PARTIAL | Latest verified A022 run covers search-qdrant-bridge --lib at 7d92fb8b only. Earlier daemon check fails. R011 changes no Rust/Cargo. | Consumers, test compilation, Windows and daemon outside that result. | High recorded scope; no whole-product build. |
+| A019 | Issues/PR handoff | Current chain; #352/#214/#525; #263 R009; #271/#239 R010; #270/#331/#261 R011; #275/#293 R012 | PARTIAL | Current issues linked to owner recipes rather than stale pinned algorithms; no whole-queue reread. #525 complete, #214 open. R012 reconciles window/evidence failure and coordinate rules. | Refresh other affected issues with real owner changes. | High named issues only. |
+| A020 | Runtime evidence | Windows, Qdrant late writers/IDF, relevance/scale, reader growth, restore, restart; R012 idle windows and mapped-page cancellation | RUNTIME-ONLY | Static counterexamples are not failure reproductions or product readiness. | Implement and execute with exact SHA/commands/raw outcome. | Not statically established. |
+| A021 | Compiler baseline | Ubuntu Rust 1.98 runs 39867915623, 39868025680, 39868205817, 39868374272, 39869930525, 39870086718, 39872058276 | PARTIAL | Latest verified A022 run covers search-qdrant-bridge --lib at 7d92fb8b only. Earlier daemon check fails. R009-R012 make no new compiler claim. | Consumers, test compilation, Windows and daemon outside that result. | High recorded scope; no whole-product build. |
 | A022 | Runtime qualification | Bridge real/connect/gate; lexical code_identifiers/encoding/fixtures | PARTIAL | Qdrant gate removed/library-checked. Lexical fixture-backed activation remains. R011 finds analogous profile-identity coupling in materializer (A009). | Remove remaining runtime ceremony with callers; keep useful causal examples as tests. | High named findings, no exhaustive caller proof. |
 
 ## Pass log
@@ -185,3 +185,46 @@ only the long-established Read/take contract was used, not a toolchain upgrade o
 A009/A011 remain PARTIAL. These changes do not close the actual preparation/current-row/publication integration,
 remaining code consumers, full current-document sweep, relevance/scale or platform/restart evidence. Prior
 successful library checks are not evidence for these proposed state transitions.
+
+### R012 — window admission, idle expiry and evidence failure domains (2026-10-23)
+
+Inspected at `e5350809ba501e88b7c76e32d97cfe0c8838b2ac`:
+
+- `bins/eliot-searchd/src/continuation/kernel/{catalog,spec}.rs` and `catalog/prepared.rs` in full;
+- `bins/eliot-searchd/src/public_runtime_service/kernel/{query,session}.rs` in full, `src/protocol_io.rs` lines 1-145;
+- `bins/eliot-searchd/src/direct_store/model.rs` and `src/direct_preparation/spine.rs` in full;
+- `bins/eliot-searchd/src/query_composition/service.rs` in full (separate canonical registry/grant host, not proof of paging integration);
+- `crates/search-query/search-candidate-validator/src/lib.rs` lines 1-555, through validation/error mapping;
+- root architecture/implementation; query overview; window/evidence README/AGENTS/FUNCTIONS; projector FUNCTIONS;
+- old continuation FUNCTIONS at c8e38b6 and current #275/#293. Directory trees located these files; unrelated files were not thereby reviewed.
+
+Findings and changes:
+
+- Daemon search builds the result before catalog retention admission. Catalog counts matches, not their owned
+  capacity/strings; truncating the vector retains its capacity. Existing upstream DIRECT corpus bounds were
+  checked, so no claim of infinite allocation is made. Window recipe now reserves before retrieval and accounts
+  for retained and temporary allocations; it freezes only a finite nomination set, not a completeness claim.
+- Expiry is access-driven in the inspected catalog. The line loop has no independent expiry turn. New view
+  guards must not inherit this lifecycle: existing control/event loop expires idle records and cancels active
+  work, but cleanup still respects any active guard not yet released. No new timer/cleanup service is selected.
+- Shared readback maps every port error to SourceUnreadable and then a candidate Gap. The prior README/#293
+  also described request exhaustion as a gap. Evidence/window recipes now separate request stop from item loss
+  so cancellation cannot consume unprocessed candidates or trigger endless refill.
+- Raw span length/exact-map checks cannot represent transformed excerpts unchanged. UTF-16LE 41 00 -> UTF-8 41
+  demonstrates the domain mismatch. Existing preparation maps provide represented ranges and truthful source
+  location; no new coordinate platform and no false exact-byte claim.
+- Confirmed a useful old behavior: verify_spine_gate rejects contradictory completeness claims but accepts
+  honest partial results; literal validation checks byte/character boundaries. Neither is a deletion target
+  merely due to its name. Prepared-page output-before-cursor-commit is also retained.
+
+Rewrote the two owner recipes, reduced their READMEs to entrypoints and reconciled #275/#293. A012/A013 are
+PARTIAL, not blanket checked subsystems. No exhaustive current-branch caller or whole-codebase proof.
+
+Donor check: the versioned Rust 1.98 Vec page was inaccessible. Official
+[stable Vec documentation](https://dev-doc.rust-lang.org/stable/alloc/vec/struct.Vec.html#method.truncate)
+confirms truncate leaves capacity unchanged. Only that longstanding contract is used; no dependency upgrade,
+Rust 1.98 execution, heap/RSS measurement or new native/Qdrant claim follows from it.
+
+Evidence boundary: static source and design counterexamples only. R012 changes Markdown/issues, not Rust,
+Cargo, workflows, tests or private #598 code. No new Clippy/build/runtime result. A local clone failed DNS;
+reads/writes used the GitHub connector. Remaining implementation and focused cases are in the two owner recipes.

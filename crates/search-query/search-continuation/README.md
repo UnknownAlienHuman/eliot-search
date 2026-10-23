@@ -1,14 +1,12 @@
 # search-continuation
 
-Replace the shared and daemon continuation/handle stores with one process-local window in the real
-query/session owner. The [FUNCTIONS map](FUNCTIONS.md) is the single page, lifetime and output-commit recipe.
-Other files in this package are migration/source notes, not additional state-machine requirements.
+Replace the shared and daemon continuation/handle stores with one short-lived window in the actual
+query/session owner. It keeps an ordered finite result set and the published view needed to read its evidence.
+It is not a durable query, corpus-completeness certificate or separate service.
 
-A live session keeps final order, cursor, fixed expiry and its pinned view. One-shot output returns no
-locators which would expire when its child exits. Continue/Expand get their own request deadline capped by
-window expiry. Page progress counts handled references represented by cards/gaps, not the proposed slice or
-just the number of cards. Partial output commits nothing and fails the session.
+[FUNCTIONS.md](FUNCTIONS.md) owns admission, memory accounting, idle/active expiry, page progress, cancellation
+and expansion. [Protocol](../../search-provider-protocol/FUNCTIONS.md) owns the transport. Do not copy another
+lifecycle algorithm into this README or treat the old catalog as a completed implementation.
 
-Move direct cursor slicing, actual retained-range checks and prepared output commit to the query owner,
-then delete this package and duplicate catalogues. No durable replan, token proof, source fence or terminal
-history is required. This describes the target, not a delivered implementation.
+Move useful direct slicing and prepared-output commit with their callers; delete duplicate catalogs, handles,
+source fences and receipt/replan machinery. [AGENTS.md](AGENTS.md) describes the integration boundary.
