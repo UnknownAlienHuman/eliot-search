@@ -1,15 +1,36 @@
-# Audit evidence
+# Audit: resume and find evidence
 
-Current audit entrypoints:
+Start at [Resume after interruption](ANALYSIS_REGISTRY.md#resume-after-interruption) in the analysis registry.
+Work on the head of [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610), branch
+`codex/refactor-preparation-20261017`, not the old default-branch snapshot.
 
-1. [Analysis registry](ANALYSIS_REGISTRY.md) — living checked/partial/pending ledger with exact paths, findings, remaining work and confidence. Update it in every audit/cleanup pass.
-2. [Static audit closure and rewrite map](AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) — stable rewrite conclusions, errors found in the replacement and remaining runtime evidence.
-3. [Distilled architecture/code audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) — source findings and concrete counterexamples.
-4. [Workspace member disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) — receiving owner or deletion decision for every Cargo member; not a target package count.
-5. [Donor evidence and limits](DONOR_VERIFICATION_REGISTER_2026-10-09.md) — inspected donor behavior, hidden costs and unverified assumptions.
+## Navigation
 
-Project direction comes from [`docs/architecture/README.md`](../architecture/README.md) and [`docs/implementation/README.md`](../implementation/README.md). Audit records explain why and what remains; they do not authorize code, freeze APIs, schedule agents or add qualification gates.
+| Need | Read |
+|---|---|
+| Current stage and immediate next question | [Resume](ANALYSIS_REGISTRY.md#resume-after-interruption) |
+| What remains unread or unresolved | [S1–S5 static worksets](ANALYSIS_REGISTRY.md#remaining-static-audit) |
+| Known code work versus unfinished research | [Delivery groups](ANALYSIS_REGISTRY.md#delivery-remaining-separate-from-static-audit) |
+| Area status and limits | [A001–A025 ledger](ANALYSIS_REGISTRY.md#coverage-ledger) |
+| Previous findings by topic, source paths and exact revision | [Pass/topic index](ANALYSIS_REGISTRY.md#evidence-index-by-pass-and-topic) |
+| What actually compiled or ran | [Execution evidence](ANALYSIS_REGISTRY.md#execution-evidence) |
+| Baseline source counterexamples | [Distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md) |
+| Intended package receiving owners | [Baseline disposition map](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
+| Earlier donor sources/cost limits | [Donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md); later evidence is indexed by pass |
 
-The old master audits, launch gates, wave packets, acceptance matrices and generated status records were removed from the current tree. Git history preserves them at their exact commits. Cite a historical fact only with its source/base and recheck it against the current owner before using it.
+The disposition map's 52 rows describe the original baseline; do not recreate removed packages. A donor's API,
+a constructor, a successful fixture or a heading saying "current" is not proof of connected behavior.
 
-The static audit is sufficient input for the current-format rewrite, but the registry must continue recording newly discovered contradictions and consumer closures. It does not claim line-by-line verification, successful compilation, Windows durability, live-Qdrant behavior, relevance, scale or product readiness. Those claims require the implemented path and actual execution.
+## Authority and preservation
+
+[Architecture](../architecture/README.md) states purpose; [implementation](../implementation/README.md) and
+nearest FUNCTIONS select the code change. Audit files record evidence and uncertainty, not permission, API
+catalogues, schedules or qualification gates. The registry is the single continuation record, not this index.
+
+The [former closure map](AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) is superseded as a status source.
+Its archived text and the detailed R001–R025 checkpoints remain linked. Do not describe incomplete static review
+as "only runtime work remains", or erase inspected-path provenance when shortening a report.
+
+Update the existing registry with the actual inspected SHA/ranges, finding, changed owner and unrun work. Persist
+it with the change on GitHub before reporting completion. Protect actual unpublished #598 overlap and retained
+user data. No new generated status database, crawler, receipt system or agent-control framework is needed.

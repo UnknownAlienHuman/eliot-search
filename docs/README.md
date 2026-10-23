@@ -1,32 +1,41 @@
 # Search documentation
 
-Keep the implementation context small.
+Keep the implementation context small. These links follow the branch being viewed; refactor work is in
+[PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
 
-## Current authority
+## Product and implementation
 
 | Document | Purpose |
 |---|---|
 | [Architecture](architecture/README.md) | Product purpose, observable requirements, boundaries and principles. |
-| [Implementation](implementation/README.md) | Current mechanisms, owners, cutover order, removals and selected donors. |
+| [Implementation](implementation/README.md) | Selected mechanisms, owners, removals and donor seams. |
 | [Product behavior](product/AGENT_ANALYSIS_FRAMEWORK.md) | Useful navigation, ambiguity, comparison, document and exact-verification outcomes. |
-| [Current ownership graph](handoff/DEPENDENCY_GRAPH.md) | Small effect/data ownership graph and cutover order. |
+| [Ownership graph](handoff/DEPENDENCY_GRAPH.md) | Effect/data ownership and cutover relationships, not a package-count target. |
 
-The nearest package or binary `FUNCTIONS.md` owns one concrete operation recipe and source seams. The active issue names the exact callers, deletion and completion evidence for that change.
+Nearest FUNCTIONS owns the concrete recipe and source seams. Issues name change scope and callers and link
+to that recipe rather than repeating another algorithm.
 
-## Audit memory, not authority
+## Resume research
 
-- [Analysis registry](audit/ANALYSIS_REGISTRY.md) records exactly what was checked, what remains, and the confidence boundary. Update it in every audit/cleanup pass.
-- [Static audit closure](audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) records the stable rewrite conclusions and replacement mistakes.
-- [Audit and donor records](audit/) explain evidence and limitations; they do not authorize code or create gates.
+[Audit navigation](audit/README.md) leads to the single [analysis registry](audit/ANALYSIS_REGISTRY.md):
+[resume point](audit/ANALYSIS_REGISTRY.md#resume-after-interruption),
+[remaining static questions](audit/ANALYSIS_REGISTRY.md#remaining-static-audit),
+[delivery work](audit/ANALYSIS_REGISTRY.md#delivery-remaining-separate-from-static-audit),
+[topic/checkpoint index](audit/ANALYSIS_REGISTRY.md#evidence-index-by-pass-and-topic), and
+[execution evidence](audit/ANALYSIS_REGISTRY.md#execution-evidence).
 
-## Supporting current material
+The former static-closure map is historical. Current review is not exhaustive or closed, and implementation is
+not complete. The registry distinguishes unread/unresolved scope from established defects awaiting code.
+Audit and donor records explain evidence; they do not authorize work or create qualification gates.
 
-- [Configuration](config/) records the typed-settings replacement and direct runtime-change semantics.
-- [Qdrant runtime boundary](runtime/QDRANT_ADAPTER_BOUNDARY.md) and [Windows/runtime notes](runtime/QDRANT_NATIVE_WINDOWS.md) describe the selected indexed backend seam.
-- [ADRs](adr/) retain only decisions that still constrain the current product or packaging.
+## Supporting material
 
-## Historical material
+[Configuration](config/), [Qdrant boundary](runtime/QDRANT_ADAPTER_BOUNDARY.md),
+[Windows/runtime notes](runtime/QDRANT_NATIVE_WINDOWS.md), and [ADRs](adr/) provide selected supporting detail.
+Check their concrete source/version and current owner; a title alone gives no authority or execution evidence.
 
-Architecture 8.4 masters, P00/W0–W10 contracts, dated execution packets, client/current/evaluation/optional wave bundles, generated maps, standalone DIRECT/DPAPI runbooks, handoff receipts, swarm assignments and structural qualification records were removed from the current tree. Git history is their archive.
+## History
 
-Do not regenerate those records, preserve their APIs through adapters or use an old title containing `CURRENT`, `CONTRACT`, `GATE`, `ACCEPTANCE`, `STATUS` or `IMPLEMENTATION` as current authority. A useful historical fact must be rechecked against current code and placed in its real owner document.
+Retired Architecture 8.4/P00/wave masters, packets, receipts, generated maps, standalone DIRECT/DPAPI runbooks,
+swarm assignments and structural qualification remain in Git history. Do not regenerate them or preserve dead
+APIs to satisfy their instructions. Recheck useful historical behavior and place its rule in the actual owner.

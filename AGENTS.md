@@ -35,6 +35,11 @@ for behavior. Keep Actions manual-only and secrets/private captures out of Git.
 ## Current work
 
 Preparation remains in [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
+After an interrupted audit, use the [registry resume point](docs/audit/ANALYSIS_REGISTRY.md#resume-after-interruption)
+and its topic/checkpoint index. Verify actual PR head before editing; chat summaries and main-branch search are
+not current-branch evidence. Record inspected ranges, findings, changed code and execution separately in that
+same registry, preserving prior immutable evidence links. Do not requeue a documented defect as unread source.
+
 Use [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) to coordinate actual overlapping work.
 Do not inspect or modify #598's unpublished branch, reset its worktree or create a competing object/key
 writer. That restriction applies to its owned files and handoff, not all code in the repository. Its old
