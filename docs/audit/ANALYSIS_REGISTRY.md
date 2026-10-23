@@ -1,137 +1,187 @@
 # Analysis registry
 
-This file records what the refactor audit actually inspected, what changed and what remains. It is a memory aid, not an approval gate, package-status system or substitute for the owning implementation documents.
+This records the refactor audit's inspected surface, findings, changes and remaining work. It is memory for
+continuation, not an approval gate, package-status system or substitute for owner instructions.
 
 **Original public source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Latest inspected source revision:** `c0fcf2947b0ce6118ae67ee94e557632bd2a809d` (2026-10-23, R010).  
+**Latest inspected source revision:** `7c7fd36cfc2e076458de141f0a4c037ade580f1c` (2026-10-23, R011).  
 **Historical qualification archive:** `2f9c9720f3e14799a0f8dfefa00077d2fa6a9887/qualification`  
-**Update rule:** commit findings and this registry together. On resume, read the actual PR head and intervening changes before trusting an older row. Bind every execution result to its SHA and command/target; never infer a completion percentage from row counts.
+**Update rule:** commit findings and this registry together. Resume from the actual PR head and intervening
+changes. Bind execution evidence to SHA/command/targets. Row counts are not an audit completion percentage.
 
 ## Status vocabulary
 
-- **CHECKED** — the named static surface and principal callers were inspected for the stated question. It does not mean every line or runtime behavior was proved.
-- **PARTIAL** — useful evidence exists, but named files, callers or reconciliation work remain.
-- **PENDING** — not yet inspected enough to direct deletion or implementation.
-- **RUNTIME-ONLY** — static inspection cannot establish the claim; implementation and execution are required.
-- **PROTECTED** — private or unpublished work must not be inspected or overwritten; only its accepted public handoff can be consumed.
+- **CHECKED**: inspected the named static surface for the stated question; not every line or runtime property.
+- **PARTIAL**: named source, caller, reconciliation or implementation questions remain.
+- **PENDING**: insufficient inspection to direct a change.
+- **RUNTIME-ONLY**: requires implementation/execution, not stronger prose.
+- **PROTECTED**: unpublished work is not inspected/overwritten; consume its accepted public handoff.
 
 ## Coverage ledger
 
 | ID | Area | Exact inspected surface | Status | Finding / change | Remaining work | Confidence |
 |---|---|---|---|---|---|---|
-| A001 | Documentation authority and consistency | AGENTS; architecture/implementation; handoff/audit entrypoints; bridge and source-reconcile README/AGENTS/FUNCTIONS | PARTIAL | R009 removed competing bridge recipes. R010 found the newer reconcile recipe still understated comparator defects and filtered-inventory semantics; corrected its owner, linked identity/preparation rules and reduced local instruction duplication. | Reconcile other surviving current owner documents. File removal is not semantic consistency. | High for named findings, incomplete cross-owner sweep. |
-| A002 | Historical governance data | `swarm/**`; generated maps; packet/handoff trees; context/ticket artifacts | CHECKED | Current-tree copies removed; Git history is the archive. | Rust/tool consumers are tracked under A015/A022. | High. |
-| A003 | Workflows and wrappers | `.github/workflows/**`; `tools/*.ps1`; tools README; A022 workflow and run | CHECKED | Wave/map/evidence/bootstrap/source-shape workflows removed. R009 removed the leftover push-triggered A022 verifier; one manual raw Cargo diagnostic remains. | Keep future checks explicit; do not leave automatic temporary workflows after interruption. | High for inspected tree. |
-| A004 | Workspace inventory | root Cargo manifest; 51 current package manifests; workspace disposition | CHECKED | Every current member has a receiving, removal, optional or conditional disposition; this is not a target package count. xtask is no longer a member. | Physical product-package cutovers. | High inventory. |
-| A005 | Entrypoints/runnable product | daemon/CLI entry composition; command interceptors; quickstarts; source_sync rechecked in R010 | CHECKED for named routes | Only bounded one-shot scan is a simple runnable path. Source sync still returns SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE; persistent product path remains disconnected. | Recheck and execute after direct dispatcher and source integration. | High static, not an executed product. |
-| A006 | Root/config/control | runtime owner; config; generic control journal/snapshot; registry restore | CHECKED | One root lock, typed current rows and finite unfinished external work selected. | Compile and test Windows lock/durability. | High static. |
-| A007 | Source acquisition/registry/reconciliation | admission/receipt/provenance/records/history/registry/safe-reader paths; R010 exact comparator, root_currentness, catalog refresh and sync entrypoint | PARTIAL | The ingestion ownership diagnosis remains useful, but R010 found wrong-root absence, omitted compound content update, physical/logical identity mismatch, erased reasons, false currentness and positional hints. New instructions now distinguish filtered omission, explicit exclusion, confirmed absence and incomplete observation. Rust defects are NOT fixed by these doc edits. | Replace comparison/application and real sync together; integrate accepted #598 handoff. Exercise R010 cases after implementation. Do not mark source semantics closed from inventory alone. | High inspected branches; connected behavior unimplemented/unrun. |
-| A008 | Private storage/key overlap | public #598 issue contract and public-main boundaries only | PROTECTED | Obsolete six-domain, purge and compatibility programme is not inherited. | Consume only accepted public handoff; do not inspect, reset or duplicate private work. | High boundary, implementation unknown. |
-| A009 | Preparation/identity | materializer/unitizer/projection/point identity; S11 cutover; logical-source matching rechecked in R010 | CHECKED for named static questions | Recoverable input/outcome comparison, stale-result guard and conservative occurrence reuse selected. R010 corrects the reconcile instructions: same-path atomic save need not create a new logical source; same bytes after rename do not guarantee unchanged transform context. | Implement and measure rewrite amplification/duplicate edits; handle processing-policy changes without invalidating unchanged successful retrieval inputs. | High static, not all preparation behavior. |
-| A010 | Qdrant/donor behavior | bridge callers; Qdrant 1.19 mutation/readback/BM25/tokenizer/scoped-IDF; real.rs/connect/gate | CHECKED for named static questions | Real adapter remains disconnected from normal product flow. QualifiedGate input removed at 7d92fb8b; fixed build/auth/deadline/ledger machinery remains. IDF cost and exact identifier limits remain explicit. | Complete direct runtime and execute late-write/relevance/scale cases. | High inspected source; not product execution. |
-| A011 | Publication/view/cleanup | competing publication machines; control intents; epoch pins; reclaimer; retention; restore | CHECKED | One pending/current/unfinished-cleanup owner selected. Readers and possible late writers constrain Qdrant deletion. Local object GC is stopped-root maintenance. | Implement delayed-RPC, reader-growth, backlog, GC and restore/import cases. | High static. |
-| A012 | Query/evidence/exact | planner/executor/access/validator/projector/handles/continuations; literal matcher; oracle path | CHECKED | Direct handlers, one request context, retained evidence and explicit exact input semantics selected. | Implement real Qdrant/evidence path and streaming cancellation. | High static. |
-| A013 | Protocol/client/CLI | provider protocol/client; daemon provider/public runtime; CLI legacy/typed stacks | CHECKED | One framed live session selected; dead locators, blocked-I/O cancellation, partial output and cursor-accounting contradictions corrected. | Implement and execute same-session Continue/Expand/cancel/child cleanup. | High static. |
-| A014 | Product depth | old orientation/comparison/document requirements; enrichers/resolvers/comparator/workers/overlay | PARTIAL | Observable user behavior preserved; scaffolds are not capabilities. | Select concrete producers/consumers and evaluate quality. | Medium. |
-| A015 | Tests/governance code | xtask; workspace/lock/workflows; product ownership/source-text tests | PARTIAL | xtask, 3.57 MB ledger and exclusive lock dependencies removed. Removed 11 Qdrant, 5 evaluation, 33 daemon and 17 preparation/store source-shape tests; behavior suites retained. Runs 39868374272, 39869930525 and 39870086718 passed their recorded checks. | Find residual source/file/document assertions without behavioral coverage. No additional test deletion or compiler run in R010. | High removed surfaces, incomplete residual search. |
-| A016 | Donors | redb 2.6.3; Qdrant 1.19; Aho-Corasick; selected Git/ripgrep/Tantivy/Lucene mechanics; R010 ignore walk source at 4649aa9 and published 0.4.33 docs | PARTIAL | R010 verified attached entry errors, partial ignore parsing, depth-zero filtering exception and metadata-size omission. Dependency reuse does not supply Eliot's inventory/selection semantics automatically. | Revisit concrete decisions only; no watcher/version upgrade or whole-donor audit claimed. | High named source branches; other donor questions remain. |
-| A017 | Qualification tree | Complete tree inventory; root policy/blockers; Qdrant/code-enrichment/os-secret samples; consumer searches | CHECKED | Old W1-W10/gate/PASS/FAIL database archived at 2f9c9720; current tree retains policy and blocker summary only. | Rust approval semantics remain A022. | High disposition. |
-| A018 | Package-local auxiliary filenames | Current package/binary root sweep; standard and nonstandard helper files | CHECKED for filename/disposition scope | W7/W8/W10/P18, copied window/control/profile and daemon DIRECT/source-mapping notes, and duplicate TOML specification removed. Unique current DIAGNOSTICS remains. | Surviving-document semantics are A001, not established by this row. | High stated scope. |
-| A019 | Open issues/PR handoff | Current chain; #352/#214/#525; PR #610; #263 in R009; #271/#239 in R010 | PARTIAL | Superseded harness/graph/lint/status tasks closed; #525 complete, #214 open. R010 reconciles optional watcher versus required inventory, stale pinned recipes and unconditional rename reuse. | Refresh changed owners in current issues. No whole-queue reread claimed. | High named issues, incomplete queue. |
-| A020 | Runtime evidence | Windows durability/cancellation; Qdrant late writes/IDF; relevance; reader growth; protected restore; restart; inventory/event cases | RUNTIME-ONLY | Static counterexamples identify execution needs, not readiness. | Implement and execute with exact SHA/commands and raw outcome. | Not statically established. |
-| A021 | Compiler baseline | Ubuntu Rust 1.98 runs 39867915623, 39868025680, 39868205817, 39868374272, 39869930525, 39870086718, 39872058276 | PARTIAL | Latest verified A022 run checks/clippies search-qdrant-bridge --lib at 7d92fb8b only. Earlier broad daemon check failed on old composition. R010 changes no Rust/Cargo and claims no new run. | Actual consumers, integration-test compilation, Windows and daemon are outside that library result. | High observed scope; no whole-product build claim. |
-| A022 | Runtime qualification and profile identity | bridge real.rs/connect/qualified gate; lexical code_identifiers.rs, encoding.rs, fixtures.rs and candidate caller searches | PARTIAL | Gate token removed/library-checked. Lexical still hashes tests into profile identity and runs fixture admission under operation budgets. Replacement rule is in lexical FUNCTIONS. | Remove remaining bridge ceremony and obsolete lexical activation/numerical route through real callers. Preserve causal examples as tests. | High named findings; not exhaustive caller proof. |
+| A001 | Documentation authority/consistency | Root authority; bridge/reconcile local docs; R011 preparation/publication/control/registry recipes and old materializer contract | PARTIAL | Competing historical instructions removed. R011 fixes current recipes' semantic/budget/installation conflation and missing publication/capture transitions; no new parallel specification. | Other current owner documents and actual consumers still need reconciliation. | High named findings, incomplete cross-owner sweep. |
+| A002 | Historical governance data | swarm, generated maps, packets/handoffs, context/ticket artifacts | CHECKED | Removed from current tree; Git history is archive. | Code remnants A015/A022. | High disposition. |
+| A003 | Workflows/wrappers | .github/workflows, tools/*.ps1, A022 YAML/run | CHECKED | Old validators and temporary automatic A022 removed; one manual Cargo diagnostic remains. | Recheck when workflows change. | High inspected tree. |
+| A004 | Workspace inventory | Root manifest and 51 current package manifests; disposition | CHECKED | Each member has a receiving/removal/optional/conditional disposition; xtask removed. Not a target package count. | Actual product-package cutovers. | High inventory. |
+| A005 | Entrypoints/product | Daemon/CLI composition; quickstarts; R010 source_sync; R011 preparation_composition | CHECKED for named routes | One-shot scan remains the simple runnable path. Source sync still refuses; preparation CLI is legacy DirectStore composition, not the target current-row scheduler. | Execute connected source/publication/CLI after implementation. | High static, not product execution. |
+| A006 | Root/config/control | Earlier root/config/journal/snapshot inventory; R011 control recipe and pinned redb ReadTransaction source | PARTIAL | Typed state selected. R011 supplies missing restartable full-build input capture using pending/target tables; process-held read snapshot is not durable selection. | Implement capture/application transactions and platform behavior; no runtime recovery proof. | High source/document distinction. |
+| A007 | Source acquisition/registry/reconciliation | Admission/source stack; R010 comparator/currentness/catalog/sync; R011 registry recipe | PARTIAL | R010 source defects remain unimplemented. R011 strengthens proposed current-row application against ABA/re-registration, without putting concurrency revisions into transform identity. | Real source-owner/sync cutover and accepted #598 handoff; execute named cases. | High inspected branches, disconnected product. |
+| A008 | Private storage/key work | Public #598 contract only | PROTECTED | Old six-domain/purge/compatibility programme is not inherited. | Accepted public handoff; do not inspect/reset/duplicate private work. | Boundary known, implementation unknown. |
+| A009 | Preparation/identity | Prior unitizer/identity audit; R011 materializer profile, request/budget, product pipeline/read/model and old FUNCTIONS | PARTIAL | Same golden/limit identity coupling as lexical; separate request/execution budgets can read before the tighter limit. Replacement now separates semantic reuse, guarded installation and retry eligibility. Known empty refusal sites recorded. | Implement current preparation; verify config-only retry, budget preflight, ABA, source-bound artifacts and stale failure handling. | High source findings; target scenarios unrun. |
+| A010 | Qdrant/donors | Bridge callers and Qdrant 1.19 mutation/readback/BM25/tokenizer/IDF; real/connect/gate | CHECKED for named static questions | Gate token removed at 7d92fb8b; actual runtime integration, auth/build/deadline/ledger replacement remain. | Connect real path; late-write/relevance/scale checks. | High named source, no product claim. |
+| A011 | Publication/view/cleanup | Prior machine/lifetime audit; R011 publication/control recipes | PARTIAL | R011 finds success-only comparison misses published-only removals/gaps, and full-build snapshot selection lacked restart persistence. Two-sided comparison and captured target inputs specified. | Implement these with existing immutable-point/late-writer/cleanup rules; no executed crash proof. | High counterexamples to prior specification. |
+| A012 | Query/evidence/exact | Earlier planner/executor/access/validator/projector/handles/continuation/exact audit; access FUNCTIONS reread R011 | CHECKED for named static questions | Direct handlers, retained evidence and explicit exact coverage selected; local old-view lifetime distinct from restricted-session revocation. | Real query/evidence/streaming cancellation implementation. | Static only. |
+| A013 | Protocol/client/CLI | Prior provider/daemon/CLI paths | CHECKED for named static questions | One framed live session; dead locators, blocked-I/O, partial output and cursor contradictions corrected. | Implement same-session continuation/expansion/cancel/cleanup. | Static only. |
+| A014 | Product depth | Orientation/comparison/document requirements and old enrichers/resolvers/workers/overlay | PARTIAL | Observable goals retained; scaffolds are not capabilities. | Concrete producer/consumer selection and quality evaluation. | Medium. |
+| A015 | Tests/governance code | xtask/workspace/lock/workflows; inspected ownership/source-text tests | PARTIAL | xtask, ledger and exclusive dependencies removed; 11 Qdrant, 5 evaluation, 33 daemon and 17 preparation/store structural tests removed, behavior suites retained. | Residual structural consumers. No additional test deletion or compiler run in R010/R011. | High removed surface; residual search incomplete. |
+| A016 | Donors | Prior named redb/Qdrant/matching/Git/ignore work; R011 redb 2.6.3 Cargo + transactions.rs at f4e3eb69 | PARTIAL | Exact read snapshot captures a tree root and shares an in-process guard. It does not supply a durable application build selection. Std Read byte cap is not time/completeness proof. | Other concrete donor questions only; no dependency upgrade or whole-donor audit. | High named mechanisms. |
+| A017 | Qualification tree | Complete tree inventory, representative reports, consumer searches | CHECKED | Archived at 2f9c9720; policy/current blockers only. | Runtime approval remnants A022. | High disposition. |
+| A018 | Auxiliary filenames | Package/binary roots, standard/nonstandard helper files | CHECKED for filename/disposition scope | Wave/profile/DIRECT/duplicate helper specs removed; distinct DIAGNOSTICS retained. | Surviving semantics are A001. | High stated scope. |
+| A019 | Issues/PR handoff | Current chain; #352/#214/#525; #263 R009; #271/#239 R010; #270/#331/#261 R011 | PARTIAL | Current issues linked to owner recipes rather than stale pinned algorithms; no whole-queue reread. #525 complete, #214 open. | Refresh other affected issues with real owner changes. | High named issues only. |
+| A020 | Runtime evidence | Windows, Qdrant late writers/IDF, relevance/scale, reader growth, restore, source/preparation/publication restart | RUNTIME-ONLY | Static counterexamples are not failure reproductions or product readiness. | Implement and execute with exact SHA/commands/raw outcome. | Not statically established. |
+| A021 | Compiler baseline | Ubuntu Rust 1.98 runs 39867915623, 39868025680, 39868205817, 39868374272, 39869930525, 39870086718, 39872058276 | PARTIAL | Latest verified A022 run covers search-qdrant-bridge --lib at 7d92fb8b only. Earlier daemon check fails. R011 changes no Rust/Cargo. | Consumers, test compilation, Windows and daemon outside that result. | High recorded scope; no whole-product build. |
+| A022 | Runtime qualification | Bridge real/connect/gate; lexical code_identifiers/encoding/fixtures | PARTIAL | Qdrant gate removed/library-checked. Lexical fixture-backed activation remains. R011 finds analogous profile-identity coupling in materializer (A009). | Remove remaining runtime ceremony with callers; keep useful causal examples as tests. | High named findings, no exhaustive caller proof. |
 
 ## Pass log
 
 ### R001 — authority/governance removal
 
-Removed Architecture 8.4 master, wave/handoff/status/swarm/generated authority and redundant workflow/tool surfaces through `a4af41f8`. Historical evidence remains in Git.
+Removed Architecture 8.4 master, wave/handoff/status/swarm/generated authority and redundant workflow/tool
+surfaces through `a4af41f8`. Historical evidence remains in Git.
 
 ### R002 — first package-local wave cleanup
 
-Inspected and removed CLI/provider W8, query W7, query-window helpers, Qdrant bridge P18 and control journal/cutover/intent/quarantine/checkpoint copies. They prescribed removed mechanisms or repeated current owner rules. Commit: `2f9c9720`.
+Inspected/removed CLI/provider W8, query W7, query-window helpers, Qdrant bridge P18 and control
+journal/cutover/intent/quarantine/checkpoint copies. They prescribed retired mechanisms or repeated current
+owner rules. Commit `2f9c9720`.
 
 ### R003 — qualification archive disposition
 
-Inspected the complete tree, representative reports and code consumers. Retained policy/current blockers; exact archive at `2f9c9720`. Commit: `49f5c46b`.
+Inspected complete tree, representative reports and consumers. Retained policy/current blockers; exact
+archive `2f9c9720`. Commit `49f5c46b`.
 
-### R004 — standard supplement closure and GC contradiction
+### R004 — standard supplements and GC contradiction
 
-Inspected the old xtask supplement naming policy and remaining standard supplements. Daemon W8/W10 still ordered grants, accepted receipts, capability snapshots, worker qualification, quarantine and migration state; other files copied current owner summaries.
-
-`search-index-reclaimer/FUNCTIONS.md` still prescribed online shared/exclusive local GC while implementation selected stopped-root maintenance. Corrected the owner distinction and removed standard supplements in `140852e4`.
+Inspected old xtask supplement policy and remaining standard supplements. Daemon W8/W10 ordered grants,
+receipts, capability snapshots, qualification, quarantine/migration; others duplicated owners.
+`search-index-reclaimer/FUNCTIONS.md` still required online local GC while implementation chose stopped-root
+maintenance. Corrected ownership and removed standard supplements in `140852e4`.
 
 ### R005 — nonstandard package-local closure
 
-Inspected current package/binary roots, not default-branch search results. Checked journal/checkpoint/quarantine/recovery/profile/integration/scale/security/snapshot names.
+Inspected current package/binary roots, not default-branch search. Checked journal/checkpoint/quarantine/
+recovery/profile/integration/scale/security/snapshot names. Removed control SECURITY_RESTRICTION_JOURNAL;
+moved replacement identity/collision/occurrence rules from S11_PROFILE into point-identity FUNCTIONS, which
+had still frozen old S11. README reduced. DIAGNOSTICS retained as a distinct read-only operation.
 
-- Removed `search-control-redb/SECURITY_RESTRICTION_JOURNAL.md`; current rules belong to access/control owners.
-- `search-point-identity/S11_PROFILE.md` explained replacement while FUNCTIONS froze old S11. Moved replacement/collision/ambiguous-occurrence rules into FUNCTIONS; removed the duplicate profile and reduced README.
-- Retained `search-control-redb/DIAGNOSTICS.md`: a distinct read-only operation, not a copied state machine.
+### R006 — xtask/digest-governance removal
 
-### R006 — xtask and digest-governance removal
+Inspected manifest/lock/aliases/workflows and all xtask command/module families; each served retired governance.
+`f9275731` removed xtask, 3.57 MB ledger, workspace member and cargo_metadata; `9d2fe65a` regenerated lockfile.
+Run `39868374272` checked removal/locked metadata/search-contracts and strict Clippy under Rust 1.98.
+Temporary verifier removed. Broad daemon check failed on old composition; A021 retains the limitation.
 
-Inspected manifest/lock/aliases/workflows and the complete xtask command/module surface. Every command served removed evidence/coverage/package-map/bootstrap/source-boundary/digest governance.
+### R007 — source-shape tests
 
-- `f9275731`: delete xtask, 3.57 MB ledger, workspace member and cargo_metadata dependency.
-- `9d2fe65a`: regenerate Cargo.lock, removing exclusive packages.
-- Run `39868374272`: removed directory/package/dependencies, locked metadata, search-contracts check and strict Clippy under Rust 1.98.
-- Temporary verifier removed. The broad daemon check failed on old composition; A021 retains that limitation.
+Removed inspected ownership tests: 11 Qdrant (`07c90c14`), 5 evaluation (`30d1921f`), 33 daemon plus four DIRECT
+notes (`789d4fb4`), 17 materializer/unitizer/revision-store (`a0de1610`). Retained CRUD/readback/recovery/IDF/
+metrics/materialization suites. Run `39869930525` passed locked check/strict Clippy for search-materializer,
+search-unitizer, search-revision-store, search-qdrant-bridge and search-eval.
 
-### R007 — source-shape test removal
+### R008 — stale references and runtime qualification
 
-Removed inspected tests reading Rust as text, enforcing module names/byte ceilings or freezing legacy placement:
-
-- 11 Qdrant bridge ownership tests (`07c90c14`);
-- 5 evaluation ownership tests (`30d1921f`);
-- 33 daemon ownership tests and four residual DIRECT/source-mapping docs (`789d4fb4`);
-- 17 materializer/unitizer/revision-store ownership tests (`a0de1610`).
-
-CRUD/readback/recovery/IDF/metrics/materialization suites retained. Run `39869930525` passed locked check and strict Clippy for search-materializer, search-unitizer, search-revision-store, search-qdrant-bridge and search-eval.
-
-### R008 — stale-reference and qualification-remnant sweep
-
-Run `39870086718` searched active Markdown/Rust/Cargo. Corrected stale xtask/package-status/qualification references; removed duplicate TOML_PROFILE_2; distilled ADR 0005 and optional Research adapter.
-
-At that checkpoint Qdrant still required QualifiedGate and lexical issued fixture-backed receipts. Subsequent Qdrant edits were present by `7d92fb8b` but the registry lagged after interruption. R009 corrected the stale statement, not repeated the code edit.
+Run `39870086718` searched active Markdown/Rust/Cargo. Corrected xtask/package-status/qualification references;
+removed duplicate TOML_PROFILE_2; distilled ADR 0005/Research adapter. At that checkpoint Qdrant required
+QualifiedGate and lexical issued fixture-backed receipts. Later edits existed by `7d92fb8b` while the registry
+lagged after interruption. R009 corrected the statement rather than repeating the code cut.
 
 ### R009 — interrupted-cut recovery and qualification audit (2026-10-23)
 
-Inspected at `7d92fb8b5532b5928bdb90ddd42d5685e5f01d48`:
+At `7d92fb8b5532b5928bdb90ddd42d5685e5f01d48` read bridge real.rs, real/connect_schema/connect.rs,
+qualified/gate.rs and README/AGENTS/FUNCTIONS; lexical code_identifiers.rs constructor/preflight/profile_definition,
+code_identifiers/{encoding,fixtures}.rs and owner notes; root instructions, workflows and exact Actions log.
 
-- bridge `src/real.rs`, `src/real/connect_schema/connect.rs`, `src/qualified/gate.rs` and README/AGENTS/FUNCTIONS;
-- lexical `src/code_identifiers.rs` constructor/preflight/profile_definition and `code_identifiers/{encoding,fixtures}.rs`, plus lexical AGENTS/FUNCTIONS;
-- root architecture/implementation, workflow directory/A022 YAML, exact-head Actions metadata/job/log.
+Gate removal existed; connect takes no token and report validation returns (). Auth/build/timeouts/ledger
+remain. Fixed contradictory bridge README/AGENTS mutation/empty-scope rules. Lexical hashes fixtures/limits
+into profile identity and runs fixture admission under operation budgets; 16-byte counterexample documented
+in lexical FUNCTIONS. No lexical execution/change. Default-branch caller search was not exhaustive proof.
 
-Gate removal was implemented: connect takes no QualifiedGate; report validation returns `()`. Auth/fixed-build/timeouts/ledger and sparse-only paths remain. Corrected the inventory and contradictory bridge README/AGENTS mutation/empty-scope rules.
+Verified historical run [39872058276](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/39872058276),
+job 120148813047, 2026-10-22, Ubuntu 24.04, Rust 1.98.0, checkout `7d92fb8b5532b5928bdb90ddd42d5685e5f01d48`:
 
-Lexical hashes fixture definitions/resource ceilings into profile identity and runs fixture admission under the operation budget. The 16-byte-input-budget counterexample and replacement rule live in [lexical FUNCTIONS](../../crates/search-lexical/FUNCTIONS.md#test-data-must-not-determine-runtime-activation-or-retrieval-identity). Lexical source was not changed or executed. Caller search returned default-branch definitions/reexports/fixtures, not exhaustive branch/feature absence.
+```text
+cargo +1.98.0 check -p search-qdrant-bridge --lib --locked
+cargo +1.98.0 clippy -p search-qdrant-bridge --lib --locked -- -D warnings
+```
 
-Verified historical run, not a new execution:
+Both passed; no tests, daemon, reclaimer, Windows, live Qdrant or recovery ran. Commit `c0fcf294` changed docs
+and removed the leftover automatic verifier. Do not add push triggers to compensate for missing manual dispatch.
 
-- [39872058276](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/39872058276), job `120148813047`, 2026-10-22, Ubuntu 24.04, Rust 1.98.0; checkout `7d92fb8b5532b5928bdb90ddd42d5685e5f01d48`.
-- Passed `cargo +1.98.0 check -p search-qdrant-bridge --lib --locked` and `cargo +1.98.0 clippy -p search-qdrant-bridge --lib --locked -- -D warnings`.
-- No tests/daemon/reclaimer/Windows/live Qdrant/recovery executed.
+### R010 — source observation, selection and freshness (2026-10-23)
 
-Commit `c0fcf294` changed docs and removed the leftover automatic A022 workflow. Do not add automatic pushes to compensate for a missing manual-dispatch tool. A001/A015/A022 and product/donor/runtime questions remained open.
+At `c0fcf2947b0ce6118ae67ee94e557632bd2a809d` read:
 
-### R010 — source observation, selection and freshness audit (2026-10-23)
+- source-reconcile/src/lib.rs through the unit-test entry;
+- source-records/src/root_currentness.rs through line 570;
+- daemon source_roots/kernel/catalog.rs through line 300 and complete owner_composition/kernel/source_sync.rs;
+- source/reconcile/admission/identity owner docs, old reconcile FUNCTIONS at c8e38b6, #271/#239;
+- ignore walk.rs at 4649aa9700619f94cf9c66876e9549d83420e16c and published 0.4.33 entry/walker docs.
 
-Inspected at `c0fcf2947b0ce6118ae67ee94e557632bd2a809d`:
+Found Missing bypassing root check, first physical-key binding dropping content change, physical/logical
+identity mismatch, erased causes, hints leaving workspace_current true, root probes clearing content hints
+and root-slot changes not rebasing queued positions. Replacement also missed filtered omission versus absence,
+attached-entry ignore errors, depth-zero filtering bypass and parser-changing rename. Fixed reconcile recipe,
+README/AGENTS and #271/#239 in `7c7fd36c`; A007 returned to PARTIAL.
 
-- `crates/search-source/search-source-reconcile/src/lib.rs`, definitions and comparison/error/ledger branches through the unit-test entry;
-- `crates/search-source/search-source-records/src/root_currentness.rs`, implementation and relevant existing tests through line 570;
-- `bins/eliot-searchd/src/source_roots/kernel/catalog.rs`, load/refresh/registration/hint boundary through line 300;
-- `bins/eliot-searchd/src/owner_composition/kernel/source_sync.rs`, full refusal-only sync path;
-- source README; reconcile README/AGENTS/FUNCTIONS; admission and identity FUNCTIONS;
-- old reconcile FUNCTIONS at public baseline `c8e38b6`; current #271/#239 issue bodies;
-- donor `ignore/src/walk.rs` at `4649aa9700619f94cf9c66876e9549d83420e16c`, relevant error/filter branches; published ignore 0.4.33 DirEntry/WalkBuilder docs. This does not update a dependency or re-audit notify/gix.
+Static counterexamples only. Sync remains unavailable. Default-main reconcile_source search found its definition,
+not exhaustive absence of branch/feature callers. No Rust/Cargo/tests/build/private #598 changes. Local clone
+failed DNS; exact files were read through GitHub. No notify/gix upgrade or whole-donor review.
 
-Confirmed static defects: Missing bypasses the root check; first physical-key binding omits concurrent content change; same-path replacement/no-key cases conflict with current logical-source policy; reason helpers discard causes; pending hints do not invalidate workspace_current; root probes clear content hints; insert/remove shifts positions without rebasing hints. The method sequence available -> synced -> Modified still reports workspace_current in the inspected code.
+### R011 — preparation identity and publication convergence (2026-10-23)
 
-Replacement-document gaps: filtered omission was still too easily read as absence; builder/traversal/attached-entry errors were not distinguished; a watcher path used as a depth-zero walk root could bypass normal discovery filtering; same-content rename was described as unconditional preparation reuse. Old scope/incomplete-inventory requirements remain useful, not their receipts/platform.
+Inspected exact head `7c7fd36cfc2e076458de141f0a4c037ade580f1c`:
 
-Changes: reconcile FUNCTIONS now owns those distinctions, guarded current-row application and a small take-at-start dirty-latch lifecycle. README/AGENTS point to it. #271/#239 use the current recipe and agree that inventory precedes the optional watcher. No new receipt, event ledger, watcher service or control plane is selected. A007 returns to PARTIAL; prior broad CHECKED was insufficient for these semantics.
+- `crates/search-prep/search-materializer/src/profile.rs`, `profile/{change,digest}.rs`;
+- `crates/search-prep/search-materializer/src/request.rs`, `request/{budget,validate}.rs`;
+- `crates/search-prep/search-materializer/src/product/{pipeline,read}.rs` in full, `product/model.rs` lines 1-210;
+- complete `bins/eliot-searchd/src/preparation_composition.rs`;
+- materializer AGENTS/FUNCTIONS, publication/control/registry/access FUNCTIONS and current #270/#331/#261;
+- old materializer FUNCTIONS at c8e38b6, lines 1-190, including golden/bounds profile and acquisition requirements;
+- redb `Cargo.toml` lines 1-45 and `src/transactions.rs` lines 2320-2520 at
+  `f4e3eb69dc2a4b4e01fefff0b9e039c6c7ab98f6` (Cargo confirms 2.6.3); std Read documentation for byte-cap semantics.
 
-Evidence boundary: code-derived counterexamples, NOT runtime reproductions. Sync remains unavailable, and search for reconcile_source returned only its definition on default main; this is not exhaustive absence of current-branch callers. No Rust/Cargo, tests, private #598 code, workflow or build changed/run. Local clone failed DNS; the named source was read through the GitHub connector at the exact SHA. Remaining work is the actual source-owner/sync cutover and case checks in the [owner recipe](../../crates/search-source/search-source-reconcile/FUNCTIONS.md), plus still-open A001/A015/A022 and product/runtime questions.
+Source findings:
+
+- Materializer profile_digest includes golden and all resource ceilings; classify_profile_change turns a new
+  identity into reprepare/reproject or rejects an unchanged revision. This repeats lexical's test/policy coupling.
+- Request validation enforces its own budget, but execution has an independent public context; pipeline does
+  not recheck the execution input limit before calling the reader. Read port cannot observe that context.
+- Zero-length rejection remains in request validation and retained reader: exact locations of an already-known
+  unfinished empty-input correction, not a newly implemented feature.
+
+Replacement-design findings and owning corrections:
+
+- [Preparation](../../crates/search-prep/search-materializer/FUNCTIONS.md): separate output-affecting semantics,
+  current installation guard and retry conditions. Fail-only limit changes preserve valid successes but can
+  reactivate prior failures; output-changing limits remain semantic. Preflight the actual execution input limit.
+- [Source state](../../crates/search-source/search-source-registry/FUNCTIONS.md): content/membership equality
+  does not guard ABA/remove-readd. Use non-reset current-row/registration guards without putting them into
+  transform identity. Keep source-bound metadata when reusing pure content.
+- [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md): compare desired and published
+  inventories, including published-only deletions and explicit gaps, not only successful prepared artifacts.
+- [Control](../../crates/search-control-redb/FUNCTIONS.md#restartable-generation-input-capture): capture chosen
+  full-build input refs under one read snapshot into existing unserved target tables before external effects;
+  partial capture restarts, completed capture resumes exact inputs. A cursor against new current rows is not
+  the old snapshot. Capture is O(selected metadata), not constant work or another snapshot platform.
+
+Evidence boundary: static code/document counterexamples; no application failure reproduced, no Rust/Cargo,
+new dependencies, tests, Clippy, CI or private #598 work changed/executed. Clone failed DNS; source access and
+publication use the GitHub connector. Two versioned redb documentation pages were unavailable, so the pinned
+GitHub implementation was read rather than substituting newer API docs. The std page was rendered as 1.99.1;
+only the long-established Read/take contract was used, not a toolchain upgrade or a new 1.98 execution claim.
+
+A009/A011 remain PARTIAL. These changes do not close the actual preparation/current-row/publication integration,
+remaining code consumers, full current-document sweep, relevance/scale or platform/restart evidence. Prior
+successful library checks are not evidence for these proposed state transitions.

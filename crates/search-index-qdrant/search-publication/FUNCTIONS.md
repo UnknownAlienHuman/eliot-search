@@ -2,111 +2,127 @@
 
 At c8e38b6, shared admission/machine/recovery code holds complete manifests and caller receipts without
 redb/Qdrant effects. Daemon/control add competing machines. Keep useful validation/readback, not the machines.
+R011 rechecks the replacement instructions at `7c7fd36c`; the corrections below are not implemented-state claims.
 
-The [control map](../../search-control-redb/FUNCTIONS.md) owns evidence tables/snapshots;
-[projection](../search-projection-planner/FUNCTIONS.md) owns changed-source input;
+The [control map](../../search-control-redb/FUNCTIONS.md) owns evidence tables/snapshots and restartable build
+input capture; [projection](../search-projection-planner/FUNCTIONS.md) owns changed-source input;
 [preparation](../../search-prep/search-materializer/FUNCTIONS.md) owns wanted-input/result reconciliation;
 [bridge](../search-qdrant-bridge/FUNCTIONS.md) owns SDK semantics and native-inference readback.
-This file owns effect order. It is proposed implementation, not executed product evidence.
+This file owns publication selection and effect order.
+
+## Reconcile desired and published state
+
+A scan of successful eligible preparations alone cannot discover a source removed from that set. If A is
+published and then excluded/unregistered, no new prepared artifact for A is required or expected. Likewise,
+a failed new input can disappear from a success-only scan while old points remain forever. These are gaps in
+the former recipe, not reproduced runtime incidents.
+
+Compare both current desired source state/outcomes and the current published source inventory. Use ordered
+key pages/a merge over their source IDs under a consistent read snapshot; do not collect the whole corpus
+into memory. A published-only source is work, not an absent queue entry. The existing published inventory
+already remembers it, so no permanent deletion tombstone or completed-operation history is required.
+
+| Desired state | Publication action |
+|---|---|
+| Usable current preparation, including supported zero units | Publish its exact source/prepared input and gaps; close replaced points. |
+| Explicit terminal unsupported/failure outcome selected for publication | Publish a gap-only source outcome and close former points in the new view. Never label old evidence as the failed revision. |
+| Confirmed source removal, unregistration or valid selection exclusion | Close its published points and remove its membership in the same view commit, even without new preparation. |
+| Preparation still running, or incomplete/unavailable observation | Do not infer deletion or successful empty. Keep any prior published revision labelled as prior/stale and expose pending/gap state; it does not satisfy a current-input request. |
+| Exact published input/outcome already matches | No new sequence or zero-effect pending operation. |
+
+The [reconcile owner](../../search-source/search-source-reconcile/FUNCTIONS.md) distinguishes valid exclusion,
+confirmed absence and incomplete observation. Publication consumes that distinction; it does not infer physical
+absence from a filtered walk. A failed/slow source need not block unrelated complete-source updates. Do not
+claim removal applied to new indexed views before its publication commits. Already pinned local work follows
+[view/scope lifetime](../../search-query/search-access/FUNCTIONS.md); this is not a new access-revocation service.
+
+Startup, queue overflow and bounded background reconciliation traverse both sides. Lost preparation,
+publication or removal notifications must converge without another source edit. Repeated identical gaps are
+also no-ops, not an infinite sequence generator. Actual wanted state and served published input remain distinct.
 
 ## Select and prepare
 
-Under the serialized publisher, compare eligible current preparation outcomes with published source inputs.
-An in-memory wake-up is only an optimization. Startup, queue overflow and bounded reconciliation must find
-unpublished current inputs even if the process died after preparation commit but before notification.
-
-Choose expected current view and target sequence. Produce finite immutable pages with actual Qdrant inputs,
-compact complete-source deltas and cleanup IDs. Validate row/byte ceilings and cleanup capacity before any
-external mutation. Commit one PendingPublication referencing the verified artifact. Its source selection,
-occurrence births, profile and readback targets are fixed; ordinary retry never rereads live paths.
+Under the serialized publisher choose expected current view and target sequence. Produce finite immutable
+pages with actual Qdrant inputs, compact complete-source deltas and cleanup IDs. Validate row/byte ceilings
+and cleanup capacity before external mutation. Commit one PendingPublication referencing the verified artifact.
+Source selection, occurrence births, profile and readback targets are fixed; retry never rereads live paths.
 
 Before pending/effects, obsolete preparation can be discarded/replanned. After effects may exist, do not
-splice fresh bytes/births into its cursor. Complete the fixed input on a settled route, or use the explicit
-isolated recovery below; then reconcile newer inputs. Published inventory names actual revisions and gaps,
-not whichever source heads happen to be current when the operation finishes.
+splice fresh bytes/births into its cursor. Complete fixed inputs on a settled route, or use isolated recovery
+below; then reconcile newer inputs. Published inventory names actual revisions and gaps, not whichever heads
+happen to be current when the operation finishes. Profile changes affecting retrieval use the generation path;
+fail-only budget/test changes follow preparation's reuse rule, not an unconditional corpus rebuild.
 
-No online local object deletion runs in this baseline. Stopped-root maintenance cannot race finalization
-and its first durable reference.
+No online local object deletion runs in this baseline. Stopped-root maintenance cannot race finalization and
+its first durable reference.
 
 ## Published retrieval state is immutable
 
 The redb snapshot preserves evidence rows, not Qdrant vectors/payload. Once published, a point's retrieval
 input, vectors, profile and query-visible filter/group/scoring fields are not updated in place. A change
-creates a different point (or a new incompatible generation). Citation-only changes update the evidence rows.
-Preserve derived computation where reusable; that does not authorize mutation of an old point.
+creates a different point or incompatible generation. Citation-only changes update evidence rows. Reusing
+derived computation does not authorize mutation of an old point.
 
-New points use valid_from=target. Closing a point writes one exclusive valid_until=target; repeat only that
-same closure. Never reopen its interval or change its original valid_from. For every already published
-sequence below target, this closure leaves eligibility unchanged. This and immutable retrieval state are
-what let old queries continue; a sequence label alone is insufficient.
+New points use valid_from=target. Closing writes one exclusive valid_until=target; repeat only that same
+closure. Never reopen the interval or change valid_from. For published sequences below target the closure
+leaves eligibility unchanged. A sequence label alone does not provide this guarantee.
 
-Use the bridge's non-overwriting new-point operation. Narrow vector/payload APIs are not a bypass for this
-rule. They may build an unexposed staging target, not alter data used by a live published view.
+Use the bridge's non-overwriting new-point operation. Narrow vector/payload APIs may build unexposed staging
+data, not alter retrieval state used by a live view.
 
 ## Apply: observed state is not dispatch completion
 
-One execution attempt has one absolute deadline/cancellation across its RPCs. After restart/backoff a finite
-new attempt budget is allowed; operation input is not an expired Instant. Nested calls cannot renew the
-budget. Cancellation never erases possibly dispatched effects or permits infinite immediate retries.
+An attempt has one absolute deadline/cancellation across RPCs. Restart/backoff may give a finite new attempt
+budget; durable operation input is not an expired Instant. Nested calls cannot renew the budget. Cancellation
+never erases possibly dispatched effects or permits infinite immediate retries.
 
-Keep two questions separate:
+Keep separate: what exact point/schema readback shows, and whether an earlier dispatched writer may still
+execute against that route. A completed wait=true response settles that dispatch, not other attempts. If its
+readback failed, retry the read rather than blindly resend the mutation. Preserve useful completion observations
+in existing unfinished pending progress. A timeout, missing response, client drop or restart is not terminal
+server evidence. Persist possible-dispatch state before effects; no completed-operation journal/bridge ledger.
 
-1. What state does the exact point/schema readback currently show?
-2. Can any earlier dispatched mutation still execute against that route?
-
-A completed wait=true response settles that dispatch, not other attempts. If its readback failed, retry the
-read rather than blindly resend the mutation. Preserve useful completion observations in existing unfinished
-pending progress when needed. A missing response, transport timeout, client drop or restart is not a terminal
-server observation. Persist enough possible-dispatch state before effects that restart cannot forget it;
-there is no completed-operation journal or second bridge ledger.
-
-Only after relevant dispatches are settled can desired post-state mean done, expected pre-state/missing new
-item mean retry, and foreign identity/state mean stop. A mixed pre/post batch is not itself corruption.
-Read back according to the actual input kind: native Document inference has the bridge's generated-vector
-contract, not a fabricated expected sparse vector.
+Only after relevant dispatches settle can desired post-state mean done, expected pre-state/missing new item
+mean retry, and foreign state mean stop. A mixed pre/post batch is not itself corruption. Native Document
+inference follows the bridge's generated-vector contract, not fabricated client-known coefficients.
 
 ### Why readback-only retry was insufficient
 
 ```text
 A: create P with open validity; response lost, A may still execute
 B: repeat create; observe desired P; mistakenly declare all work settled
-C: later close P, publish the next view, eventually delete P
+C: close P, publish a later view, eventually delete P
 A: delayed create executes after C
 ```
 
-A full upsert can reopen P even before deletion. Insert-only prevents that overwrite while P exists, but
-can still reinsert P after deletion. A local single publisher and strong ordering do not timestamp an old
-logical request with its intended application order. One later successful read is not a barrier against A.
-This is a design counterexample, not a reproduced Qdrant failure.
+A full upsert can reopen P even before deletion. Insert-only prevents overwrite while P exists, but can
+reinsert it after deletion. Local serialization and strong ordering do not timestamp an old logical request
+with its intended application order. A later successful read is not a fence. This is a design counterexample,
+not a reproduced Qdrant failure.
 
 ### Small conservative recovery boundary
 
-Do not send competing retries, advance visibility, or retire the affected IDs while an earlier writer may
-still run. Continue bounded observation only where the selected backend can actually establish terminality;
-a sleep, elapsed client deadline, reconnect or repeated matching readback is not such evidence. Do not assume
-an operation-status API or server cancellation acknowledgement that the selected client/server lacks.
+Do not send competing retries, advance visibility or retire affected IDs while an earlier writer may still
+run. Continue bounded observation only where the selected backend can establish terminality. A sleep,
+reconnect or matching readback cannot; do not assume an unavailable operation-status/cancellation API.
 
-When terminality cannot be established, use the existing new-generation build path, not more proof types:
-record the old route's unresolved obligation, construct a fresh never-reused physical generation from the
-fixed intended source/prepared inputs, validate it and switch current atomically. This is an explicit recovery
-replacement, not changing the route beneath the old pending cursor. Keep the old operation artifact referenced
-until the replacement has durably taken over its required state. Preserve unresolved old-route cleanup in the
-same handoff; never drop it just because a replacement was built.
+When terminality cannot be established, use the existing fresh-generation build path: retain the old route's
+unresolved obligation, construct a never-reused generation from the fixed intended source/prepared inputs,
+validate it and switch current atomically. This is explicit replacement, not changing the route underneath
+the old cursor. Retain the old operation artifact until replacement durably takes over its required state,
+and preserve unresolved old-route cleanup in that handoff.
 
-The uncertain route is not used for further publications. Existing old readers may finish because allowed
-late creates are future-only for those views and allowed closures do not change their eligibility; this
-argument requires the immutability rules above. New requests use the installed replacement only after commit.
-Do not recreate/reuse an abandoned physical collection name. Late old writes cannot target the replacement.
+The uncertain route receives no further publications. Existing readers may finish because late creates are
+future-only for them and allowed closures do not change their eligibility; this relies on the immutability
+rule. New requests use the replacement only after commit. Never recreate/reuse an abandoned collection name.
 
-A replacement attempt can fail too. Bound recovery attempts, retained generations and cleanup backlog. On
-exhaustion stop new writes visibly rather than loop, manufacture success or delete evidence. This costs a
-rebuild on unresolved dispatch; it is an explicit simplicity/availability trade-off. It uses the existing
-pending/rebuild/cleanup owner, not a new recovery service. A configured external Qdrant endpoint is not ours
-to terminate merely to claim a fence.
+Bound replacement attempts, retained generations and cleanup backlog; on exhaustion stop new writes visibly.
+This costs a rebuild and possibly retained garbage, not another recovery service. An external Qdrant endpoint
+is not ours to terminate merely to claim a fence.
 
 ## Ordinary incremental commit
 
-After required terminal observations and readbacks, decode the already bounded metadata delta before the writer:
+Decode the bounded metadata delta before opening the writer. After required terminal observations/readback:
 
 ```text
 one redb transaction:
@@ -116,76 +132,75 @@ one redb transaction:
   insert unfinished Qdrant cleanup, if any
   remove pending
 commit
-open read snapshot; verify its current row is target
+open read snapshot; verify current row is target
 install snapshot-backed target under short manager lock
 report visible
 ```
 
-No object/RPC I/O or unbounded corpus delta inside the writer. Do not begin another publication before
-snapshot capture/install. On uncertain commit inspect current/pending/cleanup. Failure after durable commit
-keeps old serving state or refuses new serving until recovery; it does not report uninstalled target visible.
-An old request always reads its old redb snapshot, never latest bindings under an old sequence label.
+No object/RPC I/O or corpus-sized delta inside the writer. Do not begin another publication before snapshot
+capture/install. Resolve uncertain commit from current/pending/cleanup. Failure after commit keeps old serving
+state or refuses new serving until recovery; it does not report an uninstalled target visible. Old requests
+read their old snapshot, never latest bindings under an old sequence label.
 
-## Empty, unsupported and no-work are different
+## Empty and unavailable
 
-Successful zero-unit preparation is publishable. Nonempty -> supported empty closes former points and commits
-the new inventory; an initial empty source needs no upsert. Last-source removal can yield a valid empty view.
-No sentinel point or stale nonempty success is needed to bypass EmptyUnitSet checks.
-
-Unsupported/incomplete extraction stays an explicit source gap. Until a new outcome is published, old results
-are visibly from the old published revision. A gap-only new outcome cannot attribute old evidence to the
-failed input. Missing collection/metadata and unfinished initial build are unavailable, not empty success.
-When exact published input/outcome already matches, skip redundant sequences and zero-effect pending work.
+Nonempty -> supported empty closes former points and commits the new inventory. Initial empty needs no
+upsert; last-source removal can publish a valid empty view. No sentinel point or stale nonempty success.
+Gap-only publication follows the table above. Missing collection/metadata and incomplete initial build are
+unavailable, not successful empty. Evidence for a failed revision is never borrowed from an older one.
 
 ## Initial build or incompatible profile
 
-Use a new physical generation and separate source/evidence tables, filled in bounded transactions. Staging is
-not query-visible. Pending names fixed generation/inputs. Complete validation precedes atomic pointer switch
-and cleanup transfer; the final transaction does not copy every corpus row.
+Use a new physical generation and separate source/evidence tables filled in bounded transactions. Capture
+the exact intended input/outcome inventory according to [control's recipe](../../search-control-redb/FUNCTIONS.md#restartable-generation-input-capture)
+before dispatching its Qdrant effects. One in-memory read transaction or a sequence number cannot restore
+that selection after restart; a cursor reopened against changing current rows is not the original snapshot.
 
-Source changes during the build remain discoverable by comparing current input with built inventory.
-Resume the same target only when its dispatch state permits it; otherwise use isolated recovery above.
-A zero-point generation still requires selected schema and explicit complete inventory. Generation names are
-installation-scoped and never recycled for a different build, including failed/abandoned targets.
+Staging stays unqueryable. Complete captured inputs and all required effects/evidence precede the pointer
+switch; the final transaction does not copy the corpus. Resume only from the captured inventory and when
+dispatch state permits, otherwise use isolated recovery. Source/config changes become follow-up work through
+two-sided reconciliation. A zero-point generation still has selected schema and explicit complete inventory.
+Generation names are installation-scoped and never recycled, including failed/abandoned targets.
 
 ## View and writer lifetime before cleanup
 
 PublishedViewState owns a real redb snapshot plus route/profile/sequence. One current Arc and weak retired
-refs suffice. Pin current only; windows inherit a guard. No manager lock across database/object/RPC I/O.
-Last drop may wake cleanup but performs no deletion. Old readers retain pages; finite request/window lifetime
-and write backpressure require measurement.
+refs suffice. Pin current only; windows inherit the guard. No manager lock across I/O. Last drop may wake
+cleanup but does no deletion. Bound requests/windows and measure old-reader page growth/backpressure.
 
 Transfer unfinished deletion to finite RetiredCleanup rows in the current commit. Points closed at N wait
-for every relevant same-generation view below N; a collection waits for all users. In addition, no unresolved
-writer may recreate/replace the state being retired. Reader drain alone is not writer quiescence.
+for every relevant same-generation view below N; collections wait for all users. Neither may be reclaimed
+while an unresolved writer could recreate the retired state. Reader drain alone is not writer quiescence.
 
-For a settled route, exact absence completes a delete; partial deletion retries remaining expected IDs and
-foreign identity stops work. Delayed deletes of never-reused retired IDs are harmless to newer points. For an
-uncertain abandoned route, do not discard its cleanup obligation on one observed absence while a creator can
-still arrive. Leave its unreachable data/obligation until actual terminality can be established, with bounded
-backlog and visible write backpressure. Do not claim physical cleanup that the backend cannot prove complete.
+For a settled route, exact absence completes deletion; partial deletion retries remaining expected IDs and
+foreign identity stops work. Delayed deletion of never-reused retired IDs cannot delete newer points. For
+an uncertain abandoned route, do not drop cleanup on one observed absence while a creator could still arrive.
+Keep that unreachable data/obligation with bounded backlog and visible write backpressure until actual
+terminality is established. Do not claim physical cleanup that the backend cannot prove complete.
 
-Retire generation metadata only after view/pending/cleanup consumers disappear. Local object files await
-stopped-root GC; unresolved-operation artifacts remain roots. Completed operation history is not retained.
+Retire generation metadata after view/pending/cleanup consumers disappear. Local objects await stopped-root
+GC; unresolved artifacts remain roots. Completed history is not retained.
 
 ## Restart is not restore
 
-Ordinary restart opens durable current consistently, checks pending possible-dispatch state before retry,
-and reevaluates cleanup. Old process-local readers are gone, but a separate Qdrant server may still run an
-old request. Reconstruct missed preparation/publication work from current inputs/outcomes.
+Ordinary restart opens durable current, checks pending possible-dispatch state before retry, reevaluates
+cleanup and reconciles desired/published inputs. Old process-local readers are gone; a separate Qdrant
+server may still execute old requests. Full-build input capture follows the control recipe, not a fresh scan
+silently relabelled as old work.
 
-A backup copy cannot enter this replay path. The [restore recipe](../../search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport)
-imports committed source/prepared state into a fresh destination/generation. Copied pending/cleanup is archive
-evidence, not authority over the original. Index loss also requires a fresh verified rebuild, not empty success
+A backup copy cannot enter this replay path. [Restore/import](../../search-runtime/search-retention/FUNCTIONS.md#explicit-restoreimport)
+uses committed source/prepared state in a fresh destination/generation. Copied pending/cleanup is archive
+evidence, not authority over the original. Index loss requires a fresh verified rebuild, not empty success
 or adoption of an unrelated collection.
 
 ## Remove and verify
 
-Delete the old phase/receipt/observation/restore/compensation machines, full-manifest encodings, raw pins and
-separate reclaimer after callers move. Preserve actual #598 private overlap, not its superseded programme.
+Delete competing phase/receipt/observation/compensation machines, full-manifest encodings, raw pins and
+separate reclaimer with their consumers. Preserve actual #598 private overlap, not its superseded programme.
 
-After code check lost wake-up; stale preparation; empty/gap transitions; native readback; partial settled
-batch; a delayed old create across retry/closure/deletion; no in-place vector/filter mutation of old views;
-isolated recovery and repeated failure bounds; atomic metadata/current commit; commit/install gap; staging;
-v1/v2/v3 cleanup with readers and writers; restart; old-reader disk growth and restore isolation. Minimal
-changed-owner compiler/Clippy comes first. No runtime outcome is established by this document.
+After implementation check published-only removal with a lost notification; gap-only replacement and repeated
+gap no-op; pending versus failed preparation; interrupted input capture and restart after capture; profile
+change during rebuild; immutable old-view retrieval; partial settled batches; native readback; delayed create
+across retry/close/delete; bounded isolated recovery; atomic commit/install gap; reader/writer cleanup;
+restore isolation and old-reader growth. Minimal changed-owner compiler/Clippy first. No runtime success is
+established by this document.

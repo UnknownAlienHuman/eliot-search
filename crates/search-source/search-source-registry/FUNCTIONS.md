@@ -1,115 +1,109 @@
-# search-source-registry — source map and replacement
+# Source registry: current rows, not replay history
 
-The [implementation guide](../../../docs/implementation/README.md) owns the connected source path. This
-file distinguishes current source from the few current-state operations the product actually needs.
+The [implementation guide](../../../docs/implementation/README.md) defines the connected path.
+This file owns source-row mutation. [Reconcile](../search-source-reconcile/FUNCTIONS.md) owns observation
+meaning; [preparation](../../search-prep/search-materializer/FUNCTIONS.md) owns result reuse/retry/installation.
+R011 revises the proposed conditional update; it does not implement it in Rust.
 
-## Current normal command sequence
+## Current code and why it is replaced
 
-`DirectRegistryOwner::prepare_output` and `prepare_source_output` execute approximately:
+DirectRegistryOwner::prepare_output/prepare_source_output bind RegistryJournal through bind_original_v4,
+restore all SourceRegistry state, load operations, reconstruct original policy/admission inputs, requalify
+records, commit a generic batch, read changed targets back and rebuild the full control snapshot. The normal
+native-source command also drops its acquired body and reports no retained revision.
 
-```text
-bind `RegistryJournal` through `bind_original_v4`
-→ restore complete `SourceRegistry`
-→ load historical operation by operation ID
-→ reconstruct original v4 policy/admission inputs
-→ requalify root/source records
-→ prepare and commit a generic registry batch
-→ read all changed targets back
-→ drop the adapter
-→ rebuild/publish the complete control snapshot
-```
+The registry_control support files previously measured over 63 KiB before the main adapter. This is not a
+small current-head transaction. Keep useful current values and database operations, not the replay protocol.
 
-For a new source, `native_source_command` additionally performs the stable read and Source-v2 admission,
-but the acquired body is dropped and output still reports no retained revision.
-
-The adapter supporting this path stores pending generic requests, operation envelopes and original-input
-recovery. Its supporting non-test files under `bins/eliot-searchd/src/registry_control/` already exceed
-about 63 KiB before the large main adapter. This is not a small source-head transaction.
-
-## Package API and caller reality
-
-| Area | Current behavior / caller reality |
+| Existing area | Actual disposition |
 |---|---|
-| Source-v2 preparation/commit/recovery | Used by daemon source admission. Persists admission/original-input metadata; does not retain the acquired body or commit a usable `RevisionRef`. |
-| Generic root/source/membership operations | Mutate an in-memory `SourceRegistry` through `RegistryControlPort`, operation IDs, mutation digests and receipts. Many callers are fixtures or the restore adapter. |
-| `registry_snapshot` | Clones roots, sources, memberships, portfolios, portfolio history, active generations, namespace ownership and namespace state into another aggregate. View helpers call it again. |
-| `publish_reference_portfolio` | Implemented and exercised by tests; no connected local query producer was found. |
-| source/workspace view resolution | Pure snapshot/view functions over the cloned aggregate; not the immutable Qdrant/evidence `PublishedView`. |
-| namespace cutover | General owner transition/fence/activation/recovery over registry state; no normal source writer requires it. |
-| batch/restore | Replays complete registry histories and operation receipts. The normal daemon currently depends on it, but the current-format target must not. |
-| source revision registration | Reexported from `search-source-history`; test callers were found rather than the native acquired-body path. |
-| forwarding crates | `search-source-records` and `search-source-history` relocate legacy codecs, currentness, revision and restore code; they do not own source bytes or a database. |
+| Source-v2 preparation/commit/recovery | Connected to daemon admission but stores original-input metadata, not acquired bytes plus a usable RevisionRef. Replace the caller path. |
+| Generic root/source/membership operations | In-memory registry, control ports, operation IDs/digests and receipts. Replace with concrete current-row transactions. |
+| registry_snapshot and view helpers | Clone roots, sources, memberships, portfolios/history, generations and namespace state. Query uses PublishedView instead. |
+| Reference portfolio/history, namespace cutover | No connected local query/source-writer consumer was found in the earlier audit. Do not build them to preserve historical APIs. |
+| batch/restore and revision registration | Old daemon replay or test paths, not a connected retained-body head update. Remove with their consumers. |
+| records/history forwarding crates | Relocate codecs/currentness/restore, but own neither bytes nor a database. Move remaining useful types and delete empty boundaries. |
+
+## Current state and conditional application
+
+RootRecord and SourceRecord hold current registration/selection, locator, availability and retained revision.
+A locator-to-source index exists only where actual lookup needs it. Optional saved selections are current
+configuration, not membership history. Read a command's affected rows directly; iterate only for inventory,
+reconciliation or an actual publication/build snapshot.
+
+A head digest is not a concurrency guard. A -> B -> A can restore the same content while an old acquisition
+or preparation is still running. A membership Boolean can likewise change true -> false -> true after removal
+and re-registration. The earlier compare/set wording did not distinguish these from unchanged state.
+
+Capture the current source row revision and actual root-registration/settings state before the work. In the
+short apply transaction, compare that guard plus the expected retained reference and selection conditions;
+advance the current row revision when installing a source-state change. Recreated registrations must not reuse
+a stale guard: use a new source/registration identity or a continuing non-reset row revision. No cryptographic
+stamp, universal epoch service, operation archive or compatibility layer is needed.
+
+Use this guard for source acquisition and prepared-result installation. Relevant locator, parser-selection
+or policy changes cannot be ignored merely because content bytes match. Conversely, a concurrency revision
+is not a transform-cache/point identity: unchanged pure results can be re-evaluated under current state without
+pretending that the old task still owns the row. Never attach an artifact bearing another source's identity
+just because its body digest matches.
 
 ## Connected source operation
 
-Implement one coherent operation around the exact bytes already acquired by the daemon:
-
 ```text
-pre-read admission
-→ stable final-handle read
-→ post-read classification
-→ #330 immutable object write/readback
-→ short typed redb transaction:
-     upsert SourceRecord
-     compare/set current RevisionRef
-     update locator/availability
-→ enqueue #331 preparation/publication work
+capture current registration/source/settings
+-> pre-read admission
+-> stable final-handle read
+-> post-read classification
+-> shared immutable object write/verification
+-> short typed transaction:
+     compare captured current-state guard
+     set retained head, locator/physical observation, availability/selection
+     advance source row revision
+-> wake preparation/publication (optional acceleration)
 ```
 
-The object writer runs before the source-head transaction. A failure before commit leaves an unreferenced
-object for bounded GC. A known transaction abort is a known failure. A genuinely unresolved commit is
-resolved by point-reading the current source/head row; do not rescan the pathname or inspect an operation
-archive.
+Object I/O precedes the transaction. A failure/conflict can leave an unreferenced object for stopped-root
+maintenance; it cannot overwrite a newer head. A known abort is failure. Resolve an uncertain commit by
+point-reading current rows: an exact resulting state may establish the current outcome, while a newer state
+is superseding work, not permission to retry old bytes. Do not rescan live paths under an old observation or
+recover a completed-operation transcript merely to reconstruct history.
 
-## Target typed state and operations
+Prepare work remains discoverable from desired input versus current outcome after a lost wake-up. Published-only
+sources remain discoverable from the publication inventory after removal/exclusion, even if the source row no
+longer exists. An enqueue is not the durable record for either case.
 
-Suggested table/key ownership may follow the accepted current schema, but the behavior is:
+## Operations the application actually needs
 
-```text
-ROOTS[root_id]                  -> RootRecord
-SOURCES[source_id]              -> SourceRecord
-SOURCE_BY_LOCATOR[root, locator] -> source_id        // only when current lookup needs it
-SAVED_SELECTIONS[name]          -> ordered source IDs // optional current config
-```
+Register/update/unbind a root; get a root/source; bounded source/root enumeration; conditionally commit or
+retire a current head without deleting retained objects; read one consistent source snapshot when needed;
+resolve non-widening source selection against PublishedView. These responsibilities do not require public
+methods for every noun, a generic repository trait or immutable corpus/portfolio history.
 
-Operations:
+Observation refusal, incomplete inventory and confirmed removal follow the reconcile recipe. Same-path atomic
+save need not create another logical source. A same-content rename reuses transformation only when the actual
+preparation inputs/context also match; changed parser selection is not a metadata-only update.
 
-- `register_root` / `update_root` / `unbind_root`;
-- `get_root`, `get_source`, bounded `list_roots` / `list_sources`;
-- `commit_source_head(source, expected_head, revision_ref, locator, availability)`;
-- `retire_source_head(source, expected_head, reason)` without deleting retained objects;
-- one consistent read transaction that enumerates current source heads for reconcile/publication;
-- `resolve_selected_sources(requested_ids, PublishedView)` with no widening.
+## Published view versus source state
 
-Use exact point reads for command/update paths. Use bounded table iteration only when an actual inventory or
-publication snapshot needs all current rows. Do not reconstruct the result by replaying prior operations.
+Current source rows are mutable desired input and can be newer than served published input. PublishedView
+is created after preparation/Qdrant effects and identifies exact evidence. An old query stays coherent through
+its view snapshot/guard, not through registry aliases/history. Do not call source-head commit search visibility.
 
-## Published view versus current registry
+Full-generation capture/restart belongs to [control](../../search-control-redb/FUNCTIONS.md#restartable-generation-input-capture),
+not an in-memory snapshot label reopened against latest rows. Ordinary commands do not rebuild all registry state.
 
-A current source snapshot is mutable control input. `PublishedView` is the immutable query object produced
-after preparation and Qdrant publication. Do not rebuild permanent corpus/portfolio/source-view history in
-the registry. An old query stays coherent because it holds the old published-view guard and manifest, not
-because every previous registry alias or operation remains queryable.
+## Remove after cutover
 
-## Delete after cutover
+Remove RegistryJournal/original-input resolvers/v4 restore; generic batch/operation replay; full SourceRegistry
+reconstruction; query-time aggregate clones; unused reference-portfolio/history and namespace migration;
+legacy DIRECT catalog/journal and process-local receipt/currentness authority. Delete forwarding packages once
+their remaining values move. Unsupported old roots stay untouched; no universal migration is selected.
 
-- `RegistryJournal`, original-input layouts/resolvers and v4 restore/readback;
-- registry batch/operation codecs used only for current-command replay;
-- complete in-memory `SourceRegistry` restore before each command;
-- aggregate `registry_snapshot` copies on the connected query path;
-- reference portfolio/history and membership policy machinery with no current consumer;
-- namespace export/cutover and universal migration replay;
-- legacy DIRECT journal/root-catalog codecs from the new application path;
-- process-local currentness/receipt authority;
-- forwarding package splits after useful current types move to the typed control/source owner.
+## Checks after code
 
-## Behavior to verify
-
-- exact acquired body is the body referenced by the committed revision;
-- same source/same revision replay and same expected head/different revision conflict;
-- rename without content change updates location without duplicate preparation;
-- missing/partial inventory cannot mass-retire unseen sources;
-- restart point-reads current roots/sources/heads directly from redb without operation replay;
-- publication reads one consistent current source snapshot;
-- old published-view readers keep exact evidence while new source heads advance;
-- no portfolio/cutover/restore path remains reachable from normal ingestion/query.
+Exact acquired body reaches the committed reference; stale acquisition cannot replace a newer head; same-content
+ABA and remove/re-add reject old installation; current source row and locator change atomically; parser-changing
+rename is reconsidered; incomplete inventory cannot mass-retire; lost preparation/removal wake-ups converge;
+restart uses typed current rows without replay; old view evidence stays exact while heads advance. Run minimal
+pinned compiler/Clippy for actual changed owners/consumers. These behaviors are not established by this document.
+Preserve #598's actual unpublished object/key overlap, not its obsolete process programme.
