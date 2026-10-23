@@ -1,142 +1,154 @@
 # Test and harness cutover
 
-Tests preserve product behavior, not pre-release file layout, package count, receipts or disconnected
-applications. During refactoring, connect the real producer to the real consumer, run minimal compiler/Clippy
-for changed owners, and delete tests whose only subject disappears. Broad regression and scale suites follow
-the connected application.
+Tests preserve product behavior, not pre-release package layout, receipt graphs or disconnected applications.
+During refactoring, connect the real producer to the real consumer, run minimal pinned compiler/Clippy for the
+changed production slice, and delete tests whose only subject disappears. Broad regression and scale suites
+follow the connected application.
 
-## Verified public-main inventory
+**Public baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
+**Latest inspected tree:** `8cf331a44decded2c84c7f579dcbf8434e040dc7` (`R015`, 2026-10-23)
 
-At `c8e38b6`:
+## Classification rule
 
-- `bins/eliot-searchd/tests` contains **76 Rust files**;
-- **33** are named `*_module_ownership.rs`;
-- **28** are named `*_process.rs`;
-- `bins/eliot-searchd/Cargo.toml` additionally declares **seven harness-only test targets** for snapshot/sealed
-  binaries;
-- historical wave features compile different disconnected package sets rather than one selected application.
+Every legacy test belongs to one of three buckets:
 
-Representative source inspection shows three distinct categories.
+1. **Delete with no replacement** when it parses Rust/Cargo/Markdown text, freezes filenames/type placement,
+   requires an obsolete feature or only proves an old state machine agrees with itself.
+2. **Move the causal case** when it catches a real failure that still applies to the new owner. Rewrite the case
+   against the current API; do not retain the old command, receipt or fixture to keep the test alive.
+3. **Retain unchanged** only when it already executes current product behavior through the selected owner.
 
-### 1. Delete source-shape tests
+A subprocess, native call or large fixture does not make an obsolete architecture a product requirement.
 
-Examples such as `owner_composition_module_ownership.rs`,
-`config_composition_module_ownership.rs` and `public_runtime_service_module_ownership.rs` read Rust source as
-text and assert:
+## R015: exact current-tree disposition
 
-- exact module filenames and `mod`/`pub use` spelling;
-- exact function/type marker location;
-- source byte ceilings;
-- forbidden token strings;
-- old lifecycle states, receipts, helper names and test-function names;
-- absence/presence of obsolete files.
+### Removed source-shape tests
 
-These tests actively prevent merging packages, inlining trivial facades and deleting owner/config/provider
-state machines. Remove them with the old owner. Compiler visibility, dependency review and product behavior
-replace them; do not create new source-token, AST, rustdoc or module-map enforcement.
+The following files read repository source/manifests and assert exact modules, marker strings, byte ceilings,
+feature topology or ownership placement. They execute no product behavior and actively prevent inlining,
+merging and deletion:
 
-### 2. Delete disconnected process proofs
+- `bins/eliot-searchd/tests/product_targets.rs`;
+- `bins/eliot-searchd/tests/control_migration_owner_boundary.rs`;
+- `bins/eliot-searchd/tests/direct_preparation_owner_boundary.rs`;
+- `bins/eliot-searchd/tests/direct_store_registry_owner_boundary.rs`;
+- `bins/eliot-searchd/tests/git_source_owner_boundary.rs`;
+- `bins/eliot-searchd/tests/revision_inventory_model_ownership.rs`;
+- `bins/eliot-searchd/tests/revision_key_derivation_ownership.rs`;
+- `bins/eliot-searchd/tests/revision_protection_contract_ownership.rs`;
+- `bins/eliot-searchd/tests/source_composition_owner_boundary.rs`;
+- `bins/eliot-searchd/tests/stable_native_identity_api.rs`.
 
-`indexed_query_process.rs` explicitly states that it does **not** drive the served daemon. It constructs the
-process-test in-memory Qdrant oracle, canonical plan, grants/access checkpoints, leg tickets, epoch pins,
-caller readback and projector. Passing it proves the old proof stack agrees with itself.
+This removes 39,523 source bytes. `product_targets.rs` specifically required seven daemon and one CLI legacy
+harness targets to remain, contradicting this cutover guide.
 
-`product_spine_process.rs` explicitly joins two separate halves:
+### Removed lifecycle proof family
 
-```text
-legacy daemon DIRECT commands
-+ manual std::net HTTP calls to an exact Qdrant executable
-```
+These tests exclusively exercise the rejected `wave7-lifecycle`/`search-retention` platform rather than the
+selected stopped-root GC and fresh-destination archive/import:
 
-It does not call the bridge from the daemon and does not provide one CLI search operation. Preserve useful
-live-fixture mechanics only if the connected product test reuses them; delete the two-halves acceptance claim,
-manual duplicate Qdrant client and old identity/payload assertions.
+- `bins/eliot-searchd/tests/restore_process.rs`;
+- `bins/eliot-searchd/tests/retention_process.rs`;
+- `bins/eliot-searchd/tests/purge_process.rs`;
+- `crates/search-runtime/search-retention/tests/purge_barriers.rs`;
+- `crates/search-runtime/search-retention/tests/sweep.rs`.
 
-The same rule applies to process fixtures for migration, quarantine, pairing, purge, overlay, legacy owner
-lifecycle, handle/continuation and other removed systems. A subprocess does not make obsolete behavior a
-product requirement.
+They instantiate same-installation restore, purge planes, receipt phases, generic graph roots, leases/pins and
+synthetic CAS adapters. Qdrant is absent or represented as unresolved proof. Removing these 83,573 source bytes
+does not claim that GC, backup, restore or legal erasure is implemented.
 
-### 3. Move causal behavior cases
+The useful causal cases are retained below as requirements for the concrete owners:
 
-`direct_preparation_process.rs` drives a real binary and contains useful scenarios even though it targets the
-old DIRECT command surface. Move the behavior, not the old command/store/credential harness:
+- incomplete/unknown mark input causes zero deletion;
+- foreign files and sole retained copies survive;
+- interruption before sweep deletes nothing and interruption during sweep can leave only garbage;
+- partial archive is refused and the completion marker is published last;
+- original/archive remain intact until a fresh destination is verified;
+- destination receives new installation and Qdrant identities and cannot mutate the original;
+- missing/wrong protected-storage material fails without downgrade or copied nonce continuity;
+- no physical secure-erasure claim is inferred from file absence.
 
-- match crossing an internal unit boundary;
-- exact line/byte coordinates without silent normalization;
-- binary/unsupported preparation produces a gap, not an exact negative;
-- retained historical revision survives source deletion and restart;
-- same-content ABA reuses immutable content while the current head changes;
-- overlapping literal matches are returned once each;
-- finite result/output limit changes completion truthfully.
+### Mixed migration tests retained only for behavior extraction
 
-Other old tests may contain equally useful causal cases. Before deleting a family, list the defect each case
-would catch. Move only cases that still apply to the new owner and express them through the current API.
+`control_migration_bootstrap_boundary.rs` and `control_migration_inventory_owner_boundary.rs` contain real
+Windows/filesystem cases mixed with source-text assertions. Do not delete their useful cases blindly:
+
+- no-clobber target creation and retained parent-directory identity;
+- bounded exact reads, missing versus non-file distinction and path-escape refusal;
+- directory membership drift detection between pages;
+- hard-link/alias refusal;
+- incomplete/unknown metadata remains a gap rather than silent absence.
+
+Move those cases to the current root/object/source/archive owners during their cutover. Delete the remaining
+`include_str!`/marker-order assertions and legacy migration harness at that time.
+
+## Remaining harness cuts
+
+The current manifests still contain:
+
+- seven daemon harness-only snapshot/sealed test targets;
+- one CLI snapshot test target;
+- `wave1` through `wave7`/`full-baseline` feature composition;
+- feature-gated `restore_composition` and optional `search-retention`;
+- process fixtures for migration, quarantine, pairing, recipes, overlays, old handles and manually joined
+  Qdrant/DIRECT halves.
+
+Remove each target with its last unique causal behavior. Do not replace the feature ladder with another test
+profile, package map or acceptance feature. The default binaries must become the only product application.
 
 ## Target test portfolio
 
 ### Fast owner tests
 
-Keep small deterministic tests next to the implementation for:
+Keep small deterministic tests next to the current implementation for:
 
 - typed redb compare/set and restart readback;
 - immutable object create/reuse/no-clobber/final verification;
-- materialization coordinate maps and structure-first unit boundaries;
-- stable point identity and view-manifest binding;
+- preparation empty/gap states, coordinate maps and structure-first unit boundaries;
+- stable retrieval identity and published evidence binding;
 - Qdrant request/response conversion and full versus narrow mutation semantics;
-- publication cursor transitions and view-guard cleanup eligibility;
-- request/window bounds and commit-after-complete-output;
-- framed protocol bounds, partial I/O and exactly one terminal response.
+- publication cursor transitions, late-writer handling and view-guard cleanup eligibility;
+- request/window bounds and commit after complete terminal output;
+- framed protocol bounds, cancellation and partial I/O.
 
-These tests call current functions. They do not parse source files, inspect issue state or assert module
-layout.
+These tests call current functions. They do not inspect repository text, issue state or module placement.
 
-### One connected product smoke
+### One connected smoke
 
-The primary acceptance test uses default binaries and the real selected Qdrant path:
+The primary acceptance path uses default binaries and the real selected Qdrant client:
 
 ```text
 initialize/open current root
 → ingest one real file
 → restart
-→ publish/read back native BM25 point
+→ publish and read back native BM25 state
 → CLI Search
-→ pinned manifest lookup
+→ pinned evidence lookup
 → exact retained excerpt
 ```
 
-It fails if any half is mocked or manually joined. It does not call a process-test oracle, duplicate REST
-client or test-only mutation API.
+A constructor test, process oracle, manual REST half, source-shape assertion or self-test string is not this
+smoke.
 
 ### Focused connected regressions
 
-After the smoke path works, add only scenarios with causal value:
-
-- edit and rename touch only affected work;
-- explicit/empty/unknown source scope and correct base IDF population;
-- old pinned view remains readable across publication;
-- unknown Qdrant mutation outcome resolves from actual state;
-- lost Qdrant state rebuilds from current retained/control state;
-- cancellation/deadline stops work without renewing time;
-- page failure advances no `QueryWindow` cursor;
-- bounded expansion cannot leave the emitted item;
-- unsupported/binary/missing evidence yields honest gaps;
-- exact scan owns complete-negative evidence.
+After the path exists, add only causal cases: edit/rename; explicit/empty/unknown scope; correct IDF population;
+old pinned view; unknown Qdrant mutation outcome; lost-index rebuild; cancellation/deadline; failed page output;
+bounded mapped expansion; unsupported/binary/missing evidence; exact no-match; stopped-root GC; archive/import.
 
 Optional PDF/model/overlay/MCP tests exist only after that feature has a real producer, consumer and selected
 runtime.
 
-## Refactor execution policy
+## Execution policy
 
 For each Rust cutover:
 
 1. identify the old owner/API and its last real callers;
-2. list existing tests in three buckets: delete, move behavior, retain unchanged;
-3. connect the new producer/consumer and delete the old implementation and exclusive fixtures in the same
-   slice;
-4. run minimal Rust 1.98 `check` and strict Clippy for changed production owners and immediate consumers;
-5. run only focused causal cases needed for that slice;
-6. defer full workspace/all-features/all-tests, native qualification, scale and long recovery matrices until
-   the application path is integrated.
+2. classify its tests as delete, move causal behavior or retain;
+3. connect the new producer/consumer and delete the old implementation and exclusive fixtures in the same slice;
+4. run Rust 1.98 `check` and strict Clippy for changed production owners and immediate consumers;
+5. defer broad workspace/all-feature/all-test, native qualification, scale and long recovery matrices until the
+   connected product exists.
 
-Do not keep a removed subsystem merely because its test suite is large. Test volume is not evidence of a
-useful product boundary.
+Test volume is not evidence of a useful product boundary. Do not preserve a removed subsystem merely because
+its fixtures are large.
