@@ -40,7 +40,6 @@ members = [
     "crates/search-query/search-handles",
     "crates/search-query/search-result-projector",
     "crates/search-query/search-continuation",
-    "crates/search-runtime/search-retention",
     "crates/search-eval",
     "crates/search-provider-protocol",
     "crates/search-provider-client",
@@ -101,15 +100,14 @@ search-comparator = { path = "crates/search-query/search-comparator" }
 search-handles = { path = "crates/search-query/search-handles" }
 search-result-projector = { path = "crates/search-query/search-result-projector" }
 search-continuation = { path = "crates/search-query/search-continuation" }
-search-retention = { path = "crates/search-runtime/search-retention" }
 search-eval = { path = "crates/search-eval" }
 search-provider-protocol = { path = "crates/search-provider-protocol" }
 search-provider-client = { path = "crates/search-provider-client" }
 search-provider-transport-windows = { path = "crates/search-runtime/search-provider-transport-windows" }
 search-eliot-adapter = { path = "crates/search-eliot-adapter" }
 
-# Single vendor-SDK pin. Only search-qdrant-bridge may inherit this
-# dependency; its exact version must match the qualified client receipt.
+# One vendor-SDK pin, consumed only by search-qdrant-bridge.
+# Compatibility is checked against the actual server, not an activation receipt.
 qdrant-client = { version = "=1.19.0", default-features = false }
 
 # #237: exact private algorithm mechanisms; search-contracts owns canonical

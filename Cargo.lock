@@ -413,7 +413,6 @@ dependencies = [
  "search-qdrant-supervisor",
  "search-query-planner",
  "search-result-projector",
- "search-retention",
  "search-retrieval-executor",
  "search-revision-store",
  "search-runtime-owner",
@@ -1437,19 +1436,6 @@ dependencies = [
  "search-contracts",
  "search-domain",
  "search-handles",
- "search-ports",
-]
-
-[[package]]
-name = "search-retention"
-version = "0.0.0"
-dependencies = [
- "search-config",
- "search-contracts",
- "search-domain",
- "search-epoch-pins",
- "search-handles",
- "search-index-reclaimer",
  "search-ports",
 ]
 

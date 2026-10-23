@@ -4,42 +4,42 @@ ELIOT Search helps agents and people navigate large codebases and document colle
 sources, asks a question and receives useful files, symbols or ranges with excerpts, revision identity and
 clear gaps. The result should make the next source read or exact check obvious.
 
-It is intended to be one standalone local application with a CLI and daemon. Qdrant supplies indexed
-retrieval; Search owns source retention, preparation, publication and evidence. It runs without a model or
-agent controller. Large repositories and portfolios are a core workload.
+The target is one standalone local application with a CLI and daemon. Qdrant supplies indexed retrieval;
+Search owns source retention, preparation, publication and evidence. A model or agent controller is not
+required by that design. Large repositories and portfolios are a core workload.
 
 ## Start here
 
 | Document | Purpose |
 |---|---|
 | [Architecture](docs/architecture/README.md) | Short product manifesto: purpose, useful results, requirements and principles. |
-| [Implementation](docs/implementation/README.md) | Concrete existing owners, changes, removals and donor APIs. |
-| [Current smoke](QUICKSTART.md) | The only simple runnable search route and the exact persistent-product blocker. |
+| [Implementation](docs/implementation/README.md) | Concrete owners, changes, removals and donor APIs. |
+| [One-shot scan example](QUICKSTART.md) | Existing narrow route; current-HEAD build/run is unverified. Not a persistent-product quickstart. |
+| [Analysis registry](docs/audit/ANALYSIS_REGISTRY.md) | Inspected revisions, findings, actual changes, execution evidence and remaining gaps. |
 
-[AGENTS.md](AGENTS.md) describes repository work. The [documentation index](docs/README.md) links to
-specific source evidence and optional capabilities. Historical masters, waves, packets and receipts are
-reference material only.
+[AGENTS.md](AGENTS.md) describes repository work. The [documentation index](docs/README.md) links to specific
+source evidence and optional capabilities. Git history preserves retired specifications; they are not current
+implementation requirements.
 
 ## Current implementation
 
-The indexed application is not connected. The source contains useful readers, preparation code, lexical
-encoding, a real Qdrant adapter and query components, but no production route joins them from one fresh root
-to a source-backed CLI result.
+The indexed application is not connected. Source contains useful readers, preparation code, lexical encoding,
+a real Qdrant adapter and query components, but no production route joins them from one fresh root to a
+source-backed CLI result.
 
-The primary daemon is currently a chain of overlapping command interceptors. A direct registry/journal owner
-captures several search/read/service command names before later handlers and emits registry metadata rather
-than executing the named operation. A separate read-only DIRECT service exists in source, but its
-`--serve-data-root` route is shadowed by that earlier interceptor. Other native initialization, preparation and
-migration applications are separate systems.
+The primary daemon still has overlapping command interceptors. The inspected registry/journal interceptor
+claims several search/read/service names before later handlers. Native initialization, preparation, migration
+and the read-only DIRECT service are not one product. See the [daemon map](bins/eliot-searchd/FUNCTIONS.md).
 
-The default Cargo feature is empty `wave1-shell`, so Qdrant/query dependencies are excluded. Enabling
-`full-baseline` merely compiles additional old composition systems; it does not create a connected product
-entrypoint. There is currently no feature combination which should be represented as the finished Search
-application.
+The standalone snapshot/sealed applications and daemon TCP/token proxy were removed in R016/R019. R020 removes
+the empty retention package and `wave7-lifecycle`/`full-baseline` Cargo entries. The remaining `wave1`–`wave6`
+features still select old composition fragments; enabling them does not establish a working product. No new
+all-in-one acceptance feature replaces the deleted aliases.
 
-The target remains one working path from a local file to a durable revision, indexed result and correct source
-excerpt, followed by incremental update, restart and rebuild through the same owners. DIRECT exact scan
-remains a separate explicit operation.
+The default feature remains the empty `wave1-shell`. The source's narrow one-shot exact-scan route is distinct
+from persistent indexed search. Neither that route nor the current daemon build was rerun during the latest
+cleanup. An earlier broad daemon check failed; old successful library checks do not certify this checkout.
+Exact evidence and limitations belong to the registry, not an inferred green status here.
 
 ## Workspace
 
@@ -49,26 +49,27 @@ remains a separate explicit operation.
 | Sources and retained revisions | [crates/search-source](crates/search-source/) |
 | Preparation and lexical encoding | [crates/search-prep](crates/search-prep/), [search-lexical](crates/search-lexical/) |
 | Qdrant projection, publication and adapter | [crates/search-index-qdrant](crates/search-index-qdrant/) |
-| Planning, retrieval and source validation | [crates/search-query](crates/search-query/) |
+| Query and evidence | [crates/search-query](crates/search-query/) |
 | Durable current state | [search-control-redb](crates/search-control-redb/) |
 
-This is the current layout, not a requirement to preserve every package. Consolidate modules which split one
+This is the current layout, not a requirement to preserve every package. Consolidate modules that split one
 responsibility without isolating a real dependency or effect.
 
 ## Development
 
-Use the pinned Rust toolchain and locked dependencies. Check the changed owner and its immediate real
-consumers, for example:
+Use the pinned Rust toolchain and locked dependencies. Check the actual changed target and its immediate
+consumers. For example, changes to daemon composition require the binary, not just its small library:
 
 ```sh
-cargo +1.98.0 check --locked -p <owner> --lib
-cargo +1.98.0 clippy --locked -p <owner> --lib -- -D warnings
+cargo +1.98.0 check --locked -p eliot-searchd --bin eliot-searchd
+cargo +1.98.0 clippy --locked -p eliot-searchd --bin eliot-searchd -- -D warnings
 ```
 
-Do not use `--all-features` or `full-baseline` as a product profile during the refactor: they also compile
-obsolete harness and lifecycle systems. Select only the actual changed targets. Exercise real application
-behavior after integration; compilation, fixtures, feature flags and hard-coded status fields do not establish
-a working Windows/live-Qdrant application. Keep GitHub Actions manual-only.
+These are commands to run, not reported passing results. Use `--lib` only for a genuinely library-scoped
+change. Select existing features required by the real consumer; do not equate `--all-features` with a product
+profile or restore the removed `full-baseline` alias. Broader tests follow the connected implementation.
+Compilation, fixtures and hard-coded status fields do not establish Windows/live-Qdrant behavior. Keep Actions
+manual-only.
 
 ## License
 

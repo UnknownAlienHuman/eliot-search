@@ -1,25 +1,17 @@
 # Local maintenance, backup and restore/import
 
 This file owns offline local-object collection and current-format archive/import. Qdrant retirement remains
-[publication cleanup](../../search-index-qdrant/search-publication/FUNCTIONS.md). The generic retention/purge/
-restore platform is not retained.
+[publication cleanup](../../search-index-qdrant/search-publication/FUNCTIONS.md). This is now a documentation-only
+location, not a Cargo package. The selected operations below are not implemented by removing their predecessors.
 
-## Inspected legacy code is not the replacement
+## Historical findings and remaining legacy code
 
-At `2b37f5ef` the current tree still contains two obsolete implementations:
+At `2b37f5ef`, `search-retention` contained generic leases, purge planes, graph sweep, receipts and restore phases.
+The daemon's `restore_composition` required the destination root/incarnation/epoch and physical root to match the
+export, carried copied collection/purge/key authority and supported sole-copy deletion. R017 removed both
+implementations; R020 removes the empty crate and its Cargo/lock/feature entries. Do not adapt or reconstruct them.
 
-- `search-retention/src/{lib,purge,sweep}.rs` is about 82 KiB of leases, tombstones, purge planes, receipts,
-  restore phases and generic graph sweep;
-- daemon `restore_composition/**` is a feature-gated W7 state machine used by its fixtures/process tests. Its
-  `stage_restore` requires the destination root ID, incarnation, epoch and physical root to equal the export,
-  carries copied collection/epoch/purge authority and supports receipt-driven key migration and sole-copy
-  deletion. That is the opposite of a fresh destination import.
-
-Caller searches found the restore composition in the feature-gated daemon module and test/process fixtures,
-not a normal connected product command. Delete it with `wave7-lifecycle`, `search-retention` and exclusive
-fixtures after the concrete operations below exist. Do not adapt its phases, receipts or key migration.
-
-The legacy DIRECT collector is also not a donor for the new mark set. `collect_orphan_revisions`:
+The legacy DIRECT collector remains a separate removal target. `collect_orphan_revisions`:
 
 1. reads the complete append-only `source-events.log` into memory;
 2. adds the revision from every historical event to `referenced_revisions`, including retired/superseded rows;
@@ -138,11 +130,11 @@ owner to create an independent real key/nonce context. If unavailable, report wr
 leave the archive unchanged; no silent plaintext downgrade, envelope relabel, generic re-encryption or key-
 migration receipt system.
 
-## Removal and verification
+## Remaining implementation and verification
 
-Remove `search-retention`, daemon `restore_composition`, W7 purge/restore/retention tests/features and the legacy
-GC/status hot-path callers after concrete maintenance/import owners replace them. Keep useful filesystem safety
-checks and causal cases, not old types.
+The generic package, daemon restore composition and exclusive lifecycle fixtures are removed. Replace the still-
+existing legacy DIRECT GC/status hot-path consumers with concrete maintenance/import operations; do not revive
+the removed package. Keep useful filesystem safety checks and causal cases, not old types.
 
 After implementation and minimal pinned compiler/Clippy, check:
 

@@ -1,14 +1,13 @@
-# search-retention — implementation removed
+# Former retention package — implementation notes only
 
-R017 removed the generic lease/purge/sweep/restore implementation and daemon `restore_composition`. The crate now
-exports no API. Its manifest, workspace member and lockfile record remain only until a dedicated Cargo pruning cut
-can update all three together.
+R017 removed the generic lease/purge/sweep/restore implementation. R020 removes its empty crate, workspace
+membership, daemon dependency, lockfile record and `wave7-lifecycle`/`full-baseline` features. This directory now
+contains documentation only; it is not a Cargo package or a placeholder for another service.
 
-The selected behavior is defined in [FUNCTIONS.md](FUNCTIONS.md): one stopped-root local-object mark/sweep, one
-completed offline archive and one fresh-destination import. Qdrant cleanup remains with
-[publication](../../search-index-qdrant/search-publication/FUNCTIONS.md).
+[FUNCTIONS.md](FUNCTIONS.md) retains the single recipe for stopped-root local-object collection, completed
+archives and fresh-destination import. Existing links remain valid. These operations are still unimplemented;
+removing the old platform does not deliver them. Implement them with the actual store/control/publication owners.
+[Publication](../../search-index-qdrant/search-publication/FUNCTIONS.md) owns live Qdrant cleanup.
 
-Do not reconstruct the removed platform, add forwarding types or treat this empty package as the owner of new
-code. Implement the small operations in the real store/control/publication owners, then remove this package,
-`wave7-lifecycle` and its stale dependency/lock entries. Original files, archives and sole retained copies remain
-user data.
+Do not recreate a crate, public compatibility types or a lifecycle registry here. Preserve original files,
+archives and sole retained copies.

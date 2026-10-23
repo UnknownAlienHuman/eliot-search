@@ -56,11 +56,6 @@ wave6-proof = [
     "dep:search-subject-resolver",
     "dep:search-comparator",
 ]
-wave7-lifecycle = [
-    "wave6-proof",
-    "dep:search-retention",
-]
-full-baseline = ["wave7-lifecycle"]
 
 [dependencies]
 search-contracts.workspace = true
@@ -74,7 +69,7 @@ search-provider-protocol.workspace = true
 search-lexical.workspace = true
 zeroize = "=1.9.0"
 # Real canonical content hashing, never SHA-256 relabelled as BLAKE3.
-# `pure` excludes C/assembly hashing implementations; see SOURCE_MAPPING.md.
+# Preserve the existing Rust-only `pure` configuration.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 
 # Live plaintext DIRECT ingestion always enters the canonical admission,
@@ -114,7 +109,6 @@ search-handles = { workspace = true, optional = true }
 search-result-projector = { workspace = true, optional = true }
 search-continuation = { workspace = true, optional = true }
 
-search-retention = { workspace = true, optional = true }
 search-eval = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
