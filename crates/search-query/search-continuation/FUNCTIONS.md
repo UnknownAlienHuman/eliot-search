@@ -1,98 +1,131 @@
-# Query window — bounded retention, truthful progress
+# Query window — one pinned view, one session, one cursor
 
-This file owns interactive page/window behavior. [Evidence resolution](../search-candidate-validator/FUNCTIONS.md)
-owns ranges and failure meaning; the [protocol owner](../../search-provider-protocol/FUNCTIONS.md) owns framing
-and cancellable I/O. Reviewed at `e5350809` on 2026-10-23. The replacement below is not implemented by this audit.
+This file owns paging and item-locator lifetime. [Evidence resolution](../search-candidate-validator/FUNCTIONS.md)
+owns excerpt truth; [protocol](../../search-provider-protocol/FUNCTIONS.md) owns framing and transport failure.
+This is the replacement recipe, not a claim that the current daemon implements it.
 
-## Inspected code, not an assumed working window
+## Inspected current paths
 
-- Daemon `continuation/kernel/catalog.rs` accepts an already materialized `StoreSearchResult`, clips its
-  matches using a count allowance and retains the vector. `public_runtime_service/kernel/query.rs` calls
-  `store.search` before that admission. `StoredMatch` owns five strings; a match count is not retained bytes.
-  `Vec::truncate` drops removed elements but does not reduce the vector's allocated capacity. Existing DIRECT
-  corpus limits do exist; this is an accounting/admission defect, not proof of unlimited production allocation.
-- `expire()` runs on catalog access, counters and prepared delivery. The inspected line-session loop blocks
-  awaiting another input and provides no independent expiry turn. A timestamp denies later use; it does not
-  by itself release idle memory. The old catalog does not own a PublishedView guard, so a live redb leak is
-  a risk of naively copying this lifecycle into the replacement, not an observed current failure.
-- `catalog/prepared.rs` defers insertion/cursor change until successful output. Keep that useful property.
-  The shared ContinuationStore and the daemon catalog are separate old implementations, not two required layers.
+At `44d7416c` the daemon has two separate session catalogues:
 
-Move the small window into the real query/session owner and remove both old catalogs and separate handles.
-No durable replan, token digest, source-catalog fence, issued-fingerprint archive or replacement window service.
+- continuation keeps a complete `Vec<StoredMatch>`, cursor, coverage, fixed expiry and a digest of the entire
+  current source catalogue;
+- result handles mint one random token and record per emitted match, with a separate TTL and expansion path.
 
-## Admission and the finite result set
+Useful code exists: direct slicing, finite count ceilings and `PreparedPage`, which commits insertion/advance
+only after successful local output. Keep those behaviors. Do not preserve the two catalogues or their proof-
+shaped source fence merely because they already exist.
 
-Before retrieval, choose the finite candidate allowance and reserve room for the active result and any requested
-window in the existing query/session budget. Enforce response/allocation limits at the actual backend/read
-boundary; clipping an already allocated vector is not admission. Account for vector capacity, owned strings,
-optional cached bytes and temporary page/encoding copies. Count windows and retained bytes across the owner,
-not independently per window with an unbounded session count. Use ordinary counters, not quota receipts.
+The inspected source also establishes these defects/limits:
 
-Freeze one bounded ordered nomination set from that retrieval. Retain compact evidence references and rank,
-not all source bodies or prebuilt cards. Continue slices this set; it does not rerun increasing-offset searches
-or silently extend the candidate set. A new Search is an explicit new operation. Group only selected-page
-reads by retained object; a cache must fit the same byte allowance.
+- `cmd_search_page` constructs the full search result before continuation admission;
+- count limits ignore owned strings, vector spare capacity and temporary encoded output;
+- every page/expansion calls `list_sources`; `source_fence` serializes the whole current catalogue into a new
+  buffer, so unrelated source changes invalidate every old token and page work is corpus-dependent;
+- expansion rechecks the latest active source/revision instead of the pinned published view;
+- each later page mints fresh per-item handles with a fresh TTL, which can outlive the original continuation;
+- a handle record does not retain the emitted representation or match range and accepts arbitrary absolute
+  offsets anywhere inside the raw revision.
 
-Capacity pressure cannot silently turn unrelated results into a successful empty search. Reject a required
-window before expensive work, or serve a bounded one-shot result with explicit unavailable continuation when
-that response mode permits it. Do not advertise a locator and then discover that its state cannot be retained.
-Unrelated windows are not silently evicted to manufacture capacity.
+These are static findings, not a reproduced production incident.
 
-Window exhaustion means only that this retained nomination set has been handled. Report backend/window
-truncation and candidate gaps separately. It proves neither corpus completeness nor absence of other matches.
-A smaller backend nomination set or failed evidence cannot become a complete-negative result.
+## One `QueryWindow`
 
-## Lifetime includes idle sessions
+One live session owns a small map of windows. A window contains only:
 
-A window owns its pinned view, ordered references, cursor, issued-item indexes and one fixed absolute expiry.
-It belongs only to the same live session. One-shot output returns no locators destroyed on child exit;
-disconnect, failed session or restart drops session windows. Ordinary terminal output does not end a live session.
+```text
+window ID
+PublishedViewGuard
+final ordered WindowItemRef[]
+next handled index
+fixed expires_at
+finite retained-item / metadata / optional excerpt-byte charges
+issued item indexes needed for expansion
+```
 
-The existing session/event loop services the nearest expiry even without client traffic. Remove expired
-records and cached bytes there, releasing their stored view references; a bounded scan of the finite window
-set suffices. Do not add a cleanup service or rely solely on the next Continue/diagnostics request. Long source
-reads and blocked output must not monopolize this control path.
+`WindowItemRef` points to the exact pinned evidence row and its representation/range. It is not a copied
+source body, public proof record or new handle token. Item locators are `(window_id, item_index)` on the same
+session. There is no separate result-handle catalogue, item entropy, source-catalogue digest or per-page TTL.
 
-Each Continue/Expand receives a new request deadline capped by the original window expiry. Actual I/O/work
-already spent remains charged to the window's remaining allowance, including failed/cancelled attempts;
-only unused reservations are released. Page retries do not reset TTL or lifetime work limits.
+The fixed expiry is chosen once when the first terminal response commits the window. Continue/Expand get fresh
+request deadlines capped by that expiry and remaining lifetime work limits. Access never renews it. An exhausted
+cursor may retain the window until expiry while emitted items remain expandable; otherwise release it promptly.
 
-Expiry also cancels active work and forbids further emission, but removing the catalog entry cannot forcibly
-drop a guard still owned by that work. The real I/O cancellation/termination boundary must release it. Until
-then the reader is still live for publication/cleanup; do not report reclamation from the timestamp alone.
-No global manager lock is held across retained-object or transport I/O.
+One-shot output exposes no live locator. Session end, EOF, failure, daemon restart or selected restricted-
+session revocation drops its windows. A later invocation cannot resurrect them.
 
-## Page accounting and failure
+## Admission before expensive work
 
-1. Select the next finite prefix and reserve read/output work before evidence reads. Process in final rank order.
-2. A successfully handled reference produces a card or a genuine candidate-local gap under the evidence recipe.
-   Cancellation, deadline and aggregate request exhaustion are not missing-source gaps. Stop at the unhandled
-   reference; do not advance past it or refill by scanning arbitrarily many later candidates.
-3. If output space runs out, leave the next item for a later page. An intrinsically oversized item needs a
-   bounded excerpt with truthful coordinates, a declared item-limit gap or an explicit error; it cannot cause
-   endless empty pages. If the window's total allowance is exhausted, end it with that explicit reason rather
-   than promising a retry that can never make progress.
-4. Stage a capped response with the handled-prefix length and actual issued-card indexes. A permitted partial
-   response accounts for its processed prefix and a separate stop reason, not fabricated gaps for its tail.
-   Observed cancellation/session revocation emits no candidate page. No output means no cursor/issued change.
-5. Resolve recoverable admission/validation before output. After a complete local frame write/flush, commit
-   only that handled prefix and the locators actually carried by cards. The proposed slice length or card count
-   is not necessarily the cursor delta. Partial/failed output commits nothing and closes the session.
+Reserve the window's nomination count and retained metadata/byte allowance before asking retrieval for more
+candidates than can be retained. The backend may still perform corpus-dependent work; the reservation limits
+what this request/window owns, not Qdrant's internal cost.
 
-Local flush is not peer acknowledgement. A lost session restarts Search; no exactly-once journal is required.
-Serialize operations on the same session/window while the control reader still observes Cancel/EOF/expiry.
+Account for:
 
-## Expansion and removal
+- final retained item references and owned metadata;
+- temporary candidate and evidence values before they are released;
+- optional cached excerpts;
+- the aggregate encoded terminal response.
 
-Expand only a successfully issued item. Resolve its source/representation and finite neighborhood from the
-same pinned evidence entry; the caller cannot select arbitrary offsets from another part of the revision.
-Use the evidence owner's coordinate domain, not output-text length as a raw-source offset.
+Do not call a full current-source listing or hash the corpus to authorize a pinned view. The view already owns
+its source/evidence population. A current source edit, rename or removal does not invalidate an old window whose
+retained evidence still exists; new requests receive the newer published view.
 
-After the final page, retain only what issued-item expansion requires until fixed expiry; otherwise drop the
-window immediately. References, caches and guards have ordinary ownership, not terminal cleanup receipts.
+If a required window cannot be admitted, return the selected bounded no-window response or a clear capacity
+error. Never reinterpret capacity exhaustion as an empty or complete search.
 
-After code, run minimal changed-owner compiler/Clippy, then exercise: small versus spare-capacity result vectors,
-full window capacity with a new query, multiple windows, idle expiry during indexing, active read at expiry,
-partial output, cancellation before the next candidate, missing evidence versus request stop, oversized items,
-window exhaustion versus corpus coverage, and mapped-text expansion. No runtime result is claimed here.
+## Page selection and cursor accounting
+
+1. Starting at `next_index`, choose a finite candidate prefix that can plausibly fit the remaining item/read/
+   output limits. Do not read the entire tail first.
+2. Resolve evidence in final rank order. Each handled reference becomes a card or an explicit item-local gap.
+   Cancellation, deadline or aggregate exhaustion stops before the next unhandled reference; it is not a gap.
+3. A bounded aggregate gap may represent several actually handled references. Untouched candidates are never
+   implied gaps. A single oversized item receives a defined bounded card/gap/error so the cursor cannot loop on
+   an empty page forever.
+4. Encode the complete terminal response into the protocol's capped local buffer. Stage the handled-prefix
+   length and issued item indexes; card count or proposed slice length is not automatically the cursor delta.
+5. After the entire terminal frame is written and locally flushed, atomically insert/advance this session's
+   window state. Partial output commits neither insertion nor cursor and closes the session.
+
+Local flush is not peer acknowledgement. On a lost connection the user repeats Search; no durable resume,
+receipt or exactly-once protocol is required. Progress frames, if any, contain no cards, locators or cursor-
+committing facts.
+
+Serialize operations for the affected session/window, but hold no global view/window lock across Qdrant,
+retained-object reads or transport writes. Idle expiry is serviced by the existing session/control event loop.
+Removing an expired map entry prevents new acquisitions; an already-running operation retains its guard until
+that operation actually ends.
+
+## Expansion stays inside the emitted item
+
+`Expand(window_id, item_index, before, after)` resolves the exact emitted item from the pinned view. `before`
+and `after` are finite context requests in that item's declared representation/coordinate domain. The server:
+
+- rejects an item index that was not successfully emitted;
+- derives the permitted neighborhood from the exact retained representation and mapping records;
+- clips on valid character/structure boundaries;
+- maps the clipped region back to truthful source/page/region coordinates;
+- never accepts arbitrary absolute offsets across the whole revision or switches to the latest source.
+
+Raw bytes, normalized text and extracted document text are different domains. Expansion does not fabricate an
+exact contiguous raw span for a non-contiguous or approximate mapping.
+
+## Cutover and checks
+
+Change query result retention, evidence resolution, protocol DTOs, daemon page/expand commands and CLI consumers
+together. Move the useful prepared-output commit and direct slicing into the real session owner. Then delete:
+
+- shared and daemon continuation catalogues;
+- result-handle catalogue and per-item random tokens;
+- full source-fence scans and latest-source revalidation;
+- arbitrary handle-range expansion;
+- durable replan/security/issued-fingerprint lifecycle machinery and exclusive fixtures.
+
+Do not add a cross-catalog transaction, lease service or cleanup daemon to preserve a boundary being removed.
+
+After implementation and minimal pinned compiler/Clippy, check admission before retrieval, retained/spare-byte
+ceilings, unrelated-source change, old-view continuation, later-page TTL, final-page expansion, idle expiry,
+active operation at expiry, missing evidence, cancellation, aggregate output limit, oversized item, partial
+terminal output, one-shot absence of locators and mapped representation expansion. No runtime result is claimed
+by this document.

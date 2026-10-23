@@ -1,71 +1,95 @@
-# CLI — one invocation, explicit session lifetime
+# CLI — one owned child, explicit one-shot/session lifetime
 
-Read the [implementation](../../docs/implementation/README.md). Wire/I/O semantics belong only to the
-[protocol map](../../crates/search-provider-protocol/FUNCTIONS.md); paging belongs to the
-[window map](../../crates/search-query/search-continuation/FUNCTIONS.md).
+Read the [implementation](../../docs/implementation/README.md). Wire and cancellation belong to the
+[protocol owner](../../crates/search-provider-protocol/FUNCTIONS.md); paging belongs to the
+[window owner](../../crates/search-query/search-continuation/FUNCTIONS.md).
 
-## Source findings at c8e38b6
+## Inspected current client
 
-- `app/core.rs` forwards the working one-shot scan-file/stdin path.
-- `public_client.rs` starts a child and waits for `data_root_ready`; the daemon's earlier argv interceptor
-  shadows the intended service. Presence of a child client does not prove indexed serving.
-- The default provider dependencies compile although default commands reject provider operations.
-- Legacy `IndexedQuery` still becomes a marked tab/hex command. Expansion carries an opaque handle and
-  arbitrary absolute offsets. These paths are replaced, not adapted into another protocol version.
+At `44d7416c`, `public_client.rs` provides a useful persistent child session, but it still exposes the legacy
+line/handle model:
+
+- the client writes one command and synchronously drains daemon lines until a terminal string match; user input
+  is not read during that period, so it cannot issue Cancel while work is active;
+- each response line is printed immediately. If the daemon later closes before the terminal, partial uncommitted
+  match/handle lines are already user-visible;
+- event and token fields are located with string searches rather than decoded as typed messages;
+- only the latest continuation and latest random source handle are remembered; expansion supplies arbitrary
+  absolute raw-revision offsets;
+- after spawning the child, many `?` error exits occur before the final `wait`, while `terminate_child` is used
+  only for one not-ready branch. Normal shutdown waits without a finite fallback.
+
+The function therefore needs one owned-child cleanup boundary for every return path. Do not add another daemon
+manager merely to repair process ownership.
 
 ## Capture and dispatch
 
-Capture `args_os()` and supported settings once. Keep OS paths as OS values. Validate input before spawning.
-Help/version without daemon work creates nothing. Build the current typed operation directly; do not pass
-through recipes, grants, capability descriptors or `UnsignedRequest::to_core()`.
+Capture `args_os()` and supported settings once; preserve OS paths as OS values. Validate help/version and
+request shape before spawning. Construct the current typed operation directly. Do not pass through recipes,
+grants, capability descriptors, legacy provider conversion or tab/hex commands.
 
-## One-shot versus session
+The client decodes complete framed DTOs with Serde. It stages a terminal result until the whole frame validates,
+then renders it. Optional progress may be shown separately but never contains cards or locators that depend on
+a later window commit. Human and JSON output preserve final rank and truthful gaps.
 
-These are two lifetimes of the same client/dispatcher, not two transport stacks.
+## One-shot versus live session
 
-| Mode | Lifetime | Output contract |
+These are two lifetimes over the same codec/runtime:
+
+| Mode | Child lifetime | Result contract |
 |---|---|---|
-| One-shot command | Own child for the one request, then close/reap it | Bounded cards and truthful truncation; no reusable WindowId/WindowItemRef after exit. |
-| Multi-request session | Own child/streams until explicit session end, EOF, expiry policy or failure | Search may return a window; Continue/Expand are sent on this same live connection. |
+| One-shot | Spawn/own for one request, receive terminal, close/reap | Bounded cards/gaps; no reusable WindowId or item locator. |
+| Live session | Keep the same child and streams across terminals until explicit end/EOF/expiry/failure | Search may return one window; Continue/Expand use that same connection. |
 
-The CLI session can be an interactive command loop or framed client mode; select one actual interface rather
-than building both pre-emptively. A terminal event completes one request, not the session. Do not close stdin
-or kill the child after each successful terminal in session mode.
+A terminal completes one request, not a live session. A new invocation cannot reuse an old process-local window.
+A busy data root reports the actual owner conflict; the CLI does not start a hidden second copy or change
+transports.
 
-A new independent invocation has no old process-local window. Return an expired/unavailable-window error;
-do not persist tokens, resurrect a daemon or replay Search under the same locator. A future shared daemon is
-a separately selected transport/use case, not a workaround for this mismatch.
+## Cancellation and input
 
-The same root cannot be held by several independently spawned owner children. A busy root reports the actual
-owner conflict; it does not start another storage copy or silently change transports.
+The interactive/sync surface uses a serviced client runtime with:
 
-## I/O and cleanup
+- one active data request;
+- one bounded control/input path that can send Cancel/end while the request runs;
+- one response reader/writer contract from the protocol owner;
+- no second concurrent data request, general scheduler or unbounded queue.
 
-Use the current client's request IDs and deadlines. Cancel/EOF must remain observable while a request runs;
-a sync public `invoke` may wrap an internally serviced control/read path. The protocol map specifies the
-blocking-I/O limitation and required finite shutdown behavior.
+Ctrl-C, EOF or explicit cancel signal the active request and begin bounded cleanup. Each new request gets a
+fresh deadline; Continue/Expand are additionally capped by the window's fixed expiry. The client does not
+pretend that a clock check interrupts blocked OS I/O.
 
-At session termination: close owned input, allow bounded child shutdown, then terminate/reap only the child
-owned by this invocation if it does not stop. Do not kill a persistent daemon or claim an uncertain storage
-mutation rolled back. A separate cleanup deadline never authorizes further query work.
+## Child ownership and cleanup
 
-## Results
+Wrap the spawned child, stdin and stdout in one guard immediately after `spawn`. Every success/error/panic-safe
+normal return path performs the same sequence:
 
-Render the same typed cards in human/JSON output without changing rank or losing gaps. Encoded records use a
-capped buffer before transport output. Session results may expose locators scoped to that session; one-shot
-results cannot. Continue/Expand obtain a new request budget capped by the original window expiry.
+1. stop accepting new client commands and signal cancellation/session end;
+2. close owned stdin;
+3. wait for a finite graceful-shutdown allowance;
+4. if still running, terminate only this invocation's owned child;
+5. reap it and release the root handle.
 
-Expand accepts a selected item plus finite relative context, not arbitrary revision offsets. Partial I/O
-fails the session; do not print a second protocol error after a partial frame. A successful local flush is
-not a client acknowledgement.
+Do not wait forever and do not kill a separately owned persistent daemon. Cleanup failure is reported without
+claiming that uncertain storage/index effects rolled back. The guard is ordinary process ownership, not a
+lease/receipt subsystem.
+
+## Results and expansion
+
+Render source/revision/location/representation/excerpt and bounded gaps from the typed terminal frame. Session
+locators are `(window_id, item_index)`, never a separate random source-handle catalogue. `Expand` requests finite
+relative context around the emitted item; it cannot choose arbitrary revision offsets or silently switch to the
+latest source.
+
+A partial/invalid frame produces no terminal result and closes the session. Local flush is not client
+acknowledgement; lost sessions repeat Search rather than resuming through durable tokens.
 
 ## Removal and checks
 
-Remove legacy provider core/endpoint/tab-hex paths, strict indexed markers, mandatory local pairing/grants,
-unused native registration/Windows transport and arbitrary handle-range expansion when real callers move.
-Keep useful child ownership, args_os handling and presentation code.
+Remove public line/string parsers, tab/hex conversion, latest-random-handle state, mandatory local pairing/
+grants, unused endpoint/Windows registration paths and duplicate provider clients when the typed path is live.
+Keep useful args/path handling, child ownership and presentation code.
 
-Minimal changed-owner compiler/Clippy follows code. Focused behavior: one-shot emits no dead locator; two
-requests and Continue work in the same live child; independent invocation cannot reuse that window; terminal
-does not end a live session; EOF/cancel/timeout clean up only the owned child; actual default dispatch reaches
-the intended handler. No runtime outcome is asserted by this document.
+After implementation and minimal pinned compiler/Clippy, check help/version without spawn, one-shot without dead
+locators, two requests plus Continue/Expand in one child, full-frame-before-display, Cancel during active work,
+EOF/read/write/decode errors on every post-spawn path, finite graceful shutdown, forced owned-child termination,
+busy-root reporting and independent-invocation window rejection. No runtime outcome is asserted here.
