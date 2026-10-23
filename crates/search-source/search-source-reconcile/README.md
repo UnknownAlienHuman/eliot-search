@@ -1,16 +1,17 @@
 # search-source-reconcile
 
-Compare a registered source with an observation so ingestion can update content, rebind a path or
-remove a confirmed missing source from current search.
+Turn observations of selected roots into current source/head changes. The source owner retains bytes;
+publication makes them searchable. Reconciliation owns neither another object store nor an event history.
 
-**Current source:** [`reconcile_source`](src/lib.rs) is a pure comparison. The package also contains
-batch validation and an in-memory operation ledger. It has no filesystem walker, watcher/USN producer,
-durable inventory or connected daemon scheduler. Old logical function lists were design proposals.
+Read the [implementation guide](../../../docs/implementation/README.md) and the
+[single source/operation map](FUNCTIONS.md).
 
-**Target:** one incremental daemon path consumes coalesced hints and inventory entries, reads changed
-sources, retains their exact bytes and applies current source state. Startup, resume, explicit sync and
-periodic recovery use the same scanner. Missing observations remain visible; incomplete scans do not
-confirm deletions. The reconciler does not own source bytes or index publication.
+At `c0fcf294`, `reconcile_source` is a pure comparison with known branch defects, not a ready-to-connect
+correct implementation. Root currentness also confuses directory availability, pending hints and completed
+content work. The actual sync entrypoint still returns `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`.
 
-See [implementation](../../../docs/implementation/README.md) for the application path and
-[FUNCTIONS.md](FUNCTIONS.md) for actual callers, donor choices and removal targets.
+FUNCTIONS records the exact defects, donor limitations and replacement rules. Startup/explicit/periodic
+inventory is the baseline; a watcher is optional. An omitted path is not necessarily deleted, a valid entry
+can carry an ignore error, and an exact retained view is not a snapshot of the live filesystem.
+
+No runtime, whole-workspace build or product-readiness claim follows from this static audit.

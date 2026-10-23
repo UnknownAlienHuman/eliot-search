@@ -1,21 +1,23 @@
-# search-source-reconcile — agent instructions
+# Working on source reconciliation
 
-Read the [architecture](../../../docs/architecture/README.md) and
-[implementation](../../../docs/implementation/README.md). This package contributes change comparison
-to the existing ingestion path. [FUNCTIONS.md](FUNCTIONS.md) distinguishes source from missing wiring.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and [local recipe](FUNCTIONS.md).
+FUNCTIONS owns observation, selection, freshness and scheduling rules; do not copy another algorithm here.
 
-- Keep the useful comparison of source identity, path, presence and content revision. Return an
-  ordinary decision that the source owner applies; pure comparisons need no operation receipt.
-- Connect one daemon scheduler to selected roots, watcher hints, inventory and the existing reader/
-  revision writer. Do not build a supervisor, event archive or receipt protocol for each root.
-- Coalesce repeated path hints. On overflow, restart/resume or uncertain enumeration, rescan the
-  affected scope. An event alone cannot confirm new bytes or delete a source.
-- Apply confirmed changes through the source owner and short redb transactions. Preserve unknown
-  or unreadable scope; do not retire unseen entries after a partial scan or claim it is current.
-- Use the selected walker and Git backend described in [FUNCTIONS.md](FUNCTIONS.md). Preserve explicit
-  working-tree/index/commit identity and ignore semantics; do not write another Git or ignore parser.
-- Remove the old `ReconcileLedger` and receipt-only inputs with their consumers when replacing this
-  path. Existing reason enums, hypothetical logical APIs and old source-line quotas are not obligations.
+Trace the actual source reader/current-row writer and sync entrypoint. The old comparator is not correct
+merely because it is pure: its missing-root check, combined key/content update, same-path identity policy
+and failure reasons need the recorded cutover. Directory availability and a nonempty observation receipt
+do not establish file inventory or completed synchronization.
 
-Check actual missed-change, partial-scan, rename, cancellation and unchanged-content behavior when
-implementing it. A passing comparison unit test does not establish a connected watcher or sync command.
+Use one daemon scheduler and current typed rows. Startup/explicit/periodic reconciliation works before the
+optional watcher. Keep root IDs stable across catalog changes, preserve newly arriving dirty work, and use
+captured current-row/registration checks when applying results. Do not build a watcher journal, supervisor,
+lease, accepted-observation wrapper or receipt archive.
+
+Use the selected donor with its actual error/filter behavior. Preserve useful current-scope and gap semantics
+from the old design, not its port/API catalogue. Inspect both iterator errors and entry-attached errors;
+never treat a filtered omission as confirmed physical absence or a dirty path as a user override.
+
+Apply the source identity and preparation owners' rules rather than recreating them. Remove obsolete ledger,
+receipt-only inputs and their exclusive fixtures with callers. Minimal pinned compiler/Clippy follows code;
+behavior checks follow the implementation, and every result records the exact revision/targets.
