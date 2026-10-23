@@ -1,12 +1,16 @@
-# Working on retention removal
+# Working on maintenance/restore removal
 
-Read [FUNCTIONS.md](FUNCTIONS.md) for the only local collection recipe and the
-[publication map](../../search-index-qdrant/search-publication/FUNCTIONS.md) for Qdrant cleanup.
+Read [FUNCTIONS.md](FUNCTIONS.md) for the only local-object, archive and import recipes. Read
+[publication](../../search-index-qdrant/search-publication/FUNCTIONS.md) for live Qdrant cleanup.
 
-Local object collection is explicit stopped-root maintenance under the actual exclusive root guard. Mark
-all typed roots once before deleting anything. Temporary mark data is discarded on exit/restart; no online
-ObjectGcGate, generic lease/graph platform, purge, retention receipt or sweep journal is implemented.
+Do not integrate the existing retention crate, append-log GC or daemon restore composition. They encode leases,
+purge planes, historical roots, same-installation restore, receipts and key migration that the target rejects.
+Keep only concrete filesystem/object checks that a current owner actually uses.
 
-Keep exact store enumeration/deletion, current user data and truthful failure handling. Move that small
-operation to the concrete owner and delete this crate and obsolete consumers. Disk pressure pauses new
-writes; it does not authorize optimistic deletion. Code first, minimal changed-owner check/Clippy afterward.
+Local object collection runs after the daemon stops under the real exclusive root guard. Mark every typed
+current/published/pending/cleanup reference once before deleting. Query/health output never performs a recursive
+storage inventory. Backup publishes a verified archive marker last; restore imports read-only archive bytes into
+a fresh destination/generation and never executes copied pending/cleanup authority.
+
+Protect original files, archives and sole retained copies. Code first for the selected cut, then minimal pinned
+check/Clippy for changed owners and real consumers. Runtime/platform/restore claims require execution.

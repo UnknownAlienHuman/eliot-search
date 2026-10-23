@@ -1,102 +1,158 @@
-# Local object maintenance and current-format backup
+# Local maintenance, backup and restore/import
 
-The old lib/sweep/purge package implements leases, caller graphs, receipts and restore machinery. It is not
-retained. Local object collection and backup are explicit stopped-root commands in existing store/control
-composition. Qdrant cleanup remains separate live publication work.
+This file owns offline local-object collection and current-format archive/import. Qdrant retirement remains
+[publication cleanup](../../search-index-qdrant/search-publication/FUNCTIONS.md). The generic retention/purge/
+restore platform is not retained.
 
-## Stopped-root collection
+## Inspected legacy code is not the replacement
 
-Acquire the daemon's actual exclusive root guard. Busy means refuse, not kill its owner. Keep exclusion for
-the command; there are no live producers, windows or old-view readers during the pass.
+At `2b37f5ef` the current tree still contains two obsolete implementations:
 
-While serving, writers remove their own stages but do not collect final local objects. Disk pressure pauses
-new writes and reports maintenance. This is an availability trade-off, not an online-GC claim.
+- `search-retention/src/{lib,purge,sweep}.rs` is about 82 KiB of leases, tombstones, purge planes, receipts,
+  restore phases and generic graph sweep;
+- daemon `restore_composition/**` is a feature-gated W7 state machine used by its fixtures/process tests. Its
+  `stage_restore` requires the destination root ID, incarnation, epoch and physical root to equal the export,
+  carries copied collection/epoch/purge authority and supports receipt-driven key migration and sole-copy
+  deletion. That is the opposite of a fresh destination import.
 
-The rejected online proposal traversed R reachable references before each of P deletion pages: potentially
-O(P * R), despite a small deletion page. Do not repair that with another lease/reference-count framework.
+Caller searches found the restore composition in the feature-gated daemon module and test/process fixtures,
+not a normal connected product command. Delete it with `wave7-lifecycle`, `search-retention` and exclusive
+fixtures after the concrete operations below exist. Do not adapt its phases, receipts or key migration.
 
-1. Open one consistent current control snapshot. Enumerate current source/prepared refs, current-generation
-   published source/evidence refs, pending inputs and unfinished cleanup refs.
-2. Traverse only known typed reference metadata. Raw bodies are leaves; reachability does not require
-   hashing every source.
-3. Mark exact ObjectRefs once in disposable scratch redb data, with finite cache and bounded batches.
-   Scratch is not product authority and must live outside the final object namespace.
-4. Complete valid marking before any final deletion. Missing/corrupt/unsupported/truncated reference
-   metadata, disk exhaustion or cancellation before sweep means zero final deletions.
-5. Enumerate final objects once. Delete only recognized current-format unmarked identities through the
-   object owner. Preserve foreign names, unknown formats and uncertain deletions.
-6. Discard scratch after the run. Never resume an old mark set after interruption; rebuild under the next
-   exclusive guard. Interruption during sweep can leave garbage, not select a live object for deletion.
+The legacy DIRECT collector is also not a donor for the new mark set. `collect_orphan_revisions`:
 
-Memory follows cache/page bounds; scratch disk grows with distinct references. Measure total traversal and
-temporary disk, not just deletion-page size. Pending artifacts remain roots while Qdrant is unavailable;
-maintenance does not execute or clear their effects. Stages are removable only as recognized store-owned
-temporary objects. Source removal is not legal purge or a physical-erasure promise.
+1. reads the complete append-only `source-events.log` into memory;
+2. adds the revision from every historical event to `referenced_revisions`, including retired/superseded rows;
+3. scans only the legacy `revisions/` tree;
+4. knows nothing about current preparation, published evidence, pending publication or cleanup references.
 
-## Backup is an archive, not another runnable installation
+It therefore preserves every revision ever logged while still missing the target owners. It can remove only
+unlogged legacy or temporary files. Its preview/apply wrapper repeats the full scan; a later storage-status
+refresh scans again. Preserve useful path/symlink/name checks, not this reference algorithm.
 
-The earlier #244 recipe copied current/pending/cleanup and then called normal startup. That would permit a
-restored directory to replay work against the original Qdrant collection. A different local root lock does
-not exclude the original installation from that external collection.
+## No maintenance scan in the query path
 
-Create a coherent archive while the source is stopped and exclusively held. Close writers before copying
-control/object files. Record format/storage requirements and any unresolved publication. Preserve current,
-published, pending and cleanup references and the objects they need; never call a partial copy complete.
+The inspected DIRECT query/page/continue/expand commands call `refresh_storage` before output.
+`StorageSecurityStatus::inspect` then runs the legacy GC inventory, scans revision objects again for protected
+headers and scans preparation objects. One interactive page can therefore replay up to the full control log and
+walk revision/preparation trees merely to print storage metadata.
 
-The supported backup command creates an archive marker/layout, not the daemon's launchable root manifest.
-Normal open refuses that archive and performs no external effects. A raw OS clone of a runnable root is not
-safe restore and cannot be assumed detectable merely from a new pathname. Do not promise automatic clone
-detection or safe rollback from a copied process lock/UUID.
+Remove that dependency. Normal startup/query/output may report the selected storage mode and verify each
+actually read object through its owner. It must not claim that every object is encrypted or complete from file
+suffixes/magic, and must not recursively audit storage per result. A separate explicit diagnostic/maintenance
+command may perform a full inventory and report its cost/snapshot. That report is not a runtime credential.
 
-## Explicit restore/import
+## Stopped-root local-object collection
 
-1. Keep the archive/original intact. Select an empty destination and the supported current format. Validate
-   copied references and object integrity before making destination state usable. Failed import leaves an
-   uncommitted destination, not a half-usable current root.
-2. Create destination-local control state and independent installation/collection identity using ordinary
-   initialization. Import committed source/prepared metadata needed for rebuild; do not adopt the copied
-   current Qdrant route, pending apply cursor, cleanup rows or generation counters as executable authority.
-3. Do not replay, compensate or delete anything named by copied pending/cleanup records. Keep them as archive
-   evidence. The committed source inventory is the rebuild input, including actual gaps; it may differ from
-   the last published inventory. If that inventory cannot be validated, refuse import rather than guess.
-4. Use an explicitly selected destination endpoint and a fresh, non-conflicting physical Qdrant generation.
-   An existing collection under the new name is a conflict, not an invitation to attach or delete. Rebuild
-   through the ordinary publisher and install a destination view only after its real readback.
-5. Destination cleanup can name only generations created/owned by this destination's normal publication.
-   It never inherits permission to remove the archive's/original installation's collections.
-6. The user retains the archive/original until verifying restored evidence. Restore does not delete the sole
-   retained copy, run automatic GC over the archive or reread changed live files as a substitute for backup
-   bytes. Incomplete source revisions remain explicit gaps.
+Collection is an explicit command after the daemon and all writers/readers have stopped. Acquire the actual
+exclusive root guard. Busy means refuse; never kill the owner or run a second store instance.
 
-This retains old Architecture 8.4 S28.1's useful new-installation/new-generation rebuild rule without its
-paired-snapshot, quarantine, migration or receipt framework. Restart of the same installation and restore
-of a copy are different operations; do not hide both behind one generic recovery entrypoint.
+### One complete mark
 
-## Protected storage: readable is not writable continuity
+Open one consistent current control snapshot and validate its supported schema before deletion. Enumerate all
+persisted roots that can require final local objects:
 
-Plain storage needs no key system. For a selected encrypted profile, same OS user/key availability proves
-neither new nonce space nor safe writable restore. The public #598 contract uses a durable deterministic
-AES-GCM counter and explicitly forbids copied/rolled-back counter continuity. Two writable copies with the
-same actual key/counter could reuse nonces. A fresh root UUID or different AAD does not allocate a new key.
+- current source heads and retained revisions;
+- current preparation outcomes, including successful empty/gap metadata and their artifacts;
+- every published generation still retained by current state;
+- staging/build input tables and one pending publication/effect artifact;
+- unfinished cleanup/recovery obligations that still reference local artifacts;
+- an incomplete import owned by this destination, if the selected implementation can leave one.
 
-Never reset or resume copied encryption counters as fresh. Archived ciphertext may be read only if the
-actual object reader supports its original key/AAD/source binding. New destination writes require the
-accepted storage owner to establish an independent actual key/nonce context. If that profile cannot support
-this, report writable restore as unsupported and keep the archive unchanged; do not silently downgrade,
-relabel envelopes, re-encrypt or invent a generic key migration service. The private #598 implementation is
-not inspected or modified by this recipe.
+There are no live process-local views/windows under stopped-root exclusion. Do not reconstruct roots from
+completed-operation history, append-only source events, leases or caller-provided manifests.
 
-Primary algorithm reference: [RustCrypto AES-GCM 0.10.3 usage](https://docs.rs/aes-gcm/0.10.3/aes_gcm/#usage)
-requires a unique nonce per message under a key. This is an algorithm constraint, not an argument for the
-old six-domain/purge programme or a claim that #598 has shipped.
+Traverse only known typed metadata. Fail before sweep if a supported current table/reference encoding is
+missing, corrupt, truncated, unknown to the collector, exceeds finite limits or cannot be read. Unknown metadata
+is not permission to delete an "unaffected" subset.
 
-## Remove and verify
+Mark exact `ObjectRef`s once in disposable scratch redb data outside the final object namespace. Use finite
+cache/pages/batches; scratch size follows distinct references. Raw bodies are leaves. Finish and validate the
+whole mark before any final-object deletion.
 
-Delete search-retention, wave7-lifecycle, generic restore/purge/lease models and the proposed ObjectGcGate
-with their final callers. Keep small maintenance/import behavior with real owners; no new restore service.
+### One sweep
 
-After code check busy-root refusal, complete mark coverage, malformed refs before deletion, scratch failure,
-fresh marks after restart and foreign files. For backup/restore, keep original and destination concurrently
-available at the same Qdrant endpoint: copied pending/cleanup must cause zero original mutations/deletes;
-target generation must differ. Check interrupted import, missing objects/secrets, current-vs-published source
-gaps and protected writable-copy refusal. These are required causal cases, not executed results.
+Enumerate the final-object namespace once. Delete only store-owned current-format identities absent from the
+completed mark. Preserve foreign names, unsupported formats, uncertain identities and sole retained copies.
+Store-owned temporary stages may be removed because no producer exists under the exclusive guard.
+
+Interruption before sweep deletes nothing. Interruption during sweep can leave garbage but cannot make a marked
+object eligible. The next run discards old scratch and rebuilds marks; no sweep journal/history is needed.
+Deletion/readback uncertainty preserves the object or reports failure. Do not repeat the full mark merely to
+emit status metrics.
+
+Disk pressure while serving pauses new writes and reports maintenance. It does not authorize online local GC.
+Qdrant cleanup is separate online work constrained by readers and possible late writers.
+
+## Backup is a completed archive, not a runnable clone
+
+Stop the source daemon, close database writers/readers and hold its exclusive root guard. Create a new staging
+archive outside the source root. Copy only supported committed control data and required final objects:
+
+- current source/preparation state;
+- the last committed published inventory/evidence needed to reproduce the served baseline;
+- pending/cleanup records and their referenced objects as non-executable evidence of unresolved source state;
+- format/storage profile metadata required to read the copied objects.
+
+Qdrant collections, process locks, sockets, scratch marks, caches and store-owned transient stages are not
+portable authority and are excluded by default. If unresolved state references a final artifact, copy that
+artifact even though the destination will not execute the old operation.
+
+Verify the copied control snapshot and every referenced copied object from the staging archive itself. Sync
+copied files/directories where the selected platform provides a real durability primitive. Only after complete
+verification write the small archive-complete marker last (or atomically publish the staged directory). A
+partial directory has no complete marker and is never accepted as backup.
+
+The archive marker names the supported archive/root format and source installation for diagnostics; it is not
+a second object graph or receipt system. Normal daemon open checks/refuses the marker before any external effect.
+A raw OS clone lacking this supported archive protocol remains unsafe and is not automatically adopted.
+Keep the source and archive intact.
+
+## Explicit restore/import into a fresh destination
+
+1. Open the complete archive read-only. Validate format, source/prepared/published references, object identities,
+   gaps and required storage material. Missing/unsupported data leaves the destination uncommitted.
+2. Initialize an empty destination through the normal root owner. Allocate new installation/control identity and
+   a fresh never-conflicting Qdrant generation. Do not copy process locks, owner epochs or generation counters.
+3. Import exact retained source/prepared objects through the destination object owner and create destination-
+   local current rows. Never reread changed live paths as a substitute for archive bytes.
+4. Treat copied pending/cleanup/routes/cursors as archive evidence only. They authorize no RPC, compensation,
+   deletion or retry against the original endpoint.
+5. Build one coherent destination baseline from either:
+   - the fully validated archived published inventory, preserving the last served view before later catch-up; or
+   - the fully validated desired current source/preparation inventory.
+   Do not mix portions of both. Newer desired state remains a following ordinary reconciliation.
+6. Install the destination view only after real Qdrant readback and one destination-local metadata commit.
+   Destination cleanup may name only generations created by this destination.
+
+Failed/interrupted import leaves an explicitly incomplete destination that normal serving refuses. Retry may
+restart from validated archive data; no generic restore state machine, quarantine generation or copied authority
+is required. Restore never deletes the archive/source automatically.
+
+## Protected storage
+
+Plain storage needs no key platform. Readability of copied ciphertext does not establish safe writable
+continuity. Never resume/reset a copied deterministic nonce counter under the same actual key. Archived objects
+may be read only through the original supported binding. New destination writes require the accepted storage
+owner to create an independent real key/nonce context. If unavailable, report writable restore unsupported and
+leave the archive unchanged; no silent plaintext downgrade, envelope relabel, generic re-encryption or key-
+migration receipt system.
+
+## Removal and verification
+
+Remove `search-retention`, daemon `restore_composition`, W7 purge/restore/retention tests/features and the legacy
+GC/status hot-path callers after concrete maintenance/import owners replace them. Keep useful filesystem safety
+checks and causal cases, not old types.
+
+After implementation and minimal pinned compiler/Clippy, check:
+
+- busy-root refusal and no query-time recursive inventory;
+- complete typed-root coverage, superseded revision reclamation and current/published/pending roots;
+- malformed/unknown metadata, scratch exhaustion, cancellation and crash before/during sweep;
+- foreign files and store-owned temporary cleanup;
+- archive marker written last, partial-copy refusal and copied-object verification;
+- original and restored installations sharing one Qdrant endpoint with zero original mutations/deletes;
+- archived-published baseline versus newer current state, interrupted import and distinct destination generation;
+- missing secret and protected writable-copy refusal.
+
+These are required causal cases, not executed results.

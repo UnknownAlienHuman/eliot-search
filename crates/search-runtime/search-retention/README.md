@@ -1,10 +1,14 @@
-# search-retention — remove the lifecycle platform
+# search-retention — delete the lifecycle platform
 
-The package's generic leases, graph sweep, purge and restore protocols are not the local product.
-The selected replacement is one explicit stopped-root maintenance pass described in [FUNCTIONS.md](FUNCTIONS.md).
-It marks current/published/pending/cleanup objects once and only then deletes exact unreferenced objects.
+The generic lease/purge/sweep/restore crate is not the local product. The selected concrete behavior is in
+[FUNCTIONS.md](FUNCTIONS.md): one stopped-root local-object mark/sweep, one completed offline archive and one
+fresh-destination import. Qdrant cleanup remains with
+[publication](../../search-index-qdrant/search-publication/FUNCTIONS.md).
 
-This supersedes the proposed per-page ObjectGcGate/root-rescan algorithm. No online local object GC is claimed.
-Qdrant cleanup is still owned by [publication](../../search-index-qdrant/search-publication/FUNCTIONS.md), which
-waits for old live views and retains unfinished deletion state. Do not merge these two lifetimes into a
-retention service. Source bodies and sole retained copies remain user data.
+Do not reuse the legacy append-log GC, restore phases, purge receipts or key-migration machinery. The old GC
+keeps every revision ever recorded yet misses preparation/publication roots; the old restore expects the same
+physical installation. Normal query output must not run their full storage inventories.
+
+Move only useful filesystem/object safety primitives into the concrete store/control owner, then remove this
+crate, daemon `restore_composition`, `wave7-lifecycle` and exclusive fixtures. Original files, archives and sole
+retained copies remain user data.

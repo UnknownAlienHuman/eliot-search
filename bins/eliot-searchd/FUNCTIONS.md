@@ -1,140 +1,153 @@
-# eliot-searchd — source routing and replacement map
+# eliot-searchd — one application, one owner chain
 
-Follow the [implementation guide](../../docs/implementation/README.md) and
-[test cutover](../../docs/implementation/TEST_CUTOVER.md). Existing command/package/receipt boundaries are not
+Follow the root [architecture](../../docs/architecture/README.md) and
+[implementation](../../docs/implementation/README.md). Existing command/package/receipt boundaries are not
 compatibility requirements.
 
-## Root cause: several applications share one binary
+## Current problem
 
-The production entrypoint does not parse one command and construct one application. It calls nine interceptors
-in sequence; each independently recaptures argv/config and may claim the command:
+The binary still contains several applications selected by an ordered interceptor chain:
 
 ```text
-legacy-effect refusal
-→ direct registry/journal
-→ native root lifecycle
-→ offline migration
+legacy effect refusal
+→ registry/journal command
+→ native-root lifecycle
+→ migration
 → legacy preparation
-→ optional loopback
-→ read-only DIRECT session
-→ second persistent command stack
-→ shell/stdio/one-shot application
+→ optional proxy
+→ DIRECT session
+→ secure command stack
+→ final shell
 ```
 
-This is behaviorally unsafe even where each component is locally careful. Command ownership depends on order,
-later handlers can be unreachable and help text can describe a different implementation from the one that
-receives argv.
+Each captures arguments/config and may shadow later handlers. The CLI's advertised persistent child can therefore
+reach a different implementation or refusal than its help describes. Enabling historical wave features compiles
+more disconnected planner/access/restore/test systems; it does not select one product.
 
-### Confirmed shadowing
+Representative current islands:
 
-`direct_registry_command::is_direct_command` recognizes:
+- source admission restores/requalifies registry history yet drops acquired bytes;
+- source sync still returns `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`;
+- preparation uses another DIRECT store/profile/receipt family;
+- indexed query proof stacks are wired to fixtures/test ports rather than the real Qdrant/evidence path;
+- DIRECT query uses continuation plus random result-handle catalogues and the old line protocol;
+- `wave7-lifecycle` compiles a same-installation restore/purge/receipt state machine used by fixtures.
 
-```text
-register/unregister/source-roots/sync-source-roots
-admit-source-v2 and DEK commands
-health/verify/list/search/read-revision
-serve-data-root
-```
+Do not fix reachability by adding another dispatcher, facade or compatibility version. Select the current path,
+move useful behavior, and delete the old owner with its actual callers.
 
-It runs before both `public_runtime_service` and `secure_commands::maybe_run`. Its non-source/non-DEK path does
-not dispatch by the read-looking command name: it restores/requalifies the complete registry, republishes a
-control snapshot and emits metadata including `ready:false`, `source_body_serving:false` and
-`source_read_refusal`. Thus later serve/search/list/read implementations are shadowed by registry work.
+## Hidden query-time inventory defect
 
-The primary CLI's interactive client starts `eliot-searchd --serve-data-root ROOT` and waits for
-`data_root_ready`, so its advertised persistent session cannot start against this entrypoint.
+The inspected DIRECT query, page, continue and expansion commands call `refresh_storage` before output.
+That calls `StorageSecurityStatus::inspect`, which:
 
-### Other reachable islands
+1. reads and verifies the complete append-only source event log;
+2. scans the entire revision tree for the legacy GC inventory;
+3. scans the revision tree again for protected-object headers;
+4. scans preparation refs/objects.
 
-- native initialize/inspect/owner-check uses the large installation/owner-slot lifecycle;
-- `--prepare-root` and `--prepare-revision` use another legacy store;
-- control-migration commands stage old mapping/bootstrap/source artifacts offline;
-- the final shell provides one-shot scan, stdio diagnostics and a literal self-test claim;
-- early refusal owns index/directory/retire/repair/GC names.
+Thus an interactive page can perform work proportional to all historical events and stored objects merely to
+print `storage_security`/`encrypted_at_rest`. File suffixes and magic bytes do not prove that every object is
+readable/authentic, and this scan is not request authorization.
 
-None joins one fresh root, one source body, one immutable object, Qdrant publication and source-backed query.
+Remove it from normal startup/query/formatting. The root owner exposes the selected storage mode cheaply; each
+actual retained read verifies its object through the real format. A separate explicit verify/maintenance command
+may run a full inventory and report exactly what it checked. Do not cache that report as a capability token or
+replay it per response.
 
-## Feature and test topology defect
-
-`Cargo.toml` defaults to `wave1-shell`. Qdrant/query packages appear only through historical wave features.
-`full-baseline` also enables disconnected access/planner/executor/validator/projector, multiple handle/
-continuation systems, overlay, proof/comparison, reclaimer, evaluation and generic retention. Enabling more
-features compiles more source; it does not select one application.
-
-The manifest additionally declares seven harness-only test binaries for snapshot/sealed applications. The
-main test directory contains 76 Rust files: 33 `*_module_ownership.rs` and 28 `*_process.rs`.
-
-Representative ownership tests read Rust files as text and assert exact module names, marker strings, byte
-ceilings, old lifecycle states and even retained test-function names. They are source-shape policy, not
-behavior. `indexed_query_process.rs` explicitly drives a process-test in-memory oracle rather than the served
-daemon. `product_spine_process.rs` explicitly joins legacy DIRECT and manually implemented Qdrant REST halves,
-not one CLI operation through the real bridge.
-
-Cut over direct required dependencies and delete wave features, harness-only binaries, source-shape tests and
-process proofs with their old owners. Move only still-valid causal cases into current owner/product tests; do
-not make `full-baseline` default or preserve a subsystem merely because it has many fixtures.
-
-## Connected target
+## Connected daemon
 
 ```text
 startup:
-  one args_os/config capture
+  capture args_os/config once
   → explicit initialize or open current root
-  → one process-lifetime guard
-  → current state/object/source/Qdrant owners
-  → current view + handlers
-  → one dispatcher
+  → one process-lifetime root guard
+  → construct current state/object/source/Qdrant owners
+  → recover unfinished current work
+  → install current view and concrete handlers
+  → one framed dispatcher
 
 ingest:
   selected source
   → stable read
   → immutable ObjectRef
   → current SourceRecord/RevisionRef compare-set
-  → one MaterializationProduct
+  → one preparation outcome
   → Qdrant apply/readback
-  → CurrentPublishedView
+  → atomic CurrentPublishedView
 query:
-  SearchRequest
+  typed request
   → pin current view + resolve scope + RequestContext
-  → Qdrant BM25
-  → ViewManifestEntry
-  → retained object/range verification
-  → EvidenceCard[]
-  → optional QueryWindow
+  → real Qdrant BM25
+  → pinned evidence row
+  → retained raw/prepared read
+  → one bounded terminal response
+  → optional session QueryWindow
+maintenance:
+  stop daemon / acquire root exclusively
+  → explicit local GC or completed archive/import
 ```
 
-## Owners which survive
+An arrow is not recovery. Current input/outcome comparison reconstructs lost wake-ups. Pending external effects
+retain only finite unfinished state. Normal reads and pure transforms create no durable receipt.
+
+## Surviving responsibilities
 
 | Owner | Responsibility |
 |---|---|
-| invocation/root | one command/settings value, initialize/open, one actual OS lock, orderly shutdown |
-| source/object | stable acquisition and one immutable writer/reader; bytes before source-head commit |
-| current state | short typed redb rows/transactions; no operation archive or full restore per command |
-| preparation | one materialization and structure-first units; unsupported transforms become gaps |
-| Qdrant | one private reusable client/runtime for publication and query |
-| publication | pending artifact/cursor, external effect/readback, current view and finite cleanup |
-| query/evidence | direct handlers, pinned view/scope/context, manifest lookup and exact retained read |
-| window | one temporary final-order cursor/view guard and bounded item locator |
-| protocol | one framed typed exchange; actual constructed handlers determine availability |
+| invocation/root | one command/settings value, initialize/open, one real OS lock, bounded owned shutdown |
+| source/object | stable acquisition and one immutable writer/reader; bytes durable before current-head commit |
+| current state | short typed redb rows/transactions; no operation-history restore per command |
+| preparation | one materialization/unitization result, explicit empty/gap/failure and stale-completion guard |
+| Qdrant | one private runtime/client used by publication and query |
+| publication | fixed pending input, effects/readback, atomic view/evidence commit and finite cleanup |
+| query/evidence | direct handler, pinned view/scope/context, exact composite lookup and retained read |
+| session/window | one fixed-expiry final-order cursor with item indexes; no source fences or random handles |
+| protocol/CLI | one framed typed exchange with active Cancel path and one owned-child lifetime |
+| maintenance/import | stopped-root typed mark/sweep; archive marker last; fresh destination/generation |
 
-## Test migration
+Responsibilities do not imply one crate each. Concrete internal calls are preferred; retain a boundary only for
+a real dependency/effect or repeated policy.
 
-Delete immediately with the old source owner:
+## Availability and diagnostics
 
-- module/file/function-name and line/byte-ceiling assertions;
-- source-token/forbidden-string checks which duplicate compiler/API review;
-- fixtures whose sole subject is owner slots, migration, quarantine, pairing, grants, handles,
-  continuation, purge, overlay or other retired state machines;
-- process tests which connect test doubles or manually join independent halves;
-- seven harness-only snapshot/sealed targets and their exclusive source after the last unique behavior moves;
-- wave-feature acceptance and frozen recipe/profile/schema/golden tests for removed APIs.
+Availability comes from constructed handlers and dependencies. A descriptor, receipt, qualification report or
+method name cannot advertise an absent path. Health/status must distinguish:
 
-Move useful behavior into the current path. Existing DIRECT tests contain cases worth preserving, including
-cross-boundary matches, exact line coordinates, binary-content gaps, historical retained readback, ABA content
-reuse, overlapping matches and truthful output-limit completion. Express these through the new source/object/
-preparation/query owners rather than old commands, credential cleanup and stores.
+- configured storage/backend mode;
+- currently constructed handlers;
+- current/published source state and explicit gaps;
+- last operation's real failure;
+- an explicit deep verification result when the user requested one.
 
-The main product smoke must execute default binaries and one real Qdrant route:
+It must not recursively scan the corpus/object store on every request, infer freshness from watcher silence, or
+claim complete encryption/integrity from object names. Full verify, GC, backup and restore are explicit expensive
+operations with their own output and cancellation.
+
+## Remove during cutover
+
+- argv interceptor chain and duplicate command/help implementations;
+- registry/original-input replay and full aggregate snapshots for ordinary source work;
+- duplicate object/preparation stores and compatibility formats;
+- migration/sealed/secure-command applications and owner-slot/epoch/succession machinery;
+- wave feature ladder and harness-only snapshot/sealed binaries;
+- provider pairing/grant/capability/receipt stacks;
+- planner/executor/access/validator/projector proof operating systems after direct handlers replace them;
+- process-test indexed oracle/manual REST halves;
+- continuation/result-handle catalogues, full source fences and arbitrary range expansion;
+- recursive storage-security/legacy-GC scans from query/output;
+- generic reclaimer/pin/retention/purge/restore platforms, including daemon `restore_composition`;
+- source-shape/process fixtures whose only subject is removed topology.
+
+Unsupported old roots fail before writes and remain untouched. Do not expose a fixture mutation or shadowed
+command as the replacement.
+
+## Verification
+
+For each Rust slice, run pinned Rust 1.98 check and strict Clippy for changed production owners and immediate
+real consumers. Broad all-feature/all-test matrices remain late.
+
+The connected smoke is the default binaries and one real Qdrant route:
 
 ```text
 initialize/open
@@ -142,37 +155,11 @@ initialize/open
 → restart
 → publish/read back Qdrant
 → CLI Search
-→ manifest lookup
+→ pinned evidence lookup
 → exact retained excerpt
 ```
 
-A passing constructor, oracle, source-shape test, manual REST half or self-test string is not completion.
-
-## Remove during cutover
-
-- argv interceptor chain and duplicate command/help implementations;
-- full registry replay/original inputs/full control snapshot for ordinary source operations;
-- old installation owner slots/epochs/succession and duplicate locks after one guard replaces them;
-- legacy preparation/object store beside the selected object owner;
-- migration, sealed, secure-command and DIRECT compatibility applications for unsupported pre-release roots;
-- wave feature ladder and dead-code composition facades;
-- provider pairing/grant/capability/receipt stacks;
-- planner/executor/access/validator/projector operating systems when direct handlers replace them;
-- process-test indexed backend and caller-shaped authority;
-- four continuation/handle catalogues, random source handles and catalogue-wide rescans;
-- generic reclaimer/pin/retention/restore platforms after publication cleanup and object GC own the work;
-- exclusive source-shape/process/harness fixtures for every removed family.
-
-Unsupported old roots fail before writes and remain untouched. Do not move a shadowed command into another
-facade or expose a test-only mutation implementation as the replacement.
-
-## Verification
-
-During each Rust slice, run minimal Rust 1.98 check and strict Clippy for changed production owners and their
-immediate real consumers, plus only focused causal cases. Broad workspace/all-feature/all-test matrices are
-late integration/release work.
-
-After the path connects, exercise the actual default binaries: help/version without root effects;
-initialize/open; ingest and retain one file; restart; publish/read back Qdrant; Search from CLI; reopen exact
-excerpt; edit/rename; scope/IDF; old pinned view; pending publication recovery; lost-index rebuild;
-cancellation; paging and bounded expansion. Native/live-Qdrant/recovery claims require actual execution.
+Then exercise edit/rename, explicit scope/IDF, old pinned view, lost wake-up, pending publication recovery,
+lost-index rebuild, cancellation, paging/expansion, no query-time storage inventory, stopped-root GC and fresh-
+destination restore. Native/platform/recovery/relevance/scale claims require actual execution, not constructor or
+source-shape tests.
