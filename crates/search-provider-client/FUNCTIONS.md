@@ -28,6 +28,28 @@ Two counterexamples follow from those branches, without claiming a reproduced pr
 cannot poll input or observe a new local cancel through that same mutable session until the call returns. Do not
 copy the legacy transport wholesale merely because it already uses bounded records.
 
+## Native handoff and wrapper findings (R023, 305ccab1)
+
+The CLI's `open_registered_native` compares the descriptor's installation ID, then constructs compatibility
+`NativeClientBinding::new`, which stores `trusted_installation_id: None`. `open_connected_local_stream` installs
+that anchor only for `Some`; `request_standalone_grant` rejects `None` before any grant write. Thus even successful
+pairing/profile setup along this route does not yield a usable product request. This is a static composition
+contradiction in the obsolete path, not a reason to bypass the grant guard or rebuild registration for the baseline.
+
+The separate `NativeClientExpectations` path can carry an anchor, but its existence does not connect the CLI.
+The inspected Windows opener and resolver have no caller on the examined CLI dispatch path. Construction,
+connection, permission metadata and actual handler execution must not be conflated.
+
+The CLI wrapper also constructs and discards a `core::UnsignedRequest` just to validate a query/ingest/expand,
+then allocates its own equivalent value; `to_core` constructs another at send time. Remove that adapter family,
+not merely the temporary copy. Validate borrowed fields and construct the selected request once; retain real
+wire-boundary validation without another request-model/validation crate. Allocation cost has not been measured.
+
+In the legacy line core, `verify_sealed_response` checks a digest of a synthetic status/request/sequence receipt,
+not the printed payload; `invoke_op` prints non-control lines before its terminal acknowledgement. That verification
+cannot serve as result/evidence validation in the replacement. Preserve correlation, bounded typed decoding and
+source-backed evidence instead of upgrading the retired cryptographic protocol.
+
 ## Replacement state and ownership
 
 For the sequential local baseline keep the connection, limits, a non-reused session-local request counter,
@@ -64,8 +86,10 @@ cleanup and bounded diagnostic capture. Do not copy those algorithms into anothe
 Remove the old pairing/profile/grant constructors, binding expectations, sequence/MAC compatibility, replay
 ledger, TCP/token/endpoint feature and duplicate CLI core. A reexport is not evidence that the CLI uses the typed
 path. Trace entrypoint, actual constructor, read/write loop and terminal consumer together before deleting a
-shared module. Keep the current native registration/credential overlap explicitly unclassified until its callers
-are inspected; this pass is not permission to delete every native file.
+shared module. R023 classifies the named native/remote constructor chains and their broken grant handoff; it does
+not certify all tests, transport internals or daemon counterparts. The CLI recipe owns the removal map. Provider
+pairing credential lookup is not revision encryption: do not delete shared secret adapters or #598-owned storage
+code when removing the provider caller. No new baseline registration/key owner is required.
 
 After the production change, use minimal pinned compiler/Clippy for the actual client and CLI binary. Later
 behavior checks cover long sequential use without history growth, cancellation at data-capacity/expiry,

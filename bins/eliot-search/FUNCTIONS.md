@@ -27,14 +27,30 @@ R022 at `ff59f930` inspected `entry.rs`, `app.rs`, `provider_client.rs` and the 
 - `core::run_main` replaces quotes in an error string before embedding it in JSON. Backslashes/control bytes are
   not thereby escaped. Preserve the error meaning through the selected serializer, not string replacement.
 
-These are named source findings. Full remote/native-registration/credential and remaining feature consumers
-are not yet classified. Do not delete shared native modules merely because the loopback server was removed.
+R023 at `305ccab1` follows the named native/remote constructors, not just their declarations:
+
+| Path | Actual boundary | Rewrite decision |
+|---|---|---|
+| `remote_client -> endpoint_client -> provider_client::open_session -> core::open_session` | Explicit legacy feature; fresh TCP/token session, not the typed pipe client. | Remove with legacy command dispatch; do not reconnect the retired daemon endpoint. |
+| `native_bootstrap -> native_registered::open_registered_native` | Descriptor/key authentication then compatibility `NativeClientBinding::new`; loses the installation anchor needed by the mandatory grant. | Do not repair this obsolete bootstrap or fabricate a grant producer for it. |
+| `native_local_registered -> provider_client/local.rs` | Resolver returns a bundle; the Windows opener is private to the provider-client module tree. The inspected entry/dispatch/wrapper does not call it. | Not an available CLI handler. Do not add a registration platform merely to make this unused constructor callable. |
+| `native_credentials` | Reads provider-pairing credentials through `load_provider_pairing_credential`. | Distinct from retained-revision protection; remove only exclusive provider callers/dependencies. |
+
+The default help advertises `sync-directory` and `verify-directory-manifests`, but the inspected entry/app/core
+routing has neither command arm. Remove the advertisements until actual handlers are connected; do not expose
+old mutation code just to make help true. Likewise, the feature-only `search` and `lexical` branches both build
+`UnsignedRequest::query(false, ...)`; a command name does not establish a distinct indexed-retrieval mode.
+
+This closes the named constructor/dispatch questions, not all tests, native transport internals or daemon
+counterparts. See R023 in the analysis registry for exact inspected ranges and remaining callers.
 
 ## Capture once and use the real session
 
 Capture `args_os()`/settings once, preserving OS paths. Validate help/version and request shape before spawning.
 Construct current Search/Exact/Continue/Expand or connected administration directly. Do not pass through recipes,
-grants, endpoint discovery, marked query payloads or tab/hex commands.
+grants, endpoint discovery, marked query payloads or tab/hex commands. The local child path does not need an
+installation-registration producer, pairing-key source or capability descriptor before it can send a request.
+Choose a separate restricted/shared-pipe adapter only for a selected consumer, not to preserve these APIs.
 
 The CLI supplies the selected executable/settings to one client session. That session immediately owns the
 spawned child and its streams in one cleanup guard. The CLI does not create a second guard/wait loop for health,
@@ -60,7 +76,9 @@ no general scheduler or request-history archive is required.
 Decode and validate the complete framed terminal before displaying its cards or locators. Render human/JSON/
 NDJSON from typed values with the existing selected serializer. Preserve rank, source/revision/representation/
 location and truthful partial/gaps. Never substring-parse events or repair JSON by replacing characters.
-Progress is optional and cannot expose commit-dependent results before terminal.
+Progress is optional and cannot expose commit-dependent results before terminal. A signed status/sequence
+receipt is not evidence that a displayed payload or citation was verified; use the actual typed terminal and
+retained-evidence path. Do not answer the obsolete receipt mismatch by adding MACs to trusted child stdio.
 
 Do not use `Command::output`/`wait_with_output` followed by a length check as bounded capture. If stderr is piped,
 service it alongside stdout with finite retained diagnostic bytes; keep it outside the framed result parser.
