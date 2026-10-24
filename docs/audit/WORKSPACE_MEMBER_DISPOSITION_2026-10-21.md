@@ -6,9 +6,13 @@ KEEP means retain the useful responsibility and correct existing code; rewrite o
 MERGE means move useful behavior to its consumer. DELETE removes the current package after callers move.
 OPTIONAL requires a selected consumer, not a scaffold. CONDITIONAL concerns the #598 object/key handoff only.
 
-**52 rows: 17 KEEP, 11 MERGE, 16 DELETE, 6 OPTIONAL, 2 CONDITIONAL.** The previous 17/15/13/5/2 summary and
-'all other 48' claim were arithmetic errors. With six optional and two conditional rows, 44 have unconditional
-baseline dispositions. None of these counts is a desired final workspace size.
+**52 baseline rows: 17 KEEP, 11 MERGE, 16 DELETE, 6 OPTIONAL, 2 CONDITIONAL.** The previous 17/15/13/5/2
+summary and 'all other 48' claim were arithmetic errors. With six optional and two conditional rows, 44 had
+unconditional baseline dispositions. None of these counts is a desired final workspace size.
+
+R030 removes the optional `search-eval` scaffold and its Cargo/lock wiring after confirming that it had no
+external Rust caller. The current workspace therefore has 49 explicit members. The historical row remains below
+to preserve the baseline disposition and receiving issue; it is not an instruction to recreate the crate.
 
 ## Contracts, control and runtime
 
@@ -77,7 +81,7 @@ baseline dispositions. None of these counts is a desired final workspace size.
 
 | Member | Disposition | Receiving responsibility / issue |
 |---|---|---|
-| `search-eval` | OPTIONAL | Small post-product evaluator, not runtime/release authority. |
+| `search-eval` | OPTIONAL → REMOVED R030 | #233 may later add a small pure post-product evaluator over real result files; no crate/runtime authority is retained. |
 | `search-provider-protocol` | KEEP | Current bounded framed exchange; #280. |
 | `search-provider-client` | KEEP | Owned local I/O; #280/#332. Public sync API does not imply blocking cancellation. |
 | `search-eliot-adapter` | DELETE | Optional later MCP leaf reuses the real current client; #219. |
@@ -88,7 +92,7 @@ baseline dispositions. None of these counts is a desired final workspace size.
 | `xtask` | DELETE | Retired governance; keep only a proven useful small command if any survives; #214/#525. |
 
 Package deletion does not delete product requirements such as navigation, comparison or supported documents.
-Use the manifesto and selected feature scope; do not rebuild six optional frameworks just because six rows
+Use the manifesto and selected feature scope; do not rebuild optional frameworks merely because historical rows
 exist. Full local source maps hold defect details; this table does not repeat their algorithms.
 
 Move real callers, useful causal cases and necessary shared data with the responsibility. Remove obsolete

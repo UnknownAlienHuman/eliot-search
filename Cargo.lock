@@ -395,7 +395,6 @@ dependencies = [
  "search-control-redb",
  "search-domain",
  "search-epoch-pins",
- "search-eval",
  "search-exact",
  "search-handles",
  "search-index-reclaimer",
@@ -1226,15 +1225,6 @@ dependencies = [
  "search-contracts",
  "search-domain",
  "search-ports",
-]
-
-[[package]]
-name = "search-eval"
-version = "0.0.0"
-dependencies = [
- "search-config",
- "search-contracts",
- "search-domain",
 ]
 
 [[package]]

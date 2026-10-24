@@ -43,7 +43,6 @@ wave4-query = [
     "dep:search-handles",
     "dep:search-result-projector",
     "dep:search-continuation",
-    "dep:search-eval",
 ]
 wave5-current = [
     "wave4-query",
@@ -108,8 +107,6 @@ search-comparator = { workspace = true, optional = true }
 search-handles = { workspace = true, optional = true }
 search-result-projector = { workspace = true, optional = true }
 search-continuation = { workspace = true, optional = true }
-
-search-eval = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # Concrete current-user DPAPI effect owner. The daemon retains only credential,

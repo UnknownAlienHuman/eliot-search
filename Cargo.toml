@@ -40,7 +40,6 @@ members = [
     "crates/search-query/search-handles",
     "crates/search-query/search-result-projector",
     "crates/search-query/search-continuation",
-    "crates/search-eval",
     "crates/search-provider-protocol",
     "crates/search-provider-client",
     "crates/search-eliot-adapter",
@@ -100,7 +99,6 @@ search-comparator = { path = "crates/search-query/search-comparator" }
 search-handles = { path = "crates/search-query/search-handles" }
 search-result-projector = { path = "crates/search-query/search-result-projector" }
 search-continuation = { path = "crates/search-query/search-continuation" }
-search-eval = { path = "crates/search-eval" }
 search-provider-protocol = { path = "crates/search-provider-protocol" }
 search-provider-client = { path = "crates/search-provider-client" }
 search-provider-transport-windows = { path = "crates/search-runtime/search-provider-transport-windows" }
