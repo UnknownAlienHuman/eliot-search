@@ -1,154 +1,124 @@
 # ELIOT Search — implementation
 
-Read the [manifesto](../architecture/README.md) for purpose. This guide selects mechanisms; local FUNCTIONS
-maps own operation recipes. Examples are not instructions to create a type, trait, service or package for
-every noun. Keep correct existing code. Audit records are evidence, not permission to code.
+Read the [architecture](../architecture/README.md) for purpose and observable behavior. This guide selects the
+current mechanisms, owners and delivery order. Nearest `FUNCTIONS.md` files own exact code seams; the
+[analysis registry](../audit/ANALYSIS_REGISTRY.md) owns revision-specific evidence and status.
 
-Source baseline: c8e38b6. This is proposed refactor behavior, not build/runtime qualification. One-file lexical
-search is the first milestone, not completion of navigation, comparison, documents or large-corpus goals.
+The original source baseline is `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`. The current branch is a
+pre-release refactor: correct existing code may remain, internal formats need no compatibility facade, and a
+package name or feature does not establish connected behavior.
 
-## Connected path
+## Target path
 
 ```text
-selected source -> stable read -> retained bytes -> current source head -> prepared units
--> real Qdrant effects -> atomic published evidence/view
--> scoped query -> snapshot point lookup -> actual retained excerpt
+selected source
+→ stable acquisition and retained bytes
+→ current source head
+→ recoverable preparation and units
+→ real Qdrant effects
+→ atomic published metadata and view
+→ scoped query or exact operation
+→ pinned evidence lookup and retained excerpt
+→ CLI/local-client result
 ```
 
-An arrow is not a recovery mechanism. Durable input/outcome comparison must recover lost wake-ups; a stale
-completion cannot overwrite current state. Restart, restored copy, supported empty and failed work are
-separate cases, not labels hidden behind the happy path.
+Every arrow has one owner. Durable input/outcome comparison recovers lost wake-ups; stale work cannot overwrite
+current state. Unsupported, empty, partial and failed outcomes remain distinct.
 
 ## Owners
 
-| Operation | Single recipe |
+| Responsibility | Single current recipe |
 |---|---|
 | Root/config | [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [config](../../crates/search-config/FUNCTIONS.md) |
-| Source/object | [source](../../crates/search-source/README.md), [store](../../crates/search-source/search-revision-store/FUNCTIONS.md) |
-| Preparation/reconciliation | [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [unit matching](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
-| Projection/evidence lookup | [planner](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) |
-| Effects/view/cleanup | [publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md), [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
-| Local collection and backup/restore | [stopped-root maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md) |
-| Query/window/session | [query](../../crates/search-query/README.md), [window](../../crates/search-query/search-continuation/FUNCTIONS.md), [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
+| Source acquisition/current rows | [source overview](../../crates/search-source/README.md), [registry](../../crates/search-source/search-source-registry/FUNCTIONS.md), [reconcile](../../crates/search-source/search-source-reconcile/FUNCTIONS.md) |
+| Immutable retained objects | [revision store](../../crates/search-source/search-revision-store/FUNCTIONS.md), coordinated with #598 |
+| Preparation and unit continuity | [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
+| Retrieval identity and metadata | [point identity](../../crates/search-index-qdrant/search-point-identity/FUNCTIONS.md), [planner](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) |
+| Qdrant effects/publication/cleanup | [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Query, exact, evidence and windows | [query](../../crates/search-query/README.md), [exact](../../crates/search-query/search-exact/FUNCTIONS.md), [window](../../crates/search-query/search-continuation/FUNCTIONS.md) |
+| Protocol, child lifetime and CLI | [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [client](../../crates/search-provider-client/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
+| Stopped-root collection/archive/import | [maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md) |
 
-An owner is a responsibility, not a package count. Change real consumers with their producer, then remove
-replaced mechanisms. Do not implement a donor's API catalogue or preserve a dead interface through a facade.
+An owner is a responsibility, not a required crate. Move useful behavior and real callers together; remove the
+replaced mechanism, exclusive fixtures and dependency edges in the same slice where practical.
 
-## Source and preparation
+## Delivery sequence
 
-Capture args_os/config once. Inspect without repair, initialize explicitly and hold one real root lock.
-One ignore-filtered inventory plus raw watcher hints serves updates. Incomplete scans never retire unseen
-sources. Git uses exact OIDs and bounded raw plumbing, not checkout/hooks/filters or implicit network.
+Independent preparation may proceed in parallel, but this is the shortest dependency order for a working
+application:
 
-Retain the exact acquired bytes before source-head compare/set. Unknown commit resolves from current rows.
-One materialization feeds one prepared artifact through the shared object writer; no adjacent-stage reparse.
-Source ranges, retrieval prefixes and model packing are distinct.
+| Slice | Observable result | Primary issues |
+|---|---|---|
+| 1. Invocation, settings and root | One parsed invocation; validated typed settings reach actual constructors; explicit inspect/init/open and factual status | #333, #266, #360 |
+| 2. Source, object and preparation | One selected file is acquired once, retained, installed as current under an ABA-safe guard, prepared after restart and reconciled after lost wake-ups | #267, #270, #330, #331, #271 |
+| 3. Identity, Qdrant and publication | Stable retrieval identities, one real SDK runtime, atomic published evidence/view, restartable rebuild and finite cleanup | #259, #329, #263, #261, #300, #303 |
+| 4. Query, protocol and CLI | Explicit scope reaches Qdrant or Exact, resolves pinned retained evidence, supports bounded same-session paging and truthful cancellation/gaps | #272, #279, #291, #293, #275, #280, #332, #264 |
+| 5. Maintenance | Stopped-root object collection plus archive and fresh-destination import | #302, #244 |
+| 6. Product depth | Source-backed exact, orientation/comparison, documents and Git behavior through the same path | #249, #281, #227, #335; optional #219/#334/#336 |
 
-The preparation recipe compares current wanted input with its current outcome after startup, lost queue
-work or profile change. Queue entries are disposable. Worker completion conditionally installs only a still-
-current input; stale work cannot revive a removed source. Permanent gaps are recorded, not busy-retried.
-Publication similarly derives unpublished work from current preparation versus published inventory.
+A slice is complete only when the real producer reaches the real consumer, displaced paths and fixtures are
+removed, canonical documentation and the registry are updated, and the smallest relevant compiler/Clippy or
+runtime evidence is recorded. A constructor, receipt, feature flag or closed issue is not completion.
 
-A supported complete empty input yields zero units, not a fake unit or failure. Unsupported/truncated input
-is an explicit gap, never proof of empty content. Mapped/lossy text can be useful without claiming raw-byte
-identity or completeness. A nonempty -> empty update removes former current points through publication.
+## Core implementation rules
 
-For edited sources reuse occurrences only under the unitizer's one-old/one-new rule. Duplicate position is
-not continuity; ambiguous repeats receive operation-fixed new births. Measure actual rewritten points, not
-just cache hits. Pure transform reuse does not resurrect a closed point interval.
+### Source and preparation
 
-## Evidence metadata and lookup
+Capture OS arguments/config once. Inventory explicitly selected roots with conservative retirement: an
+incomplete scan never proves absence. Acquire stable bytes once, retain them before installing the current head,
+and compare a non-reset current-row/registration guard so A → B → A and remove/re-add cannot revive stale work.
 
-Use pinned redb 2.6.3 for compact published source/evidence rows. One generation's evidence keys are
-(source_id, point_id); its source table records the actual published inventory. Views retain real read
-snapshots, never old sequence labels read against latest coordinates.
+One materialization feeds unitization and one prepared artifact. Do not reparse between adjacent trusted stages
+or maintain a second object writer. Supported complete empty input yields zero units; unsupported, truncated or
+cancelled input is an explicit gap. Reuse transformed work only when the actual parser/profile/context inputs
+match; source occurrence continuity follows the unitizer's one-old/one-new rule, not duplicate position.
 
-No custom manifest B-tree, per-view table copy or temporal database. Bodies, vectors and operation payloads
-stay in the immutable store/Qdrant. Ordinary bounded complete-source metadata deltas commit atomically with
-the current view. Full/profile rebuilds fill separate generation tables in bounded transactions, then switch
-a pointer. Long readers retain pages; finite windows and measured update backpressure matter.
+### Evidence, publication and Qdrant
 
-## Publication and retrieval
+Qdrant is derived retrieval state, not source evidence. redb stores compact current/published rows and real read
+snapshots; immutable objects hold bodies and larger unfinished effect pages. Published query-visible retrieval
+state is immutable for an old view. Changed meaning creates a new point or generation; citation-only changes stay
+in versioned evidence rows.
 
-One concrete Qdrant runtime serves native BM25 and only currently consumed mutations. The selected base
-population supplies IDF; query-only filters do not redefine it. Preserve server rank. Optional hybrid/rerank
-and unused vector/payload wrappers are not baseline work merely because the SDK supports them.
+Publication fixes pending inputs before external effects, distinguishes observed state from unresolved late
+writers, commits evidence/inventory/current view atomically and installs the matching snapshot before visibility.
+Cleanup waits for relevant readers and possible writers. A timeout, reconnect or matching readback is not a fence
+against an earlier dispatched mutation.
 
-A redb snapshot does not freeze Qdrant. Published point vectors and query-visible retrieval/filter/group
-state are immutable; changed meaning creates another point or generation. Only the fixed future validity
-closure may change in place. Citation-only changes stay in the evidence rows. The bridge recipe distinguishes
-known-vector comparison from native Document generated-vector readback; no second local BM25 encoder or
-payload digest can supply independent proof of server inference.
+Use one `qdrant_client::Qdrant` runtime for current publication and query operations. Native BM25 provides
+candidate order. The base population used for IDF is separate from request-only narrowing; an empty or missing
+statistics population must not silently widen or become proof of no content.
 
-Pending input fixes operation, births and targets. First distinguish observed point state from whether an
-old dispatched writer may still execute. Desired/pre-state readback resolves ordinary retry only after the
-relevant dispatches settle. A timeout, reconnect, local single publisher or strong ordering alone is not a
-fence against late writes. Preserve possible dispatch across restart; do not blindly resend or clear pending.
-The publication recipe chooses bounded isolated-generation recovery when terminality cannot be established,
-retaining the abandoned route's unfinished obligation. This can cost a rebuild and retained garbage, not a
-new receipt/recovery platform. Each attempt has a finite budget; nested calls cannot renew it.
+### Query, exact and session lifetime
 
-Commit evidence, published inventory, current view and unfinished cleanup atomically. Capture/install the
-matching read snapshot before visibility or another publication. No manager lock across disk/network I/O.
-New requests pin current only; old guards retain their exact snapshot and Qdrant sequence. Point cleanup
-waits for every earlier relevant live view, collection cleanup for all users, and both account for outstanding
-writers that could recreate the retired state. Cleanup is unfinished work, not permanent history. Physical
-generation names are not reused. Valid zero-point views are not missing/failed generations.
+A request pins one published view, resolves a non-widening scope and owns one absolute deadline/cancellation plus
+finite read/output limits. Select the page before source I/O, resolve exact metadata and verify retained bytes
+before emitting excerpts. Ranked top-k is navigation, never exhaustive absence.
 
-## Local object lifetime and restore
+Exact scans the stated pinned inventory independently of ranked nominations. Complete no-match requires every
+selected item in the declared representation to be verified and scanned without gaps.
 
-Local final-object collection is explicit stopped-root maintenance. Mark all current/prepared/published/
-pending/cleanup references once using disposable scratch redb data; complete validation before sweeping.
-No active producer/window exists during it. Serving removes successful stages but retains final objects;
-disk pressure pauses new writes and reports maintenance. Qdrant cleanup remains separately online.
+One process-local query window belongs to one live session. Continue/Expand never rerun the corpus or expose a
+locator destroyed on one-shot child exit. Cursor/window state advances only after complete bounded terminal
+output; partial output fails the session and commits no progress.
 
-Backup creates an archive, not a second runnable root. Restore explicitly imports supported committed
-source/prepared state into a fresh destination and Qdrant generation. It must not run copied pending or
-cleanup against the original collection. A local lock in the copy does not protect the original external
-index. Keep the original/archive intact and never substitute newer live-path bytes for retained evidence.
+### Maintenance and optional depth
 
-Protected storage adds a real constraint, not a general security framework: readable copied ciphertext does
-not authorize writing with a copied/rolled-back key/nonce counter. Require the selected owner's safe independent
-destination write context or report that restore mode unsupported. No automatic key reset, relabel or downgrade.
-See the maintenance recipe; the old six-domain/quarantine programme is not reinstated.
+Local final-object collection is explicit stopped-root maintenance. Archive/import creates a fresh destination
+and never runs copied pending external operations against the original Qdrant collection. Protected storage
+uses only the accepted #598 object/key seam; do not inherit its retired six-domain/purge programme.
 
-## Queries, windows and process lifetime
+Navigation, comparison, documents and Git remain product requirements. Add syntax, model, document, overlay or
+MCP dependencies only with a real source-backed consumer using the same evidence path. Optional capability is
+not a reason to preserve an unavailable worker or build a provider registry.
 
-Search pins a view, resolves non-widening scope and owns one request deadline/cancellation and finite read/
-output limits. Exact alone may claim complete no-match over its actually evaluated inventory. Select the
-page before source I/O, lookup exact metadata, verify retained bytes, preserve rank and report gaps.
-Known empty selection/inventory returns empty without backend RPC; unknown IDs and missing/incomplete state
-do not. An empty set must never turn into an omitted wildcard filter.
+## Evidence policy
 
-One window belongs to one live session. One-shot output cannot expose a locator destroyed on child exit.
-Continue/Expand get new request deadlines capped by fixed window expiry. Commit only the handled prefix
-represented by successful output. Local flush is not peer acknowledgement; lost sessions need no durable
-exactly-once system.
+Use Rust 1.98 and locked dependencies. Run minimal compiler/Clippy for changed production owners and immediate
+consumers after code. Run focused causal/native/recovery/scale cases only when the implementation exists.
+Record exact SHA, platform, command and result in the registry.
 
-The control reader observes Cancel/EOF during active work. A pre-I/O clock check does not interrupt blocking
-I/O; implement actual cancellation/owned-child termination and verify the platform bound. Serialize into a
-capped buffer before writing. Partial output fails the session and advances no cursor. Trusted local use
-needs no pairing/grant/capability framework.
-
-## Optional depth and coordination
-
-Navigation/comparison/documents remain goals; deleting scaffolds does not cancel them. Precise syntax/SCIP,
-extractors, models, overlays and MCP need a real consumer before adding workers, registries or dependencies.
-
-Protect #598's actual private object/key overlap and coordinate its public handoff. Do not inherit its obsolete
-six-domain/purge/compatibility programme or block unrelated work; do retain actual cipher/storage correctness.
-One manager-owned worktree and existing issues/commits suffice. No second audit-control system.
-
-## Order and evidence
-
-Integrate retained source/head/preparation, identity/Qdrant, atomic publication, query and CLI/session.
-Independent changes need not wait for the whole product. Minimal pinned compiler/Clippy follows code;
-causal/native/recovery/scale runs follow the implementation they exercise. Unsupported roots and sole retained
-copies remain intact. Historical bytes/shapes/qualification gates do not direct the rewrite.
-
-Unrun cases include lost wake-up, stale completion, empty/gap transitions, same-root restart versus restored
-copy, encrypted counter continuity, exact lookup, duplicate edits, old-reader growth, partial and delayed RPCs,
-immutable old-view retrieval, native inference/readback, isolated-generation recovery, staging, stopped-root
-collection, blocked I/O and actual retrieval quality/scale. The
-[audit evidence](../audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md#18-qdrant-lifetime-late-writes-and-native-inference-readback)
-records counterexamples; it does not certify that every defect has been found.
+Current unrun product cases include lost wake-up, stale completion, empty/gap transitions, same-root restart
+versus restored copy, exact retained lookup, duplicate edits, old-reader growth, delayed Qdrant mutations,
+immutable old-view retrieval, isolated-generation recovery, stopped-root collection, blocked I/O and actual
+retrieval quality/scale. Historical audit evidence explains counterexamples; it does not certify closure.

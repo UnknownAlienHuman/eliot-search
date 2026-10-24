@@ -1,24 +1,23 @@
-# Historical coverage map — superseded as audit status
+# Historical coverage map — superseded
 
-The former "static audit closure" statement was too broad. Subsequent source/document passes found additional
-defects and incomplete caller coverage. It is not the current completion status and must not authorize deletion
-or imply that all owner instructions/issues are reconciled.
+The former “static audit closure” claim was too broad. Later source/document passes found additional defects,
+stale callers and conflicting instructions. This file remains only as a stable target for old links; it is not
+current status, a completion gate or an alternative specification.
 
 The complete pre-correction text is preserved at
-[be84c8ab](https://github.com/UnknownAlienHuman/eliot-search/blob/be84c8abb395e2b96426cf7b1bb87a5cae4d062d/docs/audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md).
-Its 52-member inventory and 288-path sweep refer to earlier snapshots, not today's branch. Historical rewrite
-suggestions are not an alternative to the current owner recipe.
+[`be84c8ab`](https://github.com/UnknownAlienHuman/eliot-search/blob/be84c8abb395e2b96426cf7b1bb87a5cae4d062d/docs/audit/AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md).
+Its 52-member inventory and 288-path sweep describe earlier snapshots.
 
-Use the existing records instead:
+Use these current records:
 
 | Question | Current location |
 |---|---|
-| Stage, checked areas and unresolved static questions | [Analysis registry](ANALYSIS_REGISTRY.md#resume-after-interruption) |
-| Previous mistakes, inspected source and limits | [Pass/topic evidence index](ANALYSIS_REGISTRY.md#evidence-index-by-pass-and-topic) |
-| Purpose and requirements | [Architecture](../architecture/README.md) |
-| What/where to implement | [Implementation owners](../implementation/README.md#owners) and nearest FUNCTIONS |
-| Package disposition and test cutover | [Baseline member map](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md), [test map](../implementation/TEST_CUTOVER.md) |
+| Product purpose and requirements | [Architecture](../architecture/README.md) |
+| Selected mechanisms and owners | [Implementation](../implementation/README.md#owners) and nearest `FUNCTIONS.md` |
+| Current checkpoint, area status and execution evidence | [Analysis registry](ANALYSIS_REGISTRY.md) |
+| Full prior passes and exact revisions | [Evidence index](ANALYSIS_REGISTRY.md#evidence-index) |
+| Donor versions and applicability limits | [Donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
+| Baseline package/test disposition | [Workspace map](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md), [test cutover](../implementation/TEST_CUTOVER.md) |
 
-This path remains as a navigation pointer for old links, not a second ledger or specification. Useful static
-findings can support independent code changes while remaining audit questions stay open. Neither a proposed
-fix nor an audit closure label establishes a working application, compiler success or runtime behavior.
+Neither an audit label nor a proposed fix establishes a working application, compiler success or runtime
+behavior. Fix known defects directly; do not require another repository-wide audit before implementation.

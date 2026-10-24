@@ -1,17 +1,26 @@
-# Current ownership graph
+# Current handoff and ownership navigation
 
-This directory contains only the small current ownership/cutover graph:
+This directory contains the small current ownership graph. It is not an agent-control plane.
 
-- [Dependency graph](DEPENDENCY_GRAPH.md) — current effect and data owners plus cutover order.
-- [Analysis registry](../audit/ANALYSIS_REGISTRY.md#resume-after-interruption) — current checkpoint, answered questions, known implementation work and execution limits.
-- [Issue #352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) — overlap coordination and current implementation chain.
+- [Dependency graph](DEPENDENCY_GRAPH.md) — current data/effect owners and cutover relationships.
+- [Implementation delivery sequence](../implementation/README.md#delivery-sequence) — shortest path to a working application.
+- [Analysis registry](../audit/ANALYSIS_REGISTRY.md#resume-after-interruption) — current checkpoint, evidence and unrun work.
+- [Issue #352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) — overlap coordination and current programme summary.
 
-The former packet, context, digest, ticket, lease, review, accepted-evidence, P00/W0–W10 and swarm documents were removed from the current tree. Git history is their archive. They cannot authorize work, freeze APIs, require package/wave order or restore compatibility, migration or qualification machinery.
+## Taking a work slice
 
-Use ordinary Git commits/PRs, the active issue, current owner documentation and actual compiler/runtime results. Do not regenerate the retired handoff control plane or create a replacement status/approval database.
+1. Verify the actual PR head and read the registry resume point.
+2. Select one delivery slice and load only its owner recipe plus real producers/consumers.
+3. Preserve useful behavior, connect the real path and remove displaced mechanisms/fixtures together.
+4. Record inspected paths, decision, changed owner and unrun work in the existing registry.
+5. Update canonical docs, the owning issue, #352 and PR summary when their current truth changes.
 
-The former static-closure map is historical evidence, not an instruction to finish another repository-wide
-audit before coding. The [implementation guide](../implementation/README.md) and nearest owner recipe direct
-the next change; this index adds no requirements.
+Use ordinary commits, PR review and actual compiler/runtime results. A packet, lease, receipt, package row or
+agent assignment cannot freeze APIs or establish completion.
 
-#598 remains protected unpublished source/object/key work. Do not inspect, reset, rebase, duplicate or compete with its private branch/worktrees. Consume only its accepted public handoff; its old six-domain/purge/compatibility programme is not repository-wide authority.
+The former packet/context/digest/ticket/lease/review/P00/W0–W10/swarm documents were removed. Git history is
+their archive; do not regenerate them or build a replacement status/approval database.
+
+#598 remains protected unpublished object/key work. Do not inspect, reset, rebase, duplicate or compete with
+its private branch/worktrees. Consume only its accepted public handoff; its retired six-domain/purge/
+compatibility programme is not repository-wide authority.

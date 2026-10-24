@@ -1,75 +1,74 @@
 # ELIOT Search
 
-ELIOT Search helps agents and people navigate large codebases and document collections. A user selects
-sources, asks a question and receives useful files, symbols or ranges with excerpts, revision identity and
-clear gaps. The result should make the next source read or exact check obvious.
+ELIOT Search is a standalone local search application for large codebases and document collections. A user
+selects sources and receives ranked, source-backed files, symbols or ranges with verified excerpts, revision
+identity and explicit gaps. The result should make the next source read or exact check obvious without loading
+the entire corpus into a model context.
 
-The target is one standalone local application with a CLI and daemon. Qdrant supplies indexed retrieval;
-Search owns source retention, preparation, publication and evidence. A model or agent controller is not
-required by that design. Large repositories and portfolios are a core workload.
+The target product is one CLI and daemon. Qdrant is the only indexed retrieval engine; Search owns retained
+source bytes, preparation, publication state and evidence. Models, agent controllers and ELIOT Memory OS are
+optional clients, not prerequisites.
 
-## Start here
+## Read in this order
 
-| Document | Purpose |
+| Need | Document |
 |---|---|
-| [Architecture](docs/architecture/README.md) | Short product manifesto: purpose, useful results, requirements and principles. |
-| [Implementation](docs/implementation/README.md) | Concrete owners, changes, removals and donor APIs. |
-| [One-shot scan example](QUICKSTART.md) | Existing narrow route; current-HEAD build/run is unverified. Not a persistent-product quickstart. |
-| [Analysis registry](docs/audit/ANALYSIS_REGISTRY.md) | Inspected revisions, findings, actual changes, execution evidence and remaining gaps. |
+| Product purpose and observable requirements | [Architecture](docs/architecture/README.md) |
+| Selected mechanisms, owners and delivery sequence | [Implementation](docs/implementation/README.md) |
+| User-facing navigation, comparison, document and exact behavior | [Product behavior](docs/product/AGENT_ANALYSIS_FRAMEWORK.md) |
+| Current checkpoint, inspected evidence and unresolved work | [Analysis registry](docs/audit/ANALYSIS_REGISTRY.md) |
+| Exact source seams for one change | Nearest `FUNCTIONS.md` plus actual callers |
 
-[AGENTS.md](AGENTS.md) describes repository work. The [documentation index](docs/README.md) links to specific
-source evidence and optional capabilities. Git history preserves retired specifications; they are not current
-implementation requirements.
+The [documentation index](docs/README.md) explains authority and task-specific reading paths. Historical
+specifications, waves, packets and generated status files remain in Git history; they do not override current
+architecture, implementation owners or observed code.
 
-## Current implementation
+## Current truth
 
-The indexed application is not connected. Source contains useful readers, preparation code, lexical encoding,
-a real Qdrant adapter and query components, but no production route joins them from one fresh root to a
-source-backed CLI result.
+The persistent application is **not connected**. Useful source readers, preparation code, lexical helpers, a
+real Qdrant adapter and query components exist, but no default production route currently joins:
 
-The primary daemon still has overlapping command interceptors. The inspected registry/journal interceptor
-claims several search/read/service names before later handlers. Native initialization, preparation, migration
-and the read-only DIRECT service are not one product. See the [daemon map](bins/eliot-searchd/FUNCTIONS.md).
-
-The standalone snapshot/sealed applications and daemon TCP/token proxy were removed in R016/R019. R020 removes
-the empty retention package and `wave7-lifecycle`/`full-baseline` Cargo entries. The remaining `wave1`–`wave6`
-features still select old composition fragments; enabling them does not establish a working product. No new
-all-in-one acceptance feature replaces the deleted aliases.
-
-The default feature remains the empty `wave1-shell`. The source's narrow one-shot exact-scan route is distinct
-from persistent indexed search. Neither that route nor the current daemon build was rerun during the latest
-cleanup. An earlier broad daemon check failed; old successful library checks do not certify this checkout.
-Exact evidence and limitations belong to the registry, not an inferred green status here.
-
-## Workspace
-
-| Area | Current location |
-|---|---|
-| CLI and daemon | [bins/eliot-search](bins/eliot-search/), [bins/eliot-searchd](bins/eliot-searchd/) |
-| Sources and retained revisions | [crates/search-source](crates/search-source/) |
-| Preparation and lexical encoding | [crates/search-prep](crates/search-prep/), [search-lexical](crates/search-lexical/) |
-| Qdrant projection, publication and adapter | [crates/search-index-qdrant](crates/search-index-qdrant/) |
-| Query and evidence | [crates/search-query](crates/search-query/) |
-| Durable current state | [search-control-redb](crates/search-control-redb/) |
-
-This is the current layout, not a requirement to preserve every package. Consolidate modules that split one
-responsibility without isolating a real dependency or effect.
-
-## Development
-
-Use the pinned Rust toolchain and locked dependencies. Check the actual changed target and its immediate
-consumers. For example, changes to daemon composition require the binary, not just its small library:
-
-```sh
-cargo +1.98.0 check --locked -p eliot-searchd --bin eliot-searchd
-cargo +1.98.0 clippy --locked -p eliot-searchd --bin eliot-searchd -- -D warnings
+```text
+selected source
+→ retained bytes and current head
+→ recoverable preparation
+→ real Qdrant publication and query
+→ pinned evidence lookup
+→ useful CLI result
 ```
 
-These are commands to run, not reported passing results. Use `--lib` only for a genuinely library-scoped
-change. Select existing features required by the real consumer; do not equate `--all-features` with a product
-profile or restore the removed `full-baseline` alias. Broader tests follow the connected implementation.
-Compilation, fixtures and hard-coded status fields do not establish Windows/live-Qdrant behavior. Keep Actions
-manual-only.
+R031 adopted `pulldown-cmark 0.13.5` and synchronized its lock entry and materializer donor identity. Rust 1.98
+`check` and minimal Clippy passed for `search-materializer` and `search-unitizer` in
+[Actions run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130). That is
+narrow owner evidence, not a daemon, Windows, live-Qdrant or end-to-end result.
+
+The next implementation slice is typed settings and their real consumers under
+[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333), followed by retained-source/preparation and
+the connected product path coordinated by [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352).
+
+## Workspace map
+
+| Responsibility | Current location |
+|---|---|
+| CLI and daemon composition | [bins/eliot-search](bins/eliot-search/), [bins/eliot-searchd](bins/eliot-searchd/) |
+| Sources and retained revisions | [crates/search-source](crates/search-source/) |
+| Preparation and lexical input | [crates/search-prep](crates/search-prep/), [search-lexical](crates/search-lexical/) |
+| Qdrant projection, publication and adapter | [crates/search-index-qdrant](crates/search-index-qdrant/) |
+| Query, exact operations and evidence | [crates/search-query](crates/search-query/) |
+| Durable current metadata | [search-control-redb](crates/search-control-redb/) |
+
+This layout is an inventory, not a package-count target. Consolidate forwarding or duplicated owners when a
+real consumer moves; keep boundaries that isolate a real state, effect, platform or dependency.
+
+## Verification
+
+Use Rust 1.98, locked dependencies and the smallest compiler/Clippy closure covering changed production owners
+and immediate consumers. Record exactly what ran in the analysis registry and PR. Tests, native recovery,
+relevance and scale evidence follow the implementation they exercise; source presence, receipts and closed
+issues are not substitutes.
+
+The current narrow one-shot scan syntax is documented separately in [QUICKSTART.md](QUICKSTART.md). It is a
+diagnostic example, not the persistent-product quickstart.
 
 ## License
 

@@ -1,196 +1,162 @@
 # Analysis registry
 
-Continuation memory for implementation. It records inspected evidence, decisions and unrun work; it is not a
-second architecture, approval system or permission to delay known code changes. The [architecture](../architecture/README.md),
-[implementation guide](../implementation/README.md) and nearest FUNCTIONS own current behavior.
+Continuation memory for the current refactor. It records inspected evidence, decisions, published changes and
+unrun work. It is not architecture, a permission system or a reason to delay known fixes.
 
 ## Resume after interruption
 
-**Checkpoint:** R031, 2026-10-24 — maintained Markdown OffsetIter correction adopted.
-
+**Checkpoint:** R032, 2026-10-24 — canonical documentation and indexes reconciled.
 **Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
-
-**Inspected checkpoint:** `2a04c1dd1ebbd4ac516ce57fe1dae5ab3a6faad6` (R030 navigation head).
-
+**Inspected head:** `da382b66e59d0b44e758bad9b22e2f5703a4e8c2` (R031).
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
-The source → retained evidence → Qdrant → CLI application is still unconnected. R031 updates the selected
-Markdown parser and its truthful donor identity, but no current binary, Windows, live-Qdrant, parser execution
-or end-to-end success is established. A dependency cut is not product integration.
+R032 rebuilds the documentation entry path and corrects stale R031/#441, Qdrant-gate, test-evidence and audit
+anchors. It changes documentation only. The persistent source → retained evidence → Qdrant → CLI application is
+still unconnected.
 
-Start from the actual PR head, inspect intervening commits, then load only the selected owner and its real
-callers. Do not repeat R027's native/config/test work, R028's query/publication/rebuild/CLI caller map, R029's
-config-catalogue analysis, R030's evaluator-consumer search or R031's Markdown dependency/identity inspection
-as a new general audit.
+Read [docs/README](../README.md), then the affected owner recipe and actual callers. Do not repeat R027 native/
+config/test work, R028 composition/CLI caller mapping, R029 config-catalogue analysis, R030 evaluator search or
+R031 Markdown dependency inspection as a new repository-wide audit.
 
-**Next concrete work:** #333 typed settings and real consumers; #264 the connected product path. #441 remains
-open only for focused parser/materialize/replay execution when Rust tooling is available. Coordinate only actual
-#598 object/key overlap. Future evaluation remains deferred until #264/#215 produce real finite result files.
+**Next implementation:** #333 typed settings and real consumers, then #270/#330/#331 source/object/preparation
+and #264 the connected product path. #441 is closed as the Markdown dependency/identity cut; product-level
+parser/materialize/replay evidence remains #215/#331 work. Coordinate only actual #598 object/key overlap.
 
-Current workspace after R031 has **49 explicit members**. This is an inventory fact, not a target package count.
+Current workspace has **49 explicit members**. This is inventory, not a target package count.
 
 ## Established decisions — do not rediscover
 
+- Documentation authority is: architecture → implementation → nearest `FUNCTIONS.md`; product docs own
+  workflows, registry owns evidence/status, donor register owns upstream facts.
 - One current-format application owns root, source/object, preparation, publication, query and local session.
-- Real root exclusion, source-currentness helpers and shared protected storage survive their obsolete native/
+- Real root exclusion, source-currentness helpers and shared protected storage survive obsolete native/
   registration callers; the provider-registration platform does not.
-- Config startup/status, locator hints and narrow DEK selection are the only mapped legacy config consumers.
-  Typed settings must change those consumers; receipts do not apply values.
-- Query/publication/rebuild composition currently uses oracle/in-memory/supplied-proof paths, not selected live
-  Qdrant/redb effects. Feature names do not connect them.
-- All 16 tests in the two named mixed migration suites have receiving-owner/delete dispositions.
-- Exact/navigation/comparison/documents remain product requirements; deleting scaffolds does not complete them.
-- R031 pins `pulldown-cmark 0.13.5`, its published checksum and the same version/checksum in materializer donor
-  identity. Defaults remain disabled and the locked dependency set remains `bitflags`, `memchr`, `unicase`.
-  Rust 1.98 check and Clippy for `search-materializer` plus `search-unitizer` passed in [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130); focused parser/materialize/replay execution is still unrun.
-- Repository config catalogues were not runtime inputs and are gone. The config owner defines typed layer/path
-  semantics.
-- `search-eval` had no external Rust caller. Its daemon edge was Cargo-only. The package, feature/dependency and
-  lock wiring are removed in R030; no forwarding crate remains.
+- Config startup/status, locator hints and narrow DEK selection are the mapped legacy config consumers. Typed
+  settings must reach them directly; receipts do not apply values.
+- Query/publication/rebuild composition still uses oracle/in-memory/supplied-proof paths rather than selected
+  live Qdrant/redb effects. Feature names do not connect them.
+- All sixteen tests in the two mixed migration suites have receiving-owner/delete dispositions.
+- Exact, orientation, comparison, documents and Git remain product requirements.
+- R031 pins `pulldown-cmark 0.13.5`, its published checksum and identical materializer donor identity. Defaults
+  remain disabled and dependencies remain `bitflags`, `memchr`, `unicase`.
+- Repository config catalogues and `search-eval` were disconnected and are removed; do not recreate forwarding
+  facades or status authorities.
 
 ## Delivery remaining
 
-| Group | Current owner | Missing product result |
+| Group | Current owners/issues | Missing product result |
 |---|---|---|
-| Root/settings/source/object/preparation | [owners](../implementation/README.md#owners), #333/#330/#270/#331 | Validated settings reach real owners; retained bytes/current head/recoverable preparation. |
-| Qdrant/publication | [publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md), #263/#261/#300/#303 | Real SDK effects, atomic evidence/view, restartable rebuild and finite cleanup. |
-| Query/evidence/windows | [query](../../crates/search-query/README.md), #272/#291/#293/#279/#275 | Scoped real retrieval, retained evidence and one bounded pinned session window. |
-| Session/client/CLI | [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), #280/#332/#264 | One serviced framed child session replacing legacy clients/dispatch. |
-| Maintenance/archive/import | [maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md), #302/#244 | Stopped-root collection, complete archive and fresh-destination import. |
-| Selected product depth | [product behavior](../product/AGENT_ANALYSIS_FRAMEWORK.md), #249/#281/#227/#335 | Exact/navigation/comparison/document/Git behavior through actual producers. |
+| Invocation/root/settings/source/preparation | [implementation owners](../implementation/README.md#owners), #333/#266/#270/#330/#331/#271 | Validated values reach owners; retained current head and recoverable preparation. |
+| Identity/Qdrant/publication | #259/#329/#263/#261/#300/#303 | Real SDK effects, atomic evidence/view, restartable rebuild and finite cleanup. |
+| Query/evidence/window | [query](../../crates/search-query/README.md), #272/#279/#291/#293/#275/#249 | Scoped retrieval/Exact, pinned retained evidence and one bounded live-session window. |
+| Protocol/client/CLI | #280/#332/#264 | One serviced framed child session and useful default CLI result. |
+| Maintenance/archive/import | #302/#244 | Stopped-root collection, complete archive and fresh-destination import. |
+| Product depth | [product behavior](../product/AGENT_ANALYSIS_FRAMEWORK.md), #281/#227/#335 | Source-backed orientation/comparison/documents/Git behavior. |
 
-Evaluation/release summaries follow a working candidate. #233 may later add a small pure tool over explicit
-`cases.jsonl`, optional `qrels.jsonl` and `results.jsonl`; it is not a seventh product subsystem.
+Optional evaluation (#233), MCP (#219), managed Qdrant (#334) and overlays (#336) follow a working baseline and
+do not form additional product subsystems.
 
 ## Coverage ledger
 
-`CHECKED` is limited to the named question. `PARTIAL` records known inspection or implementation work.
-`PROTECTED` excludes unpublished work. `RUNTIME-ONLY` requires execution.
+`CHECKED` applies only to the named question. `PARTIAL` means known inspection/implementation remains.
+`PROTECTED` excludes private work. `RUNTIME-ONLY` requires execution.
 
-| ID | Area | Status | Established result / remaining |
+| ID | Area | Status | Current result / remaining |
 |---|---|---|---|
-| A001 | Documentation authority | PARTIAL | Current owners/indexes replace wave/packet/config/eval authority; fix further conflicts with the affected owner. |
-| A002 | Historical governance data | CHECKED | Swarm/maps/packets/generated status removed; Git preserves history. |
+| A001 | Documentation authority | CHECKED for canonical routing | R032 aligns root/docs/product/handoff/audit indexes and owner hierarchy; future owner changes must update their links. |
+| A002 | Historical governance | CHECKED | Waves/packets/swarm/generated authority removed; Git preserves history. |
 | A003 | Workflows/wrappers | CHECKED | Old gates/wrappers removed; Actions remain manual-only. |
-| A004 | Workspace inventory | CHECKED for inventory | 49 explicit members after R030; dependency resolution/build still unrun. |
-| A005 | Entrypoints/product | PARTIAL | Active CLI/daemon selection and disconnected composition mapped; real application still absent. |
+| A004 | Workspace inventory | CHECKED for inventory | 49 members; R031 resolved/compiled materializer+unitizer only; full workspace/binaries remain unrun. |
+| A005 | Entrypoints/product | PARTIAL | Active CLI/daemon shadowing mapped; real application absent. |
 | A006 | Root/config/control | PARTIAL | Consumers/layer policy known; typed settings/root/current state not implemented. |
-| A007 | Sources/reconciliation | PARTIAL | Known acquisition/currentness defects; retained-source integration unfinished. |
-| A008 | Private object/key work | PROTECTED | Use accepted #598 handoff only; no private branch/worktree inspection. |
-| A009 | Preparation/identity | PARTIAL | R031 updates Markdown parser/identity together; budget/empty/stale/ABA/reuse integration remains. |
+| A007 | Sources/reconciliation | PARTIAL | Acquisition/currentness defects known; retained-source integration unfinished. |
+| A008 | Private object/key work | PROTECTED | Consume accepted #598 handoff only. |
+| A009 | Preparation/identity | PARTIAL | Markdown parser/identity updated; budget/empty/stale/ABA/reuse integration remains. |
 | A010 | Qdrant/donors | CHECKED for named static questions | BM25/tokenizer/IDF/readback/late-write limits recorded; live integration/quality/scale unrun. |
-| A011 | Publication/view/cleanup | PARTIAL | Competing proof/floor/rebuild boundaries known; real implementation absent. |
-| A012 | Query/evidence/window | PARTIAL | Oracle-only host and lock/cost defects mapped; real path absent. |
-| A013 | Protocol/client/CLI | PARTIAL | Active legacy path and typed-client seams mapped; serviced session absent. |
-| A014 | Product depth | PARTIAL | Required exact/orientation/ambiguity/comparison/document behavior preserved; implementation incomplete. |
-| A015 | Tests/governance code | PARTIAL | Mixed suites classified; R030 removes unused eval audit/receipt APIs, but other obsolete fixtures remain. |
-| A016 | Donors | PARTIAL | Markdown 0.13.5 adopted in R031; its execution and other selected donor cuts remain per consumer. |
-| A017 | Qualification tree | CHECKED | Archived/removed as authority; release evidence remains runtime work. |
-| A018 | Auxiliary documents | CHECKED for filename/disposition | Duplicate/config/eval instructions removed or archived; semantic consistency continues under A001. |
-| A019 | Issues/PR handoff | PARTIAL | #441/#352/PR and registry reflect R031; continue updating with actual implementation. |
-| A020 | Runtime evidence | RUNTIME-ONLY | Static findings and removals establish no platform/recovery/performance result. |
-| A021 | Compiler baseline | PARTIAL | R031 Rust 1.98 check/Clippy passed for materializer + unitizer in [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130); current binaries remain unchecked. |
-| A022 | Runtime qualification/identity | PARTIAL | Markdown donor identity is truthful in R031; lexical/materializer fixture authority still needs caller cleanup. |
-| A023 | GC/storage diagnostics | PARTIAL | Stopped-root design selected; implementation/hot-path cleanup unfinished. |
-| A024 | Backup/restore | PARTIAL | Fresh archive/import design recorded; implementation absent. |
-| A025 | Features/harness topology | PARTIAL | R030 removes Cargo-only eval edge; remaining wave/query/proof wiring still needs real caller cuts. |
+| A011 | Publication/view/cleanup | PARTIAL | Recovery/lifetime boundaries selected; real effects/current-view path absent. |
+| A012 | Query/evidence/window | PARTIAL | Oracle/lock/cost defects mapped; connected path absent. |
+| A013 | Protocol/client/CLI | PARTIAL | Legacy seams mapped; serviced current session absent. |
+| A014 | Product depth | PARTIAL | Requirements preserved; implementations incomplete. |
+| A015 | Tests/governance code | PARTIAL | Mixed suites classified; remaining wave/query/lexical fixtures need caller cutover. |
+| A016 | Donors | PARTIAL | Markdown 0.13.5 installed; other selected donors remain per concrete consumer. |
+| A017 | Qualification tree | CHECKED | Archived/removed as authority; runtime evidence remains ordinary work. |
+| A018 | Auxiliary docs | CHECKED for current index | R032 classifies canonical versus historical records and fixes stale anchors/status. |
+| A019 | Issues/PR handoff | CHECKED for R032 | #352, PR #610 and the stale #189 evidence-index link were synchronized after publication. |
+| A020 | Runtime evidence | RUNTIME-ONLY | Static docs/removals establish no Windows/Qdrant/recovery/performance result. |
+| A021 | Compiler baseline | PARTIAL | R031 check/Clippy passed materializer+unitizer; current binaries/full workspace unchecked. |
+| A022 | Runtime identity/qualification | PARTIAL | Markdown donor identity truthful; lexical/materializer fixture authority still needs cleanup. |
+| A023 | GC/storage diagnostics | PARTIAL | Stopped-root design selected; implementation unfinished. |
+| A024 | Backup/restore | PARTIAL | Fresh archive/import design selected; implementation absent. |
+| A025 | Features/harness topology | PARTIAL | Eval and wave7 removed; remaining wave/query/proof wiring needs real caller cuts. |
 
 ## Evidence index
 
-Full earlier records remain immutable; this registry keeps only continuation facts.
+Full earlier records remain immutable. These links preserve detailed readsets without re-expanding this live
+registry.
 
-| Pass | Topic | Record |
+| Pass | Topic | Immutable record |
 |---|---|---|
 | R001–R012 | Governance/packages; lexical/source/preparation/publication/evidence | [44d7416c](https://github.com/UnknownAlienHuman/eliot-search/blob/44d7416c46554456f16ccd2b3943657b755304ee/docs/audit/ANALYSIS_REGISTRY.md) |
 | R013 | Client display/cancellation/framing/cleanup | [2b37f5ef](https://github.com/UnknownAlienHuman/eliot-search/blob/2b37f5ef1e8cc755bbcd8c0e1f7efc840eff8cf3/docs/audit/ANALYSIS_REGISTRY.md) |
-| R014 | Query-time inventories, local GC, restore isolation | [8cf331a4](https://github.com/UnknownAlienHuman/eliot-search/blob/8cf331a44decded2c84c7f579dcbf8434e040dc7/docs/audit/ANALYSIS_REGISTRY.md) |
-| R015 | Structural/lifecycle fixture dispositions | [bf2bde29](https://github.com/UnknownAlienHuman/eliot-search/blob/bf2bde299b3f009527397571bd9baeea51fde840/docs/audit/ANALYSIS_REGISTRY.md) |
-| R016 | Standalone snapshot/sealed applications | [53ab0ea3](https://github.com/UnknownAlienHuman/eliot-search/blob/53ab0ea33f8d405f72e984881b5aea0db69e7c3b/docs/audit/ANALYSIS_REGISTRY.md) |
-| R017 | Generic lifecycle/restore removal | [15145667](https://github.com/UnknownAlienHuman/eliot-search/blob/151456672ea4ec8773ed65c5017cb63989912d30/docs/audit/ANALYSIS_REGISTRY.md) |
-| R018 | Disconnected query/provider/rebuild proofs | [174f3ec7](https://github.com/UnknownAlienHuman/eliot-search/blob/174f3ec758cb0ec5c38b780cd3de913be9120fdc/docs/audit/ANALYSIS_REGISTRY.md) |
-| R019 | TCP/token proxy removal | [156528ad](https://github.com/UnknownAlienHuman/eliot-search/blob/156528ad0a2ab64599d9cef01d3eeea2b6f11040/docs/audit/ANALYSIS_REGISTRY.md) |
-| R020 | Retention shell/features/lock evidence | [e6c7bb90](https://github.com/UnknownAlienHuman/eliot-search/blob/e6c7bb902c9aa91509ceeccae996c610f2b8f0cd/docs/audit/ANALYSIS_REGISTRY.md) |
-| R021 | Feature roots/diagnostics/currentness | [ff59f930](https://github.com/UnknownAlienHuman/eliot-search/blob/ff59f930c5b160b1ed36684538be3dca1bdd6970/docs/audit/ANALYSIS_REGISTRY.md) |
-| R022 | Replay/cancellation/subprocess/clocks | [305ccab1](https://github.com/UnknownAlienHuman/eliot-search/blob/305ccab141774dba088e38dacc006fc90fcfb0a2/docs/audit/ANALYSIS_REGISTRY.md) |
-| R023 | Native constructors/installation anchor | [676135f4](https://github.com/UnknownAlienHuman/eliot-search/blob/676135f49c5373b27edfd6429717464e53202974/docs/audit/ANALYSIS_REGISTRY.md) |
-| R024 | Frame clocks/terminal races/Tokio/CLI help | [2d33dbde](https://github.com/UnknownAlienHuman/eliot-search/blob/2d33dbdeefce0eb0c564f013a8e66032e73f6693/docs/audit/ANALYSIS_REGISTRY.md) |
-| R025 | Native authority lock/lifetime/accept | [be84c8ab](https://github.com/UnknownAlienHuman/eliot-search/blob/be84c8abb395e2b96426cf7b1bb87a5cae4d062d/docs/audit/ANALYSIS_REGISTRY.md) |
-| R026 | Recovery/status/navigation index | [5af8cde5](https://github.com/UnknownAlienHuman/eliot-search/blob/5af8cde5416fa33e3f1a8f3c19367ed520eac9a4/docs/audit/ANALYSIS_REGISTRY.md) |
+| R014 | Query inventories, local GC, restore isolation | [8cf331a4](https://github.com/UnknownAlienHuman/eliot-search/blob/8cf331a44decded2c84c7f579dcbf8434e040dc7/docs/audit/ANALYSIS_REGISTRY.md) |
+| R015–R020 | Structural/lifecycle removals through retention shell/features | [e6c7bb90](https://github.com/UnknownAlienHuman/eliot-search/blob/e6c7bb902c9aa91509ceeccae996c610f2b8f0cd/docs/audit/ANALYSIS_REGISTRY.md) |
+| R021–R026 | Diagnostics/currentness/recovery/native authority | [5af8cde5](https://github.com/UnknownAlienHuman/eliot-search/blob/5af8cde5416fa33e3f1a8f3c19367ed520eac9a4/docs/audit/ANALYSIS_REGISTRY.md) |
 | R027 | Native/config/test/product/donor reconciliation | [37dbb198](https://github.com/UnknownAlienHuman/eliot-search/blob/37dbb198ca983d00e987f17ed2a71171d53d1d4e/docs/audit/ANALYSIS_REGISTRY.md#r027-owner-consumer-and-donor-reconciliation) |
-| R028 | Composition callers, CLI orphans, Markdown fix | [afc3bfca](https://github.com/UnknownAlienHuman/eliot-search/blob/afc3bfca60cd0a350c3cf822ccda48f5a13e2028/docs/audit/ANALYSIS_REGISTRY.md#r028-composition-cutover-and-maintained-markdown-fix) |
-| R029 | Config catalogue removal/typed input policy | [fb18eb96](https://github.com/UnknownAlienHuman/eliot-search/blob/fb18eb96b13948ac8abbb2a68996b81080aeef88/docs/audit/ANALYSIS_REGISTRY.md#r029-configuration-catalogue-removal-and-typed-input-policy) |
-| R030 | Evaluation package/caller/lock removal | [e3b40a6f](https://github.com/UnknownAlienHuman/eliot-search/blob/e3b40a6f840177e734b43d925e3992581acdd436/docs/audit/ANALYSIS_REGISTRY.md#r030-remove-disconnected-evaluation-authority) |
-| R031 | Maintained Markdown dependency/identity cut | [this pass](#r031-adopt-maintained-markdown-offsetiter-correction) |
+| R028 | Composition callers, CLI orphans, Markdown fix research | [afc3bfca](https://github.com/UnknownAlienHuman/eliot-search/blob/afc3bfca60cd0a350c3cf822ccda48f5a13e2028/docs/audit/ANALYSIS_REGISTRY.md#r028-composition-cutover-and-maintained-markdown-fix) |
+| R029 | Config catalogue removal and typed input policy | [fb18eb96](https://github.com/UnknownAlienHuman/eliot-search/blob/fb18eb96b13948ac8abbb2a68996b81080aeef88/docs/audit/ANALYSIS_REGISTRY.md#r029-configuration-catalogue-removal-and-typed-input-policy) |
+| R030 | Disconnected evaluation package removal | [e3b40a6f](https://github.com/UnknownAlienHuman/eliot-search/blob/e3b40a6f840177e734b43d925e3992581acdd436/docs/audit/ANALYSIS_REGISTRY.md#r030-remove-disconnected-evaluation-authority) |
+| R031 | Markdown 0.13.5 dependency/identity cut | [da382b66](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/docs/audit/ANALYSIS_REGISTRY.md#r031-adopt-maintained-markdown-offsetiter-correction) |
+| R032 | Canonical documentation/index reconciliation | [this pass](#r032-canonical-documentation-and-index-reconciliation) |
 
-Supporting immutable evidence: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md),
-[donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md), and
-[baseline package dispositions](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md).
+Supporting historical evidence: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md),
+[baseline member disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) and the
+[superseded coverage pointer](AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md).
 
 ## Execution evidence
 
-Last recorded passing compiler evidence is [run 39872058276](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/39872058276):
-Ubuntu, Rust 1.98.0, `search-qdrant-bridge --lib`, commit `7d92fb8b`. It does not cover current binaries.
-Earlier broad daemon compilation failed. R028 could not start Cargo (exit 127), and R030 had no cargo/rustc.
-R031 used GitHub Actions [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130): Rust 1.98 `cargo check --locked` and `cargo clippy --locked --no-deps` passed for
-`search-materializer` and `search-unitizer`. Parser reproducer, materialize/replay, current binaries and runtime remain unrun.
-
-R030 manually prunes only the confirmed local package edges from `Cargo.lock`: daemon dependency
-`search-eval` and the path-package block. Root workspace/member/dependency and daemon optional feature/dependency
-are removed in the same commit. No registry package version or checksum changes. The lock diff is independently
-compared before publication; this is an exact prune, not Cargo regeneration.
-
-R031 changes exactly the `pulldown-cmark` lock version/checksum from 0.13.1 to 0.13.5. Its locked dependency
-names are unchanged, and the same published checksum is installed in `markdown/identity.rs::donor_row`.
-This is static lock/identity evidence, not successful dependency resolution or parser execution.
+- [Run 39872058276](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/39872058276): Ubuntu,
+  Rust 1.98, `search-qdrant-bridge --lib`, commit `7d92fb8b`; no consumers/runtime.
+- [Run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130): Rust 1.98 locked
+  check and minimal Clippy for `search-materializer` + `search-unitizer` at the R031 cut.
+- Parser reproducer/materialize/replay, current binaries, Windows, live Qdrant, restart/recovery, relevance and
+  scale remain unrun.
+- R032 is documentation-only. Its verification is link/anchor/status consistency and GitHub diff review; it
+  adds no Rust/runtime result.
 
 ## R030. Remove disconnected evaluation authority
 
-**Source:** `fb18eb96b13948ac8abbb2a68996b81080aeef88`, 2026-10-23.
-
-**Inspected:** root and daemon manifests; daemon entry/module declarations; complete package tree and package
-README/Cargo manifest; current lockfile; current workspace disposition; current issue #233; repository Rust
-symbol/path references. Default-branch code search was used only to identify candidate historical paths and was
-not accepted as current-branch caller evidence.
-
-**Finding:** `search-eval` contains 41 tracked files and roughly 150 KiB of production audit/evidence/metric/SLO/
-report/receipt/verdict machinery. No external Rust caller or daemon module constructs or imports it. `wave4-query`
-only enabled an optional Cargo dependency. The package itself already stated that a useful evaluator should run
-after the product and might be simpler outside Rust.
-
-**Decision/change:** delete the whole package; remove workspace member/dependency, daemon feature/dependency and
-matching lock entries. Do not retain a facade, audit registry, immutable run store, verdict authority, reviewer
-quorum or release credential. Git history at `fb18eb96` preserves the complete source and rationale.
-
-**Future boundary:** after #264/#215 produce real public result files, #233 may implement a small pure validator
-and standard metric summary over explicit finite rows. Failed, partial, timeout, cancelled and missing cases stay
-visible. It must not become a runtime constructor input, readiness gate or permanent evidence database.
-
-**Remaining:** actual product implementation and execution. This pass does not validate metrics, release quality,
-resource behavior or relevance, and it does not reduce the requirements of #215.
+At source `fb18eb96`, `search-eval` had no external Rust caller; its daemon edge was Cargo-only. R030 removed the
+41-file package, workspace/feature/dependency wiring and exact local lock entries. Future evaluation under #233
+may be a small post-product tool over explicit finite result files; no facade, verdict authority or runtime gate
+remains.
 
 ## R031. Adopt maintained Markdown OffsetIter correction
 
-**Source:** `2a04c1dd1ebbd4ac516ce57fe1dae5ab3a6faad6`, 2026-10-24.
+At source `2a04c1dd`, the materializer was the sole installed production consumer and still pinned 0.13.1.
+R031 changed the workspace/lock/parser/donor identity together to 0.13.5 and its published checksum, preserving
+empty options, `OffsetIter`, exact retained bytes and parser behavior in transform identity. Run 40084893130
+passed the owner/consumer check and Clippy. #441 is closed as this code task; product-level parser cases remain
+#215/#331 evidence.
 
-**Inspected:** root manifest and exact lock entry; materializer manifest, parser, donor identity, authored
-fixtures and owner recipe; unitizer's current Markdown consumer fixture; donor register; issue #441; upstream
-0.13.5 release/tag and crates.io package record. No private #598 source or worktree was inspected.
+## R032. Canonical documentation and index reconciliation
 
-**Finding:** the only installed production consumer is the existing materializer adapter using
-`Parser::new_ext(source, Options::empty()).into_offset_iter()`. Root Cargo, lock and donor identity still named
-0.13.1 even though the selected maintained correction is 0.13.5. The 0.13.5 crate requires Rust 1.71.1 and, with
-defaults disabled, retains the same locked `bitflags`, `memchr` and `unicase` dependency set. Its published crate
-checksum is `278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb`.
+**Source:** `da382b66e59d0b44e758bad9b22e2f5703a4e8c2`, 2026-10-24.
 
-**Decision/change:** pin 0.13.5 in the workspace, change only that package's version/checksum in `Cargo.lock`,
-update the parser declaration and install the identical version/checksum in the materializer donor row. Keep
-empty options, `OffsetIter`, complete event exhaustion, exact byte ranges and retained original bytes. Do not
-add a local fork, spelling blacklist, plain-iterator workaround, panic wrapper or worker framework.
+**Inspected:** root README/QUICKSTART/AGENTS; complete `docs/` inventory; architecture, implementation, product,
+handoff, config, runtime and ADR entrypoints; live registry/donor/test records; bridge owner map; PR #610 and
+issues #441/#352/#333 plus stale issue links found during navigation review. No private #598 source was read.
 
-**Identity/reuse:** parser behavior is part of transformed-output identity. Existing output is not relabelled;
-current source bytes can be prepared under the new donor. Fail-only ceilings and fixture labels remain outside
-production transform identity.
+**Findings:** the canonical architecture and product behavior were broadly consistent, but entry pages were
+history-heavy and lacked one clear reading/delivery sequence. R031 left #441 described as open in the registry
+and donor register after the issue closed. The Qdrant runtime boundary still claimed `QualifiedGate` was a
+constructor input although the gate had already been removed. Test-cutover execution headers stopped at R027,
+the old coverage pointer linked a deleted registry anchor, and the Windows secret page read as target design
+instead of a legacy effect inventory.
 
-**Execution/remaining:** Rust 1.98 check and Clippy for `search-materializer` plus `search-unitizer` passed in
-[Actions run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130). The printable `"- [o]:u\n    \t"` case, bounded list/blockquote/CRLF variants and actual
-materialize/replay remain #441 work. The issue stays open until that focused evidence exists; #331 owns live Markdown adoption.
+**Decision/change:** rebuild root/docs/product/handoff navigation around the authority chain; add an explicit
+implementation delivery sequence and completion boundary; refresh test/evidence status; classify the Windows
+adapter as current legacy inventory; correct the Qdrant gate/remaining-debt description; rewrite donor and
+analysis registers into concise live indexes while preserving immutable historical links; add an ADR index.
+No product requirement, source evidence or #598 protection is removed.
+
+**Publication follow-up completed:** #352, PR #610 and the stale #189 evidence-index link were synchronized from this record. No second documentation authority was created. The product implementation and all runtime evidence listed above remain outstanding.

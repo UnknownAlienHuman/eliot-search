@@ -1,13 +1,12 @@
-# One-shot scan example — current build unverified
+# Diagnostic one-shot scan — not the persistent-product quickstart
 
-The source contains a narrow one-shot exact-scan route. This example was not executed on the latest refactor
-HEAD. An earlier broad daemon check failed; successful checks of individual libraries do not establish that
-this checkout builds or that this command currently succeeds. See the [analysis registry](docs/audit/ANALYSIS_REGISTRY.md)
-for revision-specific evidence. There is no connected persistent-product quickstart yet.
+The source contains a narrow exact scan over bytes supplied for one process invocation. The current R031
+compiler evidence covers `search-materializer` and `search-unitizer`, not the daemon binary or these commands.
+Treat the examples below as existing syntax to verify, not as a reported successful run.
 
 ## Scan one file
 
-After the daemon builds with the pinned toolchain, the existing command syntax is query before path:
+The existing daemon syntax places the query before the path:
 
 ```powershell
 $Source = Join-Path $env:TEMP "eliot-scan.txt"
@@ -20,7 +19,11 @@ $Source = Join-Path $env:TEMP "eliot-scan.txt"
 cargo +1.98.0 run --locked -p eliot-searchd -- --scan-file needle $Source
 ```
 
-The explicit ASCII-insensitive variant is `--scan-file-ascii-insensitive QUERY FILE`.
+The explicit ASCII-insensitive variant is:
+
+```powershell
+cargo +1.98.0 run --locked -p eliot-searchd -- --scan-file-ascii-insensitive needle $Source
+```
 
 ## Scan stdin
 
@@ -29,23 +32,25 @@ Get-Content -Raw $Source |
   cargo +1.98.0 run --locked -p eliot-searchd -- --scan-stdin needle
 ```
 
-A successful run would exercise only that exact-scan path over supplied bytes. It would not initialize a
-persistent root, retain a revision, use Qdrant, survive source deletion or establish restart behavior.
+A successful invocation would exercise only the one-shot exact path over supplied bytes. It would not retain a
+source revision, initialize a current-format root, use Qdrant, survive restart or establish indexed Search.
 
-## Persistent product blocker
+## Persistent product status
 
-The remaining daemon entrypoint still passes commands through independent registry, native-root, migration,
-preparation, DIRECT-service and shell applications. The inspected registry interceptor claims search/read/service
-names before their later handlers. The advertised persistent CLI client therefore is not a connected
-source → retained object → Qdrant → source-backed result path. The
-[daemon map](bins/eliot-searchd/FUNCTIONS.md) records the exact routing problem.
+There is no verified persistent quickstart yet. The default application still has overlapping legacy command
+routes and disconnected publication/query composition. Remaining `wave1`–`wave6` features select old fragments;
+a feature combination is not a product profile.
 
-R016/R019 removed standalone snapshot/sealed applications and the daemon loopback proxy. R020 removes the empty
-retention package and `wave7-lifecycle`/`full-baseline`. Remaining `wave1`–`wave6` features do not repair routing;
-the default is still the empty `wave1-shell`. Do not restore old aliases or treat a feature combination as a
-finished application.
+[#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the first real quickstart:
 
-Issue [#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the real persistent quickstart:
-initialize a current-format root, retain one file, restart, publish/query through the actual Qdrant adapter and
-reopen the retained excerpt from the CLI. Until that path is implemented and executed, help text, constructor
-checks, self-test flags and historical qualification are not evidence that it works.
+```text
+initialize/open current root
+→ select and retain one file
+→ restart
+→ publish/query through the actual Qdrant adapter
+→ reopen the pinned retained excerpt from the CLI
+```
+
+Replace this document with executed persistent steps only after that path works. Until then, help text,
+constructors, self-test names and historical qualification do not prove availability. See the
+[analysis registry](docs/audit/ANALYSIS_REGISTRY.md#execution-evidence) for exact revision-specific evidence.

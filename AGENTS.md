@@ -1,50 +1,63 @@
 # Working on ELIOT Search
 
-Start with the [architecture](docs/architecture/README.md) and the
-[implementation guide](docs/implementation/README.md). Keep the short manifesto in the lead developer's
-context; load only the code and local implementation notes needed for the current change.
+Start with the [documentation index](docs/README.md). Read the
+[architecture](docs/architecture/README.md) for purpose and observable behavior, then the
+[implementation guide](docs/implementation/README.md) for selected mechanisms and delivery order. Load only the
+nearest owner recipe and actual callers needed for the current change.
 
-The maintainer's current request governs. Audit tables record findings; they are not another specification,
-permission system or prerequisite for coding. Historical waves and package contracts cannot restore retired
-compatibility, cryptographic or process requirements.
+The maintainer's current request governs. Audit tables record findings and uncertainty; they are not a second
+specification, permission system or prerequisite for coding. Historical waves, package contracts and generated
+status files cannot restore retired compatibility, cryptographic or process requirements.
 
-## Implement the behavior, not the diagram
+## Implement behavior, not diagrams
 
-Trace the real input, owner and consumer. Reuse a correct implementation; change the defective responsibility
-and its immediate consumers together, then remove the replaced path. A pseudocode type, candidate donor,
-package row or issue number is not an instruction to create a class, trait, crate, registry or worker.
+Trace the real input, owner and consumer. Reuse correct code; change the defective responsibility and its
+immediate consumers together, then remove the replaced path. A type sketch, donor API, package row or issue
+number is not an instruction to create a class, trait, crate, registry or worker.
 
-Use direct calls and ordinary data first. Isolate a real dependency, effect or repeated policy only where it
-helps the current operation. Do not invent a second implementation to justify a trait or split a function to
-satisfy a line quota. Internal/pre-release APIs need no compatibility wrappers. Reject unsupported stored
-roots before writes and preserve user data.
+Use direct calls and ordinary data first. Isolate a real dependency, state, effect or repeated policy only where
+it helps the current operation. Internal and pre-release APIs need no compatibility facade. Reject unsupported
+stored roots before writes and preserve original files and sole retained copies.
 
-A document rule has one home. Architecture states purpose; implementation selects mechanisms; local notes
-record exact source seams and unresolved decisions. Other READMEs and issues link to that rule instead of
-copying a second algorithm. When a conflict is found, correct the owning rule and affected callers; do not
-satisfy both by adding adapters, fake receipts or more versions.
+## Documentation authority
 
-## Scope and verification
+A rule has one home:
 
-Implement only capabilities selected for the current change. Deferring an implementation does not silently
-remove a user requirement from the product. A one-file lexical path is a milestone, not the complete product.
-Use the pinned compiler and minimal Clippy closure for changed production owners and real consumers. Broader
-runtime/native/scale work follows implementation; no source-shape, receipt or qualification gate substitutes
-for behavior. Keep Actions manual-only and secrets/private captures out of Git.
+- architecture owns product purpose and observable requirements;
+- implementation owns selected mechanisms, ownership and delivery order;
+- nearest `FUNCTIONS.md` owns exact code seams and failure rules;
+- product documents own user-visible workflows;
+- the analysis registry owns current evidence, checkpoint and unrun work;
+- the donor register owns versioned upstream facts and applicability limits.
+
+Other READMEs and issues link to the owner instead of copying another algorithm. When a conflict is found,
+correct the owning document and affected indexes/issues in the same change.
+
+## Verification and records
+
+Use the pinned compiler and minimal Clippy closure for changed production owners and immediate consumers.
+Broader tests, native recovery and scale work follow the implementation they exercise. No receipt, source-shape
+check or package count substitutes for behavior.
+
+For every published slice:
+
+1. verify the actual PR head and inspect intervening commits;
+2. record inspected paths, finding, decision, changed owner and unrun work in
+   [the registry](docs/audit/ANALYSIS_REGISTRY.md);
+3. update canonical documentation and indexes without creating a duplicate status system;
+4. synchronize the owning issue, #352 and PR #610 when their current-state summary changes;
+5. report only checks that actually ran.
 
 ## Current work
 
-Preparation remains in [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
-After an interrupted audit, use the [registry resume point](docs/audit/ANALYSIS_REGISTRY.md#resume-after-interruption)
-and its topic/checkpoint index. Verify actual PR head before editing; chat summaries and main-branch search are
-not current-branch evidence. Record inspected ranges, findings, changed code and execution separately in that
-same registry, preserving prior immutable evidence links. Do not requeue a documented defect as unread source.
+Preparation remains in [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610). Resume from the
+[registry checkpoint](docs/audit/ANALYSIS_REGISTRY.md#resume-after-interruption) and its
+[evidence index](docs/audit/ANALYSIS_REGISTRY.md#evidence-index), not from chat summaries or default-branch code
+search.
 
-Use [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) to coordinate actual overlapping work.
-Do not inspect or modify #598's unpublished branch, reset its worktree or create a competing object/key
-writer. That restriction applies to its owned files and handoff, not all code in the repository. Its old
-six-domain, retention, purge and compatibility programme is not inherited by this refactor. Public issue
-contracts may be reviewed without touching private work.
+Use [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) for real overlap coordination. Do not
+inspect, reset or compete with #598's unpublished object/key branch or worktrees; consume only its accepted public
+handoff. That protection applies to its owned files, not to unrelated repository work.
 
-Use one manager-owned worktree when working locally. Report findings and remaining uncertainty in the
-existing PR/issue bodies; do not create a second audit-control system or claim exhaustive closure.
+Use one manager-owned worktree when working locally. Ordinary commits, PR review and the existing registry are
+enough; do not create another packet, lease, receipt, evaluator or agent-control plane.
