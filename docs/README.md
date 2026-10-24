@@ -22,7 +22,7 @@ compatibility code or another registry.
 | Task | Read |
 |---|---|
 | Understand the product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
-| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → affected owner in [Owners](implementation/README.md#owners) → nearest `FUNCTIONS.md` and real callers |
+| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → affected owner in [Owners](implementation/README.md#owners) → nearest `FUNCTIONS.md` and exact current callers |
 | Resume interrupted work | [Registry resume](audit/ANALYSIS_REGISTRY.md#resume-after-interruption) → affected owner and immutable evidence link |
 | Change a dependency/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner recipe |
 | Move/delete legacy code or tests | [Test cutover](implementation/TEST_CUTOVER.md) and [baseline member disposition](audit/WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
@@ -30,20 +30,18 @@ compatibility code or another registry.
 
 ## Current status
 
-R036 corrects two remaining active handoff contradictions:
+R037 fixes the optional watcher dependency chain. #239 had claimed #271 already worked without notifications,
+while #271 still records `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`. A watcher is now explicitly blocked until real
+startup/explicit/periodic reconciliation converges without notifications. `notify` is absent from the current
+lock and becomes an implementation-time candidate only after that prerequisite, with exact version, MSRV,
+features, platform backends and advisories checked and pinned with the adapter.
 
-- #244 no longer asks agents to delete the already removed `search-retention` crate or `wave7-lifecycle` /
-  `full-baseline`; it now owns only the real current-format archive/import implementation.
-- #227 treats `pdfium-render`/PDFium as an uninstalled candidate boundary. The exact crate version, matching
-  native artifact, API, MSRV, advisories, features, packaging and license evidence are selected and recorded
-  together with the actual implementation—not inherited from an old research checkpoint.
+R036 removed repeated retention/feature deletion from #244 and made PDFium an uninstalled implementation-time
+candidate. R035 reconciled active issue evidence/currentness semantics. R034 labelled historical package
+inventories. R033 fixed active package entry claims. R032 established the authority chain and delivery sequence.
+R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer + unitizer.
 
-R035 reconciled issue evidence/currentness semantics. R034 labelled historical package inventories. R033 fixed
-active package entry claims. R032 established the authority chain and delivery sequence. R031 adopted
-`pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer + unitizer; #441 is closed as
-that dependency task.
-
-The persistent source → Qdrant → retained-evidence → CLI path is still not connected. The next implementation
+The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
 [#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333). Current evidence and remaining groups are
 in the [registry](audit/ANALYSIS_REGISTRY.md).
