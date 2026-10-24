@@ -31,18 +31,18 @@ For settings work, use the [typed layer/path recipe](../crates/search-config/FUN
 and [configuration index](config/README.md). Unused wave/section catalogues and their duplicate guides are
 removed; their historical field lists do not define a supported file schema.
 
-## Resume research
+## Resume work
 
 [Audit navigation](audit/README.md) leads to the single [analysis registry](audit/ANALYSIS_REGISTRY.md):
 [resume point](audit/ANALYSIS_REGISTRY.md#resume-after-interruption),
-[remaining static questions](audit/ANALYSIS_REGISTRY.md#remaining-static-audit),
-[delivery work](audit/ANALYSIS_REGISTRY.md#delivery-remaining-separate-from-static-audit),
-[topic/checkpoint index](audit/ANALYSIS_REGISTRY.md#evidence-index-by-pass-and-topic), and
+[delivery work](audit/ANALYSIS_REGISTRY.md#delivery-remaining),
+[area ledger](audit/ANALYSIS_REGISTRY.md#coverage-ledger),
+[evidence index](audit/ANALYSIS_REGISTRY.md#evidence-index), and
 [execution evidence](audit/ANALYSIS_REGISTRY.md#execution-evidence).
 
-The former static-closure map is historical. Current review is not exhaustive or closed, and implementation is
-not complete. The registry distinguishes unread/unresolved scope from established defects awaiting code.
-Audit and donor records explain evidence; they do not authorize work or create qualification gates.
+The registry is intentionally concise. Full prior readsets remain at immutable checkpoint links in its evidence
+index. It separates established decisions and known delivery work from executed evidence; it is not another
+approval system or instruction to repeat a repository-wide audit.
 
 ## Supporting material
 
@@ -53,5 +53,6 @@ Check their concrete source/version and current owner; a title alone gives no au
 ## History
 
 Retired Architecture 8.4/P00/wave masters, packets, receipts, generated maps, standalone DIRECT/DPAPI runbooks,
-swarm assignments and structural qualification remain in Git history. Do not regenerate them or preserve dead
-APIs to satisfy their instructions. Recheck useful historical behavior and place its rule in the actual owner.
+swarm assignments, evaluation authority and structural qualification remain in Git history. Do not regenerate
+them or preserve dead APIs to satisfy their instructions. Recheck useful historical behavior and place its rule
+in the actual owner.
