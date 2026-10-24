@@ -30,15 +30,14 @@ compatibility code or another registry.
 
 ## Current status
 
-R034 separates historical baseline inventories from current branch status. Byte counts, trait/operation totals,
-manifest counts and caller censuses measured at original public-main baseline `c8e38b6` are now labelled as
-historical evidence rather than “current/public main” facts. These measurements explain disposition decisions;
-they never replace a current caller check before code deletion.
+R035 reconciles active issue handoffs with the repository record. Issues now distinguish historical source-size/
+caller evidence from current branch facts, and #302 no longer asks agents to remove the already deleted
+`search-retention` crate. Exact current caller and donor checks occur inside the concrete implementation slice,
+not through another repository-wide audit.
 
-R033 corrected active daemon/CLI/model-worker entry docs: route presence is not executed behavior, and the
-model-worker's retired P15/G6 refusal is removal input rather than a current activation rule. R032 established
-the authority chain and delivery sequence. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98
-check/minimal Clippy for materializer + unitizer; #441 is closed as that dependency/identity cut.
+R034 labelled old package inventories with baseline `c8e38b6`. R033 corrected daemon/CLI/model-worker entry
+docs. R032 established the authority chain and delivery sequence. R031 adopted `pulldown-cmark 0.13.5` and
+passed Rust 1.98 check/minimal Clippy for materializer + unitizer; #441 is closed as that dependency task.
 
 The persistent source → Qdrant → retained-evidence → CLI path is still not connected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
