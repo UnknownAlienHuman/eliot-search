@@ -30,16 +30,15 @@ compatibility code or another registry.
 
 ## Current status
 
-R033 rechecks active package entry documentation outside `docs/` and removes false current-state claims:
+R034 separates historical baseline inventories from current branch status. Byte counts, trait/operation totals,
+manifest counts and caller censuses measured at original public-main baseline `c8e38b6` are now labelled as
+historical evidence rather than “current/public main” facts. These measurements explain disposition decisions;
+they never replace a current caller check before code deletion.
 
-- CLI one-shot routes are present in source but current-head execution is unverified;
-- daemon routing is documented from the current interceptor/caller map rather than frozen at old head
-  `5af8cde5`;
-- the dormant model worker is consistently recorded as a 1,047-byte refusal stub whose P15/G6 message is
-  obsolete legacy code, not a current activation rule.
-
-R032 established the authority chain and delivery sequence. R031 adopted `pulldown-cmark 0.13.5` and passed
-Rust 1.98 check/minimal Clippy for materializer + unitizer; #441 is closed as that dependency/identity cut.
+R033 corrected active daemon/CLI/model-worker entry docs: route presence is not executed behavior, and the
+model-worker's retired P15/G6 refusal is removal input rather than a current activation rule. R032 established
+the authority chain and delivery sequence. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98
+check/minimal Clippy for materializer + unitizer; #441 is closed as that dependency/identity cut.
 
 The persistent source → Qdrant → retained-evidence → CLI path is still not connected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by

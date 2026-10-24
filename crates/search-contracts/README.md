@@ -7,9 +7,11 @@ Read the [architecture](../../docs/architecture/README.md),
 [implementation guide](../../docs/implementation/README.md), [exact source/caller audit](FUNCTIONS.md),
 [query cutover](../search-query/README.md) and [local protocol](../search-provider-protocol/README.md).
 
-## Current cost
+## Historical baseline inventory
 
-At public main:
+The figures below were measured at the original public-main baseline
+`c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`. They are preserved as gross decomposition evidence, not a
+current-branch recount, deletion promise or package-size target:
 
 ```text
 production src                       425,255 bytes (~415.3 KiB)
@@ -17,7 +19,7 @@ tests                                131,618 bytes (~128.5 KiB)
 Cargo manifests depending directly        47
 ```
 
-Production code divides into roughly:
+At that baseline production code divided roughly into:
 
 - **127.5 KiB** common bounds/canonical/digest/ID/error/schema infrastructure;
 - **168.3 KiB** grants, recipes, plans, protocol, results, evidence frames and lifecycle;
@@ -25,8 +27,8 @@ Production code divides into roughly:
 - **16.4 KiB** source/view vocabulary.
 
 The V2 evidence family was added beside the frozen eleven-recipe V1 system, not used to replace it.
-`EvidenceFrameV2` appears only in its definition, provider codec and protocol test. The contract package is
-therefore planned-system gravity, not a coherent application API.
+`EvidenceFrameV2` appeared only in its definition, provider codec and protocol test. Those measurements explain
+planned-system gravity; current callers must still be traced at the implementation cut before removing code.
 
 ## What remains shared
 

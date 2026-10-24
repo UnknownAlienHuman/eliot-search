@@ -67,11 +67,15 @@ Already encrypted old data is either:
 
 Ordinary root open must not automatically migrate every retained object.
 
-## Public-main code disposition
+## Historical public-main disposition inventory
 
-Before tests and daemon legacy migration/protection code, public main contains more than 310 KiB across
-`search-os-secrets`, `search-os-secrets-windows`, `search-revision-crypto` and daemon `secret_composition`.
-Much of it is generic lifecycle, pairing, candidate-selection and compatibility machinery.
+At original public-main baseline `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`, before tests and daemon
+legacy migration/protection code, more than 310 KiB existed across `search-os-secrets`,
+`search-os-secrets-windows`, `search-revision-crypto` and daemon `secret_composition`. Much of that baseline
+inventory was generic lifecycle, pairing, candidate-selection and compatibility machinery.
+
+This is historical gross inventory, not a current-branch recount or promised deletion amount. Recheck exact
+current callers when consuming the accepted #598 handoff.
 
 After #598 handoff:
 

@@ -1,26 +1,28 @@
 # search-ports — delete the global abstraction catalogue
 
-This package is not the application boundary. At public main it contains about **84.2 KiB** of production
-Rust, **23 public traits**, **80 registered operations**, a generic relative-deadline/receipt model and a
-22.7 KiB conformance/fake catalogue.
+This package is not the application boundary. At the original public-main baseline
+`c8e38b6fc9829f1cd38070773b1b3e5b21de18ad` it contained about **84.2 KiB** of production Rust,
+**23 public traits**, **80 registered operations**, a generic relative-deadline/receipt model and a 22.7 KiB
+conformance/fake catalogue. Those figures are historical evidence, not a current-branch recount or target.
 
 Read the [architecture](../../docs/architecture/README.md),
 [implementation guide](../../docs/implementation/README.md), [exact source/caller census](FUNCTIONS.md) and
 [test cutover](../../docs/implementation/TEST_CUTOVER.md).
 
-## Verified result
+## Established audit result
 
-The advertised universal boundary does not exist in the running product:
+At the inspected baseline the advertised universal boundary did not exist in the running product:
 
-- **19 of 23 traits have no public-main implementation**;
-- `SourceInventoryPort` and `SourceOwnershipPort` have unused adapters built on `FakeCancellation` and old
+- **19 of 23 traits had no public-main implementation**;
+- `SourceInventoryPort` and `SourceOwnershipPort` had unused adapters built on `FakeCancellation` and old
   registry/cutover state;
-- `ControlJournalPort` and `ControlSnapshotPort` are implemented only by the generic journal/snapshot system
-  now being removed;
-- **35 Cargo manifests** depend on the package, largely because historical rules forced every effect through
+- `ControlJournalPort` and `ControlSnapshotPort` were implemented only by the generic journal/snapshot system
+  selected for removal;
+- **35 Cargo manifests** depended on the package, largely because historical rules forced every effect through
   the same context/receipt vocabulary;
-- generated maps claim exact implementation owners even when no Rust implementation exists.
+- generated maps claimed exact implementation owners even when no Rust implementation existed.
 
+These counts explain the architecture defect but do not replace a current caller check before code deletion.
 A package dependency, conformance descriptor or fake is not a working abstraction.
 
 ## Replacement rule

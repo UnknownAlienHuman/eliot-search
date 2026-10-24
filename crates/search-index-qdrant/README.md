@@ -7,7 +7,7 @@ path. This directory groups existing code; the package list is not the target ar
 |---|---|
 | [projection planner](search-projection-planner/) | Build stable point and versioned manifest data from prepared units in bounded ordered pages. |
 | [point identity](search-point-identity/) | Identify real retrieval projections consistently across planning, backend and lookup. Remove revision/offset-bound and duplicate bridge identities. |
-| [Qdrant supervisor](search-qdrant-supervisor/) | **Optional only.** Baseline connects to a configured endpoint. Current ~90.7 KiB package has no product caller and models qualification/receipts it cannot establish; delete it unless a small concrete managed-child convenience is selected. |
+| [Qdrant supervisor](search-qdrant-supervisor/) | **Optional only.** Baseline connects to a configured endpoint. Historical `c8e38b6` inventory measured about 90.7 KiB of production source and the established caller audit found no normal product caller; recheck current callers before deleting it. Replace it only if a small concrete managed-child convenience is selected. |
 | [Qdrant bridge](search-qdrant-bridge/) | One private SDK client/runtime for live schema, exact mutations/readback and query. It owns no process qualification, publication or replay journal. |
 | [publication](search-publication/) | One pending artifact/cursor, exact Qdrant effects/readback, durable current view and finite unfinished cleanup rows. |
 | [epoch pins](search-epoch-pins/) | Replace with one small current-view manager. Queries pin only current; windows clone a live guard. |

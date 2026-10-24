@@ -3,12 +3,13 @@
 Selected roots become immutable retained objects, current source heads and later published evidence. The
 [implementation guide](../../docs/implementation/README.md) defines the connected result.
 
-## Measured current overhead
+## Historical baseline overhead
 
-The following policy/receipt/provenance/records/history/identity/registry packages contain **more than
-1.22 million bytes of production Rust** before safe-reader, revision-store, reconcile and tests are counted:
+At the original public-main baseline `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`, the following
+policy/receipt/provenance/records/history/identity/registry packages contained **more than 1.22 million bytes of
+production Rust** before safe-reader, revision-store, reconcile and tests were counted:
 
-| Existing package | Gross production source | Current disposition |
+| Existing package at that baseline | Gross production source | Selected disposition |
 |---|---:|---|
 | `search-source-admission` | ~367 KiB | keep one small pre/post-read policy evaluator |
 | `search-source-admission-receipt` | ~34 KiB | delete |
@@ -18,8 +19,9 @@ The following policy/receipt/provenance/records/history/identity/registry packag
 | `search-source-identity` | ~149 KiB | keep/move small physical-key/current-source matcher |
 | `search-source-registry` | ~214 KiB | replace with typed current redb/source operations |
 
-This is gross source inventory, not a promised net deletion. It shows why a single file still does not reach
-retention despite extensive source infrastructure.
+This is historical gross inventory, not a current recount or promised net deletion. It explains how extensive
+infrastructure still failed to connect one acquired file to retention. Current callers must be checked at each
+code cut before removing a package.
 
 ## Current target
 

@@ -1,9 +1,13 @@
 # search-qdrant-supervisor — optional process wrapper, not runtime authority
 
-This package is **not connected to the public-main application path**. Repository search finds construction
-and launch calls in its own lifecycle/live tests; normal daemon publication/query does not use it.
+The established caller audit found this package disconnected from normal daemon publication/query; construction
+and launch calls were package-local tests. Recheck exact current callers before deleting it, but do not connect
+or harden the package merely because it remains a workspace member.
 
-Public main contains about **90.7 KiB of production Rust** here before tests:
+## Historical baseline inventory
+
+At original public-main baseline `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`, the package contained about
+**90.7 KiB of production Rust** before tests:
 
 ```text
 artifact_policy.rs   5.1 KiB
@@ -16,9 +20,9 @@ secret.rs            4.3 KiB
 sha256.rs            8.7 KiB
 ```
 
-Most of that code models artifact qualification, owner fences, secret leases, process identity receipts,
-restart/quarantine and caller-supplied containment evidence. Those records do not make Qdrant available to
-the product.
+Those figures are historical gross inventory, not a current recount or target. Most of that baseline code
+modelled artifact qualification, owner fences, secret leases, process identity receipts, restart/quarantine and
+caller-supplied containment evidence. Those records do not make Qdrant available to the product.
 
 Read the [implementation guide](../../../docs/implementation/README.md),
 [Qdrant bridge map](../search-qdrant-bridge/FUNCTIONS.md), local [source map](FUNCTIONS.md) and

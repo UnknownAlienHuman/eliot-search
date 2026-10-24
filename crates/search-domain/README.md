@@ -1,22 +1,25 @@
 # search-domain — remove the planned-system algebra
 
-This package is not a useful business-domain core. It is about **80.9 KiB of production Rust** which
-centralizes proof, fingerprint, currentness, coverage, eligibility, visibility, transition and mutation
-vocabularies from the historical Architecture 8.4 programme.
+This package is not a useful business-domain core. At the original public-main baseline
+`c8e38b6fc9829f1cd38070773b1b3e5b21de18ad` it contained about **80.9 KiB of production Rust** centralizing
+proof, fingerprint, currentness, coverage, eligibility, visibility, transition and mutation vocabularies from
+the historical Architecture 8.4 programme. That size is historical inventory, not a current recount or target.
 
-Most exported operations have no external production caller. The remaining callers belong either to
-mechanisms already being removed or to one small helper which can live beside its real owner.
+The established caller audit found most exported operations without an external production caller. Remaining
+uses belonged either to mechanisms selected for removal or to small rules that can live beside their real owner.
+Recheck the exact current callers when performing the code cut; do not infer deletion safety from this old byte
+count alone.
 
 Read the [architecture](../../docs/architecture/README.md),
 [implementation guide](../../docs/implementation/README.md) and local [source/caller map](FUNCTIONS.md).
 
-## Verified caller disposition
+## Established caller disposition
 
-No external caller was found for the public assurance, currentness, plan-fingerprint, eligibility, stable
-candidate-order, coverage or visibility evaluators. Searches for their concrete operation names resolve only
-to package source/tests.
+The audit found no external caller for the public assurance, currentness, plan-fingerprint, eligibility, stable
+candidate-order, coverage or visibility evaluators; their concrete operation names resolved only to package
+source/tests at the inspected revision.
 
-External uses found:
+External uses found in that readset:
 
 - `transition_publication` — old generic `PublicationIntent` persistence/visibility code being replaced by one
   `PendingPublication` + `CurrentPublishedView` transaction;
@@ -24,8 +27,8 @@ External uses found:
   deleted with the source registry stack;
 - `classify_mutation_outcome` — runtime-owner/development code; a small generic enum/function around actual
   owner failure semantics;
-- Cargo dependencies from many packages whose old APIs already import domain types but whose current target
-  no longer needs this package.
+- Cargo dependencies from packages whose old APIs imported domain types although the selected target no longer
+  needs this package.
 
 A package dependency or re-export is not a consumer of useful behavior.
 
