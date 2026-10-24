@@ -5,23 +5,22 @@ unrun work. It is not architecture, a permission system or a reason to delay kno
 
 ## Resume after interruption
 
-**Checkpoint:** R039, 2026-10-24 — optional MCP SDK state corrected.  
+**Checkpoint:** R040, 2026-10-24 — document-worker donor/package state aligned.  
 **Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).  
-**Inspected head:** `d3d81ca0fc47a68c03235f21b276af0f46fb64f3` (R038).  
+**Inspected head:** `0a9aa73186eb7b7fb0c25c35d9ba947c2ba8fd4f` (R039).  
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
-R039 corrects the optional MCP handoff. `rmcp` is absent from the current lock, while the package/issue documents
-still presented the 2026-10-20 `rmcp 3.6.0` checkpoint as current. The latest stable official SDK inspected is
-3.7.0, released 2026-10-22 at commit `5d6a11f2ae022f513aec0f6e0f10f89a57891a7f`, MSRV Rust 1.88. Its
-changes are auth/HTTP-only and do not change the selected first stdio-only topology.
+R040 aligns the document-worker package entry docs with #227 and the donor register. The current package remains
+a refusal stub with an unlinked custom SHA-256 and unused internal dependencies. `pdfium-render`/PDFium is absent
+from the current lock/runtime and is an implementation-time candidate boundary, not an installed/frozen donor.
 
 The persistent source → retained evidence → Qdrant → CLI application remains unconnected. Read
-[docs/README](../README.md), then the affected owner recipe and exact current callers. Do not repeat R027–R039
+[docs/README](../README.md), then the affected owner recipe and exact current callers. Do not repeat R027–R040
 as another repository-wide audit.
 
 **Next implementation:** #333 typed settings and real consumers, then #270/#330/#331/#271
-source/object/preparation/reconciliation and #264 the connected product path. Optional MCP/regex/watcher/
-document/model work remains behind its stated prerequisite and implementation-time donor selection. Coordinate
+source/object/preparation/reconciliation and #264 the connected product path. Optional document/MCP/regex/
+watcher/model work remains behind its stated prerequisite and implementation-time donor selection. Coordinate
 only actual #598 overlap.
 
 Current workspace has **49 explicit members**. This is inventory, not a target package count.
@@ -39,8 +38,9 @@ Current workspace has **49 explicit members**. This is inventory, not a target p
   the real consumer implementation.
 - Literal Exact is baseline; optional regex cannot block it or reserve a speculative dependency.
 - Reconciliation must work independently before optional watcher hints.
-- Standalone Search must work before optional MCP. `rmcp` is absent; latest inspected stable 3.7.0 is candidate
-  evidence, not a reserved pin.
+- Standalone Search must work before optional MCP; `rmcp` remains absent.
+- Document support is not the refusal worker. PDFium remains an uninstalled candidate requiring one exact
+  current crate plus matching packaged native artifact with implementation.
 - R031 pins `pulldown-cmark 0.13.5`; #441 is closed as that dependency task.
 - #598 private object/key work remains protected; consume only its accepted public handoff.
 
@@ -55,14 +55,14 @@ Current workspace has **49 explicit members**. This is inventory, not a target p
 | Maintenance/archive/import | #302/#244 | Stopped-root collection, complete archive and fresh-destination import. |
 | Product depth | [product behavior](../product/AGENT_ANALYSIS_FRAMEWORK.md), #281/#227/#335 | Source-backed orientation/comparison/documents/Git behavior. |
 
-Optional MCP (#219), regex (#248), watcher (#239), evaluation (#233), managed Qdrant (#334), overlays (#336) and
-models follow working prerequisites and do not form baseline subsystems.
+Optional document (#227), MCP (#219), regex (#248), watcher (#239), evaluation (#233), managed Qdrant (#334),
+overlays (#336) and models follow working prerequisites and do not form baseline subsystems.
 
 ## Coverage ledger
 
 | ID | Area | Status | Current result / remaining |
 |---|---|---|---|
-| A001 | Documentation authority | CHECKED for R032–R039 scope | Canonical indexes, package/issue handoffs and donor states are aligned. |
+| A001 | Documentation authority | CHECKED for R032–R040 scope | Canonical indexes, package/issue handoffs and donor states are aligned. |
 | A002 | Historical governance | CHECKED | Removed as current authority; Git preserves history. |
 | A003 | Workflows/wrappers | CHECKED | Actions remain manual-only. |
 | A004 | Workspace inventory | CHECKED for inventory | 49 members; current full workspace/binaries remain unrun. |
@@ -75,13 +75,13 @@ models follow working prerequisites and do not form baseline subsystems.
 | A011 | Publication/view/cleanup | PARTIAL | Real effects/current-view path absent. |
 | A012 | Query/evidence/window | PARTIAL | Connected path absent; optional regex remains uninstalled. |
 | A013 | Protocol/client/CLI | PARTIAL | Serviced session absent. |
-| A014 | Product depth | PARTIAL | Requirements preserved; implementations incomplete. |
+| A014 | Product depth | PARTIAL | Document worker remains a stub; other product-depth implementations incomplete. |
 | A015 | Tests/governance code | PARTIAL | Remaining fixtures need caller cutover. |
 | A016 | Donors | PARTIAL | Installed versus candidate state explicit; current pins remain per consumer. |
 | A017 | Qualification tree | CHECKED | Removed as authority. |
-| A018 | Package/issue docs | CHECKED for R039 set | MCP SDK current/installed state corrected in issue, package docs and donor register. |
-| A019 | Issues/PR handoff | CHECKED by publication sequence | #219 corrected before commit; PR/#352 synchronized to exact commit before ref update. |
-| A020 | Runtime evidence | RUNTIME-ONLY | No current Windows/Qdrant/reconciliation/MCP/regex/performance result. |
+| A018 | Package/issue docs | CHECKED for R040 set | Document-worker package now matches #227 and donor state. |
+| A019 | Issues/PR handoff | CHECKED by publication sequence | #227 already current; PR/#352 synchronized to exact commit before ref update. |
+| A020 | Runtime evidence | RUNTIME-ONLY | No current Windows/Qdrant/reconciliation/PDF/MCP/regex/performance result. |
 | A021 | Compiler baseline | PARTIAL | R031 covers materializer+unitizer only. |
 | A022 | Runtime identity/qualification | PARTIAL | Dormant adapter/worker/fixture code remains. |
 | A023 | GC/storage diagnostics | PARTIAL | Implementation unfinished. |
@@ -105,37 +105,37 @@ models follow working prerequisites and do not form baseline subsystems.
 | R036 | Completed removals/PDF donor | [b6e70f71](https://github.com/UnknownAlienHuman/eliot-search/blob/b6e70f716d855a435d9a0bef8de5086de0a03867/docs/audit/ANALYSIS_REGISTRY.md#r036-completed-removal-and-pdf-donor-handoff-reconciliation) |
 | R037 | Watcher prerequisite/donor | [e1b66223](https://github.com/UnknownAlienHuman/eliot-search/blob/e1b66223ff255349b18135fb810a13afaa496ed6/docs/audit/ANALYSIS_REGISTRY.md#r037-watcher-prerequisite-and-donor-state) |
 | R038 | Optional regex dependency state | [d3d81ca0](https://github.com/UnknownAlienHuman/eliot-search/blob/d3d81ca0fc47a68c03235f21b276af0f46fb64f3/docs/audit/ANALYSIS_REGISTRY.md#r038-optional-regex-dependency-state) |
-| R039 | Optional MCP SDK state | [this pass](#r039-optional-mcp-sdk-state) |
+| R039 | Optional MCP SDK state | [0a9aa731](https://github.com/UnknownAlienHuman/eliot-search/blob/0a9aa73186eb7b7fb0c25c35d9ba947c2ba8fd4f/docs/audit/ANALYSIS_REGISTRY.md#r039-optional-mcp-sdk-state) |
+| R040 | Document-worker candidate state | [this pass](#r040-document-worker-candidate-state) |
 
 ## Execution evidence
 
 - Run 39872058276 covers `search-qdrant-bridge --lib` at old commit `7d92fb8b` only.
 - Run 40084893130 covers locked check/minimal Clippy for materializer + unitizer at R031 only.
-- Current binaries, Windows, live Qdrant, reconciliation/watcher, MCP, regex, parser replay, recovery, relevance
-  and scale remain unrun.
-- R032–R039 are documentation-only and add no Rust/runtime result.
+- Current binaries, Windows, live Qdrant, reconciliation/watcher, PDF, MCP, regex, parser replay, recovery,
+  relevance and scale remain unrun.
+- R032–R040 are documentation-only and add no Rust/runtime result.
 
-<a id="r039-optional-mcp-sdk-state"></a>
+<a id="r040-document-worker-candidate-state"></a>
 
-## R039. Optional MCP SDK state
+## R040. Document-worker candidate state
 
-**Source:** `d3d81ca0fc47a68c03235f21b276af0f46fb64f3`, 2026-10-24.
+**Source:** `0a9aa73186eb7b7fb0c25c35d9ba947c2ba8fd4f`, 2026-10-24.
 
-**Inspected:** current `Cargo.lock`; #219; `search-eliot-adapter` README/FUNCTIONS/AGENTS; live donor register;
-official MCP latest release; official Rust SDK latest release, annotated tag, workspace manifest and `rmcp`
-feature manifest. No private #598 source was read.
+**Inspected:** current `Cargo.lock`; document-worker README/FUNCTIONS/AGENTS, manifest/source facts and #227;
+live donor register. No private #598 source was read.
 
-**Finding:** `rmcp` is absent from the current lock, but the package/issue documents described the 2026-10-20
-3.6.0 donor checkpoint as current and showed an exact candidate pin. Official upstream released stable 3.7.0 on
-2026-10-22. Its tag resolves to commit `5d6a11f2ae022f513aec0f6e0f10f89a57891a7f`, retains MSRV 1.88 and the
-relevant `server`/`macros`/`transport-io` feature names. The release changes auth/HTTP behavior, which is outside
-the selected first stdio-only leaf.
+**Finding:** #227 and the donor register correctly treated `pdfium-render`/PDFium as an uninstalled
+implementation-time candidate, but the package README/FUNCTIONS still used “selected donor” and direct “use
+pdfium-render” wording which could be read as a frozen API/version. The current lock contains no PDFium package
+and no matching native artifact is selected.
 
-**Decision/change:** #219, package README/FUNCTIONS and the donor register now distinguish absent dependency,
-latest inspected candidate and implementation-time pin. They record 3.7.0 as current inspected evidence without
-adding Cargo wiring. At implementation, recheck the then-current stable SDK/API/MSRV/advisories/features and pin
-only with the real post-baseline consumer. Do not enable auth/HTTP or revive the disconnected adapter ledger.
+**Decision/change:** package README/FUNCTIONS/AGENTS now state that the refusal stub is not a capability and that
+PDFium is only a candidate boundary. The real #227 slice must recheck and pin one current crate version plus one
+matching packaged native artifact with API/MSRV/advisory/feature/license/hash/platform evidence, or remove the
+package while deferred. Source identity remains the retained `ObjectRef`; derived text remains mapped page/region
+evidence, not binary-byte identity.
 
-**Publication sequence:** #219 was corrected before this tree commit. PR #610 and #352 are synchronized to the
-exact commit object before the branch ref advances. Product implementation, current caller deletion search and
-all runtime evidence remain outstanding.
+**Publication sequence:** #227 already contained the correct candidate boundary and required no metadata change.
+PR #610 and #352 are synchronized to the exact commit object before the branch ref advances. Product
+implementation, exact native selection and all runtime evidence remain outstanding.

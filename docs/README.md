@@ -30,17 +30,18 @@ compatibility code or another registry.
 
 ## Current status
 
-R039 corrects the optional MCP donor state. `rmcp` is absent from the current lock; no MCP SDK/runtime is
-installed. The stable specification remains `2026-07-28`; the latest stable official Rust SDK inspected is
-`rmcp 3.7.0` (2026-10-22, commit `5d6a11f2…`, MSRV 1.88). Its auth/HTTP-only release changes do not justify
-those features for the first stdio leaf. #219 must recheck and pin the then-current SDK only with a real
-post-baseline consumer.
+R040 aligns the dormant document-worker package with #227 and the donor register. `pdfium-render`/PDFium is
+absent from the current lock/runtime and is an implementation-time candidate boundary, not an installed or
+frozen donor. The real slice must select one exact current crate plus one explicitly packaged matching native
+artifact, verify API/MSRV/advisories/features/license/hashes/platform binding, and replace or remove the refusal
+stub atomically.
 
+R039 corrected the optional MCP donor state to uninstalled `rmcp`, with 3.7.0 as the latest inspected candidate.
 R038 made regex an implementation-time optional donor. R037 gated watcher work on functioning reconciliation.
-R036 made PDFium an implementation-time candidate and removed repeated retention deletion. R035 reconciled
-active issue evidence/currentness. R034 labelled historical package inventories. R033 fixed active package
-entry claims. R032 established the authority chain and delivery sequence. R031 adopted `pulldown-cmark 0.13.5`
-and passed Rust 1.98 check/minimal Clippy for materializer + unitizer.
+R036 made PDFium an implementation-time candidate in the issue/donor handoff and removed repeated retention
+deletion. R035–R032 reconciled issue evidence, historical inventories, package entries, canonical authority and
+delivery sequence. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer
++ unitizer.
 
 The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
