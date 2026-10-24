@@ -4,7 +4,7 @@ This is the live donor index. It records exact installed versions, selected-but-
 behavior which constrains an ELIOT owner. It does not approve a dependency, create a runtime credential or
 replace the consuming owner's implementation recipe.
 
-**Current repository checkpoint:** R037 over `b6e70f716d855a435d9a0bef8de5086de0a03867`, 2026-10-24.  
+**Current repository checkpoint:** R039 over `d3d81ca0fc47a68c03235f21b276af0f46fb64f3`, 2026-10-24.  
 **Previous detailed research:** [`da382b66`](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md).
 
 A donor moves through four distinct states:
@@ -42,9 +42,9 @@ R031 Actions run 40084893130 passed Rust 1.98 locked check and minimal Clippy fo
 | high-level `toml` + Serde; `serde_json` | Typed sparse settings and bounded framed JSON | Pin only with #333/#280 consumers. Preserve layer absence, close nested structs and redact diagnostics. |
 | `ignore::WalkBuilder` | Ignore-aware bounded source inventory | Select exact current version with #271. A successful filtered walk is not automatically a complete physical inventory. |
 | `notify::RecommendedWatcher` | Optional responsiveness hints after reconciliation works | **Absent from the current lock.** Do not implement before #271 removes `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE` and demonstrates startup/explicit/periodic convergence without notifications. Then recheck exact version, MSRV, features, platform backends and advisories with #239. |
-| `regex-automata` | Optional bounded Exact regex predicate | Select only with #248; recheck exact current API/version/advisories and freeze syntax/Unicode/newline/resource choices with code. Do not claim chunk streaming unless the chosen API preserves it. |
+| `regex-automata` | Optional bounded Exact regex predicate | **Absent from the current lock.** Literal Exact is baseline. Select only with a real #248 consumer; recheck exact current API/version/MSRV/advisories/features and freeze syntax/Unicode/newline/resource semantics with code. |
 | PDFium via `pdfium-render` | First optional retained-PDF native-text profile | Uninstalled candidate. #227 must pin one exact crate version and matching packaged native PDFium artifact with API/MSRV/advisory/features/license evidence. |
-| `rmcp` | Optional MCP tools leaf after standalone Search | The 2026-10-20 `rmcp 3.6.0` inspection is historical donor evidence. Recheck exact current SDK/version/features/advisories with #219 and the real `LocalClient`. |
+| `rmcp` | Optional MCP tools leaf after standalone Search | **Absent from the current lock.** Latest inspected stable SDK is `3.7.0` (2026-10-22, commit `5d6a11f2…`, MSRV 1.88); the stable MCP spec remains `2026-07-28`. Recheck and pin only with the real #219 consumer. |
 | tree-sitter / SCIP producers | Optional source-backed outlines/semantic facts | Add only with a concrete snapshot-bound orientation consumer; syntax does not fabricate compiler call truth. |
 
 These candidates are alternatives or optional additions, not a mandate to install every donor mentioned in
@@ -108,25 +108,51 @@ The current lock does not contain high-level `toml`, Serde or `serde_json`. For 
 - TOML documents are UTF-8 strings, while native OS paths supplied outside the file remain OS values;
 - map syntax errors to bounded redacted diagnostics;
 - distinguish malformed syntax from invalid effective settings;
-- refuse invalid settings before owner effects.
+- reject invalid effective settings before owner effects.
 
 The [config owner](../../crates/search-config/FUNCTIONS.md#sparse-layers-and-validation) owns precedence,
-whole-list replacement, path bases and validation.
+whole-list replacement, path bases and application validation.
 
 <a id="a-chunk-api-is-not-an-incremental-reader"></a>
 
 ## Exact matcher seam
 
-`search-exact::literal::scan_chunks` carries Aho state across supplied UTF-8 chunks and preserves overlapping
-matches, but builds the NFA per invocation, requires pre-supplied chunks and lacks cancellation inside the byte
-loop. It is a primitive, not the connected request owner.
+`search-exact::literal::scan_chunks` preserves overlapping matches across supplied UTF-8 chunks, but builds its
+NFA per invocation, requires pre-supplied chunks and lacks cancellation inside the byte loop. It is a useful
+primitive, not the connected request owner.
 
 Compile once per Exact request, reset state at source boundaries and feed bounded blocks from the retained reader
 with cancellation checks. Raw bytes, decoded text and derived representations remain distinct predicates.
 
-## Donor maintenance rule
+<a id="mcp-rust-sdk-candidate"></a>
 
-When a selected dependency/service or consuming operation changes, recheck the official current release/API,
-MSRV, features, advisories and relevant source behavior. For native dependencies also record the exact packaged
-artifact, compatibility, license and hashes. Update this register, the consuming owner and code in the same
-slice. Research checkpoints remain historical evidence, not automatic pins.
+## MCP Rust SDK candidate
+
+The stable MCP specification release remains `2026-07-28`. The latest stable official Rust SDK inspected on
+2026-10-24 is `rmcp 3.7.0`, tag `rmcp-v3.7.0`, tag object
+`cdf95e06d7cc2a13f9ff97e3e5d6cf1226630ae9`, commit
+`5d6a11f2ae022f513aec0f6e0f10f89a57891a7f`, published 2026-10-22, MSRV Rust 1.88, Apache-2.0.
+
+The release changes auth/HTTP behavior only; it does not justify enabling those features for the first stdio
+leaf. At that tag the smallest relevant candidate closure is:
+
+```toml
+rmcp = { version = "=3.7.0", default-features = false,
+         features = ["server", "macros", "transport-io"] }
+```
+
+This is not an installed or permanently selected pin. #219 must recheck the then-current stable SDK, API, MSRV,
+advisories, features and transitive closure when standalone Search has the real consumer.
+
+Primary references:
+
+- [MCP 2026-07-28](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2026-07-28)
+- [rmcp 3.7.0 release](https://github.com/modelcontextprotocol/rust-sdk/releases/tag/rmcp-v3.7.0)
+- [workspace/MSRV](https://github.com/modelcontextprotocol/rust-sdk/blob/5d6a11f2ae022f513aec0f6e0f10f89a57891a7f/Cargo.toml)
+- [feature manifest](https://github.com/modelcontextprotocol/rust-sdk/blob/5d6a11f2ae022f513aec0f6e0f10f89a57891a7f/crates/rmcp/Cargo.toml)
+
+## Maintenance rule
+
+When a selected dependency/service or consuming operation changes, check the latest stable official release,
+versioned API, MSRV/advisories/features and source behavior relied upon. Record installed versus candidate state
+here, then update the actual owner and code together. Git history preserves superseded research detail.

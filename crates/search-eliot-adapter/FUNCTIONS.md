@@ -1,84 +1,92 @@
-# search-eliot-adapter — source audit and removal map
+# search-eliot-adapter — source audit, deletion and optional MCP map
 
-This package is optional and disconnected. The standalone Search application and its current local protocol
-must work before any MCP/ELIOT leaf is added.
+This package is optional and disconnected. Standalone Search and its current local protocol must work before an
+MCP/ELIOT leaf is added.
 
-## Current source and caller reality
+## Current package disposition
 
-| Source/API | Actual behavior |
-|---|---|
-| `src/adapter.rs` | One 19,311-byte state machine for adapter version, installation/incarnation/workspace/grant binding, request admission/replay, cancellation, terminal receipts, drain/close/quarantine and retained terminal history. |
-| `EliotBinding` | Requires `InstallationId`, incarnation, workspace and `GrantId`; these duplicate the retired provider binding/grant model rather than map current Search data. |
-| `EliotRequest` | Adds a caller payload digest and byte count to an already-decoded payload. No real transport/handler is called. |
-| `Admission` / `TerminalReceipt` | Process-local replay and terminal receipt authority. It disappears on restart and is unnecessary for ephemeral query reads. |
-| docs | Promise capability pulses, exact eleven-recipe mapping, source/workspace fences, revocation notices and authority-boundary receipts not implemented by the source. |
-| callers | Repository search found no `search_eliot_adapter::` import and no `EliotAdapter::new` caller outside the package. |
+Established inspection found `src/adapter.rs` to be a process-local state machine for adapter version,
+installation/incarnation/workspace/grant binding, request admission/replay, cancellation, terminal receipts,
+drain/close/quarantine and retained terminal history. It does not call a real Search handler or transport.
 
-The package depends on `search-contracts`, `search-domain` and the old provider protocol. Connecting it would
-reintroduce the grant/recipe/session operating system being removed by #280/#332.
+Repository searches at the recorded checkpoint found no production `search_eliot_adapter::` import and no
+`EliotAdapter::new` caller outside the package. Documentation also promised capability pulses, exact eleven-
+recipe mapping, fences and revocation/authority records absent from source.
 
-## Selected protocol donor
+These are historical findings. Before deleting under [#535](https://github.com/UnknownAlienHuman/eliot-search/issues/535),
+perform one exact current Cargo/Rust/non-Rust caller search. If no real consumer exists, remove the package,
+workspace/dependency/lock wiring, source, fixtures and package instructions together. Do not preserve a facade,
+feature-gated ledger or generic adapter registry.
 
-Current upstream inspected on 2026-10-20:
+## Current donor state — 2026-10-24
+
+The current ELIOT lock contains no `rmcp` package. No MCP dependency or runtime is installed.
+
+Latest stable official checkpoints inspected:
 
 ```text
 MCP specification: 2026-07-28
-official Rust SDK:  rmcp 3.6.0
-release tag:        rmcp-v3.6.0
-commit:             74d789515fdee63ef46a1635b801364aad6695e4
-MSRV:               Rust 1.88
-license:            Apache-2.0
+rmcp:              3.7.0
+release tag:       rmcp-v3.7.0
+published:         2026-10-22
+tag object:        cdf95e06d7cc2a13f9ff97e3e5d6cf1226630ae9
+commit:            5d6a11f2ae022f513aec0f6e0f10f89a57891a7f
+MSRV:              Rust 1.88
+license:           Apache-2.0
 ```
 
 Sources:
 
 - [MCP 2026-07-28](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2026-07-28)
-- [rmcp 3.6.0 release](https://github.com/modelcontextprotocol/rust-sdk/releases/tag/rmcp-v3.6.0)
-- [rmcp feature manifest](https://github.com/modelcontextprotocol/rust-sdk/blob/74d789515fdee63ef46a1635b801364aad6695e4/crates/rmcp/Cargo.toml)
+- [rmcp 3.7.0 release](https://github.com/modelcontextprotocol/rust-sdk/releases/tag/rmcp-v3.7.0)
+- [workspace version/MSRV](https://github.com/modelcontextprotocol/rust-sdk/blob/5d6a11f2ae022f513aec0f6e0f10f89a57891a7f/Cargo.toml)
+- [feature manifest](https://github.com/modelcontextprotocol/rust-sdk/blob/5d6a11f2ae022f513aec0f6e0f10f89a57891a7f/crates/rmcp/Cargo.toml)
 
 The official SDK owns JSON-RPC, initialization/version negotiation, tool schemas, request IDs, cancellation,
-stdio/async-RW transport and protocol errors. Release 3.6.0 includes non-blocking stdio-pipes transport and a
-bounded incoming async-RW line buffer. Do not build a second MCP protocol/session implementation.
+stdio/async-RW transport and protocol errors. Do not build a second MCP protocol/session implementation.
 
-Candidate initial feature closure after final lock/advisory review:
+The 3.7.0 release adds/fixes auth and HTTP behavior only. Those changes do not affect the selected first
+stdio-only topology and do not justify enabling auth/HTTP features.
+
+At the inspected tag, the smallest relevant candidate feature closure is:
 
 ```toml
-rmcp = { version = "=3.6.0", default-features = false,
+rmcp = { version = "=3.7.0", default-features = false,
          features = ["server", "macros", "transport-io"] }
 ```
 
-Exclude HTTP/reqwest/OAuth/auth, client/child-process transports, resources, prompts, sampling, elicitation,
-roots, Tasks, subscriptions and unrelated extensions.
+This line is not an instruction to modify Cargo now. When the optional binary has a real consumer, recheck the
+then-current stable SDK, MSRV, advisories, exact transitive closure and API, then pin the implementation-time
+selection. Exclude HTTP/reqwest/OAuth/auth, client/child-process transports, resources, prompts, sampling,
+elicitation, roots, Tasks, subscriptions and unrelated extensions unless a later concrete profile needs them.
 
 ## Optional leaf after standalone completion
 
 ```text
 MCP host stdio
 → official rmcp tools-only server
-→ small tool argument/result mapping
-→ same search-provider-client LocalClient as CLI
-→ same current framed daemon protocol
-→ Search / Exact / Continue / Expand handlers
-→ source-backed current result
+→ small argument/result mapping
+→ same search-provider-client::LocalClient as CLI
+→ same framed daemon protocol
+→ working Search / Exact / Continue / Expand handlers
+→ source-backed result
 ```
 
 One optional binary is sufficient. It owns MCP process lifetime and mapping only. It does not own Search
-session state, source scope, Qdrant, redb, object bytes, planning, ranking or grants.
+session history, source scope, Qdrant, redb, object bytes, planning, ranking, windows or grants.
 
-Suggested files if implemented:
+Suggested files, only when implemented:
 
 ```text
 bins/eliot-search-mcp/
   main.rs
-  server.rs
   tools.rs
   client.rs
   errors.rs
   limits.rs
 ```
 
-A separate mapping crate is justified only if another real adapter consumes the exact same pure mapping.
-Otherwise delete `search-eliot-adapter` and keep the small mapping in the leaf binary.
+A separate mapping crate is justified only when another real adapter consumes the same pure mapping.
 
 ## Closed first tool surface
 
@@ -93,66 +101,41 @@ eliot_expand
 
 Mapping:
 
-- `eliot_search` → current `SearchRequest` and source-backed `SearchResponse`;
+- `eliot_search` → current bounded `SearchRequest`/`SearchResponse`;
 - `eliot_exact_scan` → current bounded `ExactRequest`;
-- `eliot_continue` → `WindowId` + page size;
-- `eliot_expand` → `WindowItemRef` + bounded relative context.
+- `eliot_continue` → current `WindowId` and page size;
+- `eliot_expand` → current `WindowItemRef` and bounded relative context.
 
-Do not expose:
+Do not expose generic recipe names, arbitrary JSON pass-through, filesystem tools, Qdrant filters/points,
+redb/object/control internals, shell/network tools, model calls, arbitrary revision offsets or unsupported
+orientation/comparison placeholders.
 
-- generic recipe names or arbitrary JSON pass-through;
-- raw filesystem paths/read/list/glob;
-- Qdrant filters/collections/points/vectors/scores;
-- redb/object/control/internal manifest rows;
-- shell/process/network tools;
-- resources/prompts/sampling/model calls;
-- arbitrary revision offsets or old source handles;
-- unsupported orientation/comparison placeholders.
+## Scope, lifetime and limits
 
-Add orientation/comparison only after their real source-backed handlers exist.
+MCP stdio reachability grants no Search scope. Each tool supplies explicit source IDs/options through the same
+`LocalClient`; the daemon resolves them against one pinned published view. The leaf cannot mint memberships,
+grants, capabilities, query windows or view fences.
 
-## Scope, authentication and lifetime
+The host owns the MCP process; the leaf owns one LocalClient connection. MCP cancellation maps to one live
+Search request. EOF/shutdown cancels bounded work and closes the connection. Query windows remain daemon-owned.
 
-MCP stdio reachability does not grant Search scope. Each tool sends explicit selected source IDs/options over
-the same LocalClient. The daemon resolves them against one pinned `PublishedView`. The leaf cannot mint a
-grant, membership, capability or view fence.
+Apply finite frame/JSON/tool-argument depth and bytes, active requests, selected source/query/page/context sizes,
+result/card/gap/output bytes and one absolute deadline. Return structured current results with exact source,
+revision, location, excerpt, truthful gaps/partial state and live window locators. Empty partial output never
+becomes “nothing exists”.
 
-The host owns the MCP process; the leaf owns one LocalClient connection. MCP cancellation maps to the one live
-Search request. EOF/shutdown cancels bounded work and closes the LocalClient. Query windows stay in the daemon
-and are addressed through the current `WindowId`/`WindowItemRef` types.
-
-If a future remote/restricted profile is selected, its actual authentication/session scope terminates before
-tool mapping and can only narrow the daemon request. Do not revive `EliotBinding`, `GrantId`, payload digests,
-terminal receipts or durable revocation/influence records.
-
-## Limits and result mapping
-
-Apply finite:
-
-- MCP frame/JSON/tool-argument bytes and depth;
-- active request count;
-- selected source/query/page/context sizes;
-- result/card/gap/output bytes;
-- one absolute request deadline and cancellation.
-
-Return structured current Search results. A text rendering may be a bounded convenience field, not the only
-result. Preserve exact source/revision/location/excerpt, truthful gaps/partial state and window locators.
-Never convert empty partial output into “nothing exists”.
-
-## Remove now or with leaf implementation
+## Remove with the package
 
 - `EliotAdapter`, `EliotBinding`, `AdapterProtocolVersion` and `EliotCommand`;
 - payload/request/response digests used only for adapter replay;
 - process-local request/terminal history and replay classification;
-- drain/close/quarantine lifecycle;
-- exact-eleven-recipe/capability/fence/revocation/authority-receipt docs and fixtures;
+- terminal receipts and drain/close/quarantine lifecycle;
+- exact-eleven-recipe/capability/fence/revocation/authority docs and fixtures;
 - dependencies on old provider protocol/domain authority types;
-- package status/wave/line-target obligations.
-
-Do not add another adapter manager, session registry, capability pulse or mapping receipt.
+- package-status/wave/line-target obligations.
 
 ## Completion boundary
 
-This package may be deleted immediately after confirming no caller. Optional #219 closes only after the
-standalone CLI path works and one official-rmcp stdio tools-only leaf maps the four implemented operations
-through the same LocalClient with bounded schemas/results/cancellation and no second authority/state system.
+The current package may be deleted after the exact caller recheck. Optional #219 closes only after the standalone
+CLI path works and an official-SDK stdio tools leaf maps the four implemented operations through the same
+`LocalClient` with bounded schemas/results/cancellation and no second authority/state system.

@@ -30,16 +30,17 @@ compatibility code or another registry.
 
 ## Current status
 
-R038 corrects the optional regex handoff. `regex-automata` is absent from the current lock; literal Exact remains
-the baseline. #248 now selects and pins an exact current regex donor only when a real `ExactRequest` needs it,
-with API/version/MSRV/advisory/features and semantics verified together with the consumer. No speculative Cargo
-edge or dormant regex framework is reserved.
+R039 corrects the optional MCP donor state. `rmcp` is absent from the current lock; no MCP SDK/runtime is
+installed. The stable specification remains `2026-07-28`; the latest stable official Rust SDK inspected is
+`rmcp 3.7.0` (2026-10-22, commit `5d6a11f2…`, MSRV 1.88). Its auth/HTTP-only release changes do not justify
+those features for the first stdio leaf. #219 must recheck and pin the then-current SDK only with a real
+post-baseline consumer.
 
-R037 gated watcher work on a functioning #271 reconciliation path and recorded `notify` as an uninstalled
-candidate. R036 removed repeated retention deletion and made PDFium an implementation-time candidate. R035
-reconciled issue evidence/currentness semantics. R034 labelled historical package inventories. R033 fixed active
-package entry claims. R032 established the authority chain and delivery sequence. R031 adopted
-`pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer + unitizer.
+R038 made regex an implementation-time optional donor. R037 gated watcher work on functioning reconciliation.
+R036 made PDFium an implementation-time candidate and removed repeated retention deletion. R035 reconciled
+active issue evidence/currentness. R034 labelled historical package inventories. R033 fixed active package
+entry claims. R032 established the authority chain and delivery sequence. R031 adopted `pulldown-cmark 0.13.5`
+and passed Rust 1.98 check/minimal Clippy for materializer + unitizer.
 
 The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
