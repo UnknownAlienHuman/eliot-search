@@ -89,7 +89,7 @@ baseline and do not form additional product subsystems.
 | A016 | Donors | PARTIAL | Markdown 0.13.5 installed; other selected donors remain per concrete consumer. |
 | A017 | Qualification tree | CHECKED | Archived/removed as authority; runtime evidence remains ordinary work. |
 | A018 | Auxiliary/package docs | CHECKED for R034 set | Current entry docs and historical baseline inventories are distinguished; local owner docs change only with concrete findings. |
-| A019 | Issues/PR handoff | PARTIAL for R034 publication | Synchronize #352, PR #610 and #214 after this commit; no second handoff ledger. |
+| A019 | Issues/PR handoff | CHECKED for R034 | PR #610, #352, #214, #334 and #266 were synchronized after publication; #266's historical size was removed from its title. |
 | A020 | Runtime evidence | RUNTIME-ONLY | Static docs/removals establish no Windows/Qdrant/recovery/performance result. |
 | A021 | Compiler baseline | PARTIAL | R031 check/Clippy passed materializer+unitizer; current binaries/full workspace unchecked. |
 | A022 | Runtime identity/qualification | PARTIAL | Markdown donor identity truthful; lexical/materializer fixture authority and dormant worker code still need cleanup. |
@@ -188,5 +188,6 @@ gross inventory, state that they are neither current recounts nor deletion targe
 caller inspection at each code cut. Preserve the selected owners/removal boundaries and #598 protection. Update
 docs navigation and this registry; no source behavior or product requirement changes.
 
-**Remaining:** publish the documentation tree, then synchronize #352, PR #610 and #214. Product implementation
-and all runtime evidence above remain outstanding.
+**Publication follow-up completed:** PR #610, #352, #214, #334 and #266 were synchronized. Issue #266's title no
+longer presents the historical 553 KiB measurement as a current task identity. Product implementation and all
+runtime evidence above remain outstanding.
