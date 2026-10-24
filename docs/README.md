@@ -7,12 +7,12 @@ and use audit records only when evidence or history is needed.
 
 | Layer | Owns | Does not own |
 |---|---|---|
-| [Architecture](architecture/README.md) | Purpose, product boundary and observable requirements | Package topology, current implementation status |
+| [Architecture](architecture/README.md) | Purpose, product boundary and observable requirements | Package topology or current implementation status |
 | [Implementation](implementation/README.md) | Selected mechanisms, owners, delivery sequence and removal rules | Revision-specific execution evidence |
 | Nearest `FUNCTIONS.md` | Exact source seams, current defects and operation recipe | Product-wide mission or a second roadmap |
 | [Product behavior](product/README.md) | User-visible Search, Exact, orientation, comparison and document outcomes | Internal package status |
 | [Analysis registry](audit/ANALYSIS_REGISTRY.md) | Current checkpoint, inspected evidence and unrun work | Permission, architecture or readiness credentials |
-| [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Installed/selected versions and verified upstream limits | Automatic implementation decisions |
+| [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Installed/candidate versions and verified upstream limits | Automatic implementation decisions or permanent future pins |
 
 When documents conflict, correct the owning layer and make the others link to it. Do not satisfy both by adding
 compatibility code or another registry.
@@ -30,23 +30,20 @@ compatibility code or another registry.
 
 ## Current status
 
-R040 aligns the dormant document-worker package with #227 and the donor register. `pdfium-render`/PDFium is
-absent from the current lock/runtime and is an implementation-time candidate boundary, not an installed or
-frozen donor. The real slice must select one exact current crate plus one explicitly packaged matching native
-artifact, verify API/MSRV/advisories/features/license/hashes/platform binding, and replace or remove the refusal
-stub atomically.
+R041 corrects revision-currentness language in dormant adapter/model-worker instructions and advances the live
+donor register from its stale R037 header. Historical caller searches and source-size measurements remain useful
+evidence, but they are not permanent current-branch facts. Deletion requires one exact current manifest/Rust/
+non-Rust caller check at the implementation head.
 
-R039 corrected the optional MCP donor state to uninstalled `rmcp`, with 3.7.0 as the latest inspected candidate.
-R038 made regex an implementation-time optional donor. R037 gated watcher work on functioning reconciliation.
-R036 made PDFium an implementation-time candidate in the issue/donor handoff and removed repeated retention
-deletion. R035–R032 reconciled issue evidence, historical inventories, package entries, canonical authority and
-delivery sequence. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer
-+ unitizer.
+R040 aligned the document-worker package with #227: PDFium remains an uninstalled implementation-time candidate.
+R039 updated the latest inspected stable MCP SDK to `rmcp 3.7.0` while keeping it absent from the ELIOT lock.
+R038 keeps regex optional and uninstalled; R037 blocks watcher work until reconciliation works independently.
+R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer + unitizer only.
 
 The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
-[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333). Current evidence and remaining groups are
-in the [registry](audit/ANALYSIS_REGISTRY.md).
+[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333). Current evidence and remaining delivery
+groups are in the [registry](audit/ANALYSIS_REGISTRY.md).
 
 ## Focused supporting material
 
