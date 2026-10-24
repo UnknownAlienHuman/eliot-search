@@ -30,16 +30,16 @@ compatibility code or another registry.
 
 ## Current status
 
-R037 fixes the optional watcher dependency chain. #239 had claimed #271 already worked without notifications,
-while #271 still records `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`. A watcher is now explicitly blocked until real
-startup/explicit/periodic reconciliation converges without notifications. `notify` is absent from the current
-lock and becomes an implementation-time candidate only after that prerequisite, with exact version, MSRV,
-features, platform backends and advisories checked and pinned with the adapter.
+R038 corrects the optional regex handoff. `regex-automata` is absent from the current lock; literal Exact remains
+the baseline. #248 now selects and pins an exact current regex donor only when a real `ExactRequest` needs it,
+with API/version/MSRV/advisory/features and semantics verified together with the consumer. No speculative Cargo
+edge or dormant regex framework is reserved.
 
-R036 removed repeated retention/feature deletion from #244 and made PDFium an uninstalled implementation-time
-candidate. R035 reconciled active issue evidence/currentness semantics. R034 labelled historical package
-inventories. R033 fixed active package entry claims. R032 established the authority chain and delivery sequence.
-R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer + unitizer.
+R037 gated watcher work on a functioning #271 reconciliation path and recorded `notify` as an uninstalled
+candidate. R036 removed repeated retention deletion and made PDFium an implementation-time candidate. R035
+reconciled issue evidence/currentness semantics. R034 labelled historical package inventories. R033 fixed active
+package entry claims. R032 established the authority chain and delivery sequence. R031 adopted
+`pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer + unitizer.
 
 The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
