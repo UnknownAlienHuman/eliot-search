@@ -19,7 +19,7 @@ Work on the head of [PR #610](https://github.com/UnknownAlienHuman/eliot-search/
 | Installed versus selected donors, official APIs and cost limits | [Donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
 | Native/shared effects and mixed-test dispositions | [Daemon caller map](../../bins/eliot-searchd/FUNCTIONS.md#inspected-callers-and-effects) and [test cutover](../implementation/TEST_CUTOVER.md#mixed-migration-tests-retained-for-behavior-extraction) |
 | Disconnected query/rebuild/publication and actual CLI routes | [Composition boundaries](../../bins/eliot-searchd/FUNCTIONS.md#query-publication-and-rebuild-boundaries) and [CLI cutover](../../bins/eliot-search/FUNCTIONS.md#current-cli-selection-and-orphan-removal) |
-| Released Markdown parser correction and local adoption gap | [Donor evidence](DONOR_VERIFICATION_REGISTER_2026-10-09.md#markdown-offset-iterator-released-fix-not-yet-adopted) and [materializer action](../../crates/search-prep/search-materializer/FUNCTIONS.md#markdown-donor-correction) |
+| Adopted Markdown parser correction and pending execution | [Donor evidence](DONOR_VERIFICATION_REGISTER_2026-10-09.md#markdown-offset-iterator-released-fix-not-yet-adopted) and [materializer action](../../crates/search-prep/search-materializer/FUNCTIONS.md#markdown-donor-correction) |
 | Typed settings semantics and retired config catalogues | [Layer/path recipe](../../crates/search-config/FUNCTIONS.md#sparse-layers-and-validation), [removal boundary](../../crates/search-config/FUNCTIONS.md#retired-repository-catalogues) and [donor constraints](DONOR_VERIFICATION_REGISTER_2026-10-09.md#typed-configuration-donor-boundaries) |
 
 The registry is deliberately short. Detailed historical records remain at immutable checkpoint links in its

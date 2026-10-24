@@ -1,9 +1,10 @@
 # Donor evidence and limits
 
-Version/consumer status rechecked 2026-10-23 against Eliot `5af8cde5416fa33e3f1a8f3c19367ed520eac9a4`,
+Version/consumer status rechecked 2026-10-24 against Eliot `2a04c1dd1ebbd4ac516ce57fe1dae5ab3a6faad6`,
 its manifests and lock; R028 at `37dbb198` additionally checks the Markdown caller and upstream 0.13.5 fix.
 R029 at `afc3bfca` checks typed configuration API/default/path boundaries; no dependency changes follow.
-Dependencies are unchanged between those checkpoints. Current official Qdrant/Tokio/TOML documentation was also consulted. Pinned Qdrant
+R031 adopts pulldown-cmark 0.13.5 in the existing materializer and synchronizes the exact lock and donor identity;
+focused parser/materialize/replay execution remains unrun. Current official Qdrant/Tokio/TOML documentation was also consulted. Pinned Qdrant
 source-cost findings below come from the 2026-10-21 inspection and remain version-specific. This is not a
 benchmark, completed integration or dependency upgrade. The [previous index](https://github.com/UnknownAlienHuman/eliot-search/blob/32f265368c45627f1e93cd539361884b07e4d41a/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md)
 retains earlier donor research; its blanket implementation recommendations are not current instructions.
@@ -20,7 +21,7 @@ rules live in implementation and owner maps, not in this research index.
 | `aho-corasick` | Locked `1.1.5`. | Existing literal helper; connect its state machine to actual retained reads as described below. |
 | `redb` | Locked `2.6.3`. | Real control-store dependency. Keep typed point/range/snapshot behavior; long readers retain pages and transactions do not include Qdrant/files. |
 | Tokio | Locked `1.53.1` in daemon/bridge/reclaimer consumers. | Reuse async I/O/runtime/deadline primitives. Runtime presence does not connect the selected session or cancel blocking/native/server work. |
-| `pulldown-cmark` | Locked `0.13.1`; maintained `0.13.5` fix selected for the next verified Markdown dependency cut, not installed. | Existing offset/coordinate consumer reaches the printable panic case under sufficient limits. See [released fix](#markdown-offset-iterator-released-fix-not-yet-adopted) and the materializer owner; no local parser fork or blacklist. |
+| `pulldown-cmark` | R031 pins `0.13.5`, crate checksum `278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb`; defaults remain disabled. | Existing offset/coordinate consumer now selects the maintained correction. See [released fix](#markdown-offset-iterator-released-fix-not-yet-adopted); focused ELIOT parser/materialize/replay execution remains pending. No local parser fork or blacklist. |
 | `quick-xml` | Locked `0.42.0`. | Existing parsing/coordinate consumer, not a working PDF/document worker. |
 | `toml_parser` | Locked `1.1.4+spec-1.1.0`. | Current custom config decoder uses this low-level parser. It is not the proposed high-level typed decoder. |
 | High-level `toml` + `serde`; `serde_json` | Absent as packages from this lock. Typed TOML/JSON is the selected replacement direction; versions/features are not yet pinned. | Choose and lock with actual settings/framing consumers. [TOML docs](https://docs.rs/toml/latest/toml/) inspected at `1.1.8+spec-1.1.0` expose typed `from_slice` with `parse`/`serde`; that inspected release is not an automatic dependency upgrade. |
@@ -121,7 +122,9 @@ blocks with cancellation checks. Do not casually substitute a non-overlapping co
 existing overlapping contract. The [exact map](../../crates/search-query/search-exact/FUNCTIONS.md) also
 restores the old S25 distinction between raw bytes and decoded/derived text.
 
-## Markdown offset iterator: released fix, not yet adopted
+<a id="markdown-offset-iterator-released-fix-not-yet-adopted"></a>
+
+## Markdown offset iterator: released fix adopted; focused execution pending
 
 Eliot's `markdown/parse.rs` uses `Parser::new_ext(..., Options::empty()).into_offset_iter()` and calls
 `next()` synchronously. The printable input `"- [o]:u\n    \t"` from upstream
@@ -144,8 +147,13 @@ also changes other parsing/range behavior. A patch-release title or upstream tes
 Eliot's offset/structure compatibility or CPU bound.
 
 Use the maintained release through the [materializer correction](../../crates/search-prep/search-materializer/FUNCTIONS.md#markdown-donor-correction).
-[#441](https://github.com/UnknownAlienHuman/eliot-search/issues/441) owns that implementation. Current Cargo pin,
-lock and donor descriptor still say 0.13.1; no upgrade, reproducer or materializer/replay run occurred in R028.
+R031 updates the exact Cargo pin, lock and donor descriptor to 0.13.5. The lock retains the same `bitflags`,
+`memchr` and `unicase` dependency set; no unrelated registry package is changed. The donor descriptor uses the
+same published crate checksum as the lock, so preparation identity changes with the parser implementation.
+
+[#441](https://github.com/UnknownAlienHuman/eliot-search/issues/441) remains open for focused execution. Rust 1.98
+check and Clippy for `search-materializer` plus `search-unitizer` passed in [Actions run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130);
+no parser reproducer or materializer/replay run is claimed.
 
 ## Selected mechanisms, not wholesale donor applications
 

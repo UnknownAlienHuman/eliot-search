@@ -128,8 +128,9 @@ aho-corasick = { version = "=1.1.5", default-features = false, features = ["std"
 unicode-ident = "=1.0.26"
 unicode-normalization = { version = "=0.1.25", default-features = false, features = ["std"] }
 
-# #437: private inert CommonMark events; renderer and optional features disabled.
-pulldown-cmark = { version = "=0.13.1", default-features = false }
+# #441/#437: maintained OffsetIter correction; private inert CommonMark events,
+# renderer and optional features disabled.
+pulldown-cmark = { version = "=0.13.5", default-features = false }
 
 # #444: private inert UTF-8 XML events; optional feature families disabled.
 quick-xml = { version = "=0.42.0", default-features = false }

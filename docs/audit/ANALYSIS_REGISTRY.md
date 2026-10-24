@@ -6,27 +6,28 @@ second architecture, approval system or permission to delay known code changes. 
 
 ## Resume after interruption
 
-**Checkpoint:** R030, 2026-10-23 — disconnected evaluation authority removed.
+**Checkpoint:** R031, 2026-10-24 — maintained Markdown OffsetIter correction adopted.
 
 **Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
 
-**Inspected checkpoint:** `fb18eb96b13948ac8abbb2a68996b81080aeef88` (R029).
+**Inspected checkpoint:** `2a04c1dd1ebbd4ac516ce57fe1dae5ab3a6faad6` (R030 navigation head).
 
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
-The source → retained evidence → Qdrant → CLI application is still unconnected. No current binary, Windows,
-live-Qdrant, parser-adoption or end-to-end success is established. Removing an unused package is not product
-implementation.
+The source → retained evidence → Qdrant → CLI application is still unconnected. R031 updates the selected
+Markdown parser and its truthful donor identity, but no current binary, Windows, live-Qdrant, parser execution
+or end-to-end success is established. A dependency cut is not product integration.
 
 Start from the actual PR head, inspect intervening commits, then load only the selected owner and its real
 callers. Do not repeat R027's native/config/test work, R028's query/publication/rebuild/CLI caller map, R029's
-config-catalogue analysis or R030's evaluator-consumer search as a new general audit.
+config-catalogue analysis, R030's evaluator-consumer search or R031's Markdown dependency/identity inspection
+as a new general audit.
 
-**Next concrete work:** #333 typed settings and real consumers; #441 maintained Markdown adoption; #264 the
-connected product path. Coordinate only actual #598 object/key overlap. Future evaluation is deferred until
-#264/#215 produce real finite result files; there is no evaluation crate or runtime/release gate to repair.
+**Next concrete work:** #333 typed settings and real consumers; #264 the connected product path. #441 remains
+open only for focused parser/materialize/replay execution when Rust tooling is available. Coordinate only actual
+#598 object/key overlap. Future evaluation remains deferred until #264/#215 produce real finite result files.
 
-Current workspace after R030 has **49 explicit members**. This is an inventory fact, not a target package count.
+Current workspace after R031 has **49 explicit members**. This is an inventory fact, not a target package count.
 
 ## Established decisions — do not rediscover
 
@@ -39,8 +40,9 @@ Current workspace after R030 has **49 explicit members**. This is an inventory f
   Qdrant/redb effects. Feature names do not connect them.
 - All 16 tests in the two named mixed migration suites have receiving-owner/delete dispositions.
 - Exact/navigation/comparison/documents remain product requirements; deleting scaffolds does not complete them.
-- `pulldown-cmark 0.13.5` contains the selected maintained OffsetIter correction; the installed pin remains
-  0.13.1 until #441 changes code/lock and runs focused checks.
+- R031 pins `pulldown-cmark 0.13.5`, its published checksum and the same version/checksum in materializer donor
+  identity. Defaults remain disabled and the locked dependency set remains `bitflags`, `memchr`, `unicase`.
+  Rust 1.98 check and Clippy for `search-materializer` plus `search-unitizer` passed in [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130); focused parser/materialize/replay execution is still unrun.
 - Repository config catalogues were not runtime inputs and are gone. The config owner defines typed layer/path
   semantics.
 - `search-eval` had no external Rust caller. Its daemon edge was Cargo-only. The package, feature/dependency and
@@ -75,20 +77,20 @@ Evaluation/release summaries follow a working candidate. #233 may later add a sm
 | A006 | Root/config/control | PARTIAL | Consumers/layer policy known; typed settings/root/current state not implemented. |
 | A007 | Sources/reconciliation | PARTIAL | Known acquisition/currentness defects; retained-source integration unfinished. |
 | A008 | Private object/key work | PROTECTED | Use accepted #598 handoff only; no private branch/worktree inspection. |
-| A009 | Preparation/identity | PARTIAL | Budget/empty/stale/ABA/reuse rules known; actual consumers unchanged. |
+| A009 | Preparation/identity | PARTIAL | R031 updates Markdown parser/identity together; budget/empty/stale/ABA/reuse integration remains. |
 | A010 | Qdrant/donors | CHECKED for named static questions | BM25/tokenizer/IDF/readback/late-write limits recorded; live integration/quality/scale unrun. |
 | A011 | Publication/view/cleanup | PARTIAL | Competing proof/floor/rebuild boundaries known; real implementation absent. |
 | A012 | Query/evidence/window | PARTIAL | Oracle-only host and lock/cost defects mapped; real path absent. |
 | A013 | Protocol/client/CLI | PARTIAL | Active legacy path and typed-client seams mapped; serviced session absent. |
 | A014 | Product depth | PARTIAL | Required exact/orientation/ambiguity/comparison/document behavior preserved; implementation incomplete. |
 | A015 | Tests/governance code | PARTIAL | Mixed suites classified; R030 removes unused eval audit/receipt APIs, but other obsolete fixtures remain. |
-| A016 | Donors | PARTIAL | Selected dependency/API limits recorded; adoption and execution remain per consumer. |
+| A016 | Donors | PARTIAL | Markdown 0.13.5 adopted in R031; its execution and other selected donor cuts remain per consumer. |
 | A017 | Qualification tree | CHECKED | Archived/removed as authority; release evidence remains runtime work. |
 | A018 | Auxiliary documents | CHECKED for filename/disposition | Duplicate/config/eval instructions removed or archived; semantic consistency continues under A001. |
-| A019 | Issues/PR handoff | PARTIAL | #233/#352/PR and registry reflect R030; update with actual implementation. |
+| A019 | Issues/PR handoff | PARTIAL | #441/#352/PR and registry reflect R031; continue updating with actual implementation. |
 | A020 | Runtime evidence | RUNTIME-ONLY | Static findings and removals establish no platform/recovery/performance result. |
-| A021 | Compiler baseline | PARTIAL | Historical bridge-lib run covers only `7d92fb8b`; current cargo unavailable. |
-| A022 | Runtime qualification/identity | PARTIAL | Qdrant/eval authority removed; lexical/materializer fixture authority still needs caller cleanup. |
+| A021 | Compiler baseline | PARTIAL | R031 Rust 1.98 check/Clippy passed for materializer + unitizer in [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130); current binaries remain unchecked. |
+| A022 | Runtime qualification/identity | PARTIAL | Markdown donor identity is truthful in R031; lexical/materializer fixture authority still needs caller cleanup. |
 | A023 | GC/storage diagnostics | PARTIAL | Stopped-root design selected; implementation/hot-path cleanup unfinished. |
 | A024 | Backup/restore | PARTIAL | Fresh archive/import design recorded; implementation absent. |
 | A025 | Features/harness topology | PARTIAL | R030 removes Cargo-only eval edge; remaining wave/query/proof wiring still needs real caller cuts. |
@@ -117,7 +119,8 @@ Full earlier records remain immutable; this registry keeps only continuation fac
 | R027 | Native/config/test/product/donor reconciliation | [37dbb198](https://github.com/UnknownAlienHuman/eliot-search/blob/37dbb198ca983d00e987f17ed2a71171d53d1d4e/docs/audit/ANALYSIS_REGISTRY.md#r027-owner-consumer-and-donor-reconciliation) |
 | R028 | Composition callers, CLI orphans, Markdown fix | [afc3bfca](https://github.com/UnknownAlienHuman/eliot-search/blob/afc3bfca60cd0a350c3cf822ccda48f5a13e2028/docs/audit/ANALYSIS_REGISTRY.md#r028-composition-cutover-and-maintained-markdown-fix) |
 | R029 | Config catalogue removal/typed input policy | [fb18eb96](https://github.com/UnknownAlienHuman/eliot-search/blob/fb18eb96b13948ac8abbb2a68996b81080aeef88/docs/audit/ANALYSIS_REGISTRY.md#r029-configuration-catalogue-removal-and-typed-input-policy) |
-| R030 | Evaluation package/caller/lock removal | [this pass](#r030-remove-disconnected-evaluation-authority) |
+| R030 | Evaluation package/caller/lock removal | [e3b40a6f](https://github.com/UnknownAlienHuman/eliot-search/blob/e3b40a6f840177e734b43d925e3992581acdd436/docs/audit/ANALYSIS_REGISTRY.md#r030-remove-disconnected-evaluation-authority) |
+| R031 | Maintained Markdown dependency/identity cut | [this pass](#r031-adopt-maintained-markdown-offsetiter-correction) |
 
 Supporting immutable evidence: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md),
 [donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md), and
@@ -127,13 +130,18 @@ Supporting immutable evidence: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_20
 
 Last recorded passing compiler evidence is [run 39872058276](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/39872058276):
 Ubuntu, Rust 1.98.0, `search-qdrant-bridge --lib`, commit `7d92fb8b`. It does not cover current binaries.
-Earlier broad daemon compilation failed. R028 could not start Cargo (exit 127). R030 also has no cargo/rustc,
-so compiler, Clippy, tests and runtime were not run.
+Earlier broad daemon compilation failed. R028 could not start Cargo (exit 127), and R030 had no cargo/rustc.
+R031 used GitHub Actions [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130): Rust 1.98 `cargo check --locked` and `cargo clippy --locked --no-deps` passed for
+`search-materializer` and `search-unitizer`. Parser reproducer, materialize/replay, current binaries and runtime remain unrun.
 
 R030 manually prunes only the confirmed local package edges from `Cargo.lock`: daemon dependency
 `search-eval` and the path-package block. Root workspace/member/dependency and daemon optional feature/dependency
 are removed in the same commit. No registry package version or checksum changes. The lock diff is independently
 compared before publication; this is an exact prune, not Cargo regeneration.
+
+R031 changes exactly the `pulldown-cmark` lock version/checksum from 0.13.1 to 0.13.5. Its locked dependency
+names are unchanged, and the same published checksum is installed in `markdown/identity.rs::donor_row`.
+This is static lock/identity evidence, not successful dependency resolution or parser execution.
 
 ## R030. Remove disconnected evaluation authority
 
@@ -159,3 +167,30 @@ visible. It must not become a runtime constructor input, readiness gate or perma
 
 **Remaining:** actual product implementation and execution. This pass does not validate metrics, release quality,
 resource behavior or relevance, and it does not reduce the requirements of #215.
+
+## R031. Adopt maintained Markdown OffsetIter correction
+
+**Source:** `2a04c1dd1ebbd4ac516ce57fe1dae5ab3a6faad6`, 2026-10-24.
+
+**Inspected:** root manifest and exact lock entry; materializer manifest, parser, donor identity, authored
+fixtures and owner recipe; unitizer's current Markdown consumer fixture; donor register; issue #441; upstream
+0.13.5 release/tag and crates.io package record. No private #598 source or worktree was inspected.
+
+**Finding:** the only installed production consumer is the existing materializer adapter using
+`Parser::new_ext(source, Options::empty()).into_offset_iter()`. Root Cargo, lock and donor identity still named
+0.13.1 even though the selected maintained correction is 0.13.5. The 0.13.5 crate requires Rust 1.71.1 and, with
+defaults disabled, retains the same locked `bitflags`, `memchr` and `unicase` dependency set. Its published crate
+checksum is `278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb`.
+
+**Decision/change:** pin 0.13.5 in the workspace, change only that package's version/checksum in `Cargo.lock`,
+update the parser declaration and install the identical version/checksum in the materializer donor row. Keep
+empty options, `OffsetIter`, complete event exhaustion, exact byte ranges and retained original bytes. Do not
+add a local fork, spelling blacklist, plain-iterator workaround, panic wrapper or worker framework.
+
+**Identity/reuse:** parser behavior is part of transformed-output identity. Existing output is not relabelled;
+current source bytes can be prepared under the new donor. Fail-only ceilings and fixture labels remain outside
+production transform identity.
+
+**Execution/remaining:** Rust 1.98 check and Clippy for `search-materializer` plus `search-unitizer` passed in
+[Actions run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130). The printable `"- [o]:u\n    \t"` case, bounded list/blockquote/CRLF variants and actual
+materialize/replay remain #441 work. The issue stays open until that focused evidence exists; #331 owns live Markdown adoption.
