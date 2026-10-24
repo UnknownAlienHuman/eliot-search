@@ -14,8 +14,8 @@ and use audit records only when evidence or history is needed.
 | [Analysis registry](audit/ANALYSIS_REGISTRY.md) | Current checkpoint, inspected evidence and unrun work | Permission, architecture or readiness credentials |
 | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Installed/selected versions and verified upstream limits | Automatic implementation decisions |
 
-When two documents conflict, correct the owning layer and make the other document link to it. Do not satisfy
-both by adding compatibility code or another registry.
+When documents conflict, correct the owning layer and make the others link to it. Do not satisfy both by adding
+compatibility code or another registry.
 
 ## Reading path by task
 
@@ -23,22 +23,28 @@ both by adding compatibility code or another registry.
 |---|---|
 | Understand the product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
 | Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → affected owner in [Owners](implementation/README.md#owners) → nearest `FUNCTIONS.md` and real callers |
-| Resume interrupted work | [Registry resume](audit/ANALYSIS_REGISTRY.md#resume-after-interruption) → only the affected owner and immutable evidence link |
+| Resume interrupted work | [Registry resume](audit/ANALYSIS_REGISTRY.md#resume-after-interruption) → affected owner and immutable evidence link |
 | Change a dependency/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner recipe |
 | Move/delete legacy code or tests | [Test cutover](implementation/TEST_CUTOVER.md) and [baseline member disposition](audit/WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
 | Inspect effect/data ownership | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
 
 ## Current status
 
-R032 reconciles the canonical documentation and navigation against inspected R031 head `da382b66`. R031 adopted
-`pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for the materializer and unitizer; issue #441 is
-closed as the dependency/identity cut. Product-level parser cases remain part of later connected evidence under
-#215/#331.
+R033 rechecks active package entry documentation outside `docs/` and removes false current-state claims:
+
+- CLI one-shot routes are present in source but current-head execution is unverified;
+- daemon routing is documented from the current interceptor/caller map rather than frozen at old head
+  `5af8cde5`;
+- the dormant model worker is consistently recorded as a 1,047-byte refusal stub whose P15/G6 message is
+  obsolete legacy code, not a current activation rule.
+
+R032 established the authority chain and delivery sequence. R031 adopted `pulldown-cmark 0.13.5` and passed
+Rust 1.98 check/minimal Clippy for materializer + unitizer; #441 is closed as that dependency/identity cut.
 
 The persistent source → Qdrant → retained-evidence → CLI path is still not connected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
-[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333). Current execution evidence and all remaining
-product groups are in the [registry](audit/ANALYSIS_REGISTRY.md).
+[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333). Current evidence and remaining groups are
+in the [registry](audit/ANALYSIS_REGISTRY.md).
 
 ## Focused supporting material
 

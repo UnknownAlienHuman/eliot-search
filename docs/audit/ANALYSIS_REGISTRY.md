@@ -5,21 +5,22 @@ unrun work. It is not architecture, a permission system or a reason to delay kno
 
 ## Resume after interruption
 
-**Checkpoint:** R032, 2026-10-24 — canonical documentation and indexes reconciled.
+**Checkpoint:** R033, 2026-10-24 — active package entry documentation rechecked and corrected.
 **Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
-**Inspected head:** `da382b66e59d0b44e758bad9b22e2f5703a4e8c2` (R031).
+**Inspected head:** `3a5d30322466d40e78f501d324d5aa7a4cb17362` (R032).
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
-R032 rebuilds the documentation entry path and corrects stale R031/#441, Qdrant-gate, test-evidence and audit
-anchors. It changes documentation only. The persistent source → retained evidence → Qdrant → CLI application is
-still unconnected.
+R033 checks active README/AGENTS/FUNCTIONS entrypoints outside `docs/` after the canonical R032 rewrite. It
+corrects false current-state claims in the daemon, CLI and dormant model-worker documentation. No Rust, Cargo,
+workflow or runtime behavior changes.
 
-Read [docs/README](../README.md), then the affected owner recipe and actual callers. Do not repeat R027 native/
-config/test work, R028 composition/CLI caller mapping, R029 config-catalogue analysis, R030 evaluator search or
-R031 Markdown dependency inspection as a new repository-wide audit.
+The persistent source → retained evidence → Qdrant → CLI application is still unconnected. Read
+[docs/README](../README.md), then the affected owner recipe and actual callers. Do not repeat R027 native/config/
+test work, R028 composition/CLI caller mapping, R029 config-catalogue analysis, R030 evaluator search, R031
+Markdown dependency inspection or R032 canonical documentation review as another general audit.
 
 **Next implementation:** #333 typed settings and real consumers, then #270/#330/#331 source/object/preparation
-and #264 the connected product path. #441 is closed as the Markdown dependency/identity cut; product-level
+and #264 the connected product path. #441 remains closed as the Markdown dependency/identity cut; connected
 parser/materialize/replay evidence remains #215/#331 work. Coordinate only actual #598 object/key overlap.
 
 Current workspace has **49 explicit members**. This is inventory, not a target package count.
@@ -41,6 +42,10 @@ Current workspace has **49 explicit members**. This is inventory, not a target p
   remain disabled and dependencies remain `bitflags`, `memchr`, `unicase`.
 - Repository config catalogues and `search-eval` were disconnected and are removed; do not recreate forwarding
   facades or status authorities.
+- CLI/daemon command presence is source reachability, not execution evidence. The current one-shot routes and
+  current binaries remain uncompiled/unrun at this head.
+- The model worker is a dormant refusal stub, not an optional capability or qualification gate. Its obsolete
+  P15/G6 output is removal input, not current documentation authority.
 
 ## Delivery remaining
 
@@ -53,8 +58,8 @@ Current workspace has **49 explicit members**. This is inventory, not a target p
 | Maintenance/archive/import | #302/#244 | Stopped-root collection, complete archive and fresh-destination import. |
 | Product depth | [product behavior](../product/AGENT_ANALYSIS_FRAMEWORK.md), #281/#227/#335 | Source-backed orientation/comparison/documents/Git behavior. |
 
-Optional evaluation (#233), MCP (#219), managed Qdrant (#334) and overlays (#336) follow a working baseline and
-do not form additional product subsystems.
+Optional evaluation (#233), MCP (#219), managed Qdrant (#334), overlays (#336) and models follow a working
+baseline and do not form additional product subsystems.
 
 ## Coverage ledger
 
@@ -63,11 +68,11 @@ do not form additional product subsystems.
 
 | ID | Area | Status | Current result / remaining |
 |---|---|---|---|
-| A001 | Documentation authority | CHECKED for canonical routing | R032 aligns root/docs/product/handoff/audit indexes and owner hierarchy; future owner changes must update their links. |
+| A001 | Documentation authority | CHECKED for canonical/package routing | R032 aligns canonical indexes; R033 aligns active daemon/CLI/model-worker entry docs. Future owner changes update their links. |
 | A002 | Historical governance | CHECKED | Waves/packets/swarm/generated authority removed; Git preserves history. |
 | A003 | Workflows/wrappers | CHECKED | Old gates/wrappers removed; Actions remain manual-only. |
 | A004 | Workspace inventory | CHECKED for inventory | 49 members; R031 resolved/compiled materializer+unitizer only; full workspace/binaries remain unrun. |
-| A005 | Entrypoints/product | PARTIAL | Active CLI/daemon shadowing mapped; real application absent. |
+| A005 | Entrypoints/product | PARTIAL | CLI/daemon shadowing is mapped and documentation is truthful; real application absent. |
 | A006 | Root/config/control | PARTIAL | Consumers/layer policy known; typed settings/root/current state not implemented. |
 | A007 | Sources/reconciliation | PARTIAL | Acquisition/currentness defects known; retained-source integration unfinished. |
 | A008 | Private object/key work | PROTECTED | Consume accepted #598 handoff only. |
@@ -80,14 +85,14 @@ do not form additional product subsystems.
 | A015 | Tests/governance code | PARTIAL | Mixed suites classified; remaining wave/query/lexical fixtures need caller cutover. |
 | A016 | Donors | PARTIAL | Markdown 0.13.5 installed; other selected donors remain per concrete consumer. |
 | A017 | Qualification tree | CHECKED | Archived/removed as authority; runtime evidence remains ordinary work. |
-| A018 | Auxiliary docs | CHECKED for current index | R032 classifies canonical versus historical records and fixes stale anchors/status. |
-| A019 | Issues/PR handoff | CHECKED for R032 | #352, PR #610 and the stale #189 evidence-index link were synchronized after publication. |
+| A018 | Auxiliary/package docs | CHECKED for R033 set | Canonical indexes, daemon/CLI entrypoints and model-worker disposition are synchronized; remaining owner docs stay local to their next change. |
+| A019 | Issues/PR handoff | CHECKED for R033 | #352 and PR #610 are synchronized after publication; #189 retains the corrected evidence-index link. |
 | A020 | Runtime evidence | RUNTIME-ONLY | Static docs/removals establish no Windows/Qdrant/recovery/performance result. |
 | A021 | Compiler baseline | PARTIAL | R031 check/Clippy passed materializer+unitizer; current binaries/full workspace unchecked. |
-| A022 | Runtime identity/qualification | PARTIAL | Markdown donor identity truthful; lexical/materializer fixture authority still needs cleanup. |
+| A022 | Runtime identity/qualification | PARTIAL | Markdown donor identity truthful; lexical/materializer fixture authority and dormant worker code still need cleanup. |
 | A023 | GC/storage diagnostics | PARTIAL | Stopped-root design selected; implementation unfinished. |
 | A024 | Backup/restore | PARTIAL | Fresh archive/import design selected; implementation absent. |
-| A025 | Features/harness topology | PARTIAL | Eval and wave7 removed; remaining wave/query/proof wiring needs real caller cuts. |
+| A025 | Features/harness topology | PARTIAL | Eval and wave7 removed; remaining wave/query/proof and dormant-worker wiring need real caller cuts. |
 
 ## Evidence index
 
@@ -106,7 +111,8 @@ registry.
 | R029 | Config catalogue removal and typed input policy | [fb18eb96](https://github.com/UnknownAlienHuman/eliot-search/blob/fb18eb96b13948ac8abbb2a68996b81080aeef88/docs/audit/ANALYSIS_REGISTRY.md#r029-configuration-catalogue-removal-and-typed-input-policy) |
 | R030 | Disconnected evaluation package removal | [e3b40a6f](https://github.com/UnknownAlienHuman/eliot-search/blob/e3b40a6f840177e734b43d925e3992581acdd436/docs/audit/ANALYSIS_REGISTRY.md#r030-remove-disconnected-evaluation-authority) |
 | R031 | Markdown 0.13.5 dependency/identity cut | [da382b66](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/docs/audit/ANALYSIS_REGISTRY.md#r031-adopt-maintained-markdown-offsetiter-correction) |
-| R032 | Canonical documentation/index reconciliation | [this pass](#r032-canonical-documentation-and-index-reconciliation) |
+| R032 | Canonical documentation/index reconciliation | [3a5d3032](https://github.com/UnknownAlienHuman/eliot-search/blob/3a5d30322466d40e78f501d324d5aa7a4cb17362/docs/audit/ANALYSIS_REGISTRY.md#r032-canonical-documentation-and-index-reconciliation) |
+| R033 | Package entry documentation recheck | [this pass](#r033-package-entry-documentation-recheck) |
 
 Supporting historical evidence: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md),
 [baseline member disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) and the
@@ -120,8 +126,10 @@ Supporting historical evidence: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2
   check and minimal Clippy for `search-materializer` + `search-unitizer` at the R031 cut.
 - Parser reproducer/materialize/replay, current binaries, Windows, live Qdrant, restart/recovery, relevance and
   scale remain unrun.
-- R032 is documentation-only. Its verification is link/anchor/status consistency and GitHub diff review; it
-  adds no Rust/runtime result.
+- R032/R033 are documentation-only. Their verification is current-tree readback, link/anchor/status consistency
+  and GitHub diff review; they add no Rust/runtime result.
+
+<a id="r030-remove-disconnected-evaluation-authority"></a>
 
 ## R030. Remove disconnected evaluation authority
 
@@ -129,6 +137,8 @@ At source `fb18eb96`, `search-eval` had no external Rust caller; its daemon edge
 41-file package, workspace/feature/dependency wiring and exact local lock entries. Future evaluation under #233
 may be a small post-product tool over explicit finite result files; no facade, verdict authority or runtime gate
 remains.
+
+<a id="r031-adopt-maintained-markdown-offsetiter-correction"></a>
 
 ## R031. Adopt maintained Markdown OffsetIter correction
 
@@ -138,25 +148,50 @@ empty options, `OffsetIter`, exact retained bytes and parser behavior in transfo
 passed the owner/consumer check and Clippy. #441 is closed as this code task; product-level parser cases remain
 #215/#331 evidence.
 
+<a id="r032-canonical-documentation-and-index-reconciliation"></a>
+
 ## R032. Canonical documentation and index reconciliation
 
 **Source:** `da382b66e59d0b44e758bad9b22e2f5703a4e8c2`, 2026-10-24.
 
 **Inspected:** root README/QUICKSTART/AGENTS; complete `docs/` inventory; architecture, implementation, product,
-handoff, config, runtime and ADR entrypoints; live registry/donor/test records; bridge owner map; PR #610 and
-issues #441/#352/#333 plus stale issue links found during navigation review. No private #598 source was read.
+handoff, config, runtime and ADR entrypoints; registry/donor/test records; bridge owner map; PR #610 and issues
+#441/#352/#333 plus stale issue links. No private #598 source was read.
 
-**Findings:** the canonical architecture and product behavior were broadly consistent, but entry pages were
-history-heavy and lacked one clear reading/delivery sequence. R031 left #441 described as open in the registry
-and donor register after the issue closed. The Qdrant runtime boundary still claimed `QualifiedGate` was a
-constructor input although the gate had already been removed. Test-cutover execution headers stopped at R027,
-the old coverage pointer linked a deleted registry anchor, and the Windows secret page read as target design
-instead of a legacy effect inventory.
+**Finding/change:** entry pages were history-heavy and lacked one clear reading/delivery sequence; #441 status,
+Qdrant gate description, test headers, one registry anchor and Windows-secret target/current distinction were
+stale. R032 rebuilt the canonical navigation, added the delivery sequence, shortened live registers, preserved
+historical links/legacy donor anchors and synchronized #352/PR/#189. No product code changed.
 
-**Decision/change:** rebuild root/docs/product/handoff navigation around the authority chain; add an explicit
-implementation delivery sequence and completion boundary; refresh test/evidence status; classify the Windows
-adapter as current legacy inventory; correct the Qdrant gate/remaining-debt description; rewrite donor and
-analysis registers into concise live indexes while preserving immutable historical links; add an ADR index.
-No product requirement, source evidence or #598 protection is removed.
+<a id="r033-package-entry-documentation-recheck"></a>
 
-**Publication follow-up completed:** #352, PR #610 and the stale #189 evidence-index link were synchronized from this record. No second documentation authority was created. The product implementation and all runtime evidence listed above remain outstanding.
+## R033. Package entry documentation recheck
+
+**Source:** `3a5d30322466d40e78f501d324d5aa7a4cb17362`, 2026-10-24.
+
+**Inspected:** root R032 documentation; current daemon and CLI README/AGENTS/FUNCTIONS; model/doc worker
+README/AGENTS/FUNCTIONS and current `main.rs`; family/package entry docs for config, contracts, control-redb,
+domain, ports, source, preparation, query, lexical, provider client/protocol, runtime, Qdrant bridge/supervisor,
+ELIOT adapter, model design and research-export design; current workspace/member disposition and related issues.
+No private #598 source was read.
+
+**Findings:**
+
+- daemon README froze current status at old inspected head `5af8cde5` instead of separating historical readsets
+  from the current branch;
+- CLI README stated one-shot scan commands “work” although current CLI/daemon compilation and execution are
+  unverified;
+- model-worker package docs disagreed on `src/main.rs` size (989 versus 1,073 bytes) while the current tree size
+  is 1,047 bytes;
+- the model-worker source still emits retired P15/G6 qualification wording. The code is unchanged, but current
+  documentation must identify that string as deletion input rather than an activation rule;
+- the remaining inspected family/package entry docs already distinguish target behavior, current defects and
+  historical baseline inventories sufficiently; no new registry or package-status layer is needed.
+
+**Decision/change:** rewrite daemon and CLI entry READMEs as current source-route maps with explicit unverified
+execution; reconcile model-worker README/FUNCTIONS to the exact current tree and removal boundary; update the
+documentation index and this registry. Do not edit worker Rust during this documentation slice or claim the
+stubs are removed.
+
+**Publication follow-up:** synchronize #352, PR #610 and the relevant tooling/consolidation issue after the tree
+commit. The next work remains product implementation, not another documentation-wide audit.
