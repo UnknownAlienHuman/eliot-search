@@ -5,14 +5,14 @@ unrun work. It is not architecture, a permission system or a reason to delay kno
 
 ## Resume after interruption
 
-**Checkpoint:** R035, 2026-10-24 — active issue handoff contradictions reconciled.  
+**Checkpoint:** R035, 2026-10-24 — active issue handoffs reconciled and synchronized.  
 **Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).  
-**Inspected head:** `877ac38ddbd9aae4709eeb4661d711ab68b6feae` (R034 handoff follow-up).  
+**Published checkpoint:** `8c6047371a0f9aa82e08f2762cf82bee306102b1` (R035).  
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
-R035 corrects active issue bodies which still treated historical source sizes/caller searches as permanent
-current facts or described already removed packages as pending work. It changes issue documentation plus this
-registry/index only; no Rust, Cargo, workflow or runtime behavior changes.
+R035 corrected active issue bodies which treated historical package sizes/caller searches as permanent current
+facts or repeated already completed removal work. PR #610, #352 and #214 are synchronized. R032–R035 change
+documentation and GitHub metadata only; no Rust, Cargo, workflow or runtime behavior changed.
 
 The persistent source → retained evidence → Qdrant → CLI application remains unconnected. Read
 [docs/README](../README.md), then the affected owner recipe and exact current callers. Do not repeat R027–R035
@@ -27,18 +27,18 @@ Current workspace has **49 explicit members**. This is inventory, not a target p
 ## Established decisions — do not rediscover
 
 - Documentation authority is architecture → implementation → nearest `FUNCTIONS.md`; product docs own
-  workflows, registry owns evidence/status, donor register owns upstream facts.
+  workflows, this registry owns evidence/status, and the donor register owns upstream facts.
 - One current-format application owns root, source/object, preparation, publication, query and local session.
-- Config receipts do not apply values; typed settings must reach actual root/source/Qdrant/query consumers.
-- Query/publication/rebuild composition still uses disconnected oracle/in-memory/supplied-proof paths. Feature
-  names and constructors do not connect them.
+- Config receipts do not apply values. Typed settings must reach actual root/source/Qdrant/query consumers.
+- Query/publication/rebuild composition still contains disconnected oracle/in-memory/supplied-proof paths.
+  Feature names, constructors and test fixtures do not connect them.
 - Exact, orientation, comparison, documents and Git remain product requirements.
 - Historical source-size, trait, operation, manifest and caller counts are tied to their inspected baseline.
   Recheck exact current callers at the code cut; old counts are neither current facts nor deletion targets.
 - `search-retention` Cargo/workspace/lock wiring was removed in R020. Its remaining `FUNCTIONS.md` is a
   documentation-only maintenance owner; do not recreate or remove the crate again.
 - Dormant optional packages and workers are not capabilities. Delete them only after an exact current caller
-  search; future MCP/model/document work uses the current product path, not their old ledgers/stubs.
+  search; future MCP/model/document work uses the current product path, not old ledgers or refusal stubs.
 - R031 pins `pulldown-cmark 0.13.5` and matching materializer identity; #441 is closed as that dependency task.
 - #598 private object/key work remains protected; consume only its accepted public handoff.
 
@@ -81,7 +81,7 @@ excludes private work. `RUNTIME-ONLY` requires execution.
 | A016 | Donors | PARTIAL | Markdown installed; other donors remain per concrete consumer. |
 | A017 | Qualification tree | CHECKED | Removed as authority; runtime evidence remains ordinary work. |
 | A018 | Package/issue docs | CHECKED for R035 set | Package baselines and active issue status are no longer presented as current execution facts. |
-| A019 | Issues/PR handoff | CHECKED for R035 | #302/#535/#330/#291/#274/#219 corrected; synchronize #352/PR/#214 after this registry commit. |
+| A019 | Issues/PR handoff | CHECKED for R035 | #302/#535/#330/#291/#274/#219, #352, PR #610 and #214 are synchronized. |
 | A020 | Runtime evidence | RUNTIME-ONLY | No current Windows/Qdrant/recovery/performance result. |
 | A021 | Compiler baseline | PARTIAL | R031 check/Clippy covers materializer+unitizer only. |
 | A022 | Runtime identity/qualification | PARTIAL | Dormant worker/fixture code still needs caller-based cleanup. |
@@ -162,23 +162,20 @@ synchronized PR/#352/#214/#334/#266. Ten Markdown files plus one registry follow
 **Inspected:** active issue bodies surfaced by historical `public main`/size/caller terminology and the current
 R020/R032–R034 records. No private #598 source was read.
 
-**Findings and changes:**
+**Changes:**
 
-- #302 still said the empty `search-retention` crate awaited a Cargo cut although R020 already removed its
-  workspace/daemon/lock wiring; it now identifies `FUNCTIONS.md` as documentation-only and forbids repeating the
-  deletion.
-- #535 treated an old no-caller result as permanent current truth; it now requires an exact current caller search
-  immediately before deleting `search-eliot-adapter`.
-- #330 presented two ~40 KiB kernels as current public-main state; it now binds the duplication to baseline
-  `c8e38b6` and defers exact deletion to the accepted #598 handoff/current caller check.
-- #291 and #274 presented historical package sizes/callers as current; they now preserve the architectural
-  finding while requiring current caller inspection at implementation.
-- #219 presented the adapter measurement/caller result as current and its 2026-10-20 SDK checkpoint as an
-  automatic pin; it now separates historical adapter evidence from a required implementation-time donor recheck.
+- #302 now records that R020 already removed `search-retention` Cargo/workspace/lock wiring and that its
+  `FUNCTIONS.md` is documentation-only.
+- #535 requires an exact current caller search before deleting `search-eliot-adapter`.
+- #330 binds duplicate object-kernel measurements to baseline `c8e38b6` and defers deletion to the accepted #598
+  handoff plus current caller inspection.
+- #291 and #274 preserve executor/access architectural findings while treating old sizes/callers as historical.
+- #219 separates historical adapter evidence and the 2026-10-20 SDK checkpoint from an implementation-time donor
+  and advisory recheck.
 
-**Decision:** active issue bodies are handoff documents and must distinguish inspected historical evidence,
-current branch facts, selected target behavior and executed results. Do not keep re-auditing the whole tree;
-perform exact caller and donor checks within the concrete code slice.
+**Decision:** active issue bodies are handoff documents and must distinguish historical evidence, current branch
+facts, selected target behavior and executed results. Exact caller and donor checks occur inside the concrete
+code slice, not through another repository-wide audit.
 
-**Remaining:** synchronize #352, PR #610 and #214 with R035. Product implementation and all runtime evidence
-remain outstanding.
+**Publication follow-up completed:** #352, PR #610 and #214 are synchronized with R035. Product implementation
+and all runtime evidence above remain outstanding.
