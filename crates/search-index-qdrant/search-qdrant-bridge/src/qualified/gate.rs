@@ -1,11 +1,11 @@
-//! Mandatory live-probe receipt and final qualification token.
+//! Live-probe outcomes used by focused behavior tests.
 
 use super::{
-    QUALIFIED_CLIENT_VERSION, QUALIFIED_SERVER_BUILD,
-    QUALIFIED_SERVER_VERSION, QualificationError,
+    QUALIFIED_CLIENT_VERSION, QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION,
+    QualificationError,
 };
 
-/// Bridge-owned mandatory live probes for the qualified profile.
+/// Bridge-owned live cases for the selected profile.
 pub const MANDATORY_LIVE_PROBES: [&str; 13] = [
     "live_server_identity",
     "one_shard_topology",
@@ -22,7 +22,7 @@ pub const MANDATORY_LIVE_PROBES: [&str; 13] = [
     "schema_digest_equality",
 ];
 
-/// One executed live probe outcome.
+/// One executed live-probe outcome.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LiveProbeOutcome {
     /// Stable probe identifier.
@@ -33,7 +33,10 @@ pub struct LiveProbeOutcome {
     pub detail: String,
 }
 
-/// Executed live-probe receipt.
+/// Executed live-probe report.
+///
+/// This is test or diagnostic output. It is not a runtime credential and is
+/// never required by `RealDataPlane::connect`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LiveProbeReceipt {
     /// Observed server version.
@@ -42,60 +45,38 @@ pub struct LiveProbeReceipt {
     pub server_build: String,
     /// Observed client version.
     pub client_version: String,
-    /// Collection used by every mandatory probe.
+    /// Collection used by every live case.
     pub collection: String,
     /// Executed probe outcomes.
     pub outcomes: Vec<LiveProbeOutcome>,
 }
 
-/// Explicit admission token for the live Qdrant path.
+/// Validates one executed live report for tests or diagnostics.
 ///
-/// There is no default or mock constructor. Admission requires exact qualified
-/// identities and every mandatory probe passed.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct QualifiedGate {
-    server_version: String,
-    collection: String,
-}
-
-impl QualifiedGate {
-    /// Admits the live path after rechecking the executed receipt.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`QualificationError::LiveIdentityMismatch`] for identity drift
-    /// or [`QualificationError::MandatoryProbeFailed`] for missing/failed probes.
-    pub fn admit(receipt: &LiveProbeReceipt) -> Result<Self, QualificationError> {
-        if receipt.server_version != QUALIFIED_SERVER_VERSION
-            || receipt.server_build != QUALIFIED_SERVER_BUILD
-            || receipt.client_version != QUALIFIED_CLIENT_VERSION
-        {
-            return Err(QualificationError::LiveIdentityMismatch);
+/// The return value is deliberately `()`: callers cannot retain it as an
+/// activation token or use it to make an unrelated runtime ready.
+///
+/// # Errors
+///
+/// Returns [`QualificationError::LiveIdentityMismatch`] for identity drift or
+/// [`QualificationError::MandatoryProbeFailed`] for missing/failed cases.
+pub fn validate_live_probe_receipt(
+    receipt: &LiveProbeReceipt,
+) -> Result<(), QualificationError> {
+    if receipt.server_version != QUALIFIED_SERVER_VERSION
+        || receipt.server_build != QUALIFIED_SERVER_BUILD
+        || receipt.client_version != QUALIFIED_CLIENT_VERSION
+    {
+        return Err(QualificationError::LiveIdentityMismatch);
+    }
+    for required in MANDATORY_LIVE_PROBES {
+        let passed = receipt
+            .outcomes
+            .iter()
+            .any(|outcome| outcome.probe_id == required && outcome.passed);
+        if !passed {
+            return Err(QualificationError::MandatoryProbeFailed);
         }
-        for required in MANDATORY_LIVE_PROBES {
-            let passed = receipt
-                .outcomes
-                .iter()
-                .any(|outcome| outcome.probe_id == required && outcome.passed);
-            if !passed {
-                return Err(QualificationError::MandatoryProbeFailed);
-            }
-        }
-        Ok(Self {
-            server_version: receipt.server_version.clone(),
-            collection: receipt.collection.clone(),
-        })
     }
-
-    /// Collection the gate was executed against.
-    #[must_use]
-    pub fn collection(&self) -> &str {
-        &self.collection
-    }
-
-    /// Admitted server version.
-    #[must_use]
-    pub fn server_version(&self) -> &str {
-        &self.server_version
-    }
+    Ok(())
 }

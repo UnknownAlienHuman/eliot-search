@@ -143,9 +143,9 @@ fn run() -> Result<(), String> {
                 "{}",
                 concat!(
                     "{\"status\":\"ok\",\"component\":\"eliot-searchd\",",
-                    "\"development_stdin_scan_available\":true,",
-                    "\"development_file_scan_available\":true,",
-                    "\"persistent_direct_store_available\":true}"
+                    "\"scope\":\"in_process_helpers\",",
+                    "\"checks\":[\"command_parse\",\"shell_non_readiness\",",
+                    "\"literal_coordinates\",\"sha256_vector\"]}"
                 )
             );
         }
@@ -158,7 +158,7 @@ fn run() -> Result<(), String> {
         "--serve-data-root" => serve_legacy(&arguments)?,
         #[cfg(test)]
         "--source-roots" | "--register-source-root" | "--unregister-source-root" => {
-            super::source_root_commands::run(&arguments)?
+            super::source_root_commands::run(&arguments)?;
         }
         #[cfg(test)]
         "--sync-source-roots" => super::source_root_commands::run(&arguments)?,

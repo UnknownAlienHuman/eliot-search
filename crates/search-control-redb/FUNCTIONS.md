@@ -1,406 +1,125 @@
-# Function contract — `search-control-redb`
+# Control state and evidence lookup
 
-The revision-DEK candidate adapter reserves `secret/revision-dek/v1/{intent,candidate,current}`.
-Ordinary generic writers cannot touch that namespace. The closed original-context
-route permits one canonical State Intent when all three are absent, then one
-Candidate against the exact Intent while Candidate/Current remain absent. It
-never writes Current or deletes keys. Core owns full record semantics. Targeted
-operation-existence reads validate the existing immutable operation metadata and
-perform no writes; a positive result fences entropy, not serving authority.
+Source baseline: `c8e38b6`; preparation/publication instructions rechecked at `7c7fd36c` on 2026-10-23.
+This selects a replacement mechanism, not a claim that it exists or has passed runtime checks.
 
-Normal DIRECT/registry adapters may borrow the original absolute deadline and
-work callback through the checked owner facades. Every admitted read/copy/hash/
-write site retains cumulative accounting and first refusal; unknown commit
-suspends publication until exact operation/state recovery. These facades share
-the existing engines and codecs, not a second journal or state machine.
-The Direct initialization operation binds complete actual JournalIdentity and
-the original request through the shared canonical owner. No Native/root/access
-authority is created by a storage profile or restored metadata.
+## Existing code worth retaining
 
-## Frozen schema-5 operating profile
+`persistent/snapshot/lookup.rs::read_current_records_checked` already point-reads selected keys in one
+transaction. The generic journal instead appends permanent OPERATIONS, rebuilds all current records into
+ControlSnapshot after a mutation and scans receipts during recovery. Normal registry commands add full
+v4 batch/original-input replay. Keep typed transactions and point reads; remove those copied databases.
 
-- `JournalOperatingProfile`: closed Direct / Indexed / MigrationInert observation.
-- `JournalProfileInitialization`: Direct, Indexed with actual supplied visibility,
-  or MigrationInert; no default, readiness boolean or caller-created verified state.
-- `initialize_operating_profile`: exact generation-zero conditional commit of the
-  immutable reserved profile and, only for Indexed, existing validated visibility.
-- `recover_operating_profile_initialization`: inspect the exact original command;
-  preserve historical replay and unknown/conflict classifications without rewriting.
-- `operating_profile`: bounded current technical observation, never serving authority.
+`publication_codec::cas` only updates a supplied in-memory floor. The disconnected daemon `Publisher`
+uses it plus `FileJournal` intent bytes; it neither persists that floor through `persist_floor` nor invokes
+the real redb current-view transaction/snapshot APIs. Remove that extra floor/journal with its callers.
+The actual redb primitives remain useful; an intent-file write is not an atomic publication commit.
 
-Direct registry/control writes need no Qdrant route. Indexed visibility/intent paths
-retain their semantic validation. MigrationInert cannot bind normal registry or
-publish/admit a current snapshot. Generic mutation cannot write/delete the profile.
-The original profile codec/operation join is checked on disk verification and snapshot
-publication. Schemas 1/2/3/4 and v1 bootstrap semantics remain unchanged.
-`prepare_indexed_profile_adoption` captures the actual immutable DIRECT profile and
-current control generation. `adopt_indexed_profile` conditionally writes one immutable
-original-input adoption record plus the supplied epoch-zero visibility in the SAME
-journal. It never rewrites genesis or source metadata. `recover_indexed_profile_adoption`
-resolves only the original command; replay/conflict/unknown retain existing semantics.
-Disk/snapshot verification joins both immutable records to their actual transactions.
-Root must verify the real qualified route/schema and current owner/source/access
-guards before preparation; these technical APIs do not establish Qdrant readiness.
-MigrationInert adoption still refuses. Native v2 creation and source admission remain
-Root responsibilities; this package mints none of those authorities.
+## Use the existing database for compact evidence metadata
 
-## Concrete registry reservation (#269)
+The earlier immutable-page proposal did not define efficient evidence lookup. Do not implement another
+B-tree, sparse-directory format or whole-manifest memory cache. The pinned redb 2.6.3 supplies ordered
+tables, range reads and copy-on-write read snapshots.
 
-- `RegistryMutationRequest::new`: finite owner-supplied metadata and exact before
-  values; keeps original journal generation and separate registry revision.
-- `ControlPortCommand::Registry`: typed route through the existing borrowed
-  journal/publisher port, with snapshot suspension after dispatch.
-- `PersistentControlJournal::commit_registry_batch`: one conditional atomic
-  transaction, immutable full-ID operation and exact target readback.
-- `recover_registry_batch`: original-command recovery; no blind re-execution.
-- `lookup_registry_operation`: targeted immutable lookup/proven absence with
-  actual identity, journal generation and registry revision coordinates.
-- `read_registry_operation_targets`: exact envelope and all requested targets
-  from one coherent read, with no catalog/history scan or semantic callback.
-- `limits`: actual executing bounds copied from the journal, also on its bound port.
-- `read_registry_snapshot`: complete coherent technical restart observations;
-  source-owner semantic restore and admission decoding remain Root's responsibility.
-
-Schema 5 is VERSIONED_REBUILD. Reserved codecs also run during open/recovery and
-snapshot verification; old-schema collisions refuse. Existing seven classes,
-three physical tables and active limits remain unchanged. Wrapped state and
-operation values must fit the 64 KiB baseline; no silent splitting or limit rise.
-The unshipped schema-5 family map includes Root tag 4 with Identity class. Root
-key/value bytes remain source-owner validated opaque metadata; tags 1/2/3 and
-the original-operation codec/join remain unchanged.
-
-**Status:** concrete disk persistence and schema-5 registry reservation are implemented.
-Complete #268 candidate adoption, #269 serving cutover and native/fault/installed
-qualification remain separate, incomplete work.
-
-Inventory codecs select one explicit LegacyInventoryProfile. Existing constructors
-and descriptor bytes retain V1 basename semantics; LocationV2 selects distinct
-header/footer names, descriptor and artifact suffix. The original publication
-attempt stores that selected descriptor, and its opaque completed proof selects
-both same-database adoption and independent readback decoders. Header/profile
-mismatches refuse rather than reinterpret retained V1 references.
-
-V2 physical subjects are correlation digests over bounded root-relative normal
-native components with explicit platform, count and length framing. Kind 16
-binds failed directory observations, kind 36 successful ones, and kind 37 pairs
-a preparation-reference locator with its semantic key and exact evidence digest.
-These records grant no source, cleanup or cutover authority.
-
-This package owns the bounded durable control journal and immutable control-snapshot reconstruction. It
-is never a searchable corpus and stores no source bodies, extracted text, postings, vectors or ordinary
-query history.
-
-## Global rules
-
-- one journal identity binds installation incarnation, data-root owner epoch, schema family/version and
-  exact local path identity;
-- every mutation uses stable operation/idempotency identity and expected generation guards;
-- reads are side-effect free; hot request admission creates zero redb writes;
-- large exact point/object sets remain immutable CAS manifests referenced by digest;
-- committed durable state precedes immutable in-memory snapshot publication;
-- corruption, identity mismatch or unverified migration quarantines rather than guesses/repairs in place;
-- vendor redb types never cross the public API.
-
-## Configuration operations
-
-### `section_descriptor() -> ConfigSectionDescriptor`
-
-### `compiled_defaults() -> ConfigSectionInput`
-
-### `validate_section(input, platform, accepted_capabilities) -> Result<ValidatedControlConfig, JournalError>`
-
-Implements `config/sections/control.md`. Durability and verified-or-quarantine migration policy are fixed
-floors. Paths must stay under the current owned data root.
-
-### `section_digest(validated) -> Blake3Digest32`
-
-### `plan_section_change(old, new) -> Result<SectionReloadDecision, JournalError>`
-
-Opening/path/schema/durability changes require dependency restart or rejection. Bounded idempotency TTL/
-capacity and snapshot timing may apply live only without weakening correctness.
-
-## Journal identity and open
-
-### `derive_journal_identity(root_owner, path, schema) -> Result<JournalIdentity, JournalError>`
-
-Purely binds owner/data-root/incarnation/path/schema identities. A path string alone is insufficient.
-
-### `inspect_journal(path, platform_port, deadline, cancel) -> Result<JournalObservation, JournalError>`
-
-Observes existence, file identity, header/schema/integrity and lock state without migration or repair.
-Partial/cancelled inspection cannot authorize open.
-
-### `open_or_create(config, owner_guard, expected_identity, operation, deadline, cancel) -> Result<JournalGuard, JournalError>`
-
-**Preconditions**
-
-- exact live owner guard matches root/incarnation;
-- config/schema descriptors are validated;
-- no conflicting journal guard/operation exists;
-- migration plan is either unnecessary or separately accepted.
-
-**Postconditions**
-
-- created/opened file identity and header match expected identity;
-- one process-local guard owns the vendor handle;
-- required tables/indexes and schema version are verified;
-- returned guard exposes vendor-neutral read/mutation ports only.
-
-Timeout after creation/open metadata mutation is unknown until exact inspect/reopen. Identity mismatch or
-corruption returns quarantine, never attach.
-
-## Migration
-
-### `plan_migration(observed, target, registry) -> Result<MigrationPlan, JournalError>`
-
-Produces an explicit ordered plan with source/target schema digests, preconditions, bounded steps,
-rollback/backup policy and golden fixture identity. Unknown versions have no implicit migration.
-
-### `execute_migration(guard, plan, operation, deadline, cancel) -> Result<MigrationReceipt, JournalError>`
-
-Runs each verified step transactionally where supported and records step/plan identities. Cancellation
-occurs only at declared safe points. Unknown outcome is resolved by schema/table/data invariant readback.
-A partially unprovable migration quarantines.
-
-### `verify_migration(guard, plan, fixtures) -> Result<MigrationVerificationReceipt, JournalError>`
-
-Reopens/reads the migrated journal and proves schema/table/record invariants plus migration digest.
-Success is required before normal snapshot publication.
-
-## Read and mutation transactions
-
-### `read_snapshot(guard, request, deadline, cancel) -> Result<JournalReadSnapshot, JournalError>`
-
-Returns a consistent vendor-neutral read view with journal generation/identity. It performs no durable
-write, idempotency row, lease or query-history mutation.
-
-### `transact(guard, command, expected_generations, operation, deadline, cancel) -> Result<ControlCommitReceipt, JournalError>`
-
-Validates a bounded closed command set, operation identity, expected table/entity generations and
-immutable manifest refs before entering one atomic transaction.
-
-Success returns exact journal/transaction generation, changed entity refs and content-minimized receipt.
-Same operation plus same canonical command returns the prior receipt; same operation plus different input
-is `CONTROL_OPERATION_CONFLICT`.
-
-Timeout/cancellation after transaction dispatch is `CONTROL_COMMIT_OUTCOME_UNKNOWN`. Recovery performs
-idempotency/record/generation readback; it never blindly repeats under a new identity.
-
-### `recover_transaction(guard, operation, expected_command_digest) -> Result<CommitRecoveryDecision, JournalError>`
-
-Returns exactly:
+For each physical Qdrant generation use two private typed tables with internally derived names:
 
 ```text
-COMMITTED(receipt)
-NOT_COMMITTED_RETRY_SAME_OPERATION
-CONFLICTING_INPUT
-PARTIAL_OR_CORRUPT_QUARANTINE
+published_sources[g]: source_id -> exact revision/prepared references and recorded outcomes/gaps
+published_evidence[g]: (source_id, point_id) -> identity/input metadata + ObjectRef/representation/range
 ```
 
-## Control snapshot
+These are metadata, not bodies, vectors or another search index. A source prefix gives its old ordered points;
+an exact key resolves a nomination. Qdrant's source ID is only a routing hint: validate selected scope and
+exact key/identity in the pinned snapshot. Do not trust payload revision/range or try another source on failure.
 
-### `rebuild_control_snapshot(read_snapshot, schema) -> Result<ControlSnapshot, JournalError>`
+ViewManifestEntry means this compact value, not a second authoritative serialized view manifest. Prepared
+artifacts hold text/structure/maps; immutable pending pages hold actual unfinished external inputs. Bodies
+remain outside redb.
 
-Purely reconstructs the immutable bounded control snapshot from committed technical records. It rejects
-missing/duplicate/incoherent generations, unresolved publication intent and oversized/unbounded state.
-It never scans Qdrant to infer control truth.
+## Snapshot actually held by a view
 
-### `publish_snapshot_after_commit(commit, snapshot, publisher, deadline) -> Result<SnapshotPublishReceipt, JournalError>`
+Private PublishedViewState contains committed route/profile/sequence and an owned redb read transaction.
+Open its tables through that transaction. Do not open a fresh read for a later page of an old view or copy
+all rows into a BTreeMap.
 
-Requires snapshot journal generation/identity equal the committed state and atomically publishes the
-immutable in-memory snapshot. Publication cannot precede commit.
+After commit, the serialized publisher opens a read transaction, verifies the target current-view row,
+constructs/installs the state, and only then starts another publication. Queries/windows clone that state.
+Old readers retain old bindings when subsequent transactions change the same keys. Keep redb types private.
 
-If publication fails after commit, durable state remains authoritative and request admission stays
-fail-closed/degraded until `recover_snapshot_publication` succeeds.
+Long readers retain database pages. Bound request/window lifetime and indexing backlog, and apply visible
+write backpressure on exhaustion. Handle counts alone do not bound disk use. Measure retained-page growth;
+a snapshot service or durable lease platform is not the remedy.
 
-### `recover_snapshot_publication(guard, publisher) -> Result<SnapshotPublishReceipt, JournalError>`
+## Incremental commit versus generation build
 
-Reads current committed state, rebuilds the exact snapshot and republishes it. It never replays the
-original mutation solely to obtain an in-memory receipt.
+For an ordinary update, load/validate the finite metadata delta before opening the writer. After Qdrant
+completion/readback, one transaction applies the delta, updates published inventory/current view, inserts
+unfinished cleanup and clears pending. No object/RPC I/O inside it. Bound rows/bytes before external effects;
+split batches only at complete source boundaries. A source beyond the supported limit is an explicit indexing
+gap, never a half-new source silently presented as complete.
 
-## Idempotency maintenance
+Full rebuild uses separate target-generation tables, filled in bounded transactions while the old generation
+serves queries. After completion switch the pointer, not all corpus rows in one transaction. The target input
+selection also needs a restart rule; filling output tables alone did not supply one.
 
-### `prune_idempotency(guard, policy, protected_operations, deadline, cancel) -> Result<PruneReceipt, JournalError>`
+## Restartable generation input capture
 
-Deletes only expired bounded operation rows not required by unresolved/recoverable commands. Pruning is
-background technical maintenance and cannot make an unknown external mutation unrecoverable.
+A live ReadTransaction is a process-held snapshot, not a durable application build manifest. Reading page 1,
+restarting, then opening current source rows for page 2 can mix source sets/profiles. Saving only a sequence
+label or source-key cursor cannot recover the original values. Do not advertise that as resuming fixed input.
 
-## Quarantine and diagnostics
+For a full/incompatible-profile build, use the existing pending record and target source table:
 
-### `quarantine(reason, observation, owner_guard) -> QuarantineReceipt`
+1. Open one consistent read transaction over current selection, source state and chosen preparation outcomes.
+   Retain that same snapshot while copying compact exact input/outcome references into the unserved target
+   source table in bounded write transactions. Bodies remain in the immutable store. The publisher owns this
+   target and captures the chosen profile/options with it; no Qdrant mutation is dispatched during capture.
+2. Only after enumeration and reference validation finish, commit input-capture completion in the existing
+   pending record. A partial table is never a complete inventory. The snapshot can then be released.
+3. On interruption before completion, abandon/discard that metadata-only partial capture and start a fresh
+   capture; no external work exists for it by construction. Do not resume its cursor against a new live read.
+4. After completion, all planning, dispatch and recovery use those captured rows and immutable refs. Missing
+   input is an explicit failure/gap, not permission to substitute newer source bytes. Build evidence/output
+   incrementally without overwriting the frozen selected input with current desired state.
+5. Switch only when that captured inventory's required effects and evidence are complete. New source or
+   settings changes are discovered by publication's two-sided reconciliation after the switch.
 
-Produces content-minimized reason/identity/digest metadata and blocks normal mutation/open. It does not
-delete or auto-repair the journal.
+This is full-build-only metadata capture, not a per-update corpus copy, new snapshot database, savepoint
+catalogue or receipt protocol. Incomplete capture is owned/referenced by pending until cleaned up. After
+external effects are possible, publication's unsettled-dispatch recovery applies instead of dropping target
+state. The same original intended inputs must be available for an isolated recovery generation.
 
-### `journal_health(guard_or_observation) -> ControlStoreHealth`
+The source table must distinguish complete empty/gap outcomes from unfinished processing; a table with zero
+points does not establish completed capture or completed build. Capture costs O(selected source metadata)
+I/O and retains an MVCC reader while it runs. Bound each transaction/attempt and measure reader growth; it is
+not O(page-size) total work and a fresh read per page is not an equivalent optimization.
 
-Reports identity/schema/generation/migration/snapshot state, bounded counts and reason codes. It excludes
-source/query content and unrestricted paths.
+## Other current state
 
-## Cancellation, deadline and crash semantics
+Settings, root/source heads, prepared outcomes, current view, one pending operation and finite cleanup are
+ordinary typed rows. Source state may be ahead of published state. Queries/Exact use the latter and report
+actual currency; they do not repair ingestion. Source conditional updates use the [source recipe](../search-source/search-source-registry/FUNCTIONS.md),
+not content equality as proof that an old task still owns a row. Resolve uncertain commits from relevant
+current rows. No successful read, page or pure transform creates a durable completed-operation record.
 
-Open, migration, transaction, pruning and snapshot publication have finite deadlines and cooperative
-cancellation at safe points. Any possible durable mutation is unknown until exact journal readback.
-Power loss/reopen must produce committed prior state, committed new state or explicit corruption/
-quarantine—never fabricated success.
+## Donor verification
 
-## Typed failures
+Pinned redb, not a version upgrade:
 
-- `CONTROL_STORE_UNAVAILABLE`
-- `CONTROL_STORE_CORRUPT`
-- `CONTROL_STORE_QUARANTINED`
-- `CONTROL_IDENTITY_MISMATCH`
-- `CONTROL_SCHEMA_UNSUPPORTED`
-- `CONTROL_SCHEMA_MISMATCH`
-- `CONTROL_MIGRATION_UNVERIFIED`
-- `CONTROL_TRANSACTION_CONFLICT`
-- `CONTROL_GENERATION_MISMATCH`
-- `CONTROL_OPERATION_CONFLICT`
-- `CONTROL_COMMIT_OUTCOME_UNKNOWN`
-- `CONTROL_READ_CANCELLED`
-- `CONTROL_BUDGET_EXCEEDED`
-- `SNAPSHOT_REBUILD_FAILED`
-- `SNAPSHOT_PUBLICATION_FAILED`
-- `FORBIDDEN_CONTROL_PAYLOAD`
+- [redb 2.6.3 Cargo metadata](https://github.com/cberner/redb/blob/f4e3eb69dc2a4b4e01fefff0b9e039c6c7ab98f6/Cargo.toml).
+- [ReadTransaction implementation](https://github.com/cberner/redb/blob/f4e3eb69dc2a4b4e01fefff0b9e039c6c7ab98f6/src/transactions.rs#L2367-L2520): new captures the data root, table reads retain its transaction guard, and close/drop release the process-held transaction. Rechecked in R011.
+- [get/range API](https://docs.rs/redb/2.6.3/redb/trait.ReadableTable.html) for point/ordered reads.
 
-## Required tests / qualification evidence
+Those mechanisms support the design; they do not supply an application restart manifest automatically or
+establish latency/Windows durability. R011 used the pinned GitHub source when versioned docs pages were
+unavailable; newer redb API pages were not substituted.
 
-- create/open/reopen exact identity and second-handle/process denial;
-- table/schema descriptors contain only bounded technical control state;
-- forbidden source/text/vector/ranked-query payload compile/runtime guard;
-- migration golden fixtures for every supported source version;
-- crash/power-loss before/after each migration/transaction/snapshot boundary;
-- same-operation replay and conflicting command rejection;
-- 10,000 hot query/read admissions produce zero redb writes/idempotency rows;
-- large exact sets stored as immutable manifest refs, not redb arrays;
-- Qdrant state cannot reconstruct or override control truth;
-- committed-but-unpublished snapshot recovers without replaying mutation;
-- idempotency pruning preserves unresolved operation recovery;
-- corruption/identity mismatch/migration ambiguity quarantines;
-- `control` config fixed durability/migration floors and change classification;
-- public API/vendor-type and debug/content-disclosure guards;
-- fake storage/publisher/clock ports prove orchestration independence.
+## Removal and checks
 
-## Versioned legacy-inventory stream
+Remove generic journal/snapshot/registry restore, obsolete grant/key/migration persistence and exclusive
+fixtures with callers; do not replace them with a generic repository/versioning framework.
 
-The original inactive inventory receipt may continue into an explicit content
-stage over the same retained database. Only an original-bound, once-published
-source-content v1 artifact admits bounded row/index adoption. Both canonical wire
-rows and their technical identity index require independent readback, and every
-canonical occurrence is joined against exact legacy source/revision, SHA and length
-fields. Header/footer bytes remain owned by the frozen encoder and strict decoder.
-The extended content table profile is unavailable to old or normal journal opens.
-The final original-context checkpoint must succeed before a content owner becomes
-writable. A terminal refusal retains the target/publication evidence and blocks
-later publication, row adoption and readback even if the same callback later permits work.
-The receipt remains partial: semantic candidate, serving, restart, residency and
-cleanup authority are not issued; #268/#269/#347/#348/#215 remain separate owners.
-
-`LegacyInventoryEncoder::{header,item,source_event,end_family,finish}` provides
-one bounded metadata encoder for `eliot.legacy-inventory.v1`. Family order and
-per-status counters belong to this owner. Complete accounting requires all
-12 terminals and finite record/byte limits; gaps, unreadable and unsupported
-observations cannot prove a complete denominator. Original native custody,
-physical enumeration, revision acquisition and protection remain composition
-observations, never codec-issued authority. Existing `SourceImportRecordArtifact`
-owns staging, complete second-stream comparison and once-only publication.
-No footer authorizes #268-C acceptance, #269 cutover, #348 restart reconciliation
-or #347 cleanup. Native/fault/installed qualification remains #215.
-
-`LegacyInventoryEncoder::item_encoded_len(family, status, kind, counts)` sizes
-one item without allocation through the actual encoding formatter; digest fields
-have fixed widths. `preflight_remaining(pending_records, pending_encoded_bytes)`
-returns `LegacyInventoryCapacity` after the live emitted prefix, pending items,
-and conservative remaining terminal/footer bounds. Include all pending fanout,
-synthetic Gap24/348 and other future items; do not add terminals/footer twice.
-The query is allocation-free and non-mutating, and does not reserve capacity or
-issue authority. Unknown items need valid upper bounds. Tail overestimation can
-refuse an exact-fit stream; the actual encoder retains its unchanged hard limits.
-
-## Contextual immutable record lifecycle
-
-`SourceImportRecordArtifact::{create,push,freeze}_with_context` and contextual
-readback, comparison, preparation and publication methods borrow the existing
-`MigrationBootstrapWork` callback together with the original `Instant`. The
-deadline-only APIs use the same kernel with an inert callback. No callback,
-context or renewed allowance is retained in an artifact.
-
-`Open`, `Read`, `Write`, `Allocate`, `Process` and `Checkpoint` work is
-admitted before the corresponding inner operation. Reader processing is charged
-per actual refill, row copying and hashing separately; interrupted I/O attempts
-require fresh admission. The private writer flushes explicitly and never on Drop.
-
-`SourceImportRecordArtifactPublication::begin_borrowed_rows_with_context` is an
-opt-in sequential cursor over the retained original file. Its exclusive mutable
-publication borrow prevents another owner cursor or publication from sharing the
-offset; each pass seeks to zero. It creates no OS handle and charges no cursor
-`Open`. The default `begin_rows_with_context` still clones/charges its handle.
-Both use the same bounded row/chain/count/byte/EOF, metadata, native identity and
-fresh staging/final locator guards with the original deadline/work callback.
-Rows precede final proof: a short/dropped/refused cursor grants no completed pass.
-Drop only releases the borrow/reader; it never writes or removes retained evidence.
-
-Pre-effect refusal prevents link dispatch; post-effect refusal is unknown and
-preserves original identity, locators and the actual reused outcome. Native
-composition retains the first original refusal cause. Exact inspections and
-same-process-only resolution are unchanged; this adds no cleanup or restart
-authority.
-
-The record platform's contextual directory/locator/identity/durability methods
-must expose nested native work. Simple observer ports have compatibility defaults;
-qualified native ports override them. The daemon admits each actual locator or
-directory open, metadata observation and Windows identity dispatch, with original
-checkpoints between them. Legacy native methods use the same engine with an inert
-hook; no second observer, deadline or allowance is created.
-
-## Original migration bootstrap
-
-`MigrationBootstrap::create` initializes the caller-created single future inactive
-target and writes the bounded `eliot.migration-bootstrap.v1` original operation
-through the existing immediate conditional transaction/readback engine. It retains
-the actual RELEASED source read-custody observation, all admitted limits, original
-registration/source snapshot and explicit native output identity profile. No normal
-journal handle or candidate escapes. Native BLAKE3 and a borrowed checkpoint/work
-callback remain composition supplied; the callback cannot renew the deadline.
-
-`publish_inventory` takes the retained original publication object, writes its
-exact kind/profile/stage/final/native identity/chain/rows/bytes and dispatch phase
-before at most one link, then records the owning same-process durable outcome.
-Any uncertain journal phase forbids dispatch; any post-effect refusal stays unknown
-and retains evidence. Reuse/restart/candidate/cleanup authority is unavailable.
-The package-owned receipt explicitly reports `complete_candidate_not_performed`.
-The legacy import table/META profiles remain unchanged. A separately reviewed
-versioned migration must continue complete mapping in this same inactive target.
-
-## Live owned source stage
-
-`MigrationBootstrap::into_source_stage` requires the retained successful inventory
-outcome and exact original target/source snapshot plus the accepted mapping profile.
-`OwnerBoundSourceStage::{publish_source_map,initialize_mapping,push,begin_readback}`
-records the original immutable map attempt before once-only publication and creates
-mapping tables in the existing database. Its combined seven-table inactive profile
-requires the exact finite `owner_source_stage.v1` marker on writes and readback.
-Legacy control/import profiles and normal serving admission remain unchanged.
-
-`OwnerSourceMappingReadback::{compare,finish}` verifies the complete row denominator,
-all indices and five accounting dimensions under the borrowed original context.
-Any comparison error latches; retry or finish cannot produce a receipt. The receipt
-retains the original database owner and reports
-`complete_inventory_candidate_not_performed`. It grants no full inventory adoption,
-cutover, serving, restart reconciliation or cleanup authority.
-
-## Original all-row inventory stage
-
-`OwnerSourceMappedReceipt::into_inventory_stage` consumes the original owner;
-`OwnerInventoryStage::{push,begin_readback}` decodes and batches every canonical
-inventory row in that same database. It seals only the exact original published
-chain/rows/bytes, with encoder-derived complete family accounting. No caller
-summary, current path or digest can construct this state.
-
-`OwnerInventoryReadback::{compare,finish}` compares a complete regenerated stream,
-the persisted full denominator and every source-event index binding. Errors latch
-and cannot produce `OwnerInventoryMappedReceipt`. The receipt exposes all five
-source counts and all twelve family status arrays; it grants no semantic candidate,
-normal journal, serving, restart or cleanup authority. Old four/seven-table profiles
-remain separately admitted. Original work/deadline/cancellation applies to every
-buffer/decoder/hash/read/write phase. Native execution remains #215.
+After implementation check exact point lookup, source-prefix updates, old-reader binding stability, atomic
+source/evidence/current commit, capture interruption before/after completion, source/profile changes mid-build,
+restart from captured refs rather than latest rows, staging isolation, finite transactions and retained-page
+growth. Minimal changed-owner Clippy follows code. No new execution result is claimed here.

@@ -1,72 +1,31 @@
-# Agent contract — search-epoch-pins
+# Working on search-epoch-pins
 
-You own only `crates/search-index-qdrant/search-epoch-pins/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the [implementation guide](../../../docs/implementation/README.md), local [source map](FUNCTIONS.md) and
+[publication map](../search-publication/FUNCTIONS.md).
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S13.7, S14.2-S14.3, S26.3, H12, P07.
+This package is a replacement/removal target. Implement one private standard-library current-view manager:
+one strong current `Arc`, weak retired refs and lexical `ViewGuard` ownership. Do not repair the raw pin
+registry.
 
-## Mission
+Publication commits redb current/cleanup state first, then takes the short manager mutex to install the
+target. Never hold the manager lock across redb fsync or object/Qdrant I/O. A query which pins old in that gap
+remains valid and merely delays cleanup.
 
-Protect active query snapshots and old collection routes in memory without writing ordinary query leases.
+`pin_current()` clones only current. A window can clone only an existing live guard. No API accepts route,
+generation, sequence, owner ID, caller time or renewal.
 
-## Ownership
+Cleanup evaluates every live view:
 
-- RAII epoch/route pin registry
-- pin quotas and cancellation release
-- reclamation watermark
-- bounded continuation pin integration
-- route-drain observation
+- point IDs closed at N wait until no same-generation live view has sequence below N;
+- an old collection waits until no live view uses its generation.
 
-## Forbidden ownership
+The immediate predecessor's last guard is not enough when an earlier view remains live. Last drop only wakes
+cleanup. Periodic scan is fallback. Restart reconstructs current from redb; old interactive guards disappear
+while durable cleanup rows remain.
 
-- durable QueryFenceLease for normal reads
-- query result storage
-- publication or deletion decisions
-- indefinite pins
+Delete pin IDs/owners/counts, raw route/epoch acquisition, release-by-owner, renewal, snapshots/watermarks,
+continuation bindings, P18 APIs and shape fixtures. Move the small manager into publication/query composition
+if no real package boundary remains.
 
-## Allowed dependencies
-
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `EpochPinRegistry::acquire(route, epoch, owner) -> Result<PinGuard, PinError>`
-- `EpochPinRegistry::watermark(route) -> ReclamationWatermark`
-- `EpochPinRegistry::release_owner(owner) -> ReleaseCount`
-- `EpochPinRegistry::can_reclaim(route, retired_epoch) -> bool`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `SNAPSHOT_EXPIRED`, `PIN_LIMIT_EXCEEDED`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `pinned visible points cannot be reclaimed`
-- `guard releases on success, cancellation and disconnect`
-- `daemon crash requires no durable lease cleanup`
-- `continuation TTL bounds pin lifetime`
-- `old route drains only after final pin release`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W3 / P07**
-- Soft `src/` target: **4,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+After code, run minimal Rust 1.98 compiler/Clippy for publication/query/window/cleanup consumers and focused
+commit→install gap, v1/v2/v3, restart and dead-weak behavior.

@@ -1,61 +1,34 @@
 # search-config
 
-**Deterministic, I/O-free typed configuration and reload planning.**
+This crate still implements the legacy generic configuration platform. Startup/status, DIRECT root-locator
+hints and the explicit DEK-selection command have distinct consumers; most registered values do not reach
+their operational handlers. A valid non-default query limit is still receipt-gated at startup.
 
-This package owns finite typed documents, registry/layer semantics, section equality identities,
-effective snapshot fingerprints, redaction, deltas and plans. Capability packages own section
-meaning and runtime application. Configuration equality never proves validation or applied effects.
+Read [FUNCTIONS.md](FUNCTIONS.md) for the source/caller map and the selected replacement. It is the single
+home for decoding, merge, path, validation, startup, status and runtime-change rules.
 
-New snapshots compute BLAKE3 over shared deterministic CBOR under
-`eliot/cbor/config-snapshot/v2`. The config owner computes each section digest from exact typed
-fields, requested/selected profiles and supplied source/reset provenance; callers supply no digest.
-Private snapshot compute consumes its existing ordered bounded map, without another sort, full
-preimage or public arbitrary iterator.
+## Next change
 
-This is VERSIONED_REBUILD. The sole current file format is schema 2, `eliot-config-toml@2`,
-implemented through maintained `toml_parser` events. Schema-1 files return
-`UnsupportedSchemaVersion` and require migration. See [TOML_PROFILE_2.md](TOML_PROFILE_2.md).
-SHA-v1 bytes can be
-restored only with `ConfigFingerprint::restore_legacy_v1` for migration/comparison. They cannot
-construct a current effective snapshot. Equality preserves algorithm/profile/revision even if raw
-bytes coincide. The immediate daemon status emits the full tag under its explicit v2 schema and
-rejects report/snapshot identity mismatch. Runtime application/readback remains #333.
+[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333) replaces the generic parser/tree,
+registry, fingerprints, action plans and accepted-readiness receipts with concrete typed settings. Change the
+real daemon and setting consumers together. Startup constructs owners from validated values; status reads
+running settings and actual component observations.
 
-Borrowed identifier, value and list extents plus fixed scalar/digest payload are checked before
-temporary canonical rows. Assembly also charges names/owners before map clones and insertion.
-One shared encoder decides exact domain-inclusive CBOR bytes under the 8 MiB hard ceiling.
-Logical payload budgets are not measured allocator residency or serialized JSON/Debug size.
+High-level `toml` plus Serde is selected, not installed. The current custom decoder uses
+`toml_parser 1.1.4+spec-1.1.0`; pin replacement dependencies/features with consuming code and regenerate the
+lock. The [layer recipe](FUNCTIONS.md#sparse-layers-and-validation) defines omissions and precedence, and the
+[path policy](FUNCTIONS.md#paths-and-diagnostics) distinguishes Unicode TOML from OS-valued overrides.
 
-File/env/CLI documents retain the shared builder, descriptor/secret/precedence rules and admission
-ceilings: W1 identifiers 1 MiB, values 4 MiB, total list items 8,192. Captured document Debug emits
-fixed primitive metadata. Redacted views charge complete tagged header and entry payload before
-copies/hashing and omit over-budget entries whole. Bounded redacted path digests retain exact
-standard SHA-256 through the shared owner; no production legacy fingerprint encoder remains.
+Retain the real locator and protected storage consumers until their owners move. Coordinate actual #598
+object/key overlap without inheriting its old generic security programme. If the remaining typed helpers fit
+in daemon composition, remove this crate rather than preserve a facade.
 
-File parsing and typed entry admission share one private document builder. Lexer tokens are
-charged before storage growth; donor strings are counted, charged and then filled. The W1 lexer
-ceilings are 131,072 tokens and 4 MiB logical token storage, independently of decoded payload
-budgets. No handwritten TOML grammar, dynamic donor document tree or second parser remains.
+The unused repository config catalogues and duplicate section packets have been removed. The
+[configuration index](../../docs/config/README.md) links current recipes and immutable historical evidence;
+no packet, registry row or parser-compatible example defines working product configuration.
 
-Identity, compatibility, parser and diagnostic fixtures are AUTHORED_NOT_RUN under #352.
-Integrated/native/installed/scale/release qualification remains #215; runtime application/readback
-remains #333. Logical limits do not establish measured allocator residency or corpus compatibility.
+## Verification
 
-## Owns
-
-- config source/layer identity and deterministic merge semantics
-- top-level section registry and unknown-section rejection
-- fixed/security-floor/override classification
-- effective snapshot fingerprint and redacted diagnostic projection
-- change classification: live, security barrier, restart, new generation or reject
-
-## Must not own
-
-- reading files/environment/process arguments
-- package-specific runtime state or vendor configuration objects
-- plaintext secrets or permissive fallback on unknown settings
-- silently applying restart/rebuild/security changes as live updates
-
-- **Delivery wave:** W1 / P01
-- **Soft source-line target:** 5,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+After code changes, use the [focused behavior cases](FUNCTIONS.md#focused-checks) through actual consumers
+and the pinned compiler/Clippy for changed targets. This documentation does not establish a running typed
+settings path or a passing current binary build.

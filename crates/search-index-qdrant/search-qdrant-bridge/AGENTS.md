@@ -1,42 +1,22 @@
-# Agent contract — search-qdrant-bridge
+# Working on search-qdrant-bridge
 
-Own only `crates/search-index-qdrant/search-qdrant-bridge/`. Do not edit another
-package, root workspace, shared contracts or architecture. Missing fields use
-the contract-change process.
+Read the root [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and [local recipe](FUNCTIONS.md).
+The local recipe owns mutation, schema, scope and readback rules; do not copy another version here.
 
-The bounded packet is `swarm/assignments/search-qdrant-bridge.md`.
+Use the workspace-pinned SDK privately. Trace the real publication/query caller before adding an operation.
+One daemon-owned client/runtime serves both paths. Do not build an SDK-method catalogue, a second write
+runtime, an acceptance-token replacement or a forwarding facade around the retired interfaces.
 
-## Ownership
+`QualifiedGate` has already been removed from runtime construction. Keep useful live probes as diagnostic
+behavior, not an activation prerequisite. The remaining supervisor/lease ceremony, fixed build admission,
+relative deadlines and mutation ledger are separate unfinished cuts; removing the gate did not remove them.
 
-- Qdrant schema/capability/data-plane translation
-- strict filters and exact acknowledged mutations/readback
-- private vendor types
-- adapter-local handling of vendor API/protobuf changes
+Published retrieval state is immutable under the publication recipe. Known empty scope is not unknown scope.
+Observed point state is not proof that a timed-out writer has stopped. Native inference coefficients are not
+known client-computed vectors. Follow the concrete distinctions in FUNCTIONS rather than weakening them to
+satisfy old fixtures or restoring the former README's generic upsert/update list.
 
-## Forbidden ownership
-
-- executable/process/ACL/Job Object lifecycle or secret storage
-- recipe/access/publication/result semantics
-- vendor types in public ports
-- automatic downloads, upgrades, version ranges or silent fallback
-- requiring daemon/query/publication/control changes for an SDK rename
-
-## Dependencies
-
-Public behavior uses Eliot-owned contracts. `qdrant-client` is a private
-workspace-pinned dependency inherited only by this package; the daemon supplies
-a qualified endpoint/auth lease. Keep `default-features = false` in the root
-workspace pin and run:
-
-```powershell
-cargo run --locked -p xtask -- validate qdrant-boundary --json
-```
-
-See
-[`docs/runtime/QDRANT_ADAPTER_BOUNDARY.md`](../../../docs/runtime/QDRANT_ADAPTER_BOUNDARY.md).
-
-## Size
-
-Target `src/` ≤ 7,000 lines; split review before 8,500 total; hard stop at
-10,000 hand-written Rust lines. Split vendor transport by operation family
-instead of growing `real.rs` or `live.rs`.
+After a source change, run minimal pinned compiler/Clippy for the changed owner and actual consumers. Record
+which revision/targets ran in the analysis registry; do not reuse an older successful run as evidence for a
+new cut. Broad live/native/recovery work follows the implementation it exercises.

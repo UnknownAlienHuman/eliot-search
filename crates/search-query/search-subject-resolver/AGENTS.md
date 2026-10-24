@@ -1,69 +1,23 @@
-# Agent contract — search-subject-resolver
+# Working on subject resolution
 
-You own only `crates/search-query/search-subject-resolver/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and [local README](README.md).
+Resolve the user's selected entity to actual source locations and expose material ambiguity.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S20.1, S21.1, P11.
+The current functions consume supplied candidates; their callers are tests. Connect real candidate
+producers and source validation together. Keep selection as a small part of the existing query owner;
+change its API and consumers when a fixed ladder or package split adds no useful behavior.
 
-## Mission
+Prefer an explicit source/revision/range, then available symbol occurrences in the selected published
+snapshot. Use lexical/name matches to nominate alternatives. Preserve repository, document and
+configuration distinctions; identical names or supplied equivalence receipts do not establish identity.
+A truncated candidate set cannot prove that its sole visible match is unique.
 
-Resolve an entity under an explicit source view using a deterministic ladder and return ambiguity instead of guessing.
+Use the existing manifest and retained-byte lookup. Missing, stale or ambiguous explicit locations
+must remain visible; do not silently substitute a different subject. Apply the actual selected scope
+and client restrictions where data is read and returned.
 
-## Ownership
-
-- cursor/handle/qualified-name resolution ladder
-- exact name and signature compatibility
-- bounded SubjectAmbiguitySet
-- resolution evidence and assurance
-
-## Forbidden ownership
-
-- normative selection among materially different definitions
-- online repository discovery
-- final comparison or ranking verdict
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `resolve_subject(request, direct_facts, indexed_facts, budget) -> Result<ResolvedSubject, SubjectError>`
-- `build_ambiguity_set(candidates) -> SubjectAmbiguitySet`
-- `rank_resolution_basis(basis) -> ResolutionPriority`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `AMBIGUOUS_SUBJECT`, `SUBJECT_NOT_FOUND`, `INCOMPLETE_COVERAGE`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `explicit handle/cursor outranks every inferred candidate`
-- `qualified symbol outranks same-name lexical match`
-- `material ambiguity returns bounded set`
-- `renamed true analogue is not treated as local identity`
-- `same-name false positive remains unresolved`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W6 / P11**
-- Soft `src/` target: **6,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Remove unused resolution receipts, duplicate candidate copies and separate revalidation state with
+those consumers. Reuse the ordinary result and its existing window when expansion is needed.
+The [function map](FUNCTIONS.md) records current APIs; it does not freeze their signatures or require
+an additional resolver framework.

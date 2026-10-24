@@ -1,404 +1,123 @@
-# Function contract — `search-revision-store`
+# search-revision-store — source and cutover map
 
-**Status:** W2/P04 base contract with W7/P13 lifecycle hardening; no CAS implementation exists yet.
+## Current source
 
-This package owns immutable, residency-aware Search source revisions, coordinate artifacts, manifests and
-exact readback. It does not decide retention deletion, purge policy or restore admission. Lifecycle
-owners consume its vendor-neutral ports and exact receipts.
+| Location / symbols | Actual behavior |
+|---|---|
+| `immutable_object.rs` | Bounded legacy object read and immutable stage/final publication through a supplied platform. |
+| `immutable_object/context.rs` | Reimplements the same mechanics with request context, work accounting, attempted-effect phases and a receipt. The source file is about 40 KiB before tests. |
+| `ContextualRevisionObjectReceipt::staging_cleanup_deferred` | Reports that this call did not clean its stage. Successful contextual publication commonly leaves the stage behind. |
+| `LegacyRevisionObjectRead::into_bytes` | Transfers the owned object buffer without another full copy. Keep this ownership pattern. |
+| `kernel/store/*` | In-memory Pending/Active/tombstone/operation vectors driven by supplied intents/readbacks. It is not the persistent object store. |
+| `legacy_inventory*` | Old filename classification and migration inventory/reporting. |
 
-## Encrypted payload identity
+The daemon `DaemonImmutableObjectPlatform` calls the immutable-object kernel. Publication currently writes
+and syncs a stage, reads the full stage, links/publishes the final name, syncs the directory and reads the
+full final object. Existing-object reuse also reads and compares bytes. Materializer has a second copy of
+this platform with its own receipt family.
 
-`EncryptedRevisionPayload::new(plaintext_digest, plaintext_bytes, nonce, ciphertext, encryption,
-limits)` preserves the existing size/tag/nonce checks, then computes raw BLAKE3 over exactly the
-owned ciphertext through `search-contracts::blake3_bounded_bytes`. Its exact byte budget comes
-from the already-admitted ciphertext length; no new product limit is introduced. Existing default
-and custom finite ceilings, including ciphertext above the separate Source 16 MiB hash profile,
-remain valid.
+The platform durability claim is inconsistent: `sync_directory_result` calls `File::sync_all` on a Unix
+directory, while the non-Unix `sync_directory` implementation is a no-op and the wrapper still returns
+`Ok(())`. That may be sufficient for no durability guarantee, but it cannot be reported as an executed
+Windows directory flush.
 
-The ciphertext and cached digest are private. `ciphertext_digest() -> Blake3Digest32` is read-only;
-there is no caller digest, setter or unchecked payload factory. Append/replay/record checks use
-this cached identity, while backend readback must still independently observe actual stored bytes
-and match the expected digest. Wrong readback remains a refusal. Cloning preserves the exact
-immutable byte/digest pair.
+## Target API
 
-This pure owned-buffer calculation delegates the concrete hash to the shared owner. It performs no
-filesystem acquisition, object traversal or legacy object-content hashing. It proves byte equality,
-not encryption, authentication, source admission, publication or full C07 qualification. No persisted
-format is added or relabelled; correctly supplied historical BLAKE3 values are byte-compatible.
-
-## State ownership
-
-The package owns:
-
-- residency-domain derivation and object-address schema;
-- immutable CAS object/manifest write, reopen and integrity verification;
-- `SourceRevision` occurrence records and retention leases;
-- materialization/coordinate/loss-map refs needed for exact source-backed readback;
-- exact object/revision inventory and graph edges exposed to lifecycle ports;
-- tombstone/quarantine enforcement at the store boundary;
-- object deletion execution only when authorized by an exact lifecycle plan/operation.
-
-It does not own source identity, source admission, legal-hold/retention decisions, mark/sweep reachability,
-purge fence creation, publication, Qdrant deletion, handle authorization or backup-provider policy.
-
-## `derive_residency_closure`
+Exact names may follow #598's accepted handoff, but one owner must provide the following behavior:
 
 ```text
-derive_residency_closure(policy_bindings, encryption_domain, retention_domain, erasure_domain)
-    -> Result<ResidencyClosure, StoreError>
+put_object(kind, profile, owned bytes, OperationContext) -> ObjectRef
+open_object(ObjectRef, OperationContext) -> VerifiedObject
+read_ranges(ObjectRef, ranges, OperationContext) -> VerifiedRanges
+list_objects(cursor, limit) -> bounded object identities
+remove_exact(ObjectRef) -> known absent | removed | unresolved
 ```
 
-Produces the complete compatibility identity required for physical deduplication. Equal content digest
-alone is insufficient. Any mismatch in access/confidentiality/encryption/retention/erasure domain keeps
-objects physically distinct.
+`ObjectRef` binds the current-format address, kind/profile, content identity and exact length. It does not
+contain source membership, current-head or query authority.
 
-Pure, deterministic and versioned.
+## Publication sequence
 
-## `derive_object_address`
+1. Validate admitted final directory, final address/kind/profile and byte ceilings.
+2. Create one unpredictable `create_new` stage in the final directory. Retry a bounded name collision;
+   do not share a fixed temporary name between concurrent writers.
+3. Stream/write exact bytes while computing/verifying the selected content identity.
+4. Flush/sync the stage according to the supported storage profile.
+5. Publish no-clobber. If another writer already created the final name, open and verify it exactly.
+6. Verify the resulting final object once.
+7. Complete the platform-qualified namespace durability step.
+8. Remove the stage after either verified reuse or verified publication.
+9. Return `ObjectRef` and, where useful, the already verified owned bytes to the caller.
+
+Two concurrent writes of the same bytes converge on one final object. A final name containing different
+bytes is an immutable conflict. A failure before possible publication removes the stage when possible. A
+failure after possible publication is resolved by the exact final address/readback. Stage cleanup remains
+best effort and bounded; a leftover is GC input, not a successful-operation record.
+
+## Donor code already present
+
+`crates/search-control-redb/src/migration/cutover_artifact.rs` already implements the useful small sequence:
 
 ```text
-derive_object_address(residency, object_kind, content_digest, schema_version)
-    -> Result<CasObjectAddress, StoreError>
+create_new temporary
+→ write_all + file.sync_all
+→ temporary readback
+→ fs::hard_link(temp, final)
+→ remove temp
+→ directory sync
+→ final readback
 ```
 
-Uses domain-separated deterministic canonical encoding. Address contains no source path/display name and
-cannot collide across incompatible residency closures. Unsupported kind/version or zero/invalid digest
-fails closed.
-
-## `write_immutable_object`
-
-```text
-write_immutable_object(address, bytes, expected_digest, limits, deadline, cancel)
-    -> Result<AtomicObjectWriteReceipt, StoreError>
-```
-
-**Preconditions**
-
-- bytes are bounded and caller-supplied; the store performs no source acquisition;
-- address and digest match object kind/residency/schema;
-- target data root is owned and not restore-quarantined for serving writes;
-- purge tombstone does not prohibit the object/scope from re-entering Search state.
-
-**Postconditions**
-
-- writes a private temporary object under the same volume/root;
-- flushes/fsyncs according to accepted policy;
-- atomically publishes only after byte length/digest verification;
-- reopens and verifies the final object before success;
-- equal existing verified object returns an idempotent receipt;
-- conflicting existing object quarantines and never overwrites.
-
-Timeout/cancellation after possible atomic rename becomes `OBJECT_WRITE_OUTCOME_UNKNOWN`; exact reopen
-classifies committed/not-applied/conflict before retry.
-
-## `commit_source_revision`
-
-```text
-commit_source_revision(command, object_receipts, occurrence, manifests, control_port, operation)
-    -> Result<SourceRevisionCommitReceipt, StoreError>
-```
-
-Validates exact source namespace/owner generation, occurrence sequence, content digest/length,
-residency closure, raw/derived object refs, materialization/coordinate/loss maps and admission receipt.
-
-Durably commits an immutable occurrence record through a control port after all object readbacks succeed.
-`A → B → A` creates distinct occurrence revisions even when content bytes/digest repeat. Same operation
-identity plus equal command is idempotent; conflicting reuse is rejected.
-
-## `open_verified_object`
-
-```text
-open_verified_object(address, expected, budget, cancel)
-    -> Result<VerifiedObjectRead, StoreError>
-```
-
-Checks data-root/residency/tombstone/quarantine policy before opening. Revalidates object kind/schema,
-length and digest. Partial/short/corrupt reads fail closed and may quarantine the object. Returns bounded
-bytes behind an owned read guard; default diagnostics contain only object/digest/location class.
-
-## `open_verified_revision`
-
-```text
-open_verified_revision(revision_ref, current_authorization, requirements, budget, cancel)
-    -> Result<RevisionReadback, StoreError>
-```
-
-Requires exact source namespace/owner generation/revision occurrence, current residency permission,
-retention/lease state and no purge tombstone. It never resolves a current path or substitutes a newer
-revision.
-
-Readback binds source/revision IDs, content digest/length, residency closure, object receipts,
-materialization/coordinate/loss-map identities and assurance ceiling.
-
-## `resolve_native_anchor`
-
-```text
-resolve_native_anchor(revision, representation, anchor, coordinate_maps, requirements)
-    -> Result<VerifiedNativeRange, StoreError>
-```
-
-Validates anchor/revision/representation/profile/map digests and bounds. Raw-byte exact range is returned
-only when the mapping is lossless for that claim. Lossy/ambiguous mapping returns explicit lowered
-assurance or failure; it never fabricates exactness.
-
-## `acquire_retention_lease`
-
-```text
-acquire_retention_lease(target, owner, purpose, expiry, policy, control_port, operation)
-    -> Result<RetentionLease, StoreError>
-```
-
-Creates a bounded durable lease for accepted reasons such as visible projection, durable handle,
-verification job, import/export contract or recovery manifest. It binds exact object/revision/residency
-and owner/purpose/generation. It cannot target unsaved bytes.
-
-Same operation/equal lease is idempotent. Purged/tombstoned/incompatible-residency targets are rejected.
-A lease does not grant source access.
-
-## `release_retention_lease`
-
-```text
-release_retention_lease(lease, owner, control_port, operation)
-    -> Result<LeaseReleaseReceipt, StoreError>
-```
-
-Idempotent for exact lease/owner/generation. Release only removes one root; it never immediately deletes
-objects or claims they are unreachable. Mark/sweep decides later.
-
-## `enumerate_lifecycle_roots`
-
-```text
-enumerate_lifecycle_roots(control_snapshot, requested_kinds, limits, cancel)
-    -> Result<BoundedLifecycleRootPage, StoreError>
-```
-
-Exposes exact Search-owned revision/object/manifest roots and graph refs for the captured control
-generation through a vendor-neutral port. It does not compute reachability or filter out architecture-
-required root kinds. Pagination is deterministic and binds continuation/inventory generation.
-
-Unreadable/corrupt/incomplete root state is explicit and blocks a complete lifecycle root set.
-
-## `enumerate_object_inventory`
-
-```text
-enumerate_object_inventory(residency_scope, inventory_generation, limits, cancel)
-    -> Result<BoundedObjectInventoryPage, StoreError>
-```
-
-Returns exact object addresses/kinds/lengths/digests/residency classes and deletion/quarantine state,
-never source bodies. Continuation binds one immutable inventory generation. A changing inventory
-returns stale/incomplete rather than mixing generations.
-
-## `read_object_graph_edges`
-
-```text
-read_object_graph_edges(object_or_manifest, expected_digest, limits, cancel)
-    -> Result<ObjectGraphEdges, StoreError>
-```
-
-Parses only versioned Search-owned manifest schemas and returns exact child refs. Unknown/corrupt schema,
-digest mismatch, excessive depth/count or cross-residency illegal edge fails closed. It executes no
-embedded content.
-
-## `apply_exact_object_deletion`
-
-```text
-apply_exact_object_deletion(plan_receipt, exact_addresses, lifecycle_authority, operation, deadline, cancel)
-    -> Result<ObjectDeletionReceipt, StoreError>
-```
-
-Executes an exact bounded deletion batch only when the lifecycle authority binds an accepted sweep or
-security-purge plan, control/root/mark/tombstone generations, residency domain and exact object set.
-
-Broad directory/prefix/content-digest deletion is forbidden. Before dispatch, the store rechecks object
-identity and no conflicting quarantine/hold receipt. After dispatch, exact readback verifies absence or
-accepted store deletion state.
-
-Timeout/cancellation after dispatch is `OBJECT_DELETE_OUTCOME_UNKNOWN`; readback classifies complete,
-none-applied, partial or conflicting. Same operation identity cannot target different addresses.
-
-The receipt identifies authority kind:
-
-```text
-ordinary_sweep
-security_purge
-```
-
-It does not claim backup deletion or physical secure erase.
-
-## `install_purge_tombstone`
-
-```text
-install_purge_tombstone(tombstone, control_receipt, operation)
-    -> Result<StoreTombstoneReceipt, StoreError>
-```
-
-Stores/activates the non-content tombstone generation at the revision/object admission boundary. Any
-later write/import/restore/reindex attempt for the tombstoned scope/owner generation is rejected before
-object publication. Tombstone removal is not a public operation.
-
-In the implemented kernel, an installed complete-residency or whole-scope tombstone also blocks
-`active_record` and successful append/confirmation/recovery replays, including retained Active records.
-`state()` remains historical diagnostic state; it grants no active read. Exact lifecycle-authorized
-deletion and its replay remain available for purge cleanup. Refusal does not discard Pending or
-OutcomeUnknown evidence, and non-fenced keys retain their existing behavior.
-
-## `enter_restore_quarantine`
-
-```text
-enter_restore_quarantine(manifest_ref, target_root, operation)
-    -> Result<StoreRestoreQuarantineGuard, StoreError>
-```
-
-Marks restored objects/manifests as non-serving and prevents ordinary revision readback/admission until
-an accepted restore revalidation/admission receipt names them. Quarantine guard is durable and survives
-restart.
-
-## `validate_restored_objects`
-
-```text
-validate_restored_objects(quarantine, paired_manifest, tombstone_generation, limits, cancel)
-    -> Result<RestoredObjectValidation, StoreError>
-```
-
-Verifies every referenced object/manifest identity, digest, length, residency closure, schema and graph
-edge against the paired recovery manifest. Purge tombstones dominate: matching material is excluded and
-reported, not restored.
-
-Success is only object integrity; lifecycle/registry/access/publication owners still decide admission.
-
-## `admit_restored_objects`
-
-```text
-admit_restored_objects(quarantine, lifecycle_admission_receipt, publication_receipts, operation)
-    -> Result<StoreRestoreAdmissionReceipt, StoreError>
-```
-
-Moves only exact validated objects/manifests into serving eligibility after lifecycle/source/access and
-new publication/route receipts are accepted. It cannot resurrect old visible epoch or bypass current
-owner/residency/tombstone state. Partial admission remains quarantined.
-
-## Configuration functions
-
-For `revision_store`:
-
-```text
-section_descriptor()
-compiled_defaults()
-validate_section(section)
-section_digest(section)
-plan_section_change(old, new)
-```
-
-Only declared bounded quota/scheduling changes may apply live and never delete immediately. Fsync,
-atomic publish, reopen verification, residency separation, tombstone enforcement and quarantine are
-locked. Lower quota produces future retention pressure, not direct unsafe deletion.
-
-## Cancellation, deadlines, idempotency and crash semantics
-
-### Contextual legacy immutable objects (#466/#356)
-
-`read_legacy_revision_object_with_context` and
-`publish_legacy_revision_object_with_context` borrow the original
-`LegacyRevisionObjectContext`. Its checkpoint, cumulative work charging and
-possible-effect notification do not manufacture a root/source/request authority,
-deadline, cancellation flag or replacement allowance.
-
-`ContextualLegacyRevisionObjectPlatform` requires explicit metered directory,
-locator, identity and directory-durability callbacks with the same context;
-implementations must charge/poll their internal opens/native calls/allocations.
-The shared private kernel charges requested 64KiB read/write attempts (including
-short/Interrupted retries and EOF), fallible object/locator capacity, comparisons
-and other filesystem/platform attempts, with post-call and terminal polls.
-Logical work counters are not RSS or proof that synchronous calls are preemptible.
-
-`LegacyRevisionObjectContext::progress` defaults to the original full checkpoint;
-the kernel uses it only around charged CPU-only allocation/locator/comparison work.
-`held_observer_dispatch` defaults to Observe admission plus a full pre-ABI checkpoint. A qualified platform
-may use it per ABI inside a borrowed-FD-only observer with full outer checkpoints
-and progress polls after each ABI. Overrides retain the original refusal and meter;
-path opens, body I/O, effects and terminal checkpoints keep their full guards.
-
-Contextual failures retain component-local directory/staging/publication attempt
-phase, original caller refusal and any preceding object/platform failure.
-`object_code` gives a stable redacted classification; `context_cause` explicitly
-borrows the caller's own refusal. Standard Debug/Display/error chains expose no
-raw bytes, locator or platform error. Possible effects are unknown on refusal.
-
-The contextual path performs no stage unlink on success/error/Drop. Its receipt
-contains verified final identity/length/reuse and `staging_cleanup_deferred`,
-which describes this call's no-cleanup disposition rather than continued stage
-presence or cleanup/replay/reconciliation authority. Legacy entrypoints preserve
-their signatures, errors, exact grammar and close-before-readback/cleanup order;
-their private compatibility adapter alone selects the historical cleanup guard.
-No native production caller is activated by this prerequisite. Native caller,
-preparation and reconciliation adoption remains serialized under #355/#356/#348.
-All six new owning fixture groups and the adapted source oracle are
-AUTHORED_NOT_COMPILED/NOT_RUN until integrated qualification under #215.
-
-- address/residency/anchor validation is pure/deterministic;
-- write/delete/control uncertainty is resolved by exact object/operation readback;
-- immutable object publication is atomic or explicitly unknown/conflicting;
-- lease release never implies deletion;
-- sweep/purge deletion authority and exact sets are revalidated before each batch;
-- restore crashes remain quarantined and non-serving;
-- unsaved bytes never enter any revision/object/manifest/lease/restore operation.
-
-## Typed failures and reasons
-
-- `RESIDENCY_DOMAIN_MISMATCH`
-- `OBJECT_ADDRESS_INVALID`
-- `OBJECT_TOO_LARGE`
-- `OBJECT_WRITE_OUTCOME_UNKNOWN`
-- `CAS_OBJECT_CORRUPT`
-- `CAS_OBJECT_CONFLICT`
-- `SOURCE_REVISION_INVALID`
-- `SOURCE_REVISION_UNAVAILABLE`
-- `SOURCE_OWNER_GENERATION_CHANGED`
-- `ANCHOR_MAPPING_FAILED`
-- `MATERIALIZATION_LOSS`
-- `RETENTION_LEASE_CONFLICT`
-- `RETENTION_LEASE_INELIGIBLE`
-- `LIFECYCLE_ROOT_INCOMPLETE`
-- `OBJECT_INVENTORY_STALE`
-- `OBJECT_GRAPH_INVALID`
-- `OBJECT_DELETE_NOT_AUTHORIZED`
-- `OBJECT_DELETE_OUTCOME_UNKNOWN`
-- `OBJECT_DELETE_PARTIAL`
-- `PURGE_TOMBSTONE_CONFLICT`
-- `RESTORE_PENDING_REVALIDATION`
-- `RESTORE_OBJECT_INVALID`
-- `RESTORE_ADMISSION_BLOCKED`
-
-## Required tests / qualification evidence
-
-- equal bytes deduplicate only under complete compatible residency closure;
-- cross-domain physical dedup/address collision denied;
-- temporary write/fsync/atomic rename/reopen and every crash boundary;
-- timeout after atomic rename reconstructs success or conflict by exact readback;
-- `A → B → A` occurrence revisions remain distinct;
-- exact revision readback never substitutes current path/newer revision;
-- UTF-8/CRLF/UTF-16/lossy coordinate and anchor fixtures;
-- durable lease purpose/owner/expiry/idempotency and unsaved rejection;
-- lease release preserves objects until mark/sweep proof;
-- root/inventory pagination stays one generation and reports corruption/gaps;
-- manifest graph cycles/depth/schema/residency violations fail closed;
-- exact deletion only with accepted sweep/purge authority and exact addresses;
-- delete timeout applied/none/partial/conflict readback matrix;
-- broad/prefix/digest-only deletion path absent;
-- tombstone blocks write/import/reindex/restore resurrection;
-- restore remains quarantined across restart and until exact admission receipts;
-- paired manifest/object/residency/purge mismatch rejected;
-- ordinary sweep/security purge receipts remain distinct and never claim secure erase;
-- fake control/lifecycle/source ports prove no policy/retention ownership leakage;
-- public/default diagnostics contain no source bodies, secrets or unrestricted paths.
-
-## Opaque read-buffer ownership
-
-Legacy immutable-object reads keep their buffer in a private zeroizing guard
-before the first read and through partial-read, length, native-identity and
-terminal-context refusals. The same original context reserves bounded wipe work
-before allocation; cleanup does not depend on a later successful checkpoint.
-The public read observation and explicit `into_bytes() -> Vec<u8>` handoff stay
-compatible. An extracting caller owns subsequent cleanup. The daemon contextual
-adapter installs its private guard immediately, before any fallible checkpoint.
+Use this as an internal code donor while deleting the migration owner. Git's loose-object finalization
+confirms the same temporary-to-content-addressed-final and temporary-removal pattern.
+
+Do not copy its fixed temporary basename into a concurrent object store. Do not copy its over-conservative
+rule that byte-identical readback after an unclassified native error can never resolve the desired final
+state; object publication recovery is determined by whether the exact content-addressed final object now
+exists and verifies, not by proving which process call created it.
+
+## Windows finalization boundary
+
+- `hard_link` requires same-volume filesystem support; creating the stage in the final directory handles
+  the volume issue but not an unsupported filesystem.
+- the current Windows directory sync is a no-op; exact final readback is not a power-loss durability test;
+- select and qualify a supported native no-clobber/write-through move/link strategy for the supported
+  Windows filesystem, or expose a weaker durability profile explicitly;
+- test competing writers, destination already present, antivirus/file sharing, crash before/after final
+  namespace change and restart before committing the redb source/preparation pointer;
+- never silently fall back to overwrite, copy/delete or a receipt-only success.
+
+The source/preparation pointer is committed only after the final object is known to satisfy the selected
+storage profile. If that profile cannot establish crash durability, the application must report that fact
+rather than claim a stronger guarantee.
+
+## Range and integrity reads
+
+- never reacquire the live pathname;
+- reject foreign/corrupt kind/profile/length before returning evidence;
+- enforce the request's original absolute deadline and cancellation;
+- reserve input bytes before allocation/read;
+- group selected ranges by object and merge same-basis overlaps;
+- share a required full integrity pass across those ranges;
+- return exact coordinates and scanned-byte accounting.
+
+Do not represent a digest field returned beside arbitrary bytes as verification.
+
+## GC boundary
+
+The object store enumerates and deletes exact objects. Reachability belongs to current source heads,
+current/pending view manifests and live view guards. Registering an object before or during creation may
+help discover crash debris; it must not become a second permanent graph or operation journal.
+
+Compute one bounded deletion batch from a coherent root snapshot. Recheck/delete only exact unreferenced
+addresses. On Windows an open-handle/share-mode conflict may make deletion fail; keep the object visible for
+a later pass. A failed delete is not evidence that the object is referenced and is not a reason for a
+separate tombstone database.
+
+## Remove after cutover
+
+- contextual compatibility platform and duplicate materializer artifact platform;
+- deferred-stage receipt/disposition APIs;
+- in-memory append/recovery/purge operation histories with no current caller;
+- legacy inventory/migration codecs after unsupported old roots are isolated;
+- old encrypted/DIRECT object variants after their last declared reader moves.

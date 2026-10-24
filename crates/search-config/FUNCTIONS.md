@@ -1,131 +1,251 @@
-# Function contract — `search-config`
+# search-config — source audit and direct replacement
 
-**Status:** W1 pure implementation complete; concrete acquisition and runtime application remain caller-owned.
+## Gross source inventory
 
-All functions are pure and I/O-free. Callers capture file bytes, environment variables, CLI values,
-platform facts, accepted capability receipts and time before invoking this crate.
+Public main `c8e38b6`:
 
-## Shared rules
+| Area | Gross production source before tests |
+|---|---:|
+| `search-config/src` | ~158.0 KiB |
+| daemon `config_composition/kernel*` | ~50.0 KiB |
+| combined | ~208 KiB |
 
-- Input bytes are bounded before allocation and must be UTF-8 without BOM under [TOML_PROFILE_2.md](TOML_PROFILE_2.md).
-- Precedence is `defaults < file < environment < cli`, subject to each field's override allowlist.
-- One invalid section rejects the whole candidate snapshot.
-- Unknown sections, keys, duplicate keys and unknown load-bearing fields fail closed.
-- Plaintext secrets are invalid in every layer. Only explicitly typed opaque `SecretRef` values may pass.
-- Every returned diagnostic is redacted and bounded.
-- Equal canonical inputs produce byte-identical snapshots, fingerprints, deltas and plans.
+`identity_tests.rs` adds ~15.1 KiB and daemon config tests add substantially more. This is not a promised net
+deletion; concrete settings, bounds and input capture remain. It shows the cost of preserving a generic
+platform around a small local settings model.
 
-## Implemented representation notes
+## Current package modules
 
-- Optional capability fields use an explicit `ConfigValue::Absent`; absence is never inferred from a missing higher-precedence key.
-- New effective snapshots compute config-owned BLAKE3/shared deterministic CBOR v2. ConfigFingerprint preserves algorithm/profile/revision in equality and serialization. restore_legacy_v1 is decode-only and cannot create a current snapshot; source must be rebuilt. FILE schema2 and fingerprint revision2 are independent version dimensions (VERSIONED_REBUILD); schema2 changes the snapshot header value and digest, preserving its row layout/domain/tag.
-- File parsing delegates syntax to the maintained `toml_parser` event parser. Root `schema_version=2` and `profile` appear once before flat bare-name tables. Bare keys, booleans, decimal i64, single-line strings and flat string arrays are supported; quoted/dotted keys, nested/array/inline tables, nested arrays, multiline strings, floats/datetimes and non-decimal integers fail closed. Schema1 files return `UnsupportedSchemaVersion`.
-- Ordinary `Debug` representations redact unvalidated text, paths and opaque secret references.
-- `ConfigDocument` Debug emits only schema, profile presence/byte extent, source kind and entry/declared-section counts. It does not traverse captured profile text, names, values, source refs or digests. The same representation applies when `ConfigLayers` embeds the document; its separate externally selected `requested_profile` remains caller-authorized metadata. Debug changes no data/accessor or persisted v1 bytes and constructs no internal diagnostic String.
-- File parsing and `ConfigDocument::from_entries` share one private construction budget. Sections (including empty file tables), entries and fields per section are bounded before map growth or section clones. Strings use the actual donor decoder for an allocation-free UTF-8 count, builder charge and exact-capacity fill/length check; list item counts are charged before each item decode/push. Decimal normalization uses a fixed stack sink and native i64 conversion. No copied string/numeric grammar remains.
-- `ConfigLimits::W1` adds aggregate ceilings: identifier bytes 1 MiB, decoded value bytes 4 MiB and list items 8,192 per layer. Identifiers count the profile once, declared section names once and both path components for each entry. Value bytes count text/list UTF-8 plus boolean=1 and integer=8; resets contribute zero. Per-identifier/text/list limits also apply to caller-owned captured values before configuration collection growth. These are logical payload/count ceilings, not an allocator-resident-byte measurement.
-- Typed constructor header rules remain unchanged: positive schema, no Defaults document, profiles only on File. File profile is optional in `from_entries` and mandatory in `parse_document`; typed captures make no TOML syntax claim. File grammar is `eliot-config-toml@2` only, with both root headers required before the first table. W1 adds 131,072 lexer tokens and 4 MiB logical token-storage ceilings, checked before reservation/push. Fixed content-free errors require no diagnostic path buffer; sticky failure prevents subsequent growth/success even if the donor continues. Canonical rows, tags and layer/descriptor/secret semantics remain unchanged; schema2 deliberately changes the snapshot header value. Fixture execution remains deferred.
+| Module | Current behavior | Replacement |
+|---|---|---|
+| `document`, `builder`, `decode`, `syntax` | Restricted TOML event receiver, double-pass string decode, generic `ConfigDocument`, section/entry accounting. | Bound file bytes once and decode concrete settings with the selected high-level `toml`/Serde donor. |
+| `registry`, `section`, `value`, `names` | Dynamic field/section descriptors, generic values, owner names, security floors, allowed sources, action sets. | Concrete Rust fields, direct defaults/range validation and selected override policy. |
+| `merge`, `builder`, `environment` | Generic file/env/CLI layer operations and provenance. | Small optional-layer merge over real setting structs. |
+| `canonical_identity`, `fingerprint`, `snapshot` | Canonical CBOR-like snapshot identity and BLAKE3 fingerprint used by receipts/status. | Ordinary typed equality/current settings revision only when a real owner needs it. |
+| `diff`, `action`, `plan` | Generic action lattice and ordered receipt requirements across capabilities. | Direct live update, explicit restart or publication generation switch. |
+| `redact` | Projects the complete generic snapshot according to field policies. | Serialize a small selected redacted status struct from actual running state. |
+| `limits`, `error` | Very broad parser/registry/canonical limits and closed errors. | Retain only file/field/list/value/output bounds and useful errors. |
 
-## Operations
+## Current daemon composition
 
-### `parse_document(bytes, source, limits) -> Result<ConfigDocument, ConfigError>`
+| File | Current behavior / defect |
+|---|---|
+| `process.rs` | Parses config flags twice (`String` and `OsString` variants), rejects non-UTF8 config paths, uses `std::env::vars()` before prefix filtering and performs metadata check → unbounded `fs::read` → length check. |
+| `registry.rs` | Registers instance, mandatory secrets, control migration, source admission, lexical, query, optional semantic and source-root fields with owner/digest/action metadata. |
+| `snapshot.rs` | Reconstructs the registry, merges/project-validates every section, requires `ValidatedSecretsConfig`, builds full fingerprinted snapshot. It retains no typed query/lexical/control settings fields. |
+| `activation.rs` | Diffs fingerprints, builds action/receipt plan and refuses candidate when receipt enum values are absent. It executes/observes none of those effects. |
+| `readiness.rs` | Gates actual search/indexed availability on caller-supplied `AcceptedReceipts` booleans; `optional_profiles.semantic=true` requires optional gate acceptance even without a semantic handler. Returns a configuration fingerprint as readiness evidence. |
+| `root_locators.rs` | Projects `source_root_locators.entries` into bounded `RootBindingId -> PathBuf` hints used by DIRECT commands. Useful behavior moves to typed settings. |
+| status/diagnostics | Rebuilds redacted generic view and manually formats fingerprint-heavy JSON rather than serializing actual running component state. |
 
-Validates byte/UTF-8/BOM/LF/CRLF framing, bounded donor tokens and the sole schema2 file profile,
-duplicate keys/tables, value shape/depth and decoded collection budgets. Lone CR is rejected.
-It performs no path/environment expansion and never reads another source. Failure returns no
-partial document or donor diagnostic. Full grammar and migration rules are in TOML_PROFILE_2.md.
+## Observed callers and startup refusal
 
-### `ConfigDocument::from_entries(schema_version, requested_profile, source, entries, limits)`
+Caller search at `5af8cde5` distinguishes three paths:
 
-Admits caller-owned captured typed entries through the same private budget as file parsing, without cloning text/list values. Checks duplicate paths before insertion; failures return no partial document. Acquisition and source-digest encoding remain caller-owned. Explicit `ConfigLimits` struct literals must supply the three new aggregate fields.
+| Actual consumer | What is consumed | What this does not establish |
+|---|---|---|
+| `app/kernel/status.rs` and `public_runtime_service/kernel/runtime.rs` → `effective_from_process` | Merged config for shell/DIRECT service startup, readiness and diagnostics. Invalid/refused config can stop startup. | `query.limit`, lexical/profile, root and admission declarations are not passed to their operational handlers. A status field is not an applied setting. |
+| `owner_composition/kernel/direct_registry_command.rs::capture_hints` → `RootLocatorHints`, then `fresh_root.rs::requalify_roots` | Bounded `RootBindingId -> PathBuf` locator hints for already selected/admitted roots. This input accepts only `source_root_locators`. | A locator does not admit a new member, set source policy or prove a complete inventory. Preserve this real consumer during cutover. |
+| `owner_composition/kernel/native_dek_selection.rs::capture_candidate` → `RevisionDekSelectionPolicy::from_config` | The explicit DEK-selection command checks the backend and fingerprint tag, then binds the fingerprint and secrets-section digest. | It does not apply lease TTL, rotation grace or the Qdrant secret reference. Change this narrow caller with its actual object/key owner; do not delete shared protection code as provider-only machinery. |
 
-### `register_sections(descriptors) -> Result<ConfigRegistry, ConfigError>`
+These paths are source callers, not proof of successful command routing. The DIRECT service's serve command
+is shadowed by the earlier registry selector in the [daemon entry chain](../../bins/eliot-searchd/README.md#exact-production-entrypoint-order).
+None was executed here. `derive_readiness` also hardcodes
+`configuration_ready` and `endpoint_ready` to true; neither proves an opened root or a listening endpoint.
+The replacement below constructs owners from actual settings and reports observations of those owners.
 
-Rejects duplicate names, duplicate field paths, unknown reload classes, owner mismatches and conflicting
-secret policies. Registration order cannot affect the registry digest.
+`query.limit` is registered with default 10 and `ApplyLive`. Startup builds defaults and a candidate, then:
 
-### `merge_layers(defaults, file, environment, cli, registry) -> Result<MergedConfig, ConfigError>`
+```text
+try_activate(defaults, candidate, empty_receipt_set)
+```
 
-Applies deterministic field-level precedence. Arrays, maps, policies, artifacts and secrets remain
-file-only unless the descriptor explicitly permits a bounded alternate representation.
+A valid non-default limit therefore returns `DAEMON_CONFIG_PARTIAL_REFUSED`. The fixture
+`startup_partial_refuses_and_retains_defaults_without_leaks` locks in this behavior. Adding a `LiveApply`
+enum value would only bypass the gate; it would still not pass the value to the direct query handler.
 
-### `project_section(merged, descriptor) -> Result<ConfigSectionInput, ConfigError>`
+## Current field disposition
 
-Returns only keys owned by the target descriptor, with field provenance and explicit reset markers.
-A capability cannot inspect another package's section through this operation.
+| Registered field/family | Target |
+|---|---|
+| `instance.mode` | Remove if only `standalone` exists; otherwise a direct closed startup enum. |
+| `instance.data_root` | Direct `PathBuf`, captured once. |
+| `[secrets]` backend/lease/rotation/Qdrant ref | Remove generic section; storage/Qdrant/restricted-client own concrete values. |
+| `control.durability` / `migration_epoch` | Remove pre-release migration/fixed receipt semantics; current root format/durability is selected directly. |
+| `source_admission.allow_generated` | Keep only if the simplified policy evaluator actually consumes it; otherwise delete. |
+| `lexical.profile_id` | Direct retrieval profile setting; change requires normal generation/publication. |
+| `query.limit` | Direct bounded default used by the query owner for new requests. |
+| `optional_profiles.semantic` | Do not gate lexical readiness. Keep only when a real semantic handler/profile is selected. |
+| `source_root_locators.entries` | Preserve the existing bounded ID-to-path lookup while its DIRECT consumer remains. Keep relocation hints separate from an explicit source selection/admission operation; do not treat them as corpus membership. |
+| Qdrant/process settings | Direct endpoint/optional managed profile in `[qdrant]`. |
+| storage protection | Direct root storage profile in `[storage]`. |
 
-### `assemble_effective(validated_sections, selected_profile) -> Result<EffectiveConfigSnapshot, ConfigError>`
+The table describes target disposition, not applied runtime settings. Do not preserve unused fields for
+documentation parity or turn the legacy locator map into a new membership authority.
 
-Requires one validated result for every registered effective section. Rejects missing, duplicate,
-stale-descriptor and profile/gate mismatches.
+## Target structures and merge
 
-### Private canonical section and snapshot compute
+The inspected lock at `5af8cde5` contains `toml_parser 1.1.4+spec-1.1.0`, used by the custom decoder.
+It contains neither `toml` nor Serde. High-level typed TOML is the replacement choice, not an installed API;
+pin its compatible version/features and regenerate the lock with the consuming code change. See the
+[donor register](../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md).
 
-ValidatedSection::new(input, selected_profile, limits) computes a fallible section equality digest internally. The public caller-digest parameter, arbitrary fingerprint iterator and package canonical writer are removed. Private snapshot compute hashes the existing finite ordered BTreeMap through shared blake3_canonical_array; plaintext secrets remain structurally forbidden.
+Suggested shape; exact ownership follows final consumers:
 
-Section domain is `eliot/cbor/config-section/v2`. Its ordered root contains one header row
-`[name, owner, descriptor_revision, registry_digest, requested_profile, selected_profile]`,
-then field rows `[key, value_kind, payload, source_kind, source_ref, source_digest, reset_bool]`.
-Value kinds are Absent0/Boolean1/Integer2/Text3/SecretReference4/StringList5; source kinds use
-Defaults0/File1/Environment2/Cli3. Negative integers use I64, nonnegative U64; absent is Null;
-opaque references are text and list order is retained. False reset is explicit.
+```text
+FileSettings {
+  instance?: InstanceLayer
+  storage?: StorageLayer
+  qdrant?: QdrantLayer
+  source?: SourceLayer
+  lexical?: LexicalLayer
+  query?: QueryLayer
+}
 
-Snapshot domain/profile is `eliot/cbor/config-snapshot/v2`. Its header is
-`[config_schema_version, selected_profile]`, followed by ordered section rows
-`[name, owner, descriptor_revision, registry_digest, section_v2_digest]`.
-Both root counts include the header: at most4,096 rows, hence4,095 fields/sections.
+DaemonSettings {
+  data_root: PathBuf
+  storage: StorageSettings
+  qdrant: QdrantSettings
+  source_roots: Vec<PathBuf>
+  source_policy: SourcePolicySettings
+  lexical: LexicalSettings
+  query: QuerySettings
+}
+```
 
-Borrowed identifiers/profile/source refs, value payload and list counts are checked against
-ConfigLimits before row clones/list growth; assembly also charges before name/owner clones
-and map insertion. Logical construction sums fixed revision8, digest32, kind8, source-kind8,
-reset1 plus borrowed payload under the caller/shared8MiB ceiling. This is not a CBOR estimator
-or heap measurement. The shared encoder alone checks exact domain-inclusive bytes/depth.
-Failures return content-free errors and no partial identity. These are equality identities
-over exact supplied provenance; they do not prove package validation or runtime effects.
+### Sparse layers and validation
 
-### `diff(old, new) -> Result<ConfigDelta, ConfigError>`
+This is the selected replacement policy, not the legacy parser's behavior or a shipped file schema.
+Decode closed nested structs with `#[serde(deny_unknown_fields)]` on **each** struct; the attribute on the
+outer struct does not close its nested fields. Do not combine it with `flatten`. Every layer field is optional,
+including fields inside an optional section. An absent section and a present empty section both inherit.
+Serde defaults, if used for layer structs, produce only absent fields; application defaults are applied once
+to the final settings, not inserted into each incoming layer. See the [Serde attributes](https://serde.rs/container-attrs.html)
+and [field defaults](https://serde.rs/field-attrs.html), checked 2026-10-23.
 
-Produces stable key-path deltas and marks restrictive changes. It never treats absence as reset unless
-the field schema explicitly defines reset semantics.
+Apply defaults < file < selected environment < CLI, field by field. Omission inherits; `false`, `0` and an
+empty list are explicit values. A supplied list replaces the lower-precedence list in full. Do not merge
+lists by position, append implicitly or reinterpret an empty source list as all sources. Repeated scalar
+CLI options, including aliases for the same field, are errors. A selected repeated list-item option builds
+one bounded CLI list; it is not a sequence of appends to file settings. Exact flag names ship with the parser.
 
-### `plan_reconfiguration(delta, descriptors) -> Result<ReconfigurationPlan, ConfigError>`
+Decode every supplied layer before constructing owners. Invalid UTF-8 file content, malformed TOML, unknown
+nested keys, duplicate definitions, wrong types and integers outside the chosen Rust representation fail even when a higher layer
+would override them. TOML duplicate-definition rejection belongs to the parser, not `deny_unknown_fields`.
+After merging, validate domain ranges, cross-field constraints and checked unit conversions once on the
+effective value. Do not use truncating casts or unchecked duration/size arithmetic. Bound captured file/value
+bytes, selected entry counts and collected CLI lists before decode/merge; an override cannot excuse oversized
+input. The small file cap bounds TOML input, not an exact parser heap or CPU allowance.
 
-Preserves every required obligation. A plan may combine security barriers, dependency restarts,
-projection rebuild and collection-generation cutover; it must not collapse them to a lossy scalar.
+Ignore unrelated environment entries without decoding their values. Reject unknown names within the selected
+`ELIOT_SEARCH__` namespace, including malformed names, so misspelled settings do not silently disappear.
+Only known text fields require Unicode conversion; path fields retain their OS values.
 
-### `redacted_view(snapshot, disclosure) -> Result<RedactedConfigView, ConfigError>`
+Examples of that policy, independent of the final field/flag spelling:
 
-Returns schema/fingerprint/owner/action metadata and allowed scalar summaries only. Secret refs, raw
-environment values, source/query content and absolute paths are excluded or represented by digests and
-location classes. A path exceeding the shared 8 MiB digest ceiling returns only text-kind/byte-extent
-metadata, with no digest or raw path. Ordinary bounded paths retain their exact standard SHA-256 bytes.
+| Inputs | Effective result |
+|---|---|
+| Default limit 10; file 20; environment 30; CLI 40 | 40. |
+| File limit 20; a higher layer contains an empty query section | 20; omitted fields do not reset lower values. |
+| File list `[A, B]`; higher layer `[]` | Empty selection; no append or wildcard. |
+| File Boolean `true`; higher layer `false` | `false`, not absence. |
+| Representable limit 0 in file; CLI 5; final minimum 1 | 5 is valid; without the override, reject 0. |
+| Wrong-type or unrepresentable file limit; valid CLI limit | Reject the malformed lower layer. |
 
-Both entry count and complete logical payload are charged before profile/path/text clones, path hashing
-or map growth. W1 `max_diagnostic_bytes` is 1 MiB. The header charges fingerprint=32 + algorithm/profile UTF-8 + revision4 bytes, selected
-profile UTF-8 bytes and omitted count=8. Each entry charges section/key UTF-8 bytes plus value tag=1
-and payload: absent/hidden=0, boolean=1, integer=8, visible text bytes plus truncation flag=1, list
-extents=16, path class/digest=33, metadata kind/extent=9. These architecture-independent logical bytes
-exclude serialization framing/escaping and allocator/map overhead; this is not a measured heap bound.
-Overflow or insufficient header capacity returns an error without a partial view; invalid limits
-reject. An entry exceeding either ceiling is omitted whole; later smaller entries may still fit in
-canonical order. The daemon status adapter maps a failed view to a fixed content-free read-only error
-record. Runtime readiness calculations remain unchanged. The immediate status schema is eliot.effective-config-status-v2 and preserves fingerprint algorithm/profile/revision, rejecting a report/snapshot identity mismatch. It reports the effective snapshot schema and supported_file_syntax_profile metadata; that support value does not assert captured-file provenance.
+### Paths and diagnostics
 
-### `validate_environment_key(name, registry) -> Result<ConfigKeyPath, ConfigError>`
+Keep config-file locators and supported path overrides from `args_os`/`vars_os` as `OsString`/`PathBuf`.
+Convert only selected textual fields. TOML file contents and string paths are Unicode: they cannot encode
+arbitrary Unix path bytes or Windows unpaired surrogates. The baseline uses Unicode paths in TOML and OS-valued
+CLI/environment path inputs where exposed; no lossy conversion or invented byte-escape format. This distinction
+also applies to retained locator hints. A list of OS paths must not be split on a delimiter that can occur in
+a pathname. Reject NUL/invalid OS paths at the actual path owner. See [TOML 1.1.0](https://toml.io/en/v1.1.0).
 
-Accepts only exact `ELIOT_SEARCH__SECTION__KEY` mappings for registered scalar fields. Unknown prefixed
-variables are startup errors rather than ignored typos.
+The [inspected TOML error API](https://docs.rs/toml/latest/toml/de/struct.Error.html) is
+`1.1.8+spec-1.1.0` as of 2026-10-23. `span()` is optional and indexes the original document. Use a valid
+span to report bounded location information; otherwise report the known field/source label and error class.
+Do not unwrap the span, expose raw file/value excerpts through automatic `Display`/`Debug`, or dump argv/environment: parse
+errors may contain a mistakenly supplied credential. Secret bytes are not ordinary config values.
 
-## Failure and retry semantics
+## Capture implementation
 
-Pure failures are deterministic and never partially publish state. Retrying identical inputs returns
-the same result. Cancellation and deadlines are caller concerns because these operations are bounded
-CPU-only work; implementations still accept an optional budget/cancellation checkpoint for hostile
-input protection.
+```text
+capture cwd; parse args_os once into config locator and typed CLI layer
+→ open selected file once; verify the opened handle is a regular file
+→ read at most max_file_bytes + 1
+→ reject invalid UTF-8, then toml::from_str<FileSettings>
+→ vars_os, check selected namespace/field, build typed environment layer
+→ merge + validate DaemonSettings
+```
 
-## Required conformance fixtures
+`Read::take` bounds bytes but not waiting time; local regular-file capture may remain synchronous under the
+startup bound. Do not add a source-custody protocol for configuration.
 
-`same_layers_same_fingerprint`, `duplicate_unknown_wrong_type_fail_closed`,
-`override_allowlist_enforced`, `plaintext_secret_rejected_every_layer`,
-`package_section_collision_rejected`, `mixed_reconfiguration_obligations_preserved`,
-`redacted_view_non_disclosure`, and `parser_merge_are_io_free`.
+Select the high-level `toml` `parse`/`serde` features and Serde derive with the actual code/lock change;
+the [verified decoder API](https://docs.rs/toml/latest/toml/fn.from_str.html) was
+`1.1.8+spec-1.1.0` on 2026-10-23. Check `max_file_bytes + 1` for overflow. Configuration lookup has no implicit
+current-directory/parent search. An explicitly named missing or unreadable file is an error; when no file is
+selected, use defaults plus selected overrides. Resolve a relative config-file locator against captured startup
+cwd first. Relative TOML paths use that selected absolute config pathname's parent; CLI/environment paths use
+captured startup cwd. Resolve each layer's paths before merging; a later cwd change cannot retarget a setting.
+An optional future fixed application config location must be explicit in its parser/help.
+
+## Startup and status
+
+Construct each owner with its direct settings. Retain `Arc<DaemonSettings>` or equivalent current value for
+status/new request defaults. If a value is persisted, use one typed current redb row only when restart must
+remember a runtime-applied change; process file/env/CLI inputs normally remain the startup source.
+
+Readiness is factual:
+
+```text
+owner/root/control/object ready?
+Qdrant connected and selected generation verified?
+current PublishedView exists?
+handler constructed?
+```
+
+No accepted receipt booleans, qualification digest or configuration fingerprint can turn false into true.
+An optional unavailable handler does not disable baseline Search.
+
+## Runtime change semantics
+
+- `query.limit`: optional direct atomic/current setting for future requests;
+- source list/policy: run actual reconcile/publication operation or require restart;
+- Qdrant endpoint, root/storage profile, process mode: restart;
+- lexical/model/profile/schema: new generation/publication;
+- unsupported field: reject before changing retained settings.
+
+Only publish a new applied settings value after the concrete operation succeeds. Possible Qdrant effects use
+publication's pending artifact; there is no config transaction journal.
+
+## Delete after cutover
+
+- all generic document/parser/builder/value/registry/section/snapshot/fingerprint/diff/action/plan/redact APIs;
+- daemon registry, `EffectiveDaemonConfig` generic snapshot, `try_activate`, receipt sets and accepted readiness receipts;
+- generic config source digests/provenance and schema-profile compatibility;
+- full snapshot/manual status JSON and identity/golden fixtures;
+- historical section packets/fields with no runtime consumer.
+
+If typed decode/merge/validation is small, move it into daemon/config owner and remove the crate rather than
+leave a generic facade.
+
+## Retired repository catalogues
+
+Removed catalogues do not define a supported schema. Publish a small runnable example only with its connected
+typed settings consumers; do not restore wave/section registries or no-op examples for old fixtures. The
+[R029 record](../../docs/audit/ANALYSIS_REGISTRY.md#r029-configuration-catalogue-removal-and-typed-input-policy)
+owns removal evidence. Storage lifetime remains with [stopped-root maintenance](../search-runtime/search-retention/FUNCTIONS.md).
+
+## Focused checks
+
+- non-default values reach their actual owners;
+- file < env < CLI precedence for supported fields;
+- nested unknown/duplicate/type-invalid fields fail before owner construction; final domain bounds follow the layer examples;
+- unrelated non-Unicode environment entry cannot panic;
+- non-Unicode OS path inputs survive capture; TOML paths obey the stated Unicode/relative-base policy;
+- growing/oversized file cannot exceed allocation ceiling;
+- status reflects retained runtime values and actual readiness;
+- optional semantic absence does not block lexical Search;
+- supported live update and restart-required change are distinct;
+- no fingerprint/receipt can claim application of an unperformed effect.

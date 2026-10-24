@@ -1,60 +1,99 @@
-# Architecture entry point
+# ELIOT Search — architecture
 
-The combined master is:
+ELIOT Search helps agents and people understand large codebases and document collections without
+reading the entire corpus. It finds useful evidence, shows where it came from and makes the next
+source read or exact check obvious.
 
-```text
-ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md
-```
+This manifesto stays in the lead developer's context. The
+[implementation guide](../implementation/README.md) owns code locations, integration and donor choices.
+It overrides conflicting requirements in the historical 8.4 design and old task packets.
 
-It contains multiple historical layers in one file. Read them with the following authority boundary.
+## Product
 
-## Current authority
+A user selects local repositories or corpora, indexes them and asks a question. Search returns relevant
+files, symbols or document ranges with short excerpts, revision identity and clear gaps. The user can
+open the exact evidence, orient themselves in an unfamiliar project and compare implementations.
 
-### Part I — ELIOT Search Architecture 8.4
+The application works on its own through a CLI and local client interface. Large repositories and
+portfolios are a core workload. A model, agent controller or ELIOT integration is not required.
 
-Part I is the normative product architecture. Its embedded byte range and recorded SHA-256 remain the
-source of truth for:
+## What a useful result means
 
-- source/revision/materialization/projection identity;
-- Qdrant, redb and immutable-storage responsibilities;
-- access, currentness, publication and query invariants;
-- portfolios, retrieval, comparison, exact proof, handles and lifecycle;
-- standalone/provider behavior and qualification requirements.
+- A citation corresponds to the exact source revision that supplied its bytes.
+- A ranked result helps navigate; it does not prove exhaustive coverage or absence.
+- An explicit exact check can cover one stated, actually scanned inventory.
+- Changes become searchable incrementally. Restart preserves committed state; a lost index rebuilds.
+- Unsupported formats, missing revisions, stale observations and unfinished work remain visible.
+- Interactive requests stay bounded and cancellable while background indexing progresses.
+- Foreground queries and evidence reads take priority; background preparation/indexing yields under resource pressure.
 
-### Part II — Codex Handoff 2.7
+## Design principles
 
-Part II is historical implementation scaffolding. Its P00-only entry sequence predates the current
-implemented workspace and the accepted product-boundary corrections. It may help explain package intent,
-but it is **not current implementation authorization** and cannot require ticket issuance, launch-state,
-writer leases or replay of an obsolete wave plan.
+**Source truth has one owner.** Retained source bytes and their coordinates establish evidence.
+Qdrant is the only indexed retrieval engine. Control storage tracks current application state.
+Search does not maintain another search database or parallel authority for the same fact.
 
-When Part II conflicts with current source, an accepted product ADR, accepted public contract or a current
-maintainer issue/PR, use the current product source/decision while preserving Part I invariants.
+**One coherent view.** A query uses one explicit scope and one published view. Incomplete writes never
+become a mixed visible index. Recovery resolves real unfinished effects. Ordinary reads and pure
+transformations need no durable receipts.
 
-### Audit registers and later appendices
+**Scope is selected from a view.** The published view already fixes its source memberships, route,
+profiles and evidence bindings. A request selects a subset of that view; a source update publishes a new
+view. The local product needs no parallel immutable corpus/portfolio authority, overlap proof, scope digest
+or security checkpoint protocol around that selection.
 
-Audit registers record historical findings and intended checks. They are neither runtime behavior nor
-proof that a capability has been implemented or qualified.
+**Views own lifetime.** Current and pending views, plus live query windows derived from them, keep their
+manifests and referenced artifacts alive. After a view is no longer acquirable and its last guard is gone,
+its derived data may be reclaimed. Ordinary local operation needs no universal lease, legal-hold, purge,
+mark-and-sweep or restore platform.
 
-## Accepted product clarifications
+**Results are evidence, not capabilities.** A normal card carries source, revision, location and excerpt.
+Paging or bounded expansion may use one short-lived query window derived from the pinned view. That window
+is not a second authority, durable history or bearer-security system and may expire on disconnect/restart.
 
-- [ADR 0005](../adr/0005-standalone-search-product-and-controller-boundary.md) — Search is standalone and
-  does not own agent orchestration.
-- [ADR 0006](../adr/0006-agent-analysis-framework-product-scope.md) — Search is a Qdrant-backed
-  large-corpus analysis/navigation framework for agents, not only a locator.
+**Connected handlers define availability.** The application can perform an operation when its real handler
+and dependencies are constructed. A capability name, registry revision, descriptor digest or qualification
+receipt does not make an absent handler work. Optional client advertisement is derived from connected
+handlers and is never request authorization.
 
-These ADRs clarify implementation ownership and product interpretation without weakening Part I's
-source-truth, access, currentness, Qdrant, exact-proof or qualification requirements.
+**Local by default.** The baseline serves the owning OS account and explicitly selected sources.
+It neither executes indexed material nor silently broadens the corpus. Restricted clients, remote
+adapters and encrypted storage are separate needs with real consumers, not universal prerequisites.
 
-## Working rule
+**Complexity must buy useful behavior.** Prefer a direct call and a concrete data structure. An
+abstraction earns its place by removing duplication or isolating a real dependency or effect.
+A capability name, agent assignment or hypothetical future backend does not justify another subsystem.
 
-For implementation work, read:
+**Libraries supply established machinery.** Reuse parsing, matching, serialization, storage and
+transport implementations. Search adds source semantics and useful results. It does not need its own
+compiler, transaction platform, lifecycle operating system or general cryptographic protocol.
 
-1. relevant Part I sections;
-2. accepted ADRs;
-3. the accepted public/package contract;
-4. the current issue/PR and compiled source reality.
+**Hashes have a specific purpose.** Content identity and necessary integrity checks use real hashes.
+A local request, plan, configuration, state transition or review does not need a digest or signature
+merely to look trustworthy. A trusted local exchange needs no separate cryptographic identity system.
 
-Do not restart from P00 merely because Part II says `Entry point: P00 only`. Do not implement generic
-repository ticket/lease/controller machinery in Search. Continue the actual product spine around Qdrant,
-source evidence, query analysis and standalone delivery.
+**Replace obsolete designs.** Internal and pre-release formats carry no backward-compatibility promise.
+Legacy implementations and their fixtures do not constrain the new product. Original files and sole
+retained copies remain user data; simplification never silently destroys them.
+
+**Transient work is disposable.** Staging files, temporary pages and failed unpublished objects are not
+product history. Success removes them; interruption may leave bounded, discoverable debris for ordinary
+GC. They never justify a permanent receipt archive or another lifecycle database.
+
+**Cost follows useful work.** Normal updates touch changed content. Storage does not grow with an eternal
+history of completed operations. Query bookkeeping is short-lived. Source occurrence, current location
+and reusable derived input are separate facts: a small edit must not invalidate unrelated work merely
+because later offsets or revision identifiers changed.
+
+**Completion means an application.** Deliver connected behavior and remove the replaced implementation.
+Small files, a low line count, closed tickets and structural checks do not establish a working product.
+Tests should expose incorrect results, lost state, excessive rewrite or unbounded work.
+
+## Product boundary
+
+Search owns source acquisition, retained revisions, preparation, indexed retrieval, exact verification
+and compact evidence for its clients. Agent scheduling, task governance, general memory, online research,
+a hosted service, legal-record management and universal data migration are outside this application.
+
+Optional code intelligence, document formats, semantic ranking and adapters extend the same source and
+query path when selected. Their future possibility is not a reason to build an empty framework now.

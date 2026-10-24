@@ -1,225 +1,89 @@
-# Agent analysis framework
+# Agent-oriented analysis behavior
 
-ELIOT Search is a standalone Qdrant-backed framework for finding, organizing, comparing and exactly
-verifying evidence in large local corpora. Its main consumers are coding/research agents and human
-operators who need a grounded map of an unfamiliar repository or document collection before spending
-large context windows on raw reads.
+ELIOT Search should help an agent or person understand a large repository or document collection with fewer source reads while keeping every claim tied to exact retained evidence.
 
-This guide explains product behavior. Architecture Part I and accepted contracts remain authoritative.
+This is a product-behavior document. It does not prescribe a recipe host, graph database, plan fingerprint, capability registry, model loop or package topology.
 
-## 1. Product model
+The CLI and local client consume the same [query operations and evidence](../../crates/search-query/README.md).
+MCP is an optional adapter to that application, not a prerequisite or a second query implementation.
 
-```text
-immutable source truth and current workspace observations
-                         ↓
-materializations, units, structure and lexical features
-                         ↓
-verified projections published to Qdrant
-                         ↓
-access/currentness-scoped candidate retrieval
-                         ↓
-exact source readback, validation, provenance and coverage
-                         ↓
-compact agent-oriented navigation and optional exact verification
-```
+## Core result
 
-Qdrant is the physical index and candidate engine. ELIOT Search is the evidence and analysis layer around
-it. redb stores technical control state; immutable source/preparation artifacts remain outside both.
+A user selects explicit sources and asks a question. Search returns a bounded ordered set of cards containing:
 
-## 2. What Qdrant does
+- exact source, revision, representation and location;
+- a short verified excerpt;
+- why the result was nominated or grouped;
+- freshness, unsupported state and material gaps;
+- an optional same-session item locator for more context;
+- suggested exact checks only as suggestions, not completed proof.
 
-The Qdrant adapter owns:
+Ranked retrieval is navigation. It does not prove identity, correctness, consensus, completeness or absence. Exact retained-source operations own those claims over the inventory and representation they actually evaluate.
 
-- collection/schema admission;
-- sparse and optional dense/multivector storage;
-- payload indexes and strict-mode filters;
-- filtered retrieval and filtered IDF populations;
-- bounded count, scroll and exact point readback;
-- mutation acknowledgement/readback and typed vendor-error translation.
+## Required user workflows
 
-Search does not reproduce those capabilities in another database. It also does not expose Qdrant
-collection names, filters, point IDs or SDK types to agents.
+### Orient an unfamiliar repository
 
-## 3. What Search adds
+Return useful entry files, definitions, configuration, tests and documentation from actual prepared facts and source locations. Show missing fact producers and published-versus-current gaps. Do not generate an architectural verdict from filenames or lexical rank.
 
-### 3.1 Source truth and preparation
+Include a bounded summary of the selected scope: what is published, known newer source heads, unfinished or
+unsupported work and available handlers. Derive it from existing source/publication state. A corpus delta
+names the two actual observations/views compared; it is not an invented change history or proof of currentness.
 
-- safe root/source admission and no-execute reading;
-- stable source/repository/worktree/lineage identity;
-- immutable retained revisions;
-- encoding/newline materialization with coordinate and loss maps;
-- deterministic unitization into files, sections, symbols, references, tests and document regions;
-- structural provider facts with explicit assurance;
-- deterministic lexical document and query encoding.
+### Inspect an entity
 
-### 3.2 Projection lifecycle
+Start with an explicit location or actual observed definitions/occurrences. Preserve ambiguity between same-named definitions. A mention, comment or string is not automatically a definition; syntax is not compiler-resolved call truth.
 
-- one projection membership per point;
-- canonical collision-safe point identities;
-- immutable point/projection manifests;
-- serialized publication epochs and exact readback;
-- rebuild from source truth after index loss;
-- safe retirement, pins, reclaim and purge fences.
+### Compare selected implementations
 
-### 3.3 Analysis planning
+Compare explicit source-backed subjects over requested axes such as interface, validation, side effects, callers, tests and documentation. Show exact evidence and unknown axes. Equal names or scores do not prove equivalence, and repeated forks/copies are not independent confirmation without real lineage evidence.
 
-- coherent workspace/corpus/portfolio views;
-- access and restrictive-fence compilation before retrieval and IDF;
-- exact, keyword, structural, sparse lexical and optional semantic legs;
-- bounded per-partition planning for large portfolios;
-- deterministic fusion, evidence-role quotas and per-source/per-lineage diversity;
-- fork/mirror/copy collapse so duplicated code does not look like independent evidence;
-- explicit ambiguity, freshness and coverage.
+Keep each observation tied to its revision and applicable configuration/condition. Mutually exclusive variants,
+conflicting evidence and unknowns remain separate; do not combine them into one unconditional behavior claim.
 
-### 3.4 Evidence projection
+### Navigate documents
 
-- exact retained-source readback for every emitted citation;
-- validated definitions, references, callers, tests, documentation and configuration;
-- cross-repository behavior comparison;
-- provenance and corpus-delta reports;
-- bounded source handles and continuations;
-- exact grep/regex/symbol/structural plans for complete verification.
+Use the same retained-source/preparation/publication/evidence path for supported sections, pages, tables and references. Derived text carries its profile, coordinates and loss/gaps. Citation does not automatically establish support or contradiction. No hidden network or model fallback.
 
-## 4. Primary agent workflows
+### Verify an exact predicate
 
-### 4.1 Orient an unfamiliar repository
+Evaluate a stated raw-byte, decoded-text, extracted-representation, symbol or structural predicate over one pinned inventory. Report complete-with-match, complete-no-match, incomplete or invalid with item/byte accounting. A lexical top-k response never substitutes for this operation.
 
-Input:
+## Progressive use
 
-```text
-scope = active workspace or explicit portfolio
-intent = understand architecture and likely entry points
-```
+The first useful response should not require loading the entire corpus or generating a complete map. Search may return a few evidence-backed starting points and let the client continue, expand or request exact checks. Small output does not imply cheap upstream work; population scans, parsing, source integrity and retained reads remain measured costs.
 
-Expected output:
+One `QueryWindow` may retain the final ordered result set and pinned view for paging or bounded context in the same live session. Restart/disconnect may expire it. A one-shot child must not return an unusable continuation token.
 
-- bounded scope/profile/readiness summary;
-- likely entry files/modules/sections;
-- important symbols and ambiguity sets;
-- tests, docs and configuration linked to those entities;
-- recommended reading handles;
-- suggested exact predicates and follow-up recipe requests;
-- truthful freshness and coverage.
+## Retrieval and evidence boundary
 
-The first-class orientation/free-text contract is tracked by issue #213. Until it exists, clients must not
-invent a raw Qdrant surface or claim that the exact v1 recipes already provide general orientation.
+Qdrant is the only indexed backend. Native BM25 and optional selected branches nominate candidates under the explicit published scope. Exact punctuation/name identity remains independent of word-token BM25. The selected base population controls IDF; excluded data must not influence rank, but the cost of scoped statistics must be measured.
 
-### 4.2 Find where to grep
+Before emission, a nomination resolves through the pinned published evidence row to the exact retained object/range. The source reader, not echoed payload digests or caller booleans, verifies the bytes. A correct excerpt proves its origin, not ranking quality or corpus completeness.
 
-Search should narrow a huge corpus to a small number of grounded source ranges. It may suggest exact
-phrases, regexes, symbol keys or structural patterns. The agent can then execute the exact plane over an
-explicit denominator.
+## Optional depth
 
-The sequence is intentional:
+Syntax outlines, SCIP/LSP facts, document extractors, editor overlays, models and MCP are optional concrete producers or adapters. Add one only with:
 
-```text
-heuristic retrieval reduces the search space
-→ exact scan verifies the claim
-```
+- a real user workflow and caller;
+- exact snapshot/profile/input identity;
+- bounded work and explicit unsupported cases;
+- the same evidence-card/query-window path;
+- deletion of the displaced scaffold or duplicate owner.
 
-Raw grep remains valuable. Search makes it targeted, source-aware, cross-repository and coverage-aware.
+A model-generated label or summary is derived assistance and never replaces the source excerpt. Search does not own free-form research planning, web crawling, hidden reasoning, task authority or mutable notebook facts.
 
-### 4.3 Inspect an entity
+## Evidence for delivery
 
-For a known or resolved entity, return definitions, references, callers, tests, documentation,
-configuration variants and related entities. Ambiguous names remain separate candidates rather than being
-silently collapsed.
+A connected implementation should demonstrate, on ordinary source examples:
 
-### 4.4 Compare implementations
+- an unfamiliar repository with useful entry points;
+- duplicate symbol names and mention-versus-definition ambiguity;
+- an implementation with relevant tests/documentation;
+- two selected implementations with one unsupported comparison axis;
+- known copies that are not counted as independent evidence;
+- a source head newer than the published view;
+- exact raw/decoded behavior and truthful incomplete cases;
+- bounded page/expansion behavior without rereading the whole result set.
 
-Resolve one subject in the active scope and an immutable reference portfolio. Retrieve comparable
-implementations, group them by lineage and describe shared behavior, variants, outliers, conflicts and
-unknowns. Tests and documentation are evidence roles, not automatic truth.
-
-### 4.5 Analyze research/document corpora
-
-Qualified materializers should expose document sections, paragraphs, tables, figures/captions,
-references and native page/region coordinates. Retrieval remains Qdrant-backed; citations reopen the exact
-source/materialized revision. The profile and qualification work is tracked by #216.
-
-### 4.6 Verify absence or completeness
-
-Top-k retrieval cannot prove that something is absent. Search compiles an exact frozen-denominator plan,
-executes it with explicit coverage and returns `complete_match`, `complete_no_match`, `incomplete` or
-`invalidated`.
-
-## 5. Retrieval ladder
-
-The baseline ladder is:
-
-```text
-A. exact current overlay or direct exact scan
-B. exact Qdrant keyword predicates
-C. structural facts
-D. Qdrant sparse lexical retrieval
-E. optional qualified dense retrieval
-F. optional qualified rerank or late interaction
-```
-
-Branches are additive and budgeted. Sparse lexical retrieval is the baseline for ordinary text/code
-questions. Dense models are optional enhancements, not prerequisites for a useful Search product.
-
-Within one coherent scoring population Qdrant may combine compatible branches. Across repositories or
-partitions Search uses a versioned rank-based fusion profile rather than comparing raw scores directly.
-
-## 6. Result design for agents
-
-Agent results should be compact and progressive. A useful card includes:
-
-- evidence role and assurance;
-- repository/document lineage;
-- exact source handle and bounded preview;
-- why the item matched;
-- freshness/currentness state;
-- relevant relations;
-- coverage/gap effects;
-- optional next-read and exact-check suggestions.
-
-A handle grants no authority. Expansion revalidates the binding, scope, revision and live restrictive
-state and returns only bounded source-backed bytes.
-
-Search never returns a task verdict, code-change decision, memory disposition or finish signal. Those are
-consumer responsibilities.
-
-## 7. Large-corpus behavior
-
-Large corpora are handled through:
-
-- explicit immutable portfolios rather than mutable ad-hoc repository lists;
-- partitioned bounded retrieval legs;
-- no unbounded per-file filter list;
-- progressive cards and continuations;
-- per-binding and per-request budgets;
-- foreground priority over indexing/optional model work;
-- deterministic lineage/source caps;
-- incremental reconcile/materialize/publication;
-- index rebuild from immutable source/preparation manifests.
-
-Scale and quality must be measured on large monorepos, repository fleets and research corpora. The
-qualification work is tracked by #215.
-
-## 8. Security and privacy
-
-- access/currentness apply before retrieval, filtered IDF, counts, grouping and traces;
-- denied content cannot affect permitted ordering or suggestions;
-- raw source/query text is absent from ordinary logs and Qdrant payload;
-- unsaved buffers are memory-only unless explicitly admitted;
-- source code, document macros, hooks and remote resources are never executed;
-- external mutation timeouts remain `OUTCOME_UNKNOWN` until exact readback;
-- purge/revocation fences override snapshots and handles immediately.
-
-## 9. Product completion priorities
-
-1. compile and integrate the aligned Qdrant identity/projection/publication stack;
-2. connect real Qdrant publication and retrieval through the daemon;
-3. finish deterministic sparse document/query encoding and source-backed candidate validation;
-4. expose the existing exact/inspect/compare/provenance recipes through standalone/provider paths;
-5. add the versioned agent retrieval and scope-orientation contract (#213);
-6. qualify large multi-repository behavior (#215);
-7. qualify research/document profiles (#216);
-8. remove residual repository-controller tooling (#214);
-9. complete Windows transport/security, lifecycle and installed-release evidence.
-
-The product is not complete merely because Qdrant CRUD works. It is complete when an agent can use the
-installed standalone system to move from an unfamiliar huge scope to a small, correctly grounded set of
-source reads and exact verification steps with truthful coverage.
+Measure time to first useful evidence, source bytes/ranges read, candidate quality, false analogues, backend work, points rewritten per edit and context returned. Do not introduce an evaluation operating system merely to record those observations.

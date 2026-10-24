@@ -40,8 +40,6 @@ members = [
     "crates/search-query/search-handles",
     "crates/search-query/search-result-projector",
     "crates/search-query/search-continuation",
-    "crates/search-runtime/search-retention",
-    "crates/search-eval",
     "crates/search-provider-protocol",
     "crates/search-provider-client",
     "crates/search-eliot-adapter",
@@ -52,7 +50,6 @@ members = [
     "crates/search-runtime/search-revision-crypto",
     "crates/search-runtime/search-os-secrets-windows",
     "crates/search-runtime/search-provider-transport-windows",
-    "xtask",
 ]
 
 [workspace.package]
@@ -102,15 +99,13 @@ search-comparator = { path = "crates/search-query/search-comparator" }
 search-handles = { path = "crates/search-query/search-handles" }
 search-result-projector = { path = "crates/search-query/search-result-projector" }
 search-continuation = { path = "crates/search-query/search-continuation" }
-search-retention = { path = "crates/search-runtime/search-retention" }
-search-eval = { path = "crates/search-eval" }
 search-provider-protocol = { path = "crates/search-provider-protocol" }
 search-provider-client = { path = "crates/search-provider-client" }
 search-provider-transport-windows = { path = "crates/search-runtime/search-provider-transport-windows" }
 search-eliot-adapter = { path = "crates/search-eliot-adapter" }
 
-# Single vendor-SDK pin. Only search-qdrant-bridge may inherit this
-# dependency; its exact version must match the qualified client receipt.
+# One vendor-SDK pin, consumed only by search-qdrant-bridge.
+# Compatibility is checked against the actual server, not an activation receipt.
 qdrant-client = { version = "=1.19.0", default-features = false }
 
 # #237: exact private algorithm mechanisms; search-contracts owns canonical
@@ -118,9 +113,6 @@ qdrant-client = { version = "=1.19.0", default-features = false }
 # testing/unstable feature); do not widen it implicitly.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 sha2 = { version = "=0.10.9", default-features = false }
-
-# #250: official read-only Cargo facts, private to the bounded xtask adapter.
-cargo_metadata = { version = "=0.23.1", default-features = false }
 
 # #400/#389: private maintained file syntax events; no donor product tree.
 # Cargo ignores build metadata in requirements; locked artifact/checksum bind spec-1.1.0.
@@ -136,8 +128,9 @@ aho-corasick = { version = "=1.1.5", default-features = false, features = ["std"
 unicode-ident = "=1.0.26"
 unicode-normalization = { version = "=0.1.25", default-features = false, features = ["std"] }
 
-# #437: private inert CommonMark events; renderer and optional features disabled.
-pulldown-cmark = { version = "=0.13.1", default-features = false }
+# #441/#437: maintained OffsetIter correction; private inert CommonMark events,
+# renderer and optional features disabled.
+pulldown-cmark = { version = "=0.13.5", default-features = false }
 
 # #444: private inert UTF-8 XML events; optional feature families disabled.
 quick-xml = { version = "=0.42.0", default-features = false }

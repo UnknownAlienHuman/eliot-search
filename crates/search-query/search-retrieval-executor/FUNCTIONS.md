@@ -1,72 +1,59 @@
-# Function contract — `search-retrieval-executor`
+# search-retrieval-executor — current API and removal boundary
 
-**Status:** W4/P08 bounded execution contract; no scheduler or retrieval implementation exists yet.
+## Current API
 
-The executor consumes an accepted immutable `SearchTaskPlan` and vendor-neutral leg ports. It never
-constructs redb/Qdrant/process adapters and never treats nominated candidates as evidence.
+| Entry point | Actual behavior |
+|---|---|
+| `admit(plan, owner_id, lane, now_tick, scheduler)` | Checks caller-supplied queue counts and plan limits; reserves no queue slot. |
+| `schedule_leg` | Checks dependencies/access/deadline fields and clones a planned leg into a ticket. |
+| `acquire_leg_pins` | Creates a separate pin set that cancellation of the execution guard does not own. |
+| `dispatch_leg` | Calls a generic backend and validates shape/limits; issued tickets remain usable independently. |
+| `normalize_within_population` | Sorts raw scores and assigns ranks. |
+| `fuse_safe_legs` | Uses floating weighted reciprocal rank, missing-weight defaults and a map keyed by caller candidate ID. |
+| `classify_completion` | Summarizes caller execution maps and complete-scope flags. |
+| `cancel` | Sets flags and clears output content but does not necessarily stop issued backend I/O or drop separate pins. |
+| `execute_indexed_leg` | Builds `candidate:{leg_id}:{point_id}`, calls filtered query and unconditional exact count, then reports a complete denominator. |
 
-## Admission and scheduling
+The source is about 60.8 KiB across `lib.rs` and `indexed.rs`. The real public daemon does not call the
+existing live Qdrant plane through this path.
 
-### `admit(plan, binding_quota, scheduler_snapshot) -> Result<ExecutionGuard, ExecuteError>`
+## Replacement
 
-Verifies plan/snapshot fingerprints, deadline, lane, resource ceilings and per-binding/global queue
-capacity. Admission acquires only process-local request state; ordinary reads create no durable job or
-idempotency row.
+```text
+execute_search(request, published_view, resolved_scope, bridge, request_context)
+```
 
-### `schedule_leg(guard, leg, dependency_state) -> Result<LegTicket, ExecuteError>`
+Baseline:
 
-Checks dependencies, live access permit, budget remainder and lane priority before queueing. Queues and
-prefetch are finite. Interactive work outranks verification/background without starving bounded
-cleanup.
+1. check cancellation/deadline and reserve bounded nomination capacity;
+2. call Qdrant BM25 with the selected filter and matching IDF corpus;
+3. receive at most the requested/prefetch ceiling;
+4. preserve returned order and stable point IDs;
+5. hand selected hits to evidence resolution under the same context;
+6. return truthful non-exhaustive gaps on timeout/limit/backend failure.
 
-### `acquire_leg_pins(ticket, pin_port) -> Result<LegPinSet, ExecuteError>`
+For multiple indexed branches, express prefetch and RRF/grouping in the Qdrant Query API. For an actual
+non-indexed branch, merge finite ranked lists with one private checked integer RRF helper. No public formula,
+profile digest or plan authority.
 
-Acquires only the route/epoch pins required by the leg. Every pin is owned by the request guard and is
-released on completion, cancellation, disconnect or failure.
+Use one absolute deadline; every backend/source/output phase consumes remaining time. Keep a few explicit
+aggregate counters in the request owner. Counters are runtime limits, not durable receipts or a universal
+ledger. A normal request cancellation drops guards/windows/content; no historical terminal map is needed.
 
-### `dispatch_leg(ticket, ports, cancellation) -> Result<LegOutput, ExecuteError>`
+## Remove
 
-Dispatches direct/index/exact/provider operations through typed ports. Cancellation/deadline propagate
-to every cancellable dependency. Leg output contains bounded nominations, ranks, coverage and reasons,
-not trusted source excerpts.
+- public scheduler/guard/ticket/execution-state types and count-equality completion;
+- relative leg budgets/deadlines and separately owned pins;
+- public compiled-plan/capability/security inputs;
+- floating/default fusion and leg-prefixed candidate IDs;
+- exact count from ordinary top-k and `CompleteCandidateScope` claims;
+- process-test/oracle backend from production composition.
 
-## Fusion and contamination
+Keep only useful bounded backend translation, optional rank merge and error/gap mapping. Merge them into
+query composition if that is smaller.
 
-### `normalize_within_population(output, profile) -> Result<RankedLegOutput, ExecuteError>`
+## Verification
 
-Raw scores are comparable only inside the exact scoring population/profile that produced them.
-
-### `fuse_safe_legs(outputs, fusion_profile) -> Result<FusedNominations, ExecuteError>`
-
-Cross-population combination uses the pinned rank-based fusion profile and deterministic tie-breaks.
-Raw scores never cross population boundaries. Duplicate lineage/unit handling is explicit and bounded.
-
-### `discard_contaminated(decision, execution) -> ContaminationReceipt`
-
-Drops every influenced leg, its ranks, counts, diversity and trace. It may re-dispatch under a new live
-permit within remaining budget or return an explicit gap; post-filtered ordering is forbidden.
-
-### `classify_completion(execution, plan, budget) -> ExecutionCoverage`
-
-Reports executed, failed, cancelled, omitted-budget and unavailable legs. Saturation/deadline may yield
-a truthful partial candidate scope, never complete scope or an absence claim.
-
-### `cancel(request_id, reason) -> CancelOutcome`
-
-Idempotently stops admission/dispatch where possible, propagates cancellation, releases pins and
-request-local memory, and records only bounded non-content outcome metadata.
-
-## Configuration and failure semantics
-
-Implements `config/sections/scheduler.md`. Live decreases constrain new dispatch immediately and may
-cancel excess background work; increases apply only within accepted host/server ceilings. Failures
-include resource exhaustion, deadline/cancellation, index/provider unavailable, stale plan, access
-revoked and incomplete coverage. Read-only dependency timeout is a typed failed leg, not a mutation
-unknown-outcome receipt.
-
-## Required fixtures
-
-Lane priority and bounded fairness; queue saturation; cancellation/disconnect releases all pins;
-deadline propagation; no durable read rows; raw-score isolation; deterministic weighted-RRF/tie-break;
-contaminated whole-leg discard; stable plan/stable ordering; optional leg cannot bypass access/budget;
-package graph/public API contains no concrete adapter.
+Use the real bridge to check one BM25 query, compatible scope/IDF, finite prefetch, timeout before/after
+RPC, cancellation, missing/foreign/duplicate points, native multi-branch RRF when selected, optional local
+merge determinism and final order reaching the evidence cards unchanged.

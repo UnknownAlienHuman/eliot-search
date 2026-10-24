@@ -1,30 +1,12 @@
-# Reusable typed provider client
+# search-provider-client
 
-This crate owns the synchronous typed client moved from the CLI. The CLI resolves
-independently trusted registration/credentials and opens the concrete platform
-connection. The library consumes that connection/key with mandatory comparison
-expectations and the original absolute setup deadline, then reuses the canonical
-pairing, profile, grant, sequence, request/cancel and response state machines.
+Target: one serviced framed session used by the real CLI and daemon. A synchronous public call may wrap it;
+active cancellation is required, while progress and additional transport modes are optional.
 
-Default API exposes no TCP/token constructor or generic transport plugin.
-`legacy-loopback-compatibility` preserves previously existing TCP signatures only;
-the CLI enables it through its nondefault harness feature. Such pairing-only
-sessions still cannot issue product grants without independently trusted identity.
-#332 owns final native command/listener cutover and compatibility deletion.
+The current source still has pairing/profile/grant and replay state, and the CLI retains a separate legacy core.
+Those are not the target implementation. [FUNCTIONS.md](FUNCTIONS.md) identifies the inspected seams and cutover;
+[protocol](../search-provider-protocol/FUNCTIONS.md) owns framing/control/clocks;
+[CLI](../../bins/eliot-search/FUNCTIONS.md) owns invocation and presentation.
 
-Wire disposition is BYTE_COMPATIBLE. Seven private BLAKE3 operations retain the
-accepted binding, pairing/profile and grant transcripts; generic shared prefixing
-helpers are not equivalent. No persisted schema/profile migration is introduced.
-
-`examples/typed_consumer.rs` is a separate Rust consumer crate target using public
-session/grant/request/cancel APIs and borrowing actual coverage/handles unchanged.
-It does not open an endpoint or pretend to authenticate a synthetic peer.
-
-Source checks do not qualify native execution, installed operation or the full
-product. Moved and new fixtures remain AUTHORED_NOT_RUN until integrated
-qualification under #332/#215. The following cases must be checked at that gate:
-wrong installation/incarnation/binding/grant; partial/oversized/truncated records;
-profile and sequence/replay; progressive/terminal/cancel ordering; setup, grant
-and recipe deadline phases; EOF and possible-write uncertainty; cross-session
-handle/continuation refusal; content-free public diagnostics. Protocol/server
-owned policy is not duplicated in this client.
+There is one owned-child session/cleanup guard, not one process manager per command. Remove obsolete callers
+with their producer. Do not implement every old API sketch or future transport merely because it was named.

@@ -1,32 +1,31 @@
 # Agent contract — eliot-searchd
 
-Own only `bins/eliot-searchd/`. This is the composition root, not a capability implementation package.
-Do not edit library packages, root workspace, shared fixtures or architecture.
+The daemon owns composition in `bins/eliot-searchd/`. Use the
+[root instructions](../../AGENTS.md) and [implementation guide](../../docs/implementation/README.md)
+for a named owner and immediate-consumer cutover; unrelated package edits remain out of scope.
 
-The bounded packet is `swarm/assignments/eliot-searchd.md`.
+The [current local architecture](../../docs/architecture/README.md) supersedes old mandatory migration,
+six-domain/secret-lifecycle and delegated-client composition. Do not fill old ports with synthetic
+observations to bypass them; remove the obsolete requirement with its real producer/consumer.
 
 ## Ownership
 
-- progressive dependency injection/startup
-- concrete adapter construction and vendor-neutral port wiring
-- provider server, readiness, drain and shutdown coordination
-- qualified platform observations and stable integration reason mapping
+- Connect real owners through direct calls or small private vendor/OS adapters.
+- Order data-root acquisition, startup, provider admission, readiness, drain and shutdown.
+- Keep real OS/root identity, lifecycle and bounded failures at effect boundaries.
+- Connect the existing reader, revision and preparation code. Change their APIs together when removing
+  obsolete domains, grants or intermediate receipts; package boundaries are not permanent constraints.
 
-## Forbidden ownership
+## Keep behavior in its existing owner
 
-- capability logic in `main`
-- shared store/vendor clients outside daemon composition
-- concrete adapter edges in query/lifecycle APIs
-- hidden fallback or second data-root owner
-- control-migration schemas, immutable artifact lifecycle or receipt projections
-- revision-object read/write/publication state machines owned by `search-revision-store`
-- preparation/materialization storage state machines owned by `search-materializer`
-- secret protection semantics owned by `search-os-secrets`
+Retire the general control-migration platform for the local baseline. Unsupported old roots remain
+untouched; neither legacy readers nor export implementation precede the new application. Revision
+read/write belongs to one actual store; preparation reuses `search-materializer`. Use the concrete OS
+credential owner only for secrets an implemented integration actually needs.
+Do not copy those state machines into command handlers or create a second composition root.
+Concrete store/vendor handles stay out of query/lifecycle public APIs. No hidden fallback.
 
-## Dependencies
-
-Only accepted packages for the active Cargo feature/wave. Baseline DIRECT owners such as source admission/registry/identity, safe reader, revision store and materializer are mandatory architecture boundaries, not optional acceptance claims. New artifacts require ADR and exact qualification.
-
-## Size
-
-Target `src/` ≤ 6,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+[FUNCTIONS.md](FUNCTIONS.md) records implemented command limits and composition obligations.
+A feature, compiled constructor or healthy process does not establish an installed handler or readiness.
+When adding an external dependency, inspect its pinned API and exercise the actual integration.
+Remove duplicate mechanisms before moving files; package line counts do not require another crate.

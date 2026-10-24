@@ -1,26 +1,21 @@
 # search-point-identity
 
-**C14 — Collision-safe point identity.**
+Derive one stable retrieval-point identity and its 128-bit Qdrant address. The package is stateless and
+contains no registry, source authority, transport or publication state.
 
-**Status:** the `s11` module supplies the stateless canonical identity API from #256. Existing root exports and current routing remain `LEGACY_PROFILE` until #259/#262 consumers migrate and #329 retires them. This source API delivery is not indexed-product qualification. See [S11 profile and consumer handoff](S11_PROFILE.md) and [central package status](../../../docs/product/PACKAGE_STATUS.toml).
+## Current source
 
-Encode canonical point keys, derive namespace-separated IDs and make collisions detectable and non-destructive.
+`src/s11.rs` implements a revision/coordinate-bearing v1 key. Its separation of full BLAKE3 identity from
+128-bit address and its collision refusal are useful. The key shape and pre-release encoded bytes are not.
 
-## Owns
+## Target
 
-- versioned `ProjectionPointKey` encoding
-- canonical CBOR bytes
-- BLAKE3-256 full digest
-- 128-bit UUID projection
-- existing-point identity comparison
+Point identity contains only immutable retrieval meaning for one physical generation. Exact revision,
+representation, logical occurrence and range belong to versioned evidence in the pinned published view.
+Unambiguous unchanged occurrences may retain identity; ambiguous equal repeats receive new incarnations.
 
-## Must not own
+The complete operation, cutover and focused behavior checks live in [FUNCTIONS.md](FUNCTIONS.md). Change
+point identity, projection, Qdrant payload/readback, publication and query lookup together. Build a new
+physical generation; do not preserve old S11 through dual issuers, adapters or migration machinery.
 
-- ad-hoc string or JSON identity derivation
-- claiming collisions impossible
-- source identity derivation
-- performing upserts
-
-- **Delivery wave:** W3 / P06
-- **Soft source-line target:** 4,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+[Implementation guide](../../../docs/implementation/README.md) · [Agent notes](AGENTS.md)

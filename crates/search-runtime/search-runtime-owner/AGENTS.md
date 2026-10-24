@@ -1,71 +1,37 @@
-# Agent contract — search-runtime-owner
+# Working on search-runtime-owner
 
-You own only `crates/search-runtime/search-runtime-owner/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation guide](../../../docs/implementation/README.md), package [README](README.md),
+[source audit](FUNCTIONS.md), root issue [#266](https://github.com/UnknownAlienHuman/eliot-search/issues/266) and
+initialization issue [#360](https://github.com/UnknownAlienHuman/eliot-search/issues/360).
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S7.1, S27.1, S33, H1, P01.
+The product needs one actual process-lifetime root guard, not a lease/receipt/state-machine platform.
 
-## Mission
+Keep only real properties:
 
-Guarantee that exactly one process incarnation owns one data root and expose a fenced lifecycle to the daemon.
+- side-effect-free root inspection;
+- explicit manifest-last initialization;
+- selected path/locality/no-reparse/current-format checks;
+- one retained root handle and one exclusive lock handle;
+- small current root-format metadata;
+- close real stores before dropping the guard;
+- content-free failures and one absolute context.
 
-## Ownership
+Delete or inline:
 
-- data-root lease and owner epoch
-- standalone/managed mode fence
-- crash/reopen ownership recovery
-- clean shutdown and drain state
+- `OwnerSupervisor`, owner snapshots and generic acquire/recover/release transitions;
+- owner/process/executable identities not consumed by the live lock;
+- lease windows, renewal, health histories, drain/release/dependency receipts;
+- alternating owner slots, owner epochs/generations/succession and dual legacy/sealed locks;
+- complete argv/request digest, named work stages and command-specific root constructors;
+- source/DEK/registry/migration custody inside root ownership;
+- initialization journal/state taxonomy replaced by #360 staging;
+- fixtures preserving those APIs.
 
-## Forbidden ownership
+The daemon invocation owner parses commands. The source, storage, control, publication and key owners manage
+their own state after the root guard. Do not create `runtime-owner-v2`, forwarding wrappers or another owner
+record.
 
-- retrieval semantics
-- Qdrant schema or query operations
-- source catalog or access policy
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `DataRootOwner::acquire(path, mode) -> Result<OwnerGuard, OwnerError>`
-- `OwnerGuard::owner_epoch() -> OwnerEpoch`
-- `OwnerGuard::begin_drain() -> DrainToken`
-- `OwnerGuard::release_cleanly() -> Result<ShutdownReceipt, OwnerError>`
-- `recover_abandoned_owner(record) -> RecoveryDecision`
-
-## Failure surface
-
-Use typed errors/reason codes. Relevant public reasons: `DATA_ROOT_ALREADY_OWNED`, `OWNER_EPOCH_MISMATCH`, `MODE_TRANSITION_REQUIRES_RESTART`. Never turn a degraded or partial
-state into an apparent success.
-
-## Test seams and exit evidence
-
-- `second_owner_denied`
-- `crash_reopen_advances_or_fences_owner_epoch`
-- `managed_and_standalone_modes_cannot_coown_root`
-- `mode_transition_requires_drain_fence_and_restart`
-- `owner guard releases on orderly shutdown`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W1 / P01**
-- Soft `src/` target: **4,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+After code, run minimal Rust 1.98 compiler/Clippy for the root owner and actual daemon/store consumers, plus
+focused inspect/initialize/lock/restart/path-replacement/shutdown cases. Historical lifecycle/receipt matrices
+are removed with their APIs.

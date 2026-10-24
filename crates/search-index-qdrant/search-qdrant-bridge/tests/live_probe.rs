@@ -1,11 +1,10 @@
-//! T22 live qualification probes against the native Windows server.
+//! Live behavior probes against the selected native Windows server.
 //!
 //! Spawns `C:\Tools\Qdrant\1.19.0\qdrant.exe` on disposable storage with
-//! OS-assigned loopback ports, executes every bridge-owned mandatory probe
-//! through the pinned `qdrant-client` 1.19.0 gRPC transport, then kills the
-//! server and removes the storage. Fail-closed: a missing binary, a readiness
-//! timeout, or any failed probe fails the test — there is no in-memory
-//! stand-in on this path (the oracle stays in `lib.rs`).
+//! OS-assigned loopback ports, executes every bridge-owned case through the
+//! pinned `qdrant-client` 1.19.0 gRPC transport, then kills the server and
+//! removes the storage. A missing binary, readiness timeout or failed case
+//! fails the test; no report is used as a runtime constructor credential.
 //!
 //! Run: `cargo test -p search-qdrant-bridge --test live_probe`.
 //! Override binary: `ELIOT_QDRANT_EXE=<path>`.
@@ -17,7 +16,9 @@ use search_contracts::{Blake3Digest32, CollectionGenerationId, Epoch, OpaqueId};
 use search_qdrant_bridge::live::{
     NATIVE_EXE_PATH, free_loopback_ports, run_qualification_suite, spawn_disposable_server,
 };
-use search_qdrant_bridge::qualified::{MANDATORY_LIVE_PROBES, QualificationError, QualifiedGate};
+use search_qdrant_bridge::qualified::{
+    MANDATORY_LIVE_PROBES, QualificationError, validate_live_probe_receipt,
+};
 use search_qdrant_bridge::real::{OpContext, RealDataPlane};
 use search_qdrant_bridge::{
     BridgeError, BridgeLimits, BridgeMutation, CollectionRoute, CollectionSchema,
@@ -30,7 +31,7 @@ fn exe_path() -> String {
 }
 
 #[tokio::test]
-async fn t22_live_qualification_probes() {
+async fn live_behavior_probes() {
     let (server, outcome) = tokio::time::timeout(std::time::Duration::from_secs(180), async {
         let (http_port, grpc_port) = free_loopback_ports().expect("loopback ports");
         let server = spawn_disposable_server(&exe_path(), http_port, grpc_port)
@@ -42,7 +43,7 @@ async fn t22_live_qualification_probes() {
             .expect("wrong and missing API keys are rejected");
         let report = run_qualification_suite(&server)
             .await
-            .expect("qualification suite");
+            .expect("live behavior suite");
         for line in &report.log {
             println!("{line}");
         }
@@ -57,22 +58,20 @@ async fn t22_live_qualification_probes() {
             .outcomes
             .iter()
             .any(|result| result.probe_id == required && result.passed);
-        assert!(passed, "mandatory live probe passed: {required}");
+        assert!(passed, "mandatory live case passed: {required}");
     }
     assert_eq!(outcome.receipt.outcomes.len(), MANDATORY_LIVE_PROBES.len());
-    let gate = QualifiedGate::admit(&outcome.receipt).expect("live receipt admits gate");
-    assert_eq!(gate.server_version(), "1.19.0");
-    assert_eq!(gate.collection(), "t22_qual_probe");
+    validate_live_probe_receipt(&outcome.receipt).expect("live report is internally consistent");
+    assert_eq!(outcome.receipt.server_version, "1.19.0");
+    assert_eq!(outcome.receipt.collection, "t22_qual_probe");
     let mut plane = RealDataPlane::connect(
         server.endpoint(),
         server.fixture_connection_binding(),
         server.fixture_api_key_lease(),
-        gate.clone(),
         search_qdrant_bridge::BridgeLimits::BASELINE,
     )
     .await
     .expect("correct fixture API key is admitted by a protected RPC");
-    assert_eq!(plane.gate().server_version(), "1.19.0");
 
     // A lease that becomes invalid after the upsert dispatch but before the
     // exact readback must preserve the unknown write outcome. The still-valid
@@ -136,14 +135,10 @@ async fn t22_live_qualification_probes() {
         },
         vectors,
     };
-    // Five fixture callbacks cover SDK construction, connect health/list,
-    // schema verification and the upsert dispatch; the next callback is the
-    // required post-write exact readback and must observe the expired lease.
     let mut expiring_plane = RealDataPlane::connect(
         server.endpoint(),
         server.fixture_connection_binding(),
         server.fixture_api_key_lease_expiring_after(5),
-        gate.clone(),
         BridgeLimits::BASELINE,
     )
     .await
@@ -175,21 +170,19 @@ async fn t22_live_qualification_probes() {
     assert!(recovered.missing_ids.is_empty());
     assert!(recovered.unexpected_ids.is_empty());
 
-    // The gate executes against the live receipt: a tampered copy that claims
-    // a different server version must not admit, even with all probes passed.
+    // Report validation remains useful as a test assertion, but returns no
+    // token that can activate an unrelated runtime path.
     let mut tampered = outcome.receipt;
     tampered.server_version = "1.19.1".to_owned();
     assert_eq!(
-        QualifiedGate::admit(&tampered).expect_err("tampered receipt must reject"),
+        validate_live_probe_receipt(&tampered)
+            .expect_err("tampered report must reject"),
         QualificationError::LiveIdentityMismatch
     );
 }
 
 #[tokio::test]
-async fn t22_live_wrong_executable_rejected_before_spawn() {
-    // Create an existing, deterministic wrong-size artifact. Verification must
-    // reject it before process creation, independent of checkout location or
-    // ELIOT_QDRANT_EXE configuration.
+async fn live_wrong_executable_rejected_before_spawn() {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock after epoch")
@@ -198,7 +191,7 @@ async fn t22_live_wrong_executable_rejected_before_spawn() {
         "eliot-qdrant-wrong-exe-{}-{stamp}.bin",
         std::process::id()
     ));
-    std::fs::write(&path, b"not-the-qualified-qdrant-executable")
+    std::fs::write(&path, b"not-the-selected-qdrant-executable")
         .expect("write wrong executable fixture");
     let path_text = path.to_string_lossy().into_owned();
     let (http_port, grpc_port) = free_loopback_ports().expect("loopback ports");
@@ -214,7 +207,7 @@ async fn t22_live_wrong_executable_rejected_before_spawn() {
 }
 
 #[test]
-fn t22_live_non_loopback_endpoint_rejected_without_network() {
+fn live_non_loopback_endpoint_rejected_without_network() {
     let error = search_qdrant_bridge::live::LiveEndpoint::grpc("10.0.0.1", 6334)
         .expect_err("non-loopback endpoint must be rejected");
     assert_eq!(error.code(), "QDRANT_LIVE_ENDPOINT_NOT_LOOPBACK");

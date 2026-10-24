@@ -354,8 +354,8 @@ fn donor_row<B: IdentityBudget>(
     let (name, version, checksum) = match index {
         0 => (
             "pulldown-cmark",
-            "0.13.1",
-            "83c41efbf8f90ac44de7f3a868f0867851d261b56291732d0cbf7cceaaeb55a6",
+            "0.13.5",
+            "278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb",
         ),
         1 => (
             "bitflags",

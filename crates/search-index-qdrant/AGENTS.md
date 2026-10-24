@@ -1,13 +1,22 @@
-# Index family rules
+# Working on indexing and publication
 
-- Qdrant stores rebuildable projections only.
-- `search-qdrant-supervisor` owns exact executable identity and local child-process lifecycle.
-- `search-qdrant-bridge` owns collection/point/query vendor translation and no process state.
-- `search-publication` retires exact point identities and linearizes visibility in the guarded control
-  commit; it does not physically reclaim points.
-- `search-epoch-pins` owns pins/watermarks; `search-index-reclaimer` performs ordinary exact-ID deletion.
-- Security purge is a separate lifecycle path owned by `search-retention`.
-- Vendor types never cross public ports and broad correctness-path point updates are forbidden.
+Read the [architecture](../../docs/architecture/README.md) and
+[implementation](../../docs/implementation/README.md). Qdrant stores rebuildable projections; source bytes
+and committed control state remain with their actual owners.
 
-This directory is not a package. Do not add a family-level `Cargo.toml` or shared implementation. Put
-behavior in the child package that owns the failure state and test seam.
+Connect one configured Qdrant endpoint through one bridge/runtime before adding process management. The
+current supervisor is disconnected and cannot itself apply the Windows containment it claims. Treat managed
+Qdrant as an optional convenience: replace the supervisor with a small actual child/platform owner or delete
+it. Artifact/probe/secret/containment receipts are not runtime authority.
+
+Use one publication owner and one pending record for real unfinished external writes. Preparation is local
+until the intent is durably recorded. Remove duplicate daemon/bridge journals, supplied commit proofs and
+completed-operation history.
+
+Publish one coherent immutable view. Queries can pin only current and windows clone that guard. Fold exact
+point/generation cleanup into publication; delete sampled pin/reclaimer/retention platforms. Unknown external
+delete leaks safely and retries.
+
+A planner, point-identity, bridge, publication or view-manager name does not require a permanent crate. Keep
+a boundary only for a real dependency/effect or substantial algorithm. Change direct callers and delete the
+replaced mechanism in the same slice.

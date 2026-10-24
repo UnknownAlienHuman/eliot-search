@@ -1,51 +1,22 @@
-# Function contract — `search-epoch-pins`
+# View lifetime: pin a real snapshot, not a route label
 
-**Status:** W3/P07 process-local lifecycle contract.
+At `c8e38b6`, PinRegistry exposes arbitrary route/epoch acquisition, owner release/renewal, sampled watermarks
+and a second continuation catalogue. Those records do not prevent new old pins after a cleanup decision.
+Remove the public registry with its callers.
 
-No ordinary query or ephemeral continuation pin is written to durable storage.
+The surviving manager is private to publication/query: one strong current state and weak references to states
+still held by requests/windows. The actual state includes a redb read snapshot of the published source and
+evidence tables, not only a sequence and a pointer to mutable latest metadata.
 
-## Operations
+The [publication recipe](../search-publication/FUNCTIONS.md) defines commit, snapshot capture, installation,
+cleanup eligibility and restart. The [control map](../../search-control-redb/FUNCTIONS.md) defines lookup.
+Do not copy those algorithms here or introduce a new snapshot service.
 
-### `acquire_epoch_pin(route, epoch, owner, limits) -> Result<EpochPinGuard, PinError>`
+Acquire only current under a short mutex. A live window inherits its request's guard; callers cannot reopen
+old views by ID. Expiry/disconnect releases it. Last drop may wake cleanup and never performs I/O. Old redb
+pages remain retained while readers exist; finite query/window lifetimes and resource backpressure must be
+measured, not inferred from a small Arc count.
 
-Atomically validates the active route/epoch and increments one bounded owner/key reference. The guard is
-non-serializable and releases exactly once on drop.
-
-### `acquire_route_pin(route, owner, limits) -> Result<RoutePinGuard, PinError>`
-
-Protects a collection generation during migration/drain independently of a particular epoch.
-
-### `renew_continuation_pin(guard, new_expiry, policy) -> Result<PinRenewalReceipt, PinError>`
-
-May extend only within the original route/epoch, binding and configured maximum TTL. Ordinary query
-pins are not renewable.
-
-### `release_owner_pins(owner) -> PinReleaseReceipt`
-
-Idempotently releases all pins for request cancellation, disconnect or explicit continuation expiry.
-
-### `snapshot() -> PinRegistrySnapshot`
-
-Returns a consistent bounded snapshot of active route/epoch counts and earliest expiries without
-exposing client identities.
-
-### `compute_reclamation_watermark(retired, snapshot) -> ReclamationWatermark`
-
-Marks an exact retired manifest/route reclaimable only when no active epoch or route pin can observe it.
-
-### `expire_continuation_pins(now, policy) -> ExpiryReceipt`
-
-Expires only bounded continuation pins. Time is supplied by the caller; the registry does not own a
-clock.
-
-## Concurrency and failure semantics
-
-Acquire/release is linearizable within one daemon process. Guard drop is idempotent. A daemon crash
-ends process-local pins; durable jobs resume/replan from durable source checkpoints and do not pretend
-the old pin survived. Registry inconsistency fails closed and blocks reclaim.
-
-## Required fixtures
-
-Concurrent acquire/release; guard drop; cancellation/disconnect cleanup; bounded TTL/count; old-route
-drain after final pin; stale/foreign owner rejection; crash requiring no durable query-lease recovery;
-watermark never advances past an active pin.
+No view-manager lock across redb/object/Qdrant work. There is no live local-object GC gate in the selected
+baseline: local collection owns the stopped root exclusively. Qdrant cleanup remains live and waits for all
+relevant view sequences/generation users. Keep only a small helper in the actual owner and delete this crate.

@@ -1,29 +1,26 @@
-# Agent contract — search-handles
+# Working on search-handles
 
-Own only `crates/search-query/search-handles/`. Do not edit the root workspace, shared contracts,
-architecture or another package. Missing fields use the contract-change process.
+Read the [query cutover](../README.md), [query-window map](../search-continuation/FUNCTIONS.md) and local
+[source map](FUNCTIONS.md).
 
-The bounded implementation packet is `swarm/assignments/search-handles.md`.
+Do not repair or integrate either current handle store. Normal source-backed cards contain their verified
+excerpt/location directly. Optional expansion uses `(window_id, item_index)` inside the same live
+`QueryWindow` and pinned view.
 
-## Ownership
+Move only useful mechanics:
 
-- opaque handle ID generation and mutable handle records
-- ephemeral/durable eligibility, TTL/count/binding quotas
-- expansion authorization and disclosure/range budgets
-- security, purge, owner-generation and view invalidation
+- exact immutable range read and actual byte/range verification;
+- finite expansion/output limits;
+- exclusive prepared expansion through output;
+- original absolute expiry/deadline check.
 
-## Forbidden ownership
+Do not mint random per-item tokens, enumerate/hash the whole source catalogue, copy source/revision authority
+into another record or allow arbitrary absolute offsets across the revision. Expansion derives a bounded
+neighborhood from the exact emitted item's `ViewManifestEntry`.
 
-- ranking, result projection or continuation windows
-- treating handle possession as authorization
-- raw source bytes, paths, Qdrant IDs or cursors in tokens
-- durable handles to unsaved or unretained revisions
-- direct redb/CAS/Qdrant dependency
+Owning-account local use needs no cryptographic bearer handle. A real restricted-client adapter binds and
+cancels the window through its concrete session. Remove handle grants, permits, invalidation generations,
+durable retention leases and crypto/provider seams with consumers.
 
-## Dependencies
-
-Only `search-contracts` and `search-domain`. Authorization, readback and durable storage arrive through vendor-neutral ports.
-
-## Size
-
-Target `src/` ≤ 6,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Change protocol/results/daemon callers together and delete this crate plus the daemon result-handle module.
+After code, run minimal Rust 1.98 compiler/Clippy for actual query/window/evidence/protocol consumers.

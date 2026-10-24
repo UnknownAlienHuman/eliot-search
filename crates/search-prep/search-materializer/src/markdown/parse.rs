@@ -1,4 +1,4 @@
-//! Private raw-preserving pulldown-cmark 0.13.1 adapter.
+//! Private raw-preserving pulldown-cmark 0.13.5 adapter.
 //! Only empty Options are accepted; all raw bytes remain authoritative.
 //!
 //! Accounting: input bytes once before UTF-8 validation/eager construction;
@@ -368,7 +368,7 @@ impl Builder<'_> {
             Event::End(end) => {
                 self.meter.steps(1)?;
                 let frame = self.stack.last().ok_or(MarkdownError::InvalidStructure)?;
-                // 0.13.1 OffsetIter emits the same full item extent on Start/End.
+                // OffsetIter emits the same full item extent on Start/End.
                 if frame.expected != end || frame.span != span {
                     return Err(MarkdownError::InvalidStructure);
                 }

@@ -1,80 +1,90 @@
-# Function contract — `search-handles`
+# search-handles — current source and removal map
 
-**Status:** W4/P08 handle contract; durable/purge hardening continues in W7/P13.
+## Shared package
 
-Public handles are opaque CSPRNG bearer locators. Detailed source, binding, plan, view, anchor,
-residency and authorization state exists only in server-owned records keyed by token digest.
+| Current API/area | Actual behavior |
+|---|---|
+| handle creation/store | Stores token-digest records and source/revision/range metadata in another in-memory authority map. |
+| free/public validation and expansion structures | Caller-shaped records/contexts/permits can be copied and supplied back; the package does not own the current view or serving session. |
+| invalidation | Maintains another status/index lifecycle rather than dropping one query window. |
+| source inventory | `lib.rs` 24,206 bytes plus `invalidation.rs` 10,834 bytes. |
 
-## Minting
+The public daemon does not use this package.
 
-### `mint_ephemeral(target, binding, policy, randomness) -> Result<SearchSourceHandle, HandleError>`
+## Daemon handle path
 
-Atomically creates a memory-only record and returns one non-self-describing token. Unsaved targets must
-bind the authenticated buffer snapshot/session and cannot outlive it. Minting is intentionally
-non-idempotent; callers do not retry blindly after losing a returned token.
+`ResultHandleCatalog::prepare_mint_page`:
 
-### `mint_durable_source(target, retention_lease, binding, policy, ports, randomness) -> Result<SearchSourceHandle, HandleError>`
+```text
+list every source into BTreeMap
+→ compute source_fence by listing/hashing every source again
+→ for each emitted match:
+     validate current source/revision/digests
+     allocate random token
+     stage ResultHandleRecord
+→ insert batch only after output
+```
 
-Requires an immutable retained `SourceRevision`, native anchor, exact excerpt digest, current residency
-permission and durable-handle quota. Unsaved/current-path targets are structurally ineligible.
+The staged-batch/commit-after-output mechanic is useful. The source scans, token records and separate store
+are not.
 
-### `token_digest(handle) -> HandleTokenDigest`
+`prepare_expand`:
 
-Uses a dedicated domain and never logs or serializes plaintext token bytes. Server records and receipts
-store only the digest/reference.
+```text
+check caller-created clean LiveExpansionBarrier
+→ recompute whole source fence
+→ list/scan every source
+→ accept arbitrary [byte_start, byte_end] within whole revision
+→ read range and compare returned IDs/digests/length
+→ retain exclusive handle borrow through output
+```
 
-## Resolution and expansion
+This can expose unrelated revision content and repeats whole-catalog work for one item.
 
-### `resolve(handle, store) -> Result<SearchSourceHandleRecord, HandleError>`
+## Replacement operations
 
-Performs constant-behavior token-digest lookup where practical and returns no existence detail beyond
-the binding-safe failure contract.
+No public handle mint exists. The query-window owner may expose:
 
-### `revalidate(record, request, live_state) -> Result<HandlePermit, HandleError>`
+```text
+WindowItemRef { window_id, item_index }
+```
 
-Checks binding/principal, current grant/revocation, owner generation, source/workspace view, residency,
-retention lease, purge/tombstone, buffer snapshot, TTL and disclosure/range ceilings. Possession grants
-no authority.
+### `prepare_expand(item_ref, context_request, request_context)`
 
-### `expand(handle, request, live_state, ports, context) -> Result<HandleExpansion, HandleError>`
+1. resolve the live window and exact successfully emitted item index under an exclusive borrow;
+2. check original absolute expiry and optional concrete restricted-session binding;
+3. resolve the item's `ViewManifestEntry` from the window's pinned view;
+4. derive the permitted neighborhood from that exact entry and configured maximum context;
+5. reserve source-read/output budget;
+6. read and verify the immutable retained object/range;
+7. return `PreparedExpansion` which retains the borrow until complete output or drop.
 
-Validates budgets before readback, reopens the exact revision/anchor, verifies digest/assurance and
-rechecks live state immediately before returning bounded bytes/metadata.
+The request may choose a bounded relative neighborhood; it may not supply unconstrained absolute revision
+offsets. The source/revision/range come from the manifest, not a copied handle record.
 
-## Cancellation and deadlines
+### Output
 
-- Minting checks cancellation/deadline before randomness consumption and before record insertion.
-- If cancellation or deadline occurs after record insertion but before token delivery, the exact record
-  is invalidated and no successful token is reported; uncertain insertion is resolved by the package's
-  operation identity/record lookup rather than blind reminting.
-- Expansion checks cancellation/deadline before source readback, between bounded read/range operations
-  and immediately before emission.
-- Cancellation after bytes were read but before emission returns no bytes and no reusable permit.
-- A deadline never bypasses the final live binding/grant/owner/view/residency/purge recheck.
-- Invalidation and expiry are monotonic; cancellation may stop between bounded batches, returning a
-  resumable content-free receipt without resurrecting already invalidated records.
+Check the same absolute expiry/deadline immediately before writing. Complete writer success returns the
+frame. Partial output fails the session/window; there is no post-output acknowledgement or handle mutation.
 
-## Lifecycle
+## Delete after caller cutover
 
-### `invalidate(scope, generation, store) -> InvalidationReceipt`
+- shared `HandleStore`, records, validation contexts, permits and invalidation indexes;
+- daemon `ResultHandleCatalog`, entropy/token hashing, source-map/fence validation and handle records;
+- `SearchSourceHandle`, durable handle and retention-lease contracts;
+- `LiveExpansionBarrier` clean/purge/revocation Booleans;
+- arbitrary full-revision range expansion;
+- handle-specific crypto/provider, lifecycle and shape fixtures.
 
-Monotonic and idempotent for owner/view/security/purge/buffer/retention changes. Invalidated records
-cannot be resurrected by token replay or restore.
+Move exact immutable range reading and exclusive prepared-output behavior into the query-window/evidence
+owner. Delete this package and daemon module; do not leave a facade.
 
-### `expire(now, policy, store) -> ExpiryReceipt`
+## Verification
 
-Expires bounded batches. Caller supplies time. Restart invalidates all ephemeral records and releases
-associated memory/pins.
-
-### `apply_live_limits(old, new, store) -> Result<ConfigApplyReceipt, HandleError>`
-
-Implements restrictive changes from `config/sections/handles.md`; excess/over-age records are explicitly
-invalidated. `durable_unsaved_allowed=true` is always rejected.
-
-## Required fixtures
-
-Token entropy/opacity; plaintext absent from logs/debug/receipts; provider result cannot serialize
-server record; possession without authorization denied; ephemeral restart/buffer-close invalidation;
-durable retained-revision requirement; owner/view/residency/purge drift; range budget before readback;
-cancellation/deadline before readback and immediately before emission; uncertain mint cleanup/recovery;
-quota/TTL reduction receipts; fake persistence/readback ports.
+- normal cards require no handle allocation;
+- page/expansion performs no whole-source-catalog enumeration;
+- only a successfully emitted item index can expand;
+- expansion stays within the configured neighborhood of its exact manifest range;
+- wrong/missing retained bytes fail real verification;
+- expiry/restart/disconnect/revocation remove availability through the actual window/session;
+- partial output does not create new state or acknowledge disclosure.

@@ -1,174 +1,138 @@
-# Donor verification register — 2026-10-09
+# Donor register — installed state, implementation-time candidates and verified limits
 
-**Repository:** `UnknownAlienHuman/eliot-search`  
-**Reviewed main:** `e358d3c06d211b269efd501cd8d4002a260ba0a5`  
-**Purpose:** distinguish accepted, rejected and still-unverified donors before one manager delegates work to subagents.  
-**Qualification performed:** static source/documentation review only; no exact-head Cargo, Windows or Qdrant run is claimed.
+This is the live donor index. It records exact installed versions, uninstalled candidates and upstream
+behavior which constrains a concrete ELIOT owner. It does not approve a dependency, reserve a future pin,
+create a runtime credential or replace the consuming owner's recipe.
 
-## Status vocabulary
+**Current repository checkpoint:** R041 over inspected head
+`8a63e7ad770ea4d57f506c54f07716bb06203111`, 2026-10-24.  
+**Previous detailed research:**
+[`da382b66`](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md).
 
-| Status | Meaning |
-|---|---|
-| `ACCEPTED_EXACT` | Exact release/source/profile is selected for the named narrow role. |
-| `REJECTED_PRODUCTION` | May be used as a test oracle or research source, but not as product authority. |
-| `SELECTED_REVERIFY` | Direction is sound, but the assigned slice must recheck exact release, checksum, MSRV, features, advisories and API before changing `Cargo.lock`. |
-| `DECISION_REQUIRED` | No implementation starts until the named research task freezes one choice and golden corpus. |
+A donor has four distinct states:
 
-Popularity, benchmark marketing or a dependency already appearing in `Cargo.lock` is never sufficient acceptance.
+1. upstream behavior inspected;
+2. ELIOT use selected;
+3. exact dependency/service installed and connected to a current caller;
+4. behavior measured through the real product path.
 
-## Normative product boundary
+Do not collapse these into an “accepted donor” Boolean, receipt or package-status field. Recheck the exact
+current version, MSRV, advisories, features, transitive closure and native artifact when the real consumer is
+implemented.
 
-Read before evaluating any donor:
+<a id="installed-selected-and-optional"></a>
 
-- [Root agent rules](../../AGENTS.md)
-- [Architecture entrypoint](../architecture/README.md)
-- [Normative Architecture Part I](../architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md)
-- [ADR-0005 — standalone Search and controller boundary](../adr/0005-standalone-search-product-and-controller-boundary.md)
-- [ADR-0006 — agent-analysis product scope](../adr/0006-agent-analysis-framework-product-scope.md)
-- [Current launch packet](./WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md)
+## Installed dependencies and service baseline
 
-A donor owns a mechanism. It never inherits ELIOT root, source, access, currentness, receipt, completeness, readiness or lifecycle authority.
+| Donor | Current installed state | Consuming boundary and important limit |
+|---|---|---|
+| `qdrant-client` / Qdrant | Client locked `1.19.0`; selected server baseline `1.19.0` | One SDK bridge for publication/query. The real adapter exists, but the normal daemon path remains unconnected. Native BM25, scoped IDF and late-write limits are below. |
+| `redb` | Locked `2.6.3` | Compact current/published rows and real read snapshots. Transactions do not include Qdrant/files; long readers retain pages. |
+| Tokio | Locked `1.53.1` in current async consumers | Reuse process/I/O/deadline primitives. Dropping a future does not cancel arbitrary blocking work or settle an external mutation. |
+| `pulldown-cmark` | R031 pins `0.13.5`, checksum `278e9268c93b9e498a2da46c34d90ba93a3255eb99009646398f34bc73ab36eb`, defaults disabled | Materializer uses empty options and `OffsetIter`; version/checksum are transform identity. #441 is closed as the dependency cut. Connected parser/materialize/replay cases remain #215/#331 evidence. |
+| `quick-xml` | Locked `0.42.0` | Existing bounded JATS/XML parser/coordinate consumer, not a generic document-worker platform. |
+| `toml_parser` | Locked `1.1.4+spec-1.1.0` | Current low-level legacy config decoder, not the selected typed TOML replacement. |
+| `aho-corasick` | Locked `1.1.5` | Useful overlapping literal primitive. Current helper rebuilds per call and is not a connected retained-source Exact owner. |
+| `unicode-ident` / `unicode-normalization` | `1.0.26` / `0.1.25` | Narrow lexical identifier inputs; normalization does not establish compiler symbol identity. |
+| `globset` | Locked `0.4.20` | Admission matching only; not a source inventory owner. |
 
-## Wave-1 canonical/digest foundation
+R031 Actions run 40084893130 passed Rust 1.98 locked check and minimal Clippy for
+`search-materializer` plus `search-unitizer`. This is dependency/compiler evidence for those owners only.
 
-### Existing `search-contracts` canonical codec — `ACCEPTED_EXACT`
+## Implementation-time candidates not installed
 
-Keep the existing closed `CanonicalValue`, bounded JSON/CBOR encoders and strict decode/re-encode checks. Do **not** create `search-canonical` and do not replace the closed value vocabulary with arbitrary Serde values.
+| Candidate | Intended use | Adoption rule |
+|---|---|---|
+| high-level `toml` + Serde; `serde_json` | Typed sparse settings and bounded framed JSON | Absent from the current lock. Pin with #333/#280 consumers; preserve layer absence, close nested structs and redact diagnostics. |
+| `ignore::WalkBuilder` | Ignore-aware bounded source inventory | Absent from the current lock. Select exact current version with #271. A successful filtered walk is not automatically a complete physical inventory. |
+| `notify::RecommendedWatcher` | Optional responsiveness hints after reconciliation works | Absent from the current lock. Do not implement before #271 demonstrates startup/explicit/periodic convergence without notifications. Then recheck version, MSRV, features, platform backends and advisories with #239. |
+| `regex-automata` | Optional bounded Exact regex predicate | Absent from the current lock. Literal Exact is baseline. Select only with a real #248 consumer and freeze syntax/Unicode/newline/resource semantics with code. |
+| PDFium via `pdfium-render` | First optional retained-PDF native-text profile | Absent from the current lock/runtime. #227 must select one exact current crate and one matching packaged native PDFium artifact, with API/MSRV/advisory/features/license/hash/platform-binding evidence. |
+| `rmcp` | Optional MCP tools leaf after standalone Search | Absent from the current lock. Latest stable SDK inspected in R039 is `3.7.0`, published 2026-10-22 at commit `5d6a11f2ae022f513aec0f6e0f10f89a57891a7f`, MSRV Rust 1.88; stable MCP spec remains `2026-07-28`. Recheck and pin only with the real #219 consumer. |
+| tree-sitter / SCIP producers | Optional source-backed outlines/semantic facts | Add only with a concrete snapshot-bound orientation consumer; syntax does not fabricate compiler call truth. |
+| concrete model/tokenizer/runtime | Optional embedding or reranking after lexical baseline | No model donor is selected. Require measured benefit, one exact artifact/profile and direct preparation/query consumers; prefer in-process unless isolation is justified. |
 
-Current source:
+These candidates are alternatives or optional additions, not a mandate to install every donor mentioned in
+research. A dormant worker or adapter is not evidence that its donor is installed.
 
-- [`canonical.rs`](../../crates/search-contracts/src/canonical.rs)
-- [`ids.rs`](../../crates/search-contracts/src/ids.rs)
-- [conformance fixtures](../../crates/search-contracts/tests/conformance.rs)
+<a id="native-bm25-and-separate-statistics-scope"></a>
 
-Normative standard:
+## Qdrant native BM25, scope and IDF
 
-- [RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html)
-
-Important profile correction: the current encoder orders map keys by encoded-key length and then bytewise value. That is the RFC 8949 **length-first deterministic ordering** profile described in §4.2.3, not the §4.2.1 Core Deterministic ordering. Existing accepted bytes must be frozen. Changing ordering requires a new canonical profile and migration; it is not a cleanup inside #237.
-
-### `blake3` 1.8.2 — `ACCEPTED_EXACT`
-
-Exact source and metadata:
-
-- [official `blake3` 1.8.2 `Cargo.toml`](https://github.com/BLAKE3-team/BLAKE3/blob/1.8.2/Cargo.toml)
-- [official implementation repository](https://github.com/BLAKE3-team/BLAKE3)
-- lockfile checksum: `3888aaa89e4b2a40fca9848e400f6a658a5a3978de7be858e209cafa8be9a4a0`
-- license: `CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception`
-
-Accepted narrow profile for #237:
-
-```toml
-blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
-```
-
-Risks that must remain explicit:
-
-- upstream documents `pure` below its unstable/testing-feature boundary;
-- exact pinning is therefore mandatory;
-- `pure` is selected to avoid assembly/C implementations in this authority package, not because it is a generally stable donor feature;
-- no `rayon`, `mmap`, `serde`, `traits-preview`, platform SIMD opt-in or runtime file helper belongs in `search-contracts`;
-- the manager must prove Rust 1.98 and target compatibility before merge.
-
-The crate performs the named algorithm only. ELIOT owns domain/profile separation, input ceilings, operation schemas and typed results.
-
-### RustCrypto `sha2` 0.10.9 — `ACCEPTED_EXACT`
-
-Exact source and metadata:
-
-- [official `sha2-v0.10.9` `Cargo.toml`](https://github.com/RustCrypto/hashes/blob/sha2-v0.10.9/sha2/Cargo.toml)
-- [official RustCrypto hashes repository](https://github.com/RustCrypto/hashes)
-- lockfile checksum: `a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283`
-- license: `MIT OR Apache-2.0`
-
-Accepted narrow profile:
-
-```toml
-sha2 = { version = "=0.10.9", default-features = false }
-```
-
-Do not enable `asm`, `oid`, exposed compression APIs or another SHA implementation. Existing copied SHA loops are owner migrations; #237 adds the shared compute boundary and guard rather than rewriting every consumer in one branch.
-
-### Ciborium 0.2.2 — `REJECTED_PRODUCTION`
-
-Evidence:
-
-- [exact 0.2.2 canonical value source](https://github.com/enarx/ciborium/blob/v0.2.2/ciborium/src/value/canonical.rs)
-- [0.2.2 package documentation](https://docs.rs/crate/ciborium/0.2.2)
-
-The exact stable release provides canonical comparison/`CanonicalValue`, but not a public `canonical_into_writer` production API. Its ordering code also serializes dynamic values for comparison. It may serve as an independently pinned differential oracle in tests; it must not become the product codec or leak donor `Value` types across ELIOT boundaries.
-
-## Unicode full case folding — `DECISION_REQUIRED` under #253
-
-Normative primary data for the current review date:
-
-- [Unicode 18.0.0 `CaseFolding.txt`](https://www.unicode.org/Public/18.0.0/ucd/CaseFolding.txt)
-- [UAX #44 — Unicode Character Database](https://www.unicode.org/reports/tr44/)
-- [UAX #15 — normalization](https://www.unicode.org/reports/tr15/)
-- [UAX #31 — identifiers and syntax](https://www.unicode.org/reports/tr31/)
-- [Issue #253](https://github.com/UnknownAlienHuman/eliot-search/issues/253)
-
-Facts that the decision must preserve:
-
-- full folding uses `C + F` mappings and may expand one scalar into several;
-- default folding excludes `T`; Turkic behavior is a distinct profile;
-- case folding does not preserve normalization by itself;
-- original source ranges must remain exact even when normalized terms expand;
-- floating `latest` data is forbidden in implementation and fixtures.
-
-Candidate assessment:
-
-| Candidate | Current assessment |
-|---|---|
-| Generated checked-in table from exact Unicode 18.0.0 data | Preferred baseline candidate: smallest exact transformation surface, explicit data provenance and suitable for per-scalar range mapping. Generator, checksum, license header and differential fixtures must be retained. |
-| `focaccia` | Useful oracle/candidate: current releases expose full/Turkic comparisons and a Unicode version, but the public API is comparison-oriented. Do not select it until exact release source proves a deterministic emitted-fold/range-mapping API suitable for indexing. |
-| ICU4X case mapping | Fallback only if the small generated-table path cannot satisfy exact behavior. Its broader data/dependency surface is not justified merely to obtain folding. |
-| simple-fold-only crates / regex case folding | Rejected for `prose_words@1`: they omit multi-scalar `F` mappings such as `ß → ss`, and regex libraries intentionally use simple folding. |
-
-#253 remains a real decision gate. A subagent may recommend the generated-table option, but the manager must publish the exact data version, generator, checksum, default/Turkic policy, normalization order and byte-for-byte goldens before #254 starts.
-
-## Wave-2 donor families
-
-These selections are directionally sound and preferable to the current handwritten engines, but each implementation issue must revalidate the exact release at its post-#237 base. They are **not** additional Wave-1 coding scope.
-
-| Slice | Selected mechanism | Status | Exact task / primary entrypoint |
-|---|---|---|---|
-| Typed TOML | `toml` + Serde typed visitor + `serde_path_to_error` | `SELECTED_REVERIFY` | [#238](https://github.com/UnknownAlienHuman/eliot-search/issues/238), [toml-rs](https://github.com/toml-rs/toml) |
-| Admission globs | `globset` over ELIOT canonical relative bytes | `SELECTED_REVERIFY` | [#241](https://github.com/UnknownAlienHuman/eliot-search/issues/241), [globset source](https://github.com/BurntSushi/ripgrep/tree/master/crates/globset) |
-| Single/multi literal matching | `memchr::memmem` + `aho-corasick` | `SELECTED_REVERIFY` | [#246](https://github.com/UnknownAlienHuman/eliot-search/issues/246), [#247](https://github.com/UnknownAlienHuman/eliot-search/issues/247), [memchr](https://github.com/BurntSushi/memchr), [aho-corasick](https://github.com/BurntSushi/aho-corasick) |
-| Bounded regex | `regex-automata` closed profile | `SELECTED_REVERIFY` | [#248](https://github.com/UnknownAlienHuman/eliot-search/issues/248), [regex-automata docs](https://docs.rs/regex-automata/) |
-| Cargo graph | `cargo_metadata` | `SELECTED_REVERIFY` | [#250](https://github.com/UnknownAlienHuman/eliot-search/issues/250), [cargo_metadata](https://github.com/oli-obk/cargo_metadata) |
-| Rust syntax lint | `syn::parse_file` + narrow visitor | `SELECTED_REVERIFY` | [#251](https://github.com/UnknownAlienHuman/eliot-search/issues/251), [syn](https://github.com/dtolnay/syn) |
-| Code identifiers | `unicode-ident1.0.26` XID18 + `unicode-normalization0.1.25` NFC17; tinyvec1.13.3 | `SELECTED_REVERIFY` | Published artifacts/data and isolated closure verified2026-10-11; final workspace gates/profile review pending, NOT_QUALIFIED. [#252](https://github.com/UnknownAlienHuman/eliot-search/issues/252), [#435](https://github.com/UnknownAlienHuman/eliot-search/issues/435), [exact release/data/closure evidence](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md#6-code-identifiers--252) |
-| Prose segmentation | `unicode-segmentation` + #253 fold profile | blocked | [#254](https://github.com/UnknownAlienHuman/eliot-search/issues/254), [unicode-segmentation](https://github.com/unicode-rs/unicode-segmentation) |
-| Markdown/JATS | `pulldown-cmark0.13.1` defaults off; normal closure `bitflags2.13.2[]`, `memchr2.8.3[alloc,default,std]`, `unicase2.10.0[]`; `quick-xml` remains separate | `SELECTED_REVERIFY` | Published archive/checksum and actual workspace lock/features verified 2026-10-11. Pulldown custom-build compiled/executed with the selected empty gen-tests-off branch; this evidence is NOT_ACCEPTED/NOT_QUALIFIED. [#226](https://github.com/UnknownAlienHuman/eliot-search/issues/226), [#437](https://github.com/UnknownAlienHuman/eliot-search/issues/437), [exact Markdown artifact/closure record](WAVE2_DONOR_ACCEPTANCE_2026-10-09.md#markdown-adoption-evidence--2026-10-11-437) |
-| Git plumbing | narrow `gitoxide`/`gix` profile | `SELECTED_REVERIFY` | [#129](https://github.com/UnknownAlienHuman/eliot-search/issues/129), [gitoxide](https://github.com/GitoxideLabs/gitoxide) |
-| Structural facts | Tree-sitter as syntax producer, not semantic authority | `SELECTED_REVERIFY` | [#223](https://github.com/UnknownAlienHuman/eliot-search/issues/223), [Tree-sitter](https://github.com/tree-sitter/tree-sitter) |
-| Precise imported facts | official SCIP stream/profile | `SELECTED_REVERIFY` | [#224](https://github.com/UnknownAlienHuman/eliot-search/issues/224), [SCIP](https://github.com/sourcegraph/scip) |
-
-## Mandatory donor acceptance record
-
-Before a manager changes a manifest or lockfile, the responsible subagent returns:
+Use Qdrant native BM25 rather than a second local numerical BM25 engine. For each sparse query leaf distinguish:
 
 ```text
-exact crate/package and role
-exact version, tag and source commit
-registry checksum
-license and bundled-data terms
-MSRV against Rust 1.98
-normal/build/dev transitive closure
-explicit enabled and disabled features
-advisories and maintenance state
-API/source facts required by the issue
-resource/cancellation limitations
-public-type containment boundary
-rejected alternatives and concrete reason
-fixture/differential oracle
-ACCEPT / REJECT / BLOCK
+base population = compatible selected sources + pinned validity/access partition
+retrieval filter = base population + request-only narrowing
+idf.corpus       = base population
 ```
 
-The manager independently checks the load-bearing source lines. A subagent report, Context7 summary, README claim or generated benchmark cannot authorize adoption by itself.
+`idf.corpus` is independent from the retrieval filter and cannot exclude hits by itself. In Qdrant 1.19.0 it is
+shard-local. An empty statistics corpus removes rarity/length signals rather than falling back to global IDF.
+Missing or incorrect statistics state is not known-empty Search.
 
-## Conclusion
+Pinned 1.19.0 source shows filtered IDF first collecting the selected population into sorted IDs or a dense
+mask and then walking queried postings. Top-k therefore does not bound upstream work. Preserve required scope
+semantics and measure cold/warm broad/small scopes through the connected product before introducing caching or a
+new layout.
 
-The immediate #237 donors are now sufficiently verified for a controlled implementation start, with the `blake3::pure` risk and RFC 8949 ordering profile explicitly recorded. The wider donor program is well selected but deliberately remains `SELECTED_REVERIFY` per slice. Claiming that every donor is already fully qualified would be false; the single-manager packet makes exact donor revalidation a precondition rather than allowing agents to improvise.
+Primary references:
+
+- [native BM25](https://qdrant.tech/documentation/inference/inference-bm25/)
+- [per-tenant/scoped statistics](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-scoring-statistics)
+- [Qdrant 1.19.0 IDF source](https://github.com/qdrant/qdrant/blob/v1.19.0/lib/segment/src/index/sparse_index/sparse_vector_index/read_view/idf.rs)
+- [bridge owner](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#schema-scope-and-idf)
+
+## Qdrant word tokenization is not exact identifier identity
+
+The 1.19.0 word tokenizer splits on non-alphanumeric characters. `parse_manifest`, `parse-manifest` and
+`parse::manifest` collapse to the same word sequence; `C++` and `C#` lose punctuation. Exact literal/name/
+location operations therefore remain independent of BM25 candidates.
+
+<a id="markdown-offset-iterator-released-fix-not-yet-adopted"></a>
+
+## Markdown OffsetIter correction
+
+At R028, the installed 0.13.1 adapter used
+`Parser::new_ext(source, Options::empty()).into_offset_iter()` and the printable input
+`"- [o]:u\n    \t"` could reach the donor. Upstream `pulldown-cmark 0.13.5` shipped 2026-10-21 with the
+maintained blank-remainder correction plus other parser/range changes.
+
+R031 updated Cargo pin, lock and materializer donor identity together while preserving empty options and
+`OffsetIter`. Old prepared output is not relabelled as 0.13.5 output. #441 is closed as this dependency task;
+actual parser/materialize/replay evidence remains #215/#331 work.
+
+<a id="typed-configuration-donor-boundaries"></a>
+
+## Typed configuration donor limits
+
+The current lock does not contain high-level `toml`, Serde or `serde_json`. For #333:
+
+- preserve absence in sparse layer structs instead of applying application defaults in every layer;
+- close each nested struct; `deny_unknown_fields` and `flatten` cannot be combined casually;
+- TOML documents are UTF-8 strings, while native OS paths supplied outside the file remain OS values;
+- map syntax errors to bounded redacted diagnostics;
+- distinguish malformed syntax from invalid effective settings;
+- refuse invalid effective settings before constructing owners.
+
+The [config owner](../../crates/search-config/FUNCTIONS.md#sparse-layers-and-validation) owns precedence, list
+replacement, path bases, validation and concrete examples.
+
+<a id="a-chunk-api-is-not-an-incremental-reader"></a>
+
+## Exact matcher seam
+
+`search-exact::literal::scan_chunks` carries Aho state across supplied UTF-8 chunks and preserves overlapping
+matches, but builds the NFA per invocation, requires chunks to be pre-supplied and lacks cancellation inside the
+byte loop. It is a useful primitive, not the connected request owner.
+
+Compile once per Exact request, reset state at source boundaries and feed bounded blocks from the actual retained
+reader with cancellation checks. Raw bytes, decoded text and derived representations remain distinct predicates.
+Do not infer complete no-match from an incomplete inventory.
+
+## Currentness and maintenance rule
+
+Package caller searches and source-size measurements are revision-specific evidence. Before deletion or donor
+adoption, recheck the exact current branch across manifests, Rust/non-Rust callers, features, tests and workflows.
+Record the inspected SHA, current state, selected consumer and unrun work in the analysis registry. Preserve
+immutable links to older research instead of presenting old measurements as permanent current facts.

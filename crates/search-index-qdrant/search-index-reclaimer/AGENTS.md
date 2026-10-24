@@ -1,30 +1,29 @@
-# Agent contract — search-index-reclaimer
+# Working on search-index-reclaimer
 
-Own only `crates/search-index-qdrant/search-index-reclaimer/`. Do not edit the root workspace, shared
-contracts, architecture or another package. Missing fields use the contract-change process.
+Read the root [architecture](../../../docs/architecture/README.md),
+[implementation guide](../../../docs/implementation/README.md), local [cleanup map](FUNCTIONS.md),
+[publication map](../search-publication/FUNCTIONS.md) and
+[view manager](../search-epoch-pins/FUNCTIONS.md).
 
-The bounded implementation packet is `swarm/assignments/search-index-reclaimer.md`.
+This package is a consolidation/removal target. Move only the useful exact Qdrant ID/collection delete and
+absence-readback helper into publication or the bridge.
 
-## Ownership
+Do not repair caller-created manifest proofs, plan digests, watermarks, checkpoints, receipts or the separate
+operation journal. Publication persists one finite `RetiredCleanup` row per genuinely unfinished external
+delete and removes it after completion.
 
-- committed retired-manifest validation
-- epoch/route watermark eligibility
-- exact-ID deletion plans, receipts and resume cursors
-- separation of ordinary reclamation from security purge
+Eligibility must inspect every live view:
 
-## Forbidden ownership
+- point IDs closed at sequence N wait until no live same-route/generation view has sequence < N;
+- a collection waits until no live view uses its route/generation.
 
-- publication visibility/retirement decisions
-- pin acquisition
-- broad-filter correctness deletion
-- CAS deletion or purge acknowledgement
-- direct vendor adapter dependency
+Waiting for the immediate predecessor's last guard is wrong when an earlier view remains live. Restart drops
+old guards but keeps cleanup rows, so work is not forgotten.
 
-## Dependencies
+Bind every delete/readback to the exact route/generation and one absolute context. Unknown outcome keeps the
+same row/cursor and re-observes actual state. Broad-filter deletion, legal/security purge and secure-erasure
+claims remain absent.
 
-`search-contracts`, `search-domain`, `search-epoch-pins`. Deletion executes through an injected
-vendor-neutral index-admin port.
-
-## Size
-
-Target `src/` ≤ 4,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Delete this package and its P18/W7/shape/process fixtures after callers move. After code, run minimal Rust
+1.98 compiler/Clippy for publication/bridge/control/view consumers and focused threshold/restart/unknown-
+outcome cases.

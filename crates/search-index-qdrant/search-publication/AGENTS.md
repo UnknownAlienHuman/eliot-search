@@ -1,27 +1,16 @@
-# Agent contract — search-publication
+# Working on publication
 
-Own only `crates/search-index-qdrant/search-publication/`. Do not edit another package, root workspace,
-shared contracts or architecture. Missing fields use the contract-change process.
+Read the [manifesto](../../../docs/architecture/README.md), [implementation](../../../docs/implementation/README.md)
+and [FUNCTIONS.md](FUNCTIONS.md). Change the real planner, metadata, bridge, view and query consumers together.
 
-The bounded packet is `swarm/assignments/search-publication.md`.
+Use compact evidence rows in redb and pin the actual read snapshot. Same-generation evidence changes and the
+current-view update commit atomically after Qdrant readback; large rebuilds fill separate staging-generation
+tables. Do not implement a second manifest B-tree, per-view full copy or generic temporal-record framework.
 
-## Ownership
+Bound the incremental metadata delta before external work. Partial expected mutation progress is retried per
+item, not reported as corruption. Keep only unfinished pending/cleanup state. No database or I/O work under
+the view-manager lock. Local object collection runs only with the daemon stopped and its root lock acquired;
+do not restore the old ObjectGcGate protocol or lease platform.
 
-- serialized publication/commit/recovery state machine
-- journal/index operations through vendor-neutral ports
-- exact readback and guarded VisibleEpoch commit
-- committed retired-manifest emission
-
-## Forbidden ownership
-
-- concrete redb/Qdrant/process dependencies
-- multiple active commits, broad closure or epoch reuse
-- physical retired-point deletion
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-projection-planner`, `search-point-identity`.
-
-## Size
-
-Target `src/` ≤ 7,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Preserve useful existing code. Implement the selected slice and use minimal changed-owner check/Clippy;
+runtime fault/scale evidence follows implementation, not a receipt or review gate.

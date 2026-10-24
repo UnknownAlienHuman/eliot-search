@@ -1,9 +1,8 @@
-//! Protocol-only CLI application facade.
+//! CLI facade during the local-session cutover.
 //!
-//! The primary build exposes DIRECT/stdin operations and the canonical local
-//! provider bootstrap only. Obsolete address/token-file endpoint commands are
-//! refused before entering the legacy parser unless the explicit harness feature
-//! is enabled.
+//! Shell/one-shot and legacy root-forwarding paths remain. Native setup
+//! declarations are not a connected provider. Address/token-file commands
+//! are confined to the explicit legacy harness feature.
 
 mod core;
 #[cfg(feature = "legacy-loopback-harness")]
@@ -89,7 +88,7 @@ fn print_primary_help() {
         "eliot-search ",
         env!("CARGO_PKG_VERSION"),
         "\n\n",
-        "CONTROL:\n",
+        "SHELL CONTROL:\n",
         "  eliot-search --help\n",
         "  eliot-search --version\n",
         "  eliot-search health [--daemon PATH]\n",
@@ -97,22 +96,21 @@ fn print_primary_help() {
         "  eliot-search shutdown [--daemon PATH]\n",
         "  eliot-search self-test [--daemon PATH]\n",
         "  eliot-search serve-data-root ROOT [--daemon PATH]\n\n",
-        "ONE-SHOT SEARCH:\n",
+        "ONE-SHOT SEARCH OVER CURRENT BYTES:\n",
         "  eliot-search scan-stdin QUERY [--daemon PATH]\n",
         "  eliot-search scan-stdin-ascii-insensitive QUERY [--daemon PATH]\n",
         "  eliot-search scan-file QUERY FILE [--daemon PATH]\n",
         "  eliot-search scan-file-ascii-insensitive QUERY FILE [--daemon PATH]\n\n",
-        "PERSISTENT DIRECT CORPUS:\n",
-        "  eliot-search sync-directory ROOT DIRECTORY [--daemon PATH]\n",
+        "LEGACY ROOT FORWARDING (may be intercepted or refused):\n",
         "  eliot-search search-root ROOT QUERY [--daemon PATH]\n",
         "  eliot-search search-root-ascii-insensitive ROOT QUERY [--daemon PATH]\n",
         "  eliot-search list-sources ROOT [--daemon PATH]\n",
         "  eliot-search verify-root ROOT [--daemon PATH]\n",
-        "  eliot-search verify-directory-manifests ROOT [--daemon PATH]\n",
         "  eliot-search read-revision ROOT REVISION_ID START END [--daemon PATH]\n\n",
         "Legacy write and cleanup commands are unavailable.\n\n",
-        "The canonical authenticated provider transport is installation-scoped ",
-        "local IPC. Address, port, endpoint-file and token-file routing are not ",
-        "available in the primary build.\n"
+        "health/shutdown operate on a new shell child, not an existing service.\n",
+        "self-test checks helpers, not persistent Search or Qdrant.\n",
+        "The source-to-Qdrant-to-CLI application is not connected yet.\n",
+        "Address, port, endpoint-file and token-file routing are unavailable in the primary build.\n"
     ));
 }

@@ -1,186 +1,83 @@
-# Function contract — `search-safe-reader`
+# search-safe-reader — functions and integration
 
-**Status:** W2/P03 logical contract; no Windows final-handle or Git-object acquisition evidence exists.
+The [implementation guide](../../../docs/implementation/README.md) owns retention and preparation.
+This package owns acquisition, not source history, a watcher or another immutable-object store.
 
-This package owns bounded no-execute acquisition of exact source bytes from an already admitted local
-root or an already identified local Git object. It owns no admission policy, source identity, registry,
-revision storage, materialization or currentness claim.
+## Existing source and callers
 
-## Global rules
+| Symbol or caller | Actual behavior |
+|---|---|
+| [`same_handle_read_core`](src/lib.rs) | Opens once, validates before/after metadata, reads the requested range, checks returned length and cancellation. The adapters supply physical observations; this core does not itself implement OS containment or hash content. |
+| `safe_read`, `safe_read_with_cancel`, `acquire_with_cancel_v2` | Wrap the shared core with old barrier or root-purpose metadata/receipt validation. V2 is not a separate storage engine. |
+| `safe_read_with_retries` | Reopens for a finite number of attempts after transient backend/handle-change failures. Cancellation and deterministic validation failures are not retried. |
+| [`FinalHandleBackend`](../../../bins/eliot-searchd/src/safe_reader_adapter/kernel/backend.rs), [`read_full_file_via_kernel`](../../../bins/eliot-searchd/src/safe_reader_adapter/kernel/read.rs) | Existing daemon filesystem adapter and whole-file wrapper. The wrapper currently uses `never_cancel`; connect real cancellation when reusing its behavior. |
+| [`FreshRootContext::acquire_source_v2`](../../../bins/eliot-searchd/src/owner_composition/kernel/native_source.rs) | Uses `acquire_with_cancel_v2`, obtains and hashes the body, then returns `AcquiredNativeSource` without that body. Transfer the same body to retention as required by the implementation guide. |
+| [`parse_loose_object`](src/git.rs) | Parses already decompressed `<type> <size>\0payload`. It is not an ODB, pack/ref reader or verification that bytes hash to the requested Git OID. |
+| `GitObjectBackend`, `read_git_object_no_execute` | Abstract loose-object acquisition, with only fake implementations found. The wrapper compares backend-supplied identities, parses and copies the payload; it does not independently verify the Git object hash. |
+| [`plan_git_snapshot`](../../../bins/eliot-searchd/src/source_composition.rs) | Plans an already supplied object through old composition. No production repository reader calls it. Its repository+blob stable identity omits path occurrence; do not reuse that identity model for multiple paths/views. |
 
-- every request binds an admitted root/source/owner generation and an exact locator or Git object ID;
-- root containment is checked on the final opened handle/object source, not only on path text;
-- source bytes are returned only after bounded pre/read/post stability verification;
-- hooks, filters, attributes requiring process execution, credential prompts, remote fetches and network
-  are disabled;
-- source bytes and unrestricted absolute paths never enter ordinary diagnostics, receipts or telemetry;
-- cancellation, timeout or instability never yields a successful partial byte product;
-- equal immutable input/observations produce equal digests and receipts.
+The earlier config, batch, containment-receipt and buffer-release logical function lists were proposals,
+not implemented APIs. Retire receipt-only fields with their consumers; do not manufacture replacements.
 
-## Configuration operations
+## Filesystem byte handoff
 
-### `section_descriptor() -> ConfigSectionDescriptor`
+Keep one selected-root read with actual length limits and before/after observations on the opened handle.
+The walker supplies candidates, not verified contents. Pass the owned body and needed source observation
+to the existing writer; preserve the source observation while committing its revision. Hash exact bytes
+where content identity is established. Later storage reads verify their actual stored object when needed.
+Do not add replay of local receipts or repeat stable reads solely to cross an internal function boundary.
 
-### `compiled_defaults() -> ConfigSectionInput`
+Cancellation stops further work and returns no successful partial body. Source instability is a finite
+retry or an explicit unavailable result. Decoding, normalization and evidence coordinates belong to
+preparation; byte acquisition does not transform source truth.
 
-### `validate_section(input, platform, accepted_capabilities) -> Result<ValidatedReaderConfig, ReadError>`
+## Concrete Git path
 
-Implements `config/sections/source_reader.md`. The configured byte ceiling cannot exceed the admitted
-source ceiling. Network, hooks and filters remain fixed false. Retry count/delay and size reductions are
-bounded.
+Use installed system Git as the first backend. Resolve the selected commit/tree to exact IDs once.
+Run builtins with direct argument arrays for the selected repository, without a shell. Use raw plumbing:
 
-### `section_digest(validated) -> Blake3Digest32`
+- `ls-tree -r -z --full-tree <tree>` enumerates the initial committed view.
+- `diff-tree --raw -r -z --no-renames --no-commit-id --no-ext-diff --no-textconv <old-tree> <new-tree>`
+  finds changed paths and object IDs; unchanged subtrees require no blob reads.
+- For an explicitly selected index view, `ls-files --stage -z` captures path/OID/stage entries. Conflict
+  stages remain explicit. These blobs must not be labeled as current filesystem bytes.
+- One `cat-file --batch-command --buffer -Z` process per indexing job, under the shared work budget,
+  handles finite batches of `info <OID>` and `contents <OID>`. Check kind/size from `info` before requesting
+  contents; issue `flush` for each finite batch. Read the framed length into the existing byte writer.
 
-### `plan_section_change(old, new) -> Result<SectionReloadDecision, ReadError>`
+Use `--no-replace-objects`, `--no-lazy-fetch` and `--no-optional-locks` with the selected local commands;
+omit filters, textconv and repository-controlled external commands. The process has the operation's
+cancellation/deadline. This permits a trusted Git executable without executing indexed scripts or
+silently fetching content. Do not create a long-lived process/supervisor for every registered root.
 
-Restrictive byte/retry changes may apply to future reads. Any increase beyond qualified/admission limits,
-or any attempt to enable network/execution, is restart/gate/reject according to the section packet.
+Raw blobs may be LFS pointer text, symlink contents or different bytes from a worktree after attribute/EOL
+conversion. Preserve that view distinction. Treat submodules as separately selected repositories.
+Git GC can remove unreferenced objects; retain the exact blobs needed for evidence in the existing
+revision store. Missing/promised objects stay unavailable with lazy fetch disabled.
 
-## Request and root validation
+An OID returned by a lookup is not by itself a check of the returned bytes. At acquisition, verify the
+expected Git object identity when relying on that identity and establish the retained content digest.
+Use the repository's object hash kind; the current fixed 20-byte `GitObjectId` is old code, not a format
+compatibility promise. No new signed-object or receipt layer is needed.
 
-### `validate_read_request(request, registry_view, admission_receipt, owner_fence, limits) -> Result<ValidatedReadRequest, ReadError>`
+Verified donor: Git 2.51.0,
+[`cat-file.c`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/builtin/cat-file.c)
+streams raw blobs and queues commands until `flush`;
+[`tree-diff.c`](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/tree-diff.c)
+skips matching OID/mode entries. See the same revision's
+[command options](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git.adoc)
+and [batch framing](https://github.com/git/git/blob/c44beea485f0f2feaf460e2ac87fdd5608d63cf0/Documentation/git-cat-file.adoc).
+This pin is inspected evidence, not a promise that any installed Git supports every option.
 
-Requires exact source/root/path-binding or Git-object identity, current root/registry/owner generations,
-matching accepted admission receipt, finite byte/deadline/retry budget and explicit expected source kind.
+## Native alternative, when packaging needs it
 
-A stale binding, foreign root, review/deny admission result or implicit disk-wide locator fails before
-open. This operation performs no file read.
-
-### `resolve_final_handle(locator, admitted_root, platform_port, deadline, cancel) -> Result<ResolvedSourceHandle, ReadError>`
-
-Opens the source with the qualified no-follow/share semantics, resolves the final object and records
-stable root/volume/file/reparse identity plus bounded metadata.
-
-Path traversal, device/alternate-stream policy violation, reparse cycle or unresolved final identity is
-rejected. Cancellation closes every opened handle and returns no reusable proof.
-
-### `verify_final_containment(handle, admitted_root, platform_port) -> Result<ContainmentReceipt, ReadError>`
-
-Proves the final object remains inside the exact admitted root under the qualified platform identity
-profile. A symlink/reparse target outside the root is denied unless that target root is independently
-admitted and named by the request.
-
-Textual prefix, normalized-path prefix or initial path traversal is not sufficient containment evidence.
-
-## Stable file acquisition
-
-### `observe_before_read(handle, platform_port) -> Result<FileObservation, ReadError>`
-
-Captures stable physical identity, size, timestamps/change identity where qualified, path-binding/root
-fence and source kind. Missing load-bearing fields are explicit.
-
-### `read_bounded(handle, byte_limit, buffer_policy, deadline, cancel) -> Result<ReadBuffer, ReadError>`
-
-Reads at most the accepted ceiling into bounded process memory while computing the canonical source-byte
-digest. Oversize input fails before unbounded allocation and returns no truncated success.
-
-### `observe_after_read(handle, platform_port) -> Result<FileObservation, ReadError>`
-
-Rechecks the same load-bearing identity/metadata after the final byte read and flushes no source state.
-
-### `verify_pre_read_post(before, bytes, after, request) -> Result<StableBytes, ReadError>`
-
-Requires exact physical/root/source identity and compatible size/change observations before/after, byte
-length equal the observed stable size and digest over exactly returned bytes.
-
-A material mismatch is `SOURCE_UNSTABLE`; it is not downgraded to a current/successful read.
-
-### `read_stably(request, platform_port, clock, cancel) -> Result<StableReadReceipt, ReadError>`
-
-Runs final-handle resolution, containment and bounded pre/read/post attempts. Retries only the exact
-request within configured finite count/delay and closes every attempt handle.
-
-Success returns process-memory bytes through a guarded product plus content-free receipt binding source,
-root, owner/binding generations, observations, byte length/digest, encoding observation class and
-attempt count. The package does not persist bytes.
-
-## Git object acquisition
-
-### `validate_git_object_request(request, repository_identity, workspace_view, limits) -> Result<ValidatedGitObjectRequest, ReadError>`
-
-Requires exact admitted local repository/worktree identity, object ID, optional tree path, source/view
-fence and object/byte limits. Branch name or HEAD alone is insufficient.
-
-### `read_git_object_no_execute(request, git_object_port, deadline, cancel) -> Result<StableReadReceipt, ReadError>`
-
-Reads the exact local object using an accepted no-process/no-network backend. Hooks, filters, smudge/
-clean drivers, credential helpers, prompts, LFS/network fetch and repository-controlled commands are not
-invoked.
-
-The result binds repository/object/source/view identities, length and digest. Missing object, promised but
-unavailable object or required remote fetch returns explicit unavailable—not an implicit network call.
-
-## Encoding observation
-
-### `observe_encoding(bytes, profile) -> EncodingObservation`
-
-Returns bounded BOM/UTF validity/declared-encoding compatibility and reason metadata without changing
-source-truth bytes. Decoding/materialization belongs to `search-materializer`.
-
-## Batch acquisition
-
-### `read_batch(requests, ports, limits, deadline, cancel) -> Result<StableReadBatch, ReadError>`
-
-Canonicalizes a finite request set and returns one explicit outcome per item. Per-item bytes remain
-separately guarded. Cancellation stops further work and marks all unprocessed items; it never labels the
-batch complete or omits failures.
-
-## Redaction and cleanup
-
-### `redacted_read_view(receipt, disclosure) -> RedactedReadView`
-
-Returns opaque source/root IDs, location class/path digest, byte count/digest, attempts and reason codes.
-It excludes source bytes, unrestricted paths and foreign root/repository details.
-
-### `release_read_product(product) -> ReadReleaseReceipt`
-
-Drops/zeroizes package-owned transient buffers where the qualified allocator/runtime permits and closes
-handles. It makes no physical-memory-erasure claim.
-
-## Cancellation, deadline and crash semantics
-
-All open/read/object operations have finite deadlines and cancellation. Cancellation before stable
-verification produces no successful product. A process crash loses transient bytes/handles; no durable
-recovery is owned here. Callers retry by reopening the exact request and must revalidate current root,
-binding, admission and owner fences.
-The cancelable final-handle kernel polls the same original cancellation/deadline
-callback after final metadata and receipt validation, immediately before returning
-bytes. Cancellation raised during post-read inspection yields no successful byte
-product and is never retried by the bounded retry wrapper.
-
-## Typed failures
-
-- `READ_REQUEST_INVALID`
-- `ROOT_NOT_ADMITTED`
-- `ADMISSION_RECEIPT_STALE`
-- `SOURCE_BINDING_STALE`
-- `PATH_ESCAPES_ADMITTED_ROOT`
-- `REPARSE_CYCLE`
-- `DEVICE_OR_STREAM_PATH_DENIED`
-- `SOURCE_UNSTABLE`
-- `SOURCE_TOO_LARGE`
-- `SOURCE_READ_TIMEOUT`
-- `SOURCE_READ_CANCELLED`
-- `SOURCE_ENCODING_UNSUPPORTED`
-- `GIT_OBJECT_NOT_FOUND`
-- `GIT_OBJECT_REQUIRES_NETWORK`
-- `NO_EXECUTE_POLICY_DENIED`
-- `READ_BATCH_INCOMPLETE`
-- `READ_PLATFORM_IDENTITY_UNAVAILABLE`
-
-## Required tests / qualification evidence
-
-- final-handle containment versus textual-prefix adversarial fixtures;
-- symlink/junction/reparse escape, cycle, replacement and alternate-stream/device denial;
-- file changes before/during/after read become `SOURCE_UNSTABLE`;
-- size ceiling enforced before unbounded allocation and no truncated success;
-- finite retry/delay and cancellation closes all handles/buffers;
-- exact byte length/digest and deterministic receipt goldens;
-- Git exact object read with hooks/filters/prompts/network/credential helpers never invoked;
-- promised/missing Git object returns explicit unavailable;
-- stale admission/root/binding/owner/workspace fence rejected before read;
-- encoding observation never mutates bytes or claims decoded fidelity;
-- batch accounts every item under cancellation/failure;
-- source bytes/path absent from Debug/errors/receipts/log/metric fixtures;
-- `source_reader` configuration floors and change classification;
-- fake platform/Git/clock/cancellation ports prove no registry/CAS/materializer ownership.
+Choose gix instead if the product must work without an installed Git executable; do not implement both
+paths preemptively. At donor revision `ad0202e3ab396d752a56664001c134f48d834177`,
+[`gix-odb`](https://github.com/GitoxideLabs/gitoxide/blob/ad0202e3ab396d752a56664001c134f48d834177/gix-odb/src/lib.rs)
+reads loose and packed local objects. `Repository::find_header` obtains type/size;
+[`find_object`](https://github.com/GitoxideLabs/gitoxide/blob/ad0202e3ab396d752a56664001c134f48d834177/gix/src/repository/object.rs)
+loads the body into a reusable buffer. This is not a bounded streaming body API by itself.
+Use borrowed `TreeRefIter` and the direct tree comparison described in
+[reconciliation](../search-source-reconcile/FUNCTIONS.md), without similarity/attribute processing.
+[`gix_object::compute_hash` / `compute_stream_hash`](https://github.com/GitoxideLabs/gitoxide/blob/ad0202e3ab396d752a56664001c134f48d834177/gix-object/src/lib.rs)
+provide Git object identity computation; Eliot needs no bespoke loose/tree/pack parser.

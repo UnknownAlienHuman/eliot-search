@@ -1,23 +1,28 @@
-# Windows provider byte transport
+# Windows provider transport — delete with the old provider client
 
-Concrete OS effect owner used by the CLI's existing private typed stream seam.
-No session or protocol logic is duplicated here. #380 implements the source
-foundation; #373/#235 still own the reusable API and engine extraction, and #332
-owns native server, command cutover and compatibility removal.
+This package is one small synchronous **client-side** named-pipe adapter. It opens an endpoint described by
+the old provider protocol, exposes `Read + Write`, translates a few pipe errors and uses `PIPE_NOWAIT`
+polling. Production source is about 8.4 KiB before tests.
 
-Synchronous PIPE_NOWAIT polling is deliberate; it is not overlapped or async I/O.
-If an empty/closed pipe reports ERROR_NO_DATA, the engine retains the original
-deadline and conservative unknown outcome. Successful open/flush is not evidence
-of pairing, grant acceptance, peer receipt or rollback.
+Repository callers are the old typed provider client, its example and the unconnected CLI native-pairing
+path. There is no server/listener implementation here and no caller on the selected child-stdio path.
 
-Spec references (verified 2026-10-10):
+The current architecture uses owned child stdin/stdout first. Therefore remove this package and its workspace
+member with #280/#332 and the old provider client. Do not preserve it merely because a future persistent pipe
+might exist.
 
-- [Microsoft pipe modes](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-type-read-and-wait-modes)
-- [GetNamedPipeInfo](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-getnamedpipeinfo)
-- [SetNamedPipeHandleState](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-setnamedpipehandlestate)
-- [CreateFileW](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
-- [Rust 1.98 Windows File implementation](https://github.com/rust-lang/rust/blob/1.98.0/library/std/src/sys/fs/windows.rs)
+If a persistent Windows daemon later has a measured need, implement the smallest transport at that time:
 
-Focused pure/deadline fixtures are AUTHORED_NOT_RUN. Native wrong-user, foreign
-server, pipe mode, backpressure, cancellation, EOF and installed end-to-end
-qualification remains unperformed Q/#332/#215.
+```text
+actual owner-only named-pipe server/listener
++ real ACL/peer-owner validation
++ one owned client stream
+→ current u32-length + Serde protocol
+```
+
+That implementation may reuse the narrow Win32 error/handle lessons, but it must not depend on
+`NativeEndpointNameV1`, pairing keys, grants, capability digests, endpoint files or legacy session types.
+Transport reachability alone does not grant source scope; the daemon still resolves every request against its
+pinned view and optional restricted-session policy.
+
+No TCP/token-file fallback, discovery framework, reconnect pool or generic transport plugin is required.

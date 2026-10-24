@@ -1,25 +1,50 @@
-# search-index-reclaimer
+# search-index-reclaimer — delete after moving the exact effect
 
-**C17 — Retired-point reclamation executor.**
+Current source is about 25 KiB of production Rust. It builds caller-shaped retired manifests/plans,
+custom digests, checkpoints and receipts around one useful operation: exact Qdrant deletion/readback.
+No production `execute_batch` caller or durable checkpoint owner is connected.
 
-**Status:** `SOURCE_PRESENT`; exact retired-ID, pin-watermark and bounded resume source exists, while canonical publication/lifecycle composition and installed fault qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #126/#134.
+Read the [publication map](../search-publication/FUNCTIONS.md),
+[view manager](../search-epoch-pins/FUNCTIONS.md), [implementation guide](../../../docs/implementation/README.md)
+and local [source map](FUNCTIONS.md).
 
-Delete only exact committed retired point IDs older than every active route/epoch pin.
+## Replacement
 
-## Owns
+Publication persists finite `RetiredCleanup` rows when a committed view leaves physical work:
 
-- reclaim eligibility from committed retirement manifests
-- pin-watermark checks
-- bounded exact-ID delete batches and receipts
-- crash-safe ordinary-reclaim resume
+- same generation: exact IDs closed at `valid_until = N`, deletable only after no live same-generation view
+  has sequence below N;
+- replaced generation: one old collection, deletable only after no live view uses it.
 
-## Must not own
+The row points to immutable cleanup pages and carries the only effect/readback cursor. After eligibility,
+publication calls the bridge's exact delete/absence readback. Unknown outcome keeps the row and retries.
+Completed rows/pages disappear.
 
-- publication visibility or point retirement decisions
-- broad-filter correctness-path deletion
-- security purge or CAS retention
-- pin acquisition
+This is not a second publication journal. It is current unfinished external state, bounded and empty in
+steady state.
 
-- **Delivery wave:** W3 / P07; purge interaction hardened W7
-- **Soft source-line target:** 4,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+## Important correction
+
+Waiting for the immediate predecessor's last guard is insufficient. If v1 and v2 both reference a point and
+v3 closes it, v1 can remain live after v2 is gone. Cleanup uses every live view's route/generation/sequence.
+A sampled watermark or predecessor receipt cannot prove safety.
+
+## Remove
+
+Move any useful private exact-ID/collection delete/readback helper into publication or the Qdrant bridge,
+then delete:
+
+- `PublicationCommitProof` and caller retired-manifest validation;
+- public plan/batch/checkpoint/receipt types and custom digests;
+- separate operation ports/journal and sampled watermark inputs;
+- P18/W7 reclaim/purge/restore interaction machinery;
+- package/process/shape fixtures preserving those APIs;
+- this package and workspace dependencies after no caller remains.
+
+Ordinary cleanup makes no legal/security purge or physical-erasure claim. Unknown deletion leaks safely.
+
+## Completion
+
+A real publication commits a view and durable cleanup obligation in one transaction, old queries continue,
+point/generation deletion waits for every relevant live view, crash cannot forget the cleanup row, exact
+readback resolves ambiguous effects and no separate reclaimer state machine remains.

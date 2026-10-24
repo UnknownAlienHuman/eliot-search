@@ -1,58 +1,25 @@
-# Agent contract — eliot-search
+# Working on eliot-search
 
-You own only `bins/eliot-search/`. This is a composition or worker package, not a place to reimplement
-capability logic. Do not edit library packages, the root workspace, shared fixtures or architecture.
-Traceability only: S1.2, S33, H11.6, P01, P07, P14.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md),
+[local protocol](../../crates/search-provider-protocol/README.md) and local [source map](FUNCTIONS.md).
 
-## Mission
+The CLI owns invocation capture, one owned local connection, current typed request construction, bounded
+presentation and exit status. It does not own query/access policy, redb/object/Qdrant state or grants.
 
-Expose standalone commands strictly through the generic provider protocol.
+Use the smallest supported route first: spawn/own the daemon child and communicate over inherited
+stdin/stdout through the one current framed client. A persistent owner-only OS pipe is optional. Do not
+require pairing, shared keys, grants, binding records or capability digests for child stdio. A selected
+restricted-client profile authenticates separately and terminates into the same current dispatcher.
 
-## Ownership
+Capture `args_os()` and config once. Build `Search | Exact | Continue | Expand` directly. Do not translate to
+`RecipeIdV1`, marked indexed payloads, tab/hex commands or opaque source handles. `Expand` uses one
+`WindowItemRef` and bounded relative context, never arbitrary revision offsets.
 
-- argument parsing
-- local binding/bootstrap UX
-- request construction
-- bounded result rendering
-- doctor command transport
+Render typed human/JSON/NDJSON output with exact source/revision/location/excerpt and truthful partial/gaps.
+Use Serde; do not substring-parse events or concatenate JSON. Convert timeout once to an absolute deadline;
+interrupt sends best-effort cancellation for the live request and closes within the remaining bound.
 
-## Forbidden ownership
-
-- opening redb, CAS or Qdrant
-- reimplementing query/access logic
-- minting unbounded grants
-- rendering hidden raw payloads
-
-## Allowed dependencies
-
-`search-contracts`, `search-provider-protocol`. Do not add a storage, index, model, parser or client implementation outside this declared
-graph. New external artifacts require an ADR, exact version/digest, license proof and qualification.
-
-## Integration milestones
-
-- P01: daemon connection and health
-- P03-P12: thin recipe/doctor commands
-- P14: final protocol negotiation and flow control
-
-## Test seams and exit evidence
-
-- `binary dependency graph has no store/index crates`
-- `all commands use ProviderEnvelope`
-- `result rendering obeys disclosure/byte limits`
-- `disconnect/cancel is idempotent`
-
-Record exact command output and degraded behavior. Do not claim a Windows, Qdrant or provider proof that
-was not executed.
-
-## Size and split guard
-
-- Delivery wave: **W1 shell, commands added by owning packages**
-- Soft `src/` target: **4,500 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Keep `main` and command wiring thin; behavior belongs to the owning library package.
-
-## Definition of done
-
-The binary only composes accepted package contracts, has no reverse storage/authority path, enforces
-bounded lifecycle and cancellation, and supplies a reproducible handoff using
-`swarm/PACKAGE_HANDOFF_TEMPLATE.md`. Compilation alone is insufficient.
+Delete the duplicate legacy core/session/endpoint/harness path with its last callers. Preserve child
+ownership/cleanup, non-UTF-8 invocation behavior, finite output and useful exit mapping. After code, run
+minimal Rust 1.98 compiler/Clippy for actual CLI/client/protocol/daemon consumers.

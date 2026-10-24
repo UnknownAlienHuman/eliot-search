@@ -1,58 +1,82 @@
-# Function contract — `search-query-planner`
+# search-query-planner — source audit and deletion map
 
-**Status:** W4/P08 logical contract; no plan implementation exists yet.
+The [query cutover](../README.md) owns the connected operation. This file maps the current 104,042-byte
+single-file planner to the small amount of selection logic that may survive.
 
-The planner is server-owned. Clients supply one versioned recipe request and bounded preferences, never
-Qdrant collections, filters, point IDs, raw execution graphs or authority predicates.
+## Current API and caller reality
 
-## Operations
+| Current source/API | Actual behavior |
+|---|---|
+| public capability/budget/leg/plan structures | Ordinary callers can construct the values which later functions treat as accepted execution authority. |
+| `normalize_recipe(request)` | Validates and rebuilds one of eleven frozen V1 recipe/body variants. It does not select a real handler. |
+| `direct_leg_support(recipe)` | Static recipe-to-leg support table. It can advertise a leg with no constructed service. |
+| `canonical_execution_dependency(capabilities, scope, safe_index_legs)` | Builds another proof record from supplied capability/scope/leg inputs. |
+| `compile_canonical_plan(task_plan, grant, recipe, scope, capabilities, safe_index_legs)` | Consumes a caller-created `SearchTaskPlan`, grant, capability set and safe legs; checks their relationships and returns a public compiled plan. It does not create a Qdrant/source operation. |
+| plan fingerprinting | Uses package-local canonicalization/mixing over a subset of executable behavior. Strengthening it would still leave a disconnected protocol. |
+| `allocate_leg_budgets(global, leg_count)` | Divides relative duration/work fields among legs, encouraging nested timeout reset and confusing parallel/dependent work. |
+| `validate_drift(plan, observation)` | Compares caller-provided observations/fingerprints; it reads no current owner. |
+| package callers | `compile_canonical_plan` was found in package tests/support, not normal daemon serving. |
 
-### `normalize_recipe(request, contracts) -> Result<NormalizedRecipeRequest, PlanError>`
+The daemon separately contains a recipe registry, capability projection, grant issuer and authority owner,
+with no production constructor found. Do not choose one framework and wrap the other; remove both.
 
-Accepts exactly one of the eleven v1 recipes. Normalization is recipe-specific, bounded, Unicode/profile
-explicit and deterministic. Unknown fields or unsupported recipe/profile variants fail closed.
+## Replacement selection
 
-### `capture_query_snapshot(control_snapshot, source_view, overlay_state, capability_state) -> Result<QuerySnapshotFence, PlanError>`
+The query owner receives:
 
-Captures every Architecture S14 axis explicitly: catalog, membership, reference portfolio, access/live
-deny, shadow, purge, overlay, observation cursor/freshness, source/workspace view, collection route,
-visible epoch and lexical/profile generations. Direct-only plans use the contract's tagged route/epoch
-absence form; generic dependency maps cannot replace named axes.
+```text
+TypedQueryRequest
+PublishedViewGuard
+ResolvedScope
+RequestContext
+actual handler references
+```
 
-### `compile_plan(recipe, grant, authorized_scope, snapshot, capabilities, budget) -> Result<SearchTaskPlan, PlanError>`
+Baseline selection:
 
-Builds a finite typed leg DAG using accepted direct, lexical, exact and optional capability descriptors.
-Each leg binds its safe eligibility plan, profile, route/epoch requirements, input/output limits,
-dependencies and cancellation semantics. Optional legs are additive and explicitly unavailable when
-not accepted.
+```text
+Search   → direct Qdrant BM25 handler
+Exact    → direct bounded retained-source scan
+Continue → QueryWindow page
+Expand   → QueryWindow selected-item neighborhood
+```
 
-### `allocate_leg_budgets(recipe, global_budget, leg_drafts) -> Result<BudgetAllocation, PlanError>`
+Optional operations are included only when their concrete service exists. Unsupported modes fail before
+backend/source work.
 
-Allocates finite deadline, candidate, source-read, CPU, memory and result budgets. Zero means disabled,
-never unlimited. The sum of child ceilings cannot exceed the admitted server budget.
+For actual multiple routes/profiles, a private helper may return an ordered finite list:
 
-### `fingerprint_snapshot(snapshot) -> QuerySnapshotFingerprint`
+```text
+select_operations(request, view, scope, handlers, limits)
+    -> SmallVec<QueryOperation>
+```
 
-### `fingerprint_plan(plan_without_fingerprint) -> PlanFingerprint`
+Rules:
 
-Use deterministic canonical serialization and domain separation. Equal load-bearing inputs yield equal
-bytes/fingerprints; any named-axis/profile/budget/leg change yields a different fingerprint.
+1. `scope` is already non-widening and belongs to `view`; planning never accepts a second grant/snapshot.
+2. compatible selected sources share one Qdrant population and one IDF corpus;
+3. split only incompatible route/profile generations;
+4. every branch receives a nomination ceiling inside the request's counters;
+5. all branches share the same absolute deadline/cancellation;
+6. actual Qdrant-compatible branches use native prefetch/fusion/grouping;
+7. deterministic order is internal execution order, not a signed plan identity.
 
-### `validate_drift(plan, current_nonsecurity, current_security) -> PlanDriftDecision`
+## Delete after caller cutover
 
-Classifies `VALID`, `REVALIDATE_SECURITY`, `REPLAN`, `EXPLICIT_INCOMPLETE` or `SNAPSHOT_EXPIRED`.
-Restrictive security never waits for replan. Observation gaps cannot satisfy strict-current recipes.
+- V1 recipe normalizer and static support matrix;
+- public `CapabilitySet`, `SearchTaskPlan`, `CompiledSearchPlan`, `PlannedLeg`, `LegBudget` and related
+  constructor/sealing/fingerprint types;
+- canonical execution dependency and drift-observation protocols;
+- grant, access checkpoint, overlap proof and safe-index-leg planner inputs;
+- relative deadline division and per-leg freshness identity;
+- compile/seal/golden-plan fixtures and source-shape tests;
+- matching plan types from `search-contracts`, provider codecs and daemon authority composition.
 
-## Semantics
+Move the few useful route/profile grouping and finite-limit helpers to the direct query owner. Delete this
+crate if no substantial independent algorithm remains.
 
-Planning after captured inputs is pure, deterministic and retry-safe. Cancellation/budget exhaustion
-returns no executable partial plan. No I/O, mutable registry, pin, scheduler or vendor client is owned.
-Configuration implements `config/sections/query.md`; changed budget/profile settings affect only newly
-compiled plans unless a stronger accepted reconfiguration action is required.
+## Verification
 
-## Required fixtures
-
-Exact eleven-recipe normalization; snapshot field completeness/no-hidden-axis; direct/index tagged
-validity; equal-input golden fingerprints; one-axis drift changes fingerprint; strict currentness rejects
-observation gaps; client vendor graph rejection; finite leg/budget property; portfolio partitioning;
-optional provider absence truthful; deterministic plan bytes independent of map iteration.
+Verify that the current typed request reaches only constructed handlers, explicit/empty/unknown scope never
+widens, compatible sources share the intended base population, incompatible profiles split deterministically,
+all work uses one absolute context and unsupported optional modes perform no backend/source I/O.

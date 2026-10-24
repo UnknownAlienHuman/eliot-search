@@ -1,19 +1,18 @@
 impl RealDataPlane {
-    /// Connects to the exact supervisor-bound loopback server admitted by an
-    /// executed qualification gate, using its purpose-bound API-key lease.
-    /// The provider revalidates current process, owner, endpoint and lease
-    /// identity before each RPC. Admission requires a protected
-    /// `list_collections` request; a successful health check alone is not
-    /// sufficient.
+    /// Connects to the selected supervisor-bound loopback server using the
+    /// current purpose-bound API-key lease.
     ///
-    /// A dead endpoint fails with [`BridgeError::TransportFailed`] (definite:
-    /// nothing was sent); a version/build drift fails with
-    /// [`BridgeError::CapabilityReceiptMismatch`].
+    /// The provider validates current process, owner, endpoint and lease
+    /// identity, observes the live server version/build, and executes an
+    /// authenticated `list_collections` request. A historical probe receipt is
+    /// not required to construct the runtime adapter.
+    ///
+    /// A dead endpoint fails with [`BridgeError::TransportFailed`]; a
+    /// version/build drift fails with [`BridgeError::CapabilityReceiptMismatch`].
     pub async fn connect(
         endpoint: &LiveEndpoint,
         supervisor: QdrantConnectionBinding,
         auth_lease: QdrantApiKeyLease,
-        gate: QualifiedGate,
         limits: BridgeLimits,
     ) -> Result<Self, BridgeError> {
         let limits = limits.validate()?;
@@ -41,7 +40,6 @@ impl RealDataPlane {
             .map_err(|_| BridgeError::TransportFailed)?
             .map_err(map_read_error)?;
         if reply.version != QUALIFIED_SERVER_VERSION
-            || reply.version != gate.server_version()
             || reply
                 .commit
                 .as_deref()
@@ -57,21 +55,14 @@ impl RealDataPlane {
         Ok(Self {
             client,
             auth_lease,
-            gate,
             limits,
             schemas: BTreeMap::new(),
             operations: BTreeMap::new(),
         })
     }
 
-    /// Admitted gate bound to this data plane (evidence, not transport).
-    #[must_use]
-    pub const fn gate(&self) -> &QualifiedGate {
-        &self.gate
-    }
-
-    /// Revalidates the current supervisor binding and secret lease before
-    /// each vendor dispatch.
+    /// Revalidates the current supervisor binding and secret lease before each
+    /// vendor dispatch.
     pub(crate) fn authorize_dispatch(&self) -> Result<(), BridgeError> {
         self.auth_lease.validate()
     }

@@ -1,31 +1,35 @@
-# Agent contract — search-qdrant-supervisor
+# Working on search-qdrant-supervisor
 
-Own only `crates/search-index-qdrant/search-qdrant-supervisor/`. Do not edit the root workspace,
-shared contracts, architecture or another package. Missing fields use the contract-change process.
+Read the [architecture](../../../docs/architecture/README.md),
+[implementation guide](../../../docs/implementation/README.md), local [source audit](FUNCTIONS.md),
+[bridge map](../search-qdrant-bridge/FUNCTIONS.md) and optional issue
+[#334](https://github.com/UnknownAlienHuman/eliot-search/issues/334).
 
-The bounded implementation packet is `swarm/assignments/search-qdrant-supervisor.md`.
+The baseline product connects to a configured local Qdrant endpoint through one real bridge/runtime. Do not
+make this package, executable hashes, containment receipts, secret leases or restart/quarantine state a
+prerequisite for #263/#264.
 
-## Ownership
+The established caller audit found supervisor construction in package-local tests rather than normal daemon
+publication/query. It also found caller-produced containment evidence without Windows Job/ACL effects. Those are
+revision-specific findings. Before deleting or replacing the package, recheck current manifests, Rust/non-Rust
+callers, features, targets, tests and workflows. Do not harden the evidence protocol merely because the package
+remains in the workspace.
 
-- exact Qdrant artifact and process identity
-- loopback/ACL/Job Object containment
-- bounded restart, quarantine and controlled shutdown
-- consumption of an opaque, bounded secret lease supplied by daemon composition
+If an optional managed-child profile is selected, replace the package with one small concrete owner:
 
-## Forbidden ownership
+- spawn exactly the configured executable and retain the actual child handle;
+- apply a real platform child-tree guard or report managed mode unsupported;
+- use one absolute startup/shutdown deadline;
+- use the Qdrant bridge/client for authenticated readiness;
+- keep one actual optional API key, not a lease/equality receipt;
+- sanitize environment and own private bounded config/log resources;
+- never adopt an existing process or auto-restart in the first profile;
+- perform bounded kill/wait on failure and shutdown.
 
-- collection/point/query data-plane operations
-- recipe, access, ranking or publication meaning
-- opening or implementing the OS secret store
-- automatic download/upgrade
-- plaintext secrets in argv, config or logs
+Delete artifact qualification, package-local SHA, owner fences, purpose digests, launch receipts, pure
+supervisor/restart/quarantine state and the manual HTTP probe with their fixtures. If no managed profile is
+selected after the current caller check, delete this package entirely.
 
-## Dependencies
-
-`search-contracts`, `search-domain`. The daemon obtains a secret lease through `SecretStorePort` and
-passes only its vendor-neutral bounded capability. Platform process dependencies require exact
-qualification and Windows evidence.
-
-## Size
-
-Target `src/` ≤ 5,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+After implementation, run minimal Rust 1.98 compiler/Clippy for the optional owner and actual daemon/bridge
+consumers. Native Job/tree, timeout, early-exit, auth, environment/log privacy and orphan-child behavior require
+actual platform execution; historical qualification matrices are not runtime gates.

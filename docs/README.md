@@ -1,71 +1,63 @@
-# Documentation map
+# ELIOT Search documentation
 
-| Directory | Contents |
-|---|---|
-| `architecture/` | Architecture entry point and normative Architecture 8.4 Part I. |
-| `product/` | Product mission and agent-analysis behavior derived from the architecture. |
-| `adr/` | Accepted product, implementation and boundary decisions. |
-| `contracts/p00/` | Bounded field-level contract projection, recipes, reasons and ports. |
-| `config/` | Product configuration contracts and section ownership. |
-| `current/` | Current-workspace, observation and overlay contracts. |
-| `client/` | Standalone client and optional provider-edge contracts. |
-| `evaluation/` | Product, quality, scale and release evaluation contracts. |
-| `optional/` | Disabled-by-default optional depth profiles. |
-| `handoff/` | Historical/package planning notes; not implementation authority. |
-| `audit/` | Dated observations; they accept and authorize nothing. |
-| `execution/` | Historical run records and diagnostics; not product architecture. |
-| `generated/` | Generated product schemas/descriptors after their owning contracts are accepted. |
-
-## Product entry points
-
-Read in this order:
-
-1. [`architecture/README.md`](architecture/README.md) — how to read the combined master;
-2. Architecture Part I in `architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`;
-3. [`adr/0005-standalone-search-product-and-controller-boundary.md`](adr/0005-standalone-search-product-and-controller-boundary.md);
-4. [`adr/0006-agent-analysis-framework-product-scope.md`](adr/0006-agent-analysis-framework-product-scope.md);
-5. [`product/AGENT_ANALYSIS_FRAMEWORK.md`](product/AGENT_ANALYSIS_FRAMEWORK.md);
-6. the nearest accepted contract/package instructions and current product issue/PR.
-
-Architecture Part I defines the source/Qdrant/query/evidence system. ADR 0005 defines the external
-controller boundary. ADR 0006 clarifies that the product is an agent-oriented large-corpus analysis
-framework, not merely a path/symbol locator.
+This tree is organized for progressive reading. Start with the product contract, descend to the affected owner,
+and use audit records only when evidence or history is needed.
 
 ## Authority
 
-Use this order:
+| Layer | Owns | Does not own |
+|---|---|---|
+| [Architecture](architecture/README.md) | Purpose, product boundary and observable requirements | Package topology or current implementation status |
+| [Implementation](implementation/README.md) | Selected mechanisms, owners, delivery sequence and removal rules | Revision-specific execution evidence |
+| Nearest `FUNCTIONS.md` | Exact source seams, current defects and operation recipe | Product-wide mission or a second roadmap |
+| [Product behavior](product/README.md) | User-visible Search, Exact, orientation, comparison and document outcomes | Internal package status |
+| [Analysis registry](audit/ANALYSIS_REGISTRY.md) | Current checkpoint, inspected evidence and unrun work | Permission, architecture or readiness credentials |
+| [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Installed/candidate versions and verified upstream limits | Automatic implementation decisions or permanent future pins |
 
-1. Architecture **Part I**;
-2. accepted product ADRs;
-3. accepted public product contracts;
-4. nearest package instructions and current issue/PR;
-5. compiled source/dependency reality;
-6. historical planning material.
+When documents conflict, correct the owning layer and make the others link to it. Do not satisfy both by adding
+compatibility code or another registry.
 
-Part II (`Codex Handoff 2.7`) inside the master is historical scaffolding. Its P00 sequencing and old
-repository-control assumptions do not authorize or block current product work.
+## Reading path by task
 
-`swarm/**`, `docs/handoff/**` and `docs/execution/**` do not authorize or block implementation. In
-particular, `swarm/launch-state.toml`, ticket drafts and lease records are legacy/advisory coordination
-metadata, not a current permission system.
+| Task | Read |
+|---|---|
+| Understand the product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
+| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → affected owner in [Owners](implementation/README.md#owners) → nearest `FUNCTIONS.md` and exact current callers |
+| Resume interrupted work | [Registry resume](audit/ANALYSIS_REGISTRY.md#resume-after-interruption) → affected owner and immutable evidence link |
+| Change a dependency/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner recipe |
+| Move/delete legacy code or tests | [Test cutover](implementation/TEST_CUTOVER.md) and [baseline member disposition](audit/WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) |
+| Inspect effect/data ownership | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
 
-## Standalone boundary
+## Current status
 
-ELIOT Search is independently installable and runnable. ELIOT Memory OS and ELIOT Swarm Controller are
-external consumers/controllers, not Search runtime dependencies. Search integration with ELIOT remains a
-typed leaf adapter over the same standalone state and query owners.
+R042 extends the revision-currentness rule to source, runtime, preparation, code-enricher, Qdrant-supervisor and
+overlay package instructions. Historical byte counts and no-caller searches remain useful evidence only at their
+inspected revisions. A deletion slice must recheck exact current manifests, Rust/non-Rust callers, feature/target
+wiring, tests and workflows.
 
-## Analysis boundary
+R042 also corrects maintenance ownership: the removed `search-retention` Cargo package is not restored;
+documentation under that path owns stopped-root local-object collection and archive/import, while online Qdrant
+retirement remains publication cleanup.
 
-Qdrant is the sole indexed retrieval backend. Search adds safe source preparation, lexical/structural
-projections, explicit multi-repository portfolios, query planning, deterministic fusion, source-backed
-validation, exact proof, provenance, coverage and compact navigation for agents.
+R041 aligned adapter/model-worker currentness and the donor checkpoint. R040 aligned the document worker with
+PDFium as an uninstalled implementation-time candidate. R039 updated the inspected stable MCP SDK to `rmcp
+3.7.0` while keeping it absent from the ELIOT lock. R038 keeps regex optional/uninstalled; R037 defers watcher
+work until reconciliation functions independently. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98
+check/minimal Clippy for materializer + unitizer only.
 
-Heuristic retrieval identifies likely evidence and where to inspect or grep next. It never replaces exact
-source readback or complete-denominator verification.
+The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
+slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
+[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333). Current evidence and remaining delivery
+groups are in the [registry](audit/ANALYSIS_REGISTRY.md).
 
-## Qualification
+## Focused supporting material
 
-External-artifact and product-evidence inputs live under repository-root `qualification/`. A packet or
-captured diagnostic is not a passing receipt. Capabilities remain disabled until the exact accepted probes
-run at the exact product revision and receive independent review.
+- [Configuration](config/README.md)
+- [Qdrant adapter boundary](runtime/QDRANT_ADAPTER_BOUNDARY.md)
+- [Windows Qdrant notes](runtime/QDRANT_NATIVE_WINDOWS.md)
+- [ADRs](adr/README.md)
+- [Audit navigation](audit/README.md)
+- [Handoff/navigation](handoff/README.md)
+
+Retired Architecture 8.4, waves, packets, receipts, generated maps, standalone applications and structural
+qualification remain in Git history. They may explain a finding but cannot authorize work or restore dead APIs.

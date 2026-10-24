@@ -1,44 +1,41 @@
-# Agent contract — search-config
+# Working on search-config
 
-Own only `crates/search-config/`. Do not edit the root workspace, config registry, another package or
-Architecture 8.4. Missing fields use the contract-change process.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md), package [README](README.md) and
+[source audit](FUNCTIONS.md).
 
-The bounded implementation packet is `swarm/assignments/search-config.md`. Read the current FILE
-contract in `TOML_PROFILE_2.md` and the section registry in `config/sections.toml` before ordinary
-work. `docs/config/CONFIGURATION_1.0.md` is a historical schema-1 format reference, not current
-parser authority.
+Do not repair the generic configuration platform. Replace it with concrete typed settings used by actual
+owners.
 
-## Mission
+Select and pin high-level `toml` + Serde during the typed-settings cutover; the current lock has only
+`toml_parser`, not those target dependencies. Use a bounded file, `vars_os()` for selected environment fields and one
+`args_os()` parser. Preserve OS-valued path inputs; TOML paths are Unicode. The local
+[layer/path recipe](FUNCTIONS.md#sparse-layers-and-validation) owns omissions, precedence, lists, validation
+and relative path bases. Unknown fields/types and invalid effective values fail before constructing any owner.
 
-Make local configuration deterministic, typed, redacted and safely reconfigurable without absorbing
-package-owned settings or I/O.
+Startup constructs the application directly. Remove `try_activate`, fingerprints, registry/section digests,
+action DAGs, receipt kinds, mandatory secret section and accepted-readiness receipts. Do not manufacture a
+`LiveApply` receipt to accept startup values.
 
-## Ownership
+Retain only supported concrete settings:
 
-- immutable `ConfigLayer` and `ConfigDocument` values
-- precedence and allowed-override enforcement
-- `ConfigSectionDescriptor` registration and collision checks
-- effective snapshot canonicalization/fingerprint
-- `ConfigDelta` and ordered `ReconfigurationPlan`
-- redacted effective-config projection
-- the bounded `eliot-config-toml@2` FILE decoder into the shared typed document builder
+- root/source locations and real source policy fields;
+- storage profile;
+- Qdrant endpoint/optional managed settings;
+- lexical/retrieval profile;
+- query defaults;
+- selected optional profiles with real handlers.
 
-## Forbidden ownership
+Implement hot reload only for a concrete owner operation. Otherwise require restart. Profile/schema changes
+use publication; external uncertainty remains with that owner. Persist one current typed value only when
+restart must remember a runtime-applied change—never a completed config operation history.
 
-- filesystem/environment/CLI acquisition
-- package-specific setting structs or runtime mutation
-- secret plaintext, command-line credential injection or debug serialization
-- automatic optional-profile activation
-- treating unknown section/key or failed package validation as a warning
-- a second handwritten grammar, generic dynamic TOML product tree or configuration framework
+Status serializes running settings and actual component readiness. It does not rebuild/redact a generic
+snapshot, hash it or require acceptance booleans.
 
-## Dependencies
+Change daemon capture/construction/status and setting consumers together, then delete generic parser/tree/
+registry/snapshot/fingerprint/diff/plan/redaction APIs and their fixtures. If little shared code remains,
+delete this crate rather than preserve a facade.
 
-`search-contracts` plus the exact private `toml_parser` event/decoder edge recorded in
-`Cargo.toml` and `TOML_PROFILE_2.md`. Do not add high-level `toml`, Serde configuration trees,
-parser-provider discovery, I/O, OS, redb, Qdrant or daemon dependencies.
-
-## Size
-
-Target `src/` ≤5,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust
-lines including local tests.
+After code run minimal Rust 1.98 compiler/Clippy for actual config/control/daemon/consumer targets and focused
+precedence/bounds/non-Unicode/file-ceiling/status/live-vs-restart cases.

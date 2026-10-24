@@ -1,105 +1,93 @@
-# search-contracts
+# search-contracts — keep only current shared data
 
-**C00 — Versioned contracts and canonical identity foundation.**
+This package must not be the catalogue of every planned operation, proof, provider and lifecycle. It should
+contain only small immutable values shared by real current producers and consumers.
 
-**Status:** The P00 contract kernel, closed canonical codec, #237 shared real-digest/bounded-sink foundation and [indexed contract v1](INDEXED_CONTRACT.md) under #258 are implemented. Indexed consumer integration and W0/G0 qualification remain separate gates.
+Read the [architecture](../../docs/architecture/README.md),
+[implementation guide](../../docs/implementation/README.md), [exact source/caller audit](FUNCTIONS.md),
+[query cutover](../search-query/README.md) and [local protocol](../search-provider-protocol/README.md).
 
-This crate defines the bounded, vendor-neutral wire and domain vocabulary shared by every ELIOT Search package. It is also the sole production owner of the closed `CanonicalValue` vocabulary and canonical JSON/CBOR byte encoding.
+## Historical baseline inventory
 
-## Implemented guarantees
-
-- exact closed registries for the eleven v1 recipe/result families, semantic enums, reason codes, protocol messages and lifecycle states;
-- strongly typed UUID, epoch, revision, digest, profile, opaque reference and bearer-token wrappers;
-- strict P00 limits for strings, bytes, collections, maps, nesting, frames and in-flight requests;
-- deterministic canonical JSON and RFC 8949 CBOR with non-canonical, duplicate, unknown, malformed and oversized input rejected;
-- strict canonical decode/re-encode checks;
-- separate planning (`QuerySnapshotFence`) and emission (`ResultFence`) boundaries;
-- validated evidence candidates, explicit ambiguity, coverage gaps and exact-denominator conclusions;
-- opaque handles and continuations that carry no source identity or authorization decision;
-- bounded provider framing, version negotiation, progress, capability and lifecycle records;
-- deterministic fingerprint inputs for query snapshots and task plans.
-
-## Canonical CBOR profile
-
-The current encoder orders map keys by encoded-key length and then bytewise value. This is the RFC 8949 **length-first deterministic ordering** profile described in §4.2.3. It is not the §4.2.1 Core Deterministic ordering profile.
-
-Existing accepted bytes and golden fixtures are compatibility data. Changing ordering requires an explicit new canonical profile and migration; it is not a transparent implementation cleanup.
-
-## Shared digest compute boundary
-
-`CanonicalDigestDomain` validates a bounded, versioned owner schema name:
-`eliot/cbor/<schema>/vN` for the length-first CBOR profile or
-`eliot/raw/<schema>/vN` for exact raw bytes. The two representations cannot be
-interchanged. Parsing a name does not authorize its data or mint a receipt.
-
-`blake3_canonical` and `sha256_canonical` stream the sole encoder into private
-real algorithm implementations. `blake3_raw` and `sha256_raw` hash exact bytes
-under a raw domain. All use `domain || NUL || payload`. `DigestInputLimit` is a
-nonzero complete-preimage ceiling of at most 8 MiB; failures return no digest.
-Donor algorithm types never appear in the public contract.
-
-`blake3_exact_bytes` computes standard unframed BLAKE3 for source qualification.
-Its separate `Blake3ExactInputLimit` permits at most 16 MiB and rejects oversized
-input before hashing. Empty input has the standard digest; admission and cumulative
-operation work belong to their callers. This API grants no read or serving proof.
-The existing 8 MiB canonical limit and all domain-bound/SHA preimages remain unchanged.
-Known vectors use the pinned donor's
-[published BLAKE3 1.8.2 vectors](https://github.com/BLAKE3-team/BLAKE3/blob/1.8.2/test_vectors/test_vectors.json).
-
-`blake3_canonical_array` hashes a declared finite ordered array one fallible
-owned row at a time through that same encoder. It rejects more than 4096 rows
-before iterator conversion, checks exact length with at most one excess probe,
-and counts the enclosing array in the depth limit. The complete-preimage limit
-includes domain framing and the array header; one sink bounds all row bytes.
-Equal ordered rows have the same
-bytes as `blake3_canonical` over `CanonicalValue::Array`.
-The helper collects no complete array or preimage; callers still own bounded
-row construction and schema order. It provides no semantic or operation
-authority. The #396 fixtures are authored; their execution and resource
-qualification remain deferred under #352 and #215.
-
-`blake3_canonical_array_with_usage` returns an immutable `CanonicalBlake3Output`
-with readonly digest and exact successful complete-preimage byte getters. The
-same checked stream counts domain framing, the array header and encoded rows
-before each hash update, without a second encoder pass or complete buffer.
-The existing digest-only API delegates to this producer and preserves its
-bytes, signature and refusal ordering. Errors return neither digest nor usage.
-This reports encoder consumption; caller row allocations and cumulative
-operation budgets remain caller-owned. It grants no admission or operation
-authority. The two #422 private usage/refusal fixtures are authored, not run;
-execution and resource qualification remain under #215.
-
-Stored/wire decoding does not prove that hashing occurred. Legacy raw-byte
-constructors remain decode-only compatibility until each semantic owner's
-profile/rebuild migration. The typed `xtask validate canonical-digest-guard`
-ledger records retained sites and their current migration issues.
-
-`HandleTokenDigest` retains explicit stored/wire restoration and full-width byte
-access, while ordinary `Debug` and `Display` formatting is redacted. Formatting
-is not a storage encoder; persisted consumers use the explicit byte boundary.
-
-## Ownership boundary
-
-The crate owns contract shapes, validation, canonicalization and the shared algorithm-qualified digest construction boundary accepted by #237. It performs no filesystem, network, process, secret-store, redb, Qdrant or provider I/O.
-
-Historically the crate had no external dependencies. The reviewed #237 exception permits exact private `blake3` and `RustCrypto` `sha2` algorithm dependencies only. Donor types, dynamic donor values and donor defaults do not cross the package boundary. Ciborium is not the production codec.
-
-See:
-
-- [package agent contract](AGENTS.md);
-- [single-manager Wave-1 packet](../../docs/audit/WAVE1_SINGLE_MANAGER_PACKET_2026-10-09.md);
-- [donor verification register](../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md);
-- [issue #237](https://github.com/UnknownAlienHuman/eliot-search/issues/237).
-
-## Current source gate for #237
+The figures below were measured at the original public-main baseline
+`c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`. They are preserved as gross decomposition evidence, not a
+current-branch recount, deletion promise or package-size target:
 
 ```text
-cargo +1.98.0 check --locked -p search-contracts -p xtask --all-targets
-cargo +1.98.0 clippy --locked -p search-contracts -p xtask --all-targets -- -D warnings
+production src                       425,255 bytes (~415.3 KiB)
+tests                                131,618 bytes (~128.5 KiB)
+Cargo manifests depending directly        47
 ```
 
-Focused canonical/digest/guard fixtures are written with the implementation and compiled by `--all-targets`. Broad/full test execution and installed/native qualification remain separate later phases under the project testing policy.
+At that baseline production code divided roughly into:
 
-- **Delivery wave:** W0 / P00
-- **Soft source-line target:** 8,000
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+- **127.5 KiB** common bounds/canonical/digest/ID/error/schema infrastructure;
+- **168.3 KiB** grants, recipes, plans, protocol, results, evidence frames and lifecycle;
+- **113.1 KiB** frozen indexed/Qdrant-neutral collection/payload/vector/readback models;
+- **16.4 KiB** source/view vocabulary.
+
+The V2 evidence family was added beside the frozen eleven-recipe V1 system, not used to replace it.
+`EvidenceFrameV2` appeared only in its definition, provider codec and protocol test. Those measurements explain
+planned-system gravity; current callers must still be traced at the implementation cut before removing code.
+
+## What remains shared
+
+Keep only values with at least two real current consumers:
+
+```text
+SourceId / RevisionId / ObjectRef / RepresentationId
+ViewId / ViewSequence / stable PointId
+source location/range/page/region and logical occurrence
+selected source scope and actual finite request limits
+retrieval profile/role/input identity
+stable RetrievalPoint semantics and versioned ViewManifestEntry
+
+SearchRequest
+ExactRequest
+ContinueRequest { WindowId, page_size }
+ExpandRequest { WindowItemRef, bounded relative context }
+
+EvidenceCard with actual verified excerpt/location
+GapSummary and truthful coverage
+Search/Exact/Continue/Expand response variants
+stable public failure code/class
+```
+
+Runtime guards, streams, cancellation, redb rows, Qdrant SDK records, publication cursors and query-window
+contents belong to their concrete owners.
+
+## Remove and move
+
+Delete with their old consumers:
+
+- provider binding/grant/capability authority;
+- eleven V1 recipes and parallel V2 evidence/orientation families;
+- public plans, snapshot/security fences, leg records and fingerprints;
+- durable source/continuation handles and validation receipts;
+- recipe-specific graph/comparison/provenance result catalogue;
+- progressive evidence-frame state machine;
+- frozen sparse-only indexed schema, payload/index table and digest readback authority;
+- optional-provider/readiness lifecycle records;
+- conformance/golden fixtures for removed pre-release bytes.
+
+Move physical collection/vector/payload/query types into the private Qdrant boundary. Move current redb,
+publication and window state to their owners. Shrink IDs/reasons/schema to current semantics.
+
+Use Serde for ordinary current request/result records. Keep canonical bytes/hashes only for real content,
+artifact, point or profile identity whose owner recomputes them. Do not hash requests, plans, grants or state
+transitions into authority.
+
+## Cutover
+
+Change current protocol/client/daemon/result consumers together. Do not add `V3`, deprecated aliases,
+forwarding wrappers or raw-byte compatibility constructors. After each family moves, delete its types,
+fixtures and generated P00/coverage records immediately.
+
+The crate may remain as a small shared DTO/identity package. If the final set is trivial and used only by the
+protocol/application boundary, merge it there and remove this workspace member instead of preserving a name.
+
+## Verification
+
+Run minimal Rust 1.98 check/strict Clippy for changed real producers/consumers and focused current Serde,
+identity, location and source-backed result cases. Frozen recipe counts, canonical wire goldens and planned
+schema matrices are not gates.

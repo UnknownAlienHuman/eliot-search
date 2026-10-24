@@ -1,36 +1,71 @@
-# search-exact
+# search-exact — one authoritative scan
 
-**C20 — Exact verification plane.**
+An exact request evaluates one explicit predicate over one explicit immutable source inventory. It reports
+matches, what was actually scanned and why anything remained unread. Ranked Qdrant results never supply
+this completeness claim.
 
-**Status:** `SOURCE_PRESENT`; literal, proof and exact-spine source exists, while the complete authoritative denominator/readback product path and installed qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owner: #131.
+## Current source
 
-Compile and execute bounded exact scans against a frozen authoritative denominator through vendor-neutral inventory/readback ports.
+- [`literal.rs`](src/literal.rs), about 9 KiB, contains the useful Aho-Corasick single-literal matcher and
+  has real daemon DIRECT callers.
+- [`proof.rs`](src/proof.rs), about 64 KiB, builds caller-shaped plans, supplied inventory/readback records,
+  reports, checkpoints and a second literal matcher. Its scan API has package-test callers and receives all
+  source bytes in a preallocated `Vec<ExactItemReadback>`.
+- [`spine.rs`](src/spine.rs), about 9 KiB, adds another pure denominator/completeness representation.
 
-## Owns
+The proof/spine machinery does not enumerate the source owner, reopen revisions or hash returned bytes. It
+therefore cannot turn matching fields into authoritative completeness.
 
-The literal primitive uses one private Aho-Corasick 1.1.5 contiguous NFA for
-case-sensitive and ASCII-insensitive scans, with Standard semantics and no prefilter.
-State persists across borrowed chunks and overlapping matches. Full input validation
-precedes construction; truncation occurs only at the first extra match. Donor build/start
-failure returns the content-free `LITERAL_MATCHER_BUILD_FAILED` code without fallback.
+## Target request
 
-Matching traverses bytes linearly and visits each supplied chunk once; auxiliary
-storage is O(query bytes + returned matches). No measured performance claim follows.
-All seven existing literal fixtures remain AUTHORED_NOT_RUN under #215. Multi-pattern,
-regex and authoritative denominator integration remain #247/#248/#249; supplied-input
-exhaustion alone never proves a complete corpus claim.
+```text
+ExactRequest
+  resolved scope
+  pinned PublishedView
+  literal or selected regex predicate
+  case/encoding semantics
+  finite source/item/input/match/output limits
+  one absolute deadline
+```
 
-- exact predicate profiles and plans
-- frozen denominator
-- complete/incomplete execution accounting
-- exact proof reports
+The daemon derives an ordered immutable inventory from the pinned view. For each item it opens the exact
+retained revision, verifies actual bytes/length/identity, scans one bounded source or chunk stream, emits
+bounded `EvidenceCard` matches and releases the buffer before advancing.
 
-## Must not own
+Compile the predicate once per request. Keep matcher state across chunks of one source and reset it between
+sources. Use the same Aho core for literal callers; remove `proof::find_literal` and its conflicting
+non-ASCII semantics. Raw-byte and decoded-text modes remain explicit.
 
-- indexed top-k denominators
-- semantic absence claims
-- concrete source/storage/index adapters
+No client-visible compile/execute plan split, `PlanExecutionPermit`, denominator proof, checkpoint digest,
+receipt chain or durable exact job is needed. Cancellation/restart returns a truthful incomplete result;
+the caller may repeat the scan.
 
-- **Delivery wave:** W6 / P12
-- **Soft source-line target:** 7,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+## Completeness
+
+Terminal status is one of:
+
+```text
+complete_with_matches
+complete_no_match
+incomplete(matches + gaps)
+invalid_request
+```
+
+Complete requires every item in the pinned inventory to be evaluated on the specified retained revision.
+Missing bytes, unsupported encoding, source failure, byte/item/match limit, cancellation or deadline makes
+the result incomplete. Matches remain useful but are never promoted to complete coverage.
+
+The exact handler applies the already resolved local/restricted-client scope. It does not construct grants,
+purge fences, handles or another source inventory. Optional paging/expansion uses the same `QueryWindow` as
+ranked search.
+
+## Optional predicates
+
+Single literal is the baseline. Multi-literal is added only for an actual caller that benefits from one
+combined scan; the Aho donor already supports it and no separate profile programme is required.
+
+A selected regex uses one pinned `regex-automata` configuration with explicit syntax/Unicode/case and
+compile/search ceilings. If safe cross-chunk semantics are not implemented, require one already bounded
+contiguous source buffer; do not claim streaming or add a second fallback engine.
+
+[FUNCTIONS.md](FUNCTIONS.md) maps the removal sequence. [AGENTS.md](AGENTS.md) governs implementation.

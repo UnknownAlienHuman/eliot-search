@@ -1,102 +1,28 @@
-Status: PASS (measured scope only — full workspace check+test, clippy of core packages; full qualification NOT claimed, see NOT-MEASURED)
-Tested base commit: e911e03c292fd4dc9aedbd9dbd3e4c269f92e60c (main, short e911e03) — CLEAN worktree
-Worktree: clean — `nothing to commit, working tree clean` before and after all runs
-Verified at: 2026-09-10T14:00:00Z
-Linux job/result: unavailable/UNAVAILABLE
-Windows job/result: local/measured-scope-pass
-Branch cleanup failed: false
+Status: NOT READY
+Inspected production-source baseline: c8e38b6fc9829f1cd38070773b1b3e5b21de18ad
+Static audit registry: docs/audit/ANALYSIS_REGISTRY.md
+Historical qualification archive: 2f9c9720f3e14799a0f8dfefa00077d2fa6a9887/qualification
+Updated: 2026-10-22
 
-Scope of this record (T04 slice — clean-head evidence for the reproducible Windows gate):
-replaces the stale e1f82f4 record. Every number below was freshly measured
-at clean HEAD e911e03 in this session: toolchain 1.98.0, --locked on every
-cargo invocation, --all-features + --no-fail-fast on the workspace run.
-Anything not listed under MEASURED is under NOT-MEASURED.
+CURRENT SOURCE FACTS
+- The bounded one-shot --scan-file/--scan-stdin route works over current bytes.
+- The daemon entrypoint remains a chain of competing argv interceptors rather than one connected application dispatcher.
+- Persistent source registration, retained-object preparation, Qdrant publication/query and retained evidence do not form one reachable default product path.
+- The earlier DIRECT, migration, pairing/grant, qualification and in-memory-oracle systems do not establish current indexed Search readiness.
+- No exact-head execution proves: fresh source retained across restart -> published/read back through real Qdrant -> found by the standalone CLI -> reopened at the exact retained excerpt.
 
-MEASURED (fresh at clean e911e03, this session):
-- cargo +1.98.0 check --workspace --all-targets --all-features --locked -> exit 0
-- cargo +1.98.0 test --workspace --all-targets --all-features --locked --no-fail-fast -> 1735 passed / 0 failed / 6 ignored, 112/112 targets ok, exit 0, failing tests NONE, failing targets NONE (00:04:10 run)
-- cargo +1.98.0 test -p eliot-searchd --all-targets --all-features --locked --no-fail-fast -> 649 passed / 0 failed (T39 included; 36 targets)
-  (--no-fail-fast is mandatory here; a plain run stops early and hides the rest)
-- clippy -D warnings honest count (message.level == "error" AND some span is_primary, via --message-format=json): eliot-searchd 0 / eliot-search 0 / search-access 0 / search-control-redb 0 / search-exact 0 / search-candidate-validator 0 (5 packages, each exit 0)
-- cmdkey credential leak ('revision-key' pattern): 0 before / 0 after the full runs; machine baseline 74 unrelated system entries unchanged (delta 0)
-- git rev-parse HEAD -> e1f82f41ad389b622359cc496adc6331280e8913 (short e1f82f4, matches the expected head)
+CURRENT OWNERS
+- #264: one connected default product application and factual help/status.
+- #330/#270/#331: retained bytes, current source head and recoverable preparation.
+- #263/#261/#300/#303: real Qdrant, current published view and safe cleanup.
+- #279/#275/#280/#332: source-backed Search, live window, one protocol and actual CLI.
 
-NOT-MEASURED (recorded as UNAVAILABLE, never as zero/pass):
-- Linux CI: not run locally -> UNAVAILABLE
-- Full workspace clippy (cargo clippy --workspace): not run in this session -> UNAVAILABLE
-- Workspace rustdoc: not run in this session -> UNAVAILABLE
-- Daemon / cli self-tests beyond cargo targets, diff-whitespace check: not run in this session -> UNAVAILABLE
-- Live Qdrant spine: no Docker daemon, no local image (probed 2026-09-10); pulling/selecting an artifact without owner qualification is forbidden -> UNAVAILABLE
+NOT ESTABLISHED BY THE STATIC AUDIT
+- Rust compilation or Clippy after the planned code deletion/cutover;
+- live Qdrant mutation/query/readback, unknown or delayed writers;
+- Windows object/root durability and blocked-I/O cancellation;
+- restart/rebuild/restore/GC behavior;
+- retrieval relevance, large-corpus latency or scoped-IDF cost;
+- installed current CLI-to-daemon product flow.
 
-Carry-over (not re-measured in this session, stated exactly once each):
-- Qdrant data plane absent: search-qdrant-bridge is an in-memory model with no Qdrant client dependency (FUNCTIONS.md: no server/client pair accepted yet).
-- Gates G0-G6: all open; this record closes none.
-- T02 / audit #99 (isolate legacy entrypoints, restore micromodular ownership): NOT_STARTED — packet/draft only, no code or evidence.
-- T04 / audit #101 (reproducible Windows/Linux build+regression gate, M0 exit): still open — this record is only its clean-head Windows evidence slice, not the gate.
-
-Note on prior record retained: search-control-redb DOES depend on real redb (=2.6.3);
-workspace has zero todo!()/unimplemented!(); only the Qdrant bridge documents itself as a model.
-
-===== Linux bounded log tail =====
-UNAVAILABLE — Linux CI was not run locally in this session.
-Per repository rule, unavailable checks are recorded as unavailable, never as zero/pass.
-No Linux log tail was captured; the stale a734c93 Linux tail is discarded, not carried over.
-
-===== workspace tests =====
-UNAVAILABLE for the full workspace run (not executed in this session — no result invented).
-Measured package runs only (all --locked, exit 0):
-  cargo +1.98.0 test -p eliot-searchd --all-targets --locked --no-fail-fast
-  -> 182 passed / 0 failed / 1 ignored, 15/15 targets ok
-  (lib 8, entry 87 + 1 ignored, catalog_loss 5, direct_preparation 6, sealed-authority 18,
-  sealed-catalog 11, sealed-direct 8, sealed-recover 15, sealed-store 4,
-  sealed-transaction 8, snapshotd-main 0, persistent_roots 5, product_targets 2,
-  service_failure 4, stable_native_identity_api 1; total 182)
-  cargo +1.98.0 test --locked -p search-contracts -> 56 passed / 0 failed
-  cargo +1.98.0 test --locked -p search-domain -> 23 passed / 0 failed
-Bounded tail: no full-workspace tail captured in this session (workspace run not executed).
-
-===== workspace clippy =====
-UNAVAILABLE for the full-workspace clippy run (not executed in this session — no result invented).
-Measured per-package honest counts (level == "error" AND is_primary via --message-format=json, -D warnings, each run exit 0):
-  search-continuation: 0 (was 46 on b28e36b; cleared with zero allows per history)
-  search-publication:  0 (was 34 on b28e36b; cleared with zero allows per history)
-  eliot-searchd:       0
-  search-domain:        0
-  search-ports:         0
-  search-config:        0
-  search-contracts:     0
-Counting rule: never count from text output (grep -c '^error' overcounts
-'could not compile' lines); a plain run aborts at the first failing crate and hides the rest.
-Bounded tail: no fresh workspace tail captured in this writing session.
-
-===== workspace rustdoc =====
-UNAVAILABLE — not run in this session. No result invented; stale a734c93 rustdoc state discarded.
-
-===== daemon self-test =====
-UNAVAILABLE — not run in this session. No result invented; stale a734c93 failure discarded.
-
-===== cli self-test =====
-UNAVAILABLE — not run in this session. No result invented; stale a734c93 failure discarded.
-
-===== model worker self-test =====
-UNAVAILABLE — not run in this session. Prior PASS claims are stale and are NOT carried over.
-
-===== document worker self-test =====
-UNAVAILABLE — not run in this session. Prior PASS claims are stale and are NOT carried over.
-
-===== diff whitespace =====
-UNAVAILABLE — not run in this session. Prior PASS claims are stale and are NOT carried over.
-
-===== Windows bounded log tail =====
-Measured-scope local PASS (clean HEAD 5581da9, Windows, toolchain 1.98.0, --locked everywhere):
-  cargo +1.98.0 check --workspace --all-targets --all-features --locked -> exit 0
-  cargo +1.98.0 test -p eliot-searchd --all-targets --locked --no-fail-fast -> 182 passed / 0 failed / 1 ignored, 15/15 targets ok, exit 0
-  cargo +1.98.0 test --locked -p search-contracts -> 56 passed / 0 failed, exit 0
-  cargo +1.98.0 test --locked -p search-domain -> 23 passed / 0 failed, exit 0
-  clippy -D warnings (honest JSON count): continuation 0 / publication 0 / eliot-searchd 0 / domain 0 / ports 0 / config 0 / contracts 0
-  cmdkey 'revision-key' count: 0 before / 0 after the full eliot-searchd run (zero 'ELIOT Search' entries)
-Prior dirty state closed: the a734c93 record's uncommitted work (clippy clears, credential
-guards, owner-lock skip) is landed in commits 77235d2 / 3e02afd / 5f915a4 — git status is clean.
-Gates: Qdrant data plane absent (in-memory model); G0-G6 all open, none closed by this record.
-
-(End of file - total 104 lines)
+Historical PASS/FAIL files, wave milestones, package acceptance and probe registries were removed from the current tree. Git history preserves their exact revisions. New evidence is recorded with the concrete implementation issue/PR and does not become a runtime credential.

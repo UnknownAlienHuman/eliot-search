@@ -1,86 +1,131 @@
-# Function contract — `search-continuation`
+# Query window — one pinned view, one session, one cursor
 
-**Status:** W4/P08 continuation contract; durable/security hardening continues in W7/P13.
+This file owns paging and item-locator lifetime. [Evidence resolution](../search-candidate-validator/FUNCTIONS.md)
+owns excerpt truth; [protocol](../../search-provider-protocol/FUNCTIONS.md) owns framing and transport failure.
+This is the replacement recipe, not a claim that the current daemon implements it.
 
-Public continuation values are opaque CSPRNG tokens. Candidate windows, issued-candidate suppression,
-plan/view/route/security fences and pins are server-owned records keyed by token digest.
+## Inspected current paths
 
-## Creation
+At `44d7416c` the daemon has two separate session catalogues:
 
-### `create_ephemeral(plan, remaining_window, pin_set, binding, policy, randomness) -> Result<ContinuationHandle, ContinuationError>`
+- continuation keeps a complete `Vec<StoredMatch>`, cursor, coverage, fixed expiry and a digest of the entire
+  current source catalogue;
+- result handles mint one random token and record per emitted match, with a separate TTL and expansion path.
 
-Requires a bounded in-memory candidate window and accepted route/epoch pins. The record is
-binding-scoped, TTL/count limited and restart-invalid. The token contains no cursor, score, point ID,
-plan fingerprint, fence or binding field.
+Useful code exists: direct slicing, finite count ceilings and `PreparedPage`, which commits insertion/advance
+only after successful local output. Keep those behaviors. Do not preserve the two catalogues or their proof-
+shaped source fence merely because they already exist.
 
-### `create_durable_replan_checkpoint(job, plan, binding, policy, store, randomness) -> Result<ContinuationHandle, ContinuationError>`
+The inspected source also establishes these defects/limits:
 
-Allowed only for an explicit durable job over immutable admitted data. The record stores a replan
-checkpoint, accepted dependency/API identities and issued-candidate fingerprints; it owns no
-process-local pin and cannot reference unsaved bytes.
+- `cmd_search_page` constructs the full search result before continuation admission;
+- count limits ignore owned strings, vector spare capacity and temporary encoded output;
+- every page/expansion calls `list_sources`; `source_fence` serializes the whole current catalogue into a new
+  buffer, so unrelated source changes invalidate every old token and page work is corpus-dependent;
+- expansion rechecks the latest active source/revision instead of the pinned published view;
+- each later page mints fresh per-item handles with a fresh TTL, which can outlive the original continuation;
+- a handle record does not retain the emitted representation or match range and accepts arbitrary absolute
+  offsets anywhere inside the raw revision.
 
-### `token_digest(handle) -> ContinuationTokenDigest`
+These are static findings, not a reproduced production incident.
 
-Uses a dedicated domain. Plaintext tokens never appear in persistent records, logs, telemetry or
-receipts.
+## One `QueryWindow`
 
-## Expansion
+One live session owns a small map of windows. A window contains only:
 
-### `resolve(handle, store) -> Result<ContinuationRecord, ContinuationError>`
+```text
+window ID
+PublishedViewGuard
+final ordered WindowItemRef[]
+next handled index
+fixed expires_at
+finite retained-item / metadata / optional excerpt-byte charges
+issued item indexes needed for expansion
+```
 
-Performs binding-safe token-digest lookup without disclosing whether a foreign token exists.
+`WindowItemRef` points to the exact pinned evidence row and its representation/range. It is not a copied
+source body, public proof record or new handle token. Item locators are `(window_id, item_index)` on the same
+session. There is no separate result-handle catalogue, item entropy, source-catalogue digest or per-page TTL.
 
-### `revalidate(record, binding, live_state, now) -> Result<ContinuationPermit, ContinuationError>`
+The fixed expiry is chosen once when the first terminal response commits the window. Continue/Expand get fresh
+request deadlines capped by that expiry and remaining lifetime work limits. Access never renews it. An exhausted
+cursor may retain the window until expiry while emitted items remain expandable; otherwise release it promptly.
 
-Checks binding/principal, grant/revocation, owner generation, source/workspace view, route/epoch,
-profile, purge, TTL and configured pin/window ceilings. Possession grants no authority.
+One-shot output exposes no live locator. Session end, EOF, failure, daemon restart or selected restricted-
+session revocation drops its windows. A later invocation cannot resurrect them.
 
-### `expand_ephemeral(record, permit, budget) -> Result<ContinuationExpansion, ContinuationError>`
+## Admission before expensive work
 
-Returns the next bounded unissued window and renews a continuation pin only within the original
-route/epoch and maximum TTL. It never silently refreshes against newer corpus state.
+Reserve the window's nomination count and retained metadata/byte allowance before asking retrieval for more
+candidates than can be retained. The backend may still perform corpus-dependent work; the reservation limits
+what this request/window owns, not Qdrant's internal cost.
 
-### `expand_durable(record, permit, planner, executor, budget) -> Result<ContinuationExpansion, ContinuationError>`
+Account for:
 
-Recompiles/re-executes under the stored contract fence and suppresses previously issued stable
-candidate fingerprints. A changed/expired dependency returns `SNAPSHOT_EXPIRED` or explicit replan gap,
-not a transparent corpus switch.
+- final retained item references and owned metadata;
+- temporary candidate and evidence values before they are released;
+- optional cached excerpts;
+- the aggregate encoded terminal response.
 
-## Cancellation and deadlines
+Do not call a full current-source listing or hash the corpus to authorize a pinned view. The view already owns
+its source/evidence population. A current source edit, rename or removal does not invalidate an old window whose
+retained evidence still exists; new requests receive the newer published view.
 
-- Creation checks cancellation/deadline before token generation, pin acquisition and record insertion.
-- If cancellation or deadline occurs after pin/record acquisition but before token delivery, the package
-  releases the exact pin/window and invalidates the orphan record; uncertain durable insertion is
-  resolved by stable operation identity rather than blind reminting.
-- Expansion checks cancellation/deadline before pin renewal, before planner/executor dispatch, between
-  bounded candidate windows and immediately before terminal emission.
-- Cancellation after a window was read or recomputed but before emission returns no candidates and does
-  not mark them issued.
-- A durable expansion cancelled after dependent work starts preserves the stored replan checkpoint and
-  reports truthful incomplete coverage; it cannot switch to a newer fence.
-- Deadline expiry never extends TTL or pin lifetime beyond configured maxima and never suppresses a
-  `SNAPSHOT_EXPIRED`/security failure.
+If a required window cannot be admitted, return the selected bounded no-window response or a clear capacity
+error. Never reinterpret capacity exhaustion as an empty or complete search.
 
-## Lifecycle
+## Page selection and cursor accounting
 
-### `invalidate(scope, generation, store) -> InvalidationReceipt`
+1. Starting at `next_index`, choose a finite candidate prefix that can plausibly fit the remaining item/read/
+   output limits. Do not read the entire tail first.
+2. Resolve evidence in final rank order. Each handled reference becomes a card or an explicit item-local gap.
+   Cancellation, deadline or aggregate exhaustion stops before the next unhandled reference; it is not a gap.
+3. A bounded aggregate gap may represent several actually handled references. Untouched candidates are never
+   implied gaps. A single oversized item receives a defined bounded card/gap/error so the cursor cannot loop on
+   an empty page forever.
+4. Encode the complete terminal response into the protocol's capped local buffer. Stage the handled-prefix
+   length and issued item indexes; card count or proposed slice length is not automatically the cursor delta.
+5. After the entire terminal frame is written and locally flushed, atomically insert/advance this session's
+   window state. Partial output commits neither insertion nor cursor and closes the session.
 
-Monotonic and idempotent for security, purge, owner/view/route/profile and job changes.
+Local flush is not peer acknowledgement. On a lost connection the user repeats Search; no durable resume,
+receipt or exactly-once protocol is required. Progress frames, if any, contain no cards, locators or cursor-
+committing facts.
 
-### `expire(now, policy, store, pins) -> ExpiryReceipt`
+Serialize operations for the affected session/window, but hold no global view/window lock across Qdrant,
+retained-object reads or transport writes. Idle expiry is serviced by the existing session/control event loop.
+Removing an expired map entry prevents new acquisitions; an already-running operation retains its guard until
+that operation actually ends.
 
-Expires bounded batches and releases all process-local pins/window memory. Caller supplies time.
-Restart invalidates every ephemeral record.
+## Expansion stays inside the emitted item
 
-### `apply_live_limits(old, new, store, pins) -> Result<ConfigApplyReceipt, ContinuationError>`
+`Expand(window_id, item_index, before, after)` resolves the exact emitted item from the pinned view. `before`
+and `after` are finite context requests in that item's declared representation/coordinate domain. The server:
 
-Implements restrictive changes in `config/sections/continuations.md`; excess records/pins are explicitly
-expired. Durable ordinary queries and durable unsaved targets remain always rejected.
+- rejects an item index that was not successfully emitted;
+- derives the permitted neighborhood from the exact retained representation and mapping records;
+- clips on valid character/structure boundaries;
+- maps the clipped region back to truthful source/page/region coordinates;
+- never accepts arbitrary absolute offsets across the whole revision or switches to the latest source.
 
-## Required fixtures
+Raw bytes, normalized text and extracted document text are different domains. Expansion does not fabricate an
+exact contiguous raw span for a non-contiguous or approximate mapping.
 
-Token entropy/opacity/redaction; foreign binding denial; raw Qdrant cursor/score/point ID absent;
-restart invalidates ephemeral and releases pin; TTL/count/pin bounds; durable ordinary-query/unsaved
-rejection; durable record owns no process pin; stable issued suppression; security/view/route drift;
-cancellation/deadline before creation, after pin acquisition and immediately before emission; orphan
-record/pin cleanup; expired fence returns `SNAPSHOT_EXPIRED`; no silent refresh.
+## Cutover and checks
+
+Change query result retention, evidence resolution, protocol DTOs, daemon page/expand commands and CLI consumers
+together. Move the useful prepared-output commit and direct slicing into the real session owner. Then delete:
+
+- shared and daemon continuation catalogues;
+- result-handle catalogue and per-item random tokens;
+- full source-fence scans and latest-source revalidation;
+- arbitrary handle-range expansion;
+- durable replan/security/issued-fingerprint lifecycle machinery and exclusive fixtures.
+
+Do not add a cross-catalog transaction, lease service or cleanup daemon to preserve a boundary being removed.
+
+After implementation and minimal pinned compiler/Clippy, check admission before retrieval, retained/spare-byte
+ceilings, unrelated-source change, old-view continuation, later-page TTL, final-page expansion, idle expiry,
+active operation at expiry, missing evidence, cancellation, aggregate output limit, oversized item, partial
+terminal output, one-shot absence of locators and mapped representation expansion. No runtime result is claimed
+by this document.

@@ -1,78 +1,83 @@
-# Qdrant native Windows install (no Docker)
+# Qdrant on Windows
 
-Qdrant runs natively on Windows x64. No Docker, no WSL, no Linux VM.
+Qdrant 1.19.0 Windows x64 was previously installed and smoke-tested as recorded below. Those measurements are
+historical development/release evidence; they are not runtime credentials and do not require the application
+to preserve the old qualification supervisor.
 
-## Installed set (pinned, measured 2026-09-10)
+## Recorded development artifact — 2026-09-10
 
-- version: `1.19.0` (build `74f3e85b`), `x86_64-pc-windows-msvc`
-- archive: `qdrant-x86_64-pc-windows-msvc.zip`, 29340688 bytes,
-  SHA-256 `980CB2E1AE771155CF211DA8C0A8A9206B6482BD4EFFDC4DB994D3ADB707B087`
-  (self-measured over TLS from the official release URL; upstream publishes
-  no checksum file, so there is nothing to cross-check against — the bytes
-  above are the recorded identity)
-- binary: `C:\Tools\Qdrant\1.19.0\qdrant.exe`, 84184576 bytes,
-  SHA-256 `369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4`
-- license: Apache-2.0
-- receipt: `C:\Tools\Qdrant\1.19.0\VERSION.txt`
-- smoke 2026-09-10: `READY ok / CREATE ok / UPSERT ok / SEARCH top_id=1 /
-  COUNT=2 / DELETE ok` (`C:\Tools\Qdrant\tools\qdrant-smoke.ps1`)
+- version/build: `1.19.0` / `74f3e85b`, `x86_64-pc-windows-msvc`;
+- archive: `qdrant-x86_64-pc-windows-msvc.zip`, 29,340,688 bytes,
+  SHA-256 `980CB2E1AE771155CF211DA8C0A8A9206B6482BD4EFFDC4DB994D3ADB707B087`;
+- executable: `qdrant.exe`, 84,184,576 bytes,
+  SHA-256 `369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4`;
+- license: Apache-2.0;
+- recorded smoke: ready/create/upsert/search/count/delete succeeded.
 
-Layout rule: one versioned directory per release (`C:\Tools\Qdrant\<x.y.z>`).
-Data directories always live outside the install dir (passed per-run).
+This does not establish current availability, data compatibility, containment, authentication or product
+correctness. Check the service actually selected for the current run.
 
-## Run (manual / supervisor-owned)
+## Baseline product mode
 
-Qdrant takes a config file, not storage/port flags:
+The first connected product uses a configured local endpoint:
 
-```powershell
-pwsh -NoProfile -File C:\Tools\Qdrant\tools\qdrant-smoke.ps1 -QdrantDir C:\Tools\Qdrant\1.19.0
+```toml
+[qdrant]
+mode = "external"
+endpoint = "http://127.0.0.1:6333"
 ```
 
-Minimal `config.yaml`:
+Start Qdrant manually, as an installed service or by development tooling. The daemon's one Qdrant bridge:
+
+1. connects with the selected optional API key;
+2. observes the live server/version/capabilities;
+3. verifies the exact physical collection generation/schema it will use;
+4. performs publication/query/readback.
+
+No executable hash, artifact manifest, probe report, owner fence, secret lease or process receipt is passed to
+the bridge. Release packaging may record exact server bytes independently.
+
+Minimal local Qdrant configuration remains ordinary Qdrant configuration, for example:
 
 ```yaml
 storage:
   storage_path: ./storage
 service:
+  host: 127.0.0.1
   http_port: 6333
   grpc_port: 6334
 ```
 
-Product execution (loopback-only, API-key lease, ACL, Job Object, owner
-guard) belongs to `search-qdrant-supervisor` (T23), not to this document.
+Enable Qdrant authentication when the selected local threat/profile requires it. One actual API key is used by
+the service and bridge; the baseline does not build a lease/equality protocol around it.
 
-For the compiled approved baseline, static artifact admission permits the owned
-process to start so that the bridge can execute its required operational probes.
-Exact executable checks still run before spawn. Indexed availability requires
-those real operational observations; a matching hash or version is insufficient.
-The qualification dossier and installed/release acceptance remain separate. Their
-unfinished status cannot make startup depend on a future benchmark or report
-(ADR 0006 and #333).
+## Optional managed-child mode
 
-## Updates (manual pinned procedure, never automatic)
+A later standalone profile may let the daemon spawn the executable. It is a convenience, not a prerequisite
+for indexed search.
 
-Invariant 17 forbids automatic upgrade and silent provider switching. Every
-update is an explicit, pinned, re-qualified event:
+The implementation must be small and concrete:
 
-```powershell
-pwsh -NoProfile -File C:\Tools\Qdrant\Update-Qdrant.ps1 `
-  -Version <X.Y.Z> -ExpectedZipBytes <N> [-ExpectedZipSha256 <hex>]
-```
+- spawn only the configured executable and hold the actual child handle;
+- never attach to an existing PID/process name/port;
+- use private create-new config/resources and a sanitized environment;
+- use the real Qdrant bridge/client for authenticated readiness;
+- use one absolute startup/shutdown deadline;
+- apply an actual Windows Job Object/child-tree guard or report managed mode unsupported;
+- bounded terminate/reap on failure and shutdown;
+- no automatic restart in the first profile;
+- no fixed unbounded `run-stdout.log` / `run-stderr.log` in the index data directory.
 
-The script installs side-by-side, verifies size (+ SHA-256 when supplied),
-smoke-tests, and stops. It never switches live traffic, never deletes old
-versions, and never qualifies anything. After it:
+The current `search-qdrant-supervisor` does not satisfy that boundary: it has no product caller, cannot call
+Windows Job/ACL APIs, accepts caller-created containment evidence and surrounds child spawning with roughly
+90.7 KiB of qualification/receipt state. Replace or delete it under #334.
 
-1. write the `VERSION.txt` receipt in the new version dir;
-2. re-run the smoke against the new dir;
-3. explicitly admit the new exact pin and license policy, then execute the
-   operational probes under the actual owner before enabling indexed use;
-   preserve the `qualification/qdrant/` dossier until independent qualification
-   and installed/release acceptance are complete. Neither a pin edit nor a
-   successful process start alone makes the new version qualified;
-4. remove the old version dir only after the new one is qualified
-   (storage must be migrated or rebuilt per the migration receipt, never
-   blindly reused across versions).
+## Updating Qdrant
 
-One minor version at a time (upstream rule); consult the upstream changelog
-for storage-format notes before touching data.
+Updates are explicit. Install/test a new server/client/profile side by side, create a fresh collection
+generation when schema/retrieval meaning changes, run the connected product checks and switch the published
+view only after exact readback. Do not auto-download, auto-upgrade or silently reuse an incompatible data
+directory.
+
+Exact artifact checks and broader installed/fault/resource qualification belong to release work after the
+product path exists. They do not block direct endpoint development or become constructor tokens.

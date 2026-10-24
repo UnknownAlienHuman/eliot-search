@@ -1,62 +1,83 @@
-# eliot-searchd
+# eliot-searchd — current composition status
 
-**Composition binary — sole owner of Search stores, local Qdrant process and provider server.**
+`eliot-searchd` is the intended composition root for the standalone local Search application. It is not yet one
+application. R033 rechecked the current PR branch after R032; no daemon Rust or runtime behavior changed.
 
-**Status:** partial DIRECT composition exists. Primary redb control, canonical durable preparation,
-real Qdrant and full provider integration remain unfinished and unqualified.
+The statements below are source/caller observations, not a claim that the current binary compiled or ran.
+Exact historical readsets remain in the [analysis registry](../../docs/audit/ANALYSIS_REGISTRY.md#evidence-index).
 
-## Owns
+## Current entrypoint chain
 
-- data-root owner acquisition and progressive startup
-- concrete redb/OS-secret/Qdrant adapter construction
-- vendor-neutral port wiring
-- bounded request supervision and provider server
-- shutdown/readiness/degradation reporting
+`src/entry.rs` still evaluates independent applications in order:
 
-## Must not own
+```text
+1. secure_commands::maybe_refuse_legacy_effects
+2. owner_composition::maybe_run_direct_registry
+3. native_root_command::maybe_run
+4. source_migration_command::maybe_run
+5. preparation_composition::maybe_run
+6. public_runtime_service::maybe_run
+7. secure_commands::maybe_run
+8. app::run_main
+```
 
-- capability logic
-- shared clients for CLI/workers/adapters
-- reverse adapter edges into query/lifecycle packages
-- hidden fallback or client canonical writes
+Each layer may recapture/parse argv and terminate the process. This is shadowed command routing, not one typed
+dispatch table.
 
-- **Delivery wave:** W1 shell, integrated progressively through W9
-- **Soft source-line target:** 6,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+## Observed source routes
 
-## DIRECT proxy child bounds
+| Route in source | Current source-level disposition |
+|---|---|
+| `--scan-file`, `--scan-stdin` variants | Reach the final shell one-shot scanner when no earlier interceptor claims the invocation. The current R033 head has no daemon compile/runtime evidence, so documentation must not state that these commands currently work. |
+| `--initialize-data-root`, inspect/owner commands | Reach the complex native pre-release root/owner lifecycle rather than the selected current-format root owner. |
+| direct registry commands | Open/restore the legacy journal/registry/snapshot system; some registration/admission/DEK commands still have real effects. |
+| `--serve-data-root`, `--search-root`, `--list-sources`, `--read-revision`, `--sync-source-roots` | Claimed first by the direct-registry selector and reduced to registry/root metadata paths before the later DIRECT service can handle them. |
+| `--prepare-root`, `--prepare-revision` | Reach the legacy DIRECT store/profile/receipt preparation application. |
+| control-migration commands | Reach a separate migration staging application. They are callable legacy routes, not test-only files. |
+| `--index-file`, `--index-directory`, retire/repair/GC | Refused before selected source/publication effects as unavailable legacy mutations. |
 
-`--serve-loopback-data-root` retains one process owner and one pipe worker. Startup/READY has a
-30-second budget; each command has one 120-second budget across pipe writing, reply reading, client
-forwarding and shutdown exit confirmation. Normal exit/forced cleanup has a 5-second budget. The
-worker queue and each operation-specific reply channel have capacity one. No command is replayed.
+`public_runtime_service` contains a later read-only DIRECT session with search/paging/read-revision and opaque
+handles. It reports mutations unavailable; its mutation implementation is test-only. Its `--serve-data-root`
+invocation is shadowed by the earlier registry selector, so the primary CLI cannot receive the readiness frame it
+expects.
 
-Frames retain the 64 KiB ceiling. A reply also has a 64 MiB total-byte ceiling including newlines;
-shutdown output is retained within 128 KiB until the exact child exits successfully and its pipe
-worker joins. A STOPPED frame alone cannot acknowledge shutdown. Timeout or ambiguous output closes
-the socket, terminates the child and prevents later admission. Ordinary complete errors stay reusable.
+`--self-test` checks shell/in-memory primitives only. It does not open a current retained store, exercise real
+file/stdin I/O, construct Qdrant or establish indexed Search readiness.
 
-Cleanup uses bounded polling, not an unconditional `Child::wait` or thread join. An OS failure to
-reap a child or close inherited pipe handles remains failed/unknown cleanup, never clean owner
-release. The proxy exits rather than silently retaining a serving worker. This is not process-tree
-containment or proof against an uninterruptible OS syscall; native owner/job qualification remains.
+## Feature topology is not product topology
 
-`--bootstrap-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY` creates
-one original-operation-bound inactive target before inventory publication. It uses
-retained existing-only source/registration/protector custody and no-follow output
-ancestor/target pins. The returned `eliot.migration-bootstrap.v1` receipt records
-this first phase and explicitly reports `complete_candidate_not_performed`.
-Existing targets are never reopened as original proof; uncertainty preserves the
-target/artifact and grants no retry, restart reconciliation, cleanup or serving.
-This command does not also create a legacy v2 import. Full mapping continues in
-this target under the next accepted profile. The old plan command and formats are
-unchanged and remain unable to authorize a complete candidate or authority cutover.
+The default remains `wave1-shell = []`. Qdrant/query/reconcile/proof dependencies are selected through old wave
+features. The loopback server, `wave7-lifecycle`, `full-baseline`, generic retention application and several
+proof harnesses are already removed. Remaining waves neither repair argv shadowing nor connect retained source,
+publication, query and CLI.
 
-`--stage-source-control-migration ROOT TARGET_NAMESPACE_UUID OUTPUT_DIRECTORY`
-continues the original bootstrap through source-map publication, bounded row import
-and full readback in the same inactive target. It retains one native request,
-deadline, allowance, source/registration custody, protector and output pins through
-final reobservation. The metadata receipt uses `eliot.owner-source-stage.v1` and
-reports `complete_inventory_candidate_not_performed`. Full twelve-family adoption,
-candidate acceptance, cutover and installed qualification remain separate work.
+Replace the ladder with ordinary dependencies of the one selected composition. A dependency stays optional only
+for an actually optional user capability.
 
+## Target composition
+
+```text
+one parsed invocation + typed DaemonSettings
+→ current-format root + one real process guard
+→ typed redb / retained-object / source owners
+→ one recoverable preparation path
+→ one Qdrant client/runtime
+→ publication + current published view
+→ Search | Exact | Continue | Expand handlers
+→ one bounded local dispatcher
+→ orderly shutdown
+```
+
+The daemon owns composition, request admission, factual component status, cancellation/deadlines and shutdown.
+Source policy, object format, Qdrant translation, publication recovery, query semantics and wire framing remain
+with their direct owners.
+
+## Change and verification path
+
+Read [AGENTS.md](AGENTS.md), [FUNCTIONS.md](FUNCTIONS.md), the
+[implementation delivery sequence](../../docs/implementation/README.md#delivery-sequence) and
+[#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264). Change one real producer/consumer chain and
+remove the displaced route in the same slice.
+
+After code, run locked Rust 1.98 check/Clippy on the actual daemon binary and immediate consumers. A library
+check, command name, feature, constructor or self-test string is not daemon/product evidence.

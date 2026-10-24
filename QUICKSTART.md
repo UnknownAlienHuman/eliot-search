@@ -1,50 +1,56 @@
-# Primary DIRECT development smoke
+# Diagnostic one-shot scan — not the persistent-product quickstart
 
-This uses the primary daemon, not the old snapshot/BM25 program. It is a
-source-backed development smoke, **not a production or Qdrant deployment guide**.
-Rust 1.98.0 is required. Compilation and native tests must pass first.
+The source contains a narrow exact scan over bytes supplied for one process invocation. The current R031
+compiler evidence covers `search-materializer` and `search-unitizer`, not the daemon binary or these commands.
+Treat the examples below as existing syntax to verify, not as a reported successful run.
 
-```powershell
-cargo +1.98.0 build --release --locked -p eliot-searchd -p eliot-search --bins
-if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+## Scan one file
 
-# Use a fresh disposable data root. Keep source files outside it.
-$DataRoot = Join-Path $env:TEMP ("eliot-smoke-" + [guid]::NewGuid().ToString("N"))
-$Source = Join-Path $env:TEMP ("eliot-source-" + [guid]::NewGuid().ToString("N") + ".txt")
-New-Item -ItemType Directory -Path $DataRoot -ErrorAction Stop | Out-Null
-[System.IO.File]::WriteAllText($Source, "alpha needle omega", [System.Text.UTF8Encoding]::new($false))
-$Daemon = ".\target\release\eliot-searchd.exe"
-
-& $Daemon --index-file $DataRoot $Source
-if ($LASTEXITCODE -ne 0) { throw "Index failed; inspect state before retrying" }
-& $Daemon --search-root $DataRoot needle
-if ($LASTEXITCODE -ne 0) { throw "Search failed" }
-
-# A separate process reopens the retained revision. Live source loss does not
-# silently replace that revision with current-path bytes.
-Remove-Item -LiteralPath $Source -ErrorAction Stop
-& $Daemon --search-root $DataRoot needle
-if ($LASTEXITCODE -ne 0) { throw "Retained revision read failed" }
-```
-
-One-shot commands acquire the data-root owner themselves. Do not run them against
-a root already held by `--serve-data-root` or another daemon. Live root management
-through the final provider protocol remains unfinished.
-
-For the current internal line-protocol service:
+The existing daemon syntax places the query before the path:
 
 ```powershell
-& $Daemon --serve-data-root $DataRoot
+$Source = Join-Path $env:TEMP "eliot-scan.txt"
+[System.IO.File]::WriteAllText(
+  $Source,
+  "alpha needle omega",
+  [System.Text.UTF8Encoding]::new($false)
+)
+
+cargo +1.98.0 run --locked -p eliot-searchd -- --scan-file needle $Source
 ```
 
-Enter `version`, `health`, or `shutdown`, one per line. This is a diagnostic stdio
-surface, not the final authenticated provider protocol. After a mutation failure
-with `SERVICE_MUTATION_OUTCOME_UNKNOWN`, do not resend the mutation automatically.
-The service exits; investigate and verify storage before restarting. No automated
-repair or rollback is implied.
+The explicit ASCII-insensitive variant is:
 
-Legacy snapshot and sealed CLIs are no longer runnable Cargo binary/example
-targets. Their regression harnesses remain available via `cargo test --test`,
-including `cargo +1.98.0 test --locked -p eliot-searchd --test eliot-search-sealed-recover`.
-Keep this disposable smoke directory until its results have been inspected; this
-guide deliberately performs no automatic recursive data deletion.
+```powershell
+cargo +1.98.0 run --locked -p eliot-searchd -- --scan-file-ascii-insensitive needle $Source
+```
+
+## Scan stdin
+
+```powershell
+Get-Content -Raw $Source |
+  cargo +1.98.0 run --locked -p eliot-searchd -- --scan-stdin needle
+```
+
+A successful invocation would exercise only the one-shot exact path over supplied bytes. It would not retain a
+source revision, initialize a current-format root, use Qdrant, survive restart or establish indexed Search.
+
+## Persistent product status
+
+There is no verified persistent quickstart yet. The default application still has overlapping legacy command
+routes and disconnected publication/query composition. Remaining `wave1`–`wave6` features select old fragments;
+a feature combination is not a product profile.
+
+[#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the first real quickstart:
+
+```text
+initialize/open current root
+→ select and retain one file
+→ restart
+→ publish/query through the actual Qdrant adapter
+→ reopen the pinned retained excerpt from the CLI
+```
+
+Replace this document with executed persistent steps only after that path works. Until then, help text,
+constructors, self-test names and historical qualification do not prove availability. See the
+[analysis registry](docs/audit/ANALYSIS_REGISTRY.md#execution-evidence) for exact revision-specific evidence.

@@ -1,55 +1,86 @@
-# Function contract — `search-index-reclaimer`
+# Index cleanup — temporary extraction map
 
-**Status:** W3/P07 ordinary index-reclaim contract.
+This package has no independent durable responsibility in the target product. It currently contains a useful exact Qdrant delete/readback skeleton surrounded by caller proofs, plans, digests, receipts and checkpoint state. Move the useful private helper into publication/bridge, then delete this package and its workspace dependencies.
 
-This package deletes rebuildable retired Qdrant points. It does not perform CAS retention, legal/security
-purge, publication visibility or secure erase.
+Read the [publication owner](../search-publication/FUNCTIONS.md), [Qdrant bridge](../search-qdrant-bridge/FUNCTIONS.md) and [stopped-root maintenance](../../search-runtime/search-retention/FUNCTIONS.md).
 
-## Operations
+## Current source findings
 
-### `validate_retired_manifest(manifest, publication_receipt) -> Result<CommittedRetiredManifest, ReclaimError>`
+- `manifest.rs` validates caller-supplied structures instead of deriving exact retired IDs from committed publication.
+- `plan.rs` copies manifests into another plan and adds custom identities.
+- `execute.rs` contains the reusable exact delete/absence-readback shape but lacks the current route, view, deadline and recovery owner.
+- `receipt.rs` creates a second cleanup journal.
+- R028 at `37dbb198` traces daemon `rebuild_composition::authorize_reclaim`: it returns a plan after
+  caller-proof/pin checks, performs no deletion and has no production caller. A feature gate does not
+  connect `execute_batch` to the real bridge; its `IndexAdmin` is still a supplied abstraction.
 
-Requires exact IDs, collection generation, retirement epoch, manifest digest and a matching committed
-publication receipt. Uncommitted or broad-predicate manifests are rejected.
+## Current owner
 
-### `plan(manifest, watermark, settings, budget) -> Result<ReclaimPlan, ReclaimError>`
+Publication commits one finite unfinished cleanup obligation with the new current view:
 
-Requires the route/epoch watermark to prove invisibility to every active pin. Produces deterministic,
-finite exact-ID batches and a plan digest.
+```text
+RetiredCleanup {
+  artifact containing exact point IDs or exact retired collection identity
+  route / generation
+  retire_before_sequence when point cleanup is used
+  next effect/readback cursor
+  possible-dispatch state needed for recovery
+}
+```
 
-### `execute_batch(plan, batch_index, index_admin, mutation, context) -> Result<ReclaimBatchReceipt, ReclaimError>`
+There is no separate reclaim plan, proof, receipt history or terminal record. When the finite cleanup table is full, publication backpressures before another external mutation.
 
-Deletes only the batch's exact IDs using the index-admin port, then verifies expected missing IDs and
-rejects unexpected/mismatched acknowledgements.
+### Reader eligibility
 
-### `checkpoint(plan, receipts) -> ReclaimCheckpoint`
+A same-generation point closed with exclusive `valid_until = N` is eligible only when no live view of the same route/generation has `sequence < N`. A retired collection is eligible only when no live view uses that route/generation.
 
-Records only plan/manifest digests, completed batch indices and exact receipts. It never stores source
-content or a broad deletion filter.
+Checking the immediate predecessor or one watermark is insufficient. New requests can acquire only current; existing queries/windows retain their exact old view guard. Restart removes old process-local guards but not durable cleanup rows.
 
-### `resume(checkpoint, manifest, watermark, index_admin, context) -> Result<ReclaimReceipt, ReclaimError>`
+### Writer eligibility
 
-Revalidates manifest, publication receipt and current watermark before continuing. Already confirmed
-batches are idempotently skipped/read back.
+Reader drain is not writer quiescence. Do not delete or declare completion while an earlier Qdrant writer may still recreate or replace the state. One matching readback, elapsed client deadline or reconnect does not prove terminality. Unresolved abandoned-route obligations remain visible and bounded as specified by publication.
 
-### `complete(plan, receipts) -> Result<ReclaimReceipt, ReclaimError>`
+## Exact cleanup effect
 
-Succeeds only when every exact ID is confirmed absent. The receipt is explicitly
-`ordinary_retired_point_reclaim` and cannot satisfy a purge acknowledgement.
+For a settled exact-ID page:
 
-## Configuration operations
+1. load the immutable page named by the cleanup row;
+2. inspect exact same-route/generation state when a prior delete may have happened;
+3. issue exact-ID deletion under the current attempt deadline/cancellation;
+4. read back exact absence;
+5. advance the durable cursor in one short redb transaction;
+6. remove the row/artifact only after exact completion.
 
-Implements `config/sections/index_reclaim.md`. Batch/slice tuning is live and bounded, but never alters
-manifest or watermark eligibility.
+For a retired generation, inspect/delete/read back exact collection absence. Partial or foreign state blocks advancement. Broad-filter deletion is not used. Qdrant vendor conversion stays private to the bridge; publication owns the row, cursor, recovery and visibility.
 
-## Cancellation, retry and crash semantics
+## Local immutable-object GC is not this operation
 
-Cancellation stops between batches and returns a resumable checkpoint. A timeout after delete is an
-unknown outcome resolved by exact readback. Same batch mutation identity plus same IDs is retry-safe;
-different IDs with the same identity are rejected.
+Local object collection is explicit **stopped-root maintenance**. The daemon and all producers/windows are stopped, one exclusive root lock is held, all current/prepared/published/pending/cleanup references are validated and marked once, then only proven-unreferenced objects are swept. Unknown traversal or delete keeps bytes.
 
-## Required fixtures
+Do not implement the previous online shared/exclusive `ObjectGcGate`, per-publication root rescans, generic lease catalogue or sweep journal. Qdrant cleanup remains online because it is coordinated with live view/writer state; local object-file GC does not.
 
-Pinned/current/uncommitted never delete; exact IDs only; crash/timeout between batches; duplicate
-replay; unexpected receipt fail-closed; old route waits for final pin; ordinary receipt cannot satisfy
-security purge.
+## Removal boundary
+
+Delete after direct publication/bridge callers move:
+
+- `PublicationCommitProof` and retired-manifest field-equality admission;
+- reclaim plan/batch/checkpoint/receipt constructors and custom digests;
+- route/epoch watermark and caller `reclaimable` booleans;
+- separate operation port/journal;
+- purge/restore/rollback interactions;
+- W7/P18/source-shape/process fixtures;
+- package and workspace dependencies.
+
+Move only the private exact delete/readback code that remains useful.
+
+## Required behavior checks after integration
+
+- a live v1 prevents deletion even when v2 is gone and v3 closed the point;
+- generation cleanup waits for every view using it;
+- possible delayed writers prevent unsafe cleanup;
+- current-view commit crash preserves cleanup work;
+- restart resumes work blocked only by dead process guards;
+- unknown/partial delete resolves from exact state without broad retry;
+- backlog bound causes safe publication backpressure;
+- stopped-root GC preserves every current/pending/cleanup object root;
+- ordinary cleanup never claims purge or secure erase.

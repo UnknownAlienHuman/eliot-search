@@ -1,187 +1,214 @@
-# Function contract — `search-runtime-owner`
+# search-runtime-owner — source/caller audit and replacement map
 
-**Status:** W1/P01 logical contract; no owner implementation or Windows qualification evidence exists.
+## Gross production inventory
 
-This package is the sole owner of data-root acquisition, owner-epoch fencing, abandoned-owner
-classification and clean release. It owns no daemon composition, control tables, source state or Qdrant
-process lifecycle.
+### Pure package
 
-## Global rules
-
-- one canonical local data root has at most one live owner incarnation;
-- path text, lock-file presence, PID or responding endpoint alone never proves ownership;
-- every successful mutation binds installation incarnation, process creation identity, owner epoch,
-  mode and canonical data-root identity;
-- ambiguous state quarantines rather than attaches or deletes another process record;
-- equal operation identity plus equal canonical request is idempotent; conflicting reuse is rejected;
-- public diagnostics expose location class/digest and identity state, not unrestricted absolute paths.
-
-## Configuration operations
-
-### `section_descriptor() -> ConfigSectionDescriptor`
-
-### `compiled_defaults() -> ConfigSectionInput`
-
-### `validate_section(input, platform, accepted_capabilities) -> Result<ValidatedInstanceConfig, OwnerError>`
-
-Implements `config/sections/instance.md`. Rejects remote/network roots, invalid mode, unsafe owner-recovery
-policy and bounds outside the packet. Mode or data-root changes cannot apply live.
-
-### `section_digest(validated) -> Blake3Digest32`
-
-### `plan_section_change(old, new) -> Result<SectionReloadDecision, OwnerError>`
-
-Preserves `DRAIN_AND_RESTART` for mode/data-root changes and every stricter obligation. This package does
-not execute daemon restart or publish a global config snapshot.
-
-## Identity and path preparation
-
-### `resolve_data_root(request, platform) -> Result<ResolvedDataRoot, OwnerError>`
-
-Canonicalizes the requested or OS-default local root, validates local-volume policy, obtains stable path/
-volume/file identity where supported and produces a content-minimized identity digest.
-
-It does not create ownership state. Reparse/device/network ambiguity fails closed.
-
-### `build_owner_identity(process, executable, installation, mode) -> Result<OwnerIdentity, OwnerError>`
-
-Requires process creation identity/handle semantics, executable file identity/digest, installation
-incarnation and exact mode. PID reuse cannot satisfy equality.
-
-## Owner acquisition
-
-### `inspect_existing_owner(root, observer, deadline, cancel) -> Result<OwnerObservation, OwnerError>`
-
-Reads the durable/OS ownership markers and observes the referenced process without mutating state.
-Returns one closed classification:
+`search-runtime-owner/src` contains **123,087 bytes (~120.2 KiB)** before tests:
 
 ```text
-ABSENT
-LIVE_MATCHING_OWNER
-LIVE_CONFLICTING_OWNER
-STALE_RECORD_IDENTITY_ABSENT
-AMBIGUOUS
-CORRUPT
+admission.rs              7,617
+error.rs                  5,378
+identity.rs              10,456
+lease.rs                 21,207
+lib.rs                    1,960
+state.rs                  7,857
+supervisor.rs             8,981
+transition.rs             4,044
+transition/acquire.rs    32,247
+transition/health.rs      5,366
+transition/release.rs    17,974
 ```
 
-Cancellation before a complete observation returns no reusable ownership claim.
+`OwnerSupervisor::new` and the full prepare/complete/recover acquire API were found in package tests/internal
+wrapper only. `classify_root_open` has one real daemon native-admission caller. Daemon code imports several
+errors/enums, but that does not justify the pure lease/transition platform.
 
-### `acquire_data_root(request, owner_identity, operation, deadline, cancel) -> Result<OwnerGuard, OwnerError>`
+### Daemon owner composition
 
-**Preconditions**
-
-- resolved root and owner identity are valid;
-- no unresolved acquisition/release operation uses the root;
-- mode is compatible with the requested composition profile;
-- cancellation/deadline are explicit and finite.
-
-**Postconditions**
-
-- one OS ownership primitive and one durable owner record agree on root, incarnation, process and epoch;
-- owner epoch is fresh and strictly greater than any safely observed abandoned generation;
-- returned guard is non-serializable and is the only package authority for subsequent owner mutations;
-- a second concurrent acquisition is denied.
-
-Cancellation before mutation is clean. Timeout/cancellation after the OS/durable mutation boundary is
-`OWNER_ACQUIRE_OUTCOME_UNKNOWN`; recovery uses exact ownership observation and the original operation
-identity, never a second blind acquire.
-
-### `verify_owner_guard(guard, current_process, current_root) -> Result<OwnerVerificationReceipt, OwnerError>`
-
-Rechecks owner epoch, installation/process/executable/root identity and OS ownership primitive. Mismatch
-invalidates the guard and requests quarantine.
-
-## Recovery
-
-### `classify_abandoned_owner(observation, policy) -> RecoveryDecision`
-
-Purely maps a complete observation to:
+Excluding files named as tests, `bins/eliot-searchd/src/owner_composition/kernel*` contains **443,814 bytes
+(~433.4 KiB)**. Large production files include:
 
 ```text
-START_FRESH
-DENY_LIVE_OWNER
-CLEAN_STALE_RECORD_AND_RETRY
-TERMINATE_VERIFIED_ORPHAN_THEN_RETRY
-QUARANTINE
+native_request.rs          43.5 KiB
+initialization.rs          40.9 KiB
+fresh_root.rs              30.0 KiB
+read_child.rs              25.9 KiB
+native_admission.rs        23.4 KiB
+native_source.rs           23.6 KiB
+native_dek_selection.rs    22.8 KiB
+initialization_journal.rs  21.9 KiB
+registration_mutation.rs   20.8 KiB
+direct_registry_command.rs 19.8 KiB
+direct_registry.rs         16.1 KiB
+native_dek_command.rs      15.3 KiB
 ```
 
-Baseline policy never blindly attaches. Termination is legal only for an exact verified owned orphan and
-is performed by an injected platform/process port, not inferred from PID.
+Combined pure package + daemon production source is **566,901 bytes (~553.6 KiB)** before tests.
 
-### `recover_acquisition(root, operation, expected_owner, observer) -> Result<OwnerGuard, OwnerError>`
+This is gross inventory, not a promised net deletion. Real path/lock/staging/ACL/control/object effects remain.
 
-Resolves unknown acquire outcome by exact OS/durable readback. It reconstructs the guard only when every
-identity matches; conflicting/partial state quarantines.
+## Current pure API and disposition
 
-### `recover_release(root, operation, expected_owner, observer) -> Result<OwnerReleaseRecovery, OwnerError>`
+| Current API/module | Caller reality / disposition |
+|---|---|
+| `classify_root_open` | Real daemon native-admission caller. Keep a smaller classifier or inline beside explicit initialize/open. |
+| `OwnerSupervisor` | Construction found in package tests; no normal native daemon owner uses it. Delete. |
+| `prepare_acquire`, `complete_acquire`, recovery/release transitions | Used by `OwnerSupervisor`/tests, not the concrete native owner. Delete. |
+| `OwnerIdentity`, `ProcessCreationIdentity`, `ExecutableIdentity`, `OwnerBinding` | Logical values fed into old records/leases. Actual authority is retained root/lock handles. Delete unless a small diagnostic field has a real consumer. |
+| `OwnerGuard`, `LeaseWindow`, renewal/health/drain/release/dependency receipts | Logical state; not an OS lock or resource lifetime. Delete with callers. |
+| generic mutation outcome classifier | Move/inline at real effect owners; different effects need different readback. |
+| `OwnerError` | Retain only small current root/open/platform classes; delete historical lifecycle codes. |
 
-Distinguishes still-owned, cleanly released, partially released and ambiguous state. It never deletes a
-record that may protect a live process.
+## Current daemon path and defects
 
-## Drain and release
+### Command-shaped root authority
 
-### `begin_drain(guard, reason, operation) -> Result<DrainToken, OwnerError>`
+`NativeRootRequest` stores:
 
-Atomically changes package owner lifecycle from `ACTIVE` to `DRAINING` for the exact guard. Idempotent for
-the same operation/reason. It does not drain requests or dependencies; daemon orchestration owns that.
+- mode/root/deadline/cancellation;
+- request ID and BLAKE3 digest of retained argv;
+- copied native arguments;
+- six cumulative limits: arguments, input bytes, encoded bytes, read bytes, native calls and opens;
+- named `NativeWork` stage arrivals and terminal refusal state.
 
-### `verify_release_preconditions(guard, drain_token, dependency_receipts) -> Result<ReleasePermit, OwnerError>`
+It also contains constructors/parsers for root registration, Source-v2 admission, source sync, DEK prepare/
+selection, service, control migrations, one-shot reads and other commands.
 
-Requires matching owner/drain identities and exact receipts proving endpoint/control/source/index/process
-layers have been stopped according to the composition profile. Missing or mismatched receipts reject
-release.
+The invocation owner should parse a command once. Root ownership should receive only:
 
-### `release_cleanly(guard, permit, operation, deadline) -> Result<OwnerShutdownReceipt, OwnerError>`
+```text
+root path
+inspect | initialize | open-mutating
+absolute deadline/cancellation
+small path/read limits
+```
 
-Removes/marks the durable owner record and releases the OS ownership primitive in a crash-recoverable
-order. Success proves this owner no longer claims the root; it does not claim process-wide secure erase.
+Do not bind the entire application command/argv digest to a root lock.
 
-Same operation is idempotent. Timeout after either mutation is unknown until `recover_release`.
+### Existing open
 
-## Health and diagnostics
+`native_admission.rs` currently:
 
-### `owner_health(guard, observer) -> OwnerHealth`
+1. checks Windows-only mode and canonical local path;
+2. opens/retains the root directory;
+3. checks many legacy/direct barriers;
+4. opens both `.eliot-search-owner.lock` and `.eliot-search-sealed-owner.lock` and calls `try_lock`;
+5. parses `.eliot-search-installation.v1`;
+6. reads alternating owner slots and expects `RELEASED`;
+7. opens pins, storage ACL observations and optionally direct control;
+8. plans/publishes a successor ACTIVE owner record;
+9. carries selected key binding, request/work meter and effect-observed poisoning in one capability.
 
-Returns lifecycle/identity consistency, owner epoch, location class/digest and bounded reason codes only.
-It contains no secret, source content or unrestricted path.
+The two actual locked file handles provide exclusion. Current-format open does not need legacy/sealed dual
+locks plus alternating lifecycle records. Storage/control/key/source owners open after the guard and manage
+their own state.
 
-## Cancellation, deadline and crash semantics
+### Durable owner format
 
-All platform observations are deadline/cancellation aware. No cancelled partial observation becomes an
-owner proof. Every acquire/release mutation has a stable operation identity and exact readback recovery.
-Process crash leaves OS/durable evidence for the next owner to classify; it never automatically makes a
-root safe to reuse.
+`spec.rs` defines:
 
-## Typed failures
+```text
+.eliot-search-installation.v1
+.eliot-search-owner-state-a.v1
+.eliot-search-owner-state-b.v1
+ACTIVE | DRAINING | RELEASED
+owner epoch / generation / request digest / executable digest / drain reason
+```
 
-- `DATA_ROOT_INVALID`
-- `DATA_ROOT_REMOTE_DENIED`
-- `DATA_ROOT_ALREADY_OWNED`
-- `OWNER_MODE_CONFLICT`
-- `OWNER_EPOCH_MISMATCH`
-- `OWNER_PROCESS_IDENTITY_MISMATCH`
-- `OWNER_EXECUTABLE_IDENTITY_MISMATCH`
-- `OWNER_IDENTITY_AMBIGUOUS`
-- `OWNER_ACQUIRE_OUTCOME_UNKNOWN`
-- `OWNER_RELEASE_OUTCOME_UNKNOWN`
-- `OWNER_RECOVERY_QUARANTINED`
-- `OWNER_DRAIN_REQUIRED`
-- `OWNER_RELEASE_PRECONDITION_MISSING`
-- `OWNER_OPERATION_CONFLICT`
-- `OWNER_CANCELLED_BEFORE_MUTATION`
+A crash releases the OS lock but leaves stale lifecycle records. Normal restart then needs succession/recovery
+to reason about data which is not exclusion authority. Delete this durable process-history model. One current
+root-format manifest describes disk format/profile; process ownership is the live lock handle.
 
-## Required tests / qualification evidence
+### Initialization
 
-- OS-default/local-root canonicalization and remote/reparse/device denial;
-- two-process concurrent acquisition: exactly one succeeds;
-- PID reuse, executable replacement and installation-incarnation mismatch;
-- stale record with proved absent identity cleans safely;
-- ambiguous process/root identity quarantines;
-- crash before/after each OS/durable acquire and release boundary;
-- same-operation replay reconstructs guard/receipt; conflicting replay rejects;
-- standalone/managed co-ownership and live mode transition rejected;
-- owner epoch monotonic across crash/reopen and never reused;
-- release requires drain plus dependency shutdown receipts;
-- debug/serialization/path disclosure audit;
-- `instance` configuration validation/change classification;
-- fake platform/process/record ports prove portable decision logic.
+Current initialization/fresh-root/journal code creates a large operation/lifecycle protocol. Replace it with
+#360 unique staging and final root manifest publication last. Normal open never repairs staging. Explicit
+resume/discard is limited to exact owned uncommitted staging.
+
+### Shutdown
+
+Current code models dependency shutdown receipts, drain tokens and owner release. Replace with direct daemon
+order and RAII/drop. A released lock has no persistent receipt. A real unresolved publication/object/control
+effect is resolved by that owner before shutdown completes.
+
+## Target concrete owner
+
+Suggested behavior, not mandatory names:
+
+```text
+inspect_root(path) -> RootInspection
+initialize_root(path, settings, context) -> CurrentRootMetadata
+open_current_root(path, context) -> OpenedDataRoot
+
+OpenedDataRoot {
+  canonical root handle
+  exclusive lock handle
+  current root-format metadata
+}
+```
+
+`OpenedDataRoot` is held by daemon composition. Opening current stores is a separate step so failures close
+partial owners and release the lock through ordinary ownership.
+
+### Path and lock properties
+
+Keep the selected Windows/native properties which are real:
+
+- canonical local path; reject UNC/device/reparse/unsupported location according to current profile;
+- no-follow/open-existing semantics for committed root/manifest/lock;
+- one create-on-initialize/current-format lock file;
+- exclusive `try_lock` held for process lifetime;
+- reread manifest/root identity through retained handles after lock to prevent path replacement;
+- optional actual ACL/user validation owned by the selected storage profile.
+
+Do not add PID liveness, process executable hashing, owner epochs or a second lock as fallback authority.
+
+### Root format metadata
+
+Keep one small current-format manifest/profile containing only disk compatibility/identity needed to open the
+stores, for example:
+
+```text
+format version
+root ID
+storage profile
+control/object schema version
+```
+
+This is immutable/current root format, not process owner state. Unsupported versions are refused before
+writes and left intact.
+
+## Removal order
+
+1. Implement #360 staged manifest-last initialization and side-effect-free inspection.
+2. Open current root with one real guard and direct current-format metadata.
+3. Open typed redb/object/source/publication owners under the held guard.
+4. Change service/source/query/admin callers to use daemon-owned owners rather than command-specific root
+   capabilities.
+5. Delete root parsing from `NativeRootRequest`, named stage/work meters and command-specific custody.
+6. Delete owner slots/succession/lifecycle/dual locks/initialization journal.
+7. Delete pure supervisor/lease/transition package APIs and move/inline the small retained classifier/errors.
+8. Remove old `search-runtime-owner` dependency if no independent package remains.
+
+## Failure semantics
+
+- invalid/unsupported/corrupt/foreign path before lock: known refusal, no writes;
+- lock held: `AlreadyOwned`;
+- known initialization/open transaction failure before final manifest: known failure/staging remains bounded;
+- final manifest publication acknowledgement uncertain: explicit initialization inspection decides committed vs
+  incomplete; no generic owner operation replay;
+- current store open failure: close opened stores/drop lock, leave root unchanged;
+- shutdown component failure: report the concrete component; do not write DRAINING/RELEASED as compensation;
+- process crash: OS releases lock; next open validates current root/stores directly.
+
+## Focused checks
+
+- inspect absent/current/unsupported/corrupt/incomplete does zero writes;
+- initialize crash points yield either committed current root or recognized staging;
+- one lock excludes a second process and releases on crash/drop;
+- path replacement/reparse/foreign volume refused according to profile;
+- stale historical owner files are not consulted by current open;
+- current stores open after guard and close before release;
+- shutdown/cancellation does not turn known local abort into unknown external effect;
+- no source/DEK/registry/migration command parsing remains in root ownership.
