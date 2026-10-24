@@ -30,14 +30,18 @@ compatibility code or another registry.
 
 ## Current status
 
-R035 reconciles active issue handoffs with the repository record. Issues now distinguish historical source-size/
-caller evidence from current branch facts, and #302 no longer asks agents to remove the already deleted
-`search-retention` crate. Exact current caller and donor checks occur inside the concrete implementation slice,
-not through another repository-wide audit.
+R036 corrects two remaining active handoff contradictions:
 
-R034 labelled old package inventories with baseline `c8e38b6`. R033 corrected daemon/CLI/model-worker entry
-docs. R032 established the authority chain and delivery sequence. R031 adopted `pulldown-cmark 0.13.5` and
-passed Rust 1.98 check/minimal Clippy for materializer + unitizer; #441 is closed as that dependency task.
+- #244 no longer asks agents to delete the already removed `search-retention` crate or `wave7-lifecycle` /
+  `full-baseline`; it now owns only the real current-format archive/import implementation.
+- #227 treats `pdfium-render`/PDFium as an uninstalled candidate boundary. The exact crate version, matching
+  native artifact, API, MSRV, advisories, features, packaging and license evidence are selected and recorded
+  together with the actual implementation—not inherited from an old research checkpoint.
+
+R035 reconciled issue evidence/currentness semantics. R034 labelled historical package inventories. R033 fixed
+active package entry claims. R032 established the authority chain and delivery sequence. R031 adopted
+`pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer + unitizer; #441 is closed as
+that dependency task.
 
 The persistent source → Qdrant → retained-evidence → CLI path is still not connected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by

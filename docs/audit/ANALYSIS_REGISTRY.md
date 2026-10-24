@@ -5,17 +5,18 @@ unrun work. It is not architecture, a permission system or a reason to delay kno
 
 ## Resume after interruption
 
-**Checkpoint:** R035, 2026-10-24 — active issue handoffs reconciled and synchronized.  
+**Checkpoint:** R036, 2026-10-24 — repeated removal and unpinned PDF donor instructions corrected.  
 **Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).  
-**Published checkpoint:** `8c6047371a0f9aa82e08f2762cf82bee306102b1` (R035).  
+**Inspected head:** `fbf2c55f6e4322a1221fc9963058861adc3c8c20` (R035 handoff complete).  
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
-R035 corrected active issue bodies which treated historical package sizes/caller searches as permanent current
-facts or repeated already completed removal work. PR #610, #352 and #214 are synchronized. R032–R035 change
+R036 corrects two active issue handoffs: #244 still repeated deletion of retention code/features already removed
+in R017/R020, and #227 treated an old `pdfium-render` inspection as a selected current dependency without a pin,
+native artifact or implementation. The issue bodies were corrected before this tree commit. This pass changes
 documentation and GitHub metadata only; no Rust, Cargo, workflow or runtime behavior changed.
 
 The persistent source → retained evidence → Qdrant → CLI application remains unconnected. Read
-[docs/README](../README.md), then the affected owner recipe and exact current callers. Do not repeat R027–R035
+[docs/README](../README.md), then the affected owner recipe and exact current callers. Do not repeat R027–R036
 as another repository-wide audit.
 
 **Next implementation:** #333 typed settings and real consumers, then #270/#330/#331 source/object/preparation
@@ -35,10 +36,13 @@ Current workspace has **49 explicit members**. This is inventory, not a target p
 - Exact, orientation, comparison, documents and Git remain product requirements.
 - Historical source-size, trait, operation, manifest and caller counts are tied to their inspected baseline.
   Recheck exact current callers at the code cut; old counts are neither current facts nor deletion targets.
-- `search-retention` Cargo/workspace/lock wiring was removed in R020. Its remaining `FUNCTIONS.md` is a
-  documentation-only maintenance owner; do not recreate or remove the crate again.
+- `search-retention` Cargo/workspace/lock wiring, generic retention/restore implementation and
+  `wave7-lifecycle`/`full-baseline` were already removed in R017/R020. Remaining maintenance `FUNCTIONS.md` is
+  documentation-only; do not recreate or delete those components again.
 - Dormant optional packages and workers are not capabilities. Delete them only after an exact current caller
   search; future MCP/model/document work uses the current product path, not old ledgers or refusal stubs.
+- An inspected donor is not an installed dependency. Exact version, features, MSRV, advisories, native artifact
+  and packaging are rechecked and pinned with the concrete consumer.
 - R031 pins `pulldown-cmark 0.13.5` and matching materializer identity; #441 is closed as that dependency task.
 - #598 private object/key work remains protected; consume only its accepted public handoff.
 
@@ -63,7 +67,7 @@ excludes private work. `RUNTIME-ONLY` requires execution.
 
 | ID | Area | Status | Current result / remaining |
 |---|---|---|---|
-| A001 | Documentation authority | CHECKED for R032–R035 scope | Canonical indexes, active entry docs, historical/current labels and issue handoffs are aligned. |
+| A001 | Documentation authority | CHECKED for R032–R036 scope | Canonical indexes, active entry docs, historical/current labels and issue handoffs are aligned. |
 | A002 | Historical governance | CHECKED | Waves/packets/swarm/generated authority removed; Git preserves history. |
 | A003 | Workflows/wrappers | CHECKED | Old gates/wrappers removed; Actions remain manual-only. |
 | A004 | Workspace inventory | CHECKED for inventory | 49 members; current full workspace/binaries remain unrun. |
@@ -78,10 +82,10 @@ excludes private work. `RUNTIME-ONLY` requires execution.
 | A013 | Protocol/client/CLI | PARTIAL | Serviced current session absent. |
 | A014 | Product depth | PARTIAL | Requirements preserved; implementations incomplete. |
 | A015 | Tests/governance code | PARTIAL | Remaining wave/query/lexical fixtures need caller cutover. |
-| A016 | Donors | PARTIAL | Markdown installed; other donors remain per concrete consumer. |
+| A016 | Donors | PARTIAL | Markdown installed; PDFium/other donors remain uninstalled candidates until concrete consumer pin. |
 | A017 | Qualification tree | CHECKED | Removed as authority; runtime evidence remains ordinary work. |
-| A018 | Package/issue docs | CHECKED for R035 set | Package baselines and active issue status are no longer presented as current execution facts. |
-| A019 | Issues/PR handoff | CHECKED for R035 | #302/#535/#330/#291/#274/#219, #352, PR #610 and #214 are synchronized. |
+| A018 | Package/issue docs | CHECKED for R036 set | Repeated completed removals and unpinned donor claims are corrected. |
+| A019 | Issues/PR handoff | CHECKED by publication sequence | #244/#227 corrected before commit; PR #610/#352/#214 are synchronized to this commit object before branch ref update. |
 | A020 | Runtime evidence | RUNTIME-ONLY | No current Windows/Qdrant/recovery/performance result. |
 | A021 | Compiler baseline | PARTIAL | R031 check/Clippy covers materializer+unitizer only. |
 | A022 | Runtime identity/qualification | PARTIAL | Dormant worker/fixture code still needs caller-based cleanup. |
@@ -104,7 +108,8 @@ excludes private work. `RUNTIME-ONLY` requires execution.
 | R032 | Canonical documentation/index reconciliation | [3a5d3032](https://github.com/UnknownAlienHuman/eliot-search/blob/3a5d30322466d40e78f501d324d5aa7a4cb17362/docs/audit/ANALYSIS_REGISTRY.md#r032-canonical-documentation-and-index-reconciliation) |
 | R033 | Active package entry documentation | [95c5f65c](https://github.com/UnknownAlienHuman/eliot-search/blob/95c5f65ce8544cb14c08936993cb826f8cab4d9d/docs/audit/ANALYSIS_REGISTRY.md#r033-package-entry-documentation-recheck) |
 | R034 | Baseline inventory labels | [877ac38d](https://github.com/UnknownAlienHuman/eliot-search/blob/877ac38ddbd9aae4709eeb4661d711ab68b6feae/docs/audit/ANALYSIS_REGISTRY.md#r034-baseline-inventory-label-reconciliation) |
-| R035 | Active issue handoff reconciliation | [this pass](#r035-active-issue-handoff-reconciliation) |
+| R035 | Active issue evidence/currentness reconciliation | [fbf2c55f](https://github.com/UnknownAlienHuman/eliot-search/blob/fbf2c55f6e4322a1221fc9963058861adc3c8c20/docs/audit/ANALYSIS_REGISTRY.md#r035-active-issue-handoff-reconciliation) |
+| R036 | Completed-removal and PDF donor handoff reconciliation | [this pass](#r036-completed-removal-and-pdf-donor-handoff-reconciliation) |
 
 Supporting historical evidence: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md),
 [baseline member disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md) and the
@@ -117,65 +122,69 @@ Supporting historical evidence: [distilled audit](ARCHITECTURAL_AND_CODE_AUDIT_2
 - [Run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130): Rust 1.98 locked
   check/minimal Clippy for `search-materializer` + `search-unitizer` at R031.
 - Current binaries, Windows, live Qdrant, parser replay, restart/recovery, relevance and scale remain unrun.
-- R032–R035 are documentation-only and add no Rust/runtime result.
+- R032–R036 are documentation-only and add no Rust/runtime result.
 
 <a id="r030-remove-disconnected-evaluation-authority"></a>
 
 ## R030. Remove disconnected evaluation authority
 
-`search-eval` had no external Rust caller; R030 removed the 41-file package and Cargo/lock wiring. Future #233
-evaluation is a small post-product tool, not a runtime gate.
+Removed disconnected `search-eval` and its Cargo/lock wiring; future evaluation is post-product tooling.
 
 <a id="r031-adopt-maintained-markdown-offsetiter-correction"></a>
 
 ## R031. Adopt maintained Markdown OffsetIter correction
 
-Pinned `pulldown-cmark 0.13.5` and matching materializer identity. Run 40084893130 passed owner/consumer check
-and Clippy. #441 is closed as this dependency task.
+Pinned `pulldown-cmark 0.13.5` and matching materializer identity; owner/consumer check and Clippy passed.
 
 <a id="r032-canonical-documentation-and-index-reconciliation"></a>
 
 ## R032. Canonical documentation and index reconciliation
 
-Rebuilt canonical navigation/delivery sequence, shortened live registers and synchronized current handoff docs.
-No product code changed.
+Rebuilt canonical navigation/delivery sequence and synchronized current handoff docs.
 
 <a id="r033-package-entry-documentation-recheck"></a>
 
 ## R033. Active package entry documentation recheck
 
-Corrected daemon/CLI execution claims and exact model-worker stub disposition. Six Markdown files; no Rust.
+Corrected daemon/CLI execution claims and dormant model-worker disposition.
 
 <a id="r034-baseline-inventory-label-reconciliation"></a>
 
 ## R034. Baseline inventory label reconciliation
 
-Bound package measurements/caller censuses to original baseline `c8e38b6`, required current caller checks and
-synchronized PR/#352/#214/#334/#266. Ten Markdown files plus one registry follow-up; no product code.
+Bound package measurements/caller censuses to original baseline `c8e38b6` and synchronized active handoffs.
 
 <a id="r035-active-issue-handoff-reconciliation"></a>
 
-## R035. Active issue handoff reconciliation
+## R035. Active issue evidence/currentness reconciliation
 
-**Source:** `877ac38ddbd9aae4709eeb4661d711ab68b6feae`, 2026-10-24.
+Corrected #302/#535/#330/#291/#274/#219 so historical findings are not permanent current facts and completed
+removals are not repeated.
 
-**Inspected:** active issue bodies surfaced by historical `public main`/size/caller terminology and the current
-R020/R032–R034 records. No private #598 source was read.
+<a id="r036-completed-removal-and-pdf-donor-handoff-reconciliation"></a>
 
-**Changes:**
+## R036. Completed-removal and PDF donor handoff reconciliation
 
-- #302 now records that R020 already removed `search-retention` Cargo/workspace/lock wiring and that its
-  `FUNCTIONS.md` is documentation-only.
-- #535 requires an exact current caller search before deleting `search-eliot-adapter`.
-- #330 binds duplicate object-kernel measurements to baseline `c8e38b6` and defers deletion to the accepted #598
-  handoff plus current caller inspection.
-- #291 and #274 preserve executor/access architectural findings while treating old sizes/callers as historical.
-- #219 separates historical adapter evidence and the 2026-10-20 SDK checkpoint from an implementation-time donor
-  and advisory recheck.
+**Source:** `fbf2c55f6e4322a1221fc9963058861adc3c8c20`, 2026-10-24.
 
-**Decision:** active issue bodies are handoff documents and must distinguish historical evidence, current branch
-facts, selected target behavior and executed results. Exact caller and donor checks occur inside the concrete
-code slice, not through another repository-wide audit.
+**Inspected:** active issues #244 and #227; R017/R020 removal evidence; current retention maintenance recipe;
+R033 doc-worker source inventory; current donor register and document-profile portfolio. No private #598 source
+was read.
 
-**Publication follow-up completed:** #352, PR #610 and #214 are synchronized with R035. Product implementation
-and all runtime evidence above remain outstanding.
+**Findings and changes:**
+
+- #244 still described `search-retention`, `wave7-lifecycle` and `full-baseline` deletion as pending even though
+  R017/R020 removed the implementation, workspace/daemon/feature and lock wiring. It now explicitly forbids
+  recreating or deleting them again and owns only the real archive/import operation.
+- #227 treated an inspected `pdfium-render` API as selected current machinery although no crate version or native
+  PDFium artifact is installed. It now defines PDFium as the first candidate boundary and requires exact
+  implementation-time crate/API/MSRV/advisory/feature/native-artifact/license/packaging verification and pinning.
+  It retains the exact current refusal-stub inventory and source-backed PDF completion requirement.
+
+**Decision:** completed removals stay historical evidence; active tasks contain only remaining behavior. Donor
+research selects a candidate boundary, not an automatic current dependency. Version/native packaging evidence
+moves with the actual consumer implementation.
+
+**Publication sequence:** #244 and #227 were corrected before this tree commit. PR #610, #352 and #214 are
+synchronized to this exact commit object before the branch ref is advanced. Product implementation and all
+runtime evidence above remain outstanding.
