@@ -30,15 +30,20 @@ compatibility code or another registry.
 
 ## Current status
 
-R041 corrects revision-currentness language in dormant adapter/model-worker instructions and advances the live
-donor register from its stale R037 header. Historical caller searches and source-size measurements remain useful
-evidence, but they are not permanent current-branch facts. Deletion requires one exact current manifest/Rust/
-non-Rust caller check at the implementation head.
+R042 extends the revision-currentness rule to source, runtime, preparation, code-enricher, Qdrant-supervisor and
+overlay package instructions. Historical byte counts and no-caller searches remain useful evidence only at their
+inspected revisions. A deletion slice must recheck exact current manifests, Rust/non-Rust callers, feature/target
+wiring, tests and workflows.
 
-R040 aligned the document-worker package with #227: PDFium remains an uninstalled implementation-time candidate.
-R039 updated the latest inspected stable MCP SDK to `rmcp 3.7.0` while keeping it absent from the ELIOT lock.
-R038 keeps regex optional and uninstalled; R037 blocks watcher work until reconciliation works independently.
-R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy for materializer + unitizer only.
+R042 also corrects maintenance ownership: the removed `search-retention` Cargo package is not restored;
+documentation under that path owns stopped-root local-object collection and archive/import, while online Qdrant
+retirement remains publication cleanup.
+
+R041 aligned adapter/model-worker currentness and the donor checkpoint. R040 aligned the document worker with
+PDFium as an uninstalled implementation-time candidate. R039 updated the inspected stable MCP SDK to `rmcp
+3.7.0` while keeping it absent from the ELIOT lock. R038 keeps regex optional/uninstalled; R037 defers watcher
+work until reconciliation functions independently. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98
+check/minimal Clippy for materializer + unitizer only.
 
 The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by

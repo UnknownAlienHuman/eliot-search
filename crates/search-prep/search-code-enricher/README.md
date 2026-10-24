@@ -1,58 +1,50 @@
-# search-code-enricher — optional outline, not a code-intelligence platform
+# search-code-enricher — optional outline or deletion
 
-Code orientation should help a user choose the next file/definition to read. It is optional enrichment over
-the same retained source, unit and query path; it is not a compiler, language server, graph database or
+Code orientation should help a user choose the next file or definition to read. It is optional enrichment over
+the same retained-source, preparation and query path; it is not a compiler, language server, graph database or
 second index.
 
 Read the [architecture](../../../docs/architecture/README.md),
 [implementation guide](../../../docs/implementation/README.md), [preparation map](../README.md) and
 [source map](FUNCTIONS.md).
 
-## Verified current state
+## Inspected revision evidence
 
-`src/lib.rs` is **63,638 bytes** of production Rust. Its only external calls found in public main are the
-package's own qualification tests.
+At the established audit revision, `src/lib.rs` measured **63,638 bytes** of production Rust and external calls
+were found only in package qualification tests. The inspected implementation:
 
-The implementation:
+- scanned Rust text line by line with prefix/brace heuristics;
+- assigned facts by node ordinal rather than verified source intervals;
+- carried parser-profile qualification and assurance receipts;
+- advertised relation kinds its extractor did not produce;
+- built trees/facts/relations/manifests without a production preparation/query consumer.
 
-- scans Rust text line by line with prefix/brace heuristics;
-- assigns facts to units by node ordinal rather than exact interval mapping;
-- carries parser-profile qualification and generic assurance receipts;
-- advertises relation kinds which its extractor does not produce;
-- builds trees, facts, relations and manifests without a production preparation/query consumer.
+Those measurements and caller findings are historical evidence, not a permanent current-branch census. Before
+removal, recheck exact current manifests, Rust imports/constructors/path inclusion, features, targets, tests,
+workflows and other non-Rust consumers. Do not connect or harden the old framework merely because it survives.
 
-It does not provide reliable definitions/references/calls and should not be connected or expanded.
+## Baseline orientation
 
-## Baseline product
-
-Useful orientation already exists without a code-fact plane:
+Useful baseline orientation can start from retained facts already needed by Search:
 
 ```text
 selected source inventory
 + paths and file types
 + prepared headings / sections / code blocks
 + exact unit ranges
-+ entry/config/test/doc naming hints
-→ small project guide and next-read locations
++ entry/config/test/doc hints
+→ bounded guide and next-read locations
 ```
 
-Base Search must ship on this information first. Unsupported precise code navigation is reported honestly.
+Base Search ships first. Unsupported precise definitions/references/calls remain explicit gaps.
 
 ## Disposition
 
-Delete the current package, tests and workspace dependencies unless a concrete connected consumer is selected
-before implementation. Do not replace it with a generic Tree-sitter/SCIP/Ctags/SARIF framework.
+If the current caller recheck still finds no production consumer and no concrete selected outline profile,
+delete the package, tests and workspace/dependency wiring. Do not replace it with a generic Tree-sitter/SCIP/
+Ctags/SARIF framework.
 
-A future selected profile is one narrow producer with one real user-facing query:
-
-### Syntax outline
-
-Use one donor only:
-
-- packaged `ast-grep outline` for bounded explicit retained files; or
-- one in-process Tree-sitter grammar/query profile when packaging/process constraints justify it.
-
-Output only compact source-backed records:
+A selected syntax-outline profile uses one parser owner and emits only bounded source-backed records:
 
 ```text
 OutlineItem {
@@ -66,38 +58,26 @@ OutlineItem {
 ```
 
 No common fact ontology, producer registry, profile receipts, assurance graph or relation database is needed.
-A parser error or omitted file remains an explicit gap. The existing text search continues.
+Parser failure or omitted input remains a gap; baseline text search continues.
 
-### Optional semantic locations
+Optional semantic locations may be imported only when a concrete feature needs precise definitions/references
+and a selected producer generates them for the exact retained view. Keep importer/vendor types beside that
+adapter. Static-analysis findings are a separate optional product, not baseline preparation.
 
-Import SCIP/LSP locations only after a concrete feature needs precise definitions/references and a selected
-producer can generate them for the exact retained source view. Keep the importer next to that adapter and
-store only the bounded locations the user-facing handler consumes.
+## Rules for a selected profile
 
-Rust-analyzer SCIP does not supply all relationships/implementors, can load Cargo/build/procedural-macro
-state and is not ordinary search work. Never run it implicitly for every query or source change.
-
-### Optional static-analysis findings
-
-SARIF/CodeQL/Semgrep is a separate optional product. It does not belong in baseline preparation or in this
-package until a real analyzer workflow, corpus and query consumer are selected.
-
-## Rules for any selected profile
-
-- parser/indexer reads only exact retained bytes or one explicitly materialized read-only view;
-- path/URI never admits a source;
-- every returned range is verified against the exact retained representation;
-- source view, producer/version/settings and completeness gaps remain explicit;
-- finite input/output/process/deadline/cancellation limits apply;
-- no repository code, hook, filter, macro, build or network execution unless a separate selected profile
+- read only exact retained bytes or one explicit read-only materialization;
+- verify every returned range against the retained representation;
+- keep source view, producer/version/settings and completeness gaps explicit;
+- apply finite input/output/process/deadline/cancellation limits;
+- execute no repository code, hooks, filters, macros, builds or network access unless a separate profile
   explicitly permits it;
-- no raw donor types in public protocol/Qdrant payload;
-- no second source/access/publication/currentness owner;
-- no mandatory profile merely because a binary/parser is installed.
+- expose no raw donor types in public protocol/Qdrant payload;
+- own no second source/access/publication/currentness system.
 
 ## Completion
 
-This package is optional and cannot block the connected source→Qdrant→excerpt path. If a syntax-outline
-feature is selected, close only when one real source-backed outline record reaches the project guide or
-navigation response, and the old heuristic parser/receipts/unused relation model are gone. Otherwise delete
-the package and close the optional programme `not_planned`.
+This optional package cannot block source → Qdrant → excerpt. If an outline capability is selected, close only
+when one real record reaches the orientation result and the old heuristic/receipt model is gone. Otherwise delete
+the confirmed dormant package and mark the optional profile not planned. Package self-tests alone are not
+product evidence.

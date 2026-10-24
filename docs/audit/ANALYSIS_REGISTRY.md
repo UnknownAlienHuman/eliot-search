@@ -5,27 +5,24 @@ unrun work. It is not architecture, a permission system or a reason to delay kno
 
 ## Resume after interruption
 
-**Checkpoint:** R041, 2026-10-24 — revision-currentness and donor checkpoint corrected.  
+**Checkpoint:** R042, 2026-10-24 — package-currentness and maintenance ownership reconciled.  
 **Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).  
-**Inspected head:** `8a63e7ad770ea4d57f506c54f07716bb06203111` (R040).  
+**Inspected head:** `6de4d2b3788b94714b59351cdb5dc5d0f0d13fd5` (R041).  
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
-R041 corrects two remaining documentation errors found after R040:
-
-- the live donor register still identified R037 as its current repository checkpoint;
-- dormant adapter/model-worker instructions stated old no-caller audits as permanent current facts.
-
-The package instructions now require an exact current manifests/Rust/non-Rust/features/tests/workflows caller
-check immediately before deletion. Historical measurements remain evidence at their immutable revisions.
+R042 extends the R041 revision-currentness rule to source, runtime, preparation, code-enricher,
+Qdrant-supervisor and overlay package instructions. It also corrects local maintenance ownership: stopped-root
+object collection/archive/import stays a documentation owner after `search-retention` Cargo removal, while online
+Qdrant retirement belongs to publication cleanup.
 
 The persistent source → retained evidence → Qdrant → CLI application remains unconnected. Read
-[docs/README](../README.md), then the affected owner recipe and exact current callers. Do not repeat R027–R041
+[docs/README](../README.md), then the affected owner recipe and exact current callers. Do not repeat R027–R042
 as another repository-wide audit.
 
 **Next implementation:** #333 typed settings and real consumers, then #270/#330/#331/#271
 source/object/preparation/reconciliation and #264 the connected product path. Optional document/MCP/regex/
-watcher/model work remains behind its prerequisite and implementation-time donor selection. Coordinate only
-actual #598 overlap.
+watcher/model/overlay/managed-Qdrant work remains behind its prerequisite and implementation-time donor/caller
+selection. Coordinate only actual #598 overlap.
 
 Current workspace has **49 explicit members**. This is inventory, not a target package count.
 
@@ -38,12 +35,14 @@ Current workspace has **49 explicit members**. This is inventory, not a target p
 - Query/publication/rebuild composition still contains disconnected oracle/in-memory/supplied-proof paths.
 - Historical size and caller measurements are revision-specific evidence, not permanent current facts or
   deletion targets.
-- Before deleting a dormant package, recheck exact current manifests, Rust/non-Rust callers, feature wiring,
-  targets, tests and workflows.
+- Before deleting or merging a dormant package, recheck exact current manifests, Rust/non-Rust callers, feature
+  and target wiring, tests and workflows.
 - An inspected donor is not installed. Exact version, features, MSRV, advisories and native artifact move with
   the real consumer implementation.
 - Literal Exact is baseline; optional regex cannot block it or reserve a speculative dependency.
 - Reconciliation must work independently before optional watcher hints.
+- `search-retention` is not a Cargo package to restore. Its remaining documentation owns stopped-root local
+  object collection and archive/import; Qdrant cleanup remains publication work.
 - `rmcp`, PDFium/`pdfium-render`, `regex-automata`, `notify`, high-level TOML/Serde and model runtimes are absent
   from the current lock unless a later implementation commit explicitly adds them.
 - R031 pins `pulldown-cmark 0.13.5`; #441 is closed as that dependency task.
@@ -67,7 +66,7 @@ models follow working prerequisites and do not form baseline subsystems.
 
 | ID | Area | Status | Current result / remaining |
 |---|---|---|---|
-| A001 | Documentation authority | CHECKED for R032–R041 scope | Canonical indexes, package handoffs, donor state and currentness rules are aligned. |
+| A001 | Documentation authority | CHECKED for R032–R042 scope | Canonical indexes, package handoffs, donor state, currentness rules and maintenance ownership are aligned for inspected paths. |
 | A002 | Historical governance | CHECKED | Removed as current authority; Git preserves history. |
 | A003 | Workflows/wrappers | CHECKED | Actions remain manual-only. |
 | A004 | Workspace inventory | CHECKED for inventory | 49 members; current full workspace/binaries remain unrun. |
@@ -78,18 +77,18 @@ models follow working prerequisites and do not form baseline subsystems.
 | A009 | Preparation/identity | PARTIAL | Markdown identity updated; connected preparation remains. |
 | A010 | Qdrant/donors | CHECKED for named static questions | Live integration/quality/scale unrun. |
 | A011 | Publication/view/cleanup | PARTIAL | Real effects/current-view path absent. |
-| A012 | Query/evidence/window | PARTIAL | Connected path absent; optional regex remains uninstalled. |
+| A012 | Query/evidence/window | PARTIAL | Connected path absent; optional regex/overlay remain uninstalled or dormant. |
 | A013 | Protocol/client/CLI | PARTIAL | Serviced session absent. |
 | A014 | Product depth | PARTIAL | Requirements preserved; implementations incomplete. |
 | A015 | Tests/governance code | PARTIAL | Remaining fixtures need caller cutover. |
 | A016 | Donors | PARTIAL | Installed versus candidate state explicit; current pins remain per consumer. |
 | A017 | Qualification tree | CHECKED | Removed as authority. |
-| A018 | Package/issue docs | CHECKED for R041 set | Adapter/model-worker currentness wording and donor checkpoint corrected. |
-| A019 | Issues/PR handoff | PENDING PUBLICATION SYNC | After this commit, update #535 if needed, #352 and PR #610 to the exact R041 SHA. |
-| A020 | Runtime evidence | RUNTIME-ONLY | No current Windows/Qdrant/reconciliation/regex/PDF/MCP/performance result. |
+| A018 | Package/issue docs | CHECKED for R042 set | Source/runtime/prep/enricher/supervisor/overlay currentness and maintenance ownership corrected. |
+| A019 | Issues/PR handoff | PENDING PUBLICATION SYNC | Update #336, #352 and PR #610 to the exact R042 SHA before ref advancement. |
+| A020 | Runtime evidence | RUNTIME-ONLY | No current Windows/Qdrant/reconciliation/regex/PDF/MCP/overlay/performance result. |
 | A021 | Compiler baseline | PARTIAL | R031 covers materializer+unitizer only. |
 | A022 | Runtime identity/qualification | PARTIAL | Dormant worker/fixture code remains. |
-| A023 | GC/storage diagnostics | PARTIAL | Implementation unfinished. |
+| A023 | GC/storage diagnostics | PARTIAL | Ownership corrected; implementation unfinished. |
 | A024 | Backup/restore | PARTIAL | Archive/import implementation absent. |
 | A025 | Features/harness topology | PARTIAL | Remaining wave/query/proof/dormant wiring needs current caller cuts. |
 
@@ -112,38 +111,39 @@ models follow working prerequisites and do not form baseline subsystems.
 | R038 | Optional regex dependency | [d3d81ca0](https://github.com/UnknownAlienHuman/eliot-search/blob/d3d81ca0fc47a68c03235f21b276af0f46fb64f3/docs/audit/ANALYSIS_REGISTRY.md#r038-optional-regex-dependency-state) |
 | R039 | Optional MCP SDK state | [0a9aa731](https://github.com/UnknownAlienHuman/eliot-search/blob/0a9aa73186eb7b7fb0c25c35d9ba947c2ba8fd4f/docs/audit/ANALYSIS_REGISTRY.md#r039-optional-mcp-sdk-state) |
 | R040 | Document-worker candidate state | [8a63e7ad](https://github.com/UnknownAlienHuman/eliot-search/blob/8a63e7ad770ea4d57f506c54f07716bb06203111/docs/audit/ANALYSIS_REGISTRY.md#r040-document-worker-candidate-state) |
-| R041 | Revision-currentness and donor checkpoint | [this pass](#r041-revision-currentness-and-donor-checkpoint) |
+| R041 | Adapter/model-worker currentness and donor checkpoint | [6de4d2b3](https://github.com/UnknownAlienHuman/eliot-search/blob/6de4d2b3788b94714b59351cdb5dc5d0f0d13fd5/docs/audit/ANALYSIS_REGISTRY.md#r041-revision-currentness-and-donor-checkpoint) |
+| R042 | Package currentness and maintenance ownership | [this pass](#r042-package-currentness-and-maintenance-ownership) |
 
 ## Execution evidence
 
 - Run 39872058276 covers `search-qdrant-bridge --lib` at old commit `7d92fb8b` only.
 - Run 40084893130 covers locked check/minimal Clippy for materializer + unitizer at R031 only.
-- Current binaries, Windows, live Qdrant, reconciliation/watcher, regex, PDF, MCP, model integration, parser replay,
-  recovery, relevance and scale remain unrun.
-- R032–R041 are documentation-only and add no Rust/runtime result.
+- Current binaries, Windows, live Qdrant, reconciliation/watcher, regex, PDF, MCP, model/overlay integration,
+  parser replay, recovery, relevance and scale remain unrun.
+- R032–R042 are documentation-only and add no Rust/runtime result.
 
-<a id="r041-revision-currentness-and-donor-checkpoint"></a>
+<a id="r042-package-currentness-and-maintenance-ownership"></a>
 
-## R041. Revision-currentness and donor checkpoint
+## R042. Package currentness and maintenance ownership
 
-**Source:** `8a63e7ad770ea4d57f506c54f07716bb06203111`, 2026-10-24.
+**Source:** `6de4d2b3788b94714b59351cdb5dc5d0f0d13fd5`, 2026-10-24.
 
-**Inspected:** live donor register; `search-eliot-adapter` README/FUNCTIONS/AGENTS; #219/#535; model-worker
-README/FUNCTIONS/AGENTS; model-provider design note; current package tree/manifests exposed by the PR head. No
-private #598 source was read.
+**Inspected:** source family README/AGENTS; runtime family README/AGENTS and stopped-root maintenance owner;
+preparation README/AGENTS; code-enricher README/AGENTS; Qdrant-supervisor README/AGENTS and #334; overlay
+README/AGENTS and #336; query README; active documentation index. No private #598 source was read.
 
-**Findings:** the donor register still claimed R037 as its current checkpoint after R038–R040. Adapter AGENTS
-stated the old no-caller audit as an unconditional current fact even though #535 and the refreshed README/
-FUNCTIONS correctly require a current caller search before deletion. Model-worker AGENTS had the same
-currentness problem relative to its R033 inspection. This wording could cause deletion from stale evidence or
-unnecessary hardening of a dormant scaffold.
+**Findings:** source AGENTS called the 1.22-million-byte baseline inventory “current” despite its README already
+labelling it historical. Runtime AGENTS implied that current/pending/pinned roots replace local GC, conflicting
+with the selected stopped-root maintenance owner and separate publication/Qdrant cleanup. Preparation,
+code-enricher, supervisor and overlay instructions repeated inspected no-caller/size findings as permanent
+current facts, while their issues or package READMEs already required a current caller search.
 
-**Decision/change:** advance the donor register to R041 and preserve installed-versus-candidate state; update
-adapter/model-worker instructions to label caller findings as revision-specific and require exact current
-manifest/Rust/non-Rust/feature/test/workflow searches before deletion. Keep the selected direction: delete a
-confirmed dormant package rather than harden it, and add optional MCP/model implementations only with real
-post-baseline consumers.
+**Decision/change:** label size/caller findings as revision-specific throughout; require exact current
+manifest/Rust/non-Rust/feature/target/test/workflow searches before package deletion; keep dormant-package
+deletion rather than scaffold hardening when the current search confirms no consumer. Correct runtime ownership:
+removed retention package stays removed, stopped-root maintenance owns local object collection/archive/import,
+and publication owns Qdrant retirement.
 
-**Unrun/remaining:** no current caller search was executed as code deletion is not part of this documentation
-slice. No Rust, Cargo, workflow or runtime file changes. Continue semantic review of remaining active package
-instructions; do not claim full documentation closure from R041.
+**Unrun/remaining:** this pass does not execute the current caller searches because no package is deleted here.
+No Rust, Cargo, workflow or runtime files change. Continue semantic review of remaining active package and issue
+instructions; full documentation closure is not claimed.
