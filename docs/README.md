@@ -30,11 +30,15 @@ compatibility code or another registry.
 
 ## Current status
 
-R044 completes the active implementation-document semantic pass. Query now has one owner for typed dispatch,
-pinned scope, retrieval, verified evidence and one `QueryWindow`; planner, comparator, subject-resolver and handle
-package audits no longer present historical sizes/test-only callers as permanent current facts. Projection and
-client/CLI cutovers use the same rule. Before deleting or merging code, the implementation commit rechecks exact
-manifests, Rust/non-Rust callers, constructors/module inclusion, features, targets, tests and workflows.
+R045 records publication closeout after the R044 semantic pass: the canonical index, registry, #332, #352 and
+PR #610 handoff are synchronized, and no publication-sync item remains pending.
+
+R044 completed the active implementation-document review. Query has one owner for typed dispatch, pinned scope,
+retrieval, verified evidence and one `QueryWindow`; planner, comparator, subject-resolver and handle audits no
+longer present historical sizes or test-only callers as permanent current facts. Projection and client/CLI
+cutovers follow the same current-caller rule. Before deleting, merging or inlining code, the implementation cut
+rechecks exact manifests, Rust/non-Rust callers, constructors/module inclusion, features, targets, tests and
+workflows and moves every surviving consumer in that cut.
 
 R043 completed runtime ownership: one real root guard, concrete secret owners, #598-controlled encrypted-object
 handoff and no speculative old Windows transport. R042 corrected source/preparation/enrichment/supervisor/overlay
@@ -42,9 +46,9 @@ currentness and separated stopped-root maintenance from publication-owned Qdrant
 adapter/model-worker, document, MCP, regex and watcher handoffs. R031 adopted `pulldown-cmark 0.13.5` and passed
 Rust 1.98 check/minimal Clippy for materializer + unitizer only.
 
-The canonical active documentation is now internally aligned for implementation. Historical audit snapshots and
-retired documents remain immutable evidence in Git; they are not rewritten into current authority. This does not
-mean the product is implemented or runtime-verified.
+The canonical active documentation is internally aligned for implementation. Historical audit snapshots and
+retired documents remain immutable evidence in Git; they are not current authority. This is documentation
+closure, not product completion or runtime verification.
 
 The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
