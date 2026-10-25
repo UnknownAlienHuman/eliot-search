@@ -9,7 +9,7 @@ and use audit records only when evidence or history is needed.
 |---|---|---|
 | [Architecture](architecture/README.md) | Purpose, product boundary and observable requirements | Package topology or current implementation status |
 | [Implementation](implementation/README.md) | Selected mechanisms, owners, delivery sequence and removal rules | Revision-specific execution evidence |
-| Nearest `FUNCTIONS.md` | Exact source seams, current defects and operation recipe | Product-wide mission or a second roadmap |
+| Nearest `FUNCTIONS.md` | Exact source seams, inspected defects and operation recipe | Product-wide mission or permanent caller truth |
 | [Product behavior](product/README.md) | User-visible Search, Exact, orientation, comparison and document outcomes | Internal package status |
 | [Analysis registry](audit/ANALYSIS_REGISTRY.md) | Current checkpoint, inspected evidence and unrun work | Permission, architecture or readiness credentials |
 | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Installed/candidate versions and verified upstream limits | Automatic implementation decisions or permanent future pins |
@@ -30,26 +30,27 @@ compatibility code or another registry.
 
 ## Current status
 
-R043 completes the runtime-family documentation correction. Root ownership is one retained current-format root
-and exclusive process-lifetime lock, not a lease/epoch/receipt protocol. Generic secret lifecycle is removed in
-favor of concrete Qdrant, restricted-client or immutable-object owners. `search-revision-crypto` is retained only
-if the accepted #598 handoff directly consumes it. The old client-only Windows named-pipe adapter is removed when
-an exact current caller search confirms no persistent-daemon consumer.
+R044 completes the active implementation-document semantic pass. Query now has one owner for typed dispatch,
+pinned scope, retrieval, verified evidence and one `QueryWindow`; planner, comparator, subject-resolver and handle
+package audits no longer present historical sizes/test-only callers as permanent current facts. Projection and
+client/CLI cutovers use the same rule. Before deleting or merging code, the implementation commit rechecks exact
+manifests, Rust/non-Rust callers, constructors/module inclusion, features, targets, tests and workflows.
 
-Every historical size or caller audit is tied to its inspected revision. A code-deletion slice must repeat the
-current search across manifests, Rust/non-Rust callers, constructors, feature/target wiring, tests and workflows,
-then move all surviving callers in the same cut. Documentation does not turn an old audit into deletion authority.
+R043 completed runtime ownership: one real root guard, concrete secret owners, #598-controlled encrypted-object
+handoff and no speculative old Windows transport. R042 corrected source/preparation/enrichment/supervisor/overlay
+currentness and separated stopped-root maintenance from publication-owned Qdrant cleanup. R041–R037 reconciled
+adapter/model-worker, document, MCP, regex and watcher handoffs. R031 adopted `pulldown-cmark 0.13.5` and passed
+Rust 1.98 check/minimal Clippy for materializer + unitizer only.
 
-R042 applied the same currentness rule to source, preparation, code-enricher, Qdrant-supervisor and overlay, and
-separated stopped-root local-object maintenance/archive/import from publication-owned online Qdrant cleanup.
-R041 corrected adapter/model-worker currentness and the donor checkpoint. R040–R037 reconcile document, MCP,
-regex and watcher prerequisites. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy
-for materializer + unitizer only.
+The canonical active documentation is now internally aligned for implementation. Historical audit snapshots and
+retired documents remain immutable evidence in Git; they are not rewritten into current authority. This does not
+mean the product is implemented or runtime-verified.
 
 The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
-[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333). Current evidence and remaining delivery
-groups are in the [registry](audit/ANALYSIS_REGISTRY.md).
+[#333](https://github.com/UnknownAlienHuman/eliot-search/issues/333), then source/object/preparation/reconciliation
+and the connected CLI path. Current evidence and remaining delivery groups are in the
+[registry](audit/ANALYSIS_REGISTRY.md).
 
 ## Focused supporting material
 

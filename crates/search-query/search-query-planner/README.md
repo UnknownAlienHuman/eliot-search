@@ -1,94 +1,65 @@
 # search-query-planner — remove the proof protocol
 
-The product does not need a public planning authority. The query owner already has the pinned view,
-resolved scope, typed request, actual constructed services and finite request context. Select the operations
-directly from those values.
+The query owner already has one pinned view, resolved scope, typed request, constructed handlers and finite
+request context. It selects direct operations from those values; it does not need a public planning authority.
 
 Read the [architecture](../../../docs/architecture/README.md),
-[implementation guide](../../../docs/implementation/README.md), [query cutover](../README.md) and
+[implementation guide](../../../docs/implementation/README.md), [query cutover](../README.md) and local
 [source map](FUNCTIONS.md).
 
-## Verified current source
+## Revision-specific evidence
 
-`src/lib.rs` is one 104,042-byte production file. It defines public capability, leg, budget and compiled
-plan structures; validates caller-created grants, dependencies and fingerprints; normalizes eleven frozen
-V1 recipes; divides relative deadline budgets between legs; and classifies drift from supplied
-observations.
+At the established audit revision, `src/lib.rs` measured 104,042 bytes and defined public capability, leg,
+budget, grant and compiled-plan structures around eleven V1 recipes. Repository search found
+`compile_canonical_plan` in package tests/support rather than normal daemon serving, while the daemon contained
+another recipe/authority path. These are historical measurements and caller findings, not a permanent current
+branch census.
 
-Repository search finds `compile_canonical_plan` in this package's own tests/support, not the serving daemon.
-The daemon instead contains another recipe registry/authority host and one process-test indexed helper.
-Hardening the plan digest or making the fields private would preserve two disconnected planning systems.
+Immediately before deletion or inlining, search current manifests, Rust imports/constructors/path inclusion,
+non-Rust tooling, feature/target wiring, tests and workflows. Name every surviving consumer and change it in the
+same cut. Do not preserve two planning systems by strengthening hashes or wrapping one with another.
 
 ## Target
 
-Baseline lexical search is direct:
-
 ```text
-SearchRequest
+TypedQueryRequest
 + PublishedViewGuard
 + ResolvedScope
 + RequestContext
-+ real Qdrant runtime
-→ one native BM25 query
++ actual handler references
+→ direct operation(s)
 ```
 
-No plan object is created merely to call one service.
-
-A private operation list is justified only when multiple real operations exist:
+Baseline dispatch:
 
 ```text
-struct QueryOperation {
-    route/profile
-    concrete handler reference or closed internal kind
-    bounded nomination/output ceiling
-}
+Search   → real Qdrant/native lexical handler
+Exact    → bounded retained-source scan
+Continue → QueryWindow page
+Expand   → selected QueryWindow item neighborhood
 ```
 
-Useful pure selection is limited to:
+No plan is created merely to call one service. Optional operations remain unsupported until their concrete
+handler and evidence producer exist.
 
-- reject unsupported request modes before work;
-- keep one pinned view and non-widening resolved scope;
-- group compatible sources into one route/profile population;
-- split only incompatible physical routes/profiles;
-- choose implemented branches requested by the current request;
-- assign finite branch ceilings inside one absolute request deadline;
-- preserve deterministic operation and fusion order.
+A small private operation list is justified only for real incompatible routes/profiles. It may group compatible
+sources into one retrieval/IDF population, split incompatible physical routes, assign finite nomination ceilings
+inside the existing absolute deadline/counters, preserve deterministic internal order and reject unsupported
+modes before work. Qdrant-compatible branches should use native grouping/fusion rather than public leg objects.
 
-Compatible indexed branches should normally be one native Qdrant query with prefetch/RRF/grouping rather
-than several public legs. A real non-Qdrant branch may add one private operation and a small rank merge.
+## Remove after caller cutover
 
-## Remove with consumers
+Delete capability tables, caller-created task/leg/compiled plans, plan IDs/fingerprints, grants, dependency and
+overlap proofs, V1 recipe normalization, supplied drift observations, relative per-leg deadline resets and
+fixtures that only seal/revalidate those records. Do not create a V3 plan, internal grant, synthetic dependency
+digest or another registry.
 
-Delete:
-
-- `CapabilitySet`, retrieval/advanced capability booleans and static recipe-support tables;
-- caller-created `SearchTaskPlan`, `PlannedLeg`, `CompiledSearchPlan`, plan IDs and canonical fingerprints;
-- grant/dependency/scope proof inputs and overlap-proof planning;
-- `normalize_recipe` and the eleven-recipe V1 family after the current typed request replaces it;
-- `canonical_execution_dependency`, `validate_drift` and supplied observation proofs;
-- relative per-leg deadline allocation and persistent plan identity;
-- fixtures whose only purpose is creating/sealing/revalidating those records.
-
-Do not replace them with a V3 plan, capability descriptor, internal grant, synthetic dependency digest or
-another registry. Availability is the actual constructed handler table. A restricted-client advertisement,
-if enabled, is derived information and not planner authority.
-
-## Keep or move
-
-Keep only nontrivial pure helpers that remain after direct integration:
-
-- deterministic incompatible-route/profile grouping;
-- checked branch-limit allocation under the request's existing absolute deadline;
-- deterministic operation order;
-- explicit unsupported-mode errors.
-
-Place these in query composition unless their independent implementation remains substantial. Do not retain
-a crate around a one-leg plan.
+Move any surviving route/profile grouping and checked limit allocation into query composition unless it remains
+a substantial independent algorithm; otherwise delete the crate.
 
 ## Completion
 
-The local `Search` handler reaches the real Qdrant runtime without constructing a capability, grant, recipe,
-dependency or compiled plan. Optional operations are unavailable until their real handlers exist.
-
-Run minimal Rust 1.98 compiler/Clippy for changed query/daemon consumers after code. Planner fixture hashes
-and proof-shape tests are removed with the APIs; they are not product verification.
+The local `Search` handler reaches a constructed retrieval runtime without a capability, grant, recipe,
+dependency or compiled plan. After code, run minimal Rust 1.98 check/Clippy for changed query/daemon/protocol
+consumers and focused scope/route/limit/unsupported-mode cases. Planner fixture hashes and proof-shape tests are
+removed with their APIs.

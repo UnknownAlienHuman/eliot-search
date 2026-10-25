@@ -1,34 +1,44 @@
-# search-subject-resolver functions
+# search-subject-resolver — inspected functions and cutover
 
-## Current function map
+## Evidence boundary
 
-These functions exist in [src/lib.rs](src/lib.rs). `resolve_subject` currently has unit-test callers;
-no production source/index candidate producer is connected through this API.
+At the established audit revision, `resolve_subject` had package unit-test callers and no production source/index
+candidate producer connected through this API. Candidate steps, completeness and context/fence values were
+supplied by callers. This is historical caller evidence, not current branch truth.
 
-| Function | Actual behavior |
+Before a code cut, repeat the exact current search across manifests, Rust imports/constructors/path inclusion,
+non-Rust tooling, features, targets, tests and workflows. Record all surviving consumers and move them before
+removing APIs or the package.
+
+## Inspected behavior
+
+| Function family | Actual behavior at the inspected revision |
 |---|---|
-| `rank_resolution_basis` | Map a supplied `MatchBasis` to an optional `ResolutionPriority`. |
-| `validate_resolution_context` | Check supplied request/context fields and disclosure, currency and observation flags; it does not resolve scope or read source storage. |
-| `resolve_subject(request, context, steps, limits)` | Bound/order supplied `ResolutionStep` candidates and produce resolved, ambiguous, not-found, scope-empty or incomplete output. A missing/incomplete applicable higher-priority step currently blocks later resolution. |
-| `collapse_equivalent_occurrences` | Validate candidate fields, reject duplicate candidate digests and group by supplied hypothesis digest when an equivalence receipt is present; otherwise group by candidate digest. It does not establish alias/rename equivalence. |
-| `build_ambiguity_set` | Sort and bound supplied candidate hypotheses, retaining differentiation and omission information. |
-| `issue_resolution_receipt` | Assemble the existing resolution/context/candidate metadata into a receipt; it does not produce source evidence. |
-| `revalidate_resolution` | Compare the receipt with supplied live-state fields and classify whether resolution must change. |
+| context/request validation | Checked supplied fields and disclosure/currentness flags; resolved no scope and read no source. |
+| resolution ordering | Bounded and ordered supplied candidate steps into resolved/ambiguous/not-found/scope-empty/incomplete outcomes. |
+| occurrence collapse | Grouped candidates by supplied hypothesis/equivalence data; established no alias/rename identity. |
+| ambiguity construction | Sorted and bounded supplied candidate hypotheses. |
+| receipt/revalidation | Copied and compared supplied context/fence metadata; produced no missing evidence. |
 
-There are no separate implemented `normalize_subject_request`, `resolve_explicit_reference`,
-`resolve_qualified_key`, `resolve_exact_name`, `resolve_signature_and_kind`,
-`resolve_structural_lexical_candidates` or `assemble_resolution` APIs. Do not implement that historical
-function list merely to complete a contract.
+Do not implement historical logical function names merely to complete a contract.
 
-## Connect and simplify
+## Connected replacement
 
-Follow the [README's connected behavior](README.md#minimal-connected-behavior): actual source/range or
-symbol lookup, then bounded lexical nomination when needed. Prepared syntax/SCIP data supplies the
-candidates; existing source validation supplies the bytes and scope checks. A receipt or boolean label
-cannot replace either producer.
+Use an explicit source/revision/range when supplied and validate it against the pinned view and retained bytes.
+For a cursor, use a containing definition only when actual mapped ranges identify one. A selected semantic
+producer may nominate occurrences for the same snapshot. Otherwise bounded lexical/name retrieval nominates
+possible definitions and preserves match basis, qualifiers, truncation and ambiguity.
 
-Reuse the useful selection, ordering and ambiguity logic in that query path. Remove the mandatory
-ladder materialization, receipt/revalidation machinery and unnecessary candidate copies with their
-last consumers. Keep explicit location failures, material ambiguity and truncation visible. A renamed
-analogue is a comparison candidate; it does not become the same local entity. No-match here remains a
-result of the executed lookup, not a complete source-wide absence claim.
+A missing explicit location is not silently replaced. Mentions are not automatically definitions. Same names,
+receipt presence or rename hypotheses do not establish identity. Missing or truncated coverage cannot prove
+uniqueness or absence.
+
+Keep useful ordering/ambiguity helpers as private query code. Remove mandatory ladder materialization,
+receipt/revalidation machinery and duplicate candidate copies with their last callers. Reuse ordinary evidence
+validation and `QueryWindow`.
+
+## Verification after code
+
+Run minimal Rust 1.98 check/Clippy for changed production consumers. Through real retained source verify explicit
+location success/failure, cursor containment, duplicate names, mention versus definition, repository/configuration
+distinctions, truncation and incomplete coverage.

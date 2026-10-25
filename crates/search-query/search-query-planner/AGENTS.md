@@ -1,14 +1,16 @@
 # Working on search-query-planner
 
 Read the [architecture](../../../docs/architecture/README.md),
-[implementation guide](../../../docs/implementation/README.md), [query cutover](../README.md) and local
-[source audit](FUNCTIONS.md).
+[implementation guide](../../../docs/implementation/README.md), [query cutover](../README.md), package
+[README](README.md) and local [source audit](FUNCTIONS.md).
 
-Do not repair, privatize or version the current 104 KiB proof protocol. `CapabilitySet`, `SearchTaskPlan`,
-grants, safe-leg proofs, dependency graphs, plan IDs, fingerprints and drift observations have no connected
-production caller and are not current compatibility contracts.
+The established audit found a 104 KiB proof protocol and no normal serving caller for its plan compiler at the
+inspected revision. Treat that as revision-specific evidence. Before deletion or inlining, recheck exact current
+manifests, Rust/non-Rust callers, constructors, module inclusion, features, targets, tests and workflows. Move
+all surviving callers in the same cut.
 
-Implement the real handler first:
+Do not repair, privatize or version `CapabilitySet`, `SearchTaskPlan`, grants, safe-leg proofs, dependency graphs,
+plan IDs, fingerprints or drift observations. Implement the real handler first:
 
 ```text
 pinned PublishedView
@@ -19,21 +21,16 @@ pinned PublishedView
 → direct operation(s)
 ```
 
-For baseline `Search`, call the real Qdrant BM25 handler directly. Do not manufacture a one-leg plan.
-`Exact`, `Continue` and `Expand` dispatch to their direct owners. Optional operations remain unsupported
-until a real handler exists.
+`Search` calls the real lexical/Qdrant handler. `Exact`, `Continue` and `Expand` dispatch to their direct owners.
+Optional operations remain unsupported until a real handler exists.
 
-Keep only nontrivial pure selection that survives integration:
+Keep only nontrivial pure selection that survives integration: compatible route/profile grouping, splitting of
+actually incompatible routes, finite branch ceilings inside the existing absolute deadline/counters,
+deterministic internal order and early unsupported-mode failure. Do not manufacture a one-leg plan.
 
-- group compatible sources into one route/profile population;
-- split incompatible physical routes/profiles;
-- assign finite branch ceilings within the existing absolute deadline/counters;
-- preserve deterministic internal operation order;
-- fail unsupported modes before work.
+Change request/contracts, daemon, executor and provider consumers together. Delete old planner APIs and fixtures
+rather than adding facades or a V3 family. If the remaining code is a few helpers, move it into query composition
+and delete the crate.
 
-Change request/contracts, daemon, executor and provider consumers in the same cutover. Delete old planner
-APIs and fixtures rather than adding facades or a V3 family. If the remaining code is a few helpers, move
-it into query composition and delete the crate.
-
-After code, run minimal Rust 1.98 compiler/Clippy for changed production consumers. Do not spend the
-implementation phase maintaining plan hashes, source-shape tests or recipe matrices for deleted APIs.
+After code, run minimal Rust 1.98 check/Clippy for changed production consumers. Do not maintain plan hashes,
+source-shape tests or recipe matrices for deleted APIs.

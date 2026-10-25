@@ -1,82 +1,61 @@
 # search-query-planner — source audit and deletion map
 
-The [query cutover](../README.md) owns the connected operation. This file maps the current 104,042-byte
-single-file planner to the small amount of selection logic that may survive.
+The [query cutover](../README.md) owns the connected operation. This file maps inspected planner source to the
+small amount of selection logic that may survive.
 
-## Current API and caller reality
+## Evidence boundary
 
-| Current source/API | Actual behavior |
+At the established audit revision, the package was one 104,042-byte production file. The audit found the full
+plan compiler in package tests/support rather than normal daemon serving, while the daemon carried another
+recipe/capability/grant authority. This is immutable historical evidence, not current caller truth.
+
+Before a code cut, repeat the exact current search across manifests, Rust imports/constructors/path inclusion,
+non-Rust tooling, features, targets, tests and workflows. Record all surviving consumers and move them in the
+same change before deleting APIs or the crate.
+
+## Inspected API behavior
+
+| Source/API | Actual behavior at the inspected revision |
 |---|---|
-| public capability/budget/leg/plan structures | Ordinary callers can construct the values which later functions treat as accepted execution authority. |
-| `normalize_recipe(request)` | Validates and rebuilds one of eleven frozen V1 recipe/body variants. It does not select a real handler. |
-| `direct_leg_support(recipe)` | Static recipe-to-leg support table. It can advertise a leg with no constructed service. |
-| `canonical_execution_dependency(capabilities, scope, safe_index_legs)` | Builds another proof record from supplied capability/scope/leg inputs. |
-| `compile_canonical_plan(task_plan, grant, recipe, scope, capabilities, safe_index_legs)` | Consumes a caller-created `SearchTaskPlan`, grant, capability set and safe legs; checks their relationships and returns a public compiled plan. It does not create a Qdrant/source operation. |
-| plan fingerprinting | Uses package-local canonicalization/mixing over a subset of executable behavior. Strengthening it would still leave a disconnected protocol. |
-| `allocate_leg_budgets(global, leg_count)` | Divides relative duration/work fields among legs, encouraging nested timeout reset and confusing parallel/dependent work. |
-| `validate_drift(plan, observation)` | Compares caller-provided observations/fingerprints; it reads no current owner. |
-| package callers | `compile_canonical_plan` was found in package tests/support, not normal daemon serving. |
+| public capability/budget/leg/plan structures | Caller-created values were later treated as accepted execution authority. |
+| recipe normalization/support tables | Validated eleven frozen V1 variants and advertised static legs; did not select a constructed handler. |
+| compiled-plan path | Consumed caller-created task plan, grant, scope/capability/safe-leg proofs and returned another record; created no Qdrant/source operation. |
+| fingerprints/dependency/drift | Canonicalized supplied records and observations; read no current owner. |
+| relative leg budgets | Divided durations/work across legs and encouraged nested timeout reset. |
 
-The daemon separately contains a recipe registry, capability projection, grant issuer and authority owner,
-with no production constructor found. Do not choose one framework and wrap the other; remove both.
+Do not choose one disconnected planning framework and wrap the other.
 
 ## Replacement selection
 
-The query owner receives:
+The query owner receives one typed request, `PublishedViewGuard`, non-widening `ResolvedScope`, one
+`RequestContext` and actual constructed handlers. Baseline dispatch is direct:
 
 ```text
-TypedQueryRequest
-PublishedViewGuard
-ResolvedScope
-RequestContext
-actual handler references
-```
-
-Baseline selection:
-
-```text
-Search   → direct Qdrant BM25 handler
-Exact    → direct bounded retained-source scan
+Search   → lexical/Qdrant handler
+Exact    → retained-source scan
 Continue → QueryWindow page
-Expand   → QueryWindow selected-item neighborhood
+Expand   → selected-item neighborhood
 ```
 
-Optional operations are included only when their concrete service exists. Unsupported modes fail before
-backend/source work.
+Optional operations appear only with real handlers. Unsupported modes fail before backend/source work.
 
-For actual multiple routes/profiles, a private helper may return an ordered finite list:
-
-```text
-select_operations(request, view, scope, handlers, limits)
-    -> SmallVec<QueryOperation>
-```
-
-Rules:
-
-1. `scope` is already non-widening and belongs to `view`; planning never accepts a second grant/snapshot.
-2. compatible selected sources share one Qdrant population and one IDF corpus;
-3. split only incompatible route/profile generations;
-4. every branch receives a nomination ceiling inside the request's counters;
-5. all branches share the same absolute deadline/cancellation;
-6. actual Qdrant-compatible branches use native prefetch/fusion/grouping;
-7. deterministic order is internal execution order, not a signed plan identity.
+For actual multiple physical routes/profiles, a private helper may produce a finite ordered list. Compatible
+sources share one retrieval/IDF population; split only incompatible routes; every branch uses the same absolute
+deadline/cancellation and a finite nomination ceiling. Deterministic order is internal behavior, not a signed
+plan identity.
 
 ## Delete after caller cutover
 
-- V1 recipe normalizer and static support matrix;
-- public `CapabilitySet`, `SearchTaskPlan`, `CompiledSearchPlan`, `PlannedLeg`, `LegBudget` and related
-  constructor/sealing/fingerprint types;
-- canonical execution dependency and drift-observation protocols;
-- grant, access checkpoint, overlap proof and safe-index-leg planner inputs;
-- relative deadline division and per-leg freshness identity;
-- compile/seal/golden-plan fixtures and source-shape tests;
-- matching plan types from `search-contracts`, provider codecs and daemon authority composition.
+Remove V1 recipe normalization/support tables, public capability/task/leg/compiled plan types, grants, overlap
+and dependency proofs, supplied drift observations, relative per-leg deadline allocation and fixtures that only
+seal/revalidate those records. Remove matching contract/provider/daemon authority types with their last callers.
 
-Move the few useful route/profile grouping and finite-limit helpers to the direct query owner. Delete this
-crate if no substantial independent algorithm remains.
+Move any surviving grouping and checked-limit helpers to query composition. Delete this crate if no substantial
+independent algorithm remains.
 
-## Verification
+## Verification after code
 
-Verify that the current typed request reaches only constructed handlers, explicit/empty/unknown scope never
-widens, compatible sources share the intended base population, incompatible profiles split deterministically,
-all work uses one absolute context and unsupported optional modes perform no backend/source I/O.
+Run minimal Rust 1.98 check/Clippy for changed production consumers. Through the connected application verify
+that explicit/empty/unknown scope never widens, compatible sources share the selected population, incompatible
+routes split deterministically, all work uses one absolute context, and unsupported optional modes perform no
+backend/source I/O.

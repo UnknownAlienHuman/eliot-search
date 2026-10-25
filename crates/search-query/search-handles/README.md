@@ -1,89 +1,53 @@
 # search-handles — remove the second result store
 
-A search result does not need a separately minted source authority. The card can carry its exact source,
-revision, representation, location and verified excerpt. Optional expansion is an item locator inside the
-same short-lived `QueryWindow`.
+A source-backed result does not need a separately minted authority. The card carries its exact source, revision,
+representation, location and verified excerpt. Optional expansion is a locator into the same live
+`QueryWindow` and pinned view.
 
 Read the [query cutover](../README.md), [query-window map](../search-continuation/FUNCTIONS.md) and local
 [source map](FUNCTIONS.md).
 
-## Verified current source
+## Revision-specific evidence
 
-The shared package is about 35 KiB of production Rust and is not the public daemon's handle store. It defines
-another token/record/invalidation lifecycle with caller-created validation/permit structures.
+At the established audit revision, the shared package measured about 35 KiB and the daemon had another roughly
+19 KiB handle catalogue. The audit found whole-source-catalogue scans/hashes, per-item random tokens, duplicated
+source/revision records and arbitrary full-revision range expansion. It also found that the public daemon did not
+use the shared package. These measurements and caller findings are historical evidence, not current branch truth.
 
-The daemon separately has roughly 19 KiB of production handle catalogue/expansion code. For every emitted
-match it:
-
-1. enumerates every source into a map;
-2. recomputes a SHA-256 fence over the entire source catalogue;
-3. generates one random 32-byte-derived token;
-4. stores namespace/session/source/revision/digest/length/expiry again.
-
-Expansion rehashes the whole source catalogue, enumerates sources again and accepts any caller byte range
-inside the entire retained revision up to a maximum size. The handle is therefore both redundant and broader
-than the evidence item which caused it to be issued.
-
-Do not migrate the daemon to the shared package. Delete both models.
+Before deleting either model, search current manifests, Rust imports/constructors/path inclusion, non-Rust
+tooling, features, targets, tests and workflows. Move every surviving protocol/result/daemon consumer in the
+same cut. Do not migrate one old store into the other.
 
 ## Replacement
 
-A normal `EvidenceCard` contains:
+A normal `EvidenceCard` contains source/revision/representation, exact location, verified excerpt,
+rank/contribution metadata and optionally:
 
 ```text
-source and exact retained revision/representation
-logical/byte/line location
-short verified excerpt
-rank/contribution metadata
-optional WindowItemRef { window_id, item_index }
+WindowItemRef { window_id, item_index }
 ```
 
-`WindowItemRef` is a process-local locator into the exact final-order item already emitted from one
-`QueryWindow`. It resolves under the same `PublishedViewGuard`, expiry and optional restricted session.
+The locator resolves only the exact successfully emitted item in one live `QueryWindow`. Expansion derives a
+finite relative neighborhood from that item's pinned manifest entry, clamps it to configured and immutable-object
+boundaries, reserves read/output budget and verifies retained bytes. It may not name arbitrary absolute offsets,
+another item or another view.
 
-Expansion may request a finite context policy such as additional lines/bytes around that item's manifest
-range. The owner clamps the request to the configured neighborhood and immutable object boundaries. It may
-not name arbitrary absolute revision offsets, another item or another view.
+Useful mechanics to keep are exact immutable-range reading, actual range/length verification, finite expansion
+limits, an exclusive prepared-output guard and the original absolute expiry/deadline check. Source authority
+comes from the pinned manifest and actual reader, not echoed digests or copied handle records.
 
-Useful mechanics to move:
+For owning-account child stdio, `(window_id, item_index)` is process-local session state, not a cryptographic
+bearer token. A selected restricted-client adapter binds and cancels its own windows directly.
 
-- exact retained revision/range read;
-- actual returned byte-length/range verification;
-- finite expansion byte ceiling;
-- keeping an exclusive window/manager borrow through output;
-- original absolute expiry/deadline check before write;
-- no state change after partial output.
+## Removal boundary
 
-The immutable reader, not echoed digests, proves the object. The pinned manifest supplies the authorized
-range. No source-catalog fence or current source enumeration is needed.
-
-## Identity and security
-
-For the owning-account local pipe, `(window_id, item_index)` is not a cryptographic bearer token. The caller
-already owns the local session and the window exists only in that process. A selected restricted-client
-adapter binds the window to its real connection/session and disclosure rules; revocation cancels and removes
-it.
-
-Do not add handle token signatures, entropy providers, durable retention leases, grant checkpoints,
-invalidation generations or purge histories to the baseline.
-
-## Remove after cutover
-
-Delete:
-
-```text
-crates/search-query/search-handles/
-bins/eliot-searchd/src/result_handles/
-SearchSourceHandle and handle lifecycle contracts
-source_fence hashing for result expansion
-per-item random token generation and record maps
-handle validation/permit/invalidation/security fixtures
-```
-
-Change current protocol/result consumers together; do not keep forwarding handle wrappers or a V3 family.
+After caller cutover, delete the shared handle store, daemon result-handle catalogue, entropy/token hashing,
+whole-catalogue fences/scans, handle grants/permits/invalidation generations, arbitrary revision offsets,
+durable retention leases and handle-specific crypto/provider/shape fixtures. Move useful read/output mechanics
+into the query-window/evidence owner and leave no facade.
 
 ## Completion
 
-A result page emits the correct verified excerpt without per-item token minting or whole-catalog scans.
-Bounded expansion can only enlarge the selected item's context under the same view/window and fails after
-expiry/restart/session revocation. No separate handle database remains reachable.
+Cards emit without per-item token minting or whole-catalogue scans. Expansion can enlarge only the selected
+item's context under the same view/window and fails after expiry/restart/session revocation. After code, run
+minimal Rust 1.98 check/Clippy for actual query/window/evidence/protocol/daemon consumers.

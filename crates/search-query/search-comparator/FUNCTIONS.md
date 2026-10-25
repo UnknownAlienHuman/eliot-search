@@ -1,38 +1,46 @@
-# search-comparator functions
+# search-comparator — inspected functions and cutover
 
-## Current function map
+## Evidence boundary
 
-[lib.rs](src/lib.rs) contains the following pure kernels. Their callers are package unit tests.
-Implementations, behavior observations, configuration relations, lineage and readback/access flags
-arrive as supplied inputs; these functions do not discover or read the evidence themselves.
+At the established audit revision, the package contained pure kernels and repository callers were package unit
+tests. Implementations, observations, configuration relations, lineage and readback/access flags arrived as
+supplied inputs. These caller findings are historical evidence, not current branch truth.
 
-| Function | Actual behavior |
+Before a code cut, repeat the exact current search across manifests, Rust imports/constructors/path inclusion,
+non-Rust tooling, features, targets, tests and workflows. Record all surviving consumers and move them before
+removing APIs or the package.
+
+## Inspected behavior
+
+| Kernel family | Actual behavior at the inspected revision |
 |---|---|
-| `validate_comparison_request` | Check the supplied request, local resolution, profile/limits and live-state fields. |
-| `validate_comparable_implementation` | Check supplied candidate identity, match basis, observation fields and evidence/access flags. No source readback occurs. |
-| `collapse_repository_lineages` | Group supplied candidates using supplied lineage relations; it does not inspect Git ancestry or discover forks. |
-| `normalize_behavior_signature` | Sort/deduplicate supplied observation components and compute their signature metadata. It does not extract behavior from source. |
-| `align_evidence_roles` | Group supplied observations by requested axes and evidence roles. |
-| `classify_conflict` | Compare observation digests, supplied applicability and assurance. Different digests under `Overlapping` currently become `Conflict` after flag/assurance checks, even without an incompatibility check. |
-| `compare_axes` | Build a bounded matrix from supplied local evidence, lineage groups, role alignments and predicate relations. It does not produce those observations. |
-| `order_recommended_reading` | Sort and bound supplied reading candidates; it does not read source or create locations. |
-| `assemble_behavior_set` | Assemble the supplied comparison products into the existing contract result. |
-| `revalidate_comparison` | Compare result bindings with supplied current fence/portfolio state. |
+| request/candidate validation | Checked supplied identities, match basis, observations and access/readback flags; read no source. |
+| lineage collapse | Grouped candidates using supplied relations; discovered no Git ancestry/forks. |
+| behavior signature | Sorted/deduplicated supplied observation components; extracted no behavior from code. |
+| role/axis alignment | Arranged supplied observations for requested axes. |
+| conflict classification | Could classify unequal digests as conflict under supplied overlap/assurance without comparing incompatible property/value evidence. |
+| reading order/result assembly | Sorted and bounded supplied records; created no locations or evidence. |
+| revalidation | Compared result bindings with supplied current-state/fence values. |
 
-There are no separate implemented `partition_configuration_variants` or
-`compute_comparison_coverage` APIs. The old logical signatures are not a list of missing functions to add.
+Do not implement historical logical function names merely to complete a contract.
 
-## Connect and simplify
+## Connected replacement
 
-The [README](README.md#minimal-connected-behavior) specifies the useful path: ordinary retrieval in
-selected reference repositories, exact source ranges and a compact comparison with explicit match
-bases and unknowns. Reuse available syntax/SCIP/LSP locations through that same source/publication path.
+Ordinary retrieval in the selected scope nominates implementations and preserves their match basis. The existing
+retained-evidence path verifies exact ranges. A comparison result shows supported signatures/excerpts and
+available test/doc/reference locations per requested axis, with explicit unknowns.
 
-Replace digest-based conflict inference with actual property/value comparison only where an existing
-producer supplies comparable observations. Otherwise return the source excerpts and the unresolved
-axis. Tests and documentation describe evidence to inspect; their presence proves no runtime behavior.
-Known forks can share a group; missing provenance cannot become a count of independent votes.
+A syntax/semantic producer contributes only facts it actually generated for the pinned view. Tests and docs are
+evidence to inspect, not proof of runtime behavior. Digest inequality is not conflict; comparable property/value
+observations must actually be incompatible. Group forks/copies only from known provenance and never count missing
+lineage as independent confirmation.
 
-Keep necessary ordering/grouping as small helpers. Remove unused signature, predicate-receipt and
-revalidation platforms while changing their actual callers. Comparison shares the ordinary result and
-window; it requires no parallel retrieval engine, general behavior analyzer or mandatory model call.
+Keep necessary grouping/order helpers as private query code. Remove supplied signature, predicate receipt,
+assurance and revalidation platforms with their last callers. Comparison shares the ordinary result and window;
+it needs no parallel retrieval engine or mandatory model.
+
+## Verification after code
+
+Run minimal Rust 1.98 check/Clippy for changed production consumers. Through real source examples verify duplicate
+names, implementation plus relevant tests/docs, one unsupported axis, known copies versus independent sources,
+configuration distinctions and explicit unknowns.

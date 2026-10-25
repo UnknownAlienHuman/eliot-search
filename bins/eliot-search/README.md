@@ -1,29 +1,25 @@
-# eliot-search — current CLI status
+# eliot-search — CLI cutover status
 
-The intended standalone CLI owns invocation capture, one local child/session, current typed requests, bounded
-presentation and exit status. The current binary still contains incompatible client directions and does not
-reach the selected indexed product.
+The standalone CLI owns invocation capture, one local child/session, current typed requests, bounded presentation
+and exit status. It does not own source scope, redb/object/Qdrant state, grants or query planning.
 
-R033 rechecked current package documentation and source seams after R032. No CLI/daemon Rust was changed or
-executed. The route descriptions below are source observations, not passing runtime evidence.
+Read [AGENTS.md](AGENTS.md), [FUNCTIONS.md](FUNCTIONS.md), the
+[protocol owner](../../crates/search-provider-protocol/FUNCTIONS.md),
+[client owner](../../crates/search-provider-client/FUNCTIONS.md) and
+[#332](https://github.com/UnknownAlienHuman/eliot-search/issues/332). #264 owns the complete retained-source →
+Qdrant → pinned-evidence → CLI result.
 
-## Current source-selected paths
+## Revision-specific evidence
 
-- `scan-file` / `scan-stdin` command arms still forward to the daemon shell one-shot scanner. The current branch
-  has not compiled or run the CLI/daemon, so these routes are **present but unverified**, not documented as
-  working commands.
-- default builds reject old provider `status/search/lexical/refresh/indexed` routes as
-  `LEGACY_LOOPBACK_HARNESS_DISABLED`;
-- the default CLI still compiles the old provider client/protocol/config/ports stack and, on Windows, the
-  named-pipe/credential owners even though the primary dispatcher does not use the selected typed client;
-- `public_client.rs` intercepts `serve-data-root`, starts a daemon child and waits for `data_root_ready`, then
-  uses newline/tab/hex DIRECT commands with opaque handles and arbitrary byte ranges;
-- the daemon's earlier direct-registry interceptor claims that same argv and exits through registry metadata,
-  so the expected interactive DIRECT session cannot start;
-- the removed daemon loopback server is not a fallback. Feature-only client code cannot make it reachable.
+R033 inspected package/source seams and found multiple incompatible routes: shell scan forwarding, disabled legacy
+provider routes, an old provider dependency stack, newline/tab/hex DIRECT commands, opaque handles and shadowed
+daemon interception. No CLI/daemon Rust was changed or executed in that pass. These are source observations at
+that revision, not permanent current-branch facts or runtime results.
 
-Help still contains persistent command names owned by different or shadowed daemon applications. Help text,
-compiled dependencies and hard-coded status/self-test fields are not supported-capability evidence.
+Before deleting or replacing routes, repeat an exact current search across manifests, Rust/non-Rust callers,
+constructors, command dispatch/help, features, targets, tests and workflows. Move every surviving client/daemon
+consumer in the same cut. Help text, compiled dependencies and hard-coded status fields are not capability
+evidence.
 
 ## Target
 
@@ -39,12 +35,13 @@ eliot-search
 ```
 
 Trusted owned-child stdio needs no pairing key, grant, per-frame MAC, installation binding or endpoint/token
-file. A later restricted client authenticates separately and enters the same dispatcher.
+file. A selected restricted client authenticates separately and enters the same dispatcher. A persistent
+owner-only OS pipe is optional and has its own connection ownership.
 
 The CLI never opens redb/object/Qdrant state, mints source scope or accepts raw backend filters/point IDs.
-Continue uses one session-owned `WindowId`; Expand uses one emitted `WindowItemRef` and bounded relative context.
-Human and JSON/NDJSON rendering preserve final order, source/revision/representation/location, verified excerpt
-and truthful gaps.
+Continue uses one session-owned window; Expand uses one emitted item locator and bounded relative context. Human
+and JSON/NDJSON rendering preserves final order, source/revision/representation/location, verified excerpt and
+truthful gaps.
 
 ## Removal boundary
 
@@ -56,13 +53,9 @@ A one-shot result returns no reusable locator. A live session keeps the same chi
 and validate the complete terminal frame before displaying cards or committing window progress. Partial output
 fails the session and advances no cursor.
 
-## Work and evidence
+## Completion and evidence
 
-Read [AGENTS.md](AGENTS.md), [FUNCTIONS.md](FUNCTIONS.md), the
-[protocol owner](../../crates/search-provider-protocol/FUNCTIONS.md),
-[client owner](../../crates/search-provider-client/FUNCTIONS.md) and
-[#332](https://github.com/UnknownAlienHuman/eliot-search/issues/332). #264 owns the complete retained-source →
-Qdrant → pinned-evidence → CLI result.
-
-After code, run locked Rust 1.98 check/Clippy on the actual CLI, client, protocol and daemon consumers, then the
-focused one-shot/session/cancellation/output/cleanup scenarios. No current CLI runtime success is claimed here.
+The default CLI reaches one current daemon handler and returns source-backed typed output; cancellation and child
+cleanup work under the original deadline. After code, run minimal Rust 1.98 check/Clippy for actual CLI/client/
+protocol/daemon consumers, then focused one-shot/session/cancellation/output/cleanup cases. No current runtime
+success is claimed by this documentation.

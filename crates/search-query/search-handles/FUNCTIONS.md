@@ -1,47 +1,26 @@
-# search-handles — current source and removal map
+# search-handles — inspected source and removal map
 
-## Shared package
+## Evidence boundary
 
-| Current API/area | Actual behavior |
-|---|---|
-| handle creation/store | Stores token-digest records and source/revision/range metadata in another in-memory authority map. |
-| free/public validation and expansion structures | Caller-shaped records/contexts/permits can be copied and supplied back; the package does not own the current view or serving session. |
-| invalidation | Maintains another status/index lifecycle rather than dropping one query window. |
-| source inventory | `lib.rs` 24,206 bytes plus `invalidation.rs` 10,834 bytes. |
+At the established audit revision, the shared package contained about 35 KiB of production Rust and the daemon
+had another roughly 19 KiB result-handle catalogue. The public daemon did not use the shared package. These size,
+topology and caller findings are historical evidence, not current branch truth.
 
-The public daemon does not use this package.
+Before a code cut, repeat the exact current search across manifests, Rust imports/constructors/path inclusion,
+non-Rust tooling, features, targets, tests and workflows. Record all surviving consumers and move them before
+removing APIs, modules or the package.
 
-## Daemon handle path
+## Inspected behavior
 
-`ResultHandleCatalog::prepare_mint_page`:
+The shared package stored token-digest records and copied source/revision/range metadata in another in-memory
+authority map, accepted caller-shaped validation/permit structures and maintained an invalidation lifecycle.
 
-```text
-list every source into BTreeMap
-→ compute source_fence by listing/hashing every source again
-→ for each emitted match:
-     validate current source/revision/digests
-     allocate random token
-     stage ResultHandleRecord
-→ insert batch only after output
-```
+The inspected daemon path listed and hashed the whole source catalogue, minted a random token per emitted item,
+stored source/revision/digest/length/expiry again, then repeated catalogue work during expansion. Expansion could
+accept arbitrary byte ranges inside the whole revision. Staged insertion only after complete output and keeping an
+exclusive borrow through output were useful mechanics; the second authority and broad range were not.
 
-The staged-batch/commit-after-output mechanic is useful. The source scans, token records and separate store
-are not.
-
-`prepare_expand`:
-
-```text
-check caller-created clean LiveExpansionBarrier
-→ recompute whole source fence
-→ list/scan every source
-→ accept arbitrary [byte_start, byte_end] within whole revision
-→ read range and compare returned IDs/digests/length
-→ retain exclusive handle borrow through output
-```
-
-This can expose unrelated revision content and repeats whole-catalog work for one item.
-
-## Replacement operations
+## Replacement
 
 No public handle mint exists. The query-window owner may expose:
 
@@ -49,42 +28,23 @@ No public handle mint exists. The query-window owner may expose:
 WindowItemRef { window_id, item_index }
 ```
 
-### `prepare_expand(item_ref, context_request, request_context)`
+`prepare_expand` resolves the exact successfully emitted item under an exclusive live-window borrow, checks
+absolute expiry and any concrete restricted-session binding, obtains its pinned manifest entry, derives a finite
+relative neighborhood, reserves read/output budget and verifies the retained object/range. The request cannot
+supply unconstrained absolute offsets.
 
-1. resolve the live window and exact successfully emitted item index under an exclusive borrow;
-2. check original absolute expiry and optional concrete restricted-session binding;
-3. resolve the item's `ViewManifestEntry` from the window's pinned view;
-4. derive the permitted neighborhood from that exact entry and configured maximum context;
-5. reserve source-read/output budget;
-6. read and verify the immutable retained object/range;
-7. return `PreparedExpansion` which retains the borrow until complete output or drop.
-
-The request may choose a bounded relative neighborhood; it may not supply unconstrained absolute revision
-offsets. The source/revision/range come from the manifest, not a copied handle record.
-
-### Output
-
-Check the same absolute expiry/deadline immediately before writing. Complete writer success returns the
-frame. Partial output fails the session/window; there is no post-output acknowledgement or handle mutation.
+Complete output returns the frame; partial output fails the session/window without minting or acknowledging new
+state. The pinned manifest supplies source authority and the immutable reader verifies bytes.
 
 ## Delete after caller cutover
 
-- shared `HandleStore`, records, validation contexts, permits and invalidation indexes;
-- daemon `ResultHandleCatalog`, entropy/token hashing, source-map/fence validation and handle records;
-- `SearchSourceHandle`, durable handle and retention-lease contracts;
-- `LiveExpansionBarrier` clean/purge/revocation Booleans;
-- arbitrary full-revision range expansion;
-- handle-specific crypto/provider, lifecycle and shape fixtures.
+Remove both handle stores, token entropy/hashing, copied records, source-catalogue fences/scans, grants/permits,
+invalidation generations, durable leases, arbitrary revision-range expansion and handle-specific crypto/provider
+fixtures. Move exact range reading and exclusive prepared-output behavior into the query-window/evidence owner and
+leave no facade.
 
-Move exact immutable range reading and exclusive prepared-output behavior into the query-window/evidence
-owner. Delete this package and daemon module; do not leave a facade.
+## Verification after code
 
-## Verification
-
-- normal cards require no handle allocation;
-- page/expansion performs no whole-source-catalog enumeration;
-- only a successfully emitted item index can expand;
-- expansion stays within the configured neighborhood of its exact manifest range;
-- wrong/missing retained bytes fail real verification;
-- expiry/restart/disconnect/revocation remove availability through the actual window/session;
-- partial output does not create new state or acknowledge disclosure.
+Run minimal Rust 1.98 check/Clippy for changed production consumers. Verify no handle allocation for ordinary
+cards, no whole-catalogue enumeration for page/expansion, only emitted items can expand, neighborhoods stay
+bounded, wrong/missing bytes fail real verification, and expiry/restart/disconnect/revocation remove availability.

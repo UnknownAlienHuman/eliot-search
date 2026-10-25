@@ -1,40 +1,41 @@
-# search-comparator
+# search-comparator — source-backed comparison or a small helper
 
-Help a user compare relevant implementations by showing actual source, useful differences and what
-remains unknown. Follow the [architecture](../../../docs/architecture/README.md) and
-[implementation](../../../docs/implementation/README.md).
+Help a user compare relevant implementations by showing actual source, useful differences and explicit unknowns.
+Follow the [architecture](../../../docs/architecture/README.md),
+[implementation](../../../docs/implementation/README.md) and [query cutover](../README.md).
 
-## Current source
+## Revision-specific evidence
 
-[lib.rs](src/lib.rs) contains pure kernels: `collapse_repository_lineages`,
-`normalize_behavior_signature`, `align_evidence_roles`, `compare_axes` and
-`order_recommended_reading`. Their callers here are unit tests. Callers supply implementations,
-behavior observations, configuration relations, access/readback booleans and lineage receipts.
-The package does not discover repositories, extract behavior from code, read tests or resolve callers.
+At the established audit revision, this package contained pure grouping/signature/axis/reading-order kernels and
+its repository callers were package unit tests. Callers supplied implementations, observations, configuration
+relations, lineage and access/readback booleans; the package discovered or read none of that evidence. This is a
+revision-specific caller finding, not permanent current-branch truth.
 
-`normalize_behavior_signature` sorts supplied observation digests; it does not derive a semantic
-signature. `classify_conflict` labels different observation digests under overlapping predicates as
-`Conflict` once assurance checks pass. Different observations can both be true. This rule cannot
-establish incompatible behavior without an actual comparison of the observed property and value.
+Before deleting, merging or connecting the package, search current manifests, Rust imports/constructors/path
+inclusion, non-Rust tooling, features, targets, tests and workflows. Name every real consumer and replace only
+the behavior it actually needs. Do not harden supplied-proof machinery merely because fixtures still call it.
 
 ## Minimal connected behavior
 
-Use ordinary retrieval within the selected reference repositories to nominate implementations. Keep
-the match basis: exact symbol identity, matching name/signature, syntax pattern or lexical similarity.
-Read the nominated retained ranges through the same source validator and return a compact comparison
-of signatures, implementation excerpts and available test/doc/reference locations.
+Use ordinary retrieval in the selected source scope to nominate implementations and preserve the match basis:
+explicit location, exact symbol identity, matching name/signature, syntax observation or lexical similarity.
+Read nominated retained ranges through the same evidence validator.
 
-For each requested axis, show a source-backed observation or an explicit unknown. Syntax outlines and
-[SCIP/LSP locations](../../search-prep/search-code-enricher/README.md#optional-semantic-locations)
-can supply navigation and selected symbol facts. They do not automatically infer all errors, side
-effects, behavioral equivalence or normative correctness. Tests/documents describe evidence to inspect;
-their presence alone proves no runtime property. Configuration-specific evidence stays distinguishable.
+For each requested axis, return source-backed signatures/excerpts and available test/doc/reference locations, or
+an explicit unknown. Syntax/semantic locations supply only the facts they actually produce. Same names, scores,
+text or observation digests do not prove equal behavior, conflict, correctness or independent lineage.
 
-Group known forks/mirrors using recorded repository provenance. Collapse identical occurrences by real
-source identity. Neither same text nor a matching SCIP package name proves independent repository
-lineage; when provenance is missing, show it as unknown instead of counting an independent vote.
+Group known forks/mirrors only from recorded provenance. Missing provenance stays unknown. Different observations
+become a conflict only when a real producer supplies comparable property/value evidence that is incompatible;
+digest inequality alone is insufficient.
 
-Reuse small ordering/grouping helpers where useful. Remove unconsumed behavior-digest, predicate-receipt
-and result-revalidation platforms with their last consumers. Comparison may be a bounded expansion of
-the ordinary query result, not a second search application, a universal behavior analyzer or a required
-LLM pass. A missing comparison candidate is not proof that an equivalent implementation does not exist.
+Keep small ordering/grouping helpers where useful. Remove unconsumed behavior-signature, predicate-receipt,
+assurance and result-revalidation systems with their last callers. Comparison is a bounded expansion of the
+ordinary retained-evidence path, not a second search application, universal analyzer or mandatory model call.
+
+## Completion
+
+One real query selects source-backed implementations, displays supported axes and explicit unknowns, and does not
+count copies as independent evidence. If no substantial independent algorithm remains, inline the useful helpers
+into query composition and delete the package. After code, run minimal Rust 1.98 check/Clippy for changed query,
+source, preparation and protocol consumers.

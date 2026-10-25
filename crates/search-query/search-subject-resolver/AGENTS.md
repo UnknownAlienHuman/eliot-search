@@ -1,23 +1,26 @@
 # Working on subject resolution
 
 Read the [architecture](../../../docs/architecture/README.md),
-[implementation](../../../docs/implementation/README.md) and [local README](README.md).
-Resolve the user's selected entity to actual source locations and expose material ambiguity.
+[implementation](../../../docs/implementation/README.md), [query cutover](../README.md), package
+[README](README.md) and local [source map](FUNCTIONS.md).
 
-The current functions consume supplied candidates; their callers are tests. Connect real candidate
-producers and source validation together. Keep selection as a small part of the existing query owner;
-change its API and consumers when a fixed ladder or package split adds no useful behavior.
+The established audit found supplied-candidate resolution functions with package-test callers at the inspected
+revision. Treat that as revision-specific evidence. Before deletion, inlining or connection, search current
+manifests, Rust/non-Rust callers, constructors, module inclusion, features, targets, tests and workflows. Move
+all surviving consumers in the same cut.
 
-Prefer an explicit source/revision/range, then available symbol occurrences in the selected published
-snapshot. Use lexical/name matches to nominate alternatives. Preserve repository, document and
-configuration distinctions; identical names or supplied equivalence receipts do not establish identity.
-A truncated candidate set cannot prove that its sole visible match is unique.
+Resolve the user's selected entity to actual source locations and expose material ambiguity. Prefer an explicit
+source/revision/range, then actual symbol occurrences in the pinned view. Use lexical/name matches only to
+nominate alternatives. Preserve repository, document and configuration distinctions; identical names or supplied
+equivalence receipts do not establish identity. A truncated candidate set cannot prove uniqueness.
 
-Use the existing manifest and retained-byte lookup. Missing, stale or ambiguous explicit locations
-must remain visible; do not silently substitute a different subject. Apply the actual selected scope
-and client restrictions where data is read and returned.
+Use the existing manifest and retained-byte lookup. Missing, stale or ambiguous explicit locations remain
+visible; do not silently substitute another subject. Apply selected scope and any concrete restricted-session
+policy where data is read and returned.
 
-Remove unused resolution receipts, duplicate candidate copies and separate revalidation state with
-those consumers. Reuse the ordinary result and its existing window when expansion is needed.
-The [function map](FUNCTIONS.md) records current APIs; it does not freeze their signatures or require
-an additional resolver framework.
+Remove unused resolution receipts, duplicate candidate copies and separate revalidation state with their last
+consumers. Reuse ordinary results and the existing window. If only small selection/ambiguity helpers remain,
+inline them into query composition and delete the package.
+
+After code, run minimal Rust 1.98 check/Clippy for actual query/preparation/source/protocol consumers. Package
+self-tests over supplied candidates are not delivery.
