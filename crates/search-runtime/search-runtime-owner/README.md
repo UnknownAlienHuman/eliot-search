@@ -1,143 +1,109 @@
 # search-runtime-owner — one real root guard, not a lifecycle protocol
 
-The product needs one small boundary: inspect/initialize/open one current-format data root and hold one actual
-process-lifetime exclusion guard while its stores are open.
-
-Public main instead contains more than **553 KiB of production Rust before tests** across this package and the
-daemon owner composition:
-
-| Area | Gross production source |
-|---|---:|
-| `search-runtime-owner/src` | 123,087 bytes (~120.2 KiB) |
-| daemon `owner_composition/kernel*` | 443,814 bytes (~433.4 KiB) |
-| combined | 566,901 bytes (~553.6 KiB) |
-
-Most of that code models leases, owner identities/epochs, request digests, alternating durable owner slots,
-drain/release receipts, initialization journals, command-specific admission and migration/key/source wrappers.
-The useful authority is the actual retained root/lock handles in daemon composition.
+The product needs one small boundary: inspect or initialize one current-format data root, open it through retained
+handles, and hold one actual exclusive process-lifetime guard while all stores are open.
 
 Read the [architecture](../../../docs/architecture/README.md),
 [implementation guide](../../../docs/implementation/README.md), local [source map](FUNCTIONS.md),
 [root issue #266](https://github.com/UnknownAlienHuman/eliot-search/issues/266) and
 [initialization issue #360](https://github.com/UnknownAlienHuman/eliot-search/issues/360).
 
+## Revision-specific evidence
+
+At the original inspected public-main baseline `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`, this package plus daemon
+owner-composition code contained about 553.6 KiB of production Rust before tests. The audit found a large
+lease/identity/epoch/receipt/initialization-journal system around real root and lock handles. Those measurements
+and caller findings explain the selected cutover; they are not a current branch census or a promised deletion
+amount.
+
+Before deleting, merging or inlining this package, repeat an exact search at the implementation head across
+workspace/package manifests, Rust imports and constructors, non-Rust tooling, feature/target wiring, tests and
+workflows. Move every current caller in the same cut. Do not harden an obsolete API merely because it remains
+reachable from tests or compatibility wiring.
+
 ## Target ownership
 
 ```text
 DataRootGuard {
-  canonical/open root handle
+  retained canonical/open root handle
   one actual exclusive lock handle
   current root-format identity/profile
 }
 ```
 
-The exact platform implementation may hold additional private handles needed to prevent replacement or
-validate locality/reparse/ACL properties. They remain implementation details, not public owner records.
+The selected platform implementation may retain private handles needed to prevent replacement or validate
+locality, reparse-point and access properties. These are implementation details, not public owner records.
 
-The daemon owns the guard from successful current-root open until every redb/object/publication/query owner is
-closed. Internal operations borrow those owners; they do not renew, serialize or prove the guard.
+The daemon holds the guard from successful current-root open until source, object, control, publication, query
+and protocol owners are closed. Internal operations borrow those owners; they do not renew, serialize or prove
+the guard.
 
 ## Operations
 
 ### Inspect existing
 
-Side-effect free. Return only useful states:
-
-```text
-Absent
-Current(CurrentRootMetadata)
-IncompleteInitialization
-UnsupportedPreRelease
-Corrupt
-Busy/Owned            // when exclusive open is requested and lock is held
-Foreign/UnsafePath
-```
-
-Inspection does not create directories, lock files, installation records, logs, journals or repair state.
+Inspection is side-effect free and reports only useful states: absent, current, incomplete initialization,
+unsupported pre-release, corrupt, busy/owned, or foreign/unsafe path. It creates no directory, lock, journal,
+owner record or repair state.
 
 ### Initialize new
 
-Explicit command only. Follow #360:
+Initialization is an explicit command:
 
 ```text
 validate selected local target and absence/foreign layout
-→ acquire the actual initialization exclusion
+→ acquire actual initialization exclusion
 → build current layout in unique owned staging
-→ flush/close/verify stores
-→ publish one current root-format manifest/namespace last, no-clobber
-→ verify final current layout
-→ remove staging debris
+→ flush, close and verify stores
+→ publish one current root-format manifest/namespace last and without clobber
+→ verify final layout
+→ remove bounded staging debris
 ```
 
-A crash before the final publication leaves recognizable incomplete staging, not an ACTIVE/DRAINING/RELEASED
-owner state. Explicit resume may only finish a fully verified owned staging publication; explicit discard may
-only remove exact uncommitted owned staging.
+A crash before final publication leaves recognizable incomplete staging. Explicit resume may finish only a
+fully verified owned staging publication; explicit discard may remove only exact uncommitted owned staging.
+Normal open does not repair or migrate.
 
 ### Open existing
 
 ```text
-parse invocation/config before root effects
+parse invocation/settings before root effects
 → validate/open current root without following replacement/reparse paths
 → acquire one exclusive process-lifetime lock
-→ reread/verify current root-format manifest through retained handles
-→ open current redb/object owners
+→ reread and verify current root metadata through retained handles
+→ open concrete redb/object/source/publication owners
 → retain DataRootGuard in daemon composition
 ```
 
-No owner-slot succession, PID/executable digest, request ID/digest, owner epoch or recovery receipt is needed.
-An OS lock released by process death is not made safer by a stale durable ACTIVE record.
+No owner-slot succession, PID/executable digest, request digest, owner epoch, lease renewal or recovery receipt
+is authority. Process death releases the actual lock; the next open validates current state directly.
 
 ### Shutdown
 
-```text
-stop accepting requests
-→ cancel/drain finite in-process work
-→ drop query windows/view guards
-→ finish/resolve publication and close Qdrant users
-→ close redb/object/source owners
-→ drop DataRootGuard / lock handle
-```
-
-Use ordinary ownership/drop and one process request count/semaphore. No dependency receipt catalogue,
-DRAINING record, release permit or shutdown receipt.
-
-## Current source defects to remove
-
-- `OwnerSupervisor` and `prepare_acquire` family have package-internal/test callers, not the native product
-  owner.
-- `NativeRootRequest` copies/hashes the entire invocation, carries six work-meter dimensions, named stage
-  arrivals and constructors for source, DEK, migration, registry, service and diagnostic commands. The root
-  owner should receive a root path/open mode/context, not parse every command.
-- existing open acquires both `.eliot-search-owner.lock` and `.eliot-search-sealed-owner.lock`; the current
-  format needs one lock authority, not legacy dual ownership.
-- durable `.eliot-search-owner-state-a.v1` / `-b.v1` records alternate ACTIVE/DRAINING/RELEASED generations,
-  request digests, executable identity and owner epochs while the real lock already owns exclusion.
-- current open binds storage ACL, selected key binding, control journal, registry/source/DEK/migration logic
-  into one capability. Those belong to their concrete owners after the root guard.
-- cancellation after any `effect_observed` is broadly reclassified as owner acquire/release unknown even when
-  a local abort or read has a known result.
+Stop admission, cancel or drain finite in-process work, drop query windows and view guards, resolve concrete
+publication effects, close control/source/object owners, then drop `DataRootGuard`. Use ordinary ownership and
+one bounded shutdown context. Do not write DRAINING/RELEASED records as compensation.
 
 ## Removal boundary
 
-Delete after direct daemon cutover:
+After current callers move, remove the generic supervisor/acquire/recover/drain/release state machine, logical
+owner/process identities, lease windows, alternating owner slots, dual legacy/sealed locks, request/argv digests,
+named work-stage protocol, command-specific source/key/registry/migration custody and fixtures that only preserve
+those APIs.
 
-- `OwnerSupervisor`, `OwnerSnapshot`, generic acquire/recover/drain/release transition framework;
-- `OwnerIdentity`, executable/process creation identity and owner binding records not needed by the actual lock;
-- `LeaseWindow`, renewal, health history, drain/release tokens and dependency/shutdown receipts;
-- alternating durable owner slots, lifecycle/generation/epoch/succession records;
-- dual legacy/sealed lock model;
-- raw invocation/request digest and cumulative named `NativeWork` protocol;
-- generic operation IDs, recovery evidence and mutation outcome wrappers;
-- owner-composition DEK/source/registry/migration command parsers and forwarding custody;
-- initialization journal/state taxonomy replaced by manifest-last staging;
-- package/daemon fixtures protecting those APIs.
+Keep only actual path/locality/no-reparse checks, retained root and lock handles, one current-format classifier,
+explicit staging initialization, bounded context, content-free failures and direct shutdown ordering. If the
+remaining code is small and has no independent dependency boundary, inline it into daemon root composition and
+delete the package.
 
-Keep only actual path/locality/no-reparse checks, root/lock handles, one current-format manifest classifier,
-bounded context, content-free failures and explicit initialization/open/shutdown composition.
+Stopped-root local-object collection and archive/import are separate maintenance operations documented in
+[`search-retention/FUNCTIONS.md`](../search-retention/FUNCTIONS.md). They acquire the same real guard after the
+normal daemon is stopped; they are not responsibilities of the open-root owner.
 
 ## Completion
 
-A fresh root can be explicitly initialized crash-safely; normal open performs no repair or migration; exactly
-one daemon owns the root through one actual guard; restart ignores stale process metadata because none is
-authority; current stores open after the guard and close before it; unsupported/pre-release roots remain
-untouched; and no owner lease/receipt/succession system remains.
+A fresh root initializes crash-safely; inspection performs no writes; exactly one process owns an open root
+through one actual guard; stores open after the guard and close before it; unsupported roots remain untouched;
+and no lease/receipt/succession platform remains. After code, run minimal Rust 1.98 check/Clippy for the changed
+owner and actual daemon/store consumers, then focused inspect/initialize/lock/restart/path-replacement/shutdown
+cases. Historical lifecycle matrices disappear with their APIs.

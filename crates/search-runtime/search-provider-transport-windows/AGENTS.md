@@ -1,15 +1,21 @@
 # Working on the old Windows provider transport
 
 Read the [current protocol](../../search-provider-protocol/README.md),
-[client map](../../search-provider-client/FUNCTIONS.md), [CLI issue #332](https://github.com/UnknownAlienHuman/eliot-search/issues/332) and local [source map](FUNCTIONS.md).
+[client map](../../search-provider-client/FUNCTIONS.md), [CLI issue #332](https://github.com/UnknownAlienHuman/eliot-search/issues/332), package [README](README.md) and local [source map](FUNCTIONS.md).
 
-Do not harden or extend this client-only `PIPE_NOWAIT` adapter. It is coupled to the deleted pairing/grant
-provider stack, has no server/listener and is not used by the selected child-stdio product path. Remove the
-package/workspace member with its last old typed-client/CLI callers.
+The baseline local product uses owned child stdio. Historical audits found this client-only `PIPE_NOWAIT`
+adapter coupled to the old typed provider/pairing path and no selected child-stdio consumer. Treat that as
+revision-specific evidence. Immediately before removal, search current manifests, Rust and non-Rust callers,
+constructors, features, targets, tests and workflows.
 
-A later persistent-daemon feature may implement one actual owner-only Windows pipe server and client against
-the current framed protocol. It must validate real ACL/peer ownership and use one bounded I/O context. Do not
-preserve `NativeEndpointNameV1`, endpoint files, pairing keys, grants, capability digests or TCP fallbacks.
+When the current search confirms no real persistent-daemon consumer, remove the package/workspace/dependency
+entries and old client callers together. If a consumer exists, name it and retain only the smallest truthful
+unavailable seam while migrating it; do not harden legacy endpoint, pairing, grant or session APIs.
 
-After deletion, run minimal Rust 1.98 compiler/Clippy for actual client/CLI consumers. Native pipe tests return
-only with a real selected persistent-pipe implementation.
+A future selected persistent-daemon profile may implement one actual owner-only Windows pipe server/client using
+the current framed protocol, real ACL/peer-owner validation and one bounded I/O context. Do not preserve
+`NativeEndpointNameV1`, endpoint files, pairing keys, grants, capability digests, TCP fallbacks, discovery or
+reconnect platforms.
+
+After deletion or replacement, run minimal Rust 1.98 check/Clippy for actual protocol/client/CLI consumers.
+Native pipe runtime cases are required only when that optional profile is selected.

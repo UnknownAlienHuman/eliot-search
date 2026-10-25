@@ -30,20 +30,21 @@ compatibility code or another registry.
 
 ## Current status
 
-R042 extends the revision-currentness rule to source, runtime, preparation, code-enricher, Qdrant-supervisor and
-overlay package instructions. Historical byte counts and no-caller searches remain useful evidence only at their
-inspected revisions. A deletion slice must recheck exact current manifests, Rust/non-Rust callers, feature/target
-wiring, tests and workflows.
+R043 completes the runtime-family documentation correction. Root ownership is one retained current-format root
+and exclusive process-lifetime lock, not a lease/epoch/receipt protocol. Generic secret lifecycle is removed in
+favor of concrete Qdrant, restricted-client or immutable-object owners. `search-revision-crypto` is retained only
+if the accepted #598 handoff directly consumes it. The old client-only Windows named-pipe adapter is removed when
+an exact current caller search confirms no persistent-daemon consumer.
 
-R042 also corrects maintenance ownership: the removed `search-retention` Cargo package is not restored;
-documentation under that path owns stopped-root local-object collection and archive/import, while online Qdrant
-retirement remains publication cleanup.
+Every historical size or caller audit is tied to its inspected revision. A code-deletion slice must repeat the
+current search across manifests, Rust/non-Rust callers, constructors, feature/target wiring, tests and workflows,
+then move all surviving callers in the same cut. Documentation does not turn an old audit into deletion authority.
 
-R041 aligned adapter/model-worker currentness and the donor checkpoint. R040 aligned the document worker with
-PDFium as an uninstalled implementation-time candidate. R039 updated the inspected stable MCP SDK to `rmcp
-3.7.0` while keeping it absent from the ELIOT lock. R038 keeps regex optional/uninstalled; R037 defers watcher
-work until reconciliation functions independently. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98
-check/minimal Clippy for materializer + unitizer only.
+R042 applied the same currentness rule to source, preparation, code-enricher, Qdrant-supervisor and overlay, and
+separated stopped-root local-object maintenance/archive/import from publication-owned online Qdrant cleanup.
+R041 corrected adapter/model-worker currentness and the donor checkpoint. R040–R037 reconcile document, MCP,
+regex and watcher prerequisites. R031 adopted `pulldown-cmark 0.13.5` and passed Rust 1.98 check/minimal Clippy
+for materializer + unitizer only.
 
 The persistent source → Qdrant → retained-evidence → CLI path remains unconnected. The next implementation
 slice is [typed settings and real consumers](../crates/search-config/FUNCTIONS.md), coordinated by
