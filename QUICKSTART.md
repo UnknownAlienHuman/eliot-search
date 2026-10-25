@@ -1,12 +1,13 @@
-# Diagnostic one-shot scan — not the persistent-product quickstart
+# Quickstart status
 
-The source contains a narrow exact scan over bytes supplied for one process invocation. The current R031
-compiler evidence covers `search-materializer` and `search-unitizer`, not the daemon binary or these commands.
-Treat the examples below as existing syntax to verify, not as a reported successful run.
+There is no verified persistent-product command sequence yet. Do not present constructors, help text, feature
+flags or historical self-tests as a working installation.
 
-## Scan one file
+## Existing diagnostic one-shot scan
 
-The existing daemon syntax places the query before the path:
+The source contains a narrow exact scan over bytes supplied for one process invocation. The daemon binary and
+these routes have not been compiled or run at the current head, so treat the syntax as an implementation seam to
+verify:
 
 ```powershell
 $Source = Join-Path $env:TEMP "eliot-scan.txt"
@@ -17,40 +18,44 @@ $Source = Join-Path $env:TEMP "eliot-scan.txt"
 )
 
 cargo +1.98.0 run --locked -p eliot-searchd -- --scan-file needle $Source
-```
-
-The explicit ASCII-insensitive variant is:
-
-```powershell
 cargo +1.98.0 run --locked -p eliot-searchd -- --scan-file-ascii-insensitive needle $Source
-```
-
-## Scan stdin
-
-```powershell
 Get-Content -Raw $Source |
   cargo +1.98.0 run --locked -p eliot-searchd -- --scan-stdin needle
 ```
 
-A successful invocation would exercise only the one-shot exact path over supplied bytes. It would not retain a
-source revision, initialize a current-format root, use Qdrant, survive restart or establish indexed Search.
+Even if executed successfully, this route would not initialize a current root, retain an immutable revision,
+use Qdrant, publish a view or establish the product.
 
-## Persistent product status
+## First persistent quickstart to implement
 
-There is no verified persistent quickstart yet. The default application still has overlapping legacy command
-routes and disconnected publication/query composition. Remaining `wave1`–`wave6` features select old fragments;
-a feature combination is not a product profile.
-
-[#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the first real quickstart:
+[#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the first real executable path:
 
 ```text
-initialize/open current root
-→ select and retain one file
-→ restart
-→ publish/query through the actual Qdrant adapter
-→ reopen the pinned retained excerpt from the CLI
+initialize/open one plain current-format root
+→ explicitly select one supported local file
+→ retain one immutable ObjectRef
+→ install one current SourceRecord
+→ prepare one result
+→ build one fresh Qdrant generation
+→ one one-shot Search
+→ resolve a pinned retained excerpt
+→ render typed CLI output
 ```
 
-Replace this document with executed persistent steps only after that path works. Until then, help text,
-constructors, self-test names and historical qualification do not prove availability. See the
-[analysis registry](docs/audit/ANALYSIS_REGISTRY.md#execution-evidence) for exact revision-specific evidence.
+This first smoke may use one process and one explicit file. It must persist exact root/object/source/prepared/view
+references so the next convergence cut can verify restart without replacing the path.
+
+After the smoke works, add:
+
+1. restart/reopen and lost-wakeup reconciliation;
+2. selected-root inventory and incremental publication;
+3. rebuild/compaction and whole-generation cleanup;
+4. literal Exact and one serviced live session for Continue/Expand;
+5. stopped-root maintenance and selected optional capabilities.
+
+Encrypted storage, watcher, regex, PDF, MCP, models, overlay, managed Qdrant and a persistent Windows pipe are
+not prerequisites.
+
+Replace this document with executed commands only after the corresponding default CLI path works. Record exact
+SHA, toolchain/platform, Qdrant client/server/profile, command output and unrun cases in the
+[analysis registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).

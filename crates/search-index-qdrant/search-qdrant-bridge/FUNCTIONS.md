@@ -11,52 +11,56 @@ key and ordinary transport settings. Use one absolute deadline/cancellation per 
 renew it. Dropping a local future is not server cancellation.
 
 Remove supervisor binding, qualification gates, secret leases, relative timeout reset and the process-local
-mutation ledger with their callers. Live probes remain diagnostics, not constructor credentials.
+mutation ledger with their callers. Live probes are diagnostics, not constructor credentials.
 
-## Baseline operations only
+## Operations required by the baseline
 
 Implement only:
 
-- create/verify/delete one physical generation;
-- insert-only create of immutable points;
-- set one fixed `valid_until` closure;
+- create and verify one physical generation;
+- explicit `insert_only` create of immutable points;
+- one non-creating fixed `valid_until` closure;
 - exact point readback;
 - native BM25 query;
+- exact collection delete with terminal/wait semantics;
 - exact collection existence/absence readback.
 
 Add count/scroll/hybrid/vector/payload helpers only for a real consumer.
 
+Official Qdrant documentation makes default upsert overwrite-or-insert and exposes `insert_only`/`update_only`
+from server 1.17. The selected 1.19 baseline therefore must send an explicit mode; do not rely on defaults.
+
 ## Immutable point creation and retry
 
-A point ID binds the complete immutable retrieval identity. Creation uses insert-only semantics.
+A point ID binds the complete immutable retrieval identity:
 
 ```text
 fixed PointId + fixed Document/vector input + fixed immutable payload
-→ insert-only
+→ explicit insert_only
 → exact readback
 ```
 
-After timeout or lost response, publication may repeat the same fixed insert. If another attempt already inserted
-it, exact readback accepts identical state; conflicting state is an error. This is safe because the baseline
-never physically deletes individual point IDs. Do not use full upsert as retry.
+After timeout or lost response, publication may repeat the same fixed insert. If another attempt inserted it,
+exact readback accepts identical state; conflicting state is an error. This is safe because individual point IDs
+are never physically deleted inside the generation. Full upsert is not a retry primitive.
 
-The only permitted mutation of a published point is writing the same fixed exclusive
-`valid_until = target_sequence`. Repeating that closure is idempotent; reopening or changing the boundary is
-forbidden.
+## Fixed closure
+
+The only permitted point mutation is one exclusive `valid_until = target_sequence` value. Use a selected API
+which cannot insert a missing point: explicit `update_only` for a full-point operation, or a documented existing-
+point payload operation plus exact readback.
+
+A missing point is an inconsistency; closure never creates it. Repeating the same value is allowed. Reopening or
+changing the boundary is forbidden. Older views remain valid because their sequence is below the exclusive bound.
 
 ## Native lexical input
 
-Use Qdrant native `Document` input for the selected BM25 profile. Pending pages retain the actual bounded text and
-options required for dispatch. Generated sparse coefficients are Qdrant output, not locally predictable proof.
+Use Qdrant native `Document` input for the selected BM25 profile. Pending pages retain the bounded text/options
+needed for dispatch. Generated sparse coefficients are Qdrant output, not locally predictable proof.
 
-Readback validates:
-
-- exact point ID;
-- immutable source/occurrence/profile/filter/group bindings;
-- `valid_from` and optional fixed `valid_until`;
-- required vector field, finite sparse structure and response bounds.
-
-Retained source bytes, not payload digests or vectors, establish citation evidence.
+Readback validates exact point ID, immutable source/occurrence/profile/filter/group bindings, `valid_from`, fixed
+optional `valid_until`, required vector field, finite sparse structure and response limits. Retained source bytes,
+not payload/vector digests, establish citation evidence.
 
 ## Scope and IDF
 
@@ -69,23 +73,35 @@ idf.corpus       = base population
 ```
 
 The IDF corpus does not filter hits by itself. Explicit empty scope returns empty without RPC. Unknown IDs,
-missing generation/schema and incomplete inventory are errors, not empty success. Preserve Qdrant server order;
-top-k is navigation, not exhaustive absence.
+missing generation/schema and incomplete inventory are errors. Preserve server order; top-k is navigation, not
+exhaustive absence.
 
-## Generation cleanup
+## Whole-generation cleanup
 
-The bridge deletes only exact retired collections requested by publication, with `wait=true`, then verifies
-absence. Collection names are installation-scoped and never reused. There is no per-point physical deletion in
-the baseline and no bridge cleanup journal.
+The bridge deletes only a publication-selected retired collection after the publication owner proves no current,
+pending or live-view consumer can target/use it.
+
+```text
+delete exact collection with wait/terminal semantics
+→ exact exists/get observation says absent
+```
+
+Never reuse the collection name. Do not infer completion from list omission alone. If the request outcome or
+absence observation is uncertain, return unresolved and keep the durable cleanup row. Logical collection absence
+is not evidence that every backend file was physically reclaimed.
+
+Point operations do not create collections by design, but the delayed-point/delete race remains a required live
+case against the pinned server. The bridge has no cleanup journal; publication owns the finite unfinished row and
+backpressure.
 
 ## Errors
 
 Keep structured classes for authentication, missing/foreign generation, already-exists/identity conflict,
 resource limit, transport, definite pre-dispatch failure, unresolved attempt and malformed readback. Do not
-flatten them into receipt status or infer readiness from a matching fingerprint.
+flatten them into receipt status or infer readiness from a fingerprint.
 
 ## Focused checks
 
-Connected native ingestion/query, identical insert retry, foreign point conflict, fixed closure retry, native
-Document readback, explicit/empty/unknown scope, filtered IDF, response bounds, generation delete/absence and one
-shared runtime.
+Connected native ingestion/query; explicit update modes; identical insert retry; foreign conflict; fixed closure
+retry and missing-point refusal; native Document readback; explicit/empty/unknown scope; filtered IDF; response
+bounds; collection delete/absence including a delayed point attempt; and one shared runtime.

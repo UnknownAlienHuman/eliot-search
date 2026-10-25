@@ -1,10 +1,9 @@
 # Test and harness cutover
 
-Tests preserve selected product behavior, not pre-release package layout, receipts, waves or disconnected
-applications.
+Tests preserve selected product behavior, not pre-release topology, receipts, waves or disconnected applications.
 
 **Historical source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Current implementation-readiness checkpoint:** R046.
+**Current implementation-readiness checkpoint:** R047.
 
 ## Disposition rule
 
@@ -13,22 +12,33 @@ For each legacy test:
 1. **Delete** when it freezes source layout, package topology, receipts, obsolete features or a removed state
    machine.
 2. **Move the causal case** when it exposes behavior still owned by the current design.
-3. **Retain unchanged** only when it already executes the selected behavior through a real consumer.
+3. **Retain unchanged** only when it already executes selected behavior through a real consumer.
 
-Do not keep an obsolete API merely to preserve its fixture. Do not require broad suites before the connected
-path exists.
+Do not preserve an obsolete API to keep its fixture. Exact current caller inspection belongs to the code cut,
+not another repository-wide audit.
 
 ## Evidence order
 
-### During each code cut
+### During each production cut
 
 Run only:
 
 - the smallest locked Rust 1.98 `check` closure for changed production targets;
 - minimal Clippy for those targets and immediate consumers;
-- a focused causal case when the implementation now exists and is cheap to run.
+- one cheap focused causal case when the implementation now exists.
 
-### First connected smoke
+### Foundation smoke
+
+```text
+help/version performs no owner effects
+→ bounded bootstrap settings reach the actual root owner
+→ inspect absent/current/unsupported without writes
+→ initialize/open one plain current root
+→ second owner is refused
+→ close stores before dropping DataRootGuard
+```
+
+### First connected product smoke
 
 ```text
 initialize/open plain current root
@@ -41,22 +51,36 @@ initialize/open plain current root
 → exact retained excerpt
 ```
 
-This smoke precedes broad reconciliation, encrypted storage, live sessions, cleanup and optional formats.
+This smoke precedes broad reconciliation, encrypted storage, live sessions and cleanup.
 
-### Next focused cases
+### Convergence cases
 
-1. restart and exact reopen;
-2. stale source/preparation completion and A→B→A;
+1. restart/reopen exact root, object, source/prepared/view references;
+2. stale source/preparation completion and A→B→A/remove→add;
 3. lost wake-up reconciliation;
-4. identical insert-only retry and fixed closure retry;
-5. old view during new publication;
-6. rebuild/compaction and whole-generation cleanup;
-7. Exact, Continue/Expand and cancellation;
-8. stopped-root collection and archive/import.
+4. explicit `insert_only` identical retry after lost response;
+5. foreign/conflicting point refusal;
+6. fixed non-creating closure retry and readback;
+7. old view remains exact while the new sequence closes points;
+8. rebuild/compaction to a never-reused generation;
+9. retired generation is not targeted by new publication;
+10. collection deletion waits for all guards, uses terminal delete, verifies exact logical absence, never reuses
+    the name and keeps cleanup/backpressure on uncertainty;
+11. logical collection absence is not reported as physical disk erasure.
 
-Relevance and scale follow the working path.
+The pinned Qdrant 1.19 server/client path must execute these cases before release claims. Documentation and
+unit-level request construction are not evidence of backend race behavior.
 
-## Current removals
+### Later cases
+
+- Exact complete/incomplete semantics;
+- live Continue/Expand and partial-output fail-stop;
+- stopped-root local-object collection;
+- archive/import isolation;
+- selected optional formats/adapters;
+- relevance and scale on the connected product.
+
+## Current removal set
 
 Remove with last callers:
 
@@ -64,14 +88,14 @@ Remove with last callers:
 - config fingerprints/activation receipts;
 - root leases/owner slots;
 - duplicate object writers;
-- old query planner/handle/continuation stores;
-- publication proof/compensation/point-reclaimer stacks;
+- old planner/executor/handle/continuation stores;
+- publication proof/compensation/per-point reclaimer stacks;
 - pairing/loopback/legacy CLI sessions;
-- unavailable optional workers with no consumer.
+- unavailable optional workers with no selected consumer.
 
 Useful causal requirements move to their receiving owner: no-clobber object publication, conservative incomplete
 inventory, ABA-safe current rows, source-backed evidence, atomic view install, bounded framing/cancellation and
 owned-child cleanup.
 
-R031 check/Clippy covered materializer + unitizer only. R032–R046 documentation changes add no Rust/runtime
+R031 check/Clippy covered materializer + unitizer only. R032–R047 documentation changes add no Rust/runtime
 evidence.
