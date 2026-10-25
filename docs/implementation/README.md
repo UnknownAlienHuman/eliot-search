@@ -1,124 +1,169 @@
-# ELIOT Search — implementation
+# ELIOT Search — implementation spine
 
-Read the [architecture](../architecture/README.md) for purpose and observable behavior. This guide selects the
-current mechanisms, owners and delivery order. Nearest `FUNCTIONS.md` files own exact code seams; the
-[analysis registry](../audit/ANALYSIS_REGISTRY.md) owns revision-specific evidence and status.
+Read [architecture](../architecture/README.md) first. This document selects the shortest path to a working
+application. Nearest `FUNCTIONS.md` files own local seams and failure rules; the
+[analysis registry](../audit/ANALYSIS_REGISTRY.md) records evidence, not architecture.
 
-The original source baseline is `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`. The current branch is a
-pre-release refactor: correct existing code may remain, internal formats need no compatibility facade, and a
-package name or feature does not establish connected behavior.
+The product is pre-release. Internal APIs and formats need no compatibility facade. Preserve user files and sole
+retained copies, but remove obsolete process/receipt/proof machinery with its callers.
 
-## Target path
+## Final connected path
 
 ```text
 selected source
-→ stable acquisition and retained bytes
-→ current source head
-→ recoverable preparation and units
-→ real Qdrant effects
-→ atomic published metadata and view
-→ scoped query or exact operation
-→ pinned evidence lookup and retained excerpt
+→ stable acquired bytes
+→ immutable ObjectRef
+→ current SourceRecord
+→ PreparedRef / explicit gap
+→ Qdrant generation + atomic PublishedView
+→ scoped Search or Exact
+→ pinned EvidenceRef + verified retained excerpt
 → CLI/local-client result
 ```
 
-Every arrow has one owner. Durable input/outcome comparison recovers lost wake-ups; stale work cannot overwrite
-current state. Unsupported, empty, partial and failed outcomes remain distinct.
+Every arrow has one concrete owner. A package boundary may disappear; the responsibility may not.
 
-## Owners
+## Minimal shared values
 
-| Responsibility | Single current recipe |
-|---|---|
-| Root/config | [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [config](../../crates/search-config/FUNCTIONS.md) |
-| Source acquisition/current rows | [source overview](../../crates/search-source/README.md), [registry](../../crates/search-source/search-source-registry/FUNCTIONS.md), [reconcile](../../crates/search-source/search-source-reconcile/FUNCTIONS.md) |
-| Immutable retained objects | [revision store](../../crates/search-source/search-revision-store/FUNCTIONS.md), coordinated with #598 |
-| Preparation and unit continuity | [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
-| Retrieval identity and metadata | [point identity](../../crates/search-index-qdrant/search-point-identity/FUNCTIONS.md), [planner](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md) |
-| Qdrant effects/publication/cleanup | [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), [publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
-| Query, exact, evidence and windows | [query](../../crates/search-query/README.md), [exact](../../crates/search-query/search-exact/FUNCTIONS.md), [window](../../crates/search-query/search-continuation/FUNCTIONS.md) |
-| Protocol, child lifetime and CLI | [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [client](../../crates/search-provider-client/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
-| Stopped-root collection/archive/import | [maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md) |
+Do not design a universal contract crate around these names. They describe the information that must cross owner
+boundaries:
 
-An owner is a responsibility, not a required crate. Move useful behavior and real callers together; remove the
-replaced mechanism, exclusive fixtures and dependency edges in the same slice where practical.
+```text
+DataRootGuard      = retained root handle + one exclusive lock + current root metadata
+ObjectRef          = profile/kind + content address + exact length
+SourceRecord       = SourceId + non-reset row revision + current ObjectRef + current selection facts
+PreparedRef        = exact input ObjectRef + transform identity + prepared ObjectRef/outcome
+PublishedView      = generation + sequence + real redb read snapshot
+EvidenceRef        = point/source/prepared identity + exact representation/range
+RequestContext     = one absolute deadline + cancellation + finite counters
+```
+
+Vendor, OS and redb types remain private to their adapters where practical.
+
+## Execution rules that prevent deadlock
+
+1. **Configuration is incremental.** #333 is an umbrella, not a gate that must construct future owners. Slice 1
+   ships invocation capture, merge/validation and only root/plain-storage fields. Later slices add source,
+   Qdrant and query fields with their real consumer.
+2. **Plain storage is baseline.** Implement one current-format plain immutable-object writer/reader now. #598 may
+   later supply an encrypted profile through the same object boundary; it does not block source retention,
+   preparation, publication, query or CLI work.
+3. **Issues are ownership trackers, not prerequisites.** A vertical implementation cut may touch several issues.
+   Do not wait for every horizontal issue to close before connecting the next real consumer.
+4. **No throwaway product path.** The walking skeleton may support one explicit file, one-shot Search and one
+   generation, but it uses the final root/object/source/preparation/publication/query owners.
+5. **No speculative framework.** Add a trait, package, registry, worker or donor only for two real current
+   implementations or one concrete consumer.
+6. **One manager owns overlap.** Parallel work is limited to disjoint files. The integration manager resolves
+   interfaces and removes the replaced path in the same commit or immediately following bounded commit.
 
 ## Delivery sequence
 
-Independent preparation may proceed in parallel, but this is the shortest dependency order for a working
-application:
+### 1. Foundation: invocation, settings and root
 
-| Slice | Observable result | Primary issues |
-|---|---|---|
-| 1. Invocation, settings and root | One parsed invocation; validated typed settings reach actual constructors; explicit inspect/init/open and factual status | #333, #266, #360 |
-| 2. Source, object and preparation | One selected file is acquired once, retained, installed as current under an ABA-safe guard, prepared after restart and reconciled after lost wake-ups | #267, #270, #330, #331, #271 |
-| 3. Identity, Qdrant and publication | Stable retrieval identities, one real SDK runtime, atomic published evidence/view, restartable rebuild and finite cleanup | #259, #329, #263, #261, #300, #303 |
-| 4. Query, protocol and CLI | Explicit scope reaches Qdrant or Exact, resolves pinned retained evidence, supports bounded same-session paging and truthful cancellation/gaps | #272, #279, #291, #293, #275, #280, #332, #264 |
-| 5. Maintenance | Stopped-root object collection plus archive and fresh-destination import | #302, #244 |
-| 6. Product depth | Source-backed exact, orientation/comparison, documents and Git behavior through the same path | #249, #281, #227, #335; optional #219/#334/#336 |
+Issues: #333, #266, #360.
 
-A slice is complete only when the real producer reaches the real consumer, displaced paths and fixtures are
-removed, canonical documentation and the registry are updated, and the smallest relevant compiler/Clippy or
-runtime evidence is recorded. A constructor, receipt, feature flag or closed issue is not completion.
+Observable result:
 
-## Core implementation rules
+```text
+help/version without owner effects
+→ parse args_os once
+→ merge/validate bounded bootstrap settings
+→ inspect | initialize | open one current-format root
+→ retain one DataRootGuard
+→ factual status
+```
 
-### Source and preparation
+Only settings consumed here ship now: config locator/bounds, `data_root`, and `storage.profile = plain`.
+Qdrant/source/query settings remain absent until their owners are connected.
 
-Capture OS arguments/config once. Inventory explicitly selected roots with conservative retirement: an
-incomplete scan never proves absence. Acquire stable bytes once, retain them before installing the current head,
-and compare a non-reset current-row/registration guard so A → B → A and remove/re-add cannot revive stale work.
+### 2. Walking skeleton: one file to one CLI result
 
-One materialization feeds unitization and one prepared artifact. Do not reparse between adjacent trusted stages
-or maintain a second object writer. Supported complete empty input yields zero units; unsupported, truncated or
-cancelled input is an explicit gap. Reuse transformed work only when the actual parser/profile/context inputs
-match; source occurrence continuity follows the unitizer's one-old/one-new rule, not duplicate position.
+Coordinating issue: #264. Owner issues include #267, #270, #330, #331, #259, #263, #261, #272, #293, #280,
+#332.
 
-### Evidence, publication and Qdrant
+Implement the narrowest end-to-end path before broad reconciliation:
 
-Qdrant is derived retrieval state, not source evidence. redb stores compact current/published rows and real read
-snapshots; immutable objects hold bodies and larger unfinished effect pages. Published query-visible retrieval
-state is immutable for an old view. Changed meaning creates a new point or generation; citation-only changes stay
-in versioned evidence rows.
+```text
+explicitly select one supported file
+→ stable read once
+→ plain put_object
+→ commit one current source head
+→ materialize/unitize once
+→ persist one preparation result
+→ build one fresh Qdrant generation
+→ atomically install one PublishedView
+→ one one-shot Search
+→ resolve one pinned retained excerpt
+→ render CLI output
+```
 
-Publication fixes pending inputs before external effects, distinguishes observed state from unresolved late
-writers, commits evidence/inventory/current view atomically and installs the matching snapshot before visibility.
-Cleanup waits for relevant readers and possible writers. A timeout, reconnect or matching readback is not a fence
-against an earlier dispatched mutation.
+Temporary limits are explicit: one local account, plain storage, one file, one generation, one-shot request, no
+watcher, no live reconfiguration, no paging and no physical cleanup. These limits are not alternate
+architectures.
 
-Use one `qdrant_client::Qdrant` runtime for current publication and query operations. Native BM25 provides
-candidate order. The base population used for IDF is separate from request-only narrowing; an empty or missing
-statistics population must not silently widen or become proof of no content.
+This slice is the first product proof. Do not implement the complete reconciliation scheduler, optional formats,
+encrypted storage or general session protocol before this path works.
 
-### Query, exact and session lifetime
+### 3. Convergence and incremental publication
 
-A request pins one published view, resolves a non-widening scope and owns one absolute deadline/cancellation plus
-finite read/output limits. Select the page before source I/O, resolve exact metadata and verify retained bytes
-before emitting excerpts. Ranked top-k is navigation, never exhaustive absence.
+Issues: #271, #329, #261, #300, #303 plus affected source/preparation owners.
 
-Exact scans the stated pinned inventory independently of ranked nominations. Complete no-match requires every
-selected item in the declared representation to be verified and scanned without gaps.
+Add selected-root inventory, explicit/periodic reconciliation, restart/lost-wakeup recovery, ABA-safe source and
+preparation installation, incremental publication and rebuild/compaction.
 
-One process-local query window belongs to one live session. Continue/Expand never rerun the corpus or expose a
-locator destroyed on one-shot child exit. Cursor/window state advances only after complete bounded terminal
-output; partial output fails the session and commits no progress.
+Incremental Qdrant rules:
 
-### Maintenance and optional depth
+- new points use never-reused stable IDs and insert-only creation;
+- retries use the same fixed point bytes and verify exact readback;
+- closure writes one fixed exclusive `valid_until` and may repeat only that value;
+- individual points are never physically deleted in the baseline;
+- closed points remain until a fresh generation rebuild/compaction;
+- generation names are never reused;
+- whole-generation cleanup waits for live view guards, then deletes the collection and verifies absence.
 
-Local final-object collection is explicit stopped-root maintenance. Archive/import creates a fresh destination
-and never runs copied pending external operations against the original Qdrant collection. Protected storage
-uses only the accepted #598 object/key seam; do not inherit its retired six-domain/purge programme.
+Because a point is never deleted and recreated inside one generation, a delayed duplicate insert cannot reopen a
+closed point. This removes the need for isolated-route succession or a permanent possible-writer ledger.
 
-Navigation, comparison, documents and Git remain product requirements. Add syntax, model, document, overlay or
-MCP dependencies only with a real source-backed consumer using the same evidence path. Optional capability is
-not a reason to preserve an unavailable worker or build a provider registry.
+### 4. Exact and live session
 
-## Evidence policy
+Issues: #249, #275, #280, #332 and direct query/evidence owners.
 
-Use Rust 1.98 and locked dependencies. Run minimal compiler/Clippy for changed production owners and immediate
-consumers after code. Run focused causal/native/recovery/scale cases only when the implementation exists.
-Record exact SHA, platform, command and result in the registry.
+Add literal Exact over the pinned retained inventory, then one serviced framed live child session with
+Continue/Expand. One process-local `QueryWindow` owns final ordered evidence and one `PublishedView` guard.
+One-shot output exposes no reusable locator. Partial terminal output advances no cursor.
 
-Current unrun product cases include lost wake-up, stale completion, empty/gap transitions, same-root restart
-versus restored copy, exact retained lookup, duplicate edits, old-reader growth, delayed Qdrant mutations,
-immutable old-view retrieval, isolated-generation recovery, stopped-root collection, blocked I/O and actual
-retrieval quality/scale. Historical audit evidence explains counterexamples; it does not certify closure.
+### 5. Maintenance and product depth
+
+Issues: #302, #244, #281, #227, #335; optional #219/#239/#248/#334/#336.
+
+Add stopped-root local-object collection, archive/import, then source-backed orientation, comparison, document and
+Git behavior. Optional donors follow a measured consumer and cannot block the baseline.
+
+## Owners
+
+| Responsibility | Current recipe |
+|---|---|
+| Root/config | [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), [config](../../crates/search-config/FUNCTIONS.md) |
+| Source acquisition/current rows | [source](../../crates/search-source/README.md), [registry](../../crates/search-source/search-source-registry/FUNCTIONS.md), [reconcile](../../crates/search-source/search-source-reconcile/FUNCTIONS.md) |
+| Immutable objects | [object store](../../crates/search-source/search-revision-store/FUNCTIONS.md) |
+| Preparation | [materializer](../../crates/search-prep/search-materializer/FUNCTIONS.md), [unitizer](../../crates/search-prep/search-unitizer/FUNCTIONS.md) |
+| Control/identity/Qdrant | [control](../../crates/search-control-redb/FUNCTIONS.md), [point identity](../../crates/search-index-qdrant/search-point-identity/FUNCTIONS.md), [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
+| Publication/view/cleanup | [publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Query/evidence/window | [query](../../crates/search-query/README.md), [Exact](../../crates/search-query/search-exact/FUNCTIONS.md), [window](../../crates/search-query/search-continuation/FUNCTIONS.md) |
+| Protocol/client/CLI | [protocol](../../crates/search-provider-protocol/FUNCTIONS.md), [client](../../crates/search-provider-client/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md) |
+| Offline maintenance | [maintenance](../../crates/search-runtime/search-retention/FUNCTIONS.md) |
+
+## Slice completion contract
+
+A slice is complete when:
+
+- its real entrypoint reaches its real consumer;
+- state/effect ownership is direct and factual;
+- the obsolete path and exclusive fixtures are removed or explicitly named as the next bounded removal;
+- unsupported states fail without writes or silent widening;
+- the smallest relevant Rust 1.98 compiler/Clippy closure ran;
+- the registry records exact SHA, paths, command/result and unrun behavior.
+
+Broad suites, native crash matrices, relevance and scale work follow the connected implementation. They do not
+block writing the first production path.

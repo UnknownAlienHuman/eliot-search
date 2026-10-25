@@ -1,63 +1,60 @@
 # Working on ELIOT Search
 
-Start with the [documentation index](docs/README.md). Read the
-[architecture](docs/architecture/README.md) for purpose and observable behavior, then the
-[implementation guide](docs/implementation/README.md) for selected mechanisms and delivery order. Load only the
-nearest owner recipe and actual callers needed for the current change.
+Start with [docs/README.md](docs/README.md), then read the
+[architecture](docs/architecture/README.md), the
+[implementation spine](docs/implementation/README.md), and only the nearest owner recipe needed for the current
+vertical cut.
 
-The maintainer's current request governs. Audit tables record findings and uncertainty; they are not a second
-specification, permission system or prerequisite for coding. Historical waves, package contracts and generated
-status files cannot restore retired compatibility, cryptographic or process requirements.
+## One manager, one vertical cut
 
-## Implement behavior, not diagrams
+Use one manager-owned worktree. The manager owns the integration boundary and commit. Parallel workers may inspect
+or implement disjoint files, but they do not invent competing interfaces or merge overlapping owner changes.
 
-Trace the real input, owner and consumer. Reuse correct code; change the defective responsibility and its
-immediate consumers together, then remove the replaced path. A type sketch, donor API, package row or issue
-number is not an instruction to create a class, trait, crate, registry or worker.
+Before code, name:
 
-Use direct calls and ordinary data first. Isolate a real dependency, state, effect or repeated policy only where
-it helps the current operation. Internal and pre-release APIs need no compatibility facade. Reject unsupported
-stored roots before writes and preserve original files and sole retained copies.
+1. the real entrypoint;
+2. the concrete owner/effect being changed;
+3. the immediate real consumer;
+4. the obsolete path removed by the same cut;
+5. the smallest Rust 1.98 `check`/Clippy closure.
 
-## Documentation authority
+Then implement that path. Do not restart a repository-wide audit, create another control plane, or block code on
+historical packets, receipts, package counts, broad tests, optional donors, or unrelated open issues.
 
-A rule has one home:
+## Baseline is deliberately unblocked
 
-- architecture owns product purpose and observable requirements;
-- implementation owns selected mechanisms, ownership and delivery order;
-- nearest `FUNCTIONS.md` owns exact code seams and failure rules;
-- product documents own user-visible workflows;
-- the analysis registry owns current evidence, checkpoint and unrun work;
-- the donor register owns versioned upstream facts and applicability limits.
+The first working product uses:
 
-Other READMEs and issues link to the owner instead of copying another algorithm. When a conflict is found,
-correct the owning document and affected indexes/issues in the same change.
+- one parsed invocation and small typed settings;
+- one current-format root guard;
+- the **plain** immutable-object profile;
+- one explicitly selected file;
+- one retained source head and one preparation result;
+- one fresh Qdrant generation;
+- one one-shot Search request;
+- one pinned evidence lookup and CLI result.
 
-## Verification and records
+The encrypted object profile is optional. #598 owns that profile only after an accepted public handoff; it is not
+a prerequisite for the plain baseline. Do not inspect or modify #598's private branch/worktrees.
 
-Use the pinned compiler and minimal Clippy closure for changed production owners and immediate consumers.
-Broader tests, native recovery and scale work follow the implementation they exercise. No receipt, source-shape
-check or package count substitutes for behavior.
+Configuration grows with consumers. Slice 1 implements only invocation/root/plain-storage settings. Source,
+Qdrant and query fields are added in the slice that constructs their real owner. Do not create speculative
+settings, adapters or readiness flags.
 
-For every published slice:
+## Publication safety without a recovery operating system
 
-1. verify the actual PR head and inspect intervening commits;
-2. record inspected paths, finding, decision, changed owner and unrun work in
-   [the registry](docs/audit/ANALYSIS_REGISTRY.md);
-3. update canonical documentation and indexes without creating a duplicate status system;
-4. synchronize the owning issue, #352 and PR #610 when their current-state summary changes;
-5. report only checks that actually ran.
+New Qdrant points are immutable and created with insert-only semantics. A retry carries the same fixed point ID
+and bytes. Closing a point writes the same fixed `valid_until` boundary. The baseline never physically deletes
+individual points, so a delayed duplicate create cannot resurrect a deleted ID. Compaction/rebuild creates a
+never-reused generation; cleanup deletes only whole retired generations after readers release them.
 
-## Current work
+Do not reintroduce per-operation ledgers, isolated-route succession, point-deletion receipts or a second
+publication state machine.
 
-Preparation remains in [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610). Resume from the
-[registry checkpoint](docs/audit/ANALYSIS_REGISTRY.md#resume-after-interruption) and its
-[evidence index](docs/audit/ANALYSIS_REGISTRY.md#evidence-index), not from chat summaries or default-branch code
-search.
+## Authority and verification
 
-Use [#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) for real overlap coordination. Do not
-inspect, reset or compete with #598's unpublished object/key branch or worktrees; consume only its accepted public
-handoff. That protection applies to its owned files, not to unrelated repository work.
+Architecture owns user-visible requirements. Implementation owns delivery order and cross-owner invariants.
+Nearest `FUNCTIONS.md` owns exact seams. The registry records evidence and unrun work; it is not permission.
 
-Use one manager-owned worktree when working locally. Ordinary commits, PR review and the existing registry are
-enough; do not create another packet, lease, receipt, evaluator or agent-control plane.
+After production code, run the smallest locked Rust 1.98 compiler/Clippy closure for changed owners and immediate
+consumers. Focused runtime cases follow when the path exists. Record only commands that actually ran.

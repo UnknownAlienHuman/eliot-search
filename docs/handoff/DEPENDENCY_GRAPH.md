@@ -1,68 +1,57 @@
 # Current implementation dependency graph
 
-The target is one application with concrete owners. This path is not connected in the current binary.
-Package boundaries may shrink or disappear; the graph records data dependencies, not a permanent crate topology
-or a recovery algorithm. The [owner recipes](../implementation/README.md#owners) define each operation.
+The target is one application with concrete owners. Package boundaries may shrink; the graph records data and
+effect dependencies, not permanent crate topology.
 
 ```mermaid
 flowchart TD
-    source[Selected source] --> retained[Retained bytes and current head]
-    retained --> prepared[Prepared units and maps]
-    prepared --> publication[Publication]
-    publication -->|fixed effects| qdrant[Qdrant generation]
-    publication -->|atomic metadata commit| view[Published view and redb snapshot]
-    cli[CLI session] -->|framed request| query[Direct query handler]
-    view -->|pin| query
-    query -->|scoped retrieval| qdrant
-    qdrant -->|ranked point IDs| evidence[Evidence lookup and retained read]
-    view -->|exact metadata| evidence
-    retained -->|source bytes| evidence
-    evidence --> result[Result and optional session window]
+    cli[CLI / explicit one-file command] --> settings[Invocation + typed bootstrap settings]
+    settings --> root[DataRootGuard]
+    root --> acquire[Stable selected-file read]
+    acquire --> object[Plain immutable ObjectRef]
+    object --> source[Current SourceRecord]
+    source --> prep[PreparedRef / gap]
+    prep --> pub[Serialized publication]
+    pub --> qdrant[Fresh or current Qdrant generation]
+    pub --> view[Atomic PublishedView + redb snapshot]
+    cli --> query[Direct Search/Exact handler]
+    view --> query
+    query --> qdrant
+    qdrant --> evidence[Point ID → pinned evidence]
+    view --> evidence
+    object --> evidence
+    evidence --> result[Verified excerpt / optional QueryWindow]
 ```
 
-The query owns scope, deadline/cancellation and finite limits. Exact uses the retained reader directly; it
-does not take its domain from ranked nominations. One client owns child stdio. Bodies and unfinished effect
-pages stay in the shared object store; compact current/published metadata stays in redb. A view owns the real
-read snapshot, not a manifest copied into a second index. Qdrant does not become the evidence store.
+## First walking skeleton
+
+The first integration cut follows the whole graph for one explicit local file, plain storage, one fresh
+generation and one one-shot Search result. It deliberately omits watcher, broad inventory, encryption, paging and
+cleanup, but it uses the final owners and types.
+
+After that proof:
+
+1. add startup/explicit/periodic reconciliation and incremental publication;
+2. add Exact and live-session windows;
+3. add rebuild/compaction and whole-generation cleanup;
+4. add stopped-root maintenance and optional product depth.
+
+This order avoids horizontal packages that cannot be exercised.
 
 ## Ownership rules
 
-- Source bytes have one immutable object owner. redb stores references, not duplicate bodies.
-- Qdrant is a derived retrieval index. It never owns source evidence or durable publication recovery.
-- `PublishedView` is the immutable query snapshot. Source registry/current control state is not a second query
-  snapshot.
-- Publication is the only Qdrant mutation/recovery/current-view owner.
-- Query reads have no durable operation journal.
-- Optional restricted clients, model providers, overlays, connectors, orientation and comparison exist only
-  after a real consumer/implementation is selected. They narrow or enrich this graph; they do not create a
-  parallel application.
+- retained objects are the source of evidence;
+- redb owns compact current/published state and real read snapshots;
+- Qdrant is derived retrieval state;
+- publication is the only Qdrant mutation/current-view owner;
+- query pins one `PublishedView` and has no durable journal;
+- configuration fields appear only with a real consumer;
+- plain storage is baseline; #598 encrypted storage is optional;
+- individual Qdrant points are not physically deleted in the baseline;
+- optional adapters enrich the same path and never create a parallel application.
 
-## Interfaces
+Use concrete methods. Add a narrow consumer-owned trait only for multiple real current implementations. Test
+fakes remain private.
 
-Use concrete owner methods. A narrow trait is local to a consumer only when multiple real implementations
-exist. There is no global `search-ports` registry, service locator, effect bus or conformance catalogue.
-
-```text
-one implementation        → concrete type/method
-multiple current adapters → smallest consumer-owned trait
-test fake only             → private/local fake, not public product architecture
-```
-
-Cross-package shared types live in `search-contracts` only when at least two real current owners use them.
-Vendor/redb/OS types stay private to their adapter where useful.
-
-## Cutover order
-
-The [implementation order](../implementation/README.md#order-and-evidence) and
-[#352](https://github.com/UnknownAlienHuman/eliot-search/issues/352) connect source/preparation, publication,
-query and the local client. Implement rebuild/cleanup with publication's real recovery state; they are not a
-separate legacy rebuild platform. Product depth follows actual producers, and independent cuts can proceed
-without waiting for every earlier box. The [caller map](../../bins/eliot-searchd/FUNCTIONS.md#query-publication-and-rebuild-boundaries)
-identifies the disconnected owners being replaced.
-
-Every slice connects the real producer and consumer and removes the replaced mechanism. A trait, adapter,
-receipt, capability, issue or test fixture is not delivery.
-
-The former Architecture 8.4 graph at commit `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`
-is historical evidence only. It cannot restore the global port catalogue, wave dependencies or pre-release
-compatibility requirements.
+See the [delivery sequence](../implementation/README.md#delivery-sequence), the affected owner recipe and #264.
+Every cut connects a real producer to a real consumer and removes the displaced mechanism.

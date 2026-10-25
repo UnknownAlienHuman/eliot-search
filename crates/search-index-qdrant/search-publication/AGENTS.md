@@ -1,16 +1,24 @@
 # Working on publication
 
-Read the [manifesto](../../../docs/architecture/README.md), [implementation](../../../docs/implementation/README.md)
-and [FUNCTIONS.md](FUNCTIONS.md). Change the real planner, metadata, bridge, view and query consumers together.
+Read the [implementation spine](../../../docs/implementation/README.md), local
+[FUNCTIONS.md](FUNCTIONS.md), the [bridge](../search-qdrant-bridge/FUNCTIONS.md) and
+[control](../../search-control-redb/FUNCTIONS.md).
 
-Use compact evidence rows in redb and pin the actual read snapshot. Same-generation evidence changes and the
-current-view update commit atomically after Qdrant readback; large rebuilds fill separate staging-generation
-tables. Do not implement a second manifest B-tree, per-view full copy or generic temporal-record framework.
+Implement one serialized publisher and one pending artifact with actual bounded Qdrant inputs.
 
-Bound the incremental metadata delta before external work. Partial expected mutation progress is retried per
-item, not reported as corruption. Keep only unfinished pending/cleanup state. No database or I/O work under
-the view-manager lock. Local object collection runs only with the daemon stopped and its root lock acquired;
-do not restore the old ObjectGcGate protocol or lease platform.
+Baseline invariants:
 
-Preserve useful existing code. Implement the selected slice and use minimal changed-owner check/Clippy;
-runtime fault/scale evidence follows implementation, not a receipt or review gate.
+- new points are immutable and use insert-only creation;
+- retry only the same fixed point value and verify exact readback;
+- closure writes one fixed `valid_until` value;
+- never physically delete individual points;
+- compaction/rebuild creates a fresh never-reused generation;
+- cleanup deletes whole retired generations after all view/window guards are gone;
+- one redb transaction installs evidence/inventory/current and removes pending;
+- the matching redb snapshot is installed before reporting visibility;
+- local object collection is stopped-root maintenance.
+
+Do not implement isolated-route succession, possible-writer receipts, per-point cleanup journals, full manifest
+copies or another publication state machine. Change bridge/control/view/query consumers together. After code run
+minimal Rust 1.98 compiler/Clippy for actual changed owners, then focused retry/closure/view/restart/generation
+cases.
