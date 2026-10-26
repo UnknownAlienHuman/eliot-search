@@ -23,22 +23,21 @@ compatibility code, a second route or another registry.
 |---|---|
 | Understand product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
 | Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → nearest owner recipe → actual callers |
-| Resume interrupted work | [R052 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
+| Resume interrupted work | [R053 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
 | Change donor/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner |
 | Move/delete legacy tests/code | [Test cutover](implementation/TEST_CUTOVER.md) → exact current caller search |
 | Inspect ownership graph | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
 
-## Current status — R052
+## Current status — R053
 
-R052 inspects Qdrant 1.20 payload-index defaults and exact tokenizer/filter/scoring behavior, then freezes a small
-explicit baseline:
+R052 froze the exact Qdrant 1.20 lexical baseline:
 
 ```text
 PhysicalTextIndexProfileV1:
   vectorless one-shard collection
   retrieval_text Text index
   Code tokenizer, lowercase
-  no ascii folding, phrase matching, stemmer, stopwords, token limits or nested path
+  no ASCII folding, phrase matching, stemmer, stopwords, token limits or nested path
   BM25 scoring
   payload HNSW disabled
   Stage-2 memory=Pinned
@@ -49,21 +48,31 @@ QueryScoringProfileV1:
   no score threshold
 ```
 
-Physical schema/resource changes create a fresh generation. Query-time k/b changes do not. Stage 3A chooses
-`Pinned|Cached|Cold` explicitly per measured corpus profile.
+R053 then traced the current Windows publication code and found a reachable counterexample: legacy
+`--register-source-root`/`--unregister-source-root` reaches `registration_native::rename`, which passes a relative
+leaf plus non-null parent handle through the Win32 `SetFileInformationByHandle(FileRenameInfo)` wrapper. That route
+must not be reused as the root/object finalizer.
 
-Stage 2 creates no filter indexes because one file is the complete selected population. Stage 3A creates only real
-source/access/path-kind indexes, also with HNSW disabled and explicit memory.
+Selected Windows boundary:
 
-The Code tokenizer supplies subwords and joined camel/snake identifiers to ranking queries; no local alias expansion.
-Free text is any-token nomination. Full-text filters require all subwords in any order and are not exact identifiers
-or phrases. Exact punctuation/location remains retained-source Exact.
+```text
+opened stage handle + retained destination-directory handle + relative final leaf
+→ direct owner-private native rename information call, replacement disabled
+→ exact status/ABI validation
+→ reopen through retained parent
+→ exact identity/bytes verification
+```
 
-Query asks Qdrant for no vectors and only evidence-routing payload. Excerpts always come from pinned immutable
-objects. Readiness requires exact schema/resource readback and deterministic TextQuery canary.
+The operation remains a canary until executed on the exact supported Windows/filesystem profile. Unsupported
+profiles refuse; there is no path-only fallback and no generic filesystem framework. The legacy source-root route
+is removed with its callers during the Foundation/source cut rather than strengthened as a compatibility platform.
 
-The repository still locks client 1.19.0. No Rust/runtime change is claimed. Foundation, Windows finalization,
-Qdrant 1.20, explicit text-index profile, walking skeleton, restart, relevance and scale remain unrun.
+Physical schema/resource changes create a fresh Qdrant generation. Query-time k/b changes do not. Stage 2 creates
+no filter indexes. Query requests no vectors and only evidence-routing payload; excerpts come from pinned immutable
+objects.
+
+The repository still locks `qdrant-client 1.19.0`. No Rust/runtime change is claimed. Foundation, native Windows
+finalization, Qdrant 1.20, walking skeleton, restart, relevance and scale remain unrun.
 
 ## Focused supporting material
 

@@ -6,149 +6,144 @@ unrun work; it is not architecture, permission or an implementation prerequisite
 <a id="resume"></a>
 ## Resume
 
-**Checkpoint:** R052, 2026-10-26 — Qdrant 1.20 physical/resource defaults and exact text/filter semantics frozen.  
+**Checkpoint:** R053, 2026-10-26 — active Windows publication route traced; Win32 wrapper rejected.  
 **Branch:** `codex/refactor-preparation-20261017`, PR #610.  
-**Inspected ELIOT head:** `87c84c24aaac7820f2b418d1cbbde2ef91e4e35a` (R051).  
+**Inspected ELIOT head:** `8942d823f5c52392ee42a8d62ae5181748091060` (R052).  
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
 Read [docs/README](../README.md), the [implementation sequence](../implementation/README.md#delivery-sequence),
 then only the affected owner recipe, current callers and owning issue.
 
-R052 changes documentation only. Product remains unimplemented. Next implementation is Foundation plus Windows
-handle-finalization canary, then exact Qdrant 1.20 dependency/schema/query cut and #264.
+R053 changes documentation only. Product remains unimplemented. Next implementation remains Foundation, but its
+first Windows code slice is now an exact native-finalization canary rather than reuse of the reachable legacy Win32
+wrapper.
 
-## R052 inspected evidence
+## R053 inspected evidence
 
-### Qdrant Rust client v1.20.0
-
-Inspected:
-
-- `TextIndexParamsBuilder` including `disabled_stemmer`, `phrase_matching`, `enable_hnsw`, `memory`, BM25 scoring;
-- `KeywordIndexParamsBuilder` including HNSW/memory/prefix/tenant settings;
-- `CreateFieldIndexCollectionBuilder` and official keyword-index snippet;
-- `QueryPointsBuilder` response selectors;
-- primitive conversions for `with_payload(Vec<&str>)` and `with_vectors(bool)`;
-- `TextQueryBuilder` defaults and request-time k/b;
-- generated Memory enum.
-
-### Qdrant Server v1.20.0
+### Upstream platform material
 
 Inspected:
 
-- `TextIndexParams` actual defaults and schema serialization;
-- BM25 REST validation (`k >= 0`, `0 <= b <= 1`);
-- Code tokenizer implementation;
-- full-text scorer/filter implementation (`TextQuery` any token; `MatchText` all filter-query tokens);
-- text-statistics behavior and payload-index HNSW/resource fields.
+- `tempfile 3.27.0` Windows `persist_noclobber`: path-based `SetFileAttributesW` + `MoveFileExW`;
+- Microsoft `FILE_RENAME_INFO` / `SetFileInformationByHandle` / `NtSetInformationFile` documentation;
+- native rename information semantics for replacement-disabled relative names;
+- current reports and disassembly showing the Win32 wrapper absolutizes a relative destination while retaining
+  non-null `RootDirectory`, producing an invalid parameter combination;
+- Qdrant Rust client/server 1.20 material already recorded by R051/R052.
 
-### ELIOT owners checked
+### ELIOT source and active route
 
-Lexical profile, bridge, query owner/executor, control/evidence, implementation/test spine, donor/analysis registers,
-configuration/publication/product/release programme metadata.
+At R052 head inspected:
+
+- `bins/eliot-searchd/src/owner_composition/kernel/registration_native.rs`;
+- `registration_mutation.rs`;
+- `secure_commands/kernel/source_registration.rs`;
+- `secure_commands/kernel/entry.rs`;
+- root/object owner recipes and daemon map;
+- issue #360 and current programme handoff.
+
+The source already uses direct `NtCreateFile` for relative child opens. Its `registration_native::rename` then
+constructs a rename information buffer and calls the Win32 `SetFileInformationByHandle` wrapper. The legacy
+`--register-source-root`/`--unregister-source-root` command dispatch reaches that mutation path.
 
 ## Findings and decisions
 
-### F1 — hidden payload-index defaults would create unowned resource behavior
+### F1 — the selected R049/R052 Win32 call was not a safe implementation prescription
 
-Qdrant text and keyword payload indexes default `enable_hnsw=true` and memory to `Pinned`. R051 did not set either.
-This could create additional payload-aware graph work when collection HNSW settings allow it and silently pin large
-indexes in RAM.
+R049/R052 correctly rejected path-based `MoveFileExW`, but still told the implementer to use
+`SetFileInformationByHandle(FileRenameInfo/FileRenameInfoEx)` with a non-null retained parent and relative leaf.
+That exact Win32 wrapper form is not a demonstrated handle-relative operation on current Windows.
 
-**Decision:** every physical index profile explicitly sets resource behavior. Stage 2 text index uses
-`enable_hnsw=false`, `memory=Pinned`. Stage 3A explicitly selects `Pinned|Cached|Cold` per corpus profile and measures
-RAM/cache/disk. Real keyword/filter indexes also disable HNSW and set memory. No hidden defaults.
+**Decision:** remove the Win32 wrapper from selected architecture. The supported candidate is a tiny owner-private
+direct native file-information call over the opened source handle and retained parent handle, with exact native
+status/`IO_STATUS_BLOCK` validation and ordinary relative reopen/readback.
 
-### F2 — physical schema and query scoring were conflated
+The exact information class/buffer is chosen only after an executed canary; documentation does not pretend that
+one struct layout is already qualified.
 
-R051 placed query-time k/b beside physical retrieval profile and implied profile changes rebuild collections.
-Qdrant documents k/b as request-time parameters.
+### F2 — the repository already contains the same defective pattern
 
-**Decision:** split:
+`registration_native::rename` uses the exact unsafe wrapper shape. It is not isolated test code: current secure
+command dispatch exposes source-root registration/unregistration and reaches it through `CatalogCustody::publish`.
+
+**Decision:** treat this path as a current counterexample and removal target. Do not reuse it for Foundation or
+objects, and do not strengthen the old backup/phase/custody protocol merely to save one native helper. Move only
+verified relative-open/native-identity techniques into the current owner, then delete the legacy route and wrapper
+with callers.
+
+### F3 — direct native reuse can remain small
+
+The repository already has an owner-private `ntdll` FFI seam and ABI assertions for `NtCreateFile`. A current
+finalizer therefore does not require a platform framework, provider service or dependency inversion layer.
+
+**Decision:** one current root/object platform module may own:
 
 ```text
-PhysicalTextIndexProfile
-  field/filter schema, tokenizer, normalization, scoring-index enablement,
-  text composition, shard layout, index residency
-
-QueryScoringProfile
-  k, b, semantic version
+relative create/open through retained parent
+native no-replace finalization of opened stage
+relative reopen/readback
+native identity/kind verification
 ```
 
-Stage 2 fixes k=1.2, b=0.75 and validates finite upstream ranges. Changing only k/b does not rebuild. A request/window
-captures the profile. No baseline score threshold.
+It owns no source registration, backup phases, receipts, migration or generic file API.
 
-### F3 — “no stemmer/phrase” needed explicit builder calls and readback
+### F4 — the canary must be a falsifiable support boundary
 
-Omission relies on server defaults and can change silently across versions. `TextIndexParamsBuilder` exposes
-`disabled_stemmer`, `phrase_matching(false)`, `ascii_folding(false)` and `enable_hnsw(false)`.
+Before Windows Foundation is advertised, execute:
 
-**Decision:** Stage-2 exact text schema is:
+- ABI/offset/buffer-length checks for supported architecture;
+- exact access/share flags;
+- absent-destination success and existing-destination refusal;
+- relative leaf only and no traversal;
+- parent/path replacement resistance;
+- same-volume and unsupported-filesystem behavior;
+- failed-call stage/final classification;
+- crash debris and exact relative reopen/readback;
+- bounded native status mapping;
+- truthful file-data versus namespace/sudden-power durability claims.
+
+Failure means the platform profile is unsupported. There is no Win32-wrapper/path-only fallback.
+
+## Preserved R052 Qdrant decisions
+
+Stage-2 physical Text index remains explicit:
 
 ```text
-Code tokenizer
-lowercase=true
-ascii_folding=false
-phrase_matching=false
-stemmer=Disabled
+vectorless one-shard collection
+retrieval_text Text index
+Code tokenizer; lowercase=true
+ascii_folding=false; phrase_matching=false; stemmer disabled
 stopwords/min/max/nested absent
-scoring=BM25
+BM25 scoring
 enable_hnsw=false
 memory=Pinned
 ```
 
-Readiness compares every field. Physical schema change creates a fresh generation.
-
-### F4 — Code tokenizer has different ranking and filter semantics
-
-Official implementation gives ranking queries subwords plus joined camel/snake identifiers. Filter queries receive
-subwords only. Full-text `MatchText` requires all tokens in any order; `TextQuery` scores any matching term.
-
-**Decision:** no local identifier aliases. Free text remains any-token nomination. Typed required/excluded text
-filters, if exposed, are all-subword conditions—not exact identifiers or phrases. Exact punctuation/name/location
-uses Exact or a separately selected exact keyword producer.
-
-### F5 — Stage 2 did not need filter indexes
-
-The one-file collection is the entire selected population; it sends no candidate filter or `idf.corpus`.
-
-**Decision:** Stage 2 creates only the text index. Stage 3A creates source/access/path-kind indexes only when real
-multi-source/access queries exist. Prefix/tenant optimization appears only for a concrete query pattern.
-
-### F6 — query response was not minimized explicitly
-
-A Qdrant hit only needs point ID plus evidence-routing payload. Returning vectors or retrieval text duplicates data
-and increases response/memory cost.
-
-**Decision:** query sets `with_vectors(false)` and a payload include selector for only routing keys, normally
-`source_id`. Excerpts always come from pinned retained evidence/object reads.
-
-### F7 — readiness needed both semantic and resource canaries
-
-Schema/point readback does not prove TextQuery scoring, tokenizer behavior or memory/HNSW settings.
-
-**Decision:** readiness includes exact schema comparison, deterministic TextQuery expected order, Code tokenizer
-subword/joined cases, any-token ranking, all-token filter behavior, response projection and k/b validation.
+Query profile remains separate: k=1.2, b=0.75, finite/range validated, no threshold. Stage 2 creates no filter
+indexes; query returns no vectors and only evidence-routing payload. Stage 3A selects filter/index residency
+explicitly and measures it. The repository lock remains Qdrant client 1.19; the code cut upgrades all 1.20 pieces
+together.
 
 ## Current implementation sequence
 
 | Stage | Observable result | Primary owners |
 |---|---|---|
-| 1 Foundation | root/plain settings; handle-safe initialize/open; one guard; status | #333/#266/#360 |
-| 2 Walking skeleton | one file → ObjectRef → retrieval text → explicit vectorless Text index → TextQuery canary/query → retained CLI excerpt | #264 and vertical owners |
+| 1 Foundation | direct-native Windows finalization canary; root/plain settings; manifest-last initialize/open; one guard; status | #333/#266/#360 |
+| 2 Walking skeleton | one file → ObjectRef → retrieval text → explicit Qdrant 1.20 Text index → TextQuery canary/query → retained CLI excerpt | #264 and vertical owners |
 | 3A correctness/reference | restart; inventory; explicit filter/residency profile; complete generation/view; budget matrix | #270/#271/#331/#261/#300/#303 |
 | 3B conditional optimization | source-local diff/identity/mutation only where 3A budgets fail | #259/#329/#261/#263 |
 | 4 Exact/session | retained-source Exact and one framed live QueryWindow | #249/#275/#280/#332 |
 | 5 Maintenance/depth | stopped-root maintenance and selected product leaves | #302/#244/#281/#227/#335 |
 
-## Anti-bureaucracy / lock rules
+## Anti-bureaucracy and lock rules
 
 - Issues are owners, not dependency order.
 - One manager owns each vertical cut; parallel writes are disjoint.
 - No hidden server defaults, backend abstraction, alias manager, custom-shard fusion, watcher ledger, init journal,
   query scheduler/tickets, lexical qualification receipts or operation archive.
-- No redb writer/view mutex/window mutation borrow spans object/Qdrant/process/model I/O.
-- Complete build + physical-schema comparison + deterministic TextQuery canary + durable evidence commit precede
-  view installation.
+- No new native abstraction layer: one private current root/object platform module only.
+- No redb writer/view mutex/window mutation borrow spans object/Qdrant/process/model/native publication I/O.
+- Complete build + schema/canary + durable evidence commit precede view installation.
 - Last view drop only wakes cleanup.
 - Current-caller search is local to code moved/deleted.
 - Minimal Rust 1.98 check/Clippy follows production cuts; broad evidence follows connected behavior.
@@ -158,21 +153,17 @@ subword/joined cases, any-token ranking, all-token filter behavior, response pro
 
 | Area | Status |
 |---|---|
-| Qdrant 1.20 builder/server default inspection | CHECKED for named tag/files |
-| Exact physical text profile V1 | SELECTED, not compiled/executed |
-| HNSW disabled / explicit memory | SELECTED, not measured |
-| Code ranking vs filter token semantics | CHECKED upstream, not executed in ELIOT |
-| Physical/query-profile separation | SELECTED, not implemented |
-| k/b validation/no threshold | SELECTED, not executed |
-| Minimal payload/no vectors | SELECTED, not executed |
-| Stage-2 no filter indexes | SELECTED, not implemented |
-| Windows handle finalizer | SELECTED CANARY, unimplemented |
-| Qdrant dependency/server upgrade | NOT DONE; lock remains 1.19 |
+| Active legacy Win32 rename route | CHECKED reachable by static caller trace |
+| Win32 wrapper suitability for relative parent handle | REJECTED as selected finalizer |
+| Direct native rename candidate | SELECTED CANARY, not implemented/executed |
+| Existing direct `NtCreateFile` seam | CHECKED source, not qualified for new finalizer |
+| Exact Qdrant physical text profile V1 | SELECTED, not compiled/executed |
+| Qdrant client/server upgrade | NOT DONE; lock remains 1.19 |
 | Compiler evidence | R031 materializer + unitizer only |
 | Foundation/walking skeleton/current binaries | UNRUN |
-| Windows/live Qdrant/restart/relevance/scale/end-to-end | UNRUN |
+| Windows durability/live Qdrant/restart/relevance/scale/end-to-end | UNRUN |
 
-No donor source inspection proves ELIOT correctness.
+No static donor/source inspection proves correctness.
 
 ## Immutable prior records
 
@@ -183,11 +174,12 @@ No donor source inspection proves ELIOT correctness.
 - R048: donor/analogue synthesis `fed10c1e`.
 - R049: Qdrant 1.20/platform-finalization correction `9edd2c1d`.
 - R050: active Qdrant-owner synchronization `a4c23110`.
-- R051: exact query/schema API and query/preparation/control reconciliation `87c84c24`.
-- R052: explicit index resources, physical/query profile separation and exact tokenizer/filter semantics.
+- R051: exact Qdrant query/schema reconciliation `87c84c24`.
+- R052: explicit Qdrant text-index resource/query semantics `8942d823`.
+- R053: active Win32 wrapper trace and direct-native finalization correction.
 
 ## Next action
 
-Implement Foundation and native Windows finalization canary; run minimal compiler/Clippy; then upgrade the exact
-Qdrant client/server/schema/query profile and implement #264. Do not begin hidden-default schema, sparse BM25,
-alias expansion, filter indexes without consumers, occurrence matching, sequence/closure or optional profiles first.
+Implement the smallest direct-native Windows finalization canary in the current root/object owner without reusing
+the legacy source-registration publication platform. Run minimal compiler/Clippy and the focused native cases. Then
+complete Foundation, upgrade the exact Qdrant client/server/schema/query profile and implement #264.
