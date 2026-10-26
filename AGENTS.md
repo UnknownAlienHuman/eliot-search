@@ -11,16 +11,16 @@ evidence only.
 
 ## One manager, one vertical cut
 
-Use one manager-owned worktree. The manager owns the integration boundary, interface decisions and commit.
-Parallel workers may inspect or change disjoint files, but must not invent overlapping interfaces, merge their own
-branches or create a second implementation route.
+Use one manager-owned worktree. The manager owns interfaces, integration and commit. Parallel workers may inspect
+or change disjoint files, but must not invent overlapping interfaces, merge their own branches or create a second
+implementation route.
 
 Before code, name:
 
 1. real entrypoint;
 2. concrete owner/effect;
 3. immediate real consumer;
-4. obsolete route removed by the cut or the next explicitly bounded cut;
+4. displaced route removed by this cut or next bounded cut;
 5. smallest locked Rust 1.98 `check` and Clippy closure.
 
 Then implement. Do not restart a repository-wide audit, create another control plane or block code on package
@@ -30,57 +30,47 @@ counts, optional donors, broad tests, unrelated issues or private work.
 
 ```text
 1 Foundation
-→ 2 one file / plain ObjectRef / preparation
+→ 2 one file / ObjectRef / preparation
     / Qdrant 1.20 scoring full-text generation / TextQuery / CLI excerpt
 → 3A restart + authoritative inventory + complete fresh-generation convergence
-    + measured release gate
-→ 3B point-level incrementality only where 3A budgets fail
+    + predeclared release measurements
+→ 3B source-local point incrementality only where 3A budgets fail
 → 4 Exact/live session
 → 5 maintenance and optional depth
 ```
 
-Foundation ships only invocation, root and plain-storage settings. Source, Qdrant and query settings arrive with
-their real consumers. Plain storage is baseline; #598 encryption is optional.
+Foundation ships only root/plain settings. Plain storage is baseline; #598 encryption is optional.
 
-## Platform publication rule
+## Active Qdrant instructions
 
-On Windows, root/object finalization must be tied to the opened stage handle and retained verified destination
-parent. The current `tempfile::persist_noclobber` implementation is path-based `MoveFileExW`; do not use it as the
-trusted finalizer. Implement and execute one owner-private handle-based canary. Do not create a generic filesystem
-abstraction or silently fall back to path-only rename.
+- Upgrade current locked client 1.19.0, server, schema and real consumers together to 1.20.x.
+- Store retrieval text once in payload; create a scoring full-text index with explicit `code` tokenizer/text
+  settings; query with `TextQuery`.
+- Do not preserve baseline sparse BM25 inference, local fixed `avg_len`, aliases, custom-shard portfolio or Edge
+  fallback.
+- Stage 2/3A projection builds complete generations. Point IDs are deterministic and generation-bound.
+- Do not start the old changed-source diff, stable occurrence identity, retain/create/close or sequence-range code
+  before Stage 3A measurements activate Stage 3B.
+- Baseline cleanup is whole physical collection only. Move the small delete/absence helper from the old reclaimer
+  and delete the platform; never recreate point cleanup/writer ledgers.
+- `PublishedView` pins exact physical collection + redb snapshot. Stage 3A has no sequence.
 
-On Unix, use an owner-private no-replace directory-relative primitive or a verified same-filesystem link/unlink
-fallback. Existing final objects are always opened and verified exactly.
+## Platform publication
 
-## Qdrant baseline
-
-The implementation cut upgrades server/client/schema/query together to Qdrant 1.20.x:
-
-- retrieval text is stored once in payload;
-- one scoring full-text index uses explicit text processing and the `code` tokenizer;
-- query uses `TextQuery`;
-- baseline sparse BM25 vector inference and fixed `avg_len` are removed;
-- Exact remains independent of tokenization;
-- `PublishedView` names the exact physical collection; aliases are not serving authority.
-
-Stage 3A builds complete immutable physical generations. It is a release mode only for corpus classes whose
-numeric latency/throughput/disk budgets pass. If a target class fails, Stage 3B incrementality is required before
-release. Do not invent thresholds inside code; #215 records the product budgets and raw results.
-
-Do not add custom per-root shards as a generic optimization: BM25 statistics are shard-local and cross-shard
-portfolio ranking would require another fusion owner. Do not add Qdrant Edge as a fallback. It may be evaluated in
-one isolated post-baseline spike and must replace the bridge cleanly if selected.
+On Windows, root/object finalization is tied to the opened stage handle and retained destination parent. Current
+`tempfile::persist_noclobber` uses path-based `MoveFileExW`; do not trust it as final authority. Implement and run
+one owner-private handle-based canary. No generic filesystem abstraction or silent path-only fallback.
 
 ## Lifetime and lock discipline
 
-- `DataRootGuard` is the outer process lifetime, not a serializable lease.
-- Publication has one logical owner/task. No redb writer or view-manager mutex spans object/Qdrant I/O.
-- Query pins one `PublishedView` under a short lock and releases it before backend/evidence work.
-- Redb writers contain bounded metadata compare/commit only.
+- `DataRootGuard` is the process lifetime, not a lease.
+- One publisher selects work; no redb writer or view-manager mutex spans object/Qdrant I/O.
+- Query pins one view under a short lock and releases it before backend/evidence work.
+- Redb writers contain bounded compare/commit only.
 - Query reserves finite capacity before retrieval and mutates a window/cursor only after complete bounded output.
 - Last guard drop wakes cleanup; it never deletes inline.
 
-Follow the exact order in the implementation spine. Remove or adapt an old API that requires a reverse order.
+Follow the exact order in the implementation spine. Remove/adapt an old API requiring a reverse order.
 
 ## Verification and records
 
@@ -97,5 +87,4 @@ For every published slice:
 4. synchronize #352 and PR #610 when current stage changes;
 5. report only checks which actually ran.
 
-Resume from the [R049 registry](docs/audit/ANALYSIS_REGISTRY.md#resume), not chat summaries, historical issue
-bodies or default-branch code search.
+Resume from the [R050 registry](docs/audit/ANALYSIS_REGISTRY.md#resume), not chat summaries or historical issues.

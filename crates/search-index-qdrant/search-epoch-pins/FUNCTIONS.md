@@ -1,22 +1,52 @@
-# View lifetime: pin a real snapshot, not a route label
+# View lifetime — pin exact physical generation and evidence snapshot
 
-At `c8e38b6`, PinRegistry exposes arbitrary route/epoch acquisition, owner release/renewal, sampled watermarks
-and a second continuation catalogue. Those records do not prevent new old pins after a cleanup decision.
-Remove the public registry with its callers.
+At `c8e38b6`, `PinRegistry` exposes arbitrary route/epoch acquisition, renewal, sampled watermarks and a second
+continuation catalogue. Remove the public registry with callers.
 
-The surviving manager is private to publication/query: one strong current state and weak references to states
-still held by requests/windows. The actual state includes a redb read snapshot of the published source and
-evidence tables, not only a sequence and a pointer to mutable latest metadata.
+The surviving manager is private to publication/query:
 
-The [publication recipe](../search-publication/FUNCTIONS.md) defines commit, snapshot capture, installation,
-cleanup eligibility and restart. The [control map](../../search-control-redb/FUNCTIONS.md) defines lookup.
-Do not copy those algorithms here or introduce a new snapshot service.
+```text
+current: Arc<PublishedView>
+retired: weak references to views still held by requests/windows
+```
 
-Acquire only current under a short mutex. A live window inherits its request's guard; callers cannot reopen
-old views by ID. Expiry/disconnect releases it. Last drop may wake cleanup and never performs I/O. Old redb
-pages remain retained while readers exist; finite query/window lifetimes and resource backpressure must be
-measured, not inferred from a small Arc count.
+`PublishedView` contains the exact physical Qdrant collection, retrieval profile and real redb read snapshot of
+published source/evidence tables. Stage 2/3A has no intra-generation sequence; Stage 3B may add one only if required
+by failed release budgets.
 
-No view-manager lock across redb/object/Qdrant work. There is no live local-object GC gate in the selected
-baseline: local collection owns the stopped root exclusively. Qdrant cleanup remains live and waits for all
-relevant view sequences/generation users. Keep only a small helper in the actual owner and delete this crate.
+The [publication recipe](../search-publication/FUNCTIONS.md) owns commit, snapshot capture, installation, cleanup
+eligibility and restart. The control owner owns lookup. Do not duplicate those algorithms or create a snapshot
+service.
+
+## Acquisition and lock order
+
+Acquire current only under a short manager mutex. A live request clones the guard and releases the mutex before
+scope resolution, `TextQuery`, evidence/object reads or rendering. A live `QueryWindow` may inherit that same guard;
+callers cannot reopen arbitrary old views by ID.
+
+After durable current/evidence commit, publication opens/verifies the matching snapshot and then installs the view
+under the short mutex. Do not begin another publication until install succeeds or startup/recovery refuses serving.
+
+No manager lock spans redb writer, object, Qdrant, process or output work. Last guard drop may wake cleanup and
+never performs I/O.
+
+## Stage 3A lifetime and measurements
+
+Old guards continue using the old immutable physical collection/snapshot after a new view installs. Whole-
+generation cleanup waits for every guard, every pending/future target and every unresolved targetable attempt.
+
+Old redb pages and Qdrant collections consume real disk. Measure current + building + reader-retained generations
+under #215's maximum supported request/window lifetime. Arc count is not a byte bound. If Stage 3A fails declared
+disk/latency budgets, adjust supported lifetimes or implement Stage 3B; do not hide retention behind a watermark.
+
+## Stage 3B
+
+If incremental publication is required, the same view carries physical generation/profile/sequence. Fixed
+exclusive closure may happen while older same-generation views live; whole-generation deletion still waits for all
+guards. No second pin system.
+
+## Local object collection
+
+There is no live local-object GC gate. Local collection owns a stopped root exclusively. Qdrant cleanup remains
+online and whole-generation. Keep only the small manager in the actual publication/query owner and delete this
+crate after callers move.

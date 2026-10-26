@@ -1,86 +1,91 @@
-# Index cleanup — temporary extraction map
+# Index cleanup — extract whole-collection helper, delete the platform
 
-This package has no independent durable responsibility in the target product. It currently contains a useful exact Qdrant delete/readback skeleton surrounded by caller proofs, plans, digests, receipts and checkpoint state. Move the useful private helper into publication/bridge, then delete this package and its workspace dependencies.
+This package has no independent durable responsibility in the target product. It contains some exact Qdrant
+delete/readback mechanics surrounded by plans, digests, receipts, watermarks and checkpoints. Move the useful
+private whole-collection helper into publication/bridge, then delete this package and its workspace edges.
 
-Read the [publication owner](../search-publication/FUNCTIONS.md), [Qdrant bridge](../search-qdrant-bridge/FUNCTIONS.md) and [stopped-root maintenance](../../search-runtime/search-retention/FUNCTIONS.md).
+Read the [publication owner](../search-publication/FUNCTIONS.md),
+[Qdrant bridge](../search-qdrant-bridge/FUNCTIONS.md) and
+[stopped-root maintenance](../../search-runtime/search-retention/FUNCTIONS.md).
 
 ## Current source findings
 
-- `manifest.rs` validates caller-supplied structures instead of deriving exact retired IDs from committed publication.
-- `plan.rs` copies manifests into another plan and adds custom identities.
-- `execute.rs` contains the reusable exact delete/absence-readback shape but lacks the current route, view, deadline and recovery owner.
+- `manifest.rs` validates caller-supplied retired structures instead of deriving cleanup from committed current/view state.
+- `plan.rs` copies manifests and creates another identity/plan layer.
+- `execute.rs` has a reusable exact delete/absence-readback shape but lacks the actual view/deadline/recovery owner.
 - `receipt.rs` creates a second cleanup journal.
-- R028 at `37dbb198` traces daemon `rebuild_composition::authorize_reclaim`: it returns a plan after
-  caller-proof/pin checks, performs no deletion and has no production caller. A feature gate does not
-  connect `execute_batch` to the real bridge; its `IndexAdmin` is still a supplied abstraction.
+- daemon `authorize_reclaim` returns plans after proof/pin checks but performs no connected deletion.
 
-## Current owner
+## Stage 3A cleanup owner
 
-Publication commits one finite unfinished cleanup obligation with the new current view:
+Publication commits one compact row with the new current view:
 
 ```text
 RetiredCleanup {
-  artifact containing exact point IDs or exact retired collection identity
-  route / generation
-  retire_before_sequence when point cleanup is used
-  next effect/readback cursor
-  possible-dispatch state needed for recovery
+  exact never-reused physical collection name
+  expected predecessor/current relationship
+  unresolved-attempt state needed to prevent retargeting
 }
 ```
 
-There is no separate reclaim plan, proof, receipt history or terminal record. When the finite cleanup table is full, publication backpressures before another external mutation.
+No point-ID pages, retire-before sequence, reclaim plan, checkpoint cursor, receipt history or terminal record is
+required in Stage 3A. Visible collections are immutable and cleanup is whole-generation only.
 
-### Reader eligibility
+A row is eligible when:
 
-A same-generation point closed with exclusive `valid_until = N` is eligible only when no live view of the same route/generation has `sequence < N`. A retired collection is eligible only when no live view uses that route/generation.
+- the collection is not durable current;
+- no pending/current/future build can target it;
+- no live `PublishedView` or `QueryWindow` guard uses it;
+- no owned unresolved request/build remains targetable;
+- no redb writer or view-manager lock is held across backend I/O.
 
-Checking the immediate predecessor or one watermark is insufficient. New requests can acquire only current; existing queries/windows retain their exact old view guard. Restart removes old process-local guards but not durable cleanup rows.
+Last guard drop only wakes cleanup.
 
-### Writer eligibility
+## Exact effect
 
-Reader drain is not writer quiescence. Do not delete or declare completion while an earlier Qdrant writer may still recreate or replace the state. One matching readback, elapsed client deadline or reconnect does not prove terminality. Unresolved abandoned-route obligations remain visible and bounded as specified by publication.
+```text
+eligible physical collection
+→ bridge terminal delete under attempt deadline/cancellation
+→ exact exists/get observation
+→ logical absence
+→ short redb removal of cleanup/obsolete metadata
+```
 
-## Exact cleanup effect
+Never reuse the collection name. Do not infer completion from list omission. Unknown/partial/foreign state or
+uncertain response keeps the row and bounded publication backpressure. Logical absence is not physical erasure.
 
-For a settled exact-ID page:
+Execute delayed request/build versus collection-delete behavior against selected Qdrant 1.20 before claiming
+safety.
 
-1. load the immutable page named by the cleanup row;
-2. inspect exact same-route/generation state when a prior delete may have happened;
-3. issue exact-ID deletion under the current attempt deadline/cancellation;
-4. read back exact absence;
-5. advance the durable cursor in one short redb transaction;
-6. remove the row/artifact only after exact completion.
+## Stage 3B
 
-For a retired generation, inspect/delete/read back exact collection absence. Partial or foreign state blocks advancement. Broad-filter deletion is not used. Qdrant vendor conversion stays private to the bridge; publication owns the row, cursor, recovery and visibility.
+Incremental point closure does not restore per-point physical deletion. Individual points remain until the same
+whole-generation cleanup. There is still no point reclaimer, possible-writer ledger or per-point cleanup journal.
 
-## Local immutable-object GC is not this operation
+## Local immutable-object GC is separate
 
-Local object collection is explicit **stopped-root maintenance**. The daemon and all producers/windows are stopped, one exclusive root lock is held, all current/prepared/published/pending/cleanup references are validated and marked once, then only proven-unreferenced objects are swept. Unknown traversal or delete keeps bytes.
+Local object collection is explicit stopped-root maintenance: all producers/windows stopped, exclusive root held,
+all current/prepared/published/pending/cleanup references validated and marked, then only proven-unreferenced
+objects swept. Unknown traversal/deletion keeps bytes.
 
-Do not implement the previous online shared/exclusive `ObjectGcGate`, per-publication root rescans, generic lease catalogue or sweep journal. Qdrant cleanup remains online because it is coordinated with live view/writer state; local object-file GC does not.
+Do not restore online `ObjectGcGate`, per-publication root rescans, generic lease catalogue or sweep journal.
 
 ## Removal boundary
 
-Delete after direct publication/bridge callers move:
+Delete after publication/bridge callers move:
 
-- `PublicationCommitProof` and retired-manifest field-equality admission;
-- reclaim plan/batch/checkpoint/receipt constructors and custom digests;
-- route/epoch watermark and caller `reclaimable` booleans;
+- `PublicationCommitProof`, retired manifests and field-equality admission;
+- reclaim plans/batches/checkpoints/receipts/custom digests;
+- route/epoch watermarks and caller `reclaimable` booleans;
+- exact point-delete pages and per-point writer eligibility machinery;
 - separate operation port/journal;
-- purge/restore/rollback interactions;
-- W7/P18/source-shape/process fixtures;
-- package and workspace dependencies.
+- purge/restore/rollback integrations and old fixtures;
+- package/workspace dependencies.
 
-Move only the private exact delete/readback code that remains useful.
+Move only the private whole-collection delete/absence code which remains useful.
 
-## Required behavior checks after integration
+## Checks
 
-- a live v1 prevents deletion even when v2 is gone and v3 closed the point;
-- generation cleanup waits for every view using it;
-- possible delayed writers prevent unsafe cleanup;
-- current-view commit crash preserves cleanup work;
-- restart resumes work blocked only by dead process guards;
-- unknown/partial delete resolves from exact state without broad retry;
-- backlog bound causes safe publication backpressure;
-- stopped-root GC preserves every current/pending/cleanup object root;
-- ordinary cleanup never claims purge or secure erase.
+Old/current/new guards, no dispatch after retirement, restart with cleanup rows, commit/install crash, exact
+logical absence, delayed request/delete race, name non-reuse, uncertainty/backpressure, measured retained-generation
+disk and stopped-root object preservation. Ordinary cleanup never claims purge or secure erase.

@@ -22,29 +22,29 @@ compatibility path, receipt or second registry.
 | Task | Read |
 |---|---|
 | Understand the product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
-| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → nearest owner recipe → actual callers → owning issue |
-| Resume interrupted work | [R049 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
-| Change a dependency/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner recipe |
+| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → nearest owner recipe → current callers → owning issue |
+| Resume interrupted work | [R050 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
+| Change dependency/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner recipe |
 | Move/delete legacy code/tests | [Test cutover](implementation/TEST_CUTOVER.md) and current caller search |
 | Inspect data/effect/lock ownership | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
 
 ## Current implementation decisions
 
-R049 selects:
+R049 selected Qdrant 1.20 direct full-text BM25, handle-safe Windows finalization, measured Stage 3A release gates,
+conditional Stage 3B, no generic custom-shard portfolio and Edge as a later isolated candidate.
 
-- owner-private handle-based Windows root/object finalization; `tempfile::persist_noclobber` is not the trusted
-  Windows finalizer;
-- Qdrant Server/Rust client 1.20.x for the implementation cut;
-- direct BM25 over a scoring full-text payload index with explicit `code` tokenizer and `TextQuery`;
-- exact physical collection identity in `PublishedView`, without aliases;
-- Stage 3A complete immutable generations as the correctness/reference profile;
-- numeric release budgets before Stage 3A may ship for a corpus class;
-- Stage 3B point-level incrementality only where those budgets fail;
-- no generic custom-shard partitioning because BM25 statistics are shard-local;
-- Qdrant Edge as an isolated later candidate, not the current baseline.
+R050 synchronizes the remaining active Qdrant package/runtime instructions:
 
-The product remains unimplemented. The Cargo lock still contains Qdrant client 1.19.0; R049 changes documentation
-and issue metadata only.
+- Stage 2/3A projection assembles complete generations with actual retrieval-text payloads;
+- Stage 2/3A point IDs are deterministic and generation-bound;
+- stable occurrence identity, source-local retain/create/close and sequence ranges are Stage 3B only;
+- baseline cleanup deletes whole physical collections only;
+- the old point-reclaimer/possible-writer/checkpoint platform is removed after its small helper moves;
+- view lifetime pins physical collection + redb snapshot, with sequence only in Stage 3B;
+- historical Qdrant 1.19 Windows smoke is not current Qdrant 1.20 evidence.
+
+The product remains unimplemented. Cargo still locks Qdrant client 1.19.0; R050 changes documentation and metadata
+only.
 
 ## Focused supporting material
 

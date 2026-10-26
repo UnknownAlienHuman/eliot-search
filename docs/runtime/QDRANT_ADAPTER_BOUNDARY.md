@@ -1,53 +1,71 @@
 # Qdrant adapter boundary
 
-Qdrant is the only indexed retrieval backend. `search-qdrant-bridge` is the sole package allowed to depend
-directly on `qdrant-client`; vendor request/response/filter/schema types remain private.
+Qdrant Server/Rust client **1.20.x** is the selected indexed backend for the first connected product. The repository
+lock still contains client 1.19.0; upgrade client, lock, schema builders and actual publication/query consumers in
+one code cut. `search-qdrant-bridge` is the only package allowed to depend directly on `qdrant-client`; vendor types
+remain private.
 
 ## Selected runtime boundary
 
-Daemon composition supplies one configured endpoint, optional actual credential, transport settings and the
-selected physical generation/schema. Publication and query use the same concrete adapter. Startup observes the
-live server capabilities required by the selected profile; past probes, build strings and artifact checksums are
+Daemon composition supplies one configured endpoint, actual optional API key, bounded transport settings and one
+absolute deadline/cancellation. One daemon-owned client/runtime serves publication and query. Startup observes live
+server capabilities and verifies the exact selected physical collection/schema; build hashes and probe reports are
 development/release evidence, not constructor credentials.
 
-Mutation uncertainty returns to publication for reconciliation. A local timeout, reconnect, client drop or
-matching readback does not prove that every earlier dispatched write is terminal. Reads report ordinary failures
-and never manufacture a commit receipt.
+The baseline Qdrant 1.20 retrieval profile is:
+
+```text
+one retrieval-text payload field
++ scoring full-text payload index
++ explicit code tokenizer/text-processing settings
++ TextQuery with query-time k/b
++ payload scope filter and independent idf.corpus base population
+```
+
+Do not generate baseline sparse BM25 vectors, query vectors or local fixed `avg_len`. Exact punctuated identifier
+search remains independent of tokenized BM25.
+
+## Physical view identity
+
+`PublishedView` names the exact physical collection and matching redb snapshot. Query addresses that collection
+directly. Qdrant aliases are not serving, recovery or cleanup authority because alias mutation cannot atomically
+install ELIOT evidence or preserve old pinned views.
+
+Stage 2/3A visible collections are immutable. Any selected-state difference builds another never-reused physical
+collection. Point-level mutation and stable occurrence identity exist only in Stage 3B when Stage 3A fails declared
+release budgets.
+
+## Scope and sharding
+
+BM25/full-text statistics are physical-shard-local. `idf.corpus` changes the statistics population on each shard;
+it cannot reach data in another shard. Do not split a general portfolio by root/source custom shard key or merge
+independently scored shard lists locally. Custom sharding is considered only for a scope always queried as one
+partition and only after measurement.
 
 ## Current code debt
 
-The former `QualifiedGate` constructor input was removed at `7d92fb8b`; `qualified/gate.rs` now returns `()` for
-test/diagnostic validation. Do not recreate that token.
+The former `QualifiedGate` constructor input was removed at `7d92fb8b`; do not recreate it. Current
+`RealDataPlane::connect` still requires supervisor binding and an API-key lease, checks an exact server build and
+uses fixed nested timeouts. Other qualification/auth-binding wrappers, operation receipts and duplicated
+point/payload models remain. Normal daemon publication/query is not connected.
 
-Current `RealDataPlane::connect` still requires supervisor binding and an API-key lease, checks an exact server
-build and uses fixed nested transport timeouts. Other `qualified/**`, auth/binding checks, a process-local
-operation receipt map and duplicated point/payload models remain. Normal daemon publication/query is still not
-connected to this runtime.
+The #263 cutover preserves real auth, transport, schema, bounded response and exact readback while deleting
+qualification/binding/receipt authority and unused SDK wrappers after current callers move.
 
-The #263 cutover constructs the bridge directly from:
+## Optional process and Edge boundaries
 
-```text
-selected endpoint
-+ actual optional credential
-+ one absolute attempt deadline/cancellation
-+ current capability and exact selected-schema observation
-```
+External endpoint mode is baseline. A later managed-child profile may own one actual process handle, private
+resources, real platform child-tree guard and bounded startup/shutdown. It uses this same bridge for readiness.
 
-Preserve real auth, transport, schema, mutation/readback and bounded-response behavior. Remove historical
-qualification/binding/receipt authority and only the unconsumed SDK wrappers after tracing real callers.
-
-## Optional process owner
-
-`search-qdrant-supervisor` has no connected product caller. External endpoint mode is the baseline. A future
-managed-child profile may own an actual process handle, private config/resources, real platform child-tree
-containment and bounded startup/shutdown. It must use the same bridge for authenticated readiness and never
-block external-endpoint Search.
+Qdrant Edge is a separate embedded-backend replacement candidate, not a managed child or fallback. Evaluate a
+newer released Edge line only after the server path works; it must replace this bridge cleanly after persistence,
+Windows, BM25/filter, restart and size/latency evidence.
 
 ## Verification
 
 Run 39872058276 passed Rust 1.98 locked check/strict Clippy for `search-qdrant-bridge --lib` at `7d92fb8b` only.
-It does not cover current consumers, daemon composition, Windows, live Qdrant or retrieval behavior.
+It covers neither current consumers nor Qdrant 1.20.
 
-For each bridge change, compile the bridge and real consumers, then execute the affected schema/query/mutation/
-recovery case against the selected server. Record raw result boundaries in the registry/PR; do not store them as
-credentials required by ordinary startup.
+For the real cut run bridge + publication/query/daemon check/Clippy, then live 1.20 scoring-full-text schema,
+code-tokenizer, TextQuery, scope/IDF, insert-only readback, physical-generation restart, cancellation and
+collection-delete/absence cases. Record exact server/client/profile and raw results in the registry/PR.

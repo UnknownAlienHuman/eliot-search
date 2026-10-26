@@ -1,69 +1,73 @@
-# Projection: changed-source diff, not a whole-corpus plan
+# Projection — complete generation first, changed-source delta only when required
 
 At `c8e38b6`, `plan_projection` and `PublicationAdmissionOwners` feed package/process fixtures rather than a
-connected daemon publisher. `PointSpec` discards actual vectors in favour of digests. The builder creates all
-points, clones manifests, constructs canonical trees and re-encodes them; its advertised 100,000-point limit
-conflicts with the 4,096-item codec ceiling. `manifest_read.rs` decodes and re-encodes the entire object.
-Those costs are not fixed by merely renaming the output 'pages'.
+connected publisher. `PointSpec` discards uploadable input in favour of digests, clones manifests and creates
+conflicting size ceilings. Do not repair that whole-plan platform.
 
-## Concrete input and ordering
+## Stage 2 / 3A complete-generation assembler
 
-Work on changed sources, not a globally materialized UnitSet. Preparation supplies one bounded source product,
-exact revision/prepared refs and actual retrieval inputs. The unchanged-source check skips preparation when
-both the retained bytes and relevant preparation/retrieval settings are unchanged.
+Preparation supplies a complete bounded selected inventory of outcomes for one generation:
 
-The [unitizer map](../../search-prep/search-unitizer/FUNCTIONS.md) owns occurrence matching. After matching,
-sort that source's finite point descriptors by point ID in place. Read its old ordered bindings with a
-source-prefix range in the [control tables](../../search-control-redb/FUNCTIONS.md). Merge those two sequences
-into create/retain/close operations and evidence changes. Do not assume preparation emits hash-derived IDs
-already sorted, or sort the complete corpus to make the iterator interface look streaming.
+- exact source/prepared/ObjectRefs and explicit gaps;
+- unit retrieval text and compact evidence coordinates;
+- selected retrieval profile and scope fields.
 
-For m new units and o old units in the changed source, sorting is O(m log m) and the merge is O(m + o), apart
-from database access. Memory includes the bounded source product, its descriptors and one output batch; it
-is not constant in source size. State/enforce the source and metadata-batch limits before allocations/effects.
-Large repositories are many independently updated sources, not one giant atomic input.
+Stream or page the complete inventory into bounded immutable `PendingGenerationBuild` pages. Each point contains
+actual Qdrant 1.20 retrieval-text payload and filter/evidence keys; a digest is not uploadable input.
 
-## Occurrence versus point versus citation
+Stage 2/3A point IDs need only be deterministic and collision-checked **within the never-reused physical
+generation**. They may bind generation + source/prepared/unit occurrence/role and be reminted in the next
+generation. Cross-generation stable occurrence identity is not required.
 
-An occurrence is reused only under the conservative matching rule in the unitizer map. Retrieval identity
-includes its incarnation, exact retrieval input/profile/role and selected stable source/group meaning.
-Revision and absolute citation coordinates are absent. A changed input gets a new retrieval point even if the
-occurrence is the same; changed coordinates only update evidence metadata. Duplicate text is not identity.
+Sort/page only as required by deterministic build/readback and bounded memory. Do not create a globally copied
+UnitSet, canonical-value tree, manifest cache or a changed-source retain/close plan for the baseline.
 
-Allocate unmatched occurrences from the operation's target sequence and source-local new-unit slot, scoped
-by source identity. This is an internal birth value, not a continuity rule based on ordinal. Persist it with
-the prepared publication input; recovery uses that same input. Once external work starts, never allocate a
-replacement birth or reopen a closed point interval. No eternal occurrence registry is needed.
+Complete pages are validated before backend effects. A source/outcome ceiling produces an explicit gap or refuses
+the build; never publish half a selected source while calling the generation complete.
 
-## Output required by the real consumer
+## Qdrant 1.20 retrieval profile
 
-Immutable operation pages contain actual BM25 Document text/options or selected vector values, full/narrow
-point operations, validity closures and the compact evidence delta. A digest cannot stand in for uploadable
-input. Header/page bounds are checked on write and independent load; no second canonical-value tree or
-receipt establishes correctness.
+Output one explicit retrieval-text payload field plus compact scope/evidence metadata for the scoring full-text
+index. The bridge owns vendor conversion and schema. Baseline output does not contain sparse BM25 document/query
+vectors or fixed `avg_len`.
 
-The query lookup layout is not left to the implementer: compact source/evidence rows and pinned redb snapshots
-are specified in the control map. There is no custom page-directory/index or corpus-sized manifest cache.
-Operation pages are temporary recovery inputs, not a second permanent evidence database.
+Text processing—`code` tokenizer, lowercase/stemmer/stopword choices—and query-time `k`/`b` are part of the
+retrieval profile. A changed profile creates a new physical generation.
 
-## Publication unit
+## Stage 3B changed-source delta — conditional
 
-An incremental operation covers complete changed sources within the configured metadata-commit ceiling.
-Validate the final evidence/source delta before Qdrant work. Split between sources; never publish half of
-one source as if it were complete. Oversize/unsupported input is an explicit gap with the previous published
-revision still identifiable. A new-generation rebuild fills staging metadata in bounded transactions and
-switches its pointer only when complete; see the [publisher](../search-publication/FUNCTIONS.md).
+Only for corpus classes where Stage 3A fails #215 budgets, add the source-local diff:
 
-## Remove
+1. preparation supplies one bounded changed source product;
+2. unitizer performs conservative occurrence matching;
+3. point descriptors are sorted by point ID;
+4. read the old source-prefix evidence range;
+5. merge into retain/create/fixed-close operations and complete-source evidence changes;
+6. persist actual retrieval text/payload and operation-fixed births in one fixed pending delta.
 
-Remove whole `ProjectionPlan`/manifest copies, two full diff maps, digest-only vector output, revision-bound
-S11/scoring IDs, artificial allocation arithmetic and test-only admission-owner proof APIs. Keep useful
-validation, exact point identity, source-local sorting and merge logic. A small remainder belongs directly
-in preparation/publication, not a new planner service.
+Reuse only one-old/one-new unambiguous occurrences with unchanged retrieval input/context. Equal text or duplicate
+ordinal is not continuity. Ambiguous/unmatched units receive fixed new births. A changed input receives a new
+point; coordinate-only movement may update evidence.
 
-## Cases and measurements
+Memory/cost is O(m log m + o) for m new/o old units plus bounded output, not constant. Validate the complete-source
+delta before Qdrant effects. Oversize delta falls back to full fresh generation or an explicit gap, never partial
+source publication.
 
-Check: edit at the start of a file; repeated equal blocks; insert/remove/reorder a duplicate; same input under
-changed heading context; disappear/reappear after committed removal; a source exceeding the ceiling; and a
-rebuild while source heads advance. Measure actual retained/new/closed points, changed metadata rows,
-preparation bytes and Qdrant writes. Cache hits alone do not establish incrementality.
+Custom per-root/source Qdrant shards are not a shortcut for this delta because full-text/BM25 statistics are
+shard-local and cross-shard portfolio scoring would need another fusion owner.
+
+## Removal
+
+Remove whole `ProjectionPlan`/manifest copies, two full diff maps, digest-only output, revision-bound S11/scoring
+IDs, artificial allocation arithmetic and test-only admission proof APIs. Stage 2/3A assembly may live directly in
+publication/preparation. Keep a separate planner package only if Stage 3B is selected and the source-local merge is
+substantial enough to justify it.
+
+## Checks and measurements
+
+Stage 2/3A: complete inventory paging, deterministic generation-bound IDs, exact payload/readback, zero-unit/gap
+outcomes, bounded memory and build measurement.
+
+Stage 3B if selected: edit at file start, repeated blocks, insert/remove/reorder duplicate, changed heading/context,
+disappear/reappear, oversize source, pending replay and actual retained/new/closed points/Qdrant writes. Cache hits
+alone do not prove useful incrementality.

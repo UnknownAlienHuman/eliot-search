@@ -1,25 +1,31 @@
 # Qdrant on Windows
 
-Qdrant 1.19.0 Windows x64 was previously installed and smoke-tested as recorded below. Those measurements are
-historical development/release evidence; they are not runtime credentials and do not require the application
-to preserve the old qualification supervisor.
+## Historical 1.19 development artifact
 
-## Recorded development artifact — 2026-09-10
+Qdrant 1.19.0 Windows x64 was previously installed and smoke-tested on 2026-09-10:
 
-- version/build: `1.19.0` / `74f3e85b`, `x86_64-pc-windows-msvc`;
-- archive: `qdrant-x86_64-pc-windows-msvc.zip`, 29,340,688 bytes,
+- build `74f3e85b`, `x86_64-pc-windows-msvc`;
+- archive `qdrant-x86_64-pc-windows-msvc.zip`, 29,340,688 bytes,
   SHA-256 `980CB2E1AE771155CF211DA8C0A8A9206B6482BD4EFFDC4DB994D3ADB707B087`;
-- executable: `qdrant.exe`, 84,184,576 bytes,
+- executable 84,184,576 bytes,
   SHA-256 `369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4`;
-- license: Apache-2.0;
-- recorded smoke: ready/create/upsert/search/count/delete succeeded.
+- historical ready/create/upsert/search/count/delete smoke succeeded.
 
-This does not establish current availability, data compatibility, containment, authentication or product
-correctness. Check the service actually selected for the current run.
+This is immutable historical evidence only. It does not establish current availability, Qdrant 1.20 behavior,
+product correctness, data compatibility, containment or authentication.
+
+## Selected implementation baseline
+
+R049 selects Qdrant Server/Rust client **1.20.x** for #263/#264 because direct BM25 over a scoring full-text payload
+index plus `TextQuery` and the `code` tokenizer remove baseline sparse-vector inference and fixed `avg_len`.
+
+The repository lock still contains client 1.19.0 and no Qdrant 1.20 Windows artifact has been installed or run by
+this documentation work. The implementation cut must select exact server bytes and client version together and
+record origin, license, hashes and commands.
 
 ## Baseline product mode
 
-The first connected product uses a configured local endpoint:
+Use a configured local endpoint:
 
 ```toml
 [qdrant]
@@ -27,17 +33,18 @@ mode = "external"
 endpoint = "http://127.0.0.1:6333"
 ```
 
-Start Qdrant manually, as an installed service or by development tooling. The daemon's one Qdrant bridge:
+Start Qdrant manually, as an installed service or through development tooling. The one bridge:
 
-1. connects with the selected optional API key;
-2. observes the live server/version/capabilities;
-3. verifies the exact physical collection generation/schema it will use;
-4. performs publication/query/readback.
+1. connects with the actual optional API key;
+2. observes live server/version/capabilities;
+3. creates/verifies the exact physical collection and scoring full-text schema;
+4. performs insert-only publication, `TextQuery`, scope/IDF filtering and exact readback;
+5. queries the physical collection named by `PublishedView`—never a serving alias.
 
-No executable hash, artifact manifest, probe report, owner fence, secret lease or process receipt is passed to
-the bridge. Release packaging may record exact server bytes independently.
+No executable hash, artifact manifest, owner fence, secret lease or qualification receipt is passed to the bridge.
+Release packaging may record exact server bytes independently.
 
-Minimal local Qdrant configuration remains ordinary Qdrant configuration, for example:
+Minimal Qdrant service configuration remains ordinary Qdrant configuration:
 
 ```yaml
 storage:
@@ -48,36 +55,45 @@ service:
   grpc_port: 6334
 ```
 
-Enable Qdrant authentication when the selected local threat/profile requires it. One actual API key is used by
-the service and bridge; the baseline does not build a lease/equality protocol around it.
+Use one actual API key when the selected threat profile requires authentication. Do not wrap it in a lease or
+equality protocol.
+
+## Windows evidence required for Qdrant 1.20
+
+Before claiming support, execute on the exact packaged artifact:
+
+- service startup/shutdown and restart against its private data directory;
+- scoring full-text index creation with explicit `code` tokenizer/text settings;
+- insert-only build, exact readback and `TextQuery`;
+- payload scope plus independent `idf.corpus` behavior;
+- process crash/restart with durable current generation verification;
+- complete next generation and old pinned view;
+- terminal collection deletion and exact logical absence;
+- delayed request versus retired-collection delete;
+- bounded memory/disk/handles, current + building + retained generations;
+- authentication, cancellation and content-free diagnostics.
+
+Historical 1.19 smoke does not substitute for any of these.
 
 ## Optional managed-child mode
 
-A later standalone profile may let the daemon spawn the executable. It is a convenience, not a prerequisite
-for indexed search.
+A later convenience profile may spawn the exact configured server and retain the actual child handle. It must use
+private create-new resources, sanitized environment, bridge-authenticated readiness, one absolute deadline and an
+actual Windows Job Object/kill-on-close tree guard or report managed mode unsupported. Failure/shutdown performs
+bounded terminate and reap. No attach by PID/name/port, automatic restart, auto-download or qualification platform.
 
-The implementation must be small and concrete:
+The current `search-qdrant-supervisor` does not satisfy this boundary and must be replaced or deleted under #334
+after current callers are rechecked.
 
-- spawn only the configured executable and hold the actual child handle;
-- never attach to an existing PID/process name/port;
-- use private create-new config/resources and a sanitized environment;
-- use the real Qdrant bridge/client for authenticated readiness;
-- use one absolute startup/shutdown deadline;
-- apply an actual Windows Job Object/child-tree guard or report managed mode unsupported;
-- bounded terminate/reap on failure and shutdown;
-- no automatic restart in the first profile;
-- no fixed unbounded `run-stdout.log` / `run-stderr.log` in the index data directory.
+## Qdrant Edge is separate
 
-The current `search-qdrant-supervisor` does not satisfy that boundary: it has no product caller, cannot call
-Windows Job/ACL APIs, accepts caller-created containment evidence and surrounds child spawning with roughly
-90.7 KiB of qualification/receipt state. Replace or delete it under #334.
+Qdrant Edge is an embedded backend replacement experiment, not a managed server. The official 0.8.0 line remains
+beta and recently exposed WAL acknowledgement/replay defects. Evaluate only a newer released line after the server
+walking skeleton works; require Windows persistence/crash, BM25/filter, generation lifecycle, build-size and
+latency evidence. Never ship server and Edge as permanent dual backends.
 
 ## Updating Qdrant
 
-Updates are explicit. Install/test a new server/client/profile side by side, create a fresh collection
-generation when schema/retrieval meaning changes, run the connected product checks and switch the published
-view only after exact readback. Do not auto-download, auto-upgrade or silently reuse an incompatible data
-directory.
-
-Exact artifact checks and broader installed/fault/resource qualification belong to release work after the
-product path exists. They do not block direct endpoint development or become constructor tokens.
+Updates are explicit. Install/test a new server/client/profile side by side, build a fresh physical generation
+when schema/retrieval meaning changes, commit matching evidence/current state and install the view only after exact
+readback. Do not auto-upgrade or silently reuse an incompatible data directory.

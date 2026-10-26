@@ -10,7 +10,7 @@ is derived retrieval state; immutable objects remain the source of evidence.
 |---|---|
 | Product purpose and user-visible invariants | [Architecture](docs/architecture/README.md) |
 | Shortest implementation path and owner boundaries | [Implementation spine](docs/implementation/README.md) |
-| Current checkpoint, decisions and unrun evidence | [R049 registry](docs/audit/ANALYSIS_REGISTRY.md#resume) |
+| Current checkpoint, decisions and unrun evidence | [R050 registry](docs/audit/ANALYSIS_REGISTRY.md#resume) |
 | One concrete change | Nearest `FUNCTIONS.md`, actual current callers and owning issue |
 
 [Documentation authority and task paths](docs/README.md) explain which document wins when text conflicts.
@@ -18,12 +18,12 @@ Historical waves, packets, receipts and old issue bodies remain evidence only.
 
 ## Current truth
 
-The product is **not implemented end to end**. R049 corrects implementation choices; it does not claim runtime
-success.
+The product is **not implemented end to end**. R050 synchronizes all active Qdrant runtime/package instructions
+with the selected implementation; it does not claim runtime success.
 
 ```text
 1. Foundation
-   invocation → typed root/plain settings → final-manifest-last root → DataRootGuard
+   invocation → typed root/plain settings → handle-safe final-manifest-last root → DataRootGuard
 
 2. Walking skeleton
    one file → ObjectRef → preparation
@@ -32,28 +32,26 @@ success.
 
 3A. Correctness/reference convergence
    restart + authoritative inventory + complete fresh generation/view switch
-   → measure release budgets
+   → measure predeclared release budgets
 
 3B. Required optimization only where 3A misses budgets
-   stable occurrence reuse + insert-only additions + fixed closures
+   source-local diff + stable occurrence identity + insert-only additions + fixed closures
 ```
 
-Qdrant 1.20 is selected for the implementation cut because direct BM25 over a scoring full-text payload index and
-the `code` tokenizer remove baseline sparse-vector inference and fixed average-length management. The repository
-lock still contains client 1.19.0; no dependency has changed yet.
+The repository lock still contains Qdrant client 1.19.0. Upgrade server/client/schema/query together in the real
+#263/#264 code cut. Baseline 1.20 retrieval stores text once in payload and uses a scoring full-text index with
+explicit `code` tokenizer/text processing and `TextQuery`; no sparse BM25 inference or fixed local `avg_len`.
 
-## Important implementation boundaries
+## Important boundaries
 
 - Plain storage is baseline; #598 encryption is optional.
-- Windows root/object publication uses an owner-private handle-based no-clobber finalizer after a focused canary.
-  The current path-based `tempfile::persist_noclobber` implementation is not trusted as that finalizer.
-- `PublishedView` names one exact physical Qdrant collection; aliases are not serving or recovery authority.
-- Stage 3A visible collections are immutable. A changed desired state builds a complete new generation.
-- Stage 3A is a release mode only for corpus classes whose declared latency, throughput and disk budgets pass.
-- Point-level incrementality is required only for classes where those budgets fail.
-- Per-root/per-source custom sharding is not a generic shortcut because BM25 statistics are shard-local.
-- Qdrant Edge is a promising later replacement spike, not the current baseline.
-- Watcher events are dirty hints; startup/explicit/periodic inventory establishes selected state.
+- Windows root/object publication uses an owner-private handle-based no-clobber finalizer after a native canary.
+- `PublishedView` names one exact physical Qdrant collection and matching redb snapshot; aliases are not authority.
+- Stage 3A uses deterministic generation-bound point IDs and whole-generation cleanup only.
+- Stable occurrence identity, point closures and changed-source deltas are Stage 3B only where #215 budgets fail.
+- Per-root/per-source custom sharding is not a generic optimization because BM25 statistics are shard-local.
+- Qdrant Edge is a later isolated replacement candidate, not a fallback or dual backend.
+- Watcher events are dirty hints; inventory establishes selected state.
 - No redb writer, view-manager mutex or QueryWindow mutation borrow spans object/Qdrant/process/model I/O.
 
 ## Workspace map
@@ -68,8 +66,9 @@ lock still contains client 1.19.0; no dependency has changed yet.
 | Query and retained evidence | [crates/search-query](crates/search-query/) |
 | Durable compact metadata | [search-control-redb](crates/search-control-redb/) |
 
-This is inventory, not required final crate topology. Move useful behavior with real callers and remove displaced
-routes/fixtures rather than preserving forwarding facades.
+This is inventory, not required final crate topology. Move useful behavior with real callers and delete displaced
+routes/fixtures. In particular, baseline complete-generation assembly may not justify permanent projection/
+identity crates, and the old reclaimer package must disappear after its whole-collection helper moves.
 
 ## Verification status
 
