@@ -1,68 +1,59 @@
 # ELIOT Search documentation
 
-Start with product behavior, then the implementation spine and only the owner recipe needed for the current
-vertical cut.
+This tree is organized for progressive reading. Start with the product contract, descend to the affected owner and
+use audit records only when evidence or history is needed.
 
 ## Authority
 
-| Layer | Owns |
-|---|---|
-| [Architecture](architecture/README.md) | purpose, product boundary and observable behavior |
-| [Implementation](implementation/README.md) | execution spine, cross-owner invariants and delivery order |
-| Nearest `FUNCTIONS.md` | exact code seam, operation and failure rules |
-| [Product behavior](product/README.md) | user-visible Search/Exact/orientation/comparison/document outcomes |
-| [Analysis registry](audit/ANALYSIS_REGISTRY.md) | checkpoint, inspected evidence and unrun work |
-| [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | installed/candidate dependencies, upstream facts and analogue dispositions |
+| Layer | Owns | Does not own |
+|---|---|---|
+| [Architecture](architecture/README.md) | Product purpose, boundary and observable requirements | Package topology or current execution status |
+| [Implementation](implementation/README.md) | Selected mechanisms, delivery sequence, lock order and optimization gates | Revision-specific evidence |
+| Nearest `FUNCTIONS.md` | Exact owner seam, current defects and operation recipe | Product-wide mission or second roadmap |
+| [Product behavior](product/README.md) | User-visible Search, Exact, orientation, comparison and document outcomes | Internal package status |
+| [Analysis registry](audit/ANALYSIS_REGISTRY.md) | Current checkpoint, inspected facts and unrun work | Architecture or runtime permission |
+| [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Installed/candidate versions and verified upstream limits | Automatic adoption decisions |
 
-Issues coordinate ownership; they do not override the owning document. Historical waves, packets, receipts and
-generated maps remain evidence in Git only.
+When documents conflict, correct the owning layer and make other pages link to it. Do not satisfy both by adding a
+compatibility path, receipt or second registry.
 
-## Reading path
+## Reading path by task
 
 | Task | Read |
 |---|---|
-| Understand the product | [Architecture](architecture/README.md) |
-| Implement next cut | [Implementation spine](implementation/README.md#delivery-sequence) → affected owner recipe → actual callers |
-| Resume work | [R048 registry](audit/ANALYSIS_REGISTRY.md#resume) |
-| Change a dependency/service/backend | [Donor/analogue register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → real consumer |
-| Remove legacy code/tests | [Test cutover](implementation/TEST_CUTOVER.md) plus exact current caller search |
-| Inspect ownership/lock flow | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
+| Understand the product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
+| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → nearest owner recipe → actual callers → owning issue |
+| Resume interrupted work | [R049 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
+| Change a dependency/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner recipe |
+| Move/delete legacy code/tests | [Test cutover](implementation/TEST_CUTOVER.md) and current caller search |
+| Inspect data/effect/lock ownership | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
 
-## Current status — R048
+## Current implementation decisions
 
-R048 inspected Git/tempfile, Tantivy, Zoekt, Watchman/ignore, qntx/qmd, Veles, codesearch and current Qdrant
-mechanisms. The selected simplifications are:
+R049 selects:
 
-1. plain object/root finalization prefers same-directory `tempfile::persist_noclobber` plus exact readback;
-2. Foundation initialization is final-manifest-last with exact discard/retry, not resume/replay;
-3. the first restart-convergent index rebuilds a complete fresh physical Qdrant generation for every real desired
-   state change;
-4. stable point reuse, fixed closures and compaction are a later measured optimization, not prerequisites;
-5. `PublishedView` names a physical collection directly; Qdrant aliases are not serving authority;
-6. filesystem notifications remain dirty hints only; authoritative inventory determines selected state;
-7. Qdrant remains the only selected backend—no fallback trait or dual index before measurement.
+- owner-private handle-based Windows root/object finalization; `tempfile::persist_noclobber` is not the trusted
+  Windows finalizer;
+- Qdrant Server/Rust client 1.20.x for the implementation cut;
+- direct BM25 over a scoring full-text payload index with explicit `code` tokenizer and `TextQuery`;
+- exact physical collection identity in `PublishedView`, without aliases;
+- Stage 3A complete immutable generations as the correctness/reference profile;
+- numeric release budgets before Stage 3A may ship for a corpus class;
+- Stage 3B point-level incrementality only where those budgets fail;
+- no generic custom-shard partitioning because BM25 statistics are shard-local;
+- Qdrant Edge as an isolated later candidate, not the current baseline.
 
-Current vertical sequence:
+The product remains unimplemented. The Cargo lock still contains Qdrant client 1.19.0; R049 changes documentation
+and issue metadata only.
 
-```text
-Foundation
-→ one-file Search walking skeleton
-→ restart + fresh-generation convergence
-→ measured optional incrementality
-→ Exact/live session
-→ maintenance and selected depth
-```
-
-The application is still unimplemented. R048 changes instructions only and adds no compiler/runtime evidence.
-
-## Focused material
+## Focused supporting material
 
 - [Configuration](config/README.md)
-- [Qdrant boundary](runtime/QDRANT_ADAPTER_BOUNDARY.md)
+- [Qdrant adapter boundary](runtime/QDRANT_ADAPTER_BOUNDARY.md)
 - [Windows Qdrant notes](runtime/QDRANT_NATIVE_WINDOWS.md)
 - [ADRs](adr/README.md)
 - [Audit navigation](audit/README.md)
 - [Handoff/navigation](handoff/README.md)
 
-Retired Architecture 8.4, waves, packets, receipts, generated maps and structural qualification cannot restore
-dead APIs or become implementation prerequisites.
+Retired Architecture 8.4, waves, packets, receipts, generated maps, standalone applications and structural
+qualification remain in Git history. They may explain findings but cannot authorize work or restore dead APIs.

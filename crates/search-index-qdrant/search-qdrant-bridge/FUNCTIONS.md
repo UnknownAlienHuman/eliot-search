@@ -1,92 +1,52 @@
-# Qdrant bridge — one private physical-generation SDK adapter
+# Qdrant bridge — one real 1.20 runtime and exact physical generations
 
-The bridge translates Eliot-owned operations to the workspace-pinned `qdrant-client` and validates responses.
-Publication owns ordering, pending state, physical-generation lifecycle and visibility; query owns scope/result
-use. Vendor types, credentials and status text stay private.
+`search-qdrant-bridge` is the sole package allowed to depend directly on `qdrant-client`; vendor request/response,
+filter, index and schema types remain private. Publication and query share one daemon-owned client/runtime.
 
-## One runtime
+## Selected implementation baseline
 
-One daemon-owned `qdrant_client::Qdrant` serves publication and query. Inputs are endpoint, optional actual API
-key and ordinary transport settings. Use one absolute deadline/cancellation per attempt; nested calls do not renew
-it. Dropping a future is not server cancellation.
+R049 selects Qdrant Server and Rust client **1.20.x** for the walking-skeleton cut. The current repository lock
+still contains client 1.19.0; upgrade dependency, lock, schema builders and real consumers together.
 
-Remove supervisor binding, qualification gates, secret leases, relative timeout resets and process-local mutation
-ledgers with their callers. Live probes are diagnostics, not constructor credentials.
+Qdrant 1.20 provides direct BM25 on a scoring full-text payload index plus `TextQuery` and the `code` tokenizer.
+The baseline no longer generates sparse BM25 vectors or owns `avg_len`.
 
-## Physical collections, no alias authority
-
-Every ELIOT generation has one installation-scoped never-reused physical collection name. `PublishedView` carries
-that exact name and query addresses it directly.
-
-Do not use a Qdrant alias as serving or recovery authority. Alias mutation cannot atomically install ELIOT's
-matching redb evidence snapshot, and an old pinned view must continue to address its old physical generation.
-An alias may exist as an operator convenience outside correctness, but the bridge API does not require one.
-
-## Baseline operations
-
-Walking skeleton and fresh-generation convergence require only:
-
-- create one physical generation with selected schema;
-- verify exact generation/schema/profile;
-- explicit `insert_only` create of immutable points;
-- exact point readback;
-- native BM25 query against an exact physical generation;
-- terminal delete of an exact retired collection;
-- exact collection existence/absence readback.
-
-Do not add count/scroll/hybrid/vector/payload mutation helpers until a real consumer exists.
-
-Stage 3B may add one fixed non-creating `valid_until` closure. Prefer explicit `update_only` full-point update or a
-payload operation whose official semantics cannot insert a missing point; test the exact selected SDK request.
-Default upsert is forbidden for retry.
-
-## Complete fresh-generation build
+Required concrete operations:
 
 ```text
-fixed physical collection + selected schema
-→ bounded pages of fixed point IDs/Document inputs/payloads
-→ insert_only
-→ exact readback
+connect(endpoint, actual optional API key, transport settings, RequestContext)
+create_physical_generation(name, explicit schema)
+create_scoring_text_index(field, explicit tokenizer/stemmer/stopword settings)
+insert_only_points(name, fixed bounded batch)
+retrieve_exact_points(name, ids)
+query_text(name, field, query, scope/idf params, limit)
+collection_exists/get(name)
+delete_collection_terminal(name)
 ```
 
-A timeout/lost response may repeat the identical fixed insert. If another attempt already inserted it, exact
-readback accepts identical state. Foreign/conflicting state fails the generation.
+Do not expose a generic data-plane trait, dynamic provider registry, qualification token or replay ledger.
 
-The collection is unservable until publication commits matching evidence/current state and explicitly installs
-the `PublishedView`. Once visible under the fresh-generation profile, it receives no point mutation.
+## Connection and schema
 
-## Incremental profile — optional later consumer
+Construct from endpoint, actual optional key, finite transport settings and one absolute deadline/cancellation.
+Observe live server version/capabilities and verify the exact selected schema. Do not require executable hashes,
+artifact receipts, build strings or process identity as runtime credentials.
 
-If stage 3B is selected from measurement:
+The first generation contains:
 
-- stable point identity is generation/profile bound;
-- new point remains explicit `insert_only`;
-- fixed closure repeats only the same exclusive `valid_until`;
-- closure may not create a missing point or reopen/change an existing boundary;
-- no individual point is physically deleted;
-- compaction/profile change creates another physical generation.
+- explicit derived point identity;
+- retrieval text payload;
+- compact scope/evidence keys needed for filters/readback;
+- one scoring full-text index using explicit text-processing settings;
+- required payload indexes for scope and `idf.corpus` filters.
 
-The bridge owns no replay journal. Publication persists the exact pending page/artifact and observes actual state.
+The `code` tokenizer improves code lexical recall but does not replace Exact. Every retrieval-text/schema choice is
+part of the retrieval profile and incompatible changes create a fresh generation.
 
-## Native lexical input
-
-Use Qdrant native `Document` input for the selected BM25 profile. Pending build pages retain actual bounded text
-and explicit tokenizer/language/stemmer/stopword options needed for dispatch. Generated sparse coefficients are
-Qdrant output, not locally predictable proof.
-
-Readback validates at least:
-
-- exact point ID;
-- immutable source/occurrence/profile/filter/group bindings;
-- expected profile-specific validity fields, if any;
-- required vector field and finite sparse response shape;
-- aggregate response bounds.
-
-Retained source/prepared bytes establish evidence, not payload/vector digests.
-
+<a id="scope-and-idf"></a>
 ## Scope and IDF
 
-For every sparse query leaf:
+For each `TextQuery`:
 
 ```text
 base population = compatible selected sources + pinned validity/access partition
@@ -94,55 +54,82 @@ retrieval filter = base population + request-only narrowing
 idf.corpus       = base population
 ```
 
-The IDF corpus does not filter hits. Explicit empty scope returns empty without RPC. Unknown IDs, missing
-physical generation/schema or incomplete inventory are errors, not empty success. Preserve Qdrant server order;
-top-k is navigation, not exhaustive absence.
+Known-empty scope returns empty without RPC. Unknown/incomplete scope does not widen. The corpus filter changes
+statistics, not result eligibility, and may be broader than the retrieval filter.
 
-The fresh-generation profile can often express base population through one physical collection plus selected
-source filters, avoiding intra-generation validity clauses. The incremental profile adds exact sequence validity
-to both retrieval and `idf.corpus`; the clauses must remain identical.
+Full-text BM25 statistics are physical-shard-local. In a multi-shard collection the same document may score
+differently depending on its shard. `idf.corpus` cannot reach into another shard and can silently see partial or
+empty local overlap. Therefore the baseline generation does not partition a portfolio by source/root shard key.
+Do not add local cross-shard score fusion. Custom sharding is reconsidered only for a scope always queried as one
+partition.
 
-## Whole-generation cleanup
+Measure connected cold/warm broad/narrow scope cost. Top-k does not prove bounded upstream statistics/filter work.
 
-Publication requests deletion only after the generation is retired, no pending/future publication can target it,
-no view/window guard uses it and no owned unresolved attempt remains.
+## Fresh-generation profile — Stages 2 and 3A
+
+`PublishedView` names one exact physical collection. Queries address that collection directly. Qdrant aliases are
+not serving/recovery authority because an alias switch cannot atomically install ELIOT's matching redb snapshot or
+preserve old pinned views.
+
+Build a never-reused collection:
 
 ```text
-delete exact collection with selected terminal/wait semantics
-→ exists/get exact collection identity
-→ observe logical absence
+create exact schema
+→ create scoring full-text/payload indexes
+→ explicit insert_only bounded batches
+→ exact point/schema/count readback
+→ return settled generation observation to publication
 ```
 
-Never reuse the name. Do not infer completion from list omission alone. Uncertain delete/absence remains unresolved
-to publication, which retains cleanup/backpressure. Logical absence is not physical disk erasure.
+Once visible, the collection is immutable. Any selected-state change builds another complete generation. No
+`valid_until`, point deletion or stable cross-generation point identity is required.
 
-The delayed point-attempt versus collection-delete race remains an executed Qdrant 1.19 requirement. Do not hide
-it behind an alias or process-local receipt.
+Default upsert is forbidden. A lost-response retry repeats the identical fixed batch/point and accepts only exact
+readback; foreign/conflicting state fails the generation. A failed/uncertain generation is never served and its
+name is never reused.
 
-## Backend boundary
+## Stage 3B optional mutation surface
 
-Qdrant is the only selected indexed backend. Do not add a generic backend trait or Tantivy/Zoekt fallback. Those
-systems inform immutable build/visibility mechanics only. If post-3A measurements reject Qdrant, prototype a
-replacement through the same retained/prepared/evidence values and replace the derived backend deliberately.
+Only when Stage 3A fails declared budgets may the bridge add:
 
-## Errors
+- explicit `insert_only` additions;
+- one fixed non-creating `valid_until` closure with exact readback;
+- compact/rebuild through another fresh generation.
 
-Keep structured classes for authentication, missing/foreign generation, schema/profile mismatch,
-already-exists/identity conflict, resource limit, transport, definite pre-dispatch failure, unresolved attempt,
-malformed readback and uncertain collection deletion. Do not flatten them into readiness/receipt status.
+Do not add point-mutation APIs speculatively. If the selected Rust client cannot express a non-creating closure
+unambiguously, keep full-generation publication until a verified operation exists.
 
-## Focused checks
+<a id="whole-generation-cleanup"></a>
+## Whole-generation cleanup
 
-- exact collection/schema creation and readback;
-- complete insert-only one-file build;
-- identical lost-response insert retry;
-- foreign/conflicting point refusal;
-- native Document query and retained-evidence result;
-- explicit empty/unknown/multi-source scope and scoped IDF;
-- no alias dependency;
-- no default upsert in retry path;
-- whole-generation delete/absence, name non-reuse and uncertainty;
-- delayed point-attempt/delete race on pinned server/client 1.19;
-- one shared runtime for publication and query.
+Delete only an exact retired physical collection after publication proves:
 
-Run minimal Rust 1.98 check/Clippy for bridge and actual publication/query/daemon consumers before live cases.
+- it is not durable current;
+- no pending/future operation can target it;
+- no live `PublishedView` or `QueryWindow` guard uses it;
+- no owned unresolved attempt remains targetable.
+
+Use terminal/wait semantics, then query exact collection existence/state and observe logical absence. Never reuse
+the name. Uncertain deletion/absence remains unresolved/backpressured. Logical absence is not physical disk-erasure
+proof. Execute delayed request versus collection-delete behavior on the selected 1.20 server before claiming
+safety.
+
+## Qdrant Edge boundary
+
+Qdrant Edge 0.8.0 is an official beta candidate with in-process BM25 and on-disk shards, but is not the baseline.
+Its released line has manual optimize/flush obligations and recently exposed WAL acknowledgement/replay defects.
+After the server path works, an isolated spike may compare a newer released Edge version. It must replace this
+bridge behind the same retained/prepared/evidence boundary, not create a dual backend.
+
+## Remove with callers
+
+Remove supervisor binding/key leases/fixed-build qualification, manual HTTP readiness, duplicated vendor wrappers,
+process-local mutation receipt maps, supplied-readback proofs and old schema/point models after real publication
+and query consumers move.
+
+## Verification
+
+Run Rust 1.98 locked check/Clippy for bridge plus actual publication/query/daemon consumers. Then execute Qdrant
+1.20 cases: live capability/schema, scoring full-text index and code tokenizer, insert-only lost response and
+foreign conflict, exact readback, scope/IDF empty and partial cases, physical generation query, old-view use,
+terminal delete/absence, delayed request/delete race, cancellation and measured build/query resources.

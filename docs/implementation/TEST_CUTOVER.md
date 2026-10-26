@@ -1,127 +1,107 @@
-# Test and harness cutover
+# Test and evidence cutover
 
-Tests preserve selected product behavior, not pre-release package layout, receipts, waves or disconnected
-applications.
+Tests preserve connected product behavior, not pre-release package layout, receipts, waves or disconnected
+applications. Run the smallest Rust 1.98 compiler/Clippy closure after each production cut; add focused runtime
+evidence only for behavior which now exists.
 
-**Historical source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`  
-**Current documentation checkpoint:** R048.
-
-## Disposition rule
-
-For each legacy test:
-
-1. **Delete** when it freezes source layout, topology, receipts, obsolete features or a removed state machine.
-2. **Move the causal case** when it exposes behavior still owned by the current design.
-3. **Retain unchanged** only when it already executes selected behavior through a real consumer.
-
-Do not retain an obsolete API for its fixture. Do not require broad suites before a connected path exists.
+**Current documentation checkpoint:** R049 over inspected head `fed10c1e`.
+**Current compiler evidence:** R031 materializer + unitizer only. R032–R049 are documentation-only.
 
 ## Evidence order
 
-### Each production cut
+### Stage 1 — Foundation
 
-Run:
+After root/config code exists:
 
-- smallest locked Rust 1.98 `check` closure for changed production targets;
-- minimal Clippy for those targets and immediate consumers;
-- one focused causal case only when the implementation exists and is cheap.
+- locked check and Clippy for actual CLI/daemon/root/config/store consumers;
+- help/version with zero root effects;
+- inspect absent/current/incomplete/foreign/busy;
+- final-manifest-last initialize and exact reopen;
+- strict `discard-incomplete` without foreign/user-data deletion;
+- second-owner refusal and shutdown ordering;
+- Windows handle-based no-clobber finalization canary, including destination-exists and path/parent replacement;
+- truthful durability reporting.
 
-### Foundation
+Do not accept `tempfile::persist_noclobber` documentation or a path-only rename as Windows evidence.
 
-```text
-help/version no effects
-→ bounded root/plain settings
-→ inspect absent/current/incomplete/foreign
-→ manifest-last initialize
-→ open one actual guard
-→ factual status
-```
+### Stage 2 — one-file walking skeleton
 
-Focused cases: zero-write inspect, final-manifest-last failure points, exact discard of recognized empty incomplete
-layout, foreign/replacement refusal and second-owner exclusion.
-
-### First connected smoke
+Upgrade the actual bridge/client/schema to Qdrant 1.20.x in the same code cut. Then run:
 
 ```text
-open plain root
-→ select one supported file
-→ retain/reopen ObjectRef
-→ prepare once
-→ build one fresh physical Qdrant collection with insert_only
-→ commit evidence/current + install PublishedView
-→ one CLI Search
-→ exact retained excerpt
+one stable file read
+→ plain ObjectRef
+→ current SourceRecord
+→ PreparedRef
+→ fresh physical collection
+→ scoring full-text index with explicit code/text processing
+→ insert_only point build and exact readback
+→ evidence/current commit and PublishedView install
+→ TextQuery
+→ retained excerpt in default CLI
 ```
 
-No restart, broad inventory, stable cross-generation point ID, fixed closure, watcher, session, cleanup or optional
-format is required for this first result.
+Verify exact source/revision/location/excerpt, missing/corrupt evidence refusal, Qdrant order preservation, known
+empty scope, bounded output, cancellation and help/status capability truth. Baseline tests must not require sparse
+BM25 inference, fixed `avg_len`, aliases, custom shards, watcher, stable cross-generation point identity, encrypted
+storage or a second backend.
 
-### Stage 3A — fresh-generation convergence
+### Stage 3A — correctness/reference convergence
 
-1. restart and exact reopen of root/object/source/prepared/current view;
-2. startup/explicit/periodic inventory with incomplete-scan preservation;
-3. source edit, removal and policy exclusion building a complete next generation;
-4. dropped wake-up repaired from desired/published comparison;
-5. old pinned view remains exact after new view installation;
-6. crash between redb commit and view installation;
-7. interrupted/foreign generation never becomes current;
-8. whole-generation cleanup after last guard, name non-reuse and uncertain-delete retention.
+Add restart/reopen, authoritative startup/explicit/periodic inventory, dropped-wakeup repair, source edit/removal,
+complete next generation, old pinned view, commit/install crash recovery and whole-generation cleanup.
 
-### Stage 3B — only if measurement selects incrementality
+Record a measurement matrix for declared corpus classes:
 
-1. unchanged/unique occurrence reuse and ambiguous duplicate reminting;
-2. identical insert-only retry after lost response;
-3. missing-point fixed-closure refusal;
-4. closure while an older sequence view lives;
-5. representative edits with measured point/write reduction versus 3A;
-6. compaction threshold and fresh generation switch.
+- full build p50/p95;
+- edit-observed → view-installed latency;
+- points/payload bytes and backend writes;
+- peak memory/CPU/handles;
+- current + building + reader-retained generation disk;
+- update arrival rate versus rebuild throughput;
+- cleanup backlog and longest supported reader/window.
 
-If 3B does not materially beat 3A on declared corpora, do not ship the incremental machinery merely because its
-tests exist.
+Stage 3A is a release mode only where #215's numeric budgets pass. These numbers are product/release inputs, not
+values invented by a unit test.
 
-### Exact/session
+### Stage 3B — only where Stage 3A misses budgets
 
-Literal cross-block overlap, complete-negative only for fully scanned inventory, raw versus decoded representations,
-partial frames, cancellation/EOF, output-before-cursor-commit and same-session Continue/Expand.
+Then test stable occurrence reuse, explicit insert-only additions, fixed non-creating closures, sequence-range
+exactness if retained, pending-delta recovery, old-view evidence and measured compaction. If every target corpus
+class passes Stage 3A, close Stage 3B issues `not_planned` with the measurements.
 
-### Maintenance/depth
+### Later stages
 
-Stopped-root mark/sweep, archive/fresh import, then selected PDF/Git/orientation/overlay/model/MCP behavior only for
-shipped profiles.
+- literal Exact and one serviced framed live session/QueryWindow;
+- stopped-root object collection, archive/import and selected product leaves;
+- optional profiles only when shipped: encryption, PDF, Git, MCP, models, overlay, managed Qdrant or an isolated
+  Qdrant Edge replacement spike.
 
-Relevance and scale follow the working path.
+Qdrant Edge is not a baseline test matrix while its selected released line remains beta/unqualified for ELIOT.
+Custom sharding is not a baseline optimization because BM25 statistics are shard-local.
 
-## Donor-derived canaries
+## Legacy-test disposition
 
-Keep small causal tests for the failures seen in analogous systems:
+1. **Delete** tests which only freeze source layout, package topology, waves, receipts, obsolete features or a
+   removed state machine.
+2. **Move causal behavior** to the receiving owner when the failure remains relevant.
+3. **Retain unchanged** only when the test already executes selected current behavior through a real consumer.
 
-- no manifest-first visibility of partially written artifacts (Veles counterexample);
-- equal size+mtime does not prove unchanged bytes when a source is actually evaluated;
-- walker/stat/ignore error cannot become complete inventory or deletion;
-- Qdrant commit/current metadata and serving view installation are distinct (Tantivy reload lesson);
-- no database/view/window mutex across embedding/backend/object/process I/O (qntx/qmd lock lesson);
-- no Qdrant alias required for serving;
-- existing content-addressed final is verified, never trusted from path alone (Git collision boundary).
+The two mixed migration suites already have complete move/delete dispositions. Do not re-audit them. Remove
+remaining wave1–wave6, config activation, legacy query/handle/proof and CLI/provider fixtures as their real caller
+moves. A subprocess, native call or large fixture does not make an obsolete architecture current.
 
-These are owner tests, not a new analogue-conformance suite.
+## Donor canaries live with owners
 
-## Current removals
+- Windows handle finalization canary belongs to root/object owners.
+- Qdrant 1.20 scoring full-text/code-tokenizer/scope/cleanup cases belong to bridge/publication/query.
+- `ignore` traversal/error cases belong to reconciliation.
+- Edge or backend replacement experiments remain isolated and cannot become an all-target gate.
 
-Remove with last callers:
+Do not create a repository-wide donor-conformance scanner, receipt service or qualification authority.
 
-- wave1–wave6 acceptance/features and source-shape gates;
-- config fingerprints/activation receipts;
-- root leases/owner slots/init journal/resume machine;
-- duplicate object writers;
-- old query planner/handle/continuation stores;
-- publication proof/compensation/per-point-reclaimer stacks;
-- alias-as-view logic;
-- pairing/loopback/legacy CLI sessions;
-- unavailable optional workers with no current consumer.
+## Completion discipline
 
-Useful causal requirements move to receiving owners: no-clobber object publication, conservative inventory,
-ABA-safe rows, source-backed evidence, complete build then explicit view install, bounded framing/cancellation and
-owned-child cleanup.
-
-R031 check/Clippy covered materializer + unitizer only. R032–R048 documentation changes add no Rust/runtime
-evidence.
+Every reported result names exact SHA, platform, toolchain, Qdrant server/client/profile, command and outcome.
+Use `PASS | FAIL | PARTIAL | NOT_RUN`; missing evidence is not PASS. Compilation, source presence, readback or a
+closed issue alone does not establish crash safety, relevance, bounded work or end-to-end behavior.
