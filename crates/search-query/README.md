@@ -1,30 +1,52 @@
 # Query and source-backed results
 
 The connected query owner turns one typed operation into bounded, source-backed output. It pins one
-`PublishedView`, resolves one non-widening scope, calls the concrete handler, preserves the final order and verifies
-selected evidence against immutable retained objects.
+`PublishedView`, resolves one non-widening scope, captures one query-scoring profile, calls the concrete handler,
+preserves final order and verifies selected evidence against immutable objects.
 
 ## Direct flow
 
 ```text
-typed operation + explicit/default source selection + limits
-→ pin current PublishedView
+typed operation + source selection + limits
+→ pin current PublishedView (physical profile + redb snapshot)
+→ capture QueryScoringProfile
 → resolve ResolvedScope without widening
-→ reserve finite candidate/output/window capacity
+→ reserve finite nomination/output/window capacity
 → execute Search | Exact | Continue | Expand
 → select page before retained-source I/O
-→ point-read evidence in the pinned redb snapshot
+→ point-read pinned evidence
 → verify retained representation/range
-→ emit source/revision/location/excerpt, match basis and truthful gaps
+→ emit source/revision/location/excerpt, basis and gaps
 ```
 
-A citation proves provenance. It does not prove relevance, uniqueness, semantic identity, corpus completeness or
-behavioral equivalence.
+A citation proves provenance, not relevance, uniqueness, semantic identity or corpus completeness.
 
-## Search — exact Qdrant 1.20 boundary
+## Search — physical versus query profile
 
-Baseline Search is one Qdrant 1.20 `TextQuery` against the `retrieval_text` scoring full-text index named by the
-pinned view. The bridge owns vendor types. Its equivalent Rust request is:
+The pinned view binds a physical Qdrant 1.20 profile:
+
+```text
+vectorless one-shard collection
+retrieval_text Text index
+Code tokenizer
+explicit normalization/stemmer/phrase/HNSW/memory settings
+filter-field schema
+```
+
+The admitted request separately captures:
+
+```text
+QueryScoringProfileV1 {
+  k = 1.2
+  b = 0.75
+}
+```
+
+Validate finite `k >= 0` and finite `0 <= b <= 1`. Changing only k/b changes future request scoring and does not
+rebuild a collection. A live window stores final ordered references; Continue does not requery under newer k/b.
+There is no baseline `score_threshold`.
+
+Equivalent bridge request:
 
 ```text
 QueryPointsBuilder(collection)
@@ -33,90 +55,82 @@ QueryPointsBuilder(collection)
   [.filter(candidate_filter)]
   [.params(SearchParamsBuilder.idf(base_population_filter))]
   .limit(prefetch_ceiling)
+  .with_vectors(false)
+  .with_payload([source_id and only required routing keys])
 ```
 
-The selected exact patch exposes `TextIndexParamsBuilder::bm25_scoring`, `TokenizerType::Code`, `TextQueryBuilder`,
-`QueryPointsBuilder`, `SearchParamsBuilder::idf` and `UpdateMode::InsertOnly`. Compile this exact surface in the
-implementation cut; documentation inspection is not a build result.
+Do not return `retrieval_text` or excerpts from Qdrant; evidence/object reads are authoritative.
 
-`TextQuery` is any-term BM25 nomination. Search text is not a Boolean or phrase parser. Required/excluded terms
-exist only when the typed request explicitly supplies them; they become filter clauses. Exact spelling and
-punctuation-sensitive predicates use Exact, not a stricter interpretation of free text.
+## Text and filter semantics
 
-Preserve Qdrant's returned order. Do not re-sort a single population by raw score, compare scores from incompatible
-populations or call exact count to make top-k look exhaustive. Native prefetch/RRF/grouping is optional only when a
-real multi-branch indexed request exists. A non-Qdrant branch may use one small private deterministic rank merge;
-no public ranking framework is required.
+`TextQuery` is any-token BM25 nomination. The Code tokenizer gives ranking queries subwords plus detached joined
+camel/snake identifiers, so an exact joined identifier can rank highly without local alias expansion.
+
+Free text is not a hidden Boolean, phrase or negation grammar. If a typed request exposes required/excluded text
+clauses, Qdrant full-text filters require **all query subwords in any order**. They do not receive joined identifier
+tokens and, with phrase matching disabled, are not exact identifier/phrase predicates. Exact spelling,
+punctuation and byte/location requests use retained-source Exact or a separately selected exact keyword producer.
 
 ## Scope and IDF
 
-`ResolvedScope` has two filter levels:
-
 ```text
-base population = source selection ∩ real access/session restriction
+base population = selected sources ∩ actual access/session restriction
 candidate filter = base population + request-only path/kind/topical narrowing
 idf.corpus       = base population
 ```
 
-Default or explicit source selection is part of the BM25 population. Query-only narrowing does not redefine IDF.
-Both filter forms use indexed payload fields. Explicit empty returns empty without RPC. Unknown/foreign or
-incomplete selection fails or reports a gap; it never widens to all sources.
+Default/explicit source selection and real access restrictions affect both candidates and BM25 statistics.
+Request-only narrowing does not redefine IDF. Every actual filter field is indexed. Explicit empty returns without
+RPC; unknown/foreign/incomplete selection fails or reports a gap and never widens.
 
-For Stage 2's one-file collection, base population equals the entire physical collection: omit both filter and
-`idf` instead of sending ceremonial predicates. For Stage 3A, one compatible physical collection may contain
-several sources; source subset and restricted-session selection appear in both candidate eligibility and IDF.
-
-Different physical collections or incompatible retrieval profiles remain separate populations. Do not sort their
-raw scores together. The baseline uses one shard because full-text BM25 statistics are shard-local; no per-source
-custom-shard portfolio or local fusion owner is selected.
+Stage 2's one-file collection equals the complete base population: omit filter and `idf`. Stage 3A adds only the
+filter indexes required by real multi-source/access requests. Different physical collections/profiles remain
+separate score populations; do not sort raw scores together. Baseline uses one ordinary shard because BM25
+statistics are shard-local.
 
 ## Evidence and coordinates
 
-Qdrant payload is nomination/routing data, not source evidence. Resolve each selected `(source_id, point_id)` in the
-pinned redb snapshot, validate complete identity/profile metadata, then open the exact retained object and range.
-Missing, foreign, corrupt or mismatched evidence produces a gap/error, never a card and never a fallback source.
+Qdrant payload nominates and routes; it is not source evidence. Resolve `(source_id, point_id)` in the pinned redb
+snapshot, validate complete identity/profile metadata, then open the exact retained object and range. Missing,
+foreign, corrupt or mismatched evidence produces a gap/error, never a card or fallback source.
 
-Text locations bind a retained representation plus half-open byte range `[start, end)`. Display lines are 1-based;
-columns use UTF-8 byte offsets unless explicitly labelled otherwise. Mapped/extracted text carries its source map
-and loss/gaps. Prepared offsets are never presented as raw-source offsets.
+Text locations bind retained representation plus half-open byte range `[start,end)`. Display lines are 1-based;
+columns use UTF-8 byte offsets unless labelled otherwise. Mapped text carries source maps/loss/gaps. Prepared
+offsets are never presented as raw-source offsets.
 
 Select the page before object reads. Group ranges from the same object where useful, but charge actual integrity and
-source bytes. A whole-object hash/AEAD check can cost more than the excerpt; top-k does not make integrity O(page).
+source bytes. Whole-object verification can cost more than excerpts; top-k does not make integrity O(page).
 
-## Exact, orientation and comparison
+## Ranking and completeness
 
-- **Exact** scans the stated pinned retained inventory independently of Search candidates. Complete no-match requires
-  complete scan of the declared representation/domain with no gaps.
-- **Orient** appears only with real path/heading/definition/import/test/doc observations.
-- **Compare** selects actual source-backed subjects first and reports only supported axes. Equal names or lexical
-  scores do not establish equivalent behavior.
+Preserve one-population Qdrant order. Do not normalize/re-sort raw scores, exact-count ordinary top-k or report
+complete candidate scope. Native Qdrant prefetch/RRF/grouping is optional only for a real indexed multi-branch
+operation. A real non-Qdrant branch may use one private checked rank merge; no public ranking framework.
 
-A text occurrence is not necessarily a definition; syntax is not compiler-resolved call/reference truth. Missing
-producers remain unsupported/unknown rather than being inferred from filenames or top-k.
+## Exact and later product operations
 
-## Request lifetime and windows
+- **Exact** scans the declared pinned retained inventory independently of Search. Complete no-match requires a
+  complete gap-free scan of the stated representation/domain.
+- **Orient/Compare** appear only with real source-backed producers and report unsupported axes honestly.
+- Syntax/name/text observations never fabricate compiler-resolved call/reference truth.
 
-One `RequestContext` carries the pinned view, resolved scope, absolute deadline, cancellation and finite counters
-through Qdrant, evidence reads, formatting and output. No nested phase resets the timeout. No redb writer,
+## Lifetime and windows
+
+One `RequestContext` carries view, physical profile, query scoring profile, scope, absolute deadline, cancellation
+and finite counters through Qdrant, evidence, formatting and output. No nested phase resets. No redb writer,
 view-manager mutex or window mutation borrow spans backend/object/process/model I/O.
 
-One-shot output exposes no reusable locator. A live serviced session may transfer the same view guard and final
-ordered references into one bounded `QueryWindow`. Continue pages stored final references; Expand reads bounded
-context around an emitted item. Cursor advances only after complete bounded output.
+One-shot output exposes no reusable locator. A live session may transfer the same view guard and final ordered
+references into one bounded `QueryWindow`. Continue pages stored results; Expand reads bounded context around an
+emitted item. Cursor advances only after complete bounded output.
 
-## Current cutover
+## Cutover and verification
 
-Replace disconnected recipe/capability/grant/plan/ticket/handle/oracle paths with direct composition. The likely
-small survivors are scope resolution, request counters, bridge translation, evidence point reads, retained range
-validation and optional rank merge. Package names are not required boundaries.
+Remove disconnected recipe/capability/grant/plan/ticket/scheduler/handle/oracle paths; local postings/sparse BM25;
+score normalization; and alias-expansion profile code. Keep only scope resolution, request counters, bridge
+translation, evidence reads, range verification and an optional private rank helper if real consumers remain.
 
-Remove old local postings/BM25 and the sparse `qdrant/bm25` Document path. The [lexical owner](../search-lexical/FUNCTIONS.md)
-now selects one Qdrant 1.20 scoring full-text profile and no local alias expansion.
-
-## Verification
-
-After code and minimal Rust 1.98 check/Clippy, execute the default CLI against real Qdrant 1.20: one-file whole
-collection; multi-source selected IDF; explicit empty/unknown scope; code-tokenizer camel/snake/joined matches;
-typed required/excluded filters; punctuation-sensitive Exact; order preservation; missing/corrupt evidence;
-timeout/cancellation before and after RPC; old pinned view; bounded output; and actual cold/warm scope cost. R051
-changes instructions only.
+After code and minimal Rust 1.98 check/Clippy, execute exact physical schema, explicit resource settings, minimal
+payload/no vectors, k/b validation, any-token ranking, all-subword filters, whole/scoped IDF, empty/unknown scope,
+Code-tokenizer joined behavior, punctuation Exact, order, evidence failure, timeout/cancellation, old view and
+cold/warm cost. R052 changes docs only.

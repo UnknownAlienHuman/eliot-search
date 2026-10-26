@@ -1,118 +1,139 @@
-# Lexical retrieval — Qdrant 1.20 scoring full-text, not a local BM25 engine
+# Lexical retrieval — explicit Qdrant 1.20 physical and query profiles
 
-This owner supplies the concrete lexical profile used by publication and query. It does not own source identity,
-publication state, evidence, scope or Exact. R051 replaces the old `qdrant/bm25` sparse-vector design with direct
-BM25 over a scoring full-text payload index in Qdrant 1.20.
+This owner defines the concrete lexical meaning consumed by preparation, publication and query. It does not own
+source identity, publication state, scope, evidence or Exact. R052 removes hidden Qdrant defaults and separates
+physical index schema from query-time BM25 scoring.
 
-## Selected baseline profile
+## Physical text-index profile V1
 
-The implementation cut upgrades server and Rust client together to one exact 1.20 patch. One vectorless physical
-collection stores points with bounded payload fields:
+The first product uses one vectorless physical collection and one payload field:
 
 ```text
-point identity/evidence key
-source membership/filter keys
 retrieval_text
 ```
 
-Create one scoring text index before loading points:
+Build the text index with every behavior/resource field explicit:
 
-```text
-field             = retrieval_text
-tokenizer         = code
-lowercase         = true
-ascii_folding     = false
-stemmer           = none
-stopwords         = none
-min/max token len = unset unless measurement selects explicit bounds
-scoring           = BM25
-nested            = false
+```rust
+TextIndexParamsBuilder::new(TokenizerType::Code)
+    .lowercase(true)
+    .ascii_folding(false)
+    .phrase_matching(false)
+    .disabled_stemmer()
+    .enable_hnsw(false)
+    .memory(Memory::Pinned) // Stage-2 one-file profile
+    .bm25_scoring()
 ```
 
-The exact chosen schema, field name and query-time BM25 `k`/`b` values belong to the retrieval profile. A semantic
-change creates a fresh physical generation; old collections are never reinterpreted.
+Leave `stopwords`, `min_token_len`, `max_token_len` and `nested` absent and verify they read back absent. Do not use
+the deprecated `on_disk` field.
 
-The Rust 1.20 API surface inspected at tag `v1.20.0` is concrete:
+Why every field is explicit:
 
-- `TextIndexParamsBuilder::new(TokenizerType::Code).lowercase(true).bm25_scoring()`;
-- `CreateFieldIndexCollectionBuilder` for the payload index;
-- `Query::new_text` / `TextQueryBuilder` for BM25 query text and optional `k`/`b`;
-- `QueryPointsBuilder::using`, `filter`, `params`, `limit`;
-- `SearchParamsBuilder::idf` for a selected statistics corpus;
-- `UpsertPointsBuilder::update_mode(UpdateMode::InsertOnly)`;
-- `PointStruct.vectors` is optional, so the lexical collection needs no dummy vector.
+- text and keyword payload indexes default `enable_hnsw` to true; the vectorless lexical baseline needs no
+  payload-aware vector HNSW links;
+- index memory defaults to `Pinned`; Stage 2 selects that deliberately for one file instead of inheriting it;
+- phrase matching would add a positional capability the baseline does not expose;
+- stemming, stopwords, token-length clipping and ASCII folding can silently change identifier meaning;
+- one-character identifiers and Unicode distinctions must not disappear through an implicit limit/normalization.
 
-Recheck and compile the exact selected patch with the real bridge; source inspection is not compiler evidence.
+The physical profile includes field names, tokenizer/normalization/index parameters, text composition, point
+payload/filter schema, ordinary shard count and index residency. Any physical-profile change creates a fresh
+never-reused generation; an old collection is never reinterpreted.
+
+### Stage 3A resource profile
+
+For declared corpus classes, choose text/filter index memory explicitly from `Pinned | Cached | Cold` before
+measurement. Do not let the server default choose. A different residency choice creates a new physical generation
+under the selected profile. The release matrix records build/query latency, RAM/cache pressure and disk.
+
+Stage 2 has one file and no candidate filter, so it creates only the text index. Stage 3A adds exact keyword/filter
+indexes only for fields used by real source/access/path-kind filters. Those indexes also set
+`enable_hnsw(false)` and explicit memory. Prefix or tenant optimization is enabled only for an actual query shape.
 
 ## Retrieval text: no alias inflation
 
-Preparation/unitization provides one bounded `retrieval_text` for each unit. It may include the actual unit text
-and a finite structural heading/signature/path context **once** when that context is a selected product behavior.
-It must not append snake/camel/acronym aliases generated from the same identifier.
+Each unit supplies one bounded `retrieval_text`: actual unit text plus finite selected structural context once.
+Do not append snake/camel/acronym aliases.
 
-Qdrant's `code` tokenizer already splits camelCase, snake_case and acronym transitions and also indexes the joined
-identifier. Local alias expansion would duplicate terms, alter document length/term frequency and make ranking
-profile-dependent for little benefit. Remove it from the baseline. If measured relevance later justifies another
-text composition, define a new retrieval profile and rebuild; do not silently mutate existing text.
+Qdrant's 1.20 Code tokenizer:
 
-Exact spelling, punctuation and byte/location requests remain retained-source Exact. `C++`, `C#`, operators,
-string literals and other punctuation-sensitive predicates are not made exact by the code tokenizer.
+- splits snake_case, SCREAMING_CASE, camelCase, PascalCase and acronym transitions;
+- keeps letter+digit identifiers such as `utf8`, `sha256` and `x86` together where specified;
+- indexes document subwords plus detached joined camel/snake identifier tokens;
+- gives ranking queries both subwords and joined tokens when lowercase is enabled;
+- gives full-text filter queries subwords only.
 
-## Query semantics
+Therefore local aliases duplicate index terms, alter TF/document length and can degrade ranking. A measured
+alternative text composition is a new physical retrieval profile and fresh generation.
 
-A `TextQuery` scores a point when it contains any query term. Free text is not a hidden Boolean/phrase language.
-Required or excluded terms are added only from an explicit typed request as Qdrant filter conditions. Do not infer
-quotes, `-term`, `AND`, language or stemming rules from arbitrary user text.
+Punctuation-sensitive identifiers/operators/strings remain retained-source Exact. Code tokenization does not make
+`C++`, `C#`, `::`, quoted text or exact byte/location predicates exact.
 
-For the first one-file smoke the physical collection equals the selected population, so issue one `TextQuery`
-without a candidate filter or `idf.corpus`.
+## Query-scoring profile V1
 
-For later scoped requests distinguish:
+BM25 `k` and `b` are request-time parameters, not index schema. The first query profile fixes:
 
 ```text
-base population = selected source memberships intersected with real access/session restrictions
-candidate filter = base population + explicit request-only path/kind/topical narrowing
+k = 1.2
+b = 0.75
+```
+
+Validate client-side before dispatch:
+
+```text
+k is finite and k >= 0
+b is finite and 0 <= b <= 1
+```
+
+Changing only `k`/`b` does **not** rebuild the collection. Capture the exact scoring profile in the admitted request
+and any resulting live window/diagnostics. Do not expose tuning fields until a real consumer/measurement requires
+them. No baseline `score_threshold`: use bounded top-k because absolute BM25 scores vary by corpus/profile.
+
+## Ranking and filter semantics
+
+`TextQuery` is any-token BM25 nomination. Free query text is not parsed as Boolean, phrase or negation syntax.
+
+If the product later exposes typed required/excluded text clauses, Qdrant full-text filters use **all query
+subwords in any order**. With Code tokenizer they do not use joined identifier tokens and are not exact identifier
+or phrase predicates. Phrase filters require a separately selected positional profile; exact identifiers remain
+Exact or an explicit exact keyword producer.
+
+## Scope and IDF
+
+For a scoped query:
+
+```text
+base population = selected sources ∩ actual access/session restriction
+candidate filter = base population + request-only narrowing
 idf.corpus       = base population
 ```
 
-The base source/access filter appears in both candidate eligibility and IDF. Request-only narrowing does not
-silently redefine statistics. If the base population is the whole physical collection, omit `idf` rather than
-sending a redundant filter. Explicit empty returns empty without RPC; unknown/incomplete scope never widens.
+If base population is the whole physical collection, omit `idf`. Explicit empty returns without RPC; unknown or
+incomplete selection never widens. All real filter fields are payload-indexed. BM25 statistics are shard-local, so
+the baseline uses one ordinary shard and no per-source custom-shard portfolio.
 
-Create keyword/payload indexes for every field used by base or candidate filters. Qdrant BM25 statistics are
-physical-shard-local; the baseline uses one ordinary shard and no per-source custom-shard portfolio.
+## Visibility and response economy
 
-## Visibility and cost
+Create/verify the text index before point ingestion. Build with explicit `InsertOnly` and `wait`, then verify schema,
+point payload/count and an actual deterministic `TextQuery` canary before publication commits the view.
 
-Create the text and filter indexes before point ingestion. Build points with explicit `insert_only` and `wait`,
-then verify collection/index schema, exact point payloads/count and at least one deterministic `TextQuery` canary
-before publication may commit the matching view. Point readback alone does not prove the scoring index works.
+Query requests explicitly return no vectors and only the routing payload required for evidence lookup (normally
+`source_id`; point ID comes from the result). Do not return `retrieval_text` or duplicate excerpts over the Qdrant
+response; the retained object supplies evidence.
 
-Qdrant reports that full-text statistics can temporarily include stale data after updates/deletes until segment
-optimization. Stage 2/3A avoids this class by building a new collection and never mutating it after visibility.
-Stage 3B, if selected, must measure score drift/optimizer behavior rather than assuming immediate statistics.
-
-Scoped IDF and text scoring can perform corpus-dependent work. Measure cold/warm narrow/broad requests, actual
-server CPU/memory, cancellation and result quality. Top-k bounds output, not necessarily backend work.
+Stage 2/3A visible collections are immutable. Qdrant notes that text statistics can remain stale after point
+updates/deletes until segment optimization; Stage 3B must measure that behavior if activated.
 
 ## Remove with callers
 
-After the direct path is connected, remove:
-
-- local postings/BM25 engines and scoring-corpus builder;
-- `Document(text, "qdrant/bm25", ...)` sparse document/query inference;
-- fixed local `avg_len` and sparse-vector byte/profile goldens;
-- frozen analyzer/qualification/acceptance receipts;
-- alias-expansion/profile identities driven by tests or resource ceilings;
-- duplicate numerical encoders and unused dependencies.
-
-Keep only a small retrieval-text composer if it has real preparation/publication callers. Inline it if no package
-boundary remains justified.
+Remove local postings/numerical BM25, sparse `qdrant/bm25` inference, fixed local `avg_len`, alias expansion,
+frozen analyzer/qualification receipts, score-normalization profiles and duplicate encoders. Keep only a small
+retrieval-text composer if real callers justify it; inline it otherwise.
 
 ## Focused verification
 
-After code and minimal Rust 1.98 check/Clippy, execute: vectorless collection creation; explicit code-tokenizer
-schema; camel/snake/acronym matches without alias duplication; joined identifier match; OR term behavior; typed
-required/excluded filters; whole-collection and selected-source IDF; explicit empty/unknown scope; punctuated Exact
-separation; insert-only conflict/readback; deterministic query order; cancellation; and cold/warm cost. No such
-runtime result is claimed by R051.
+After code and minimal Rust 1.98 check/Clippy, verify exact schema readback including disabled stemmer/phrase/HNSW,
+absent stopwords/length/nested, explicit memory, vectorless points, Code tokenizer subword/joined behavior,
+all-token filter behavior, k/b validation, no score threshold, minimal payload/no vectors, whole/scoped IDF,
+punctuation Exact separation, deterministic readiness query and cold/warm resource cost. R052 changes docs only.

@@ -6,143 +6,149 @@ unrun work; it is not architecture, permission or an implementation prerequisite
 <a id="resume"></a>
 ## Resume
 
-**Checkpoint:** R051, 2026-10-26 — exact Qdrant 1.20 query/schema API and remaining query/preparation/control owners reconciled.  
+**Checkpoint:** R052, 2026-10-26 — Qdrant 1.20 physical/resource defaults and exact text/filter semantics frozen.  
 **Branch:** `codex/refactor-preparation-20261017`, PR #610.  
-**Inspected ELIOT head:** `a4c23110c94f77c67e8f82057e5a84e11dbf1ad6` (R050).  
+**Inspected ELIOT head:** `87c84c24aaac7820f2b418d1cbbde2ef91e4e35a` (R051).  
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
 Read [docs/README](../README.md), the [implementation sequence](../implementation/README.md#delivery-sequence),
-then only the affected owner recipe, actual current callers and owning issue.
+then only the affected owner recipe, current callers and owning issue.
 
-R051 changes documentation only. The product remains unimplemented. Next implementation is Foundation plus the
-Windows handle-finalization canary, then the exact Qdrant 1.20 dependency/schema/query cut and #264.
+R052 changes documentation only. Product remains unimplemented. Next implementation is Foundation plus Windows
+handle-finalization canary, then exact Qdrant 1.20 dependency/schema/query cut and #264.
 
-## R051 inspected evidence
+## R052 inspected evidence
 
-### Official Qdrant Rust client 1.20
+### Qdrant Rust client v1.20.0
 
-Verified signed tag `v1.20.0`:
+Inspected:
 
-```text
-tag object  3e7920854c271883ae1bca60097c73dbb7082124
-commit      3b5a75aa371169486a9af8fc2748a76b379f0d02
-release     2026-10-22
-```
+- `TextIndexParamsBuilder` including `disabled_stemmer`, `phrase_matching`, `enable_hnsw`, `memory`, BM25 scoring;
+- `KeywordIndexParamsBuilder` including HNSW/memory/prefix/tenant settings;
+- `CreateFieldIndexCollectionBuilder` and official keyword-index snippet;
+- `QueryPointsBuilder` response selectors;
+- primitive conversions for `with_payload(Vec<&str>)` and `with_vectors(bool)`;
+- `TextQueryBuilder` defaults and request-time k/b;
+- generated Memory enum.
 
-Inspected generated proto/builders/conversions and official snippet tests:
+### Qdrant Server v1.20.0
 
-- `collections.proto`, `points.proto`;
-- `CreateCollectionBuilder`, `TextIndexParamsBuilder`, `CreateFieldIndexCollectionBuilder`;
-- `TextQueryBuilder`, `QueryPointsBuilder`, `SearchParamsBuilder`, `UpsertPointsBuilder`;
-- `qdrant_client/conversions/query.rs`;
-- BM25 text-index and TextQuery snippet tests.
+Inspected:
 
-Exact usable surface is present:
+- `TextIndexParams` actual defaults and schema serialization;
+- BM25 REST validation (`k >= 0`, `0 <= b <= 1`);
+- Code tokenizer implementation;
+- full-text scorer/filter implementation (`TextQuery` any token; `MatchText` all filter-query tokens);
+- text-statistics behavior and payload-index HNSW/resource fields.
 
-- vectorless collection (`vectors_config` optional; `PointStruct.vectors` optional);
-- `TokenizerType::Code`;
-- `TextIndexParamsBuilder::bm25_scoring`;
-- `TextQueryBuilder::{k,b}` and `Query::new_text`;
-- `QueryPointsBuilder::{using,filter,params,limit}`;
-- `SearchParamsBuilder::idf`;
-- `UpdateMode::InsertOnly`.
+### ELIOT owners checked
 
-### ELIOT active owners checked
-
-- lexical profile;
-- query family README/AGENTS, access/scope, planner and retrieval executor;
-- unitizer/materializer;
-- redb control/evidence owner;
-- Qdrant bridge/publication/runtime owners;
-- implementation/test/index entrypoints;
-- issues #272/#278/#279/#291/#331 and programme handoff.
+Lexical profile, bridge, query owner/executor, control/evidence, implementation/test spine, donor/analysis registers,
+configuration/publication/product/release programme metadata.
 
 ## Findings and decisions
 
-### F1 — R050 still left the old sparse BM25 profile active
+### F1 — hidden payload-index defaults would create unowned resource behavior
 
-`search-lexical` still selected `Document(text, "qdrant/bm25")`, fixed `avg_len`, word tokenizer, sparse document/
-query inference and local alias expansion. Query docs still named Qdrant 1.19 and the old lexical owner.
+Qdrant text and keyword payload indexes default `enable_hnsw=true` and memory to `Pinned`. R051 did not set either.
+This could create additional payload-aware graph work when collection HNSW settings allow it and silently pin large
+indexes in RAM.
 
-**Decision:** baseline is one vectorless Qdrant 1.20 collection with `retrieval_text` payload, scoring full-text
-index, `Code` tokenizer and `TextQuery`. Remove sparse BM25 inference, local `avg_len`, local postings/numerical
-encoders and alias-expansion profile from the connected baseline.
+**Decision:** every physical index profile explicitly sets resource behavior. Stage 2 text index uses
+`enable_hnsw=false`, `memory=Pinned`. Stage 3A explicitly selects `Pinned|Cached|Cold` per corpus profile and measures
+RAM/cache/disk. Real keyword/filter indexes also disable HNSW and set memory. No hidden defaults.
 
-### F2 — code tokenizer makes local alias expansion harmful by default
+### F2 — physical schema and query scoring were conflated
 
-The official 1.20 code tokenizer splits camelCase/snake_case/acronym transitions and indexes the joined identifier.
-Appending local parts duplicates terms and changes term frequency/document length.
+R051 placed query-time k/b beside physical retrieval profile and implied profile changes rebuild collections.
+Qdrant documents k/b as request-time parameters.
 
-**Decision:** unitization emits text/context exactly once. No automatic snake/camel/acronym aliases. A measured
-alternative text composition is a new retrieval profile/fresh generation. Exact punctuation/location remains
-retained-source Exact.
-
-### F3 — free text is any-term nomination, not a hidden query language
-
-`TextQuery` ranks points containing any query term; required/excluded terms belong in request filters.
-
-**Decision:** arbitrary search text is not parsed as Boolean/phrase/negation syntax. Typed required/excluded
-clauses, if exposed, become explicit filters. This prevents accidental product semantics from donor syntax.
-
-### F4 — scope needed two explicit filter levels
-
-Prior text alternated between “same filter for retrieval and IDF” and “query narrowing does not change IDF”.
-
-**Decision:** use:
+**Decision:** split:
 
 ```text
-base population = selected sources ∩ actual access/session restriction
-candidate filter = base population + request-only narrowing
-idf.corpus       = base population
+PhysicalTextIndexProfile
+  field/filter schema, tokenizer, normalization, scoring-index enablement,
+  text composition, shard layout, index residency
+
+QueryScoringProfile
+  k, b, semantic version
 ```
 
-Source/access selection affects both candidates and statistics. Request-only path/kind/topic narrowing does not.
-Whole-collection base omits `idf`. Explicit empty returns without RPC; unknown/incomplete never widens.
+Stage 2 fixes k=1.2, b=0.75 and validates finite upstream ranges. Changing only k/b does not rebuild. A request/window
+captures the profile. No baseline score threshold.
 
-### F5 — readiness needed an actual scorer/query canary
+### F3 — “no stemmer/phrase” needed explicit builder calls and readback
 
-Schema/point/count readback can succeed while the chosen text field/scorer/query wiring is unusable.
+Omission relies on server defaults and can change silently across versions. `TextIndexParamsBuilder` exposes
+`disabled_stemmer`, `phrase_matching(false)`, `ascii_folding(false)` and `enable_hnsw(false)`.
 
-**Decision:** before publication commit, verify exact schema/points/count **and execute one deterministic TextQuery
-canary** against fixed generation inputs. Stage 2/3A creates text/filter indexes before ingestion and uses explicit
-`insert_only` + `wait`.
+**Decision:** Stage-2 exact text schema is:
 
-### F6 — unitizer/control still made Stage 3B mandatory
+```text
+Code tokenizer
+lowercase=true
+ascii_folding=false
+phrase_matching=false
+stemmer=Disabled
+stopwords/min/max/nested absent
+scoring=BM25
+enable_hnsw=false
+memory=Pinned
+```
 
-Unitizer still required old/new occurrence matching; control state still centered route/profile/sequence and
-ordinary incremental deltas.
+Readiness compares every field. Physical schema change creates a fresh generation.
 
-**Decision:** Stage 2/3A has no occurrence matching, stable cross-generation identity or sequence. Units produce
-bounded retrieval text; complete generation capture derives deterministic generation-bound point IDs. Control
-pins physical collection + profile + redb snapshot. Source-prefix merge, births, sequence and closures appear only
-if failed budgets activate Stage 3B.
+### F4 — Code tokenizer has different ranking and filter semantics
 
-### F7 — Qdrant statistics after point mutation strengthen fresh-generation-first
+Official implementation gives ranking queries subwords plus joined camel/snake identifiers. Filter queries receive
+subwords only. Full-text `MatchText` requires all tokens in any order; `TextQuery` scores any matching term.
 
-Qdrant documents that text statistics may temporarily contain stale updated/deleted data until optimization.
+**Decision:** no local identifier aliases. Free text remains any-token nomination. Typed required/excluded text
+filters, if exposed, are all-subword conditions—not exact identifiers or phrases. Exact punctuation/name/location
+uses Exact or a separately selected exact keyword producer.
 
-**Decision:** immutable Stage 2/3A collections perform no point updates/deletes after visibility. If Stage 3B is
-activated, its qualification includes scoring/optimizer convergence, not only mutation readback.
+### F5 — Stage 2 did not need filter indexes
+
+The one-file collection is the entire selected population; it sends no candidate filter or `idf.corpus`.
+
+**Decision:** Stage 2 creates only the text index. Stage 3A creates source/access/path-kind indexes only when real
+multi-source/access queries exist. Prefix/tenant optimization appears only for a concrete query pattern.
+
+### F6 — query response was not minimized explicitly
+
+A Qdrant hit only needs point ID plus evidence-routing payload. Returning vectors or retrieval text duplicates data
+and increases response/memory cost.
+
+**Decision:** query sets `with_vectors(false)` and a payload include selector for only routing keys, normally
+`source_id`. Excerpts always come from pinned retained evidence/object reads.
+
+### F7 — readiness needed both semantic and resource canaries
+
+Schema/point readback does not prove TextQuery scoring, tokenizer behavior or memory/HNSW settings.
+
+**Decision:** readiness includes exact schema comparison, deterministic TextQuery expected order, Code tokenizer
+subword/joined cases, any-token ranking, all-token filter behavior, response projection and k/b validation.
 
 ## Current implementation sequence
 
 | Stage | Observable result | Primary owners |
 |---|---|---|
-| 1 Foundation | parsed root/plain settings; handle-safe initialize/open; one guard; factual status | #333/#266/#360 |
-| 2 Walking skeleton | one file → ObjectRef → prepared retrieval text → vectorless Qdrant 1.20 text index → TextQuery → retained CLI excerpt | #264 and vertical owners |
-| 3A correctness/reference | restart; authoritative inventory; complete fixed generation; old-view lifetime; cleanup; budget matrix | #270/#271/#331/#261/#300/#303 |
-| 3B conditional optimization | source-local diff, stable occurrence IDs, point additions/closures only where 3A budgets fail | #259/#329/#261/#263 |
-| 4 Exact/session | literal Exact and one framed live QueryWindow session | #249/#275/#280/#332 |
-| 5 Maintenance/depth | stopped-root collection/archive/import and selected product leaves | #302/#244/#281/#227/#335 |
+| 1 Foundation | root/plain settings; handle-safe initialize/open; one guard; status | #333/#266/#360 |
+| 2 Walking skeleton | one file → ObjectRef → retrieval text → explicit vectorless Text index → TextQuery canary/query → retained CLI excerpt | #264 and vertical owners |
+| 3A correctness/reference | restart; inventory; explicit filter/residency profile; complete generation/view; budget matrix | #270/#271/#331/#261/#300/#303 |
+| 3B conditional optimization | source-local diff/identity/mutation only where 3A budgets fail | #259/#329/#261/#263 |
+| 4 Exact/session | retained-source Exact and one framed live QueryWindow | #249/#275/#280/#332 |
+| 5 Maintenance/depth | stopped-root maintenance and selected product leaves | #302/#244/#281/#227/#335 |
 
 ## Anti-bureaucracy / lock rules
 
 - Issues are owners, not dependency order.
 - One manager owns each vertical cut; parallel writes are disjoint.
-- No backend abstraction, alias manager, custom-shard fusion, watcher ledger, init journal, query scheduler/ticket
-  system, lexical qualification receipts or object-operation archive.
-- No redb writer, view mutex or window mutation borrow spans object/Qdrant/process/model I/O.
-- Complete backend build + deterministic query canary + durable evidence commit precede view installation.
+- No hidden server defaults, backend abstraction, alias manager, custom-shard fusion, watcher ledger, init journal,
+  query scheduler/tickets, lexical qualification receipts or operation archive.
+- No redb writer/view mutex/window mutation borrow spans object/Qdrant/process/model I/O.
+- Complete build + physical-schema comparison + deterministic TextQuery canary + durable evidence commit precede
+  view installation.
 - Last view drop only wakes cleanup.
 - Current-caller search is local to code moved/deleted.
 - Minimal Rust 1.98 check/Clippy follows production cuts; broad evidence follows connected behavior.
@@ -152,15 +158,16 @@ activated, its qualification includes scoring/optimizer convergence, not only mu
 
 | Area | Status |
 |---|---|
-| Qdrant Rust 1.20 API/source inspection | CHECKED for named tag/types/tests |
-| Vectorless scoring-text profile | SELECTED, not compiled/executed |
-| TextQuery any-term/filter semantics | CHECKED upstream; not executed in ELIOT |
-| Base population vs request-only narrowing | SELECTED, not implemented |
-| No local alias expansion | SELECTED, not relevance-tested |
-| TextQuery readiness canary | REQUIRED, unrun |
-| Stage 2/3A no occurrence matching/sequence | DOCUMENTED, not implemented |
+| Qdrant 1.20 builder/server default inspection | CHECKED for named tag/files |
+| Exact physical text profile V1 | SELECTED, not compiled/executed |
+| HNSW disabled / explicit memory | SELECTED, not measured |
+| Code ranking vs filter token semantics | CHECKED upstream, not executed in ELIOT |
+| Physical/query-profile separation | SELECTED, not implemented |
+| k/b validation/no threshold | SELECTED, not executed |
+| Minimal payload/no vectors | SELECTED, not executed |
+| Stage-2 no filter indexes | SELECTED, not implemented |
 | Windows handle finalizer | SELECTED CANARY, unimplemented |
-| Qdrant dependency/server upgrade | NOT DONE; repository lock remains 1.19 |
+| Qdrant dependency/server upgrade | NOT DONE; lock remains 1.19 |
 | Compiler evidence | R031 materializer + unitizer only |
 | Foundation/walking skeleton/current binaries | UNRUN |
 | Windows/live Qdrant/restart/relevance/scale/end-to-end | UNRUN |
@@ -173,13 +180,14 @@ No donor source inspection proves ELIOT correctness.
 - R032–R045: canonical documentation reconciliation through `af337ec7`.
 - R046: implementation-readiness correction `1eeb4191`.
 - R047: active-surface hostile verification `858d1e34`.
-- R048: donor/analogue synthesis and fresh-generation split `fed10c1e`.
+- R048: donor/analogue synthesis `fed10c1e`.
 - R049: Qdrant 1.20/platform-finalization correction `9edd2c1d`.
 - R050: active Qdrant-owner synchronization `a4c23110`.
-- R051: exact query/schema API plus lexical/query/unitizer/control reconciliation.
+- R051: exact query/schema API and query/preparation/control reconciliation `87c84c24`.
+- R052: explicit index resources, physical/query profile separation and exact tokenizer/filter semantics.
 
 ## Next action
 
-Implement Foundation and the native Windows finalization canary, run minimal compiler/Clippy, then upgrade the exact
-Qdrant Rust client/server/schema/query profile to 1.20 and implement #264. Do not begin sparse BM25 inference, local
-alias expansion, occurrence matching, sequence/closure, query scheduler/tickets, watcher or optional profiles first.
+Implement Foundation and native Windows finalization canary; run minimal compiler/Clippy; then upgrade the exact
+Qdrant client/server/schema/query profile and implement #264. Do not begin hidden-default schema, sparse BM25,
+alias expansion, filter indexes without consumers, occurrence matching, sequence/closure or optional profiles first.
