@@ -1,146 +1,122 @@
-# Query and results
+# Query and source-backed results
 
-The [implementation guide](../../docs/implementation/README.md) connects retained sources, a published view,
-real retrieval and evidence. That connection is necessary, but returning a verified excerpt is not by itself
-useful code search. Old architecture S12.3, S16, S21-S25 contained user behavior that must survive deletion of
-its recipes, grants, fingerprints and proof packages.
+The connected query owner turns one typed operation into bounded, source-backed output. It pins one
+`PublishedView`, resolves one non-widening scope, calls the concrete handler, preserves the final order and verifies
+selected evidence against immutable retained objects.
 
-## Target flow
+## Direct flow
 
 ```text
-explicit operation + selected sources + limits
--> pin published view and resolve non-widening scope
--> reserve finite candidate/output capacity and any session-window allowance
--> run the concrete handler for that operation
--> establish final candidate order and select a page
--> resolve exact evidence metadata and verify retained data
--> source/revision/location/excerpt, match basis and truthful gaps
--> optional window on the same live session
+typed operation + explicit/default source selection + limits
+→ pin current PublishedView
+→ resolve ResolvedScope without widening
+→ reserve finite candidate/output/window capacity
+→ execute Search | Exact | Continue | Expand
+→ select page before retained-source I/O
+→ point-read evidence in the pinned redb snapshot
+→ verify retained representation/range
+→ emit source/revision/location/excerpt, match basis and truthful gaps
 ```
 
-The operation determines what the result means. BM25 is one ranked nomination mechanism, not the
-implementation of every request. A valid citation proves where the excerpt came from, not that it answers
-the question, resolves a symbol, exhausts a corpus or represents independent implementations.
+A citation proves provenance. It does not prove relevance, uniqueness, semantic identity, corpus completeness or
+behavioral equivalence.
 
-Text locations identify their retained representation and a half-open byte range `[start, end)`. Display
-lines are 1-based; text columns use UTF-8 byte offsets unless another encoding is explicitly named. An adapter
-using UTF-16 must label that encoding. Decoded/extracted text carries its source mapping and loss/gaps;
-prepared-text offsets and page coordinates must never be presented as raw-source byte offsets. The actual
-reader validates the stated range against that retained representation before emission.
+## Search — exact Qdrant 1.20 boundary
 
-## Product behaviors that must not disappear
+Baseline Search is one Qdrant 1.20 `TextQuery` against the `retrieval_text` scoring full-text index named by the
+pinned view. The bridge owns vendor types. Its equivalent Rust request is:
 
-| User task | Observable result | Smallest connected mechanism / limit |
-|---|---|---|
-| Find a literal or exact spelling | Actual matching ranges under declared byte/text semantics | [Exact reader/matcher](search-exact/FUNCTIONS.md), not filtering a truncated BM25 result |
-| Locate a selected symbol | Exact source location, or bounded materially different definitions with reasons | Explicit location or actual syntax/semantic name observations; no same-name identity guess |
-| Explore an unfamiliar repository | Useful entry points, headings/definitions and relevant next source reads | Existing prepared facts and source metadata; no architecture verdict generated from filenames |
-| Search a question | Ranked relevant source excerpts, with the basis and missing evidence visible | [Native lexical query](../search-lexical/FUNCTIONS.md); optional stronger retrieval only when connected and assessed |
-| Compare selected implementations | Side-by-side evidence for requested axes and explicit unknowns | Selected source ranges and real parser/semantic observations; no arbitrary behavioral equivalence |
-| Check absence | No-match only for the stated predicate/domain and completely scanned inventory | Exact scan; a missing symbol provider or empty top-k is not absence |
-| Inspect changing work | Which retained revision/view was used and what is known about pending observation/indexing | Current state/status already owned by source/publication; no fresh-workspace claim from a pinned old view |
+```text
+QueryPointsBuilder(collection)
+  .query(Query::new_text(TextQueryBuilder(query).k(k).b(b)))
+  .using(retrieval_text_field)
+  [.filter(candidate_filter)]
+  [.params(SearchParamsBuilder.idf(base_population_filter))]
+  .limit(prefetch_ceiling)
+```
 
-These are product requirements, not orders for seven new services. The first lexical milestone can omit
-unimplemented modes, but must not advertise them under a broad `Search` name or silently reinterpret them.
-Deletion of a package does not close these behaviors as delivered.
+The selected exact patch exposes `TextIndexParamsBuilder::bm25_scoring`, `TokenizerType::Code`, `TextQueryBuilder`,
+`QueryPointsBuilder`, `SearchParamsBuilder::idf` and `UpdateMode::InsertOnly`. Compile this exact surface in the
+implementation cut; documentation inspection is not a build result.
 
-## Scope comes from the published view
+`TextQuery` is any-term BM25 nomination. Search text is not a Boolean or phrase parser. Required/excluded terms
+exist only when the typed request explicitly supplies them; they become filter clauses. Exact spelling and
+punctuation-sensitive predicates use Exact, not a stricter interpretation of free text.
 
-Resolve configured or explicit sources from one pinned view, optionally narrowed by a real restricted
-session. Unknown IDs fail. Explicit empty and known empty inventory return an empty result without wildcard
-RPC; unavailable/incomplete inventory is different. Compatible sources share the selected retrieval/IDF
-population. [Lexical](../search-lexical/FUNCTIONS.md) owns the exact IDF meaning and donor cost caveat.
+Preserve Qdrant's returned order. Do not re-sort a single population by raw score, compare scores from incompatible
+populations or call exact count to make top-k look exhaustive. Native prefetch/RRF/grouping is optional only when a
+real multi-branch indexed request exists. A non-Qdrant branch may use one small private deterministic rank merge;
+no public ranking framework is required.
 
-Publication establishes the immutable view's invariants. Ordinary deltas validate changed source/evidence rows
-against the retained state; a full generation validates its captured population as it is built. Do not replace
-per-query scans with a new unconditional whole-population scan on every small publication. Ordinary work turns
-check selected scope and actual evidence against the pinned view, not the whole access/membership bundle.
-Per-object integrity and genuine restricted-session revocation still apply. Hold a shared current-view lock
-only while acquiring/installing the reference, never through backend work, source reads or transport output.
-Do not import the old live-authority mutex/updater into this path.
+## Scope and IDF
 
-Published is not necessarily current working tree. New source heads and unresolved watcher/indexing gaps
-remain distinguishable from the revisions served. A client asking for current-workspace semantics must get
-that actually established scope or a stale/incomplete/unsupported result, not a renamed published snapshot.
-Do not reread the whole corpus on ordinary Search, infer freshness from watcher silence, or prove whole-scope
-freshness from a few returned hits. Explicit synchronization and historical search are distinct operations.
+`ResolvedScope` has two filter levels:
 
-Already admitted local requests may finish on their old immutable view. A selected restricted-session
-revocation cancels that actual session/windows; no local grant or phase-checkpoint platform is reinstated.
+```text
+base population = source selection ∩ real access/session restriction
+candidate filter = base population + request-only path/kind/topical narrowing
+idf.corpus       = base population
+```
 
-## Direct operations, not a recipe operating system
+Default or explicit source selection is part of the BM25 population. Query-only narrowing does not redefine IDF.
+Both filter forms use indexed payload fields. Explicit empty returns empty without RPC. Unknown/foreign or
+incomplete selection fails or reports a gap; it never widens to all sources.
 
-Implement direct handlers: `Search`, `Exact`, `Continue`, `Expand`. Add `Orient`/`Compare` only with their
-actual source-backed producers. Availability comes from construction, not capability descriptors.
+For Stage 2's one-file collection, base population equals the entire physical collection: omit both filter and
+`idf` instead of sending ceremonial predicates. For Stage 3A, one compatible physical collection may contain
+several sources; source subset and restricted-session selection appear in both candidate eligibility and IDF.
 
-Exact input does not become a lexical query on failure. An explicit location that no longer resolves does
-not silently select a different symbol with a similar name. For an unqualified symbol name, keep distinct
-definitions ambiguous unless real context disambiguates them. A raw text occurrence is not necessarily a
-definition; syntax is not compiler-resolved call/reference evidence. The useful small selection logic in
-[subject resolver](search-subject-resolver/FUNCTIONS.md) may be moved into its real consumer; no public
-resolution ladder, receipt or service registry is needed.
+Different physical collections or incompatible retrieval profiles remain separate populations. Do not sort their
+raw scores together. The baseline uses one shard because full-text BM25 statistics are shard-local; no per-source
+custom-shard portfolio or local fusion owner is selected.
 
-For orientation use prepared paths/headings/definitions and independently observed imports/tests/docs where
-available. For comparison choose actual source-backed subjects first, then show available evidence for each
-requested axis. Absence of a fact is unknown unless the relevant exact operation established it. Equal names
-or lexical scores do not establish equal behavior. Known copies may share a presentation group, but repeated
-forks/copies must not be reported as independent confirming evidence. Do not invent repository lineage when
-no producer supplies it.
+## Evidence and coordinates
 
-Within one lexical population preserve server order. If results need source diversity, use the selected
-native grouping or a finite, explicit presentation policy. Deduplication/reranking cannot recover candidates
-that never entered the bounded candidate set. Do not promise enough distinct sources merely because a
-larger raw hit limit was requested. Across incompatible scoring populations do not sort raw scores together.
+Qdrant payload is nomination/routing data, not source evidence. Resolve each selected `(source_id, point_id)` in the
+pinned redb snapshot, validate complete identity/profile metadata, then open the exact retained object and range.
+Missing, foreign, corrupt or mismatched evidence produces a gap/error, never a card and never a fallback source.
 
-## Cost is not the response length
+Text locations bind a retained representation plus half-open byte range `[start, end)`. Display lines are 1-based;
+columns use UTF-8 byte offsets unless explicitly labelled otherwise. Mapped/extracted text carries its source map
+and loss/gaps. Prepared offsets are never presented as raw-source offsets.
 
-Selecting a page before evidence reads avoids reading unselected candidates. It does not make the backend
-or integrity verification O(page size). Qdrant 1.19 scoped IDF enumerates a population; a whole-object hash
-or AEAD reader can require more bytes than the excerpt. Charge actual source/integrity work and expose a
-limit gap rather than forging verification from a digest field. Group selected reads by object where useful.
-No speculative IDF cache, range-authentication tree, secondary index or global scheduler is selected here.
+Select the page before object reads. Group ranges from the same object where useful, but charge actual integrity and
+source bytes. A whole-object hash/AEAD check can cost more than the excerpt; top-k does not make integrity O(page).
 
-Candidate/window admission precedes retrieval allocation, not just evidence reading. Follow the
-[window owner's reservation rule](search-continuation/FUNCTIONS.md#admission-before-expensive-work);
-no separate quota service is required. This bounds retained/transient request data, not all internal backend work.
+## Exact, orientation and comparison
 
-Measure realistic scopes and source sizes through the connected application. A small successful example
-establishes integration, not the large-corpus requirement. Remove scope-wide scans performed only for old
-catalogue fences, but do not claim zero corpus-dependent work merely because it moved into a donor.
+- **Exact** scans the stated pinned retained inventory independently of Search candidates. Complete no-match requires
+  complete scan of the declared representation/domain with no gaps.
+- **Orient** appears only with real path/heading/definition/import/test/doc observations.
+- **Compare** selects actual source-backed subjects first and reports only supported axes. Equal names or lexical
+  scores do not establish equivalent behavior.
 
-## One query window
+A text occurrence is not necessarily a definition; syntax is not compiler-resolved call/reference truth. Missing
+producers remain unsupported/unknown rather than being inferred from filenames or top-k.
 
-Use the [window recipe](search-continuation/FUNCTIONS.md), not another handle/continuation store. It owns the
-same pinned view, final references, handled-prefix cursor, fixed expiry and finite retained bytes. One-shot
-CLI output cannot expose a window destroyed on child exit. Each Continue/Expand has a new request deadline
-bounded by window expiry. Complete local output commits the handled prefix; it does not prove peer receipt.
-Expansion is bounded context around an emitted item, not arbitrary revision offsets.
+## Request lifetime and windows
 
-## Current owners and cutover
+One `RequestContext` carries the pinned view, resolved scope, absolute deadline, cancellation and finite counters
+through Qdrant, evidence reads, formatting and output. No nested phase resets the timeout. No redb writer,
+view-manager mutex or window mutation borrow spans backend/object/process/model I/O.
 
-At inspected source `5af8cde5`, these are integration seams, not delivered operations:
+One-shot output exposes no reusable locator. A live serviced session may transfer the same view guard and final
+ordered references into one bounded `QueryWindow`. Continue pages stored final references; Expand reads bounded
+context around an emitted item. Cursor advances only after complete bounded output.
 
-| Behavior | Existing producer/helper | Receiving consumer and limit |
-|---|---|---|
-| Exact | [literal matcher](search-exact/src/literal.rs) over already supplied UTF-8 chunks | Target: read the pinned inventory through the retained reader; reuse the matcher as described in its [recipe](search-exact/FUNCTIONS.md). No BM25 shortlist or old proof/spine prerequisite. |
-| Orientation / symbols | Source metadata and prepared text; [code-enricher](../search-prep/search-code-enricher/FUNCTIONS.md) has no connected outline consumer | Query/CLI can show observed paths/headings and gaps. Definitions, callers and relations need an actual producer; missing facts stay unsupported/unknown. |
-| Comparison | [comparator](search-comparator/FUNCTIONS.md) assembles supplied observations; no connected production producer/readback caller | Select subjects and retained evidence in query first, then present supported axes. No claim of compiler-resolved behavior from this helper. |
-| Documents | Markdown/XML parsers in preparation; [document worker](../../bins/eliot-search-doc-worker/FUNCTIONS.md) remains a refusal stub | Use supported prepared text/coordinates in the same evidence path. PDF extraction needs a selected real extractor; the worker name is not support. |
-| Models / MCP | [model worker](../../bins/eliot-search-model-worker/FUNCTIONS.md) remains a refusal stub; no selected MCP runtime | Optional adapters consume the same connected operations. No empty worker, raw-Qdrant tool or new protocol catalogue is required for baseline delivery. |
+## Current cutover
 
-Concrete scope, backend call, retained reader and result formatter replace the disconnected
-recipe/capability/plan/grant/executor/proof stack. Existing packages are donor locations, not a required
-package topology. Current contracts, daemon/client handlers and result consumers change together. Remove
-obsolete forwarders and fixtures; no V3 compatibility family.
+Replace disconnected recipe/capability/grant/plan/ticket/handle/oracle paths with direct composition. The likely
+small survivors are scope resolution, request counters, bridge translation, evidence point reads, retained range
+validation and optional rank merge. Package names are not required boundaries.
 
-#279 owns connected Search, #249 Exact, #281 source-backed navigation/comparison, and #275 the window.
-Those assignments should link here rather than reproduce another behavioral specification.
+Remove old local postings/BM25 and the sparse `qdrant/bm25` Document path. The [lexical owner](../search-lexical/FUNCTIONS.md)
+now selects one Qdrant 1.20 scoring full-text profile and no local alias expansion.
 
 ## Verification
 
-After implementation and minimal changed-owner Clippy, use a small set of actual source tasks with known
-locations: punctuation-colliding names; two same-named definitions; definition versus mention; implementation
-plus relevant test/docs; known copies versus independent alternatives; raw versus decoded no-match; and a
-changed source whose published revision is still old. Add real scoped-IDF and evidence-read costs before a
-scale claim. Ordinary source examples and recorded outcomes suffice; no new evaluation/governance platform
-or automatic all-feature gate is needed. No runtime, relevance or exhaustive-audit result is claimed here.
+After code and minimal Rust 1.98 check/Clippy, execute the default CLI against real Qdrant 1.20: one-file whole
+collection; multi-source selected IDF; explicit empty/unknown scope; code-tokenizer camel/snake/joined matches;
+typed required/excluded filters; punctuation-sensitive Exact; order preservation; missing/corrupt evidence;
+timeout/cancellation before and after RPC; old pinned view; bounded output; and actual cold/warm scope cost. R051
+changes instructions only.

@@ -1,78 +1,80 @@
-# search-access — scope resolver, not a security operating system
+# Scope resolution — one pinned view, two filter levels
 
-The local product needs one operation: resolve a requested subset of the current `PublishedView` without
-widening it. Restricted clients may add a real session restriction at their connection boundary.
+The local product resolves a requested subset of one pinned `PublishedView`. Restricted clients may add a real
+session restriction at their connection boundary. This is not a grant, portfolio-history or policy operating
+system.
 
-## Current source
+## `ResolvedScope`
 
-`src/lib.rs` is about 34.6 KiB and combines:
-
-- signed/pairing-verified grant claims;
-- recipe/modality/budget permissions;
-- caller-shaped access snapshots and digests;
-- per-membership eligibility plans;
-- overlap proofs and singleton retrieval legs;
-- live security/purge/shadow generations and per-phase permits.
-
-`src/barrier.rs` is another 17.5 KiB durable restrictive-mutation coordinator with commit/readback,
-published deny snapshots, dependent receipts and recovery phases.
-
-The normal daemon path does not obtain authority from these structures. Public continuation/expansion
-instead calls `LiveExpansionBarrier::clean()`, demonstrating that the machinery is disconnected rather
-than protective.
-
-## Target `ResolvedScope`
+A small value carries only current consumers' inputs:
 
 ```text
-ResolvedScope
-  pinned PublishedView reference
-  ordered selected source memberships
-  projection memberships / stable filter fields needed by Qdrant
-  exact source inventory references needed by Exact
-  optional disclosure limits from a real restricted session
+PublishedViewGuard
+ordered selected source memberships
+base_population_filter
+candidate_filter
+exact retained inventory references
+optional disclosure/read limits from one real restricted session
 ```
 
-For the owning local OS account:
+The view already binds the exact physical Qdrant collection, retrieval profile and redb snapshot. Stage 2/3A has
+no sequence or route label in scope.
 
-1. absent/default scope selects configured sources in the current view;
-2. an explicit source set must be a subset of that view;
-3. unknown/foreign IDs are rejected and an explicit empty set never widens to all sources;
-4. one compatible selection becomes one Qdrant retrieval filter and the same `params.idf.corpus`;
-5. exact scan uses the same selected view inventory;
-6. source add/remove/policy change publishes a new view; an already pinned local query may finish on its
-   old immutable view.
+## Selection semantics
 
-No grant, recipe permission, overlap certificate, predicate digest, purge generation or live checkpoint is
-required for that path.
+1. Absent/default source selection resolves to the configured sources present in the pinned view.
+2. Explicit source IDs must be a subset of that view and any real session-allowed set.
+3. Unknown/foreign IDs fail. Explicit empty is empty and never becomes wildcard.
+4. Incomplete/unavailable membership is a gap/error, not permission to widen.
+5. Exact scans and evidence validation consume the same selected source/revision inventory.
+6. A source registration/policy change publishes a new view; an already pinned local request may finish on the old
+   immutable view.
 
-For a selected restricted-client profile, authenticate the connection and derive one allowed source set,
-disclosure limits and cancellation owner. Each request must stay inside that set. Revocation closes the
-session, cancels its in-flight work and removes its query windows. Do not enumerate every internal
-request/leg/handle into a durable influence manifest or turn session revocation into a general mutation
-journal.
+No canonical scope digest, historical alias revision, overlap proof, membership receipt or retention edge is
+required.
 
-## Population and routes
+## Base population versus candidate narrowing
 
-Compatible memberships share one retrieval/IDF population. Split only for different physical routes or
-incompatible retrieval settings, then perform one bounded merge. Membership count alone does not create
-one request per source. Do not duplicate Qdrant points to model overlapping selections.
+Keep these distinct:
 
-The published view binds route/generation/profile. Query-only topical filters may narrow returned hits but
-must not silently redefine the selected IDF corpus. An empty selected corpus remains empty.
+```text
+base population = selected source memberships ∩ access/session restriction
+candidate filter = base population + explicit request-only path/kind/topical narrowing
+idf.corpus       = base population
+```
+
+Source selection and access restriction affect both results and BM25 statistics. Request-only narrowing affects
+candidate eligibility but does not silently redefine IDF. Every filter field is payload-indexed in the physical
+collection schema.
+
+If the base population is the whole physical collection, omit `idf.corpus`; Qdrant's global statistics are then
+exactly the selected population. Stage 2's one-file smoke uses this simplest form. Known empty returns empty without
+RPC.
+
+Compatible sources in one physical collection use one `TextQuery`. Different collections or incompatible
+retrieval profiles remain separate populations and cannot be combined by sorting raw scores. Add a bounded merge
+only for a real multi-population product operation.
+
+Qdrant BM25 statistics are physical-shard-local. Do not partition a general portfolio by source/root shard key and
+then pretend scores are globally comparable. Custom sharding is only reconsidered for a scope always queried as one
+partition.
+
+## Restricted session
+
+A selected restricted-client profile authenticates one connection and derives one allowed source set, disclosure
+limits and cancellation owner. Requests only narrow that set. Revocation closes the session, cancels its work and
+removes its windows. No durable influence manifest, phase permit or restriction-mutation journal.
 
 ## Removal
 
-Change daemon admission, executor and bridge filter consumers together, then remove:
+Change query, Exact, evidence and bridge consumers together, then remove caller-created grants, recipes,
+`AuthoritativeAccessSnapshot`, eligibility plans/digests, overlap proofs, phase checkpoints, purge/shadow
+generations and the disconnected barrier platform. If the resolver becomes a few pure functions, place it in query
+composition instead of preserving this crate.
 
-- local grant/template/recipe checks;
-- `AuthoritativeAccessSnapshot`, `AuthorizedScope` proof fields and local snapshot digests;
-- `BaseEligibilityPlan`, `EligibilityPlanDigest`, `OverlapFreeRouteProof` and per-member safe legs;
-- `RequestSecurityFence`, `AccessPermit`, phase checkpoints and `LiveExpansionBarrier::clean()`;
-- `SecurityMutationBarrier`, durable restriction receipts and purge/shadow generations from baseline;
-- source-shape/proof fixtures for those APIs.
+## Focused checks
 
-Keep root/source safety, explicit selected scope, real restricted-session checks and exclusion before
-retrieval/statistics. If the surviving resolver is small, place it with query/view composition instead of
-preserving this package boundary.
-
-[FUNCTIONS.md](FUNCTIONS.md) maps current APIs and the exact cutover. [AGENTS.md](AGENTS.md) governs work.
+Verify default/explicit/empty/unknown source sets; restricted narrowing; base filter appearing in both candidates
+and `idf.corpus`; request-only filter absent from `idf.corpus`; whole-collection omission of redundant predicates;
+excluded-source noninterference; incompatible-profile split; old pinned view after source update; and exact/evidence
+inventory agreement. R051 adds no runtime result.

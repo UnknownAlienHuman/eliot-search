@@ -1,61 +1,59 @@
-# search-query-planner — source audit and deletion map
+# Query selection — direct handlers, not a plan compiler
 
-The [query cutover](../README.md) owns the connected operation. This file maps inspected planner source to the
-small amount of selection logic that may survive.
+The [query owner](../README.md) defines the connected operation. This file maps the old planner to the small amount
+of direct selection logic which may survive. Before deleting/inlining the crate, repeat exact current caller search
+across manifests, Rust/non-Rust code, path inclusion, features, targets, tests and workflows.
 
-## Evidence boundary
+## Direct baseline
 
-At the established audit revision, the package was one 104,042-byte production file. The audit found the full
-plan compiler in package tests/support rather than normal daemon serving, while the daemon carried another
-recipe/capability/grant authority. This is immutable historical evidence, not current caller truth.
-
-Before a code cut, repeat the exact current search across manifests, Rust imports/constructors/path inclusion,
-non-Rust tooling, features, targets, tests and workflows. Record all surviving consumers and move them in the
-same change before deleting APIs or the crate.
-
-## Inspected API behavior
-
-| Source/API | Actual behavior at the inspected revision |
-|---|---|
-| public capability/budget/leg/plan structures | Caller-created values were later treated as accepted execution authority. |
-| recipe normalization/support tables | Validated eleven frozen V1 variants and advertised static legs; did not select a constructed handler. |
-| compiled-plan path | Consumed caller-created task plan, grant, scope/capability/safe-leg proofs and returned another record; created no Qdrant/source operation. |
-| fingerprints/dependency/drift | Canonicalized supplied records and observations; read no current owner. |
-| relative leg budgets | Divided durations/work across legs and encouraged nested timeout reset. |
-
-Do not choose one disconnected planning framework and wrap the other.
-
-## Replacement selection
-
-The query owner receives one typed request, `PublishedViewGuard`, non-widening `ResolvedScope`, one
-`RequestContext` and actual constructed handlers. Baseline dispatch is direct:
+The query owner receives:
 
 ```text
-Search   → lexical/Qdrant handler
-Exact    → retained-source scan
-Continue → QueryWindow page
-Expand   → selected-item neighborhood
+typed request
+PublishedViewGuard
+ResolvedScope
+RequestContext
+constructed handlers
 ```
 
-Optional operations appear only with real handlers. Unsupported modes fail before backend/source work.
+Dispatch is direct:
 
-For actual multiple physical routes/profiles, a private helper may produce a finite ordered list. Compatible
-sources share one retrieval/IDF population; split only incompatible routes; every branch uses the same absolute
-deadline/cancellation and a finite nomination ceiling. Deterministic order is internal behavior, not a signed
-plan identity.
+```text
+Search   → Qdrant 1.20 TextQuery handler
+Exact    → retained-source scan
+Continue → QueryWindow page
+Expand   → selected-item bounded context
+```
 
-## Delete after caller cutover
+Optional Orient/Compare appear only with real producers. Unsupported operations fail before backend/source work.
+No recipe normalization, capability set, task/leg plan, grant, dependency proof or plan fingerprint.
 
-Remove V1 recipe normalization/support tables, public capability/task/leg/compiled plan types, grants, overlap
-and dependency proofs, supplied drift observations, relative per-leg deadline allocation and fixtures that only
-seal/revalidate those records. Remove matching contract/provider/daemon authority types with their last callers.
+## Search branch selection
 
-Move any surviving grouping and checked-limit helpers to query composition. Delete this crate if no substantial
-independent algorithm remains.
+Baseline Search has one physical collection/retrieval profile and one compatible base population. Use the pinned
+view's collection, `retrieval_text` field and explicit profile `k`/`b`. `ResolvedScope` supplies:
 
-## Verification after code
+```text
+candidate filter = base selected source/access population + request-only narrowing
+idf.corpus       = base selected source/access population
+```
 
-Run minimal Rust 1.98 check/Clippy for changed production consumers. Through the connected application verify
-that explicit/empty/unknown scope never widens, compatible sources share the selected population, incompatible
-routes split deterministically, all work uses one absolute context, and unsupported optional modes perform no
-backend/source I/O.
+When base equals whole collection, omit both filter and IDF. Free text is any-term `TextQuery`; typed required or
+excluded clauses become explicit filters. Exact punctuation/location never silently falls back to Search.
+
+For actual multiple physical collections or incompatible profiles, produce a finite ordered branch list. Each
+branch uses the same absolute deadline and finite nomination ceiling. Raw scores are different populations and are
+not directly compared. Add one explicit bounded rank merge only when a real product operation needs it.
+
+## Remove
+
+Delete V1 recipe tables, public capability/task/leg/compiled-plan types, grants, overlap/drift/dependency proofs,
+relative per-leg timeouts and fixtures which only seal those records. Move any surviving tiny grouping/check-limit
+helper into query composition; delete the crate if no substantial independent algorithm remains.
+
+## Verification
+
+After code and minimal check/Clippy, verify Search/Exact dispatch, unsupported mode before I/O, whole-collection
+scope omission, selected-source base/candidate/IDF split, explicit empty/unknown no widening, one absolute context,
+TextQuery order preservation and deterministic multi-population behavior only where a real branch exists. R051
+changes documentation only.

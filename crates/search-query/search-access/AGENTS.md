@@ -1,20 +1,32 @@
 # Working on search-access
 
-Read the [architecture](../../../docs/architecture/README.md),
-[query design](../README.md) and [source map](FUNCTIONS.md).
+Read the [query owner](../README.md), [implementation spine](../../../docs/implementation/README.md) and local
+[README](README.md). Reduce this package to selected-scope resolution or move the few pure functions into query
+composition.
 
-Reduce this package to selected-scope resolution or remove it after moving that logic to query/view
-composition. The baseline local input is a requested source subset plus one pinned `PublishedView`.
-Return one compatible population for retrieval, IDF, exact inventory and evidence validation.
+Input is one pinned `PublishedView`, requested/default source set and optional real restricted-session allowed set.
+Return:
 
-Remove local signed grants, recipe permissions, snapshot/predicate digests, overlap proofs, per-membership
-legs, security checkpoints and durable restriction barriers with their callers. Do not replace
-`LiveExpansionBarrier::clean()` with a larger permit system; delete the obsolete handle/continuation path.
+```text
+ordered selected memberships
+base population filter = selected sources ∩ session/access restriction
+candidate filter = base population + request-only narrowing
+exact retained inventory refs
+```
 
-A selected restricted-client adapter may authenticate one session, derive an allowed source set and bind
-its query windows. Revocation closes/cancels that session. Keep this concrete policy separate from the
-owning-account path and do not enumerate all internal objects into a durable invalidation journal.
+The base filter controls both candidates and `SearchParams.idf.corpus`. Request-only path/kind/topic filters affect
+candidates only. If base equals the whole collection, omit filter/IDF. Explicit empty never widens; unknown,
+foreign or incomplete membership fails or reports a gap.
 
-Source changes publish a new view. Existing local queries use their pinned immutable view; new requests see
-the new one. Verify no widening, compatible multi-membership retrieval/IDF, exact inventory parity,
-restricted-session cancellation and excluded data not affecting candidates or statistics.
+Different physical collections/retrieval profiles remain different populations. Do not compare raw scores across
+them or create per-source legs. Qdrant BM25 statistics are shard-local; do not introduce a custom-shard portfolio.
+
+Remove signed grants, recipe permissions, snapshot/predicate digests, overlap proofs, eligibility plans,
+per-membership legs, phase checkpoints and durable restriction barriers with callers. A selected restricted-client
+profile authenticates one session, derives one allowed source set and cancels/removes that session's windows on
+revocation—no durable influence journal.
+
+Source changes publish a new view. Existing local requests use their pinned view; new requests see new state.
+After code verify default/explicit/empty/unknown sets, restricted narrowing, base filter parity between candidates
+and IDF, request-only filter separation, exact/evidence inventory parity and old-view behavior. R051 changes docs
+only.

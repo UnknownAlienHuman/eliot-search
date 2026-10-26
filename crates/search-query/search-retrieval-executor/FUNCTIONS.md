@@ -1,59 +1,82 @@
-# search-retrieval-executor — current API and removal boundary
+# Retrieval execution — one `TextQuery`, one request context
 
-## Current API
-
-| Entry point | Actual behavior |
-|---|---|
-| `admit(plan, owner_id, lane, now_tick, scheduler)` | Checks caller-supplied queue counts and plan limits; reserves no queue slot. |
-| `schedule_leg` | Checks dependencies/access/deadline fields and clones a planned leg into a ticket. |
-| `acquire_leg_pins` | Creates a separate pin set that cancellation of the execution guard does not own. |
-| `dispatch_leg` | Calls a generic backend and validates shape/limits; issued tickets remain usable independently. |
-| `normalize_within_population` | Sorts raw scores and assigns ranks. |
-| `fuse_safe_legs` | Uses floating weighted reciprocal rank, missing-weight defaults and a map keyed by caller candidate ID. |
-| `classify_completion` | Summarizes caller execution maps and complete-scope flags. |
-| `cancel` | Sets flags and clears output content but does not necessarily stop issued backend I/O or drop separate pins. |
-| `execute_indexed_leg` | Builds `candidate:{leg_id}:{point_id}`, calls filtered query and unconditional exact count, then reports a complete denominator. |
-
-The source is about 60.8 KiB across `lib.rs` and `indexed.rs`. The real public daemon does not call the
-existing live Qdrant plane through this path.
-
-## Replacement
+The current executor package is a disconnected scheduler/ticket/leg framework. The target product needs one direct
+function and may inline it into query composition:
 
 ```text
-execute_search(request, published_view, resolved_scope, bridge, request_context)
+execute_search(request, view, scope, bridge, context) -> ordered nominations + gaps
 ```
 
-Baseline:
+## Exact baseline request
 
-1. check cancellation/deadline and reserve bounded nomination capacity;
-2. call Qdrant BM25 with the selected filter and matching IDF corpus;
-3. receive at most the requested/prefetch ceiling;
-4. preserve returned order and stable point IDs;
-5. hand selected hits to evidence resolution under the same context;
-6. return truthful non-exhaustive gaps on timeout/limit/backend failure.
+The Qdrant Rust client 1.20 surface inspected at tag `v1.20.0` supports the selected operation:
 
-For multiple indexed branches, express prefetch and RRF/grouping in the Qdrant Query API. For an actual
-non-indexed branch, merge finite ranked lists with one private checked integer RRF helper. No public formula,
-profile digest or plan authority.
+```text
+QueryPointsBuilder::new(view.physical_collection)
+  .query(Query::new_text(TextQueryBuilder::new(request.text).k(k).b(b)))
+  .using(profile.retrieval_text_field)
+  [.filter(scope.candidate_filter)]
+  [.params(SearchParamsBuilder::default().idf(IdfParams {
+      corpus: Some(scope.base_population_filter)
+  }))]
+  .limit(request.prefetch_ceiling)
+```
 
-Use one absolute deadline; every backend/source/output phase consumes remaining time. Keep a few explicit
-aggregate counters in the request owner. Counters are runtime limits, not durable receipts or a universal
-ledger. A normal request cancellation drops guards/windows/content; no historical terminal map is needed.
+Omit filter/IDF when the whole physical collection is the selected population. Request no vectors and only the
+bounded routing payload required for point/evidence lookup. The bridge owns these vendor types and validates that
+the live schema matches the pinned retrieval profile.
+
+Execution order:
+
+1. check the absolute deadline/cancellation;
+2. reserve bounded nomination/output/window capacity;
+3. issue one `TextQuery` under the remaining deadline;
+4. receive at most the fixed prefetch ceiling;
+5. preserve Qdrant order and generation-bound point IDs;
+6. select the output page before retained-object I/O;
+7. point-read evidence in the pinned redb snapshot and verify retained ranges under the same context;
+8. return cards and truthful non-exhaustive gaps.
+
+`TextQuery` matches any query term. Required/excluded terms exist only as explicit typed filter clauses. Do not
+parse Boolean/phrase syntax from arbitrary free text in this owner.
+
+## Context and cancellation
+
+One `RequestContext` owns:
+
+```text
+PublishedViewGuard
+ResolvedScope
+absolute monotonic deadline
+cancellation token
+remaining nominations/evidence items/source bytes/result bytes/output bytes
+```
+
+A small process-local semaphore may bound concurrent requests. Acquire it directly and release through RAII. No
+relative per-leg deadlines, owner-issued tickets, queue-count proofs or durable terminal map.
+
+Dropping a future is not proof that server work stopped, but query has no durable mutation. On timeout/cancel, drop
+buffers/guards/windows, report current failure/gap and do not retry under a fresh deadline.
+
+## Ranking
+
+One baseline population preserves Qdrant order. Do not exact-count ordinary top-k, normalize scores, prefix
+candidate IDs with a leg, or declare complete candidate scope.
+
+When a real multi-branch indexed operation exists, prefer bounded Qdrant Query API prefetch/RRF/grouping. A real
+non-Qdrant branch may use one private checked integer rank merge. Raw scores from incompatible populations are never
+compared directly.
 
 ## Remove
 
-- public scheduler/guard/ticket/execution-state types and count-equality completion;
-- relative leg budgets/deadlines and separately owned pins;
-- public compiled-plan/capability/security inputs;
-- floating/default fusion and leg-prefixed candidate IDs;
-- exact count from ordinary top-k and `CompleteCandidateScope` claims;
-- process-test/oracle backend from production composition.
-
-Keep only useful bounded backend translation, optional rank merge and error/gap mapping. Merge them into
-query composition if that is smaller.
+Delete public scheduler/guard/ticket/execution-state types, separate pin sets, compiled-plan/capability admission,
+relative budgets, floating/default fusion, exact count, process-test/oracle product adapters and fixtures whose only
+subject is that framework. Keep only small bridge translation, gap mapping and an optional private rank helper if
+real consumers remain.
 
 ## Verification
 
-Use the real bridge to check one BM25 query, compatible scope/IDF, finite prefetch, timeout before/after
-RPC, cancellation, missing/foreign/duplicate points, native multi-branch RRF when selected, optional local
-merge determinism and final order reaching the evidence cards unchanged.
+After code and minimal Rust 1.98 check/Clippy, run one vectorless Qdrant 1.20 text query, whole-collection scope,
+selected-source `idf.corpus`, request-only narrowing, finite limit, OR/required/excluded semantics, timeout before
+and after RPC, cancellation, duplicate/foreign points, evidence failure and final-order preservation. R051 changes
+instructions only.

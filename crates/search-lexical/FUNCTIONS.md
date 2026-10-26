@@ -1,155 +1,118 @@
-# Lexical search: native ranking without losing exact-search semantics
+# Lexical retrieval — Qdrant 1.20 scoring full-text, not a local BM25 engine
 
-The selected numerical encoder/index is Qdrant `qdrant/bm25`, server/client 1.19.0. Eliot may retain a small
-code-term preparation helper. This is a proposed consumer cutover, not evidence that ranking quality or
-large-corpus latency is acceptable.
+This owner supplies the concrete lexical profile used by publication and query. It does not own source identity,
+publication state, evidence, scope or Exact. R051 replaces the old `qdrant/bm25` sparse-vector design with direct
+BM25 over a scoring full-text payload index in Qdrant 1.20.
 
-## Existing source and actual callers
+## Selected baseline profile
 
-At public baseline `c8e38b6`, this package has about 205.6 KiB of source across the general analyzer,
-frozen profiles, scoring-corpus builder, sparse encoders and code-identifier/qualification code. The legacy
-daemon adds about 34.5 KiB of in-memory postings/BM25 code. Those are prior gross measurements, not a new
-recount or a promised deletion size.
-
-The previously traced production imports are daemon `lexical/{build,search,mod}.rs`, belonging to the old
-snapshot application: it collects retained documents, builds local postings, scores locally and rebuilds
-on refresh. The alternative frozen and code-identifier sparse APIs do not have connected production Qdrant
-consumers. Do not preserve three numerical encoders, a second index or their profile-compatibility machinery.
-
-Useful Unicode identifier splitting is independent of those engines. Keep it only with actual preparation
-and query callers. Source coordinates stay with prepared/source evidence, not token-position receipts.
-
-## Test data must not determine runtime activation or retrieval identity
-
-Rechecked at `7d92fb8b` on 2026-10-23:
-
-- `src/code_identifiers.rs::CodeIdentifiersProfile::new` hashes artifact descriptors and the compatibility/
-  collision fixture definitions. `profile_definition` includes those hashes and every hard resource ceiling
-  in the retrieval fingerprint. Editing a test expectation or adding a case can therefore change profile
-  identity without changing the transform. Wiring that identity into publication would cause needless
-  invalidation; it is not evidence that a connected product has already performed such a rebuild.
-- `code_identifiers/encoding.rs::accept_code_identifiers_profile` matches caller-supplied acceptance and
-  identity fields; it executes no fixtures. An opaque returned wrapper does not turn matching metadata into
-  observed backend behavior. Do not harden this with a signature or another issuer.
-- `qualify_code_identifiers_profile` runs embedded fixtures under the supplied operation limits/deadline.
-  A source-derived counterexample is an input-byte ceiling of 16: the real input `name` fits, but the
-  24-byte `foo-bar/baz\\qux.mod:name` compatibility case cannot pass. Whether the actual input is admissible
-  must not depend on the size of an unrelated startup test. This counterexample has not been runtime-tested.
-
-Do not integrate `AcceptedCodeIdentifiersProfile`, runtime `qualify`/`accept`, qualification receipts or the
-local numerical encoder as a stepping stone to native BM25. Remove them with their exclusive consumers;
-retain causal Unicode splitting examples as ordinary tests when the helper moves to its real text consumer.
-The default-branch caller search found definitions, reexports and fixtures, not a daemon caller; it is a
-candidate search, not an exhaustive proof about every branch or feature.
-
-The published retrieval identity binds actual transform semantics: selected tokenizer/normalization data,
-document/query options, expansion rules, and any truncation/packing rule that changes successful output.
-It does not hash the test suite, review report, build packaging or per-request timeout/output budget. A
-behavior-changing donor upgrade still requires an explicit profile decision. Lower resource ceilings refuse
-or report incomplete work; they do not silently produce a different successful vector under the same identity.
-
-Changing processing policy may make a previously refused source eligible. The existing preparation
-wanted-input/outcome comparison must reconsider that gap without forcing unchanged successful outputs into
-a new retrieval generation. Do not add a second policy-history or qualification database for this distinction.
-
-## One explicit native profile
+The implementation cut upgrades server and Rust client together to one exact 1.20 patch. One vectorless physical
+collection stores points with bounded payload fields:
 
 ```text
-bounded retained unit + bounded selected context/aliases
--> Document(text, "qdrant/bm25", document options)
--> published named sparse vector
-
-bounded request query + the same selected lexical preparation rules
--> Document(text, "qdrant/bm25", query options)
--> query under selected base population and pinned validity
+point identity/evidence key
+source membership/filter keys
+retrieval_text
 ```
 
-Document and query roles are not interchangeable. Publish the chosen vector name and all behavior-affecting
-options with the retrieval profile. Never inherit language defaults accidentally. For the initial word-based,
-language-neutral code/text profile, make these choices explicit:
-
-```json
-{
-  "tokenizer": "word",
-  "lowercase": true,
-  "ascii_folding": false,
-  "stemmer": {"type": "none"},
-  "stopwords": {},
-  "k": 1.2,
-  "b": 0.75,
-  "avg_len": 256.0
-}
-```
-
-The numerical values are a starting configuration from the donor, not tuned relevance evidence. Record any
-selected token-length limits explicitly. `avg_len` is a supplied constant, not an automatically refreshed
-corpus average. This tokenizer is not a universal segmentation solution for every language. A measured
-multilingual or other profile is an explicit choice, never an automatic fallback. A semantic profile change
-uses the publication generation boundary; do not relabel old vectors.
-
-Qdrant's [actual 1.19 preprocessing](https://github.com/qdrant/qdrant/blob/v1.19.0/src/common/inference/bm25_inference.rs)
-defaults to English when omitted. `language: "none"` is a deprecated side effect, not the chosen opt-out.
-Native-vector readback follows the [bridge](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md): the
-server computes coefficients, and Eliot does not generate a second BM25 vector merely to compare them.
-
-## Identifier expansion is recall, not identity
-
-The [word tokenizer](https://github.com/qdrant/qdrant/blob/v1.19.0/lib/segment/src/index/field_index/full_text_index/tokenizers/mod.rs)
-splits on non-alphanumeric characters. Thus these spellings have the same word tokens:
+Create one scoring text index before loading points:
 
 ```text
-parse_manifest     parse-manifest     parse::manifest
-C++                C#
+field             = retrieval_text
+tokenizer         = code
+lowercase         = true
+ascii_folding     = false
+stemmer           = none
+stopwords         = none
+min/max token len = unset unless measurement selects explicit bounds
+scoring           = BM25
+nested            = false
 ```
 
-Keeping a whole spelling in the input string does not preserve a whole-token exact key. This distinction
-was required by old architecture S12.3 and must survive removal of the old lexical engines.
+The exact chosen schema, field name and query-time BM25 `k`/`b` values belong to the retrieval profile. A semantic
+change creates a fresh physical generation; old collections are never reinterpreted.
 
-The small optional helper may preserve original text and append finite unique snake/camel/acronym parts,
-using existing XID and token-local NFC support. It must not claim collision-free name matching, source
-identity or semantic equivalence. Aliases affect term frequency and length: appending both `parse_manifest`
-and `parse manifest` can repeat the same native terms. Bound the expansion and assess its relevance effect;
-do not create a second token/IDF engine to simulate the donor.
+The Rust 1.20 API surface inspected at tag `v1.20.0` is concrete:
 
-Exact spelling/literal requests use retained-source exact matching independently of BM25 top-k. Exact symbol
-resolution additionally needs actual definitions/occurrences; a text occurrence may be a comment or test.
-When a real syntax/SCIP consumer supplies name fields, its keyword lookup may nominate exact names, followed
-by source validation and explicit ambiguity. Do not add such payload fields or a resolver service without
-that producer/consumer. Never silently substitute lexical similarity for an unavailable exact operation.
+- `TextIndexParamsBuilder::new(TokenizerType::Code).lowercase(true).bm25_scoring()`;
+- `CreateFieldIndexCollectionBuilder` for the payload index;
+- `Query::new_text` / `TextQueryBuilder` for BM25 query text and optional `k`/`b`;
+- `QueryPointsBuilder::using`, `filter`, `params`, `limit`;
+- `SearchParamsBuilder::idf` for a selected statistics corpus;
+- `UpsertPointsBuilder::update_mode(UpdateMode::InsertOnly)`;
+- `PointStruct.vectors` is optional, so the lexical collection needs no dummy vector.
 
-## Scoped IDF has a measurable cost
+Recheck and compile the exact selected patch with the real bridge; source inspection is not compiler evidence.
 
-The base population includes selected sources and pinned validity; query-only narrowing is separate.
-Required source isolation must not silently degrade to global statistics. Known empty population returns
-empty without RPC; unknown IDs and unavailable inventory remain errors/gaps.
+## Retrieval text: no alias inflation
 
-In pinned Qdrant 1.19, scoped IDF collects matching point IDs or a segment-sized bit mask and examines queried
-postings before ranking. `top_k`, output size and payload indexes do not remove that population work. See
-[donor source analysis](../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#filtered-idf-performs-population-work).
-The absence of an Eliot-side corpus scan is not proof of a corpus-independent query cost.
+Preparation/unitization provides one bounded `retrieval_text` for each unit. It may include the actual unit text
+and a finite structural heading/signature/path context **once** when that context is a selected product behavior.
+It must not append snake/camel/acronym aliases generated from the same identifier.
 
-Use the selected native path first with finite query/concurrency limits and actual service timeout handling.
-Before a scale claim, compare cold/warm requests over small and broad scopes, with staged/retired points
-retained. Measure end-to-end latency, backend work/memory and cancellation, not only returned hits. No new
-statistics cache, local denominator database, per-request collection or automatic sharding scheme is selected.
+Qdrant's `code` tokenizer already splits camelCase, snake_case and acronym transitions and also indexes the joined
+identifier. Local alias expansion would duplicate terms, alter document length/term frequency and make ranking
+profile-dependent for little benefit. Remove it from the baseline. If measured relevance later justifies another
+text composition, define a new retrieval profile and rebuild; do not silently mutate existing text.
 
-## Real consumer cutover
+Exact spelling, punctuation and byte/location requests remain retained-source Exact. `C++`, `C#`, operators,
+string literals and other punctuation-sensitive predicates are not made exact by the code tokenizer.
 
-Preparation emits actual bounded retrieval text/options. Projection retains those inputs in its existing
-operation pages. The bridge sends native documents and queries; publication verifies known bindings and
-required vector structure; query resolves nominations through retained evidence. A correct excerpt proves
-its source, not the relevance or completeness of the ranked result.
+## Query semantics
 
-After those callers move, remove the general analyzer/receipt, frozen numerical profiles, ScoringCorpusBuilder,
-local sparse hashing/weighting/qualification, legacy daemon postings/BM25, unused dependency edges and their
-exclusive fixtures. Do not restore old vector byte goldens or another encoder registry. Keep causal Unicode
-splitting cases. Inline the remaining helper if a package no longer earns its boundary.
+A `TextQuery` scores a point when it contains any query term. Free text is not a hidden Boolean/phrase language.
+Required or excluded terms are added only from an explicit typed request as Qdrant filter conditions. Do not infer
+quotes, `-term`, `AND`, language or stemming rules from arbitrary user text.
 
-## Behavior to assess after implementation
+For the first one-file smoke the physical collection equals the selected population, so issue one `TextQuery`
+without a candidate filter or `idf.corpus`.
 
-Use concrete cases instead of a universal profile verdict: exact `parse_manifest` among punctuation variants;
-camel/snake/acronym recall; `not` and other English stopwords retained; explicit code versus non-space-language
-limits; correct document/query roles; alias repetition; scope/validity isolation; and selected-population cost.
-A wrong or empty lexical result cannot prove absence. A test-only edit must not alter retrieval identity;
-an operation that fits its limits must not require a larger fixture budget. Run minimal changed-owner
-compiler/Clippy after code, then exercise the real Qdrant path. No live relevance/performance result is claimed.
+For later scoped requests distinguish:
+
+```text
+base population = selected source memberships intersected with real access/session restrictions
+candidate filter = base population + explicit request-only path/kind/topical narrowing
+idf.corpus       = base population
+```
+
+The base source/access filter appears in both candidate eligibility and IDF. Request-only narrowing does not
+silently redefine statistics. If the base population is the whole physical collection, omit `idf` rather than
+sending a redundant filter. Explicit empty returns empty without RPC; unknown/incomplete scope never widens.
+
+Create keyword/payload indexes for every field used by base or candidate filters. Qdrant BM25 statistics are
+physical-shard-local; the baseline uses one ordinary shard and no per-source custom-shard portfolio.
+
+## Visibility and cost
+
+Create the text and filter indexes before point ingestion. Build points with explicit `insert_only` and `wait`,
+then verify collection/index schema, exact point payloads/count and at least one deterministic `TextQuery` canary
+before publication may commit the matching view. Point readback alone does not prove the scoring index works.
+
+Qdrant reports that full-text statistics can temporarily include stale data after updates/deletes until segment
+optimization. Stage 2/3A avoids this class by building a new collection and never mutating it after visibility.
+Stage 3B, if selected, must measure score drift/optimizer behavior rather than assuming immediate statistics.
+
+Scoped IDF and text scoring can perform corpus-dependent work. Measure cold/warm narrow/broad requests, actual
+server CPU/memory, cancellation and result quality. Top-k bounds output, not necessarily backend work.
+
+## Remove with callers
+
+After the direct path is connected, remove:
+
+- local postings/BM25 engines and scoring-corpus builder;
+- `Document(text, "qdrant/bm25", ...)` sparse document/query inference;
+- fixed local `avg_len` and sparse-vector byte/profile goldens;
+- frozen analyzer/qualification/acceptance receipts;
+- alias-expansion/profile identities driven by tests or resource ceilings;
+- duplicate numerical encoders and unused dependencies.
+
+Keep only a small retrieval-text composer if it has real preparation/publication callers. Inline it if no package
+boundary remains justified.
+
+## Focused verification
+
+After code and minimal Rust 1.98 check/Clippy, execute: vectorless collection creation; explicit code-tokenizer
+schema; camel/snake/acronym matches without alias duplication; joined identifier match; OR term behavior; typed
+required/excluded filters; whole-collection and selected-source IDF; explicit empty/unknown scope; punctuated Exact
+separation; insert-only conflict/readback; deterministic query order; cancellation; and cold/warm cost. No such
+runtime result is claimed by R051.

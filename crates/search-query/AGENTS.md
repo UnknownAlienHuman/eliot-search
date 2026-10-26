@@ -1,38 +1,77 @@
 # Working on query and results
 
-Read the [architecture](../../docs/architecture/README.md), [implementation](../../docs/implementation/README.md)
-and family [README](README.md). Connect one typed request to useful source-backed results. Change scope,
-retrieval, evidence validation, result formatting and window consumers together when their current models differ.
+Read the [architecture](../../docs/architecture/README.md), [implementation spine](../../docs/implementation/README.md)
+and family [README](README.md). Connect one typed request directly to the selected operation, Qdrant 1.20 or
+retained-source owner, pinned evidence and bounded output.
 
-## Evidence/currentness rule
+## Current baseline
 
-Package sizes, source-shape findings and no-production-caller searches in child READMEs/FUNCTIONS are evidence
-at their named inspected revisions. Before deleting, merging or inlining a query package, repeat an exact search
-at the implementation head across workspace/package manifests, Rust imports and constructors, path/module
-inclusion, non-Rust tooling, features, targets, tests and workflows. Move every surviving caller in the same cut.
-Do not harden an obsolete proof/receipt API merely because tests or compatibility wiring still reach it.
+`Search` uses one Qdrant 1.20 scoring full-text payload index:
 
-## One query owner
+```text
+TextQuery over retrieval_text
++ optional candidate filter
++ optional SearchParams.idf(base population)
+→ preserve backend order
+→ point-read pinned redb evidence
+→ verify retained range
+→ card or gap
+```
 
-Resolve selected scope against one pinned `PublishedView`. Use the actual operation handler, one absolute request
-context and constructed services. Do not manufacture plans, grants, capability sets, proof digests or fixture IDs
-to satisfy old constructors.
+The physical collection may be vectorless. The real Rust surface includes `TokenizerType::Code`,
+`TextIndexParamsBuilder::bm25_scoring`, `TextQueryBuilder`, `QueryPointsBuilder`, `SearchParamsBuilder::idf` and
+`UpdateMode::InsertOnly`. Vendor types remain private to the bridge.
 
-- `Search` uses the real retrieval population and preserves final order.
-- `Exact` scans the pinned inventory directly and reports complete negative only after complete scan.
-- evidence lookup resolves point → pinned manifest entry → retained bytes/range through the actual reader.
-- `Continue` and `Expand` use one bounded process-local `QueryWindow`; there is no second handle store.
-- orientation/comparison appear only with real source-backed candidate/fact producers.
+Free text is any-term BM25 nomination, not a Boolean/phrase grammar. Required/excluded terms are explicit typed
+filter clauses. Punctuation-sensitive spelling/location is Exact.
 
-Vendor I/O stays in its actual adapter under the same deadline/cancellation. Final cards retain verified source,
-revision, representation, location, excerpt, match basis and bounded gaps. A valid citation proves provenance, not
-semantic relevance, uniqueness, corpus completeness or behavioral equivalence.
+## Scope
 
-Keep package boundaries only for a real dependency/effect or substantial algorithm. Combine pure stages and
-duplicated window/handle owners when their split adds no useful boundary. Remove old recipes, supplied-proof
-structures, receipt/revalidation planes, raw-score fusion and fixture-only compatibility families with their last
-callers.
+Resolve against one pinned `PublishedView`:
 
-After production code, run minimal Rust 1.98 check/Clippy for changed query and immediate daemon/protocol/source
-consumers. Runtime relevance, scale, cancellation and evidence claims require execution through the connected
-application; historical shape/receipt matrices disappear with their APIs.
+```text
+base population = selected sources ∩ actual session/access restriction
+candidate filter = base population + request-only narrowing
+idf.corpus       = base population
+```
+
+Source/access selection affects both candidates and statistics. Request-only narrowing does not redefine IDF.
+Whole-collection selection omits redundant filter/IDF. Explicit empty never widens; unknown/incomplete fails or
+reports a gap. Do not compare raw scores across different physical collections/profiles.
+
+## One owner and one context
+
+Use direct handlers:
+
+- `Search` — Qdrant 1.20 `TextQuery` and pinned evidence;
+- `Exact` — complete retained-source scan of the declared inventory/representation;
+- `Continue`/`Expand` — one bounded live `QueryWindow` holding the same view guard;
+- optional orientation/comparison — only with actual source-backed producers.
+
+One `RequestContext` carries absolute deadline, cancellation and finite nomination/evidence/source/result/output
+budgets. Reserve before retrieval. No phase resets, public scheduler/tickets, grants, plans, capability proofs,
+separate pins, terminal history or second handle store.
+
+No redb writer, view-manager mutex or window mutation borrow spans Qdrant/object/process/model I/O. Query pins current
+under a short lock, releases it, runs work, and mutates a window/cursor only after complete bounded output.
+
+## Evidence and ranking
+
+Qdrant payload nominates; redb/object state proves. Missing/foreign/corrupt evidence never becomes a card or
+fallback source. Select the page before object reads and preserve Qdrant order. Do not exact-count ordinary top-k,
+normalize/re-sort one population or make top-k an absence claim.
+
+Use native Qdrant prefetch/RRF/grouping only for a real multi-branch indexed operation. A non-Qdrant branch may use
+one private checked rank merge. No public ranking formula/profile system.
+
+## Removal/currentness rule
+
+Before deleting/inlining a package, repeat an exact current search over manifests, Rust/non-Rust callers,
+constructors/path inclusion, features, targets, tests and workflows. Move surviving callers in the same cut.
+
+Remove old local postings/BM25, sparse `qdrant/bm25` Document inference, alias-expansion profiles, recipes,
+supplied proofs, tickets/schedulers, raw-score fusion, process-test/oracle adapters and fixture-only compatibility.
+Keep package boundaries only for a real dependency/effect or substantial algorithm.
+
+After production code run minimal locked Rust 1.98 check/Clippy for query, bridge, daemon, protocol and evidence
+consumers, then focused real Qdrant/evidence/cancellation/scope cases. R051 changes documentation only.

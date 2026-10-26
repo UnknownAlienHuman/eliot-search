@@ -1,247 +1,196 @@
 # Donor and analogue register — installed state, candidates and selected patterns
 
-This is the live upstream/analogue index. It records exact installed dependencies, implementation-time
-candidates and patterns which materially simplify a concrete ELIOT owner. It does not approve a dependency,
-reserve a future pin or turn another system into ELIOT architecture.
+This live index records exact installed dependencies, implementation-time candidates and upstream behavior which
+materially constrains a concrete ELIOT owner. It does not approve a dependency, reserve a future pin or turn an
+analogue into architecture.
 
-**Current checkpoint:** R049 over inspected head
-`fed10c1e17e07f5bd309200dd25245fcbf85a0be`, 2026-10-26.
+**Current checkpoint:** R051 over inspected ELIOT head `a4c23110`, 2026-10-26.  
+**Previous detailed register:** [`da382b66`](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md).
 
 Keep four states separate:
 
 1. upstream behavior inspected;
 2. ELIOT use selected;
-3. exact dependency/service installed and connected to a caller;
-4. behavior executed through the product path.
+3. exact dependency/service installed and connected;
+4. behavior executed through the product.
 
-Recheck exact version, features, MSRV, advisories, native artifacts and API with the actual code cut.
+Recheck exact patch, features, MSRV, advisories, native artifacts and API with the real consumer.
 
-<a id="installed-selected-and-optional"></a>
-## Installed dependencies and selected service baseline
+## Installed dependencies / current service state
 
-| Donor | Current state | ELIOT boundary and important limit |
+| Donor | Current state | Boundary |
 |---|---|---|
-| `qdrant-client` / Qdrant | lock currently has client `1.19.0`; R049 selects server/client `1.20.x` for the walking-skeleton code cut | Qdrant 1.20 adds direct BM25 scoring on full-text payload indexes, `TextQuery` and the `code` tokenizer. Upgrade Cargo/lock/schema/query together; no runtime claim exists yet. |
-| `redb` | locked `2.6.3` | Compact current/published rows and real read snapshots. Transactions do not include files/Qdrant; long readers retain pages. |
-| Tokio | locked `1.53.1` in current async consumers | Process/I/O/deadline primitives. Dropping a future neither cancels blocking work nor settles external effects. |
-| `pulldown-cmark` | exact `0.13.5`, defaults disabled | Materializer uses empty options plus `OffsetIter`; version/checksum are transform identity. |
-| `quick-xml` | locked `0.42.0` | Bounded JATS/XML parsing and coordinates, not a universal document platform. |
-| `toml_parser` | locked `1.1.4+spec-1.1.0` | Legacy low-level decoder, not the selected typed replacement. |
-| `aho-corasick` | locked `1.1.5` | Useful overlapping literal primitive; not yet the connected retained-source Exact owner. |
-| `globset` | locked `0.4.20` | Admission matching only; not an inventory owner. |
+| `qdrant-client` / Qdrant | repository lock/server evidence still 1.19; R049–R051 select one exact 1.20.x patch for implementation | One private derived-index adapter. No connected default product yet. |
+| `redb` | locked 2.6.3 | Compact current/published metadata and real read snapshots. No files/Qdrant inside transactions; old readers retain pages. |
+| Tokio | locked 1.53.1 in async consumers | Process/I/O/deadline primitives. Dropping a future does not prove external work stopped. |
+| `pulldown-cmark` | exact 0.13.5, defaults disabled | Markdown `OffsetIter`; version/checksum are transform identity. |
+| `quick-xml` | locked 0.42.0 | Bounded XML/JATS parsing, not a document platform. |
+| `toml_parser` | locked 1.1.4+spec-1.1.0 | Legacy decoder, not the selected typed replacement. |
+| `aho-corasick` | locked 1.1.5 | Literal Exact primitive, not the connected request owner. |
+| Unicode/glob helpers | `unicode-ident 1.0.26`, `unicode-normalization 0.1.25`, `globset 0.4.20` | Narrow helpers; no compiler identity or inventory authority. |
 
-R031 Actions run 40084893130 passed Rust 1.98 locked check/minimal Clippy for `search-materializer` plus
-`search-unitizer` only.
+R031 Actions run 40084893130 passed locked Rust 1.98 check/minimal Clippy for materializer + unitizer only.
 
 ## Implementation-time candidates not installed
 
 | Candidate | Intended use | Adoption rule |
 |---|---|---|
-| high-level `toml` + Serde; `serde_json` | Incremental typed settings and bounded framed JSON | Select with Foundation/protocol consumers. Preserve sparse-layer absence, closed nested structs, native paths and redacted diagnostics. |
-| owner-private native no-clobber finalizer | Root manifest and plain immutable objects | Required on Windows unless an executed alternative preserves opened-stage and retained-parent identity. Keep it inside root/object owners. |
-| `tempfile` | Optional same-directory random stage helper, mainly Unix | Current inspected `3.27.0`, MSRV 1.63. Do **not** use its current Windows `persist_noclobber` as the trusted finalizer; it is path-based. Pin only if the concrete owner still benefits after native finalization is selected. |
-| `ignore::WalkBuilder` | Authoritative ignore-aware bounded inventory | Select with #271 after the one-file skeleton. Inspect builder, traversal and `DirEntry::error()` channels. |
-| `notify::RecommendedWatcher` | Optional dirty hints after reconciliation | No correctness authority; add only after #271 works without notifications. |
-| `regex-automata` | Optional bounded Exact regex | Literal Exact is baseline; select only with a concrete #248 consumer. |
-| PDFium via `pdfium-render` | Optional retained-PDF native text | Pin crate and matching packaged native artifact together with #227. |
-| `rmcp` | Optional stdio MCP leaf | Absent from lock; recheck only with post-baseline #219. |
-| tree-sitter / SCIP | Optional source-backed outline/semantic facts | Add one producer only for a concrete orientation consumer. |
-| model/tokenizer/runtime | Optional reranking/embedding | Require measured benefit over the lexical baseline and one exact artifact/profile. |
+| high-level `toml` + Serde; `serde_json` | Typed settings and framed JSON | Select with actual Foundation/protocol consumers; preserve sparse absence/native paths/redacted diagnostics. |
+| owner-private Windows/Unix finalizer; optionally `tempfile` for random staging | Same-parent staging and no-clobber root/object publication | Windows path-based `persist_noclobber` is not trusted final authority. Pin helper dependencies with #330/#360 code and canaries. |
+| `ignore::WalkBuilder` | Authoritative bounded source inventory | Select with #271 after walking skeleton; inspect builder/traversal/entry errors. |
+| `notify::RecommendedWatcher` | Optional dirty hints | No correctness authority; add only after inventory works without it. |
+| `regex-automata` | Optional Exact regex | Select only with concrete #248 consumer. |
+| PDFium / `pdfium-render` | Optional PDF native-text profile | Pin crate and matching packaged native artifact together. |
+| `rmcp` | Optional stdio MCP leaf | Absent from lock; R039 inspected stable 3.7.0. Recheck post-baseline. |
+| tree-sitter / SCIP | Optional outline/semantic producers | Add one producer only for a real orientation consumer. |
+| model runtime | Optional rerank/embedding | Require measured lexical benefit and one exact artifact/profile. |
 
-These are alternatives and optional leaves, not a dependency shopping list.
+## Qdrant 1.20 direct BM25 — exact selected API
 
-<a id="plain-object-publication-donor"></a>
-## Plain object publication — corrected platform boundary
+Official Rust client tag `v1.20.0` resolves to verified tag object `3e792085...` and commit
+`3b5a75aa371169486a9af8fc2748a76b379f0d02`, dated 2026-10-22. R051 inspected the generated proto/builders and
+snippet tests, not only prose docs.
 
-Git's loose-object writer supplies the right high-level pattern:
+Concrete Rust surface:
 
-```text
-same-directory unique stage
-→ stream bytes while computing identity
-→ flush/sync and close
-→ no-clobber finalization
-→ exact existing/final verification
+```rust
+CreateCollectionBuilder::new(name)              // vectors_config optional
+TextIndexParamsBuilder::new(TokenizerType::Code)
+    .lowercase(true)
+    .bm25_scoring()
+CreateFieldIndexCollectionBuilder::new(collection, field, FieldType::Text)
+TextQueryBuilder::new(text).k(k).b(b)
+QueryPointsBuilder::new(collection)
+    .query(Query::new_text(...))
+    .using(field)
+    .filter(...)
+    .params(SearchParamsBuilder::default().idf(IdfParams { corpus: ... }))
+    .limit(limit)
+UpsertPointsBuilder::new(collection, points)
+    .wait(true)
+    .update_mode(UpdateMode::InsertOnly)
 ```
 
-Primary source: [Git loose-object writer at `7e34d817`](https://github.com/git/git/blob/7e34d8174dcda3435d1404c9a30bef46afe6c13e/odb/source-loose.c).
+`PointStruct.vectors` and collection `vectors_config` are optional, so the baseline lexical collection is
+vectorless; no dummy vector/sparse BM25 inference is needed.
 
-ELIOT does not copy Git's skipped collision check. Existing final bytes and metadata are verified exactly.
-
-### `tempfile 3.27.0` finding
-
-The public API offers `persist_noclobber`, but the platform implementations matter:
-
-- Linux/Apple/Redox attempt `renameat`/`renameat2` with `NOREPLACE`, then fall back to `hard_link` + `unlink`; the
-  original stage link may remain after a crash/failure.
-- Windows changes attributes by path and calls `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING`. This is
-  no-clobber at the destination name, but it is **path-based** and does not bind finalization to the already-open
-  stage handle or retained destination-directory handle.
-
-Sources:
-
-- [tempfile Unix implementation](https://github.com/Stebalien/tempfile/blob/1c294cc29d2a48746637252a0e30b1bebc05b3e6/src/file/imp/unix.rs)
-- [tempfile Windows implementation](https://github.com/Stebalien/tempfile/blob/1c294cc29d2a48746637252a0e30b1bebc05b3e6/src/file/imp/windows.rs)
-
-**Decision:** retract R048's cross-platform preference for `persist_noclobber` as the finalizer. It may remain a
-stage helper where safe, but Windows final publication uses one owner-private handle-based operation. Microsoft
-`FILE_RENAME_INFO`/`SetFileInformationByHandle` supports failure when the destination exists and can resolve a
-relative name from a directory handle; the exact target Windows profile requires an executed canary before
-claiming support. No generic filesystem abstraction is introduced.
-
-Advertise only the achieved profile: namespace no-clobber/atomicity, exact file-data flush and final readback.
-Do not claim sudden-power-loss directory durability without executed platform evidence.
-
-<a id="qdrant-120-direct-bm25"></a>
-## Qdrant 1.20 direct BM25 and code tokenizer
-
-Qdrant 1.20 adds BM25 scoring directly on a scoring full-text payload index:
-
-- text is stored once in payload;
-- no sparse-vector inference step is required for documents or queries;
-- average document length and term statistics derive from indexed data;
-- `k` and `b` are query-time values;
-- the new `code` tokenizer splits identifiers on underscores and case changes while retaining the full
-  identifier.
-
-Primary sources:
-
-- [Qdrant 1.20 release](https://github.com/qdrant/qdrant/releases/tag/v1.20.0)
-- [Qdrant 1.20 full-text announcement](https://qdrant.tech/blog/qdrant-1.20.x/)
-- [full-text BM25 documentation](https://qdrant.tech/documentation/search/text-search/full-text-search/)
-- [Rust client 1.20 release](https://github.com/qdrant/qdrant-client/releases/tag/v1.20.0)
-
-**Selected baseline:** upgrade server/client/schema/query together during #263/#264, store retrieval text in one
-explicit payload field, create a scoring full-text index with explicit tokenizer/lowercase/stemmer/stopword
-settings, and use `TextQuery`. Keep source bytes in immutable objects; Qdrant payload is derived retrieval state.
-Exact punctuated identifier search remains independent.
-
-The direct full-text index uses more disk/memory than a non-scoring text index and its statistics may include
-outdated segment data until optimization after updates. Fresh-generation publication avoids serving partially
-mutated statistics in Stage 3A.
-
-<a id="qdrant-partition-and-shard-boundary"></a>
-## Qdrant partitions/custom shards — not a generic rebuild shortcut
-
-Qdrant supports payload partitions and user-defined shard keys. Custom shards are useful for a modest number of
-large partitions that are always queried independently. They are not selected as a generic per-root/per-source
-replacement strategy for ELIOT:
-
-- BM25/full-text statistics are computed per physical shard;
-- when several shards are queried, each shard scores with its own statistics population;
-- an `idf.corpus` filter cannot reach across shards and can silently see empty/partial local overlap;
-- comparing or fusing independently scored shard result lists would create another ranking owner;
-- each shard consumes storage/index resources and high-cardinality shard keys are explicitly discouraged.
-
-Primary sources:
-
-- [Qdrant multitenancy and per-tenant scoring](https://qdrant.tech/documentation/manage-data/multitenancy/)
-- [distributed/custom sharding](https://qdrant.tech/documentation/distributed_deployment/)
-- [time-based sharding](https://qdrant.tech/documentation/tutorials-operations/time-based-sharding/)
-
-Custom sharding may be reconsidered only for a product scope that is always searched as one partition and has
-measured resource benefit. It is not part of the baseline portfolio query.
-
-<a id="qdrant-edge-boundary"></a>
-## Qdrant Edge — promising, not selected baseline
-
-Qdrant Edge 0.8.0 is an official Rust crate with in-process sparse/BM25 search, filters, on-disk shards and
-read-only follower views. It could eventually remove the external service/network boundary and maps naturally to
-immutable generation directories.
-
-It is not selected now because:
-
-- official documentation still labels Edge beta;
-- Edge is single-shard/single-device with manual `optimize()` and explicit flush/drop obligations;
-- the released 0.8.0 line recently exposed WAL acknowledgement/replay/persistence defects; fixes appear in newer
-  Qdrant source/release work but are not yet established as a separately qualified stable Edge release for ELIOT;
-- the crate is a large embedded storage dependency and would materially change build, licensing review, Windows
-  behavior and failure ownership.
-
-Primary sources:
-
-- [Edge overview](https://qdrant.tech/documentation/edge/)
-- [Edge vs Server](https://qdrant.tech/documentation/edge/edge-vs-qdrant-cluster/)
-- [Edge BM25](https://qdrant.tech/documentation/edge/edge-bm25/)
-- [qdrant-edge 0.8.0 docs](https://docs.rs/qdrant-edge/0.8.0/qdrant_edge/)
-- [Qdrant 1.20 Edge fixes](https://github.com/qdrant/qdrant/releases/tag/v1.20.0)
-
-After the server walking skeleton works, an isolated Edge spike may compare build size, startup, persistence,
-Windows behavior, BM25 relevance and generation lifecycle. It must replace the bridge cleanly, not create a dual
-backend.
-
-<a id="analog-systems"></a>
-## Analogue systems — adopt the pattern, reject the subsystem
-
-| System | Useful pattern | Explicit non-adoption |
-|---|---|---|
-| Tantivy | Durable commit and reader visibility are separate; segment GC is separate. | No fallback/backend trait; scoped statistics would become ELIOT-owned complexity. |
-| Zoekt | Immutable temporary shards, completed-artifact publication and explicit state classification. | No second exact-search index or delta-shard/tombstone stack. |
-| Watchman / `ignore` | Events are observations; uncertainty causes recrawl; inventory errors are explicit. | No Watchman service, durable event cursor or watcher authority. |
-| qntx/qmd | Release database mutex before embedding/reranking/generation; lock per statement. | No SQLite replacement or default model runtime. |
-| Veles | Simple manifest/update topology is easy to read. | Reject manifest-first publication, missing-artifact-as-empty, size+mtime authority and `old-seen == removed`. |
-| codesearch | Broad product catalogue. | Reject all-at-once grammars/models/two indexes/watcher/HTTP/TUI/SCIP/MCP closure. |
-
-<a id="qdrant-update-mode-and-generation-cleanup"></a>
-## Qdrant generation profiles and cleanup
-
-### Fresh-generation profile — Stages 2 and 3A
+Selected text index/profile:
 
 ```text
-new never-reused physical collection
-→ scoring full-text schema
-→ explicit insert_only complete build
-→ exact readback + complete evidence snapshot
-→ atomic redb current commit
-→ explicit PublishedView install
+field=retrieval_text
+tokenizer=Code
+lowercase=true
+ascii_folding=false
+stemmer=none
+stopwords=none
+scoring=BM25
+nested=false
+k/b explicit at query time
 ```
 
-Once visible, the collection is immutable. Any selected source change builds another generation. No point
-closure, per-point deletion, stable cross-generation ID or alias switch is required.
+`TextQuery` matches any query term. Required/excluded terms are explicit filter clauses; arbitrary free text is not
+implicitly parsed as Boolean/phrase syntax. Exact punctuation/location remains retained-source Exact.
 
-### Incremental profile — Stage 3B
+The code tokenizer splits camelCase/snake_case/acronym boundaries and also indexes the joined identifier. Therefore
+ELIOT does not append local snake/camel/acronym aliases in the baseline: duplicated terms would change term
+frequency/document length and complicate profile identity. A measured alternative text composition requires a new
+retrieval profile/fresh generation.
 
-Only if Stage 3A fails declared budgets:
+### Scope and IDF
 
-```text
-new point → explicit insert_only
-replaced point → one fixed non-creating valid_until
-compaction/profile change → fresh never-reused generation
-```
-
-Whole-generation cleanup requires no current/pending target and no live view/window guard, then terminal deletion
-plus exact logical-absence observation. Never reuse the name. Uncertainty retains cleanup state/backpressure.
-Logical absence is not physical-erasure evidence.
-
-<a id="native-bm25-and-separate-statistics-scope"></a>
-## BM25 scope and IDF
-
-For every query leaf:
+For one text query:
 
 ```text
-base population = compatible selected sources + pinned validity/access partition
-retrieval filter = base population + request-only narrowing
+base population = selected sources ∩ real access/session restriction
+candidate filter = base population + request-only narrowing
 idf.corpus       = base population
 ```
 
-Qdrant statistics are shard-local. Empty corpus overlap removes rarity/length signals rather than falling back.
-Scoped IDF may enumerate the selected population before ranking, so top-k does not bound backend work. Measure
-cold/warm broad/narrow scopes through the connected 1.20 `TextQuery` path.
+If base population equals the whole physical collection, omit `idf`; global statistics are exactly correct.
+Explicit empty returns empty without RPC. Unknown/incomplete never widens. Source/access/path-kind fields used by
+filters require payload indexes.
 
-<a id="typed-configuration-donor-boundaries"></a>
+BM25 statistics are physical-shard-local. No generic per-source/root custom-shard portfolio: cross-shard scores use
+different populations and require another fusion owner. Baseline uses one ordinary shard.
+
+### Visibility/readiness
+
+Create scoring/filter indexes before point ingestion. Build with `insert_only` + `wait`, then verify schema,
+point payload/count **and an actual deterministic TextQuery canary**. Readback alone does not establish that the
+selected field/scorer/index is usable.
+
+Qdrant documents that text statistics may temporarily include stale updated/deleted data until segment
+optimization. Stage 2/3A avoids post-visibility point updates/deletes by using immutable fresh collections. Stage
+3B must measure scoring/optimizer behavior if activated.
+
+Primary sources:
+
+- [Rust client v1.20.0 tag](https://github.com/qdrant/rust-client/releases/tag/v1.20.0)
+- [Text index builder](https://github.com/qdrant/rust-client/blob/v1.20.0/src/builders/text_index_params_builder.rs)
+- [Text query builder](https://github.com/qdrant/rust-client/blob/v1.20.0/src/builders/text_query_builder.rs)
+- [QueryPoints builder](https://github.com/qdrant/rust-client/blob/v1.20.0/src/builders/query_points_builder.rs)
+- [SearchParams IDF builder](https://github.com/qdrant/rust-client/blob/v1.20.0/src/builders/search_params_builder.rs)
+- [Insert-only builder](https://github.com/qdrant/rust-client/blob/v1.20.0/src/builders/upsert_points_builder.rs)
+- [BM25 text-index snippet](https://github.com/qdrant/rust-client/blob/v1.20.0/tests/snippet_tests/test_create_text_index_with_bm25.rs)
+- [TextQuery snippet](https://github.com/qdrant/rust-client/blob/v1.20.0/tests/snippet_tests/test_query_points_with_text.rs)
+
+## Plain root/object publication — platform correction
+
+Git's useful pattern remains same-parent temporary write, streaming identity, file sync, no-clobber finalization
+and exact existing/final verification.
+
+`tempfile 3.27.0` is suitable for random staging and has MSRV 1.63. Its Windows `persist_noclobber`, however,
+changes attributes and calls path-based `MoveFileExW`; it is not tied to the already-open stage handle and retained
+destination-parent handle. It is not the trusted Windows finalizer.
+
+Windows selected boundary:
+
+```text
+opened stage handle + retained verified parent handle + relative final leaf
+→ owner-private SetFileInformationByHandle rename, replacement disabled
+→ reopen through retained parent/root
+→ exact final verification
+```
+
+Run a native canary for exact info class/struct, access/share flags, destination-exists refusal, path/parent
+replacement, crash debris and final readback. Refuse unsupported profiles rather than silently falling back.
+
+Unix uses a private directory-relative no-replace primitive; hard-link + unlink fallback requires exact readback and
+visible stage debris handling. File-data flush, namespace atomicity, readback and sudden-power-loss durability are
+distinct claims.
+
+## Analogues — patterns only
+
+| System | Use | Reject |
+|---|---|---|
+| Git loose objects | Same-parent content-addressed write/finalize | No source-membership inference or unchecked existing final. |
+| Tantivy | Commit and reader visibility are separate; GC separate | No fallback/backend trait or ELIOT-owned scoped-statistics subsystem. |
+| Zoekt | Immutable temporary build/finalize; state classification | No second exact index or mandatory delta-shard/tombstone stack. |
+| Watchman / `ignore` | Events are observations; uncertainty recrawls | No service/cursor/event ledger; inventory is correctness. |
+| qntx/qmd | Release DB mutex around long inference work | No SQLite replacement/default model runtime. |
+| Veles | Simple manifest easy to inspect | Reject manifest-first, missing artifact as empty, size+mtime authority and old-seen deletion. |
+| codesearch | Useful optional product catalogue | Reject all-at-once grammars/models/two indexes/watcher/HTTP/TUI/MCP closure. |
+| Qdrant Edge | Promising embedded replacement candidate | Beta/recent WAL concerns; no fallback/dual backend. Test newer release only after server path works. |
+
+## Markdown correction
+
+R031 moved `pulldown-cmark` 0.13.1 → 0.13.5 with exact lock and transform identity. Connected parser/materialize/
+replay evidence remains unrun under #215/#331.
+
 ## Typed configuration limits
 
-The current lock lacks high-level `toml`, Serde and `serde_json`. Preserve sparse absence, close nested structs,
-keep native paths outside TOML text where applicable, bound input before decoding, redact diagnostics and reject
-invalid effective settings before effects.
+The current lock lacks high-level `toml`, Serde and `serde_json`. Preserve sparse absence, closed structs, native OS
+paths where needed, bounded input/redacted diagnostics and reject invalid effective settings before effects. Add
+fields only with actual consumers.
 
-<a id="a-chunk-api-is-not-an-incremental-reader"></a>
 ## Exact matcher seam
 
-`search-exact::literal::scan_chunks` preserves overlapping matches across supplied chunks, but builds the NFA per
-call, requires pre-supplied chunks and lacks cancellation inside the loop. Compile once per request and feed
-bounded blocks from the retained reader. Raw bytes, decoded text and derived representations remain distinct.
+`search-exact::literal::scan_chunks` preserves overlapping matches over supplied UTF-8 chunks, but is not the
+connected retained reader and lacks cancellation inside its byte loop. Compile once per request, reset at source
+boundaries and feed bounded retained blocks. Raw bytes, decoded text and derived representations remain distinct.
 
 ## Currentness rule
 
 Caller searches, package sizes and analogue behavior are revision-specific. Before a code cut, recheck only the
-exact current callers and donor API involved. Record inspected SHA, selected use and unrun work in the registry.
+exact current callers and donor API involved, then record inspected SHA, selected use, installed state and unrun
+work in the analysis registry.

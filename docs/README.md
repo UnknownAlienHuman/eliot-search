@@ -1,50 +1,61 @@
 # ELIOT Search documentation
 
-This tree is organized for progressive reading. Start with the product contract, descend to the affected owner and
-use audit records only when evidence or history is needed.
+Read progressively: product contract → implementation sequence → affected owner/callers → current evidence. Audit
+records do not authorize code or create readiness credentials.
 
 ## Authority
 
-| Layer | Owns | Does not own |
-|---|---|---|
-| [Architecture](architecture/README.md) | Product purpose, boundary and observable requirements | Package topology or current execution status |
-| [Implementation](implementation/README.md) | Selected mechanisms, delivery sequence, lock order and optimization gates | Revision-specific evidence |
-| Nearest `FUNCTIONS.md` | Exact owner seam, current defects and operation recipe | Product-wide mission or second roadmap |
-| [Product behavior](product/README.md) | User-visible Search, Exact, orientation, comparison and document outcomes | Internal package status |
-| [Analysis registry](audit/ANALYSIS_REGISTRY.md) | Current checkpoint, inspected facts and unrun work | Architecture or runtime permission |
-| [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Installed/candidate versions and verified upstream limits | Automatic adoption decisions |
+| Layer | Owns |
+|---|---|
+| [Architecture](architecture/README.md) | Product purpose, boundary and observable requirements |
+| [Implementation spine](implementation/README.md) | Selected mechanisms, delivery order, ownership and removal rules |
+| Nearest `FUNCTIONS.md` | Exact source seams, algorithm and failure rules |
+| [Product behavior](product/README.md) | User-visible Search/Exact/orientation/comparison/document outcomes |
+| [Analysis registry](audit/ANALYSIS_REGISTRY.md) | Current checkpoint, inspected evidence and unrun work |
+| [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) | Exact upstream versions/APIs and applicability limits |
 
-When documents conflict, correct the owning layer and make other pages link to it. Do not satisfy both by adding a
-compatibility path, receipt or second registry.
+When text conflicts, correct the owning layer and make the other document link to it. Do not satisfy both by adding
+compatibility code, a second route or another registry.
 
-## Reading path by task
+## Reading path
 
 | Task | Read |
 |---|---|
-| Understand the product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
-| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → nearest owner recipe → current callers → owning issue |
-| Resume interrupted work | [R050 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
-| Change dependency/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner recipe |
-| Move/delete legacy code/tests | [Test cutover](implementation/TEST_CUTOVER.md) and current caller search |
-| Inspect data/effect/lock ownership | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
+| Understand product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
+| Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → nearest owner recipe → actual callers |
+| Resume interrupted work | [R051 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
+| Change donor/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner |
+| Move/delete legacy tests/code | [Test cutover](implementation/TEST_CUTOVER.md) → exact current caller search |
+| Inspect ownership graph | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
 
-## Current implementation decisions
+## Current status — R051
 
-R049 selected Qdrant 1.20 direct full-text BM25, handle-safe Windows finalization, measured Stage 3A release gates,
-conditional Stage 3B, no generic custom-shard portfolio and Edge as a later isolated candidate.
+R051 verifies the exact official Qdrant Rust client 1.20 text-search API and reconciles lexical, query, scope,
+retrieval executor, unitizer, control and bridge owners.
 
-R050 synchronizes the remaining active Qdrant package/runtime instructions:
+Selected implementation:
 
-- Stage 2/3A projection assembles complete generations with actual retrieval-text payloads;
-- Stage 2/3A point IDs are deterministic and generation-bound;
-- stable occurrence identity, source-local retain/create/close and sequence ranges are Stage 3B only;
-- baseline cleanup deletes whole physical collections only;
-- the old point-reclaimer/possible-writer/checkpoint platform is removed after its small helper moves;
-- view lifetime pins physical collection + redb snapshot, with sequence only in Stage 3B;
-- historical Qdrant 1.19 Windows smoke is not current Qdrant 1.20 evidence.
+```text
+vectorless physical collection
++ retrieval_text payload
++ scoring Text index (Code tokenizer)
++ insert_only points
++ deterministic TextQuery readiness canary
++ TextQuery with explicit k/b
++ base-population idf.corpus when source/access selection narrows collection
+```
 
-The product remains unimplemented. Cargo still locks Qdrant client 1.19.0; R050 changes documentation and metadata
-only.
+Removed from the mandatory baseline:
+
+- sparse `qdrant/bm25` document/query inference and fixed local `avg_len`;
+- local postings/numerical BM25;
+- automatic snake/camel/acronym alias expansion;
+- hidden Boolean/phrase parsing of free query text;
+- old/new occurrence matching, stable point identity and sequence in Stage 2/3A;
+- query scheduler/tickets/leg fusion and point-level cleanup platform.
+
+The Cargo lock still contains client 1.19.0. No Rust/runtime change is claimed. Foundation, Windows handle
+finalization, Qdrant 1.20, walking skeleton, restart, relevance and scale remain unrun.
 
 ## Focused supporting material
 
@@ -53,7 +64,7 @@ only.
 - [Windows Qdrant notes](runtime/QDRANT_NATIVE_WINDOWS.md)
 - [ADRs](adr/README.md)
 - [Audit navigation](audit/README.md)
-- [Handoff/navigation](handoff/README.md)
+- [Handoff](handoff/README.md)
 
-Retired Architecture 8.4, waves, packets, receipts, generated maps, standalone applications and structural
-qualification remain in Git history. They may explain findings but cannot authorize work or restore dead APIs.
+Historical Architecture 8.4, waves, packets, receipts, generated maps and standalone applications remain in Git
+history. They may explain a finding but cannot restore dead APIs or block the current vertical path.
