@@ -2,7 +2,7 @@
 
 ELIOT Search is a standalone local search application for large codebases and document collections. It returns
 ranked source-backed locations with verified excerpts, exact revision identity and explicit gaps. Qdrant is the
-only indexed retrieval engine; retained immutable objects remain the source of evidence.
+only selected indexed retrieval engine; retained immutable objects remain source evidence.
 
 ## Read first
 
@@ -11,56 +11,68 @@ only indexed retrieval engine; retained immutable objects remain the source of e
 | Product purpose and user-visible invariants | [Architecture](docs/architecture/README.md) |
 | Shortest implementation path and owner boundaries | [Implementation spine](docs/implementation/README.md) |
 | Current checkpoint, decisions and unrun evidence | [Analysis registry](docs/audit/ANALYSIS_REGISTRY.md#resume) |
-| One concrete change | Nearest `FUNCTIONS.md`, actual current callers and the owning issue |
+| Upstream dependencies and analogue dispositions | [Donor/analogue register](docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) |
+| One concrete change | Nearest `FUNCTIONS.md`, actual current callers and owning issue |
 
-[Documentation authority and task paths](docs/README.md) explain which document wins when text conflicts.
-Historical architecture, waves, packets, receipts and old issue bodies remain evidence only.
+[Documentation authority](docs/README.md) explains which layer wins. Historical architecture, waves, packets,
+receipts and old issue bodies remain evidence only.
 
 ## Current truth
 
-The product is **not implemented end to end**. R047 verifies and corrects the implementation instructions; it
-does not claim runtime success.
-
-The first two production cuts are deliberately small:
+The product is **not implemented end to end**. R048 verifies donors/analogues and simplifies the implementation
+sequence; it adds no runtime result.
 
 ```text
-Foundation:
-  one invocation capture
-  → bounded typed root/plain settings
-  → inspect | initialize | open current root
-  → one DataRootGuard and factual status
+1. Foundation
+   one invocation
+   → bounded root/plain settings
+   → inspect | manifest-last initialize | open
+   → one DataRootGuard and factual status
 
-Walking skeleton:
-  one explicitly selected supported file
-  → stable read once
-  → plain immutable ObjectRef
-  → current SourceRecord
-  → one preparation result
-  → one fresh Qdrant generation
-  → one one-shot Search
-  → pinned retained excerpt
-  → CLI output
+2. Walking skeleton
+   one selected file
+   → stable read
+   → plain immutable ObjectRef
+   → current SourceRecord
+   → one preparation result
+   → one fresh physical Qdrant generation
+   → one Search
+   → pinned retained excerpt
+   → CLI output
+
+3A. Fresh-generation convergence
+   restart + authoritative inventory
+   → any selected change builds a complete new physical generation
+   → matching evidence/current commit
+   → explicit PublishedView install
+
+3B. Optional measured incrementality
+   stable occurrence reuse
+   → insert-only additions + fixed non-creating closures
+   → compaction only if full rebuild cost justifies this machinery
 ```
 
-Foundation does not define source/Qdrant/query settings before those consumers exist. The walking skeleton uses
-final owners and values, but initially omits broad inventory, watcher, encrypted storage, paging, physical cleanup
-and general recovery.
+Foundation does not define future source/Qdrant/query settings. The walking skeleton and 3A use final owners and
+persisted values, but avoid watcher, encrypted storage, paging, aliases and per-point cleanup.
 
-Plain storage is the baseline. [#598](https://github.com/UnknownAlienHuman/eliot-search/issues/598) is an optional
+Plain storage is baseline. [#598](https://github.com/UnknownAlienHuman/eliot-search/issues/598) is an optional
 encrypted profile and cannot block the plain source → Qdrant → excerpt path.
 
-## Safety decisions
+## Safety and simplicity decisions
 
-- One process owns the current root through one actual guard; no lease/epoch/receipt owner system.
-- One immutable object owner stores source and prepared bytes; redb stores references and compact current state.
-- One publisher owns Qdrant effects and `PublishedView` installation.
-- New Qdrant points use explicit `insert_only`; default upsert is not a retry primitive.
-- A point is closed by one fixed non-creating `valid_until` mutation and is not individually deleted.
-- Compaction/rebuild uses a never-reused generation; cleanup deletes only whole retired generations after guards
-  are gone and exact collection absence is observed.
-- One query pins one view, resolves one non-widening scope and reads evidence through immutable objects.
-- One-shot output exposes no reusable window locator; live paging is a later same-session capability.
-- Issues track work ownership, not prerequisite order. Optional profiles do not block the baseline.
+- One process owns the root through one actual guard; no lease/epoch/receipt owner system.
+- Empty-root initialization publishes one final manifest last and uses exact discard/retry, not resume/replay.
+- One immutable object owner uses same-directory no-clobber finalization and exact existing/final verification.
+- Redb stores compact references/current state; no redb writer spans object/Qdrant/process I/O.
+- Publication builds a complete fresh physical collection before committing/installing the matching view.
+- `PublishedView` names that physical collection directly; a Qdrant alias is not visibility authority.
+- Fresh visible collections are immutable. Point closures/stable identity are later measured optimization.
+- Retired collections are deleted only after all guards and targetable work are gone; uncertain cleanup remains
+  visible/backpressured and collection names are never reused.
+- Watcher events only mark a root dirty; authoritative inventory establishes selected state.
+- One query pins one view/scope and resolves evidence through retained objects.
+- Qdrant remains the only selected backend; no Tantivy/Zoekt fallback trait before measurement.
+- Issues track ownership, not prerequisite order. Optional profiles do not block baseline.
 
 ## Workspace map
 
@@ -74,14 +86,15 @@ encrypted profile and cannot block the plain source → Qdrant → excerpt path.
 | Query and retained evidence | [crates/search-query](crates/search-query/) |
 | Durable compact metadata | [search-control-redb](crates/search-control-redb/) |
 
-This is an inventory, not a required final crate topology. Move useful behavior with real callers; remove the
-replaced path and exclusive fixtures rather than preserving forwarding facades.
+This is inventory, not required final crate topology. Move useful behavior with real callers and delete the
+replaced path/fixtures instead of preserving forwarding facades.
 
 ## Verification status
 
-R031 ran locked Rust 1.98 check and minimal Clippy for `search-materializer` and `search-unitizer` only. Current
-binaries, Foundation, the walking skeleton, Windows durability, live Qdrant, restart/recovery, relevance and scale
-remain unrun. See the [registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
+R031 ran locked Rust 1.98 check/minimal Clippy for `search-materializer` and `search-unitizer` only. Current
+binaries, Foundation, walking skeleton, fresh-generation convergence, Windows durability, live Qdrant,
+restart/recovery, relevance and scale remain unrun. See the
+[registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
 The existing one-shot scan syntax is documented in [QUICKSTART.md](QUICKSTART.md) as an unverified diagnostic
 route, not the persistent product.

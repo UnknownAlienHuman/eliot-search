@@ -1,164 +1,188 @@
 # Analysis registry
 
-Continuation memory and evidence status. It is not architecture, permission or a checklist which must complete
-before coding.
+Continuation memory and evidence status. It records inspected facts, selected decisions and unrun work; it is not
+architecture, permission or an implementation prerequisite.
 
 <a id="resume"></a>
 ## Resume
 
-**Checkpoint:** R047, 2026-10-25 — implementation-readiness verification and active-surface synchronization.  
+**Checkpoint:** R048, 2026-10-25 — donor/analogue synthesis and simpler convergence plan.  
 **Branch:** `codex/refactor-preparation-20261017`, PR #610.  
-**Inspected head:** `1eeb41912893d323a677ae5b94c8d45f0a636453` (R046).  
+**Inspected ELIOT head:** `858d1e34a9053b6c3f51ba5d81d3b92ceb14b9f3` (R047).  
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
 Read [docs/README](../README.md), then the
-[implementation sequence](../implementation/README.md#delivery-sequence), then only the affected owner recipe and
-actual current callers.
+[implementation sequence](../implementation/README.md#delivery-sequence), then only the affected owner recipe,
+actual current callers and owning issue.
 
-R047 verifies every active instruction surface which can direct the next implementation: root entry documents,
-implementation/test/dependency spine, config/object/publication/Qdrant owners, donor register and load-bearing
-open issues. It does not claim product execution.
+R048 reviews concrete implementation donors and analogous search systems. It changes documentation only. The
+product remains unimplemented.
 
-## R047 findings and decisions
+## R048 inspected evidence
 
-### F1 — root entrypoints still advertised the old horizontal order
+### Primary donors and source revisions
 
-`README.md` still said to finish broad #333 before source/preparation. `QUICKSTART.md` linked a removed registry
-anchor and mixed the first product smoke with later restart convergence.
+- Git loose-object writer at `7e34d8174dcda3435d1404c9a30bef46afe6c13e`;
+- `tempfile 3.27.0` source/API at current master;
+- Tantivy at `b9c4ed1c62729001c3c1ce0cc6cdf7dd4a5eb82a`;
+- Zoekt at `572f5e4a3a37532300298e2ba38513c15b2e0319`;
+- ripgrep `ignore` walker and existing ELIOT source-reconcile donor notes;
+- Watchman official clock/recrawl/subscription behavior;
+- qntx/qmd at `8747cafab6b3af79d93f92b2c27ff5cfaf935c8f`;
+- Veles at `f49adb4f828543d2b9bb5e3469582abcf03adaaa`;
+- codesearch at `765e3daad6f4614b1d91789d682c6e94d5be3a08`;
+- Qdrant official update-mode, collections/aliases, delete-collection and native-BM25 material.
 
-**Decision:** Foundation contains root/plain settings only. It is followed immediately by #264's one-file
-walking skeleton. Full restart/lost-wakeup convergence is the next stage, not a prerequisite for the first CLI
-result.
+### ELIOT owners checked
 
-### F2 — #598 still contradicted the plain-storage baseline
+Implementation spine, dependency graph, donor register, root owner, plain object store, source reconciliation,
+Qdrant bridge/publication, test cutover and active programme handoff.
 
-The #598 body still called selected-key storage a prerequisite for #270/#330/#352, while R046 only corrected a
-comment and other documents. #266/#267 and several later issues could still direct an agent to wait for the
-private handoff.
+## Findings and decisions
 
-**Decision:** #598 is an optional encrypted-object profile only. Plain `ObjectRef` put/open/read under #330 is the
-baseline and is implemented independently. Private #598 branches/worktrees remain protected; any accepted
-profile extends the same object boundary and cannot create a second source/store/query path.
+### F1 — stage 3 still introduced incremental complexity too early
 
-### F3 — open issues could restore superseded recovery and lifetime rules
+The R047 sequence moved the first result ahead of broad recovery, but its next stage still bundled restart,
+inventory, stable point identity, per-source point closure, compaction and cleanup.
 
-#215 still required unsettled-writer/isolated-generation recovery. #263 referred to unresolved-writer rules.
-#300 incorrectly made fixed point closure wait for old readers. #266/#267/#360 retained old storage-profile
-language. #189/#214 used stale registry anchors/checkpoints. #315 could defer current object identity to #598.
+Tantivy and Zoekt demonstrate the useful smaller pattern: build immutable derived artifacts, make visibility an
+explicit later step and garbage-collect old artifacts separately. Their exact implementations are not adopted.
 
-**Decision:** synchronize those issue bodies with the current spine. A fixed exclusive `valid_until` closure is
-safe for older sequences; only whole-generation deletion waits for all guards. Issue bodies track work but never
-override canonical owners.
+**Decision:** split convergence:
 
-### F4 — donor evidence was stale and one active anchor was broken
+- **3A Fresh-generation convergence:** restart/reopen, authoritative inventory and desired-state reconciliation;
+  any selected change builds a complete fresh never-reused Qdrant generation, commits matching evidence/current
+  state, then explicitly installs `PublishedView`.
+- **3B Measured incremental publication:** add stable occurrence reuse, `insert_only` point additions, fixed
+  non-creating closures and compaction only after 3A works and full-rebuild cost is measured.
 
-The donor register still named R041 and linked the removed config `#sparse-layers-and-validation` heading.
+The fresh-generation profile is production architecture, not a throwaway. It uses the same retained objects,
+prepared outcomes, evidence rows and physical collection identity. It prevents #329 identity continuity and
+intra-generation mutation from blocking the first restart-convergent product.
 
-**Decision:** update to R047, point at `#layer-semantics`, and state the exact Qdrant update-mode evidence.
+### F2 — plain object publication had an unresolved stable-Rust primitive choice
 
-### F5 — Qdrant retry semantics were selected but not fully bounded
+`std::fs::rename` may replace a destination; stable Rust 1.98 has no stable `rename_noreplace`. Git supplies the
+right shape: same-directory temporary file, streaming identity, sync, close and content-addressed finalization.
 
-Official Qdrant documentation states that default upsert inserts or overwrites, while `insert_only` and
-`update_only` are available from server 1.17. The selected 1.19 baseline therefore supports explicit modes.
-However, documentation had overclaimed that delayed point mutations could not affect collection cleanup without
-stating the required delete/absence proof or runtime evidence.
+`tempfile 3.27.0` provides `NamedTempFile::persist_noclobber` with MSRV 1.63.
 
-**Decision:**
+**Decision:** select `tempfile` as the preferred implementation-time candidate for #330/#360, not an installed
+pin. Use final-directory staging, streaming address, `sync_all`, no-clobber persistence and exact existing/final
+readback. A crash-left hard link/stage is safe maintenance debris. If Windows retained-handle/no-reparse needs a
+smaller native finalizer, keep it private to the object/root owner instead of inventing a filesystem framework.
 
-- new point: explicit `insert_only`, identical fixed retry and exact readback;
-- closure: one non-creating fixed `valid_until`, never default upsert;
-- no individual point deletion;
-- no new pending operation after generation retirement;
-- whole-generation cleanup waits for all guards, uses terminal collection deletion, verifies exact logical
-  absence and never reuses the name;
-- uncertain deletion/absence retains `RetiredCleanup` and backpressure;
-- logical absence does not claim physical disk erasure;
-- delayed-point/delete behavior remains a required live case on pinned Qdrant 1.19.
+### F3 — Foundation initialization recovery remained larger than necessary
 
-### F6 — lock order was implicit
+The current root task still allowed `initialize --resume`. Foundation creates only an empty current-format
+control/object layout; no user source has been accepted yet.
 
-Owner documents prohibited some locks across I/O but did not provide one cross-owner acquisition order. An agent
-could still compose a publisher/view/window/redb cycle.
+**Decision:** select **manifest-file-last plus discard/retry**, not an initialization replay state machine:
 
-**Decision:** add the explicit lifetime/lock order to the implementation spine and dependency graph. No redb
-writer, view-manager mutex or window mutation borrow spans object/Qdrant/process I/O. View install follows commit;
-cleanup never runs inline from last guard drop.
+```text
+validate empty/owned target
+→ create exact initialization marker + minimal layout
+→ flush/close/verify
+→ publish final root manifest no-clobber last
+→ verify current root
+```
 
-### F7 — release and test instructions needed the same stage boundary
+Before the final manifest the root is `IncompleteInitialization`. Ordinary open writes nothing. Explicit
+`discard-incomplete` removes only the exact recognized empty initialization layout after acquiring exclusion;
+unknown/conflicting entries refuse and require manual relocation. No baseline resume path is needed.
 
-The release issue and test cutover mixed first-smoke evidence with later reconciliation, sessions and cleanup.
+### F4 — Qdrant aliases would create a cross-system split-brain risk
 
-**Decision:** separate Foundation, one-file product smoke, convergence, Exact/session and maintenance/release
-confidence. Broad suites do not block the first production path.
+Qdrant can switch aliases atomically, but that switch cannot atomically install ELIOT's matching redb evidence
+snapshot. Old pinned views also need the old physical generation.
+
+**Decision:** `PublishedView` names the exact physical collection. Queries address it directly. Aliases are not
+serving, recovery or cleanup authority and no alias manager is added to baseline.
+
+### F5 — event systems confirm inventory-first correctness
+
+Watchman treats clocks/events as observations and recrawls conservatively on uncertainty. The `ignore` donor has
+separate builder, traversal and entry-attached error channels.
+
+**Decision:** retain the existing ELIOT design: startup/explicit/periodic `ignore::WalkBuilder` inventory is
+correctness; a watcher only sets stable-root dirty latches. Overflow/error/fresh instance schedules a root scan.
+No durable event cursor, event replay ledger, Watchman service or whole-tree watcher cache.
+
+### F6 — an embedded Tantivy fallback would not simplify scoped lexical search
+
+Tantivy has excellent commit/reload and segment mechanics, but default BM25 statistics aggregate across all
+segments. ELIOT would have to own exact scoped token/document statistics to reproduce its selected IDF semantics.
+That creates another statistics subsystem and a second backend path.
+
+**Decision:** keep Qdrant as the only selected indexed backend. Do not add a backend trait or Tantivy fallback.
+After #264/3A, reconsider the backend only if measured setup, relevance, scoped-IDF, recovery or scale criteria
+fail. A replacement prototype must consume the same retained/prepared/evidence boundaries and replace the
+derived backend rather than dual-run indefinitely.
+
+### F7 — modern analogues demonstrate both useful topology and failure modes
+
+- qntx/qmd recently removed a database mutex from around embedding/reranking/generation and locks per statement;
+  this reinforces ELIOT's no-lock-across-I/O rule.
+- Veles writes its manifest first, treats a missing symbols artifact as empty, trusts equal size+mtime without
+  rehash and derives removals from unseen paths. These are explicit counterexamples for ELIOT.
+- codesearch combines many grammars, embedding downloads, two indexes, watcher/debouncer, HTTP/TUI, SCIP and a
+  vendored MCP patch. It is a useful product catalogue but a negative architecture donor for the baseline.
+
+**Decision:** preserve small leaves and progressive capability delivery. Do not interpret popularity or feature
+breadth as a reason to adopt a subsystem.
 
 ## Current implementation sequence
 
-| Stage | Observable result | Primary ownership |
+| Stage | Observable result | Primary owners |
 |---|---|---|
-| Foundation | one invocation; root/plain typed settings; inspect/init/open; one guard; factual status | #333/#266/#360 |
-| Walking skeleton | one explicit file → plain ObjectRef → preparation → fresh Qdrant generation → one Search → pinned CLI excerpt | #264 plus #267/#270/#330/#331/#259/#263/#261/#272/#293/#280/#332 |
-| Convergence | restart/reopen; inventory/reconcile; ABA/lost-wakeup handling; incremental publication; rebuild/compaction | #270/#271/#331/#329/#261/#300/#303 |
-| Exact/session | literal Exact and one framed live session with one QueryWindow | #249/#275/#280/#332 |
-| Maintenance/depth | stopped-root collection/archive/import and selected optional capabilities | #302/#244/#281/#227/#335 |
+| 1 Foundation | parsed invocation; root/plain settings; inspect/init/open; one guard; factual status | #333/#266/#360 |
+| 2 Walking skeleton | one file → plain ObjectRef → preparation → one fresh generation → Search → retained CLI excerpt | #264 and vertical owners |
+| 3A Fresh-generation convergence | restart/reopen; authoritative inventory; desired-state reconciliation; complete fresh generation and view switch | #270/#271/#331/#261/#300/#303 |
+| 3B Incremental optimization | stable occurrence reuse; point additions/fixed closures; measured compaction thresholds | #329/#259/#261/#263 |
+| 4 Exact/session | literal Exact and one framed live session/QueryWindow | #249/#275/#280/#332 |
+| 5 Maintenance/depth | stopped-root collection/archive/import and selected product leaves | #302/#244/#281/#227/#335 |
 
-## Non-blocking and anti-bureaucracy rules
+## Anti-bureaucracy and lock rules
 
-- Issue closure order is not implementation dependency order.
-- One manager owns each vertical cut and integration commit; parallel work is disjoint.
-- Settings, traits, donors and optional adapters appear only with a real consumer.
-- Plain storage and lexical Search do not wait for #598, watcher, regex, documents, MCP, models, overlay,
-  managed Qdrant or persistent pipe.
-- Current caller inspection is local to code being moved/deleted.
-- Historical waves, packets, receipts, package maps and closed issue bodies are not authority.
-- The first connected path uses final owners and values; no throwaway second route.
-- Minimal Rust 1.98 check/Clippy follows each production cut; broad tests follow connected behavior.
-
-## Active-surface synchronization
-
-R047 updates canonical files and the following open issues before branch advancement:
-
-- #189 — current registry anchor and vertical-cut scope;
-- #214 — current R047 evidence and remaining tooling removal;
-- #215 — release scenarios aligned with insert-only/no-per-point-delete design;
-- #263 — exact Qdrant update modes and generation cleanup boundary;
-- #264 — walking-skeleton completion separated from stage-3 convergence;
-- #266/#267/#360 — plain baseline independent of #598;
-- #300 — closure does not wait for old readers; generation deletion does;
-- #315 — current plain object identity does not wait for encrypted handoff;
-- #598 — optional encrypted profile, not baseline prerequisite;
-- #352 and PR #610 — current programme/handoff.
-
-At publication of this checkpoint these metadata surfaces are synchronized to the exact R047 commit.
+- Issue closure order is not dependency order.
+- One manager owns each vertical integration cut; parallel writes are disjoint.
+- No backend abstraction, alias manager, watcher ledger, init journal or object-operation archive.
+- No redb writer, view-manager mutex or QueryWindow mutation borrow spans object/Qdrant/process/model I/O.
+- A complete build and durable evidence commit precede view installation.
+- Last guard drop only wakes cleanup; it never deletes inline.
+- Optional donors appear only with their consumer.
+- Current-caller search is local to code being moved/deleted.
+- Minimal Rust 1.98 check/Clippy follows production cuts; broad suites follow connected behavior.
 
 <a id="evidence-status"></a>
 ## Evidence status
 
 | Area | Status |
 |---|---|
-| Canonical architecture, implementation spine and owner handoff | CHECKED through R047 |
-| Active load-bearing issue alignment | CHECKED through R047 |
-| Dependency/lock order | DOCUMENTED, not executed |
-| Root/config/source/preparation/publication/query design | IMPLEMENTATION-READY, not implemented |
-| Plain object profile | SELECTED, not implemented |
-| Encrypted #598 profile | PROTECTED/OPTIONAL |
-| Qdrant `insert_only`/`update_only` API availability | OFFICIAL DONOR EVIDENCE; selected 1.19 satisfies version floor |
-| Qdrant delayed-operation/collection-delete race | REQUIRED LIVE CASE, UNRUN |
+| Donor/analogue source inspection | CHECKED for named revisions/questions |
+| Fresh-generation-first decision | SELECTED, not implemented |
+| `tempfile` no-clobber candidate | INSPECTED/SELECTED CANDIDATE, not installed |
+| Root discard-only initialization | SELECTED, not implemented |
+| Qdrant physical-generation/no-alias serving | SELECTED, not executed |
+| Qdrant incremental update/cleanup races | STAGE 3B / REQUIRED LIVE CASES |
+| Watcher/inventory authority | CHECKED design, not implemented |
+| Backend replacement criteria | DOCUMENTED, not measured |
 | Compiler evidence | R031 materializer + unitizer only |
 | Current binaries/Foundation/walking skeleton | UNRUN |
 | Windows durability/live Qdrant/restart/relevance/scale/end-to-end | UNRUN |
 
-No documentation review proves the product will work. R047 removes known instruction cycles and defines the
-smallest executable proof which can falsify the remaining assumptions quickly.
+No analogue proves ELIOT correctness. R048 narrows the code required before the next falsifiable product result.
 
 ## Immutable prior records
 
 - R001–R031: historical audit/removal/dependency work through `da382b66`.
-- R032–R045: canonical documentation reconciliation and publication closeout through `af337ec7`.
+- R032–R045: canonical documentation reconciliation through `af337ec7`.
 - R046: first implementation-readiness correction at `1eeb4191`.
-- R047: hostile verification of active documents/issues, lock order and Qdrant retry/cleanup boundary.
+- R047: active-surface hostile verification at `858d1e34`.
+- R048: donor/analogue synthesis, object/root primitive selection and fresh-generation convergence split.
 
 ## Next action
 
-Implement Foundation, run the minimal compiler/Clippy closure, then immediately implement the one-file walking
-skeleton and execute it against real Qdrant 1.19. Update documentation only with concrete code cuts or newly
-verified evidence; do not restart a general documentation audit.
+Implement Foundation with the selected manifest-last/discard-only plain root, run minimal compiler/Clippy, then
+implement #264. The first convergence extension is restart plus complete fresh-generation rebuild. Do not begin
+incremental point mutation, stable cross-revision point reuse, watcher integration or backend abstraction first.

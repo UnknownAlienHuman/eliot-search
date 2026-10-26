@@ -1,17 +1,14 @@
 # Immutable object store — plain baseline, optional encrypted profile
 
-This owner persists source bodies and prepared artifacts. It decides object identity, publication, verification,
-range reads and exact deletion mechanics. Source membership, preparation currentness, publication reachability and
-query scope belong elsewhere.
+This owner persists source bodies and prepared artifacts. It decides object identity, no-clobber publication,
+verification, range reads and exact deletion mechanics. Source membership, preparation currentness, publication
+reachability and query scope belong elsewhere.
 
-## Baseline is not blocked by #598
+## Baseline is independent of #598
 
-Implement the `Plain` current-format profile first. It has no key, secret catalogue or encryption lifecycle.
-#598 may later provide an encrypted profile after an accepted public handoff. Integration must use the same
-Eliot-owned object boundary and must not create a second source/preparation/evidence path.
-
-If #598 overlaps existing files, coordinate the smallest public type seam with its manager. Do not wait for the
-whole encrypted programme to implement the plain profile, and do not inspect private worktrees.
+Implement `Plain` first. It has no key, secret catalogue or encryption lifecycle. #598 may later supply an
+encrypted profile through the same Eliot-owned `ObjectRef`; it cannot create a second source/preparation/evidence
+path or block the plain product.
 
 ## Required boundary
 
@@ -25,77 +22,108 @@ list_objects(cursor, limit) -> bounded identities
 remove_exact(ObjectRef) -> Absent | Removed | Unresolved
 ```
 
-`ObjectRef` binds:
+`ObjectRef` binds current format, storage profile, kind, content address and exact length. It carries no source
+membership, current-head, access or query authority.
+
+<a id="plain-publication"></a>
+## Plain publication — selected small implementation
+
+The preferred stable-Rust candidate is `tempfile::NamedTempFile` in the final object's directory. R048 inspected
+`tempfile 3.27.0` (MSRV 1.63); pin/recheck it only with the implementation.
 
 ```text
-current object-format version
-storage profile
-kind
-content address
-exact length
+validate object kind/profile and input ceiling
+→ determine final parent/address namespace
+→ NamedTempFile::new_in(final_parent)
+→ write exact bytes while streaming the content address
+→ verify computed address/length
+→ sync_all according to the advertised durability profile
+→ persist_noclobber(final_path)
+→ if AlreadyExists: verify the existing final object exactly
+→ open/verify the final object once
+→ return ObjectRef, optionally retaining verified owned bytes
 ```
 
-It carries no source membership, current-head, access or query authority.
+This borrows Git's useful loose-object pattern: same-directory stage, streaming identity, file sync and
+content-addressed finalization. Do not copy Git's skipped collision check. Different bytes/format/profile/kind at
+one address are a hard immutable conflict.
 
-## Plain publication
+`std::fs::rename` is not selected because it may replace the destination. Stable Rust 1.98 has no stable
+`rename_noreplace`. `persist_noclobber` may leave a stage or second hard link after crash/unlink failure; that is
+safe visible maintenance debris, not a durable operation history.
+
+If the selected Windows retained-handle/no-reparse rules cannot be preserved by the path API, implement one tiny
+native no-clobber finalizer inside this owner. It must keep the same operation contract and must not become a
+generic filesystem framework.
+
+Known pre-publication failure removes this writer's stage when possible. Possible publication is resolved only by
+exact final-address readback.
+
+## Durability statement
+
+Expose what was executed, for example:
 
 ```text
-validate final namespace/address and byte limit
-→ create unpredictable create_new stage in final directory
-→ write exact bytes while computing/verifying content identity
-→ file sync according to the supported durability profile
-→ publish final address no-clobber
-→ when final already exists, open and verify it exactly
-→ verify final object once
-→ remove this writer's stage
-→ return ObjectRef and optionally already-owned verified bytes
+NamespaceAtomicAndFileSynced
+NamespaceAtomicReadbackOnly
 ```
 
-Two writers of the same bytes converge. Different bytes at one address are an immutable conflict. A known failure
-before publication removes the stage when possible. A possible publication is resolved by exact final-address
-readback. Leftover stages/unreferenced finals are stopped-root maintenance input, not operation history.
-
-Do not claim Windows sudden-power-loss durability from final readback or a no-op directory sync. Select and
-execute one qualified same-volume no-clobber primitive or expose the weaker durability profile explicitly.
+Do not claim sudden-power-loss durability from namespace readback, `File::sync_all` alone or a no-op directory
+sync. A stronger Windows profile requires platform execution. The baseline may ship a truthful weaker profile
+rather than block product integration on an unproven claim.
 
 ## Reads
 
 - never reacquire a mutable live source path;
-- validate format/profile/kind/length before returning bytes;
-- use the request's original deadline, cancellation and byte counters;
+- validate format/profile/kind/address/length before returning bytes;
+- use the original deadline, cancellation and byte counters;
 - reject declared oversize before allocation/I/O;
 - share one required integrity pass across ranges from the same object;
 - return exact coordinates and scanned-byte accounting;
-- corruption, wrong profile and short/long content are hard read failures.
+- corruption, wrong profile and short/long content are hard failures.
 
-A digest returned beside arbitrary bytes is not verification.
+A digest returned beside arbitrary bytes is not verification. For the first walking skeleton a full verified read
+is acceptable; optimize range verification only from measurement, not by inventing a Merkle framework.
+
+## Metadata commit boundary
+
+Object I/O completes before the short source/preparation redb transaction. The transaction installs the verified
+`ObjectRef` only if its captured non-reset guard still matches. A stale/conflicting transaction may leave an
+unreferenced immutable object; stopped-root maintenance can reclaim it later. It must never roll back or delete a
+newer/current object.
 
 ## Reachability and deletion
 
-The object store enumerates and removes exact objects. It does not decide reachability. Stopped-root maintenance
-marks from current source/preparation state, published/pending state and retained archives, then sweeps exact
-unreferenced objects. Failed Windows deletion remains visible for a later run.
+The store enumerates and removes exact objects but does not decide reachability. Stopped-root maintenance marks
+from current source/preparation state, published/pending state and incomplete import, then sweeps exact recognized
+unreferenced objects.
 
-No online object GC, tombstone database, purge proof or completed-operation archive is part of the baseline.
+No online object GC, tombstone database, reference counter, purge proof or completed-operation archive.
+Failed Windows deletion remains visible for another maintenance run.
 
-## Encrypted profile handoff
+## Encrypted handoff
 
-After #598 publishes an accepted implementation, retain only:
-
-- the concrete encrypted `put/open/read` path;
-- exact profile metadata needed by `ObjectRef`;
-- its real OS-protected key owner and authenticated envelope checks.
-
-Plain and encrypted profiles may share small object format/address helpers. Do not restore a universal secret
-catalogue, provider registry, rotation/migration platform or legacy six-domain protocol.
+After an accepted #598 implementation, retain only its concrete encrypted `put/open/read`, exact `ObjectRef`
+profile metadata, authenticated envelope checks and real OS-protected key owner. Plain and encrypted profiles may
+share small address/format helpers; do not restore a universal secret catalogue, rotation/migration system or
+second store.
 
 ## Remove with callers
 
-Delete duplicate materializer writer, contextual receipt/stage APIs, in-memory object lifecycle histories,
-legacy inventory/migration codecs and old DIRECT formats after exact current callers move.
+Delete duplicate materializer/DIRECT writers, contextual receipt/stage APIs, in-memory lifecycle histories,
+legacy inventory/migration codecs and compatibility readers after exact current callers move.
 
-## Focused checks
+## Focused evidence after code
 
-Plain profile first: zero/nonzero bytes, concurrent identical writers, final conflict, stage cleanup, restart
-reopen, corruption, range bounds, cancellation and truthful durability status. Encrypted cases follow only after
-the accepted #598 handoff.
+- zero/nonzero and maximum accepted bytes;
+- concurrent identical writers;
+- final existing identical versus conflicting/corrupt;
+- streaming address/length mismatch;
+- stage/hard-link debris after interruption;
+- persisted reopen and range bounds;
+- cancellation before/during write and before finalization;
+- exact advertised durability on selected Windows profile;
+- stale metadata commit leaves safe orphan only.
+
+Run minimal Rust 1.98 check/Clippy for the store and immediate source/preparation/evidence consumers before these
+focused cases.

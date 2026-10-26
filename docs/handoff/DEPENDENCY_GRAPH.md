@@ -1,7 +1,7 @@
 # Current implementation dependency graph
 
-The target is one application with concrete owners. Package boundaries may shrink; this graph records data,
-effect and lifetime dependencies, not permanent crate topology.
+The target is one application with concrete owners. Package boundaries may shrink; this graph records data/effect
+dependencies rather than permanent crate topology.
 
 ```mermaid
 flowchart TD
@@ -10,77 +10,90 @@ flowchart TD
     root --> acquire[Stable selected-file read]
     acquire --> object[Plain immutable ObjectRef]
     object --> source[Current SourceRecord]
-    source --> prep[PreparedRef / explicit gap]
-    prep --> publication[Serialized publisher]
-    publication --> qdrant[Fresh/current Qdrant generation]
-    publication --> view[Atomic PublishedView + redb snapshot]
+    source --> prep[PreparedRef / gap]
+    prep --> build[Complete generation builder]
+    build --> qdrant[Physical Qdrant generation]
+    build --> commit[Evidence/current redb commit]
+    commit --> view[Install PublishedView]
     cli --> query[Direct Search/Exact handler]
     view --> query
     query --> qdrant
-    qdrant --> evidence[Point ID → pinned evidence row]
+    qdrant --> evidence[Point ID → pinned evidence]
     view --> evidence
     object --> evidence
     evidence --> result[Verified excerpt / optional QueryWindow]
 ```
 
-## Delivery spine
+## Progressive path
 
-1. **Foundation:** invocation/root/plain settings and one `DataRootGuard`.
-2. **Walking skeleton:** one explicit file through the full graph to one one-shot CLI result.
-3. **Convergence:** restart, selected-root inventory, lost-wakeup recovery, incremental publication and
-   rebuild/compaction.
-4. **Exact/session:** literal Exact and one live session/`QueryWindow`.
-5. **Maintenance/depth:** stopped-root maintenance and selected optional capabilities.
+### Foundation
 
-The first product proof deliberately omits watcher, encryption, broad inventory, paging and physical cleanup but
-uses the final owners and values.
+One invocation, small root/plain settings, manifest-last empty-root initialization, one process-lifetime guard and
+factual status. No source/Qdrant/query framework.
+
+### Walking skeleton
+
+Follow the entire graph for one explicit file, plain storage, one fresh physical collection and one one-shot
+Search. It uses final owners and persists reopen-capable references.
+
+### Fresh-generation convergence
+
+Startup/explicit/periodic inventory compares desired selected state with published inventory. Any real difference
+builds a complete fresh never-reused generation and matching evidence snapshot, then commits/installs the new
+view. The visible collection is immutable. Old views keep old physical collections.
+
+This stage supplies correctness, restart and old-view behavior before cross-revision point continuity or
+intra-generation mutation.
+
+### Measured incrementality
+
+Only when full-rebuild measurements justify it, add stable occurrence reuse, insert-only additions, one fixed
+non-creating closure and compaction. A fresh-generation profile remains a valid shipped mode; incrementality is
+not architecture theatre.
 
 ## Ownership rules
 
-- Retained immutable objects are the source of evidence.
-- Redb owns compact current/published state and real read snapshots.
-- Qdrant is derived retrieval state.
-- Publication is the only Qdrant mutation/current-view/retired-generation owner.
-- Query pins one `PublishedView` and has no durable operation journal.
-- Configuration fields appear only with a real consumer.
-- Plain storage is baseline; #598 encrypted storage is optional.
-- New Qdrant points are explicit `insert_only`; closures are fixed non-creating updates.
-- Individual points are not physically deleted; cleanup deletes only whole never-reused retired generations.
-- Optional adapters enrich the same path and never create a parallel application.
+- retained objects are source evidence;
+- redb owns compact current/published state and real snapshots;
+- Qdrant is replaceable derived retrieval state, but it is the only selected backend;
+- publication is the only Qdrant mutation/current-view owner;
+- `PublishedView` names an exact physical collection, never a Qdrant alias;
+- a complete build/readback and metadata commit precede view installation;
+- query pins one view and has no durable journal;
+- configuration fields appear only with a real consumer;
+- plain storage is baseline; #598 encryption is optional;
+- watcher events only dirty a root; inventory establishes selected state;
+- optional adapters enrich the same path and never create a parallel application.
 
-## Lifetime and lock graph
+## Lifetime/lock edges
 
 ```mermaid
-flowchart TD
-    guard[DataRootGuard process lifetime] --> stores[Concrete stores/owners]
-    stores --> pubpermit[One publisher task/permit]
-    stores --> viewlock[Short PublishedView manager lock]
-    stores --> request[Finite request semaphore]
-    pubpermit --> io[Object/Qdrant I/O — no redb writer/view lock]
-    io --> redb[Short redb metadata transaction]
-    redb --> install[Open snapshot + short view install lock]
-    request --> pin[Short view pin]
-    pin --> queryio[Qdrant/evidence I/O — no window mutation]
-    queryio --> output[Bounded output/window commit]
+flowchart LR
+    rg[DataRootGuard lifetime] --> stores[Concrete stores]
+    pub[Publisher logical permit] --> io[Object/Qdrant I/O without global locks]
+    io --> tx[Bounded redb transaction]
+    tx --> snap[Open/verify snapshot]
+    snap --> install[Short view-manager install]
+    pin[Short view clone] --> queryio[Query backend/object I/O]
+    queryio --> output[Prepared output outside window lock]
+    output --> wcommit[Bounded window/cursor commit]
+    drop[Last view/window drop] --> wake[Wake cleanup only]
 ```
 
-Required order:
+No redb writer, view-manager mutex or QueryWindow mutation borrow spans object/Qdrant/process/model I/O. Cleanup
+never runs inline from a guard destructor.
 
-- root guard surrounds store lifetime but is not reacquired per request;
-- no redb writer or view-manager lock spans Qdrant/object/process I/O;
-- no query-window mutation borrow spans retrieval/evidence I/O;
-- view installation follows metadata commit; another publication waits until install/recovery resolves;
-- last view drop only wakes cleanup; deletion is never performed under the view lock;
-- retired-generation cleanup runs only when no publication can target the generation and no guard uses it.
+## Explicit non-edges
 
-A reverse lock path is a design defect. Remove or adapt the old API rather than preserve the cycle.
+- no Qdrant alias → ELIOT visibility authority;
+- no Tantivy/Zoekt fallback → backend abstraction;
+- no watcher → source truth;
+- no encrypted profile → plain baseline dependency;
+- no point-identity continuity → fresh-generation correctness prerequisite;
+- no release qualification → first product result prerequisite.
 
-## Interface rule
+Use concrete methods. Add a narrow consumer-owned trait only for multiple real current implementations; private
+test fakes do not justify a production interface.
 
-Use concrete owner methods. Add a narrow consumer-owned trait only when multiple real implementations exist.
-Test fakes remain private. Vendor/redb/OS types stay inside adapters.
-
-See the [implementation spine](../implementation/README.md#delivery-sequence),
-[lock order](../implementation/README.md#lifetime-and-lock-order), affected owner recipe and #264. Every code cut
-connects a real producer to a real consumer and removes the displaced mechanism or names one immediately bounded
-follow-up.
+See the [delivery sequence](../implementation/README.md#delivery-sequence), affected owner recipe and #264. Every
+cut connects a real producer to a real consumer and removes the displaced route.

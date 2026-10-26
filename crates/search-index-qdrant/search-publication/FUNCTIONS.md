@@ -1,182 +1,208 @@
-# Publication — one pending operation, immutable points, atomic view
+# Publication — complete generation first, measured incrementality later
 
 Publication is the only owner of Qdrant mutation, published source/evidence state, current `PublishedView` and
-retired-generation cleanup. The bridge owns SDK translation; control owns redb tables/snapshots; preparation owns
-current wanted outcomes.
+retired-generation cleanup. The bridge translates SDK operations; control owns redb tables/snapshots;
+preparation owns desired outcomes.
 
-## Baseline safety decision
+## Two explicit retrieval profiles
 
-Individual Qdrant points are never physically deleted in the baseline.
+### Fresh-generation profile — walking skeleton and stage 3A
 
-New retrieval points are immutable and created with explicit `insert_only`. Default upsert is forbidden because
-it overwrites an existing point. A retry carries the same fixed point ID, retrieval input and immutable payload.
+The first working and restart-convergent product publishes complete immutable physical collections:
 
-Replaced points receive one fixed exclusive `valid_until = target_sequence` through an operation which cannot
-create a missing point. Repeating the same closure is allowed; reopening the interval or choosing another
-boundary is not.
+```text
+complete desired selected inventory
+→ fresh never-reused physical collection
+→ bounded immutable build pages with actual Qdrant inputs
+→ explicit insert_only dispatch + exact readback
+→ complete evidence/inventory snapshot
+→ one redb current commit
+→ open/verify matching read snapshot
+→ explicit PublishedView install
+```
 
-A fixed closure may be applied while older views still live: their sequence is below the exclusive boundary and
-remains eligible. Reader lifetime blocks whole-generation deletion, not the closure mutation.
+Once visible, the collection receives no point mutation. A source/preparation/membership/profile change builds the
+next generation. Cross-generation point IDs need not be stable and there is no `valid_until` closure in this
+profile.
 
-Because a closed point remains present, a delayed duplicate insert cannot recreate or overwrite it. Storage is
-compacted by building a fresh never-reused generation and switching the current view. Cleanup deletes only whole
-retired generations. This removes the old per-point possible-writer/reclaimer/isolated-route system.
+This is a valid production mode, not a temporary backend. It provides correctness, restart, old-view lifetime,
+rebuild and cleanup before incremental point identity/mutation complexity.
 
-These are selected invariants. The pinned Qdrant 1.19 server/client behavior must still be executed before a
-runtime claim.
+### Incremental profile — stage 3B
+
+Add only after full-generation build cost is measured and materially excessive. It keeps the same retained
+objects, evidence rows, view manager and cleanup owner, but uses an explicit new retrieval profile/generation.
+
+- unambiguous occurrence reuse supplies stable identity within one physical generation;
+- new immutable point uses explicit `insert_only`;
+- retry repeats identical fixed ID/input/payload and verifies exact readback;
+- replacement writes one fixed non-creating exclusive `valid_until = target_sequence` and verifies it;
+- old sequences remain eligible below the boundary, so closure does not wait for old readers;
+- individual point IDs are never physically deleted;
+- compaction/profile/schema change builds a fresh never-reused generation.
+
+Default upsert is forbidden. A missing-point closure must not create a point. Do not add the incremental profile
+if measured gains do not justify its identity/recovery surface.
 
 ## Reconcile desired and published state
 
-Compare both sides under one consistent redb snapshot:
+Compare under a consistent redb snapshot:
 
-- current source/preparation desired state;
+- current selected source/preparation desired state;
 - current published source inventory.
 
-Use bounded ordered pages; never collect the corpus in memory. Published-only removal/exclusion is work even
-without a new preparation event. Repeated identical state is a no-op.
+Use bounded ordered pages; do not collect the corpus in memory. Queue entries only accelerate discovery. Startup,
+explicit and periodic reconciliation must rediscover differences.
 
-| Desired state | Result |
+| Desired state | Fresh-generation action |
 |---|---|
-| usable preparation, including zero units | publish exact prepared input/gaps; create new points; close replaced points |
-| selected terminal unsupported/failure | publish a gap-only outcome; close former points |
-| confirmed removal/unregistration/exclusion | remove membership and close former points |
-| preparation running or observation incomplete | retain prior served revision as prior/stale and expose pending/gap; do not infer empty/removal |
-| exact desired/published match | no publication |
+| Exact desired/published match | no publication |
+| Usable preparation, including zero units | include exact result/gaps in next complete generation |
+| Selected terminal unsupported/failure | include gap-only selected outcome |
+| Confirmed removal/unregistration/exclusion | omit membership only after complete inventory proof |
+| Preparation running or observation incomplete | preserve prior served view and expose pending/gap; do not infer empty/removal |
 
-Queues are acceleration only. Startup/explicit/periodic reconciliation rediscovers differences.
+For stage 3A, any real difference builds a complete next generation. Stage 3B may instead calculate a bounded
+complete-source delta.
 
-## Prepare one fixed pending artifact
+## Fixed build artifact
 
 Under one serialized publisher:
 
 ```text
-pin expected current view
-→ choose target sequence/generation
-→ build bounded immutable pages containing actual Qdrant inputs
-→ build compact evidence/inventory delta
-→ validate row/byte limits
-→ persist one PendingPublication referencing those exact pages
+pin expected current view and desired-state snapshot
+→ allocate fresh installation-scoped generation name
+→ capture bounded immutable pages containing actual Qdrant inputs
+→ capture complete matching evidence/inventory rows
+→ validate page/row/byte ceilings
+→ persist one PendingGenerationBuild referencing those exact pages
 ```
 
-After pending is durable, retries never reread live paths or splice newer work into the cursor. Newer source/config
-state becomes later work.
+Retries never reread live paths or splice newer state into the build. Newer desired state becomes a following
+publication.
 
-Only one publisher may target a generation at a time. Once a generation is retired, no new pending operation may
-name it.
+## Apply build pages
 
-## Apply incremental pages
-
-Use one absolute deadline/cancellation per attempt. Persist page progress only after exact observation.
-
-### Create point
+Use one absolute attempt deadline/cancellation. For each point:
 
 ```text
-explicit insert_only of exact immutable point
-→ completed response or retry the same fixed insert
-→ exact readback of ID, immutable bindings, validity and vector shape
+explicit insert_only fixed point
+→ completed response or repeat identical insert
+→ exact readback of ID, retrieval bindings, profile/filter/group fields and vector/Document shape
 ```
 
-A timeout or lost response is unresolved for that attempt, but the identical retry is safe: an existing point is
-not overwritten. Exact identical readback accepts completion; foreign/conflicting state stops publication.
+A timeout/lost response is unresolved for that attempt. Exact identical readback settles it; foreign/conflicting
+state fails the generation. A failed/uncertain generation is never served and its name is never reused.
 
-### Close point
+No Qdrant alias is switched. The build targets the exact physical collection which the future `PublishedView`
+will name.
 
-```text
-non-creating update of exact valid_until = target_sequence
-→ completed response or repeat the same fixed closure
-→ exact readback
-```
+## Atomic metadata commit and serving visibility
 
-Use `update_only` when the selected full-point API is used, or another selected Qdrant operation whose documented
-semantics cannot insert a missing point. Do not use default upsert. Missing point/readback is an inconsistency or
-rebuild input, never permission to recreate a closed identity through a closure call.
-
-No operation may remove the closure or choose another boundary.
-
-## Atomic commit and visibility
-
-After every required schema/point observation succeeds:
+After every required build/schema observation succeeds:
 
 ```text
-one redb transaction:
-  compare expected current and exact pending
-  apply complete-source evidence and published inventory delta
-  current = target
-  add retired-generation cleanup row if needed
-  remove pending
+bounded redb transaction:
+  compare expected current + exact pending build
+  install complete evidence/inventory rows
+  set durable current physical generation/profile
+  add retired-generation cleanup row for predecessor
+  remove pending build
 commit
-open and verify target read snapshot
-install snapshot-backed PublishedView under a short manager lock
-report visible
+→ open/verify target read snapshot
+→ short view-manager install of matching PublishedView
+→ report visible
 ```
 
-No RPC, object I/O or corpus-sized encoding occurs inside the writer. Do not start another publication before the
-matching snapshot is installed. Resolve uncertain commit from current/pending rows.
+No RPC, object I/O or corpus-sized encoding occurs inside the writer. Do not start another publication before
+view installation succeeds or recovery refuses serving.
 
-## Initial build, rebuild and compaction
+This follows the useful Tantivy distinction: durable commit and serving-reader visibility are separate events.
+ELIOT makes the second event explicit instead of relying on delayed automatic reload.
 
-A fresh or incompatible profile uses a new physical generation and separately captured bounded input pages.
-Staging remains unqueryable. Complete Qdrant effects and evidence precede the atomic pointer switch. Source changes
-during the build are follow-up reconciliation.
+If redb commit outcome is uncertain, resolve from current/pending rows. If commit succeeded but process died before
+view installation, restart opens durable current and installs its matching snapshot before serving.
 
-Use the same path for first build, lost/corrupt collection rebuild, incompatible schema/profile and explicit
-compaction. Generation names are installation-scoped and never reused, including failed targets.
+## Initial build, restart and lost index
+
+The same complete-generation path owns:
+
+- first build;
+- restart convergence after desired-state change;
+- lost/corrupt collection rebuild;
+- incompatible retrieval profile/schema;
+- stage-3B compaction.
+
+Source changes during a build become following reconciliation. Never mutate a completed old generation to
+pretend it contains the newer desired state.
+
+## Physical collection identity, not aliases
+
+`PublishedView` stores the exact physical collection. Query addresses it directly. A Qdrant alias switch cannot
+atomically install ELIOT's redb snapshot and cannot preserve old pinned views, so aliases are not serving,
+recovery or cleanup truth. Do not add an alias manager to baseline.
 
 ## View lifetime and whole-generation cleanup
 
-`PublishedView` owns a real redb snapshot plus generation/sequence. One strong current `Arc` and weak retired
-references are sufficient. Queries and windows hold guards; no manager lock spans I/O.
+One strong current `Arc` plus weak retired view references is sufficient. Queries/windows retain guards; no
+manager lock spans I/O.
 
-A `RetiredCleanup` row names one whole generation. It becomes eligible only when:
+A `RetiredCleanup` row names an exact never-reused generation. Cleanup starts only when:
 
-1. the generation is not current and no future/pending publication can target it;
-2. no live `PublishedView` or `QueryWindow` guard uses it;
-3. the cleanup owner can execute the exact collection operation under a finite context.
+1. generation is not durable current;
+2. no pending/current/future publication can target it;
+3. no live `PublishedView`/`QueryWindow` guard uses it;
+4. no unresolved build/mutation attempt owned by this process remains targetable to it.
 
 Then:
 
 ```text
-delete exact collection with terminal/wait semantics
-→ verify exact logical collection absence through the selected exists/get operation
-→ remove cleanup row and obsolete generation metadata
+terminal delete exact collection
+→ query exact collection identity through exists/get
+→ observe logical absence
+→ remove cleanup row and obsolete metadata
 ```
 
-A collection name is never reused. Point APIs are not collection-creation APIs, but this project must verify that
-race against the pinned Qdrant 1.19 server before claiming runtime safety. If deletion result, exact absence or
-backend state is uncertain, retain the cleanup row and apply bounded publication backpressure. A collection
-missing from a list is not sufficient evidence, and logical absence is not a claim that backend files were
-physically erased.
+Last guard drop only wakes cleanup. Never reuse the collection name. Deletion/absence uncertainty retains the row
+and bounded publication backpressure. Logical absence is not physical-disk-erasure evidence.
 
-Last guard may wake cleanup but never deletes inline. Local immutable objects are separate stopped-root
-maintenance.
+The delayed request versus collection-delete behavior remains a required live Qdrant 1.19 case. Fresh-generation
+publication confines that risk to a never-served or retired physical name; it does not justify a permanent
+possible-writer ledger.
 
-## Restart and restore
+Local immutable objects are not deleted here; stopped-root maintenance owns them.
 
-Restart opens durable current, resumes exact pending pages, installs the current snapshot and reevaluates retired
-generations. It never rescans live paths as an old pending operation's input.
+## Restore/import
 
-Restore/import creates a fresh installation and generation. Copied pending/cleanup records are archive evidence,
-not authority over the original endpoint.
+Import creates a fresh installation and physical generation. Copied pending/cleanup rows and aliases are archive
+evidence only and authorize no operation against the original endpoint.
 
 ## Remove with callers
 
-Delete competing phase/receipt/compensation machines, full-manifest proof encodings, raw pin registry, per-point
-reclaimer, bridge replay ledger and exclusive fixtures.
+Delete competing phase/receipt/compensation machines, alias-as-authority paths, full manifest proof encodings, raw
+pin registry, per-point reclaimer, bridge replay ledger and fixtures which exist only for those systems.
 
-## Focused checks after code
+## Focused evidence after code
 
-- published-only removal after lost notification;
-- successful empty and gap-only replacement;
-- explicit `insert_only` request on pinned client/server;
+### Walking skeleton / 3A
+
+- complete one-file fresh build and exact retained excerpt;
+- incomplete/foreign point readback refuses visibility;
+- redb commit then explicit view install;
+- restart between commit/install;
+- source edit/removal builds new complete generation;
+- old pinned view remains exact;
+- lost notification repaired from desired/published comparison;
+- interrupted build never becomes current;
+- cleanup after last guard and uncertainty retention.
+
+### 3B only if selected
+
 - identical insert retry after lost response;
-- foreign point conflict;
-- fixed non-creating closure retry and missing-point refusal;
-- old view remains exact after closure at a later sequence;
-- atomic commit/snapshot-install gap;
-- restart from pending pages;
-- rebuild/compaction and never-reused generation;
-- no new dispatch to retired generation;
-- collection delete/absence race with delayed point attempt;
-- cleanup row retained on any uncertainty;
-- bounded retired-generation backpressure;
-- no claim of physical erasure from logical absence.
+- missing-point closure refusal;
+- fixed closure while older view lives;
+- ambiguous duplicate occurrence and conservative reminting;
+- measured rebuild/write reduction versus 3A;
+- compaction threshold and generation switch.
+
+Run minimal Rust 1.98 check/Clippy for changed publication/bridge/control/query consumers before live Qdrant cases.
