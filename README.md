@@ -10,7 +10,7 @@ is derived retrieval state; immutable objects remain the evidence source.
 |---|---|
 | Product purpose and invariants | [Architecture](docs/architecture/README.md) |
 | Shortest implementation path | [Implementation spine](docs/implementation/README.md) |
-| Current checkpoint and evidence | [R053 registry](docs/audit/ANALYSIS_REGISTRY.md#resume) |
+| Current checkpoint and evidence | [R054 registry](docs/audit/ANALYSIS_REGISTRY.md#resume) |
 | One concrete cut | Nearest `FUNCTIONS.md`, actual callers and owning issue |
 
 [Documentation authority](docs/README.md) explains which layer wins. Historical waves, receipts and old issue text
@@ -18,13 +18,16 @@ are evidence only.
 
 ## Current truth
 
-The product is **not implemented end to end**. R053 preserves the explicit Qdrant 1.20 text profile from R052 and
-corrects the Windows finalization boundary after tracing the currently reachable native source-registration route.
-It does not claim compiler or runtime success.
+The product is **not implemented end to end**. R054 corrects an overreach in R053: the selected Windows root/object
+finalizer no longer relies on a private direct NT file-information call. It uses a documented Win32 handle-based
+source operation with an absolute destination path protected by a retained no-delete-share directory-handle chain.
+No compiler or runtime success is claimed.
 
 ```text
 1 Foundation
-  root/plain settings → native-canary-backed final-manifest-last root → DataRootGuard
+  root/plain settings
+  → documented Windows finalization canary
+  → final-manifest-last root → DataRootGuard
 
 2 Walking skeleton
   one file → ObjectRef → retrieval_text
@@ -70,13 +73,27 @@ evidence lookup; excerpts always come from immutable objects.
 
 ## Windows root/object boundary
 
-- Path-based `tempfile::persist_noclobber` is not trusted publication authority on Windows.
-- The existing legacy `registration_native::rename` is also not a donor: it routes a relative name through the
-  Win32 `SetFileInformationByHandle` wrapper and is reachable from legacy source-root commands.
-- Foundation/object publication requires one owner-private direct native rename canary tied to the opened stage and
-  retained destination parent, followed by exact reopen/readback.
-- Unsupported native/API/filesystem profiles fail closed. There is no path-only fallback or general filesystem
-  framework.
+Rejected as baseline finalizers:
+
+- path-based `tempfile::persist_noclobber` / `MoveFileExW`;
+- legacy relative-`RootDirectory` `SetFileInformationByHandle` wrapper used by source-registration commands;
+- private user-mode `NtSetInformationFile`/equivalent direct NT calls selected prematurely by R053.
+
+Selected candidate:
+
+```text
+opened stage handle with DELETE access
++ retained verified root→final-parent directory handles without FILE_SHARE_DELETE
++ canonical absolute final path derived from retained final parent
+→ documented SetFileInformationByHandle(FileRenameInfo)
+   RootDirectory=NULL; ReplaceIfExists=FALSE
+→ relative reopen through retained final parent
+→ exact identity/content verification
+```
+
+The handle chain prevents rename/delete replacement of every path component during publication. A canary must
+prove the exact path form, access/share flags, existing-destination refusal, parent/ancestor replacement resistance,
+failure debris and readback on each advertised local filesystem/Windows profile. Unsupported profiles fail closed.
 
 ## Other boundaries
 
@@ -85,13 +102,13 @@ evidence lookup; excerpts always come from immutable objects.
 - Complete immutable collections and generation-bound point IDs precede point optimization.
 - Whole-collection cleanup only in baseline.
 - No aliases, custom-shard portfolio, Edge fallback, query scheduler/tickets or second backend.
-- No redb writer/view/window lock spans backend/object/process/model I/O.
+- No redb writer/view/window lock spans backend/object/process/model/filesystem publication I/O.
 
 ## Verification status
 
 Only R031 has current compiler evidence: locked Rust 1.98 check/minimal Clippy for materializer + unitizer. Current
-binaries, Foundation, native Windows finalizer, Qdrant 1.20, explicit text-index profile, walking skeleton, restart,
-relevance, scale and end-to-end behavior remain unrun. See the
+binaries, Foundation, documented Windows finalizer, Qdrant 1.20, explicit text-index profile, walking skeleton,
+restart, relevance, scale and end-to-end behavior remain unrun. See the
 [registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).
 
 [QUICKSTART.md](QUICKSTART.md) remains an unverified diagnostic route until #264 works.

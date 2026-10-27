@@ -33,9 +33,9 @@ Representative current islands:
 - provider composition contains pairing/grant/envelope machinery unrelated to trusted child stdio;
 - query/output can trigger corpus/history-sized storage inspection.
 
-## R053 reachable Windows rename defect
+## R054 Windows publication correction
 
-The legacy source-registration route is an active counterexample:
+The active legacy source-registration route remains a concrete counterexample:
 
 ```text
 secure_commands::maybe_run
@@ -43,28 +43,41 @@ secure_commands::maybe_run
 → run_source_registration
 → registration_mutation::CatalogCustody::publish
 → registration_native::rename
-→ Win32 SetFileInformationByHandle(FileRenameInfo)
+→ SetFileInformationByHandle(FileRenameInfo) with relative leaf + non-null RootDirectory
 ```
 
-`registration_native::rename` passes a relative leaf plus non-null retained parent handle through the Win32 wrapper.
-That is precisely the wrapper form which cannot be treated as a tested handle-relative finalizer. The command route
-is reachable, so this is not dead-code speculation.
+R053 correctly rejected this wrapper as the new finalizer but incorrectly selected a private direct NT call as the
+replacement. The current product uses neither path.
+
+Selected owner operation:
+
+```text
+retain verified directory handles for every component from data root to final parent
+  without FILE_SHARE_DELETE
+retain opened stage handle with DELETE access
+derive canonical absolute final path from retained final-parent handle
+→ documented SetFileInformationByHandle(FileRenameInfo)
+   RootDirectory=NULL; ReplaceIfExists=FALSE
+→ reopen final relative to retained parent
+→ verify stable identity, kind, length and bytes
+```
+
+The no-delete-share handle chain prevents rename/delete replacement of the absolute path while the documented call
+runs. A focused canary must prove accepted path form, access/share flags, destination-present refusal, ancestor and
+parent replacement resistance, supported local filesystem, failure debris and exact readback.
 
 Disposition:
 
-- do **not** reuse this rename function for Foundation or the immutable object store;
-- do **not** expand its backup/phase/custody protocol into the new architecture;
-- preserve only useful relative `NtCreateFile` open and native-identity techniques after a current caller review;
-- implement one small direct-native finalization canary in the current root/object owner;
-- remove the legacy source-registration command route, mutation phases and Win32 wrapper with their callers during
-  the Foundation/source cut.
+- do not reuse/repair the relative-root legacy wrapper;
+- do not use path-based `MoveFileExW`/`tempfile::persist_noclobber` as authority;
+- do not add private `NtSetInformationFile`/equivalent user-mode FFI;
+- preserve only useful relative-open and file-identity techniques after current caller review;
+- remove the legacy source-registration command route, mutation phases and wrapper during Foundation/source cut.
 
-Passing old command tests cannot qualify the current finalizer. Until the direct-native canary runs, Windows root
-and object publication remain unsupported evidence, not completed behavior.
+Passing old command tests cannot qualify the current finalizer. Until the documented canary runs, Windows root and
+object publication remain unverified.
 
 ## Current Qdrant/query direction
-
-The selected first product path is:
 
 ```text
 one explicit file
@@ -100,7 +113,6 @@ startup:
   → recover exact durable current state
   → install PublishedView and concrete handlers
   → one framed local dispatcher
-
 ingest:
   selected source → stable read → immutable ObjectRef
   → conditional current SourceRecord → preparation outcome
@@ -123,7 +135,7 @@ only finite unfinished state. Normal reads and pure transforms create no durable
 
 | Owner | Responsibility |
 |---|---|
-| invocation/root | one settings value, initialize/open, tested platform finalization, one OS guard, bounded shutdown |
+| invocation/root | one settings value, initialize/open, documented tested finalization, one OS guard, bounded shutdown |
 | source/object | stable acquisition; immutable bytes durable before current-head commit |
 | current state | short typed redb rows/transactions; no history replay per operation |
 | preparation | one materialization/unitization outcome with empty/gap/failure/stale guard |
@@ -141,7 +153,8 @@ algorithms.
 
 Remove with actual consumers:
 
-- current legacy source-registration command and defective Win32 rename wrapper;
+- current legacy source-registration command and relative-root wrapper;
+- any direct-NT finalizer experiment introduced from R053 guidance;
 - remaining argv interceptors and duplicate command implementations;
 - registry/original-input replay and aggregate snapshots for ordinary source work;
 - duplicate object/preparation stores and compatibility formats;
@@ -163,7 +176,7 @@ immediate consumers. `eliot-searchd --lib` does not cover binary composition.
 Focused first evidence:
 
 ```text
-Windows direct-native finalization canary
+Windows documented finalization canary
 → Foundation initialize/open/status
 → one retained file
 → Qdrant 1.20 schema/build/TextQuery canary

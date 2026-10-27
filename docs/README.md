@@ -23,12 +23,12 @@ compatibility code, a second route or another registry.
 |---|---|
 | Understand product | [Architecture](architecture/README.md) → [product workflows](product/AGENT_ANALYSIS_FRAMEWORK.md) |
 | Implement a slice | [Delivery sequence](implementation/README.md#delivery-sequence) → nearest owner recipe → actual callers |
-| Resume interrupted work | [R053 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
+| Resume interrupted work | [R054 resume](audit/ANALYSIS_REGISTRY.md#resume) → affected owner only |
 | Change donor/service | [Donor register](audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md) → consuming owner |
 | Move/delete legacy tests/code | [Test cutover](implementation/TEST_CUTOVER.md) → exact current caller search |
 | Inspect ownership graph | [Dependency graph](handoff/DEPENDENCY_GRAPH.md) |
 
-## Current status — R053
+## Current status — R054
 
 R052 froze the exact Qdrant 1.20 lexical baseline:
 
@@ -48,30 +48,36 @@ QueryScoringProfileV1:
   no score threshold
 ```
 
-R053 then traced the current Windows publication code and found a reachable counterexample: legacy
-`--register-source-root`/`--unregister-source-root` reaches `registration_native::rename`, which passes a relative
-leaf plus non-null parent handle through the Win32 `SetFileInformationByHandle(FileRenameInfo)` wrapper. That route
-must not be reused as the root/object finalizer.
+R053 correctly found that the reachable legacy source-registration Win32 wrapper is not a trusted relative-parent
+finalizer. It then overreached by selecting a private direct NT call as the baseline. R054 removes that prescription.
 
 Selected Windows boundary:
 
 ```text
-opened stage handle + retained destination-directory handle + relative final leaf
-→ direct owner-private native rename information call, replacement disabled
-→ exact status/ABI validation
-→ reopen through retained parent
+retain verified handles for every directory from data root to final parent
+  without FILE_SHARE_DELETE
+retain opened stage handle with DELETE access
+derive canonical absolute destination from the retained final-parent handle
+→ documented SetFileInformationByHandle(FileRenameInfo)
+   RootDirectory=NULL; ReplaceIfExists=FALSE
+→ reopen final relative to retained parent
 → exact identity/bytes verification
 ```
 
-The operation remains a canary until executed on the exact supported Windows/filesystem profile. Unsupported
-profiles refuse; there is no path-only fallback and no generic filesystem framework. The legacy source-root route
-is removed with its callers during the Foundation/source cut rather than strengthened as a compatibility platform.
+Official Win32 documentation describes relative `RootDirectory`, but a current supported-build report shows the
+wrapper may absolutize the name and fail when the root handle remains set. The implementation therefore does not
+use that form. It also does not call private user-mode `NtSetInformationFile`. The retained handle chain prevents
+rename/delete replacement of path components while the documented absolute-target operation runs.
+
+The operation remains a canary until executed on each advertised Windows/local-filesystem profile. Unsupported
+profiles refuse; there is no `MoveFileExW`, relative-root-wrapper, private-NT or generic-filesystem fallback. The
+legacy source-root publication route is removed with callers rather than repaired as a compatibility platform.
 
 Physical schema/resource changes create a fresh Qdrant generation. Query-time k/b changes do not. Stage 2 creates
 no filter indexes. Query requests no vectors and only evidence-routing payload; excerpts come from pinned immutable
 objects.
 
-The repository still locks `qdrant-client 1.19.0`. No Rust/runtime change is claimed. Foundation, native Windows
+The repository still locks `qdrant-client 1.19.0`. No Rust/runtime change is claimed. Foundation, Windows
 finalization, Qdrant 1.20, walking skeleton, restart, relevance and scale remain unrun.
 
 ## Focused supporting material

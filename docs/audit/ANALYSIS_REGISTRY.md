@@ -6,105 +6,100 @@ unrun work; it is not architecture, permission or an implementation prerequisite
 <a id="resume"></a>
 ## Resume
 
-**Checkpoint:** R053, 2026-10-26 — active Windows publication route traced; Win32 wrapper rejected.  
+**Checkpoint:** R054, 2026-10-26 — R053 private-NT finalizer overreach corrected.  
 **Branch:** `codex/refactor-preparation-20261017`, PR #610.  
-**Inspected ELIOT head:** `8942d823f5c52392ee42a8d62ae5181748091060` (R052).  
+**Inspected ELIOT head:** `9910a15bf34a6d5417da8e45eac9a3f124733f11` (R053).  
 **Original source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
 
 Read [docs/README](../README.md), the [implementation sequence](../implementation/README.md#delivery-sequence),
 then only the affected owner recipe, current callers and owning issue.
 
-R053 changes documentation only. Product remains unimplemented. Next implementation remains Foundation, but its
-first Windows code slice is now an exact native-finalization canary rather than reuse of the reachable legacy Win32
-wrapper.
+R054 changes documentation only. Product remains unimplemented. The next implementation remains Foundation, but
+the Windows finalization canary now uses a documented Win32 absolute-target operation protected by a retained
+no-delete-share handle chain. It does not use private NT user-mode APIs.
 
-## R053 inspected evidence
+## R054 inspected evidence
 
 ### Upstream platform material
 
 Inspected:
 
-- `tempfile 3.27.0` Windows `persist_noclobber`: path-based `SetFileAttributesW` + `MoveFileExW`;
-- Microsoft `FILE_RENAME_INFO` / `SetFileInformationByHandle` / `NtSetInformationFile` documentation;
-- native rename information semantics for replacement-disabled relative names;
-- current reports and disassembly showing the Win32 wrapper absolutizes a relative destination while retaining
-  non-null `RootDirectory`, producing an invalid parameter combination;
-- Qdrant Rust client/server 1.20 material already recorded by R051/R052.
+- Microsoft `FILE_RENAME_INFO` and `SetFileInformationByHandle` documentation;
+- Microsoft `CreateFile`/`CreateFile2` share-mode semantics: omitting `FILE_SHARE_DELETE` prevents subsequent
+  delete-access opens, and delete access covers rename;
+- current supported-build report reproducing `ERROR_INVALID_PARAMETER` when the Win32 wrapper is given both a
+  relative destination and non-null `RootDirectory`, while absolute destination + null root succeeds;
+- Microsoft driver/DDI material for `FILE_RENAME_INFORMATION`, showing that direct NT file-information APIs are not
+  the ordinary documented desktop Win32 contract;
+- current R053 root/object/daemon instructions and reachable legacy wrapper route.
 
-### ELIOT source and active route
+### ELIOT source/docs checked
 
-At R052 head inspected:
-
-- `bins/eliot-searchd/src/owner_composition/kernel/registration_native.rs`;
-- `registration_mutation.rs`;
-- `secure_commands/kernel/source_registration.rs`;
-- `secure_commands/kernel/entry.rs`;
-- root/object owner recipes and daemon map;
-- issue #360 and current programme handoff.
-
-The source already uses direct `NtCreateFile` for relative child opens. Its `registration_native::rename` then
-constructs a rename information buffer and calls the Win32 `SetFileInformationByHandle` wrapper. The legacy
-`--register-source-root`/`--unregister-source-root` command dispatch reaches that mutation path.
+- root `AGENTS.md`, `README.md`, `docs/README.md`;
+- implementation spine;
+- root owner and immutable object-store recipes;
+- daemon composition map;
+- donor register;
+- PR #610 and active root/object/programme issues.
 
 ## Findings and decisions
 
-### F1 — the selected R049/R052 Win32 call was not a safe implementation prescription
+### F1 — R053 replaced one unqualified wrapper with another unqualified API boundary
 
-R049/R052 correctly rejected path-based `MoveFileExW`, but still told the implementer to use
-`SetFileInformationByHandle(FileRenameInfo/FileRenameInfoEx)` with a non-null retained parent and relative leaf.
-That exact Win32 wrapper form is not a demonstrated handle-relative operation on current Windows.
+R053 correctly rejected:
 
-**Decision:** remove the Win32 wrapper from selected architecture. The supported candidate is a tiny owner-private
-direct native file-information call over the opened source handle and retained parent handle, with exact native
-status/`IO_STATUS_BLOCK` validation and ordinary relative reopen/readback.
+- path-based `MoveFileExW`/`tempfile::persist_noclobber` as trusted authority;
+- the reachable legacy relative-`RootDirectory` Win32 wrapper.
 
-The exact information class/buffer is chosen only after an executed canary; documentation does not pretend that
-one struct layout is already qualified.
+It then selected a direct `NtSetInformationFile`-style user-mode operation. That is not the documented Win32
+application contract and would require private ntdll ABI/support assumptions. This was an architectural error.
 
-### F2 — the repository already contains the same defective pattern
+**Decision:** remove private direct NT rename from the selected baseline.
 
-`registration_native::rename` uses the exact unsafe wrapper shape. It is not isolated test code: current secure
-command dispatch exposes source-root registration/unregistration and reaches it through `CatalogCustody::publish`.
+### F2 — documented absolute-target rename can be made path-stable without a private API
 
-**Decision:** treat this path as a current counterexample and removal target. Do not reuse it for Foundation or
-objects, and do not strengthen the old backup/phase/custody protocol merely to save one native helper. Move only
-verified relative-open/native-identity techniques into the current owner, then delete the legacy route and wrapper
-with callers.
+The root owner already needs retained directory handles. Windows share-mode documentation states that omitting
+`FILE_SHARE_DELETE` prevents later opens requesting delete access; delete access includes rename.
 
-### F3 — direct native reuse can remain small
-
-The repository already has an owner-private `ntdll` FFI seam and ABI assertions for `NtCreateFile`. A current
-finalizer therefore does not require a platform framework, provider service or dependency inversion layer.
-
-**Decision:** one current root/object platform module may own:
+**Decision:** retain and verify every directory component from data root to final parent without delete sharing,
+retain the stage handle with DELETE access, derive one canonical absolute final path from the retained final-parent
+handle, then call documented `SetFileInformationByHandle(FileRenameInfo)` with:
 
 ```text
-relative create/open through retained parent
-native no-replace finalization of opened stage
-relative reopen/readback
-native identity/kind verification
+RootDirectory = NULL
+ReplaceIfExists = FALSE
 ```
 
-It owns no source registration, backup phases, receipts, migration or generic file API.
+Reopen final relative to the retained parent and verify stable file identity plus exact content. The handle chain
+prevents rename/delete replacement of the path components while the absolute path is resolved and used.
 
-### F4 — the canary must be a falsifiable support boundary
+### F3 — relative RootDirectory remains documentation-versus-runtime evidence, not a baseline
+
+Official `FILE_RENAME_INFO` documentation describes a relative destination with `RootDirectory`. A current supported-
+build reproduction shows the wrapper may convert the name to absolute and leave the root handle set, producing
+`ERROR_INVALID_PARAMETER`.
+
+**Decision:** do not use that form until a supported-platform canary demonstrates it. Do not bypass it with private
+NT APIs. The documented absolute-target form is the only selected Windows candidate.
+
+### F4 — support is a canary result, not a prose assertion
 
 Before Windows Foundation is advertised, execute:
 
-- ABI/offset/buffer-length checks for supported architecture;
-- exact access/share flags;
-- absent-destination success and existing-destination refusal;
-- relative leaf only and no traversal;
-- parent/path replacement resistance;
-- same-volume and unsupported-filesystem behavior;
-- failed-call stage/final classification;
-- crash debris and exact relative reopen/readback;
-- bounded native status mapping;
-- truthful file-data versus namespace/sudden-power durability claims.
+- canonical path derivation from retained parent and accepted extended-path form;
+- stage DELETE access and exact share modes;
+- retained root→parent chain without `FILE_SHARE_DELETE`;
+- absent destination success and existing destination refusal;
+- attempted ancestor/parent rename or replacement during operation;
+- local same-volume filesystem support and unsupported-profile refusal;
+- failure/crash debris classification;
+- relative reopen, stable file identity and complete byte verification;
+- truthful file-data, namespace and sudden-power-loss durability claims.
 
-Failure means the platform profile is unsupported. There is no Win32-wrapper/path-only fallback.
+Failure means the platform profile is unsupported. There is no MoveFileEx, relative-root-wrapper, private-NT or
+generic-filesystem fallback.
 
-## Preserved R052 Qdrant decisions
+## Preserved Qdrant decisions
 
 Stage-2 physical Text index remains explicit:
 
@@ -119,16 +114,16 @@ enable_hnsw=false
 memory=Pinned
 ```
 
-Query profile remains separate: k=1.2, b=0.75, finite/range validated, no threshold. Stage 2 creates no filter
-indexes; query returns no vectors and only evidence-routing payload. Stage 3A selects filter/index residency
-explicitly and measures it. The repository lock remains Qdrant client 1.19; the code cut upgrades all 1.20 pieces
+Query profile remains k=1.2, b=0.75, finite/range validated, no threshold. Stage 2 creates no filter indexes,
+requests no vectors and only routing payload, and requires exact schema/resource/point/count readback plus a
+deterministic TextQuery canary. Repository lock remains client 1.19; implementation upgrades all 1.20 pieces
 together.
 
 ## Current implementation sequence
 
 | Stage | Observable result | Primary owners |
 |---|---|---|
-| 1 Foundation | direct-native Windows finalization canary; root/plain settings; manifest-last initialize/open; one guard; status | #333/#266/#360 |
+| 1 Foundation | documented Windows finalization canary; root/plain settings; manifest-last initialize/open; one guard; status | #333/#266/#360 |
 | 2 Walking skeleton | one file → ObjectRef → retrieval text → explicit Qdrant 1.20 Text index → TextQuery canary/query → retained CLI excerpt | #264 and vertical owners |
 | 3A correctness/reference | restart; inventory; explicit filter/residency profile; complete generation/view; budget matrix | #270/#271/#331/#261/#300/#303 |
 | 3B conditional optimization | source-local diff/identity/mutation only where 3A budgets fail | #259/#329/#261/#263 |
@@ -141,8 +136,8 @@ together.
 - One manager owns each vertical cut; parallel writes are disjoint.
 - No hidden server defaults, backend abstraction, alias manager, custom-shard fusion, watcher ledger, init journal,
   query scheduler/tickets, lexical qualification receipts or operation archive.
-- No new native abstraction layer: one private current root/object platform module only.
-- No redb writer/view mutex/window mutation borrow spans object/Qdrant/process/model/native publication I/O.
+- No platform framework: one private current root/object finalization seam only.
+- No redb writer/view mutex/window mutation borrow spans object/Qdrant/process/model/filesystem publication I/O.
 - Complete build + schema/canary + durable evidence commit precede view installation.
 - Last view drop only wakes cleanup.
 - Current-caller search is local to code moved/deleted.
@@ -153,10 +148,11 @@ together.
 
 | Area | Status |
 |---|---|
-| Active legacy Win32 rename route | CHECKED reachable by static caller trace |
-| Win32 wrapper suitability for relative parent handle | REJECTED as selected finalizer |
-| Direct native rename candidate | SELECTED CANARY, not implemented/executed |
-| Existing direct `NtCreateFile` seam | CHECKED source, not qualified for new finalizer |
+| Legacy relative-root wrapper route | CHECKED reachable by static caller trace |
+| Relative RootDirectory Win32 form | DOCUMENTED upstream but REJECTED pending supported-platform canary |
+| R053 direct private NT candidate | REJECTED as baseline |
+| Documented absolute-target Win32 candidate | SELECTED CANARY, not implemented/executed |
+| Retained no-delete-share path chain | SELECTED design, not executed |
 | Exact Qdrant physical text profile V1 | SELECTED, not compiled/executed |
 | Qdrant client/server upgrade | NOT DONE; lock remains 1.19 |
 | Compiler evidence | R031 materializer + unitizer only |
@@ -176,10 +172,11 @@ No static donor/source inspection proves correctness.
 - R050: active Qdrant-owner synchronization `a4c23110`.
 - R051: exact Qdrant query/schema reconciliation `87c84c24`.
 - R052: explicit Qdrant text-index resource/query semantics `8942d823`.
-- R053: active Win32 wrapper trace and direct-native finalization correction.
+- R053: active Win32 wrapper trace and direct-native selection `9910a15b`.
+- R054: private-NT rejection and documented handle-locked Win32 finalization correction.
 
 ## Next action
 
-Implement the smallest direct-native Windows finalization canary in the current root/object owner without reusing
-the legacy source-registration publication platform. Run minimal compiler/Clippy and the focused native cases. Then
-complete Foundation, upgrade the exact Qdrant client/server/schema/query profile and implement #264.
+Implement the smallest documented Windows finalization canary in the current root/object owner. Run minimal
+compiler/Clippy and focused path-lock/finalization cases. Then complete Foundation, upgrade the exact Qdrant
+client/server/schema/query profile and implement #264.

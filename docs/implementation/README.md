@@ -26,7 +26,7 @@ Every arrow has one concrete owner. A package boundary may disappear; the respon
 ## Minimal cross-owner values
 
 ```text
-DataRootGuard            = retained root handle + exclusive lock + root metadata
+DataRootGuard            = retained root/directory handles + exclusive lock + root metadata
 ObjectRef                = format/profile/kind + content address + exact length
 SourceRecord             = SourceId + non-reset row revision + current ObjectRef + selection facts
 PreparedRef              = input ObjectRef + transform identity + prepared ObjectRef/outcome
@@ -50,7 +50,8 @@ Stage 2/3A has no sequence. Query-time k/b is not physical schema and does not t
 7. Complete immutable generations establish correctness before point mutation.
 8. Stage 3A ships only for corpus classes meeting predeclared budgets; Stage 3B is required where it fails.
 9. Physical schema/resource defaults are explicit; hidden Qdrant defaults are not a profile.
-10. Platform publication uses one tested owner-private primitive; legacy wrappers are not donors.
+10. Platform publication uses one documented, tested owner-private primitive; private NT calls and legacy wrappers
+    are not baseline donors.
 11. Minimal compiler/Clippy follows each production cut; broad evidence follows connected behavior.
 
 <a id="delivery-sequence"></a>
@@ -76,47 +77,56 @@ Initialization creates no user source state:
 
 ```text
 validate empty/recognized target
-→ acquire exclusion and retain root/destination-directory handles
+→ acquire exclusion
+→ retain/verify every directory handle from data root to manifest parent
 → create exact incomplete marker
 → create/flush/close/verify minimal redb + object layout
-→ create/write/flush one manifest stage in the destination directory
+→ create/write/flush one manifest stage in final parent
 → publish final manifest no-clobber last through the tested platform owner
-→ reopen through retained parent and verify current root
+→ reopen final relative to retained parent and verify current root
 → remove marker/stage debris where safe
 ```
 
 Before the final manifest, classification is `IncompleteInitialization`; ordinary open writes nothing. Explicit
 `discard-incomplete` removes only an exact recognized empty layout. Unknown/conflicting/replaced entries refuse.
 
-#### Windows finalization
+#### Windows finalization — R054
 
-Do not use either of these as trusted authority:
+Do not use:
 
-- path-based `tempfile::persist_noclobber` (`SetFileAttributesW` + `MoveFileExW`);
-- the current legacy `registration_native::rename`, which passes a relative leaf and non-null parent through the
-  Win32 `SetFileInformationByHandle(FileRenameInfo)` wrapper and is reachable from source-root commands.
+- path-based `tempfile::persist_noclobber` / `MoveFileExW`;
+- the reachable legacy relative-`RootDirectory` `SetFileInformationByHandle` wrapper;
+- private user-mode `NtSetInformationFile` or equivalent direct NT calls selected prematurely by R053.
 
-Use one owner-private direct native operation over the already-open stage handle and retained destination parent:
+Use one documented owner-private operation:
 
 ```text
-exact native rename information buffer, replacement disabled, relative leaf
-→ direct native information call
-→ check returned status and IO_STATUS_BLOCK exactly
-→ reopen final relative to retained parent through the ordinary native reader
-→ verify file identity, kind, length and bytes
+retain every root→final-parent directory handle
+  with FILE_SHARE_READ | FILE_SHARE_WRITE and without FILE_SHARE_DELETE
+retain opened stage handle with DELETE access
+derive one canonical absolute destination path from the retained final-parent handle
+→ SetFileInformationByHandle(FileRenameInfo)
+   RootDirectory=NULL
+   ReplaceIfExists=FALSE
+→ reopen final relative to retained parent
+→ compare stable file identity and verify kind/length/bytes
 ```
 
-The implementation cut must first run a native canary for ABI/layout, required access/share flags, destination-
-exists refusal, parent/path replacement, same-volume behavior, failure debris and exact readback on the supported
-Windows/filesystem profile. If the operation or support profile is unavailable, refuse. No Win32-wrapper or path-
-only fallback and no generic filesystem abstraction.
+The retained no-delete-share chain prevents rename/delete replacement of every path component while the absolute
+path is used. The implementation canary must establish the accepted extended path form, required access/share
+flags, destination-present refusal, ancestor/parent replacement resistance, same-volume/local-filesystem behavior,
+failure debris and exact readback. If the documented operation cannot be demonstrated, refuse the profile.
+
+Official `FILE_RENAME_INFO` documentation describes relative `RootDirectory`, but a current supported-build report
+shows the Win32 wrapper may convert the name to absolute while retaining the root handle. That relative form is not
+selected. Private NT APIs are not used to work around the wrapper.
 
 Unix uses an owner-private directory-relative no-replace operation or a verified same-filesystem link/unlink
 fallback. File-data flush, namespace publication, readback and sudden-power-loss durability are separate claims.
 
 **Completion:** real entrypoint reaches root owner; unsupported roots fail before writes; one guard surrounds store
-lifetime; native canaries pass for every advertised platform profile; status is factual; displaced config/root and
-legacy source-root publication routes are removed or immediately bounded.
+lifetime; documented platform canaries pass for every advertised profile; status is factual; displaced config/root
+and legacy source-root publication routes are removed or immediately bounded.
 
 <a id="2-walking-skeleton--one-file-to-one-cli-result"></a>
 ### 2. Walking skeleton — one file to one CLI result
@@ -244,7 +254,8 @@ never fallback.
 1. `DataRootGuard` is acquired before stores and dropped after stores close; it is not per-request locking.
 2. One publisher selects work but holds no redb writer or view-manager mutex during object/Qdrant I/O.
 3. Query clones current `PublishedView` under a short manager lock and releases it before backend/object work.
-4. Object/Qdrant/process/model/native publication I/O occurs without a redb writer or QueryWindow mutation borrow.
+4. Object/Qdrant/process/model/filesystem publication I/O occurs without a redb writer or QueryWindow mutation
+   borrow.
 5. Redb writer performs bounded compare/commit only.
 6. After commit, open/verify matching read snapshot, then install the view under a short lock.
 7. Prepare evidence outside the window lock; mutate cursor/window only after complete bounded output.

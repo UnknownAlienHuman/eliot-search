@@ -34,12 +34,12 @@ Ordinary open/search/status never repairs, resumes, migrates or deletes.
 ```text
 validate selected local target
 → acquire initialization exclusion
-→ retain/verify root and destination-directory handles
+→ retain/verify every directory handle from root to manifest parent
 → create exact owned initialization marker
 → create/flush/close/verify empty redb + object layout
-→ create one unique manifest stage in the destination directory
+→ create one unique manifest stage in final parent
 → write exact manifest + file-data flush
-→ publish final manifest no-clobber last through the tested platform owner
+→ publish final manifest no-clobber last through tested platform owner
 → reopen final relative to retained parent and verify current layout
 → remove marker/stage debris where safe
 → return DataRootGuard
@@ -47,48 +47,46 @@ validate selected local target
 
 Foundation accepts no user source before the final manifest, so recovery is discard/retry rather than replay.
 
-## Windows finalization — corrected R053 boundary
+## Windows finalization — corrected R054 boundary
 
-Two currently available paths are explicitly **not** trusted finalizers:
+Rejected baseline paths:
 
-1. `tempfile 3.27.0::persist_noclobber`, which uses path-based `SetFileAttributesW` and `MoveFileExW`;
-2. `bins/eliot-searchd/.../registration_native.rs::rename`, which passes a relative leaf and non-null parent through
-   the Win32 `SetFileInformationByHandle(FileRenameInfo)` wrapper.
+1. `tempfile::persist_noclobber` / `MoveFileExW`, because publication is path-based;
+2. the reachable legacy relative-`RootDirectory` Win32 wrapper in `registration_native::rename`;
+3. private user-mode `NtSetInformationFile` or equivalent direct NT calls selected prematurely by R053.
 
-The second path is not dead: `--register-source-root` and `--unregister-source-root` reach it through the current
-secure-command interceptor. Its existence is a concrete removal/canary finding, not a reason to reuse or extend the
-legacy source-registration platform.
-
-The selected implementation-time candidate is one small owner-private **direct native** operation:
+Use one documented owner-private operation:
 
 ```text
-opened stage handle with required rename/delete rights
-+ retained verified destination-directory handle
-+ bounded relative final leaf
-→ exact native FILE_RENAME_INFORMATION/selected information buffer
-   replacement disabled; RootDirectory=retained parent
-→ direct native file-information call
-→ require exact success status and completed IO_STATUS_BLOCK
-→ reopen final relative to retained parent with the ordinary native reader
-→ verify native identity, non-reparse kind, length and complete manifest bytes
+opened stage handle with DELETE access
++ retained verified directory-handle chain from data root to final parent
+  (share read/write; omit FILE_SHARE_DELETE)
++ canonical absolute final path derived from retained final-parent handle
+→ SetFileInformationByHandle(FileRenameInfo)
+   RootDirectory = NULL
+   ReplaceIfExists = FALSE
+→ reopen final relative to retained parent
+→ compare stable file identity; verify non-reparse kind, length and complete manifest bytes
 ```
 
-The exact information class and buffer layout are selected by a focused code canary, not assumed from the Win32
-wrapper. The canary must cover:
+Holding every directory component without delete sharing prevents rename/delete replacement of the path chain while
+the documented absolute-target operation runs. The implementation canary must cover:
 
-- ABI/offset/length calculations on supported architectures;
-- required source access and share flags;
-- destination absent success and destination present refusal;
-- bounded relative leaf only; no absolute or parent traversal;
-- retained-parent/path replacement cannot retarget the operation;
-- same-volume/filesystem requirement and unsupported-volume refusal;
-- source remains classifiable after a failed call;
-- crash/failure debris and exact final readback;
-- native status to bounded content-free error mapping.
+- accepted extended absolute path form derived from the retained parent;
+- stage DELETE access and exact share modes;
+- successful absent destination and refusal of existing destination;
+- ancestor/final-parent rename or replacement attempts while handles are retained;
+- local same-volume filesystem support and unsupported-profile refusal;
+- source/stage classification after failure;
+- exact relative reopen, identity and byte readback;
+- bounded content-free Win32 error mapping.
 
-If the native operation, deployment policy or filesystem profile cannot be demonstrated, that platform profile
-refuses initialization. Do not silently fall back to `SetFileInformationByHandle`, `MoveFileExW`, path-only rename
-or a generic filesystem framework.
+Official `FILE_RENAME_INFO` documentation describes a relative `RootDirectory`, but a current supported-build report
+shows the wrapper may absolutize the name while retaining that handle. Do not use the relative form until a supported
+platform canary proves it. Do not bypass the wrapper with private NT APIs.
+
+If the documented absolute-target operation cannot be demonstrated for the advertised Windows/filesystem profile,
+refuse initialization. There is no `MoveFileExW`, private-NT or generic-filesystem fallback.
 
 File-data flush is separate from namespace persistence. Do not claim sudden-power-loss directory durability without
 an executed primitive and crash evidence.
@@ -114,9 +112,9 @@ journal, operation digest, owner epoch or quarantine platform exists.
 
 ## Open and shutdown
 
-Open retains the root handle, acquires one real exclusive guard, rereads/verifies current metadata through retained
-handles, then opens concrete stores. Shutdown stops admission, drains/cancels finite requests, stops publication
-and Qdrant users, closes stores, then drops the guard. No `DRAINING/RELEASED` record.
+Open retains the root/path-component handles, acquires one real exclusive guard, rereads/verifies current metadata,
+then opens concrete stores. Shutdown stops admission, drains/cancels finite requests, stops publication and Qdrant
+users, closes stores, then drops the guard. No `DRAINING/RELEASED` record.
 
 No redb writer, view/window lock or Qdrant/object/process I/O is nested through the guard as a per-request mutex.
 
@@ -126,12 +124,11 @@ Remove owner leases/slots/succession, process/executable identities unrelated to
 dual compatibility locks, `NativeRootRequest` argv/stage custody, initialization journal/resume and root-level
 source/registry/DEK/migration/service wrappers.
 
-Specifically remove the legacy source-registration publication route, including the defective Win32 rename wrapper,
-after any useful relative-open/identity helpers are moved into the tested current root/object owner. Do not retain
-its backup/phase/receipt protocol merely to reuse one native call.
+Remove the legacy source-registration publication route and defective relative-root Win32 wrapper after useful
+relative-open/identity code is moved. Do not retain its backup/phase/receipt protocol or its direct-NT experiment.
 
 ## Focused evidence
 
-Run minimal Rust 1.98 check/Clippy for root/daemon/store consumers, then native canaries for absent/current/
-incomplete/foreign/busy, destination-exists refusal, parent/path replacement, every initialization failure point,
-strict discard, restart after crash and shutdown order. Record the exact platform and durability profile achieved.
+Run minimal Rust 1.98 check/Clippy for root/daemon/store consumers, then canaries for absent/current/incomplete/
+foreign/busy, destination-exists refusal, ancestor/parent replacement, every initialization failure point, strict
+discard, restart after crash and shutdown order. Record the exact platform and durability profile achieved.

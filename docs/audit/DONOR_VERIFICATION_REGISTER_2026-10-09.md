@@ -4,7 +4,7 @@ This live index records exact installed dependencies, implementation-time candid
 materially constrains a concrete ELIOT owner. It does not approve dependencies, reserve pins or turn another system
 into architecture.
 
-**Current checkpoint:** R053 over inspected ELIOT head `8942d823`, 2026-10-26.  
+**Current checkpoint:** R054 over inspected ELIOT head `9910a15b`, 2026-10-26.  
 **Previous detailed register:**
 [`da382b66`](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md).
 
@@ -22,7 +22,7 @@ Recheck exact patch, features, MSRV, advisories, native artifacts and API with t
 
 | Donor | Current state | Boundary |
 |---|---|---|
-| `qdrant-client` / Qdrant | repository lock/historical server evidence still 1.19; R049–R053 select one exact 1.20.x patch for implementation | One private derived-index adapter; default product unconnected. |
+| `qdrant-client` / Qdrant | repository lock/historical server evidence still 1.19; R049–R054 select one exact 1.20.x patch for implementation | One private derived-index adapter; default product unconnected. |
 | `redb` | locked 2.6.3 | Compact metadata and real read snapshots; no file/Qdrant effects inside transactions. |
 | Tokio | locked 1.53.1 in async consumers | I/O/deadline/process primitives; dropped future does not prove external termination. |
 | `pulldown-cmark` | exact 0.13.5, defaults disabled | Markdown `OffsetIter`; version/checksum are transform identity. |
@@ -38,7 +38,7 @@ R031 Actions run 40084893130 passed locked Rust 1.98 check/minimal Clippy for ma
 | Candidate | Intended use | Adoption rule |
 |---|---|---|
 | high-level `toml` + Serde; `serde_json` | Typed settings/framed JSON | Select with actual consumers; preserve sparse absence/native paths/redacted diagnostics. |
-| direct owner-private Windows native finalizer | Same-parent root/object publication | Must pass R053 canary; no Win32 wrapper/path fallback. |
+| documented Win32 absolute-target finalizer | Same-parent root/object publication | Must pass R054 canary; no private NT, relative-root-wrapper or path-only fallback. |
 | optional random-stage helper | Stage creation only | A helper such as `tempfile` never becomes final publication authority. |
 | `ignore::WalkBuilder` | Authoritative bounded source inventory | Select with #271; inspect builder/traversal/entry errors. |
 | `notify::RecommendedWatcher` | Optional dirty hints | Add only after inventory works without it. |
@@ -54,7 +54,7 @@ R031 Actions run 40084893130 passed locked Rust 1.98 check/minimal Clippy for ma
 Official Rust client `v1.20.0` and Qdrant Server 1.20 expose the required vectorless scoring text path:
 
 ```rust
-CreateCollectionBuilder::new(name) // vectors optional
+CreateCollectionBuilder::new(name)
 TextIndexParamsBuilder::new(TokenizerType::Code)
 CreateFieldIndexCollectionBuilder
 TextQueryBuilder::new(text).k(k).b(b)
@@ -65,31 +65,16 @@ UpsertPointsBuilder::update_mode(UpdateMode::InsertOnly)
 
 ### Physical text-index profile V1
 
-```rust
-TextIndexParamsBuilder::new(TokenizerType::Code)
-    .lowercase(true)
-    .ascii_folding(false)
-    .phrase_matching(false)
-    .disabled_stemmer()
-    .enable_hnsw(false)
-    .memory(Memory::Pinned)
-    .bm25_scoring()
+```text
+retrieval_text Text index
+Code tokenizer; lowercase=true
+ascii_folding=false; phrase_matching=false; stemmer disabled
+stopwords/min/max/nested absent
+BM25; enable_hnsw=false; memory=Pinned
 ```
 
-Keep stopwords, min/max token length and nested path absent and verify that exact absence on readback. Do not use
-deprecated `on_disk`.
-
-Upstream defaults which must not remain hidden:
-
-- payload text/keyword indexes default `enable_hnsw=true`;
-- index memory defaults to `Pinned`;
-- phrase matching defaults false;
-- stemming defaults disabled;
-- scoring defaults disabled;
-- lowercase defaults true and ASCII folding false.
-
-Stage 2 explicitly uses Pinned for one file. Stage 3A selects `Pinned|Cached|Cold` per corpus/release profile and
-measures RAM/cache/disk. Real keyword/filter indexes also disable HNSW and set memory explicitly.
+Read back every physical field. Stage 3A selects `Pinned|Cached|Cold` per measured corpus profile and creates only
+filter indexes used by real scope clauses.
 
 ### Query-scoring profile V1
 
@@ -102,16 +87,9 @@ no score threshold
 ELIOT rejects non-finite/out-of-range values before dispatch. A k/b change is request/window meaning and does not
 rebuild the physical collection.
 
-### Code tokenizer semantics
-
-Official server source confirms snake/camel/Pascal/acronym splitting. Documents and ranking queries receive
-subwords plus detached joined camel/snake identifiers. Full-text filter queries receive subwords only.
-
-Therefore baseline retrieval text contains source/context once and no local identifier aliases. `TextQuery` scores
-any matching term. Full-text `MatchText` filters require all query subwords in any order; with phrase matching off,
-they are neither phrase nor exact-identifier predicates. Exact punctuation/location remains retained-source Exact.
-
-### Scope, IDF and sharding
+Code tokenizer ranking receives subwords plus joined camel/snake identifiers. Full-text filters receive subwords
+only. Therefore baseline retrieval text contains source/context once and no local identifier aliases. Exact
+punctuation/location remains retained-source Exact.
 
 ```text
 base population = selected sources ∩ actual access/session restriction
@@ -119,81 +97,72 @@ candidate filter = base population + request-only narrowing
 idf.corpus       = base population
 ```
 
-If base is whole collection, omit `idf`. Explicit empty avoids RPC; unknown/incomplete never widens. Statistics are
-physical-shard-local, so baseline uses one ordinary shard and no per-source custom-shard portfolio.
+If base is whole collection, omit `idf`. Statistics are physical-shard-local, so baseline uses one ordinary shard
+and no per-source custom-shard portfolio.
 
-### Visibility/readiness and response economy
-
-Create/verify indexes before ingestion. Build with explicit InsertOnly + wait, verify exact schema/point/payload/
-count and execute a deterministic TextQuery canary. Query requests no vectors and only evidence-routing payload,
-not retrieval text or excerpts.
-
-Text statistics can remain stale after point mutation until optimization. Stage 2/3A avoids post-visibility
-mutation. Stage 3B must measure score/optimizer convergence.
+Create/verify indexes before ingestion. Build with InsertOnly + wait, verify exact schema/point/payload/count and
+execute a deterministic TextQuery canary. Query requests no vectors and only evidence-routing payload.
 
 Primary sources:
 
 - [Rust client v1.20.0](https://github.com/qdrant/rust-client/releases/tag/v1.20.0)
 - [Text index builder](https://github.com/qdrant/rust-client/blob/v1.20.0/src/builders/text_index_params_builder.rs)
 - [Text query builder](https://github.com/qdrant/rust-client/blob/v1.20.0/src/builders/text_query_builder.rs)
-- [IDF corpus snippet](https://github.com/qdrant/rust-client/blob/v1.20.0/tests/snippet_tests/test_query_points_with_idf_corpus.rs)
 - [Code tokenizer](https://github.com/qdrant/qdrant/blob/v1.20.0/lib/segment/src/index/field_index/full_text_index/tokenizers/code.rs)
-- [Text scoring/filter semantics](https://github.com/qdrant/qdrant/blob/v1.20.0/lib/segment/src/index/field_index/full_text_index/full_text_index_read.rs)
 - [Server text-index defaults](https://github.com/qdrant/qdrant/blob/v1.20.0/lib/segment/src/data_types/index.rs)
 
 <a id="plain-object-publication-donor"></a>
-## Plain root/object publication — R053 platform correction
+## Plain root/object publication — R054 Windows correction
 
 Git's useful high-level pattern remains same-parent stage, streaming identity, file-data flush, no-clobber
 finalization and exact existing/final verification.
 
 ### Rejected Windows paths
 
-`tempfile 3.27.0::persist_noclobber` calls path-based `SetFileAttributesW` and `MoveFileExW` on Windows. It may help
-with random stage creation but is not final authority.
+- `tempfile::persist_noclobber` uses path-based `SetFileAttributesW` + `MoveFileExW`.
+- Legacy `registration_native::rename` passes relative leaf + non-null parent through the Win32 wrapper and is
+  reachable from source-root commands.
+- R053 then selected a private direct `NtSetInformationFile`-style user-mode call. That is not a documented Win32
+  application contract and is removed from the baseline.
 
-The current ELIOT legacy source-registration owner is also a negative donor:
+Official `FILE_RENAME_INFO` documentation says a relative `RootDirectory` may be supplied, but a current supported-
+build report shows the wrapper may convert the destination to an absolute path while leaving `RootDirectory`
+non-null, producing `ERROR_INVALID_PARAMETER`. Documentation alone therefore does not qualify that relative form.
+
+### Selected documented Windows candidate
 
 ```text
---register-source-root / --unregister-source-root
-→ registration_mutation::publish
-→ registration_native::rename
+retain verified handles for every directory from data root to final parent
+  with share read/write and without FILE_SHARE_DELETE
+retain opened stage handle with DELETE access
+derive canonical absolute final path from retained final-parent handle
 → SetFileInformationByHandle(FileRenameInfo)
+   RootDirectory=NULL
+   ReplaceIfExists=FALSE
+→ reopen final relative to retained parent
+→ verify stable identity and exact bytes
 ```
 
-It passes a relative leaf and non-null parent through the Win32 wrapper. The route is reachable, so agents must not
-mistake its existence for an already-qualified handle-relative finalizer.
+Omitting delete sharing prevents rename/delete replacement of every retained component while the absolute path is
+used. The canary must prove accepted path form, access/share flags, destination-present refusal, ancestor/parent
+replacement resistance, same-volume/local-filesystem support, failure debris and exact readback. Unsupported
+profiles refuse.
 
-Current Windows behavior/reporting indicates the Win32 wrapper can absolutize the name while retaining
-`RootDirectory`, producing an invalid parameter combination. Formal `FILE_RENAME_INFO` structure documentation is
-therefore insufficient evidence that the wrapper executes the selected relative operation.
-
-### Selected Windows candidate
-
-Use one owner-private direct native file-information call, building an exact native rename buffer with replacement
-disabled, retained parent handle and bounded relative leaf. Validate both returned native status and completed
-`IO_STATUS_BLOCK`, then reopen through the retained parent with the ordinary native reader and verify identity and
-bytes.
-
-The exact information class/layout is selected only after a canary on every supported architecture/profile. The
-canary covers destination-exists refusal, access/share flags, path/parent replacement, same-volume behavior,
-failure debris, exact readback and error mapping. Unsupported native/filesystem/deployment profiles refuse. No
-Win32-wrapper or path-only fallback, generic filesystem layer, source-registration phases or publication receipts.
-
-The existing direct `NtCreateFile` relative-open seam is useful evidence, not qualification of a new rename.
+Do not use `MoveFileExW`, relative-root wrapper, private `NtSetInformationFile`, undocumented ntdll FFI or a generic
+filesystem layer. The old source-registration publication phases are removed with callers.
 
 Primary references:
 
 - [Microsoft FILE_RENAME_INFO](https://learn.microsoft.com/windows/win32/api/winbase/ns-winbase-file_rename_info)
 - [Microsoft SetFileInformationByHandle](https://learn.microsoft.com/windows/win32/api/fileapi/nf-fileapi-setfileinformationbyhandle)
-- [Microsoft NtSetInformationFile](https://learn.microsoft.com/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntsetinformationfile)
-- current ELIOT `registration_native.rs` at the inspected branch head
+- [Microsoft CreateFile share modes](https://learn.microsoft.com/windows/win32/api/fileapi/nf-fileapi-createfilew)
+- current Microsoft Q&A reproduction of relative `RootDirectory` wrapper failure
+- current ELIOT `registration_native.rs` at inspected branch head
 
 ### Unix candidate
 
-Use a private directory-relative no-replace rename when available. A hard-link + unlink fallback is allowed only
-on the same filesystem, with exact final verification and visible stage debris. `std::fs::rename` may overwrite and
-is not selected.
+Use a private directory-relative no-replace rename when available. A same-filesystem hard-link + unlink fallback is
+allowed with exact final verification and visible stage debris. `std::fs::rename` may overwrite and is not selected.
 
 File-data flush, namespace publication, exact readback and sudden-power-loss durability are separate claims.
 
