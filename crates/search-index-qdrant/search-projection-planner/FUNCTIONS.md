@@ -1,59 +1,60 @@
-# Function contract — `search-projection-planner`
+# Projection — complete generations before measured source-local deltas
 
-**Status:** W3/P06 logical contract; pure planning only.
+Projection turns prepared units into bounded uploadable pages and matching evidence bindings. It owns no
+redb/Qdrant effect, publication state or recovery ledger. Keep it inside preparation/publication unless a
+substantial independent algorithm justifies the package.
 
-## Operations
+## Current source seam
 
-### `validate_projection_input(input, profiles) -> Result<ValidatedProjectionInput, ProjectionError>`
+The baseline audit at `c8e38b6` found `plan_projection`/`PublicationAdmissionOwners` connected to fixtures rather
+than a publisher; `PointSpec` discarded uploadable input for digests and cloned manifests. Recheck actual callers
+at the code cut. Do not repair that proof protocol or preserve it through wrappers.
 
-Requires immutable admitted revision/representation/unit manifests, exactly one
-`ProjectionMembership -> SourceMembership`, accepted profile IDs and complete vector encodings.
+## Stage 2/3A assembler
 
-### `build_minimal_payload(unit, membership, profile_set, epoch) -> Result<MinimalPointPayload, ProjectionError>`
+Consume one complete captured inventory of preparation outcomes: exact source/prepared/ObjectRefs, explicit gaps,
+unit text/ranges, selected structural context, physical profile and actual scope fields.
 
-Emits only the opaque S9.5 fields. Corpus/repository display names, ACL subjects, membership arrays,
-source text, paths and vendor metadata are rejected.
+Stream bounded pages containing actual retrieval_text, required routing/filter payload and matching evidence.
+A digest is not uploadable input. Validate complete selected outcomes and point/byte ceilings before effects;
+an oversized source produces an explicit gap or build refusal, not silent partial-source completeness.
 
-### `build_point_spec(input, identity_port) -> Result<PointSpec, ProjectionError>`
+Derive deterministic collision-checked IDs within the never-reused physical generation. The key may include
+generation, source/prepared identity, unit occurrence and role. Cross-generation continuity is unnecessary.
+Sort/page only as required for deterministic build/readback; do not copy the whole corpus or create canonical
+value trees, full-manifest caches or a baseline retain/close plan.
 
-Combines the canonical point identity, exact named-vector set, payload digest, unit/reference digests
-and expected readback shape. Point identity derivation remains owned by `search-point-identity`.
+## Physical profile versus query scoring
 
-### `plan_projection(input, profiles, budget) -> Result<ProjectionPlan, ProjectionError>`
+The [lexical owner](../../search-lexical/FUNCTIONS.md) defines these separately:
 
-Creates a deterministically ordered exact point set and rejects duplicate UUIDs, duplicate unit roles,
-missing vectors, profile mismatches and unbounded plans.
+- Physical profile: retrieval-text composition, tokenizer/index/resource settings and payload/filter schema.
+  A physical-profile change creates a fresh generation.
+- Query scoring: request-time BM25 k/b. Changing only k/b does not change projection input, point identity,
+  pending build, physical collection or durable current view.
 
-### `canonicalize_manifest(points) -> Result<ProjectionManifest, ProjectionError>`
+The bridge owns vendor schema conversion. Baseline pages contain no sparse BM25 inference vectors, fixed local
+avg_len or locally generated identifier aliases.
 
-Produces immutable CAS-ready manifest bytes containing exact UUIDs, full identity digests, unit IDs,
-vector names and payload/vector digests. No broad selection predicate substitutes for the exact set.
+## Stage 3B — only after failed Stage 3A budgets
 
-### `diff_manifests(old, new) -> Result<ManifestDiff, ProjectionError>`
+Add a source-local delta only when the [delivery sequence](../../../docs/implementation/README.md#3b-measured-incremental-publication)
+selects it. Compare bounded old/new descriptors within the same source/context, sort by point ID, and merge the
+old source-prefix evidence into retain/create/fixed-close operations with complete-source evidence changes.
 
-Returns exact create, retain and retire lists. Retained IDs require full identity and expected payload/
-vector equality.
+Reuse only unambiguous one-old/one-new occurrences with identical retrieval input/context. Equal text or ordinal
+alone is not continuity. Ambiguous/unmatched units receive births fixed in the persisted pending delta;
+disappear/reappear never reopens a closed interval. Preserve actual text/payload for replay.
 
-### `validate_schema_requirements(manifest, collection_schema) -> Result<(), ProjectionError>`
+Memory/cost is O(m log m + o) for m new/o old units plus bounded output, not constant. Validate the complete delta
+before effects. An oversized delta uses a fresh generation or explicit gap. Custom per-source shards are not a
+substitute for a measured publication strategy.
 
-Proves every filterable payload field has the required index and every expected named vector exists
-before the plan may enter publication.
+## Removal and verification
 
-## Semantics
+Delete whole ProjectionPlan/manifest copies, dual diff maps, digest-only output, revision-bound scoring IDs and
+fixture-only admission/codec APIs with callers. Keep source ranges and collision checks.
 
-Stored reads use `decode_projection_manifest_data(bytes, budget)` to check the exact existing
-canonical field sets, finite bounds, ordering and byte-identical re-encoding without preparing
-a source. `validate_projection_manifest_metadata(manifest, scope, schema, budget)` recomputes
-existing S11 addresses/full digests and scoring-document identities and checks scope/vector names.
-These return ordinary metadata, never source/completeness/access/publication proof. Root still
-authenticates actual C07 bytes and current C02/C03 bindings; publication uses complete UnitSet
-admission and citations require C24 exact source readback.
-
-Planning is pure, deterministic and retry-safe. Budget/cancellation yields no usable partial manifest.
-The crate performs no Qdrant/redb/CAS I/O and makes no source/admission/access decision.
-
-## Required fixtures
-
-One membership per point; minimal payload disclosure guard; deterministic manifest bytes; exact
-old/new diff; profile/generation change replaces affected points; duplicate/collision propagation;
-schema/index completeness; broad-filter closure structurally unavailable.
+After code run minimal locked check/Clippy for actual preparation/publication/bridge/evidence consumers. Then
+check complete/empty/gap inventory paging, deterministic IDs, exact payload/evidence and bounded memory. Stage 3B
+adds duplicate/shift/reorder/context/replay cases and measured write reduction only if selected.

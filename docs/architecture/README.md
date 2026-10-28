@@ -1,60 +1,75 @@
-# Architecture entry point
+# ELIOT Search — architecture
 
-The combined master is:
+ELIOT Search helps agents and people understand codebases and document collections without reading the whole
+corpus. It finds useful evidence, shows its origin and makes the next source read or exact check obvious.
+[Implementation](../implementation/README.md) owns delivery order and mechanisms; this page owns product invariants.
+Historical Architecture 8.4 and task packets do not override it.
 
-```text
-ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md
-```
+## Product
 
-It contains multiple historical layers in one file. Read them with the following authority boundary.
+Users select local repositories/corpora and receive ranked source locations with short verified excerpts,
+revision identity and explicit gaps. They can read exact evidence, orient in an unfamiliar project and compare
+implementations. Search operates through its own CLI/local interface without a model, agent controller or ELIOT
+integration. Large repositories and portfolios remain core workloads, not optional demos.
 
-## Current authority
+## Result contract
 
-### Part I — ELIOT Search Architecture 8.4
+A citation binds the retained revision that supplied its bytes. Ranking proposes useful reading, not exhaustive
+coverage, uniqueness, semantic equivalence or absence. Exact checks report their actual scanned inventory and
+representation. Unsupported formats, missing revisions, stale observations and unfinished work stay visible.
 
-Part I is the normative product architecture. Its embedded byte range and recorded SHA-256 remain the
-source of truth for:
+Committed state survives restart; lost derived indexes rebuild. Updates converge to current selected content.
+Preparation reuses unchanged work. Publication starts with complete fresh generations and gains source-local
+mutation only where declared corpus budgets require it; do not promise that the reference profile avoids every
+unrelated index rewrite. Interactive work remains bounded/cancellable and takes priority under resource pressure.
 
-- source/revision/materialization/projection identity;
-- Qdrant, redb and immutable-storage responsibilities;
-- access, currentness, publication and query invariants;
-- portfolios, retrieval, comparison, exact proof, handles and lifecycle;
-- standalone/provider behavior and qualification requirements.
+## Invariants
 
-### Part II — Codex Handoff 2.7
+**One source of evidence.** Immutable source/prepared objects and their coordinates establish citations. Qdrant is
+the only indexed retrieval engine; control storage holds compact application metadata, not another search corpus.
 
-Part II is historical implementation scaffolding. Its P00-only entry sequence predates the current
-implemented workspace and the accepted product-boundary corrections. It may help explain package intent,
-but it is **not current implementation authorization** and cannot require ticket issuance, launch-state,
-writer leases or replay of an obsolete wave plan.
+**One coherent view.** A request selects a non-widening scope from one published view. Evidence and retrieval must
+refer to that same view. Incomplete writes never become a mixed visible index. Recovery resolves real unfinished
+effects; ordinary reads and pure transforms need no durable receipts.
 
-When Part II conflicts with current source, an accepted product ADR, accepted public contract or a current
-maintainer issue/PR, use the current product source/decision while preserving Part I invariants.
+**Lifetime follows ownership.** Current/pending references and live query windows preserve required data. Cleanup
+also accounts for unresolved external writers; the last reader disappearing is not enough. Publication owns
+whole-generation index cleanup. Local-object collection is explicit stopped-root maintenance, not a hot-path GC
+or universal lease/legal-hold/purge platform.
 
-### Audit registers and later appendices
+**Results are not capabilities.** Cards carry exact source/revision/location/excerpt. Paging and bounded expansion
+use one short-lived same-session window derived from the pinned view. It is not a durable history or second bearer-
+security system and may expire on disconnect/restart.
 
-Audit registers record historical findings and intended checks. They are neither runtime behavior nor
-proof that a capability has been implemented or qualified.
+**Availability is factual.** A handler works only when its real dependencies are constructed. A name, registry,
+digest, qualification receipt or advertisement does not create behavior or grant request authority.
 
-## Accepted product clarifications
+**Local and no-execute by default.** The baseline serves the owning OS account and explicitly selected sources.
+It never executes indexed material or silently widens scope. Restricted clients, remote adapters and encryption
+are separately selected needs, not mandatory infrastructure for ordinary local work.
 
-- [ADR 0005](../adr/0005-standalone-search-product-and-controller-boundary.md) — Search is standalone and
-  does not own agent orchestration.
-- [ADR 0006](../adr/0006-agent-analysis-framework-product-scope.md) — Search is a Qdrant-backed
-  large-corpus analysis/navigation framework for agents, not only a locator.
+**Complexity must serve a consumer.** Prefer direct calls and concrete values. A trait/package/worker earns its
+place through a real dependency, effect or substantial algorithm, not a hypothetical future backend. Reuse maintained
+parsing, matching, serialization, storage and transport; do not build a compiler or lifecycle operating system.
 
-These ADRs clarify implementation ownership and product interpretation without weakening Part I's
-source-truth, access, currentness, Qdrant, exact-proof or qualification requirements.
+**Hashes have a purpose.** Content identity and integrity use real hashes. Requests, plans, reviews, configuration
+and local state transitions do not need digests merely to appear trustworthy. Trusted local exchange needs no
+additional cryptographic authority platform.
 
-## Working rule
+**Replacement preserves user data.** Internal pre-release APIs/formats have no compatibility promise. Remove old
+implementations and their exclusive fixtures, but preserve original files and sole retained copies. Unsupported
+roots fail before writes; do not silently migrate or destroy them.
 
-For implementation work, read:
+**Bound work, not prose.** Stages/temporary pages/unreferenced objects are bounded discoverable debris, not permanent
+operation history. Keep finite pending state only where a real effect can outlive the process. Source identity,
+revision, current location and reusable transform input remain separate facts.
 
-1. relevant Part I sections;
-2. accepted ADRs;
-3. the accepted public/package contract;
-4. the current issue/PR and compiled source reality.
+**Completion is observable.** Deliver connected behavior and remove its displaced route. File size, crate count,
+closed issues, source presence and structural checks cannot prove correct results, recovery, relevance or scale.
 
-Do not restart from P00 merely because Part II says `Entry point: P00 only`. Do not implement generic
-repository ticket/lease/controller machinery in Search. Continue the actual product spine around Qdrant,
-source evidence, query analysis and standalone delivery.
+## Product boundary
+
+Search owns source acquisition, retained revisions, preparation, indexed retrieval, exact verification and compact
+evidence. Agent scheduling, task governance, general memory, online research, hosted services, legal-record
+management and universal migration are outside it. Optional code intelligence, formats, semantic ranking and
+adapters extend the same source/query path only with real consumers.

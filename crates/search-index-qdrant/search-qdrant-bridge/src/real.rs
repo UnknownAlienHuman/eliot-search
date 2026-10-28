@@ -1,14 +1,15 @@
-//! Real T24 data-plane adapter over the pinned `qdrant-client` 1.19.0 transport.
+//! Real data-plane adapter over the pinned `qdrant-client` 1.19.0 transport.
 //!
 //! The in-memory [`QdrantBridge`](crate::QdrantBridge) stays as the behavioral
-//! test oracle only. Every production data-plane operation here executes
-//! against a real Qdrant server through the exact qualified client and
-//! returns verified typed results, never model success.
+//! test oracle only. Every real data-plane operation here executes against a
+//! Qdrant server and returns verified typed results, never model success.
 //!
-//! Admission: [`RealDataPlane::connect`] requires an executed
-//! [`QualifiedGate`](crate::qualified::QualifiedGate) (all T22 mandatory live
-//! probes passed) and rechecks the live server identity on connect. Collection
-//! names, filters and batches are validated before dispatch.
+//! [`RealDataPlane::connect`] accepts the selected endpoint, current process
+//! binding, actual API-key lease and operation limits. It observes the live
+//! server identity and performs an authenticated collection-list request during
+//! construction. Historical probe receipts are tests/evidence, not constructor
+//! credentials. Collection names, filters and batches are validated before
+//! dispatch.
 //!
 //! The API key is borrowed only inside the lease-provider callback while the
 //! SDK client is built. Qdrant client 1.19.0 retains a `String` copy in its
@@ -17,30 +18,28 @@
 //! owner, endpoint and lease before every RPC. SDK calls have a 10-second
 //! transport timeout, with operation contexts imposing their own deadlines.
 //!
-//! Single-contract retrieval + IDF (invariant 5): [`RealDataPlane::query_filtered`]
-//! takes one [`EligibilityFilter`](crate::EligibilityFilter) and renders both
-//! the retrieval `filter` and the `idf.corpus` population filter from that
-//! same value. [`IdfScope::Global`] omits the corpus (collection-wide IDF);
-//! [`IdfScope::ScopedToRetrieval`] clones the retrieval filter as the corpus.
-//! A diverged corpus is unrepresentable: there is no second filter argument.
+//! Single-contract retrieval + IDF: [`RealDataPlane::query_filtered`] takes one
+//! [`EligibilityFilter`](crate::EligibilityFilter) and renders both the
+//! retrieval `filter` and the `idf.corpus` population filter from that same
+//! value. [`IdfScope::Global`] omits the corpus; [`IdfScope::ScopedToRetrieval`]
+//! clones the retrieval filter as the corpus. A diverged corpus is
+//! unrepresentable: there is no second filter argument.
 //!
 //! Pre-dispatch versus possible-write failures: validation, cancellation and
-//! connect-time failures are definite typed errors (no commit was possible).
-//! Any mutation dispatch that may have reached the server — transport loss,
-//! deadline expiry, ambiguous acknowledgement — reports
+//! connect-time failures are definite typed errors. Any mutation dispatch that
+//! may have reached the server reports
 //! [`BridgeError::MutationOutcomeUnknown`](crate::BridgeError::MutationOutcomeUnknown)
-//! and must be resolved through [`RealDataPlane::readback_exact`] with the
-//! same mutation identity. Reads never report unknown outcomes: they commit
-//! nothing, so loss maps to [`BridgeError::TransportFailed`](crate::BridgeError).
+//! and must be resolved through [`RealDataPlane::readback_exact`] with the same
+//! mutation identity. Reads never report unknown outcomes: they commit nothing,
+//! so loss maps to [`BridgeError::TransportFailed`](crate::BridgeError).
 //!
 //! Vendor (`qdrant_client`) types never appear in public signatures and vendor
 //! status text never reaches errors: every failure maps to a stable
 //! [`BridgeError`](crate::BridgeError) code.
 //!
-//! The T24 scope is sparse vectors only: a schema carrying a dense vector is
-//! rejected pre-dispatch with
-//! [`BridgeError::CollectionSchemaMismatch`](crate::BridgeError::CollectionSchemaMismatch)
-//! because dense layouts need a distinct accepted scoring profile.
+//! The current scope is sparse vectors only: a schema carrying a dense vector
+//! is rejected pre-dispatch with
+//! [`BridgeError::CollectionSchemaMismatch`](crate::BridgeError::CollectionSchemaMismatch).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::{
@@ -62,7 +61,7 @@ use qdrant_client::qdrant::{
 use search_contracts::{OpaqueId, ReceiptRef};
 
 use crate::live::LiveEndpoint;
-use crate::qualified::{QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION, QualifiedGate};
+use crate::qualified::{QUALIFIED_SERVER_BUILD, QUALIFIED_SERVER_VERSION};
 use crate::{
     BoundedPointReadback, BridgeError, BridgeLimits, BridgeMutation, CandidateNomination,
     CollectionRoute, CollectionSchema, EligibilityFilter, ExactCount, MutationReceipt,
@@ -71,8 +70,8 @@ use crate::{
 };
 
 /// gRPC canonical status numbers (`google.rpc.Code`), matched without a
-/// `tonic` dependency: only the stable numeric values travel across the
-/// crate boundary, never vendor status text.
+/// `tonic` dependency: only the stable numeric values travel across the crate
+/// boundary, never vendor status text.
 const CODE_INVALID_ARGUMENT: i32 = 3;
 const CODE_NOT_FOUND: i32 = 5;
 const CODE_ALREADY_EXISTS: i32 = 6;
@@ -157,9 +156,6 @@ pub struct ScrollPage {
     pub next_offset: Option<QdrantPointId>,
 }
 
-// Keep vendor translation private and physically separated by responsibility.
-// `include!` preserves the original module namespace and public paths while
-// this no-behavior-change split awaits the dedicated test pass.
 include!("real/identity.rs");
 include!("real/codec.rs");
 include!("real/filter.rs");
@@ -167,13 +163,12 @@ include!("real/errors_schema.rs");
 
 /// Real Qdrant data plane over the pinned client transport.
 ///
-/// Owns the vendor client opaquely (the type never appears in public
-/// signatures), the schemas it created, and a bounded mutation-identity
-/// ledger for exact replay. There is no fallback to the in-memory oracle.
+/// Owns the vendor client opaquely, the schemas it created, and a bounded
+/// mutation-identity ledger for exact replay. There is no fallback to the
+/// in-memory oracle.
 pub struct RealDataPlane {
     client: Qdrant,
     auth_lease: QdrantApiKeyLease,
-    gate: QualifiedGate,
     limits: BridgeLimits,
     schemas: BTreeMap<String, CollectionSchema>,
     operations: BTreeMap<OpaqueId, MutationReceipt>,

@@ -1,30 +1,12 @@
-# Agent contract — search-index-reclaimer
+# Working on index cleanup
 
-Own only `crates/search-index-qdrant/search-index-reclaimer/`. Do not edit the root workspace, shared
-contracts, architecture or another package. Missing fields use the contract-change process.
+This package is a removal target. Read [FUNCTIONS.md](FUNCTIONS.md) and the
+[publication cleanup rule](../search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup).
+Move only the exact whole-collection deletion/absence helper with its real callers.
 
-The bounded implementation packet is `swarm/assignments/search-index-reclaimer.md`.
+No individual-point physical deletion, point manifests, cleanup cursors, watermarks, receipts or separate
+reclaimer journal in Stage 2/3A or conditional Stage 3B. Closed Stage 3B points remain until whole-generation
+retirement. Local-object GC is separate stopped-root maintenance.
 
-## Ownership
-
-- committed retired-manifest validation
-- epoch/route watermark eligibility
-- exact-ID deletion plans, receipts and resume cursors
-- separation of ordinary reclamation from security purge
-
-## Forbidden ownership
-
-- publication visibility/retirement decisions
-- pin acquisition
-- broad-filter correctness deletion
-- CAS deletion or purge acknowledgement
-- direct vendor adapter dependency
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-epoch-pins`. Deletion executes through an injected
-vendor-neutral index-admin port.
-
-## Size
-
-Target `src/` ≤ 4,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Run minimal check/Clippy for actual publication/bridge/control consumers after code; do not qualify the retired
+framework or preserve its exclusive fixtures.

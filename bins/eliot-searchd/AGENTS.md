@@ -1,32 +1,15 @@
-# Agent contract — eliot-searchd
+# Working on the daemon
 
-Own only `bins/eliot-searchd/`. This is the composition root, not a capability implementation package.
-Do not edit library packages, root workspace, shared fixtures or architecture.
+Read [FUNCTIONS.md](FUNCTIONS.md), the current delivery stage and only affected owner recipes.
+The daemon composes one application: invocation/root, source/object/control, preparation, Qdrant/publication,
+query/evidence and one dispatcher. It does not duplicate those owners' algorithms.
 
-The bounded packet is `swarm/assignments/eliot-searchd.md`.
+Trace current interceptors/callers and remove the displaced route with its consumer. Enabling old wave features
+or adding another dispatcher does not connect the product. Do not build receipts, grants or qualification
+constructors around missing effects. Preserve user data and unpublished #598 work.
 
-## Ownership
+The root recipe alone owns platform finalization; the lexical/bridge recipes own Qdrant profiles and SDK mapping.
+Use execution-only context outside query handling. Follow the implementation lock order.
 
-- progressive dependency injection/startup
-- concrete adapter construction and vendor-neutral port wiring
-- provider server, readiness, drain and shutdown coordination
-- qualified platform observations and stable integration reason mapping
-
-## Forbidden ownership
-
-- capability logic in `main`
-- shared store/vendor clients outside daemon composition
-- concrete adapter edges in query/lifecycle APIs
-- hidden fallback or second data-root owner
-- control-migration schemas, immutable artifact lifecycle or receipt projections
-- revision-object read/write/publication state machines owned by `search-revision-store`
-- preparation/materialization storage state machines owned by `search-materializer`
-- secret protection semantics owned by `search-os-secrets`
-
-## Dependencies
-
-Only accepted packages for the active Cargo feature/wave. Baseline DIRECT owners such as source admission/registry/identity, safe reader, revision store and materializer are mandatory architecture boundaries, not optional acceptance claims. New artifacts require ADR and exact qualification.
-
-## Size
-
-Target `src/` ≤ 6,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+After production changes, run minimal locked Rust 1.98 check/Clippy for affected consumers including the actual
+eliot-searchd binary. Library checks, help and self-test strings do not prove daemon behavior.

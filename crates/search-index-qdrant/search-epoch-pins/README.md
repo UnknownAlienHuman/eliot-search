@@ -1,26 +1,15 @@
-# search-epoch-pins
+# Published-view lifetime
 
-**C17 — Epoch and route pins.**
+Keep the exact physical collection and evidence snapshot used by a request/window alive. Replace the inherited
+raw pin registry with a small private current-view manager; no arbitrary old-view acquisition or renewal API.
 
-**Status:** `SOURCE_PRESENT`; bounded RAII pin, quota, watermark and drain-observation source exists, while canonical publication/reclamation composition and installed qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #126/#210.
+[FUNCTIONS.md](FUNCTIONS.md) owns acquisition and the source cutover.
+[Publication cleanup](../search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup) owns deletion
+eligibility and uncertainty. Last guard drop only wakes it.
 
-Protect active query snapshots and old collection routes in memory without writing ordinary query leases.
+Both Stage 2/3A and conditional Stage 3B use whole-generation cleanup. There is no physical point deletion based
+on sequence, predecessor drain or sampled watermarks. All live guards and targetable unresolved attempts matter.
 
-## Owns
-
-- RAII epoch/route pin registry
-- pin quotas and cancellation release
-- reclamation watermark
-- bounded continuation pin integration
-- route-drain observation
-
-## Must not own
-
-- durable `QueryFenceLease` for normal reads
-- query result storage
-- publication or deletion decisions
-- indefinite pins
-
-- **Delivery wave:** W3 / P07
-- **Soft source-line target:** 4,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Trace real callers, move the small manager into publication/query if appropriate, and remove the old pin,
+continuation-binding and receipt APIs with exclusive fixtures. Historical source details remain in the
+[pre-R055 README](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/crates/search-index-qdrant/search-epoch-pins/README.md).

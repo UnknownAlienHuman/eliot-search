@@ -1,50 +1,70 @@
-# Primary DIRECT development smoke
+# Quickstart status
 
-This uses the primary daemon, not the old snapshot/BM25 program. It is a
-source-backed development smoke, **not a production or Qdrant deployment guide**.
-Rust 1.98.0 is required. Compilation and native tests must pass first.
+There is no verified persistent-product command sequence yet. Do not present constructors, help text, feature
+flags or historical self-tests as a working installation.
 
-```powershell
-cargo +1.98.0 build --release --locked -p eliot-searchd -p eliot-search --bins
-if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+## Existing diagnostic one-shot scan
 
-# Use a fresh disposable data root. Keep source files outside it.
-$DataRoot = Join-Path $env:TEMP ("eliot-smoke-" + [guid]::NewGuid().ToString("N"))
-$Source = Join-Path $env:TEMP ("eliot-source-" + [guid]::NewGuid().ToString("N") + ".txt")
-New-Item -ItemType Directory -Path $DataRoot -ErrorAction Stop | Out-Null
-[System.IO.File]::WriteAllText($Source, "alpha needle omega", [System.Text.UTF8Encoding]::new($false))
-$Daemon = ".\target\release\eliot-searchd.exe"
-
-& $Daemon --index-file $DataRoot $Source
-if ($LASTEXITCODE -ne 0) { throw "Index failed; inspect state before retrying" }
-& $Daemon --search-root $DataRoot needle
-if ($LASTEXITCODE -ne 0) { throw "Search failed" }
-
-# A separate process reopens the retained revision. Live source loss does not
-# silently replace that revision with current-path bytes.
-Remove-Item -LiteralPath $Source -ErrorAction Stop
-& $Daemon --search-root $DataRoot needle
-if ($LASTEXITCODE -ne 0) { throw "Retained revision read failed" }
-```
-
-One-shot commands acquire the data-root owner themselves. Do not run them against
-a root already held by `--serve-data-root` or another daemon. Live root management
-through the final provider protocol remains unfinished.
-
-For the current internal line-protocol service:
+The source contains a narrow exact scan over bytes supplied for one process invocation. The current daemon binary
+and routes have not been compiled or run at the current head, so treat the syntax as an implementation seam:
 
 ```powershell
-& $Daemon --serve-data-root $DataRoot
+$Source = Join-Path $env:TEMP "eliot-scan.txt"
+[System.IO.File]::WriteAllText(
+  $Source,
+  "alpha needle omega",
+  [System.Text.UTF8Encoding]::new($false)
+)
+
+cargo +1.98.0 run --locked -p eliot-searchd -- --scan-file needle $Source
+cargo +1.98.0 run --locked -p eliot-searchd -- --scan-file-ascii-insensitive needle $Source
+Get-Content -Raw $Source |
+  cargo +1.98.0 run --locked -p eliot-searchd -- --scan-stdin needle
 ```
 
-Enter `version`, `health`, or `shutdown`, one per line. This is a diagnostic stdio
-surface, not the final authenticated provider protocol. After a mutation failure
-with `SERVICE_MUTATION_OUTCOME_UNKNOWN`, do not resend the mutation automatically.
-The service exits; investigate and verify storage before restarting. No automated
-repair or rollback is implied.
+Even if successful, this route would not initialize a current root, retain an immutable revision, use Qdrant,
+publish a view or establish the product.
 
-Legacy snapshot and sealed CLIs are no longer runnable Cargo binary/example
-targets. Their regression harnesses remain available via `cargo test --test`,
-including `cargo +1.98.0 test --locked -p eliot-searchd --test eliot-search-sealed-recover`.
-Keep this disposable smoke directory until its results have been inspected; this
-guide deliberately performs no automatic recursive data deletion.
+## First persistent quickstart to implement
+
+[#264](https://github.com/UnknownAlienHuman/eliot-search/issues/264) owns the first executable path. R049 selects
+Qdrant Server/Rust client 1.20.x for the code cut; the repository lock still contains client 1.19.0.
+
+```text
+start/configure one external Qdrant 1.20 server
+→ initialize/open one plain current-format root
+→ explicitly select one supported local file
+→ retain one immutable ObjectRef
+→ install one current SourceRecord
+→ prepare one result
+→ create one fresh never-reused physical collection
+→ create scoring full-text index with explicit code/text processing
+→ insert_only complete points and exact readback
+→ commit evidence/current and install PublishedView
+→ execute one TextQuery
+→ resolve a pinned retained excerpt
+→ render typed CLI output
+```
+
+The first smoke may use one process, one explicit file and one physical collection. It must persist exact
+root/object/source/prepared/view references so the next cut can verify restart without replacing the path.
+
+Foundation must first execute the selected platform publication canary. On Windows, do not use path-based
+`tempfile::persist_noclobber` as the trusted root/object finalizer; use the owner-private handle-based operation and
+record its exact behavior.
+
+After the smoke works:
+
+1. restart/reopen and authoritative startup/explicit/periodic inventory;
+2. complete fresh-generation convergence after edit/removal;
+3. measure build latency, throughput, peak/retained disk and reader pressure for declared corpus classes;
+4. implement point-level incrementality only where those budgets fail;
+5. add literal Exact and one serviced live session;
+6. add stopped-root maintenance and selected optional capabilities.
+
+Encrypted storage, watcher, regex, PDF, MCP, models, overlay, managed Qdrant, custom sharding and Qdrant Edge are
+not prerequisites. Edge may be tested later as an isolated replacement candidate, never as a dual fallback.
+
+Replace this document with executed commands only after the default CLI path works. Record exact SHA, toolchain,
+platform, Qdrant client/server/profile, commands, output and unrun cases in the
+[analysis registry](docs/audit/ANALYSIS_REGISTRY.md#evidence-status).

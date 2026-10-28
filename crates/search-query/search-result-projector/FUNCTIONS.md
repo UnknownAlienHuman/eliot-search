@@ -1,56 +1,57 @@
-# Function contract — `search-result-projector`
+# search-result-projector — source map and deletion boundary
 
-**Status:** W4/P08 bounded result-projection contract; no implementation exists yet.
+## Current API
 
-Only `ValidatedSearchCandidate` values may enter evidence-bearing result fields. Validation gaps,
-failed/omitted legs and stale/security outcomes remain explicit non-evidence coverage records.
+| API/type | Actual behavior |
+|---|---|
+| `project_candidate_set(envelope, inputs, budget)` | Owns a complete `Vec`, re-sorts descending by supplied raw score and candidate ID, then applies result/source-byte ceilings after earlier validation/handle work. |
+| `CandidateProjectionInput` | Carries already verified source bytes plus an already minted `SearchSourceHandle` and caller public metadata. |
+| omission/coverage projection | Copies caller coverage and grows one omission record per rejected item. |
+| `verify_handle_target_binding` | Compares supplied IDs only; it reads no handle/window/manifest owner. |
+| callers | Normal product query caller was not found. The indexed process fixture constructs and calls it. |
 
-## Operations
+The package is one 10,337-byte production file. It is downstream of disconnected planner/executor/validator
+and handle systems; preserving its current API would preserve all of them.
 
-### `project_candidate_set(validated, gaps, execution, plan, budget, handle_port, context) -> Result<SearchCandidateSet, ProjectError>`
+## Replacement
 
-Verifies result/plan/snapshot binding, computes truthful coverage, selects bounded handle subjects and
-assembles compact candidate cards. Inputs are already source-backed; the projector performs no vendor
-readback and cannot accept a raw nomination type.
+Final ranking belongs to retrieval/fusion. Evidence lookup belongs to the pinned manifest and immutable
+reader. Query-window lifetime belongs to one `QueryWindow`. Projection receives only final-order verified
+items and remaining output limits:
 
-### `project_recipe_result(recipe, product, context) -> Result<RecipeResultV1, ProjectError>`
+```text
+format_cards(
+  items: &[VerifiedEvidenceItem],
+  gaps: GapSummary,
+  window_items: Option<&[WindowItemRef]>,
+  context: &mut RequestContext,
+) -> BoundedResponse
+```
 
-Constructs exactly the tagged output variant for the normalized v1 recipe. Ambiguous subject results
-cannot coexist with resolved evidence. Exact negative/completeness fields require an accepted exact
-execution report and cannot be inferred from indexed top-k.
+Rules:
 
-### `select_handle_subjects(validated, quotas) -> BoundedList<HandleSubject>`
+1. never reorder `items`;
+2. reserve/charge item and encoded-byte budget before copying excerpts;
+3. include source/revision/representation/location and actual verified excerpt directly;
+4. keep rank/contribution metadata separate from evidence identity;
+5. sample finite gap details and retain aggregate counts;
+6. ordinary ranked top-k remains explicitly non-exhaustive;
+7. output failure does not advance the query-window cursor.
 
-Deterministically recommends normally 2–4 exact source/anchor subjects within grant and result budget.
-It requests opaque handles through `HandleFactoryPort`; it never stores records or expands tokens.
+If these operations are simple response encoding, inline them into the daemon/protocol owner and delete this
+crate.
 
-### `project_coverage(execution, validation, plan) -> Coverage`
+## Delete after caller cutover
 
-Reports candidate scope, freshness, executed/failed/omitted legs, validation gaps and unknowns.
-`complete_scope` is structurally unavailable without exact-plane proof over the authoritative
-denominator.
+- old `SearchCandidateSet` envelope and handle-oriented result family;
+- `CandidatePublicMetadata`, `SearchSourceHandle` input and target-binding helper;
+- raw-score sorting/tie behavior;
+- caller coverage/proof input and per-omission allocation;
+- process fixture pipeline that treats oracle nominations as source-backed evidence;
+- projector-specific compatibility/version adapters and source-shape fixtures.
 
-### `enforce_result_budget(draft, budget) -> Result<ProjectedResult, ProjectError>`
+## Verification
 
-Applies deterministic ordering/truncation by source, candidate, variant, metadata and byte ceilings.
-Every omission is reflected in coverage/reason metadata; no truncation is silent.
-
-### `bind_result(result, plan, emission_permit) -> Result<BoundResult, ProjectError>`
-
-Binds request/plan/snapshot, source-owner, access/live-deny, view, route/epoch and profile identities and
-requires the final emission permit. Restrictive drift rejects or explicitly degrades rather than
-emitting a stale binding.
-
-## Failure and cancellation
-
-Projection is bounded pure work except handle mint requests. Cancellation before final binding emits no
-partial response advertised as complete. Handle mint failure may omit that handle with an explicit
-reason if the recipe permits; it never converts an unvalidated candidate into evidence. Equal inputs
-and quotas produce byte-identical ordering and truncation.
-
-## Required fixtures
-
-Golden compact cards and all eleven tagged results; raw nomination type cannot compile/pass; validation
-gap has no excerpt/handle; full-file/unbounded chunk rejection; deterministic truncation with omission
-receipt; default 2–4 exact handles; handle-factory failure; ambiguity excludes evidence; complete-scope
-overclaim rejection; final security/result fence; no mutable handle state or vendor metadata.
+Check final order preservation, exact item/output ceilings, no retained-source read for unselected items,
+bounded gap details, correct verified excerpt/location and zero query-window cursor advancement on partial or
+failed output.

@@ -1,23 +1,14 @@
-# search-candidate-validator
+# search-candidate-validator — evidence lookup, not a proof owner
 
-**C24 — Candidate Validator.**
+Resolve a ranked hit through the pinned source/evidence table to actual retained bytes or a supported prepared
+representation. Source identity, coordinate domain and failure scope come from those real owners, not echoed
+Qdrant payloads or caller-created verification fields.
 
-**Status:** `SOURCE_PRESENT`; security/membership/overlay and exact revision/anchor validation source exists, while live owner-derived readback composition and installed product qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #125/#127.
+[FUNCTIONS.md](FUNCTIONS.md) contains the inspected API defects and the single resolution recipe, including
+mapped-text coordinates and request cancellation versus candidate-local gaps. [Windowing](../search-continuation/FUNCTIONS.md)
+owns page progress; projection only formats the resulting evidence in its final order.
 
-Validate nominated candidates against live security state and exact source revision/anchor readback through a vendor-neutral port.
-
-## Owns
-
-- security/membership/overlay checks
-- exact revision/anchor verification
-- stale/unreadable rejection
-- replan/gap signal
-
-## Must not own
-
-- vendor payload evidence or client admission
-- concrete revision-store/redb/Qdrant/process adapters
-
-- **Delivery wave:** W4 / P08; hardening W7 / P13
-- **Soft source-line target:** 7,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+The current shared validator still compares public readback metadata and has a raw-slice-only coordinate
+contract. Updating these documents does not connect or fix its Rust implementation. Change actual callers
+with the retained reader; remove the duplicate proof/permit/refill structures and the crate boundary if it
+no longer carries a substantial responsibility. See [AGENTS.md](AGENTS.md).

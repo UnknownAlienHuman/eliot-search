@@ -1,7 +1,7 @@
 //! Exact executable identity: path, size, SHA-256, and version.
 //!
-//! The qualified artifact is pinned by `qualification/qdrant/artifact.toml`
-//! and `docs/runtime/QDRANT_NATIVE_WINDOWS.md`: Qdrant 1.19.0
+//! The optional managed-child expectation is pinned by the constants below and the selected
+//! `docs/runtime/QDRANT_NATIVE_WINDOWS.md` procedure: Qdrant 1.19.0
 //! (`x86_64-pc-windows-msvc`), `84_184_576` bytes, SHA-256
 //! `369C562E…EA9D4`. Every spawn verifies size, streams the SHA-256, and
 //! runs a bounded `--version` probe before the server may start. Any

@@ -1,28 +1,12 @@
-# Agent contract — search-retention
+# Maintenance implementation notes
 
-Own only `crates/search-runtime/search-retention/`. Do not edit another package, root workspace, shared
-contracts or architecture. Missing fields use the contract-change process.
+This is a documentation-only directory. The old retention crate, lifecycle implementation and Cargo/feature
+entries are removed. Do not add a new package, compatibility API or placeholder state machine here.
 
-The bounded packet is `swarm/assignments/search-retention.md`.
+[FUNCTIONS.md](FUNCTIONS.md) owns the selected offline collection/archive/import behavior. Implement it through
+the actual store/control owners; [publication](../../search-index-qdrant/search-publication/FUNCTIONS.md) owns
+live Qdrant cleanup. Deletion of the old platform is not evidence that these operations exist.
 
-## Ownership
-
-- CAS retention roots/mark/sweep policy
-- monotonic purge/tombstone/receipt semantics
-- restore revalidation/quarantine
-- lifecycle invalidation requests
-
-## Forbidden ownership
-
-- ordinary index reclaim or handle storage/authorization
-- concrete redb/revision-store/Qdrant/process dependencies
-- physical secure-erasure overclaims
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-epoch-pins`, `search-index-reclaimer`, `search-handles`.
-Concrete control/object/index operations arrive through ports.
-
-## Size
-
-Target `src/` ≤ 7,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Preserve original files, archives and sole retained copies. Run minimal pinned check/Clippy on changed production
+owners and immediate consumers when implementing them. Record unavailable execution honestly; do not turn an
+old library check, source inspection or archive marker into runtime qualification.

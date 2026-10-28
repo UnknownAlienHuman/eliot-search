@@ -1,130 +1,226 @@
-# ELIOT Search: Deep Architectural & Code Audit and Mandatory Remediation Plan (2026-10-17)
+# ELIOT Search — distilled architecture and code audit
 
-**Audited against:**
-- Normative Architecture: `docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md` (Parts I–IV, Part I SHA-256 `ae4c18ccff256ce4d5fdf91dfd9041236ff6f332b611bae3bd748c2da8ac6a1c`)
-- Accepted ADRs: `0001` through `0006` (specifically `ADR 0005` Standalone Product Boundary and `ADR 0006` Agent Analysis Framework)
-- Source bases inspected: local freeze `5d0435a5` and live `origin/main` `239c5723` (after PR #609)
-- Status: **CRITICAL REMEDIATION REQUIRED — STOP META-WORK AND FIX THE PRODUCT SPINE**
+**Source baseline:** `c8e38b6fc9829f1cd38070773b1b3e5b21de18ad`.
+**Replacement documentation rechecked:** `de06d75e534b912bdff70e84fa4bcb53d1d91a42`, 2026-10-21.
+Static evidence and design review only. No exhaustive, build, native or runtime qualification claim.
 
----
+This report records reasons and counterexamples, not a second implementation specification. The
+[manifesto](../architecture/README.md) and [implementation](../implementation/README.md) direct the work.
+The [coverage record](AUDIT_COVERAGE_AND_DOCUMENTATION_MAP_2026-10-21.md) states limits, not permission to code.
+The [previous full report](https://github.com/UnknownAlienHuman/eliot-search/blob/8106347f18cf9b8ccc9e6ab9041efd2878ee82d3/docs/audit/ARCHITECTURAL_AND_CODE_AUDIT_2026-10-17.md)
+remains in Git; its copied algorithms are superseded, notably online ObjectGcGate collection.
 
-## 1. Резюме для владельца проекта (RU)
+## 1. Executive conclusion
 
-После полной вычитки всех 4 частей [`ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md`](../architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md), всех ADR (`0001`–`0006`) и построчной проверки кода в `crates/**` и `bins/eliot-searchd/**` (включая актуальный `origin/main` `239c5723` после 609 пулл-реквестов) установлено следующее:
+The primary defect is disconnected and overlapping ownership, not too few lines or insufficient proof types.
+Source retention, preparation, Qdrant, evidence and the real CLI must form one application. A fake grant,
+receipt, capability or adapter does not connect a missing producer.
 
-1. **Демон `eliot-searchd` (~82,6 тыс. строк кода) до сих пор не подключён к Qdrant и реальному поисковому пайплайну.**
-   - В [`bins/eliot-searchd/Cargo.toml`](../../bins/eliot-searchd/Cargo.toml) по умолчанию включён только `default = ["wave1-shell"]` — крейты Qdrant (`search-qdrant-bridge`, `search-qdrant-supervisor`, `search-projection-planner`, `search-point-identity`, `search-publication`), поиска (`search-access`, `search-query-planner`, `search-retrieval-executor`, `search-candidate-validator`) и жизненного цикла даже не входят в дефолтную сборку бинарника.
-   - В точке входа [`bins/eliot-searchd/src/entry.rs`](../../bins/eliot-searchd/src/entry.rs) модули `publication_composition`, `query_composition`, `rebuild_composition`, `restore_composition`, `git_source_composition` и 7 модулей `sealed_*` заглушены атрибутом `#[allow(dead_code)]` и **не вызываются из `main()`**.
-   - Внутри `bins/eliot-searchd/Cargo.toml` лежат 7 устаревших бинарников (`src/main.rs` и 6 файлов `src/bin/eliot-search-sealed-*.rs`), замаскированных под `[[test]]`-таргеты с комментарием `# Legacy implementations are harness-only. Their CLI main is never run.`
-2. **Прямое нарушение главного инварианта `INV-01` (никаких локальных поисковых индексов кроме Qdrant):**
-   - В [`bins/eliot-searchd/src/lexical/`](../../bins/eliot-searchd/src/lexical/mod.rs) агенты написали собственный in-memory инвертированный индекс (`postings: BTreeMap<String, Vec<Posting>>` на 8 млн постингов) с собственным расчётом `BM25` и захардкоженным фейковым дайджестом `[0x6c; 32]` (`FINGERPRINT_ALGORITHM = "eliot-fnv4-v1"`).
-3. **Фальшивая криптография (`Blake3Digest32` через 4-полосный `FNV-1a`) и сломанная идентификация точек S11:**
-   - В 8+ крейтах/модулях (включая [`search-access`](../../crates/search-query/search-access/src/lib.rs), [`search-eval`](../../crates/search-eval/src/fingerprint.rs), [`search-index-reclaimer`](../../crates/search-index-qdrant/search-index-reclaimer/src/plan.rs), [`search-lexical`](../../crates/search-lexical/src/sparse/fingerprint.rs), [`search-retention`](../../crates/search-runtime/search-retention/src/sweep.rs), [`search-source-records`](../../crates/search-source/search-source-records/src/membership.rs), [`search-source-registry`](../../crates/search-source/search-source-registry/src/view.rs), [`eliot-searchd/src/snapshot`](../../bins/eliot-searchd/src/snapshot/kernel/fingerprint.rs)) в тип [`Blake3Digest32`](../../crates/search-contracts/src/canonical.rs) (32-байтный криптографический `BLAKE3-256`) записывается самодельный 4-полосный 64-битный некриптографический хеш `FNV-1a` (`0xcbf2_9ce4_8422_2325`). В `search-access::derive_predicate_digest` поля склеиваются без длин и разделителей, что даёт тривиальные коллизии предикатов безопасности (`"abcd" + "ef" == "abcdef"`).
-   - В [`crates/search-index-qdrant/search-point-identity/src/lib.rs`](../../crates/search-index-qdrant/search-point-identity/src/lib.rs) до сих пор активен 16-байтный `pub struct PointIdentityDigest([u8; 16])` на базе `FNV+SplitMix64` (вместо 32-байтного `BLAKE3-256` по **S11.2**), включающий `ProjectionKind` в ключ точки (запрещено **S11.1 / A-29 / H18**) и копирующий те же 16 байт в `derive_qdrant_uuid`, из-за чего обнаружение коллизий UUID математически невозможно.
-   - Вместо того чтобы исправить фейковые дайджесты в коде, агенты сгенерировали в репозитории **72 002-строчный JSON-файл исключений** [`xtask/canonical-digest-ledger.json`](../../xtask/canonical-digest-ledger.json) (**3,57 МБ!**), легализующий каждый фейковый хеш и тестовую заглушку ссылкой на открытый тикет.
-4. **Дыры безопасности и фейковые квитанции в продакшн-коде `src/`:**
-   - Тавтологическая проверка `admitted_root` в [`bins/eliot-searchd/src/direct_store/store.rs`](../../bins/eliot-searchd/src/direct_store/store.rs): `read_file_snapshot` передаёт `absolute.parent()` в качестве «допущенного корня» для самого файла `absolute`.
-   - В [`bins/eliot-searchd/src/safe_reader_adapter/kernel/backend.rs`](../../bins/eliot-searchd/src/safe_reader_adapter/kernel/backend.rs) захардкожен `ReadSecurityDisposition::Permitted`, в `read.rs` — барьер `NonZeroRevision::new(1)`, а в `identity.rs` на Windows корень идентифицируется по байтам пути (и при ошибке `native_file::observe` файл молча откатывается на путь с `is_hardlink = false`).
-   - В [`bins/eliot-searchd/src/secret_composition/kernel/revocation.rs`](../../bins/eliot-searchd/src/secret_composition/kernel/revocation.rs) продакшн-метод `confirm_absent_delete` фабрикует квитанцию хранилища секретов из константы `Blake3Digest32::from_bytes([0xA5; 32])`.
-   - В продакшн-модулях `src/` без `#[cfg(test)]` лежат `pub struct FakeGuards` (`[0xA1; 32]`) и `pub fn build_test_export()` (`[0xC1; 32]`), а также 3 ручные реализации `SHA-256` (`0x428a_2f98`).
+The audit itself repeated this failure when it copied algorithms into reports/issues, declared closure from
+package dispositions, and removed useful failure/lifetime requirements together with obsolete machinery.
+Deleting a complex mechanism is correct only if its necessary observable behavior has a smaller owner or an
+explicitly stated unsupported case. A one-file milestone does not replace the product's original goals.
 
----
+## 2. Measured baseline
 
-## 2. Why Development Stalled After 600+ PRs (Root-Cause Analysis for Agents)
+These are prior measurements at the inspected baseline, not a new recount or promised net deletion:
 
-1. **Hyper-fragmentation without spine integration:** Splitting the workspace into 48 micro-crates caused isolated agents to build self-contained in-memory state machines and mock receipt tokens inside each crate without ever wiring the end-to-end daemon spine (`ingest → prepare → redb → Qdrant → retrieve → validate → serve`).
-2. **Process rules that penalized deleting broken legacy code:** Previous execution rules restricted each slice to a single primary owner and forbade deleting "legacy APIs" until a future cutover issue. As a result, when agents implemented real S11 point identity (`search_point_identity::s11`) or real `blake3` helpers, they left the broken 16-byte FNV `PointIdentityDigest([u8; 16])` and 4-lane FNV-1a functions alive in the same crates.
-3. **Exemption-ledger bureaucracy instead of code repair:** Instead of replacing 8 occurrences of 4-lane FNV-1a and 3 hand-rolled SHA-256 modules with `blake3` / `sha2`, agents built `xtask/src/canonical_digest_guard` and a **3.57 MB (`72,002`-line) exemption ledger** (`xtask/canonical-digest-ledger.json`) plus **2.5+ MB of TOML coverage maps** in `swarm/coverage/**` to excuse every violation.
-4. **Dumping prototypes into `bins/eliot-searchd`:** Instead of replacing the early prototype stores, `bins/eliot-searchd` accumulated 7 legacy test-harness binaries (`src/main.rs`, `src/bin/eliot-search-sealed-*.rs`), three parallel local stores (`direct_store`, `plaintext_direct_store`, `sealed_store`), an illegal in-memory BM25 inverted index (`src/lexical/`), and `#[allow(dead_code)]` composition facades.
+| Family | Inventory |
+|---|---:|
+| Workspace | 52 members |
+| Tracked Rust | 1,593 files / 393,383 physical lines, including tests/comments/blanks |
+| Daemon Rust | 604 files / 122,212 physical lines |
+| Test-named Rust outside xtask | 359 files / 101,276 physical lines |
+| xtask | 123 Rust files / 23,823 physical lines |
+| Digest ledger | 3,572,618 bytes / 5,960 sites |
+| swarm coverage | 205 files / 152,921 lines |
 
----
+Gross families: source admission/history/registry >1.22 MiB; root/composition about 553.6 KiB; query proof/host
+>300 KiB; protocol stacks >500 KiB plus contracts about 486 KiB. These figures do not establish how much
+correct production behavior can be deleted. Receiving owners and actual callers decide that.
 
-## 3. Verified Code-Level Defects That Must Be Eliminated
+## 3. Product topology and entrypoints
 
-### Defect Class A — Unwired Daemon Spine & Dead Code in `bins/eliot-searchd`
+The baseline has overlapping DIRECT/native/migration/shell services, feature ladders and harness binaries.
+The real Qdrant plane is not the normal daemon query path; process fixtures use an oracle or manually join
+halves of the product. CLI provider DTOs can still become legacy tab/hex commands.
 
-| Location | Verified Defect | Required Fix |
-| :--- | :--- | :--- |
-| `bins/eliot-searchd/Cargo.toml` | `default = ["wave1-shell"]` omits `wave3-index` (Qdrant), `wave4-query`, `wave5-current`, `wave6-proof`, `wave7-lifecycle`. | Make `full-baseline` the default feature set; remove artificial wave feature gates once wired. |
-| `bins/eliot-searchd/src/entry.rs` | `publication_composition`, `query_composition`, `rebuild_composition`, `restore_composition`, `git_source_composition`, and `sealed_*` are marked `#[allow(dead_code)]` and have **0 callers** from `main()`. | Wire `entry.rs::main()` to the canonical provider service and real Qdrant/redb spine; remove `#![allow(dead_code)]` / `#[allow(dead_code)]` blankets. |
-| `bins/eliot-searchd/Cargo.toml` (`[[test]]` targets) & `src/main.rs`, `src/bin/eliot-search-sealed-*.rs` | 7 obsolete binaries (`eliot-search-snapshotd` and 6 `eliot-search-sealed-*` binaries) are kept inside `bins/eliot-searchd` as fake `[[test]]` targets. | Delete `src/main.rs`, `src/bin/eliot-search-sealed-*.rs`, `src/sealed_*`, `src/snapshot/`, and `src/control_store/` once their test coverage is served by real crate/spine tests. |
-| `bins/eliot-searchd/src/lexical/` (`mod.rs`, `build.rs`, `manifest.rs`, `search.rs`) | Custom in-memory inverted index (`postings: BTreeMap<String, Vec<Posting>>`) and custom BM25 scorer with hardcoded `Blake3Digest32::from_bytes([0x6c; 32])` and `eliot-fnv4-v1`. Directly violates **INV-01** (`Qdrant is the only indexed/search database`). | Delete `bins/eliot-searchd/src/lexical/` completely. All lexical indexing/retrieval must go through `search-lexical` + `search-qdrant-bridge`. |
+Source/caller maps: [daemon](../../bins/eliot-searchd/FUNCTIONS.md), [CLI](../../bins/eliot-search/FUNCTIONS.md).
+Do not treat removal of cfg(test), changing a default feature or passing constructor fixtures as integration.
 
-### Defect Class B — Fake `Blake3Digest32` (4-Lane FNV-1a) & Hand-Rolled SHA-256
+## 4. Root, configuration and current control state
 
-Every site below stuffs a non-cryptographic 64-bit FNV-1a (`0xcbf2_9ce4_8422_2325`) or fixed bytes into `Blake3Digest32`, or reimplements SHA-256 (`0x428a_2f98`) by hand:
+A real process lock is wrapped by epochs, slots, succession and receipts. Configuration activation can
+reject a valid startup override without a live-apply receipt. The control journal retains completed
+operations, reconstructs full snapshots and restores original registry inputs before small mutations.
 
-1. `crates/search-query/search-access/src/lib.rs` (`derive_predicate_digest`): Uses 4-lane FNV-1a and mixes variable-length strings (`collection_alias`, `namespace_id`, `membership_ids`, `partition_ids`) without length prefixes or delimiters, allowing trivial multi-field collisions (`"abcd" + "ef" == "abcdef"`). **Must use `blake3::Hasher` with explicit length-prefixed framing or canonical CBOR.**
-2. `crates/search-eval/src/fingerprint.rs`: 4-lane FNV-1a returning `Blake3Digest32`. **Replace with real `blake3`.**
-3. `crates/search-index-qdrant/search-index-reclaimer/src/plan.rs`: 4-lane FNV-1a returning `Blake3Digest32`. **Replace with real `blake3`.**
-4. `crates/search-lexical/src/sparse/fingerprint.rs` & `mapping.rs`: 4-lane FNV-1a returning `Blake3Digest32`. **Replace with real `blake3`.**
-5. `crates/search-runtime/search-retention/src/sweep.rs` (`digest_bytes`): 4-lane FNV-1a returning `Blake3Digest32`. **Replace with real `blake3`.**
-6. `crates/search-source/search-source-records/src/membership.rs` & `crates/search-source/search-source-registry/src/view.rs`: FNV-1a digest computation. **Replace with real `blake3`.**
-7. `bins/eliot-searchd/src/sha256.rs`, `bins/eliot-search-doc-worker/src/sha256.rs`, `crates/search-index-qdrant/search-qdrant-supervisor/src/sha256.rs`: Hand-rolled SHA-256 (`0x428a_2f98`). **Replace with workspace `sha2` or `blake3` as required by the contract.**
+Current recipes: [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md),
+[config](../../crates/search-config/FUNCTIONS.md), [control](../../crates/search-control-redb/FUNCTIONS.md).
+They must retain actual exclusion/transaction semantics, not the obsolete authority vocabulary.
 
-### Defect Class C — Broken Legacy S11 Point Identity Still Exported in `search-point-identity`
+## 5. Source acquisition, identity and reconciliation
 
-In `crates/search-index-qdrant/search-point-identity/src/lib.rs`:
-- `pub struct PointIdentityDigest([u8; 16])` (line 356) is 16 bytes instead of 32 bytes (`PointIdentityDigest(pub [u8; 32])` in Architecture S11.2 / line 2341), computed via 128-bit FNV+SplitMix64 (`frozen_digest_128`).
-- `ProjectionPointKey` includes `ProjectionKind` (`Lexical`, `ExactMetadata`, `CodeStructure`, `ModelDerived`), violating **S11.1, A-29, and H18** (one unit = one Qdrant point with named vectors).
-- `derive_qdrant_uuid(digest)` returns `PointId128::from_bytes(digest.0)` — making the 128-bit UUID and the "digest" identical 16-byte arrays so collision detection in `PointCollisionLedger` can never trigger for derived IDs.
-- **Required Fix:** Cut over all callers (`search-projection-planner`, `search-publication`, `eliot-searchd`) to the stateless canonical CBOR + 32-byte `BLAKE3-256` S11 implementation and **delete** the 16-byte FNV types and `ProjectionKind` key from `search-point-identity`.
+The baseline acquisition reads/hashes/classifies bytes but does not hand the body to retention. Sync can end
+in `SOURCE_ROOT_SYNC_EFFECTS_UNAVAILABLE`. Receipt/provenance/history packages do not compensate for that gap.
+Watcher hints are not complete inventories, and editor move/remove events are not definitive retirement.
 
-### Defect Class D — Security Bypass, Tautological Containment & Fake Production Receipts
+The replacement's head-commit -> queue arrow also omitted crash recovery and stale-worker completion.
+[Preparation](../../crates/search-prep/search-materializer/FUNCTIONS.md) now derives outstanding work from
+current inputs/outcomes and conditionally installs only a still-current result. This is a design correction,
+not a reproduced queue failure in the unimplemented new path.
 
-1. **Tautological root containment in `bins/eliot-searchd/src/direct_store/store.rs` (`read_file_snapshot`):**
-   Computes `let parent = absolute.parent()` and passes `parent` as `admitted_root_hint` to `safe_reader_adapter::read_full_file_via_kernel(&absolute, parent, max_bytes)`. Proving a file is inside its own immediate parent directory is a tautology and provides zero containment against an admitted corpus/workspace root. **Must pass the actual registered/admitted source root from the authoritative registry.**
-2. **Hardcoded security disposition and path-fallback identity in `bins/eliot-searchd/src/safe_reader_adapter/kernel/`:**
-   - `backend.rs` (`SafeReadBackend::inspect`) hardcodes `security_disposition: ReadSecurityDisposition::Permitted`.
-   - `read.rs` (`barrier()`) hardcodes `NonZeroRevision::new(1)`.
-   - `identity.rs` (`root_identity_material` on Windows) uses `path_identity_bytes(canonical_root)` instead of native volume/file identity, and `handle_identity_material` silently falls back to path bytes with `is_hardlink = false` when `native_file::observe` fails.
-3. **Fabricated secret-deletion receipt in `bins/eliot-searchd/src/secret_composition/kernel/revocation.rs`:**
-   `confirm_absent_delete` mints `VaultWriteEvidence::receipt_for(Blake3Digest32::from_bytes([0xA5; 32]))?`. **Must derive the receipt from actual OS vault post-delete readback state, never a fixed byte constant.**
-4. **Zero profile digest fallback in `bins/eliot-searchd/src/access_composition/grant_authority/admission.rs`:**
-   `compile_standalone_pre_retrieval` uses `Blake3Digest32::from_bytes([0_u8; 32])` when `overlap_proof` is `None`. **Delete the unqualified wrapper; require an explicit published profile digest.**
-5. **Test fixtures in production `src/`:**
-   Move `FakeGuards` (`bins/eliot-searchd/src/publication_composition/kernel/guards.rs`) and `build_test_export` (`bins/eliot-searchd/src/restore_composition/kernel/fixture.rs`) behind `#[cfg(test)]` or into `tests/`.
+## 6. Immutable objects and storage protection
 
----
+Revision store and materializer duplicate staging/sync/finalization/readback. Windows directory-sync success
+can mask a no-op. Final readback does not demonstrate sudden-power-loss durability.
 
-## 4. Mandatory Rules for All Agents (Effective Immediately)
+Keep one [object owner](../../crates/search-source/search-revision-store/FUNCTIONS.md). Plain storage needs
+no key platform. Removing six-domain/purge/receipt machinery does not waive the actual selected encryption
+algorithm's nonce and binding rules. Private #598 code remains outside this audit; only its public contract
+was read. Do not adopt that old programme or claim its implementation was verified.
 
-All agents and managers working in `eliot-search` must obey these 6 engineering rules:
+## 7. Preparation and incremental identity
 
-1. **NO FAKE CRYPTOGRAPHY OR SYNTHETIC DIGESTS:**
-   Never write FNV-1a (`0xcbf2_9ce4_8422_2325`), SplitMix64, XOR-folding, or hand-rolled SHA-256 (`0x428a_2f98`). Never construct `Blake3Digest32` from non-BLAKE3 output or repeated byte constants (`[0; 32]`, `[0xA5; 32]`, `[0xA1; 32]`, `[0x6c; 32]`). Add `blake3.workspace = true` (or `sha2.workspace = true`) to the package's `Cargo.toml` and compute real domain-separated hashes with length-prefixed fields or canonical CBOR.
-2. **SHRINK AND DELETE `xtask/canonical-digest-ledger.json` — NEVER ADD TO IT:**
-   Adding an exemption to `xtask/canonical-digest-ledger.json` is forbidden. Every touch to a crate with ledger exemptions must fix the underlying fake digest/receipt and remove its ledger entries.
-3. **CUT OVER AND DELETE LEGACY DUPLICATES IN ONE SLICE:**
-   Do not leave broken legacy types (`PointIdentityDigest([u8; 16])`, `ProjectionKind` in point keys, `src/lexical`, `src/snapshot`, `sealed_*`, `src/main.rs`) sitting next to their replacements. Cross-package slices that update a crate and its immediate reverse consumers in order to **delete** the legacy implementation are explicitly authorized and required.
-4. **NO DEAD-CODE FACADES IN `eliot-searchd`:**
-   Do not add `#[allow(dead_code)]` modules to `bins/eliot-searchd`. Every composition module in `eliot-searchd` must be reachable from `src/entry.rs::main()` under default features (`full-baseline`).
-5. **NO TAUGHT-TO-THE-TEST OR TAUTOLOGICAL SECURITY GUARDS:**
-   Never pass `path.parent()` as `admitted_root`. Never hardcode `ReadSecurityDisposition::Permitted` or `[0xA5; 32]` receipts in production code. Keep `Fake*` / `build_test_*` helpers strictly inside `#[cfg(test)]` or `tests/`.
-6. **REAL COMPILER AND END-TO-END SPINE VERIFICATION:**
-   Every slice must compile cleanly under `cargo +1.98.0 check --locked --all-features` and `cargo +1.98.0 clippy --locked --all-features -- -D warnings` for all modified crates and `eliot-searchd`, and execute the relevant unit/integration tests.
+Adjacent Markdown/JATS stages can repeat full materialization; buffers/manifests are copied and encoded
+repeatedly. Revision/absolute offsets/ordinal in UnitId and S11 v1 amplify a local edit into point churn.
 
----
+Current [unit matching](../../crates/search-prep/search-unitizer/FUNCTIONS.md) conservatively reuses only
+unambiguous matches. Duplicate ordinal is not continuity. Content/model-input reuse and occurrence birth
+are separate. Exact evidence comes from the published snapshot, not a guessed stable location.
 
-## 5. Concrete 4-Phase Remediation Execution Plan
+The baseline [projection check](../../crates/search-index-qdrant/search-projection-planner/src/plan.rs)
+rejects an empty UnitSet; [manifest validation](../../crates/search-index-qdrant/search-projection-planner/src/manifest_read.rs)
+also rejects an empty manifest. A rewrite must explicitly support successful zero-unit input without
+converting failed/unsupported extraction into empty success. Supported mapped/lossy representations remain
+usable with coordinates/gaps; they do not prove raw-source completeness.
 
-### Phase 1 — Eliminate All Fake Digests, Hand-Rolled Crypto & Legacy S11 Types
-1. Add `blake3.workspace = true` to `search-access`, `search-eval`, `search-index-reclaimer`, `search-lexical`, `search-retention`, `search-source-records`, and `search-source-registry`; replace every 4-lane FNV-1a (`0xcbf2_9ce4_8422_2325`) with real domain-separated `blake3::Hasher` (using length-prefixed inputs or canonical CBOR).
-2. Replace the 3 remaining hand-rolled `sha256.rs` modules (`eliot-searchd`, `eliot-search-doc-worker`, `search-qdrant-supervisor`) with the workspace `sha2` crate.
-3. Cut over `search-projection-planner`, `search-publication`, and `eliot-searchd` to canonical 32-byte BLAKE3 S11 point identity (`PointIdentityDigest([u8; 32])`, no `ProjectionKind` in `ProjectionPointKey`), and delete the 16-byte FNV types from `search-point-identity`.
-4. Remove the resolved exemptions from `xtask/canonical-digest-ledger.json`.
+## 8. Qdrant bridge and lexical search
 
-### Phase 2 — Purge Legacy Prototypes & Fix Security Holes in `bins/eliot-searchd`
-1. Delete the illegal in-memory BM25 inverted index (`bins/eliot-searchd/src/lexical/`), legacy `src/snapshot/`, `src/main.rs`, `src/bin/eliot-search-sealed-*.rs`, and unused `src/sealed_*` modules.
-2. Move `FakeGuards` (`publication_composition/kernel/guards.rs`) and `build_test_export` (`restore_composition/kernel/fixture.rs`) out of production `src/` into `#[cfg(test)]` / `tests/`.
-3. Fix `secret_composition/kernel/revocation.rs` (`confirm_absent_delete`) to require real vault post-delete verification instead of `[0xA5; 32]`, and remove the `[0_u8; 32]` profile-digest fallback in `access_composition/grant_authority/admission.rs`.
-4. Fix `safe_reader_adapter` and its callers so `admitted_root` is always an authoritative registered source root (never `path.parent()`), Windows root identity uses native volume/file identity (`GetFileInformationByHandle` / `FILE_ID_INFO`), and live security barriers are enforced.
+The existing real SDK path is burdened by qualification/auth equality records, process-local replay receipts,
+relative deadlines, fixed schema floors and echoed evidence digests. Full upsert versus narrow mutation and
+payload merge versus overwrite have different semantics.
 
-### Phase 3 — Wire the Real Product Spine in `bins/eliot-searchd`
-1. Set `default = ["full-baseline"]` in `bins/eliot-searchd/Cargo.toml` and remove `#![allow(dead_code)]` / `#[allow(dead_code)]` from `src/entry.rs`.
-2. Connect `src/entry.rs::main()` so the standalone daemon starts `search-runtime-owner` + `search-control-redb` + `search-qdrant-supervisor`/`search-qdrant-bridge`, serves canonical local IPC via `provider_composition`, ingests admitted roots through `search-source-admission` → `search-safe-reader` → `search-materializer` → `search-unitizer`, projects and publishes generations to Qdrant via `projection_composition` + `publication_composition`, and executes queries via `access_composition` + `query_composition` + `search-candidate-validator` (with mandatory exact retained-source readback).
-3. Prove the end-to-end spine with an automated integration test: `real source file → durable redb control state → Qdrant point upsert & generation alias publication → lexical/structural query → exact source readback validation → citation/handle expansion`.
+The [bridge recipe](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) uses concrete Qdrant
+behavior and actual readback. Native BM25/IDF/fusion are donor mechanisms, not proof that runtime integration,
+quality or scale has been measured. Partial expected batch progress must not be classified as corruption.
+The latest review also distinguishes native generated-vector readback from known-input vector equality;
+see section 18. An SDK's ability to update payload/vectors is not permission to alter a published view.
 
-### Phase 4 — Product Contract v2 (#213) & Repository Cleanup (#214)
-1. Complete removal of residual swarm/coverage TOML bloat (`swarm/coverage/**`, `xtask/canonical-digest-ledger.json`).
-2. Implement the versioned `v2` agent-analysis contract (#213 / ADR 0006): `CorpusId` / `PortfolioId` / `WorkspaceId` scope orientation, free-text lexical retrieval over Qdrant sparse vectors + filtered IDF, symbol/relation navigation (`search-code-enricher` / `search-subject-resolver`), and cross-repository comparison (`search-comparator`) with lineage deduplication.
+## 9. Publication, view lifetime and cleanup
+
+Three old publication machines hold labels/receipts rather than one real apply/commit path. Raw old-view
+acquisition and sampled watermarks can race cleanup. Waiting only for the immediate predecessor misses an
+earlier live view.
+
+[Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md) owns effect order and
+snapshot-backed evidence. [Stopped-root collection](../../crates/search-runtime/search-retention/FUNCTIONS.md)
+replaces the rejected online full-root scan per deletion page. This report no longer repeats either
+algorithm. Old redb readers, offline maintenance downtime and scratch disk remain explicit costs.
+Reader lifetime is only half the condition: an unresolved writer can recreate retired state after a readback
+or deletion. Section 18 records why our simplified recovery previously failed to account for it.
+
+## 10. Query, evidence and paging
+
+Baseline defects include leg-prefixed identity, projector raw-score resorting, digest fields echoed beside
+unverified bytes, whole-catalog fences per page, prefix rescans, arbitrary revision-range handles and exact
+count applied to non-exhaustive top-k.
+
+Use [query](../../crates/search-query/README.md) and [window](../../crates/search-query/search-continuation/FUNCTIONS.md)
+recipes. A valid empty published inventory is different from unavailable backend, failed build or incomplete
+source coverage. Top-k never proves absence; exact negative evidence requires its stated evaluated inventory.
+
+## 11. Protocol, client and CLI
+
+The old stack duplicates paired/manual-JSON/recipe/provider and line protocols. Our replacement initially
+closed the child while returning live locators, blocked the Cancel reader, confused request deadline with
+window TTL, and treated local flush as peer receipt. These were defects in the new instructions.
+
+The [protocol map](../../crates/search-provider-protocol/FUNCTIONS.md) now owns these semantics. The actual
+[deadline adapter](../../bins/eliot-searchd/src/public_runtime_service/kernel/output_deadline.rs) explicitly
+cannot interrupt a blocked write. Capped allocation and real cancellation must be implemented, not asserted
+by a wrapper name.
+
+## 12. Shared contracts, ports and domain
+
+Shared contracts catalogued planned recipes, grants, lifecycles and vendor-like schemas. Global ports added
+23 traits and about 80 operations, often with fixture implementations only. Domain rules drifted from their
+real owners. See [contracts](../../crates/search-contracts/README.md) and the
+[workspace disposition](WORKSPACE_MEMBER_DISPOSITION_2026-10-21.md).
+
+Package labels/pseudocode are not instructions to generate a trait/service per noun or to rewrite healthy
+code. A useful isolated dependency/effect may justify a boundary; a dead test or hypothetical backend does not.
+
+## 13. Tests, tooling and generated governance
+
+Maps, digest approvals, P00 tickets, frozen package counts and module-shape tests preserve the discarded
+architecture. See [tooling disposition](../../tools/README.md) and [test cutover](../implementation/TEST_CUTOVER.md).
+Preserve causal scenarios, not obsolete source spelling. No audit form, per-file stamp or new acceptance
+registry is introduced by this review.
+
+## 14. Optional features and donors
+
+Refusal workers and disconnected overlay/code-intelligence/evaluation frameworks are not capabilities.
+Their deletion does not cancel navigation/comparison/documents/large-corpus goals. Keep a goal, a selected
+concrete seam and honest gaps, not empty packages for every future feature.
+
+The [donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md) records concrete versions/mechanisms, not an
+exhaustive market survey. Standard libraries replace machinery, not source meaning, restore isolation or
+correct liveness. RustCrypto's nonce requirement is checked against
+[aes-gcm 0.10.3 usage](https://docs.rs/aes-gcm/0.10.3/aes_gcm/#usage), not a claim of a dependency upgrade.
+Qdrant checks in section 18 use the project's 1.19.0 source and official API documentation fetched 2026-10-21;
+no vendor upgrade or live-server experiment was performed.
+
+## 15. Implementation order
+
+The [implementation guide](../implementation/README.md) owns dependency order. There is no second queue here.
+Protect real private #598 overlap; independent work need not wait for its old programme. Remove replaced
+code/docs/tests with actual consumers and run minimal compiler/Clippy after code.
+
+## 16. What this audit does not prove
+
+No full-line or complete-file review, private #598 inspection, build, Windows durability, live Qdrant,
+crash/recovery run, performance result or exhaustive contradiction sweep is claimed. A table of package
+outcomes is not proof of correctness. Each below counterexample still needs a causal implementation check.
+
+## 17. Old requirements versus mistakes in the replacement
+
+| Evidence inspected in the preceding pass | Replacement defect / counterexample | Useful requirement retained without the old framework |
+|---|---|---|
+| Old [S28.1/S28.2](https://github.com/UnknownAlienHuman/eliot-search/blob/c8e38b6fc9829f1cd38070773b1b3e5b21de18ad/docs/architecture/ELIOT_SEARCH_8.4_IMPLEMENTATION_MASTER.md#s281-rebuildability-first); restore `kernel/lifecycle.rs`; #244 at 2026-10-21 | A copied root is reopened normally while its pending/cleanup still names the original collection. Two different local locks do not isolate that collection. | Explicit archive/import creates a fresh destination generation and never replays copied external work. Original retained evidence remains intact. No paired-snapshot or quarantine service. |
+| Public #598 deterministic AES-GCM counter contract; RustCrypto algorithm requirement | Same-user access to a copied key is mistaken for permission to resume a copied/rolled-back nonce counter. | Readability and writable continuity are separate. No same-key/counter writable fork; require supported independent destination key state or explicit unsupported restore. Private implementation untouched. |
+| #270's committed head then enqueue; preparation map at 8106347; daemon `preparation_composition.rs` | Crash loses the wake-up; old worker completion overwrites newer current preparation; unchanged unsupported input can retry indefinitely. | Current-input/outcome reconciliation, conditional completion and finite current retry disposition. Queue remains disposable; no durable job/receipt archive. |
+| `validate_scope_binding`, `validate_projection_manifest_metadata`; unitizer nonempty baseline | Empty file or last-source removal is rejected, or a failed extraction is incorrectly treated as empty. | Distinguish complete empty, unsupported/incomplete and unavailable index. Publish legitimate zero-unit changes without sentinels; preserve explicit gaps. |
+| Publication recovery recipe used one 'operation deadline' | Restarted durable work is tied to an expired Instant, or nested retries renew work forever. | Each recovery attempt has one finite budget; durable input/births/cursor remain fixed between attempts. |
+| This report's own section 9 at 8106347 | Audit still prescribed ObjectGcGate after the owning recipe moved to stopped-root collection. | Audit stores observations and links, not a competing copied algorithm. A historical fact is not an instruction. |
+
+These are static source facts plus explicit counterexamples to the proposed design. They are not reports of
+observed production data loss. Owner recipes contain the corrections; this material explains why the new
+documentation must retain the behavior while dropping the former mechanism.
+
+## 18. Qdrant lifetime, late writes and native-inference readback
+
+Historical checkpoint: native Document inference and baseline validity closures below were superseded by the
+current [scoring-text bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) and
+[publication stages](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md). The versioned links preserve
+the old correction's context, not current instructions to reintroduce it.
+
+This pass rechecked the old architecture's INV-11/12/14, replacement bridge/publication/planner instructions
+at de06d75e, public bridge code, #263/#303 and Qdrant 1.19.0 source. It does not assert that the disconnected
+new product was run or that the counterexamples were reproduced against a live server.
+
+| Evidence | Defect in the replacement | Owning correction |
+|---|---|---|
+| Planner says changed retrieval input creates a new point; bridge mutation table allows replacing vectors/filter payload on existing points | An old redb snapshot preserves citation rows but not mutated Qdrant retrieval state. A request can rank/filter on new data while resolving old evidence. | [Bridge](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#immutable-retrieval-state-versus-versioned-evidence): published retrieval state is immutable; one fixed future-validity closure is the exception. |
+| `real/mutations/upsert.rs` uses full default UpsertPoints under a local timeout; `publication/FUNCTIONS.md` previously treated desired readback as done | A timed-out original request can remain outstanding while a retry is observed, then arrive after a later closure/deletion. Readback observes present state, not absence of future old effects. | [Publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md#apply-observed-state-is-not-dispatch-completion): preserve possible-dispatch state, settle writers or isolate recovery in a fresh physical generation. |
+| [Qdrant 1.19.0 update_from_client](https://github.com/qdrant/qdrant/blob/v1.19.0/lib/collection/src/collection/point_ops.rs) dispatches through update_runtime.spawn; official docs describe insert-only and ordering | Client cancellation/reconnect and a local serialized writer are not server completion. Insert-only ignores an existing ID but can insert it again after physical deletion; strong ordering is not the application's old-request version. | Retain the late-writer counterexample. No speculative competing retry or cleanup-complete claim from one absence read; bound unresolved generations/backlog. |
+| `real/mutations/readback.rs` compares decoded PointRecord to expected explicit vectors; replacement selects native Document input and forbids a duplicate encoder | The instruction 'compare actual vectors' omitted where expected native coefficients come from. It could induce a second BM25 implementation, fake digest or unfulfillable gate. | [Bridge readback](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#native-lexical-input-and-bounded-readback): known-vector equality versus native generated-vector shape/binding validation, with the selected server's inference trust explicit. |
+| Bridge target API and #263 enumerate every vector/payload mutation despite the new-point/closure baseline | A donor capability list again becomes instructions to build unused wrappers; a narrow API can still violate view semantics. | Implement only connected operations. Keep SDK operation differences as reference, not a mandatory framework. |
+| Bridge/#263 still reject every empty scope after the preceding pass accepted empty published states | Successful last-source removal or explicit empty selection remains inconsistent at the RPC boundary. | Known empty returns empty without RPC; unknown IDs and missing/incomplete state remain errors/gaps. Empty never becomes an omitted wildcard filter. |
+
+The donor facts are supported by [native BM25](https://qdrant.tech/documentation/inference/inference-bm25/),
+[point update semantics](https://qdrant.tech/documentation/manage-data/points/),
+[write ordering](https://qdrant.tech/documentation/scaling/consistency-guarantees/) and
+[1.19 filtered IDF](https://qdrant.tech/documentation/manage-data/multitenancy/#per-tenant-idf-statistics).
+The native-inference contract does not independently prove numerical embedding correctness. The isolated
+recovery choice sacrifices rebuild time and may retain unresolved garbage; it does not promise free or
+unbounded automatic recovery. Those costs and the late-writer behavior need implementation evidence.

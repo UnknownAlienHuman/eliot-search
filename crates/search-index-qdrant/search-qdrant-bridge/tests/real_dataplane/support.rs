@@ -16,7 +16,6 @@ pub(crate) use search_qdrant_bridge::live::{
     NATIVE_EXE_PATH, free_loopback_ports, run_qualification_suite,
     spawn_disposable_server,
 };
-pub(crate) use search_qdrant_bridge::qualified::QualifiedGate;
 pub(crate) use search_qdrant_bridge::real::{
     IdfScope, OpContext, RealDataPlane, validate_collection_name,
 };

@@ -1,25 +1,24 @@
-# Agent contract — search-exact
+# Working on exact scans
 
-Own only `crates/search-query/search-exact/`. Do not edit another package, root workspace, shared
-contracts or architecture. Missing fields use the contract-change process.
+Read the [architecture](../../../docs/architecture/README.md),
+[query cutover](../README.md#exact-and-later-product-operations), [README](README.md) and
+[function map](FUNCTIONS.md).
 
-The bounded packet is `swarm/assignments/search-exact.md`.
+Implement one server-owned `ExactRequest` over the source inventory of a pinned `PublishedView`. Read and
+verify each retained revision as work advances; do not preload the corpus or accept caller inventory,
+readback, completeness, permit or receipt records.
 
-## Ownership
+Keep the existing Aho literal matcher, compile once, preserve state across chunks of one source and reset
+between sources. Remove the second `proof::find_literal` matcher and unify ASCII-insensitive semantics.
+Optional regex uses one explicit `regex-automata` configuration only when requested by a real caller.
 
-- frozen-denominator exact-plan compilation/execution
-- exact predicate profiles and truthful completeness reports
+Return source-backed evidence cards plus scanned-item/byte accounting and truthful gaps. Complete negative
+requires every inventory item. Cancellation, limit, missing revision or unsupported input is incomplete,
+not success.
 
-## Forbidden ownership
+Remove public compile/execute scan plans, checkpoints, proof digests, durable-job lifecycle and handle
+minting with their consumers. Use the shared `QueryWindow` only for paging/expansion. Do not create another
+inventory/access/capability/qualification framework.
 
-- indexed top-k denominators or semantic absence claims
-- unbounded regex
-- concrete source/storage/index adapters
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-access`. Inventory/readback arrive through ports.
-
-## Size
-
-Target `src/` ≤ 7,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Verify the connected daemon request: frozen inventory, exact revision bytes, cross-chunk overlaps, source
+boundaries, non-ASCII behavior, byte limits before reads, cancellation and complete/incomplete status.

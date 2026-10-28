@@ -1,44 +1,13 @@
-# Agent contract — search-config
+# Working on settings
 
-Own only `crates/search-config/`. Do not edit the root workspace, config registry, another package or
-Architecture 8.4. Missing fields use the contract-change process.
+Read [FUNCTIONS.md](FUNCTIONS.md) and the affected daemon constructor. Add each typed setting with its real
+consumer; Foundation needs only root/plain settings and input/diagnostic bounds. Do not implement a catalogue
+of future fields, hot reload or a configuration platform first.
 
-The bounded implementation packet is `swarm/assignments/search-config.md`. Read the current FILE
-contract in `TOML_PROFILE_2.md` and the section registry in `config/sections.toml` before ordinary
-work. `docs/config/CONFIGURATION_1.0.md` is a historical schema-1 format reference, not current
-parser authority.
+The recipe owns [capture and paths](FUNCTIONS.md#target-capture), [layer semantics](FUNCTIONS.md#layer-semantics)
+and [redaction](FUNCTIONS.md#diagnostics-and-secrets). Preserve native OS paths, sparse omission and explicit
+empty/false values. Invalid selected input fails before effects. Status reports actual constructed owners.
 
-## Mission
-
-Make local configuration deterministic, typed, redacted and safely reconfigurable without absorbing
-package-owned settings or I/O.
-
-## Ownership
-
-- immutable `ConfigLayer` and `ConfigDocument` values
-- precedence and allowed-override enforcement
-- `ConfigSectionDescriptor` registration and collision checks
-- effective snapshot canonicalization/fingerprint
-- `ConfigDelta` and ordered `ReconfigurationPlan`
-- redacted effective-config projection
-- the bounded `eliot-config-toml@2` FILE decoder into the shared typed document builder
-
-## Forbidden ownership
-
-- filesystem/environment/CLI acquisition
-- package-specific setting structs or runtime mutation
-- secret plaintext, command-line credential injection or debug serialization
-- automatic optional-profile activation
-- treating unknown section/key or failed package validation as a warning
-- a second handwritten grammar, generic dynamic TOML product tree or configuration framework
-
-## Dependencies
-
-`search-contracts` plus the exact private `toml_parser` event/decoder edge recorded in
-`Cargo.toml` and `TOML_PROFILE_2.md`. Do not add high-level `toml`, Serde configuration trees,
-parser-provider discovery, I/O, OS, redb, Qdrant or daemon dependencies.
-
-## Size
-
-Target `src/` ≤5,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust
-lines including local tests.
+Select replacement TOML/Serde dependencies with the code cut. Move current locator/key consumers before
+removing their old APIs; preserve unpublished #598 overlap without blocking plain storage. Delete registry,
+fingerprint, receipt and duplicate-parser machinery with callers. Run minimal pinned check/Clippy after code.

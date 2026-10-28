@@ -1,78 +1,103 @@
-# Qdrant native Windows install (no Docker)
+# Qdrant on Windows
 
-Qdrant runs natively on Windows x64. No Docker, no WSL, no Linux VM.
+## Historical 1.19 development artifact
 
-## Installed set (pinned, measured 2026-09-10)
+Qdrant 1.19.0 Windows x64 was previously installed and smoke-tested on 2026-09-10:
 
-- version: `1.19.0` (build `74f3e85b`), `x86_64-pc-windows-msvc`
-- archive: `qdrant-x86_64-pc-windows-msvc.zip`, 29340688 bytes,
-  SHA-256 `980CB2E1AE771155CF211DA8C0A8A9206B6482BD4EFFDC4DB994D3ADB707B087`
-  (self-measured over TLS from the official release URL; upstream publishes
-  no checksum file, so there is nothing to cross-check against — the bytes
-  above are the recorded identity)
-- binary: `C:\Tools\Qdrant\1.19.0\qdrant.exe`, 84184576 bytes,
-  SHA-256 `369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4`
-- license: Apache-2.0
-- receipt: `C:\Tools\Qdrant\1.19.0\VERSION.txt`
-- smoke 2026-09-10: `READY ok / CREATE ok / UPSERT ok / SEARCH top_id=1 /
-  COUNT=2 / DELETE ok` (`C:\Tools\Qdrant\tools\qdrant-smoke.ps1`)
+- build `74f3e85b`, `x86_64-pc-windows-msvc`;
+- archive `qdrant-x86_64-pc-windows-msvc.zip`, 29,340,688 bytes,
+  SHA-256 `980CB2E1AE771155CF211DA8C0A8A9206B6482BD4EFFDC4DB994D3ADB707B087`;
+- executable 84,184,576 bytes,
+  SHA-256 `369C562EAE3D89333A13ABFDB522FA209E3F587C1217A1059D817E80814EA9D4`;
+- historical ready/create/upsert/search/count/delete smoke succeeded.
 
-Layout rule: one versioned directory per release (`C:\Tools\Qdrant\<x.y.z>`).
-Data directories always live outside the install dir (passed per-run).
+This is immutable historical evidence only. It does not establish current availability, Qdrant 1.20 behavior,
+product correctness, data compatibility, containment or authentication.
 
-## Run (manual / supervisor-owned)
+## Selected implementation baseline
 
-Qdrant takes a config file, not storage/port flags:
+R049 selects Qdrant Server/Rust client **1.20.x** for #263/#264 because direct BM25 over a scoring full-text payload
+index plus `TextQuery` and the `code` tokenizer remove baseline sparse-vector inference and fixed `avg_len`.
 
-```powershell
-pwsh -NoProfile -File C:\Tools\Qdrant\tools\qdrant-smoke.ps1 -QdrantDir C:\Tools\Qdrant\1.19.0
+The repository lock still contains client 1.19.0 and no Qdrant 1.20 Windows artifact has been installed or run by
+this documentation work. The implementation cut must select exact server bytes and client version together and
+record origin, license, hashes and commands.
+
+## Baseline product mode
+
+The selected Rust bridge uses a configured local **gRPC** endpoint. This illustrates the target settings;
+it is not a runnable current ELIOT config schema until the typed-settings consumer is implemented:
+
+```toml
+[qdrant]
+mode = "external"
+endpoint = "http://127.0.0.1:6334"
 ```
 
-Minimal `config.yaml`:
+Port 6333 is REST/health; port 6334 is gRPC. The [bridge recipe](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#dependency-cut)
+owns the transport choice and links the official definitions. Start Qdrant manually, as an installed service
+or through development tooling. The one bridge:
+
+1. connects with the actual optional API key;
+2. observes live server/version/capabilities;
+3. creates/verifies the exact physical collection and scoring full-text schema;
+4. performs insert-only publication, `TextQuery`, scope/IDF filtering and exact readback;
+5. queries the physical collection named by `PublishedView`—never a serving alias.
+
+No executable hash, artifact manifest, owner fence, secret lease or qualification receipt is passed to the bridge.
+Release packaging may record exact server bytes independently.
+
+Minimal Qdrant service configuration remains ordinary Qdrant configuration:
 
 ```yaml
 storage:
   storage_path: ./storage
 service:
+  host: 127.0.0.1
   http_port: 6333
   grpc_port: 6334
 ```
 
-Product execution (loopback-only, API-key lease, ACL, Job Object, owner
-guard) belongs to `search-qdrant-supervisor` (T23), not to this document.
+Use one actual API key when the selected threat profile requires authentication. Do not wrap it in a lease or
+equality protocol.
 
-For the compiled approved baseline, static artifact admission permits the owned
-process to start so that the bridge can execute its required operational probes.
-Exact executable checks still run before spawn. Indexed availability requires
-those real operational observations; a matching hash or version is insufficient.
-The qualification dossier and installed/release acceptance remain separate. Their
-unfinished status cannot make startup depend on a future benchmark or report
-(ADR 0006 and #333).
+## Windows evidence required for Qdrant 1.20
 
-## Updates (manual pinned procedure, never automatic)
+Before claiming support, execute on the exact packaged artifact:
 
-Invariant 17 forbids automatic upgrade and silent provider switching. Every
-update is an explicit, pinned, re-qualified event:
+- service startup/shutdown and restart against its private data directory;
+- scoring full-text index creation with explicit `code` tokenizer/text settings;
+- insert-only build, exact readback and `TextQuery`;
+- payload scope plus independent `idf.corpus` behavior;
+- process crash/restart with durable current generation verification;
+- complete next generation and old pinned view;
+- terminal collection deletion and exact logical absence;
+- delayed request versus retired-collection delete;
+- bounded memory/disk/handles, current + building + retained generations;
+- authentication, cancellation and content-free diagnostics.
 
-```powershell
-pwsh -NoProfile -File C:\Tools\Qdrant\Update-Qdrant.ps1 `
-  -Version <X.Y.Z> -ExpectedZipBytes <N> [-ExpectedZipSha256 <hex>]
-```
+Historical 1.19 smoke does not substitute for any of these.
 
-The script installs side-by-side, verifies size (+ SHA-256 when supplied),
-smoke-tests, and stops. It never switches live traffic, never deletes old
-versions, and never qualifies anything. After it:
+## Optional managed-child mode
 
-1. write the `VERSION.txt` receipt in the new version dir;
-2. re-run the smoke against the new dir;
-3. explicitly admit the new exact pin and license policy, then execute the
-   operational probes under the actual owner before enabling indexed use;
-   preserve the `qualification/qdrant/` dossier until independent qualification
-   and installed/release acceptance are complete. Neither a pin edit nor a
-   successful process start alone makes the new version qualified;
-4. remove the old version dir only after the new one is qualified
-   (storage must be migrated or rebuilt per the migration receipt, never
-   blindly reused across versions).
+A later convenience profile may spawn the exact configured server and retain the actual child handle. It must use
+private create-new resources, sanitized environment, bridge-authenticated readiness, one absolute deadline and an
+actual Windows Job Object/kill-on-close tree guard or report managed mode unsupported. Failure/shutdown performs
+bounded terminate and reap. No attach by PID/name/port, automatic restart, auto-download or qualification platform.
 
-One minor version at a time (upstream rule); consult the upstream changelog
-for storage-format notes before touching data.
+The current `search-qdrant-supervisor` does not satisfy this boundary and must be replaced or deleted under #334
+after current callers are rechecked.
+
+## Qdrant Edge is separate
+
+Qdrant Edge is an embedded replacement candidate, not a managed server or fallback. Prior donor inspection
+recorded beta/WAL concerns for 0.8.0; that is historical candidate evidence, not the current release status.
+Recheck the exact released line only with a real replacement consumer after the server path works. Require
+Windows persistence/crash, BM25/filter, generation lifecycle, build-size and latency evidence. Never ship
+server and Edge as permanent dual backends.
+
+## Updating Qdrant
+
+Updates are explicit. Install/test a new server/client/profile side by side, build a fresh physical generation
+when schema/retrieval meaning changes, commit matching evidence/current state and install the view only after exact
+readback. Do not auto-upgrade or silently reuse an incompatible data directory.

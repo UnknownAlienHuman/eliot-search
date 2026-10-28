@@ -1,56 +1,18 @@
-//! T28 indexed-retrieval composition over one pinned route/epoch.
+//! Disconnected legacy indexed-query composition.
 //!
-//! Daemon composition over the accepted `search-retrieval-executor::indexed`
-//! kernel. One indexed leg is executed with retrieval and IDF rendered from
-//! a single accepted [`BaseEligibilityPlan`] contract, nominations are
-//! resolved through exact point readback, and the exact filter-population
-//! denominator travels with the output so top-k saturation can never narrow
-//! an exact proof.
+//! `entry.rs` already declares this module under `wave4-query`. No current
+//! public handler constructs its registered service or calls `execute_pinned_leg`.
+//! Enabling the feature does not connect indexed Search.
 //!
-//! Production data plane (async, qualified gate, live server) lives in
-//! `search-qdrant-bridge::real::RealDataPlane` and is intentionally not
-//! called here: it needs an async runtime plus an executed T22
-//! qualification gate that this composition does not own. The production
-//! call sequence mirrors [`ProcessTestIndexedPort`] one-to-one:
+//! `ProcessTestIndexedPort` uses the synchronous in-memory `QdrantBridge`:
+//! query, point readback and exact count over the old single-filter contract.
+//! It never invokes `search_qdrant_bridge::real::RealDataPlane` or a live server.
+//! The real adapter no longer requires the retired qualification gate.
 //!
-//! 1. `query_filtered` with one [`EligibilityFilter`] and
-//!    `IdfScope::ScopedToRetrieval` (the retrieval filter cloned as the IDF
-//!    corpus, so denied documents never move permitted denominators);
-//! 2. `readback_exact` over the nominated point IDs (payload bytes are
-//!    hints only; membership and digests are authoritative only after
-//!    readback);
-//! 3. `count_exact` over the same single filter (the exact denominator).
-//!
-//! [`ProcessTestIndexedPort`] below is an explicit process-test double over
-//! the synchronous in-memory oracle. It performs the same
-//! query-then-readback-then-count steps with the same single filter value,
-//! but it never claims live-server proof: the oracle scores plain sparse
-//! dot products with no IDF weighting, so live scoring/IDF/count parity
-//! remains the T24 acceptance obligation (the same deferral as
-//! `access_composition::QDRANT_LIVE_PARITY_DEFERRED_TO`). Ranking parity
-//! with a live server is not asserted by any test in this file.
-//!
-//! Wiring (integration owner): add to `entry.rs`
-//!
-//! ```text
-//! #[cfg(feature = "wave4-query")]
-//! mod query_composition;
-//! ```
-//!
-//! and call [`execute_pinned_leg`] from the provider `query` path after the
-//! T20 pre-retrieval gate. Without `wave4-query` the module is absent and
-//! recipe queries stay explicitly unavailable through the existing
-//! `PROVIDER_*_UNAVAILABLE` capability gating. The DIRECT path is untouched:
-//! indexed-unavailable surfaces as `BackendUnavailable`, never as DIRECT
-//! success.
-//!
-//! What this module never does:
-//!
-//! - No Qdrant payload is treated as source evidence. Evidence comes only
-//!   from exact revision readback in `search-candidate-validator`.
-//! - No silent fallback: [`QueryCompositionError`] and the executor's
-//!   `BackendUnavailable`/`ContaminatedLeg` stay typed.
-//! - No second search database: the only indexed store is Qdrant.
+//! The current query/publication recipes replace this host and proof stack with
+//! a selected handler, pinned published view, actual SDK query and retained
+//! evidence read. Their base IDF population can differ from query-only narrowing;
+//! the old unconditional count and provider gates are not integration requirements.
 
 #![forbid(unsafe_code)]
 
@@ -272,8 +234,8 @@ impl IndexedRetrievalPort for ProcessTestIndexedPort<'_> {
 
 /// Executes one pinned indexed leg through the process-test port.
 ///
-/// Thin helper used by the retrieval e2e test: it renders nothing by
-/// itself and owns no filter text. Callers supply the ticket, pins, single
+/// Unwired legacy helper; no caller was found in the inspected source tree.
+/// It renders nothing by itself and owns no filter text. Its inputs are tickets, pins, single
 /// predicates, query vector and both live fences; the port supplies the
 /// single-contract bridge reads. Returns the executor output with its exact
 /// denominator, or the typed [`ExecuteError`].

@@ -1,72 +1,53 @@
-# Function contract — `search-retrieval-executor`
+# Retrieval execution — one bounded query
 
-**Status:** W4/P08 bounded execution contract; no scheduler or retrieval implementation exists yet.
+Replace the disconnected scheduler/ticket/leg framework with a direct handler in the query owner:
 
-The executor consumes an accepted immutable `SearchTaskPlan` and vendor-neutral leg ports. It never
-constructs redb/Qdrant/process adapters and never treats nominated candidates as evidence.
+```text
+execute_search(request, RequestContext, bridge) -> ordered nominations + gaps
+```
 
-## Admission and scheduling
+## Request construction
 
-### `admit(plan, binding_quota, scheduler_snapshot) -> Result<ExecutionGuard, ExecuteError>`
+The view provides physical collection/index profile. The admitted request provides the separate scoring profile;
+validate its finite/range limits before dispatch. [Lexical](../../search-lexical/FUNCTIONS.md) owns parameter meaning;
+[bridge](../../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) owns exact SDK construction.
 
-Verifies plan/snapshot fingerprints, deadline, lane, resource ceilings and per-binding/global queue
-capacity. Admission acquires only process-local request state; ordinary reads create no durable job or
-idempotency row.
+Resolve [scope](../search-access/FUNCTIONS.md) once. Entire-collection base omits only its redundant base clause
+and IDF override. Request-only candidate narrowing remains; omit the candidate filter only if no clauses remain.
+Explicit empty returns without RPC; unknown/incomplete never widens.
 
-### `schedule_leg(guard, leg, dependency_state) -> Result<LegTicket, ExecuteError>`
+Use one TextQuery with bounded prefetch, no vectors and only required evidence-routing payload. Do not return
+retrieval_text as evidence, set a baseline score threshold or exact-count ordinary top-k.
 
-Checks dependencies, live access permit, budget remainder and lane priority before queueing. Queues and
-prefetch are finite. Interactive work outranks verification/background without starving bounded
-cleanup.
+## Execution
 
-### `acquire_leg_pins(ticket, pin_port) -> Result<LegPinSet, ExecuteError>`
+1. Check the original absolute deadline/cancellation and reserve nomination/output/window capacity.
+2. Dispatch through the shared bridge with local deadline and secondary bounded server timeout.
+3. Accept only bounded points/payload, preserve backend order and select the output page before object reads.
+4. Resolve each point in the pinned evidence snapshot, verify its retained representation/range and return a card
+   or truthful gap under the same execution counters.
+5. Transfer references to a live window only through complete output; cancellation/failure advances no cursor.
 
-Acquires only the route/epoch pins required by the leg. Every pin is owned by the request guard and is
-released on completion, cancellation, disconnect or failure.
+An integer-second server timeout does not extend the local deadline. Dropping the future does not prove remote
+execution stopped; reads create no durable mutation or receipt. Do not retry under a fresh request deadline.
 
-### `dispatch_leg(ticket, ports, cancellation) -> Result<LegOutput, ExecuteError>`
+RequestContext owns view, scope, scoring and execution state. Lower I/O borrows execution-only deadline/cancellation/
+limits and never renews them. No writer/view/window mutation lock spans backend/object/process I/O. A small RAII
+semaphore may bound concurrency; no ticket authority or terminal-history map.
 
-Dispatches direct/index/exact/provider operations through typed ports. Cancellation/deadline propagate
-to every cancellable dependency. Leg output contains bounded nominations, ranks, coverage and reasons,
-not trusted source excerpts.
+## Semantics and ranking
 
-## Fusion and contamination
+TextQuery is tokenized nomination, not a Boolean/phrase grammar or exact identifier check. Explicit full-text
+filters retain their token semantics; punctuation/exact locations use Exact. One population preserves Qdrant order.
+Multiple indexed branches may use native bounded fusion only for a real operation; a non-Qdrant branch may justify
+one private rank helper, not a public ranking framework.
 
-### `normalize_within_population(output, profile) -> Result<RankedLegOutput, ExecuteError>`
+## Remove and verify
 
-Raw scores are comparable only inside the exact scoring population/profile that produced them.
+Delete public scheduler/ticket/execution-state types, separate pins, compiled-plan/capability admission, relative
+budgets, unconditional count, default raw-score fusion and oracle/process-fixture adapters with callers.
 
-### `fuse_safe_legs(outputs, fusion_profile) -> Result<FusedNominations, ExecuteError>`
-
-Cross-population combination uses the pinned rank-based fusion profile and deterministic tie-breaks.
-Raw scores never cross population boundaries. Duplicate lineage/unit handling is explicit and bounded.
-
-### `discard_contaminated(decision, execution) -> ContaminationReceipt`
-
-Drops every influenced leg, its ranks, counts, diversity and trace. It may re-dispatch under a new live
-permit within remaining budget or return an explicit gap; post-filtered ordering is forbidden.
-
-### `classify_completion(execution, plan, budget) -> ExecutionCoverage`
-
-Reports executed, failed, cancelled, omitted-budget and unavailable legs. Saturation/deadline may yield
-a truthful partial candidate scope, never complete scope or an absence claim.
-
-### `cancel(request_id, reason) -> CancelOutcome`
-
-Idempotently stops admission/dispatch where possible, propagates cancellation, releases pins and
-request-local memory, and records only bounded non-content outcome metadata.
-
-## Configuration and failure semantics
-
-Implements `config/sections/scheduler.md`. Live decreases constrain new dispatch immediately and may
-cancel excess background work; increases apply only within accepted host/server ceilings. Failures
-include resource exhaustion, deadline/cancellation, index/provider unavailable, stale plan, access
-revoked and incomplete coverage. Read-only dependency timeout is a typed failed leg, not a mutation
-unknown-outcome receipt.
-
-## Required fixtures
-
-Lane priority and bounded fairness; queue saturation; cancellation/disconnect releases all pins;
-deadline propagation; no durable read rows; raw-score isolation; deterministic weighted-RRF/tie-break;
-contaminated whole-leg discard; stable plan/stable ordering; optional leg cannot bypass access/budget;
-package graph/public API contains no concrete adapter.
+After production changes run minimal locked Rust 1.98 check/Clippy for actual consumers. Focused cases include
+whole base plus request-only filter, scoped IDF, empty/unknown selection, response limits, timeout/cancellation,
+foreign points, evidence failure and final order. The [registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status)
+records what has actually run.

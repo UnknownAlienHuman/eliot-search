@@ -1,25 +1,16 @@
-# search-index-reclaimer
+# Index cleanup — move the whole-collection effect, remove this package
 
-**C17 — Retired-point reclamation executor.**
+Publication owns cleanup. Stage 2/3A uses immutable physical generations; Stage 3B, when selected, also keeps
+individual points until their entire generation is retired. Neither profile physically deletes individual points.
 
-**Status:** `SOURCE_PRESENT`; exact retired-ID, pin-watermark and bounded resume source exists, while canonical publication/lifecycle composition and installed fault qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owners: #126/#134.
+[Publication](../search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup) owns eligibility,
+unfinished cleanup state and uncertainty. [FUNCTIONS.md](FUNCTIONS.md) maps the old reclaimer's useful private
+collection delete/absence helper and removal boundary. Do not reintroduce point pages, cleanup cursors,
+watermarks or a separate journal.
 
-Delete only exact committed retired point IDs older than every active route/epoch pin.
+All live view/window guards and targetable unresolved attempts matter, not just the immediate predecessor.
+Last guard drop only wakes cleanup. Local immutable-object GC is separate stopped-root maintenance.
 
-## Owns
-
-- reclaim eligibility from committed retirement manifests
-- pin-watermark checks
-- bounded exact-ID delete batches and receipts
-- crash-safe ordinary-reclaim resume
-
-## Must not own
-
-- publication visibility or point retirement decisions
-- broad-filter correctness-path deletion
-- security purge or CAS retention
-- pin acquisition
-
-- **Delivery wave:** W3 / P07; purge interaction hardened W7
-- **Soft source-line target:** 4,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+Trace current callers, move the useful helper into publication/bridge, and delete this package and exclusive
+fixtures. Logical absence is not a physical-erasure claim. Evidence lives in the
+[registry](../../../docs/audit/ANALYSIS_REGISTRY.md#evidence-status).

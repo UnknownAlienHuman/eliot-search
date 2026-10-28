@@ -1,27 +1,14 @@
-# Agent contract — search-publication
+# Working on publication
 
-Own only `crates/search-index-qdrant/search-publication/`. Do not edit another package, root workspace,
-shared contracts or architecture. Missing fields use the contract-change process.
+Read [FUNCTIONS.md](FUNCTIONS.md), then only the affected bridge/control/view/query consumers.
 
-The bounded packet is `swarm/assignments/search-publication.md`.
+Stage 2/3A uses one serialized publisher, fixed complete generation input, InsertOnly build, exact readiness,
+bounded evidence/current commit and explicit view installation. No sequence, closure or occurrence matching.
+Conditional Stage 3B follows its own recipe only after failed measured budgets.
 
-## Ownership
+Cleanup is whole-generation in both profiles; no physical point deletion or point-cleanup ledger. Never treat a
+timeout or matching readback as proof that every earlier dispatched writer has stopped. No redb writer/view lock
+spans backend or object I/O. Local object collection remains stopped-root maintenance.
 
-- serialized publication/commit/recovery state machine
-- journal/index operations through vendor-neutral ports
-- exact readback and guarded VisibleEpoch commit
-- committed retired-manifest emission
-
-## Forbidden ownership
-
-- concrete redb/Qdrant/process dependencies
-- multiple active commits, broad closure or epoch reuse
-- physical retired-point deletion
-
-## Dependencies
-
-`search-contracts`, `search-domain`, `search-projection-planner`, `search-point-identity`.
-
-## Size
-
-Target `src/` ≤ 7,500 lines; split review before 8,500 total; hard stop at 10,000 hand-written Rust lines.
+Change actual consumers and remove displaced machines/fixtures together. Run minimal locked Rust 1.98
+check/Clippy after production changes. Algorithms and failure rules stay in the recipe, not duplicated here.

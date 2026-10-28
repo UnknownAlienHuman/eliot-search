@@ -1,25 +1,9 @@
-# search-handles
+# search-handles — remove the second result store
 
-**Handle support for C26/C27 — Source/result handle owner.**
+Cards contain verified source/revision/representation/location/excerpt. Optional expansion uses the emitted
+`(window_id, item_index)` locator in the same live session, not a minted bearer token or separate authority map.
 
-**Status:** `SOURCE_PRESENT`; handle identity, invalidation and bounded expansion-state source exists, while durable product integration and live authorization qualification remain incomplete. See [central package status](../../../docs/product/PACKAGE_STATUS.toml). Current owner: #118.
-
-Own opaque ephemeral and durable source handles, expansion authorization, TTL/quota state and invalidation.
-
-## Owns
-
-- opaque handle IDs and collision policy
-- ephemeral handle table and durable source-handle records
-- current authorization/view/revision revalidation on expansion
-- TTL, binding, disclosure and invalidation state
-
-## Must not own
-
-- ranking or continuation cursors
-- authority derived from handle possession
-- durable handles to unsaved/unretained bytes
-- raw source content or vendor IDs in tokens
-
-- **Delivery wave:** W4 / P08; durable/security hardening W7 / P13
-- **Soft source-line target:** 6,500
-- **Agent instructions:** [AGENTS.md](AGENTS.md)
+[FUNCTIONS.md](FUNCTIONS.md) owns removal of the old stores. The [window recipe](../search-continuation/FUNCTIONS.md)
+alone owns admission, serialization, expiry and output commit; the evidence owner verifies retained ranges.
+Do not preserve an exclusive mutable window borrow across reads/writes to reuse old PreparedPage mechanics.
+Move useful range reading with consumers, then delete both old handle catalogues and their exclusive fixtures.

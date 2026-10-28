@@ -1,187 +1,111 @@
-# Function contract — `search-runtime-owner`
+# Root owner — one current-format guard
 
-**Status:** W1/P01 logical contract; no owner implementation or Windows qualification evidence exists.
+This owner classifies, initializes and opens one root, holds process-lifetime exclusion, and owns the small
+platform finalization seam shared with the object writer. It owns no source catalogue, query session or lifecycle
+ledger. Target behavior below is not implemented/runtime evidence.
 
-This package is the sole owner of data-root acquisition, owner-epoch fencing, abandoned-owner
-classification and clean release. It owns no daemon composition, control tables, source state or Qdrant
-process lifecycle.
-
-## Global rules
-
-- one canonical local data root has at most one live owner incarnation;
-- path text, lock-file presence, PID or responding endpoint alone never proves ownership;
-- every successful mutation binds installation incarnation, process creation identity, owner epoch,
-  mode and canonical data-root identity;
-- ambiguous state quarantines rather than attaches or deletes another process record;
-- equal operation identity plus equal canonical request is idempotent; conflicting reuse is rejected;
-- public diagnostics expose location class/digest and identity state, not unrestricted absolute paths.
-
-## Configuration operations
-
-### `section_descriptor() -> ConfigSectionDescriptor`
-
-### `compiled_defaults() -> ConfigSectionInput`
-
-### `validate_section(input, platform, accepted_capabilities) -> Result<ValidatedInstanceConfig, OwnerError>`
-
-Implements `config/sections/instance.md`. Rejects remote/network roots, invalid mode, unsafe owner-recovery
-policy and bounds outside the packet. Mode or data-root changes cannot apply live.
-
-### `section_digest(validated) -> Blake3Digest32`
-
-### `plan_section_change(old, new) -> Result<SectionReloadDecision, OwnerError>`
-
-Preserves `DRAIN_AND_RESTART` for mode/data-root changes and every stricter obligation. This package does
-not execute daemon restart or publish a global config snapshot.
-
-## Identity and path preparation
-
-### `resolve_data_root(request, platform) -> Result<ResolvedDataRoot, OwnerError>`
-
-Canonicalizes the requested or OS-default local root, validates local-volume policy, obtains stable path/
-volume/file identity where supported and produces a content-minimized identity digest.
-
-It does not create ownership state. Reparse/device/network ambiguity fails closed.
-
-### `build_owner_identity(process, executable, installation, mode) -> Result<OwnerIdentity, OwnerError>`
-
-Requires process creation identity/handle semantics, executable file identity/digest, installation
-incarnation and exact mode. PID reuse cannot satisfy equality.
-
-## Owner acquisition
-
-### `inspect_existing_owner(root, observer, deadline, cancel) -> Result<OwnerObservation, OwnerError>`
-
-Reads the durable/OS ownership markers and observes the referenced process without mutating state.
-Returns one closed classification:
+## Public operations
 
 ```text
-ABSENT
-LIVE_MATCHING_OWNER
-LIVE_CONFLICTING_OWNER
-STALE_RECORD_IDENTITY_ABSENT
-AMBIGUOUS
-CORRUPT
+inspect(path) -> RootInspection
+initialize_plain(path, settings, ExecutionContext) -> DataRootGuard
+open_existing(path, settings, ExecutionContext) -> DataRootGuard
+explicit_discard_incomplete(path, ExecutionContext)
 ```
 
-Cancellation before a complete observation returns no reusable ownership claim.
+Use the [execution/query separation](../../../docs/implementation/README.md#minimal-cross-owner-values).
+Root work needs deadline/cancellation and its own finite limits, never a query view or scoring profile.
+Help/version perform no root effects; inspect is read-only.
 
-### `acquire_data_root(request, owner_identity, operation, deadline, cancel) -> Result<OwnerGuard, OwnerError>`
+## Classification
 
-**Preconditions**
+The plain layout contains a final root manifest, minimal control store, immutable-object namespace and recognizable
+owned initialization debris. Root metadata binds format/root identity, plain profile and store schema versions.
 
-- resolved root and owner identity are valid;
-- no unresolved acquisition/release operation uses the root;
-- mode is compatible with the requested composition profile;
-- cancellation/deadline are explicit and finite.
+| Observation | Classification |
+|---|---|
+| Absent or empty target without a final manifest/owned marker | Uninitialized |
+| Exact current marker and recognized unfinished empty layout, no final manifest | IncompleteInitialization |
+| Final manifest with exact compatible layout | Current |
+| Final manifest with missing/conflicting required layout | Corrupt |
+| Unknown, foreign, unsafe or unsupported pre-release layout | Unsupported |
+| Actual exclusive owner present | Busy |
 
-**Postconditions**
+Unknown entries are not an empty uninitialized root. A valid final manifest with leftover owned debris is not
+permission to discard the committed root. Ordinary open/search/status never repairs, resumes, migrates or deletes.
 
-- one OS ownership primitive and one durable owner record agree on root, incarnation, process and epoch;
-- owner epoch is fresh and strictly greater than any safely observed abandoned generation;
-- returned guard is non-serializable and is the only package authority for subsequent owner mutations;
-- a second concurrent acquisition is denied.
-
-Cancellation before mutation is clean. Timeout/cancellation after the OS/durable mutation boundary is
-`OWNER_ACQUIRE_OUTCOME_UNKNOWN`; recovery uses exact ownership observation and the original operation
-identity, never a second blind acquire.
-
-### `verify_owner_guard(guard, current_process, current_root) -> Result<OwnerVerificationReceipt, OwnerError>`
-
-Rechecks owner epoch, installation/process/executable/root identity and OS ownership primitive. Mismatch
-invalidates the guard and requests quarantine.
-
-## Recovery
-
-### `classify_abandoned_owner(observation, policy) -> RecoveryDecision`
-
-Purely maps a complete observation to:
+## Final-manifest-last initialization
 
 ```text
-START_FRESH
-DENY_LIVE_OWNER
-CLEAN_STALE_RECORD_AND_RETRY
-TERMINATE_VERIFIED_ORPHAN_THEN_RETRY
-QUARANTINE
+validate target → acquire actual exclusion → retain/verify required path handles
+→ exact owned initialization marker → create/flush/close/verify empty stores
+→ unique manifest stage in final parent → write/flush exact bytes
+→ platform no-clobber finalization → verified final manifest/layout
+→ safe removal of owned marker/stage debris → DataRootGuard
 ```
 
-Baseline policy never blindly attaches. Termination is legal only for an exact verified owned orphan and
-is performed by an injected platform/process port, not inferred from PID.
+No user source is admitted before the final manifest. Interruption before publication uses strict discard/retry,
+not resume or phase replay. Resolve an uncertain finalization through exact final/marker/layout inspection;
+never restart creation over a possibly committed root.
 
-### `recover_acquisition(root, operation, expected_owner, observer) -> Result<OwnerGuard, OwnerError>`
+<a id="windows-finalization"></a>
+<a id="windows-finalization--corrected-r054-boundary"></a>
+## Windows finalization candidate
 
-Resolves unknown acquire outcome by exact OS/durable readback. It reconstructs the guard only when every
-identity matches; conflicting/partial state quarantines.
+This is the single root/object Windows recipe. The selected candidate is documented Win32, but its ELIOT path
+stability and durability remain unexecuted. [Upstream evidence and exact report](../../../docs/audit/DONOR_VERIFICATION_REGISTER_2026-10-09.md#plain-object-publication-donor)
+are separate from support qualification.
 
-### `recover_release(root, operation, expected_owner, observer) -> Result<OwnerReleaseRecovery, OwnerError>`
+```text
+retain verified root→final-parent directory handles
+  with FILE_SHARE_READ | FILE_SHARE_WRITE, without FILE_SHARE_DELETE
+retain verified stage handle with DELETE access
+establish a stable absolute destination namespace from the retained final parent
+→ SetFileInformationByHandle(FileRenameInfo)
+   RootDirectory=NULL; ReplaceIfExists=FALSE
+→ reopen final through the verified parent relationship
+→ compare stable identity, non-reparse kind, length and exact bytes
+```
 
-Distinguishes still-owned, cleanly released, partially released and ambiguous state. It never deletes a
-record that may protect a live process.
+No-delete sharing constrains rename/delete access to the opened objects; it is not by itself proof that every
+component of an absolute path is stable. The implementation must also account for mutable ancestors above the
+data root and reparse/device-path resolution. Do not claim safety from the root→parent chain alone.
 
-## Drain and release
+The focused canary must establish accepted absolute/extended path form, access/share flags, absent-target
+success, existing-target refusal, stage/parent/ancestor replacement resistance, safe reopen, local same-volume
+support, bounded errors and classifiable failure debris. Refuse an unsupported or unproven profile.
 
-### `begin_drain(guard, reason, operation) -> Result<DrainToken, OwnerError>`
+Do not use path-only MoveFileExW/tempfile publication, the legacy relative-RootDirectory wrapper, a private direct
+NT finalizer or a generic filesystem framework as fallback. Reuse useful verified-open/identity code only after
+tracing current callers; the legacy source-registration publication route is removed with its consumers.
 
-Atomically changes package owner lifecycle from `ACTIVE` to `DRAINING` for the exact guard. Idempotent for
-the same operation/reason. It does not drain requests or dependencies; daemon orchestration owns that.
+File-data flush, namespace visibility, final readback and sudden-power-loss durability are separate claims.
+Do not advertise the last one without executed evidence.
 
-### `verify_release_preconditions(guard, drain_token, dependency_receipts) -> Result<ReleasePermit, OwnerError>`
+## Unix finalization
 
-Requires matching owner/drain identities and exact receipts proving endpoint/control/source/index/process
-layers have been stopped according to the composition profile. Missing or mismatched receipts reject
-release.
+Use a private directory-relative no-replace operation where available. A same-filesystem link/unlink fallback
+needs exact final verification and visible stage-debris handling. Ordinary overwriting rename is not no-clobber.
 
-### `release_cleanly(guard, permit, operation, deadline) -> Result<OwnerShutdownReceipt, OwnerError>`
+## Explicit discard
 
-Removes/marks the durable owner record and releases the OS ownership primitive in a crash-recoverable
-order. Success proves this owner no longer claims the root; it does not claim process-wide secure erase.
+Discard requires actual exclusion, no final manifest, the exact current-format marker, only recognized empty
+control/object layout and owned stages, no source/prepared/published/pending/import references, and matching
+inspected/opened identities. Unknown entries, conflicting bytes, replacement or uncertain deletion refuse.
+No baseline resume, initialization journal, operation digest, owner epoch or quarantine platform.
 
-Same operation is idempotent. Timeout after either mutation is unknown until `recover_release`.
+## Open and shutdown
 
-## Health and diagnostics
+Open retains required handles, acquires one actual exclusive guard, rereads current metadata, then opens stores.
+Shutdown stops admission, drains/cancels finite work, drops windows/views, stops publication/backend users, closes
+stores, then drops the guard. No DRAINING/RELEASED record or per-request borrowing of the guard as a global mutex.
 
-### `owner_health(guard, observer) -> OwnerHealth`
+## Removal and checks
 
-Returns lifecycle/identity consistency, owner epoch, location class/digest and bounded reason codes only.
-It contains no secret, source content or unrestricted path.
+Remove owner leases/slots/succession, unrelated process/executable identities, health/drain receipts, compatibility
+locks, argv/stage custody, initialization resume/journal and root-owned source/key/migration wrappers with callers.
+Preserve user data and unpublished #598 overlap.
 
-## Cancellation, deadline and crash semantics
-
-All platform observations are deadline/cancellation aware. No cancelled partial observation becomes an
-owner proof. Every acquire/release mutation has a stable operation identity and exact readback recovery.
-Process crash leaves OS/durable evidence for the next owner to classify; it never automatically makes a
-root safe to reuse.
-
-## Typed failures
-
-- `DATA_ROOT_INVALID`
-- `DATA_ROOT_REMOTE_DENIED`
-- `DATA_ROOT_ALREADY_OWNED`
-- `OWNER_MODE_CONFLICT`
-- `OWNER_EPOCH_MISMATCH`
-- `OWNER_PROCESS_IDENTITY_MISMATCH`
-- `OWNER_EXECUTABLE_IDENTITY_MISMATCH`
-- `OWNER_IDENTITY_AMBIGUOUS`
-- `OWNER_ACQUIRE_OUTCOME_UNKNOWN`
-- `OWNER_RELEASE_OUTCOME_UNKNOWN`
-- `OWNER_RECOVERY_QUARANTINED`
-- `OWNER_DRAIN_REQUIRED`
-- `OWNER_RELEASE_PRECONDITION_MISSING`
-- `OWNER_OPERATION_CONFLICT`
-- `OWNER_CANCELLED_BEFORE_MUTATION`
-
-## Required tests / qualification evidence
-
-- OS-default/local-root canonicalization and remote/reparse/device denial;
-- two-process concurrent acquisition: exactly one succeeds;
-- PID reuse, executable replacement and installation-incarnation mismatch;
-- stale record with proved absent identity cleans safely;
-- ambiguous process/root identity quarantines;
-- crash before/after each OS/durable acquire and release boundary;
-- same-operation replay reconstructs guard/receipt; conflicting replay rejects;
-- standalone/managed co-ownership and live mode transition rejected;
-- owner epoch monotonic across crash/reopen and never reused;
-- release requires drain plus dependency shutdown receipts;
-- debug/serialization/path disclosure audit;
-- `instance` configuration validation/change classification;
-- fake platform/process/record ports prove portable decision logic.
+After code run minimal locked Rust 1.98 check/Clippy for root/daemon/store consumers. Focused cases cover
+classification, all initialization interruption points, strict discard, exclusive ownership, documented platform
+publication/replacement behavior, restart and shutdown order. Record exact platform and achieved durability.

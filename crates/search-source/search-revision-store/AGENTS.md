@@ -1,123 +1,38 @@
-# Agent contract — search-revision-store
+# Working on search-revision-store
 
-You own only `crates/search-source/search-revision-store/`. Do not edit another package, the root workspace, or shared contracts.
-When a missing contract blocks correct work, open a contract-change issue with the exact field,
-invariant, producer, consumer and compatibility impact; do not patch around it.
+Read the root [architecture](../../../docs/architecture/README.md) and
+[implementation](../../../docs/implementation/README.md). This package has a concrete byte-storage role;
+it is not a separate lifecycle or transaction platform.
 
-The Architecture 8.4 master does not need to be loaded for ordinary work. This file contains the
-package slice. Traceability only: S6.3-S6.4, S7.5, S15, S28.4, H6, P04.
+## Change the real path
 
-## Mission
+- Trace acquired bytes through the daemon writer, revision reference and source-head transaction.
+  Change the owner and its real consumers together.
+- Start with [immutable object I/O](src/immutable_object.rs). Keep one byte writer/reader; consolidate
+  the duplicate materializer artifact mechanics instead of adding another crate, port or forwarding layer.
+- Keep source identity/head semantics in the existing source/control owner. Do not install the
+  [in-memory kernel](src/kernel/store.rs) as a second catalogue or permanent operation ledger.
+- Verify real content length/digest at the storage boundary and preserve that verified buffer through
+  the handoff. Expected metadata returned beside arbitrary bytes is not a verified read.
+- Keep immutable publication, durability and conflict handling. A successful known rollback is a
+  failure/cancellation; an actual possible write needs readback or pending recovery.
+- Clean up staging owned by this writer when its outcome is known. The old contextual APIs' permanent
+  deferred-cleanup disposition is current inventory, not a rule for the new writer.
 
-Admit, retain and reopen immutable source revisions under complete residency identities.
+## Remove obsolete obligations
 
-## Ownership
+New local storage does not require six residency domains, encryption, copy/re-encrypt receipts,
+retention-lease graphs or another completed-operation archive. Remove obsolete fields and exclusive
+callers together; do not fabricate values to appease them.
 
-- residency-key-derived CAS paths
-- no-clobber temporary write, file/directory sync and immutable publication
-- bounded exact object reads and stable native-identity/locator fencing
-- raw revision and manifest integrity
-- retention leases and exact reopen
-- copy/re-encrypt transition receipts
-- bounded legacy DIRECT `.bin` / `.dpapi` object I/O during T02 migration
-- explicit borrowed original-context legacy object I/O, cumulative requested-work
-  metering and component-local attempted-effect observations under #466/#356
-- closed legacy revision root/shard/final/temporary filename grammar
-- stable physical inventory classification tags and canonical relative locators
-- deterministic legacy inventory ordering, counts and names/sizes/mtimes digest
-- legacy orphan checkpoint, canonical cursor, bounded page and exact JSON projection
+Old names, layouts, error strings and fixture bytes are not compatibility commitments. Reject an
+unsupported old root before writes and leave it intact. Do not delete user originals or sole retained
+copies to simplify the implementation.
 
-## Forbidden ownership
+## Check the changed behavior
 
-- query language or ranking
-- global content-digest-only CAS namespace
-- cross-domain co-residency, ciphertext or key reuse
-- source identity or access authorization
-- secret acquisition, DPAPI/keyring operations or plaintext verification policy
-- preparation/materialization artifacts owned by `search-materializer`
-- data-root traversal, metadata acquisition or object-content hashing
-
-## Allowed dependencies
-
-`search-contracts`, `search-domain`. Additional internal or external dependencies require an explicit boundary review. Public
-APIs may expose only `search-contracts` or package-owned opaque types; vendor types stay private.
-
-## Required logical surface
-
-These are behavior contracts, not mandated Rust syntax. Preserve the semantics even if the concrete API
-is improved:
-
-- `derive_object_path(residency_key, kind, digest) -> CasPath`
-- `admit_revision(stable_read, residency) -> Result<RevisionReceipt, CasError>`
-- `reopen_exact(revision_ref) -> Result<VerifiedRevision, CasError>`
-- `retain(revision_ref, cause) -> Result<RetentionLease, CasError>`
-- `copy_or_reencrypt(source, target_residency) -> Result<TransitionReceipt, CasError>`
-- `enumerate_mark_roots(snapshot) -> MarkRootSet`
-- `read_legacy_revision_object(platform, path, maximum_bytes)`
-- `publish_legacy_revision_object(platform, directory, final_name, temporary_name, bytes, maximum_bytes)`
-- `classify_legacy_revision_inventory_name(name)`
-- `legacy_revision_inventory_relative_locator(shard, name)`
-- `build_legacy_revision_inventory(shards, observations)`
-- `legacy_revision_inventory_checkpoint(catalog, backend, inventory)`
-- `plan_legacy_revision_inventory_page(inventory, checkpoint, cursor)`
-- `render_legacy_revision_inventory_report(namespace, catalog, inventory, page, evidence)`
-
-The legacy adapter treats bytes as opaque and accepts qualified native identity,
-locator and directory-durability observations through an injected platform. It
-must never infer source identity, decrypt/protect bytes, authorize a revision or
-write a preparation artifact. The pure inventory owner accepts only normalized
-qualified observations plus catalog-overlay classifications. Concrete SHA-256,
-filesystem traversal, metadata and content fingerprints remain injected by daemon
-composition. A racing final object is reused only after exact readback; a
-conflicting object is never replaced.
-
-## Failure surface
-
-Contextual legacy platform callbacks must borrow and internally meter/poll the
-same caller context; there is no default unmetered contextual implementation.
-Contextual publication never installs a cleanup guard or unlinks staging, even
-on verified success. Its receipt reports deferred cleanup by this call, not
-continued stage presence/custody or reconciliation/deletion authority. Legacy
-API/cleanup behavior remains separate until native caller adoption under #355.
-The complete #466 owner/fixtures/oracle Rust ceiling is 7,000 lines; count the
-whole package, without deleting/moving retained fixtures to satisfy it.
-
-Use typed errors/reason codes. Relevant public reasons: `SOURCE_REVISION_UNAVAILABLE`, `RESIDENCY_DOMAIN_MISMATCH`, `CAS_INTEGRITY_MISMATCH`. Never turn a degraded or partial
-state into an apparent success. Possible publication followed by failed durability is outcome-unknown, not an ordinary retryable miss.
-
-Legacy inventory construction and paging preserve the existing bounded
-`DIRECT_MIGRATION_*` reason namespace. Malformed cursors are rejected before
-catalog or filesystem access. A stale checkpoint, zero-progress page, aggregate
-byte overflow or overlarge report fails closed and never authorizes deletion.
-
-## Test seams and exit evidence
-
-- `same bytes different residency keys produce different objects`
-- `atomic-write crash leaves no admitted partial object`
-- `reopen verifies residency digest, content digest and length`
-- `cross-domain physical/ciphertext/key reuse denied`
-- `visible epoch or durable handle keeps revision reachable`
-- `legacy immutable object exact replay reuses without replacement`
-- `legacy immutable object conflict preserves existing bytes`
-- `legacy read rejects changed native identity and oversize before allocation`
-- `DIRECT revision paths compose this package while preparation artifacts do not`
-- `legacy revision final/temporary names and shard grammar fail closed`
-- `inventory order/digest/cursor/page/report bytes remain frozen`
-- `daemon contains no duplicate revision filename parser, inventory model, digest domains or report schema`
-
-Property/fault tests belong beside the owning behavior. Shared control-corpus fixtures may be requested,
-but the writer does not edit another package opportunistically.
-
-## Size and split guard
-
-- Delivery wave: **W2 / P04**
-- Soft `src/` target: **8,000 lines**
-- Hard review threshold: **10,000 total hand-written Rust lines**
-- Split on a real security, runtime, replacement, test or dependency boundary; never create a forwarding
-  wrapper or crate-per-type shell.
-
-## Definition of done
-
-The package has a vendor-neutral public contract, deterministic tests for its invariants, explicit
-degradation behavior, no forbidden dependency, and a handoff reporting commands and raw outcomes.
-Compilation alone is insufficient.
+Exercise actual write/reopen, existing-object conflict, crash before/after the reference transaction
+and cleanup of owned staging where changed. Check that the same retained bytes reach preparation and
+evidence reads. Compile the affected production owner and consumers; documentation edits need only
+documentation checks. No source-line quota, slice exception, migration issue or qualification receipt
+is a prerequisite.

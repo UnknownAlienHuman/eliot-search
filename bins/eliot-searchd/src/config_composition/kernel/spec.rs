@@ -6,9 +6,9 @@ use search_config::{
 };
 use search_contracts::{Blake3Digest32, ProfileId};
 
-/// Exact configuration schema version from `config/sections.toml`.
+/// Schema version implemented by the legacy configuration decoder.
 pub const DAEMON_CONFIG_SCHEMA_VERSION: u32 = search_config::CONFIG_TOML_SCHEMA_VERSION;
-/// Externally authorized W1 shell profile.
+/// Legacy standalone shell configuration profile.
 pub const DAEMON_DIRECT_PROFILE: &str = "direct";
 /// Bounded captured inputs for one composition attempt.
 pub const MAX_CAPTURED_FILE_BYTES: usize = 64 * 1024;

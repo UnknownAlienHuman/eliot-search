@@ -1,55 +1,91 @@
-# Function contract — `search-index-reclaimer`
+# Index cleanup — extract whole-collection helper, delete the platform
 
-**Status:** W3/P07 ordinary index-reclaim contract.
+This package has no independent durable responsibility in the target product. It contains some exact Qdrant
+delete/readback mechanics surrounded by plans, digests, receipts, watermarks and checkpoints. Move the useful
+private whole-collection helper into publication/bridge, then delete this package and its workspace edges.
 
-This package deletes rebuildable retired Qdrant points. It does not perform CAS retention, legal/security
-purge, publication visibility or secure erase.
+Read the [publication owner](../search-publication/FUNCTIONS.md),
+[Qdrant bridge](../search-qdrant-bridge/FUNCTIONS.md) and
+[stopped-root maintenance](../../search-runtime/search-retention/FUNCTIONS.md).
 
-## Operations
+## Current source findings
 
-### `validate_retired_manifest(manifest, publication_receipt) -> Result<CommittedRetiredManifest, ReclaimError>`
+- `manifest.rs` validates caller-supplied retired structures instead of deriving cleanup from committed current/view state.
+- `plan.rs` copies manifests and creates another identity/plan layer.
+- `execute.rs` has a reusable exact delete/absence-readback shape but lacks the actual view/deadline/recovery owner.
+- `receipt.rs` creates a second cleanup journal.
+- daemon `authorize_reclaim` returns plans after proof/pin checks but performs no connected deletion.
 
-Requires exact IDs, collection generation, retirement epoch, manifest digest and a matching committed
-publication receipt. Uncommitted or broad-predicate manifests are rejected.
+## Stage 3A cleanup owner
 
-### `plan(manifest, watermark, settings, budget) -> Result<ReclaimPlan, ReclaimError>`
+Publication commits one compact row with the new current view:
 
-Requires the route/epoch watermark to prove invisibility to every active pin. Produces deterministic,
-finite exact-ID batches and a plan digest.
+```text
+RetiredCleanup {
+  exact never-reused physical collection name
+  expected predecessor/current relationship
+  unresolved-attempt state needed to prevent retargeting
+}
+```
 
-### `execute_batch(plan, batch_index, index_admin, mutation, context) -> Result<ReclaimBatchReceipt, ReclaimError>`
+No point-ID pages, retire-before sequence, reclaim plan, checkpoint cursor, receipt history or terminal record is
+required in Stage 3A. Visible collections are immutable and cleanup is whole-generation only.
 
-Deletes only the batch's exact IDs using the index-admin port, then verifies expected missing IDs and
-rejects unexpected/mismatched acknowledgements.
+A row is eligible when:
 
-### `checkpoint(plan, receipts) -> ReclaimCheckpoint`
+- the collection is not durable current;
+- no pending/current/future build can target it;
+- no live `PublishedView` or `QueryWindow` guard uses it;
+- no owned unresolved request/build remains targetable;
+- no redb writer or view-manager lock is held across backend I/O.
 
-Records only plan/manifest digests, completed batch indices and exact receipts. It never stores source
-content or a broad deletion filter.
+Last guard drop only wakes cleanup.
 
-### `resume(checkpoint, manifest, watermark, index_admin, context) -> Result<ReclaimReceipt, ReclaimError>`
+## Exact effect
 
-Revalidates manifest, publication receipt and current watermark before continuing. Already confirmed
-batches are idempotently skipped/read back.
+```text
+eligible physical collection
+→ bridge terminal delete under attempt deadline/cancellation
+→ exact exists/get observation
+→ logical absence
+→ short redb removal of cleanup/obsolete metadata
+```
 
-### `complete(plan, receipts) -> Result<ReclaimReceipt, ReclaimError>`
+Never reuse the collection name. Do not infer completion from list omission. Unknown/partial/foreign state or
+uncertain response keeps the row and bounded publication backpressure. Logical absence is not physical erasure.
 
-Succeeds only when every exact ID is confirmed absent. The receipt is explicitly
-`ordinary_retired_point_reclaim` and cannot satisfy a purge acknowledgement.
+Execute delayed request/build versus collection-delete behavior against selected Qdrant 1.20 before claiming
+safety.
 
-## Configuration operations
+## Stage 3B
 
-Implements `config/sections/index_reclaim.md`. Batch/slice tuning is live and bounded, but never alters
-manifest or watermark eligibility.
+Incremental point closure does not restore per-point physical deletion. Individual points remain until the same
+whole-generation cleanup. There is still no point reclaimer, possible-writer ledger or per-point cleanup journal.
 
-## Cancellation, retry and crash semantics
+## Local immutable-object GC is separate
 
-Cancellation stops between batches and returns a resumable checkpoint. A timeout after delete is an
-unknown outcome resolved by exact readback. Same batch mutation identity plus same IDs is retry-safe;
-different IDs with the same identity are rejected.
+Local object collection is explicit stopped-root maintenance: all producers/windows stopped, exclusive root held,
+all current/prepared/published/pending/cleanup references validated and marked, then only proven-unreferenced
+objects swept. Unknown traversal/deletion keeps bytes.
 
-## Required fixtures
+Do not restore online `ObjectGcGate`, per-publication root rescans, generic lease catalogue or sweep journal.
 
-Pinned/current/uncommitted never delete; exact IDs only; crash/timeout between batches; duplicate
-replay; unexpected receipt fail-closed; old route waits for final pin; ordinary receipt cannot satisfy
-security purge.
+## Removal boundary
+
+Delete after publication/bridge callers move:
+
+- `PublicationCommitProof`, retired manifests and field-equality admission;
+- reclaim plans/batches/checkpoints/receipts/custom digests;
+- route/epoch watermarks and caller `reclaimable` booleans;
+- exact point-delete pages and per-point writer eligibility machinery;
+- separate operation port/journal;
+- purge/restore/rollback integrations and old fixtures;
+- package/workspace dependencies.
+
+Move only the private whole-collection delete/absence code which remains useful.
+
+## Checks
+
+Old/current/new guards, no dispatch after retirement, restart with cleanup rows, commit/install crash, exact
+logical absence, delayed request/delete race, name non-reuse, uncertainty/backpressure, measured retained-generation
+disk and stopped-root object preservation. Ordinary cleanup never claims purge or secure erase.

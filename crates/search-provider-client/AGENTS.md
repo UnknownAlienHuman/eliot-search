@@ -1,26 +1,24 @@
-# Agent contract — search-provider-client
+# Working on search-provider-client
 
-Own one synchronous typed client session/correlation engine. Consume a concrete
-platform connection and non-Clone BindingKey with mandatory caller-owned trusted
-comparison coordinates. Pairing/profile/grant policy remain the protocol/server
-owners; expectations are not an authenticated receipt or authority.
+Read the [architecture](../../docs/architecture/README.md), the
+[protocol recipe](../search-provider-protocol/FUNCTIONS.md), and [FUNCTIONS.md](FUNCTIONS.md).
 
-Keep LocalByteStream, framing I/O, setup budget and mutable state private. One
-reader, one key, one sequence/correlation ledger, one cancellation slot; no stream
-clone, background task, reconnect, pooling, discovery, fallback or blind replay.
-Preserve the original absolute setup deadline and one deadline per operation.
-Raw I/O errors and credential/path/query/handle/proof material never enter public
-Debug, Display or source(). Reuse accepted protocol types and exact wire bytes.
+Implement one serviced framed session used by the actual CLI and daemon. The public call may be synchronous;
+the connection must still service response reads, partial writes, cancellation and its deadline while work is
+active. Cancellation is baseline behavior, not an optional future API. Progress is optional.
 
-Dependencies are search-contracts, search-ports, search-provider-protocol, the
-concrete search-provider-transport-windows owner and the accepted exact BLAKE3
-pin. No database, Qdrant, async runtime or external networking framework.
+Use one active data request and bounded control state. Do not retain completed-request replay history, add a
+multiplexing scheduler or let a data/history limit prevent cancellation and close. Never interleave a control
+frame into a partially written frame; follow the protocol owner's failure rule.
 
-Nondefault legacy-loopback-compatibility retains old TCP APIs only until #332
-atomically cuts over/deletes their consumers. A missing independently trusted
-installation cannot issue a product grant, even with this feature enabled.
+The child-stdio session owns exactly one child/stream cleanup guard. The CLI supplies invocation settings and
+renders results; it does not build another process manager. A separately owned pipe connection is never killed
+as though it were this client's child.
 
-Compile the library and direct CLI/example consumers with Rust 1.98 locked
-checks and strict production Clippy. Author causal fixtures with changes;
-execution/native/fault/installed qualification follows the execution protocol.
-Compilation alone is not product qualification.
+Replace pairing/profile/grant authority, NativeClientExpectations, per-record MACs, replay transcripts,
+loopback/token/endpoint fallback and duplicate CLI core sessions with their actual consumers. Preserve useful
+framing, fixed-deadline polling, typed error/result distinction and fail-stop cleanup. Do not translate new
+requests through old RecipeIdV1 or tab/hex messages.
+
+After a production cut, run minimal pinned compiler/Clippy for the actual CLI/client/protocol/daemon targets.
+Neither a constructor nor a local documentation change establishes a working transport.

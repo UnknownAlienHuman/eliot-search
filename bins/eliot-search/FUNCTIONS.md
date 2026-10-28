@@ -1,174 +1,67 @@
-# Function contract — `eliot-search`
+# CLI — invocation and bounded presentation
 
-**Status:** thin standalone generic-client contract; no implementation exists yet.
+The CLI captures invocation/settings, uses one owned client session and renders typed results. It owns no source
+scope, stores, planning or second process manager. This is a target recipe, not a working-product claim.
 
-The CLI owns argument parsing, protocol session, rendering and exit status. It never opens redb, Search
-CAS, Qdrant or the OS secret store.
+## Ownership and source seams
 
-## `parse_command`
+Read an adjacent recipe only when its boundary changes:
 
-```text
-parse_command(argv, environment, limits) -> Result<CliCommand, CliError>
-```
+| Boundary | Owner |
+|---|---|
+| Frames, deadlines and terminal races | [Protocol](../../crates/search-provider-protocol/FUNCTIONS.md) |
+| Child/streams, serviced I/O, cancellation, cleanup | [Client](../../crates/search-provider-client/FUNCTIONS.md) |
+| Pinned paging and emitted-item lifetime | [Query window](../../crates/search-query/search-continuation/FUNCTIONS.md) |
+| Actual receiving handlers | [Daemon](../eliot-searchd/FUNCTIONS.md) |
 
-Parses one closed command family:
+At the recorded pre-R055 head, the primary target is src/entry.rs with legacy remote/public_client/app/core routes.
+Inspect their current dispatch and real consumers before replacement. Detailed historical route findings and the
+five already removed orphan files remain in the
+[immutable source audit](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/bins/eliot-search/FUNCTIONS.md).
+They are not additional implementation steps or proof that a current command runs.
 
-- capability/status;
-- pair/unpair/list-bindings where server policy permits;
-- one of the exact eleven P00 recipes;
-- cancel a live request;
-- expand a source/continuation handle through `expand_handle@1`;
-- bounded doctor request exposed by accepted server capability.
+## Capture and dispatch
 
-Unknown/unversioned recipes, raw vendor filters, collection/point IDs and direct store paths fail.
-Sensitive values cannot be supplied as plaintext command arguments where the protocol requires opaque
-proof/ref handling.
+Capture args_os/settings once, preserve native paths, and validate help/version/request shape before spawning.
+Create current typed requests directly, not old recipes, grants, endpoint discovery or tab/hex conversions.
+The client immediately owns its child/streams/cleanup guard. A busy root fails without a second installation or
+transport fallback. Never kill an independent daemon.
 
-## `connect_and_authenticate`
+The original deadline covers setup and encoding. Input/control/output remain serviced during work; a synchronous
+public call may wrap that session but cannot replace it with blocking per-command subprocess loops.
 
-```text
-connect_and_authenticate(endpoint, local_identity, pairing_input, protocol_range, deadline)
-  -> Result<CliSession, CliError>
-```
+## Modes
 
-Connects to the per-installation local provider transport, completes mutual hello/pairing/binding and
-stores only bounded session state. Pipe ACL/local user alone is not treated as authentication.
+One-shot emits a complete bounded terminal response without reusable window/item locators, then cleans its child.
+A live session keeps the same child/streams; Continue/Expand use that session. A new invocation cannot reuse old
+locators. One active data request plus bounded control state is enough; no completed-request archive.
 
-The CLI never reads daemon credentials or constructs a Search grant.
+## Output
 
-## `fetch_capabilities`
+Decode and validate the entire terminal frame before displaying cards or locators. Use typed human/JSON/NDJSON
+rendering with proper serialization. Preserve final order, source/revision/representation/location and truthful
+gaps. Optional progress contains no uncommitted result cards.
 
-```text
-fetch_capabilities(session, refresh_policy, deadline)
-  -> Result<SearchProviderCapabilityDescriptor, CliError>
-```
+Service captured stderr alongside stdout with a finite diagnostic bound. Inherited/discarded stderr is a separate
+policy, not bounded capture. Do not wait for exit/stdout with unread piped stderr or use Command::output followed
+by a late size check. Output failure ends the owned session instead of leaving child work alive.
 
-Returns the binding-filtered descriptor. Cached data is planning/UI state only and does not bypass
-per-request validation. Hidden memberships/names/counts are not inferred or displayed.
+## Cleanup and expansion
 
-## `build_recipe_request`
+All exit paths use the client cleanup owner: stop work, bounded best-effort control, close stdin, finite graceful
+allowance, terminate when needed, observe/reap exit. Kill is not reap or rollback. No indefinite input-thread join,
+detached timeout workers or unproven hard OS timing promise. A healthy typed failure is distinct from broken
+framing; the protocol determines session usability.
 
-```text
-build_recipe_request(command, descriptor, explicit_scope, source_view, budget_class)
-  -> Result<SearchRecipeRequest, CliError>
-```
+Expand names an emitted window item and bounded relative context in its representation. It cannot select arbitrary
+revision offsets, revive expiry or switch revisions. A lost session repeats Search.
 
-Builds the exact P00 tagged request. It cannot mint/sign a grant, widen scope, invent a recipe or encode
-Qdrant fields. Unsupported capability returns a typed local error before sending.
+## Cutover and verification
 
-## `request_standalone_grant`
+Change CLI/client/protocol/daemon consumers together. Remove duplicate parser/launch/endpoint/session routes and
+exclusive fixtures; preserve native-path handling, bounded diagnostics and actual cleanup behavior. Protect shared
+revision-key owners and #598 when removing pairing-only code.
 
-```text
-request_standalone_grant(session, requested_scope, requested_ceiling, deadline)
-  -> Result<SearchReadGrantClaims, CliError>
-```
-
-Sends a bounded grant request to the daemon. The daemon intersects authoritative policy and mints the
-grant. CLI treats the grant as opaque bounded claims and never edits memberships/ceilings/signature.
-
-## `run_request`
-
-```text
-run_request(session, grant, request, renderer, cancel_source)
-  -> Result<CliTerminalOutcome, CliError>
-```
-
-Validates request/descriptor consistency, sends one protocol request, enforces progress ordering and
-accepts exactly one terminal result/error/cancelled event. Disconnect/cancel releases local resources;
-server mutation uncertainty remains a typed server outcome.
-
-## `cancel_request`
-
-```text
-cancel_request(session, request_id, deadline) -> Result<CancelOutcome, CliError>
-```
-
-Idempotent. Acknowledges `cancelled` only according to protocol semantics and never claims rollback of a
-possibly committed mutation.
-
-## `expand_handle`
-
-```text
-expand_handle(session, grant, handle, expansion, max_bytes, output)
-  -> Result<CliTerminalOutcome, CliError>
-```
-
-Builds `expand_handle@1` and uses normal request lifecycle. CLI does not decode token contents, cache an
-authorization permit or silently refresh an expired continuation.
-
-## `render_result`
-
-```text
-render_result(result, mode, disclosure) -> Result<RenderedOutput, CliError>
-```
-
-Human and JSON modes preserve request/plan IDs, material ambiguity, coverage denominator kind,
-freshness, assurance, degraded reasons, gaps and continuation/handle expiry metadata.
-
-Human formatting may summarize but cannot hide a material gap or relabel `candidate_scope`/
-`unknown` as `complete_scope`. JSON is canonical provider result plus bounded CLI metadata.
-
-## `map_exit_status`
-
-```text
-map_exit_status(outcome) -> CliExitStatus
-```
-
-Closed statuses distinguish:
-
-```text
-SUCCESS
-PARTIAL_OR_DEGRADED
-USAGE_ERROR
-AUTHENTICATION_OR_BINDING_FAILED
-UNAUTHORIZED_OR_SCOPE_EMPTY
-PROTOCOL_ERROR
-DEPENDENCY_UNAVAILABLE
-REQUEST_CANCELLED
-REQUEST_FAILED
-SNAPSHOT_EXPIRED
-```
-
-Material partial/degraded outcomes do not map to success unless a specific command contract explicitly
-classifies the outcome as successful-with-warning and preserves a non-zero machine status field.
-
-## `close_session`
-
-```text
-close_session(session, reason) -> CliDisconnectReceipt
-```
-
-Stops new requests, sends bounded cancellations where possible and closes local transport. It owns no
-durable handle deletion or daemon shutdown unless an explicit authenticated server command is invoked.
-
-## Configuration semantics
-
-Presentation/progress fields may apply locally. Direct store access and partial-success exit-zero are
-locked false. Standalone grant TTL is a daemon policy request ceiling, not client authority.
-
-## Typed failures
-
-- `CLI_USAGE_ERROR`
-- `CLI_COMMAND_NOT_SUPPORTED`
-- `DAEMON_UNAVAILABLE`
-- `PAIRING_REQUIRED`
-- `BINDING_REVOKED`
-- `PROTOCOL_VERSION_MISMATCH`
-- `CAPABILITY_NOT_AVAILABLE`
-- `REQUEST_PARTIAL_OR_DEGRADED`
-- `REQUEST_CANCELLED`
-- `SNAPSHOT_EXPIRED`
-- `CLI_OUTPUT_LIMIT_EXCEEDED`
-
-## Required tests
-
-- dependency guard: no redb/CAS/Qdrant/secret-store dependency;
-- exact eleven-recipe and command closure;
-- raw vendor filter/store path rejected;
-- mutual pairing beyond ACL;
-- CLI cannot mint/edit grant or widen scope;
-- progress/terminal sequencing and cancel/disconnect;
-- partial/degraded/ambiguity/coverage rendering and exit statuses;
-- handle token remains opaque and expansion uses recipe;
-- secret/pairing/handle/query/source redaction;
-- managed/standalone owner conflict displayed without bypass.
+After production changes run minimal locked Rust 1.98 check/Clippy selecting actual binaries, not libraries only.
+Later execution covers terminal-before-display, live cancellation/EOF, two-request paging/expansion, backpressure,
+output failure, cleanup, busy root and independent-invocation locator rejection. Record unrun cases explicitly.

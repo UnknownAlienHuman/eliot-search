@@ -10,7 +10,7 @@ repository.workspace = true
 publish = false
 readme = "README.md"
 
-# Stateless native boundary shared only by this package's bin/test targets.
+# Stateless native boundary shared by the package binary and integration tests.
 [lib]
 path = "src/lib.rs"
 
@@ -18,55 +18,9 @@ path = "src/lib.rs"
 name = "eliot-searchd"
 path = "src/entry.rs"
 
-# Legacy implementations are harness-only. Their CLI main is never run.
-[[test]]
-name = "eliot-search-snapshotd"
-path = "src/main.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-authority"
-path = "src/bin/eliot-search-sealed-authority.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-catalog"
-path = "src/bin/eliot-search-sealed-catalog.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-direct"
-path = "src/bin/eliot-search-sealed-direct.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-recover"
-path = "src/bin/eliot-search-sealed-recover.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-store"
-path = "src/bin/eliot-search-sealed-store.rs"
-harness = true
-test = true
-
-[[test]]
-name = "eliot-search-sealed-transaction"
-path = "src/bin/eliot-search-sealed-transaction.rs"
-harness = true
-test = true
-
 [features]
 default = ["wave1-shell"]
 wave1-shell = []
-# Retains the obsolete TCP/token-file proxy only for existing process fixtures.
-# Final product startup must never enable or fall back to this feature.
-legacy-loopback-harness = []
 # Revision-store ownership is a baseline DIRECT boundary, not optional wave
 # acceptance. The feature marker remains for graph compatibility only.
 wave2-source = []
@@ -89,7 +43,6 @@ wave4-query = [
     "dep:search-handles",
     "dep:search-result-projector",
     "dep:search-continuation",
-    "dep:search-eval",
 ]
 wave5-current = [
     "wave4-query",
@@ -102,11 +55,6 @@ wave6-proof = [
     "dep:search-subject-resolver",
     "dep:search-comparator",
 ]
-wave7-lifecycle = [
-    "wave6-proof",
-    "dep:search-retention",
-]
-full-baseline = ["wave7-lifecycle"]
 
 [dependencies]
 search-contracts.workspace = true
@@ -120,7 +68,7 @@ search-provider-protocol.workspace = true
 search-lexical.workspace = true
 zeroize = "=1.9.0"
 # Real canonical content hashing, never SHA-256 relabelled as BLAKE3.
-# `pure` excludes C/assembly hashing implementations; see SOURCE_MAPPING.md.
+# Preserve the existing Rust-only `pure` configuration.
 blake3 = { version = "=1.8.2", default-features = false, features = ["std", "pure", "zeroize"] }
 
 # Live plaintext DIRECT ingestion always enters the canonical admission,
@@ -159,9 +107,6 @@ search-comparator = { workspace = true, optional = true }
 search-handles = { workspace = true, optional = true }
 search-result-projector = { workspace = true, optional = true }
 search-continuation = { workspace = true, optional = true }
-
-search-retention = { workspace = true, optional = true }
-search-eval = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 # Concrete current-user DPAPI effect owner. The daemon retains only credential,
