@@ -1,110 +1,24 @@
-# Current indexed contract
+# Indexed boundaries — navigation, not a second schema
 
-The old indexed v1 contract froze one sparse-only qualification profile into shared provider-neutral types:
-20 payload fields, 19 indexes, one-shard/strict/strong assumptions, schema/payload digests and a canonical
-membership population. That profile is not a compatibility promise and should not remain the product spine.
+The historical sparse/vector/validity contract is superseded. Do not implement it beside the current profile.
+[Shared contracts](FUNCTIONS.md) owns cross-owner data; concrete indexed algorithms live at these owners:
 
-Read the [contract direction](README.md),
-[Qdrant bridge map](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md),
-[publication map](../search-index-qdrant/search-publication/FUNCTIONS.md) and
-[point-identity issue](https://github.com/UnknownAlienHuman/eliot-search/issues/259).
+| Question | Owner |
+|---|---|
+| Physical text index versus query scoring | [Lexical](../search-lexical/FUNCTIONS.md) |
+| Generation-bound addresses and collision evidence | [Point identity](../search-index-qdrant/search-point-identity/FUNCTIONS.md) |
+| Exact Qdrant schema, payload and RPC translation | [Bridge](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) |
+| Fixed build input, visibility, recovery and cleanup | [Publication](../search-index-qdrant/search-publication/FUNCTIONS.md) |
+| Pinned evidence lookup | [Control](../search-control-redb/FUNCTIONS.md) |
+| Empty/unknown selection and candidate/IDF filters | [Scope](../search-query/search-access/FUNCTIONS.md) |
 
-## Shared indexed values
+Stage 2/3A has no required vectors, occurrence incarnations, sequence or validity interval. Points are immutable
+within one never-reused physical collection. Conditional Stage 3B cannot introduce those fields before its
+measured need and consumers exist. Neither profile physically deletes individual points.
 
-Only stable cross-owner meaning belongs here:
+A Qdrant hit is a nomination. Its address is not the full identity, and payload is not retained source evidence.
+Known empty selection returns without RPC; unknown selection fails instead of widening. Do not reinstate the
+old empty-is-error rule, provider-neutral field table or schema/qualification digests.
 
-```text
-PointId                         // full stable identity value
-PointIdentityEvidence           // sufficient collision verification
-OccurrenceIncarnation
-RetrievalRole / RetrievalProfileId / RetrievalInputId
-ViewSequence
-ValidityInterval { valid_from, valid_until? }
-Stable grouping/filter coordinates actually used by preparation/query/publication
-ViewManifestEntry
-```
-
-Actual Qdrant payload field names, index creation structs, write ordering, shard/replica/resource settings,
-strict mode, SDK vector variants and vendor readback types stay private to the bridge.
-
-## Stable point
-
-A point identity binds stable retrieval meaning, not an exact mutable citation:
-
-```text
-source-stable identity / occurrence incarnation
-retrieval role and published profile/input identity
-stable logical/grouping coordinates
-```
-
-The Qdrant point carries that identity, selected filter/group fields, view validity and actual vectors or
-native document input. Exact source revision, representation, occurrence range and excerpt verification live
-in `ViewManifestEntry` for one published view.
-
-A later view may retain the same point without mutating an earlier view's citation. A changed retrieval input
-or identity-bearing occurrence creates a different point. Full identity evidence is read back and compared;
-a payload digest echo is not collision proof.
-
-## Retrieval profile
-
-The published retrieval profile binds the semantics that must match preparation and query:
-
-- vector/document names and roles;
-- native BM25 model and document/query options;
-- optional explicit vector shape/distance/multivector parameters;
-- tokenizer/case/stemmer/stopword/folding options when used;
-- stable field/filter/grouping interpretation;
-- rank/fusion profile when externally observable.
-
-A profile change which cannot coexist safely creates a new physical collection generation and ordinary
-publication. Do not preserve old points by relabelling their profile.
-
-## Scope and IDF
-
-A query resolves one non-widening selected base population from the pinned `PublishedView`. That population
-is used for retrieval eligibility and sparse/BM25 `idf.corpus`. Optional query-only narrowing may make the
-retrieval filter smaller without silently redefining the intended IDF denominator.
-
-Empty/unknown explicit scope fails. Do not turn one membership digest into access authority or create a
-provider-neutral frozen sorted population record for every query.
-
-## Physical schema
-
-The selected Qdrant generation may contain sparse, dense or multivector fields required by its real profile.
-Local baseline topology is one node/shard/replica and one serialized publisher, but that is configuration,
-not a shared correctness type. `wait=true` plus exact readback and committed-view switching establish the
-local mutation boundary; strong ordering is not universal.
-
-Schema/profile/vector incompatibility builds a new generation. Adding a vector definition does not claim
-existing points contain it. Publication verifies the complete selected generation before switching the
-current view.
-
-## Evidence and readback
-
-Do not store or expose provider-neutral fields such as:
-
-```text
-source_revision
-unit_ordinal used as citation authority
-payload_digest / identity_digest
-vector_digest_<name>
-canonical schema receipt
-qualification/acceptance digest
-```
-
-Publication reads back actual vectors, payload fields, validity and identity evidence required by each page.
-Query treats a Qdrant hit as a nomination, resolves it through the pinned manifest and verifies retained
-bytes/range.
-
-## Removal
-
-Delete the frozen `PAYLOAD_FIELDS`/index table, sparse-only mode, schema/payload canonical digest authority,
-eligibility/qualification proof types and duplicate bridge definitions after direct consumers migrate.
-Concrete Qdrant request/response conversion remains private in the bridge; shared contracts retain only the
-stable semantic values above.
-
-## Verification
-
-Through the connected application, verify stable point readback, selected scope/IDF population, native BM25
-text ingestion/query, point→manifest→retained excerpt, profile/generation rebuild and old-view survival. A
-contract fixture or digest alone does not qualify Qdrant or the product.
+The [prior contract](https://github.com/UnknownAlienHuman/eliot-search/blob/44ee1661833c1139f1e0f1486f365a3a523fe814/crates/search-contracts/INDEXED_CONTRACT.md)
+is historical evidence only. Physical/query profile rules and validation cases must not be copied here again.

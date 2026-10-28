@@ -1,22 +1,18 @@
-# search-research-export-adapter
+# Optional Research export — design note only
 
-**Status:** optional design only. No Cargo package, runtime handler or capability exists.
+No Cargo package, runtime handler or production consumer exists here. Export is not a baseline prerequisite.
+The retired package contract and activation/receipt framework are preserved in
+[Git history](https://github.com/UnknownAlienHuman/eliot-search/blob/44ee1661833c1139f1e0f1486f365a3a523fe814/crates/search-research-export-adapter/FUNCTIONS.md), not implementation instructions.
 
-Implement this adapter only when one concrete Research consumer requires the `eliotr.normalized.v1` bundle. It receives already selected, source-backed materialization data from the daemon and returns one bounded wire object. The adapter does not create another storage, authority or qualification layer.
+Add an adapter only with a named downstream consumer and its verified current format. Map selected retained
+source/prepared data into that format with bounded output, truthful revision/coordinates and explicit loss.
+Use the existing evidence reader and operation deadline/cancellation. Calculate only checksums required by
+that actual format; never relabel an internal digest as a different algorithm.
 
-## Owns when implemented
+The adapter does not own source admission, storage, publication, ownership transfer, grants, receipt archives
+or activation gates. Do not reserve a wire version, dependency list, package size or public API before a
+consumer exists. Implement the smallest mapping beside its caller and change the caller in the same cut.
 
-- mapping the selected materialization into the exact wire schema;
-- deterministic manifest assembly and explicit unknown-field rejection;
-- wire-level digest calculation and readback;
-- reporting unsupported or lossy fields without fabricating completeness.
-
-## Does not own
-
-- source admission, materialization or publication;
-- ownership transfer, cutover receipts or canonical Research writes;
-- Qdrant, redb, object-store or key access;
-- unsaved overlays unless a concrete consumer and provenance contract are selected;
-- provider registries, activation gates or release authority.
-
-The concrete operation belongs in [FUNCTIONS.md](FUNCTIONS.md) after a real caller is selected. Until then this directory is documentation, not delivered functionality.
+Follow the [delivery sequence](../../docs/implementation/README.md#delivery-sequence) and
+[retained-evidence owner](../search-query/search-candidate-validator/FUNCTIONS.md). Optional export cannot
+restore Architecture 8.4 waves, qualification fixtures, cutover receipts or package-only edit restrictions.

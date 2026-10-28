@@ -1,17 +1,12 @@
-# Working on search-lexical
+# Working on lexical retrieval
 
-Read the [architecture](../../docs/architecture/README.md), [implementation](../../docs/implementation/README.md),
-local [source/behavior map](FUNCTIONS.md) and [query intent](../search-query/README.md).
+Read the [profile recipe](FUNCTIONS.md), then actual preparation and query consumers. Use its selected Code
+text-index profile; do not restore the earlier word-tokenizer/sparse-inference design or local alias expansion.
+The [bridge](../search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md) alone translates vendor APIs.
 
-Connect actual preparation/query consumers to native Qdrant BM25 with explicit document/query preprocessing.
-Reuse useful bounded Unicode identifier splitting, not the old numerical encoders, corpus statistics,
-qualification records or legacy daemon index. Move a trivial remainder into its real consumer.
+Keep source coordinates and integrity with their owners. Physical-profile changes rebuild; query-time k/b does
+not. Top-k limits returned nominations, not backend population work. Measure actual relevance and cost rather
+than asserting them from tokenizer or cache behavior.
 
-Do not claim that appending a whole identifier preserves it through the word tokenizer. Exact spelling/name
-behavior remains independent of lexical top-k. Do not call a native scoped query O(top-k): the pinned donor
-collects its filtered IDF population. The local map supplies concrete source evidence and required examples.
-
-No lexical-provider trait, second encoder, IDF cache or new framework is selected by these findings. Keep
-source coordinates and integrity with their actual owners. After code run minimal pinned compiler/Clippy for
-changed real consumers; assess actual relevance and scoped-query costs before claims. Delete obsolete
-vector/receipt/byte-shape fixtures with their implementations, not the useful behavioral examples.
+Remove local numerical encoders, statistics, qualification records and exclusive fixtures with callers. No
+provider trait, IDF cache or second index is needed. After code, run minimal pinned check/Clippy for real consumers.

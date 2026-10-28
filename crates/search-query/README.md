@@ -1,23 +1,29 @@
 # Query and source-backed results
 
-The connected query owner turns one typed operation into bounded, source-backed output. It pins one
-`PublishedView`, resolves one non-widening scope, captures one query-scoring profile, calls the concrete handler,
-preserves final order and verifies selected evidence against immutable objects.
+A new Search or Exact operation pins one published view and resolves a non-widening scope. Only Search captures
+query scoring. Continue/Expand inherit the existing window's view and result selection; they never switch to
+current state. Each handler returns bounded source-backed output or truthful gaps.
 
 ## Direct flow
 
 ```text
-typed operation + source selection + limits
-→ pin current PublishedView (physical profile + redb snapshot)
-→ capture QueryScoringProfile
-→ resolve ResolvedScope without widening
-→ reserve finite nomination/output/window capacity
-→ execute Search | Exact | Continue | Expand
-→ select page before retained-source I/O
-→ point-read pinned evidence
-→ verify retained representation/range
+new Search/Exact + source selection + limits
+→ pin current PublishedView and resolve scope
+→ reserve the operation's finite capacity
+→ Search: capture scoring and query Qdrant; Exact: scan retained inventory
+→ verify the selected retained evidence under the same execution context
 → emit source/revision/location/excerpt, basis and gaps
+
+Continue/Expand + same-session locator
+→ admit the existing window under its original expiry
+→ use its pinned view and final ordered evidence references
+→ prepare a bounded page or emitted-item neighborhood
+→ complete terminal output before committing window progress
 ```
+
+Search selects its output page before retained-object reads. Exact owns its independent scan and coverage;
+it does not require Qdrant nominations or a Search scoring profile. The
+[window recipe](search-continuation/FUNCTIONS.md) owns later-page acquisition and output accounting.
 
 A citation proves provenance, not relevance, uniqueness, semantic identity or corpus completeness.
 
@@ -116,9 +122,12 @@ operation. A real non-Qdrant branch may use one private checked rank merge; no p
 
 ## Lifetime and windows
 
-One `RequestContext` carries view, physical profile, query scoring profile, scope, absolute deadline, cancellation
-and finite counters through Qdrant, evidence, formatting and output. No nested phase resets. No redb writer,
-view-manager mutex or window mutation borrow spans backend/object/process/model I/O.
+Each admitted operation carries its pinned view/scope and original execution deadline, cancellation and finite
+counters through evidence, formatting and output. Search additionally captures query scoring; Exact does not need
+BM25 settings, and Continue uses stored order rather than new scoring. Lower I/O receives execution-only state.
+No nested phase resets. No redb writer, view-manager mutex or mutable window/map borrow spans external I/O.
+The [window owner](search-continuation/FUNCTIONS.md#operation-ownership) serializes data requests through owned
+pending state while cancellation and expiry remain serviced.
 
 One-shot output exposes no reusable locator. A live session may transfer the same view guard and final ordered
 references into one bounded `QueryWindow`. Continue pages stored results; Expand reads bounded context around an

@@ -1,6 +1,6 @@
 # Local control storage
 
-Use the [implementation guide](../../docs/implementation/README.md#publication-and-retrieval).
+Use the [control recipe](FUNCTIONS.md) and [shared lifetime rules](../../docs/implementation/README.md#lifetime-and-lock-order).
 This package is the concrete redb owner for current source/settings/publication metadata.
 
 ## Write the useful state
@@ -26,7 +26,7 @@ tables. Immutable objects live with the revision/preparation owner; Qdrant owns 
 
 The new application may reject an unsupported old root before writing and leave it intact. General
 migration staging/cutover/rollback, old-format codecs and a new export framework are not prerequisites.
-Historical README/FUNCTIONS schemas explain existing code; they do not reinstate retired requirements.
+Legacy source schemas explain existing code; the current recipe does not preserve their retired requirements.
 
 Keep actual format/transaction/source-reference/publication consistency and actionable scoped errors.
 Test committed-state reopen, abort, genuine unknown outcomes and bounded retry-state retirement.

@@ -1,50 +1,31 @@
-# search-handles — inspected source and removal map
+# Handle removal and emitted-item expansion
 
-## Evidence boundary
+The [prior source audit](https://github.com/UnknownAlienHuman/eliot-search/blob/44ee1661833c1139f1e0f1486f365a3a523fe814/crates/search-query/search-handles/FUNCTIONS.md)
+found two stores, copied source/revision records, random tokens, whole-catalogue scans and unconstrained revision
+ranges. That is revision-specific evidence. Recheck current Cargo/Rust/non-Rust callers before deletion.
 
-At the established audit revision, the shared package contained about 35 KiB of production Rust and the daemon
-had another roughly 19 KiB result-handle catalogue. The public daemon did not use the shared package. These size,
-topology and caller findings are historical evidence, not current branch truth.
+## Replacement boundary
 
-Before a code cut, repeat the exact current search across manifests, Rust imports/constructors/path inclusion,
-non-Rust tooling, features, targets, tests and workflows. Record all surviving consumers and move them before
-removing APIs, modules or the package.
+There is no public handle mint. A card may carry WindowItemRef `{ window_id, item_index }` only for the same live
+session. This is a locator; the window's ordered EvidenceRef and pinned view provide its evidence binding.
+One-shot output provides no reusable locator.
 
-## Inspected behavior
+The [window recipe](../search-continuation/FUNCTIONS.md#operation-ownership) owns serialization and pending output.
+`prepare_expand` validates a successfully emitted item, fixed expiry and the real session binding before retained
+I/O. It moves/owns the needed operation state without retaining a shared mutable window borrow or mutex.
 
-The shared package stored token-digest records and copied source/revision/range metadata in another in-memory
-authority map, accepted caller-shaped validation/permit structures and maintained an invalidation lifecycle.
+Derive a finite relative neighborhood around that item's representation/range, reserve the original operation's
+read/output budget, and use [evidence verification](../search-candidate-validator/FUNCTIONS.md). No arbitrary
+absolute revision offsets, source-catalogue revalidation, latest-source substitution or independent handle TTL.
+Only complete output commits new progress; damaged/partial output closes the session. Ordinary healthy request
+failure follows the window owner's restoration rule, not a second handle lifecycle.
 
-The inspected daemon path listed and hashed the whole source catalogue, minted a random token per emitted item,
-stored source/revision/digest/length/expiry again, then repeated catalogue work during expansion. Expansion could
-accept arbitrary byte ranges inside the whole revision. Staged insertion only after complete output and keeping an
-exclusive borrow through output were useful mechanics; the second authority and broad range were not.
+## Delete with consumers
 
-## Replacement
+Remove both handle stores, entropy/token hashing, copied authority records, catalogue scans/fences, permits,
+invalidation generations, durable leases and arbitrary-range expansion. Move only useful range verification and
+prepared-output commit into the window/evidence owners. Serialization does not mean holding a mutable borrow
+through I/O. Delete exclusive fixtures and the crate once its callers move.
 
-No public handle mint exists. The query-window owner may expose:
-
-```text
-WindowItemRef { window_id, item_index }
-```
-
-`prepare_expand` resolves the exact successfully emitted item under an exclusive live-window borrow, checks
-absolute expiry and any concrete restricted-session binding, obtains its pinned manifest entry, derives a finite
-relative neighborhood, reserves read/output budget and verifies the retained object/range. The request cannot
-supply unconstrained absolute offsets.
-
-Complete output returns the frame; partial output fails the session/window without minting or acknowledging new
-state. The pinned manifest supplies source authority and the immutable reader verifies bytes.
-
-## Delete after caller cutover
-
-Remove both handle stores, token entropy/hashing, copied records, source-catalogue fences/scans, grants/permits,
-invalidation generations, durable leases, arbitrary revision-range expansion and handle-specific crypto/provider
-fixtures. Move exact range reading and exclusive prepared-output behavior into the query-window/evidence owner and
-leave no facade.
-
-## Verification after code
-
-Run minimal Rust 1.98 check/Clippy for changed production consumers. Verify no handle allocation for ordinary
-cards, no whole-catalogue enumeration for page/expansion, only emitted items can expand, neighborhoods stay
-bounded, wrong/missing bytes fail real verification, and expiry/restart/disconnect/revocation remove availability.
+After code run minimal pinned check/Clippy for real query/window/protocol/daemon consumers. Later cases exercise
+only emitted items, bounded neighborhoods, wrong/missing bytes and expiry/disconnect/restart behavior.

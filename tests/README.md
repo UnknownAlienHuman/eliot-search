@@ -1,10 +1,13 @@
-# tests
+# Test material
 
-| Directory | Contents |
-|---|---|
-| `control-corpus/` | Acceptance corpus: an actively edited local function; renamed analogues across reference repositories; a same-name false positive; tests carrying a decisive edge case; mutually exclusive configuration variants; a fork and a mirror; a nested repository; stale, unindexed and inaccessible repositories; saved and unsaved edits; a watcher gap and resume; publication crash at each failpoint; access revocation during a query; a purge and restore attempt; a point-identity collision; multilingual documentation and non-ASCII paths. |
-| `fixtures/` | Recorded deterministic fixtures: parser bundles, capability probes, golden lexical vectors, provider envelopes. |
-| `property/` | Property and fault proofs over the invariants. |
+The tracked directories contain historical corpus/fixture material, not a completed acceptance programme.
+Their names do not prove that current binaries use or pass them. See the
+[test cutover](../docs/implementation/TEST_CUTOVER.md) for disposition and the
+[registry](../docs/audit/ANALYSIS_REGISTRY.md#evidence-status) for actual execution evidence.
 
-Evaluation baselines are raw read and search, an existing comparison tool, and this system. A green
-unit suite without acceptance evidence is not product acceptance.
+Keep causal cases only with their implemented owner. Old recipe/capability envelopes, lexical vector goldens,
+purge/restore platforms and point-reclaimer matrices must not become requirements for the new product.
+Move or delete fixtures with the actual code cut according to [ownership](CRATE_FIXTURE_OWNERS.md).
+
+Implement connected behavior first and run the minimal compiler/Clippy closure after Rust changes. Broad runtime,
+relevance and scale suites follow the connected product. Documentation-only work does not run or qualify them.

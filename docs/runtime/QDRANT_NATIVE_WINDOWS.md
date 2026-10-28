@@ -25,15 +25,18 @@ record origin, license, hashes and commands.
 
 ## Baseline product mode
 
-Use a configured local endpoint:
+The selected Rust bridge uses a configured local **gRPC** endpoint. This illustrates the target settings;
+it is not a runnable current ELIOT config schema until the typed-settings consumer is implemented:
 
 ```toml
 [qdrant]
 mode = "external"
-endpoint = "http://127.0.0.1:6333"
+endpoint = "http://127.0.0.1:6334"
 ```
 
-Start Qdrant manually, as an installed service or through development tooling. The one bridge:
+Port 6333 is REST/health; port 6334 is gRPC. The [bridge recipe](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md#dependency-cut)
+owns the transport choice and links the official definitions. Start Qdrant manually, as an installed service
+or through development tooling. The one bridge:
 
 1. connects with the actual optional API key;
 2. observes live server/version/capabilities;
@@ -87,10 +90,11 @@ after current callers are rechecked.
 
 ## Qdrant Edge is separate
 
-Qdrant Edge is an embedded backend replacement experiment, not a managed server. The official 0.8.0 line remains
-beta and recently exposed WAL acknowledgement/replay defects. Evaluate only a newer released line after the server
-walking skeleton works; require Windows persistence/crash, BM25/filter, generation lifecycle, build-size and
-latency evidence. Never ship server and Edge as permanent dual backends.
+Qdrant Edge is an embedded replacement candidate, not a managed server or fallback. Prior donor inspection
+recorded beta/WAL concerns for 0.8.0; that is historical candidate evidence, not the current release status.
+Recheck the exact released line only with a real replacement consumer after the server path works. Require
+Windows persistence/crash, BM25/filter, generation lifecycle, build-size and latency evidence. Never ship
+server and Edge as permanent dual backends.
 
 ## Updating Qdrant
 

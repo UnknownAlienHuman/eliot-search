@@ -28,7 +28,7 @@ Follow the [cross-owner values](../../docs/implementation/README.md#minimal-cros
 
 ```text
 ExecutionContext = original absolute deadline + cancellation + operation-specific remaining counters
-RequestContext   = query ExecutionContext + pinned view + resolved scope + query scoring
+RequestContext   = query ExecutionContext + pinned view + resolved scope; Search adds scoring
 ```
 
 Root/bootstrap/object/preparation/publication operations do not construct a dummy query context. A query borrows

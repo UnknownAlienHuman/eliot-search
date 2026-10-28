@@ -1,41 +1,13 @@
-# Working on search-config
+# Working on settings
 
-Read the [architecture](../../docs/architecture/README.md),
-[implementation guide](../../docs/implementation/README.md), package [README](README.md) and
-[source audit](FUNCTIONS.md).
+Read [FUNCTIONS.md](FUNCTIONS.md) and the affected daemon constructor. Add each typed setting with its real
+consumer; Foundation needs only root/plain settings and input/diagnostic bounds. Do not implement a catalogue
+of future fields, hot reload or a configuration platform first.
 
-Do not repair the generic configuration platform. Replace it with concrete typed settings used by actual
-owners.
+The recipe owns [capture and paths](FUNCTIONS.md#target-capture), [layer semantics](FUNCTIONS.md#layer-semantics)
+and [redaction](FUNCTIONS.md#diagnostics-and-secrets). Preserve native OS paths, sparse omission and explicit
+empty/false values. Invalid selected input fails before effects. Status reports actual constructed owners.
 
-Select and pin high-level `toml` + Serde during the typed-settings cutover; the current lock has only
-`toml_parser`, not those target dependencies. Use a bounded file, `vars_os()` for selected environment fields and one
-`args_os()` parser. Preserve OS-valued path inputs; TOML paths are Unicode. The local
-[layer/path recipe](FUNCTIONS.md#sparse-layers-and-validation) owns omissions, precedence, lists, validation
-and relative path bases. Unknown fields/types and invalid effective values fail before constructing any owner.
-
-Startup constructs the application directly. Remove `try_activate`, fingerprints, registry/section digests,
-action DAGs, receipt kinds, mandatory secret section and accepted-readiness receipts. Do not manufacture a
-`LiveApply` receipt to accept startup values.
-
-Retain only supported concrete settings:
-
-- root/source locations and real source policy fields;
-- storage profile;
-- Qdrant endpoint/optional managed settings;
-- lexical/retrieval profile;
-- query defaults;
-- selected optional profiles with real handlers.
-
-Implement hot reload only for a concrete owner operation. Otherwise require restart. Profile/schema changes
-use publication; external uncertainty remains with that owner. Persist one current typed value only when
-restart must remember a runtime-applied change—never a completed config operation history.
-
-Status serializes running settings and actual component readiness. It does not rebuild/redact a generic
-snapshot, hash it or require acceptance booleans.
-
-Change daemon capture/construction/status and setting consumers together, then delete generic parser/tree/
-registry/snapshot/fingerprint/diff/plan/redaction APIs and their fixtures. If little shared code remains,
-delete this crate rather than preserve a facade.
-
-After code run minimal Rust 1.98 compiler/Clippy for actual config/control/daemon/consumer targets and focused
-precedence/bounds/non-Unicode/file-ceiling/status/live-vs-restart cases.
+Select replacement TOML/Serde dependencies with the code cut. Move current locator/key consumers before
+removing their old APIs; preserve unpublished #598 overlap without blocking plain storage. Delete registry,
+fingerprint, receipt and duplicate-parser machinery with callers. Run minimal pinned check/Clippy after code.

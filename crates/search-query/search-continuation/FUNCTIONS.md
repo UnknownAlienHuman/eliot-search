@@ -36,19 +36,23 @@ One live session owns a small map of windows. A window contains only:
 ```text
 window ID
 PublishedViewGuard
-final ordered WindowItemRef[]
+final ordered EvidenceRef[]
 next handled index
 fixed expires_at
 finite retained-item / metadata / optional excerpt-byte charges
 issued item indexes needed for expansion
 ```
 
-`WindowItemRef` points to the exact pinned evidence row and its representation/range. It is not a copied
-source body, public proof record or new handle token. Item locators are `(window_id, item_index)` on the same
-session. There is no separate result-handle catalogue, item entropy, source-catalogue digest or per-page TTL.
+Each internal EvidenceRef points to an exact pinned evidence row and its representation/range; it is not a
+copied source body. The public WindowItemRef is only `(window_id, item_index)` in that same session, resolving
+one already emitted item. Do not store those public locators as the window's evidence. There is no separate
+handle catalogue, item entropy, source-catalogue digest or per-page TTL.
+Use the creating request's non-reused session-local ID as window_id. Expiry releases storage, not the ID;
+an old locator must never resolve to a different later window in the same session.
 
-The fixed expiry is chosen once when the first terminal response commits the window. Continue/Expand get fresh
-request deadlines capped by that expiry and remaining lifetime work limits. Access never renews it. An exhausted
+Choose the fixed expiry while preparing the first terminal response, before output; validate and reserve the
+new window's slot then. Continue/Expand get fresh request deadlines capped by that expiry and remaining lifetime
+work limits. Access never renews it, and committing a frame never starts a new TTL. An exhausted
 cursor may retain the window until expiry while emitted items remain expandable; otherwise release it promptly.
 
 One-shot output exposes no live locator. Session end, EOF, failure, daemon restart or selected restricted-
@@ -92,10 +96,30 @@ Local flush is not peer acknowledgement. On a lost connection the user repeats S
 receipt or exactly-once protocol is required. Progress frames, if any, contain no cards, locators or cursor-
 committing facts.
 
-Serialize operations for the affected session/window, but hold no global view/window lock across Qdrant,
-retained-object reads or transport writes. Idle expiry is serviced by the existing session/control event loop.
-Removing an expired map entry prevents new acquisitions; an already-running operation retains its guard until
-that operation actually ends.
+## Operation ownership
+
+The protocol admits one active data request per session. Move the selected window into private operation-owned
+pending state (or use the same exclusive ownership in the existing session task); leave no second acquisition
+path. Do not clone its result vector or hold a mutable map borrow, window mutex or view-manager lock across
+retained reads, encoding or transport I/O. The owned view guard may remain live across that work.
+
+The control loop continues servicing Cancel, Close and expiry. It cancels the active operation directly rather
+than waiting for a window lock. Idle entries may be removed; active state retains its view until work actually
+stops. No global busy registry, revision-token protocol or separate window service is required.
+
+Before any terminal byte, reserve the map slot and metadata, validate cursor arithmetic and stage the handled
+prefix/emitted indexes. Enforce the deadline (including window expiry) while writing/flushing. After successful
+complete flush, apply the prepared local update synchronously before the next dispatch: no allocation, new
+source read, revalidation RPC or other fallible work after advertising the locator.
+
+A healthy pre-output error/cancellation returns an existing unexpired window with cursor/emitted set unchanged.
+Actual read/work charges remain spent; failure does not refund them. A failed new Search inserts no window.
+Partial output/disconnect discards pending availability. Expiry/revocation cancels unfinished work and prevents
+new acquisitions; after a completed terminal the same session owner applies the prepared update and then removes
+expired availability without renewing it. Local flush is not peer acknowledgement.
+
+The [protocol terminal rule](../../search-provider-protocol/FUNCTIONS.md#cancellation-versus-terminal-output)
+decides which terminal wins. This is one session-owned update, not a second transaction or locking protocol.
 
 ## Expansion stays inside the emitted item
 

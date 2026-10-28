@@ -44,6 +44,11 @@ Versioned primary sources retained from that inspection:
 Compile and execute the exact selected server/client patch with real consumers. The present lock does not supply
 this selected path. Query-time k/b and physical index settings remain distinct.
 
+R056 checked the official [Rust quickstart](https://qdrant.tech/documentation/quickstart/) and
+[network ports](https://qdrant.tech/documentation/installation/#networking) on 2026-10-28: Rust uses gRPC, ordinarily
+port 6334; 6333 is REST/health. Corrected the Windows target example and the bridge context boundary. This is
+API/documentation evidence, not a connected ELIOT/server run or a broader version/advisory audit.
+
 <a id="plain-object-publication-donor"></a>
 ## Windows finalization — exact evidence and limits
 

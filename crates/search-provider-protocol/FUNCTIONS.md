@@ -47,7 +47,9 @@ source selection still belongs to the daemon. Restricted external authentication
 
 One active data request is sufficient. Cancel names that request and consumes neither another work slot nor
 completed-ID history. A late Cancel cannot cancel the next ID. Counter exhaustion closes instead of wrapping.
-Coalesce redundant control signals; do not build a replay ledger or a general work scheduler.
+Require increasing data-request IDs and retain only the last admitted ID. Reject a reused or older data ID;
+Cancel/Close do not advance that counter. Coalesce redundant control signals; do not build a replay ledger or
+a general work scheduler.
 
 Service reads, writes, control and deadlines while work is active. A synchronous public call may wrap this same
 serviced runtime. Never hold the only session owner inside a full write/read loop or block the event-loop thread
@@ -104,7 +106,9 @@ Before terminal output, reserve the pending window slot/metadata, validate curso
 indexes. After successful local flush, commit is an infallible local assignment with no new allocation, source
 read, policy requalification or backend call. Serialize the next data dispatch after it. This prevents an
 avoidable failure after advertising a locator; it does not claim atomic delivery across a crashed connection.
-Do not hold global view/window locks across I/O. The window recipe owns detailed accounting and expiry.
+The prepared result owns its pending window state and view guard; it retains no mutable window/map borrow or
+mutex across I/O. [Window operation ownership](../search-query/search-continuation/FUNCTIONS.md#operation-ownership)
+owns reservation, error restoration, spent-work accounting and expiry. Do not add a second window transaction.
 
 EOF/end/failure signals active work and removes session windows. Idle turns service expiry; active guards remain
 until their operations actually stop. No cleanup daemon or durable resume ledger is required.

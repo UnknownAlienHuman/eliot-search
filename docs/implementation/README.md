@@ -31,14 +31,15 @@ QueryScoringProfile = request-time BM25 settings; separate from physical schema
 PublishedView       = exact physical collection + physical profile + owned redb read snapshot
 EvidenceRef         = point/source/prepared binding + representation/range
 ExecutionContext    = absolute deadline + cancellation + counters needed by this operation
-RequestContext      = query execution context + pinned view + resolved scope + scoring profile
+RequestContext      = query execution context + pinned view + resolved scope; Search adds scoring profile
 ```
 
 `ExecutionContext` is a small private value or borrowed parameters, not a generic context service. Root creation,
 object writes, preparation and publication need no query view, scope or scoring profile. A query passes its same
 execution budget to lower-level I/O; nested calls cannot renew the deadline or reset counters. Never fabricate a
 view or add optional query fields to every background operation. These names describe responsibilities, not a
-requirement to create one public type per row.
+requirement to create one public type per row. Exact needs no BM25 settings; Continue retains its original
+ordered results instead of requerying under a new scoring profile.
 
 Stage 2/3A has no intra-generation sequence. Changing query-time k/b does not rebuild a collection; changing
 physical schema/retrieval meaning does. The [lexical owner](../../crates/search-lexical/FUNCTIONS.md) defines both
@@ -159,8 +160,9 @@ DataRootGuard precedes stores and outlives them; it is not a per-request mutex. 
 performs object/Qdrant I/O outside a redb writer, commits bounded metadata, opens/verifies the matching snapshot,
 then installs the view under a short lock. Do not begin another publication before installation/recovery completes.
 
-Query clones current under the short view lock, releases it, resolves scope and performs backend/evidence work.
-Prepare output outside a window mutation lock; commit cursor progress only after complete bounded output. No redb
+New Search/Exact clones current under the short view lock, then releases it before scope/backend/evidence work.
+Continue/Expand keep the existing window's view instead of acquiring current. Prepare output outside a window
+mutation lock; commit cursor progress only after complete bounded output. No redb
 writer, view-manager mutex or window mutation borrow spans filesystem, Qdrant, process or model I/O. Last guard
 drop wakes cleanup and performs no deletion. Remove old APIs that require the reverse order.
 

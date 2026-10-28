@@ -1,83 +1,83 @@
 # Analysis registry
 
-Current checkpoint and evidence, not another specification or permission system. Algorithms live with owners.
+Current checkpoint and evidence only. Algorithms live with their operation owners; this record grants no
+implementation permission or runtime readiness.
 
 <a id="resume"></a>
 <a id="resume-after-interruption"></a>
 ## Resume
 
-**Checkpoint:** R055, 2026-10-28 — reconcile instructions and shorten implementation entrypoints.
-**Branch:** codex/refactor-preparation-20261017, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
-**Inspected parent:** 45ddf887c9e84861b1302334a1f5ecabb263f7f3 (R054).
-**Original source baseline:** c8e38b6fc9829f1cd38070773b1b3e5b21de18ad.
+**Checkpoint:** R056, 2026-10-28 — complete relative-link check and remaining instruction cutover.
+**Branch:** `codex/refactor-preparation-20261017`, [PR #610](https://github.com/UnknownAlienHuman/eliot-search/pull/610).
+**Inspected parent:** `44ee1661833c1139f1e0f1486f365a3a523fe814` (R055).
+**Verified source tree:** `7fb022f08bcc7cf76dba54889bbb402f40fcad92`.
 
-R055 is documentation-only. No product code, manifest, lockfile or workflow is changed. The target product remains
-unconnected end to end. Until PR #610 merges, main retains the older documentation generation.
+This change is Markdown-only. Product code, manifests, lockfile and PR workflows are unchanged. The connected
+application remains unimplemented; `main` retains the older generation until the PR merges.
 
-Next implementation: [Foundation](../implementation/README.md#1-foundation--invocation-settings-and-root).
-Read its affected settings/root recipes and actual callers, not the whole audit history. Implement the small
-root/object platform seam, then root/settings and the one-file path; do not start another broad audit.
+Next implementation remains [Foundation](../implementation/README.md#1-foundation--invocation-settings-and-root),
+then the one-file retained-source → Qdrant → CLI path. Read that stage, its owner recipes and actual callers.
+Do not restart a broad audit or build optional systems before the working path. Preserve unpublished #598 work.
 
 <a id="established-decisions--do-not-rediscover"></a>
-## Decisions retained and clarified
+## Current decisions
 
-| Question | Decision and owner |
+R055's physical/query-profile split, strict empty-init discard/retry, execution-only lower-I/O context and
+whole-generation cleanup remain selected. Windows finalization is still an unexecuted candidate, not a safety
+or durability guarantee. The [implementation guide](../implementation/README.md#owners) routes the owning rules.
+
+| R056 correction | Owning rule |
 |---|---|
-| Query k/b versus index identity | Query-time settings never cause physical rebuild; [lexical](../../crates/search-lexical/FUNCTIONS.md) and corrected [projection](../../crates/search-index-qdrant/search-projection-planner/FUNCTIONS.md). |
-| Interrupted initialization | Strict recognized-empty discard/retry, no resume/journal; [root](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md). |
-| Index cleanup | Whole-generation only, including conditional Stage 3B; [publication](../../crates/search-index-qdrant/search-publication/FUNCTIONS.md#view-lifetime-and-whole-generation-cleanup). |
-| Context before a query exists | Execution-only deadline/cancellation/counters; query adds its view/scope/scoring; [shared boundary](../implementation/README.md#minimal-cross-owner-values). |
-| Windows finalization | One candidate recipe at the root owner; exact Q&A environment/source in donor register; not an executed safety guarantee. |
-| Documentation maintenance | Owner defines rule once; README/AGENTS/index link to it. Historical readsets remain at immutable Git links. |
-
-The selected Qdrant upgrade, complete-generation reference implementation and conditional optimization order are
-unchanged. Optional encryption/models/documents/adapters do not block the lexical product.
+| Window state and output | [Window](../../crates/search-query/search-continuation/FUNCTIONS.md#operation-ownership): owned pending state, no mutable map/window borrow across I/O, prepared post-flush commit, healthy-error restoration without refunding work. |
+| Locators and lifetime | Continue/Expand retain the old view; internal evidence refs differ from emitted locators; session-local IDs are not reused; [protocol](../../crates/search-provider-protocol/FUNCTIONS.md) serializes terminal/control handling. |
+| Stage-specific shared data | [Contracts](../../crates/search-contracts/FUNCTIONS.md): no mandatory sequence/validity/incarnation or unused future DTO family in Stage 2/3A. Point address is not complete identity. |
+| Lexical baseline | [Lexical](../../crates/search-lexical/FUNCTIONS.md): source/context once, no local alias inflation or second BM25 implementation. |
+| Bootstrap versus Search | [Contexts](../implementation/README.md#minimal-cross-owner-values): root/connection/publication do not require a view; only Search adds scoring. |
+| Qdrant transport | [Bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md): Rust gRPC endpoint, not the REST port; target examples are not current runnable settings. |
+| Historical frameworks | Admission V2 descriptions are history, not permanent contracts; optional Research export has one consumer-driven note, no activation/receipt/size/wave framework. |
 
 <a id="coverage-ledger"></a>
 ## Documentation work
 
-| Stage | R055 disposition | Continue with |
-|---|---|---|
-| Conflicting rules | Corrected query/index profile split, initialization, cleanup and context ownership | Change the owner first when behavior changes. |
-| Entry/navigation | Shortened root/index/implementation and CLI/daemon entrypoints; restored owner map and meaningful legacy registry anchors | Check incoming links when moving a section. |
-| Duplicate recipes | Removed Windows recipe copies from entry/object/composition documents; root owns it | Apply the same owner/link rule to other families when touched. |
-| Evidence/history | Exact Windows source/environment added; old detailed records linked, not copied | Keep inspected and executed states distinct. |
-| Whole-tree assurance | No claim that every remaining owner document or code path is now defect-free | Review only the next affected owner/caller chain; record concrete new contradictions. |
+The full R055 Markdown navigation pass found eight missing anchors. Config, control, Exact and historical audit
+links now resolve. Follow-up semantic review covered query/session/handles/protocol, contracts/point identity,
+lexical guidance, bootstrap context, nested root instructions, test ownership and optional export/admission notes.
+It removed competing instructions rather than introducing new runtime services or verification gates.
 
-This is a bounded documentation repair, not repository-wide code audit closure.
+Deleted only the two obsolete instruction files in the documentation-only Research export directory. Kept its
+short design note and immutable history link. Four admission V2 pages now point to the current recipe and their
+exact historical descriptions; no corresponding Rust or user data was deleted.
 
 <a id="delivery-remaining"></a>
 ## Remaining product work
 
-Foundation and the one-file Qdrant/CLI path remain to implement. Restart/inventory/convergence, measured corpus
-budgets, Exact/session and selected product depth remain afterward. The
-[delivery sequence](../implementation/README.md#delivery-sequence) is the single owner of their order and scope.
-R055 does not mark a product stage complete or make optional work a prerequisite.
+[Delivery sequence](../implementation/README.md#delivery-sequence) remains the sole stage/order owner: Foundation,
+one-file Search, restart/inventory and complete generations, measured conditional incrementality, Exact/session,
+then selected depth. No product stage is completed by this documentation change.
 
 <a id="evidence-status"></a>
 <a id="execution-evidence"></a>
 ## Evidence status
 
-| Area | Evidence / limit |
+| Check | Result / limit |
 |---|---|
-| R055 documentation | Four contradictions addressed in their owners and affected instructions; entrypoints/known broken navigation reconciled. This is editorial/static evidence. |
-| Windows references | Microsoft API pages and dated Q&A reproduction inspected 2026-10-28; no ELIOT Windows canary executed. |
-| Runtime safety | Windows namespace/ancestor/reparse handling and durability remain unverified; the candidate must refuse unsupported profiles. |
-| Qdrant | Lock remains 1.19.0; selected 1.20.x integration has not been compiled or executed. |
-| Compiler history | R031 materializer/unitizer check + minimal Clippy, [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130); not a new whole-product build. |
-| Current product | Foundation, current binaries, end-to-end search, restart, relevance and scale remain NOT_RUN. |
-| R055 Rust/tests | Not run: documentation-only changes; cargo is absent in this editing environment. No new test suite or workflow added. |
-| Link-check scope | Known navigation targets/anchors are the repair scope; no new repository-wide 202-file crawler result is claimed. |
+| Exact input | R055 archive's commit header and reconstructed Git tree matched the parent and tree above. |
+| Relative Markdown navigation | Before: 202 files, 578 relative links, 8 broken anchors. After: 200 files, 599 relative links, 0 missing paths/anchors. CommonMark links/table links, generated heading IDs and explicit HTML anchors checked; external URLs were not crawled. |
+| Diff | `git diff --check` passed; final change contains Markdown only. |
+| Rule agreement | Listed owner/caller-document corrections checked statically; not a proof that every remaining design or source path is correct. |
+| Snapshot export | [Run 40787301463](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40787301463) exported the fixed parent without executing project code. The temporary helper branch was removed; its workflow is not part of PR #610. |
+| Qdrant | Endpoint guidance checked against official installation/Rust quickstart; lock remains client 1.19.0. Selected 1.20.x integration remains uncompiled/unexecuted. |
+| Compiler history | R031 materializer/unitizer check + minimal Clippy, [run 40084893130](https://github.com/UnknownAlienHuman/eliot-search/actions/runs/40084893130), is narrow historical evidence only. |
+| This change | No Rust build/Clippy/test suite executed; no verification framework or permanent workflow added. |
+| Product/runtime | Foundation/current binaries, Windows finalization/durability, end-to-end Search, restart, relevance and scale remain NOT_RUN. |
 
 <a id="evidence-index"></a>
-## Prior evidence
+## Prior evidence and maintenance
 
-- [R054 registry and earlier checkpoint list](https://github.com/UnknownAlienHuman/eliot-search/blob/45ddf887c9e84861b1302334a1f5ecabb263f7f3/docs/audit/ANALYSIS_REGISTRY.md).
-- [Detailed earlier registry through R031](https://github.com/UnknownAlienHuman/eliot-search/blob/da382b66e59d0b44e758bad9b22e2f5703a4e8c2/docs/audit/ANALYSIS_REGISTRY.md).
-- [Current donor evidence](DONOR_VERIFICATION_REGISTER_2026-10-09.md).
-- CLI/daemon/ports recipes link their own immutable prior source readsets.
+[R055 registry](https://github.com/UnknownAlienHuman/eliot-search/blob/44ee1661833c1139f1e0f1486f365a3a523fe814/docs/audit/ANALYSIS_REGISTRY.md)
+links earlier checkpoints and exact source readsets. The [donor register](DONOR_VERIFICATION_REGISTER_2026-10-09.md)
+records upstream evidence separately from installed and executed behavior.
 
-## Updating this record
-
-Keep one short current checkpoint with inspected SHA, changed owners, actual checks and unrun work. Preserve old
-readsets through immutable links. Do not copy local algorithms, add approval tokens or accumulate a second job log.
+Keep one current checkpoint: inspected revision, changed owners, actual checks and unrun work. Preserve prior
+readsets through immutable links. Change algorithms at their owner; update incoming links and conflicting issue
+bodies in the same slice. Do not copy algorithms or an accumulating job history into this registry.

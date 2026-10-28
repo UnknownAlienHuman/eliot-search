@@ -1,21 +1,11 @@
 # search-point-identity
 
-Derive one stable retrieval-point identity and its 128-bit Qdrant address. The package is stateless and
-contains no registry, source authority, transport or publication state.
+Derive a deterministic point address and retain enough full identity to reject collisions. The address is a
+locator, not complete evidence. [FUNCTIONS.md](FUNCTIONS.md) owns the key and stage boundaries.
 
-## Current source
+Stage 2/3A uses generation-bound IDs and may remint every point in the next complete generation. Occurrence
+matching/incarnations and stable reuse are conditional Stage 3B work, not prerequisites for the first result.
+Exact revision/range comes from pinned evidence.
 
-`src/s11.rs` implements a revision/coordinate-bearing v1 key. Its separation of full BLAKE3 identity from
-128-bit address and its collision refusal are useful. The key shape and pre-release encoded bytes are not.
-
-## Target
-
-Point identity contains only immutable retrieval meaning for one physical generation. Exact revision,
-representation, logical occurrence and range belong to versioned evidence in the pinned published view.
-Unambiguous unchanged occurrences may retain identity; ambiguous equal repeats receive new incarnations.
-
-The complete operation, cutover and focused behavior checks live in [FUNCTIONS.md](FUNCTIONS.md). Change
-point identity, projection, Qdrant payload/readback, publication and query lookup together. Build a new
-physical generation; do not preserve old S11 through dual issuers, adapters or migration machinery.
-
-[Implementation guide](../../../docs/implementation/README.md) · [Agent notes](AGENTS.md)
+Move identity, projection, readback and evidence consumers together. Keep no registry, compatibility issuer or
+forwarding crate; inline a trivial remaining helper into publication/preparation.

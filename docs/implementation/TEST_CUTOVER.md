@@ -1,161 +1,48 @@
-# Test and evidence cutover
+# Verification and legacy-test cutover
 
-Tests preserve connected product behavior, not package layout, waves, receipts or disconnected applications. Run
-the smallest locked Rust 1.98 compiler/Clippy closure after each production cut; add runtime evidence only for
-behavior which exists.
+This is a future verification/disposition guide, not a prerequisite to build a test platform now. Implement the
+connected slice first; after Rust changes run the smallest locked Rust 1.98 check/Clippy for actual production
+targets and immediate consumers. Broad tests follow the connected product. Markdown-only changes need a diff,
+link/anchor check and semantic agreement, not a Rust suite.
 
-**Current documentation checkpoint:** R052 over inspected head `87c84c24`.  
-**Current compiler evidence:** R031 materializer + unitizer only. R032–R052 are documentation-only.
+[Registry evidence](../audit/ANALYSIS_REGISTRY.md#evidence-status) is the only current status. This page contains no
+independent checkpoint or passing-build claim. The [implementation sequence](README.md#delivery-sequence) owns
+stages; algorithms, field tables and resource defaults stay with their operation owners.
 
-## Stage 1 — Foundation
+## Evidence when the implementation exists
 
-After code exists:
+| Stage | Behavior to exercise through real consumers |
+|---|---|
+| Foundation | Side-effect-free inspect/help; strict manifest-last initialization/discard; actual exclusion; unsupported/foreign preservation; restart and shutdown. Use the [root finalization cases](../../crates/search-runtime/search-runtime-owner/FUNCTIONS.md), not a second platform recipe. |
+| One-file Search | Stable source bytes → object/preparation → actual Qdrant build/readiness → committed view → retained CLI excerpt. Verify the [lexical profile](../../crates/search-lexical/FUNCTIONS.md) through the [bridge](../../crates/search-index-qdrant/search-qdrant-bridge/FUNCTIONS.md), including real scoring rather than schema readback alone. |
+| Stage 3A | Complete inventory and fixed build input; dropped wake-ups; edits/removal/empty/gaps; stale-work rejection; old views; commit/install crash; whole-collection cleanup. |
+| Conditional Stage 3B | Only after failed 3A budgets: conservative matching, fixed births/closures, exact validity if used, pending recovery, old-view evidence and scoring convergence. No physical point reclaimer. |
+| Exact/session | Complete versus incomplete retained scan; request bounds; cancellation; one active request with serviced control; internal evidence versus public locators; cursor commit after complete output; healthy errors, partial writes, expiry and disconnect. |
+| Selected depth | Stopped-root maintenance/import and only selected real document/syntax/model/adapter profiles. Their absence does not block the lexical baseline. |
 
-- check/Clippy actual CLI/daemon/root/config/store consumers;
-- help/version with zero root effects;
-- inspect absent/current/incomplete/foreign/busy;
-- manifest-last initialize and exact reopen;
-- strict incomplete discard without foreign/user-data deletion;
-- second-owner refusal and shutdown order;
-- Windows handle-bound no-clobber canary: destination exists, path/parent replacement, crash debris, final readback;
-- Unix no-replace/fallback and truthful durability.
+Known empty scope performs no RPC. Whole-collection base selection removes redundant base/IDF predicates, not
+request-only candidate filtering. No baseline case requires sparse inference, local alias expansion, stable
+cross-generation IDs, sequence/closure, encryption, watcher or another backend.
 
-Path-based `tempfile::persist_noclobber` documentation is not Windows handle-safety evidence.
+## Release measurements
 
-## Stage 2 — one-file walking skeleton
+Before advertising a corpus class, declare numeric latency/throughput/memory/disk budgets in #215 and retain raw
+measurements: full build and edit-to-view latency, writes, update arrival versus coalesced build throughput,
+peak resources, index residency/cache, retained redb pages, current/building/reader-held collection disk, cleanup
+backlog and supported request/window lifetime. Stage 3A ships only where those budgets pass; 3B is conditional.
 
-Upgrade actual Rust client/server/schema to one exact Qdrant 1.20 patch, then execute:
+## Disposition of existing tests
 
-```text
-stable file read
-→ ObjectRef/current SourceRecord
-→ one prepared artifact + retrieval_text units
-→ fresh vectorless one-shard collection
-→ exact physical Text index V1
-→ InsertOnly points + exact readback
-→ deterministic TextQuery readiness canary
-→ evidence/current commit + PublishedView
-→ TextQuery with QueryScoringProfileV1
-→ verified retained excerpt in default CLI
-```
+Keep a test only when it exercises useful current behavior. Move a causal case with its real owner; delete tests
+that freeze removed packages, waves, receipts, grants, old wire bytes, qualification records or source shapes.
+Do not regenerate their goldens to disguise a removed design as compatibility.
 
-### Exact physical schema canary
+The [fixture ownership note](../../tests/CRATE_FIXTURE_OWNERS.md) replaces the old matrix. No typed contribution
+request, merge receipt, package-count target or new evaluator is required. Existing mixed migration dispositions
+are historical evidence, not a reason to re-audit all tests before implementation.
 
-Read back and compare every field:
+## Reporting
 
-```text
-retrieval_text
-TokenizerType::Code
-lowercase=true
-ascii_folding=false
-phrase_matching=false
-stemmer=Disabled
-stopwords=None
-min_token_len=None
-max_token_len=None
-nested=None
-scoring=BM25
-enable_hnsw=false
-memory=Pinned
-vectors_config=None
-one ordinary shard
-```
-
-Point/query response checks:
-
-- explicit InsertOnly + wait;
-- no vectors in points or response;
-- response payload contains only source/evidence routing keys, not retrieval text/excerpts;
-- exact point/payload/count readback;
-- readiness TextQuery returns expected fixed order.
-
-### Token/query semantics canary
-
-- Code tokenizer splits snake/camel/Pascal/acronym transitions and preserves documented letter+digit behavior;
-- ranking query receives subwords plus joined camel/snake identifiers;
-- no duplicate local aliases in retrieval text;
-- free TextQuery matches any query token;
-- typed full-text filter matches all filter-query subwords in any order, not joined exact identifier/phrase;
-- punctuation-sensitive Exact stays independent;
-- one-file whole collection omits filter/IDF.
-
-### Query-scoring canary
-
-Baseline fixes `k=1.2`, `b=0.75`. Verify client rejects NaN/infinite/out-of-range values before dispatch and accepts
-finite `k>=0`, `0<=b<=1`. Changing k/b changes request scoring without schema rebuild. No baseline score threshold.
-
-Baseline tests must not require sparse BM25 inference, local avg_len/postings, alias expansion, occurrence matching,
-stable cross-generation IDs, sequence, aliases, custom shards, watcher, encryption or another backend.
-
-## Stage 3A — correctness/reference convergence
-
-Add restart/reopen, complete desired-input capture, authoritative inventory, dropped-wakeup repair, edit/removal,
-complete next generation, old pinned view, commit/install recovery and whole-collection cleanup.
-
-Add only real filter indexes. Read back exact keyword/text params, `enable_hnsw=false` and explicit
-`Pinned|Cached|Cold` memory. Prefix/tenant optimization appears only with a measured query shape.
-
-Scope cases:
-
-```text
-base population = selected sources ∩ actual access/session restriction
-candidate filter = base population + request-only narrowing
-idf.corpus       = base population
-```
-
-Verify base clauses in candidates and IDF, request-only clauses absent from IDF, explicit empty without RPC,
-unknown/incomplete no widening and filter fields indexed.
-
-Record predeclared corpus-class measurements:
-
-- full build and edit→view p50/p95;
-- points/payload bytes/backend writes;
-- peak CPU/RAM/handles;
-- text/filter index residency/cache behavior;
-- current + building + reader-retained collection disk;
-- redb retained-page growth;
-- update arrival versus rebuild throughput;
-- cleanup backlog and max reader/window lifetime.
-
-Stage 3A ships only where every correctness and numeric budget passes.
-
-## Stage 3B — only where Stage 3A budgets fail
-
-Then test source-local merge, unambiguous occurrence reuse, operation-fixed births, InsertOnly additions, fixed
-non-creating closures, exact sequence if retained, pending recovery, old-view evidence, text-statistics/optimizer
-convergence after point updates and measured compaction/write reduction.
-
-If all target classes pass Stage 3A, close Stage 3B issues `not_planned` with measurements.
-
-## Later stages
-
-- literal Exact and one serviced framed QueryWindow session;
-- stopped-root collection/archive/import;
-- source-backed orientation/comparison/Git/documents;
-- optional shipped profiles only: encryption, regex, PDF/OCR, MCP, models, overlay, managed Qdrant or isolated
-  backend replacement.
-
-## Legacy-test disposition
-
-1. Delete tests which only freeze source layout, packages, waves, receipts or removed state machines.
-2. Move causal behavior to the current owner.
-3. Retain unchanged only when a test already executes selected current behavior through a real consumer.
-
-The two mixed migration suites already have complete move/delete dispositions. Do not re-audit them.
-
-Delete rather than regenerate:
-
-- sparse BM25 document/query vector goldens and local avg_len/postings equivalence;
-- fixture-backed analyzer qualification/receipts;
-- mandatory alias expansion/profile hashes;
-- hidden server-default schema assumptions;
-- stable occurrence identity/sequence in Stage 2/3A;
-- exact count/completeness for ordinary top-k;
-- public scheduler/ticket/leg/fusion/terminal maps.
-
-## Result discipline
-
-Every result names exact SHA, platform, toolchain, Qdrant client/server/profile, command and outcome. Use
-`PASS | FAIL | PARTIAL | NOT_RUN`; missing evidence is not PASS. Compilation, source presence, schema/point readback
-or issue closure alone does not prove scorer readiness, resource bounds, crash safety, relevance or end-to-end
-behavior. R052 changes docs only.
+Record exact SHA, platform, toolchain/service profile, command and actual outcome: PASS, FAIL, PARTIAL or NOT_RUN.
+A successful library build, issue closure, supplied proof or readback alone does not establish crash safety,
+resource bounds, relevance or application readiness. Keep unrun behavior explicit in the registry.

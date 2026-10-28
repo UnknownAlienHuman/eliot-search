@@ -21,6 +21,12 @@ Official Rust tag `v1.20.0` provides the selected surface:
 
 Compile the exact pinned patch with real consumers. Source inspection is not build evidence.
 
+The Rust client connects over gRPC: the ordinary local endpoint is `http://127.0.0.1:6334`, not the REST/health
+port 6333. Keep the configured transport/port explicit; no protocol probing/fallback. See the
+[official Rust quickstart](https://qdrant.tech/documentation/quickstart/) and
+[port definitions](https://qdrant.tech/documentation/installation/#networking). Connect/publication use
+ExecutionContext even before any published view exists; only Search adds BM25 scoring.
+
 ## Physical profile V1
 
 Stage 2 creates one vectorless one-shard collection and one scoring text field. Use exact builder semantics:
@@ -70,7 +76,7 @@ Do not use deprecated `on_disk`, dummy vectors, sparse vector schema, custom sha
 ## Private operations
 
 ```text
-connect(endpoint, optional actual key, bounded transport, RequestContext)
+connect(endpoint, optional actual key, bounded transport, ExecutionContext)
 create_vectorless_generation(name, exact physical profile)
 create_scoring_text_index(field, exact params)
 create_required_filter_indexes(exact params)

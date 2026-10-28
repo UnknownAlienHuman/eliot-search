@@ -1,7 +1,7 @@
 # Working on exact scans
 
 Read the [architecture](../../../docs/architecture/README.md),
-[query cutover](../README.md#direct-operations-not-a-recipe-operating-system), [README](README.md) and
+[query cutover](../README.md#exact-and-later-product-operations), [README](README.md) and
 [function map](FUNCTIONS.md).
 
 Implement one server-owned `ExactRequest` over the source inventory of a pinned `PublishedView`. Read and

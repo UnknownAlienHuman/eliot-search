@@ -6,7 +6,7 @@ current callers before inlining/deleting it and move actual consumers in the sam
 ## Direct baseline
 
 ```text
-typed request + RequestContext(view, scope, query scoring, execution) + constructed handlers
+typed request + operation context(view, scope, execution; scoring for Search) + constructed handlers
 Search   → Qdrant TextQuery
 Exact    → retained-source scan
 Continue → stored QueryWindow page

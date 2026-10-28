@@ -1,25 +1,11 @@
-# Working on search-handles
+# Working on handles
 
-Read the [query cutover](../README.md), [query-window map](../search-continuation/FUNCTIONS.md), package
-[README](README.md) and local [source map](FUNCTIONS.md).
+Read [FUNCTIONS.md](FUNCTIONS.md) and the [window owner](../search-continuation/FUNCTIONS.md). Recheck current
+protocol/result/daemon callers before removing both old handle catalogues; do not migrate one into the other.
 
-The established audit found two handle stores, whole-catalogue scans, token records and arbitrary revision-range
-expansion at the inspected revision. Treat sizes, topology and caller findings as revision-specific evidence.
-Before deletion, search current manifests, Rust/non-Rust callers, constructors, module inclusion, features,
-targets, tests and workflows. Move actual protocol/result/daemon callers together.
+Keep exact retained-range verification and bounded context around successfully emitted items. Use the window's
+owned pending-delivery path, not a shared mutable borrow/lock across object reads or transport writes. A locator
+cannot choose arbitrary revision offsets, renew expiry or switch view/session.
 
-Normal source-backed cards contain their verified excerpt/location directly. Optional expansion uses
-`(window_id, item_index)` inside the same live `QueryWindow` and pinned view.
-
-Move only useful mechanics: exact immutable-range reading and byte/range verification, finite expansion/output
-limits, exclusive prepared output and the original absolute expiry/deadline check. Expansion derives a bounded
-neighborhood from the exact emitted item's manifest entry; it cannot accept arbitrary absolute revision offsets
-or mint another authority record.
-
-Owning-account child stdio needs no cryptographic bearer handle. A selected restricted-client adapter binds and
-cancels the window through its concrete session. Remove handle grants, permits, source-catalogue fences,
-invalidation generations, durable leases and crypto/provider seams with their last consumers. Delete both old
-stores rather than migrating one into the other.
-
-After code, run minimal Rust 1.98 check/Clippy for actual query/window/evidence/protocol/daemon consumers.
-Historical handle lifecycle and shape fixtures are removed with their APIs.
+Remove token minting/hashing, catalogue scans/fences, grants, invalidation histories and exclusive fixtures with
+callers. After code run minimal pinned check/Clippy for actual consumers. No forwarding handle platform remains.
